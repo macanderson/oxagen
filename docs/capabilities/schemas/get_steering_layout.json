@@ -1,0 +1,53 @@
+{
+  "name": "get_steering_layout",
+  "domain": "context",
+  "description": "Which of the two repository layouts the workspace's bound repository uses: steering (steering/governance.toml on its production branch) or legacy (.oxagen/rules/). Null when no repository is bound or the read failed.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "context"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {},
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "layout": {
+        "anyOf": [
+          {
+            "type": "string",
+            "enum": [
+              "steering",
+              "legacy"
+            ]
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "layout"
+    ],
+    "additionalProperties": false
+  }
+}

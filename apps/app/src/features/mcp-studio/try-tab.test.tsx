@@ -1,10 +1,9 @@
 // @vitest-environment jsdom
 // A Studio server's Test tab (#4678) on fake calls: where the environment
 // and tool pickers start, the live warning, the arguments check, a call in
-// flight, the three panes a call that succeeded draws, the not built, denied
-// and failed answers, the empty state, and Save as test. With no call passed,
-// the tab gets try_studio_tool's stub, and Run renders disabled with a note
-// until #4742 merges. A saved test is read
+// flight, the three panes a call that succeeded draws, the denied and failed
+// answers, the empty state, and Save as test. Each call names the page's
+// workspace. A saved test is read
 // back from the tab's sessionStorage the way the page stored it, and it must
 // hold no credential header: Save as test strips authorization,
 // proxy-authorization, cookie and set-cookie before it stages the test. The
@@ -16,7 +15,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import type { DraftOp } from "./draft";
-import type { TryResult, TryStudioTool } from "./pending-capabilities";
+import type { TryResult, TryStudioTool } from "./studio-calls";
 import {
   BILLING,
   draftKey,
@@ -56,7 +55,7 @@ afterEach(async () => {
 });
 
 type TryProps = Parameters<typeof TryTab>[0];
-type TryInput = Parameters<TryStudioTool["call"]>[0];
+type TryInput = Parameters<TryStudioTool["call"]>[1];
 type Answered = Extract<TryResult, { ok: true }>;
 type SavedTest = Extract<DraftOp, { kind: "test" }>;
 
@@ -132,9 +131,7 @@ function pendingTry() {
   const waiting: ((result: TryResult) => void)[] = [];
   const call: TryStudioTool = {
     name: "try_studio_tool",
-    available: true,
-    gap: "capability",
-    call: (input) => {
+    call: (_at, input) => {
       calls.push(input);
       return new Promise<TryResult>((resolve) => {
         waiting.push(resolve);
@@ -440,42 +437,17 @@ describe("TryTab call", () => {
     }
   });
 
-  it("keeps Run off with a note while try_studio_tool has not merged", () => {
-    renderTry(BILLING);
-    const button = screen.getByRole("button", { name: "Run" });
-    expect(button).toBeDisabled();
-    expect(button).toHaveAttribute("data-capability", "try_studio_tool");
-    const note = screen.getByTestId("studio-try-pending");
-    expect(button).toHaveAttribute("aria-describedby", note.id);
-    expect(note).toHaveAttribute("data-state", "not-available");
-    expect(note).toHaveAttribute("data-capability", "try_studio_tool");
-    expect(note).toHaveAttribute("data-gap", "#4742");
-    expect(note).toHaveTextContent("Testing is not available yet.");
-    fireEvent.submit(button);
-    expect(screen.queryByTestId("studio-try-request")).toBeNull();
-    expect(screen.queryByTestId("studio-try-not-built")).toBeNull();
-  });
-
-  it("draws no note once the capability is available", () => {
-    const { call } = fakeTry(tryClean());
+  it("runs try_studio_tool for the page's workspace, with no note", async () => {
+    const { call, calls, workspaces } = fakeTry(tryClean());
     renderTry(BILLING, { call });
     const button = screen.getByRole("button", { name: "Run" });
     expect(button).toBeEnabled();
+    expect(button).toHaveAttribute("data-capability", "try_studio_tool");
     expect(button).not.toHaveAttribute("aria-describedby");
     expect(screen.queryByTestId("studio-try-pending")).toBeNull();
-  });
-
-  it("says testing is not available when the call answers not built", async () => {
-    const { call } = fakeTry({ ok: false, reason: "not_built", gap: "capability" });
-    renderTry(BILLING, { call });
-    run();
-    const note = await screen.findByTestId("studio-try-not-built");
-    expect(note).toHaveAttribute("role", "note");
-    expect(note).toHaveAttribute("data-state", "not-recorded");
-    expect(note).toHaveAttribute("data-gap", "#4742");
-    expect(note).toHaveTextContent("Testing is not available yet.");
-    expect(screen.queryByTestId("studio-try-request")).toBeNull();
-    expect(screen.queryByRole("button", { name: "Save as test" })).toBeNull();
+    await runToPanes();
+    expect(workspaces).toEqual([STUDIO_AT]);
+    expect(calls).toHaveLength(1);
   });
 
   it("shows a denied call with the policy's message and offers no save", async () => {
@@ -513,9 +485,7 @@ describe("TryTab call", () => {
     const calls: TryInput[] = [];
     const call: TryStudioTool = {
       name: "try_studio_tool",
-      available: true,
-      gap: "capability",
-      call: (input) => {
+      call: (_at, input) => {
         calls.push(input);
         return Promise.reject(new Error("fetch failed: socket hang up"));
       },

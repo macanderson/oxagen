@@ -14,7 +14,7 @@
 // and, once list_studio_tools answers, says how many tools tools.toml imports
 // of those the last discovery listed, whether the definitions would fit
 // better behind tool search, and whether tools.toml compiled. Both reads are
-// lane M10's (#4682), and until they merge the tab says so.
+// lane M10's (#4682). When a read fails, the tab says so in its place.
 import { useLocale, useTranslations } from "next-intl";
 import { type ReactNode, useState } from "react";
 import type { ToolRiskGrade, ToolSideEffect } from "@/data/contracts/tools";
@@ -39,11 +39,11 @@ import {
 import type { StudioRecord, StudioTool } from "./model";
 import { StudioNotRecorded, StudioNotRecordedValue } from "./not-recorded";
 import { DiscoveryProgress } from "./add-server";
+import type { StudioAt } from "./route";
 import type {
   DraftStudioDescription,
   StudioToolsList,
-} from "./pending-capabilities";
-import type { StudioAt } from "./route";
+} from "./studio-calls";
 import { ToolPanel } from "./tool-panel";
 import { useStudioDraft } from "./use-draft";
 
@@ -225,9 +225,9 @@ export function ToolsTab({
   off: Readonly<Record<string, ReactNode>>;
   /** Who turned each tool off or back on, and when, by tool name. */
   offFacts: Readonly<Record<string, ReactNode>>;
-  /** Draft's capability for the tool panel; the stub by default (#4742). */
+  /** Draft's capability for the tool panel. A test passes a fake. */
   draft?: DraftStudioDescription;
-  /** list_studio_tools' answer, or null until it merges or when it fails. */
+  /** list_studio_tools' answer, or null while it loads or when it fails. */
   listed?: StudioToolsList | null;
 }) {
   const t = useTranslations("mcpStudio.tools");
@@ -299,7 +299,7 @@ export function ToolsTab({
   return (
     <div className="flex flex-col gap-4">
       <Budget record={record} tools={tools} ops={ops} />
-      <DiscoveryProgress server={serverName} canStart={canEdit} />
+      <DiscoveryProgress at={at} server={serverName} canStart={canEdit} />
       {listed === null ? null : <Listed listed={listed} />}
       {record === null ? (
         <StudioNotRecorded gap="record" testId="studio-tools-missing">
@@ -487,6 +487,7 @@ export function ToolsTab({
       {opened === undefined ? null : (
         <ToolPanel
           key={opened.name}
+          at={at}
           serverName={serverName}
           tool={opened}
           ops={ops}

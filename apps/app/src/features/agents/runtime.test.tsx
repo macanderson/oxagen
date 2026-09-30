@@ -4,8 +4,9 @@
 // reported; a collector that reported its version and was seen; the proxy
 // on each side of the gateway rung; no run, so no tier; every host revoked;
 // a retired identity, which is offered neither enroll nor unenroll; and a
-// viewer without an Owner or Admin role, who is offered neither either.
-// Axe runs after every test (INV-26).
+// viewer without an Owner or Admin role, who is offered neither either; and
+// the links to the host's drawer and the Runtimes tab. Axe runs after every
+// test (INV-26).
 import { cleanup, render, screen, within } from "@testing-library/react";
 import type { ComponentProps, ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -75,6 +76,25 @@ const hooksCell = () => {
 afterEach(async () => {
   await expectNoAxe(document.body);
   cleanup();
+});
+
+describe("Runtime › links to the Runtimes tab", () => {
+  it("opens the host in the runtime drawer, and every runtime on the Runtimes tab", () => {
+    renderRuntime({ detail: agentDetail({ hosts: [host()] }) });
+    expect(screen.getByTestId("open-runtime")).toHaveAttribute(
+      "href",
+      "/acme/core-platform/agents?tab=runtimes&runtime=tch_0123456789abcdefghijkl",
+    );
+    expect(screen.getByTestId("open-runtime")).toHaveTextContent(
+      "Open the runtime",
+    );
+    expect(screen.getByTestId("all-runtimes")).toHaveAttribute(
+      "href",
+      "/acme/core-platform/agents?tab=runtimes",
+    );
+    // Both were stubs that said the Runtimes page was not built (negative).
+    expect(screen.queryByText(/not built yet/)).toBeNull();
+  });
 });
 
 describe("Runtime › host", () => {

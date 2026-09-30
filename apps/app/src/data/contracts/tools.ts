@@ -418,6 +418,12 @@ export const McpServer = z.object({
    * Null when `contextTokens` is null or the week has no priced call.
    */
   weeklyPrice: Cost.nullable().default(null),
+  /**
+   * Its folder under tools/servers/ in the steering repo, for a server a
+   * steering repo defines; null for one added any other way. Studio names a
+   * server by it (#4678).
+   */
+  steeringName: z.string().min(1).nullable().default(null),
 });
 export type McpServer = z.infer<typeof McpServer>;
 

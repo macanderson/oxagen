@@ -11,10 +11,11 @@
 // saved the draft since this tab did reloads theirs and stages this tab's
 // edits on top (mergeDrafts), and the person reviews the result before trying
 // again. A stored draft this page cannot read leaves the tab's edits as they
-// are. The findings come from list_studio_findings, which runs lane M5's
-// checks. #4742 builds it, and until it merges the section says findings are
-// not available yet. The PR carries tools.toml, the lock and the saved tests,
-// never a credential.
+// are. The findings come from list_studio_findings (#4742), which runs lane
+// M5's checks on the saved draft, or on the folder when no draft is saved. It
+// names the server by the folder the record gives, so until the record names
+// one, the section says findings are not recorded. The PR carries tools.toml,
+// the lock and the saved tests, never a credential.
 import { useLocale, useTranslations } from "next-intl";
 import { type ReactNode, useId, useMemo, useState } from "react";
 import { Badge, type BadgeTone } from "@/ui/badge";
@@ -212,7 +213,7 @@ function Findings({
   return (
     <Section title={t("title")} testId="studio-changes-findings">
       {findings === null ? (
-        <StudioNotRecorded gap="findings" testId="studio-findings-missing">
+        <StudioNotRecorded gap="record" testId="studio-findings-missing">
           {t("missing")}
         </StudioNotRecorded>
       ) : findings.length === 0 ? (

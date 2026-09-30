@@ -23,6 +23,11 @@ const APP_HOSTS: ReadonlySet<string> = new Set([
   "app.oxagen.sh",
 ]);
 
+/** Whether a host name (no port) is one the production app answers on. */
+export function isAppHost(host: string): boolean {
+  return APP_HOSTS.has(host.trim().toLowerCase());
+}
+
 /**
  * The host the app keeps for good (ADR-215). A redirect to it is permanent.
  * A redirect to any other host is temporary and uncached, so a browser that

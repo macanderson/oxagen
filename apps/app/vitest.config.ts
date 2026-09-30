@@ -44,6 +44,9 @@ export default defineConfig({
       "src/**/*.test.tsx",
       // The Next instrumentation hook sits at the app root beside its test.
       "instrumentation.test.ts",
+      // CI-only tooling beside its tests: the mockup parity capture's plan
+      // (scripts/mockup-parity). Coverage below still measures src/ alone.
+      "scripts/**/*.test.ts",
     ],
     // Architecture probes are inputs to src/test/arch, never suites of their own.
     exclude: [...configDefaults.exclude, "src/test/arch/probes/**"],

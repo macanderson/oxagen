@@ -6,11 +6,18 @@
 // page. The registry and the toolbelts are views of Tool servers
 // (`?tab=tools`, `?tab=toolbelts`), so the strip lights Tool servers for them.
 //
-// One header serves every tab. Its actions keep the labels they had on the
-// pages they came from, in this order: Import a provider and New tool from
-// Tools, Flip a kill switch on Off switches, Add a runtime from Runtimes, and
-// Connect an agent last. Connect an agent is the page's one gold action; every
-// other button is drawn in the default style.
+// One header serves every tab, with the mockup's three actions in its order:
+// Import, Add server, and Connect an agent. Connect an agent is the page's one
+// gold action; every other button is drawn in the default style. What only
+// one tab writes sits in that tab's body: Add a runtime on Runtimes, and Flip
+// a kill switch on Off switches.
+//
+// The strip counts what each tab lists: the live agents, the tool servers, the
+// runtimes, and the switches denying. Policies has no count, because the
+// Cedar policy files the mockup counts are not what the tab reads.
+//
+// One runtime opens in the drawer over the Runtimes tab (`&runtime=<id>`,
+// roadmap mockups `agt-runtime`), and the tab stays behind it.
 //
 // The header and the strip stay on every state a tab can reach, so a person
 // whose agents read failed can still open Tool servers. A tab's body carries
@@ -19,10 +26,10 @@ import { useLocale, useTranslations } from "next-intl";
 import { type ReactNode, Suspense } from "react";
 import type { DataSource } from "@/data/ports";
 import {
-  AddRuntime,
-  mayAddRuntime,
+  RuntimeInDrawer,
   Runtimes,
   RuntimesLoading,
+  runtimesCount,
 } from "@/features/runtimes";
 import {
   ToolsBody,
@@ -36,6 +43,7 @@ import {
   AGENTS_AREA_TABS,
   type AgentsAreaTab,
   type AgentsPageTab,
+  firstParam,
   routes,
 } from "@/shared/safe-path";
 import { formatCount } from "@/ui/money-format";
@@ -73,7 +81,9 @@ export function areaTabOf(tab: AgentsPageTab): AgentsAreaTab {
 
 /** What the strip counts, each null where the read did not answer. */
 type Counts = {
+  agents: number | null;
   servers: number | null;
+  runtimes: number | null;
   switchesOn: number | null;
   switchesOnIsFloor: boolean;
 };
@@ -93,10 +103,12 @@ function AgentsAreaTabs({
   const locale = useLocale();
   const count = (tab: AgentsAreaTab): ReactNode | undefined => {
     switch (tab) {
+      case "agents":
       case "servers":
-        return counts.servers === null
-          ? undefined
-          : formatCount(counts.servers, locale);
+      case "runtimes": {
+        const n = counts[tab];
+        return n === null ? undefined : formatCount(n, locale);
+      }
       case "switches":
         if (counts.switchesOn === null) return undefined;
         return (
@@ -109,9 +121,7 @@ function AgentsAreaTabs({
               : t("switchesOn", { count: counts.switchesOn })}
           </span>
         );
-      case "agents":
       case "policies":
-      case "runtimes":
         return undefined;
     }
   };
@@ -208,10 +218,22 @@ export async function AgentsArea({
   viewerName: string;
 }) {
   const current = areaTabOf(tab);
-  const counts = await toolsTabCounts(ctx, source);
+  const [tools, agents, runtimes] = await Promise.all([
+    toolsTabCounts(ctx, source),
+    source.agents.list(ctx, { cursor: null, includeRetired: false }),
+    runtimesCount(ctx, source),
+  ]);
+  const counts: Counts = {
+    ...tools,
+    agents: agents.ok ? agents.value.totals.identities : null,
+    runtimes,
+  };
+  const asked = firstParam(searchParams.runtime);
+  const runtime =
+    tab === "runtimes" && asked !== undefined && asked !== "" ? asked : null;
   return (
     <div className="flex flex-col gap-4">
-      <AreaHeader ctx={ctx} source={source} tab={tab} />
+      <AreaHeader ctx={ctx} source={source} />
       <AgentsAreaTabs
         org={ctx.orgSlug}
         ws={ctx.wsSlug}
@@ -233,19 +255,23 @@ export async function AgentsArea({
           />
         </Suspense>
       </div>
+      {runtime === null ? null : (
+        <Suspense key={runtime} fallback={null}>
+          <RuntimeInDrawer
+            ctx={ctx}
+            source={source}
+            org={ctx.orgSlug}
+            ws={ctx.wsSlug}
+            runtime={runtime}
+            viewerName={viewerName}
+          />
+        </Suspense>
+      )}
     </div>
   );
 }
 
-function AreaHeader({
-  ctx,
-  source,
-  tab,
-}: {
-  ctx: WsCtx;
-  source: DataSource;
-  tab: AgentsPageTab;
-}) {
+function AreaHeader({ ctx, source }: { ctx: WsCtx; source: DataSource }) {
   const t = useTranslations();
   return (
     <PageHeader
@@ -254,14 +280,7 @@ function AreaHeader({
       description={t("agents.area.description")}
       actions={
         <>
-          <ToolsHeaderActions
-            ctx={ctx}
-            source={source}
-            tab={toolsTabOfAgentsTab(tab)}
-          />
-          {mayAddRuntime(ctx) ? (
-            <AddRuntime org={ctx.orgSlug} ws={ctx.wsSlug} gold={false} />
-          ) : null}
+          <ToolsHeaderActions ctx={ctx} source={source} />
           <ConnectAgentLink org={ctx.orgSlug} ws={ctx.wsSlug} />
         </>
       }

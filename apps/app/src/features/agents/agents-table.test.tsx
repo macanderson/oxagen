@@ -84,6 +84,26 @@ afterEach(async () => {
 });
 
 describe("AgentsTable › missing values", () => {
+  it("overlays each agent's recorded harness without badging its operator", () => {
+    renderTable([
+      row("claude", { harness: "claude-code" }),
+      row("codex", { harness: "codex" }),
+      row("stella", { harness: "stella" }),
+    ]);
+    expect(
+      rows().map((agent) =>
+        agent
+          .querySelector("[data-harness-badge]")
+          ?.getAttribute("data-harness-badge"),
+      ),
+    ).toEqual(["claude-code", "codex", "stella"]);
+    for (const agent of rows()) {
+      expect(
+        within(agent).getByTestId("operator-avatar").closest("[data-agent-avatar]"),
+      ).toBeNull();
+    }
+  });
+
   it("says the owner is not recorded when none is (negative)", () => {
     renderTable([row("orphan", { operatorId: null, operatorName: null })]);
     const [only] = rows();

@@ -163,7 +163,7 @@ function proposalPage(count: number, total: number) {
         pr: {
           number: 600 + i,
           repository: "acme/core-platform",
-          branch: `context/ctx.page.${String(i)}`,
+          branch: `steering/ctx.page.${String(i)}`,
         },
       }),
     ),
@@ -1279,6 +1279,7 @@ describe("Proposals", () => {
       ],
       contextPr: [],
       freshness: [],
+      layout: [],
       deliveries: [],
       hub: [[ctx]],
       memories: [],
@@ -1560,6 +1561,9 @@ describe("Assignments, the delivery report", () => {
 
   it("reads only delivery counts and distinguishes missing manifests from zero delivery", async () => {
     const calls = await renderSteering("/assignments", { agents });
+    expect(
+      document.querySelector("[data-harness-badge] [data-harness-mark]"),
+    ).toHaveAttribute("data-harness-mark", "claude-code");
     expect(calls.deliveries).toEqual([[ctx]]);
     // The hub's count, then the whole list for the Scope panel.
     expect(calls.records).toEqual([

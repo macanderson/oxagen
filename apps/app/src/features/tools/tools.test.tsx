@@ -153,15 +153,14 @@ async function renderTools(
   return { ...view, calls };
 }
 
-/** The Tools actions the Agents header carries on this view's tab. */
+/** The Tools actions the Agents header carries, the same on every tab. */
 async function renderActions(
   reads: Parameters<typeof toolsSource>[0] = {},
-  tab: Tab | null = "tools",
   ctx = owner,
 ) {
   const { source, calls } = toolsSource(reads);
   const view = withIntl(
-    <header>{await ToolsHeaderActions({ ctx, source, tab })}</header>,
+    <header>{await ToolsHeaderActions({ ctx, source })}</header>,
   );
   return { ...view, calls };
 }
@@ -190,67 +189,60 @@ afterEach(async () => {
 });
 
 describe("Tools › header actions", () => {
-  it("adds Import a provider and New tool to the Agents header, neither gold, off the Off switches tab", async () => {
-    const { calls } = await renderActions({}, "providers");
+  it("adds Import and Add server to the Agents header, neither gold, and reads only the roster", async () => {
+    const { calls } = await renderActions();
     const header = element(document.querySelector("header"), "header");
     expect(
       within(header)
         .getAllByRole("button")
         .map((button) => button.textContent),
-    ).toEqual(["Import a provider", "New tool"]);
+    ).toEqual(["Import", "Add server"]);
     expect(golds()).toEqual([]);
-    // Only the roster is read: the switch board and the org roster feed Flip.
+    // Flip a kill switch moved to the Off switches body, so the header reads
+    // neither the switch board nor the org roster.
     expect(calls.mcpServers).toHaveLength(1);
     expect(calls.killSwitches).toHaveLength(0);
     expect(calls.members).toHaveLength(0);
-  });
-
-  it("adds Flip a kill switch on the Off switches tab, the tab whose record it writes", async () => {
-    const { calls } = await renderActions({}, "switches");
-    const header = element(document.querySelector("header"), "header");
-    expect(
-      within(header)
-        .getAllByRole("button")
-        .map((button) => button.textContent),
-    ).toEqual(["Import a provider", "New tool", "Flip a kill switch"]);
-    expect(golds()).toEqual([]);
-    expect(calls.killSwitches).toEqual([[owner]]);
-    expect(calls.members).toEqual([[owner]]);
-  });
-
-  it("still offers Flip when the board and the roster did not answer", async () => {
-    await renderActions(
-      {
-        killSwitches: readError("tool_registry_unavailable", 503),
-        members: readError("org_unavailable", 503),
-        mcpServers: readError("tool_registry_unavailable", 503),
-      },
-      "switches",
-    );
-    expect(screen.getByTestId("tools-flip-open")).toBeVisible();
-  });
-
-  it("adds the two tool actions on the Agents and Runtimes tabs, which hold no Tools view", async () => {
-    await renderActions({}, null);
     expect(screen.queryByTestId("tools-flip-open")).not.toBeInTheDocument();
-    expect(screen.getByTestId("tools-new-tool-open")).toBeVisible();
   });
 
-  it("opens the tool wizard's stub, which says what it would do and saves nothing", async () => {
+  it("opens Import's stub, which says the harness configs are not read yet and saves nothing", async () => {
     await renderActions();
-    fireEvent.click(screen.getByTestId("tools-new-tool-open"));
-    const dialog = await screen.findByTestId("tools-new-tool");
+    fireEvent.click(screen.getByTestId("tools-harness-import-open"));
+    const dialog = await screen.findByTestId("tools-harness-import");
     expect(
-      within(dialog).getByText(/The tool wizard is not built yet/),
-    ).toHaveAttribute("data-gap", "#3924");
-    expect(within(dialog).getByTestId("tools-new-tool-confirm")).toBeDisabled();
-    expect(within(dialog).getAllByRole("listitem")).toHaveLength(5);
+      within(dialog).getByRole("heading", { name: "Import MCP servers" }),
+    ).toBeInTheDocument();
+    expect(
+      within(dialog).getByText(
+        /Oxagen does not read the MCP servers in your harness configs yet/,
+      ),
+    ).toHaveAttribute("data-gap", "#4810");
+    expect(
+      within(dialog).getByTestId("tools-harness-import-confirm"),
+    ).toBeDisabled();
+  });
+
+  it("opens the import dialog from Add server, under the button's own name", async () => {
+    await renderActions();
+    fireEvent.click(screen.getByTestId("tools-import-open"));
+    const dialog = await screen.findByRole("dialog", { name: "Add server" });
+    expect(dialog).toBeVisible();
+  });
+
+  it("still offers Add server when the roster did not answer", async () => {
+    await renderActions({
+      mcpServers: readError("tool_registry_unavailable", 503),
+    });
+    expect(screen.getByTestId("tools-import-open")).toHaveTextContent(
+      "Add server",
+    );
   });
 
   it.each(["member", "billing", "compliance"] as const)(
     "offers an org %s none of them, and reads nothing for them (negative)",
     async (role) => {
-      const { calls } = await renderActions({}, "switches", viewer(role));
+      const { calls } = await renderActions({}, viewer(role));
       const header = element(document.querySelector("header"), "header");
       expect(within(header).queryAllByRole("button")).toHaveLength(0);
       expect(calls.mcpServers).toHaveLength(0);
@@ -943,6 +935,7 @@ describe("Tools › tool servers view", () => {
                 authorization: null,
                 contextTokens: null,
                 weeklyPrice: null,
+                steeringName: null,
               },
             ],
           }),
@@ -1240,6 +1233,16 @@ describe("Tools › off switches tab", () => {
     ).toBeVisible();
   });
 
+  it("offers Flip a kill switch beside Create a switch, where the header used to carry it", async () => {
+    await renderTools({}, "switches");
+    const scoped = screen.getByRole("region", { name: "Scoped switches" });
+    const flip = within(scoped).getByTestId("tools-flip-open");
+    expect(flip).toHaveTextContent("Flip a kill switch");
+    expect(within(scoped).getByTestId("tools-switch-new-open")).toBeVisible();
+    fireEvent.click(flip);
+    expect(await screen.findByTestId("tools-flip-dialog")).toBeVisible();
+  });
+
   it("offers Create a switch over the three scopes an incident names, saving nothing yet", async () => {
     await renderTools({}, "switches");
     fireEvent.click(screen.getByTestId("tools-switch-new-open"));
@@ -1272,6 +1275,7 @@ describe("Tools › off switches tab", () => {
     expect(
       screen.queryByTestId("tools-switch-new-open"),
     ).not.toBeInTheDocument();
+    expect(screen.queryByTestId("tools-flip-open")).not.toBeInTheDocument();
   });
 });
 
@@ -1304,17 +1308,16 @@ function enforceablyGrants(
 
 /**
  * Which of the three write controls the page offers this viewer: the Agents
- * header's Tools actions as the Off switches tab draws them, where Flip sits,
- * beside the registry's body, where a version is reclassified.
+ * header's Tools actions, the registry's body, where a version is
+ * reclassified, and the Off switches body, where Flip sits.
  */
 async function offered(ctx: WsCtxType): Promise<Record<ToolsWrite, boolean>> {
   const { source } = toolsSource({});
   withIntl(
     <>
-      <header>
-        {await ToolsHeaderActions({ ctx, source, tab: "switches" })}
-      </header>
+      <header>{await ToolsHeaderActions({ ctx, source })}</header>
       {await ToolsBody({ ctx, source, tab: "tools", searchParams: {} })}
+      {await ToolsBody({ ctx, source, tab: "switches", searchParams: {} })}
     </>,
   );
   // The header and the registry panel each carry the import control.

@@ -25,6 +25,9 @@ describe("HarnessIcon", () => {
     "Claude Code",
     " codex",
     "custom",
+    "__proto__",
+    "constructor",
+    "toString",
   ])("keeps a custom name generic: %s", (harness) => {
     const { container } = render(<HarnessIcon harness={harness} />);
     expect(container.querySelector("[data-harness-mark]")).toBeNull();

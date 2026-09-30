@@ -4,12 +4,13 @@
 // (the agent page's header). The mockup's Trust and Spend pills are cut
 // (#2969 closed), so no layout draws a score.
 import type { ReactNode } from "react";
+import { AgentAvatar } from "./agent-avatar";
 import { mono } from "./control-styles";
 
 const AVATAR = {
-  list: "size-7 text-[11px]",
-  compact: "size-[30px] text-[11px]",
-  detail: "size-14 text-lg",
+  list: 28,
+  compact: 30,
+  detail: 56,
 } as const;
 
 /**
@@ -22,12 +23,14 @@ const COMPACT =
 
 export function AgentCard({
   agentKey,
+  harness,
   notRecorded,
   sub,
   layout = "list",
 }: {
   /** `org_ns.ws_ns.slug`; null when the store names no agent. */
   agentKey: string | null;
+  harness: string | null | undefined;
   /** The translated words for a key the store did not record. */
   notRecorded: string;
   sub: ReactNode;
@@ -40,12 +43,13 @@ export function AgentCard({
       className={`flex min-w-0 items-center gap-2.5 text-left ${layout === "compact" ? COMPACT : ""}`}
     >
       {agentKey === null ? null : (
-        <span
-          aria-hidden="true"
-          className={`inline-flex shrink-0 items-center justify-center rounded-[30%] border border-border bg-muted font-semibold uppercase ${AVATAR[layout]}`}
-        >
-          {slug.slice(0, 2)}
-        </span>
+        <AgentAvatar
+          value={null}
+          initials={slug.slice(0, 2).toUpperCase()}
+          harness={harness}
+          size={AVATAR[layout]}
+          surface={layout === "compact" ? "background" : "panel"}
+        />
       )}
       <span
         className={`flex min-w-0 flex-col leading-snug ${layout === "list" ? "w-48 max-w-60" : layout === "compact" ? "max-w-[280px] leading-[1.3]" : "max-w-full"}`}

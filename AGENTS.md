@@ -58,6 +58,8 @@ Mac owns `oxagen.app`, bought on 2026-09-27. It is registered at Vercel, in the 
 | `steering-assembler` | `src/assemble.ts` | The one assembler (ADR-093): ranks every steering candidate by tier then recency, fits it to a token budget, returns the text and a manifest of what was included or cut and why |
 | `inngest-functions` | `src/functions/` | Durable background jobs |
 | `ingestion` | `src/pipeline.ts` | Universal connector pipeline |
+| `work` | `src/types.ts` | Work item, collector, workflow, and triage types and schemas, and the autonomy gate (`autonomyAllows`). Triage, planning, work order checks, and training export throw `NotBuiltError` |
+| `done-record` | `src/types.ts` | The done-record/v1 type and schema. `decide` and `lockDigest` throw `NotBuiltError` |
 | `billing` | `src/metering.ts` | Credit gate + usage metering |
 | `billing` | `src/grants.ts` | Credit grants + scope |
 | `plugins` | `src/entitlements/` | Plugin entitlement gate + bootstrap |

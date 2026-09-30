@@ -237,7 +237,7 @@ gh run watch                                    # confirm CI green
 
 ### The gate
 
-CI runs lint, typecheck, unit tests, coverage, builds, contract checks, and integration checks through [pipeline.yml](.github/workflows/pipeline.yml). The [Vision Gate](.github/workflows/vision-gate.yml) reviews the diff against `docs/VISION.md`.
+CI runs lint, typecheck, unit tests, coverage, builds, contract checks, and integration checks through [pipeline.yml](.github/workflows/pipeline.yml). The [Vision Gate](.github/workflows/vision-gate.yml) reviews the diff against `docs/VISION.md`. The [mockup parity capture](.github/workflows/mockup-parity-capture.yml) screenshots every page of the app as each audit persona for the roadmap's `/mockup-parity-audit`, on dispatch and on a pull request that changes it.
 
 `pnpm gate` and `pnpm gate:full` are heavy verification entry points. Do not run them on the shared development machine. The local exception is one test file for code the task changed, in isolation. Lightweight integrity checks and git hooks still apply. See [CLAUDE.md](CLAUDE.md) for the full policy.
 

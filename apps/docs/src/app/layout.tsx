@@ -1,5 +1,7 @@
 import "./global.css";
+import { APPLE_STARTUP_IMAGES } from "@oxagen/ui/lib/splash-screens";
 import type { Metadata, Viewport } from "next";
+import Script from "next/script";
 import type { ReactNode } from "react";
 import { RootProvider } from "fumadocs-ui/provider/next";
 import { InstallCliButton } from "@/components/install/install-cli-button";
@@ -24,13 +26,17 @@ export const metadata: Metadata = {
     ],
   },
   // iOS standalone mode: `capable` allows full-screen launch from the home
-  // screen. `default` (not `black-translucent` like apps/app) keeps the
-  // status bar opaque — this is a reading surface, so text near the top of
-  // the viewport must not run under the status bar.
+  // screen. `default` keeps the status bar opaque: this is a reading surface,
+  // so text near the top of the viewport must not run under the status bar.
+  // Each device opens on the kit's launch screen for its exact screen size.
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
     title: "Oxagen docs",
+    startupImage: APPLE_STARTUP_IMAGES.map(({ url, media }) => ({
+      url,
+      media,
+    })),
   },
   openGraph: {
     title: "Oxagen docs: the agent control plane",
@@ -71,6 +77,14 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <RootProvider>{children}</RootProvider>
         <InstallCliButton />
         <SwRegister />
+        {/* The house install prompt (oxagen-brand pwa/install-prompt.js),
+            vendored by tools/scripts/sync-brand-assets.mjs. */}
+        <Script
+          src="/pwa/install-prompt.js"
+          strategy="afterInteractive"
+          data-icon="/pwa/icon-192.png"
+          data-title="Add Oxagen docs to your home screen"
+        />
       </body>
     </html>
   );

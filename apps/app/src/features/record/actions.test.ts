@@ -49,7 +49,7 @@ const CONTEXT_PR = {
     provider: "github",
     repository: "acme/platform",
     baseRef: "main",
-    branch: "context/ctx.scr.001-never-push-to-main",
+    branch: "steering/ctx.scr.001-never-push-to-main",
     headSha: "0123456789abcdef",
     path: ".oxagen/rules/ctx.scr.001-never-push-to-main.toml",
   },
@@ -90,6 +90,7 @@ describe("reviseRecord", () => {
         status: "checks_passed",
         prNumber: 43,
         prUrl: "https://github.com/acme/platform/pull/43",
+        branch: "steering/ctx.scr.001-never-push-to-main",
       },
     });
     expect(requireViewer).toHaveBeenCalledWith("acme", "core-platform");
@@ -116,7 +117,7 @@ describe("reviseRecord", () => {
       ),
     ).toEqual({
       ok: true,
-      value: { status: "proposed", prNumber: null, prUrl: null },
+      value: { status: "proposed", prNumber: null, prUrl: null, branch: null },
     });
     const input: unknown = invoke.mock.calls[0]?.[1];
     expect(input).not.toHaveProperty("rationale");

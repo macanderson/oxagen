@@ -1,16 +1,46 @@
-# Node-side deploy scripts
+# Node deployment
 
-These run on the shared application node (tagged `Name=oxagen-app`, account
-`916294258235` — the account the 2026-08-27 cutover moved the live platform
-to), not on a developer's machine and not on a CI runner.
-`tools/install-node-scripts.sh` copies this directory to `/opt/oxagen/bin`.
+The shared application node runs these scripts. Infrastructure publishes a
+complete bundle under `_node-tools/releases/<digest>.json`. The digest covers
+the five allowed filenames and each file's UTF-8 content hash. The dispatcher
+refuses missing files, extra paths, changed content, and symlinks in cached
+releases. It does not extract an archive.
 
-They exist so that CI does not have to. A GitHub Actions role that could send
-`AWS-RunShellScript` to this instance would have root on the box that also
-runs Neo4j and ClickHouse (Postgres moved to Aurora Serverless v2); instead
-each CI role may send exactly one SSM document, `oxagen-deploy-service`,
-whose only argument is a service name constrained by `allowedPattern`. The
-privilege lives here, in version control, where it can be read and reviewed.
+The deployment document embeds the trusted dispatcher from infrastructure
+source. Application CI asks that document to verify its source digest before
+publishing a service artifact. An old document rejects the new parameters.
+Missing approved bundles fail before the recovery artifact changes. Verification
+also checks that the bucket's bootstrap launcher, dispatcher, and current pointer
+match the approved release. Actual deployment verifies the bundle again.
+
+The dispatcher installs a complete release at `/opt/oxagen/node-tools/<digest>`
+under `service-deploy.lock`, then releases that installation lock before running
+the worker through its absolute immutable path. The worker acquires the same
+lock for memory admission, container replacement, health checks, and rollback.
+Every Python helper comes from the worker's release directory. Updating the
+legacy entry points cannot change files used by an active deployment.
+
+Only infrastructure authority publishes `_node-tools` and bootstrap executables.
+Application and Stella deploy roles retain their existing permissions. The
+platform role's separate shell permission for database migrations is unchanged.
+The existing infrastructure workflow publishes bundles after applying the
+production deploy or staging stack. Source changes under `infra/tools/node/`
+select those stacks. A deployment that reaches verification before publication
+fails closed and can be rerun after infrastructure finishes.
+
+For an explicit infrastructure installation, run `infra/tools/install-node-scripts.sh`.
+It publishes the bundle, verifies it, and atomically switches legacy entry points
+under the node lock. It retains the existing Caddy validation and rollback flow.
+`infra/tools/publish-node-tools.sh` only publishes approved sources and takes an
+explicit `BUCKET`. It does not restart a service. Neither script runs with an
+application deploy role.
+
+The legacy bootstrap still downloads `_bin/`. Its `deploy-service.sh` is now a
+launcher for the approved bundle. No user-data edit is needed. Keep approved S3
+bundles and installed node tool releases for rollback and investigation. Service
+rollback uses the same guarded worker, never a fallback to an unverified script.
+Node configuration remains in `/opt/oxagen/bin/node.env` and is not part of the
+executable bundle.
 
 ## The contract: `oxagen-run.json`
 
@@ -37,7 +67,7 @@ manifest describing how it runs:
 | `command` | yes | Argv, relative to the tarball root, which is mounted at `/app`. |
 | `memory` | no (`512m`) | Hard container limit. Positive integer bytes, or a `k`, `m`, or `g` suffix. |
 | `health_path` | no (`/`) | Path polled for up to 60s after start. |
-| `env` | no | Non-secret environment. This file ships inside a public CI artifact. |
+| `env` | no | Non-secret environment. This file ships inside a public CI artifact. `package-for-node.sh` adds the registry's static values that Parameter Store does not hold (`build-env.ts --runtime-out`). If you later add one of those keys to Parameter Store, redeploy the service, because the container would otherwise start with both. |
 | `config_prefix` | no | Parameter Store prefix; every parameter under it becomes an environment variable named after its last path segment. |
 
 The manifest is what makes the deploy path generic. Passing the image, port and

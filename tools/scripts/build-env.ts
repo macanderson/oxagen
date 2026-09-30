@@ -22,12 +22,24 @@
  * GitHub warning: the feature it drives degrades, and #1182 is the record of
  * how invisible that is when nothing says so.
  *
+ * The running container is a second consumer. The node starts it with what
+ * Parameter Store holds and nothing else, so a static value reached the build
+ * and never the process. Production's `APP_URL` is one: the registry sets it,
+ * no parameter holds it, and the Slack and Linear connect flows, which read it
+ * at request time, stayed off. `--runtime-out` writes the static values that
+ * Parameter Store does not hold, and package-for-node.sh puts them in the
+ * artifact's manifest. A static value Parameter Store already holds is left
+ * out, so Parameter Store keeps deciding what production runs. Where the two
+ * disagree, the build says so, because the registry then describes a
+ * production that does not exist.
+ *
  * Usage:
  *   aws ssm get-parameters-by-path --path /oxagen/production --recursive \
  *     --with-decryption --output json \
  *     --query 'Parameters[].{Name:Name,Value:Value}' \
  *   | tsx tools/scripts/build-env.ts --service app --env production \
- *       --prefix /oxagen/production --out "$RUNNER_TEMP/build-env"
+ *       --prefix /oxagen/production --out "$RUNNER_TEMP/build-env" \
+ *       --runtime-out "$RUNNER_TEMP/runtime-env.json"
  */
 
 import { readFileSync, writeFileSync } from "node:fs";
@@ -83,6 +95,18 @@ export interface ResolveResult {
    * its absence at build time is not a defect and is not reported.
    */
   missingOptional: string[];
+  /**
+   * Static, non-secret values that Parameter Store does not hold. The node
+   * starts a container with Parameter Store alone, so these reach the running
+   * process only through the artifact's manifest.
+   */
+  runtimeFill: ResolvedVar[];
+  /**
+   * Static keys whose Parameter Store value differs from the registry's. The
+   * build uses the registry's value and the running container uses the
+   * parameter, so the two disagree about what this environment runs.
+   */
+  drift: string[];
 }
 
 /**
@@ -122,6 +146,8 @@ export function resolveBuildEnv({
   const missingRequired: string[] = [];
   const missingInlined: string[] = [];
   const missingOptional: string[] = [];
+  const runtimeFill: ResolvedVar[] = [];
+  const drift: string[] = [];
 
   for (const [key, meta] of Object.entries(ENV_REGISTRY)) {
     if (!meta.services.includes(service)) continue;
@@ -138,15 +164,40 @@ export function resolveBuildEnv({
       continue;
     }
 
-    resolved.push({
+    const entry: ResolvedVar = {
       key,
       value,
       secret: meta.secret,
       source: staticValue === undefined ? "parameter-store" : "registry",
-    });
+    };
+    resolved.push(entry);
+
+    if (staticValue === undefined) continue;
+    const stored = fromStore.get(key);
+    if (stored === undefined) {
+      // The manifest ships inside an artifact a public CI job builds, so a
+      // value marked secret never goes into it, static or not.
+      if (!meta.secret) runtimeFill.push(entry);
+    } else if (stored !== staticValue) {
+      drift.push(key);
+    }
   }
 
-  return { resolved, missingRequired, missingInlined, missingOptional };
+  return {
+    resolved,
+    missingRequired,
+    missingInlined,
+    missingOptional,
+    runtimeFill,
+    drift,
+  };
+}
+
+/** Render the runtime fill as the JSON object package-for-node.sh merges. */
+export function renderRuntimeEnv(fill: readonly ResolvedVar[]): string {
+  const env: Record<string, string> = {};
+  for (const { key, value } of fill) env[key] = value;
+  return `${JSON.stringify(env, null, 2)}\n`;
 }
 
 /** Quote a value so a POSIX shell reads it back byte-for-byte. */
@@ -176,6 +227,7 @@ async function main(): Promise<void> {
   const env = flag("env") ?? "production";
   const prefix = flag("prefix") ?? `/oxagen/${env}`;
   const out = flag("out");
+  const runtimeOut = flag("runtime-out");
   const paramsFile = flag("params");
 
   if (!service || !SERVICE_NAMES.includes(service as ServiceName)) {
@@ -192,14 +244,20 @@ async function main(): Promise<void> {
   const raw = paramsFile ? readFileSync(paramsFile, "utf8") : await readStdin();
   const parameters = (raw.trim() === "" ? [] : JSON.parse(raw)) as Parameter[];
 
-  const { resolved, missingRequired, missingInlined, missingOptional } =
-    resolveBuildEnv({
-      service: service as ServiceName,
-      env: env as EnvName,
-      parameters,
-      prefix,
-      withoutOAuth: argv.includes("--without-oauth"),
-    });
+  const {
+    resolved,
+    missingRequired,
+    missingInlined,
+    missingOptional,
+    runtimeFill,
+    drift,
+  } = resolveBuildEnv({
+    service: service as ServiceName,
+    env: env as EnvName,
+    parameters,
+    prefix,
+    withoutOAuth: argv.includes("--without-oauth"),
+  });
 
   // Mask before anything else can echo one. A multi-line secret has to be
   // masked line by line — the workflow-command parser reads one line at a time.
@@ -218,6 +276,17 @@ async function main(): Promise<void> {
     );
   }
 
+  // Names only. A key the registry treats as non-secret can still hold a
+  // parameter value nobody meant to print.
+  if (drift.length > 0) {
+    stdout.write(
+      `::warning title=Registry and Parameter Store disagree::${prefix} ` +
+        `holds a different value than the registry for ${drift.join(", ")}. ` +
+        `The ${service} build uses the registry's value and the running ` +
+        `container uses the parameter. Change whichever one is wrong.\n`,
+    );
+  }
+
   if (missingRequired.length > 0) {
     stdout.write(
       `::error title=Incomplete build environment::${service} requires ` +
@@ -231,10 +300,20 @@ async function main(): Promise<void> {
   if (out) writeFileSync(out, file, { mode: 0o600 });
   else stdout.write(file);
 
+  if (runtimeOut) {
+    writeFileSync(runtimeOut, renderRuntimeEnv(runtimeFill), { mode: 0o600 });
+    stdout.write(
+      `build-env: ${service}/${env} manifest carries ` +
+        `${runtimeFill.map((entry) => entry.key).join(", ") || "nothing"}\n`,
+    );
+  }
+
   stdout.write(
     `build-env: ${service}/${env} resolved ${resolved.length} variables; ` +
       `${missingInlined.length} client values missing, ` +
-      `${missingOptional.length} server-side optional left to the node\n`,
+      `${missingOptional.length} server-side optional left to the node, ` +
+      `${runtimeFill.length} static values for the running container, ` +
+      `${drift.length} disagreeing with Parameter Store\n`,
   );
 }
 

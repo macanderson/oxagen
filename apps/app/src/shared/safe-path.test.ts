@@ -380,7 +380,7 @@ describe("routes", () => {
     ).toBe("/acme/core-platform/agents?tab=toolbelts&belt=tbt_reviewbelt");
   });
 
-  it("puts the Runtimes list on its Agents tab, and keeps one runtime on its own path", () => {
+  it("puts the Runtimes list on its Agents tab, and opens one runtime in the drawer over it", () => {
     expect(routes.runtimes("acme", "core-platform")).toBe(
       "/acme/core-platform/agents?tab=runtimes",
     );
@@ -388,8 +388,19 @@ describe("routes", () => {
       "/acme/core%20platform/agents?tab=runtimes",
     );
     expect(routes.runtime("acme", "core-platform", "rtm_buildbox")).toBe(
-      "/acme/core-platform/runtimes/rtm_buildbox",
+      "/acme/core-platform/agents?tab=runtimes&runtime=rtm_buildbox",
     );
+    expect(
+      routes.runtime("acme", "core-platform", "tch_mbellmbp16aaaaaaaaaaaaa"),
+    ).toBe(
+      "/acme/core-platform/agents?tab=runtimes&runtime=tch_mbellmbp16aaaaaaaaaaaaa",
+    );
+    expect(
+      routes.agents("acme", "core-platform", {
+        tab: "runtimes",
+        runtime: "rtm_buildbox",
+      }),
+    ).toBe("/acme/core-platform/agents?tab=runtimes&runtime=rtm_buildbox");
   });
 
   it.each([

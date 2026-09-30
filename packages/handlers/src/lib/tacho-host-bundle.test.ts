@@ -824,7 +824,9 @@ describe("the agent's day spend on the control envelope (ADR-160)", () => {
     return { tx, findMany };
   }
 
-  beforeEach(() => selectAgentDaySpend.mockReset());
+  beforeEach(() => {
+    selectAgentDaySpend.mockReset();
+  });
 
   it("splits the agent's UTC day into this host and every other host of the agent", async () => {
     const { tx, findMany } = hostsTransaction([
@@ -912,7 +914,9 @@ describe("the unbound repository clause on the bundle (#3941)", () => {
   }
   const signature = { key_id: "k", alg: "ed25519", sig: "s" };
 
-  beforeEach(() => resolveUnboundRepo.mockReset());
+  beforeEach(() => {
+    resolveUnboundRepo.mockReset();
+  });
 
   it("signs the clause for a host that advertised it, and the host's schema parses it", () => {
     const result = withMandate(ASKS, WITH_CLAUSE);

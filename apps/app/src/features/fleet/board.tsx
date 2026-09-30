@@ -485,6 +485,7 @@ function RunRowView({
           <td key={column} className={`${cell} min-w-48`}>
             <AgentCard
               agentKey={run.agentKey}
+              harness={run.harness?.name}
               notRecorded={t("notRecorded")}
               sub={
                 run.harness

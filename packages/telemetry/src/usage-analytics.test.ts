@@ -69,7 +69,9 @@ const agg = (o: Partial<Record<string, string>>) => ({
   ...o,
 });
 
-beforeEach(() => queryMock.mockReset());
+beforeEach(() => {
+  queryMock.mockReset();
+});
 afterEach(() => vi.clearAllMocks());
 
 const WINDOW = {

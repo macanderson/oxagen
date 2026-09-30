@@ -135,7 +135,7 @@ describe("WAL body failure isolation", () => {
     const markShipped = vi.spyOn(wal, "markShipped");
     const ingest = vi.fn().mockResolvedValue({
       accepted: session.length,
-      event_ids: [],
+      event_ids: session.map((event) => event.event_id_idem),
       chain_breaks: [],
       control: {
         host_status: "active",

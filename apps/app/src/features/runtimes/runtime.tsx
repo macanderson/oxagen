@@ -1,17 +1,16 @@
-// One runtime, reached at /[org]/[ws]/runtimes/[runtime]. The segment is one
-// of two public ids, and each draws its own page:
+// One runtime, in the drawer over the Agents page's Runtimes tab (roadmap
+// mockups `agt-runtime`), opened by `?tab=runtimes&runtime=<id>`. The id is
+// one of two public ids, and each draws its own body:
 //
-// - A host enrollment (`tch_…`, mockup `rtDetail()`): the host, the agents on
-//   it, and how to roll it back, because the enrollment is the row the record
-//   holds for a machine.
+// - A host enrollment (`tch_…`): the host, the agents on it, and how to roll
+//   it back, because the enrollment is the row the record holds for a machine.
 // - A named runtime (`rtm_…`, ADR-198): the slot hosts enroll against, its
 //   agents, and its containment (ADR-204). An org Owner or Admin changes
 //   containment here with a switch; everyone else reads the value.
 //
-// The spec's detail has no empty state: an id the workspace does not hold is
-// a 404.
+// An id the workspace does not hold opens the drawer on a sentence that says
+// so, and the tab stays behind it.
 import { runtimeIdSchema } from "@oxagen/oxagen/contracts/runtime.shared";
-import { notFound } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import type {
@@ -23,11 +22,10 @@ import type {
 import type { MemberList } from "@/data/contracts/org";
 import type { DataSource } from "@/data/ports";
 import type { Read } from "@/data/read";
-import { PageRecord } from "@/features/shell";
 import type { WsCtx } from "@/server/viewer";
 import { routes } from "@/shared/safe-path";
 import { AgentCard } from "@/ui/agent-card";
-import { buttonSecondary, mono, panelBody } from "@/ui/control-styles";
+import { mono, panelBody } from "@/ui/control-styles";
 import { type ListRow, ListTable } from "@/ui/list-table";
 import { formatCount } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
@@ -35,6 +33,7 @@ import { type OperatorIdentity, OperatorName } from "@/ui/operator";
 import { ReadFailure } from "@/ui/read-failure";
 import { cell } from "@/ui/table";
 import { ContainmentSwitch, SmokeSession, Unenroll } from "./controls";
+import { RuntimeDrawer } from "./drawer";
 import { AgentsCell, LastSeen } from "./named";
 import {
   COMMAND_HOOKS,
@@ -50,7 +49,7 @@ import {
   Panel,
   Sub,
 } from "./parts";
-import { mayAddRuntime, RuntimesHeader } from "./runtimes";
+import { mayAddRuntime } from "./runtimes";
 import { RuntimesFailure } from "./states";
 
 function HostPanel({
@@ -258,6 +257,7 @@ function agentRow({
   const card = (
     <AgentCard
       agentKey={agentKey}
+      harness={agent?.harness}
       notRecorded={words.notRecorded}
       // The design's `agentCard` names the harness under the key.
       sub={
@@ -426,7 +426,7 @@ function RollbackPanel({
   );
 }
 
-/** The loaded detail, below the page header. */
+/** A host enrollment's drawer body. */
 function RuntimeLoaded({
   host,
   agents,
@@ -444,40 +444,27 @@ function RuntimeLoaded({
   wsName: string;
   now: number;
 }) {
-  const t = useTranslations("runtimes.detail");
   const agent = agents.ok
     ? agents.value.agents.find((a) => a.agentKey === host.agentKey)
     : undefined;
   return (
     <>
-      <div>
-        <SafeLink
-          to={routes.runtimes(org, ws)}
-          data-testid="runtime-back"
-          data-touch-target=""
-          className={`${buttonSecondary} min-h-7 px-2.5 text-xs`}
-        >
-          {t("back")}
-        </SafeLink>
-      </div>
-      <div className="flex flex-col gap-3.5">
-        <HostPanel host={host} wsName={wsName} now={now} />
-        <AgentsPanel
-          host={host}
-          agents={agents}
-          members={members}
-          org={org}
-          ws={ws}
-        />
-        <RollbackPanel
-          host={host}
-          agent={
-            agent?.slug ?? (host.agentKey.split(".").at(-1) || host.agentKey)
-          }
-          org={org}
-          ws={ws}
-        />
-      </div>
+      <HostPanel host={host} wsName={wsName} now={now} />
+      <AgentsPanel
+        host={host}
+        agents={agents}
+        members={members}
+        org={org}
+        ws={ws}
+      />
+      <RollbackPanel
+        host={host}
+        agent={
+          agent?.slug ?? (host.agentKey.split(".").at(-1) || host.agentKey)
+        }
+        org={org}
+        ws={ws}
+      />
     </>
   );
 }
@@ -572,7 +559,7 @@ function ContainmentPanel({
   );
 }
 
-/** A named runtime's page, below the page header. */
+/** A named runtime's drawer body. */
 function NamedRuntimeLoaded({
   runtime,
   org,
@@ -584,28 +571,15 @@ function NamedRuntimeLoaded({
   ws: string;
   canEdit: boolean;
 }) {
-  const t = useTranslations("runtimes.detail");
   return (
     <>
-      <div>
-        <SafeLink
-          to={routes.runtimes(org, ws)}
-          data-testid="runtime-back"
-          data-touch-target=""
-          className={`${buttonSecondary} min-h-7 px-2.5 text-xs`}
-        >
-          {t("back")}
-        </SafeLink>
-      </div>
-      <div className="flex flex-col gap-3.5">
-        <NamedFactsPanel runtime={runtime} />
-        <ContainmentPanel
-          runtime={runtime}
-          org={org}
-          ws={ws}
-          canEdit={canEdit}
-        />
-      </div>
+      <NamedFactsPanel runtime={runtime} />
+      <ContainmentPanel
+        runtime={runtime}
+        org={org}
+        ws={ws}
+        canEdit={canEdit}
+      />
     </>
   );
 }
@@ -653,7 +627,12 @@ async function readRuntime(ctx: WsCtx, source: DataSource, runtime: string) {
   return { state: "found" as const, host, agents, members, now: Date.now() };
 }
 
-export async function Runtime({
+/**
+ * The runtime drawer over the Runtimes tab. A failed read opens it on the
+ * failure, and an id the workspace does not hold on a sentence saying so,
+ * because the tab behind it is still worth keeping.
+ */
+export async function RuntimeInDrawer({
   ctx,
   source,
   org,
@@ -672,58 +651,78 @@ export async function Runtime({
   const read = NAMED_RUNTIME_ID.test(runtime)
     ? await readNamedRuntime(ctx, source, runtime)
     : await readRuntime(ctx, source, runtime);
+  return (
+    <DrawerFor
+      read={read}
+      ctx={ctx}
+      org={org}
+      ws={ws}
+      viewerName={viewerName}
+    />
+  );
+}
+
+function DrawerFor({
+  read,
+  ctx,
+  org,
+  ws,
+  viewerName,
+}: {
+  read:
+    | Awaited<ReturnType<typeof readNamedRuntime>>
+    | Awaited<ReturnType<typeof readRuntime>>;
+  ctx: WsCtx;
+  org: string;
+  ws: string;
+  viewerName: string;
+}) {
+  const t = useTranslations("runtimes.drawer");
+  const closeTo = routes.runtimes(org, ws);
   if (read.state === "failed")
     return (
-      <RuntimesFailure
-        read={read.read}
-        org={org}
-        ws={ws}
-        orgName={ctx.orgName}
-        wsSlug={ctx.wsSlug}
-        wsRole={ctx.wsRole}
-        viewerName={viewerName}
-        readAt={read.now}
-      />
+      <RuntimeDrawer title={t("title")} closeTo={closeTo}>
+        <RuntimesFailure
+          read={read.read}
+          org={org}
+          ws={ws}
+          orgName={ctx.orgName}
+          wsSlug={ctx.wsSlug}
+          wsRole={ctx.wsRole}
+          viewerName={viewerName}
+          readAt={read.now}
+        />
+      </RuntimeDrawer>
     );
-  if (read.state === "missing") notFound();
+  if (read.state === "missing")
+    return (
+      <RuntimeDrawer title={t("title")} closeTo={closeTo}>
+        <p
+          data-testid="runtime-missing"
+          className="text-sm text-muted-foreground"
+        >
+          {t("missing")}
+        </p>
+      </RuntimeDrawer>
+    );
   const canEdit = mayAddRuntime(ctx);
   if (read.state === "named")
     return (
-      <>
-        {/* The breadcrumb ends on the runtime's name, not its id. */}
-        <PageRecord
-          route="runtimes"
-          id={read.runtime.id}
-          label={read.runtime.name}
-        />
-        <RuntimesHeader
-          org={org}
-          ws={ws}
-          wsName={ctx.wsName}
-          canAdd={canEdit}
-        />
+      <RuntimeDrawer
+        title={read.runtime.name}
+        subtitle={read.runtime.slug}
+        closeTo={closeTo}
+      >
         <NamedRuntimeLoaded
           runtime={read.runtime}
           org={org}
           ws={ws}
           canEdit={canEdit}
         />
-      </>
+      </RuntimeDrawer>
     );
   return (
-    <>
-      {/* The breadcrumb ends on the runtime's name, not its enrollment id. */}
-      <PageRecord
-        route="runtimes"
-        id={read.host.id}
-        label={read.host.hostname}
-      />
-      <RuntimesHeader
-        org={org}
-        ws={ws}
-        wsName={ctx.wsName}
-        canAdd={canEdit}
-      />
+    <RuntimeDrawer title={read.host.hostname} closeTo={closeTo}>
       <RuntimeLoaded
         host={read.host}
         agents={read.agents}
@@ -733,6 +732,6 @@ export async function Runtime({
         wsName={ctx.wsName}
         now={read.now}
       />
-    </>
+    </RuntimeDrawer>
   );
 }

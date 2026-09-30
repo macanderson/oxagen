@@ -96,6 +96,47 @@ describe("agent.mcp.list handler", () => {
     expect(s.toolCount).toBe(2);
   });
 
+  it("names a steering server's folder and no folder for a server added another way (#4678)", async () => {
+    const base = {
+      transportType: "streamable-http",
+      endpointUrl: "https://mcp.example.com",
+      healthStatus: "healthy",
+      lastHealthcheckAt: null,
+      discoveredTools: [],
+    };
+    mocks.selectResult.mockReturnValueOnce([
+      {
+        ...base,
+        publicId: "mcs_1",
+        name: "Stripe",
+        origin: "steering",
+        steeringName: "stripe",
+      },
+      {
+        ...base,
+        publicId: "mcs_2",
+        name: "Linear",
+        origin: "legacy",
+        steeringName: null,
+      },
+      // A legacy row never names a folder, even one a later write left behind.
+      {
+        ...base,
+        publicId: "mcs_3",
+        name: "Notion",
+        origin: "legacy",
+        steeringName: "notion",
+      },
+    ]);
+    const result = await agentMcpListHandler({}, CTX);
+    expect(result.servers.map((s) => [s.publicId, s.steeringName])).toEqual([
+      ["mcs_1", "stripe"],
+      ["mcs_2", null],
+      ["mcs_3", null],
+    ]);
+    expect(() => agentMcpList.output.parse(result)).not.toThrow();
+  });
+
   it("redacts userinfo from a stored endpoint address (#3720)", async () => {
     // A row written before the register guard can carry a username and
     // password in endpoint_url. The list must not return either in the clear.

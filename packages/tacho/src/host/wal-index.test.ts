@@ -158,7 +158,7 @@ describe("shipping a long session", () => {
       shippedBodies += bodies.length;
       return {
         accepted: events.length,
-        event_ids: [],
+        event_ids: events.map((event) => event.event_id_idem),
         chain_breaks: [],
         body_rejections: [],
         control: {

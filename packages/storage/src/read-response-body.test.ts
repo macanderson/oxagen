@@ -53,6 +53,21 @@ describe("bounded response bodies", () => {
     expect(body.locked).toBe(false);
   });
 
+  it("rejects non-byte chunks before buffering and cancels the source", async () => {
+    const cancel = vi.fn();
+    const body = new ReadableStream<string>({
+      pull(controller) { controller.enqueue("invalid response chunk"); },
+      cancel,
+    }, { highWaterMark: 0 });
+    // A Response takes byte chunks only. This one is handed strings on purpose,
+    // to prove the reader refuses them, so the type is widened by hand.
+    const mislabelled = body as unknown as ReadableStream<Uint8Array>;
+    await expect(readResponseBody(new Response(mislabelled), 100))
+      .rejects.toThrow("Response body must contain byte chunks");
+    expect(cancel).toHaveBeenCalledOnce();
+    expect(body.locked).toBe(false);
+  });
+
   it("rejects overflow even when source cancellation never completes", async () => {
     const body = new ReadableStream<Uint8Array>({
       pull(controller) { controller.enqueue(new Uint8Array(2)); },

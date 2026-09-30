@@ -6,9 +6,8 @@
 // Replacing one is written on this tab and kept in the vault, never in the
 // steering folder, so a credential never reaches a steering PR. The form
 // (credential-form.tsx) stores a service secret or an OAuth client's id and
-// secret through set_mcp_credential (#4742), and draws as not available until
-// that merges. An operator's own OAuth sign-in is replaced through the
-// Reconnect link beside it. Until discovery records the server's folder, the
+// secret through set_mcp_credential (#4742). An operator's own OAuth sign-in
+// is replaced through the Reconnect link beside it. Until discovery records the server's folder, the
 // tab shows what the
 // registry row holds: the endpoint, the transport, the auth kind and the
 // status light the Providers tab draws.
@@ -465,6 +464,7 @@ function Auth({
       {canEdit ? (
         <div className="flex flex-col gap-3">
           <CredentialForm
+            at={at}
             defaultName={credentialName(record?.auth.credential ?? null)}
             defaultKind={
               record?.auth.mode === "operator-oauth" ? "oauth_client" : "secret"

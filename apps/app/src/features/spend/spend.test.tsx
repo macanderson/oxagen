@@ -214,6 +214,7 @@ const source: DataSource = {
     proposals: vi.fn(),
     contextPr: vi.fn(),
     freshness: vi.fn(),
+    layout: vi.fn(),
     hub: vi.fn(),
     deliveries: vi.fn(),
     memories: vi.fn(),
@@ -605,6 +606,7 @@ describe("Spend › Month", () => {
     name: "Repair the login redirect",
     startedAt: "2026-09-11T06:00:00.000Z",
     agentKey: "acme.core.triage",
+    harness: "codex",
     operatorKey: "prn_marcusbell",
     cost: cost("4000000"),
     calls: 12,
@@ -711,6 +713,7 @@ describe("Spend › Month", () => {
       "/acme/core-platform/runs/arun_01k5rn8f3j",
     );
     expect(run).toHaveTextContent("$4.00");
+    expect(run.querySelector('[data-harness-badge="codex"]')).not.toBeNull();
     expect(screen.getByText("7 more runs")).toBeInTheDocument();
   });
 

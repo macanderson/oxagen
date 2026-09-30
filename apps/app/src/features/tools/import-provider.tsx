@@ -73,6 +73,7 @@ import { RecordMultiPicker } from "@/ui/record-picker";
 import { SheetDialog } from "@/ui/sheet-dialog";
 import { UNANSWERED, useActionFailure } from "./action-failure";
 import { importTools, type McpServerDraft, registerServer } from "./actions";
+import { useOAuthFailureText } from "./oauth-failure";
 import {
   type AuthorizationDraft,
   providerRedirectUrl,
@@ -383,8 +384,11 @@ export function ImportProvider({
   servers: readonly { id: string; name: string }[] | null;
   /** Gold only where it is the screen's one primary action. */
   primary?: boolean;
-  /** "Import a provider" in the header and the Tools panel; "Add a provider" on Providers. */
-  label?: "import" | "add";
+  /**
+   * "Import a provider" in the Tools panel, "Add a provider" on Providers,
+   * and "Add server" in the Agents page header (roadmap mockups `addserver`).
+   */
+  label?: "import" | "add" | "server";
   /** The Tools panel header's copy of the control: the trigger drops to one line. */
   compact?: boolean;
 }) {
@@ -392,6 +396,7 @@ export function ImportProvider({
   const tOAuth = useTranslations("tools.import.oauth");
   const tStudio = useTranslations("mcpStudio.addServer");
   const failureText = useActionFailure();
+  const oauthFailureText = useOAuthFailureText();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<Step>(1);
@@ -449,31 +454,6 @@ export function ImportProvider({
     setDone(null);
     setSigningInTo("");
     oauth.reset();
-  }
-
-  function oauthFailure(code: string): string {
-    switch (code) {
-      case "access_denied":
-        return tOAuth("failure.access_denied");
-      case "authorization_expired":
-        return tOAuth("failure.authorization_expired");
-      case "authorization_failed":
-        return tOAuth("failure.authorization_failed");
-      case "authorization_discovery_failed":
-        return tOAuth("failure.authorization_discovery_failed");
-      case "authorization_url_invalid":
-        return tOAuth("failure.authorization_url_invalid");
-      case "endpoint_not_public":
-        return tOAuth("failure.endpoint_not_public");
-      case "redirect_url_invalid":
-        return tOAuth("failure.redirect_url_invalid");
-      case "server_not_found":
-        return tOAuth("failure.server_not_found");
-      case "org_role_required":
-        return tOAuth("failure.org_role_required");
-      default:
-        return failureText({ ok: false, reason: "unavailable", code });
-    }
   }
 
   async function register(draft: McpServerDraft) {
@@ -634,7 +614,9 @@ export function ImportProvider({
     step === 1
       ? label === "add"
         ? t("addTitle")
-        : t("title")
+        : label === "server"
+          ? t("serverTitle")
+          : t("title")
       : step === 2
         ? t("reviewTitle")
         : t("classifyTitle");
@@ -733,7 +715,11 @@ export function ImportProvider({
           setOpen(true);
         }}
       >
-        {label === "add" ? t("openAdd") : t("open")}
+        {label === "add"
+          ? t("openAdd")
+          : label === "server"
+            ? t("openServer")
+            : t("open")}
       </button>
       <SheetDialog
         open={open}
@@ -1131,7 +1117,7 @@ export function ImportProvider({
                   ) : null}
                   {phase.kind === "failed" ? (
                     <FormAlert testId={`${TESTID}-oauth-failure`}>
-                      {oauthFailure(phase.code)}
+                      {oauthFailureText(phase.failure)}
                     </FormAlert>
                   ) : null}
                   <p className="rounded-lg border border-border px-3 py-2.5 text-[13px] text-muted-foreground">
@@ -1247,7 +1233,7 @@ export function ImportProvider({
                       unchanged: done.unchanged,
                     })}
                   </p>
-                  <DiscoveryProgress server={null} canStart={false} />
+                  <DiscoveryProgress at={at} server={null} canStart={false} />
                   {/* Several providers in one sitting: back to Connect, dialog open. */}
                   <button
                     type="button"
