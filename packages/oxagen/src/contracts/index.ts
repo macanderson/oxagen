@@ -536,6 +536,8 @@ export {
 // capability, so exported here to satisfy the file-coverage guard.
 export {
   recordKindSchema,
+  proposalKindSchema,
+  GOVERNANCE_LINEAGE,
   recordForceSchema,
   constraintEffectSchema,
   publishedSharingScopeSchema,
@@ -552,6 +554,7 @@ export {
 } from "./context.steering.shared";
 export type {
   RecordKind,
+  ProposalKind,
   RecordForce,
   ConstraintEffect,
   PublishedSharingScope,

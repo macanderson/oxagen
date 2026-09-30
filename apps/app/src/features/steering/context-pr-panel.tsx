@@ -167,6 +167,7 @@ export function ContextPrPanel({
   }
   const { value } = read;
   const { pr, merged, onMerge, governanceMode, status } = value;
+  const governance = value.kind === "governance";
   const url = pr === null ? null : parsePullRequestUrl(pr.url);
   const mode =
     governanceMode === null ? t("modeUnread") : t(`modes.${governanceMode}`);
@@ -296,12 +297,17 @@ export function ContextPrPanel({
             <Fact name="merged-at" term={t("merged.at")}>
               {date(merged.at)}
             </Fact>
-            <Fact name="promotion-event" term={t("merged.promotion")}>
-              <span className={mono}>{merged.promotionEventId}</span>
-            </Fact>
-            <Fact name="record" term={t("merged.record")}>
-              <span className={mono}>{merged.recordId}</span>
-            </Fact>
+            {/* A governance merge appends no promotion event and publishes no record (#4795). */}
+            {merged.promotionEventId === null ? null : (
+              <Fact name="promotion-event" term={t("merged.promotion")}>
+                <span className={mono}>{merged.promotionEventId}</span>
+              </Fact>
+            )}
+            {merged.recordId === null ? null : (
+              <Fact name="record" term={t("merged.record")}>
+                <span className={mono}>{merged.recordId}</span>
+              </Fact>
+            )}
           </Facts>
         </div>
       )}
@@ -311,14 +317,22 @@ export function ContextPrPanel({
             {t("onMerge.title")}
           </h3>
           <ol className="flex list-decimal flex-col gap-1 ps-5 text-sm text-foreground">
-            <li>{t("onMerge.publishes", { path: onMerge.path })}</li>
-            <li>
-              {t("onMerge.version", {
-                current: formatCount(onMerge.bundleVersion.current, locale),
-                next: formatCount(onMerge.bundleVersion.afterMerge, locale),
-              })}
-            </li>
-            <li>{t("onMerge.promotion")}</li>
+            {/* A governance change publishes no record and appends no
+                promotion event (ADR-232), so it lists only what it does. */}
+            {governance ? (
+              <li>{t("onMerge.governance", { path: onMerge.path })}</li>
+            ) : (
+              <>
+                <li>{t("onMerge.publishes", { path: onMerge.path })}</li>
+                <li>
+                  {t("onMerge.version", {
+                    current: formatCount(onMerge.bundleVersion.current, locale),
+                    next: formatCount(onMerge.bundleVersion.afterMerge, locale),
+                  })}
+                </li>
+                <li>{t("onMerge.promotion")}</li>
+              </>
+            )}
             <li>{t("onMerge.review", { review: mode })}</li>
           </ol>
         </div>
@@ -338,7 +352,9 @@ export function ContextPrPanel({
             proposalId={value.proposalId}
             blocked={status !== "checks_passed"}
           />
-          {reviewed && canMergeWithoutReview && unapproved ? (
+          {/* merge_pr_without_review refuses a governance change: it lands
+              only for an approver (ADR-232). */}
+          {reviewed && canMergeWithoutReview && unapproved && !governance ? (
             <MergeWithoutReview
               org={at.org}
               ws={at.ws}
@@ -351,6 +367,7 @@ export function ContextPrPanel({
             ws={at.ws}
             proposalId={value.proposalId}
             status={status}
+            governance={governance}
           />
         </div>
       ) : null}

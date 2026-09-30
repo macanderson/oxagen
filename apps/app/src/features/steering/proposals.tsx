@@ -104,6 +104,7 @@ function ProposalItem({
           ws={at.ws}
           proposalId={proposal.id}
           status={proposal.status}
+          governance={proposal.kind === "governance"}
         />
       </div>
     </RecordCard>

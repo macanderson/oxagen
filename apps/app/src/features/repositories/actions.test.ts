@@ -978,6 +978,7 @@ describe("readRepositoryChange", () => {
   const CONTEXT_PR = {
     proposalId: "prp_1",
     lineageId: "ctx.scr.001-never-push-to-main",
+    kind: "rule",
     status: "merged",
     governanceMode: "team",
     pr: {
@@ -1032,6 +1033,7 @@ describe("readRepositoryChange", () => {
       value: {
         proposalId: "prp_1",
         lineage: "ctx.scr.001-never-push-to-main",
+        kind: "rule",
         status: "merged",
         governanceMode: "team",
         pr: {
@@ -1085,6 +1087,7 @@ describe("mergeRepositoryChange and closeRepositoryChange", () => {
     invoke.mockResolvedValue({
       proposalId: "prp_1",
       status: "merged",
+      kind: "rule",
       record: {
         id: "rec_1",
         lineageId: "ctx.scr.001-never-push-to-main",

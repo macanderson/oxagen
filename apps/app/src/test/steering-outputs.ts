@@ -138,6 +138,7 @@ export function contextPrOutput(
   return {
     proposalId: "prp_01k5ru4a",
     lineageId: LINEAGE,
+    kind: "rule",
     status: "checks_passed",
     governanceMode: "team",
     pr: {

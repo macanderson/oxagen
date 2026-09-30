@@ -14,7 +14,8 @@
         "procedure": "procedure",
         "fact": "fact",
         "memory": "memory",
-        "preference": "preference"
+        "preference": "preference",
+        "governance": "governance"
       },
       "unclassified": "unclassified",
       "force": "force {force}",

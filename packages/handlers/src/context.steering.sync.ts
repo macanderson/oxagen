@@ -590,7 +590,13 @@ export async function syncWorkspaceSteering(
         try {
           await deps.steering.updateProposal(
             row.id,
-            { status: "pr_open", headSha: pr.headSha, checks: pendingChecks() },
+            {
+              status: "pr_open",
+              headSha: pr.headSha,
+              // A governance proposal runs the steering checks, not the six
+              // record checks. Setting the mode again runs them (#4795).
+              checks: row.kind === "governance" ? [] : pendingChecks(),
+            },
             [row.status as (typeof STALE_FROM)[number]],
             { headSha: row.headSha, noClaimSince },
           );
@@ -602,6 +608,10 @@ export async function syncWorkspaceSteering(
       }
     }
     for (const { row, pr } of merged) {
+      // A governance PR publishes no record, so there is none to link. The
+      // row stays open until the sync's governance branch records the merge
+      // (#4795).
+      if (row.kind === "governance") continue;
       // A file the sync refused did not publish, so the record still holds
       // its last good version. Linking the proposal to that version would
       // report the merge as published when it was not.

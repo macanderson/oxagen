@@ -231,6 +231,23 @@ export class MemoryStore implements SteeringStore {
       total: rows.length,
     };
   }
+  async replaceProposal(
+    prior: Parameters<SteeringStore["replaceProposal"]>[0],
+    values: Parameters<SteeringStore["replaceProposal"]>[1],
+  ) {
+    // One transaction in Postgres: a refused prior inserts nothing, and a
+    // refused insert leaves the prior as it was.
+    const i = this.proposals.findIndex((p) => p.id === prior.id);
+    const before = i < 0 ? undefined : { ...this.proposals[i]! };
+    await this.updateProposal(prior.id, prior.patch, prior.from, prior.guard);
+    try {
+      return await this.insertProposal(values);
+    } catch (err) {
+      if (before) this.proposals[i] = before;
+      throw err;
+    }
+  }
+
   async updateProposal(
     id: string,
     patch: Parameters<SteeringStore["updateProposal"]>[1],
@@ -554,6 +571,22 @@ export class MemoryStore implements SteeringStore {
       },
       ledgerBefore,
     };
+  }
+  async mergeGovernance(input: Parameters<SteeringStore["mergeGovernance"]>[0]) {
+    const current = this.proposals.find((p) => p.id === input.proposal.id);
+    if (current?.status !== "checks_passed" || current.kind !== "governance")
+      throw alreadyMerged(input.proposal.publicId);
+    const merged = await this.updateProposal(
+      input.proposal.id,
+      { status: "merged", mergeClaimedAt: null, updatedById: input.mergedByUserId },
+      ["checks_passed"],
+    );
+    Object.assign(merged, {
+      mergedCommit: input.commitSha,
+      mergedAt: input.mergedAt,
+      mergedByUserId: input.mergedByUserId,
+    });
+    return merged;
   }
 }
 

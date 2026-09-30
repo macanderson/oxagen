@@ -27,6 +27,14 @@ export const RECORD_KINDS = [
 export const RecordKind = z.enum(RECORD_KINDS);
 export type RecordKind = z.infer<typeof RecordKind>;
 
+/**
+ * What a proposal changes: a record of one of the six kinds, or the steering
+ * repository's governance mode (#4795). A governance proposal publishes no
+ * record.
+ */
+export const ProposalKind = z.enum([...RECORD_KINDS, "governance"]);
+export type ProposalKind = z.infer<typeof ProposalKind>;
+
 export const RecordForce = z.enum(["must", "should", "may", "info"]);
 export type RecordForce = z.infer<typeof RecordForce>;
 
@@ -78,7 +86,7 @@ export const Proposal = z.object({
   id: PublicId,
   /** The lineage the record or proposal is about: the file stem under .oxagen/rules/, not an id. */
   lineage: z.string().min(1),
-  kind: RecordKind,
+  kind: ProposalKind,
   force: RecordForce,
   constraintEffect: ConstraintEffect.nullable(),
   sharingScope: SharingScope,
@@ -129,6 +137,8 @@ export const ContextPr = z.object({
   proposalId: PublicId,
   /** The lineage the record or proposal is about: the file stem under .oxagen/rules/, not an id. */
   lineage: z.string().min(1),
+  /** A record kind, or governance for a change to the governance mode (#4795). */
+  kind: ProposalKind,
   status: ProposalStatus,
   /** Read from governance.toml when the pull request opens; null before. */
   governanceMode: GovernanceMode.nullable(),
@@ -165,8 +175,10 @@ export const ContextPr = z.object({
     .object({
       commit: z.string().min(1),
       at: Instant,
-      promotionEventId: PublicId,
-      recordId: PublicId,
+      /** Null for a governance proposal, which appends no promotion event. */
+      promotionEventId: PublicId.nullable(),
+      /** Null for a governance proposal, which publishes no record. */
+      recordId: PublicId.nullable(),
     })
     .nullable(),
 });
