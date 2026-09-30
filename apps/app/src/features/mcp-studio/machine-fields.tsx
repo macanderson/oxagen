@@ -221,29 +221,6 @@ function MachineServerFlow({
     }
   };
 
-  if (stage.kind === "listing") {
-    return (
-      <ListingProgress
-        at={at}
-        server={stage.server}
-        get={calls.get}
-        pollMs={pollMs}
-        onDone={(listing) => {
-          if (listing.status === "succeeded" && listing.tools !== null) {
-            setStage({
-              kind: "classify",
-              server: stage.server,
-              tools: listing.tools,
-            });
-          } else {
-            setOutcome({ kind: "unlisted" });
-            setStage({ kind: "form" });
-          }
-        }}
-      />
-    );
-  }
-
   if (stage.kind === "classify") {
     return (
       <ClassifyTools
@@ -281,47 +258,75 @@ function MachineServerFlow({
     );
   }
 
+  const listing = stage.kind === "listing" ? stage.server : null;
+  // The form stays mounted while a machine lists the tools, so a listing
+  // that fails returns to the fields as the person left them.
   return (
-    <form
-      data-testid={testId}
-      onSubmit={(event) => void submit(event)}
-      className="flex flex-col gap-3"
-      noValidate
-    >
-      <p className="text-[13px] text-muted-foreground">{intro}</p>
-      {fields(stored)}
-      {outcome === null ? null : outcome.kind === "problems" ? (
-        <FormAlert testId={`${testId}-problems`}>
-          <ul className="flex flex-col gap-1">
-            {outcome.problems.map((problem) => (
-              <li key={`${problem.kind}:${JSON.stringify(problem)}`}>
-                {problemText(problem)}
-              </li>
-            ))}
-          </ul>
-        </FormAlert>
-      ) : outcome.kind === "failed" ? (
-        <FormAlert testId={`${testId}-failed`}>
-          {failureText(outcome.code)}
-        </FormAlert>
-      ) : outcome.kind === "unlisted" ? (
-        <FormAlert testId={`${testId}-unlisted`}>{t("unlisted")}</FormAlert>
-      ) : (
-        <FormAlert testId={`${testId}-${outcome.kind}`}>
-          {t(outcome.kind, { name: outcome.name })}
-        </FormAlert>
-      )}
-      <button
-        type="submit"
-        data-testid={`${testId}-submit`}
-        data-capability={startStudioListing.name}
-        data-retry={stored === null ? undefined : "true"}
-        aria-disabled={busy || undefined}
-        className={`${buttonPrimary} self-start`}
+    <div className="flex flex-col gap-3">
+      <form
+        data-testid={testId}
+        onSubmit={(event) => void submit(event)}
+        className="flex flex-col gap-3"
+        noValidate
       >
-        {busy ? t("saving") : stored === null ? t("submit") : t("retry")}
-      </button>
-    </form>
+        <p className="text-[13px] text-muted-foreground">{intro}</p>
+        <fieldset
+          disabled={listing !== null}
+          className="flex min-w-0 flex-col gap-3"
+        >
+          {fields(stored)}
+        </fieldset>
+        {outcome === null ? null : outcome.kind === "problems" ? (
+          <FormAlert testId={`${testId}-problems`}>
+            <ul className="flex flex-col gap-1">
+              {outcome.problems.map((problem) => (
+                <li key={`${problem.kind}:${JSON.stringify(problem)}`}>
+                  {problemText(problem)}
+                </li>
+              ))}
+            </ul>
+          </FormAlert>
+        ) : outcome.kind === "failed" ? (
+          <FormAlert testId={`${testId}-failed`}>
+            {failureText(outcome.code)}
+          </FormAlert>
+        ) : outcome.kind === "unlisted" ? (
+          <FormAlert testId={`${testId}-unlisted`}>{t("unlisted")}</FormAlert>
+        ) : (
+          <FormAlert testId={`${testId}-${outcome.kind}`}>
+            {t(outcome.kind, { name: outcome.name })}
+          </FormAlert>
+        )}
+        {listing === null ? (
+          <button
+            type="submit"
+            data-testid={`${testId}-submit`}
+            data-capability={startStudioListing.name}
+            data-retry={stored === null ? undefined : "true"}
+            aria-disabled={busy || undefined}
+            className={`${buttonPrimary} self-start`}
+          >
+            {busy ? t("saving") : stored === null ? t("submit") : t("retry")}
+          </button>
+        ) : null}
+      </form>
+      {listing === null ? null : (
+        <ListingProgress
+          at={at}
+          server={listing}
+          get={calls.get}
+          pollMs={pollMs}
+          onDone={(done) => {
+            if (done.status === "succeeded" && done.tools !== null) {
+              setStage({ kind: "classify", server: listing, tools: done.tools });
+            } else {
+              setOutcome({ kind: "unlisted" });
+              setStage({ kind: "form" });
+            }
+          }}
+        />
+      )}
+    </div>
   );
 }
 

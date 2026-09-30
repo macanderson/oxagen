@@ -186,6 +186,83 @@
                 "type": "null"
               }
             ]
+          },
+          "tools": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "suggested": {
+                      "type": "object",
+                      "properties": {
+                        "risk": {
+                          "type": "string",
+                          "enum": [
+                            "low",
+                            "medium",
+                            "high",
+                            "critical"
+                          ]
+                        },
+                        "sideEffect": {
+                          "type": "string",
+                          "enum": [
+                            "read",
+                            "write",
+                            "irreversible"
+                          ]
+                        },
+                        "egress": {
+                          "type": "string",
+                          "enum": [
+                            "local",
+                            "org_tenant",
+                            "third_party"
+                          ]
+                        },
+                        "impacts": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "risk",
+                        "sideEffect",
+                        "egress",
+                        "impacts"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "description",
+                    "suggested"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -200,7 +277,8 @@
           "finishedAt",
           "machine",
           "toolCount",
-          "error"
+          "error",
+          "tools"
         ],
         "additionalProperties": false
       }

@@ -112,6 +112,28 @@ Added on 2026-09-30, when the listing was built:
   it takes the roles that save a draft, is high sensitivity, and an in-app
   agent asks a person before it calls it.
 
+Added on 2026-09-30, when the app forms were built:
+
+- A new server has no folder, so Studio's Tools tab, which reads the folder,
+  cannot show its tools. `get_studio_listing` carries them once the listing
+  succeeds, each with the classification Studio suggests. It reads them from
+  the draft, which is what Review builds from.
+- Add server imports and classifies the listed tools in the dialog. Every
+  tool starts picked with its suggestion, and the dialog refuses to open
+  Review with none picked, because that lock would list no tools.
+- The package form offers npm and NuGet, the types Oxagen pins today. An
+  entry that offers only PyPI or OCI says so and has no submit, until the
+  PyPI rule in section 1 ships.
+- A secret argument takes no value in the form. Studio writes `${NAME}` for
+  it, with NAME read from the argument's key, and lists NAME in
+  `source.env`. The value stays on each machine.
+- The form writes the official MCP registry's URL, the one registry
+  `search_mcp_registry` reads. An entry with no catalog version is refused,
+  because the lock pins a version.
+- A local command syncs manually, because only a new draft moves its pin. A
+  registry package syncs daily, because Oxagen reads each new version's
+  digest itself.
+
 ### 3. Review is unchanged
 
 The draft's source is an MCP source with a local or registry lock source, so

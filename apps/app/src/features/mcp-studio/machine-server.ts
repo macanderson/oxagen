@@ -188,13 +188,13 @@ function groupProblems(groups: readonly string[]): MachineProblem[] {
   }
   return groups
     .filter((group) => !MACHINE_GROUP.test(group))
-    .map((group) => ({ kind: "machine", group }));
+    .map((group) => ({ kind: "machine" as const, group }));
 }
 
 function variableProblems(names: readonly string[]): MachineProblem[] {
   return names
     .filter((name) => !VARIABLE_NAME.test(name))
-    .map((name) => ({ kind: "variable", name }));
+    .map((name) => ({ kind: "variable" as const, name }));
 }
 
 function headingToml(heading: Heading): string[] {

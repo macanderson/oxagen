@@ -6,8 +6,8 @@
 //     revision 0, then opens Review in the same submit. When Review refuses
 //     after the save, the dialog names the refusal and a retry saves again at
 //     the revision the save returned. It never starts over at revision 0.
-//   - Local command and the registry package form render disabled, each with
-//     the note naming the work that enables it.
+//   - A registry entry says whether it offers a remote, a package or both.
+//     Local command and the package form are machine-fields.test.tsx's.
 //   - Discovery progress reads the server's discovery until it finishes,
 //     through get_studio_discovery and start_studio_discovery for the page's
 //     workspace.
@@ -23,9 +23,7 @@ import { IntlProvider, translator } from "@/test/intl";
 import {
   DefinitionFields,
   DiscoveryProgress,
-  LocalCommandFields,
   RegistryOfferChip,
-  RegistryPackageFields,
 } from "./add-server";
 import type {
   CreateStudioServer,
@@ -35,7 +33,6 @@ import type {
 import type { StudioAt } from "./route";
 import type {
   getStudioDiscovery,
-  RegistryPackage,
   StudioDiscovery,
   startStudioDiscovery,
 } from "./studio-calls";
@@ -73,8 +70,6 @@ afterEach(async () => {
 
 const tDefinition = translator("mcpStudio.addServer.definition");
 const tProblem = translator("mcpStudio.addServer.definition.problems");
-const tLocal = translator("mcpStudio.addServer.local");
-const tPackage = translator("mcpStudio.addServer.package");
 const tOffer = translator("mcpStudio.addServer.offer");
 const tDiscovery = translator("mcpStudio.addServer.discovery");
 const tPr = translator("mcpStudio.changes.pr");
@@ -565,29 +560,6 @@ describe("From a definition", () => {
   });
 });
 
-// ---- Local command -----------------------------------------------------------
-
-describe("Local command", () => {
-  it("renders disabled, with the note naming #4756 and no capability", () => {
-    render(
-      <IntlProvider>
-        <LocalCommandFields />
-      </IntlProvider>,
-    );
-    expect(inputOf("Command")).toBeDisabled();
-    expect(screen.getByLabelText("Arguments")).toBeDisabled();
-    expect(screen.getByLabelText("Machine groups")).toBeDisabled();
-    const button = screen.getByTestId("studio-add-local-submit");
-    expect(button).toBeDisabled();
-    expect(button).toHaveTextContent(tLocal("submit"));
-    expect(button).toHaveAccessibleDescription(tLocal("pending"));
-    const note = screen.getByTestId("studio-add-local-pending");
-    expect(note).toHaveAttribute("data-gap", "#4756");
-    expect(note).toHaveAttribute("data-state", "not-available");
-    expect(note).not.toHaveAttribute("data-capability");
-  });
-});
-
 // ---- Registry offer and package ----------------------------------------------
 
 function registryServer(over: Partial<RegistryServer> = {}): RegistryServer {
@@ -649,134 +621,6 @@ describe("RegistryOfferChip", () => {
       </IntlProvider>,
     );
     expect(container).toBeEmptyDOMElement();
-  });
-});
-
-const FILES_PACKAGES: readonly RegistryPackage[] = [
-  {
-    registryType: "mcpb",
-    identifier: "https://acme.example/files.mcpb",
-    version: "1.2.0",
-    transport: "stdio",
-    runtimeHint: null,
-    packageArguments: [],
-    environmentVariables: [],
-  },
-  {
-    registryType: "pypi",
-    identifier: "acme-files-mcp",
-    version: "1.2.0",
-    transport: "stdio",
-    runtimeHint: "uvx",
-    packageArguments: [
-      {
-        type: "named",
-        name: "--root",
-        valueHint: null,
-        isRequired: true,
-        isSecret: false,
-        value: null,
-        default: "/srv/files",
-      },
-      {
-        type: "positional",
-        name: null,
-        valueHint: "api_token",
-        isRequired: true,
-        isSecret: true,
-        value: null,
-        default: null,
-      },
-      {
-        type: "named",
-        name: "--mode",
-        valueHint: null,
-        isRequired: true,
-        isSecret: false,
-        value: "readonly",
-        default: null,
-      },
-      {
-        type: "named",
-        name: "--verbose",
-        valueHint: null,
-        isRequired: false,
-        isSecret: false,
-        value: null,
-        default: null,
-      },
-    ],
-    environmentVariables: [
-      { name: "ACME_FILES_TOKEN", isRequired: true },
-      { name: "ACME_FILES_DEBUG", isRequired: false },
-    ],
-  },
-];
-
-describe("RegistryPackageFields", () => {
-  it("renders disabled with no arguments for an entry that lists no package, and names #4756", () => {
-    render(
-      <IntlProvider>
-        <RegistryPackageFields server={registryServer()} />
-      </IntlProvider>,
-    );
-    expect(screen.getByLabelText("Machine groups")).toBeDisabled();
-    const type = selectOf("Package type");
-    expect(type).toBeDisabled();
-    expect(type.value).toBe("npm");
-    expect(Array.from(type.options).map((option) => option.value)).toStrictEqual(
-      ["npm", "pypi", "oci", "nuget"],
-    );
-    expect(
-      screen.queryByTestId("studio-add-package-arguments"),
-    ).not.toBeInTheDocument();
-    const button = screen.getByTestId("studio-add-package-submit");
-    expect(button).toBeDisabled();
-    expect(button).toHaveAccessibleDescription(tPackage("pending"));
-    const note = screen.getByTestId("studio-add-package-pending");
-    expect(note).toHaveAttribute("data-gap", "#4756");
-    expect(note).not.toHaveAttribute("data-capability");
-  });
-
-  it("reads the packages search_mcp_registry lists when the page passes none", () => {
-    render(
-      <IntlProvider>
-        <RegistryPackageFields
-          server={registryServer({ packages: [...FILES_PACKAGES] })}
-        />
-      </IntlProvider>,
-    );
-    expect(selectOf("Package type").value).toBe("pypi");
-    const group = screen.getByRole("group", { name: tPackage("arguments") });
-    expect(within(group).getByLabelText("--root")).toHaveValue("/srv/files");
-  });
-
-  it("asks for the required arguments of the first package the gateway runs", () => {
-    render(
-      <IntlProvider>
-        <RegistryPackageFields
-          server={registryServer()}
-          packages={FILES_PACKAGES}
-        />
-      </IntlProvider>,
-    );
-    // mcpb is not a type the local gateway runs, so pypi is the first.
-    expect(selectOf("Package type").value).toBe("pypi");
-    const group = screen.getByRole("group", { name: tPackage("arguments") });
-    expect(within(group).getByLabelText("--root")).toHaveValue("/srv/files");
-    const token = within(group).getByLabelText("api_token");
-    expect(token).toHaveValue("");
-    expect(token).toHaveAccessibleDescription(tPackage("secretHint"));
-    // A fixed value is the registry's, and an optional argument is not asked.
-    expect(within(group).queryByLabelText("--mode")).not.toBeInTheDocument();
-    expect(within(group).queryByLabelText("--verbose")).not.toBeInTheDocument();
-    const variables = screen.getByRole("list", { name: tPackage("variables") });
-    expect(
-      within(variables)
-        .getAllByRole("listitem")
-        .map((item) => item.textContent),
-    ).toStrictEqual(["ACME_FILES_TOKEN"]);
-    expect(screen.getByTestId("studio-add-package-submit")).toBeDisabled();
   });
 });
 
