@@ -39,17 +39,18 @@ beforeEach(() => {
 });
 
 describe("readModelCallFrames", () => {
-  it("reads a wrapped run's calls, and the transcript rows joined to them, in the run's workspace", async () => {
+  it("reads a wrapped run's calls, and the transcript and proxy rows joined to them, in the run's workspace", async () => {
     await readModelCallFrames({
       orgId: ORG,
       workspaceId: WS,
       run: { kind: "tacho", rootSessionUuid: RUN, sessionUuids: [RUN] },
     });
     const { query, query_params } = lastQuery();
-    // The priced rows and both transcript joins: a joined row from another
-    // workspace would move tokens between this run's classes.
+    // The priced rows, both transcript joins, and both proxy joins (#4508):
+    // a joined row from another workspace would move tokens between this
+    // run's classes, or add another run's token sources to this one.
     const each = reads(query);
-    expect(each).toHaveLength(3);
+    expect(each).toHaveLength(5);
     for (const read of each) {
       expect(read).toMatch(
         /WHERE org_id = \{orgId:UUID\}\s+AND workspace_id = \{workspaceId:UUID\}\s+AND root_session_uuid = \{rootSessionUuid:UUID\}/,
@@ -66,7 +67,7 @@ describe("readModelCallFrames", () => {
   // and has no index on root_session_uuid, so a read that names the root
   // alone scans every chain the workspace holds. Each read now names the
   // run's own sessions, and still keeps the workspace and root predicates.
-  it("reads only the run's own sessions, root first, in all three reads", async () => {
+  it("reads only the run's own sessions, root first, in every read", async () => {
     await readModelCallFrames({
       orgId: ORG,
       workspaceId: WS,
@@ -74,7 +75,7 @@ describe("readModelCallFrames", () => {
     });
     const { query, query_params } = lastQuery();
     const each = reads(query);
-    expect(each).toHaveLength(3);
+    expect(each).toHaveLength(5);
     for (const read of each) {
       expect(read).toMatch(
         /WHERE org_id = \{orgId:UUID\}\s+AND workspace_id = \{workspaceId:UUID\}\s+AND root_session_uuid = \{rootSessionUuid:UUID\}\s+AND session_uuid IN \{sessionUuids:Array\(UUID\)\}/,
@@ -86,9 +87,11 @@ describe("readModelCallFrames", () => {
     // on the child's, so the joins key on the call id alone. The session
     // predicate above already keeps them inside this run's family.
     expect(query).toMatch(/ON t\.call_key = c\.request_id\s+LEFT JOIN/);
-    expect(query).toMatch(/ON m\.call_key = c\.message_id\s+ORDER BY/);
+    expect(query).toMatch(/ON m\.call_key = c\.message_id\s+LEFT JOIN/);
+    expect(query).toMatch(/ON r\.call_key = c\.request_id\s+LEFT JOIN/);
+    expect(query).toMatch(/ON q\.call_key = c\.message_id\s+ORDER BY/);
     expect(query).not.toContain("session_uuid = c.session_uuid");
-    expect(query.match(/GROUP BY call_key\s+HAVING/g)).toHaveLength(2);
+    expect(query.match(/GROUP BY call_key\s+HAVING/g)).toHaveLength(4);
   });
 
   it("still reads the root chain when the session list leaves the root out", async () => {
