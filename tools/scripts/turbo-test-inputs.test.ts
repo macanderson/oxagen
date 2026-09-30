@@ -38,6 +38,23 @@ const OUTSIDE_READS: Record<string, Record<string, string[]>> = {
   },
   "tools/scripts": {
     "root-hook-deps.test.ts": ["package.json", "lefthook.yml"],
+    "run-checks.test.ts": ["package.json"],
+    "check-checks-job-continues.test.ts": [
+      ".github/workflows/pipeline.yml",
+      "package.json",
+    ],
+    "hook-preflight.test.ts": ["package.json"],
+    "typecheck-staged-plan.test.ts": [
+      "apps/app/package.json",
+      "apps/app_deprecated/package.json",
+      "apps/docs/package.json",
+    ],
+    // lib/archdocs/collect.ts imports the manifest hash from @oxagen/database
+    // by a relative path. The atlas's other reads span the whole tree and stay
+    // uncovered, as the header says.
+    "gen-architecture-docs.test.ts": [
+      "packages/database/src/storage-manifest/canonical-json.ts",
+    ],
     "check-coverage-scope.test.ts": [
       ".github/workflows/pipeline.yml",
       "apps/app/vitest.config.ts",

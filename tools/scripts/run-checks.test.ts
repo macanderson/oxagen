@@ -105,9 +105,10 @@ describe("workflow command escaping", () => {
 });
 
 describe("check:contracts", () => {
-  // Reads the root package.json, a file outside this package's turbo inputs
-  // (#4664 item 2). check-checks-job-continues.mjs holds the same property
-  // live, inside check:contracts, on every CI run.
+  // Reads the root package.json, which tools/scripts/turbo.json declares as
+  // an input of this package's tests (#4664 item 2).
+  // check-checks-job-continues.mjs holds the same property live, inside
+  // check:contracts, on every CI run.
   const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
   const scripts: Record<string, string> = JSON.parse(
     readFileSync(join(repoRoot, "package.json"), "utf8"),
