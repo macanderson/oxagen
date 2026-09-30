@@ -2444,8 +2444,8 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   OXAGEN_BRAND_KIT: {
     group: "Operator scripts",
     description:
-      "Path to the house brand kit checkout (oxagenai/oxagen-brand) sync-brand-assets.mjs copies marks and the branding skill from. " +
-      "Defaults to ../oxagen-brand.",
+      "Path to the house brand kit checkout (macanderson/oxagen-brand) sync-brand-assets.mjs copies marks and the branding skill from. " +
+      "Defaults to ../oxagen-brand. CI points it at the kit's main branch, checked out in the workspace.",
     secret: false,
     clientExposed: false,
     services: [],
