@@ -40,7 +40,7 @@ async function openDialog() {
         at={at}
         source={{ id: "tbt_alltools", name: "All tools" }}
         label="New toolbelt"
-        gold
+        isNew
         testId="tools-belt-new"
       />
     </IntlProvider>,
@@ -97,7 +97,7 @@ describe("CloneToolbelt", () => {
     fireEvent.click(dialog.getByTestId("tools-belt-new-submit"));
     await waitFor(() => {
       expect(router.push).toHaveBeenCalledWith(
-        "/acme/core-platform/tools/toolbelts?belt=tbt_reviewbelt",
+        "/acme/core-platform/agents?tab=toolbelts&belt=tbt_reviewbelt",
       );
     });
     expect(actions.cloneToolbelt).toHaveBeenCalledWith(

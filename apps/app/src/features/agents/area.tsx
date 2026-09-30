@@ -62,7 +62,11 @@ export function parseAgentsPageTab(raw: string | undefined): AgentsPageTab {
   return PAGE_TABS.find((tab) => tab === raw) ?? "agents";
 }
 
-/** The tab the strip lights: a Tool servers view lights Tool servers. */
+/**
+ * The tab the strip lights: a Tool servers view lights Tool servers.
+ *
+ * @internal Exported for its unit test; nothing outside this module imports it.
+ */
 export function areaTabOf(tab: AgentsPageTab): AgentsAreaTab {
   return tab === "tools" || tab === "toolbelts" ? "servers" : tab;
 }
@@ -74,7 +78,7 @@ type Counts = {
   switchesOnIsFloor: boolean;
 };
 
-export function AgentsAreaTabs({
+function AgentsAreaTabs({
   org,
   ws,
   current,
