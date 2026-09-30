@@ -643,6 +643,90 @@ export async function folderProtoFiles(
   return files.filter((file): file is ImportedFile => file !== null);
 }
 
+/** A brace, or a statement that names a package, message, enum, or service. */
+const PROTO_NAMING =
+  /[{}]|\b(package|message|enum|service)\s+([A-Za-z_][\w.]*)/g;
+
+/**
+ * The full names a .proto file defines at its top level: its package joined
+ * to each message, enum, and service outside any braces. Comments and string
+ * literals are taken out in one pass first, so a `//` inside an option's
+ * string is not read as a comment. It never throws: a file that does not
+ * parse is left for the importer to refuse.
+ */
+function protoTopLevelNames(text: string): Set<string> {
+  const code: string[] = [];
+  let plain = 0;
+  let at = 0;
+  while (at < text.length) {
+    const char = text[at];
+    const next = text[at + 1];
+    let end = -1;
+    if (char === '"' || char === "'") {
+      end = at + 1;
+      while (end < text.length && text[end] !== char && text[end] !== "\n") {
+        end += text[end] === "\\" ? 2 : 1;
+      }
+      end += 1;
+    } else if (char === "/" && next === "/") {
+      end = text.indexOf("\n", at);
+      if (end === -1) end = text.length;
+    } else if (char === "/" && next === "*") {
+      end = text.indexOf("*/", at + 2);
+      end = end === -1 ? text.length : end + 2;
+    }
+    if (end === -1) {
+      at += 1;
+      continue;
+    }
+    code.push(text.slice(plain, at), " ");
+    plain = end;
+    at = end;
+  }
+  code.push(text.slice(plain));
+
+  let pkg = "";
+  let depth = 0;
+  const defined: string[] = [];
+  for (const match of code.join("").matchAll(PROTO_NAMING)) {
+    if (match[0] === "{") depth += 1;
+    else if (match[0] === "}") depth = Math.max(0, depth - 1);
+    else if (depth === 0 && match[2] !== undefined) {
+      if (match[1] === "package") pkg = match[2];
+      else defined.push(match[2]);
+    }
+  }
+  return new Set(defined.map((name) => (pkg === "" ? name : `${pkg}.${name}`)));
+}
+
+/**
+ * The folder path a fetched .proto file is written to. The held file that
+ * defines any of the same top-level names is its older copy, wherever import
+ * put it, since the importer refuses a name defined twice. With no such file,
+ * the one held file with the same name stands in. With neither, the fetched
+ * file is new to the folder's proto/.
+ */
+function heldCopyPath(
+  held: readonly ImportedFile[],
+  read: DefinitionText,
+): string {
+  const names = protoTopLevelNames(read.text);
+  const sharing = held.filter((file) =>
+    [...protoTopLevelNames(file.text)].some((name) => names.has(name)),
+  );
+  if (sharing.length > 1) {
+    const fetched = read.location.url ?? read.location.path ?? read.entry;
+    const paths = sharing.map((file) => file.path).join(", ");
+    throw new DiscoveryRefused(
+      "source",
+      `${fetched} defines names that ${sharing.length} files under ${PROTO_DIR}/ also define: ${paths}. Import the server again in Studio to choose the file it replaces.`,
+    );
+  }
+  const named = held.filter((file) => basename(file.path) === read.entry);
+  const copy = sharing[0] ?? (named.length === 1 ? named[0] : undefined);
+  return copy?.path ?? `${PROTO_DIR}/${read.entry}`;
+}
+
 /**
  * The descriptor set compile needs to serve a gRPC server, read from the
  * .proto files the production branch holds under the folder's proto/.
@@ -718,14 +802,12 @@ async function discoverGrpc(
     }
     default: {
       const read = await readDefinition(ctx, source);
-      // Write over the folder's copy of the file when import put it deeper
+      // Write over the folder's copy of the file wherever import put it
       // under proto/, so the folder never holds the package twice. The
       // folder's other files go to the importer too: the read file may
       // import them, and import hashed the whole bundle.
       const held = await folderProtoFiles(ctx.checkout, ctx.server);
-      const path =
-        held.find((file) => basename(file.path) === read.entry)?.path ??
-        `${PROTO_DIR}/${read.entry}`;
+      const path = heldCopyPath(held, read);
       const file: ImportedFile = { path, text: read.text };
       files = [...held.filter((other) => other.path !== path), file].sort(
         (a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0),

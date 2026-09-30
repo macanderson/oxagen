@@ -354,7 +354,9 @@ export async function runDiscoveryEvent(
 /**
  * The events the hourly sweep sends:
  *
- * - schedule, for every published server with no discovery yet;
+ * - schedule, for every published server whose tools discovery has not
+ *   snapshotted: one with no discovery yet, or one whose last discovery
+ *   finished before its mcp.servers row existed;
  * - schedule, for every daily server whose last discovery is a day old;
  * - lock_merged, for every server with an open sync steering PR, so a merge
  *   releases the withheld tools and a closed PR is let go;

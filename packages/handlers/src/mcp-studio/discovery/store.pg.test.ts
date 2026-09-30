@@ -1129,6 +1129,9 @@ describe.skipIf(!enabled)("the discovery store against Postgres", () => {
       revived: randomUUID(),
       bFresh: randomUUID(),
       cFresh: randomUUID(),
+      stranded: randomUUID(),
+      strandedFailed: randomUUID(),
+      strandedRunning: randomUUID(),
     };
 
     // The sweep reads every workspace, so each check keeps only the targets
@@ -1206,10 +1209,26 @@ describe.skipIf(!enabled)("the discovery store against Postgres", () => {
             serverRow(ids.revived, A, "revived"),
             serverRow(ids.bFresh, B, "fresh"),
             serverRow(ids.cFresh, C, "fresh"),
+            serverRow(ids.stranded, A, "stranded"),
+            serverRow(ids.strandedFailed, A, "stranded_failed"),
+            serverRow(ids.strandedRunning, A, "stranded_running"),
           ]);
         const daily = { schedule: "daily" };
         await tx.insert(discoveries).values([
-          discoveryRow(A, "found"),
+          discoveryRow(A, "found", { mcpServerId: ids.found }),
+          // undiscovered: runs that finished before the server's
+          // mcp.servers row existed, so no snapshot was written.
+          discoveryRow(A, "stranded", { finishedAt: shift(BEFORE, -2) }),
+          discoveryRow(A, "stranded_failed", {
+            status: "failed",
+            finishedAt: shift(BEFORE, -5),
+          }),
+          // undiscovered: a run in flight is left to the stalled sweep.
+          discoveryRow(A, "stranded_running", {
+            status: "running",
+            requestedAt: shift(STALE, 1),
+            startedAt: shift(STALE, 1),
+          }),
           // dueDaily: due rows.
           discoveryRow(A, "d_old", { ...daily, finishedAt: shift(BEFORE, -2) }),
           discoveryRow(A, "d_older", {
@@ -1377,6 +1396,8 @@ describe.skipIf(!enabled)("the discovery store against Postgres", () => {
       expect(ours(await sweep.undiscovered(10_000)).sort()).toEqual([
         "A/fresh",
         "A/revived",
+        "A/stranded",
+        "A/stranded_failed",
         "B/fresh",
         "C/fresh",
       ]);
@@ -1390,9 +1411,44 @@ describe.skipIf(!enabled)("the discovery store against Postgres", () => {
       await store.request(A, "fresh", "schedule", null, T0);
       expect(ours(await sweep.undiscovered(10_000)).sort()).toEqual([
         "A/revived",
+        "A/stranded",
+        "A/stranded_failed",
         "B/fresh",
         "C/fresh",
       ]);
+    });
+
+    it("undiscovered lists servers with no row before stranded rows, and the stranded rows oldest finish first", async () => {
+      const listed = ours(await sweep.undiscovered(10_000));
+      const stranded = listed.filter((one) => one.startsWith("A/stranded"));
+
+      expect(stranded).toEqual(["A/stranded_failed", "A/stranded"]);
+      expect(listed.indexOf("A/stranded_failed")).toBe(
+        listed.length - stranded.length,
+      );
+    });
+
+    it("undiscovered drops a stranded server once a run stamps its mcpServerId", async () => {
+      await store.recordSource(
+        A,
+        "stranded",
+        {
+          kind: "remote",
+          repo: null,
+          path: null,
+          ref: null,
+          schedule: "on-change",
+          mcpServerId: ids.stranded,
+        },
+        T0,
+      );
+
+      expect(ours(await sweep.undiscovered(10_000))).not.toContain(
+        "A/stranded",
+      );
+      expect(ours(await sweep.undiscovered(10_000))).toContain(
+        "A/stranded_failed",
+      );
     });
 
     it("dueDaily lists finished daily servers older than the cutoff, oldest first and never-finished last", async () => {

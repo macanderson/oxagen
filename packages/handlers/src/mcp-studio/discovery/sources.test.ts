@@ -2271,6 +2271,108 @@ describe("discover a gRPC definition", () => {
     ]);
   });
 
+  it("writes a url file over the copy import put under its package path", async () => {
+    const grpc = grpcImporter();
+    const url = "https://api.orders.dev/v1/definition";
+    // The string holds "/*" and the comment names another package, so a
+    // scanner that read either as code would miss the orders.v1 copy.
+    const changed = [
+      'syntax = "proto3";',
+      "package orders.v1;",
+      'option java_package = "com.acme/*orders";',
+      "// package common.v1; message Money {}",
+      'import "common/v1/money.proto";',
+      "service Orders { rpc FetchOrder(GetOrderRequest) returns (Order); }",
+      "",
+    ].join("\n");
+    const { ctx } = setup({
+      server: "orders",
+      source: { type: "grpc", from: "url", url },
+      files: ORDERS_FILES,
+      route: () => answer(200, changed, "text/plain"),
+      seams: { grpc },
+    });
+    const found = await discover(ctx);
+
+    expect(grpc).toHaveBeenCalledWith({
+      files: [
+        { path: "proto/common/v1/money.proto", text: MONEY_PROTO },
+        { path: "proto/orders/v1/orders.proto", text: changed },
+      ],
+    });
+    expect(found.files).toEqual([
+      { path: "proto/orders/v1/orders.proto", text: changed },
+    ]);
+  });
+
+  it("writes over the held file that defines the same names when two share its file name", async () => {
+    const grpc = grpcImporter();
+    const v2 = [
+      'syntax = "proto3";',
+      "package orders.v2;",
+      "message Order { string id = 1; }",
+      "service Orders { rpc GetOrder(Order) returns (Order); }",
+      "",
+    ].join("\n");
+    const changed = v2.replace("GetOrder(", "FetchOrder(");
+    const { reader } = definitions(changed);
+    const { ctx } = setup({
+      server: "orders",
+      source: ORDERS_REPO,
+      files: {
+        ...ORDERS_FILES,
+        [`${ORDERS_FOLDER}/proto/orders/v2/orders.proto`]: v2,
+      },
+      seams: { grpc, definitions: reader },
+    });
+    const found = await discover(ctx);
+
+    expect(grpc).toHaveBeenCalledWith({
+      files: [
+        { path: "proto/common/v1/money.proto", text: MONEY_PROTO },
+        { path: "proto/orders/v1/orders.proto", text: ORDERS_PROTO },
+        { path: "proto/orders/v2/orders.proto", text: changed },
+      ],
+    });
+    expect(found.files).toEqual([
+      { path: "proto/orders/v2/orders.proto", text: changed },
+    ]);
+  });
+
+  it("refuses a fetched file whose names two held files define", async () => {
+    const grpc = grpcImporter();
+    const merged = [
+      'syntax = "proto3";',
+      "package orders.v1;",
+      "message Order { string id = 1; }",
+      "service Orders { rpc GetOrder(Order) returns (Order); }",
+      "",
+    ].join("\n");
+    const { ctx, sent } = setup({
+      server: "orders",
+      source: { type: "grpc", from: "url", url: ORDERS_URL },
+      files: {
+        ...ORDERS_FILES,
+        [`${ORDERS_FOLDER}/proto/orders/v1/order.proto`]: [
+          'syntax = "proto3";',
+          "package orders.v1;",
+          "message Order { message Line { string sku = 1; } }",
+          "",
+        ].join("\n"),
+      },
+      route: () => answer(200, merged, "text/plain"),
+      seams: { grpc },
+    });
+    const error = await refusal(discover(ctx));
+
+    expect(sent).toHaveLength(1);
+    expect(error.code).toBe("source");
+    expect(error.message).toBe(
+      `${ORDERS_URL} defines names that 2 files under proto/ also define: proto/orders/v1/order.proto, proto/orders/v1/orders.proto. Import the server again in Studio to choose the file it replaces.`,
+    );
+    expect(grpc).not.toHaveBeenCalled();
+  });
+
   it("refuses a definition the importer cannot read", async () => {
     const grpc = vi.fn<GrpcImporter>(() =>
       Promise.reject(new Error("orders.proto:3: unknown type GetOrderRequest")),
