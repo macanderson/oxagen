@@ -20000,6 +20000,18 @@
           "type": "text"
         },
         {
+          "name": "source_registry_name",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "source_version",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
           "name": "pr_number",
           "nullable": true,
           "primaryKey": false,

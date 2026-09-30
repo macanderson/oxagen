@@ -12,6 +12,12 @@ import { schema, withTenantDb } from "@oxagen/database";
 import { readSteeringConnection } from "@oxagen/handlers/context.steering.host";
 import { operatorRoleOf } from "@oxagen/handlers/lib/operator-role";
 import { workspaceCredentialSource } from "@oxagen/handlers/mcp-studio/credentials/connect";
+import { readWorkspaceWithheldTools } from "@oxagen/handlers/mcp-studio/discovery/store";
+import { createInProcessBroker, type LocalGatewayBroker } from "@oxagen/handlers/mcp-studio/local-calls/broker";
+import { postgresMachineGroupReader } from "@oxagen/handlers/mcp-studio/local-calls/groups-store";
+import { launchSpecFor, machineGroupsOf } from "@oxagen/handlers/mcp-studio/local-calls/launch";
+import { localCallSignerFromEnv } from "@oxagen/handlers/mcp-studio/local-calls/signer";
+import { createLocalTransport } from "@oxagen/handlers/mcp-studio/local-calls/transport";
 import { searchIndexFor } from "@oxagen/handlers/mcp-studio/search-index";
 import { postgresVersionStore } from "@oxagen/handlers/steering-repo/version-store";
 import { readKeyScope, TACHO_GATEWAY_PURPOSE } from "@oxagen/iam/machine-key-scope";
@@ -222,9 +228,8 @@ export const servedLog: ServedLog = {
 export function createServedPorts(run: ServedRun): ServedPorts {
   return {
     off: readOffSwitches,
-    // Discovery, which withholds a tool from a server, is only proposed
-    // (mcp-studio-spec, Discovery). Until it stores a withheld list, none is.
-    withheld: async () => new Set<string>(),
+    // The tools discovery holds back until their sync steering PR merges.
+    withheld: (served) => readWorkspaceWithheldTools(scopeOf(served)),
     admit: admitServed,
     emergencyDeny: servedEmergencyDenies(run, { gate: postgresKillSwitchReads, targets: readSwitchTargets }),
     approvals: postgresApprovals(),
