@@ -207,6 +207,9 @@ import { toolImportRoute } from "./routes/v1/tool.import";
 import { toolStudioDraftSaveRoute } from "./routes/v1/tool.studio.draft.save";
 import { toolStudioDraftGetRoute } from "./routes/v1/tool.studio.draft.get";
 import { toolStudioReviewOpenRoute } from "./routes/v1/tool.studio.review.open";
+import { toolStudioDiscoveryStartRoute } from "./routes/v1/tool.studio.discovery.start";
+import { toolStudioDiscoveryGetRoute } from "./routes/v1/tool.studio.discovery.get";
+import { toolStudioToolsListRoute } from "./routes/v1/tool.studio.tools.list";
 import { toolRelayCreateRoute } from "./routes/v1/tool.relay.create";
 import { toolRelayRevokeRoute } from "./routes/v1/tool.relay.revoke";
 import { credentialGrantListRoute } from "./routes/v1/credential.grant.list";
@@ -1219,6 +1222,10 @@ orgScoped.route("/tools/import", toolImportRoute);
 orgScoped.route("/tools/studio/draft", toolStudioDraftSaveRoute);
 orgScoped.route("/tools/studio/draft/get", toolStudioDraftGetRoute);
 orgScoped.route("/tools/studio/review", toolStudioReviewOpenRoute);
+// Discovery (lane M10, #4682): start a discovery, read its state, and list a server's tools.
+orgScoped.route("/tools/studio/discovery/start", toolStudioDiscoveryStartRoute);
+orgScoped.route("/tools/studio/discovery/get", toolStudioDiscoveryGetRoute);
+orgScoped.route("/tools/studio/tools/list", toolStudioToolsListRoute);
 // Relays (lane M12, #4685): register and revoke a relay for a private network.
 orgScoped.route("/tools/relays", toolRelayCreateRoute);
 orgScoped.route("/tools/relays/revoke", toolRelayRevokeRoute);
