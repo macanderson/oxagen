@@ -431,6 +431,7 @@ import "./contracts/tool.studio.draft.get";
 import "./contracts/tool.studio.draft.save";
 import "./contracts/tool.studio.findings.list";
 import "./contracts/tool.studio.review.open";
+import "./contracts/tool.studio.server.get";
 import "./contracts/tool.studio.tools.list";
 import "./contracts/tool.studio.try";
 import "./contracts/tool.version.list";

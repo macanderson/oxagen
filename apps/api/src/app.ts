@@ -214,6 +214,7 @@ import { toolStudioDescriptionDraftRoute } from "./routes/v1/tool.studio.descrip
 import { toolStudioTryRoute } from "./routes/v1/tool.studio.try";
 import { toolStudioDiscoveryStartRoute } from "./routes/v1/tool.studio.discovery.start";
 import { toolStudioDiscoveryGetRoute } from "./routes/v1/tool.studio.discovery.get";
+import { toolStudioServerGetRoute } from "./routes/v1/tool.studio.server.get";
 import { toolStudioToolsListRoute } from "./routes/v1/tool.studio.tools.list";
 import { toolRelayCreateRoute } from "./routes/v1/tool.relay.create";
 import { toolRelayRevokeRoute } from "./routes/v1/tool.relay.revoke";
@@ -1238,6 +1239,7 @@ orgScoped.route("/tools/studio/try", toolStudioTryRoute);
 orgScoped.route("/tools/studio/discovery/start", toolStudioDiscoveryStartRoute);
 orgScoped.route("/tools/studio/discovery/get", toolStudioDiscoveryGetRoute);
 orgScoped.route("/tools/studio/tools/list", toolStudioToolsListRoute);
+orgScoped.route("/tools/studio/server/get", toolStudioServerGetRoute);
 // Relays (lane M12, #4685): register and revoke a relay for a private network.
 orgScoped.route("/tools/relays", toolRelayCreateRoute);
 orgScoped.route("/tools/relays/revoke", toolRelayRevokeRoute);

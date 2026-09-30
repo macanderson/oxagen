@@ -6,11 +6,11 @@
 //
 // The page reads the registry, the switch board and the org's members, as the
 // Tools page does, plus the Studio record and, on Changes, the tool checks'
-// findings. The record is a seam that answers null until this lane binds
-// the server's steering folder (#4678). The findings come from
-// list_studio_findings (#4742), and on Tools the page reads list_studio_tools'
-// counts (#4682), both through studio-calls.ts. Each names the server by the
-// folder the record gives, so neither is read before the record names it.
+// findings. The record is the server's steering folder, read through
+// get_studio_server by the folder the registry row names (record-read.ts). The
+// findings come from list_studio_findings (#4742), and on Tools the page reads
+// list_studio_tools' counts (#4682), both through studio-calls.ts. Each names
+// the server by its folder, so neither is read for a server with no folder.
 // The registry read follows
 // the server's cursor to its last page, so a server with more versions than
 // one page holds still shows every tool with its version and off switch. A
@@ -55,11 +55,8 @@ import { ChangesTab } from "./changes-tab";
 import { ConnectionTab } from "./connection-tab";
 import { buildStudioView, type StudioServerView } from "./model";
 import { type StudioAt, type StudioRoute, studioHref } from "./route";
-import {
-  type RecordReader,
-  readStudioRecord,
-  type StudioFinding,
-} from "./seams";
+import { readStudioRecord } from "./record-read";
+import type { RecordReader, StudioFinding } from "./seams";
 import {
   type ListStudioFindings,
   listStudioFindings,
@@ -296,7 +293,7 @@ export async function StudioServer({
   ctx: WsCtx;
   source: DataSource;
   route: StudioRoute;
-  /** The Studio record's reader; null until discovery writes one (lane M10). */
+  /** The Studio record's reader. A test passes a fake. */
   readRecord?: RecordReader;
   /** The tool checks' capability. A test passes a fake. */
   findings?: ListStudioFindings;
@@ -306,12 +303,21 @@ export async function StudioServer({
   const at: StudioAt = { org: ctx.orgSlug, ws: ctx.wsSlug };
   const here = studioHref(at, route.serverId, route.tab);
   const canEdit = canAdministerOrg(ctx);
+  // The record is read by the folder the registry row names, so it waits on
+  // the server list alone. The other reads run beside it.
+  const serverList = source.tools.mcpServers(ctx);
+  const recordRead = serverList.then((read) => {
+    const row = read.ok
+      ? read.value.servers.find((s) => s.id === route.serverId)
+      : undefined;
+    return row === undefined ? null : readRecord(ctx, row);
+  });
   const [servers, versions, board, members, record] = await Promise.all([
-    source.tools.mcpServers(ctx),
+    serverList,
     serverVersions(ctx, source, route.serverId),
     source.tools.killSwitches(ctx),
     source.org.members(ctx),
-    readRecord(ctx, route.serverId),
+    recordRead,
   ]);
   if (!servers.ok) {
     return (

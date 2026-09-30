@@ -1,8 +1,8 @@
 /**
- * #3431: `@oxagen/app`'s coverage report counted about 80 files from the
- * retired app at 0% and failed its floor while every test passed. The guard
- * must fail on a report like that, and must not pass when there is no report
- * to read.
+ * #3431: a coverage report that names another package's files, or files not
+ * on disk, fails a PR for a reason that is not true. The 2026-09-19 case
+ * turned out to be a misread log, not such a report, but the guard must
+ * still fail on one, and must not pass when there is no report to read.
  */
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -73,7 +73,7 @@ describe("checkPackage", () => {
     expect(result.message).toContain("names 2 files, all under apps/app/src");
   });
 
-  it("fails on the retired app's files, the 2026-09-19 report", () => {
+  it("fails on another package's files", () => {
     // The witness: a file from apps/app_deprecated in apps/app's report.
     const foreign = `${CWD}/apps/app_deprecated/src/app/[orgSlug]/[workspaceSlug]/page.tsx`;
     const result = checkPackage("apps/app", io({ ...clean, [foreign]: entry }));
@@ -84,12 +84,26 @@ describe("checkPackage", () => {
   });
 
   it("fails on a file under src that is not on disk", () => {
-    // The reported paths did not exist at the commit that was tested.
     const ghost = `${APP}/src/app/[orgSlug]/[workspaceSlug]/settings/page.tsx`;
     const result = checkPackage("apps/app", io({ ...clean, [ghost]: entry }));
     expect(result.code).toBe(1);
     expect(result.message).toContain("1 not on disk");
     expect(result.message).toContain(ghost);
+  });
+
+  it("reads a relative key against the package, not the process directory", () => {
+    // #4664 item 10. The process runs from tools/scripts under vitest, so a
+    // key resolved against process.cwd() would land outside apps/app/src.
+    const relativeKeys = {
+      "src/ui/avatar.tsx": entry,
+      "src/app/[org]/audit/page.tsx": entry,
+    };
+    const result = checkPackage("apps/app", io(relativeKeys));
+    expect(result.code).toBe(0);
+    expect(result.message).toContain("names 2 files, all under apps/app/src");
+    expect(
+      offenders(relativeKeys, [`${APP}/src`], () => true, APP).outside,
+    ).toEqual([]);
   });
 
   it("fails when there is no report, so it cannot pass empty", () => {
@@ -185,5 +199,20 @@ describe("CI runs the guard", () => {
     const condition = unit.slice(stepStart, run).join("\n");
     expect(condition).toContain("!cancelled()");
     expect(condition).toContain("matrix.lane == 'app'");
+  });
+
+  it("runs it only when the coverage suite itself ran (#4664 item 4)", () => {
+    // When Bootstrap, Migrate or Seed fails, the suite never writes a report,
+    // and a "no report" line beside the real cause points the reader away
+    // from it. The thresholds step's own outcome gates the guard.
+    const thresholds = unit.findIndex(is("- name: Coverage thresholds"));
+    expect(unit[thresholds + 1]?.trim()).toBe("id: coverage");
+    const run = unit.findIndex(is(GUARD));
+    let stepStart = run;
+    while (stepStart > 0 && !/^\s+- /.test(unit[stepStart] ?? "")) stepStart--;
+    const condition = unit.slice(stepStart, run).join("\n");
+    expect(condition).toContain(
+      "(steps.coverage.outcome == 'success' || steps.coverage.outcome == 'failure')",
+    );
   });
 });

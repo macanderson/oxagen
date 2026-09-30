@@ -88,7 +88,9 @@ import {
   handlerCallsRoleGate,
   parseSource,
   soleHandlerExport,
+  withoutComments,
 } from "./lib/role-gate-ast.mjs";
+import { isEntrypoint } from "./lib/is-entrypoint.mjs";
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const CONTRACTS_DIR = join(REPO_ROOT, "packages", "oxagen", "src", "contracts");
@@ -214,11 +216,23 @@ function parseGrants(block) {
 }
 
 /**
+ * A contract's source with its comments blanked. Three contracts carry a doc
+ * comment that quotes `surfaces: []` above the real declaration, and the
+ * readers below take the first match, so a comment must not be one (#4664
+ * item 7). A header comment that quoted a non-agent `surfaces:` array would
+ * otherwise skip the agent rule for its contract.
+ */
+function contractCode(src) {
+  return withoutComments("contract.ts", src);
+}
+
+/**
  * The contract's `defaultRoles`, as `{ org, workspace }` maps of role to
  * effect, or null when it declares none. Parses a block that spans lines and
- * one that sits on one line alike.
+ * one that sits on one line alike. Comments are ignored.
  */
-export function parseDefaultRoles(src) {
+export function parseDefaultRoles(contractSrc) {
+  const src = contractCode(contractSrc);
   const at = src.search(/\bdefaultRoles\s*:/);
   if (at < 0) return null;
   const block = balancedBlock(src, at);
@@ -230,9 +244,12 @@ export function parseDefaultRoles(src) {
   return { org: side("org"), workspace: side("workspace") };
 }
 
-/** The `surfaces` array a contract declares, or null when it is not a literal. */
+/**
+ * The `surfaces` array a contract declares, or null when it is not a literal.
+ * Comments are ignored.
+ */
 export function parseSurfaces(src) {
-  const m = src.match(/\bsurfaces\s*:\s*\[([^\]]*)\]/);
+  const m = contractCode(src).match(/\bsurfaces\s*:\s*\[([^\]]*)\]/);
   if (!m) return null;
   return [...m[1].matchAll(/["']([a-z]+)["']/g)].map((s) => s[1]);
 }
@@ -242,7 +259,7 @@ export function parseSurfaces(src) {
  * the shape #3258 calls a declared role restriction.
  */
 export function declaresRoleRestriction(src) {
-  if (!/sensitivity:\s*["']high["']/.test(src)) return false;
+  if (!/sensitivity:\s*["']high["']/.test(contractCode(src))) return false;
   return parseDefaultRoles(src) !== null;
 }
 
@@ -258,9 +275,12 @@ export function declaresAgentRoleRestriction(src) {
   return roles.workspace.Member !== "allow";
 }
 
-/** The capability `name` a contract file registers, or null if none is found. */
+/**
+ * The capability `name` a contract file registers, or null if none is found.
+ * Comments are ignored.
+ */
 export function declaredCapabilityName(src) {
-  const m = src.match(/name:\s*["']([a-zA-Z0-9_]+)["']/);
+  const m = contractCode(src).match(/name:\s*["']([a-zA-Z0-9_]+)["']/);
   return m ? m[1] : null;
 }
 
@@ -557,7 +577,7 @@ function main() {
   process.exit(0);
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isEntrypoint(import.meta.url)) {
   try {
     main();
   } catch (error) {

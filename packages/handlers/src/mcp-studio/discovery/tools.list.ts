@@ -27,7 +27,7 @@ export interface ListStudioToolsDeps {
 }
 
 /** The folder's three files, with a refusal a person can act on. */
-async function publishedFiles(
+export async function publishedFiles(
   steering: SteeringFiles,
   scope: DiscoveryScope,
   server: string,

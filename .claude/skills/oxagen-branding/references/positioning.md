@@ -86,7 +86,7 @@ One page per operator, read from the record and not estimated. It shows spend by
 
 **The honesty rule.** The review reports what the record shows and does not grade the person. "Twelve restarts on the same task this week" is a fact. "Bad prompter" is not one, and no line in this product says it. A habit is a measurement with its definition beside it, not a score or a rating. Do not imply a saving from a habit without the measured workload and conditions.
 
-**Decision, 2026-09-27:** Spend ranks operators by unproductive spend, for managers. Mac's words: "managers need to know who is wasting the most money." The ranking uses that one measured figure, and each figure opens to the requests behind it. Outside that ranking, no line scores or ranks a person. The figures shown beside each name, a pseudonym setting, and the operator and work order metrics are proposals. The lines are `mc-operator-ranking`, `mc-operator-productivity`, `mc-work-order-metrics`, `mc-unassigned-spend`, and `mc-unproductive-spend`, all held. The source is `finding-wasted-spend.html` in `oxagenai/oxagen-brand`.
+**Decision, 2026-09-27:** Spend ranks operators by unproductive spend, for managers. Mac's words: "managers need to know who is wasting the most money." The ranking uses that one measured figure, and each figure opens to the requests behind it. Outside that ranking, no line scores or ranks a person. The figures shown beside each name, a pseudonym setting, and the operator and work order metrics are proposals. The lines are `mc-operator-ranking`, `mc-operator-productivity`, `mc-work-order-metrics`, `mc-unassigned-spend`, and `mc-unproductive-spend`, all held. The source is `finding-wasted-spend.html` in `macanderson/oxagen-brand`.
 
 **Unproductive spend** is spend on steps that bought no progress: a repeated status poll, a cache that expired while a parent run waited, a model class larger than the job. It replaces "wasted spend". It is a recorded figure, so a line about it names the requests behind it and makes no savings claim without the measured workload.
 
@@ -106,7 +106,7 @@ The lines are held until their gates ship:
 
 **Decision, 2026-09-15, messaging review:** completion is an optional control for bounded tasks. The bill, waste, memory, proof, and fleet lines are retired for the reasons in the table below. The dod lines stay held until the dod ships.
 
-The approved lines live in the message registry at `messages/` in `oxagenai/oxagen-brand`. Each entry carries its audience, long and short copy, release status, evidence, owner, and review date, and the registry generates `message-bank.html` and the ad copy. When this list and the registry disagree, the registry wins. The list below is here so the vendored copy of this skill works without the registry. It carries no count, so adding or retiring an entry never leaves a stale number behind.
+The approved lines live in the message registry at `messages/` in `macanderson/oxagen-brand`. Each entry carries its audience, long and short copy, release status, evidence, owner, and review date, and the registry generates `message-bank.html` and the ad copy. When this list and the registry disagree, the registry wins. The list below explains each line in context. It carries no count, so adding or retiring an entry never leaves a stale number behind.
 
 ### Live
 
