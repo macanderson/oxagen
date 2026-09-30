@@ -1403,7 +1403,7 @@ export const flows: Flow[] = [
     ],
     groups: [
       {
-        label: "app node · t4g.large arm64 · private subnet · no SSH",
+        label: "app node · m7g.xlarge arm64 · private subnet · no SSH",
         col: 3,
         row: 0,
         colspan: 3,

@@ -333,8 +333,9 @@ tools/scripts/package-for-node.sh api
 
 ### Four things that will bite
 
-- **The instance is `arm64`** (a `t4g.large`, verified 2026-09-10 via the
-  `where-is-production` workflow). `deploy-node` runs on
+- **The instance is `arm64`** (an `m7g.xlarge` since 2026-09-30, #4866; a
+  `t4g.large` before, verified 2026-09-10 via the `where-is-production`
+  workflow). `deploy-node` runs on
   `ubuntu-24.04-arm` for that reason. An artifact built on an x86 runner
   installs and tests green and then fails to load a native module at first
   request.
