@@ -45,6 +45,14 @@ const { choices } = vi.hoisted(() => {
     },
   };
 });
+// Add server's Studio sources load Studio's server actions through
+// @/features/mcp-studio/client. No test here calls them.
+vi.mock("@/features/mcp-studio/actions", () => ({
+  saveStudioDraftAction: vi.fn(),
+  saveNewStudioServerAction: vi.fn(),
+  getStudioDraftAction: vi.fn(),
+  openStudioReviewAction: vi.fn(),
+}));
 vi.mock("@/features/shell/client", () => ({
   ...choices,
   openApprovals: vi.fn(),

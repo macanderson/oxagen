@@ -6,12 +6,16 @@
 //
 // The page reads the registry, the switch board and the org's members, as the
 // Tools page does, plus the Studio record and, on Changes, the tool checks'
-// findings. The last two are seams that answer null until lanes M10 and M5
-// land. The registry read follows the server's cursor to its last page, so a
-// server with more versions than one page holds still shows every tool with
-// its version and off switch. A failed registry read, on any page, replaces
-// the whole body the way it does on Tools, and a server the workspace does
-// not hold is its own state, so a stale link never draws an empty page.
+// findings. The record is a seam that answers null until this lane binds
+// lane M10's discovery. The findings come from list_studio_findings, a stub
+// until #4742 merges (pending-capabilities.ts). On Tools, the page reads
+// list_studio_tools' counts the same way, a stub until lane M10 part 2
+// merges (#4682). The registry read follows
+// the server's cursor to its last page, so a server with more versions than
+// one page holds still shows every tool with its version and off switch. A
+// failed registry read, on any page, replaces the whole body the way it does
+// on Tools, and a server the workspace does not hold is its own state, so a
+// stale link never draws an empty page.
 //
 // The off switches are the Tools page's own controls (switch-controls.tsx),
 // drawn here on the server and handed to the tabs, so a flip here writes the
@@ -49,11 +53,15 @@ import { StateWrap } from "@/ui/state-wrap";
 import { ChangesTab } from "./changes-tab";
 import { ConnectionTab } from "./connection-tab";
 import { buildStudioView, type StudioServerView } from "./model";
+import {
+  type ListStudioFindings,
+  listStudioFindings,
+  listStudioTools,
+  type StudioToolsList,
+} from "./pending-capabilities";
 import { type StudioAt, type StudioRoute, studioHref } from "./route";
 import {
-  type FindingsReader,
   type RecordReader,
-  readFindings,
   readStudioRecord,
   type StudioFinding,
 } from "./seams";
@@ -248,35 +256,62 @@ function BoardNote({ state }: { state: "failed" | "truncated" | null }) {
   return null;
 }
 
+/**
+ * The tool checks' findings on one server folder, or null when there are none
+ * to show: the capability has not merged, the record names no folder, or the
+ * read was refused.
+ */
+async function findingsOf(
+  list: ListStudioFindings,
+  serverName: string | null,
+): Promise<readonly StudioFinding[] | null> {
+  if (!list.available || serverName === null) return null;
+  const answer = await list.call({ server: serverName });
+  return answer.ok ? answer.findings : null;
+}
+
+/**
+ * One server's tool counts from list_studio_tools, or null when there are
+ * none to show: the capability has not merged, the record names no folder,
+ * or the read was refused.
+ */
+async function listedOf(
+  list: typeof listStudioTools,
+  serverName: string | null,
+): Promise<StudioToolsList | null> {
+  if (!list.available || serverName === null) return null;
+  const answer = await list.call({ server: serverName });
+  return answer.ok ? answer : null;
+}
+
 export async function StudioServer({
   ctx,
   source,
   route,
   readRecord = readStudioRecord,
-  findings = readFindings,
+  findings = listStudioFindings,
+  toolsList = listStudioTools,
 }: {
   ctx: WsCtx;
   source: DataSource;
   route: StudioRoute;
   /** The Studio record's reader; null until discovery writes one (lane M10). */
   readRecord?: RecordReader;
-  /** The tool checks' reader; null until lint lands (lane M5, #4672). */
-  findings?: FindingsReader;
+  /** The tool checks' capability: the stub until #4742 merges. */
+  findings?: ListStudioFindings;
+  /** The Tools tab's counts: the stub until lane M10 part 2 merges (#4682). */
+  toolsList?: typeof listStudioTools;
 }) {
   const at: StudioAt = { org: ctx.orgSlug, ws: ctx.wsSlug };
   const here = studioHref(at, route.serverId, route.tab);
   const canEdit = canAdministerOrg(ctx);
-  const [servers, versions, board, members, record, checks] =
-    await Promise.all([
-      source.tools.mcpServers(ctx),
-      serverVersions(ctx, source, route.serverId),
-      source.tools.killSwitches(ctx),
-      source.org.members(ctx),
-      readRecord(ctx, route.serverId),
-      route.tab === "changes"
-        ? findings(ctx, route.serverId)
-        : Promise.resolve<readonly StudioFinding[] | null>(null),
-    ]);
+  const [servers, versions, board, members, record] = await Promise.all([
+    source.tools.mcpServers(ctx),
+    serverVersions(ctx, source, route.serverId),
+    source.tools.killSwitches(ctx),
+    source.org.members(ctx),
+    readRecord(ctx, route.serverId),
+  ]);
   if (!servers.ok) {
     return (
       <ToolsReadFailure
@@ -306,6 +341,11 @@ export async function StudioServer({
     board: board.ok ? board.value : null,
     record,
   });
+  // The checks name the server by its folder, which only the record gives.
+  const checks =
+    route.tab === "changes" ? await findingsOf(findings, view.serverName) : null;
+  const listed =
+    route.tab === "tools" ? await listedOf(toolsList, view.serverName) : null;
   const roster = members.ok ? members.value.members : [];
   const denyGeneration = board.ok
     ? board.value.denyGeneration
@@ -382,6 +422,7 @@ export async function StudioServer({
             canEdit={canEdit}
             off={off}
             offFacts={offFacts}
+            listed={listed}
           />
         ) : null}
         {route.tab === "connection" ? (
