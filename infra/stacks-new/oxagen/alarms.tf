@@ -329,8 +329,8 @@ resource "aws_cloudwatch_metric_alarm" "node_cpu" {
 
 # The one that distinguishes busy from broken, and the one that was billing.
 #
-# `t4g.large` is burstable. In `unlimited` mode — the default, and what the node
-# runs — exhausting the credit balance does not throttle it; it charges for the
+# A t-family node is burstable. In `unlimited` mode — the default — exhausting
+# the credit balance does not throttle it; it charges for the
 # surplus, per vCPU-hour, silently and indefinitely. During the ClickHouse
 # runaway the balance sat at 0.0 with surplus credits pegged at the 576 maximum
 # for over a day. Nothing in AWS objects to that, which is exactly why it needs
@@ -340,7 +340,15 @@ resource "aws_cloudwatch_metric_alarm" "node_cpu" {
 # earns them back, so a balance that stays near zero means consumption has
 # outrun the baseline rather than spiked past it. `oxagen-node-cpu` can fire on
 # honest load; this one firing with it means the load is not a burst.
+#
+# Only a t-family node publishes CPUCreditBalance, so the alarm exists only on
+# one. The node moved to `m7g.xlarge` on 2026-09-30 (main.tf,
+# `local.app_instance_type`), which has no credits to run down or buy, and
+# `oxagen-node-cpu` above still catches sustained load. Moving back to a
+# t-family type brings this alarm back with it.
 resource "aws_cloudwatch_metric_alarm" "node_cpu_credits" {
+  count = startswith(local.app_instance_type, "t") ? 1 : 0
+
   alarm_name        = "oxagen-node-cpu-credits"
   alarm_description = "The app node has run its CPU credit balance down and is buying surplus credits. In `unlimited` mode this bills rather than throttles, so it can run for days without any other symptom — it did, for 26 hours, in August 2026."
 
@@ -360,18 +368,6 @@ resource "aws_cloudwatch_metric_alarm" "node_cpu_credits" {
   alarm_actions = [aws_sns_topic.alerts.arn]
   ok_actions    = [aws_sns_topic.alerts.arn]
   tags          = { Brand = local.brand }
-
-  # Only burstable instances publish CPUCreditBalance. Move the node off the
-  # t-family and this alarm stops receiving data entirely, and with
-  # `notBreaching` it would sit in INSUFFICIENT_DATA forever rather than say so
-  # — a monitor that has quietly stopped monitoring. Failing the plan is the
-  # honest outcome: whoever changes the instance type decides what replaces it.
-  lifecycle {
-    precondition {
-      condition     = startswith(module.app.instance_type, "t")
-      error_message = "oxagen-node-cpu-credits alarms on CPUCreditBalance, which only burstable (t-family) instances publish. The app node is ${module.app.instance_type}. Remove this alarm or choose the metric that replaces it."
-    }
-  }
 }
 
 # The agent has been collecting `mem_used_percent` since #2797 and nothing read

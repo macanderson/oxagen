@@ -29,6 +29,13 @@
 
 locals {
   brand = "oxagen"
+
+  # 16 GiB, 4 Graviton vCPUs, not burstable. The t4g.large (8 GiB) could no
+  # longer hold the services' memory limits: the deploy's memory guard refused
+  # mcp on 2026-09-30 with 8,448 MiB needed against 7,809 (#4202, #4829). Mac
+  # approved the move that day, about $70 a month more. alarms.tf keys the CPU
+  # credit alarm off this value, because only t-family nodes publish credits.
+  app_instance_type = "m7g.xlarge"
 }
 
 module "brand" {
@@ -107,6 +114,7 @@ module "app" {
   source = "../../modules/app-node"
 
   ami_id            = var.node_ami
+  instance_type     = local.app_instance_type
   name              = "oxagen-app"
   deploy_bucket     = "oxagen-deploy-${var.account_id}"
   region            = var.region
