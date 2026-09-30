@@ -1,5 +1,5 @@
 // Fleet (fleet.md in the roadmap's mockups): every run in the workspace, live
-// and recent. The header with Steer and Register Agent, the four summary tiles,
+// and recent. The header with Steer the fleet and Register an agent, the four summary tiles,
 // and the Runs panel, from one `list_runs` read, the pending approvals, the
 // open interjections and the workspace's agents. Approvals and interjections
 // are listed in the shell's drawer; Fleet counts both in one tile and opens

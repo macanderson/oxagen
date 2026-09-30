@@ -362,7 +362,7 @@ describe("tool rows and chips", () => {
     {
       value: `mcp.${UUID}.notion-create-database@*`,
       label: "Create database",
-      context: "Notion · every version",
+      context: "Notion (every version)",
       description: "Create a database in a page.",
       icon: NOTION,
       facts: [
@@ -373,7 +373,7 @@ describe("tool rows and chips", () => {
     {
       value: `mcp.${UUID}.notion-search@*`,
       label: "Search",
-      context: "Notion · every version",
+      context: "Notion (every version)",
       icon: NOTION,
       facts: [{ text: "Read only", tone: "allowed" }],
     },
@@ -399,7 +399,7 @@ describe("tool rows and chips", () => {
     const [create] = screen.getAllByRole("option");
     if (create === undefined) throw new Error("no rows");
     expect(create).toHaveTextContent("Create database");
-    expect(create).toHaveTextContent("Notion · every version");
+    expect(create).toHaveTextContent("Notion (every version)");
     expect(create).toHaveTextContent("Writes");
     expect(create).toHaveTextContent("High risk");
     expect(create).toHaveTextContent("Create a database in a page.");
@@ -442,7 +442,7 @@ describe("tool rows and chips", () => {
     );
     expect(chip).toHaveTextContent("Search");
     expect(chip?.textContent).not.toContain(UUID);
-    expect(chip).toHaveAttribute("title", "Notion · every version");
+    expect(chip).toHaveAttribute("title", "Notion (every version)");
     expect(chip?.querySelector("[data-provider-icon]")).not.toBeNull();
     expect(hidden(container, "tools")).toBe(`mcp.${UUID}.notion-search@*`);
   });
@@ -503,7 +503,7 @@ describe("tool rows and chips", () => {
     );
     const input = screen.getByRole("combobox", { name: "Tool" });
     expect(input).toHaveValue("Search");
-    expect(input).toHaveAttribute("title", "Notion · every version");
+    expect(input).toHaveAttribute("title", "Notion (every version)");
     expect(container.querySelector("[data-provider-icon]")).not.toBeNull();
   });
 
@@ -518,7 +518,7 @@ describe("tool rows and chips", () => {
             {
               value: "tlv_1",
               label: "Search v1",
-              context: "Notion · version 1 only",
+              context: "Notion (version 1 only)",
               icon: NOTION,
             },
             { value: "tlv_2", label: "Refund v1", context: "Stripe" },

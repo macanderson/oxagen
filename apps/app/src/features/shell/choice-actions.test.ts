@@ -99,19 +99,19 @@ describe("chooseToolPatterns", () => {
           {
             value: "stripe@*",
             label: "Stripe",
-            context: "Custom tool · every version",
+            context: "Custom tool (every version)",
             facts,
           },
           {
             value: "stripe@1",
             label: "Stripe v1",
-            context: "Custom tool · version 1 only",
+            context: "Custom tool (version 1 only)",
             facts,
           },
           {
             value: "stripe@2",
             label: "Stripe v2",
-            context: "Custom tool · version 2 only",
+            context: "Custom tool (version 2 only)",
             facts,
           },
         ],
@@ -140,7 +140,7 @@ describe("chooseToolPatterns", () => {
     expect(create).toEqual({
       value: `mcp.${NOTION_UUID}.notion-create-database@*`,
       label: "Create database",
-      context: "Notion · every version",
+      context: "Notion (every version)",
       description: "Create a database in a page.",
       icon: { name: "Notion", url: "https://notion.so/icon.png" },
       facts: [
@@ -180,7 +180,7 @@ describe("chooseToolPatterns", () => {
     expect(result.value.partial).toBe(false);
     expect(result.value.options[0]).toMatchObject({
       label: "Notion search",
-      context: "MCP server · every version",
+      context: "MCP server (every version)",
     });
     expect(result.value.options[0]?.icon).toBeUndefined();
     expect(result.value.namespaces).toBeUndefined();
@@ -493,11 +493,11 @@ describe("chooseSwitchTargets", () => {
     const [fetch, ledger] = result.value.options;
     expect(fetch).toMatchObject({
       label: "Web fetch v2",
-      context: "Built in · version 2 only",
+      context: "Built in (version 2 only)",
     });
     expect(ledger).toMatchObject({
       label: "Ledger sync v1",
-      context: "Foundry · version 1 only",
+      context: "Foundry (version 1 only)",
     });
     expect(fetch?.icon).toBeUndefined();
     expect(ledger?.icon).toBeUndefined();
@@ -529,7 +529,7 @@ describe("chooseSwitchTargets", () => {
         value:
           "tlv_mcp.7c084658-9d6d-480d-81eb-499322416dae.notion-create-pages3",
         label: "Create pages v3",
-        context: "Notion · version 3 only",
+        context: "Notion (version 3 only)",
         icon: { name: "Notion", url: "https://notion.so/icon.png" },
         facts: [
           { text: "May write", tone: "denied" },

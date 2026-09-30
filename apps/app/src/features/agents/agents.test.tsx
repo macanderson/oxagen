@@ -170,12 +170,12 @@ describe("Agents, loaded", () => {
     });
     expect(tiles().map((tile) => tile.textContent)).toEqual([
       // "Listed below" counts the rows this read returned, not the total.
-      "Agents here7organization count not recorded · 2 listed below",
+      "Agents here72 listed below. The organization count is not recorded yet.",
       "Enrolled25 not yet enrolled",
-      "Holding a mandate1acme.core.release-bot · in Core platform · counted in Core platform only",
+      "Holding a mandate1acme.core.release-bot in Core platform",
       // Every tamper incident the store keeps on the agents' hosts, and the
       // newest as <scope> · <kind>, <date> with how many are open.
-      "Tamper incidents4acme.core.release-bot · hooks_removed, 2026-09-11 · 3 open · counted in Core platform only",
+      "Tamper incidents43 open in Core platform. The latest is hooks_removed on acme.core.release-bot from 2026-09-11.",
     ]);
     expect(tiles()[3]?.querySelector("[data-critical]")).not.toBeNull();
     // The design scopes the last two to the organization; the read answers
@@ -211,8 +211,8 @@ describe("Agents, loaded", () => {
       ),
     });
     expect(tiles().map((tile) => tile.textContent)).toEqual([
-      "Agents here2organization count not recorded · 2 listed below",
-      "Enrolled21 listed here on the observe tier, the rest on harness",
+      "Agents here22 listed below. The organization count is not recorded yet.",
+      "Enrolled21 on the observe tier. The rest are on harness.",
       "Holding a mandate0no agent in Core platform holds one",
       "Tamper incidents0none in the retention window in Core platform",
     ]);
@@ -245,10 +245,10 @@ describe("Agents, loaded", () => {
       ),
     });
     expect(tiles()[1]?.textContent).toBe(
-      "Enrolled31 listed here on the observe tier, 1 on harness, 1 on another tier or none recorded",
+      "Enrolled31 on the observe tier, 1 on harness, and 1 on another tier or none.",
     );
     expect(tiles()[3]?.textContent).toBe(
-      "Tamper incidents2acme.core.c · chain_break, 2026-09-02 · all resolved · counted in Core platform only",
+      "Tamper incidents2All resolved in Core platform. The latest was chain_break on acme.core.c from 2026-09-02.",
     );
   });
 
@@ -310,7 +310,7 @@ describe("Agents, loaded", () => {
       ),
     });
     expect(tiles()[2]?.textContent).toBe(
-      "Holding a mandate5acme.core.b · in Core platform, acme.core.d · in Core platform, acme.core.e · in Core platform, acme.core.release-bot · in Core platform, acme.core.z · in Core platform · counted in Core platform only",
+      "Holding a mandate5acme.core.b, acme.core.d, acme.core.e, acme.core.release-bot, acme.core.z in Core platform",
     );
     expect(tiles()[2]?.textContent).not.toContain("more in");
   });
@@ -790,7 +790,7 @@ describe("Agents list controls", () => {
       within(screen.getByRole("combobox", { name: "Filter by Tier" }))
         .getAllByRole("option")
         .map((o) => o.textContent),
-    ).toEqual(["All · Tier", "gateway", "harness", "observe"]);
+    ).toEqual(["All (Tier)", "gateway", "harness", "observe"]);
     // The Owner facet left the view, so it no longer filters.
     expect(screen.getByText("1–10 of 12")).toBeInTheDocument();
   });
@@ -1017,7 +1017,7 @@ describe("Agents, not loaded", () => {
       }),
     ).toBeInTheDocument();
     expect(denied).toHaveTextContent(
-      "Your roles on Acme Robotics do not include agent.read on core-platform. An organization owner can grant it; the grant is a governed action and lands in the audit record with your name on it.",
+      "Your roles on Acme Robotics do not include agent.read on core-platform. An organization owner can grant it. The grant is a governed action and lands in the audit record with your name on it.",
     );
     expect(
       within(denied)
@@ -1031,7 +1031,7 @@ describe("Agents, not loaded", () => {
     ).toEqual([
       "Marcus Bell · workspace.member · core-platform",
       "agent.read on core-platform",
-      "policy not recorded · deny wins over every allow",
+      "policy not recorded",
     ]);
     expect(denied.querySelector('[data-gap="policy"]')).toHaveAttribute(
       "title",

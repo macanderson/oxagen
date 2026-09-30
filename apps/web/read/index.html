@@ -94,7 +94,7 @@
 <link rel="apple-touch-startup-image" media="(device-width: 768px) and (device-height: 1024px) and (-webkit-device-pixel-ratio: 2) and (orientation: landscape) and (prefers-color-scheme: light)" href="/splash/oxagen-splash-2048x1536-light.png">
 <script src="/assets/install-prompt.js" defer data-icon="/icon-192.png"></script>
 <!-- /pwa -->
-<link rel="preload" href="/fonts/space-grotesk-latin-700.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/fonts/space-grotesk-latin-600.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/fonts/geist-latin-wght.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/assets/house-tokens.css">
 <script type="application/ld+json">
@@ -136,13 +136,15 @@
   --ember-c:var(--ox-gold);          /* the brand metal */
   --ember-hover:var(--ox-gold-bright);
   --indigo:var(--ox-text);           /* links: neutral, underlined */
+  /* Space Grotesk sets the text wordmark in the header and nothing else
+     (Mac, 2026-09-29). This page has no hero, so every heading is Geist. */
+  --font-wordmark:var(--ox-font-display);
   --on-gold:var(--ox-ink);
   --ok:var(--ox-st-allowed);
   --radius:2px;
   --ease-out:cubic-bezier(.22,1,.36,1);
 }
 @font-face{font-family:"Space Grotesk";src:url("/fonts/space-grotesk-latin-600.woff2") format("woff2");font-weight:600;font-style:normal;font-display:swap}
-@font-face{font-family:"Space Grotesk";src:url("/fonts/space-grotesk-latin-700.woff2") format("woff2");font-weight:700;font-style:normal;font-display:swap}
 @font-face{font-family:"Geist";src:url("/fonts/geist-latin-wght.woff2") format("woff2");font-weight:100 900;font-style:normal;font-display:swap}
 @font-face{font-family:"Monaspace Neon";src:url("/fonts/monaspace-neon-latin-wght.woff2") format("woff2");font-weight:200 800;font-style:normal;font-display:swap}
 
@@ -157,7 +159,7 @@ body{
   min-height:100vh;display:flex;flex-direction:column;
 }
 ::selection{background:var(--ox-hl);color:var(--ox-text)}
-h1,h2,h3{margin:0;font-family:var(--ox-font-display);font-weight:700;letter-spacing:-.02em;line-height:1.1;text-wrap:balance}
+h1,h2,h3{margin:0;font-family:var(--ox-font);font-weight:700;letter-spacing:-.02em;line-height:1.1;text-wrap:balance}
 p{margin:0}
 a{color:inherit;text-decoration:none}
 img,svg{display:block;max-width:100%}
@@ -200,7 +202,7 @@ button,input,textarea,select{font:inherit;color:inherit}
 /* ============ header / footer ============ */
 .gate-header{padding:22px 0}
 .gate-header .wrap{width:min(680px,calc(100% - 40px));margin-inline:auto}
-.brand{display:inline-flex;align-items:center;gap:10px;color:var(--ink);font-family:var(--ox-font-display);font-weight:600;font-size:18px;letter-spacing:-.02em}
+.brand{display:inline-flex;align-items:center;gap:10px;color:var(--ink);font-family:var(--font-wordmark);font-weight:600;font-size:18px;letter-spacing:-.02em}
 .brand svg{width:26px;height:26px}
 .gate-footer{border-top:1px solid var(--line);padding:24px 0;margin-top:auto}
 .gate-footer .wrap{
@@ -274,7 +276,7 @@ main{flex:1;position:relative}
   background:var(--ember-c);
 }
 .book-kicker{font-family:var(--ox-font-mono);font-size:8.5px;letter-spacing:.2em;color:var(--ember-c);text-transform:uppercase;margin-bottom:10px}
-.book-title{font-family:var(--ox-font-display);font-size:clamp(15px,3.6vw,17px);font-weight:700;letter-spacing:-.01em;line-height:1.16}
+.book-title{font-family:var(--ox-font);font-size:clamp(15px,3.6vw,17px);font-weight:700;letter-spacing:-.01em;line-height:1.16}
 .book-author{margin-top:auto;padding-top:10px;border-top:1px solid var(--line)}
 .book-author b{display:block;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;font-weight:600}
 .book-author span{font-size:9.5px;color:var(--muted)}

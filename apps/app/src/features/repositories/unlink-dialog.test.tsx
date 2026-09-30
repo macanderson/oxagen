@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // Unlinking a repository, on its own: the warning a governed repository adds,
-// the throw the action can end in, and Keep it linked, which writes nothing
+// the throw the action can end in, and Keep the repository linked, which writes nothing
 // and forgets the refusal it showed. An unlink of a repository workspace.toml
 // lists opens a steering PR (ADR-212): the dialog names it, says to merge it,
 // and stays open. A link that predates the steering record goes at once.
@@ -213,7 +213,7 @@ describe("the unlink dialog", () => {
     // keep the link: the steering PR is open.
     expect(within(dialog).queryByTestId("unlink-submit")).toBeNull();
     expect(
-      within(dialog).queryByRole("button", { name: "Keep it linked" }),
+      within(dialog).queryByRole("button", { name: "Keep the repository linked" }),
     ).toBeNull();
 
     await user.click(within(dialog).getByRole("button", { name: "Close" }));
@@ -296,7 +296,7 @@ describe("the unlink dialog", () => {
       await within(dialog).findByTestId("unlink-failure"),
     ).toHaveTextContent("main repository cannot be unlinked");
     await user.click(
-      within(dialog).getByRole("button", { name: "Keep it linked" }),
+      within(dialog).getByRole("button", { name: "Keep the repository linked" }),
     );
     await waitFor(() => {
       expect(screen.queryByTestId("unlink-dialog")).toBeNull();

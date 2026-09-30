@@ -413,7 +413,7 @@ describe("Tools › not loaded", () => {
     const panel = within(screen.getByTestId("tools-denied"));
     expect(panel.getByText("You cannot see the tool registry")).toBeVisible();
     expect(screen.getByTestId("tools-denied").textContent).toContain(
-      "Your roles on Acme Robotics do not include tools.read on core-platform. An organization owner can grant it; the grant is a governed action and lands in the audit record with your name on it.",
+      "Your roles on Acme Robotics do not include tools.read on core-platform. An organization owner can grant it. The grant is a governed action and lands in the audit record with your name on it.",
     );
     expect(panel.getByText("Signed in as")).toBeVisible();
     expect(panel.getAllByText("tools.read on core-platform")).toHaveLength(2);
@@ -733,7 +733,7 @@ describe("Tools › registry view", () => {
     await renderTools();
     expect(
       screen.getByText(
-        "The gate shown is today’s: the version’s own kill switch, then its provider’s, then its class’s. A toolbelt decides which agents are shown the tool; the gate decides whether the call survives. Open a provider on any row to see what it imported and the connection it is reached with.",
+        "Gate today reads the version’s own kill switch, then its provider’s, then its class’s. A toolbelt decides which agents see a tool, and the gate decides whether a call goes through. Open a provider on any row to see what it imported and the connection that reaches it.",
       ),
     ).toBeVisible();
   });
@@ -745,7 +745,7 @@ describe("Tools › registry view", () => {
     expect(within(dialog).getByText("moves_money")).toBeVisible();
     expect(
       within(dialog).getByText(
-        /Category is a registry attribute, not a policy/,
+        /A rule may reference a category/,
       ),
     ).toBeVisible();
   });
@@ -896,7 +896,7 @@ describe("Tools › tool servers view", () => {
       "1 provider needs a look.",
     );
     expect(
-      screen.getByText(/MCP is one transport among several/),
+      screen.getByText(/is imported, versioned, and decided the same way/),
     ).toBeVisible();
   });
 

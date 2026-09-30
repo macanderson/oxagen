@@ -4,7 +4,7 @@
 // routes second. A stored customer key makes the source customer_key and
 // carries the key form. Without one the page cannot tell the minted key from
 // the shared key (#4005), so the badge says so and the minted key's facts are
-// not recorded, with Mint a key, Rotate and Revoke as stubs that send nothing.
+// not recorded, with Create a key, Rotate and Revoke as stubs that send nothing.
 // Model routes draws §4.5's four tiers with every stored figure not recorded
 // (#4006) and the Total labelled with its basis, client_attested. A viewer
 // below Owner or Admin gets the frame's denied state before the read.
@@ -183,9 +183,9 @@ describe("Funding source", () => {
         .map((o) => o.textContent),
     ).toEqual([
       "Choose a source",
-      "platform_minted — one key minted for this organization on Oxagen’s OpenRouter account",
-      "platform — Oxagen’s shared account",
-      "customer_key — your own OpenRouter or vendor key",
+      "platform_minted (one key minted for this organization on Oxagen’s OpenRouter account)",
+      "platform (Oxagen’s shared account)",
+      "customer_key (your own OpenRouter or vendor key)",
     ]);
     expect(panel).toHaveTextContent(
       "No capability reads which one yet (#4005)",
@@ -210,7 +210,7 @@ describe("Funding source", () => {
     );
   });
 
-  it("previews the minted key's two states apart: a held key with Rotate, Revoke and Reconciliation, and no key with Mint a key", async () => {
+  it("previews the minted key's two states apart: a held key with Rotate, Revoke and Reconciliation, and no key with Create a key", async () => {
     const { view } = await renderTab(readOk(NONE));
     const panel = funding();
     await userEvent.selectOptions(
@@ -246,7 +246,7 @@ describe("Funding source", () => {
       "[data-reconciliation]",
     );
     if (reconciliation === null) throw new Error("no reconciliation");
-    for (const row of ["OpenRouter reports", "Our credit ledger", "Difference"])
+    for (const row of ["OpenRouter reports", "Oxagen credit ledger", "Difference"])
       expect(reconciliation).toHaveTextContent(row);
     // Difference is never computed from two unread figures.
     expect(reconciliation.querySelectorAll("[data-not-recorded]")).toHaveLength(
@@ -258,19 +258,19 @@ describe("Funding source", () => {
         "data-stub",
       );
     }
-    // Mint a key is the no-key state's, never beside Rotate and Revoke.
+    // Create a key is the no-key state's, never beside Rotate and Revoke.
     expect(
-      within(state).queryByRole("button", { name: "Mint a key" }),
+      within(state).queryByRole("button", { name: "Create a key" }),
     ).toBeNull();
     expect(none).toHaveTextContent(
       "With no key the in-app agent cannot run, and nothing has been charged.",
     );
     await expectNoAxe(view.container);
     await userEvent.click(
-      within(none).getByRole("button", { name: "Mint a key" }),
+      within(none).getByRole("button", { name: "Create a key" }),
     );
     const dialog = screen.getByTestId("funding-mint-key");
-    expect(dialog).toHaveTextContent("Mint a model key for Acme Robotics");
+    expect(dialog).toHaveTextContent("Create a model key for Acme Robotics");
     expect(dialog).toHaveTextContent("so nothing is sent (#4005)");
   });
 

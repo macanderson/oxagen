@@ -283,7 +283,7 @@ function NamesToggle({
   );
 }
 
-/** What the categories mean (`toolcats`): the tags the chips show, and what they decide. */
+/** The category definitions (`toolcats`): the tags the chips show, and what they decide. */
 function CategoriesDialog() {
   const t = useTranslations("tools.registry.categoriesDialog");
   return (

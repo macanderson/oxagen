@@ -130,9 +130,9 @@ describe("Steer the fleet", () => {
   it("selects every agent by default and shows what each has in flight", () => {
     renderDialog();
     expect(screen.getByTestId("steer-selected")).toHaveTextContent(
-      "Agents · 2 of 2 selected",
+      "Agents (2 of 2 selected)",
     );
-    expect(box()).toHaveAccessibleName("Agents · 2 of 2 selected");
+    expect(box()).toHaveAccessibleName("Agents (2 of 2 selected)");
     expect(chips()).toEqual(["acme.core.release-bot", "acme.core.docs"]);
     fireEvent.focus(box());
     const release = option("acme.core.release-bot");
@@ -146,7 +146,7 @@ describe("Steer the fleet", () => {
     expect(docs).toHaveTextContent("no run in flight");
     expect(docs).not.toHaveTextContent("next run");
     expect(dialog()).toHaveTextContent(
-      "Every agent in Core platform, selected by default.",
+      "Every agent in Core platform starts selected.",
     );
     // The summary sits in the footer beside Cancel and Steer, as the design has it.
     const summary = screen.getByTestId("steer-summary");
@@ -233,7 +233,7 @@ describe("Steer the fleet", () => {
       "2 agents · 1 in flight · interrupt",
     );
     await user.type(screen.getByLabelText("Steering text"), "Stop now.");
-    await user.click(screen.getByRole("button", { name: "Send & Interrupt" }));
+    await user.click(screen.getByRole("button", { name: "Steer and interrupt" }));
     expect(steerFleet).toHaveBeenCalledWith("acme", "core-platform", {
       agentKeys: ["acme.core.release-bot", "acme.core.docs"],
       text: "Stop now.",
@@ -281,17 +281,17 @@ describe("Steer the fleet", () => {
     });
   });
 
-  it("clears and restores the selection with None and All, and cannot send to nobody", async () => {
+  it("clears and restores the selection with Select none and Select all, and cannot send to nobody", async () => {
     renderDialog();
     const user = userEvent.setup();
     await user.type(screen.getByLabelText("Steering text"), "Hold.");
-    await user.click(screen.getByRole("button", { name: "None" }));
+    await user.click(screen.getByRole("button", { name: "Select none" }));
     expect(screen.getByTestId("steer-selected")).toHaveTextContent(
-      "Agents · 0 of 2 selected",
+      "Agents (0 of 2 selected)",
     );
     expect(send()).toBeDisabled();
     expect(chips()).toEqual([]);
-    await user.click(screen.getByRole("button", { name: "All" }));
+    await user.click(screen.getByRole("button", { name: "Select all" }));
     expect(send()).toBeEnabled();
     expect(chips()).toEqual(["acme.core.release-bot", "acme.core.docs"]);
     await user.click(
@@ -309,14 +309,14 @@ describe("Steer the fleet", () => {
     });
     renderDialog();
     const user = userEvent.setup();
-    await user.click(screen.getByRole("button", { name: "None" }));
+    await user.click(screen.getByRole("button", { name: "Select none" }));
     await user.click(box());
     await user.keyboard("docs");
     expect(screen.getAllByRole("option")).toHaveLength(1);
     await user.keyboard("{Enter}");
     expect(chips()).toEqual(["acme.core.docs"]);
     expect(screen.getByTestId("steer-selected")).toHaveTextContent(
-      "Agents · 1 of 2 selected",
+      "Agents (1 of 2 selected)",
     );
     await user.type(screen.getByLabelText("Steering text"), "Hold.");
     await user.click(send());
@@ -469,7 +469,7 @@ describe("Steer the fleet", () => {
   it("counts the workspace's agents, not the ones listed, and says which a steer cannot reach", () => {
     renderDialog({ agentTotal: 3 });
     expect(screen.getByTestId("steer-selected")).toHaveTextContent(
-      "Agents · 2 of 3 selected",
+      "Agents (2 of 3 selected)",
     );
     expect(screen.getByTestId("steer-unlisted")).toHaveTextContent(
       "1 agent carries no key, so a steer cannot reach it.",
@@ -497,9 +497,9 @@ describe("Steer the fleet", () => {
     expect(onClose).toHaveBeenCalled();
   });
 
-  it("gives All and None the phone's touch target", () => {
+  it("gives Select all and Select none the phone's touch target", () => {
     renderDialog();
-    for (const name of ["All", "None"])
+    for (const name of ["Select all", "Select none"])
       expect(screen.getByRole("button", { name })).toHaveAttribute(
         "data-touch-target",
       );
