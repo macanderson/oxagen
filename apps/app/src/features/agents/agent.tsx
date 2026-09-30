@@ -29,6 +29,7 @@ import { ActivitySection } from "./activity";
 import {
   type AgentReads,
   type AgentTab,
+  incidentRowsOf,
   readAgentTab,
   runsOf,
   spendRowOf,
@@ -76,6 +77,7 @@ export async function Agent({
   agent,
   tab,
   cursor,
+  rows: rawRows = null,
 }: {
   ctx: WsCtx;
   source: DataSource;
@@ -85,8 +87,11 @@ export async function Agent({
   tab: string | null;
   /** `?cursor=`, a later page of the incidents. */
   cursor: string | null;
+  /** `?rows=`, how many incidents a page holds. A missing or unoffered size reads as 50 (#4693). */
+  rows?: string | null;
 }) {
   const selected = tabOf(tab);
+  const rows = incidentRowsOf(rawRows);
   const { read, now } = await readAgent(ctx, source, agent);
   if (!read.ok) {
     if (read.reason === "error" && read.status === 404) notFound();
@@ -105,7 +110,14 @@ export async function Agent({
   const detail = read.value;
   const { identity } = detail;
   const place = { org: ctx.orgSlug, ws: ctx.wsSlug, agent: identity.slug };
-  const reads = await readAgentTab(ctx, source, detail, selected, cursor, now);
+  const reads = await readAgentTab(
+    ctx,
+    source,
+    detail,
+    selected,
+    { cursor, rows },
+    now,
+  );
   const runs = runsOf(reads.runs, identity.agentKey);
   const lastRun = runs.ok ? (runs.value[0] ?? null) : null;
   const operatorName = operatorNameOf(identity, lastRun);
@@ -120,6 +132,7 @@ export async function Agent({
     place,
     now,
     cursor,
+    rows,
   });
   return (
     <div className="flex flex-col gap-5" data-testid="agent-page">
@@ -156,6 +169,7 @@ function tabBody({
   place,
   now,
   cursor,
+  rows,
 }: {
   selected: AgentTab;
   ctx: WsCtx;
@@ -167,6 +181,8 @@ function tabBody({
   place: { org: string; ws: string; agent: string };
   now: number;
   cursor: string | null;
+  /** The incidents a page holds on Activity, one of `INCIDENT_ROWS`. */
+  rows: number;
 }): ReactNode {
   const { identity } = detail;
   const spendRow = spendRowOf(reads.spend, identity.agentKey);
@@ -298,6 +314,7 @@ function tabBody({
           findings={reads.findings}
           incidents={reads.incidents}
           cursor={cursor}
+          rows={rows}
           agentKey={identity.agentKey}
           place={place}
         />

@@ -82,10 +82,16 @@ describe("isNavItemCurrent", () => {
     ["/acme/core-platform", "fleet"],
     ["/acme/core-platform/runs/run_01/chain", "fleet"],
     ["/acme/core-platform/agents/acme.core.triage", "agents"],
-    ["/acme/core-platform/tools/switches", "tools"],
+    // The Agents page's tabs are query values on its own path.
+    ["/acme/core-platform/agents?tab=switches", "agents"],
+    ["/acme/core-platform/agents?tab=runtimes", "agents"],
+    // Tools and Runtimes are tabs of Agents: a Studio server's page, one
+    // runtime's page and the retired paths that redirect all light Agents.
+    ["/acme/core-platform/tools", "agents"],
+    ["/acme/core-platform/tools/servers/mcs_01k5s1/try", "agents"],
     ["/acme/core-platform/steering", "steering"],
-    ["/acme/core-platform/runtimes", "runtimes"],
-    ["/acme/core-platform/runtimes/mbell-mbp-16", "runtimes"],
+    ["/acme/core-platform/runtimes", "agents"],
+    ["/acme/core-platform/runtimes/mbell-mbp-16", "agents"],
     ["/acme/core-platform/repositories", "repositories"],
     ["/acme/core-platform/repositories/changes", "repositories"],
     ["/acme/core-platform/spend/budgets", "spend"],
@@ -148,15 +154,13 @@ describe("hrefs", () => {
 });
 
 describe("sidebarSections", () => {
-  it("has the mockup's ten links in order, Runtimes then Repositories between Steering and Spend, and Audit after Billing, and no Run, Skills or Ontology entry", () => {
+  it("has the mockup's eight links in order, Repositories between Steering and Spend, and Audit after Billing, and no Run, Skills, Tools, Runtimes or Ontology entry", () => {
     const sections = sidebarSections("acme", "core-platform");
     expect(sections.map((s) => s.key)).toEqual(["workspace", "organization"]);
     expect(sections.flatMap((s) => s.items)).toEqual([
       { key: "fleet", href: "/acme/core-platform" },
       { key: "agents", href: "/acme/core-platform/agents" },
-      { key: "tools", href: "/acme/core-platform/tools" },
       { key: "steering", href: "/acme/core-platform/steering" },
-      { key: "runtimes", href: "/acme/core-platform/runtimes" },
       { key: "repositories", href: "/acme/core-platform/repositories" },
       { key: "spend", href: "/acme/core-platform/spend" },
       { key: "organization", href: "/acme" },
@@ -164,7 +168,7 @@ describe("sidebarSections", () => {
       { key: "audit", href: "/acme/audit" },
     ]);
     for (const { href } of sections.flatMap((s) => s.items))
-      expect(href).not.toMatch(/\/(ontology|runs|skills)(\/|$)/);
+      expect(href).not.toMatch(/\/(ontology|runs|skills|tools|runtimes)(\/|$)/);
   });
 
   it("carries a key and an href per item and nothing else (negative)", () => {
@@ -182,11 +186,10 @@ describe("sidebarSections", () => {
 });
 
 describe("the phone's thumb bar and More sheet", () => {
-  it("split the ten sidebar keys: four slots, the rest in the sheet, each key once", () => {
-    expect(THUMB_SLOTS).toEqual(["fleet", "agents", "tools", "spend"]);
+  it("split the eight sidebar keys: three slots, the rest in the sheet, each key once", () => {
+    expect(THUMB_SLOTS).toEqual(["fleet", "agents", "spend"]);
     expect(MORE_SHEET).toEqual([
       "steering",
-      "runtimes",
       "repositories",
       "organization",
       "billing",
@@ -205,8 +208,6 @@ describe("the phone's thumb bar and More sheet", () => {
       "/acme/billing",
       "/acme/audit",
       "/acme/core-platform/steering",
-      "/acme/core-platform/runtimes",
-      "/acme/core-platform/runtimes/mbell-mbp-16",
       "/acme/core-platform/repositories",
     ])
       expect(isMoreCurrent(path)).toBe(true);
@@ -216,7 +217,10 @@ describe("the phone's thumb bar and More sheet", () => {
     for (const path of [
       "/",
       "/acme/core-platform",
+      // Tools and one runtime light Agents, a thumb-bar slot.
+      "/acme/core-platform/agents?tab=runtimes",
       "/acme/core-platform/tools",
+      "/acme/core-platform/runtimes/mbell-mbp-16",
       "/acme/core-platform/spend",
     ])
       expect(isMoreCurrent(path)).toBe(false);
@@ -260,13 +264,16 @@ describe("breadcrumbs", () => {
       { kind: "nav", key: "fleet", href: "/acme/core-platform" },
       { kind: "id", text: "run_01", href: null },
     ]);
+    // A Studio server's page sits under Agents, which absorbed Tools.
     expect(
-      breadcrumbs("/acme/core-platform/tools/policy", names).at(-1),
-    ).toEqual({
-      kind: "nav",
-      key: "tools",
-      href: null,
-    });
+      breadcrumbs("/acme/core-platform/tools/servers/mcs_01k5s1", names).slice(
+        2,
+      ),
+    ).toEqual([{ kind: "nav", key: "agents", href: null }]);
+    // A tab of Agents is a query value, so its trail is the Agents page's.
+    expect(
+      breadcrumbs("/acme/core-platform/agents?tab=policies", names).slice(2),
+    ).toEqual([{ kind: "nav", key: "agents", href: null }]);
   });
 
   it("agent detail and one of its tabs", () => {
@@ -283,14 +290,15 @@ describe("breadcrumbs", () => {
     ).toEqual([{ kind: "id", text: "a", href: null }]);
   });
 
-  it("runtimes and one host, the host under the list as a run sits under Fleet", () => {
-    expect(breadcrumbs("/acme/core-platform/runtimes", names).slice(2)).toEqual(
-      [{ kind: "nav", key: "runtimes", href: null }],
-    );
+  it("one host sits under Agents, linked to its Runtimes tab, as a run sits under Fleet", () => {
     expect(
       breadcrumbs("/acme/core-platform/runtimes/mbell-mbp-16", names).slice(2),
     ).toEqual([
-      { kind: "nav", key: "runtimes", href: "/acme/core-platform/runtimes" },
+      {
+        kind: "nav",
+        key: "agents",
+        href: "/acme/core-platform/agents?tab=runtimes",
+      },
       { kind: "id", text: "mbell-mbp-16", href: null },
     ]);
   });
@@ -334,14 +342,18 @@ describe("breadcrumbs", () => {
     ]);
   });
 
-  it("runtimes ends on Runtimes, and one runtime ends on its id under a Runtimes link", () => {
+  it("the retired runtimes path ends on Agents, and one runtime ends on its id under the Runtimes tab's link", () => {
     expect(breadcrumbs("/acme/core-platform/runtimes", names).slice(2)).toEqual(
-      [{ kind: "nav", key: "runtimes", href: null }],
+      [{ kind: "nav", key: "agents", href: null }],
     );
     expect(
       breadcrumbs("/acme/core-platform/runtimes/tch_1", names).slice(2),
     ).toEqual([
-      { kind: "nav", key: "runtimes", href: "/acme/core-platform/runtimes" },
+      {
+        kind: "nav",
+        key: "agents",
+        href: "/acme/core-platform/agents?tab=runtimes",
+      },
       { kind: "id", text: "tch_1", href: null },
     ]);
   });

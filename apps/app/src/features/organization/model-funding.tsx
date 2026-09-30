@@ -11,8 +11,8 @@
 // which (#4005), so no source is chosen until the person picks one to look
 // at. platform_minted draws the design's two states apart, a key held (its
 // facts, Rotate, Revoke and the Reconciliation block) and no key (the note
-// and Mint a key), because nothing reads which of the two is true: every fact
-// says "not recorded", and Mint a key, Rotate, Revoke and the source switch
+// and Create a key), because nothing reads which of the two is true: every fact
+// says "not recorded", and Create a key, Rotate, Revoke and the source switch
 // are stubs that say what they would do.
 //
 // Model routes. §4.5's tiers are fixed (complex, light, embed, rerank), and

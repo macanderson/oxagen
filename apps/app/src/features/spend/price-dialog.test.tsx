@@ -287,7 +287,7 @@ describe("Remove a negotiated rate", () => {
     renderWithIntl(<RemoveRateDialog at={at} entry={entry} />);
     await userEvent.click(
       screen.getByRole("button", {
-        name: "Remove the negotiated rate for claude-sonnet-5, Output",
+        name: "Remove the negotiated rate for claude-sonnet-5 (Output)",
       }),
     );
     return screen.getByRole("dialog", { name: "Fall back to the list price" });
@@ -303,7 +303,7 @@ describe("Remove a negotiated rate", () => {
       "a run priced before now still names the rate it was priced with",
     );
     expect(
-      screen.getByRole("button", { name: "End this rate, use the list price" }),
+      screen.getByRole("button", { name: "End the rate and use the list price" }),
     ).toBeInTheDocument();
     expect(dialog.textContent).not.toMatch(/\bdelete this\b/i);
   });
@@ -315,7 +315,7 @@ describe("Remove a negotiated rate", () => {
     });
     await openDialog();
     await userEvent.click(
-      screen.getByRole("button", { name: "End this rate, use the list price" }),
+      screen.getByRole("button", { name: "End the rate and use the list price" }),
     );
     await waitFor(() => {
       expect(router.replace).toHaveBeenCalledWith(
@@ -341,7 +341,7 @@ describe("Remove a negotiated rate", () => {
     });
     await openDialog();
     await userEvent.click(
-      screen.getByRole("button", { name: "End this rate, use the list price" }),
+      screen.getByRole("button", { name: "End the rate and use the list price" }),
     );
     expect(
       await screen.findByTestId("spend-remove-rate-unpriced"),
@@ -368,7 +368,7 @@ describe("Remove a negotiated rate", () => {
     });
     await openDialog();
     await userEvent.click(
-      screen.getByRole("button", { name: "End this rate, use the list price" }),
+      screen.getByRole("button", { name: "End the rate and use the list price" }),
     );
     expect(
       await screen.findByTestId("spend-remove-rate-failure"),
@@ -389,7 +389,7 @@ describe("Remove a negotiated rate", () => {
     });
     await openDialog();
     await userEvent.click(
-      screen.getByRole("button", { name: "End this rate, use the list price" }),
+      screen.getByRole("button", { name: "End the rate and use the list price" }),
     );
     const confirmDialog = await screen.findByRole("dialog", {
       name: "This class would become unpriced",
@@ -411,14 +411,14 @@ describe("Remove a negotiated rate", () => {
       .mockResolvedValueOnce({ ok: true, value: { fallbackPriced: false } });
     await openDialog();
     await userEvent.click(
-      screen.getByRole("button", { name: "End this rate, use the list price" }),
+      screen.getByRole("button", { name: "End the rate and use the list price" }),
     );
     await screen.findByRole("dialog", {
       name: "This class would become unpriced",
     });
     await userEvent.click(
       screen.getByRole("button", {
-        name: "End the rate anyway, leave it unpriced",
+        name: "End the rate and leave it unpriced",
       }),
     );
     expect(
@@ -443,7 +443,7 @@ describe("Remove a negotiated rate", () => {
     });
     await openDialog();
     await userEvent.click(
-      screen.getByRole("button", { name: "End this rate, use the list price" }),
+      screen.getByRole("button", { name: "End the rate and use the list price" }),
     );
     await screen.findByRole("dialog", {
       name: "This class would become unpriced",

@@ -143,11 +143,14 @@ const ALLOWED: Record<
     // another lane, which may not import a barrel (INV-21). Fleet's carries
     // the approval decision the assistant flyout's parked cards make (#4162).
     // Run's carries the delivery report Fleet's steer receipt opens (#2953).
+    // Studio's carries Add server's local command, definition, package and
+    // discovery forms (#4678).
     if (
       isFeatureBarrel(target) ||
       target === "features/fleet/client" ||
       target === "features/run/client" ||
-      target === "features/shell/client"
+      target === "features/shell/client" ||
+      target === "features/mcp-studio/client"
     )
       return true;
     if (under(target, "ui") || under(target, "shared")) return true;

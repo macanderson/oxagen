@@ -175,7 +175,7 @@ describe("EnrollHost", () => {
   it("mints the token and shows it once, with its expiry and the command", async () => {
     issueAgentEnrollmentToken.mockResolvedValue({ ok: true, value: TOKEN });
     renderEnroll();
-    const dialog = await open("Show the CLI path", "enroll-host-dialog");
+    const dialog = await open("Enroll a host", "enroll-host-dialog");
     expect(dialog).toHaveTextContent("Enroll a host under Release bot");
     // The machine needs the app, which puts the CLI on PATH, before the command runs.
     expect(
@@ -188,7 +188,7 @@ describe("EnrollHost", () => {
       "https://downloads.oxagen.sh/latest/Oxagen_x64_en-US.msi",
     );
     await userEvent.click(
-      within(dialog).getByRole("button", { name: "Mint a token" }),
+      within(dialog).getByRole("button", { name: "Create a token" }),
     );
     expect(issueAgentEnrollmentToken).toHaveBeenCalledWith(
       "acme",
@@ -206,7 +206,7 @@ describe("EnrollHost", () => {
     // The dialog stays open: the token is the answer, and closing it would
     // throw the one copy away.
     expect(
-      within(dialog).getByRole("button", { name: "Mint another" }),
+      within(dialog).getByRole("button", { name: "Create another token" }),
     ).toBeInTheDocument();
   });
 
@@ -214,9 +214,9 @@ describe("EnrollHost", () => {
     const writeText = stubClipboard(() => Promise.resolve());
     issueAgentEnrollmentToken.mockResolvedValue({ ok: true, value: TOKEN });
     renderEnroll();
-    const dialog = await open("Show the CLI path", "enroll-host-dialog");
+    const dialog = await open("Enroll a host", "enroll-host-dialog");
     await userEvent.click(
-      within(dialog).getByRole("button", { name: "Mint a token" }),
+      within(dialog).getByRole("button", { name: "Create a token" }),
     );
     await screen.findByTestId("enrollment-token-value");
     const copies = within(dialog).getAllByRole("button", { name: "Copy" });
@@ -230,9 +230,9 @@ describe("EnrollHost", () => {
     stubClipboard(() => Promise.reject(new Error("not allowed")));
     issueAgentEnrollmentToken.mockResolvedValue({ ok: true, value: TOKEN });
     renderEnroll();
-    const dialog = await open("Show the CLI path", "enroll-host-dialog");
+    const dialog = await open("Enroll a host", "enroll-host-dialog");
     await userEvent.click(
-      within(dialog).getByRole("button", { name: "Mint a token" }),
+      within(dialog).getByRole("button", { name: "Create a token" }),
     );
     await screen.findByTestId("enrollment-token-value");
     await userEvent.click(
@@ -251,9 +251,9 @@ describe("EnrollHost", () => {
   it("names a refusal and mints nothing (negative)", async () => {
     issueAgentEnrollmentToken.mockResolvedValue(DENIED);
     renderEnroll();
-    const dialog = await open("Show the CLI path", "enroll-host-dialog");
+    const dialog = await open("Enroll a host", "enroll-host-dialog");
     await userEvent.click(
-      within(dialog).getByRole("button", { name: "Mint a token" }),
+      within(dialog).getByRole("button", { name: "Create a token" }),
     );
     expect(await screen.findByTestId("enroll-host-failure")).toHaveTextContent(
       "Your organization role does not allow this change",
@@ -264,15 +264,15 @@ describe("EnrollHost", () => {
   it("forgets the token when the dialog closes (negative)", async () => {
     issueAgentEnrollmentToken.mockResolvedValue({ ok: true, value: TOKEN });
     renderEnroll();
-    const dialog = await open("Show the CLI path", "enroll-host-dialog");
+    const dialog = await open("Enroll a host", "enroll-host-dialog");
     await userEvent.click(
-      within(dialog).getByRole("button", { name: "Mint a token" }),
+      within(dialog).getByRole("button", { name: "Create a token" }),
     );
     await screen.findByTestId("enrollment-token-value");
     await userEvent.click(
       within(dialog).getByRole("button", { name: "Close" }),
     );
-    await open("Show the CLI path", "enroll-host-dialog");
+    await open("Enroll a host", "enroll-host-dialog");
     expect(screen.queryByTestId("enrollment-token")).not.toBeInTheDocument();
   });
 });
@@ -307,7 +307,7 @@ describe("Enrollment writes while a dialog is open", () => {
   it("mints one token however often the form is submitted while it is pending (negative)", async () => {
     issueAgentEnrollmentToken.mockReturnValue(new Promise(() => undefined));
     renderEnroll();
-    const dialog = await open("Show the CLI path", "enroll-host-dialog");
+    const dialog = await open("Enroll a host", "enroll-host-dialog");
     const form = dialog.querySelector("form");
     if (form === null) throw new Error("mint form not drawn");
     fireEvent.submit(form);

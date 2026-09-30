@@ -19,7 +19,11 @@ import { readError } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider, translator } from "@/test/intl";
 import { phoneWidth } from "@/test/phone";
-import { buttonDanger, buttonPrimary } from "@/ui/control-styles";
+import {
+  buttonDanger,
+  buttonPrimary,
+  buttonSecondary,
+} from "@/ui/control-styles";
 import { agentPage, agentRow, agentsSource } from "./agents.builders";
 
 const push = vi.fn();
@@ -46,7 +50,7 @@ vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
 const { WsCtx } = await import("@/server/viewer");
 const { unsafeMint } = await import("@/server/viewer.testing");
 const { Agents, AgentsLoading } = await import("./agents");
-const { AgentsCreate } = await import("./create-actions");
+const { AddRuntimeLink, ConnectAgentLink } = await import("./create-actions");
 
 const t = translator("agents.list");
 
@@ -62,8 +66,6 @@ const ctx = unsafeMint(WsCtx, {
   wsRole: "member",
 });
 
-const HEADER = <h1>Agents</h1>;
-
 async function renderAgents(
   reads: Parameters<typeof agentsSource>[0],
   cursor: string | null = null,
@@ -76,7 +78,6 @@ async function renderAgents(
     source,
     cursor,
     ...(showRetired === undefined ? {} : { showRetired }),
-    header: HEADER,
     viewerName: "Marcus Bell",
   });
   render(
@@ -147,14 +148,13 @@ afterEach(async () => {
 });
 
 describe("Agents, loaded", () => {
-  it("reads one agents page at the URL's cursor and draws the header it is handed", async () => {
+  it("reads one agents page at the URL's cursor and draws no page header of its own", async () => {
     const calls = await renderAgents({ list: agentPage([agentRow()]) }, "c1");
     expect(calls.list).toEqual([
       [ctx, { cursor: "c1", includeRetired: false }],
     ]);
-    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
-      "Agents",
-    );
+    // The Agents page (area.tsx) draws the one header over every tab.
+    expect(screen.queryByRole("heading", { level: 1 })).toBeNull();
   });
 
   it("draws four tiles, each one number and one basis line from the workspace totals", async () => {
@@ -170,12 +170,12 @@ describe("Agents, loaded", () => {
     });
     expect(tiles().map((tile) => tile.textContent)).toEqual([
       // "Listed below" counts the rows this read returned, not the total.
-      "Agents here7organization count not recorded · 2 listed below",
+      "Agents here72 listed below. The organization count is not recorded yet.",
       "Enrolled25 not yet enrolled",
-      "Holding a mandate1acme.core.release-bot · in Core platform · counted in Core platform only",
+      "Holding a mandate1acme.core.release-bot in Core platform",
       // Every tamper incident the store keeps on the agents' hosts, and the
       // newest as <scope> · <kind>, <date> with how many are open.
-      "Tamper incidents4acme.core.release-bot · hooks_removed, 2026-09-11 · 3 open · counted in Core platform only",
+      "Tamper incidents43 open in Core platform. The latest is hooks_removed on acme.core.release-bot from 2026-09-11.",
     ]);
     expect(tiles()[3]?.querySelector("[data-critical]")).not.toBeNull();
     // The design scopes the last two to the organization; the read answers
@@ -211,8 +211,8 @@ describe("Agents, loaded", () => {
       ),
     });
     expect(tiles().map((tile) => tile.textContent)).toEqual([
-      "Agents here2organization count not recorded · 2 listed below",
-      "Enrolled21 listed here on the observe tier, the rest on harness",
+      "Agents here22 listed below. The organization count is not recorded yet.",
+      "Enrolled21 on the observe tier. The rest are on harness.",
       "Holding a mandate0no agent in Core platform holds one",
       "Tamper incidents0none in the retention window in Core platform",
     ]);
@@ -245,10 +245,10 @@ describe("Agents, loaded", () => {
       ),
     });
     expect(tiles()[1]?.textContent).toBe(
-      "Enrolled31 listed here on the observe tier, 1 on harness, 1 on another tier or none recorded",
+      "Enrolled31 on the observe tier, 1 on harness, and 1 on another tier or none.",
     );
     expect(tiles()[3]?.textContent).toBe(
-      "Tamper incidents2acme.core.c · chain_break, 2026-09-02 · all resolved · counted in Core platform only",
+      "Tamper incidents2All resolved in Core platform. The latest was chain_break on acme.core.c from 2026-09-02.",
     );
   });
 
@@ -310,7 +310,7 @@ describe("Agents, loaded", () => {
       ),
     });
     expect(tiles()[2]?.textContent).toBe(
-      "Holding a mandate5acme.core.b · in Core platform, acme.core.d · in Core platform, acme.core.e · in Core platform, acme.core.release-bot · in Core platform, acme.core.z · in Core platform · counted in Core platform only",
+      "Holding a mandate5acme.core.b, acme.core.d, acme.core.e, acme.core.release-bot, acme.core.z in Core platform",
     );
     expect(tiles()[2]?.textContent).not.toContain("more in");
   });
@@ -599,9 +599,7 @@ describe("Agents, loaded", () => {
 
   it("opens the agent when a row is clicked anywhere but its actions", async () => {
     await renderAgents({ list: agentPage([agentRow()]) });
-    fireEvent.click(
-      within(only(rows())).getByText("Marcus Bell"),
-    );
+    fireEvent.click(within(only(rows())).getByText("Marcus Bell"));
     expect(push).toHaveBeenCalledWith("/acme/core-platform/agents/release-bot");
   });
 });
@@ -792,7 +790,7 @@ describe("Agents list controls", () => {
       within(screen.getByRole("combobox", { name: "Filter by Tier" }))
         .getAllByRole("option")
         .map((o) => o.textContent),
-    ).toEqual(["All · Tier", "gateway", "harness", "observe"]);
+    ).toEqual(["All (Tier)", "gateway", "harness", "observe"]);
     // The Owner facet left the view, so it no longer filters.
     expect(screen.getByText("1–10 of 12")).toBeInTheDocument();
   });
@@ -892,32 +890,46 @@ describe("Agents, deregistered", () => {
   });
 });
 
-describe("Agents header actions", () => {
-  it("draws Add a runtime and Register an agent, with Register the one gold action into the register flow (ADR-198)", async () => {
+describe("Agents create actions", () => {
+  it("draws Connect an agent gold by default, into the register flow at its first step (ADR-198)", async () => {
     const { container } = render(
       <IntlProvider>
-        <AgentsCreate org="acme" ws="core-platform" />
+        <ConnectAgentLink org="acme" ws="core-platform" />
       </IntlProvider>,
     );
-    expect(
-      [...document.querySelectorAll("button, a")].map((el) => el.textContent),
-    ).toEqual(["Add a runtime", "Register an agent"]);
-    const register = screen.getByRole("link", { name: "Register an agent" });
-    expect(register).toHaveAttribute(
+    const connect = screen.getByRole("link", { name: "Connect an agent" });
+    expect(connect).toHaveAttribute(
       "href",
       "/acme/core-platform/register/name",
     );
-    expect(register.className).toBe(buttonPrimary);
-    expect(screen.getByRole("link", { name: "Add a runtime" })).toHaveAttribute(
-      "href",
-      "/acme/core-platform/runtimes",
-    );
+    expect(connect).toHaveAttribute("data-testid", "agents-register");
+    expect(connect.className).toBe(buttonPrimary);
     await expectNoAxe(container);
+  });
+
+  it("draws Connect an agent in the default style where the page header already carries the gold", () => {
+    render(
+      <IntlProvider>
+        <ConnectAgentLink org="acme" ws="core-platform" primary={false} />
+      </IntlProvider>,
+    );
     expect(
-      [...document.querySelectorAll("button, a")].filter(
-        (el) => el.className === buttonPrimary,
-      ),
-    ).toHaveLength(1);
+      screen.getByRole("link", { name: "Connect an agent" }).className,
+    ).toBe(buttonSecondary);
+  });
+
+  it("sends Add a runtime to the Runtimes tab of the Agents page", () => {
+    render(
+      <IntlProvider>
+        <AddRuntimeLink org="acme" ws="core-platform" />
+      </IntlProvider>,
+    );
+    const add = screen.getByRole("link", { name: "Add a runtime" });
+    expect(add).toHaveAttribute(
+      "href",
+      "/acme/core-platform/agents?tab=runtimes",
+    );
+    expect(add.className).toBe(buttonSecondary);
   });
 });
 
@@ -935,7 +947,12 @@ describe("Agents, not loaded", () => {
     );
     expect(
       [...empty.querySelectorAll("button, a")].map((el) => el.textContent),
-    ).toEqual(["Register an agent", "Add a runtime"]);
+    ).toEqual(["Connect an agent", "Add a runtime"]);
+    // Under the Agents page header, whose Connect an agent is the gold one,
+    // the empty state draws both in the default style.
+    expect(
+      [...empty.querySelectorAll("button, a")].map((el) => el.className),
+    ).toEqual([buttonSecondary, buttonSecondary]);
     expect(screen.queryByRole("heading", { level: 1 })).toBeNull();
     expect(screen.queryByRole("table")).toBeNull();
   });
@@ -1000,7 +1017,7 @@ describe("Agents, not loaded", () => {
       }),
     ).toBeInTheDocument();
     expect(denied).toHaveTextContent(
-      "Your roles on Acme Robotics do not include agent.read on core-platform. An organization owner can grant it; the grant is a governed action and lands in the audit record with your name on it.",
+      "Your roles on Acme Robotics do not include agent.read on core-platform. An organization owner can grant it. The grant is a governed action and lands in the audit record with your name on it.",
     );
     expect(
       within(denied)
@@ -1014,7 +1031,7 @@ describe("Agents, not loaded", () => {
     ).toEqual([
       "Marcus Bell · workspace.member · core-platform",
       "agent.read on core-platform",
-      "policy not recorded · deny wins over every allow",
+      "policy not recorded",
     ]);
     expect(denied.querySelector('[data-gap="policy"]')).toHaveAttribute(
       "title",

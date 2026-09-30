@@ -9,6 +9,12 @@
 // Studio suggested reads as a suggestion until a person confirms it. The
 // per-tool off switches are drawn on the server (switch-controls.tsx) and
 // arrive here as nodes, mounted only for the rows the page shows.
+//
+// Above the table, the tab follows the server's discovery (#4678, item 8)
+// and, once list_studio_tools answers, says how many tools tools.toml imports
+// of those the last discovery listed, whether the definitions would fit
+// better behind tool search, and whether tools.toml compiled. Both reads are
+// lane M10's (#4682), and until they merge the tab says so.
 import { useLocale, useTranslations } from "next-intl";
 import { type ReactNode, useState } from "react";
 import type { ToolRiskGrade, ToolSideEffect } from "@/data/contracts/tools";
@@ -32,8 +38,12 @@ import {
 } from "./draft";
 import type { StudioRecord, StudioTool } from "./model";
 import { StudioNotRecorded, StudioNotRecordedValue } from "./not-recorded";
+import { DiscoveryProgress } from "./add-server";
+import type {
+  DraftStudioDescription,
+  StudioToolsList,
+} from "./pending-capabilities";
 import type { StudioAt } from "./route";
-import type { DraftDescription } from "./seams";
 import { ToolPanel } from "./tool-panel";
 import { useStudioDraft } from "./use-draft";
 
@@ -158,6 +168,38 @@ function Budget({
   );
 }
 
+/**
+ * What list_studio_tools counted. A compile error's text is the handler's,
+ * so the tab names the failure in its own words and never shows the text.
+ */
+function Listed({ listed }: { listed: StudioToolsList }) {
+  const t = useTranslations("mcpStudio.tools.listed");
+  const locale = useLocale();
+  return (
+    <div className="flex flex-col gap-2" data-testid="studio-tools-listed">
+      <p className="text-[13px] text-foreground">
+        {t("counts", {
+          imported: formatCount(listed.imported, locale),
+          offered: formatCount(listed.offered, locale),
+        })}
+      </p>
+      {listed.searchRecommended ? (
+        <p
+          className="text-[12.5px] text-muted-foreground"
+          data-testid="studio-tools-search"
+        >
+          {t("search")}
+        </p>
+      ) : null}
+      {listed.compileError === null ? null : (
+        <FormAlert testId="studio-tools-compile-error">
+          {t("compileError")}
+        </FormAlert>
+      )}
+    </div>
+  );
+}
+
 export function ToolsTab({
   at,
   serverName,
@@ -168,6 +210,7 @@ export function ToolsTab({
   off,
   offFacts,
   draft,
+  listed = null,
 }: {
   /** The workspace the draft belongs to. */
   at: StudioAt;
@@ -182,8 +225,10 @@ export function ToolsTab({
   off: Readonly<Record<string, ReactNode>>;
   /** Who turned each tool off or back on, and when, by tool name. */
   offFacts: Readonly<Record<string, ReactNode>>;
-  /** Draft's capability for the tool panel; the not-built stub by default. */
-  draft?: DraftDescription;
+  /** Draft's capability for the tool panel; the stub by default (#4742). */
+  draft?: DraftStudioDescription;
+  /** list_studio_tools' answer, or null until it merges or when it fails. */
+  listed?: StudioToolsList | null;
 }) {
   const t = useTranslations("mcpStudio.tools");
   const registry = useTranslations("tools.registry");
@@ -254,6 +299,8 @@ export function ToolsTab({
   return (
     <div className="flex flex-col gap-4">
       <Budget record={record} tools={tools} ops={ops} />
+      <DiscoveryProgress server={serverName} canStart={canEdit} />
+      {listed === null ? null : <Listed listed={listed} />}
       {record === null ? (
         <StudioNotRecorded gap="record" testId="studio-tools-missing">
           {t("missing")}
@@ -440,7 +487,7 @@ export function ToolsTab({
       {opened === undefined ? null : (
         <ToolPanel
           key={opened.name}
-          serverId={serverId}
+          serverName={serverName}
           tool={opened}
           ops={ops}
           canEdit={canEdit}

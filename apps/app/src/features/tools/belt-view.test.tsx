@@ -196,7 +196,7 @@ describe("BeltView › a custom belt, edited by an admin", () => {
     fireEvent.click(dialog.getByTestId("belt-delete-confirm"));
     await waitFor(() => {
       expect(router.push).toHaveBeenCalledWith(
-        "/acme/core-platform/tools/toolbelts",
+        "/acme/core-platform/agents?tab=toolbelts",
       );
     });
     expect(actions.deleteToolbelt).toHaveBeenCalledWith(
@@ -311,7 +311,7 @@ describe("BeltView › read only", () => {
       within(screen.getByTestId("belt-empty")).getByRole("link", {
         name: "Open Providers",
       }),
-    ).toHaveAttribute("href", "/acme/core-platform/tools/providers");
+    ).toHaveAttribute("href", "/acme/core-platform/agents?tab=servers");
     expect(screen.getByText("No agent carries this toolbelt.")).toBeVisible();
   });
 });

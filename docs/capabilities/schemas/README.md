@@ -387,6 +387,7 @@ capability rewrites, so two such branches always conflicted on it (ADR-216).
 - open_init_pr
 - record_working_copy
 - repair_steering_repo
+- retry_steering_repo_provision
 - set_production_branch
 - unlink_repository
 
@@ -536,16 +537,23 @@ capability rewrites, so two such branches always conflicted on it (ADR-216).
 ## tool
 
 - create_relay
+- draft_studio_description
+- get_studio_discovery
 - get_studio_draft
 - import_tools
+- list_studio_findings
+- list_studio_tools
 - list_tool_declarations
 - list_tool_versions
 - open_studio_review
 - publish_tool_declaration
 - revoke_relay
 - save_studio_draft
+- set_mcp_credential
 - set_tool_classification
 - set_tool_state
+- start_studio_discovery
+- try_studio_tool
 
 ## toolbelt
 

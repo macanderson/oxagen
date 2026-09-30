@@ -170,7 +170,7 @@ describe("once every check passed", () => {
       "Publish .oxagen/rules/ctx.release.no-reread-changelog.toml as a record in force",
       "Take the workspace's promotion ledger from 41 entries to 42",
       "Write the promotion event to the ledger and a steering_published audit event",
-      "Who merges, under governance mode team: an org Owner or Admin, or a workspace Owner, other than the author merges",
+      "Merge rule: team: an org Owner or Admin, or a workspace Owner, other than the author merges",
     ]);
     // The re-run stays offered after the checks pass: when the head moves,
     // merge_context_pr refuses with `head_moved` and running the checks again

@@ -207,6 +207,13 @@ import { toolImportRoute } from "./routes/v1/tool.import";
 import { toolStudioDraftSaveRoute } from "./routes/v1/tool.studio.draft.save";
 import { toolStudioDraftGetRoute } from "./routes/v1/tool.studio.draft.get";
 import { toolStudioReviewOpenRoute } from "./routes/v1/tool.studio.review.open";
+import { toolStudioCredentialSetRoute } from "./routes/v1/tool.studio.credential.set";
+import { toolStudioFindingsListRoute } from "./routes/v1/tool.studio.findings.list";
+import { toolStudioDescriptionDraftRoute } from "./routes/v1/tool.studio.description.draft";
+import { toolStudioTryRoute } from "./routes/v1/tool.studio.try";
+import { toolStudioDiscoveryStartRoute } from "./routes/v1/tool.studio.discovery.start";
+import { toolStudioDiscoveryGetRoute } from "./routes/v1/tool.studio.discovery.get";
+import { toolStudioToolsListRoute } from "./routes/v1/tool.studio.tools.list";
 import { toolRelayCreateRoute } from "./routes/v1/tool.relay.create";
 import { toolRelayRevokeRoute } from "./routes/v1/tool.relay.revoke";
 import { credentialGrantListRoute } from "./routes/v1/credential.grant.list";
@@ -225,6 +232,7 @@ import { publishedSteeringGetRoute } from "./routes/v1/context.steering.publishe
 import { steeringIndexGetRoute } from "./routes/v1/context.steering.index.get";
 import { steeringRepoGetRoute } from "./routes/v1/steering_repo.get";
 import { steeringRepoRepairRoute } from "./routes/v1/steering_repo.repair";
+import { steeringRepoProvisionRetryRoute } from "./routes/v1/steering_repo.provision.retry";
 import { steeringRepoImportRoute } from "./routes/v1/steering_repo.import";
 import { contextProposalCreateRoute } from "./routes/v1/context.proposal.create";
 import { contextProposalListRoute } from "./routes/v1/context.proposal.list";
@@ -1219,6 +1227,14 @@ orgScoped.route("/tools/import", toolImportRoute);
 orgScoped.route("/tools/studio/draft", toolStudioDraftSaveRoute);
 orgScoped.route("/tools/studio/draft/get", toolStudioDraftGetRoute);
 orgScoped.route("/tools/studio/review", toolStudioReviewOpenRoute);
+orgScoped.route("/tools/studio/credential", toolStudioCredentialSetRoute);
+orgScoped.route("/tools/studio/findings", toolStudioFindingsListRoute);
+orgScoped.route("/tools/studio/description", toolStudioDescriptionDraftRoute);
+orgScoped.route("/tools/studio/try", toolStudioTryRoute);
+// Discovery (lane M10, #4682): start a discovery, read its state, and list a server's tools.
+orgScoped.route("/tools/studio/discovery/start", toolStudioDiscoveryStartRoute);
+orgScoped.route("/tools/studio/discovery/get", toolStudioDiscoveryGetRoute);
+orgScoped.route("/tools/studio/tools/list", toolStudioToolsListRoute);
 // Relays (lane M12, #4685): register and revoke a relay for a private network.
 orgScoped.route("/tools/relays", toolRelayCreateRoute);
 orgScoped.route("/tools/relays/revoke", toolRelayRevokeRoute);
@@ -1242,6 +1258,8 @@ orgScoped.route("/context/steering/index", steeringIndexGetRoute);
 // The workspace's steering repo and its settings repair (lane S2, #4560).
 orgScoped.route("/context/steering/repo", steeringRepoGetRoute);
 orgScoped.route("/context/steering/repo/repair", steeringRepoRepairRoute);
+// Re-send a failed or blocked steering repo setup (#4750).
+orgScoped.route("/context/steering/repo/retry", steeringRepoProvisionRetryRoute);
 // The move from .oxagen/ to a steering repo, once per workspace (lane S10, #4620).
 orgScoped.route("/context/steering/repo/import", steeringRepoImportRoute);
 orgScoped.route("/context/proposals", contextProposalListRoute);

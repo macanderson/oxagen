@@ -5,7 +5,7 @@
 // yet (#2962) rather than drawn as zeros. A run card carries what the cause
 // cites: the run's session name over its id, and the cause. Its own amount is
 // not on the contract yet.
-// Wasted is a claim about frames, not about outcomes.
+// Wasted spend is read from frames.
 import { useLocale, useTranslations } from "next-intl";
 import { ratioOfMicros } from "@/data/contracts/money";
 import type { SpendReport, SpendWaste } from "@/data/contracts/spend";

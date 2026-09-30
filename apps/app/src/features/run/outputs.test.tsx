@@ -303,7 +303,7 @@ describe("the spine", () => {
     renderSpine(readError("frame_store_unreachable", 502));
     expect(screen.queryByTestId("run-outputs")).toBeNull();
     expect(screen.getByText(/frame_store_unreachable/).textContent).toContain(
-      "What this run produced",
+      "Run outputs",
     );
   });
 });

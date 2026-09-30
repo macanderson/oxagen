@@ -140,13 +140,13 @@ describe("run controls", () => {
     renderControls();
     await user.click(screen.getByTestId("run-steer"));
     await user.type(
-      screen.getByLabelText("What to tell the agent"),
+      screen.getByLabelText("Message"),
       "use the 3.2 branch",
     );
     // The contract's own default, offered checked so a person who does not
     // choose sends the mode every connection point can carry.
     expect(screen.getByTestId("steer-mode-next_step")).toBeChecked();
-    await user.click(screen.getByRole("button", { name: "Send it" }));
+    await user.click(screen.getByRole("button", { name: "Send the steer" }));
     await waitFor(() => {
       expect(screen.getByTestId("queued-command")).toHaveTextContent("tcm_9");
     });
@@ -173,10 +173,10 @@ describe("run controls", () => {
     ).toBeTruthy();
     await user.click(screen.getByTestId("steer-mode-interrupt"));
     await user.type(
-      screen.getByLabelText("What to tell the agent"),
+      screen.getByLabelText("Message"),
       "stop and read the failing job",
     );
-    await user.click(screen.getByRole("button", { name: "Send it" }));
+    await user.click(screen.getByRole("button", { name: "Send the steer" }));
     await waitFor(() => {
       expect(screen.getByTestId("queued-command")).toBeTruthy();
     });
@@ -199,8 +199,8 @@ describe("run controls", () => {
     const user = userEvent.setup();
     renderControls();
     await user.click(screen.getByTestId("run-steer"));
-    await user.type(screen.getByLabelText("What to tell the agent"), "go on");
-    await user.click(screen.getByRole("button", { name: "Send it" }));
+    await user.type(screen.getByLabelText("Message"), "go on");
+    await user.click(screen.getByRole("button", { name: "Send the steer" }));
     await waitFor(() => {
       expect(screen.getByTestId("run-steer-failure")).toHaveTextContent(
         "Pick one of the three delivery modes.",
@@ -219,8 +219,8 @@ describe("run controls", () => {
     const user = userEvent.setup();
     renderControls();
     await user.click(screen.getByTestId("run-steer"));
-    await user.type(screen.getByLabelText("What to tell the agent"), "go on");
-    await user.click(screen.getByRole("button", { name: "Send it" }));
+    await user.type(screen.getByLabelText("Message"), "go on");
+    await user.click(screen.getByRole("button", { name: "Send the steer" }));
     await waitFor(() => {
       expect(screen.getByTestId("run-steer-failure")).toHaveTextContent(
         "This agent reads steering text only when a session starts",
@@ -258,7 +258,7 @@ describe("run controls", () => {
     // A running run offers Pause, not Resume beside it (#4112).
     expect(screen.queryByTestId("run-resume")).toBeNull();
     await user.click(screen.getByTestId("run-steer"));
-    expect(screen.queryByLabelText("What to tell the agent")).toBeNull();
+    expect(screen.queryByLabelText("Message")).toBeNull();
     await user.click(screen.getByTestId("run-pause"));
     await user.type(screen.getByLabelText("Reason"), "hold");
     await user.click(screen.getByRole("button", { name: "Queue the pause" }));

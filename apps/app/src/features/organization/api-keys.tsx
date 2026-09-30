@@ -252,7 +252,7 @@ function KeysPanel({
 }
 
 /**
- * Surfaces this reaches: the API, MCP, the CLI and these screens run on one
+ * Surfaces: the API, MCP, the CLI and these screens run on one
  * agent tool contract, so what a key may do here it may do everywhere. The
  * four command lines are commands the `oxagen` CLI ships
  * (apps/cli/src/program.ts), with this organization's slug filled in.

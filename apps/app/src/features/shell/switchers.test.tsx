@@ -107,7 +107,7 @@ describe("organization switcher", () => {
     expect(links[1]).not.toHaveAttribute("aria-current");
     // The mock's note under the list, with the count the read returned.
     expect(dialog).toHaveTextContent(
-      "An organization owns a key-encryption key, a Postgres partition, a billing account, and optionally a dedicated data plane. You belong to 2 here.",
+      "You belong to 2 organizations.",
     );
     // The plan and agent count are not returned by list_orgs, and the dialog says so.
     expect(

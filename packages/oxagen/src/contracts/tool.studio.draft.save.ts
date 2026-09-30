@@ -61,7 +61,9 @@ export const studioServerNameSchema = z
     message: `${BUILTIN_SERVER} is reserved for Oxagen's built-in tools`,
   });
 
-const toolSchema = z.string().min(1).max(128);
+/** A tool as Studio names it: its tools.toml key, or the upstream name it selects. */
+export const studioToolNameSchema = z.string().min(1).max(128);
+const toolSchema = studioToolNameSchema;
 
 /** One staged edit. Studio's DraftOp, field for field. */
 export const studioDraftOpSchema = z.discriminatedUnion("kind", [

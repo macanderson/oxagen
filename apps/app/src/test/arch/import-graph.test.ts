@@ -387,6 +387,10 @@ const PROBES: Readonly<Record<string, readonly Placement[]>> = {
   ],
   // #2953: Fleet's steer receipt opens the delivery report through Run's client entry.
   "run-client.ts": [{ at: "src/features/fleet/steer-fleet.tsx", expect: null }],
+  // #4678: Add server's forms come from Studio's client entry.
+  "mcp-studio-client.ts": [
+    { at: "src/features/tools/import-provider.tsx", expect: null },
+  ],
   "kernel-write-use-server.ts": [
     { at: "src/features/fleet/actions.ts", expect: null },
   ],

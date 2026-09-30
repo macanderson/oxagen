@@ -23,6 +23,7 @@ import {
 } from "@oxagen/config/public-url";
 import type {
   AgentMcpRegistrySearchOutput,
+  McpRegistryPackage,
   McpRegistryServer,
 } from "@oxagen/oxagen/contracts/agent.mcp.registry.search";
 import { probeMcpAuth } from "./mcp-auth-probe";
@@ -48,7 +49,19 @@ type RegistryHeader = {
   isRequired?: unknown;
 };
 type RegistryRemote = { type?: unknown; url?: unknown; headers?: unknown };
-type RegistryPackage = { transport?: { type?: unknown } };
+type RegistryPackage = {
+  registryType?: unknown;
+  identifier?: unknown;
+  version?: unknown;
+  runtimeHint?: unknown;
+  transport?: { type?: unknown };
+  environmentVariables?: unknown;
+};
+type RegistryVariable = {
+  name?: unknown;
+  isRequired?: unknown;
+  isSecret?: unknown;
+};
 type RegistryEntry = {
   server?: {
     name?: unknown;
@@ -110,6 +123,61 @@ function remotesOf(value: unknown): RegistryRemote[] {
   return Array.isArray(value) ? (value as RegistryRemote[]) : [];
 }
 
+function isTransport(
+  value: unknown,
+): value is McpRegistryServer["transports"][number] {
+  return value === "stdio" || value === "streamable-http" || value === "sse";
+}
+
+/**
+ * The entry's packages, each with the fields Studio offers. A package with no
+ * registry type, no identifier, or a transport the registry does not define is
+ * dropped, because nothing could start it.
+ */
+export function packagesOf(value: unknown): McpRegistryPackage[] {
+  if (!Array.isArray(value)) return [];
+  return (value as unknown[]).flatMap((raw) => {
+    if (typeof raw !== "object" || raw === null) return [];
+    const pkg = raw as RegistryPackage;
+    const registryType = str(pkg.registryType);
+    const identifier = str(pkg.identifier);
+    const transport = pkg.transport?.type;
+    if (
+      registryType === null ||
+      identifier === null ||
+      !isTransport(transport)
+    ) {
+      return [];
+    }
+    const variables = Array.isArray(pkg.environmentVariables)
+      ? (pkg.environmentVariables as unknown[])
+      : [];
+    return [
+      {
+        registryType,
+        identifier,
+        version: str(pkg.version),
+        transport,
+        runtimeHint: str(pkg.runtimeHint),
+        environmentVariables: variables.flatMap((item) => {
+          if (typeof item !== "object" || item === null) return [];
+          const variable = item as RegistryVariable;
+          const name = str(variable.name);
+          return name === null
+            ? []
+            : [
+                {
+                  name,
+                  isRequired: variable.isRequired === true,
+                  isSecret: variable.isSecret === true,
+                },
+              ];
+        }),
+      },
+    ];
+  });
+}
+
 function isPublicEndpoint(url: string): boolean {
   try {
     assertPublicHttpUrl(url, {
@@ -150,21 +218,14 @@ export function toRegistryServer(
   if (status === "deleted" || status === "deprecated") return null;
 
   const remotes = remotesOf(server.remotes);
-  const packages = Array.isArray(server.packages)
-    ? (server.packages as RegistryPackage[])
-    : [];
+  const packages = packagesOf(server.packages);
   const transports = new Set<McpRegistryServer["transports"][number]>();
   for (const remote of remotes) {
     if (remote.type === "streamable-http" || remote.type === "sse") {
       transports.add(remote.type);
     }
   }
-  for (const pkg of packages) {
-    const type = pkg.transport?.type;
-    if (type === "stdio" || type === "streamable-http" || type === "sse") {
-      transports.add(type);
-    }
-  }
+  for (const pkg of packages) transports.add(pkg.transport);
 
   // The endpoint Oxagen can reach: a streamable-http remote with a literal
   // public https URL. A templated URL (`https://{tenant}.example.com/mcp`)
@@ -208,6 +269,7 @@ export function toRegistryServer(
     authHeader: declared.header,
     oauthRegistration: null,
     connectable: endpointUrl !== null,
+    packages,
   };
 }
 

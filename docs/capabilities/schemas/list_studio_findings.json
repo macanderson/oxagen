@@ -1,0 +1,144 @@
+{
+  "name": "list_studio_findings",
+  "domain": "tool",
+  "description": "List the tool checks' findings on one server folder: the saved draft, or the production folder when there is no draft. Each finding names its level, tool, field, message, and fix. Writes nothing.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "medium",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "governance"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "server": {
+        "type": "string",
+        "x-server-validated": true,
+        "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
+      }
+    },
+    "required": [
+      "server"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "server": {
+        "type": "string"
+      },
+      "basis": {
+        "type": "string",
+        "enum": [
+          "draft",
+          "published"
+        ]
+      },
+      "revision": {
+        "anyOf": [
+          {
+            "type": "integer",
+            "minimum": 1
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "tokens": {
+        "type": "object",
+        "properties": {
+          "definitions": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "budget": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "definitions",
+          "budget"
+        ],
+        "additionalProperties": false
+      },
+      "findings": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "rule": {
+              "type": "string"
+            },
+            "level": {
+              "type": "string",
+              "enum": [
+                "error",
+                "warning",
+                "info"
+              ]
+            },
+            "tool": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "field": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "message": {
+              "type": "string"
+            },
+            "fix": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "rule",
+            "level",
+            "tool",
+            "field",
+            "message",
+            "fix"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "server",
+      "basis",
+      "revision",
+      "tokens",
+      "findings"
+    ],
+    "additionalProperties": false
+  }
+}

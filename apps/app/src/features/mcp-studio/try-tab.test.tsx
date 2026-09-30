@@ -1,8 +1,10 @@
 // @vitest-environment jsdom
-// A Studio server's Try it tab (#4678) on fake calls: where the environment
+// A Studio server's Test tab (#4678) on fake calls: where the environment
 // and tool pickers start, the live warning, the arguments check, a call in
 // flight, the three panes a call that succeeded draws, the not built, denied
-// and failed answers, the empty state, and Save as test. A saved test is read
+// and failed answers, the empty state, and Save as test. With no call passed,
+// the tab gets try_studio_tool's stub, and Run renders disabled with a note
+// until #4742 merges. A saved test is read
 // back from the tab's sessionStorage the way the page stored it, and it must
 // hold no credential header: Save as test strips authorization,
 // proxy-authorization, cookie and set-cookie before it stages the test. The
@@ -14,7 +16,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import type { DraftOp } from "./draft";
-import type { TryCall, TryResult } from "./seams";
+import type { TryResult, TryStudioTool } from "./pending-capabilities";
 import {
   BILLING,
   draftKey,
@@ -54,7 +56,7 @@ afterEach(async () => {
 });
 
 type TryProps = Parameters<typeof TryTab>[0];
-type TryInput = Parameters<TryCall>[0];
+type TryInput = Parameters<TryStudioTool["call"]>[0];
 type Answered = Extract<TryResult, { ok: true }>;
 type SavedTest = Extract<DraftOp, { kind: "test" }>;
 
@@ -128,11 +130,16 @@ function answered(result: TryResult): Answered {
 function pendingTry() {
   const calls: TryInput[] = [];
   const waiting: ((result: TryResult) => void)[] = [];
-  const call: TryCall = (input) => {
-    calls.push(input);
-    return new Promise<TryResult>((resolve) => {
-      waiting.push(resolve);
-    });
+  const call: TryStudioTool = {
+    name: "try_studio_tool",
+    available: true,
+    gap: "capability",
+    call: (input) => {
+      calls.push(input);
+      return new Promise<TryResult>((resolve) => {
+        waiting.push(resolve);
+      });
+    },
   };
   const settle = (result: TryResult) => {
     for (const resolve of waiting) resolve(result);
@@ -266,7 +273,12 @@ describe("TryTab environment", () => {
     );
     await runToPanes();
     expect(calls).toStrictEqual([
-      { serverId: BILLING, tool: "create_refund", environment: "production", args: {} },
+      {
+        server: "billing",
+        tool: "create_refund",
+        environment: "production",
+        arguments: {},
+      },
     ]);
     choose(environmentSelect(), "sandbox");
     expect(screen.queryByTestId("studio-try-live")).toBeNull();
@@ -327,10 +339,10 @@ describe("TryTab tool and arguments", () => {
     await runToPanes();
     expect(calls).toStrictEqual([
       {
-        serverId: BILLING,
+        server: "billing",
         tool: "list_invoices",
         environment: "sandbox",
-        args: { status: "open", limit: 5 },
+        arguments: { status: "open", limit: 5 },
       },
     ]);
     // The environment's vault reference stays with the gateway: the call
@@ -344,7 +356,7 @@ describe("TryTab tool and arguments", () => {
     expect(sent).not.toContain("oxagen:credential");
     expect(
       screen.getByText(
-        "The call is recorded and metered like an agent's. The gateway adds the credential after the request is recorded, so the request shown never holds it.",
+        "The call is recorded and metered like an agent's. The request shown omits the credential because the gateway adds it after recording.",
       ),
     ).toBeInTheDocument();
   });
@@ -390,7 +402,7 @@ describe("TryTab tool and arguments", () => {
     await runToPanes();
     expect(screen.queryByTestId("studio-try-bad-json")).toBeNull();
     expect(argsField()).not.toHaveAttribute("aria-invalid");
-    expect(calls.map((input) => input.args)).toEqual([{ limit: 1 }]);
+    expect(calls.map((input) => input.arguments)).toEqual([{ limit: 1 }]);
   });
 });
 
@@ -428,14 +440,40 @@ describe("TryTab call", () => {
     }
   });
 
-  it("says Try it is not built yet when the page passes no call", async () => {
+  it("keeps Run off with a note while try_studio_tool has not merged", () => {
     renderTry(BILLING);
+    const button = screen.getByRole("button", { name: "Run" });
+    expect(button).toBeDisabled();
+    expect(button).toHaveAttribute("data-capability", "try_studio_tool");
+    const note = screen.getByTestId("studio-try-pending");
+    expect(button).toHaveAttribute("aria-describedby", note.id);
+    expect(note).toHaveAttribute("data-state", "not-available");
+    expect(note).toHaveAttribute("data-capability", "try_studio_tool");
+    expect(note).toHaveAttribute("data-gap", "#4742");
+    expect(note).toHaveTextContent("Testing is not available yet.");
+    fireEvent.submit(button);
+    expect(screen.queryByTestId("studio-try-request")).toBeNull();
+    expect(screen.queryByTestId("studio-try-not-built")).toBeNull();
+  });
+
+  it("draws no note once the capability is available", () => {
+    const { call } = fakeTry(tryClean());
+    renderTry(BILLING, { call });
+    const button = screen.getByRole("button", { name: "Run" });
+    expect(button).toBeEnabled();
+    expect(button).not.toHaveAttribute("aria-describedby");
+    expect(screen.queryByTestId("studio-try-pending")).toBeNull();
+  });
+
+  it("says testing is not available when the call answers not built", async () => {
+    const { call } = fakeTry({ ok: false, reason: "not_built", gap: "capability" });
+    renderTry(BILLING, { call });
     run();
     const note = await screen.findByTestId("studio-try-not-built");
     expect(note).toHaveAttribute("role", "note");
     expect(note).toHaveAttribute("data-state", "not-recorded");
-    expect(note).toHaveAttribute("data-gap", "#4678");
-    expect(note).toHaveTextContent("Try it is not available yet.");
+    expect(note).toHaveAttribute("data-gap", "#4742");
+    expect(note).toHaveTextContent("Testing is not available yet.");
     expect(screen.queryByTestId("studio-try-request")).toBeNull();
     expect(screen.queryByRole("button", { name: "Save as test" })).toBeNull();
   });
@@ -473,9 +511,14 @@ describe("TryTab call", () => {
 
   it("says the call did not finish when it throws, and lets the person run it again", async () => {
     const calls: TryInput[] = [];
-    const call: TryCall = (input) => {
-      calls.push(input);
-      return Promise.reject(new Error("fetch failed: socket hang up"));
+    const call: TryStudioTool = {
+      name: "try_studio_tool",
+      available: true,
+      gap: "capability",
+      call: (input) => {
+        calls.push(input);
+        return Promise.reject(new Error("fetch failed: socket hang up"));
+      },
     };
     renderTry(BILLING, { call });
     run();
@@ -606,14 +649,18 @@ describe("TryTab Save as test", () => {
     expect(savedTests(draftKey("billing"))).toHaveLength(2);
   });
 
-  it("keys the draft by the server's registry id when the record names no folder", async () => {
+  it("keeps Run off when the record names no folder, since the call names the server by it", () => {
     expect(studioView(GITHUB).serverName).toBeNull();
-    const { call } = fakeTry(tryClean());
+    const { call, calls } = fakeTry(tryClean());
     renderTry(GITHUB, { call });
-    await runToPanes();
-    fireEvent.click(saveButton());
-    expect(onlySavedTest(idDraftKey(GITHUB)).tool).toBe("get_file_contents");
-    expect(window.sessionStorage.getItem(draftKey("github"))).toBeNull();
+    const button = screen.getByRole("button", { name: "Run" });
+    expect(button).toBeDisabled();
+    const note = screen.getByTestId("studio-try-pending");
+    expect(note).toHaveAttribute("data-gap", "#4678");
+    expect(note).toHaveAttribute("data-capability", "try_studio_tool");
+    fireEvent.submit(button);
+    expect(calls).toEqual([]);
+    expect(window.sessionStorage.getItem(idDraftKey(GITHUB))).toBeNull();
   });
 
   it.each([

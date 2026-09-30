@@ -1,12 +1,10 @@
 // The pieces every Tools tab shares: the section frame, the term-and-value
-// list, the one date style, the cursor pager, and the badges that carry state
-// as a dot and a word so they survive greyscale (the mockup's rule: gold is
-// identity, never state).
+// list, the one date style, and the badges that carry state as a dot and a
+// word so they survive greyscale (the mockup's rule: gold is identity, never
+// state). The lists that page draw the shared LinkPager (#4693).
 import { useTranslations } from "next-intl";
 import type { ComponentProps, ReactNode } from "react";
-import type { SafePath } from "@/shared/safe-path";
-import { linkText, mono, panel } from "@/ui/control-styles";
-import { SafeLink } from "@/ui/navigation";
+import { mono, panel } from "@/ui/control-styles";
 import { useFormatter } from "@/ui/formatter";
 
 export function Section({
@@ -132,26 +130,5 @@ export function NotCarried() {
     <span data-not-carried="" className="text-xs text-muted-foreground">
       {t("notCarried")}
     </span>
-  );
-}
-
-/** The next cursor page of a list; nothing when the read carried the last one. */
-export function CursorPager({
-  nextCursor,
-  link,
-}: {
-  nextCursor: string | null;
-  link: (cursor: string) => SafePath;
-}) {
-  const t = useTranslations("tools");
-  if (nextCursor === null) return null;
-  return (
-    <SafeLink
-      to={link(nextCursor)}
-      data-testid="tools-next-page"
-      className={linkText}
-    >
-      {t("nextPage")}
-    </SafeLink>
   );
 }

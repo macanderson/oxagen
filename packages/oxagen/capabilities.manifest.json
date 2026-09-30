@@ -6433,6 +6433,22 @@
       }
     },
     {
+      "name": "retry_steering_repo_provision",
+      "file": "steering_repo.provision.retry.ts",
+      "domain": "repository",
+      "mode": "sync",
+      "surfaces": [
+        "api"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
       "name": "repair_steering_repo",
       "file": "steering_repo.repair.ts",
       "domain": "repository",
@@ -7003,6 +7019,74 @@
       }
     },
     {
+      "name": "set_mcp_credential",
+      "file": "tool.studio.credential.set.ts",
+      "domain": "tool",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "draft_studio_description",
+      "file": "tool.studio.description.draft.ts",
+      "domain": "tool",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "get_studio_discovery",
+      "file": "tool.studio.discovery.get.ts",
+      "domain": "tool",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "start_studio_discovery",
+      "file": "tool.studio.discovery.start.ts",
+      "domain": "tool",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "get_studio_draft",
       "file": "tool.studio.draft.get.ts",
       "domain": "tool",
@@ -7037,8 +7121,59 @@
       }
     },
     {
+      "name": "list_studio_findings",
+      "file": "tool.studio.findings.list.ts",
+      "domain": "tool",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "open_studio_review",
       "file": "tool.studio.review.open.ts",
+      "domain": "tool",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "list_studio_tools",
+      "file": "tool.studio.tools.list.ts",
+      "domain": "tool",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "try_studio_tool",
+      "file": "tool.studio.try.ts",
       "domain": "tool",
       "mode": "sync",
       "surfaces": [

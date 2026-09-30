@@ -12,7 +12,7 @@ import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import { StatementEditor } from "./statement-editor";
 
-const PATH = ".oxagen/rules/ctx.scr.001-never-push-to-main.toml · statement";
+const PATH = "statement in .oxagen/rules/ctx.scr.001-never-push-to-main.toml";
 
 function Harness({
   initial,
