@@ -5,9 +5,20 @@
  * what carries over is the device key, the loopback port, and the local
  * token, so the control plane sees one continuous host identity and the
  * hook entries only change their enrollment id.
+ *
+ * Only an enrollment made through the CLI session moves. An agent enrolled
+ * with a one-time token from the Agents page is a registered agent, and an
+ * agent stays in the workspace it is registered in. The fresh enrollment
+ * here goes through the CLI session, which links no agent, so moving one
+ * would detach it from its record. `reassign` refuses it before it revokes
+ * anything and sends the operator to the Agents page (#4410, ADR-203).
  */
 import { type Agent, describeAgent, listAgents } from "../host/agents";
-import { readHostFile } from "../host/host-file";
+import {
+  enrolledWithToken,
+  type HostFile,
+  readHostFile,
+} from "../host/host-file";
 import { acquireInstallLock } from "../host/install-lock";
 import type { TachoHome } from "../host/paths";
 import type { TachoHarness } from "../wire";
@@ -122,6 +133,27 @@ export function reassignTarget(
   };
 }
 
+/**
+ * Why a token-enrolled agent does not reassign, and what to do instead
+ * (#4410). A move to another workspace or org gets the workspace rule. A
+ * harness change in the same workspace gets its own answer, since a harness
+ * an agent does not run is another agent to register (ADR-198).
+ */
+function tokenAgentRefusal(
+  host: Pick<
+    HostFile,
+    "agent_key" | "org_slug" | "workspace_slug" | "harnesses"
+  >,
+  target: { org: string; workspace: string },
+): string {
+  const home = `${host.org_slug}/${host.workspace_slug}`;
+  const there = `${target.org}/${target.workspace}`;
+  const unenroll = `\`tacho unenroll --harness ${host.harnesses[0] ?? ""}\``;
+  if (there !== home)
+    return `Cannot reassign ${host.agent_key}, so nothing was changed. A one-time token from the Agents page enrolled it as an agent registered in ${home}. An agent stays in the workspace it is registered in. To report ${host.harnesses.join(", ")} to ${there}, register an agent in ${there} on the Agents page, run ${unenroll}, and then run the enroll command the page shows.`;
+  return `Cannot change the harnesses of ${host.agent_key}, so nothing was changed. A one-time token from the Agents page enrolled it as a registered agent. A reassign enrolls it again through your CLI session, which links no agent. To hook another harness, register an agent for it on the Agents page and run the enroll command the page shows. To take ${host.agent_key} off this machine, run ${unenroll}.`;
+}
+
 async function reassignLocked(
   options: ReassignOptions,
   deps: CliDeps,
@@ -182,6 +214,14 @@ async function reassignLocked(
     enrollmentId: host.host_enrollment_id,
   };
 
+  // A token-enrolled agent is linked to its registration, and the enroll
+  // below goes through the CLI session, which links none. Refused here,
+  // before the revoke, so the agent keeps its enrollment and its record.
+  if (enrolledWithToken(host)) {
+    deps.err(tokenAgentRefusal(host, { org, workspace }));
+    return { ok: false, from, warnings };
+  }
+
   // Everything `enroll` refuses without a network call is checked here,
   // before step 1. Revoking and stripping first and only then learning that
   // there is no token, that the binary runs from a disk image, or that a
@@ -217,15 +257,6 @@ async function reassignLocked(
       `Cannot reassign, so nothing was changed; this host still reports to ${from.org}/${from.workspace}:\n${refusals.map((refusal) => `  ${refusal}`).join("\n")}`,
     );
     return { ok: false, from, warnings };
-  }
-
-  // A one-time token linked the enrollment to its agent. The enroll below
-  // uses the CLI's session, which links none, so the agent loses its
-  // sessions (#4410).
-  if (host.enrollment_source === "token") {
-    const unlinked = `${host.agent_key} was enrolled with a one-time token from the Agents page. A reassign enrolls it again with your CLI session, which links the new enrollment to no agent, so its sessions stop reaching that agent's page (#4410). To keep the link, run \`tacho unenroll --harness ${host.harnesses[0] ?? ""}\`, register the agent in ${org}/${workspace}, and run the command its page shows.`;
-    deps.err(`warning: ${unlinked}`);
-    warnings.push(unlinked);
   }
 
   // The control plane is always asked, a marked host.json included: the
@@ -305,14 +336,11 @@ async function reassignLocked(
     // recovery is the same command whatever state host.json is in, and
     // `--harness` so it lands in this agent's directory: an enroll goes to
     // the retired agent that hooked the harnesses it names (`enrollTarget`).
-    //
-    // An agent enrolled with a one-time token has no such command, since an
-    // enroll through the CLI session would unlink it from its agent (#4410).
+    // Only a session enrollment gets this far, so the recovery takes the
+    // session too.
     const apiUrl = options.apiUrl ?? host.api_url;
     deps.err(
-      host.enrollment_source === "token"
-        ? `Reassign failed after revoking the old enrollment; ${host.agent_key} is now unenrolled (host.json kept, marked retired). It was enrolled with a one-time token, so once the cause is fixed, register the agent in ${org}/${workspace} on the Agents page and run the command its page shows.`
-        : `Reassign failed after revoking the old enrollment; this host is now unenrolled (host.json kept, marked retired). Run \`tacho enroll --force --org ${org} --workspace ${workspace} --api-url ${apiUrl} --harness ${harnesses.join(",")}\` once the cause is fixed.`,
+      `Reassign failed after revoking the old enrollment; this host is now unenrolled (host.json kept, marked retired). Run \`tacho enroll --force --org ${org} --workspace ${workspace} --api-url ${apiUrl} --harness ${harnesses.join(",")}\` once the cause is fixed.`,
     );
     return { ok: false, from, warnings };
   }

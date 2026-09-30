@@ -954,6 +954,9 @@ async function enrollSteps(
     };
     let response: Awaited<ReturnType<typeof callEnrollment>>;
     let tenant: { orgSlug: string; workspaceSlug: string };
+    // The registered agent a token links this enrollment to. The session
+    // path links none.
+    let agentId: string | undefined;
     try {
       if (credentials) {
         response = await callEnrollment(deps, credentials, facts);
@@ -969,6 +972,7 @@ async function enrollSteps(
           ...(remote !== undefined ? { repositoryRemote: remote } : {}),
         });
         response = answer;
+        agentId = answer.agentId;
         tenant = {
           orgSlug: answer.orgSlug,
           workspaceSlug: answer.workspaceSlug,
@@ -1154,6 +1158,7 @@ async function enrollSteps(
       mcp_stdio_command: deps.runtime.mcpStdioCommand,
       harness_files: harnessFilesRecord(deps.paths),
       enrollment_source: credentials === undefined ? "token" : "session",
+      ...(agentId !== undefined ? { agent_id: agentId } : {}),
       enrolled_at: now,
       expires_at: response.expiresAt,
       revoked_at: null,
