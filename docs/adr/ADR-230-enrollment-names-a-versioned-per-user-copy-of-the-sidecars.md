@@ -99,6 +99,12 @@ held open, so an update failed or waited for a reboot (D-03).
   the new build. Now the collector stays on the version it was enrolled
   with, which is still complete and working, until **Re-apply**.
   `restart_tacho_service` restarts that same version.
+- **The macOS copy drops the quarantine attribute.** A copy keeps the
+  bundle's extended attributes, and Gatekeeper refuses to run a quarantined
+  executable outside the app the person approved, so a hook or launchd could
+  not start the copy. The person approved the app these binaries ship in,
+  and the copy is made by that app, so it removes `com.apple.quarantine`
+  from the two files it writes and nothing else.
 - **Each version costs about 240 MB on disk until it is pruned.** At most
   two versions are kept at once in the usual case: the one the hooks name
   and the one the app carries.

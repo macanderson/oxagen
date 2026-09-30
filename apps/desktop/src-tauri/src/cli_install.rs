@@ -1006,6 +1006,7 @@ fn keep_sidecars(sidecars: &Path, kept: &Path) -> Result<PathBuf, String> {
             .map_err(|e| format!("cannot copy {} to {}: {e}", from.display(), staging.display()))
             .and_then(|_| make_executable(&staging))
             .and_then(|()| {
+                clear_quarantine(&staging);
                 fs::rename(&staging, &to)
                     .map_err(|e| format!("cannot move {} to {}: {e}", staging.display(), to.display()))
             });
@@ -1047,6 +1048,27 @@ fn make_executable(path: &Path) -> Result<(), String> {
 fn make_executable(_path: &Path) -> Result<(), String> {
     Ok(())
 }
+
+/// macOS: a copy keeps the bundle's extended attributes, and with them the
+/// `com.apple.quarantine` a downloaded app carries. Gatekeeper refuses to run
+/// a quarantined executable that is outside the app the person approved,
+/// and a hook or launchd would then fail to start the copy. The person
+/// approved the app these two binaries ship in, so the copy drops that one
+/// attribute. A copy that has none is left as it is, and a failure here
+/// leaves the copy as the bundle had it.
+#[cfg(target_os = "macos")]
+fn clear_quarantine(path: &Path) {
+    let _ = std::process::Command::new("/usr/bin/xattr")
+        .args(["-d", "com.apple.quarantine"])
+        .arg(path)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status();
+}
+
+#[cfg(not(target_os = "macos"))]
+fn clear_quarantine(_path: &Path) {}
 
 /// Make this version's per-user copy (`InstallEnv::kept_dir`) from the
 /// bundled sidecars, recording in `created` every directory made for it, so
@@ -2754,6 +2776,34 @@ mod tests {
         assert_eq!(fs::read(kept.join(exe("tacho"))).unwrap(), b"tacho 2.1.3");
     }
 
+    /// A downloaded bundle is quarantined, and a copy keeps extended
+    /// attributes. Gatekeeper would refuse the quarantined copy when a hook
+    /// or launchd starts it, so the copy drops the attribute. The bundle
+    /// keeps its own.
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn the_copy_drops_the_quarantine_a_downloaded_bundle_carries() {
+        fn xattr(args: &[&str], path: &Path) -> bool {
+            std::process::Command::new("/usr/bin/xattr")
+                .args(args)
+                .arg(path)
+                .output()
+                .unwrap()
+                .status
+                .success()
+        }
+        let env = scratch_env("quarantine", "2.1.3");
+        let bundled = env.sidecars.clone().unwrap().join("tacho");
+        assert!(xattr(
+            &["-w", "com.apple.quarantine", "0081;00000000;Safari;"],
+            &bundled
+        ));
+        let kept = keep_versioned_copy_recorded(&env).unwrap();
+        assert!(xattr(&["-p", "com.apple.quarantine"], &bundled));
+        assert!(!xattr(&["-p", "com.apple.quarantine"], &kept.join("tacho")));
+        assert_eq!(fs::read(kept.join("tacho")).unwrap(), b"tacho 2.1.3");
+    }
+
     /// Audit D-03: an update copies the new version beside the one the
     /// daemon and the hooks run, so no file they hold is replaced. The old
     /// copy stays while any `host.json` names it, and goes on the first
@@ -2777,7 +2827,7 @@ mod tests {
             })
             .to_string()
         };
-        put_file(&host, enrolled_on(&old_dir).as_bytes());
+        put_file(&host, enrolled_on(old_dir.as_path()).as_bytes());
 
         // The update: a new bundle, a new version.
         let new = scratch_env_over(&old, "2.1.4");
@@ -2790,7 +2840,7 @@ mod tests {
 
         // Re-apply moves the enrollment onto the new copy. The next launch
         // removes the old one.
-        put_file(&host, enrolled_on(&new_dir).as_bytes());
+        put_file(&host, enrolled_on(new_dir.as_path()).as_bytes());
         let removed = prune_old_copies(&new);
         assert!(!old_dir.exists(), "{removed:?}");
         assert!(has_both_sidecars(&new_dir));
