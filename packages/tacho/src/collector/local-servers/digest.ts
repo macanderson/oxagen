@@ -68,10 +68,11 @@ export interface PackageDigester {
   ): Promise<Sha256Digest>;
   /**
    * The one file of a PyPI release a pin names (pickPypiFile), read from the
-   * index. Throws a LocalServerError with digest_unavailable when the index
-   * does not answer or the release has no such file.
+   * index. Null when the release has no such file, which only a new release
+   * changes. Throws a LocalServerError with digest_unavailable when the index
+   * does not answer, which a later read may.
    */
-  pypiFile(pkg: Pick<LaunchPackage, "name" | "version">, signal?: AbortSignal): Promise<PypiFile>;
+  pypiFile(pkg: Pick<LaunchPackage, "name" | "version">, signal?: AbortSignal): Promise<PypiFile | null>;
 }
 
 /** A failure the digester reports as the reason in digest_unavailable. */
@@ -205,14 +206,10 @@ export function createPackageDigester(deps: PackageDigesterDeps): PackageDigeste
   async function releaseFile(
     pkg: Pick<LaunchPackage, "name" | "version">,
     signal: AbortSignal | undefined,
-  ): Promise<PypiFile> {
+  ): Promise<PypiFile | null> {
     const url = `${REGISTRY_URLS.pypi}/${encodeURIComponent(pkg.name)}/${encodeURIComponent(pkg.version)}/json`;
     const release = objectOf(await (await read(url, signal)).json());
-    const file = pickPypiFile(release?.urls);
-    if (file === undefined) {
-      throw new DigestProblem("the release has no py3-none-any wheel and no source distribution");
-    }
-    return file;
+    return pickPypiFile(release?.urls) ?? null;
   }
 
   /** The SHA-256 of the file at `url`. A published file never changes, so it is read once. */

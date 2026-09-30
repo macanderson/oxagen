@@ -318,10 +318,15 @@ describe("createPackageDigester for pypi (ADR-233)", () => {
     ["no urls list", { urls: "none" }],
     ["no release", null],
     ["no universal wheel and no source distribution", { urls: [file("x-cp312.whl", wheel, "bdist_wheel")] }],
-  ])("refuses to pick a file from an index answer with %s (negative)", async (_name, body) => {
+  ])("answers no file for an index answer with %s, which only a new release changes (negative)", async (_name, body) => {
     const fetch = registry({ [index]: jsonAnswer(body) });
+    expect(await digester({ fetch }).pypiFile(pkg)).toBeNull();
+  });
+
+  it("refuses when the index does not answer, which a later read may (negative)", async () => {
+    const fetch = registry({ [index]: jsonAnswer({}, 503) });
     expect(await refusalOf(digester({ fetch }).pypiFile(pkg))).toEqual(
-      digestUnavailable("mcp-server-git@1.2.0", "the release has no py3-none-any wheel and no source distribution"),
+      digestUnavailable("mcp-server-git@1.2.0", `the registry answered 503 for ${index}`),
     );
   });
 

@@ -38,13 +38,14 @@ export interface RegistryDigests {
   ): Promise<string>;
   /**
    * The one file of a PyPI release a pin names: its universal wheel, or its
-   * source distribution. It rejects with the index's reason when the index
-   * does not answer or the release has neither.
+   * source distribution. Null when the release has neither, which only a new
+   * release changes. It rejects with the index's reason when the index does
+   * not answer.
    */
   pypiFile(
     pkg: Pick<LaunchPackage, "name" | "version">,
     signal?: AbortSignal,
-  ): Promise<PypiLockFile>;
+  ): Promise<PypiLockFile | null>;
 }
 
 /** The digest the digester is handed before one is known. It never matches a real artifact. */
@@ -144,15 +145,31 @@ export async function readPackagePin(
       false,
     );
   }
-  try {
-    let launch = { command: unpinned.command, args: unpinned.args };
-    let file: PypiLockFile | undefined;
-    if (registry_type === "pypi") {
-      file = await reader.pypiFile({ name, version }, signal);
-      const named = registryLaunch({ source, entry, digest: "", file });
-      // The same entry and source launched a moment ago, so this holds.
-      if (named.ok) launch = { command: named.command, args: named.args };
+  let launch = { command: unpinned.command, args: unpinned.args };
+  let file: PypiLockFile | undefined;
+  if (registry_type === "pypi") {
+    let picked: PypiLockFile | null;
+    try {
+      picked = await reader.pypiFile({ name, version }, signal);
+    } catch (error) {
+      throw new PackagePinProblem(
+        `Oxagen could not read the digest of ${name}@${version}: ${messageOf(error)}`,
+        true,
+      );
     }
+    // Retrying cannot help: only a new release adds a file Oxagen can pin.
+    if (picked === null) {
+      throw new PackagePinProblem(
+        `${name}@${version} is a PyPI release with no py3-none-any wheel and no source distribution, so Oxagen cannot pin one file of it`,
+        false,
+      );
+    }
+    file = picked;
+    const named = registryLaunch({ source, entry, digest: "", file });
+    // The same entry and source launched a moment ago, so this holds.
+    if (named.ok) launch = { command: named.command, args: named.args };
+  }
+  try {
     const digest = await reader.digest(
       { name, version, registry_type },
       launch,

@@ -190,6 +190,24 @@ describe("readPackagePin", () => {
     expect(digest).not.toHaveBeenCalled();
   });
 
+  it("refuses a PyPI release with no file to pin, and names it not worth a retry (negative)", async () => {
+    const { reader, digest, pypiFile } = fakeReader();
+    pypiFile.mockResolvedValueOnce(null);
+    const problem = await pinProblem(readPackagePin(reader, SOURCE, entryWith("pypi", "acme-files")));
+    expect(problem.retriable).toBe(false);
+    expect(problem.message).toBe(
+      "acme-files@1.4.0 is a PyPI release with no py3-none-any wheel and no source distribution, so Oxagen cannot pin one file of it",
+    );
+    expect(digest).not.toHaveBeenCalled();
+  });
+
+  it("names an index that did not answer the file as worth a retry (negative)", async () => {
+    const { reader, pypiFile } = fakeReader();
+    pypiFile.mockRejectedValueOnce(new Error("the registry answered 503"));
+    const problem = await pinProblem(readPackagePin(reader, SOURCE, entryWith("pypi", "acme-files")));
+    expect(problem.retriable).toBe(true);
+  });
+
   it("names a registry that did not answer as worth a retry (negative)", async () => {
     const { reader } = fakeReader(new Error("the registry answered 503"));
     const problem = await pinProblem(readPackagePin(reader, SOURCE, entryWith("pypi", "acme-files")));
