@@ -92,8 +92,10 @@ export const contextPrSchema = z
         commit: z.string(),
         at: instant,
         byUserId: z.string().nullable(),
-        promotionEventId: z.string(),
-        recordId: z.string(),
+        /** Null for a governance proposal, which appends no promotion event (#4795). */
+        promotionEventId: z.string().nullable(),
+        /** Null for a governance proposal, which publishes no record. */
+        recordId: z.string().nullable(),
       })
       .strict()
       .nullable(),

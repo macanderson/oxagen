@@ -53,6 +53,17 @@
 // merged keeps it, and a retry resumes the merge. A claim a crash left behind
 // lapses after MERGE_CLAIM_SECONDS.
 //
+// A governance proposal (#4795, ADR-229) is the review-route PR
+// set_governance_mode opens on steering/governance. It lands through the same
+// queue, reviewer rule, claim, and approvals, with four differences. The
+// check is governance/v1 on steering/governance.toml plus the steering
+// checks, not the record checks. The merge publishes no record and appends no
+// promotion event: the ledger line's Oxagen-Approved-By trailer, the row's
+// merged_by_user_id, and `steering.governance_changed` name the approver. An
+// approval is required, so neither a merger's ownership nor
+// merge_pr_without_review lands one without review: Apply now is the recorded
+// override. The output is the governance arm of the union on `kind`.
+//
 // One window stays open: a crash or a timeout after the stamp merged and
 // before the row moved to the stamp commit leaves the row at the checked
 // head. Once the claim lapses, the next call reads a merged PR at another
@@ -63,8 +74,20 @@ import {
   isHandlerError,
   type CapabilityHandler,
 } from "@oxagen/oxagen";
-import { contextPrMerge } from "@oxagen/oxagen/contracts/context.pr.merge";
+import {
+  contextPrMerge,
+  type ContextPrMergeOutput,
+} from "@oxagen/oxagen/contracts/context.pr.merge";
 import { contextPrMergeWithoutReview } from "@oxagen/oxagen/contracts/context.pr.merge_without_review";
+import type {
+  GovernanceMode,
+  RecordKind,
+} from "@oxagen/oxagen/contracts/context.steering.shared";
+import { readTomlFile } from "@oxagen/oxagen/steering-repo/files";
+import {
+  governanceSchema,
+  resolveGovernance,
+} from "@oxagen/oxagen/steering-repo/governance";
 import type { RepoHealth } from "@oxagen/oxagen/steering-repo/health";
 import type { PublishResult } from "@oxagen/steering-bundle";
 import { recheckContextPr } from "./context.pr.open";
@@ -88,12 +111,22 @@ import { logger } from "./logger";
 import { withToolProjection } from "./mcp-studio/publish-deps";
 import { sha256Hex } from "./registry-digest";
 import {
+  landGovernancePr,
+  passedCheckNames,
+  productionSteeringGovernanceSeams,
+  runGovernanceChecks,
+  type GovernanceCheckContext,
+  type SteeringGovernanceSeams,
+} from "./steering-repo/governance-mode";
+import {
   assertHealthy,
   inMergeQueue,
   landSteeringPr,
   mergeApproval,
   readSteeringLayout,
   recordPublishDeployment,
+  type MergeApproval,
+  type SteeringLayout,
 } from "./steering-repo/merge-queue";
 import { readSteeringHealth } from "./steering-repo/health.read";
 import {
@@ -131,6 +164,12 @@ export interface MergeSeams {
    * than the one in the Oxagen-Version trailer refuses the call.
    */
   publisher?: (scope: Scope, host: SteeringHost) => SteeringPublisher;
+  /**
+   * The steering checks a governance proposal runs on its head at merge
+   * time and after each update (#4795). A governance merge refuses to start
+   * without it.
+   */
+  governanceCheck?: SteeringGovernanceSeams["check"];
 }
 
 /** A proposal row whose pull request is recorded, so it can merge. */
@@ -165,14 +204,17 @@ function mergeable(row: ProposalRow | null, proposalId: string): RecordedRow {
     });
   }
   const { prNumber, repository, branch, path, headSha } = row;
+  // A governance proposal changes steering/governance.toml, which carries no
+  // record stamp.
+  const stamped =
+    row.kind === "governance" || (!!row.stampedRecordId && !!row.recordHash);
   if (
     prNumber === null ||
     !repository ||
     !branch ||
     !path ||
     !headSha ||
-    !row.stampedRecordId ||
-    !row.recordHash
+    !stamped
   ) {
     throw new HandlerError({
       code: "conflict",
@@ -272,6 +314,43 @@ export function createMergeContextPrHandler(
         });
       }
       assertProductionBase(repo, pr.baseRef, row.prUrl);
+      // Approvals count at the head the author pushed and at each merge the
+      // queue makes on top of it. landSteeringPr reads them again after each
+      // update.
+      const approve = (heads: readonly string[]) =>
+        mergeApproval({
+          host: deps.github,
+          repo,
+          number: prNumber,
+          mode,
+          heads,
+          authorUserId: recorded.createdById,
+          merger,
+          isMember: async (uid) => {
+            const roles = await roleOf(uid);
+            return (
+              roles.workspaceRole !== null ||
+              roles.orgRole === "Owner" ||
+              roles.orgRole === "Admin"
+            );
+          },
+          holdsMergeWithoutReview: () => holdsMergeWithoutReview(scope, userId),
+        });
+      if (recorded.kind === "governance") {
+        return mergeGovernanceProposal({
+          deps,
+          seams,
+          capability,
+          scope,
+          requestId: ctx.requestId ?? null,
+          userId,
+          repo,
+          row: recorded,
+          pr,
+          layout,
+          approve,
+        });
+      }
       // The published body is the file at the merged commit.
       let body = await readBody(deps, repo, path, recorded.headSha);
       // Only a steering repo publishes. Its trailer carries the version
@@ -339,29 +418,7 @@ export function createMergeContextPrHandler(
             checkedHead: recorded.headSha,
             checks: passedChecks(row),
             layout,
-            // Approvals count at the head the author pushed and at each merge
-            // the queue makes on top of it. landSteeringPr reads them again
-            // after each update.
-            approve: (heads) =>
-              mergeApproval({
-                host: deps.github,
-                repo,
-                number: prNumber,
-                mode,
-                heads,
-                authorUserId: recorded.createdById,
-                merger,
-                isMember: async (uid) => {
-                  const roles = await roleOf(uid);
-                  return (
-                    roles.workspaceRole !== null ||
-                    roles.orgRole === "Owner" ||
-                    roles.orgRole === "Admin"
-                  );
-                },
-                holdsMergeWithoutReview: () =>
-                  holdsMergeWithoutReview(scope, userId),
-              }),
+            approve,
             mergedBy: userId,
             commitTitle: `steering: publish ${row.lineageId} (#${prNumber})`,
             version,
@@ -473,6 +530,7 @@ export function createMergeContextPrHandler(
       return {
         proposalId: row.publicId,
         status: "merged" as const,
+        kind: row.kind as RecordKind,
         record: {
           id: result.recordPublicId,
           lineageId: row.lineageId,
@@ -492,6 +550,271 @@ export function createMergeContextPrHandler(
         publishedVersion,
       };
     });
+  };
+}
+
+interface GovernanceMerge {
+  deps: SteeringDeps;
+  seams: MergeSeams;
+  capability: string;
+  scope: Scope;
+  requestId: string | null;
+  userId: string;
+  repo: SteeringRepository;
+  row: RecordedRow;
+  pr: Awaited<ReturnType<SteeringHost["getPullRequest"]>>;
+  layout: SteeringLayout;
+  approve: (heads: readonly string[]) => Promise<MergeApproval>;
+}
+
+function governanceRefusal(reason: string, message: string): HandlerError {
+  return new HandlerError({ code: "conflict", reason, message });
+}
+
+/**
+ * The mode `steering/governance.toml` declares at `sha`, or a refusal. A file
+ * that is not governance/v1 refuses `governance_invalid`, and nothing merges:
+ * `[memory] auto_merge = true` outside solo is the case that exists today.
+ */
+async function governanceModeAt(
+  deps: SteeringDeps,
+  repo: SteeringRepository,
+  row: Pick<ProposalRow, "prUrl">,
+  path: string,
+  sha: string,
+): Promise<GovernanceMode> {
+  const text = await deps.github.readFile(repo, path, sha);
+  if (text === null) {
+    throw governanceRefusal(
+      "governance_file_missing",
+      `${path} is not at ${sha} on ${row.prUrl ?? "the pull request"}. Set the mode again to open a new one.`,
+    );
+  }
+  const read = readTomlFile(text, "governance/v1", governanceSchema);
+  if (!read.ok) {
+    const first = read.issues[0];
+    throw governanceRefusal(
+      "governance_invalid",
+      `${path} at ${sha} is not governance/v1 (${first?.line ? `line ${first.line}: ` : ""}${first?.message ?? "it does not parse"}), so nothing merged. Set the mode again to open a new pull request.`,
+    );
+  }
+  return resolveGovernance(read.value).mode;
+}
+
+/** An approval that stands without review refuses a governance merge. */
+function reviewRequired(prUrl: string | null): HandlerError {
+  return new HandlerError({
+    code: "forbidden",
+    reason: "review_required",
+    message: `A governance change lands only after a workspace member other than its author approves ${prUrl ?? "its pull request"}. Apply now in the workspace's governance settings is the recorded override.`,
+  });
+}
+
+/**
+ * Land a governance proposal (#4795). The caller holds the merge queue and
+ * has checked the health, the reviewer rule, the claim, the head, and the
+ * base. This reads the mode the PR sets, runs the steering checks on the
+ * head, claims the row, and lands the PR through landGovernancePr with an
+ * approval that must be a review. A PR the host already merged on an earlier
+ * call resumes from its merge commit. The row moves to `merged` with the
+ * commit and the approver, and `steering.governance_changed` names both.
+ */
+async function mergeGovernanceProposal(
+  input: GovernanceMerge,
+): Promise<ContextPrMergeOutput> {
+  const { deps, seams, scope, repo, pr, userId } = input;
+  const recorded = input.row;
+  const { prNumber, path } = recorded;
+  let row: ProposalRow = recorded;
+  // The reviewed route never records a merge without review (ADR-229).
+  if (input.capability === contextPrMergeWithoutReview.name) {
+    throw reviewRequired(recorded.prUrl);
+  }
+  const layout = input.layout;
+  if (layout.layout !== "steering") {
+    throw governanceRefusal(
+      "layout_changed",
+      `${repo.fullName} no longer holds ${path} on ${repo.defaultBranch}, so nothing merged. Set the mode again.`,
+    );
+  }
+  const check = seams.governanceCheck;
+  const publisherFor = seams.publisher;
+  if (!check || !publisherFor) {
+    throw new Error(
+      "merge_context_pr: a governance merge needs the governanceCheck and publisher seams",
+    );
+  }
+  const setting = await governanceModeAt(
+    deps,
+    repo,
+    recorded,
+    path,
+    recorded.headSha,
+  );
+  let approvedBy: string[] = [];
+  const approve = async (heads: readonly string[]) => {
+    const approval = await input.approve(heads);
+    if (approval.withoutReview) throw reviewRequired(recorded.prUrl);
+    approvedBy = approval.approvedBy;
+    return approval;
+  };
+
+  let commitSha: string;
+  let mergedAt: Date;
+  let publishedVersion: number | null = null;
+  if (pr.merged) {
+    // The host merged it on an earlier call whose record did not land. The
+    // repository sync publishes the production branch that holds it.
+    if (!pr.mergeCommitSha) {
+      throw new HandlerError({
+        code: "conflict",
+        reason: "github_refused",
+        message: `${recorded.prUrl} is merged with no merge commit`,
+      });
+    }
+    commitSha = pr.mergeCommitSha;
+    mergedAt = requireMergedAt(pr.mergedAt, recorded.prUrl);
+    await deps.github.deleteBranch(repo, recorded.branch);
+  } else {
+    const checks: GovernanceCheckContext = {
+      host: deps.github,
+      repo,
+      scope,
+      now: deps.now,
+      check,
+    };
+    // The row passed its checks when the PR opened, against the production
+    // branch of that moment. They run again on the head that would merge.
+    const main = await deps.github.branchHead(repo, repo.defaultBranch);
+    const report =
+      main === null
+        ? null
+        : await runGovernanceChecks(checks, recorded.headSha, main);
+    if (!report?.passed) {
+      await deps.store.updateProposal(
+        recorded.id,
+        { status: "checks_failed", updatedById: userId },
+        ["checks_passed"],
+        { headSha: recorded.headSha, noClaimSince: claimCutoff(deps.now()) },
+      );
+      throw governanceRefusal(
+        "checks_failed",
+        `The steering checks ${report === null ? "did not run" : "failed"} on ${recorded.headSha}, so nothing merged. ${recorded.prUrl} holds the report. Set the mode again to run them.`,
+      );
+    }
+    // Claim the proposal before the stamp moves the PR's head.
+    row = await deps.store.updateProposal(
+      recorded.id,
+      { mergeClaimedAt: deps.now() },
+      ["checks_passed"],
+      { headSha: recorded.headSha, noClaimSince: claimCutoff(deps.now()) },
+    );
+    const landed = await landGovernancePr({
+      host: deps.github,
+      repo,
+      layout,
+      number: prNumber,
+      checkedHead: recorded.headSha,
+      checks: passedCheckNames(report),
+      mode: setting,
+      approve,
+      mergedBy: userId,
+      publisher: publisherFor(scope, deps.github),
+      now: deps.now,
+      // The queue merged the production branch into the PR's branch. The row
+      // follows the new head through checks_running, as a record's does.
+      recheck: async (head) => {
+        const from = row.headSha ?? recorded.headSha;
+        row = await deps.store.updateProposal(
+          row.id,
+          { status: "checks_running", headSha: head, updatedById: userId },
+          ["checks_passed"],
+          { headSha: from },
+        );
+        const base = await deps.github.branchHead(repo, repo.defaultBranch);
+        const again =
+          base === null ? null : await runGovernanceChecks(checks, head, base);
+        const ok = again?.passed === true;
+        row = await deps.store.updateProposal(
+          row.id,
+          { status: ok ? "checks_passed" : "checks_failed" },
+          ["checks_running"],
+          { headSha: head },
+        );
+        return { ok, checks: ok && again ? passedCheckNames(again) : [] };
+      },
+    }).catch(async (err: unknown) => {
+      await releaseUnmergedClaim(deps, repo, prNumber, row);
+      throw err;
+    });
+    commitSha = landed.commitSha;
+    if (landed.mergedHead !== row.headSha) {
+      // The stamp commit merged: the row follows it, so a retry reads a
+      // merged PR at the head the row names.
+      row = await deps.store.updateProposal(
+        row.id,
+        { headSha: landed.mergedHead },
+        ["checks_passed"],
+        { headSha: row.headSha ?? recorded.headSha },
+      );
+    }
+    mergedAt = requireMergedAt(
+      await mergedAtOnGitHub(deps, repo, prNumber),
+      recorded.prUrl,
+    );
+    publishedVersion = landed.live ? landed.version : null;
+  }
+
+  row = await deps.store.mergeGovernance({
+    proposal: row,
+    commitSha,
+    mergedAt,
+    mergedByUserId: userId,
+  });
+  const ledger = await deps.store.ledgerLength(scope);
+  deps.emit({
+    eventType: "steering.governance_changed",
+    actorUserId: userId,
+    orgId: scope.orgId,
+    workspaceId: scope.workspaceId,
+    capability: input.capability,
+    outcome: "success",
+    ip: null,
+    userAgent: null,
+    requestId: input.requestId,
+    detail: {
+      fullName: repo.fullName,
+      productionBranch: repo.defaultBranch,
+      previousMode: layout.mode,
+      mode: setting,
+      commitSha,
+      overrodeReview: false,
+      approvedBy,
+      proposalId: row.publicId,
+      pullRequest: row.prUrl,
+    },
+  });
+  logger.info(
+    {
+      proposalId: row.publicId,
+      pr: row.prUrl,
+      commit: commitSha,
+      previousMode: layout.mode,
+      mode: setting,
+      approvedBy,
+      publishedVersion,
+      workspaceId: scope.workspaceId,
+    },
+    "context.pr.merge: merged governance mode",
+  );
+  return {
+    proposalId: row.publicId,
+    status: "merged",
+    kind: "governance",
+    governance: { mode: setting, path },
+    mergedCommit: commitSha,
+    bundleVersion: { before: ledger, after: ledger },
+    publishedVersion,
   };
 }
 
@@ -799,6 +1122,8 @@ export const productionMergeSeams: MergeSeams = {
       extend: withToolProjection,
       readHealth: readSteeringHealth,
     }),
+  // The checks set_governance_mode runs when it opens the PR (#4795).
+  governanceCheck: productionSteeringGovernanceSeams.check,
 };
 
 export const mergeContextPrHandler = createMergeContextPrHandler(

@@ -67,7 +67,25 @@ type ProposalInsert = Pick<
   | "supportingRecordIds"
   | "evidenceLinks"
   | "createdById"
-> & { title?: string | null; label?: string | null };
+> & {
+  title?: string | null;
+  label?: string | null;
+} & Partial<
+    Pick<
+      ProposalRow,
+      | "status"
+      | "governanceMode"
+      | "provider"
+      | "repository"
+      | "baseRef"
+      | "branch"
+      | "path"
+      | "prNumber"
+      | "prUrl"
+      | "headSha"
+      | "checks"
+    >
+  >;
 
 /** The columns a handler may change after insert. */
 type ProposalPatch = Partial<
@@ -185,6 +203,14 @@ interface PublishMergeInput {
   mergedByUserId: string | null;
   /** The governance mode the merge ran under, recorded as the ledger's policy version. */
   policyVersion: string;
+}
+
+/** A governance proposal's merge (#4795): the commit and the approver. */
+interface MergeGovernanceInput {
+  proposal: ProposalRow;
+  commitSha: string;
+  mergedAt: Date;
+  mergedByUserId: string;
 }
 
 interface PublishMergeResult {
@@ -317,6 +343,13 @@ export interface SteeringStore {
    * transaction back with `already_merged`.
    */
   publishMerge(input: PublishMergeInput): Promise<PublishMergeResult>;
+  /**
+   * Move a governance proposal from `checks_passed` to `merged`, with its
+   * commit and approver, and clear its merge claim. It publishes no record
+   * and appends no promotion event: `context_promotions` keeps one chain per
+   * record. A proposal no longer at `checks_passed` throws `already_merged`.
+   */
+  mergeGovernance(input: MergeGovernanceInput): Promise<ProposalRow>;
 }
 
 /** A guarded proposal write found the proposal at `status`. */
@@ -1197,5 +1230,31 @@ export const postgresSteeringStore: SteeringStore = {
         ledgerBefore: promotion.ledgerBefore,
       };
     });
+  },
+
+  async mergeGovernance(input) {
+    const [row] = await withTenantDb((tx) =>
+      tx
+        .update(schema.contextProposals)
+        .set({
+          status: "merged",
+          mergedCommit: input.commitSha,
+          mergedAt: input.mergedAt,
+          mergedByUserId: input.mergedByUserId,
+          mergeClaimedAt: null,
+          updatedById: input.mergedByUserId,
+          updatedAt: input.mergedAt,
+        })
+        .where(
+          and(
+            eq(schema.contextProposals.id, input.proposal.id),
+            eq(schema.contextProposals.kind, "governance"),
+            eq(schema.contextProposals.status, "checks_passed"),
+          ),
+        )
+        .returning(),
+    );
+    if (!row) throw alreadyMerged(input.proposal.publicId);
+    return toProposal(row);
   },
 };

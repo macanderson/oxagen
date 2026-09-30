@@ -10,9 +10,9 @@
 // so the branch-scope rule admits it. Oxagen runs the steering checks on the
 // PR's head and reports the required `Oxagen steering` check there.
 //
-// - Review (team or regulated): the PR stays open and waits for review. A
-//   reviewed governance PR has no land path yet: merge_context_pr lands a PR
-//   from a proposal row, and this writes none (#4795, ADR-229).
+// - Review (team or regulated): the PR stays open and waits for review. The
+//   handler records it as a governance proposal, and merge_context_pr lands
+//   it for an approver through landGovernancePr below (#4795, ADR-229).
 // - Land at once (solo, or the override): the PR goes through the steering
 //   merge queue. The queue brings the branch up to date, stamps the ledger
 //   line, squash-merges with the trailers, and publish() makes the version
@@ -45,38 +45,22 @@ import {
   landSteeringPr,
   readSteeringLayout,
   recordPublishDeployment,
+  type LandInput,
   type MergeApproval,
+  type SteeringLayout,
 } from "./merge-queue";
+import {
+  STEERING_GOVERNANCE_PR_BODY,
+  STEERING_GOVERNANCE_PR_TITLE,
+} from "./governance-pr";
 import type { HeldPublish, SteeringPublisher } from "./publisher";
 
 type Scope = { orgId: string; workspaceId: string };
 
-/** The steering PR's title. The diff names the mode, so the title does not. */
-export const STEERING_GOVERNANCE_PR_TITLE =
-  "Change the steering governance mode";
-
-/**
- * The steering PR's body. A reused PR keeps the body it was opened with, so
- * the body names no mode: the diff is the only current statement of it.
- */
-export const STEERING_GOVERNANCE_PR_BODY = [
-  "This steering PR changes the `mode` key in `steering/governance.toml`, which decides",
-  "who may merge a steering PR in this workspace. Every other setting in the file stays",
-  "as it is.",
-  "",
-  "Read the diff for the mode being set. This description is not updated when the branch",
-  "is, so the file is the only current statement of it.",
-  "",
-  "| Mode | Who merges a steering PR |",
-  "| --- | --- |",
-  "| `solo` | the merger, with no other approval |",
-  "| `team` | the merger, after a workspace member other than the author approves |",
-  "| `regulated` | the merger, after a workspace member other than the author approves |",
-  "",
-  "Oxagen runs the `Oxagen steering` check on this PR, and only Oxagen merges into the",
-  "production branch. Oxagen does not land a reviewed governance change yet, so this PR",
-  "waits for review. Until Oxagen lands it, the mode in force stays as it is.",
-].join("\n");
+export {
+  STEERING_GOVERNANCE_PR_BODY,
+  STEERING_GOVERNANCE_PR_TITLE,
+} from "./governance-pr";
 
 /** The seams production binds. Tests pass their own. */
 export interface SteeringGovernanceSeams {
@@ -256,7 +240,13 @@ export interface SteeringPullRequest {
 }
 
 export type SteeringGovernanceResult =
-  | { outcome: "proposed"; pullRequest: SteeringPullRequest; head: string }
+  | {
+      outcome: "proposed";
+      pullRequest: SteeringPullRequest;
+      head: string;
+      /** True when every steering check passed on `head`. */
+      checksPassed: boolean;
+    }
   | {
       outcome: "applied";
       pullRequest: SteeringPullRequest;
@@ -265,9 +255,18 @@ export type SteeringGovernanceResult =
       deploymentUrl: string | null;
     };
 
+/** What running and reporting the steering checks on a governance PR needs. */
+export interface GovernanceCheckContext {
+  host: SteeringHost;
+  repo: SteeringRepository;
+  scope: Scope;
+  now: () => Date;
+  check: SteeringGovernanceSeams["check"];
+}
+
 /** Report the required check on `head`. A failed report is logged. */
 async function reportCheck(
-  input: SteeringGovernanceInput,
+  input: GovernanceCheckContext,
   head: string,
   report: CheckReport | null,
   error: unknown,
@@ -301,9 +300,13 @@ async function reportCheck(
   }
 }
 
-/** Run the checks on `head` against `base` and report them. Null when they did not run. */
-async function runChecks(
-  input: SteeringGovernanceInput,
+/**
+ * Run the steering checks on a governance PR's `head` against the production
+ * branch commit `base`, and report them as the required check. Null when they
+ * did not run.
+ */
+export async function runGovernanceChecks(
+  input: GovernanceCheckContext,
   head: string,
   base: string,
 ): Promise<CheckReport | null> {
@@ -311,13 +314,7 @@ async function runChecks(
   let report: CheckReport | null = null;
   let error: unknown = null;
   try {
-    report = await input.seams.check(
-      input.scope,
-      input.host,
-      input.repo,
-      head,
-      base,
-    );
+    report = await input.check(input.scope, input.host, input.repo, head, base);
   } catch (err) {
     error = err;
     logger.error(
@@ -469,6 +466,107 @@ async function publishMerged(
   return true;
 }
 
+/** What landing a governance PR needs, whichever route lands it. */
+export interface GovernanceLandInput {
+  host: SteeringHost;
+  repo: SteeringRepository;
+  /** The production branch's layout, read inside the merge queue. */
+  layout: Extract<SteeringLayout, { layout: "steering" }>;
+  number: number;
+  /** The head the checks passed on. */
+  checkedHead: string;
+  /** The checks that passed on it, by name. */
+  checks: readonly string[];
+  /** The mode the PR sets, named in the commit title. */
+  mode: GovernanceMode;
+  approve: LandInput["approve"];
+  mergedBy: string;
+  recheck: LandInput["recheck"];
+  publisher: SteeringPublisher;
+  now: () => Date;
+}
+
+export interface GovernanceLanded {
+  commitSha: string;
+  /** The branch head the merge was pinned to: the stamp commit. */
+  mergedHead: string;
+  version: number;
+  /** True when publish() made `version` live. */
+  live: boolean;
+  deploymentUrl: string | null;
+}
+
+/**
+ * Land a governance PR through the steering merge queue. Under the
+ * publisher's lock it takes the version publish() assigns next, brings the
+ * branch up to date, stamps the ledger line with the approval, squash-merges
+ * with the trailers, deletes the branch, and publishes. It records the
+ * deployment for a version that went live. The caller holds the merge queue
+ * and has checked the repository's health.
+ *
+ * set_governance_mode lands solo and Apply now through it. merge_context_pr
+ * lands a reviewed governance proposal through it (#4795).
+ */
+export async function landGovernancePr(
+  input: GovernanceLandInput,
+): Promise<GovernanceLanded> {
+  const { host, repo, publisher } = input;
+  const landed = await underPublishLock(publisher, repo, async (held) => {
+    const version =
+      (await publisher.store.highestVersion(publisher.repository(repo))) + 1;
+    const merged = await landSteeringPr({
+      host,
+      repo,
+      number: input.number,
+      branch: STEERING_GOVERNANCE_BRANCH,
+      checkedHead: input.checkedHead,
+      checks: input.checks,
+      layout: input.layout,
+      approve: input.approve,
+      mergedBy: input.mergedBy,
+      commitTitle: `steering: set governance mode to ${input.mode} (#${input.number})`,
+      version,
+      now: input.now,
+      recheck: input.recheck,
+    });
+    await host.deleteBranch(repo, STEERING_GOVERNANCE_BRANCH);
+    const live = await publishMerged(held, repo, merged.commitSha, version);
+    return {
+      commitSha: merged.commitSha,
+      mergedHead: merged.mergedHead,
+      version,
+      live,
+    };
+  });
+  const deploymentUrl = landed.live
+    ? await recordPublishDeployment(host, repo, {
+        sha: landed.commitSha,
+        version: landed.version,
+        number: input.number,
+      })
+    : null;
+  return { ...landed, deploymentUrl };
+}
+
+/**
+ * The production layout inside the merge queue, or `layout_changed` when
+ * `steering/governance.toml` is gone from the production branch.
+ */
+export async function steeringLayoutOrRefuse(
+  host: SteeringHost,
+  repo: SteeringRepository,
+  retry: string,
+): Promise<Extract<SteeringLayout, { layout: "steering" }>> {
+  const layout = await readSteeringLayout(host, repo);
+  if (layout.layout !== "steering") {
+    throw governanceRefusal(
+      "layout_changed",
+      `${repo.fullName} no longer holds ${STEERING_GOVERNANCE_FILE} on ${repo.defaultBranch}, so nothing merged. ${retry}`,
+    );
+  }
+  return layout;
+}
+
 /**
  * Change the mode in a steering repository: push the steering PR, run and
  * report its check, and either leave it open or land it through the queue.
@@ -480,9 +578,23 @@ export async function setSteeringGovernanceMode(
   // Before any write: a mode the rest of the file does not allow refuses here.
   const content = rewriteGovernanceMode(input.currentText, input.mode);
   const { pullRequest, head } = await pushBranch(input, content);
-  const report = await runChecks(input, head, input.productionHead);
+  const checks: GovernanceCheckContext = {
+    host,
+    repo,
+    scope: input.scope,
+    now: input.now,
+    check: input.seams.check,
+  };
+  const report = await runGovernanceChecks(checks, head, input.productionHead);
 
-  if (!input.land) return { outcome: "proposed", pullRequest, head };
+  if (!input.land) {
+    return {
+      outcome: "proposed",
+      pullRequest,
+      head,
+      checksPassed: report?.passed === true,
+    };
+  }
 
   if (report === null || !report.passed) {
     const errors =
@@ -507,58 +619,40 @@ export async function setSteeringGovernanceMode(
 
   return inMergeQueue(repo, async () => {
     assertHealthy(await input.seams.readHealth(input.scope, repo), repo);
-    const layout = await readSteeringLayout(host, repo);
-    if (layout.layout !== "steering") {
-      throw governanceRefusal(
-        "layout_changed",
-        `${repo.fullName} no longer holds ${STEERING_GOVERNANCE_FILE} on ${repo.defaultBranch}, so nothing merged. Set the mode again.`,
-      );
-    }
-    const publisher = await input.seams.publisher(input.scope, host);
-    const landed = await underPublishLock(publisher, repo, async (held) => {
-      const version =
-        (await publisher.store.highestVersion(publisher.repository(repo))) + 1;
-      const merged = await landSteeringPr({
-        host,
-        repo,
-        number: pullRequest.number,
-        branch: STEERING_GOVERNANCE_BRANCH,
-        checkedHead: head,
-        checks: passedCheckNames(report),
-        layout,
-        approve: async () => approval,
-        mergedBy: input.actingUserId,
-        commitTitle: `steering: set governance mode to ${input.mode} (#${pullRequest.number})`,
-        version,
-        now: input.now,
-        // The queue merged the production branch into the PR's branch. The
-        // checks compare the new head with the production head it now holds.
-        recheck: async (next) => {
-          const base = await host.branchHead(repo, repo.defaultBranch);
-          const again =
-            base === null ? null : await runChecks(input, next, base);
-          return again === null
-            ? { ok: false, checks: [] }
-            : { ok: again.passed, checks: passedCheckNames(again) };
-        },
-      });
-      await host.deleteBranch(repo, STEERING_GOVERNANCE_BRANCH);
-      const live = await publishMerged(held, repo, merged.commitSha, version);
-      return { commitSha: merged.commitSha, version, live };
+    const layout = await steeringLayoutOrRefuse(
+      host,
+      repo,
+      "Set the mode again.",
+    );
+    const landed = await landGovernancePr({
+      host,
+      repo,
+      layout,
+      number: pullRequest.number,
+      checkedHead: head,
+      checks: passedCheckNames(report),
+      mode: input.mode,
+      approve: async () => approval,
+      mergedBy: input.actingUserId,
+      // The queue merged the production branch into the PR's branch. The
+      // checks compare the new head with the production head it now holds.
+      recheck: async (next) => {
+        const base = await host.branchHead(repo, repo.defaultBranch);
+        const again =
+          base === null ? null : await runGovernanceChecks(checks, next, base);
+        return again === null
+          ? { ok: false, checks: [] }
+          : { ok: again.passed, checks: passedCheckNames(again) };
+      },
+      publisher: await input.seams.publisher(input.scope, host),
+      now: input.now,
     });
-    const deploymentUrl = landed.live
-      ? await recordPublishDeployment(host, repo, {
-          sha: landed.commitSha,
-          version: landed.version,
-          number: pullRequest.number,
-        })
-      : null;
     return {
       outcome: "applied" as const,
       pullRequest,
       commitSha: landed.commitSha,
       version: landed.version,
-      deploymentUrl,
+      deploymentUrl: landed.deploymentUrl,
     };
   });
 }

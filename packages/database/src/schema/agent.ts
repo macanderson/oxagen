@@ -1738,7 +1738,9 @@ export const contextPromotions = agentSchema.table(
 // with rejected reachable from proposed and from any open-PR state through
 // dismiss_proposal. The promotion event a merge writes is a contextPromotions
 // row (promotion_event_id), never a field here: the ledger is append-only and
-// this row is not.
+// this row is not. A governance proposal (kind 'governance', #4795) is the
+// review-route PR set_governance_mode opens: it proposes no record, and its
+// merge writes no promotion event.
 export const contextProposals = agentSchema.table(
   "context_proposals",
   {
@@ -1825,7 +1827,7 @@ export const contextProposals = agentSchema.table(
     ),
     kindCheck: check(
       "context_proposals_kind_check",
-      sql`${t.kind} IN ('rule', 'constraint', 'procedure', 'fact', 'memory', 'preference')`,
+      sql`${t.kind} IN ('rule', 'constraint', 'procedure', 'fact', 'memory', 'preference', 'governance')`,
     ),
     forceCheck: check(
       "context_proposals_force_check",
@@ -1855,9 +1857,11 @@ export const contextProposals = agentSchema.table(
       "context_proposals_governance_mode_check",
       sql`${t.governanceMode} IS NULL OR ${t.governanceMode} IN ('solo', 'team', 'regulated')`,
     ),
+    // A governance proposal (#4795) publishes no record and appends no
+    // promotion event, so a merged one needs only its commit.
     mergedCheck: check(
       "context_proposals_merged_check",
-      sql`(${t.status} = 'merged') = (${t.mergedCommit} IS NOT NULL AND ${t.promotionEventId} IS NOT NULL AND ${t.publishedRecordId} IS NOT NULL)`,
+      sql`(${t.status} = 'merged') = (${t.mergedCommit} IS NOT NULL AND (${t.kind} = 'governance' OR (${t.promotionEventId} IS NOT NULL AND ${t.publishedRecordId} IS NOT NULL)))`,
     ),
   }),
 );

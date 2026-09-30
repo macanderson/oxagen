@@ -410,6 +410,16 @@ export interface GovernanceChangeDetail {
   commitSha: string;
   /** Whether the review route the mode in force asked for was skipped. */
   overrodeReview: boolean;
+  /**
+   * The Oxagen users whose approval on the host landed a reviewed governance
+   * PR through merge_context_pr (#4795). Absent on a change that landed at
+   * once. Empty when a retry resumed a merge the host already held.
+   */
+  approvedBy?: string[];
+  /** The governance proposal merge_context_pr landed (`prp_…`). */
+  proposalId?: string;
+  /** The pull request that carried the change. */
+  pullRequest?: string | null;
 }
 
 /**

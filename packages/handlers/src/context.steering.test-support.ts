@@ -555,6 +555,22 @@ export class MemoryStore implements SteeringStore {
       ledgerBefore,
     };
   }
+  async mergeGovernance(input: Parameters<SteeringStore["mergeGovernance"]>[0]) {
+    const current = this.proposals.find((p) => p.id === input.proposal.id);
+    if (current?.status !== "checks_passed" || current.kind !== "governance")
+      throw alreadyMerged(input.proposal.publicId);
+    const merged = await this.updateProposal(
+      input.proposal.id,
+      { status: "merged", mergeClaimedAt: null, updatedById: input.mergedByUserId },
+      ["checks_passed"],
+    );
+    Object.assign(merged, {
+      mergedCommit: input.commitSha,
+      mergedAt: input.mergedAt,
+      mergedByUserId: input.mergedByUserId,
+    });
+    return merged;
+  }
 }
 
 const pullUrl = (n: number) => `https://github.com/a-intel/platform/pull/${n}`;

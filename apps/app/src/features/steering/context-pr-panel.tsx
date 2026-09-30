@@ -296,12 +296,17 @@ export function ContextPrPanel({
             <Fact name="merged-at" term={t("merged.at")}>
               {date(merged.at)}
             </Fact>
-            <Fact name="promotion-event" term={t("merged.promotion")}>
-              <span className={mono}>{merged.promotionEventId}</span>
-            </Fact>
-            <Fact name="record" term={t("merged.record")}>
-              <span className={mono}>{merged.recordId}</span>
-            </Fact>
+            {/* A governance merge appends no promotion event and publishes no record (#4795). */}
+            {merged.promotionEventId === null ? null : (
+              <Fact name="promotion-event" term={t("merged.promotion")}>
+                <span className={mono}>{merged.promotionEventId}</span>
+              </Fact>
+            )}
+            {merged.recordId === null ? null : (
+              <Fact name="record" term={t("merged.record")}>
+                <span className={mono}>{merged.recordId}</span>
+              </Fact>
+            )}
           </Facts>
         </div>
       )}

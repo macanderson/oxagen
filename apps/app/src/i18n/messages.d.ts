@@ -11460,6 +11460,7 @@ type Messages = {
         fact: string;
         memory: string;
         preference: string;
+        governance: string;
       };
       unclassified: string;
       force: string;

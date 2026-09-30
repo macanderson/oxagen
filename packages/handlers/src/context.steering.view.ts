@@ -6,6 +6,7 @@ import {
   CHECK_NAMES,
   type ConstraintEffect,
   type GovernanceMode,
+  type ProposalKind,
   type ProposalStatus,
   type ProposalView,
   type PublishedRecordView,
@@ -17,6 +18,7 @@ import {
 import { recordFilePath } from "./context.steering.file";
 import { REVIEW_BY_MODE } from "./context.steering.policy";
 import type { ProposalRow, PublishedRecordRow } from "./context.steering.store";
+import { STEERING_GOVERNANCE_PR_BODY } from "./steering-repo/governance-pr";
 
 /**
  * The host a proposal's PR lives on. The store's
@@ -31,7 +33,7 @@ export function proposalView(row: ProposalRow): ProposalView {
   return {
     id: row.publicId,
     lineageId: row.lineageId,
-    kind: row.kind as RecordKind,
+    kind: row.kind as ProposalKind,
     force: row.force as RecordForce,
     constraintEffect: (row.constraintEffect as ConstraintEffect | null) ?? null,
     sharingScope: row.sharingScope as PublishedSharingScope,
@@ -90,7 +92,11 @@ export function publishedRecordView(
   };
 }
 
-/** The Context PR panel's view of a proposal, before, during and after its PR. */
+/**
+ * The Context PR panel's view of a proposal, before, during and after its PR.
+ * A governance proposal (#4795) publishes no record and appends no promotion
+ * event, so its merge leaves the ledger length as it was and names neither.
+ */
 export function contextPrView(
   row: ProposalRow,
   ledgerLength: number,
@@ -100,6 +106,7 @@ export function contextPrView(
   const mode = (row.governanceMode as GovernanceMode | null) ?? null;
   const path = row.path ?? recordFilePath(row.lineageId);
   const isMerged = row.status === "merged";
+  const governance = row.kind === "governance";
   return {
     proposalId: row.publicId,
     lineageId: row.lineageId,
@@ -135,24 +142,29 @@ export function contextPrView(
             statement: row.statement,
           }
         : null,
-    body: row.prNumber !== null ? prBody(row) : null,
+    body:
+      row.prNumber === null
+        ? null
+        : governance
+          ? STEERING_GOVERNANCE_PR_BODY
+          : prBody(row),
     checks: row.checks,
     onMerge: {
       publishes: { lineageId: row.lineageId, path },
       bundleVersion: {
         current: ledgerLength,
-        afterMerge: isMerged ? ledgerLength : ledgerLength + 1,
+        afterMerge: isMerged || governance ? ledgerLength : ledgerLength + 1,
       },
       review: mode ? REVIEW_BY_MODE[mode] : null,
     },
     merged:
-      isMerged && row.mergedCommit && row.mergedAt && merged
+      isMerged && row.mergedCommit && row.mergedAt && (merged || governance)
         ? {
             commit: row.mergedCommit,
             at: row.mergedAt.toISOString(),
             byUserId: row.mergedByUserId,
-            promotionEventId: merged.promotionEventPublicId,
-            recordId: merged.recordPublicId,
+            promotionEventId: merged?.promotionEventPublicId ?? null,
+            recordId: merged?.recordPublicId ?? null,
           }
         : null,
   };
