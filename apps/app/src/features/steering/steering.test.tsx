@@ -486,11 +486,21 @@ describe("the hub", () => {
     [{ state: "unbound" } as const, "unbound"],
     [{ state: "unread", code: "github_not_connected" } as const, "not read"],
     [
-      { state: "read", repository: "acme/platform", mode: "absent" } as const,
+      {
+        state: "read",
+        repository: "acme/platform",
+        path: ".oxagen/rules/governance.toml",
+        mode: "absent",
+      } as const,
       "team",
     ],
     [
-      { state: "read", repository: "acme/platform", mode: "invalid" } as const,
+      {
+        state: "read",
+        repository: "acme/platform",
+        path: ".oxagen/rules/governance.toml",
+        mode: "invalid",
+      } as const,
       "invalid",
     ],
   ])("prints the chip for governance %o as %s", async (governance, shown) => {

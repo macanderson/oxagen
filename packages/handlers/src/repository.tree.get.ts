@@ -14,9 +14,12 @@
 //      `head: null` and an empty tree rather than a refusal: it is a fact the
 //      page must show, and the repair (`set_production_branch`) is on the
 //      same page.
-//   5. The paths under `.oxagen/` at that head, the two files the page shows
-//      in full when they exist, the mode governance.toml declares (read by the
-//      same parser the Context PR gate uses), and the open init pull request.
+//   5. The paths under `.oxagen/` and `steering/` at that head, the two files
+//      the page shows in full when they exist, the mode the governance file
+//      declares (read by the same parser the Context PR gate uses), and the
+//      open init pull request. A steering repository keeps its mode in
+//      `steering/governance.toml`, and a legacy one in
+//      `.oxagen/rules/governance.toml` (#4821).
 //
 // No store is written. Every fact here is GitHub's, read at call time.
 import type { CapabilityHandler } from "@oxagen/oxagen";
@@ -26,8 +29,10 @@ import {
 } from "@oxagen/oxagen/contracts/repository.tree.get";
 import { INIT_BRANCH } from "@oxagen/oxagen/contracts/repository.init_pr.open";
 import {
+  GOVERNANCE_TOML_PATH,
   LEGACY_OXAGEN_DIR,
   LEGACY_WORKSPACE_TOML_PATH,
+  STEERING_DIR,
 } from "@oxagen/oxagen/steering-repo/paths";
 import {
   GOVERNANCE_PATH,
@@ -42,6 +47,7 @@ import {
 } from "./repository.bound";
 
 export const OXAGEN_DIR = `${LEGACY_OXAGEN_DIR}/`;
+const STEERING_PREFIX = `${STEERING_DIR}/`;
 export const WORKSPACE_TOML_PATH = LEGACY_WORKSPACE_TOML_PATH;
 
 export interface RepositoryTreeDeps {
@@ -86,14 +92,25 @@ export function createRepositoryTreeGetHandler(
     const head = branch?.sha ?? null;
 
     let files: string[] = [];
+    let steeringFiles: string[] = [];
     let workspaceToml: string | null = null;
     let governanceToml: string | null = null;
+    let governancePath: string = GOVERNANCE_PATH;
     if (head !== null) {
       // Every read below names the commit, not the branch. A push that lands
       // between two reads would otherwise mix two commits into one answer,
       // and the page says the files are "at commit <head>".
       const tree = await gh.getTree({ ...at, ref: head });
       files = tree.filter((path) => path.startsWith(OXAGEN_DIR)).sort();
+      steeringFiles = tree
+        .filter((path) => path.startsWith(STEERING_PREFIX))
+        .sort();
+      // A steering repository keeps its mode in steering/governance.toml.
+      // Conversion deletes the legacy file, so reading it there would report
+      // the default mode, not the one in force.
+      const steering = steeringFiles.includes(GOVERNANCE_TOML_PATH);
+      if (steering) governancePath = GOVERNANCE_TOML_PATH;
+      const governanceListed = steering || files.includes(GOVERNANCE_PATH);
       // Read only what the tree says is there: two GETs that would 404 are
       // two round trips a person waits for and learns nothing from.
       const [workspace, governance] = await Promise.all([
@@ -104,10 +121,10 @@ export function createRepositoryTreeGetHandler(
               ref: head,
             })
           : null,
-        files.includes(GOVERNANCE_PATH)
+        governanceListed
           ? gh.getFileContent({
               ...at,
-              path: GOVERNANCE_PATH,
+              path: governancePath,
               ref: head,
             })
           : null,
@@ -130,7 +147,9 @@ export function createRepositoryTreeGetHandler(
       githubDefaultBranch,
       head,
       oxagen: { present: files.length > 0, files },
+      steering: { present: steeringFiles.length > 0, files: steeringFiles },
       workspaceToml,
+      governancePath,
       governanceToml,
       governanceMode: declaredMode(governanceToml),
       initPullRequest: pr ? { number: pr.number, htmlUrl: pr.htmlUrl } : null,

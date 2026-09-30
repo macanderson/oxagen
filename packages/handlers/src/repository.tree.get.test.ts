@@ -83,7 +83,9 @@ describe("get_repository_tree", () => {
           ".oxagen/workspace.toml",
         ],
       },
+      steering: { present: false, files: [] },
       workspaceToml: 'schema = "oxagen-workspace/v0.1"\n',
+      governancePath: ".oxagen/rules/governance.toml",
       governanceToml: 'mode = "regulated"\n',
       governanceMode: "regulated",
       initPullRequest: null,
@@ -135,11 +137,67 @@ describe("get_repository_tree", () => {
     });
   });
 
+  it("reads the mode a steering repository keeps in steering/governance.toml (#4821)", async () => {
+    // Conversion moved the mode into steering/ and deleted the legacy file.
+    const client = fakeGithub({
+      getTree: vi.fn(async () => [
+        "README.md",
+        ".oxagen/workspace.toml",
+        "steering/governance.toml",
+        "steering/constraints/ctx.core.no-force-push.md",
+      ]),
+      getFileContent: vi.fn(async (args: { path: string }) =>
+        args.path === "steering/governance.toml"
+          ? 'schema = "governance/v1"\nmode = "solo"\n'
+          : 'schema = "oxagen-workspace/v0.1"\n',
+      ),
+    });
+    const out = await handler(client)({ bindingId: "rpb_0a1b" }, makeCTX());
+    expect(out.governancePath).toBe("steering/governance.toml");
+    expect(out.governanceMode).toBe("solo");
+    expect(out.steering).toEqual({
+      present: true,
+      files: [
+        "steering/constraints/ctx.core.no-force-push.md",
+        "steering/governance.toml",
+      ],
+    });
+    expect(client.getFileContent).toHaveBeenCalledWith({
+      owner: "acme",
+      repo: "widgets",
+      path: "steering/governance.toml",
+      ref: "abc123",
+    });
+    expect(client.getFileContent).not.toHaveBeenCalledWith(
+      expect.objectContaining({ path: ".oxagen/rules/governance.toml" }),
+    );
+    expect(repositoryTreeGet.output.safeParse(out).success).toBe(true);
+  });
+
+  it("prefers the steering file when a half-converted repository holds both", async () => {
+    const client = fakeGithub({
+      getTree: vi.fn(async () => [
+        ".oxagen/rules/governance.toml",
+        "steering/governance.toml",
+      ]),
+      getFileContent: vi.fn(async (args: { path: string }) =>
+        args.path === "steering/governance.toml"
+          ? 'mode = "regulated"\n'
+          : 'mode = "solo"\n',
+      ),
+    });
+    const out = await handler(client)({ bindingId: "rpb_0a1b" }, makeCTX());
+    expect(out.governancePath).toBe("steering/governance.toml");
+    expect(out.governanceMode).toBe("regulated");
+  });
+
   it("answers head null and an empty tree when the production branch is gone from GitHub", async () => {
     const client = fakeGithub({ getBranch: vi.fn(async () => null) });
     const out = await handler(client)({ bindingId: "rpb_0a1b" }, makeCTX());
     expect(out.head).toBeNull();
     expect(out.oxagen.present).toBe(false);
+    expect(out.steering.present).toBe(false);
+    expect(out.governancePath).toBe(".oxagen/rules/governance.toml");
     expect(client.getTree).not.toHaveBeenCalled();
   });
 

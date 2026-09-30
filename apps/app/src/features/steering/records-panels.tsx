@@ -1,12 +1,14 @@
 // The two panels under the Records shelf's list (roadmap
-// pages/steering-records.md): On disk, the `.oxagen/` tree on the main
-// repository's production branch as GitHub holds it now, and Injection
-// points, the five places Oxagen's steering enters a harness's context.
+// pages/steering-records.md): On disk, the main repository's tree on its
+// production branch as GitHub holds it now, and Injection points, the five
+// places Oxagen's steering enters a harness's context. The tree is
+// `steering/` in a steering repository and `.oxagen/` in a legacy one
+// (#4821).
 //
 // On disk draws the tree it read, never a picture of one: every path is a
 // path get_repository_tree returned, and the comment beside a path says what
 // that file or directory is for. A workspace with no main repository, a read
-// that failed, and a branch with no `.oxagen/` each say so instead.
+// that failed, and a branch with neither directory each say so instead.
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import type { OxagenTree } from "@/data/contracts/steering";
@@ -18,7 +20,7 @@ import { panel, panelBody, panelHeader, panelTitle } from "@/ui/control-styles";
 const note =
   "border-l-2 border-gold py-0.5 pl-3 text-[12.5px] text-muted-foreground";
 
-/** What a path under `.oxagen/` is for, keyed by the path or its directory. */
+/** What a path under the tree's root is for, keyed by the path or its directory. */
 type Comment =
   | "workspace"
   | "governance"
@@ -30,6 +32,8 @@ type Comment =
 
 const FILE_COMMENTS: Readonly<Record<string, Comment>> = {
   "workspace.toml": "workspace",
+  // steering/governance.toml, and .oxagen/rules/governance.toml.
+  "governance.toml": "governance",
   "rules/governance.toml": "governance",
   "rules/promotions.jsonl": "promotions",
 };
@@ -123,7 +127,7 @@ function TreeState({ tree }: { tree: Read<OxagenTree> }) {
         data-tree="read"
         className="max-h-[420px] overflow-auto rounded-lg border border-border bg-hl px-3.5 py-3 font-mono text-[12px] leading-[1.6] text-foreground"
       >
-        {".oxagen/\n"}
+        {`${value.root}/\n`}
         {lines.map((line, index) => {
           const text = `${"  ".repeat(line.depth + 1)}${line.name}`;
           return (

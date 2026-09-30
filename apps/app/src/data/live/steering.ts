@@ -246,9 +246,10 @@ export const steering: DataSource["steering"] = {
    * The governance mode on the workspace's main repository, and the proposals
    * a person still has to act on.
    *
-   * The mode is the binding from list_repositories, then
-   * `.oxagen/rules/governance.toml` as get_repository_tree reads it from
-   * GitHub now. Nothing caches the mode (ADR-061 decision 1), so the chip
+   * The mode is the binding from list_repositories, then the governance
+   * file as get_repository_tree reads it from GitHub now:
+   * `steering/governance.toml` in a steering repository,
+   * `.oxagen/rules/governance.toml` in a legacy one. Nothing caches the mode (ADR-061 decision 1), so the chip
    * reads the file the Context PR gate reads.
    *
    * The waiting count is every proposal, less the merged and the dismissed.
@@ -283,6 +284,7 @@ export const steering: DataSource["steering"] = {
         ? {
             state: "read",
             repository: tree.value.fullName,
+            path: tree.value.governancePath,
             mode: tree.value.governanceMode,
           }
         : { state: "unread", code: failureCode(tree) };

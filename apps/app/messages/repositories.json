@@ -511,7 +511,7 @@
         "label": "Production branch",
         "hint": "GitHub’s default branch is <code>{branch}</code>, which is the suggestion and not the decision. This is the only branch whose commits update the code graph, and the only one a record is published to. If GitHub’s default changes later, Oxagen records it and prompts; the binding never moves on its own.",
         "modeLabel": "Governance mode",
-        "modeHint": "This is read off <code>.oxagen/rules/governance.toml</code> when a pull request is opened and again when it is merged, so raising it takes effect on everything already in flight. Nothing else in Oxagen writes that file.",
+        "modeHint": "This is read off the repository’s governance file (<code>steering/governance.toml</code>, or <code>.oxagen/rules/governance.toml</code> in a legacy repository) when a pull request is opened and again when it is merged, so raising it takes effect on everything already in flight. Nothing else in Oxagen writes that file.",
         "modes": {
           "solo": "The author may merge their own. One person, or a repository nobody else reviews.",
           "team": "A reviewer other than the author merges. What a missing governance.toml means, and what most repositories want.",
