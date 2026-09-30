@@ -582,3 +582,80 @@ describe("a model call that fails inside the turn", () => {
     );
   });
 });
+
+describe("bounded enrichment memory", () => {
+  it("writes a full chunk before opening the next body without retaining chunks", async () => {
+    const body = "x".repeat(ENRICHMENT_CHUNK_CHARS);
+    let written = 0;
+    const get = vi.fn(async (_scope: unknown, ref: string) => {
+      if (ref === "body-1") expect(written).toBeGreaterThan(0);
+      return { bytes: new TextEncoder().encode(body) };
+    });
+    const got = await collectRunText(
+      scope,
+      [frame(0, body), frame(1, body)],
+      get,
+      async (text) => {
+        expect(text.length).toBeLessThanOrEqual(ENRICHMENT_CHUNK_CHARS);
+        written += 1;
+      },
+    );
+    expect(got.chunks).toEqual([]);
+    expect(got.retained).toBe(2);
+    expect(get).toHaveBeenCalledWith(scope, "body-0", {
+      maxBytes: 4 * 1024 * 1024,
+    });
+  });
+
+  it("propagates scratch failures so the durable step retries", async () => {
+    const body = "x".repeat(ENRICHMENT_CHUNK_CHARS);
+    await expect(
+      collectRunText(
+        scope,
+        [frame(0, body)],
+        async () => ({ bytes: new TextEncoder().encode(body) }),
+        async () => {
+          throw new Error("scratch unavailable");
+        },
+      ),
+    ).rejects.toThrow("scratch unavailable");
+  });
+
+  it("marks oversized bodies as truncated without retrying them as missing", async () => {
+    const get = vi.fn(async () => {
+      throw Object.assign(new Error("body exceeds read limit"), {
+        name: "EvidenceBodyTooLargeError",
+      });
+    });
+    const got = await collectRunText(
+      scope,
+      [frame(0, "huge"), frame(1, "later")],
+      get,
+    );
+    expect(get).toHaveBeenCalledTimes(1);
+    expect(got).toMatchObject({ truncated: true, missing: 0, unavailable: 0 });
+    expect(got.chunks.join("")).toContain("The transcript stops here.");
+  });
+
+  it("records an incomplete frame projection as truncated", async () => {
+    const got = await collectRunText(
+      scope,
+      [frame(0, "first")],
+      async () => ({ bytes: new TextEncoder().encode("first") }),
+      undefined,
+      false,
+    );
+    expect(got.truncated).toBe(true);
+    expect(got.chunks.join("")).toContain("The transcript stops here.");
+  });
+
+  it("bounds the fallback prompt separately from the body", async () => {
+    const text = "first sentence. ".repeat(1_000);
+    const got = await collectRunText(
+      scope,
+      [{ ...frame(0, text), type: "turn_start" }],
+      async () => ({ bytes: new TextEncoder().encode(text) }),
+    );
+    expect(got.firstPrompt?.length).toBe(4_096);
+  });
+});

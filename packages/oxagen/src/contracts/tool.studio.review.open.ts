@@ -14,6 +14,24 @@ const classificationSchema = z.object({
   impacts: z.array(z.string()),
 });
 
+/** A folder's definition tokens against its budget. list_studio_findings returns the same shape. */
+export const studioTokensSchema = z.object({
+  /** Every imported tool's definition together. */
+  definitions: z.number().int().min(0),
+  /** server.toml's definition_budget, or the default. */
+  budget: z.number().int().min(1),
+});
+
+/** One tool check finding on a folder. list_studio_findings returns the same shape. */
+export const studioFindingSchema = z.object({
+  rule: z.string(),
+  level: z.enum(["error", "warning", "info"]),
+  tool: z.string().nullable(),
+  field: z.string().nullable(),
+  message: z.string(),
+  fix: z.string(),
+});
+
 /**
  * Review (lane M11, ADR-224): turn Studio's draft for one server folder into
  * one steering PR on the branch `tools/<server>`. The PR writes server.toml,
@@ -71,23 +89,9 @@ export const toolStudioReviewOpen = registerCapability({
         after: classificationSchema,
       }),
     ),
-    tokens: z.object({
-      /** Every imported tool's definition together. */
-      definitions: z.number().int().min(0),
-      /** server.toml's definition_budget, or the default. */
-      budget: z.number().int().min(1),
-    }),
+    tokens: studioTokensSchema,
     /** The tool checks' findings on the folder the PR writes. */
-    findings: z.array(
-      z.object({
-        rule: z.string(),
-        level: z.enum(["error", "warning", "info"]),
-        tool: z.string().nullable(),
-        field: z.string().nullable(),
-        message: z.string(),
-        fix: z.string(),
-      }),
-    ),
+    findings: z.array(studioFindingSchema),
   }),
 });
 

@@ -101,7 +101,7 @@ describe("a statement whose every line is recorded", () => {
     expect(line("total")).toHaveTextContent(`${due ?? "missing"} USD`);
     expect(tile("due").querySelector("[data-recorded=false]")).toBeNull();
     expect(tile("due")).toHaveTextContent(
-      "USD · after the onboarding discount",
+      "USD after the onboarding discount",
     );
   });
 

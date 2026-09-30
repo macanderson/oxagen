@@ -223,7 +223,7 @@ describe("timeline", () => {
     ).toHaveTextContent("steer");
     expect(
       within(timeline).getByTestId("timeline-mark-parked"),
-    ).toHaveTextContent("parked · approval");
+    ).toHaveTextContent("parked for approval");
     expect(within(timeline).getByTestId("timeline-axis")).toHaveTextContent(
       "09:14:02+49 s · 09:14:51 · live",
     );
@@ -406,7 +406,7 @@ describe("the open frame", () => {
       frameLink("100"),
     );
     expect(screen.getByTestId("player-position")).toHaveTextContent(
-      "seq 37 · outside the 4 frames shown",
+      "seq 37 is outside the 4 frames shown",
     );
     expect(
       screen

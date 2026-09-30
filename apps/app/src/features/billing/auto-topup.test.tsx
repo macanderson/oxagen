@@ -232,7 +232,7 @@ describe("Auto top-up", () => {
 
   it.each([
     ["paid", "Last top-up 2026-09-14: paid"],
-    ["open", "Last top-up 2026-09-14: open, its invoice is under Invoices"],
+    ["open", "Last top-up 2026-09-14: open under Invoices"],
     ["failed", "Last top-up 2026-09-14: failed"],
   ] as const)("prints a %s last attempt", (status, text) => {
     const { region } = renderControl({

@@ -297,6 +297,10 @@ import { toolStudioToolsList } from "./tool.studio.tools.list";
 import { toolStudioDraftSave } from "./tool.studio.draft.save";
 import { toolStudioDraftGet } from "./tool.studio.draft.get";
 import { toolStudioReviewOpen } from "./tool.studio.review.open";
+import { toolStudioCredentialSet } from "./tool.studio.credential.set";
+import { toolStudioFindingsList } from "./tool.studio.findings.list";
+import { toolStudioDescriptionDraft } from "./tool.studio.description.draft";
+import { toolStudioTry } from "./tool.studio.try";
 import { toolRelayCreate } from "./tool.relay.create";
 import { toolRelayRevoke } from "./tool.relay.revoke";
 import { credentialGrantList } from "./credential.grant.list";
@@ -320,6 +324,7 @@ import { contextSteeringDeliveries } from "./context.steering.deliveries";
 import { steeringRepoGet } from "./steering_repo.get";
 import { steeringRepoRepair } from "./steering_repo.repair";
 import { steeringRepoImport } from "./steering_repo.import";
+import { steeringRepoProvisionRetry } from "./steering_repo.provision.retry";
 import { contextSteeringFreshness } from "./context.steering.freshness";
 import { contextGovernanceModeSet } from "./context.governance_mode.set";
 import { connectionList } from "./connection.list";
@@ -993,6 +998,10 @@ export {
   toolStudioDraftSave,
   toolStudioDraftGet,
   toolStudioReviewOpen,
+  toolStudioCredentialSet,
+  toolStudioFindingsList,
+  toolStudioDescriptionDraft,
+  toolStudioTry,
   toolRelayCreate,
   toolRelayRevoke,
   credentialGrantList,
@@ -1010,6 +1019,7 @@ export {
   steeringRepoGet,
   steeringRepoRepair,
   steeringRepoImport,
+  steeringRepoProvisionRetry,
   contextRecordsAppend,
   contextProposalCreate,
   contextProposalList,
@@ -1434,6 +1444,10 @@ export const contracts: readonly CapabilityDeclaration[] = [
   toolStudioDraftSave,
   toolStudioDraftGet,
   toolStudioReviewOpen,
+  toolStudioCredentialSet,
+  toolStudioFindingsList,
+  toolStudioDescriptionDraft,
+  toolStudioTry,
   toolRelayCreate,
   toolRelayRevoke,
   credentialGrantList,
@@ -1450,6 +1464,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   steeringRepoGet,
   steeringRepoRepair,
   steeringRepoImport,
+  steeringRepoProvisionRetry,
   contextRecordsAppend,
   contextProposalCreate,
   contextProposalList,

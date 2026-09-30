@@ -34,6 +34,8 @@ import {
   partialEvidenceNote,
   runNarrativeTurn,
   ENRICHMENT_BUDGET_NOTE,
+  ENRICHMENT_BODY_MAX_BYTES,
+  ENRICHMENT_LIMIT_NOTE,
   ENRICHMENT_CHUNK_CHARS,
   ENRICHMENT_RUN_BUDGET_USD,
   ENRICHMENT_RUN_TOTAL_BUDGET_MICROS,
@@ -45,7 +47,8 @@ import { logger } from "../logger";
 import { RUN_ENRICH_EVENT } from "../events";
 import {
   discardEnrichmentChunks,
-  keepEnrichmentChunks,
+  createEnrichmentChunkWriter,
+  ENRICHMENT_MAX_CHUNKS,
   readEnrichmentChunk,
 } from "../lib/run-enrichment-scratch";
 
@@ -524,10 +527,10 @@ export const [runEnrich, runEnrichOnFailure] = createFunction(
         `Run enrichment unavailable: ${reason}`,
       );
     },
-    concurrency: {
-      limit: 1,
-      key: "event.data.orgId",
-    },
+    concurrency: [
+      { limit: 2 },
+      { limit: 1, key: "event.data.orgId" },
+    ],
     // The batch folds the requests one run collects in a moment (ingest's
     // first-prompt request, an operator's `summarize_run`, a sweep) into one
     // read. Its wait is paid by every run before its account starts, so it is
@@ -755,11 +758,16 @@ export const [runEnrich, runEnrichOnFailure] = createFunction(
         // (#3823). The read holds up to `TRANSCRIPT_FRAME_CAP` frames, which
         // carry body references and no bodies. The text stops at its
         // ceiling, and no body past it is opened (#3784).
-        const { frames } = await readTranscriptFramesOf(scope, record);
-        const transcript = await collectRunText(scope, frames, (s, ref) =>
-          evidenceStore().getBody(s, ref),
+        const { frames, complete } = await readTranscriptFramesOf(scope, record);
+        const writer = await createEnrichmentChunkWriter(scope, jobRunId());
+        const transcript = await collectRunText(
+          scope,
+          frames,
+          (s, ref, options) => evidenceStore().getBody(s, ref, options),
+          writer.write,
+          complete,
         );
-        const { chunks, firstPrompt, ...facts } = transcript;
+        const { firstPrompt, chunks: _chunks, ...facts } = transcript;
         // Until a model writes the account, the run is named for its first
         // prompt. The write never touches a name already set, and the title
         // stays out of this step's output, which the provider keeps.
@@ -780,22 +788,11 @@ export const [runEnrich, runEnrichOnFailure] = createFunction(
           (previous.digest === transcript.digest ||
             previous.digest === `partial:${transcript.digest}`) &&
           previous.hasSummary;
-        // Only a run the model will read keeps its chunks, as scratch
-        // objects the job deletes when it ends (#3784). `scratch` is how many
-        // chunk names the job's manifest holds, from this attempt or an
-        // earlier one of this step. `chunkDigests` is what each later read
-        // checks its chunk against: it lives in this step's record, where
-        // nothing that can write scratch objects can change it.
-        const kept = unchanged || facts.retained === 0 ? [] : chunks;
-        const { scratch, digests } = await keepEnrichmentChunks(
-          scope,
-          jobRunId(),
-          kept,
-        );
+        const { scratch, digests, chars } = await writer.finish();
         return {
           ...facts,
           revision: previous.revision ?? null,
-          chunkChars: kept.map((text) => text.length),
+          chunkChars: chars,
           chunkDigests: digests,
           scratch,
           unchanged,
@@ -836,14 +833,24 @@ export const [runEnrich, runEnrichOnFailure] = createFunction(
     let chunks: TranscriptPortion[] = [];
     if (legacyManifest !== null) {
       const manifest = await inScope(() =>
-        evidenceStore().getBody(scope, legacyManifest),
+        evidenceStore().getBody(scope, legacyManifest, {
+          maxBytes: ENRICHMENT_BODY_MAX_BYTES,
+        }),
       );
       const refs = z
         .array(z.string())
+        .max(ENRICHMENT_MAX_CHUNKS)
         .parse(JSON.parse(new TextDecoder().decode(manifest.bytes)));
       for (const ref of refs) {
-        const body = await inScope(() => evidenceStore().getBody(scope, ref));
-        chunks.push(portionOf(new TextDecoder().decode(body.bytes)));
+        const body = await inScope(() =>
+          evidenceStore().getBody(scope, ref, {
+            maxBytes: ENRICHMENT_BODY_MAX_BYTES,
+          }),
+        );
+        const text = new TextDecoder().decode(body.bytes);
+        if (text.length > ENRICHMENT_CHUNK_CHARS)
+          throw new Error("Legacy enrichment chunk exceeds its text limit");
+        chunks.push(portionOf(text));
       }
     } else {
       // Every read step that keeps scratch chunks returns one digest per
@@ -924,7 +931,11 @@ export const [runEnrich, runEnrichOnFailure] = createFunction(
         summary: accountSummary(
           account.summary,
           partialEvidenceNote(collected.missing) +
-            (budgetReached ? ENRICHMENT_BUDGET_NOTE : ""),
+            (budgetReached
+              ? ENRICHMENT_BUDGET_NOTE
+              : collected.truncated
+                ? ENRICHMENT_LIMIT_NOTE
+                : ""),
         ),
         model: result.model,
         costUsd: result.costUsd,

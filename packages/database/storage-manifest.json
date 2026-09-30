@@ -786,6 +786,16 @@
       "writes": []
     },
     {
+      "domain": "tool",
+      "name": "draft_studio_description",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "tacho",
       "name": "enroll_host",
       "reads": [],
@@ -2647,6 +2657,16 @@
     },
     {
       "domain": "tool",
+      "name": "list_studio_findings",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "tool",
       "name": "list_studio_tools",
       "reads": [],
       "surfaces": [
@@ -3333,6 +3353,15 @@
       "writes": []
     },
     {
+      "domain": "repository",
+      "name": "retry_steering_repo_provision",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
       "domain": "secret",
       "name": "reveal_secret",
       "reads": [],
@@ -3714,6 +3743,16 @@
       "writes": []
     },
     {
+      "domain": "tool",
+      "name": "set_mcp_credential",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "agent",
       "name": "set_mcp_enabled",
       "reads": [],
@@ -4070,6 +4109,16 @@
       "surfaces": [
         "api",
         "cli",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "tool",
+      "name": "try_studio_tool",
+      "reads": [],
+      "surfaces": [
+        "api",
         "mcp"
       ],
       "writes": []
@@ -19967,6 +20016,18 @@
         },
         {
           "name": "latest_version",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "source_registry_name",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "source_version",
           "nullable": true,
           "primaryKey": false,
           "type": "text"

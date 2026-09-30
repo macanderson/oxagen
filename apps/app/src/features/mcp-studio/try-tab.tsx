@@ -1,5 +1,5 @@
 "use client";
-// A Studio server's Try it tab (#4678, "Try it"): pick an environment and an
+// A Studio server's Test tab (#4678, "Try it" in the spec): pick an environment and an
 // imported tool, fill in its arguments, and see the request that went
 // upstream, the raw result and the result after tools.toml's shaping. Save
 // as test stages the call in the draft, and the steering PR adds it to the
@@ -126,7 +126,7 @@ export function TryTab({
   agentEnvironment: string | null;
   /** An org Owner or Admin, who can save a call as a test in the draft. */
   canEdit: boolean;
-  /** Try it's capability: the stub until #4742 merges. */
+  /** The Test tab's capability: the stub until #4742 merges. */
   call?: TryStudioTool;
 }) {
   const t = useTranslations("mcpStudio.try");

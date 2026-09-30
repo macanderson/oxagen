@@ -154,6 +154,7 @@ describe("get_spend contract", () => {
       name: null,
       startedAt: "2026-09-10T12:00:00.000Z",
       agentKey: "acme.core.cc",
+      harness: "codex",
       operatorKey: null,
       cost: { micros: "700", currency: "USD", basis: "estimated" },
       calls: 2,

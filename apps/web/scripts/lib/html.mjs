@@ -3,6 +3,8 @@
 // assets/blog.css for the parts only the blog has. No colour, no hex, no
 // inline style: the palette lives in the stylesheet's token table.
 
+import { PWA_HEAD } from "./pwa-head.generated.mjs";
+
 export const SITE = "https://oxagen.sh";
 export const BLOG_TITLE = "Oxagen Research";
 export const BLOG_DESCRIPTION =
@@ -181,13 +183,22 @@ ${pillars.map((p) => `          <li><a href="${urls.pillar(p.slug)}">${esc(p.nam
 }
 
 /**
+ * Space Grotesk sets the first line of a hero headline and nothing else on a
+ * blog page (the wordmark is an SVG). The hero line inherits the heading
+ * weight, 600, so a page with a hero preloads that one file and a page
+ * without a hero preloads none.
+ */
+export const HERO_FONT_PRELOAD =
+  '<link rel="preload" href="/fonts/space-grotesk-latin-600.woff2" as="font" type="font/woff2" crossorigin>';
+
+/**
  * The document shell shared by every blog page.
  * @param {{
  *   title: string, description: string, path: string, image: string,
  *   imageAlt?: string,
  *   type?: "website" | "article", ldjson?: object, body: string,
  *   wordmark: string, pillars: Array<{slug: string, name: string}>,
- *   extraHead?: string,
+ *   extraHead?: string, heroFont?: boolean,
  * }} o
  */
 export function layout(o) {
@@ -225,9 +236,8 @@ export function layout(o) {
 <link rel="icon" href="/favicon.ico" sizes="16x16 32x32 48x48">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="manifest" href="/oxagen.webmanifest">
-<link rel="preload" href="/fonts/space-grotesk-latin-400.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="preload" href="/fonts/space-grotesk-latin-600.woff2" as="font" type="font/woff2" crossorigin>
-${o.ldjson ? `<script type="application/ld+json">\n${JSON.stringify(o.ldjson, null, 2).replace(/</g, "\\u003c")}\n</script>` : ""}
+${PWA_HEAD}
+${o.heroFont ? `${HERO_FONT_PRELOAD}\n` : ""}${o.ldjson ? `<script type="application/ld+json">\n${JSON.stringify(o.ldjson, null, 2).replace(/</g, "\\u003c")}\n</script>` : ""}
 ${THEME_HEAD}
 <link rel="stylesheet" href="/assets/oxagen.css">
 <link rel="stylesheet" href="/assets/blog.css">
@@ -305,7 +315,7 @@ export function indexPage({ pillars, posts, wordmark, image }) {
   <section class="blog-hero tex tex-hex">
     <div class="wrap">
       <p class="eyebrow">Research</p>
-      <h1>What the research says about agents,<br><span class="gold">and how to govern them</span></h1>
+      <h1><span class="hero-line-1">What the research says about agents,</span><br><span class="gold">and how to govern them</span></h1>
       <p class="blog-hero-sub">${esc(BLOG_DESCRIPTION)}</p>
     </div>
   </section>
@@ -341,6 +351,7 @@ ${posts.map((p) => postCard(p, pillars)).join("\n")}
     body,
     wordmark,
     pillars,
+    heroFont: true,
     ldjson: {
       "@context": "https://schema.org",
       "@type": "Blog",
@@ -359,7 +370,7 @@ export function pillarPage({ pillar, pillars, posts, wordmark }) {
     ${heroArt(pillar.images.banner)}
     <div class="wrap"><div class="pillar-hero-copy">
       <p class="eyebrow"><a href="${urls.blog()}">Research</a> · Pillar</p>
-      <h1>${esc(pillar.name)}</h1>
+      <h1 class="hero-line-1">${esc(pillar.name)}</h1>
       <p class="pillar-tagline">${esc(pillar.tagline)}</p>
       <p class="pillar-desc">${esc(pillar.description)}</p>
     </div></div>
@@ -389,6 +400,7 @@ export function pillarPage({ pillar, pillars, posts, wordmark }) {
     body,
     wordmark,
     pillars,
+    heroFont: true,
     ldjson: {
       "@context": "https://schema.org",
       "@type": "CollectionPage",

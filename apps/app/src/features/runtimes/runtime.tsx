@@ -178,18 +178,29 @@ function HostPanel({
       id="runtime-host"
       title={host.hostname}
       titleNode={
-        <p
+        // Three facts, one per item, so no mid-dot joins them into a label.
+        <ul
           data-testid="runtime-subtitle"
-          className="mt-0.5 text-xs text-muted-foreground"
+          className="mt-0.5 flex flex-wrap gap-x-3 text-xs text-muted-foreground"
         >
           {t.rich("detail.subtitle", {
-            os: () => <OsLine host={host} />,
             kind: () => (
-              <NotBacked gap="host">{t("detail.kindUnrecorded")}</NotBacked>
+              <li>
+                <NotBacked gap="host">{t("detail.kindUnrecorded")}</NotBacked>
+              </li>
             ),
-            who: () => <NotBacked gap="host" />,
+            os: () => (
+              <li>
+                <OsLine host={host} />
+              </li>
+            ),
+            who: (chunks) => (
+              <li>
+                {chunks} <NotBacked gap="host" />
+              </li>
+            ),
           })}
-        </p>
+        </ul>
       }
       aside={
         <HealthBadge host={host} now={now}>
@@ -247,6 +258,7 @@ function agentRow({
   const card = (
     <AgentCard
       agentKey={agentKey}
+      harness={agent?.harness}
       notRecorded={words.notRecorded}
       // The design's `agentCard` names the harness under the key.
       sub={

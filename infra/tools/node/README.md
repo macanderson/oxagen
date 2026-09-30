@@ -1,16 +1,46 @@
-# Node-side deploy scripts
+# Node deployment
 
-These run on the shared application node (tagged `Name=oxagen-app`, account
-`916294258235` — the account the 2026-08-27 cutover moved the live platform
-to), not on a developer's machine and not on a CI runner.
-`tools/install-node-scripts.sh` copies this directory to `/opt/oxagen/bin`.
+The shared application node runs these scripts. Infrastructure publishes a
+complete bundle under `_node-tools/releases/<digest>.json`. The digest covers
+the five allowed filenames and each file's UTF-8 content hash. The dispatcher
+refuses missing files, extra paths, changed content, and symlinks in cached
+releases. It does not extract an archive.
 
-They exist so that CI does not have to. A GitHub Actions role that could send
-`AWS-RunShellScript` to this instance would have root on the box that also
-runs Neo4j and ClickHouse (Postgres moved to Aurora Serverless v2); instead
-each CI role may send exactly one SSM document, `oxagen-deploy-service`,
-whose only argument is a service name constrained by `allowedPattern`. The
-privilege lives here, in version control, where it can be read and reviewed.
+The deployment document embeds the trusted dispatcher from infrastructure
+source. Application CI asks that document to verify its source digest before
+publishing a service artifact. An old document rejects the new parameters.
+Missing approved bundles fail before the recovery artifact changes. Verification
+also checks that the bucket's bootstrap launcher, dispatcher, and current pointer
+match the approved release. Actual deployment verifies the bundle again.
+
+The dispatcher installs a complete release at `/opt/oxagen/node-tools/<digest>`
+under `service-deploy.lock`, then releases that installation lock before running
+the worker through its absolute immutable path. The worker acquires the same
+lock for memory admission, container replacement, health checks, and rollback.
+Every Python helper comes from the worker's release directory. Updating the
+legacy entry points cannot change files used by an active deployment.
+
+Only infrastructure authority publishes `_node-tools` and bootstrap executables.
+Application and Stella deploy roles retain their existing permissions. The
+platform role's separate shell permission for database migrations is unchanged.
+The existing infrastructure workflow publishes bundles after applying the
+production deploy or staging stack. Source changes under `infra/tools/node/`
+select those stacks. A deployment that reaches verification before publication
+fails closed and can be rerun after infrastructure finishes.
+
+For an explicit infrastructure installation, run `infra/tools/install-node-scripts.sh`.
+It publishes the bundle, verifies it, and atomically switches legacy entry points
+under the node lock. It retains the existing Caddy validation and rollback flow.
+`infra/tools/publish-node-tools.sh` only publishes approved sources and takes an
+explicit `BUCKET`. It does not restart a service. Neither script runs with an
+application deploy role.
+
+The legacy bootstrap still downloads `_bin/`. Its `deploy-service.sh` is now a
+launcher for the approved bundle. No user-data edit is needed. Keep approved S3
+bundles and installed node tool releases for rollback and investigation. Service
+rollback uses the same guarded worker, never a fallback to an unverified script.
+Node configuration remains in `/opt/oxagen/bin/node.env` and is not part of the
+executable bundle.
 
 ## The contract: `oxagen-run.json`
 
@@ -33,9 +63,9 @@ manifest describing how it runs:
 | Field | Required | Meaning |
 | --- | --- | --- |
 | `port` | yes | Loopback port Caddy proxies to. Must match the Caddyfile. |
-| `image` | yes | Container image. **Must have an `arm64` variant** — the node is a `t4g.medium`. |
+| `image` | yes | Container image. Must have an `arm64` variant for the Graviton node. |
 | `command` | yes | Argv, relative to the tarball root, which is mounted at `/app`. |
-| `memory` | no (`512m`) | Hard container limit. |
+| `memory` | no (`512m`) | Hard container limit. Positive integer bytes, or a `k`, `m`, or `g` suffix. |
 | `health_path` | no (`/`) | Path polled for up to 60s after start. |
 | `env` | no | Non-secret environment. This file ships inside a public CI artifact. |
 | `config_prefix` | no | Parameter Store prefix; every parameter under it becomes an environment variable named after its last path segment. |
@@ -46,7 +76,26 @@ Terraform apply every time an application changed how it starts, and it would
 widen the document's arguments from one validated identifier to a set of
 strings that reach a command line.
 
-### Why `config_prefix` rather than baking configuration in
+## Memory budget
+
+Before replacing a container, deployment takes `/opt/oxagen/service-deploy.lock`
+and holds it through the health check and rollback. Different services share
+this lock. The proxy helper establishes Caddy's 256 MiB hard limit, refusing to
+shrink it while its measured usage exceeds 192 MiB.
+
+`memory-budget.py` adds the incoming limit to every other running or restarting
+container's limit, plus 1,024 MiB for the kernel, Docker, SSM, CloudWatch, and
+other host processes. The replaced service's current and migration-era names
+are excluded because deployment removes both before starting the replacement.
+Caddy is counted as a container. Swap contributes no capacity.
+
+An unlimited container or a total above physical `MemTotal` refuses deployment
+before changing the service's current release or stopping its container. The
+error names the missing limit or required physical capacity. Keep the guard in
+place and resolve the allocation before retrying. Passing this check establishes
+the declared memory budget, not sustained workload throughput.
+
+### Configuration prefix
 
 Secrets in the artifact would mean rebuilding the application to rotate one,
 and would put them in a tarball produced by a public CI job. Read at start

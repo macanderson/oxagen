@@ -371,6 +371,16 @@ describe("errorMiddleware unknown error", () => {
 // ── Store backpressure → 503 + Retry-After (#3662) ───────────────────────────
 
 describe("errorMiddleware store backpressure", () => {
+  it("returns retryable overload for the evidence write pool", async () => {
+    const { EvidenceStoreBusyError } = await import("@oxagen/run-ledger/evidence-store");
+    const { status, body, headers } = await triggerError(new EvidenceStoreBusyError());
+    expect(status).toBe(503);
+    expect(headers.get("Retry-After")).toBe("2");
+    expect(body).toMatchObject({
+      error: { code: "evidence_store_busy", retryAfterSeconds: 2 },
+    });
+  });
+
   /** What @oxagen/telemetry's StoreOverloadedError puts on the wire. */
   function overloaded(retryAfterSeconds: number): Error {
     return Object.assign(

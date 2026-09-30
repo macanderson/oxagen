@@ -14,7 +14,7 @@ export type FieldProps = Omit<
   hint?: ReactNode;
   /** Already-translated error text; renders under the input and marks it invalid. */
   error?: string | undefined;
-  /** Rendered on the label row's far side (e.g. "Forgot password?"). */
+  /** Rendered on the label row's far side (e.g. "Reset password"). */
   labelAside?: ReactNode;
   /** Rendered inside the input's box, on its trailing edge (e.g. a show/hide toggle). */
   trailing?: ReactNode;

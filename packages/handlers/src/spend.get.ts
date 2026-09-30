@@ -36,6 +36,7 @@ import {
   readOperatorFacts,
   type ReadOperatorFacts,
 } from "./lib/operator-facts";
+import { readRunHarnesses } from "./lib/run-harnesses";
 import { readRunNames } from "./lib/run-names";
 import {
   addTokens,
@@ -52,6 +53,7 @@ import {
 } from "./spend.shared";
 
 export type SpendGetDeps = {
+  readRunHarnesses: typeof readRunHarnesses;
   readDailyTotals: typeof readDailyTotals;
   readRunTotals: (
     scope: SpendScope,
@@ -374,17 +376,18 @@ export function createSpendGetHandler(
     );
     // An operator row's key is a principal id, which is a key and not a
     // label. The person it names rides beside it, so the page prints a name.
-    const [facts, names] = await Promise.all([
+    const topRunIds = [...top.values()].flatMap((list) =>
+      list.map((a) => a.run.runId),
+    );
+    const [facts, names, harnesses] = await Promise.all([
       groupBy === "operator"
         ? (deps.readOperatorFacts ?? noOperatorFacts)(
             scope,
             grouped.map((row) => row.key),
           )
         : new Map<string, never>(),
-      deps.readRunNames(
-        scope,
-        [...top.values()].flatMap((list) => list.map((a) => a.run.runId)),
-      ),
+      deps.readRunNames(scope, topRunIds),
+      deps.readRunHarnesses(scope, topRunIds),
     ]);
     const topRuns = (key: string): SpendTopRun[] =>
       (top.get(key) ?? []).map(({ run, share }) => ({
@@ -392,6 +395,7 @@ export function createSpendGetHandler(
         name: names.get(run.runId) ?? null,
         startedAt: run.startedAt.toISOString(),
         agentKey: run.agentKey,
+        harness: harnesses.get(run.runId) ?? null,
         operatorKey: run.operatorKey,
         cost: cost(share.micros, run.currency, share.basis),
         calls: share.calls,
@@ -429,4 +433,5 @@ export const spendGetHandler = createSpendGetHandler({
   readUnmeteredRuns: (scope, q) =>
     readUnmeteredRuns(scope, { ...q, filter: { kind: "all" } }),
   readRunNames,
+  readRunHarnesses,
 });

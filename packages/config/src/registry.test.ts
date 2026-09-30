@@ -39,6 +39,17 @@ describe("ENV_REGISTRY ↔ baseEnvSchema coverage", () => {
 });
 
 describe("registry entry shape", () => {
+  it("routes the optional public OpenAI Apps verification challenge only to MCP", () => {
+    expect(ENV_REGISTRY.OPENAI_APPS_VERIFICATION_TOKEN).toMatchObject({
+      services: ["mcp"],
+      requiredIn: [],
+      secret: false,
+      clientExposed: false,
+    });
+    expect(baseEnvSchema.shape.OPENAI_APPS_VERIFICATION_TOKEN.parse(undefined)).toBeUndefined();
+    expect(baseEnvSchema.shape.OPENAI_APPS_VERIFICATION_TOKEN.parse("challenge")).toBe("challenge");
+  });
+
   it("every entry has a known group, valid services, and valid requiredIn envs", () => {
     for (const [key, meta] of Object.entries(ENV_REGISTRY)) {
       expect(meta.group.length, `${key}.group`).toBeGreaterThan(0);

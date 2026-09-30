@@ -459,10 +459,10 @@ describe("Agents › Mandates", () => {
     const cells = within(held())
       .getByTestId("agent-mandate")
       .querySelectorAll("td");
-    expect(cells[4]?.textContent).toContain("per month · 2026-09");
+    expect(cells[4]?.textContent).toContain("per month (2026-09)");
     // A mandate may cap calls daily and money monthly, so each window sits
     // with the limit it qualifies rather than once per row.
-    expect(cells[4]?.textContent).toContain("per day · 2026-09-16");
+    expect(cells[4]?.textContent).toContain("per day (2026-09-16)");
     // A per-call limit is not counted over a window and does not claim one.
     expect(cells[3]?.textContent).not.toContain("per month");
   });

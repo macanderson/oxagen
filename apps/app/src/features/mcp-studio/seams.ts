@@ -11,7 +11,7 @@
 //     open_studio_review shipped in #4688. review-calls.ts binds these types
 //     to them through this lane's server actions (actions.ts).
 //
-// Try it, Draft and the Changes tab's findings call capabilities that have
+// The Test tab, Draft and the Changes tab's findings call capabilities that have
 // not merged yet. Their stubs live in pending-capabilities.ts.
 //
 // A credential never crosses any of these seams.

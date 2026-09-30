@@ -311,7 +311,7 @@ describe("Fleet reads", () => {
     const user = userEvent.setup();
     await user.click(screen.getByTestId("fleet-steer"));
     expect(screen.getByTestId("steer-selected")).toHaveTextContent(
-      "Agents · 3 of 3 selected",
+      "Agents (3 of 3 selected)",
     );
     expect(screen.queryByTestId("steer-unlisted")).toBeNull();
     // arun_parked is the docs agent's run, and its call is parked. The picker
@@ -341,7 +341,7 @@ describe("Fleet reads", () => {
     const user = userEvent.setup();
     await user.click(screen.getByTestId("fleet-steer"));
     expect(screen.getByTestId("steer-selected")).toHaveTextContent(
-      "Agents · 1 of 3 selected",
+      "Agents (1 of 3 selected)",
     );
     expect(screen.getByTestId("steer-unlisted")).toHaveTextContent(
       "The list stops after 1 agent. 2 more are not listed",
@@ -350,7 +350,7 @@ describe("Fleet reads", () => {
 });
 
 describe("header", () => {
-  it("names the workspace, the page and what it holds, with Steer then Register Agent, neither gold", async () => {
+  it("names the workspace, the page and what it holds, with Steer the fleet then Register an agent, neither gold", async () => {
     await loaded();
     const header = screen.getByRole("banner");
     expect(header).toHaveTextContent("Core platform");
@@ -358,12 +358,12 @@ describe("header", () => {
       screen.getByRole("heading", { level: 1, name: "Fleet" }),
     ).toBeInTheDocument();
     expect(header).toHaveTextContent(
-      "Every run in this workspace, live and recent.",
+      "Live and recent runs in this workspace.",
     );
     const steer = screen.getByTestId("fleet-steer");
     const register = screen.getByTestId("fleet-register");
-    expect(steer).toHaveTextContent("Steer");
-    expect(register).toHaveTextContent("Register Agent");
+    expect(steer).toHaveTextContent("Steer the fleet");
+    expect(register).toHaveTextContent("Register an agent");
     expect(register).toHaveAttribute(
       "href",
       "/acme/core-platform/register/name",
@@ -762,7 +762,7 @@ describe("the Runs panel", () => {
     ).toEqual([
       // The lifecycle words the record holds (#3837). Parked comes from the
       // approvals read, so the chips find it and the read cannot filter on it.
-      "All · Status",
+      "All (Status)",
       "live",
       "sealed",
       "halted",
@@ -924,9 +924,11 @@ describe("the Runs panel", () => {
     expect(dialog).toHaveTextContent("Takes effect at the next boundary");
     expect(dialog).toHaveTextContent("turn 34 · step 271 · frame 1204");
     expect(dialog).toHaveTextContent(
-      "control.pause frame · operator authority",
+      "control.pause frame under operator authority",
     );
-    expect(dialog).toHaveTextContent("Pause is not cancel.");
+    expect(dialog).toHaveTextContent(
+      "The agent reads this reason when the run resumes where it stopped.",
+    );
     const note = dialog.querySelector("[data-sheet-footer] [data-footer-note]");
     expect(note).toHaveTextContent(
       "Recorded as a control.pause frame under run.pause.",
@@ -946,9 +948,7 @@ describe("the Runs panel", () => {
       within(dialog).queryByRole("button", { name: "Cancel evidence ingress" }),
     ).toBeNull();
     await user.type(
-      within(dialog).getByLabelText(
-        "Reason — the model reads this on resume, so write it for the agent",
-      ),
+      within(dialog).getByLabelText("Reason"),
       "Holding for finance",
     );
     await user.click(
@@ -1024,7 +1024,7 @@ describe("the Runs panel", () => {
     expect(dialog).toHaveTextContent(
       "Pause refuses new evidence batches at the next ingest boundary.",
     );
-    expect(dialog).toHaveTextContent("command receipt · operator authority");
+    expect(dialog).toHaveTextContent("command receipt under operator authority");
     expect(dialog).toHaveTextContent(
       "The reason is recorded with the command. Oxagen does not send it to the external process.",
     );
@@ -1826,7 +1826,7 @@ describe("list controls", () => {
 });
 
 describe("not-loaded states", () => {
-  it("empty: says how a run arrives and offers Register Agent and Open Agents, with no header or table", async () => {
+  it("empty: says how a run arrives and offers Register an agent and Open Agents, with no header or table", async () => {
     await renderFleet({ runs: runPage([]), approvals: NO_APPROVALS });
     const empty = screen.getByTestId("fleet-empty");
     expect(
@@ -1835,10 +1835,10 @@ describe("not-loaded states", () => {
       }),
     ).toBeInTheDocument();
     expect(empty).toHaveTextContent(
-      "Nothing has reached Oxagen from this workspace. A run appears the moment a registered agent makes its first model call. You do not create runs here. Agents do.",
+      "Nothing has reached Oxagen from this workspace. A run appears when a registered agent makes its first model call.",
     );
     expect(
-      within(empty).getByRole("link", { name: "Register Agent" }),
+      within(empty).getByRole("link", { name: "Register an agent" }),
     ).toHaveAttribute("href", "/acme/core-platform/register/name");
     expect(
       within(empty).getByRole("link", { name: "Open Agents" }),
@@ -1907,7 +1907,7 @@ describe("not-loaded states", () => {
         .getAllByRole("option")
         .map((option) => option.textContent),
     ).toEqual([
-      "critical — money moved that Oxagen did not govern",
+      "critical (money moved that Oxagen did not govern)",
       "warning",
       "info",
     ]);
@@ -1917,7 +1917,7 @@ describe("not-loaded states", () => {
     expect(
       within(dialog).getByRole("button", { name: "Cancel" }),
     ).toBeInTheDocument();
-    const attach = within(dialog).getByRole("list", { name: "Attach" });
+    const attach = within(dialog).getByRole("list", { name: "Attachments" });
     expect(
       within(attach)
         .getAllByRole("listitem")
@@ -1930,7 +1930,7 @@ describe("not-loaded states", () => {
     expect(screen.getByTestId("incident-unbacked")).toHaveTextContent(
       "cannot be sent",
     );
-    expect(screen.getByRole("button", { name: "Raise it" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Open incident" })).toBeDisabled();
   });
 
   it("access denied: names the permission, offers Request access and Back to Fleet, and says who is signed in", async () => {
@@ -1942,14 +1942,14 @@ describe("not-loaded states", () => {
       }),
     ).toBeInTheDocument();
     expect(denied).toHaveTextContent(
-      "Your roles on Acme Robotics do not include workspace.read on core-platform. An organization owner can grant it; the grant is a governed action and lands in the audit record with your name on it.",
+      "Your roles on Acme Robotics do not include workspace.read on core-platform. An organization owner can grant it. The grant is a governed action and lands in the audit record with your name on it.",
     );
     expect(denied).toHaveTextContent(
       "Signed in asMarcus Bell · workspace.member · core-platform",
     );
     expect(denied).toHaveTextContent("Neededworkspace.read on core-platform");
     expect(denied).toHaveTextContent(
-      "Decided bypolicy not recorded · deny wins over every allow",
+      "Decided bypolicy not recorded",
     );
     expect(
       within(denied).getByRole("link", { name: "Back to Fleet" }),
@@ -1988,7 +1988,7 @@ describe("not-loaded states", () => {
     await user.click(screen.getByRole("button", { name: "Open an incident" }));
     const attach = within(
       screen.getByRole("dialog", { name: "Open an incident" }),
-    ).getByRole("list", { name: "Attach" });
+    ).getByRole("list", { name: "Attachments" });
     expect(
       within(attach)
         .getAllByRole("listitem")
@@ -2065,7 +2065,7 @@ describe("not-loaded states", () => {
     });
     const decided = screen.getByTestId("fleet-decided-by");
     expect(decided).toHaveTextContent(
-      "policy not recorded · deny wins over every allow",
+      "policy not recorded",
     );
     expect(decided).toHaveAttribute("data-recorded", "false");
   });

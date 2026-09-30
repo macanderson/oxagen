@@ -13,6 +13,7 @@
     "./styles/house-fonts.css": "./src/styles/house-fonts.css",
     "./styles/fonts/space-grotesk.css": "./src/styles/fonts/space-grotesk.css",
     "./lib/motion": "./src/lib/motion.ts",
+    "./lib/splash-screens": "./src/lib/splash-screens.ts",
     "./components/*": "./src/components/*.tsx"
   },
   "scripts": {

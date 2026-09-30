@@ -49,8 +49,8 @@ const TITLE: Record<AvatarSubject, string> = {
 };
 
 const NOTE: Record<AvatarSubject, string> = {
-  user: "Saved with update_profile, like any change to your account.",
-  agent: "Part of the agent's definition, so a change rides a pull request.",
+  user: "Saved with update_profile.",
+  agent: "Saved in the agent's definition through a pull request.",
   workspace:
     "Saved with update_workspace_settings on the workspace's record.",
   organization:
@@ -218,7 +218,7 @@ describe("Tone", () => {
     const { user, dialog, preview } = await openEditor("organization");
     await user.click(within(dialog).getByTestId("avatar-tone-gold-deep"));
     expect(tiles(preview)[0]?.dataset.tone).toBe("gold-deep");
-    expect(dialog).toHaveTextContent("initials · sans · gold-deep tone");
+    expect(dialog).toHaveTextContent("initials in sans with gold-deep tone");
     await user.click(screen.getByTestId("avatar-save"));
     expect(save).toHaveBeenCalledWith(
       'avatar:v1:{"kind":"initials","text":"PW","font":"sans","tone":"gold-deep"}',

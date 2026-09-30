@@ -761,7 +761,7 @@ describe("StudioServer tabs", () => {
     const names = STUDIO_TABS.map(
       (tab) => tabLink(tab).childNodes[0]?.textContent,
     );
-    expect(names).toEqual(["Tools", "Connection", "Try it", "Changes"]);
+    expect(names).toEqual(["Tools", "Connection", "Test", "Changes"]);
   });
 
   it("counts the tools the page lists, and no edits while the draft is empty", async () => {

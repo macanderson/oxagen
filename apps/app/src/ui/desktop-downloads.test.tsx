@@ -69,7 +69,7 @@ describe("DesktopDownloads", () => {
       name: "Install the Oxagen app",
     });
     expect(section).toHaveTextContent(
-      "Install it first, on the machine the agent runs on. The app puts the oxagen and tacho commands on PATH, and enrollment runs through them.",
+      "Install the app on the machine the agent runs on to put the oxagen and tacho commands that enrollment uses on PATH.",
     );
     await expectNoAxe(document.body);
   });
@@ -133,7 +133,7 @@ describe("DesktopDownloads", () => {
   it("links every version and its checksums in a new tab without an opener", () => {
     renderDownloads();
     const all = screen.getByRole("link", {
-      name: "Every version, with SHA-256 checksums",
+      name: "Browse all versions and checksums",
     });
     expect(all).toHaveAttribute("href", "https://downloads.oxagen.sh/");
     expect(all).toHaveAttribute("target", "_blank");

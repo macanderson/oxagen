@@ -334,6 +334,36 @@ function scanned(): string[] {
   );
 }
 
+/**
+ * A reference to Space Grotesk: the kit's display token, the wordmark token,
+ * or the family by name. Mac set the rule on 2026-09-29: every heading and
+ * every line of text is Geist, and Space Grotesk sets the wordmark only.
+ */
+const SPACE_GROTESK = /--ox-font-display|--font-wordmark|Space Grotesk/;
+
+describe("design record: one face for every heading and every line", () => {
+  it("the heading token is Geist, and Space Grotesk is left to the wordmark", () => {
+    const shared = readFileSync(
+      path.join(APP_DIR, "../../packages/ui/src/styles/globals.css"),
+      "utf8",
+    );
+    expect(shared).toMatch(/--font-display:\s*var\(--ox-font\);/);
+    expect(shared).toMatch(/--font-sans:\s*var\(--ox-font\);/);
+    expect(shared).toMatch(/--font-wordmark:\s*var\(--ox-font-display\);/);
+  });
+
+  it(
+    "no file under src/ sets Space Grotesk; the wordmark reaches it through `.ox-wordmark`",
+    () => {
+      const files = [...scanned(), "src/app/globals.css"];
+      expect(
+        hits(files, SPACE_GROTESK, "space-grotesk", { skipComments: true }),
+      ).toEqual([]);
+    },
+    WHOLE_TREE_TIMEOUT_MS,
+  );
+});
+
 describe("design record: no page draws around the recipes", () => {
   it(
     "no file under src/ paints with the kit's ink primary",
@@ -451,7 +481,13 @@ describe("design record: no page draws around the recipes", () => {
       `${RULE} ${raw}:14 raw-font`,
       `${RULE} ${raw}:15 raw-font`,
     ]);
+    expect(hits([raw], SPACE_GROTESK, "space-grotesk", scan)).toEqual([
+      `${RULE} ${raw}:16 space-grotesk`,
+      `${RULE} ${raw}:17 space-grotesk`,
+      `${RULE} ${raw}:18 space-grotesk`,
+    ]);
     expect(hits([clean], RAW_COLOUR, "raw-colour", scan)).toEqual([]);
     expect(hits([clean], RAW_FONT, "raw-font", scan)).toEqual([]);
+    expect(hits([clean], SPACE_GROTESK, "space-grotesk", scan)).toEqual([]);
   });
 });

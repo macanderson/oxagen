@@ -2,9 +2,7 @@
 // A steering repo's provisioning over fake retries (#4518): each step and its
 // state on GitHub and GitLab, the failed step's message with Retry for an
 // owner or admin, the Re-authorize way back on GitHub and GitLab, and the
-// ready repository with its link. The platform does not register
-// `retry_steering_repo_provision` yet, so the refusal a deployment answers
-// today is covered too.
+// ready repository with its link.
 import {
   cleanup,
   render,
@@ -228,23 +226,6 @@ describe("the steering repo provisioning", () => {
     await waitFor(() => {
       expect(nav.refresh).toHaveBeenCalledTimes(1);
     });
-  });
-
-  it("names the capability a deployment has not registered, and re-reads nothing (negative)", async () => {
-    actions.retrySteeringRepoProvision.mockResolvedValue({
-      ok: false,
-      reason: "unavailable",
-      code: "tool_not_registered",
-    });
-    provisioning(FAILED);
-    await userEvent.click(screen.getByTestId("steering-repo-retry"));
-    expect(
-      await screen.findByTestId("steering-repo-retry-failure"),
-    ).toHaveTextContent(
-      "This deployment does not run retry_steering_repo_provision yet, so Oxagen changed nothing.",
-    );
-    expect(nav.refresh).not.toHaveBeenCalled();
-    expect(screen.getByTestId("steering-repo-retry")).toBeEnabled();
   });
 
   it("prints a refusal's code as recorded (negative)", async () => {

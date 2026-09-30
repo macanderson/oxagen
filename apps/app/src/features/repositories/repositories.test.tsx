@@ -578,7 +578,7 @@ describe("the Repositories tab", () => {
       "Unlink acme/docs-site from Core platform?",
     );
     await user.click(
-      within(confirm).getByRole("button", { name: "Unlink it" }),
+      within(confirm).getByRole("button", { name: "Unlink the repository" }),
     );
     await waitFor(() => {
       expect(actions.unlinkWorkspaceRepository).toHaveBeenCalledWith(
@@ -606,7 +606,7 @@ describe("the Repositories tab", () => {
     await user.click(within(dialog).getByTestId("repository-dialog-unlink"));
     const confirm = await screen.findByTestId("unlink-dialog");
     await user.click(
-      within(confirm).getByRole("button", { name: "Unlink it" }),
+      within(confirm).getByRole("button", { name: "Unlink the repository" }),
     );
     expect(
       await within(confirm).findByTestId("unlink-failure"),
@@ -1026,7 +1026,7 @@ describe("the init wizard", () => {
     });
     await user.click(within(wizard).getByTestId("init-wizard-open"));
     const opened = await within(wizard).findByTestId("init-wizard-opened");
-    expect(opened).toHaveTextContent("Opened acme/docs-site#7 · Add Oxagen");
+    expect(opened).toHaveTextContent("Opened pull request acme/docs-site#7 to add Oxagen");
     expect(within(opened).getByTestId("init-wizard-pr-link")).toHaveAttribute(
       "href",
       "https://github.com/acme/docs-site/pull/7",
@@ -1709,7 +1709,7 @@ describe("configuration read states", () => {
     );
     expect(
       screen.getByTestId("configuration-workspace-toml"),
-    ).toHaveTextContent("On acme/platform · not indexed yet");
+    ).toHaveTextContent("On acme/platform and not indexed yet");
     expect(
       screen.getByTestId("configuration-workspace-toml"),
     ).toHaveTextContent("Not on the production branch yet");

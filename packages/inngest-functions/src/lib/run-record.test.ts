@@ -790,6 +790,7 @@ describe("readSealedSegments", () => {
  * ascending, at most `limit`.
  */
 function tachoChain(seqs: number[]) {
+  WRAPPED.seqCount = Math.max(-1, ...seqs) + 1;
   mocks.selectTachoEvents.mockImplementation(
     async (args: { afterSeq: number; throughSeq?: number; limit: number }) =>
       seqs
@@ -814,7 +815,7 @@ const WRAPPED = {
   enforcementTier: "harness",
   completenessGaps: [] as string[],
   replayGrade: null,
-  // The transcript read does not check the recorded head. Only the export does.
+  // The transcript reads only through the head captured with the session.
   seqCount: 0,
   finalHash: null,
 };
@@ -833,22 +834,24 @@ describe("readTranscriptFramesOf: the run's own chain", () => {
   });
 
   // #4202: under FINAL an unbounded page scans the rest of the chain.
-  it("bounds each windowed page of a wrapped session at afterSeq plus the page size", async () => {
+  it("bounds pages and gap reads by the captured head", async () => {
     tachoChain(range(0, 1200));
     const { frames } = await readTranscriptFramesOf(SCOPE, WRAPPED);
     expect(frames.map((f) => Number(f.seq))).toEqual(range(0, 1200));
     const calls = mocks.selectTachoEvents.mock.calls.map(
-      ([args]) => args as { afterSeq: number; throughSeq?: number },
+      ([args]) => args as { afterSeq: number; throughSeq: number },
     );
-    const windowed = calls.filter((c) => c.throughSeq !== undefined);
-    expect(windowed.map((c) => c.afterSeq)).toEqual([-1, 499, 999]);
-    for (const call of windowed) {
-      expect(call.throughSeq).toBe(call.afterSeq + 500);
-    }
-    // One unbounded read, past the last window, finds the end of the chain.
-    expect(calls.filter((c) => c.throughSeq === undefined)).toEqual([
-      expect.objectContaining({ afterSeq: 1499 }),
-    ]);
+    expect(calls.every((call) => call.throughSeq <= 1200)).toBe(true);
+    expect(calls.every((call) => Number.isFinite(call.throughSeq))).toBe(true);
+  });
+
+  it("leaves frames appended after the captured head for the next read", async () => {
+    tachoChain(range(0, 1200));
+    const { frames } = await readTranscriptFramesOf(SCOPE, {
+      ...WRAPPED,
+      seqCount: 501,
+    });
+    expect(frames.map((f) => Number(f.seq))).toEqual(range(0, 500));
   });
 
   it("reads past a recorded break in a wrapped session's chain", async () => {

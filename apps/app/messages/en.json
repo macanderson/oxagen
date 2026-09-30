@@ -1,11 +1,18 @@
 {
   "app": {
     "name": "Oxagen",
-    "description": "Workforce management for autonomous agents: govern, ground, explain, meter and rate every run."
+    "description": "Workforce management for autonomous agents: govern, ground, explain, meter and rate every run.",
+    "install": {
+      "title": "Add Oxagen to your home screen",
+      "body": "Open it like an app, full screen, one tap away.",
+      "bodyIos": "Tap Share, then Add to Home Screen.",
+      "install": "Add to home screen",
+      "dismiss": "Not now"
+    }
   },
   "pages": {
     "login": "Log in to Oxagen",
-    "signup": "Govern the agents you already run.",
+    "signup": "Sign up for Oxagen",
     "verify": "Check your email",
     "twoFactor": "Two-factor authentication",
     "forgotPassword": "Reset your password",

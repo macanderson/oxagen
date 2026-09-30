@@ -211,10 +211,15 @@ function buildInngestConfig(
     inngestConfig.retries = config.retries;
   }
   if (config.concurrency) {
-    if (config.concurrency.limit > MAX_CONCURRENCY_LIMIT) {
-      throw new Error(
-        `${config.id}: concurrency.limit ${config.concurrency.limit} is over Inngest's limit of ${MAX_CONCURRENCY_LIMIT}, and the sync would refuse every function in the app`,
-      );
+    const limits = Array.isArray(config.concurrency)
+      ? config.concurrency
+      : [config.concurrency];
+    for (const concurrency of limits) {
+      if (concurrency.limit > MAX_CONCURRENCY_LIMIT) {
+        throw new Error(
+          `${config.id}: concurrency.limit ${concurrency.limit} is over Inngest's limit of ${MAX_CONCURRENCY_LIMIT}, and the sync would refuse every function in the app`,
+        );
+      }
     }
     inngestConfig.concurrency = config.concurrency;
   }
