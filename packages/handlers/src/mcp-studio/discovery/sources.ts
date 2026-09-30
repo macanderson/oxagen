@@ -16,7 +16,6 @@ import {
   DEFINITION_BYTES_MAX,
   importGraphql,
   importOpenApi,
-  registryLaunch,
   registryLockSource,
   upstreamFromMcpTool,
   type DefinitionLockSource,
@@ -36,6 +35,11 @@ import {
   type UpstreamTool,
 } from "@oxagen/mcp-studio";
 import { serverFolderPath } from "@oxagen/oxagen/steering-repo";
+import {
+  type PackagePin,
+  PackagePinProblem,
+  readPackagePin,
+} from "./digests";
 import {
   fetchText,
   introspectGraphql,
@@ -349,13 +353,14 @@ function registryLock(
   source: RegistrySource,
   entry: RegistryEntry,
   serverVersion: string | undefined,
-  digest?: string,
+  pin?: PackagePin,
 ): RegistryLockSource {
   try {
     return registryLockSource({
       source,
       entry,
-      digest,
+      digest: pin?.digest,
+      ...(pin?.file === undefined ? {} : { file: pin.file }),
       server_version: serverVersion,
     });
   } catch (error) {
@@ -438,10 +443,10 @@ async function discoverRegistry(
  * A registry package on machines whose catalog names a newer version. Oxagen
  * reads the new version's digest from the public registry, pins it in the
  * lock source, and asks a machine for tools/list at that pin, so the sync PR
- * moves source.version and shows the new digest to its reviewer (ADR-233). An
- * OCI image, and a process with no digest reader, stop at needs_digest. So
- * does a PyPI release: its pin names one file, which uvx name@version does not
- * install, and the file selection ships with the machine's reader (ADR-233).
+ * moves source.version and shows the new digest to its reviewer (ADR-233). A
+ * PyPI release pins its one universal wheel, or its source distribution, and
+ * the lock names that file. An OCI image, and a process with no digest
+ * reader, stop at needs_digest.
  */
 async function discoverMovedPackage(
   ctx: SourceContext,
@@ -450,38 +455,23 @@ async function discoverMovedPackage(
   latestVersion: string,
 ): Promise<Discovered> {
   const reader = ctx.seams.digests;
-  if (
-    reader === undefined ||
-    source.registry_type === "oci" ||
-    source.registry_type === "pypi"
-  ) {
+  if (reader === undefined || source.registry_type === "oci") {
     throw new NeedsDigest(source.server, latestVersion);
   }
   const next: RegistrySource = { ...source, version: latestVersion };
-  const unpinned = registryLaunch({ source: next, entry: latest, digest: "" });
-  if (!unpinned.ok) {
-    throw new DiscoveryRefused(
-      "source",
-      `${source.server} ${latestVersion} cannot run on a machine: ${unpinned.problems.map((problem) => `${problem.field}: ${problem.message}`).join("; ")}`,
-    );
-  }
-  const { name, version, registry_type } = unpinned.package;
-  let digest: string;
+  let pin: PackagePin;
   try {
-    digest = await reader.digest(
-      { name, version, registry_type },
-      { command: unpinned.command, args: unpinned.args },
-      ctx.signal,
-    );
+    pin = await readPackagePin(reader, next, latest, ctx.signal);
   } catch (error) {
-    // The registry may be down, so a retry can read it.
+    if (!(error instanceof PackagePinProblem)) throw error;
+    // A registry that did not answer may answer a retry.
     throw new DiscoveryRefused(
       "source",
-      `Oxagen could not read the digest of ${name}@${version}: ${messageOf(error)}`,
-      { retriable: true },
+      error.message,
+      { retriable: error.retriable },
     );
   }
-  const lockSource = registryLock(next, latest, undefined, digest);
+  const lockSource = registryLock(next, latest, undefined, pin);
   const report = await ctx.seams.local.report({
     scope: ctx.scope,
     server: ctx.server,

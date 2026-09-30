@@ -197,6 +197,8 @@ export interface GitHubPathCommit {
   committedAt: string;
   /** The first line of the commit message. */
   summary: string;
+  /** The whole commit message, trailers included. */
+  message: string;
 }
 
 /** The conclusions a completed check run can carry here. GitHub passes a required check on success and on neutral. */

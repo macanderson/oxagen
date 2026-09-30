@@ -58,7 +58,8 @@ export interface LocalServersOptions {
   spawn: StdioSpawn;
   /** The environment the local gateway started with. */
   env: MachineEnv;
-  digester: PackageDigester;
+  /** Checks the pin before a launch. The gateway only reads digests: it never picks a PyPI file. */
+  digester: Pick<PackageDigester, "digest">;
   log(line: string): void;
   /** The time now, in epoch milliseconds. Defaults to Date.now. */
   now?: () => number;

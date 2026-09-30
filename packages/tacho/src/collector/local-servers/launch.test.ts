@@ -30,14 +30,27 @@ describe("launchShapeProblem", () => {
     expect(launchShapeProblem(local)).toBeUndefined();
   });
 
-  it("passes a pypi launch, whose runner has no flags", () => {
-    const pypi = npmLaunch({
+  const WHEEL = "https://files.pythonhosted.org/packages/ab/cd/mcp_server_git-1.2.0-py3-none-any.whl";
+  const pypiLaunch = (args: string[]) =>
+    npmLaunch({
       command: "uvx",
-      args: ["mcp-server-git@1.2.0"],
+      args,
       env: [],
       package: { name: "mcp-server-git", version: "1.2.0", digest: NPM_DIGEST, registry_type: "pypi" },
     });
-    expect(launchShapeProblem(pypi)).toBeUndefined();
+
+  it("passes a pypi launch that installs the one pinned file with --from (ADR-233)", () => {
+    expect(launchShapeProblem(pypiLaunch(["--from", WHEEL, "mcp-server-git", "--repo", "."]))).toBeUndefined();
+  });
+
+  it.each([
+    ["names the version, which lets uvx pick a file", ["mcp-server-git@1.2.0"]],
+    ["installs from plain http", ["--from", WHEEL.replace("https:", "http:"), "mcp-server-git"]],
+    ["runs another package from the file", ["--from", WHEEL, "other-server"]],
+  ])("refuses a pypi launch that %s (negative)", (_what, args) => {
+    expect(launchShapeProblem(pypiLaunch(args))).toBe(
+      "the args do not install the locked package mcp-server-git from one file with --from <url>",
+    );
   });
 
   it("passes an oci launch with a -e pair for each env name and the image by digest", () => {

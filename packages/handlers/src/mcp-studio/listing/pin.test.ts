@@ -36,11 +36,16 @@ const NPM_ENTRY = acmeEntry([
   { registryType: "npm", identifier: "@acme/files-mcp", version: "1.4.0", transport: { type: "stdio" } },
 ]);
 
+const WHEEL = "https://files.pythonhosted.org/packages/ab/cd/acme_files-1.4.0-py3-none-any.whl";
+
 function deps(over: { entry?: RegistryCatalog["entry"]; digest?: RegistryDigests["digest"] } = {}) {
   const entry = vi.fn<RegistryCatalog["entry"]>(over.entry ?? (() => Promise.resolve(NPM_ENTRY)));
   const digest = vi.fn<RegistryDigests["digest"]>(over.digest ?? (() => Promise.resolve(DIGEST)));
-  const pinDeps: PinDeps = { catalog: { entry }, digests: { digest }, signal: new AbortController().signal };
-  return { entry, digest, pinDeps };
+  const pypiFile = vi.fn<RegistryDigests["pypiFile"]>(() =>
+    Promise.resolve({ name: "acme_files-1.4.0-py3-none-any.whl", url: WHEEL }),
+  );
+  const pinDeps: PinDeps = { catalog: { entry }, digests: { digest, pypiFile }, signal: new AbortController().signal };
+  return { entry, digest, pypiFile, pinDeps };
 }
 
 async function refusal(promise: Promise<unknown>) {
@@ -104,13 +109,37 @@ describe("pinListing for a registry package", () => {
     expect(error).toMatchObject({ code: "conflict", reason: "pin_not_accepted" });
   });
 
-  it("stops an OCI image and a PyPI release at needs_digest, before any registry read (negative)", async () => {
-    for (const registry_type of ["oci", "pypi"] as const) {
-      const { entry, pinDeps } = deps();
-      const error = await refusal(pinListing("files", { ...PACKAGE, registry_type }, undefined, pinDeps));
-      expect(error).toMatchObject({ code: "conflict", reason: "needs_digest" });
-      expect(entry).not.toHaveBeenCalled();
-    }
+  it("stops an OCI image at needs_digest, before any registry read (negative)", async () => {
+    const { entry, pinDeps } = deps();
+    const error = await refusal(pinListing("files", { ...PACKAGE, registry_type: "oci" }, undefined, pinDeps));
+    expect(error).toMatchObject({ code: "conflict", reason: "needs_digest" });
+    expect(entry).not.toHaveBeenCalled();
+  });
+
+  it("pins a PyPI release to one file, which the launch installs with uvx --from (ADR-233)", async () => {
+    const pypiEntry = acmeEntry([
+      { registryType: "pypi", identifier: "acme-files", version: "1.4.0", transport: { type: "stdio" } },
+    ]);
+    const { digest, pypiFile, pinDeps } = deps({ entry: () => Promise.resolve(pypiEntry) });
+    const pinned = await pinListing("files", { ...PACKAGE, registry_type: "pypi" }, undefined, pinDeps);
+
+    expect(pypiFile).toHaveBeenCalledWith({ name: "acme-files", version: "1.4.0" }, pinDeps.signal);
+    expect(digest).toHaveBeenCalledWith(
+      { name: "acme-files", version: "1.4.0", registry_type: "pypi" },
+      { command: "uvx", args: ["--from", WHEEL, "acme-files"] },
+      pinDeps.signal,
+    );
+    expect(pinned.lockSource).toMatchObject({
+      package: {
+        name: "acme-files",
+        version: "1.4.0",
+        digest: DIGEST,
+        registry_type: "pypi",
+        file: { name: "acme_files-1.4.0-py3-none-any.whl", url: WHEEL },
+      },
+      command: "uvx",
+      args: ["--from", WHEEL, "acme-files"],
+    });
   });
 
   it("refuses when the registry does not answer the entry or the digest (negative)", async () => {

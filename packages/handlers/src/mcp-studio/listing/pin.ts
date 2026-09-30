@@ -6,21 +6,27 @@
 //   - A local command pins the version and SHA-256 the person names: the
 //     executable the command resolves to on the machine.
 //   - A registry package on machines pins the SHA-256 Oxagen reads from the
-//     public registry with the digester the machine uses (npm, NuGet).
-//   - An OCI image and a PyPI release are refused, as discovery refuses them:
-//     the catalog carries no image digest, and a PyPI pin must name one file
-//     that uvx name@version does not install (ADR-233, #4756).
+//     public registry with the digester the machine uses (npm, NuGet, PyPI).
+//     A PyPI release pins one file: its universal wheel, or its source
+//     distribution. readPackagePin reads the pin, the path discovery's
+//     version move takes too.
+//   - An OCI image is refused, as discovery refuses it: the catalog carries
+//     no image digest (ADR-233, #4756).
 // A server with no machine groups runs nowhere, and a server that runs
 // remotely imports its tools with Connect, so both are refused too.
 import { HandlerError } from "@oxagen/oxagen";
 import {
   parseServerToml,
-  registryLaunch,
   registryLockSource,
   type McpLockSource,
   type ServerSource,
 } from "@oxagen/mcp-studio";
-import type { RegistryDigests } from "../discovery/digests";
+import {
+  type PackagePin,
+  PackagePinProblem,
+  readPackagePin,
+  type RegistryDigests,
+} from "../discovery/digests";
 import type { RegistryCatalog } from "../discovery/seams";
 import { machineGroupsOf } from "../local-calls/launch";
 
@@ -130,12 +136,10 @@ export async function pinListing(
       `${server} is a registry package, so Oxagen reads its SHA-256 from the registry. Send no pin.`,
     );
   }
-  if (source.registry_type === "oci" || source.registry_type === "pypi") {
+  if (source.registry_type === "oci") {
     throw refuse(
       "needs_digest",
-      source.registry_type === "oci"
-        ? `${server} is an OCI image, and the catalog carries no image digest, so Oxagen cannot pin it yet.`
-        : `${server} is a PyPI release, whose pin must name one file the launch installs (ADR-233), so Oxagen cannot pin it yet.`,
+      `${server} is an OCI image, and the catalog carries no image digest, so Oxagen cannot pin it yet.`,
     );
   }
   let entry;
@@ -147,31 +151,25 @@ export async function pinListing(
       `Oxagen could not read ${source.server} ${source.version} from the registry: ${error instanceof Error ? error.message : String(error)}`,
     );
   }
-  const unpinned = registryLaunch({ source, entry, digest: "" });
-  if (!unpinned.ok) {
-    throw refuse(
-      "source_invalid",
-      `${source.server} ${source.version} cannot run on a machine: ${unpinned.problems.map((problem) => `${problem.field}: ${problem.message}`).join("; ")}`,
-    );
-  }
-  const { name, version, registry_type } = unpinned.package;
-  let digest: string;
+  let pin: PackagePin;
   try {
-    digest = await deps.digests.digest(
-      { name, version, registry_type },
-      { command: unpinned.command, args: unpinned.args },
-      deps.signal,
-    );
+    pin = await readPackagePin(deps.digests, source, entry, deps.signal);
   } catch (error) {
-    throw refuse(
-      "registry_unreachable",
-      `Oxagen could not read the digest of ${name}@${version}: ${error instanceof Error ? error.message : String(error)}`,
-    );
+    if (!(error instanceof PackagePinProblem)) throw error;
+    // A registry that did not answer may answer a retry. Anything else is
+    // the entry's to fix.
+    throw refuse(error.retriable ? "registry_unreachable" : "source_invalid", error.message);
   }
   let lockSource: McpLockSource;
   try {
     // The server reports its version only when it starts, so the claim adds it.
-    lockSource = registryLockSource({ source, entry, digest, server_version: undefined });
+    lockSource = registryLockSource({
+      source,
+      entry,
+      digest: pin.digest,
+      ...(pin.file === undefined ? {} : { file: pin.file }),
+      server_version: undefined,
+    });
   } catch (error) {
     throw refuse("source_invalid", error instanceof Error ? error.message : String(error));
   }

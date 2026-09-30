@@ -91,7 +91,7 @@ function harness(found: StoredStudioDraft | null, ownsMachine = true) {
     listings,
     authorize: vi.fn(() => Promise.resolve(USER)),
     catalog: () => ({ entry }),
-    digests: () => ({ digest }),
+    digests: () => ({ digest, pypiFile: vi.fn(() => Promise.resolve(null)) }),
     owners,
     now: () => NOW,
   };

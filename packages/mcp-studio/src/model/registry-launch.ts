@@ -4,7 +4,7 @@
 // lock() writes the launch into tools.lock.json, and the compile check
 // reports its problems. This mapping is part of the model, so the lock,
 // compile, and the fixtures agree on it.
-import type { RegistryLockPackage } from "../contract/lock";
+import type { PypiLockFile, RegistryLockPackage } from "../contract/lock";
 import type { RegistryArgument, RegistryEntry, RegistryPackage } from "../contract/registry-entry";
 import type { RegistryType, ServerSource } from "../contract/server";
 
@@ -13,14 +13,18 @@ export interface RegistryRunner {
   command: string;
   /** The flags before the entry's runtimeArguments. oci adds -e NAME for each name in source.env. */
   flags: readonly string[];
-  /** What the package reference pins after the @: the version, or the image's digest. */
-  pin: "version" | "digest";
+  /**
+   * What the launch pins. `version` and `digest` follow the package after an
+   * @. `file` installs one file of the release with `--from <url> <name>`,
+   * because a PyPI release holds one file per host (ADR-233).
+   */
+  pin: "version" | "digest" | "file";
 }
 
 /** The spec's launch table: one runner per package type. */
 export const REGISTRY_RUNNERS: Readonly<Record<RegistryType, RegistryRunner>> = {
   npm: { command: "npx", flags: ["--yes"], pin: "version" },
-  pypi: { command: "uvx", flags: [], pin: "version" },
+  pypi: { command: "uvx", flags: [], pin: "file" },
   oci: { command: "docker", flags: ["run", "--rm", "-i"], pin: "digest" },
   nuget: { command: "dnx", flags: ["--yes"], pin: "version" },
 };
@@ -32,8 +36,14 @@ export interface RegistryLaunchInput {
   source: RegistrySource;
   /** The catalog entry at source.version. */
   entry: RegistryEntry;
-  /** The package's digest: for oci the image's manifest digest, for the others the archive's SHA-256. */
+  /** The package's digest: for oci the image's manifest digest, for pypi the file's, for the others the archive's SHA-256. */
   digest: string;
+  /**
+   * For pypi: the one file of the release the launch installs. Without it a
+   * pypi launch names the package at its version, which reads the name and
+   * version for a digest read but does not pin, and the lock refuses it.
+   */
+  file?: PypiLockFile;
 }
 
 /** One reason the package cannot run, on the server.toml field a person changes to fix it. */
@@ -172,7 +182,7 @@ function words(slot: Slot, given: Readonly<Record<string, string>>, problems: La
  * in args for the local gateway to fill from the machine. Returns every
  * problem found, not only the first.
  */
-export function registryLaunch({ source, entry, digest }: RegistryLaunchInput): RegistryLaunch {
+export function registryLaunch({ source, entry, digest, file }: RegistryLaunchInput): RegistryLaunch {
   const type = source.registry_type;
   if (type === undefined) {
     return {
@@ -223,12 +233,16 @@ export function registryLaunch({ source, entry, digest }: RegistryLaunchInput): 
   problems.push(...keyProblems([...runtime, ...packaged], given, type));
 
   const version = pkg.version ?? entry.server.version;
-  const pin = runner.pin === "digest" ? digest : literal(version);
+  const pinned = runner.pin === "file" ? file : undefined;
+  const reference =
+    pinned !== undefined
+      ? ["--from", literal(pinned.url), literal(pkg.identifier)]
+      : [`${literal(pkg.identifier)}@${runner.pin === "digest" ? digest : literal(version)}`];
   const args = [
     ...runner.flags,
     ...(type === "oci" ? env.flatMap((name) => ["-e", name]) : []),
     ...runtime.flatMap((slot) => words(slot, given, problems)),
-    `${literal(pkg.identifier)}@${pin}`,
+    ...reference,
     ...packaged.flatMap((slot) => words(slot, given, problems)),
   ];
   if (problems.length > 0) return { ok: false, problems };
@@ -236,6 +250,12 @@ export function registryLaunch({ source, entry, digest }: RegistryLaunchInput): 
     ok: true,
     command: runner.command,
     args,
-    package: { name: pkg.identifier, version, digest, registry_type: type },
+    package: {
+      name: pkg.identifier,
+      version,
+      digest,
+      registry_type: type,
+      ...(pinned === undefined ? {} : { file: pinned }),
+    },
   };
 }

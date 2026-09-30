@@ -31,6 +31,7 @@ const ANSWER = {
     reused: false,
   },
   overrodeReview: false,
+  proposalId: null,
 };
 
 describe("set_governance_mode contract", () => {
@@ -106,6 +107,19 @@ describe("set_governance_mode contract", () => {
         ...ANSWER,
         outcome: "merged",
       }).success,
+    ).toBe(false);
+    // A steering repository's proposed change names the governance proposal a
+    // reviewer lands with merge_context_pr (ADR-232).
+    expect(
+      contextGovernanceModeSet.output.safeParse({
+        ...ANSWER,
+        path: STEERING_GOVERNANCE_FILE,
+        proposalId: "prp_01k6c0v3",
+      }).success,
+    ).toBe(true);
+    const { proposalId: _dropped, ...withoutProposal } = ANSWER;
+    expect(
+      contextGovernanceModeSet.output.safeParse(withoutProposal).success,
     ).toBe(false);
     // The pull request is only useful if the person can open it.
     expect(

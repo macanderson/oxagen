@@ -15,7 +15,7 @@ You are adding a server that runs on machines: a local command, or a registry pa
 The machine only ever checks a digest. It never supplies one. So Oxagen pins the server first:
 
 - A local command pins the version and SHA-256 you name: the executable the command resolves to on the machine.
-- A registry package pins the SHA-256 Oxagen reads from the public registry, for npm and NuGet. An OCI image and a PyPI release are refused with `needs_digest`, as discovery refuses them.
+- A registry package pins the SHA-256 Oxagen reads from the public registry, for npm, PyPI, and NuGet. A PyPI release pins one file, its universal wheel or its source distribution, and the launch installs that file with `uvx --from`. An OCI image is refused with `needs_digest`, as discovery refuses it.
 
 The listing waits for a machine. When one polls, the MCP process that holds its poll asks it for tools/list. The machine checks the pin before it starts anything. The tools it lists become the draft's source, with the pin as the lock source, and the draft's revision rises by one. Read the progress with [get_studio_listing](tool.studio.listing.get.md).
 
@@ -63,7 +63,7 @@ The contract declares the server folder (`tool_server_folder`) as its audit targ
 | `conflict` (409) | `machines_required`: `source.machines` names no group |
 | `conflict` (409) | `machine_not_yours`: you enrolled no machine in the server's groups, and a listing runs only on a machine the person who asked enrolled |
 | `conflict` (409) | `pin_required` or `pin_not_accepted`: a local command needs your pin, and a registry package takes none |
-| `conflict` (409) | `needs_digest`: an OCI image or a PyPI release, which Oxagen cannot pin yet |
+| `conflict` (409) | `needs_digest`: an OCI image, which Oxagen cannot pin yet |
 | `conflict` (409) | `registry_unreachable` or `source_invalid`: the registry did not answer, or the entry lists no package that runs on a machine |
 | `invalid_input` (400) | a field is missing or malformed, or the input carries another field |
 

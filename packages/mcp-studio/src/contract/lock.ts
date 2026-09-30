@@ -45,13 +45,57 @@ export const lockPackageSchema = z
 export type LockPackage = z.output<typeof lockPackageSchema>;
 
 /**
+ * The one file of a PyPI release a pin names (ADR-233): the release's
+ * universal wheel, or its source distribution. The launch installs it by its
+ * URL, and the digest is that file's.
+ */
+export const pypiLockFileSchema = z
+  .object({
+    name: z.string().min(1).max(255).describe("The file's name on the index: mcp_server_git-1.2.0-py3-none-any.whl."),
+    url: z
+      .string()
+      .url()
+      .regex(
+        /^https:\/\/[^/?#@]*(?:[/?#]|$)/,
+        "a PyPI file's URL starts with https:// and has no user name or password",
+      )
+      .describe("The URL the launch installs the file from, after uvx --from."),
+  })
+  .strict();
+export type PypiLockFile = z.output<typeof pypiLockFileSchema>;
+
+/** A PyPI package pins one file, and no other type names one. */
+const fileOnlyForPypi: CustomCheck = {
+  issues(value) {
+    if (value.registry_type === "pypi" && value.file === undefined) {
+      return [{ path: ["file"], message: "file is required for a pypi package: the pin names one file of the release" }];
+    }
+    if (value.registry_type !== "pypi" && value.file !== undefined) {
+      return [{ path: ["file"], message: "file is allowed only for a pypi package" }];
+    }
+    return [];
+  },
+  json: {
+    if: { properties: { registry_type: { const: "pypi" } }, required: ["registry_type"] },
+    then: { required: ["file"] },
+    else: { not: { required: ["file"] } },
+  },
+};
+
+/**
  * A registry entry's package, pinned: which of the entry's packages the
  * source picked, and the digest the local gateway checks before it starts it.
  */
-export const registryLockPackageSchema = lockPackageSchema.extend({
-  registry_type: registryTypeSchema.describe("source.registry_type: npm, pypi, oci, or nuget."),
-  digest: sha256Schema.describe("For oci, the image's manifest digest. For the others, the SHA-256 of the package archive."),
-});
+export const registryLockPackageSchema = withChecks(
+  lockPackageSchema.extend({
+    registry_type: registryTypeSchema.describe("source.registry_type: npm, pypi, oci, or nuget."),
+    digest: sha256Schema.describe(
+      "For oci, the image's manifest digest. For pypi, the SHA-256 of file. For the others, the SHA-256 of the package archive.",
+    ),
+    file: pypiLockFileSchema.optional().describe("For pypi: the one file of the release the launch installs."),
+  }),
+  [fileOnlyForPypi],
+);
 export type RegistryLockPackage = z.output<typeof registryLockPackageSchema>;
 
 export const remoteLockSourceSchema = z

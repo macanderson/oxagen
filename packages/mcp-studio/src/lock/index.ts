@@ -21,6 +21,7 @@ import {
   type DefinitionLockSource,
   type McpLockSource,
   type McpToolsLock,
+  type PypiLockFile,
 } from "../contract/lock";
 import type { RegistryEntry } from "../contract/registry-entry";
 import { lockedUpstream } from "../model/from-mcp";
@@ -74,6 +75,8 @@ export interface RegistryLockSourceInput {
   entry: RegistryEntry;
   /** With source.machines: the package's digest, as registryLaunch takes it. */
   digest: string | undefined;
+  /** For a pypi package: the one file of the release the digest is of (ADR-233). */
+  file?: PypiLockFile;
   /** The version the server reported in initialize, when it reported one. */
   server_version: string | undefined;
 }
@@ -95,7 +98,7 @@ const REMOTE_TRANSPORTS: Readonly<Record<string, "http">> = {
  * the gateway can run.
  */
 export function registryLockSource(input: RegistryLockSourceInput): RegistryLockSource {
-  const { source, entry, digest, server_version } = input;
+  const { source, entry, digest, file, server_version } = input;
   if (entry.server.name !== source.server || entry.server.version !== source.version) {
     throw new Error(
       `The catalog entry is ${entry.server.name} ${entry.server.version}, and server.toml names ${source.server} ${source.version}.`,
@@ -112,9 +115,12 @@ export function registryLockSource(input: RegistryLockSourceInput): RegistryLock
     if (digest === undefined) {
       throw new Error(`${source.server} runs on machines, so its lock needs the package's digest.`);
     }
-    const launch = registryLaunch({ source, entry, digest });
+    const launch = registryLaunch({ source, entry, digest, ...(file === undefined ? {} : { file }) });
     if (!launch.ok) {
       throw new Error(launch.problems.map((problem) => `${problem.field}: ${problem.message}`).join("\n"));
+    }
+    if (launch.package.registry_type === "pypi" && file === undefined) {
+      throw new Error(`${source.server} is a pypi package, so its lock names the one file of the release it pins.`);
     }
     out.package = launch.package;
     out.command = launch.command;
