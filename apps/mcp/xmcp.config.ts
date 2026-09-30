@@ -1,5 +1,8 @@
 import type { XmcpConfig } from "xmcp";
 
+/** A test or a `_` helper under src/tools, by relative or absolute request. */
+const NOT_A_TOOL = /(?:^|[\\/])src[\\/]tools[\\/](?:[^\\/]+[\\/])*(?:_[^\\/]*|[^\\/]+\.test)\.tsx?$/;
+
 const config: XmcpConfig = {
   http: {
     port: Number(process.env.MCP_PORT ?? 4100),
@@ -20,9 +23,15 @@ const config: XmcpConfig = {
   bundler: (config) => {
     config.resolve = config.resolve ?? {};
     // mcp serves through xmcp's own HTTP entry. The owned edge in
-    // src/http-app.ts reached production on 2026-09-30 and ran its heap out on
-    // the first POST /mcp. It stays unwired until a test drives a real request
-    // through it with the real middleware (#4829, #4202).
+    // src/http-app.ts stays unwired until a test drives a real request through
+    // it with the real middleware (#4202).
+
+    // One bundle, with each module once. xmcp gives every tool its own async
+    // chunk and turns splitChunks off, so each of ~360 chunks carried its own
+    // copy of the shared dependency graph: 1,266 files and 2.6 GB. The first
+    // request imports every tool, and on 2026-09-30 that ran a 640 MB heap out
+    // within 10 seconds, under the owned edge and xmcp's server alike (#4829).
+    config.output = { ...config.output, asyncChunks: false };
 
     // xmcp force-aliases `zod` (and `zod/v3`, `zod/v4-mini`) to this app's
     // local zod (v3). better-auth depends on zod v4 and its dist imports
@@ -92,6 +101,12 @@ const config: XmcpConfig = {
       callback: (err?: Error, result?: string) => void,
     ) => {
       const request = data.request ?? "";
+      // xmcp registers every file under src/tools as a tool, the tests and
+      // `_` helpers too. Each resolves to an empty module, which xmcp skips,
+      // so production never imports vitest.
+      if (NOT_A_TOOL.test(request)) {
+        return callback(undefined, "var {}");
+      }
       const isHeavy = heavyPackages.some(
         (pkg) => request === pkg || request.startsWith(pkg + "/"),
       );
