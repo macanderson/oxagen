@@ -1548,6 +1548,8 @@ describe.skipIf(!enabled)("the discovery store against Postgres", () => {
           ref: null,
           schedule: "on-change",
           mcpServerId: ids.stranded,
+          registryName: null,
+          version: null,
         },
         T0,
       );
