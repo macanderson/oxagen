@@ -124,7 +124,7 @@ async function rig(options: { env?: MachineEnv; digest?: `sha256:${string}` } = 
   const started: Started[] = [];
   const delivered: Delivery[] = [];
   const log: string[] = [];
-  const digester: PackageDigester = { digest: () => Promise.resolve(options.digest ?? FILES_DIGEST) };
+  const digester: Pick<PackageDigester, "digest"> = { digest: () => Promise.resolve(options.digest ?? FILES_DIGEST) };
   const servers = createLocalServers({
     machine: MACHINE,
     publicKeyPem: signer.publicKeyPem,
