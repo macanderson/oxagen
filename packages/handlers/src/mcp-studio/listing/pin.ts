@@ -170,7 +170,8 @@ export async function pinListing(
   }
   let lockSource: McpLockSource;
   try {
-    lockSource = registryLockSource({ source, entry, digest });
+    // The server reports its version only when it starts, so the claim adds it.
+    lockSource = registryLockSource({ source, entry, digest, server_version: undefined });
   } catch (error) {
     throw refuse("source_invalid", error instanceof Error ? error.message : String(error));
   }
