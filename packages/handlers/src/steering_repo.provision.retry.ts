@@ -32,8 +32,8 @@ import {
   STEERING_REPO_PROVISION_EVENT,
   pickSteeringConnection,
   readSteeringRepoState,
-  saveSteeringConnection,
   saveSteeringRepoState,
+  storeChosenSteeringConnection,
   type SteeringConnection,
   type SteeringRepoProvisionRequest,
   type SteeringRepoScope,
@@ -43,7 +43,10 @@ import {
 export interface RetrySteeringRepoProvisionDeps {
   loadState(scope: SteeringRepoScope): Promise<SteeringRepoState | null>;
   saveState(scope: SteeringRepoScope, state: SteeringRepoState): Promise<void>;
-  /** Store the organization's steering connection. */
+  /**
+   * Store the picked connection as the organization's steering connection,
+   * or refuse it when the organization already holds a different one.
+   */
   saveConnection(orgId: string, connection: SteeringConnection): Promise<void>;
   send(data: SteeringRepoProvisionRequest, eventId: string): Promise<void>;
   now(): Date;
@@ -183,7 +186,7 @@ async function loadSteeringRepoState(scope: SteeringRepoScope): Promise<Steering
 export const retrySteeringRepoProvisionHandler = createRetrySteeringRepoProvisionHandler({
   loadState: loadSteeringRepoState,
   saveState: saveSteeringRepoState,
-  saveConnection: saveSteeringConnection,
+  saveConnection: storeChosenSteeringConnection,
   send: async (data, eventId) => {
     await eventClient.send({ name: STEERING_REPO_PROVISION_EVENT, data, id: eventId });
   },

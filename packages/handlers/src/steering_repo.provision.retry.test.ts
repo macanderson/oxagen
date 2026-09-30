@@ -293,6 +293,22 @@ describe("retry_steering_repo_provision handler", () => {
       expect(h.sends).toHaveLength(1);
     });
 
+    it("changes nothing when the organization already holds a different connection", async () => {
+      const h = harness(choosing());
+      h.deps.saveConnection = async () => {
+        throw new HandlerError({
+          code: "conflict",
+          reason: "connection_already_chosen",
+          message: "This organization already creates steering repos in acme.",
+        });
+      };
+      await expect(
+        retry(h, { connection: { provider: "github", id: 12 } }),
+      ).rejects.toMatchObject({ reason: "connection_already_chosen" });
+      expect(h.saves).toEqual([]);
+      expect(h.sends).toEqual([]);
+    });
+
     it("refuses a connection the setup did not find, and changes nothing", async () => {
       const h = harness(choosing());
       await expect(

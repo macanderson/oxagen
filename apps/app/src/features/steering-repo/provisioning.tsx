@@ -17,7 +17,10 @@
 // through `import_workspace_steering`, never through a retry of the job: the
 // job stops with steering_import_required while that repository holds the
 // workspace's steering head. The import answers once the repo exists or
-// setup stopped, and its outcome shows under the steps.
+// setup stopped, and its outcome shows under the steps. The import reads
+// only a GitHub repository, so a GitLab source gets a note and no action. A
+// workspace on a retired sources connection, which the import refuses, gets
+// the empty steering repo only after a person confirms it (`startFresh`).
 import type { SteeringRepoImportOutput } from "@oxagen/oxagen/contracts/steering_repo.import";
 import {
   CheckIcon,
@@ -42,6 +45,7 @@ import { SteeringRepositoryLink } from "./repository-link";
 import { provisioningSteps, type StepState } from "./steps";
 import {
   STEERING_CHOOSE_CONNECTION,
+  STEERING_IMPORT_LEGACY_CONNECTION,
   STEERING_NO_CONNECTION,
   STEERING_REAUTHORIZE,
   type SteeringConnectionPick,
@@ -191,6 +195,19 @@ function PullRequestLink({ url, children }: { url: string; children: ReactNode }
   return <span>{children}</span>;
 }
 
+/** Why a workspace steered by a GitLab repository has no setup action here. */
+function GitlabSourceNote({ view }: { view: SteeringRepoView }) {
+  const t = useTranslations("repositories.steeringRepo.provisioning");
+  return (
+    <p
+      data-testid="steering-repo-gitlab-source"
+      className="text-[12.5px] text-muted-foreground"
+    >
+      {t("gitlabSource", { legacy: view.legacySource?.fullName ?? "" })}
+    </p>
+  );
+}
+
 /** What the import did, with the pull requests a person merges. */
 function ImportOutcome({ outcome }: { outcome: SteeringRepoImportOutput }) {
   const t = useTranslations("repositories.steeringRepo.provisioning.imported");
@@ -263,6 +280,9 @@ export function SteeringRepoProvisioning({
   const [outcome, setOutcome] = useState<SteeringRepoImportOutput | null>(
     null,
   );
+  // The import refused a retired sources connection, so the way on is an
+  // empty steering repo, which a person confirms.
+  const [fresh, setFresh] = useState(false);
   const steps = provisioningSteps(view, ws);
   const ready = view.status === "ready" ? view.repository : null;
   // A workspace with a legacy source, or one that never started, goes on
@@ -270,20 +290,34 @@ export function SteeringRepoProvisioning({
   // move.
   const importing =
     ws !== null && (view.legacySource !== null || view.status === "not_started");
+  // The import reads `.oxagen/` only from GitHub.
+  const movable =
+    view.legacySource === null || view.legacySource.provider === "github";
 
-  async function goOn(connection?: SteeringConnectionPick) {
+  async function goOn(
+    options: { connection?: SteeringConnectionPick; startFresh?: true } = {},
+  ) {
     if (pending) return;
     setPending(true);
     setFailure(null);
+    const { connection } = options;
     const capability = importing ? IMPORT_CAPABILITY : RETRY_CAPABILITY;
     try {
       if (importing && ws !== null) {
         const result =
-          connection === undefined
+          connection === undefined && options.startFresh === undefined
             ? await importWorkspaceSteering(org, ws)
-            : await importWorkspaceSteering(org, ws, connection);
-        if (result.ok) setOutcome(result.value);
-        else setFailure(failureText(result, capability));
+            : await importWorkspaceSteering(org, ws, options);
+        if (result.ok) {
+          setOutcome(result.value);
+          setFresh(false);
+        } else {
+          setFailure(failureText(result, capability));
+          setFresh(
+            "code" in result &&
+              result.code === STEERING_IMPORT_LEGACY_CONNECTION,
+          );
+        }
         // A refused import still records where setup stopped.
         navigate.refresh();
       } else {
@@ -353,13 +387,15 @@ export function SteeringRepoProvisioning({
                 >
                   {view.error.message}
                 </p>
-                {!canAct ? null : choosing ? (
+                {!canAct ? null : !movable ? (
+                  <GitlabSourceNote view={view} />
+                ) : choosing ? (
                   <ConnectionChooser
                     view={view}
                     pending={pending}
                     pendingLabel={pendingLabel}
                     onPick={(pick) => {
-                      void goOn(pick);
+                      void goOn({ connection: pick });
                     }}
                   />
                 ) : (
@@ -390,7 +426,10 @@ export function SteeringRepoProvisioning({
           </li>
         ))}
       </ol>
-      {view.status === "not_started" && canAct && ws !== null ? (
+      {view.status === "not_started" && canAct && ws !== null && !movable ? (
+        <GitlabSourceNote view={view} />
+      ) : null}
+      {view.status === "not_started" && canAct && ws !== null && movable ? (
         <div className="flex flex-col items-start gap-2">
           <button
             type="button"
@@ -416,6 +455,28 @@ export function SteeringRepoProvisioning({
       {failure === null ? null : (
         <FormAlert testId="steering-repo-retry-failure">{failure}</FormAlert>
       )}
+      {fresh && canAct ? (
+        <div
+          data-testid="steering-repo-fresh"
+          className="flex flex-col items-start gap-2"
+        >
+          <p className="text-[12.5px] text-muted-foreground">
+            {t("fresh.body")}
+          </p>
+          <button
+            type="button"
+            data-testid="steering-repo-start-fresh"
+            data-touch-target=""
+            disabled={pending}
+            className={buttonSecondary}
+            onClick={() => {
+              void goOn({ startFresh: true });
+            }}
+          >
+            {pending ? t("starting") : t("fresh.action")}
+          </button>
+        </div>
+      ) : null}
       {outcome === null ? null : <ImportOutcome outcome={outcome} />}
       {ready === null ? null : (
         <p

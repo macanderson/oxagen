@@ -73,6 +73,7 @@ describe("get_steering_repo contract", () => {
       legacySource: {
         fullName: "acme/platform",
         url: "https://github.com/acme/platform",
+        provider: "github",
       },
       connectionChoices: [],
     };

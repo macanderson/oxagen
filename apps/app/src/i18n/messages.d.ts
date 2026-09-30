@@ -6318,6 +6318,11 @@ type Messages = {
           pullRequest: string;
           cleanup: string;
         };
+        gitlabSource: string;
+        fresh: {
+          body: string;
+          action: string;
+        };
       };
       reauthorize: {
         heading: string;
@@ -6374,6 +6379,7 @@ type Messages = {
         intro: {
           create: string;
           legacy: string;
+          gitlab: string;
         };
       };
     };

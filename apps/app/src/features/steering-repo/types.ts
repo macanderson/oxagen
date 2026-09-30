@@ -37,6 +37,13 @@ export const STEERING_REAUTHORIZE = "steering_reauthorize";
 /** The error code of a setup that waits on a person to pick its connection. */
 export const STEERING_CHOOSE_CONNECTION = "choose_connection";
 
+/**
+ * The import's refusal for a workspace that reads its repository through a
+ * retired sources connection. It goes on only with `startFresh`.
+ */
+export const STEERING_IMPORT_LEGACY_CONNECTION =
+  "steering_import_legacy_connection";
+
 /** The error code of a setup that found no GitHub organization or GitLab group. */
 export const STEERING_NO_CONNECTION = "no_connection";
 
@@ -104,9 +111,14 @@ export type SteeringRepoView = {
   differences: readonly SettingsDifferenceView[];
   /**
    * The code repository that still steers the workspace through its
-   * `.oxagen/` tree, or null. Setup for such a workspace runs the import.
+   * `.oxagen/` tree, or null. Setup for such a workspace runs the import,
+   * which reads only a GitHub repository.
    */
-  legacySource: { fullName: string; url: string } | null;
+  legacySource: {
+    fullName: string;
+    url: string;
+    provider: "github" | "gitlab";
+  } | null;
   /** The connections to pick from when setup stopped with `choose_connection`. */
   connectionChoices: readonly SteeringConnectionChoice[];
 };

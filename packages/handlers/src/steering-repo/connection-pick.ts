@@ -12,8 +12,8 @@ import { and, eq } from "drizzle-orm";
 import {
   pickSteeringConnection,
   readSteeringRepoState,
-  saveSteeringConnection,
   saveSteeringRepoState,
+  storeChosenSteeringConnection,
   type SteeringConnectionPick,
 } from "../steering_repo.provision";
 
@@ -44,7 +44,7 @@ export async function applyWorkspaceConnectionPick(
       reason: "unknown_connection",
       message: `import_workspace_steering: ${pick.provider} ${pick.id} is not one of the connections this workspace's setup found. Read get_steering_repo for its connectionChoices.`,
     });
-  await saveSteeringConnection(scope.orgId, chosen);
+  await storeChosenSteeringConnection(scope.orgId, chosen);
   await saveSteeringRepoState(
     { kind: "workspace", ...scope },
     { ...state, connection_choices: [], updated_at: new Date().toISOString() },

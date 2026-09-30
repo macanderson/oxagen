@@ -35,7 +35,9 @@
 // that steering and provisions in the same run. An organization whose owner
 // token reaches more than one GitHub organization or GitLab group stops with
 // `choose_connection` and records the candidates, and a retry or an import
-// that names one of them stores it (`pickSteeringConnection`).
+// that names one of them stores it (`pickSteeringConnection`,
+// `storeChosenSteeringConnection`). The organization has one connection, so
+// the first pick stands and a later, different pick is refused.
 import { decrypt, resolveIngestionCryptoAdapterForKeyId } from "@oxagen/crypto";
 import { schema, withSystemDb, withTenantDb } from "@oxagen/database";
 import {
@@ -54,6 +56,7 @@ import {
   STEERING_ENVIRONMENT,
   steeringRepoName,
 } from "@oxagen/oxagen/steering-repo";
+import { HandlerError } from "@oxagen/oxagen";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import {
@@ -1086,24 +1089,67 @@ export async function saveSteeringRepoState(
 }
 
 /**
- * Store `connection` as the organization's steering connection. The job
- * stores the one connection the owner's tokens reach, and a retry or an import
- * stores the one a person picked from the recorded choices.
+ * Store `connection` as the organization's steering connection: the one
+ * connection pick_connection found that the owner's tokens reach. A person's
+ * pick goes through `storeChosenSteeringConnection` instead.
  */
 export async function saveSteeringConnection(
   orgId: string,
   connection: SteeringConnection,
 ): Promise<void> {
   const patch = { [STEERING_CONNECTION_SETTING]: connection };
-  // tenancy: filtered by orgId, which the provision event or the kernel's
-  // capability context names. The connection is one this org's own stored
-  // tokens reach: the only candidate, or a recorded choice.
+  // tenancy: filtered by orgId from the provision event. The connection is
+  // the one candidate this org's own stored tokens reach.
   await withSystemDb((tx) =>
     tx
       .update(schema.organizations)
       .set({ settings: mergeSettings(schema.organizations.settings, patch) })
       .where(eq(schema.organizations.id, orgId)),
   );
+}
+
+/** Whether two connections name the same installation or group. */
+function sameSteeringConnection(
+  a: SteeringConnection,
+  b: SteeringConnection,
+): boolean {
+  return (
+    a.provider === b.provider &&
+    steeringConnectionId(a) === steeringConnectionId(b)
+  );
+}
+
+/**
+ * Store the connection a person picked from a setup's recorded choices. The
+ * organization has one steering connection, so the store is a compare and
+ * set: the first pick stands, the same pick again is a no-op, and a different
+ * one is refused (conflict `connection_already_chosen`). Without this, two
+ * workspaces waiting on a choice could each store their own, and a queued job
+ * would create its repo wherever the last pick pointed (#4877).
+ */
+export async function storeChosenSteeringConnection(
+  orgId: string,
+  connection: SteeringConnection,
+): Promise<void> {
+  if (await keepSteeringConnection(orgId, connection)) return;
+  // tenancy: filtered by orgId, which the kernel's capability context names.
+  const [org] = await withSystemDb((tx) =>
+    tx
+      .select({ settings: schema.organizations.settings })
+      .from(schema.organizations)
+      .where(eq(schema.organizations.id, orgId))
+      .limit(1),
+  );
+  const stored = readSteeringConnection(org?.settings);
+  if (stored !== null && sameSteeringConnection(stored, connection)) return;
+  throw new HandlerError({
+    code: "conflict",
+    reason: "connection_already_chosen",
+    message:
+      stored === null
+        ? "The organization's steering connection could not be stored. Try again."
+        : `This organization already creates steering repos in ${steeringConnectionName(stored)}. Retry without a connection to use it.`,
+  });
 }
 
 /**

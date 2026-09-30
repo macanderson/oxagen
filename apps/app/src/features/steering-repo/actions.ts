@@ -40,19 +40,20 @@ export async function retrySteeringRepoProvision(
  * Create the workspace's steering repo through the import: it moves the
  * `.oxagen/` steering of a code repository that still steers the workspace,
  * or only creates the repo when there is none. The run provisions inline, so
- * the answer comes once the repo exists or setup stopped.
+ * the answer comes once the repo exists or setup stopped. `connection` is the
+ * pick after `choose_connection`, and `startFresh` is a person's confirmation
+ * for a workspace on a retired sources connection.
  */
 export async function importWorkspaceSteering(
   org: string,
   ws: string,
-  connection?: SteeringConnectionPick,
+  input: { connection?: SteeringConnectionPick; startFresh?: true } = {},
 ): Promise<ActionResult<SteeringRepoImportOutput>> {
   const ctx = await requireViewer(org, ws);
-  return kernelWrite(
-    ctx,
-    steeringRepoImport,
-    connection === undefined ? {} : { connection },
-  );
+  return kernelWrite(ctx, steeringRepoImport, {
+    ...(input.connection === undefined ? {} : { connection: input.connection }),
+    ...(input.startFresh === true ? { startFresh: true } : {}),
+  });
 }
 
 /** Put every prescribed setting back on the workspace's steering repo. The answer is the health after the repair. */

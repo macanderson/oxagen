@@ -46,6 +46,7 @@ export function steeringRepoView(
 export const LEGACY_SOURCE = {
   fullName: "acme/agent-harness",
   url: "https://github.com/acme/agent-harness",
+  provider: "github" as const,
 };
 
 /**

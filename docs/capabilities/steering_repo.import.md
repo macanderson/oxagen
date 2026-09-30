@@ -85,6 +85,7 @@ The first import steering PR lists what the import left and each dropped field. 
 | `forbidden` | `no_principal`, `org_role_required` | no signed-in user; not an org Owner or Admin or a workspace Owner |
 | `not_found` | `workspace_not_found` | the workspace is gone |
 | `conflict` | `unknown_connection` | `connection` is not one of the connections the workspace's setup found. Nothing changed |
+| `conflict` | `connection_already_chosen` | the organization already holds a different steering connection. Call again without `connection` to use it |
 | `conflict` | `steering_import_running` | another run of this workspace saved within the last 10 minutes |
 | `conflict` | `steering_import_provider_unsupported` | the workspace binds a repository on a host other than GitHub, such as GitLab |
 | `conflict` | `steering_import_source_unreachable` | Oxagen can no longer reach the old repository, or its production branch is gone |

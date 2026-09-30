@@ -107,7 +107,9 @@ export function SteeringRepoSetup({
           >
             {legacy === null
               ? t("intro.create")
-              : t("intro.legacy", { legacy })}
+              : view.legacySource?.provider === "gitlab"
+                ? t("intro.gitlab", { legacy })
+                : t("intro.legacy", { legacy })}
           </p>
           <SteeringRepoProvisioning
             org={org}

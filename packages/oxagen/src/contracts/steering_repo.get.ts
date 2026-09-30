@@ -107,10 +107,14 @@ export const steeringRepoView = z.object({
     .describe("The settings health, or null before the first health read."),
   differences: z.array(steeringRepoDifference),
   legacySource: z
-    .object({ fullName: z.string(), url: z.string().url() })
+    .object({
+      fullName: z.string(),
+      url: z.string().url(),
+      provider: z.enum(["github", "gitlab"]),
+    })
     .nullable()
     .describe(
-      "The code repository that still steers the workspace through its .oxagen/ tree, or null. import_workspace_steering moves it to a steering repo.",
+      "The code repository that still steers the workspace through its .oxagen/ tree, or null. import_workspace_steering moves it to a steering repo when it is on GitHub, and refuses one on GitLab.",
     ),
   connectionChoices: z
     .array(steeringConnectionChoice)

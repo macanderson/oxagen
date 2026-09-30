@@ -688,6 +688,11 @@
           "needsChoices": "{rules, plural, one {# rule needs} other {# rules need}} a kind and {constraints, plural, one {# constraint needs} other {# constraints need}} an effect before Oxagen can move them. Nothing changed. Send the choices to import_workspace_steering.",
           "pullRequest": "Steering PR #{number} ({branch})",
           "cleanup": "Cleanup PR #{number}"
+        },
+        "gitlabSource": "Oxagen moves steering only out of GitHub repositories, and {legacy} is on GitLab. Setup cannot start from this page.",
+        "fresh": {
+          "body": "This workspace reads its repository through a retired sources connection, and Oxagen does not import from one. Start with an empty steering repo instead. The .oxagen/ files stay where they are.",
+          "action": "Start with an empty steering repo"
         }
       },
       "reauthorize": {
@@ -744,7 +749,8 @@
         },
         "intro": {
           "create": "Oxagen creates a private steering repo for this workspace, seeds it, applies its prescribed settings, and binds it here. Steering records live in it from then on.",
-          "legacy": "Oxagen creates a private steering repo for this workspace and opens steering PRs that move the records in {legacy}'s .oxagen/ tree into it. It then opens one cleanup PR on {legacy}. Nothing moves until you merge them."
+          "legacy": "Oxagen creates a private steering repo for this workspace and opens steering PRs that move the records in {legacy}'s .oxagen/ tree into it. It then opens one cleanup PR on {legacy}. Nothing moves until you merge them.",
+          "gitlab": "{legacy} steers this workspace, and it is on GitLab. Oxagen moves steering only out of GitHub repositories."
         }
       }
     }

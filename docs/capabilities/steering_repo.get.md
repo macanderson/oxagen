@@ -36,7 +36,7 @@ None. The org and workspace come from the capability context.
 | `publishedVersion` | positive integer or null | the published steering version |
 | `health` | `healthy`, `drifted`, `disconnected`, `diverged`, or null | the settings health from the last health read, null before the first |
 | `differences` | array | each prescribed setting that differs: `setting`, `expected`, `actual`, `changedBy`, and `changedAt` |
-| `legacySource` | `{ fullName, url }` or null | the code repository that still steers the workspace through its `.oxagen/` tree. [import_workspace_steering](steering_repo.import.md) moves that steering to a steering repo |
+| `legacySource` | `{ fullName, url, provider }` or null | the code repository that still steers the workspace through its `.oxagen/` tree. [import_workspace_steering](steering_repo.import.md) moves that steering to a steering repo when `provider` is `github`, and refuses a GitLab repository (`steering_import_provider_unsupported`) |
 | `connectionChoices` | array | the GitHub organizations and GitLab groups to choose from when setup stopped with `choose_connection`: `provider`, `id` (the installation id or the group id), and `name`. Empty otherwise |
 
 The steps, in the order provisioning runs them, are `pick_connection`, `create_repository`, `add_to_installation`, `write_first_commit`, `apply_settings`, `register_webhook`, `publish_version`, and `bind_repository`.

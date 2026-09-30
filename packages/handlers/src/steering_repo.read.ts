@@ -122,6 +122,7 @@ function legacySourceView(
   return {
     fullName: legacy.full_name,
     url: steeringRepoUrl(provider, legacy.full_name),
+    provider,
   };
 }
 

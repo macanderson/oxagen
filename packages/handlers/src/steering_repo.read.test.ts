@@ -148,6 +148,7 @@ describe("get_steering_repo", () => {
       legacySource: {
         fullName: "acme/agent-harness",
         url: "https://github.com/acme/agent-harness",
+        provider: "github",
       },
     });
     expect(steeringRepoGet.output.parse(out)).toEqual(out);

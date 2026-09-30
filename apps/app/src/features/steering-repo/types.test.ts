@@ -9,6 +9,7 @@ import { describe, expect, it } from "vitest";
 import {
   REPO_HEALTH_STATES,
   STEERING_CHOOSE_CONNECTION,
+  STEERING_IMPORT_LEGACY_CONNECTION,
   STEERING_IMPORT_REQUIRED,
   STEERING_NO_CONNECTION,
   STEERING_REAUTHORIZE,
@@ -60,5 +61,8 @@ describe("the steering repo copies", () => {
       `export const STEERING_IMPORT_REQUIRED = "${STEERING_IMPORT_REQUIRED}";`,
     );
     expect(source).toContain(`"${STEERING_NO_CONNECTION}",`);
+    expect(
+      platformSource("packages/handlers/src/steering-repo/import-run.ts"),
+    ).toContain(`"${STEERING_IMPORT_LEGACY_CONNECTION}"`);
   });
 });

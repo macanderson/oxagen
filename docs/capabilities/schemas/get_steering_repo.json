@@ -228,11 +228,19 @@
               "url": {
                 "type": "string",
                 "format": "uri"
+              },
+              "provider": {
+                "type": "string",
+                "enum": [
+                  "github",
+                  "gitlab"
+                ]
               }
             },
             "required": [
               "fullName",
-              "url"
+              "url",
+              "provider"
             ],
             "additionalProperties": false
           },
