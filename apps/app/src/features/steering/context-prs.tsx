@@ -17,6 +17,7 @@ import { type SteeringAt, steeringLink } from "./view";
 export function ContextPrs({
   at,
   offset,
+  rows,
   read,
   selected,
   pr,
@@ -24,6 +25,8 @@ export function ContextPrs({
 }: {
   at: SteeringAt;
   offset: number;
+  /** How many proposals a page holds, one of PROPOSAL_ROWS. */
+  rows: number;
   read: Read<ProposalPage>;
   /** The proposal the URL selects; null shows the table alone. */
   selected: string | null;
@@ -39,12 +42,12 @@ export function ContextPrs({
   if (!read.ok) {
     body = <SteeringReadFailure read={read} section={title} />;
   } else {
-    const rows = read.value.proposals.flatMap((proposal) =>
+    const prRows = read.value.proposals.flatMap((proposal) =>
       proposal.pr === null ? [] : [{ proposal, pr: proposal.pr }],
     );
     body = (
       <>
-        {rows.length === 0 ? (
+        {prRows.length === 0 ? (
           <p data-state="empty" className="text-sm text-muted-foreground">
             {t("empty")}
           </p>
@@ -58,12 +61,13 @@ export function ContextPrs({
               { label: t("columns.state") },
             ]}
           >
-            {rows.map(({ proposal, pr: row }) => (
+            {prRows.map(({ proposal, pr: row }) => (
               <tr key={proposal.id} data-proposal={proposal.id}>
                 <td className={cell}>
                   <SafeLink
                     to={steeringLink(at, {
                       tab: "prs",
+                      rows,
                       offset,
                       proposal: proposal.id,
                     })}
@@ -94,9 +98,10 @@ export function ContextPrs({
         )}
         <Pager
           offset={offset}
+          rows={rows}
           shown={read.value.proposals.length}
           total={read.value.total}
-          link={(to) => steeringLink(at, { tab: "prs", offset: to })}
+          link={(to) => steeringLink(at, { tab: "prs", ...to })}
         />
       </>
     );

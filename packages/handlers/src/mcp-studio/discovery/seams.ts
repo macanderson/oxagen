@@ -10,11 +10,14 @@
 //   and its published servers (vaultCredentials). noCredentials refuses
 //   every request, for a process with no vault.
 // - local: lane M15 installs gatewayLocalReporter with the live broker.
-// - grpc: lane M3 builds gRPC reflection and descriptor reads.
+// - grpc: lane M3's importGrpc, which reads .proto files into tools and a
+//   descriptor set.
 // - opener: lane M11's toolsPullRequestOpener (#4688) opens the tools
 //   steering PR. Until it merges, the default refuses.
 import type {
   CredentialSource,
+  GrpcInput,
+  ImportResult,
   McpLockSource,
   McpTool,
   RegistryEntry,
@@ -23,6 +26,7 @@ import type {
 } from "@oxagen/mcp-studio";
 import {
   createCloudTransport,
+  importGrpc,
   mcpToolSchema,
   registryEntrySchema,
 } from "@oxagen/mcp-studio";
@@ -247,26 +251,11 @@ export function gatewayLocalReporter(
 
 // ── gRPC ─────────────────────────────────────────────────────────────────────
 
-export interface GrpcDiscovery {
-  /** The descriptor set and tools of a gRPC server. */
-  discover(request: {
-    scope: DiscoveryScope;
-    server: string;
-    signal: AbortSignal;
-  }): Promise<never>;
-}
-
-/** Refuses until the second M10 PR binds lane M3's `importGrpc` here. */
-export const noGrpcDiscovery: GrpcDiscovery = {
-  discover() {
-    return Promise.reject(
-      new DiscoveryRefused(
-        "unsupported",
-        "gRPC discovery is not available yet.",
-      ),
-    );
-  },
-};
+/**
+ * Lane M3's importer: .proto files, or what server reflection returned, as
+ * tools and the descriptor set compile needs.
+ */
+export type GrpcImporter = (input: GrpcInput) => Promise<ImportResult>;
 
 // ── Definitions in a linked repository ───────────────────────────────────────
 
@@ -503,7 +492,7 @@ export interface DiscoverySeams {
   /** The Transport every remote request goes through. */
   transport(): Transport;
   local: LocalToolsReporter;
-  grpc: GrpcDiscovery;
+  grpc: GrpcImporter;
   definitions: DefinitionReader;
   catalog: RegistryCatalog;
   opener: ToolsPullRequestOpener;
@@ -530,7 +519,7 @@ async function defaultSeams(): Promise<DiscoverySeams> {
     credentials: vaultCredentials(workspaceVault),
     transport: cloudTransport,
     local: noLocalReporter,
-    grpc: noGrpcDiscovery,
+    grpc: importGrpc,
     definitions: githubDefinitionReader(async (scope, signal) =>
       createGitHubClient({
         token: await resolveGitHubToken({

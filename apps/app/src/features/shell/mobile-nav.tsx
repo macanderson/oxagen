@@ -1,7 +1,7 @@
 "use client";
 // The phone shell's navigation (ARCHITECTURE.md §1.2; mockup `mobileNav` and
-// `DLG_EXT.more`): a fixed five-slot thumb bar (Fleet, Agents, Tools, Spend,
-// More) with a count only where something waits on a person, the More sheet
+// `DLG_EXT.more`): a fixed four-slot thumb bar (Fleet, Agents, Spend, More)
+// with a count only where something waits on a person, the More sheet
 // carrying the rest of the sidebar, the assistant, search, notifications, the
 // account and the two switchers, and the drawer the top bar's menu button
 // opens over a scrim.
@@ -92,7 +92,6 @@ function CurrentMarker() {
 /** The keys the More sheet carries, each with its own line under the name. */
 type MoreKey =
   | "steering"
-  | "runtimes"
   | "repositories"
   | "organization"
   | "billing"
@@ -101,7 +100,6 @@ type MoreKey =
 function isMoreKey(key: NavKey): key is MoreKey {
   return (
     key === "steering" ||
-    key === "runtimes" ||
     key === "repositories" ||
     key === "organization" ||
     key === "billing" ||
@@ -243,7 +241,7 @@ export function ShellMobileNav({ data }: { data: ShellData }) {
         aria-label={t("mobileNav.label")}
         data-testid="mobile-nav"
         data-thumb-bar=""
-        className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 gap-0.5 border-t border-app-topbar-border bg-app-topbar-bg px-1 pt-1.5 text-app-link-fg md:hidden"
+        className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-4 gap-0.5 border-t border-app-topbar-border bg-app-topbar-bg px-1 pt-1.5 text-app-link-fg md:hidden"
       >
         {slots.map(({ key, href }) => {
           const Icon = NAV_ICONS[key];

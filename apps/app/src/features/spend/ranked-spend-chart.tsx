@@ -1,7 +1,7 @@
 "use client";
 // A ranked bar chart of money, largest first, drawn with the chart kit
-// (@/ui/chart). Spend's By tool and By agent views put one beside their table,
-// which holds every row: the chart answers which few keys carry the spend, and
+// (@/ui/chart). Spend's By tool view puts one beside its table, which holds
+// every row: the chart answers which few keys carry the spend, and
 // the table answers everything else, so the table is the chart's text
 // equivalent. A bar's length is its share of the leading value, as a float
 // from ratioOfMicros (INV-09); the money printed at its end is the exact

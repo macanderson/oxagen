@@ -56,6 +56,71 @@ describe("createCheckRun", () => {
     expect(out).toEqual({ id: 7, htmlUrl: "https://github.com/o/r/runs/7" });
   });
 
+  it("POSTs a neutral run with its text, details link, and external id", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(makeResponse({ id: 8, html_url: "https://github.com/o/r/runs/8" }));
+    vi.stubGlobal("fetch", fetchMock);
+    const client = createGitHubClient({ token: "tok" });
+
+    await client.createCheckRun({
+      owner: "o",
+      repo: "r",
+      name: "Oxagen done",
+      headSha: "abc123",
+      status: "completed",
+      conclusion: "neutral",
+      title: "Held",
+      summary: "every check passed",
+      text: "envelope",
+      detailsUrl: "https://oxagen.app/work/wi_1",
+      externalId: "sha256:abc",
+      startedAt: "2026-09-29T00:00:00.000Z",
+      completedAt: "2026-09-29T00:00:00.000Z",
+    });
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(init.body as string)).toEqual({
+      name: "Oxagen done",
+      head_sha: "abc123",
+      status: "completed",
+      conclusion: "neutral",
+      started_at: "2026-09-29T00:00:00.000Z",
+      completed_at: "2026-09-29T00:00:00.000Z",
+      details_url: "https://oxagen.app/work/wi_1",
+      external_id: "sha256:abc",
+      output: { title: "Held", summary: "every check passed", text: "envelope" },
+    });
+  });
+
+  it("POSTs a run in progress with no conclusion and no end time", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(makeResponse({ id: 9, html_url: "https://github.com/o/r/runs/9" }));
+    vi.stubGlobal("fetch", fetchMock);
+    const client = createGitHubClient({ token: "tok" });
+
+    await client.createCheckRun({
+      owner: "o",
+      repo: "r",
+      name: "Oxagen done",
+      headSha: "abc123",
+      status: "in_progress",
+      title: "Pending",
+      summary: "still checking",
+      startedAt: "2026-09-29T00:00:00.000Z",
+    });
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(init.body as string)).toEqual({
+      name: "Oxagen done",
+      head_sha: "abc123",
+      status: "in_progress",
+      started_at: "2026-09-29T00:00:00.000Z",
+      output: { title: "Pending", summary: "still checking" },
+    });
+  });
+
   it("surfaces GitHub's refusal of a non-App token as the thrown error", async () => {
     vi.stubGlobal(
       "fetch",

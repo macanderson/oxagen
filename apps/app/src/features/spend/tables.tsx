@@ -1,10 +1,10 @@
-// The rollup at one level, as the design's tables (#2962; spec "By operator",
-// "By agent", "By model", "By tool", "Budgets"). An operator, agent or tool row
-// opens that key's drill; a model or task row has none. Every money cell
-// carries its basis; a column the rollup does not record prints "not
-// recorded", never a zero. Potential savings are the sum of the open findings
-// that name the key, from list_findings. On a phone the shell labels each cell
-// with its column (card tables), so each table keeps a single header row.
+// The Spend tables the Month tab does not replace (#2962; spec "By tool",
+// "Budgets"): By tool, By task, and Budgets, with the panel they share. A tool
+// row opens that key's drill; a task row has none. Every money cell carries
+// its basis; a column the rollup does not record prints "not recorded", never
+// a zero. Potential savings are the sum of the open findings that name the
+// key, from list_findings. On a phone the shell labels each cell with its
+// column (card tables), so each table keeps a single header row.
 import { useLocale, useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import { divMicros, ratioOfMicros } from "@/data/contracts/money";
@@ -16,7 +16,6 @@ import type {
 } from "@/data/contracts/spend";
 import { routes } from "@/shared/safe-path";
 import {
-  buttonSecondary,
   linkText,
   mono,
   panel,
@@ -27,26 +26,11 @@ import {
 import { Money } from "@/ui/money";
 import { formatCount, formatRatio, ratioWidth } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
-import { OperatorName } from "@/ui/operator";
 import { cell, numericCell, Table } from "@/ui/table";
 import { BudgetDialog } from "./budget-dialog";
-import {
-  BasisLabel,
-  CostFigure,
-  NotRecordedValue,
-  UnmeteredNote,
-} from "./figures";
+import { CostFigure, NotRecordedValue } from "./figures";
 import { NotBacked } from "./not-backed";
-import { rankInOneCurrency } from "./rank-in-one-currency";
-import { RankedSpendChart } from "./ranked-spend-chart";
-import {
-  cacheHitRate,
-  classesOf,
-  findingsOn,
-  perRun,
-  savingOf,
-  totalOf,
-} from "./rollup";
+import { findingsOn, savingOf } from "./rollup";
 import { ToolChart } from "./tool-chart";
 import type { SpendAt } from "./view";
 
@@ -110,23 +94,6 @@ export function HeaderCell({
   );
 }
 
-type Row = SpendReport["rows"][number];
-
-function Tokens({ row }: { row: Row }) {
-  const locale = useLocale();
-  return <>{formatCount(totalOf(classesOf(row.tokens)), locale)}</>;
-}
-
-function CacheHit({ row }: { row: Row }) {
-  const locale = useLocale();
-  const rate = cacheHitRate(classesOf(row.tokens));
-  return rate === null ? (
-    <NotRecordedValue />
-  ) : (
-    <>{formatRatio(rate, locale)}</>
-  );
-}
-
 /** The key's open findings: what they have at stake and how many there are. */
 function Savings({
   findings,
@@ -178,319 +145,6 @@ function DrillLink({
     >
       {children}
     </SafeLink>
-  );
-}
-
-export function OperatorTable({
-  report,
-  findings,
-  at,
-}: {
-  report: SpendReport;
-  findings: readonly SpendFinding[] | null;
-  at: SpendAt;
-}) {
-  const t = useTranslations("spend");
-  const locale = useLocale();
-  return (
-    <Panel
-      id="spend-operator"
-      title={t("groups.operator.title")}
-      footer={
-        <span className="flex flex-col gap-2">
-          <span>{t("groups.operator.note")}</span>
-          <NotBacked gap="budgets">
-            {t("groups.operator.budgetMissing")}
-          </NotBacked>
-        </span>
-      }
-    >
-      {report.rows.length === 0 ? (
-        <Empty>{t("groups.operator.empty")}</Empty>
-      ) : (
-        <Table
-          label={t("groups.operator.title")}
-          columns={[
-            { label: t("columns.operator") },
-            { label: t("columns.role") },
-            { label: t("columns.agents"), numeric: true },
-            { label: t("columns.runs"), numeric: true },
-            { label: t("columns.spend"), numeric: true },
-            { label: t("columns.tokens"), numeric: true },
-            { label: t("columns.cacheHit"), numeric: true },
-            { label: t("columns.savings"), numeric: true },
-            { label: t("columns.budgetPosition") },
-          ]}
-        >
-          {report.rows.map((row) => (
-            <tr key={row.key} data-key={row.key}>
-              <th scope="row" className={`${cell} text-left font-semibold`}>
-                {/* The person, by name. The id is the drill route's key and the
-                    hover card holds it; it is never the label. */}
-                <OperatorName
-                  operator={{
-                    id: row.key,
-                    name: row.operator?.name ?? null,
-                    kind: "human",
-                    email: row.operator?.email ?? null,
-                    avatarUrl: row.operator?.avatarUrl ?? null,
-                    role: row.operator?.role ?? null,
-                  }}
-                >
-                  <DrillLink at={at} kind="operator" keyOf={row.key}>
-                    {row.operator?.name ?? t("groups.operator.unnamed")}
-                  </DrillLink>
-                </OperatorName>
-              </th>
-              <td
-                className={`${cell} ${mono} text-[11.5px] text-muted-foreground`}
-              >
-                {row.operator?.role ?? <NotRecordedValue />}
-              </td>
-              <td className={numericCell}>
-                <NotRecordedValue />
-              </td>
-              <td className={numericCell}>{formatCount(row.runs, locale)}</td>
-              <td className={numericCell}>
-                <CostFigure cost={row.cost} />
-              </td>
-              <td className={numericCell}>
-                <Tokens row={row} />
-              </td>
-              <td className={numericCell}>
-                <CacheHit row={row} />
-              </td>
-              <td className={numericCell}>
-                <Savings findings={findings} level="operator" keyOf={row.key} />
-              </td>
-              <td className={cell}>
-                <NotRecordedValue />
-              </td>
-            </tr>
-          ))}
-        </Table>
-      )}
-    </Panel>
-  );
-}
-
-/** How many agents the chart beside the By agent table holds. */
-const CHART_MAX = 12;
-
-/**
- * By agent: the table, and beside it the leading agents by recorded spend as
- * a ranked bar. The chart answers which few agents carry the period's spend.
- * The table holds every agent, so it is the chart's text equivalent. With no
- * recorded amount there is nothing to rank, and the table takes the width.
- */
-export function AgentTable({
-  report,
-  findings,
-  at,
-}: {
-  report: SpendReport;
-  findings: readonly SpendFinding[] | null;
-  at: SpendAt;
-}) {
-  const t = useTranslations("spend");
-  const locale = useLocale();
-  const table = (
-    <Panel
-      id="spend-agent"
-      title={t("groups.agent.title")}
-      footer={
-        <span className="flex flex-col gap-2">
-          <span>{t("groups.agent.note")}</span>
-          <NotBacked gap="rollup">{t("groups.agent.trendMissing")}</NotBacked>
-        </span>
-      }
-    >
-      {report.rows.length === 0 ? (
-        <Empty>{t("groups.agent.empty")}</Empty>
-      ) : (
-        <Table
-          label={t("groups.agent.title")}
-          columns={[
-            { label: t("columns.agent") },
-            { label: t("columns.runs"), numeric: true },
-            { label: t("columns.spend"), numeric: true },
-            { label: t("columns.tokens"), numeric: true },
-            { label: t("columns.perRun"), numeric: true },
-            { label: t("columns.cacheHit"), numeric: true },
-            { label: t("columns.savings"), numeric: true },
-            { label: t("columns.trend") },
-          ]}
-        >
-          {report.rows.map((row) => {
-            const per = perRun(totalOf(classesOf(row.tokens)), row.runs);
-            return (
-              <tr key={row.key} data-key={row.key}>
-                <th scope="row" className={`${cell} text-left font-normal`}>
-                  <DrillLink at={at} kind="agent" keyOf={row.key}>
-                    <span className={mono}>{row.key}</span>
-                  </DrillLink>
-                </th>
-                <td className={numericCell}>{formatCount(row.runs, locale)}</td>
-                <td className={numericCell}>
-                  <CostFigure cost={row.cost} />
-                </td>
-                <td className={numericCell}>
-                  <Tokens row={row} />
-                </td>
-                <td className={numericCell}>
-                  {per === null ? (
-                    <NotRecordedValue />
-                  ) : (
-                    formatCount(per, locale)
-                  )}
-                </td>
-                <td className={numericCell}>
-                  <CacheHit row={row} />
-                </td>
-                <td className={numericCell}>
-                  <Savings findings={findings} level="agent" keyOf={row.key} />
-                </td>
-                <td className={cell}>
-                  <NotRecordedValue />
-                </td>
-              </tr>
-            );
-          })}
-        </Table>
-      )}
-    </Panel>
-  );
-  const { ranked, otherCurrency } = rankInOneCurrency(
-    report.rows.flatMap((row) =>
-      row.cost === null ? [] : [{ key: row.key, value: row.cost }],
-    ),
-  );
-  if (ranked.length === 0) return table;
-  const shown = ranked.slice(0, CHART_MAX);
-  return (
-    <div className="grid items-start gap-3.5 lg:grid-cols-3">
-      <div className="min-w-0 lg:col-span-2">{table}</div>
-      <section
-        aria-labelledby="spend-agent-chart"
-        data-testid="spend-agent-chart"
-        className={panel}
-      >
-        <div className={panelHeader}>
-          <h2 id="spend-agent-chart" className={panelTitle}>
-            {t("agentChart.title")}
-          </h2>
-        </div>
-        <RankedSpendChart
-          items={shown}
-          label={t("agentChart.label")}
-          seriesLabel={t("agentChart.title")}
-          precision="cents"
-        />
-        <p className={panelFooter}>
-          {t("agentChart.footer", {
-            shown: formatCount(shown.length, locale),
-            total: formatCount(report.rows.length, locale),
-          })}
-          {otherCurrency > 0
-            ? ` ${t("agentChart.otherCurrency", { count: otherCurrency })}`
-            : null}
-        </p>
-      </section>
-    </div>
-  );
-}
-
-export function ModelTable({ month, at }: { month: SpendReport; at: SpendAt }) {
-  const t = useTranslations("spend");
-  const locale = useLocale();
-  return (
-    <Panel
-      id="spend-model"
-      title={t("groups.model.title")}
-      note={t("groups.model.note")}
-      action={
-        <SafeLink to={routes.modelFunding(at.org)} className={buttonSecondary}>
-          {t("groups.model.routes")}
-        </SafeLink>
-      }
-      footer={
-        <span className="flex flex-col gap-2">
-          <span>{t("groups.model.footer")}</span>
-          <NotBacked gap="rollup">{t("groups.model.keyMissing")}</NotBacked>
-        </span>
-      }
-    >
-      <Table
-        label={t("groups.model.title")}
-        columns={[
-          { label: t("columns.model") },
-          { label: t("columns.providerKey") },
-          { label: t("columns.modelCalls"), numeric: true },
-          { label: t("columns.spend"), numeric: true },
-          { label: t("columns.cacheHitRate"), numeric: true },
-          { label: t("columns.basis") },
-        ]}
-      >
-        {month.rows.map((row) => (
-          <tr key={row.key} data-key={row.key}>
-            <th
-              scope="row"
-              className={`${cell} text-left font-mono font-normal`}
-            >
-              {row.key}
-            </th>
-            <td className={cell}>
-              <span className="flex flex-col">
-                <NotRecordedValue />
-                {row.provider === null ? null : (
-                  <span className="text-[11px] text-muted-foreground md:truncate">
-                    {row.provider}
-                  </span>
-                )}
-              </span>
-            </td>
-            <td className={numericCell}>{formatCount(row.calls, locale)}</td>
-            <td className={numericCell}>
-              {row.cost === null ? (
-                <NotRecordedValue />
-              ) : (
-                <Money value={row.cost} />
-              )}
-            </td>
-            <td className={numericCell}>
-              <CacheHit row={row} />
-            </td>
-            <td className={cell}>
-              <BasisLabel basis={row.cost?.basis ?? null} />
-            </td>
-          </tr>
-        ))}
-        <tr data-total="">
-          <th scope="row" className={`${cell} text-left`} colSpan={3}>
-            <span className="font-semibold">{t("groups.model.total")}</span>{" "}
-            <span className="text-[11.5px] font-normal text-muted-foreground">
-              {t("groups.model.totalNote")}
-            </span>
-            <UnmeteredNote
-              unmetered={month.unmeteredRuns}
-              className="block text-[11.5px] font-normal text-muted-foreground"
-              testId="spend-model-unmetered"
-            />
-          </th>
-          <td className={`${numericCell} font-semibold`}>
-            {month.total.cost === null ? (
-              <NotRecordedValue />
-            ) : (
-              <Money value={month.total.cost} />
-            )}
-          </td>
-          <td className={cell} />
-          <td className={cell}>
-            <BasisLabel basis={month.total.cost?.basis ?? null} />
-          </td>
-        </tr>
-      </Table>
-    </Panel>
   );
 }
 

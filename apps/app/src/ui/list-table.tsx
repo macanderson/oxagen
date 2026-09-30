@@ -6,6 +6,9 @@
 // click (ascending, descending, then the order the caller gave), and under the
 // table the shared pager (ui/pagination): a Rows select (5, 10, 25, 50, All)
 // and the range ("1–10 of 12") on the left, Previous and Next on the right.
+// A list that pages by address hands in its own pager instead (ui/link-pager,
+// #4693). The table then shows every row it was handed, and the range counts
+// the rows the search and the filters keep.
 //
 // A column earns a filter by the mockup's rule (`ltFacets`): at least four
 // rows, and two to eight distinct values of 28 characters or fewer that are
@@ -28,6 +31,8 @@
 // text, so its card cell has no label.
 import { useTranslations } from "next-intl";
 import { type ReactNode, useCallback, useId, useRef, useState } from "react";
+import { LinkPager, type LinkPagerProps } from "@/ui/link-pager";
+import { ListSelect } from "@/ui/list-select";
 import { RowsPager } from "@/ui/pagination";
 import { cell, headCell, numericCell } from "@/ui/table";
 
@@ -143,11 +148,12 @@ function compare(a: string, b: string, numeric: boolean): number {
 }
 
 /**
- * The mockup's `.lt select`: the column filters, and any filter a caller
- * draws beside them.
+ * The trigger classes of the mockup's `.lt select`, for the column filters and
+ * any filter a caller draws beside them. Each is a small ListSelect
+ * (`size="sm"`), so its list opens on the translucent menu surface. These keep
+ * the old 12px text, and make the trigger 44px tall with 16px text on a phone.
  */
-export const listSelect =
-  "rounded-lg border border-input-border bg-input-bg px-2 py-[5px] text-[12px] text-input-fg focus-visible:border-input-border-focus focus-visible:outline-none max-md:text-base";
+export const listSelect = "text-[12px] max-md:min-h-11 max-md:text-base";
 
 /** What each row in a body renders, by the row's key, whitespace collapsed. */
 function readTexts(
@@ -172,6 +178,7 @@ export function ListTable({
   rows,
   filters,
   empty,
+  pager,
 }: {
   /** The table's accessible name, already translated. */
   label: string;
@@ -186,6 +193,13 @@ export function ListTable({
   filters?: ReactNode;
   /** What the table says when no row shows; "No rows match" by default. */
   empty?: string;
+  /**
+   * The pager of a list that pages by address (#4693), drawn in place of the
+   * table's own. The caller read one page at the size Rows names, so the
+   * table shows every row it was handed. The range is the table's, so it
+   * still counts what the search and the filters keep.
+   */
+  pager?: Omit<LinkPagerProps, "range" | "className">;
 }) {
   const t = useTranslations("ui.listTable");
   const [query, setQuery] = useState("");
@@ -251,7 +265,7 @@ export function ListTable({
     );
   }
   const total = order.length;
-  const size = per === 0 ? Math.max(total, 1) : per;
+  const size = pager !== undefined || per === 0 ? Math.max(total, 1) : per;
   const pages = Math.max(1, Math.ceil(total / size));
   const current = Math.min(page, pages);
   const from = total === 0 ? 0 : (current - 1) * size + 1;
@@ -260,6 +274,14 @@ export function ListTable({
     order.slice(from - 1, to).map((row, i) => [row.key, i] as const),
   );
   const hiddenRows = rows.filter((row) => !order.includes(row));
+  const range =
+    total === 0
+      ? t("rangeNone")
+      : t("range", {
+          from: String(from),
+          to: String(to),
+          total: String(total),
+        });
 
   const toggle = (column: number) => {
     setTexts(measure());
@@ -323,25 +345,22 @@ export function ListTable({
         {facets.map(({ column, values }) => {
           const name = columns[column]?.label ?? "";
           return (
-            <select
+            <ListSelect
               key={name}
               aria-label={t("facetLabel", { column: name })}
+              items={[
+                { value: "", label: t("facetAll", { column: name }) },
+                ...values.map((value) => ({ value, label: value })),
+              ]}
               value={chosen[column] ?? ""}
-              onChange={(event) => {
-                const value = event.currentTarget.value;
+              onValue={(value) => {
                 setChosen((was) => ({ ...was, [column]: value }));
                 setPage(1);
               }}
+              size="sm"
               data-touch-target=""
               className={`${listSelect} max-w-[220px]`}
-            >
-              <option value="">{t("facetAll", { column: name })}</option>
-              {values.map((value) => (
-                <option key={value} value={value}>
-                  {value}
-                </option>
-              ))}
-            </select>
+            />
           );
         })}
       </div>
@@ -409,43 +428,43 @@ export function ListTable({
           </tbody>
         </table>
       </div>
-      <RowsPager
-        label={t("pages", { label })}
-        rowsLabel={t("rows")}
-        perPage={per}
-        sizes={LIST_PAGE_SIZES}
-        onPerPage={(n) => {
-          setPer(n);
-          setPage(1);
-        }}
-        sizeLabel={(n) => (n === 0 ? t("all") : String(n))}
-        range={
-          total === 0
-            ? t("rangeNone")
-            : t("range", {
-                from: String(from),
-                to: String(to),
-                total: String(total),
-              })
-        }
-        previousLabel={t("previous")}
-        nextLabel={t("next")}
-        previous={
-          current <= 1
-            ? null
-            : () => {
-                setPage(current - 1);
-              }
-        }
-        next={
-          current >= pages
-            ? null
-            : () => {
-                setPage(current + 1);
-              }
-        }
-        className="border-t border-border bg-card"
-      />
+      {pager === undefined ? (
+        <RowsPager
+          label={t("pages", { label })}
+          rowsLabel={t("rows")}
+          perPage={per}
+          sizes={LIST_PAGE_SIZES}
+          onPerPage={(n) => {
+            setPer(n);
+            setPage(1);
+          }}
+          sizeLabel={(n) => (n === 0 ? t("all") : String(n))}
+          range={range}
+          previousLabel={t("previous")}
+          nextLabel={t("next")}
+          previous={
+            current <= 1
+              ? null
+              : () => {
+                  setPage(current - 1);
+                }
+          }
+          next={
+            current >= pages
+              ? null
+              : () => {
+                  setPage(current + 1);
+                }
+          }
+          className="border-t border-border bg-card"
+        />
+      ) : (
+        <LinkPager
+          {...pager}
+          range={range}
+          className="border-t border-border bg-card"
+        />
+      )}
     </div>
   );
 }

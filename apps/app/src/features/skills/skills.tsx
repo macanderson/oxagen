@@ -13,6 +13,8 @@ type SkillsProps = {
   ctx: WsCtx;
   source: DataSource;
   cursor: string | null;
+  /** The inventory's page size, one of SKILL_ROWS (#4693). */
+  rows: number;
   view?: string;
 };
 const VIEWS = ["catalog", "search", "versions"] as const;
@@ -21,13 +23,14 @@ export async function Skills({
   ctx,
   source,
   cursor,
+  rows,
   view: rawView,
 }: SkillsProps) {
   const view = VIEWS.find((value) => value === rawView) ?? "catalog";
-  const at = { org: ctx.orgSlug, ws: ctx.wsSlug, cursor, view };
+  const at = { org: ctx.orgSlug, ws: ctx.wsSlug, cursor, rows, view };
   const read =
     view === "catalog"
-      ? await source.skills.inventory(ctx, { cursor })
+      ? await source.skills.inventory(ctx, { cursor, limit: rows })
       : await source.skills.configuration(ctx);
   let body;
   if (!read.ok) body = <SkillsFailure read={read} at={at} />;

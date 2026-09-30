@@ -31,7 +31,6 @@ import type { CapabilityHandler } from "@oxagen/oxagen";
 import { CapabilityError } from "@oxagen/oxagen/kernel";
 import {
   SKILL_HARNESS_CAP,
-  SKILL_PAGE_SIZE,
   SKILL_WINDOW_DAYS_MAX,
   type SkillInventoryRow,
   skillList,
@@ -306,9 +305,9 @@ export function createSkillListHandler(
     const scope = { orgId: ctx.orgId, workspaceId: ctx.workspaceId };
     const { totals, rows } = await deps.queries.read(scope, window, {
       after: cursor?.after ?? null,
-      limit: SKILL_PAGE_SIZE,
+      limit: input.limit,
     });
-    const page = rows.slice(0, SKILL_PAGE_SIZE);
+    const page = rows.slice(0, input.limit);
     const last = page.at(-1);
     return {
       window: {
@@ -320,7 +319,7 @@ export function createSkillListHandler(
       notReportedSessions: totals.sessions - totals.reported,
       skills: page,
       nextCursor:
-        rows.length > SKILL_PAGE_SIZE && last
+        rows.length > input.limit && last
           ? encodeSkillCursor({ window, after: last.name })
           : null,
     };

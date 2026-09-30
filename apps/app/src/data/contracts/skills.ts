@@ -39,6 +39,12 @@ export const SkillInventory = z.object({
 });
 export type SkillInventory = z.infer<typeof SkillInventory>;
 
+/** The page sizes Rows per page offers under the skill inventory (#4693). */
+export const SKILL_ROWS = [10, 25, 50, 100] as const;
+
+/** The inventory's page size when the address names none, list_skills' own default. */
+export const SKILL_PAGE = 100;
+
 const SkillVersion = z.object({
   id: PublicId,
   version: z.string(),

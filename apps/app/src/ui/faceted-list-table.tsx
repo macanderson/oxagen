@@ -14,9 +14,9 @@
 // no grouped cells, so a phone still turns the table into labelled cards
 // (features/shell/card-tables.ts); the sort glyph is drawn by CSS, so it never
 // becomes part of a card's label.
-import { CaretDownIcon } from "@phosphor-icons/react";
 import { useTranslations } from "next-intl";
-import { type ComponentProps, type ReactNode, useMemo, useState } from "react";
+import { type ReactNode, useMemo, useState } from "react";
+import { ListSelect } from "./list-select";
 import { RowsPager } from "./pagination";
 import { headCell } from "./table";
 
@@ -40,26 +40,14 @@ const PER_PAGE = [5, 10, 25, 50, 0] as const;
 // The bar's controls share one skin and size to their content. `inputBase`
 // is a form field (`block w-full`), and in this flex row it stretched the
 // search and every select to a full line of its own, so the bar stacked into
-// five rows. The search takes the room left over; each select is as wide as
-// its longest option, with its own chevron in place of the browser's.
+// five rows. The search takes the room left over. Each filter is the app's
+// Select, as wide as the choice it shows, so its list opens on the
+// translucent menu surface. It keeps the bar's height and never shrinks.
 const control =
   "min-h-8 max-md:min-h-11 rounded-4xl border border-input-border bg-input-bg py-1.5 text-sm max-md:text-base text-input-fg " +
   "hover:border-input-border-hover focus-visible:border-input-border-focus focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-input-ring";
 const search = `${control} min-w-0 flex-[1_1_14rem] px-3 placeholder:text-input-placeholder`;
-const select = `${control} cursor-pointer appearance-none pl-3 pr-8`;
-
-/** A select with the bar's chevron; the wrapper keeps it one flex item. */
-function BarSelect(props: ComponentProps<"select">) {
-  return (
-    <span className="relative inline-flex shrink-0">
-      <select {...props} className={select} />
-      <CaretDownIcon
-        aria-hidden="true"
-        className="pointer-events-none absolute top-1/2 right-2.5 size-3.5 -translate-y-1/2 text-muted-foreground"
-      />
-    </span>
-  );
-}
+const filter = "shrink-0 max-md:min-h-11 max-md:text-base";
 
 type Sort = { key: string; dir: 1 | -1 } | null;
 
@@ -112,7 +100,8 @@ export function ListTable({
           ...new Set(
             rows.flatMap((row) => {
               const value = row.values[key];
-              return value === null || value === undefined
+              // An empty value would repeat the All choice, whose value is "".
+              return value === null || value === undefined || value === ""
                 ? []
                 : [String(value)];
             }),
@@ -188,23 +177,21 @@ export function ListTable({
           }}
         />
         {facets.map((facet) => (
-          <BarSelect
+          <ListSelect
             key={facet.key}
-            data-filter={facet.key}
+            size="sm"
+            className={filter}
             aria-label={t("filterBy", { column: facet.label })}
+            items={[
+              { value: "", label: t("all", { column: facet.label }) },
+              ...facet.values.map((value) => ({ value, label: value })),
+            ]}
             value={picked[facet.key] ?? ""}
-            onChange={(event) => {
-              setPicked((was) => ({ ...was, [facet.key]: event.target.value }));
+            onValue={(next) => {
+              setPicked((was) => ({ ...was, [facet.key]: next }));
               setPage(1);
             }}
-          >
-            <option value="">{t("all", { column: facet.label })}</option>
-            {facet.values.map((value) => (
-              <option key={value} value={value}>
-                {value}
-              </option>
-            ))}
-          </BarSelect>
+          />
         ))}
       </div>
       <div className="min-w-0 overflow-x-auto">

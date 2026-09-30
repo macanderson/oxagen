@@ -1,13 +1,11 @@
 // The pieces every Agents section is drawn from: a titled panel, a list of
-// facts, a tile, an instant, the status dot and word, the not-recorded words
-// and a pager. Presentational; each section passes translated text.
+// facts, a tile, an instant, the status dot and word, and the not-recorded
+// words. Presentational. Each section passes translated text.
 import { useTranslations } from "next-intl";
 import { Fragment, type ReactNode } from "react";
 import type { AgentStatus } from "@/data/contracts/agents";
-import type { SafePath } from "@/shared/safe-path";
 import {
   buttonSecondary,
-  linkText,
   panel,
   panelHeader,
   statNote,
@@ -15,7 +13,6 @@ import {
   statTile,
   statValue,
 } from "@/ui/control-styles";
-import { SafeLink } from "@/ui/navigation";
 import { useFormatter } from "@/ui/formatter";
 
 /**
@@ -227,33 +224,5 @@ export function AgentStatusBadge({ status }: { status: AgentStatus }) {
       />
       {t(status)}
     </span>
-  );
-}
-
-export function Pager({
-  label,
-  first,
-  next,
-}: {
-  label: string;
-  /** The first page and its link text, when a later page is shown. */
-  first: { to: SafePath; text: string } | null;
-  /** The next page and its link text, when one exists. */
-  next: { to: SafePath; text: string } | null;
-}) {
-  if (first === null && next === null) return null;
-  return (
-    <nav aria-label={label} className="flex gap-4 pt-3 text-sm">
-      {first === null ? null : (
-        <SafeLink to={first.to} className={linkText}>
-          {first.text}
-        </SafeLink>
-      )}
-      {next === null ? null : (
-        <SafeLink to={next.to} className={linkText}>
-          {next.text}
-        </SafeLink>
-      )}
-    </nav>
   );
 }

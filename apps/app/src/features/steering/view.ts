@@ -2,8 +2,9 @@
 // tabs, each a path segment, and on the Library a shelf, also a path segment.
 // `/steering` and `/steering/library` are the Library's All shelf;
 // `/steering/records`, `/skills`, `/memory`, `/ontology` and `/instructions`
-// are its other shelves. A filter, a page offset, a selected proposal and a
-// Skills cursor stay query values.
+// are its other shelves. A filter, a page offset, the rows a Proposals or
+// Skills page holds (#4693), a selected proposal and a Skills cursor stay
+// query values.
 //
 // Every address written before the five tabs still lands. `/steering/policy`
 // is Gates, `/steering/preview/<agent>` is `/steering/compiler/<agent>`,
@@ -15,7 +16,12 @@
 // Assignments. `/steering/library/<shelf>` from the interim hub lands on the
 // shelf. A segment that names nothing is a 404 rather than a page that
 // guesses.
-import { RECORD_KINDS, type RecordKind } from "@/data/contracts/steering";
+import {
+  RECORD_KINDS,
+  type RecordKind,
+  STEERING_PAGE,
+} from "@/data/contracts/steering";
+import { SKILL_PAGE, SKILL_ROWS } from "@/data/contracts/skills";
 import { firstParam, routes, type SafePath } from "@/shared/safe-path";
 
 /** The five tabs, in the design's order; each answers one question. */
@@ -51,6 +57,9 @@ export type LibraryShelf = (typeof LIBRARY_SHELVES)[number];
 /** The two segments of Proposals: the candidates and their Context PRs. */
 export type ProposalSegment = "candidates" | "prs";
 
+/** The page sizes Rows per page offers under both Proposals segments (#4693). */
+export const PROPOSAL_ROWS: readonly number[] = [10, 25, 50, 100];
+
 export type SteeringView = {
   tab: SteeringTab;
   /** Only on the Library. */
@@ -62,6 +71,12 @@ export type SteeringView = {
   /** Only on the Records shelf. */
   kind: RecordKind | null;
   offset: number;
+  /**
+   * How many rows a page holds: on either Proposals segment one of
+   * PROPOSAL_ROWS, on the Skills shelf one of SKILL_ROWS, and
+   * `STEERING_PAGE` everywhere else.
+   */
+  rows: number;
   /** Only on the Context PRs segment: the Context PR selected. */
   proposal: string | null;
   /** Only on the Skills shelf: the inventory page `list_skills` answered with. */
@@ -132,6 +147,7 @@ const isTab = (raw: string): raw is SteeringTab =>
 function carried(query: Params) {
   return {
     kind: firstParam(query.kind),
+    rows: firstParam(query.rows),
     offset: firstParam(query.offset),
     proposal: firstParam(query.proposal),
     cursor: firstParam(query.cursor),
@@ -147,6 +163,7 @@ function viewOf(
   const shelf = base.shelf ?? (tab === "library" ? "all" : null);
   const segment = base.segment ?? (tab === "proposals" ? "candidates" : null);
   const rawKind = firstParam(query.kind);
+  const rawRows = Number(firstParam(query.rows));
   const rawOffset = firstParam(query.offset);
   const rawProposal = firstParam(query.proposal);
   const rawCursor = firstParam(query.cursor);
@@ -161,6 +178,14 @@ function viewOf(
         : null,
     offset:
       rawOffset !== undefined && OFFSET.test(rawOffset) ? Number(rawOffset) : 0,
+    // A size Rows does not offer reads as the default, so a hand-typed URL
+    // cannot ask for more rows than a page shows.
+    rows:
+      tab === "proposals"
+        ? (PROPOSAL_ROWS.find((size) => size === rawRows) ?? STEERING_PAGE)
+        : shelf === "skills"
+          ? (SKILL_ROWS.find((size) => size === rawRows) ?? SKILL_PAGE)
+          : STEERING_PAGE,
     proposal:
       segment === "prs" &&
       rawProposal !== undefined &&
@@ -186,6 +211,14 @@ function viewOf(
  * The view a Steering request names: `segments` is the path under
  * `/steering` (none on the bare route) and `query` the search values.
  */
+/**
+ * The Skills inventory's page size as an address carries it: left off at the
+ * default, so a route that forwards the size needs no contract import (#4693).
+ */
+export function skillRowsParam(rows: number): string | undefined {
+  return rows === SKILL_PAGE ? undefined : String(rows);
+}
+
 export function resolveSteeringRoute(
   at: SteeringAt,
   segments: readonly string[] | undefined,
@@ -277,7 +310,10 @@ export function resolveSteeringRoute(
   return notFound;
 }
 
-/** The route for a view; a page's defaults (the first page, every kind) are left off the query. */
+/**
+ * The route for a view; a page's defaults (the first page, every kind,
+ * `STEERING_PAGE` rows) are left off the query.
+ */
 export function steeringLink(
   at: SteeringAt,
   to: {
@@ -285,6 +321,8 @@ export function steeringLink(
     agent?: string | null;
     kind?: RecordKind | null;
     offset?: number;
+    /** How many proposals a page holds; only on Proposals. */
+    rows?: number;
     proposal?: string | null;
     /** A skill whose source the Skills shelf opens. */
     skill?: string | null;
@@ -294,6 +332,10 @@ export function steeringLink(
     tab: to.tab,
     agent: to.agent ?? undefined,
     kind: to.kind ?? undefined,
+    rows:
+      to.rows === undefined || to.rows === STEERING_PAGE
+        ? undefined
+        : String(to.rows),
     offset:
       to.offset === undefined || to.offset === 0
         ? undefined

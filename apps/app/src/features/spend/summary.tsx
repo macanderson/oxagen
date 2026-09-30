@@ -2,8 +2,8 @@
 // on a drill): Spend with its basis and currency, the month's tokens with the
 // share served from cache, the share of tokens the gateway observed, and the
 // wasted spend in the critical ink. Each is a rollup of the rows beneath it:
-// Spend is the model rollup's total, the Total row of By model, and says when
-// it includes open runs' running estimates; Tokens is the
+// Spend is the model rollup's total, and says when it includes open runs'
+// running estimates; Tokens is the
 // sum of the model rows' classes, the By token class total.
 import { useLocale, useTranslations } from "next-intl";
 import type { SpendReport, SpendWaste } from "@/data/contracts/spend";

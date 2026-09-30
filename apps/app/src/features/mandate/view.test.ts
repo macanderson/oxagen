@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import { mandateMovement } from "@/test/mandate-views";
 import {
   LEDGER_PAGE,
+  LEDGER_ROWS,
   ledgerPage,
   MANDATE_ID,
   mandateLink,
@@ -31,12 +32,27 @@ describe("MANDATE_ID", () => {
 });
 
 describe("parseMandateView", () => {
-  it("defaults to no search, every state and the first page", () => {
+  it("defaults to no search, every state, 25 rows and the first page", () => {
     expect(parseMandateView({})).toEqual({
       search: null,
       state: null,
+      rows: 25,
       offset: 0,
     });
+  });
+
+  it("takes each size Rows per page offers", () => {
+    for (const rows of LEDGER_ROWS) {
+      expect(parseMandateView({ rows: String(rows) }).rows).toBe(rows);
+    }
+  });
+
+  // A size Rows does not offer reads as the default, so a hand-typed URL
+  // cannot ask the page for a thousand rows (#4693).
+  it("reads a size Rows does not offer as 25 (negative)", () => {
+    for (const rows of ["0", "7", "1000", "-10", "many", ""]) {
+      expect(parseMandateView({ rows }).rows).toBe(LEDGER_PAGE);
+    }
   });
 
   it("takes the search trimmed, and reads a blank box as no search", () => {
@@ -67,6 +83,12 @@ describe("parseMandateView", () => {
     expect(parseMandateView({ offset: "many" }).offset).toBe(0);
   });
 
+  it("snaps the offset to a page at the size the URL names", () => {
+    expect(parseMandateView({ rows: "10", offset: "37" }).offset).toBe(30);
+    expect(parseMandateView({ rows: "100", offset: "150" }).offset).toBe(100);
+    expect(parseMandateView({ rows: "50", offset: "49" }).offset).toBe(0);
+  });
+
   it("takes the first value when a parameter is repeated", () => {
     expect(parseMandateView({ state: ["settle", "release"] }).state).toBe(
       "settle",
@@ -86,12 +108,28 @@ describe("mandateLink", () => {
       "/a-intel/core-platform/mandates/mnd_4f2a9c?q=pi_3Qa&state=settle&offset=25",
     );
   });
+
+  it("carries a size other than 25, before the offset", () => {
+    expect(mandateLink(at, { rows: 50, offset: 100 })).toBe(
+      "/a-intel/core-platform/mandates/mnd_4f2a9c?rows=50&offset=100",
+    );
+    expect(mandateLink(at, { state: "reserve", rows: 10 })).toBe(
+      "/a-intel/core-platform/mandates/mnd_4f2a9c?state=reserve&rows=10",
+    );
+  });
+
+  it("leaves off the default size (negative)", () => {
+    expect(mandateLink(at, { rows: LEDGER_PAGE, offset: 25 })).toBe(
+      "/a-intel/core-platform/mandates/mnd_4f2a9c?offset=25",
+    );
+  });
 });
 
 describe("ledgerPage", () => {
   const view = (over: Partial<ReturnType<typeof parseMandateView>> = {}) => ({
     search: null,
     state: null,
+    rows: LEDGER_PAGE,
     offset: 0,
     ...over,
   });
@@ -144,6 +182,19 @@ describe("ledgerPage", () => {
     const second = ledgerPage(many, view({ offset: LEDGER_PAGE }));
     expect(second.rows).toHaveLength(5);
     expect(second.hasMore).toBe(false);
+  });
+
+  it("pages by the size the view names", () => {
+    const many = Array.from({ length: 23 }, () => mandateMovement());
+    const first = ledgerPage(many, view({ rows: 10 }));
+    expect(first.rows).toHaveLength(10);
+    expect(first.hasMore).toBe(true);
+    const last = ledgerPage(many, view({ rows: 10, offset: 20 }));
+    expect(last.rows).toHaveLength(3);
+    expect(last.hasMore).toBe(false);
+    const whole = ledgerPage(many, view({ rows: 50 }));
+    expect(whole.rows).toHaveLength(23);
+    expect(whole.hasMore).toBe(false);
   });
 
   // A blank page would read as a mandate with no movements, and only a link can

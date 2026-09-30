@@ -24,12 +24,11 @@ import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import { DESCRIPTION_MAX, type DraftOp } from "./draft";
 import type { StudioTool } from "./model";
-import type { DraftDescription } from "./seams";
+import type { DraftStudioDescription } from "./pending-capabilities";
 import {
   BILLING,
   fakeDraft,
   graphqlTool,
-  SCRATCH,
   STRIPE,
   studioTool,
   studioView,
@@ -56,7 +55,20 @@ afterEach(async () => {
 });
 
 type PanelProps = ComponentProps<typeof ToolPanel>;
-type DraftAnswer = Awaited<ReturnType<DraftDescription>>;
+type DraftAnswer = Awaited<ReturnType<DraftStudioDescription["call"]>>;
+type DraftInput = Parameters<DraftStudioDescription["call"]>[0];
+
+/** draft_studio_description once #4742 merges, answering through `answer`. */
+function draftCalling(
+  answer: (input: DraftInput) => Promise<DraftAnswer>,
+): DraftStudioDescription {
+  return {
+    name: "draft_studio_description",
+    available: true,
+    gap: "capability",
+    call: answer,
+  };
+}
 
 /** The panel's words, from messages/mcp-studio.json (`mcpStudio.panel`). */
 const COPY = {
@@ -129,7 +141,7 @@ function renderPanel(
   const onStage = vi.fn<(op: DraftOp) => boolean>(() => true);
   const onOpenChange = vi.fn<(open: boolean) => void>();
   const props: PanelProps = {
-    serverId: STRIPE,
+    serverName: "stripe",
     tool,
     ops: [],
     canEdit: true,
@@ -198,7 +210,7 @@ describe("ToolPanel classification", () => {
   });
 
   it("reads a confirmed classification with no impacts as none", () => {
-    renderPanel(warehouseFirst(), { serverId: WAREHOUSE, canEdit: false });
+    renderPanel(warehouseFirst(), { serverName: "warehouse", canEdit: false });
     const facts = within(region("Classification")).getByTestId(
       "studio-panel-classification",
     );
@@ -210,7 +222,7 @@ describe("ToolPanel classification", () => {
 
   it("says a tool has no classification yet and suggests none", () => {
     renderPanel(toolOn(BILLING, "create_refund"), {
-      serverId: BILLING,
+      serverName: "billing",
       canEdit: false,
     });
     const section = within(region("Classification"));
@@ -221,7 +233,7 @@ describe("ToolPanel classification", () => {
 
   it("marks a suggestion nobody confirmed and says what it came from", () => {
     renderPanel(toolOn(BILLING, "void_invoice"), {
-      serverId: BILLING,
+      serverName: "billing",
       canEdit: false,
     });
     const section = within(region("Classification"));
@@ -256,7 +268,7 @@ describe("ToolPanel classification", () => {
   });
 
   it("asks for the import before a person edits a tool nobody imported", () => {
-    renderPanel(toolOn(BILLING, "void_invoice"), { serverId: BILLING });
+    renderPanel(toolOn(BILLING, "void_invoice"), { serverName: "billing" });
     const classification = within(region("Classification"));
     expect(classification.getByText(COPY.importFirst)).toBeInTheDocument();
     expect(classification.queryByRole("combobox")).toBeNull();
@@ -282,7 +294,7 @@ describe("ToolPanel classification", () => {
     const user = userEvent.setup();
     const ops: DraftOp[] = [{ kind: "import", tool: "void_invoice" }];
     const panel = renderPanel(toolOn(BILLING, "void_invoice"), {
-      serverId: BILLING,
+      serverName: "billing",
       ops,
     });
     const section = within(region("Classification"));
@@ -313,7 +325,7 @@ describe("ToolPanel classification", () => {
   it("puts the suggestion back in the choices when a person confirms after changing one", async () => {
     const user = userEvent.setup();
     const panel = renderPanel(toolOn(BILLING, "void_invoice"), {
-      serverId: BILLING,
+      serverName: "billing",
       ops: [{ kind: "import", tool: "void_invoice" }],
     });
     const section = within(region("Classification"));
@@ -338,7 +350,7 @@ describe("ToolPanel classification", () => {
   it("stages a changed suggestion with the suggestion's impacts", async () => {
     const user = userEvent.setup();
     const panel = renderPanel(toolOn(BILLING, "void_invoice"), {
-      serverId: BILLING,
+      serverName: "billing",
       ops: [{ kind: "import", tool: "void_invoice" }],
     });
     const section = within(region("Classification"));
@@ -359,7 +371,7 @@ describe("ToolPanel classification", () => {
   });
 
   it("offers the registry's words for each value", () => {
-    renderPanel(toolOn(BILLING, "create_refund"), { serverId: BILLING });
+    renderPanel(toolOn(BILLING, "create_refund"), { serverName: "billing" });
     const section = within(region("Classification"));
     const options = (label: string) =>
       within(section.getByLabelText(label))
@@ -389,7 +401,7 @@ describe("ToolPanel classification", () => {
   it("stages a classification for an unclassified tool only once all three values are chosen", async () => {
     const user = userEvent.setup();
     const panel = renderPanel(toolOn(BILLING, "create_refund"), {
-      serverId: BILLING,
+      serverName: "billing",
     });
     const section = within(region("Classification"));
     const risk = section.getByLabelText("Risk");
@@ -594,7 +606,7 @@ describe("ToolPanel description", () => {
 
   it("starts a tool with no description blank and stages once text is written", async () => {
     const user = userEvent.setup();
-    const panel = renderPanel(studioTool("ping"), { serverId: SCRATCH });
+    const panel = renderPanel(studioTool("ping"), { serverName: "scratch" });
     const section = within(region("Description"));
     const text = section.getByRole("textbox", { name: "Description" });
     const stage = section.getByRole("button", { name: "Add to draft" });
@@ -637,7 +649,7 @@ describe("ToolPanel Draft", () => {
     await waitFor(() => {
       expect(text).toHaveValue(drafted);
     });
-    expect(calls).toEqual([{ serverId: STRIPE, tool: "create_payment" }]);
+    expect(calls).toEqual([{ server: "stripe", tool: "create_payment" }]);
     expect(panel.onStage).not.toHaveBeenCalled();
     expect(section.getByRole("button", { name: "Draft" })).toBeEnabled();
     expect(section.queryByRole("status")).toBeNull();
@@ -651,15 +663,15 @@ describe("ToolPanel Draft", () => {
 
   it("holds Draft while one runs, so one click asks for one draft", async () => {
     const user = userEvent.setup();
-    const calls: Parameters<DraftDescription>[0][] = [];
+    const calls: DraftInput[] = [];
     let answer: (result: DraftAnswer) => void = () => undefined;
     const running = new Promise<DraftAnswer>((resolve) => {
       answer = resolve;
     });
-    const draft: DraftDescription = (input) => {
+    const draft = draftCalling((input) => {
       calls.push(input);
       return running;
-    };
+    });
     renderPanel(toolOn(STRIPE, "create_payment"), { draft });
     const section = within(region("Description"));
     const button = section.getByRole("button", { name: "Draft" });
@@ -668,7 +680,7 @@ describe("ToolPanel Draft", () => {
     expect(button).toBeDisabled();
     expect(button).toHaveAttribute("aria-busy", "true");
     fireEvent.click(button);
-    expect(calls).toEqual([{ serverId: STRIPE, tool: "create_payment" }]);
+    expect(calls).toEqual([{ server: "stripe", tool: "create_payment" }]);
 
     await act(async () => {
       answer({ ok: true, description: "Charges a customer in cents." });
@@ -682,8 +694,8 @@ describe("ToolPanel Draft", () => {
   });
 
   it.each([
-    { gap: "capability", ref: "#4678" },
-    { gap: "steeringPr", ref: "#4686" },
+    { gap: "capability", ref: "#4742" },
+    { gap: "discovery", ref: "#4682" },
   ] as const)(
     "says Draft is not built yet and points the note at $ref for the $gap gap",
     async ({ gap, ref }) => {
@@ -704,14 +716,54 @@ describe("ToolPanel Draft", () => {
     },
   );
 
-  it("answers not built from the default seam when the page passes no Draft", async () => {
+  it("keeps Draft off with a note while draft_studio_description has not merged", async () => {
     const user = userEvent.setup();
-    renderPanel(toolOn(STRIPE, "create_payment"));
+    const panel = renderPanel(toolOn(STRIPE, "create_payment"));
     const section = within(region("Description"));
-    await user.click(section.getByRole("button", { name: "Draft" }));
-    const note = await section.findByTestId("studio-panel-draft-not-built");
-    expect(note).toHaveAttribute("data-gap", "#4678");
+    const button = section.getByRole("button", { name: "Draft" });
+    expect(button).toBeDisabled();
+    expect(button).toHaveAttribute("data-capability", "draft_studio_description");
+    const note = section.getByTestId("studio-panel-draft-pending");
+    expect(button).toHaveAttribute("aria-describedby", note.id);
+    expect(note).toHaveAttribute("data-state", "not-available");
+    expect(note).toHaveAttribute("data-capability", "draft_studio_description");
+    expect(note).toHaveAttribute("data-gap", "#4742");
     expect(note).toHaveTextContent(COPY.draftNotBuilt);
+    // The person can still write the description and stage it.
+    const text = section.getByRole("textbox", { name: "Description" });
+    fireEvent.change(text, { target: { value: "Charges a customer in cents." } });
+    await user.click(section.getByRole("button", { name: "Add to draft" }));
+    expect(panel.onStage.mock.calls).toEqual([
+      [
+        {
+          kind: "describe",
+          tool: "create_payment",
+          description: "Charges a customer in cents.",
+        },
+      ],
+    ]);
+  });
+
+  it("keeps Draft off when the record names no folder, since Draft names the server by it", () => {
+    const { draft, calls } = fakeDraft({ ok: true, description: "Unused." });
+    renderPanel(toolOn(STRIPE, "create_payment"), { serverName: null, draft });
+    const section = within(region("Description"));
+    const button = section.getByRole("button", { name: "Draft" });
+    expect(button).toBeDisabled();
+    const note = section.getByTestId("studio-panel-draft-pending");
+    expect(note).toHaveAttribute("data-gap", "#4678");
+    fireEvent.click(button);
+    expect(calls).toEqual([]);
+  });
+
+  it("draws no note once the capability is available", () => {
+    const { draft } = fakeDraft({ ok: true, description: "Unused." });
+    renderPanel(toolOn(STRIPE, "create_payment"), { draft });
+    const section = within(region("Description"));
+    expect(section.getByRole("button", { name: "Draft" })).not.toHaveAttribute(
+      "aria-describedby",
+    );
+    expect(section.queryByTestId("studio-panel-draft-pending")).toBeNull();
   });
 
   it("shows why Draft failed, and clears it when the next Draft succeeds", async () => {
@@ -740,11 +792,11 @@ describe("ToolPanel Draft", () => {
 
   it("says Draft did not finish when it throws, and frees the button", async () => {
     const user = userEvent.setup();
-    const calls: Parameters<DraftDescription>[0][] = [];
-    const draft: DraftDescription = (input) => {
+    const calls: DraftInput[] = [];
+    const draft = draftCalling((input) => {
       calls.push(input);
       return Promise.reject(new Error("fetch failed: socket hang up"));
-    };
+    });
     renderPanel(toolOn(STRIPE, "create_payment"), { draft });
     const section = within(region("Description"));
     const button = section.getByRole("button", { name: "Draft" });
@@ -791,7 +843,7 @@ describe("ToolPanel refused edits", () => {
 describe("ToolPanel shaping", () => {
   it("lists the hidden inputs, the fixed inputs and the result paths", () => {
     renderPanel(toolOn(BILLING, "list_invoices"), {
-      serverId: BILLING,
+      serverName: "billing",
       canEdit: false,
     });
     const section = within(region("Shaping"));
@@ -835,7 +887,7 @@ describe("ToolPanel what the server says", () => {
 
   it("draws no annotation list when the server set none", () => {
     renderPanel(toolOn(BILLING, "list_invoices"), {
-      serverId: BILLING,
+      serverName: "billing",
       canEdit: false,
     });
     const section = within(region("Server's own description"));
@@ -860,7 +912,7 @@ describe("ToolPanel agent feedback", () => {
 
   it("draws no notes list when agents left no notes", () => {
     renderPanel(toolOn(BILLING, "list_invoices"), {
-      serverId: BILLING,
+      serverName: "billing",
       canEdit: false,
     });
     const section = within(region("Agent feedback"));
@@ -906,7 +958,7 @@ describe("ToolPanel kill switch", () => {
 
   it("draws the switch alone when the page has no flip to report", () => {
     renderPanel(toolOn(BILLING, "create_refund"), {
-      serverId: BILLING,
+      serverName: "billing",
       offFacts: null,
     });
     const section = within(region("Kill switch"));
@@ -927,7 +979,7 @@ describe("ToolPanel kill switch", () => {
 describe("ToolPanel tools the record barely holds", () => {
   it("marks everything missing on a tool that has only a name", () => {
     renderPanel(studioTool("ping"), {
-      serverId: SCRATCH,
+      serverName: "scratch",
       canEdit: false,
       off: null,
       offFacts: null,
@@ -962,7 +1014,7 @@ describe("ToolPanel tools the record barely holds", () => {
   });
 
   it("marks the Warehouse tool's missing shaping, server text and feedback, and keeps its switch", () => {
-    renderPanel(warehouseFirst(), { serverId: WAREHOUSE, canEdit: false });
+    renderPanel(warehouseFirst(), { serverName: "warehouse", canEdit: false });
     expect(
       within(region("Description")).getByText("None"),
     ).toBeInTheDocument();

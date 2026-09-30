@@ -9,7 +9,11 @@
       "noneReported": "No session in this window reported its skills.",
       "notReported": "{count, plural, one {# session reported no inventory} other {# sessions reported no inventory}}.",
       "list": "Skills reported in this window",
-      "next": "Next page"
+      "pager": {
+        "label": "Skill pages",
+        "first": "First page",
+        "next": "Next page"
+      }
     },
     "row": {
       "sessions": "{count} of {total, plural, one {# session} other {# sessions}}",

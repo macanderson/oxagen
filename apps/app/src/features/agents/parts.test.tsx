@@ -1,22 +1,15 @@
 // @vitest-environment jsdom
 // The pieces every Agents section is drawn from (parts.tsx): a panel's state
-// edge, a tile whose figure is a problem when it is not zero, a not-recorded
-// value that names the store it waits on, and a pager that draws nothing
-// when there is no other page. Axe runs after every test (INV-26).
+// edge, a tile whose figure is a problem when it is not zero, and a
+// not-recorded value that names the store it waits on. Axe runs after every
+// test (INV-26).
 import { cleanup, render, screen, within } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { routes } from "@/shared/safe-path";
+import { afterEach, describe, expect, it } from "vitest";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 
-vi.mock("next/link", () => ({
-  default: ({ children, ...rest }: { children: ReactNode; href: string }) => (
-    <a {...rest}>{children}</a>
-  ),
-}));
-
-const { NotRecordedValue, Pager, Panel, Tile } = await import("./parts");
+const { NotRecordedValue, Panel, Tile } = await import("./parts");
 
 function draw(node: ReactNode) {
   render(<IntlProvider>{node}</IntlProvider>);
@@ -85,26 +78,5 @@ describe("NotRecordedValue", () => {
     const value = screen.getByText("not recorded");
     expect(value).not.toHaveAttribute("data-gap");
     expect(value).not.toHaveAttribute("title");
-  });
-});
-
-describe("Pager", () => {
-  const to = routes.agent("acme", "core-platform", "release-bot", {
-    tab: "activity",
-  });
-
-  it("draws nothing when there is neither a first nor a next page (negative)", () => {
-    draw(<Pager label="Pages" first={null} next={null} />);
-    expect(screen.queryByRole("navigation", { name: "Pages" })).toBeNull();
-  });
-
-  it("draws only the link it is given", () => {
-    draw(<Pager label="Pages" first={{ to, text: "Newest" }} next={null} />);
-    const nav = screen.getByRole("navigation", { name: "Pages" });
-    expect(
-      within(nav)
-        .getAllByRole("link")
-        .map((a) => a.textContent),
-    ).toEqual(["Newest"]);
   });
 });
