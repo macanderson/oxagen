@@ -721,8 +721,9 @@ describe("collectors", () => {
   it("computes the manifest's content hash and per-store table counts, which the file no longer commits (ADR-216)", () => {
     // The site prints a table count per store and the content hash. Both left
     // the committed manifest in #3691, so the collector derives them: counts
-    // from the tables array, the hash from the file's bytes, which for a
-    // canonical file is the value `pnpm schema:manifest` prints.
+    // from the tables array, and the hash with `contentHashOf`, the function
+    // `pnpm schema:manifest` calls. For a canonical file that hash is the
+    // sha256 of the bytes.
     const root = scratch();
     const text =
       JSON.stringify(
@@ -774,6 +775,46 @@ describe("collectors", () => {
     const m = collectManifest(root);
     expect(m.stores[0]?.tableCount).toBe(1);
     expect(m.contentHash).not.toBe("0".repeat(64));
+  });
+
+  it("prints the hash `pnpm schema:manifest` prints for a CRLF, legacy, or unformatted file (#4664)", () => {
+    // Hashing the bytes agreed with the CLI only while the file was exactly
+    // canonical. Each variant below holds the same content in other bytes,
+    // and each must hash to the sha256 of the canonical file.
+    const canonical =
+      JSON.stringify(
+        {
+          domains: [],
+          stores: [{ domains: ["agent"], kind: "postgres", purpose: "p" }],
+          tables: [{ id: "postgres:agent.agents", store: "postgres" }],
+          version: 2,
+        },
+        null,
+        2,
+      ) + "\n";
+    const expected = createHash("sha256").update(canonical).digest("hex");
+    const body = JSON.parse(canonical) as {
+      stores: Record<string, unknown>[];
+    };
+    const variants: Record<string, string> = {
+      crlf: canonical.replace(/\n/g, "\r\n"),
+      legacy: JSON.stringify(
+        {
+          ...body,
+          contentHash: "0".repeat(64),
+          stores: body.stores.map((s) => ({ ...s, tableCount: 7 })),
+        },
+        null,
+        2,
+      ),
+      unformatted: JSON.stringify(body),
+    };
+    for (const [name, text] of Object.entries(variants)) {
+      expect(text, name).not.toBe(canonical);
+      const root = scratch();
+      file(root, "packages/database/storage-manifest.json", text);
+      expect(collectManifest(root).contentHash, name).toBe(expected);
+    }
   });
 });
 

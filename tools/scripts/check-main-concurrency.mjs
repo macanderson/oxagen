@@ -25,6 +25,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { isEntrypoint } from "./lib/is-entrypoint.mjs";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const path = join(repoRoot, ".github", "workflows", "pipeline.yml");
@@ -54,11 +55,7 @@ export function isPerCommitOnMain(group) {
   );
 }
 
-const isEntrypoint =
-  process.argv[1] !== undefined &&
-  import.meta.url === new URL(`file://${process.argv[1]}`).href;
-
-if (isEntrypoint) {
+if (isEntrypoint(import.meta.url)) {
   const group = concurrencyGroup(readFileSync(path, "utf8"));
   if (!isPerCommitOnMain(group)) {
     console.error(

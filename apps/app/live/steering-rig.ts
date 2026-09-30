@@ -83,7 +83,7 @@ export function readSettings(env: NodeJS.ProcessEnv = process.env): Settings {
     githubOrg: value("STEERING_LIVE_GITHUB_ORG"),
     githubToken: value("STEERING_LIVE_GITHUB_TOKEN"),
     apiUrl: optional(env, "STEERING_LIVE_API_URL", "https://api.oxagen.sh"),
-    appUrl: optional(env, "STEERING_LIVE_APP_URL", "https://app.oxagen.sh"),
+    appUrl: optional(env, "STEERING_LIVE_APP_URL", "https://oxagen.app"),
     runSlug: `live-${runId}-${attempt}`,
   };
 }

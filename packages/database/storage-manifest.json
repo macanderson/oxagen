@@ -1811,6 +1811,16 @@
       "writes": []
     },
     {
+      "domain": "tool",
+      "name": "get_studio_server",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "billing",
       "name": "get_subscription",
       "reads": [],

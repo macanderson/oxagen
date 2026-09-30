@@ -41,10 +41,13 @@ and adding a check that recomputes them.
 
 1. **The storage manifest commits no `contentHash` and no `tableCount`.**
    The generator stops writing both, and `MANIFEST_VERSION` moves to 2.
-   `contentHashOf(manifest)` computes the hash wherever it is read, and it
-   equals the sha256 of the committed file's bytes. `manifestSummary` counts
-   each store's tables from the `tables` array. The architecture atlas
-   derives both when it reads the file. This amends the manifest shape in
+   `contentHashOf(manifest)` computes the hash wherever it is read. It hashes
+   the parsed content without either field, so for a canonical file it equals
+   the sha256 of the bytes, and a CRLF checkout or a file that still records
+   a retired field hashes the same. `manifestSummary` counts each store's
+   tables from the `tables` array. The architecture atlas derives both when
+   it reads the file, and it calls `contentHashOf` too, so it prints the hash
+   `pnpm schema:manifest` prints. This amends the manifest shape in
    ADR-031. The `version`, `stores`, `domains`, `tables`, and `capabilities`
    members are unchanged.
 2. **`_index.json` commits no `generatedCount`.** A reader who wants the
@@ -52,7 +55,10 @@ and adding a check that recomputes them.
    no reader in this repository used the field.
 3. **The schema `README.md` commits no count and no joined list.** It lists
    one capability per line under a `## <domain>` heading. Two branches that
-   add capabilities, even to the same domain, then touch different lines.
+   add capabilities, even to the same domain, then touch different lines,
+   unless their new names sort next to each other. Both then insert between
+   the same neighbours, and git reports a conflict. That conflict sits on
+   real content, and taking both sides resolves it.
 4. **Each drift check names the file and both values.** `pnpm docs:schemas
    --check` prints each stale file with its first differing line, committed
    and regenerated. `pnpm schema:manifest:check` prints the content hash of
@@ -105,5 +111,6 @@ and adding a check that recomputes them.
   resolution that kept `contentHash` or `tableCount`.
 - `atlas.sum`, `pnpm-lock.yaml`, `Cargo.lock`,
   `packages/oxagen/capabilities.manifest.json`,
-  `apps/app/src/i18n/messages.d.ts`, and ADR numbers remain shared cells.
+  `apps/app/src/i18n/messages.d.ts`, ADR numbers, and the ADR index in
+  `docs/adr/README.md` remain shared cells.
   `AGENTS.md` names them so an author meets the hazard before the conflict.

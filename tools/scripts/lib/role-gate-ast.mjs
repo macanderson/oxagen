@@ -22,6 +22,48 @@ export function parseSource(fileName, text) {
 }
 
 /**
+ * `text` with every comment blanked to spaces, newlines kept, so a regex that
+ * reads a contract field cannot match a comment that quotes one (#4664 item 7).
+ * The parser finds the comments, so a `//` inside a string, a template, or a
+ * regular expression is left alone. Offsets and line numbers do not move.
+ */
+export function withoutComments(fileName, text) {
+  const source = parseSource(fileName, text);
+  const ranges = [];
+  const seen = new Set();
+  const visit = (node) => {
+    // A JSDoc node sits inside the comment it parses, so its children's
+    // positions are comment text, not trivia.
+    if (
+      node.kind >= ts.SyntaxKind.FirstJSDocNode &&
+      node.kind <= ts.SyntaxKind.LastJSDocNode
+    )
+      return;
+    const pos = node.getFullStart();
+    if (!seen.has(pos)) {
+      seen.add(pos);
+      // A comment on the line where a token ends is trailing trivia. One on
+      // a later line is leading trivia of the next token. Read both.
+      ranges.push(
+        ...(ts.getTrailingCommentRanges(text, pos) ?? []),
+        ...(ts.getLeadingCommentRanges(text, pos) ?? []),
+      );
+    }
+    for (const child of node.getChildren(source)) visit(child);
+  };
+  visit(source);
+  if (ranges.length === 0) return text;
+  // UTF-16 units, the same units the ranges count in.
+  const chars = text.split("");
+  for (const { pos, end } of ranges) {
+    for (let i = pos; i < end; i += 1) {
+      if (chars[i] !== "\n") chars[i] = " ";
+    }
+  }
+  return chars.join("");
+}
+
+/**
  * `a`, `a.b` or `a.b.c` for an identifier or a chain of property accesses,
  * or null for anything else (a call, an element access, `this`).
  */
@@ -221,6 +263,11 @@ function isValueReference(node) {
   return parent.name !== node && parent.propertyName !== node;
 }
 
+/** Whether `node` is the function a call expression calls. */
+function isCallee(node) {
+  return ts.isCallExpression(node.parent) && node.parent.expression === node;
+}
+
 /**
  * Whether the export `exportName` of `source` reaches a role gate.
  *
@@ -234,6 +281,13 @@ function isValueReference(node) {
  * of it, or as a member (`iam.assertOrgRole`). A property access counts when
  * its dotted name is one of `propertyGates` (`schema.orgUsers.role`, the column
  * an inline role check selects). Type annotations are skipped.
+ *
+ * With `requireCall`, a gate counts only as the function a reached call calls,
+ * bare or as a member. A handler that names a gate and never calls it, such as
+ * `void iam.assertOrgRole`, then fails. INV-29's rule one passes it, because
+ * that rule exists to prove the handler asserts the role (#4664 item 11).
+ * `check-role-enforcement.mjs` leaves it off, so a gate a handler hands to a
+ * dependency object still counts there.
  *
  * The scan follows what the handler calls or refers to:
  *
@@ -252,11 +306,13 @@ function isValueReference(node) {
  *   propertyGates?: readonly string[],
  *   followImport?: (spec: string, importedName: string) =>
  *     { source: import("typescript").SourceFile, exportName: string } | null,
+ *   requireCall?: boolean,
  * }} options
  * @returns {boolean}
  */
 export function handlerCallsRoleGate(source, exportName, options) {
-  const { gates, propertyGates = [], followImport } = options;
+  const { gates, propertyGates = [], followImport, requireCall = false } =
+    options;
   const gateSet = new Set(gates);
   const propertySet = new Set(propertyGates);
 
@@ -287,8 +343,10 @@ export function handlerCallsRoleGate(source, exportName, options) {
       if (ts.isIdentifier(node) && isValueReference(node)) {
         const name = node.text;
         if (gateSet.has(aliases.get(name) ?? name)) {
-          hit = true;
-          return;
+          if (!requireCall || isCallee(node)) {
+            hit = true;
+            return;
+          }
         }
         if (topLevelDeclaration(file, name)) enqueue(name);
         else if (follow(name)) {
@@ -298,7 +356,7 @@ export function handlerCallsRoleGate(source, exportName, options) {
       }
       if (ts.isPropertyAccessExpression(node)) {
         if (
-          gateSet.has(node.name.text) ||
+          (gateSet.has(node.name.text) && (!requireCall || isCallee(node))) ||
           (propertySet.size > 0 && propertySet.has(dottedName(node) ?? ""))
         ) {
           hit = true;

@@ -163,7 +163,7 @@ const apiUrl = (
   cfg?.apiUrl ??
   "https://api.oxagen.sh"
 ).replace(/\/+$/, "");
-const appUrl = (cfg?.appUrl ?? "https://app.oxagen.sh").replace(/\/+$/, "");
+const appUrl = (cfg?.appUrl ?? "https://oxagen.app").replace(/\/+$/, "");
 if (!cfg?.token) {
   record(
     "session",

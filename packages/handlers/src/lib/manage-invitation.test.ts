@@ -102,7 +102,7 @@ describe("invitation management", () => {
     );
     expect(mocks.template).toHaveBeenCalledWith(
       expect.objectContaining({
-        inviteUrl: `${process.env.APP_URL ?? "https://app.oxagen.sh"}/invite/${row.publicId}`,
+        inviteUrl: `${process.env.APP_URL ?? "https://oxagen.app"}/invite/${row.publicId}`,
       }),
     );
     expect(mocks.lock).toHaveBeenCalledWith("update");

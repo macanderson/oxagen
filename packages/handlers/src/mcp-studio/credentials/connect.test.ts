@@ -521,11 +521,11 @@ describe("the app origin", () => {
     expect(mcpStudioAppOrigin({ APP_URL: "not a url", NEXT_PUBLIC_APP_URL: "http://localhost:3000/x" })).toBe(
       "http://localhost:3000",
     );
-    expect(mcpStudioAppOrigin({})).toBe("https://app.oxagen.sh");
+    expect(mcpStudioAppOrigin({})).toBe("https://oxagen.app");
   });
 
   it("never reads the API's origin, where the browser sends no session cookie", () => {
-    expect(mcpStudioAppOrigin({ NEXT_PUBLIC_API_URL: "https://api.oxagen.sh" })).toBe("https://app.oxagen.sh");
+    expect(mcpStudioAppOrigin({ NEXT_PUBLIC_API_URL: "https://api.oxagen.sh" })).toBe("https://oxagen.app");
   });
 });
 

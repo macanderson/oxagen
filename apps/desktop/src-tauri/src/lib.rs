@@ -68,7 +68,7 @@ fn cli_config() -> (CliConfigView, Option<String>) {
         .ok()
         .or_else(|| str_field(&value, "apiUrl"))
         .unwrap_or_else(|| "https://api.oxagen.sh".to_string());
-    let app_url = str_field(&value, "appUrl").unwrap_or_else(|| "https://app.oxagen.sh".to_string());
+    let app_url = str_field(&value, "appUrl").unwrap_or_else(|| "https://oxagen.app".to_string());
     (
         CliConfigView {
             path: path.display().to_string(),

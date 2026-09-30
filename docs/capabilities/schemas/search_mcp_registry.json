@@ -216,6 +216,78 @@
                       }
                     ]
                   },
+                  "packageArguments": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "named",
+                            "positional"
+                          ]
+                        },
+                        "name": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "valueHint": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "isRequired": {
+                          "type": "boolean"
+                        },
+                        "isSecret": {
+                          "type": "boolean"
+                        },
+                        "value": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "default": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "name",
+                        "valueHint",
+                        "isRequired",
+                        "isSecret",
+                        "value",
+                        "default"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "default": []
+                  },
                   "environmentVariables": {
                     "type": "array",
                     "items": {
