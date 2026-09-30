@@ -4,11 +4,17 @@
 //
 // A credential shows only as its vault reference (`oxagen:credential/<name>`).
 // Replacing one is written on this tab and kept in the vault, never in the
-// steering folder, so a credential never reaches a steering PR. That write is
-// lane M8's (#4668), and the button draws as not built until it lands. Until
-// discovery records the server's folder, the tab shows what the registry row
-// holds: the endpoint, the transport, the auth kind and the status light the
-// Providers tab draws.
+// steering folder, so a credential never reaches a steering PR. The form
+// (credential-form.tsx) stores a service secret or an OAuth client's id and
+// secret through set_mcp_credential (#4742), and draws as not available until
+// that merges. An operator's own OAuth sign-in is replaced through the
+// Reconnect link beside it. Until discovery records the server's folder, the
+// tab shows what the
+// registry row holds: the endpoint, the transport, the auth kind and the
+// status light the Providers tab draws.
+//
+// A URL can carry a credential too, as user info or as a query value, so the
+// tab hides both wherever it shows an address (#4678, item 12).
 import { useTranslations } from "next-intl";
 import { type ReactNode, useId } from "react";
 import type { McpServer } from "@/data/contracts/tools";
@@ -19,7 +25,6 @@ import {
 } from "@/features/tools";
 import { Badge } from "@/ui/badge";
 import {
-  buttonSecondary,
   kvList,
   kvTerm,
   kvValue,
@@ -31,7 +36,7 @@ import {
 } from "@/ui/control-styles";
 import { useFormatter } from "@/ui/formatter";
 import { cell, Table } from "@/ui/table";
-import { studioGapRef } from "./gaps";
+import { CredentialForm } from "./credential-form";
 import type {
   StudioAuthMode,
   StudioEnvironment,
@@ -85,6 +90,62 @@ function Code({ children }: { children: ReactNode }) {
  * that module (test/arch/layers.ts), so the pattern is copied here.
  */
 const CREDENTIAL_REF = /^oxagen:credential\/[a-z0-9][a-z0-9-]{0,62}$/;
+const CREDENTIAL_PREFIX = "oxagen:credential/";
+
+/** The name a vault reference carries, or "" when the value is not one. */
+function credentialName(value: string | null): string {
+  return value !== null && CREDENTIAL_REF.test(value)
+    ? value.slice(CREDENTIAL_PREFIX.length)
+    : "";
+}
+
+/**
+ * A query or fragment parameter whose name reads like a secret. Loose on
+ * purpose: hiding a harmless value costs less than showing a key.
+ */
+const SECRET_PARAM =
+  /token|secret|passw|pwd|key|auth|sig|credential|session|code/i;
+
+/**
+ * Whether a parameter name reads like a secret, tested as written and as the
+ * recipient reads it. A name may percent-encode any of its characters, so
+ * `%74oken` is `token` to the server that receives it and has to be hidden
+ * like one. A malformed escape such as `%zz` makes decodeURIComponent throw,
+ * and then the name as written is the only reading there is.
+ */
+function secretName(name: string): boolean {
+  if (SECRET_PARAM.test(name)) return true;
+  try {
+    return SECRET_PARAM.test(decodeURIComponent(name));
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Text that holds URLs, as the tab shows it: each URL's user info and each
+ * query or fragment value whose name reads like a secret replaced with `***`.
+ * The user info rule is redactUrlCredentials in
+ * packages/config/src/public-url.ts, copied because the app does not depend on
+ * @oxagen/config.
+ */
+function redactUrls(text: string): string {
+  return text
+    .replace(
+      /([a-zA-Z][a-zA-Z0-9+.-]*:\/\/)[^/?#\s]*@/g,
+      (_match, scheme: string) => `${scheme}***@`,
+    )
+    .replace(
+      /([?&;#])([^=&;#\s]+)=([^&;#\s]*)/g,
+      (match, separator: string, name: string) =>
+        secretName(name) ? `${separator}${name}=***` : match,
+    );
+}
+
+/** A URL, or a command line that may carry one, with its secrets hidden. */
+function Address({ value }: { value: string }) {
+  return <Code>{redactUrls(value)}</Code>;
+}
 
 /**
  * A credential as the record names it. Only a vault reference is shown. Any
@@ -142,7 +203,7 @@ function SourceFacts({ source }: { source: StudioSource }) {
       return (
         <>
           <Fact term={t("facts.url")}>
-            <Code>{source.url}</Code>
+            <Address value={source.url} />
           </Fact>
           <Fact term={t("facts.transport")}>
             <Code>{source.transport}</Code>
@@ -154,7 +215,7 @@ function SourceFacts({ source }: { source: StudioSource }) {
       return (
         <>
           <Fact term={t("facts.registry")}>
-            <Code>{source.registry}</Code>
+            <Address value={source.registry} />
           </Fact>
           <Fact term={t("facts.server")}>
             <Code>{source.server}</Code>
@@ -187,7 +248,7 @@ function SourceFacts({ source }: { source: StudioSource }) {
       return (
         <>
           <Fact term={t("facts.command")}>
-            <Code>{[source.command, ...source.args].join(" ")}</Code>
+            <Address value={[source.command, ...source.args].join(" ")} />
           </Fact>
           <Fact term={t("facts.machines")}>
             <Names names={source.machines} none={t("noMachines")} />
@@ -205,7 +266,7 @@ function SourceFacts({ source }: { source: StudioSource }) {
           <Fact term={t("facts.from")}>{t(`from.${source.from}`)}</Fact>
           {source.repo === null ? null : (
             <Fact term={t("facts.repo")}>
-              <Code>{source.repo}</Code>
+              <Address value={source.repo} />
             </Fact>
           )}
           {source.path === null ? null : (
@@ -220,7 +281,7 @@ function SourceFacts({ source }: { source: StudioSource }) {
           )}
           {source.url === null ? null : (
             <Fact term={t("facts.url")}>
-              <Code>{source.url}</Code>
+              <Address value={source.url} />
             </Fact>
           )}
           <Fact term={t("facts.network")}>{network(source.network)}</Fact>
@@ -261,7 +322,7 @@ function Source({
         {record === null ? (
           <>
             <Fact term={t("facts.endpoint")}>
-              <Code>{server.endpointUrl}</Code>
+              <Address value={server.endpointUrl} />
             </Fact>
             <Fact term={t("facts.transport")}>
               <Code>{server.transportType}</Code>
@@ -337,7 +398,7 @@ function Environments({
               </span>
             </td>
             <td className={`${cell} ${mono} [overflow-wrap:anywhere]`}>
-              {env.url ?? "—"}
+              {env.url === null ? "—" : redactUrls(env.url)}
             </td>
             <td className={`${cell} ${mono}`}>
               {env.network ?? connection("cloud")}
@@ -402,18 +463,16 @@ function Auth({
         </Fact>
       </dl>
       {canEdit ? (
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            disabled
-            aria-describedby={noteId}
-            data-testid="studio-credential-replace"
-            data-gap={studioGapRef("credentials")}
-            className={buttonSecondary}
-          >
-            {t("replace")}
-          </button>
-          <ReconnectProvider at={at} server={server} />
+        <div className="flex flex-col gap-3">
+          <CredentialForm
+            defaultName={credentialName(record?.auth.credential ?? null)}
+            defaultKind={
+              record?.auth.mode === "operator-oauth" ? "oauth_client" : "secret"
+            }
+          />
+          <div className="flex flex-wrap items-center gap-2">
+            <ReconnectProvider at={at} server={server} />
+          </div>
         </div>
       ) : null}
       <p id={noteId} className="text-[12.5px] text-muted-foreground">

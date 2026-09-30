@@ -14,6 +14,7 @@ import type { RoleCatalog, SsoSettings } from "@/data/contracts/org";
 import type { Read } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
+import { optionNames, pickOption } from "@/test/select";
 
 vi.mock("next/link", () => ({
   default: ({ children, ...rest }: { href: string; children: ReactNode }) => (
@@ -200,8 +201,9 @@ describe("the Roles panel", () => {
   });
 
   it("filters by kind", async () => {
+    const user = userEvent.setup();
     await renderRoles();
-    await userEvent.selectOptions(screen.getByLabelText("Kind"), "human");
+    await pickOption(user, screen.getByLabelText("Kind"), "human");
     expect(document.querySelectorAll("[data-row]")).toHaveLength(1);
     expect(rowOf("rol_9z8y7x6w5v4t3s2r1q0p9n")).toBeInTheDocument();
   });
@@ -222,11 +224,9 @@ describe("the Roles panel", () => {
   });
 
   it("lists each creator and date in the Origin filter, then built-in", async () => {
+    const user = userEvent.setup();
     await renderRoles();
-    const origin = screen.getByLabelText("Origin");
-    const options = within(origin)
-      .getAllByRole("option")
-      .map((option) => option.textContent);
+    const options = await optionNames(user, screen.getByLabelText("Origin"));
     expect(options[0]).toBe("All · Origin");
     expect(options).toContain("Priya Natarajan · Aug 30, 2026");
     expect(options.at(-1)).toBe("built-in");
@@ -234,8 +234,10 @@ describe("the Roles panel", () => {
   });
 
   it("narrows the roles to one creator's", async () => {
+    const user = userEvent.setup();
     await renderRoles();
-    await userEvent.selectOptions(
+    await pickOption(
+      user,
       screen.getByLabelText("Origin"),
       "Priya Natarajan · Aug 30, 2026",
     );

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // The phone shell at a 400 px container, with src/ui/phone.css's phone rules
-// applied (src/test/phone.ts): the five-slot thumb bar, its Fleet count and
+// applied (src/test/phone.ts): the four-slot thumb bar, its Fleet count and
 // active slot, the More sheet as a bottom-sheet dialog, the drawer's scrim, and
 // a list table on the page labelled as cards.
 import {
@@ -162,23 +162,23 @@ function slots(): HTMLElement[] {
 }
 
 describe("thumb bar", () => {
-  it("renders five slots in order — Fleet, Agents, Tools, Spend, More — as 44 px targets over the safe-area inset", () => {
+  it("renders four slots in order — Fleet, Agents, Spend, More — as 44 px targets over the safe-area inset", () => {
     renderPhone(shellData());
     const bar = screen.getByRole("navigation", { name: "Primary" });
     expect(slots().map((s) => s.dataset.slot)).toEqual([
       "fleet",
       "agents",
-      "tools",
       "spend",
       "more",
     ]);
     expect(slots().map((s) => s.textContent)).toEqual([
       "Fleet",
       "Agents",
-      "Tools",
       "Spend",
       "More",
     ]);
+    // One column per slot, so no empty cell sits at the end of the bar.
+    expect(bar).toHaveClass("grid-cols-4");
     expect(
       within(bar)
         .getAllByRole("link")
@@ -186,7 +186,6 @@ describe("thumb bar", () => {
     ).toEqual([
       "/acme/core-platform",
       "/acme/core-platform/agents",
-      "/acme/core-platform/tools",
       "/acme/core-platform/spend",
     ]);
     for (const slot of slots()) {
@@ -299,10 +298,12 @@ describe("thumb bar", () => {
     ["/acme/core-platform", "fleet"],
     ["/acme/core-platform/runs/run_01", "fleet"],
     ["/acme/core-platform/agents", "agents"],
-    ["/acme/core-platform/tools", "tools"],
+    // Tools and Runtimes are tabs of Agents, and their old paths light it.
+    ["/acme/core-platform/agents?tab=servers", "agents"],
+    ["/acme/core-platform/tools", "agents"],
+    ["/acme/core-platform/runtimes/mbell-mbp-16", "agents"],
     ["/acme/core-platform/spend", "spend"],
     ["/acme/core-platform/steering", "more"],
-    ["/acme/core-platform/runtimes", "more"],
     ["/acme/core-platform/repositories", "more"],
     ["/acme/billing", "more"],
     ["/acme/api-keys", "more"],
@@ -386,7 +387,7 @@ describe("thumb bar", () => {
 });
 
 describe("More sheet", () => {
-  it("rises as a bottom sheet carrying Steering, Runtimes, Repositories, Organization, Billing and Audit, each with its line", async () => {
+  it("rises as a bottom sheet carrying Steering, Repositories, Organization, Billing and Audit, each with its line", async () => {
     const user = userEvent.setup();
     renderPhone(shellData());
     const more = screen.getByRole("button", { name: "More" });
@@ -399,10 +400,6 @@ describe("More sheet", () => {
       [
         "Steeringlibrary, assignments, gates, proposals, compiler",
         "/acme/core-platform/steering",
-      ],
-      [
-        "Runtimeshosts, harnesses, hooks, tiers",
-        "/acme/core-platform/runtimes",
       ],
       [
         "Repositoriesbindings, working copies, changes",
@@ -571,7 +568,7 @@ describe("the other dialogs on a phone", () => {
     expect(style(within(menu).getByRole("combobox")).fontSize).toBe("16px");
   });
 
-  it("the drawer opens over a scrim with the sidebar's ten links", async () => {
+  it("the drawer opens over a scrim with the sidebar's eight links", async () => {
     const user = userEvent.setup();
     renderPhone(shellData());
     expect(document.querySelector("[data-scrim]")).toBeNull();
@@ -587,7 +584,7 @@ describe("the other dialogs on a phone", () => {
       within(drawer)
         .getByRole("navigation", { name: "Main" })
         .querySelectorAll("a"),
-    ).toHaveLength(10);
+    ).toHaveLength(8);
   });
 
   it("the drawer closes when the window widens past the breakpoint, so no invisible modal holds focus", async () => {

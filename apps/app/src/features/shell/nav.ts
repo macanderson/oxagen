@@ -1,21 +1,21 @@
-// The shell's navigation model (ARCHITECTURE.md §1.2): the sidebar's ten
-// links in the mockup's order (Workspace: Fleet, Agents, Tools, Steering,
-// Runtimes, Repositories, Spend; Organization: Organization, Billing, Audit),
+// The shell's navigation model (ARCHITECTURE.md §1.2): the sidebar's eight
+// links in the mockup's order (Workspace: Fleet, Agents, Steering,
+// Repositories, Spend; Organization: Organization, Billing, Audit),
 // the phone's thumb bar and More
 // sheet over the same keys, which item is current, and the breadcrumbs. Pure
 // functions of the URL, so the sidebar, top bar, command menu and <MobileNav>
 // agree on one model. Run has no entry: it opens from the Fleet runs table.
 // Skills has none either: it is a tab of Steering (MC spec §10.7), and
-// `/{org}/{ws}/skills` redirects there.
+// `/{org}/{ws}/skills` redirects there. Tools and Runtimes have none either:
+// they are tabs of Agents (roadmap mockups `agents?tab=`), so a Studio server
+// page under `/tools` and one runtime's page under `/runtimes` light Agents.
 
-import { pathOf, type SafePath } from "@/shared/safe-path";
+import { pathOf, routes, type SafePath } from "@/shared/safe-path";
 
 export type WorkspaceNavKey =
   | "fleet"
   | "agents"
-  | "tools"
   | "steering"
-  | "runtimes"
   | "repositories"
   | "spend";
 export type OrgNavKey = "organization" | "billing" | "audit";
@@ -26,9 +26,7 @@ export type NavKey = WorkspaceNavKey | OrgNavKey | OrgPageNavKey;
 export const WORKSPACE_NAV: readonly WorkspaceNavKey[] = [
   "fleet",
   "agents",
-  "tools",
   "steering",
-  "runtimes",
   "repositories",
   "spend",
 ];
@@ -55,23 +53,14 @@ function isOrgPageNavKey(key: NavKey | null): key is OrgPageNavKey {
   return key !== null && key in ORG_PAGE_NAV;
 }
 
-type ThumbSlot = Extract<
-  WorkspaceNavKey,
-  "fleet" | "agents" | "tools" | "spend"
->;
+type ThumbSlot = Extract<WorkspaceNavKey, "fleet" | "agents" | "spend">;
 
-/** The phone's thumb bar: these four slots, then More (mockup `mobileNav`). */
-export const THUMB_SLOTS: readonly ThumbSlot[] = [
-  "fleet",
-  "agents",
-  "tools",
-  "spend",
-];
+/** The phone's thumb bar: these three slots, then More (mockup `mobileNav`). */
+export const THUMB_SLOTS: readonly ThumbSlot[] = ["fleet", "agents", "spend"];
 
 /** The rest of the sidebar, one tap away in the phone's More sheet (mockup `DLG_EXT.more`). */
 export const MORE_SHEET: readonly NavKey[] = [
   "steering",
-  "runtimes",
   "repositories",
   "organization",
   "billing",
@@ -102,9 +91,7 @@ function isOrgSegment(segment: string): segment is keyof typeof ORG_SEGMENTS {
 
 const WORKSPACE_SEGMENT: Record<Exclude<WorkspaceNavKey, "fleet">, string> = {
   agents: "agents",
-  tools: "tools",
   steering: "steering",
-  runtimes: "runtimes",
   repositories: "repositories",
   spend: "spend",
 };
@@ -180,6 +167,9 @@ export function currentNavKey(pathname: string): NavKey | null {
   // A mandate belongs to an agent and has no sidebar item of its own, so it
   // lights Agents the same way a run with no Runs item lights Fleet above.
   if (head === "mandates") return "agents";
+  // Tools and Runtimes are tabs of Agents; the pages still under their paths
+  // (a Studio server, one runtime) light Agents.
+  if (head === "tools" || head === "runtimes") return "agents";
   return (
     WORKSPACE_NAV.find(
       (key) => key !== "fleet" && WORKSPACE_SEGMENT[key] === head,
@@ -289,16 +279,13 @@ export function breadcrumbs(
       if (id !== undefined) out.push({ kind: "id", text: id, href: null });
       break;
     case "runtimes":
-      // One runtime ends the trail on the runtime's name, under Runtimes
-      // (mockup `crumbs()`: the list is a link, the name is mono). The
+      // One runtime ends the trail on the runtime's name, under Agents, whose
+      // Runtimes tab lists it (mockup `crumbs()`: the list is a link, the name
+      // is mono). The
       // segment is the enrollment id, so the name is the one the page
       // declared for that id; until it has, the id stands in. The id stays
       // copyable on the page, in the rollback command.
-      out.push({
-        kind: "nav",
-        key: "runtimes",
-        href: pathOf(org, ws, "runtimes"),
-      });
+      out.push({ kind: "nav", key: "agents", href: routes.runtimes(org, ws) });
       if (id !== undefined) {
         const label = names.record?.id === id ? (names.record.label ?? id) : id;
         out.push({ kind: "id", text: label, href: null });

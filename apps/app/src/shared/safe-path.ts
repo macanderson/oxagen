@@ -50,6 +50,41 @@ export function pathOf(...segments: readonly string[]): SafePath {
 
 const ROOT = mint("/");
 
+/**
+ * The Agents page's tabs, in the order the strip draws them (roadmap mockups
+ * `agents`): the agents, the tool servers they call, the policies that decide
+ * each call, the runtimes they run on, and the off switches.
+ */
+export const AGENTS_AREA_TABS = [
+  "agents",
+  "servers",
+  "policies",
+  "runtimes",
+  "switches",
+] as const;
+export type AgentsAreaTab = (typeof AGENTS_AREA_TABS)[number];
+
+/**
+ * The `?tab=` values the Agents page serves: its five tabs, and the two views
+ * of Tool servers that carry no tab of their own, the tool registry and the
+ * toolbelts.
+ */
+export type AgentsPageTab = AgentsAreaTab | "tools" | "toolbelts";
+
+/** The Agents `?tab=` each view of the retired Tools page lands on. */
+const TOOLS_VIEW_TAB: Readonly<
+  Record<
+    "tools" | "toolbelts" | "providers" | "policy" | "switches",
+    AgentsPageTab
+  >
+> = {
+  tools: "tools",
+  toolbelts: "toolbelts",
+  providers: "servers",
+  policy: "policies",
+  switches: "switches",
+};
+
 function withQuery(
   path: SafePath,
   query: Readonly<Record<string, string | undefined>>,
@@ -192,10 +227,7 @@ export const routes = {
    * notices post to (#4608). `slack` is how a connection attempt ended, set
    * only by the OAuth callback.
    */
-  notifications: (
-    org: string,
-    q?: { slack?: SlackConnectOutcome },
-  ): SafePath =>
+  notifications: (org: string, q?: { slack?: SlackConnectOutcome }): SafePath =>
     withQuery(pathOf(org), { tab: "notifications", slack: q?.slack }),
   /** Organization › Roles: the roles and the permission catalogue (#2964). */
   roles: (org: string): SafePath => pathOf(org, "roles"),
@@ -266,25 +298,38 @@ export const routes = {
     });
   },
   /**
-   * Agent IAM; `cursor` opens a later page of the identities table, and
+   * Agents, the one page for agents and what governs them (roadmap mockups
+   * `agents?tab=`). `tab` picks Tool servers, Policies, Runtimes or Off
+   * switches, and is left off for the Agents tab. It is a query value, not a
+   * path segment, because `/agents/<segment>` is one agent's page. On the
+   * Agents tab `cursor` opens a later page of the identities table and
    * `deregistered` lists retired agents beside the live ones.
    */
   agents: (
     org: string,
     ws: string,
-    q?: { cursor?: string; view?: string; deregistered?: boolean },
+    q?: {
+      tab?: AgentsPageTab;
+      cursor?: string;
+      view?: string;
+      deregistered?: boolean;
+    },
   ): SafePath =>
     withQuery(pathOf(org, ws, "agents"), {
+      tab: q?.tab === "agents" ? undefined : q?.tab,
       deregistered: q?.deregistered === true ? "show" : undefined,
       cursor: q?.cursor,
       view: q?.view,
     }),
-  /** One agent; `tab` picks the section, `cursor` a later page of its incidents. */
+  /**
+   * One agent. `tab` picks the section, `rows` how many of its incidents a
+   * page holds, and `cursor` a later page of them (#4693).
+   */
   agent: (
     org: string,
     ws: string,
     agent: string,
-    q?: { tab: string; cursor?: string },
+    q?: { tab: string; rows?: string; cursor?: string },
   ): SafePath =>
     withQuery(
       q?.tab === undefined
@@ -299,6 +344,7 @@ export const routes = {
               : q.tab,
           ),
       {
+        rows: q?.rows,
         cursor: q?.cursor,
       },
     ),
@@ -314,19 +360,21 @@ export const routes = {
    * from the record instead: the page's header links to the agent the mandate was
    * granted to.
    *
-   * `q` searches the ledger, `state` narrows it to one movement kind and
-   * `offset` opens a later page of it. All three are query values, not routes,
-   * for the reason every other filter and page here is.
+   * `q` searches the ledger, `state` narrows it to one movement kind, `rows`
+   * sets how many movements a page holds and `offset` opens a later page of
+   * it. All four are query values, not routes, for the reason every other
+   * filter and page here is.
    */
   mandate: (
     org: string,
     ws: string,
     mandate: string,
-    q?: { search?: string; state?: string; offset?: string },
+    q?: { search?: string; state?: string; rows?: string; offset?: string },
   ): SafePath =>
     withQuery(pathOf(org, ws, "mandates", mandate), {
       q: q?.search,
       state: q?.state,
+      rows: q?.rows,
       offset: q?.offset,
     }),
   /**
@@ -347,7 +395,8 @@ export const routes = {
       runtime: q?.runtime,
     }),
   /**
-   * Billing; `cursor` opens a later page of its invoices, `checkout` is where
+   * Billing; `rows` sets how many invoices a page holds (#4693) and `cursor`
+   * opens a later page of them, `checkout` is where
    * a Stripe Checkout returns. The two meters return to different values —
    * `success` for a governed-action-unit purchase, `credits` for a usage
    * credit top-up — so the page can name the meter the payment landed on;
@@ -356,10 +405,11 @@ export const routes = {
   billing: (
     org: string,
     q?:
-      | { cursor: string }
+      | { rows?: string; cursor?: string }
       | { checkout: "success" | "cancel" | "credits" | "plan" },
   ): SafePath =>
     withQuery(pathOf(org, "billing"), {
+      rows: q !== undefined && "rows" in q ? q.rows : undefined,
       cursor: q !== undefined && "cursor" in q ? q.cursor : undefined,
       checkout: q !== undefined && "checkout" in q ? q.checkout : undefined,
     }),
@@ -430,36 +480,47 @@ export const routes = {
   /**
    * Spend on one tab, with one key's drill or one finding's evidence open. The
    * tab and the drill are path segments (`/spend/agent/<key>`), as the mockup's
-   * route names them, and the first tab is the bare path; a finding's evidence
-   * is a dialog over the Findings tab, so it is a query value.
+   * route names them, and the first tab, Month, is the bare path. A finding's
+   * evidence is a dialog over the Findings tab and `by` is the Month tab's
+   * grouping, so both are query values.
    */
   spend: (
     org: string,
     ws: string,
-    view: { tab: string; drill?: string; finding?: string },
+    view: { tab: string; drill?: string; finding?: string; by?: string },
   ): SafePath =>
     withQuery(
       view.drill !== undefined
         ? pathOf(org, ws, "spend", view.tab, view.drill)
-        : view.tab === "findings"
+        : view.tab === "month"
           ? pathOf(org, ws, "spend")
           : pathOf(org, ws, "spend", view.tab),
-      { finding: view.finding },
+      { finding: view.finding, by: view.by },
     ),
   /**
    * Skills, the Skills shelf of the Steering library (roadmap pages/skills.md);
-   * `cursor` opens a later page of the inventory. `/{org}/{ws}/skills`
+   * `cursor` opens a later page of the inventory, and `rows` is the size of
+   * a page when it is off the default (#4693). `/{org}/{ws}/skills`
    * redirects here.
    */
-  skills: (org: string, ws: string, q?: { cursor: string }): SafePath =>
+  skills: (
+    org: string,
+    ws: string,
+    q?: { cursor?: string; rows?: string },
+  ): SafePath =>
     withQuery(pathOf(org, ws, "steering", "skills"), {
+      rows: q?.rows,
       cursor: q?.cursor,
     }),
   /**
-   * Tools; its tabs are path segments (`/tools/providers`), as the mockup's
-   * route names them, and the first tab is the bare path. A category chip, a
-   * provider chip, the API-names toggle, a cursor and the toolbelt open on the
-   * Toolbelts tab (`belt`, ADR-198) are query values.
+   * The governance views of the Agents page, which absorbed the Tools page.
+   * Each Tools view keeps its name here and lands on the Agents tab that holds
+   * it: Providers on Tool servers, Policy on Policies, Kill switches on Off
+   * switches. The registry (`tab` left off) and Toolbelts are views of the
+   * Tool servers tab, `?tab=tools` and `?tab=toolbelts`. A category chip, a
+   * provider chip, the API-names toggle, the rows a page of the view's list
+   * holds (#4693), a cursor and the toolbelt open on the Toolbelts view
+   * (`belt`, ADR-198) are query values.
    */
   tools: (
     org: string,
@@ -469,22 +530,20 @@ export const routes = {
       category?: string;
       provider?: string;
       names?: string;
+      rows?: string;
       cursor?: string;
       belt?: string;
     } = {},
   ): SafePath =>
-    withQuery(
-      q.tab === undefined
-        ? pathOf(org, ws, "tools")
-        : pathOf(org, ws, "tools", q.tab),
-      {
-        category: q.category,
-        provider: q.provider,
-        names: q.names,
-        cursor: q.cursor,
-        belt: q.belt,
-      },
-    ),
+    withQuery(pathOf(org, ws, "agents"), {
+      tab: TOOLS_VIEW_TAB[q.tab ?? "tools"],
+      category: q.category,
+      provider: q.provider,
+      names: q.names,
+      rows: q.rows,
+      cursor: q.cursor,
+      belt: q.belt,
+    }),
   /**
    * Repositories; its tabs are path segments (`/repositories/changes`), as the
    * mockup's route names them, and the first tab is the bare path.
@@ -501,8 +560,9 @@ export const routes = {
       : tab === "changes" && change !== undefined
         ? pathOf(org, ws, "repositories", tab, change)
         : pathOf(org, ws, "repositories", tab),
-  /** Runtimes: the hosts agents run on (roadmap mockups/pages/runtimes.md). */
-  runtimes: (org: string, ws: string): SafePath => pathOf(org, ws, "runtimes"),
+  /** Runtimes, the hosts agents run on: a tab of the Agents page (roadmap mockups/pages/runtimes.md). */
+  runtimes: (org: string, ws: string): SafePath =>
+    withQuery(pathOf(org, ws, "agents"), { tab: "runtimes" }),
   /**
    * One runtime: a host enrollment by its public id (`tch_…`), or a named
    * runtime by its id (`rtm_…`, ADR-198), whose page carries its containment
@@ -517,7 +577,8 @@ export const routes = {
    * id written before the rename still maps to where it lives now: `policy`,
    * `settings` and `freshness` are Gates, `deliveries` is Assignments,
    * `preview` is the Compiler and `prs` is the Context PRs segment. Filters, a
-   * page offset, a selected proposal and a Skills cursor stay query values.
+   * page offset, the rows a page of proposals holds, a selected proposal and a
+   * Skills cursor stay query values.
    */
   steering: (
     org: string,
@@ -529,6 +590,8 @@ export const routes = {
       /** A skill whose source `/steering/skills/<skill>/source` opens; only with `tab: "skills"`. */
       skill?: string;
       kind?: string;
+      /** How many rows a page holds; on Proposals and the Skills shelf (#4693). */
+      rows?: string;
       offset?: string;
       proposal?: string;
       cursor?: string;
@@ -547,6 +610,7 @@ export const routes = {
     }
     return withQuery(pathOf(org, ws, "steering", ...segments), {
       kind: q.kind,
+      rows: q.rows,
       offset: q.offset,
       proposal: q.proposal,
       cursor: q.cursor,

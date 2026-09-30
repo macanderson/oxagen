@@ -82,6 +82,7 @@ const START_ROLES = {
 
 function row(server: string): DiscoveryRow {
   return {
+    id: "0191d0a0-0000-7000-8000-00000000d15c",
     server,
     mcpServerId: null,
     status: "queued",

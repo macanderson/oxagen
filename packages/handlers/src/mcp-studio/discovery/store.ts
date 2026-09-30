@@ -24,6 +24,7 @@ import {
   isNull,
   lt,
   or,
+  sql,
 } from "drizzle-orm";
 import type {
   DiscoveryOutcome,
@@ -38,6 +39,11 @@ export type DiscoveryStatus = "queued" | "running" | "succeeded" | "failed";
 
 /** One server's discovery state. */
 export interface DiscoveryRow {
+  /**
+   * The row's id. The upsert never sets it, so it stays the same across
+   * every discovery of the server and serves as the discovery id.
+   */
+  id: string;
   server: string;
   mcpServerId: string | null;
   status: DiscoveryStatus;
@@ -192,7 +198,10 @@ export interface StalledTarget extends DiscoveryTarget {
 
 /** The cross-workspace reads of the hourly sweep and the push webhook. */
 export interface DiscoverySweepStore {
-  /** Published steering servers with no discovery row yet. */
+  /**
+   * Published steering servers whose tools discovery has not snapshotted: no
+   * discovery row yet, or a finished row with no mcpServerId.
+   */
   undiscovered(limit: number): Promise<DiscoveryTarget[]>;
   /** Daily servers whose last finish is older than before, or that never finished. */
   dueDaily(before: Date, limit: number): Promise<DiscoveryTarget[]>;
@@ -226,6 +235,7 @@ function toRow(row: Row): DiscoveryRow {
       ? { number: row.prNumber, url: row.prUrl, branch: row.prBranch }
       : null;
   return {
+    id: row.id,
     server: row.server,
     mcpServerId: row.mcpServerId,
     status: row.status as DiscoveryStatus,
@@ -557,9 +567,18 @@ export const postgresDiscoverySweepStore: DiscoverySweepStore = {
     const s = schema.mcpServers;
     // tenancy: the scheduled hourly sweep is a deliberate cross-tenant read
     // of the shared plane. It selects the org, workspace, and folder name of
-    // each live steering server with no discovery row, and reads no other
-    // column. Each discovery then runs in its own workspace scope. The
-    // oldest server goes first, so a sweep past the limit is fair.
+    // each live steering server whose tools discovery has not snapshotted,
+    // and reads no other column. Each discovery then runs in its own
+    // workspace scope.
+    //
+    // A server has no snapshots when it has no discovery row, or when its
+    // last finished run began before its mcp.servers row existed: that run
+    // recorded the offered names with no mcpServerId to write snapshots
+    // under. The next run that reads the folder stamps the id, even when it
+    // skips, so a server leaves this list after one such run once its row is
+    // live. A server with no discovery row goes first, oldest server first.
+    // The stranded rows follow by their last finish, so a folder that fails
+    // on every run does not hold the head of each sweep.
     const rows = await withSystemDb((tx) =>
       tx
         .select({
@@ -581,10 +600,20 @@ export const postgresDiscoverySweepStore: DiscoverySweepStore = {
             eq(s.origin, "steering"),
             isNotNull(s.steeringName),
             isNull(s.deletedAt),
-            isNull(t.id),
+            or(
+              isNull(t.id),
+              and(
+                isNull(t.mcpServerId),
+                or(eq(t.status, "succeeded"), eq(t.status, "failed")),
+              ),
+            ),
           ),
         )
-        .orderBy(asc(s.createdAt), asc(s.id))
+        .orderBy(
+          sql`${t.finishedAt} asc nulls first`,
+          asc(s.createdAt),
+          asc(s.id),
+        )
         .limit(limit),
     );
     return rows.flatMap((row) =>

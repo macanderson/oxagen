@@ -1581,6 +1581,25 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./mcp-studio/import/review.open"))
         .openStudioReviewHandler as CapabilityHandlerFn,
   );
+  // Studio's discovery progress and Tools tab (lane M10, #4682).
+  registerHandler(
+    "start_studio_discovery",
+    async () =>
+      (await import("./mcp-studio/discovery/discovery.start"))
+        .startStudioDiscoveryHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "get_studio_discovery",
+    async () =>
+      (await import("./mcp-studio/discovery/discovery.get"))
+        .getStudioDiscoveryHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "list_studio_tools",
+    async () =>
+      (await import("./mcp-studio/discovery/tools.list"))
+        .listStudioToolsHandler as CapabilityHandlerFn,
+  );
   // M12 (#4685): relays for servers and APIs in a private network.
   registerHandler(
     "create_relay",

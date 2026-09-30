@@ -7,8 +7,9 @@
 // Every edit here is staged in the draft, never written. A suggested
 // classification stays a suggestion until a person confirms or changes it,
 // and the steering PR that Changes opens is what records it. Draft asks the
-// in-app agent for a description and bills as in-app agent spend; until the
-// capability lands it answers "not built" (seams.ts).
+// in-app agent for a description (draft_studio_description) and bills as
+// in-app agent spend. #4742 builds that capability. Until it merges, Draft
+// renders disabled with a one-line note (pending-capabilities.ts).
 import { useLocale, useTranslations } from "next-intl";
 import { type ReactNode, useId, useState } from "react";
 import {
@@ -41,7 +42,11 @@ import {
 import { studioGapRef } from "./gaps";
 import type { StudioClassification, StudioTool } from "./model";
 import { StudioNotRecorded } from "./not-recorded";
-import { type DraftDescription, draftDescription } from "./seams";
+import {
+  type DraftStudioDescription,
+  draftStudioDescription,
+} from "./pending-capabilities";
+import { PendingNote } from "./pending-note";
 
 const section = "flex flex-col gap-2 border-t border-border pt-4 first:border-t-0 first:pt-0";
 const heading = "text-[13.5px] font-semibold text-foreground";
@@ -255,19 +260,19 @@ function Classification({
 }
 
 function Description({
-  serverId,
+  serverName,
   tool,
   ops,
   canEdit,
   onStage,
   draft,
 }: {
-  serverId: string;
+  serverName: string | null;
   tool: StudioTool;
   ops: readonly DraftOp[];
   canEdit: boolean;
   onStage: (op: DraftOp) => void;
-  draft: DraftDescription;
+  draft: DraftStudioDescription;
 }) {
   const t = useTranslations("mcpStudio.panel");
   const id = useId();
@@ -283,11 +288,18 @@ function Description({
   >({ kind: "none" });
   const imported = importedAfter(tool, ops);
   const trimmed = text.trim();
+  /** Draft names the server by its folder, so it waits for the record too. */
+  const blocked = !draft.available
+    ? draft.gap
+    : serverName === null
+      ? "record"
+      : null;
   const runDraft = async () => {
+    if (serverName === null || !draft.available) return;
     setPending(true);
     setOutcome({ kind: "none" });
     try {
-      const result = await draft({ serverId, tool: tool.name });
+      const result = await draft.call({ server: serverName, tool: tool.name });
       if (result.ok) {
         setText(result.description);
         return;
@@ -329,8 +341,10 @@ function Description({
             <button
               type="button"
               className={buttonSecondary}
-              disabled={pending}
+              disabled={pending || blocked !== null}
               aria-busy={pending}
+              aria-describedby={blocked === null ? undefined : `${id}-pending`}
+              data-capability={draft.name}
               data-testid="studio-panel-draft"
               onClick={() => {
                 void runDraft();
@@ -355,6 +369,16 @@ function Description({
               <Badge tone="approval">{t("staged")}</Badge>
             ) : null}
           </div>
+          {blocked === null ? null : (
+            <PendingNote
+              id={`${id}-pending`}
+              capability={draft.name}
+              gap={blocked}
+              testId="studio-panel-draft-pending"
+            >
+              {t("draftNotBuilt")}
+            </PendingNote>
+          )}
           {outcome.kind === "not_built" ? (
             <p
               role="status"
@@ -525,7 +549,7 @@ function Feedback({ tool }: { tool: StudioTool }) {
 }
 
 export function ToolPanel({
-  serverId,
+  serverName,
   tool,
   ops,
   canEdit,
@@ -534,9 +558,10 @@ export function ToolPanel({
   offFacts,
   open,
   onOpenChange,
-  draft = draftDescription,
+  draft = draftStudioDescription,
 }: {
-  serverId: string;
+  /** The folder name Draft names the server by; null until the record names it. */
+  serverName: string | null;
   tool: StudioTool;
   ops: readonly DraftOp[];
   canEdit: boolean;
@@ -548,8 +573,8 @@ export function ToolPanel({
   offFacts: ReactNode;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** Draft's capability; the not-built stub until PR2 of #4678. */
-  draft?: DraftDescription;
+  /** Draft's capability: the stub until #4742 merges. */
+  draft?: DraftStudioDescription;
 }) {
   const t = useTranslations("mcpStudio.panel");
   const id = useId();
@@ -576,7 +601,7 @@ export function ToolPanel({
           onStage={stage}
         />
         <Description
-          serverId={serverId}
+          serverName={serverName}
           tool={tool}
           ops={ops}
           canEdit={canEdit}

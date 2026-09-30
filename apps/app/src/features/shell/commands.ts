@@ -1,7 +1,7 @@
 // The ⌘K command menu's model (mockup `CMDS` and `cmdMenu()`, audit-prompt
 // check 6): every page and action, in the mockup's groups.
 //
-// - Go: the pages. Fleet, Agents, Tools, Steering and Spend carry ⌘1 to ⌘5.
+// - Go: the pages. Fleet, Agents, Steering and Spend carry ⌘1 to ⌘4.
 // - The assistant: open it, or open it with a question drafted, and the model
 //   key it answers with.
 // - Create: the chooser, then one entry per kind the wizard host carries;
@@ -42,11 +42,13 @@ export const COMMAND_GROUPS = [
 ] as const;
 export type CommandGroup = (typeof COMMAND_GROUPS)[number];
 
-/** The pages ⌘1 to ⌘5 open, in that order (mockup `CMDS` Go). */
+/**
+ * The pages ⌘1 to ⌘4 open, in that order (mockup `CMDS` Go). Tools is a tab
+ * of Agents now, so ⌘2 reaches it.
+ */
 const SHORTCUT_PAGES: readonly WorkspaceNavKey[] = [
   "fleet",
   "agents",
-  "tools",
   "steering",
   "spend",
 ];
@@ -198,7 +200,7 @@ export function buildCommands(
         id: "action:grant",
         label: labels.text("actions.grant"),
         group: "actions",
-        href: routes.tools(org, ws),
+        href: routes.tools(org, ws, { tab: "policy" }),
       },
     );
   }

@@ -86,6 +86,22 @@ describe("skills.inventory", () => {
     );
   });
 
+  it("asks for a page size off the default, and leaves the default off the input (#4693)", async () => {
+    kernelRead.mockResolvedValue(readOk(output));
+    await skills.inventory(ctx, { cursor: "c2", limit: 25 });
+    expect(kernelRead).toHaveBeenLastCalledWith(ctx, {
+      contract: skillList,
+      input: { cursor: "c2", limit: 25 },
+      page: "skills",
+    });
+    await skills.inventory(ctx, { cursor: null, limit: 100 });
+    expect(kernelRead).toHaveBeenLastCalledWith(ctx, {
+      contract: skillList,
+      input: {},
+      page: "skills",
+    });
+  });
+
   it("asks for the page a cursor names", async () => {
     kernelRead.mockResolvedValue(readOk(output));
     await skills.inventory(ctx, { cursor: "c2" });
