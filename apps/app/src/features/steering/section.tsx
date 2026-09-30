@@ -1,14 +1,15 @@
 // The frame every Steering section shares: a region named by its heading with
 // an optional lead, the term-and-value list its facts print in, the pager for
-// a page of records or proposals, and the one date style the page uses.
+// a page of proposals with Rows per page beside Previous and Next (#4693), and
+// the one date style the page uses.
 import { useLocale, useTranslations } from "next-intl";
 import type { ComponentProps, ReactNode } from "react";
-import { STEERING_PAGE } from "@/data/contracts/steering";
 import type { SafePath } from "@/shared/safe-path";
-import { linkText, panel } from "@/ui/control-styles";
-import { formatCount } from "@/ui/money-format";
-import { SafeLink } from "@/ui/navigation";
+import { panel } from "@/ui/control-styles";
 import { useFormatter } from "@/ui/formatter";
+import { LinkPager } from "@/ui/link-pager";
+import { formatCount } from "@/ui/money-format";
+import { PROPOSAL_ROWS } from "./view";
 
 export function Section({
   id,
@@ -76,51 +77,59 @@ export function useDate(): (iso: string) => string {
     format.dateTime(new Date(iso), { dateStyle: "medium", timeStyle: "short" });
 }
 
-/** Previous and next pages of a list read `STEERING_PAGE` at a time; nothing when one page holds it all. */
+/**
+ * The pager under a page of proposals: Rows per page and the range on the
+ * left, Previous and Next on the right, each an address `link` builds.
+ * Picking a size opens the first page at that size. It draws while the page
+ * holds a proposal or sits past the first, so a list that fits one page can
+ * still be read ten at a time.
+ */
 export function Pager({
   offset,
+  rows,
   shown,
   total,
   link,
 }: {
   offset: number;
+  /** How many proposals a page holds, one of PROPOSAL_ROWS. */
+  rows: number;
   /** How many rows this page returned. */
   shown: number;
   total: number;
-  link: (offset: number) => SafePath;
+  link: (to: { offset: number; rows: number }) => SafePath;
 }) {
   const t = useTranslations("steering.pager");
+  const list = useTranslations("ui.list");
   const locale = useLocale();
-  const hasPrevious = offset > 0;
-  const hasNext = offset + shown < total;
-  if (!hasPrevious && !hasNext) return null;
+  if (shown === 0 && offset === 0) return null;
   return (
-    <nav
-      aria-label={t("label")}
-      className="flex flex-wrap items-center gap-4 text-sm"
-    >
-      {shown === 0 ? null : (
-        <span className="text-muted-foreground">
-          {t("range", {
-            from: formatCount(offset + 1, locale),
-            to: formatCount(offset + shown, locale),
-            total: formatCount(total, locale),
-          })}
-        </span>
-      )}
-      {hasPrevious ? (
-        <SafeLink
-          to={link(Math.max(0, offset - STEERING_PAGE))}
-          className={linkText}
-        >
-          {t("previous")}
-        </SafeLink>
-      ) : null}
-      {hasNext ? (
-        <SafeLink to={link(offset + STEERING_PAGE)} className={linkText}>
-          {t("next")}
-        </SafeLink>
-      ) : null}
-    </nav>
+    <LinkPager
+      label={t("label")}
+      rowsLabel={list("rows")}
+      previousLabel={t("previous")}
+      nextLabel={t("next")}
+      perPage={rows}
+      sizes={PROPOSAL_ROWS.map((size) => ({
+        size,
+        first: link({ offset: 0, rows: size }),
+      }))}
+      range={
+        shown === 0
+          ? undefined
+          : t("range", {
+              from: formatCount(offset + 1, locale),
+              to: formatCount(offset + shown, locale),
+              total: formatCount(total, locale),
+            })
+      }
+      previous={
+        offset > 0 ? link({ offset: Math.max(0, offset - rows), rows }) : null
+      }
+      next={
+        offset + shown < total ? link({ offset: offset + rows, rows }) : null
+      }
+      className="px-0"
+    />
   );
 }

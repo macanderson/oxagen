@@ -13,8 +13,10 @@ import {
   fireEvent,
   render,
   screen,
+  waitFor,
   within,
 } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Read } from "@/data/read";
 import { readError, readOk } from "@/data/read";
@@ -84,6 +86,7 @@ type Props = {
   category?: string | null;
   provider?: string | null;
   cursor?: string | null;
+  rows?: number;
   canImport?: boolean;
 };
 
@@ -94,6 +97,7 @@ function renderRegistry({
   category = null,
   provider = null,
   cursor = null,
+  rows = 50,
   canImport = true,
 }: Props = {}) {
   return render(
@@ -105,6 +109,7 @@ function renderRegistry({
         category={category}
         provider={provider}
         cursor={cursor}
+        rows={rows}
         canImport={canImport}
         canClassify={canImport}
         read={read}
@@ -117,6 +122,9 @@ function renderRegistry({
 
 const chips = () =>
   within(screen.getByRole("group", { name: t("categories") }));
+/** The pager under the registry table (#4693). */
+const pages = () =>
+  within(screen.getByRole("navigation", { name: "Tool version pages" }));
 function chip(category: string): HTMLElement {
   const node = document.querySelector(`[data-category="${category}"]`);
   if (!(node instanceof HTMLElement)) throw new Error(`no chip ${category}`);
@@ -262,7 +270,7 @@ describe("Registry › category chips", () => {
     renderRegistry({ read: readOk(toolVersionPage({ nextCursor: "cur_2" })) });
     expect(chip("all")).toHaveTextContent(t("allOnPage"));
     expect(facetNote()).toBe(t("categoriesNote"));
-    expect(screen.getByTestId("tools-next-page")).toBeVisible();
+    expect(pages().getByRole("link", { name: "Next page" })).toBeVisible();
   });
 
   it("presses the chip in effect, clears the filter when it is pressed again, and drops the all chip's count", () => {
@@ -421,9 +429,78 @@ describe("Registry › provider chips", () => {
     expect(router.push).toHaveBeenLastCalledWith(
       `${TOOLS}&provider=${STRIPE}&names=api`,
     );
-    expect(screen.getByTestId("tools-next-page")).toHaveAttribute(
+    expect(pages().getByRole("link", { name: "Next page" })).toHaveAttribute(
       "href",
       `${TOOLS}&provider=${STRIPE}&cursor=cur_2`,
+    );
+  });
+
+  it("keeps a picked size on the chips, the names toggle, and both steps (#4693)", () => {
+    renderRegistry({
+      provider: STRIPE,
+      cursor: "cur_1",
+      rows: 25,
+      read: readOk(toolVersionPage({ items: [stripe()], nextCursor: "cur_2" })),
+    });
+    fireEvent.click(chip("moves_money"));
+    expect(router.push).toHaveBeenLastCalledWith(
+      `${TOOLS}&category=moves_money&provider=${STRIPE}&rows=25`,
+    );
+    fireEvent.click(chip("all"));
+    expect(router.push).toHaveBeenLastCalledWith(
+      `${TOOLS}&provider=${STRIPE}&rows=25`,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "API names" }));
+    expect(router.push).toHaveBeenLastCalledWith(
+      `${TOOLS}&provider=${STRIPE}&names=api&rows=25`,
+    );
+    // The cursor only walks forward, so the step back is the first page.
+    expect(pages().getByRole("link", { name: "First page" })).toHaveAttribute(
+      "href",
+      `${TOOLS}&provider=${STRIPE}&rows=25`,
+    );
+    expect(pages().getByRole("link", { name: "Next page" })).toHaveAttribute(
+      "href",
+      `${TOOLS}&provider=${STRIPE}&rows=25&cursor=cur_2`,
+    );
+  });
+
+  it("opens the first page, with the filters kept, at the size picked from Rows (#4693)", async () => {
+    renderRegistry({
+      provider: STRIPE,
+      cursor: "cur_1",
+      read: readOk(toolVersionPage({ items: [stripe()], nextCursor: "cur_2" })),
+    });
+    const rows = screen.getByRole("combobox", { name: "Rows" });
+    expect(rows).toHaveTextContent("50");
+    await userEvent.click(rows);
+    await userEvent.click(await screen.findByRole("option", { name: "10" }));
+    await waitFor(() => {
+      expect(router.push).toHaveBeenLastCalledWith(
+        `${TOOLS}&provider=${STRIPE}&rows=10`,
+      );
+    });
+  });
+
+  it("disables both steps on a first page with no later page (negative)", () => {
+    renderRegistry({ read: readOk(toolVersionPage({ nextCursor: null })) });
+    expect(pages().getByRole("button", { name: "First page" })).toBeDisabled();
+    expect(pages().getByRole("button", { name: "Next page" })).toBeDisabled();
+  });
+
+  it("draws no pager on an empty first page, and keeps it on an empty later page", () => {
+    renderRegistry({ read: readOk(toolVersionPage({ items: [] })) });
+    expect(
+      screen.queryByRole("navigation", { name: "Tool version pages" }),
+    ).toBeNull();
+    cleanup();
+    renderRegistry({
+      cursor: "cur_2",
+      read: readOk(toolVersionPage({ items: [], nextCursor: null })),
+    });
+    expect(pages().getByRole("link", { name: "First page" })).toHaveAttribute(
+      "href",
+      TOOLS,
     );
   });
 

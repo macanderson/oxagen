@@ -117,6 +117,7 @@ function renderProviders({
         connections={readOk(connectionList())}
         grants={readOk(credentialGrantPage())}
         cursor={null}
+        rows={50}
       />
     </IntlProvider>,
   );

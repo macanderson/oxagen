@@ -49,7 +49,7 @@ import {
   type PlanOption,
 } from "./change-plan";
 import { CheckoutBanner, checkoutOutcome } from "./checkout-banner";
-import { Invoices } from "./invoices";
+import { invoiceRowsOf, Invoices } from "./invoices";
 import { Meters } from "./meters";
 import { PriceList } from "./price-list";
 import { PurchaseForm } from "./purchase-form";
@@ -164,6 +164,7 @@ export async function Billing({
   viewerName,
   checkout,
   cursor,
+  rows,
 }: {
   ctx: OrgCtx;
   source: DataSource;
@@ -175,13 +176,16 @@ export async function Billing({
   checkout: string | null;
   /** The invoices page the URL asked for; null is the newest. */
   cursor: string | null;
+  /** `?rows=` as the URL carried it: how many invoices a page holds (#4693). */
+  rows: string | null;
 }) {
+  const invoiceRows = invoiceRowsOf(rows);
   const [plan, bucket, rate, retention, invoices, credits] = await Promise.all([
     source.billing.plan(ctx),
     source.billing.bucket(ctx),
     source.billing.contractRate(ctx),
     source.billing.retention(ctx),
-    source.billing.invoices(ctx, { cursor }),
+    source.billing.invoices(ctx, { cursor, limit: invoiceRows }),
     source.billing.usageCredits(ctx),
   ]);
   const reads: Read<unknown>[] = [
@@ -296,6 +300,7 @@ export async function Billing({
           <Invoices
             invoices={invoices.value}
             cursor={cursor}
+            rows={invoiceRows}
             org={ctx.orgSlug}
           />
           <Statements

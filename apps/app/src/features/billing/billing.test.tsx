@@ -2,7 +2,8 @@
 // The Billing page (oxagen-roadmap mockups/pages/billing.md) over a fake
 // DataSource: the six reads it makes, the header and its one gold action, the
 // four tiles and how they reconcile with This period, the five meters,
-// Invoices, the list controls on those three tables, the price list, Billable
+// Invoices and the pager under them that pages by address with Rows per
+// page (#4693), the list controls on those three tables, the price list, Billable
 // units, the three panels that buy through Stripe (Auto top-up, Buy governed
 // actions and Token balance, kept by macanderson/oxagen-roadmap#67), the
 // checkout banner,
@@ -11,10 +12,16 @@
 // controls' own interactions have their own test files (auto-topup,
 // purchase-form, usage-credits, change-plan); this file covers the page-level
 // derivations that feed them.
-import { cleanup, render, screen, within } from "@testing-library/react";
+import {
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { OrgRole } from "@/data/contracts/common";
 import { readError, readOk } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
@@ -33,6 +40,8 @@ import {
   SUBSCRIPTION,
 } from "./billing.builders";
 
+const { push } = vi.hoisted(() => ({ push: vi.fn() }));
+
 vi.mock("next/link", () => ({
   default: ({ children, ...rest }: { children: ReactNode; href: string }) => (
     <a {...rest}>{children}</a>
@@ -48,6 +57,11 @@ vi.mock("./actions", () => ({
 }));
 vi.mock("@/server/session", () => ({ getSession: vi.fn() }));
 vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
+// A new size under Invoices visits its newest page through the router (#4693).
+vi.mock("next/navigation", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("next/navigation")>()),
+  useRouter: () => ({ push, replace: vi.fn(), refresh: vi.fn() }),
+}));
 
 const { OrgCtx } = await import("@/server/viewer");
 const { unsafeMint } = await import("@/server/viewer.testing");
@@ -113,6 +127,7 @@ async function renderBilling(
     viewerName?: string | null;
     checkout?: string | null;
     cursor?: string | null;
+    rows?: string | null;
   } = {},
 ) {
   const ctx = viewer(options.role ?? "owner");
@@ -125,6 +140,7 @@ async function renderBilling(
       options.viewerName === undefined ? "Marcus Bell" : options.viewerName,
     checkout: options.checkout ?? null,
     cursor: options.cursor ?? null,
+    rows: options.rows ?? null,
   });
   render(<IntlProvider>{body}</IntlProvider>);
   return { ctx, calls };
@@ -159,6 +175,10 @@ const gold = () =>
     el.className.includes("bg-button-primary-bg"),
   );
 
+beforeEach(() => {
+  push.mockReset();
+});
+
 afterEach(async () => {
   // INV-26: every test ends in a state of the page; axe checks it.
   try {
@@ -176,13 +196,33 @@ describe("reads", () => {
     expect(calls.rate).toEqual([[ctx]]);
     expect(calls.retention).toEqual([[ctx]]);
     expect(calls.usageCredits).toEqual([[ctx]]);
-    expect(calls.invoices).toEqual([[ctx, { cursor: null }]]);
+    expect(calls.invoices).toEqual([[ctx, { cursor: null, limit: 50 }]]);
   });
 
   it("reads only the invoices page the URL asks for", async () => {
     const { ctx, calls } = await renderBilling(LOADED, { cursor: "c2" });
-    expect(calls.invoices).toEqual([[ctx, { cursor: "c2" }]]);
+    expect(calls.invoices).toEqual([[ctx, { cursor: "c2", limit: 50 }]]);
   });
+
+  it("reads as many invoices as the URL's size asks for", async () => {
+    const { ctx, calls } = await renderBilling(LOADED, {
+      cursor: "c2",
+      rows: "25",
+    });
+    expect(calls.invoices).toEqual([[ctx, { cursor: "c2", limit: 25 }]]);
+  });
+
+  it.each([
+    ["a size Rows does not offer", "7"],
+    ["a size past the contract's 100", "500"],
+    ["no number at all", "all"],
+  ])(
+    "reads 50 invoices for %s (negative)",
+    async (_what, rows) => {
+      const { ctx, calls } = await renderBilling(LOADED, { rows });
+      expect(calls.invoices).toEqual([[ctx, { cursor: null, limit: 50 }]]);
+    },
+  );
 });
 
 describe("header", () => {
@@ -533,7 +573,13 @@ describe("Invoices", () => {
 
   it("carries the design's list controls on This period, Meters and Invoices", async () => {
     await renderBilling();
-    for (const name of ["This period", "Meters", "Invoices"]) {
+    // Invoices pages by address, so its pager has its own name and reads the
+    // 50 invoices a page holds by default (#4693).
+    for (const [name, size, pages] of [
+      ["This period", "10", "This period pages"],
+      ["Meters", "10", "Meters pages"],
+      ["Invoices", "50", "Invoice pages"],
+    ] as const) {
       const panel = section(name);
       expect(
         within(panel).getByRole("searchbox", { name: "Search this list" }),
@@ -542,13 +588,13 @@ describe("Invoices", () => {
         name: "Search this list",
       });
       const rows = within(panel).getByRole("combobox", { name: "Rows" });
-      expect(rows).toHaveTextContent("10");
+      expect(rows).toHaveTextContent(size);
       // Both are 44px tap targets on a phone: the search through ui/phone.css,
       // and Rows, in the pager under the table, through its own min height.
       expect(search).toHaveAttribute("data-touch-target");
       expect(rows).toHaveClass("max-md:min-h-11");
       expect(
-        within(panel).getByRole("navigation", { name: `${name} pages` }),
+        within(panel).getByRole("navigation", { name: pages }),
       ).toBeInTheDocument();
     }
     const pager = section("Invoices").querySelector("[data-rows-pager]");
@@ -585,6 +631,10 @@ describe("Invoices", () => {
     expect(
       screen.getByRole("link", { name: "Older invoices" }),
     ).toHaveAttribute("href", "/acme/billing?cursor=c2");
+    // The newest page has no page before it.
+    expect(
+      screen.getByRole("button", { name: "Newest invoices" }),
+    ).toBeDisabled();
     cleanup();
     await renderBilling(
       { ...LOADED, invoices: invoicePage([invoiceRow()]) },
@@ -593,6 +643,96 @@ describe("Invoices", () => {
     expect(
       screen.getByRole("link", { name: "Newest invoices" }),
     ).toHaveAttribute("href", "/acme/billing");
+    // The last page knows no older one.
+    expect(
+      screen.getByRole("button", { name: "Older invoices" }),
+    ).toBeDisabled();
+  });
+
+  it("draws Rows per page at the foot of Invoices, after the table, with the four sizes", async () => {
+    await renderBilling({
+      ...LOADED,
+      invoices: invoicePage([invoiceRow()], "c2"),
+    });
+    const invoices = section("Invoices");
+    const size = within(invoices).getByRole("combobox", { name: "Rows" });
+    const pager = size.closest("[data-rows-pager]");
+    if (!(pager instanceof HTMLElement)) throw new Error("Rows has no pager");
+    expect(
+      within(invoices)
+        .getByRole("table")
+        .compareDocumentPosition(pager) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    // The pager holds the range, and Newest and Older beside it.
+    expect(pager.querySelector("[data-range]")?.textContent).toBe("1–1 of 1");
+    expect(
+      within(pager).getByRole("link", { name: "Older invoices" }),
+    ).toBeInTheDocument();
+    await userEvent.click(size);
+    await screen.findByRole("option", { name: "25" });
+    // The page's native selects carry options too; these are the pager's.
+    expect(
+      screen
+        .getAllByRole("option")
+        .filter((option) => option.closest("select") === null)
+        .map((option) => option.textContent),
+    ).toEqual(["10", "25", "50", "100"]);
+  });
+
+  it("leaves the default size off every link, and keeps a picked size on both steps", async () => {
+    await renderBilling({
+      ...LOADED,
+      invoices: invoicePage([invoiceRow()], "c3"),
+    });
+    expect(
+      screen.getByRole("link", { name: "Older invoices" }),
+    ).toHaveAttribute("href", "/acme/billing?cursor=c3");
+    cleanup();
+    await renderBilling(
+      { ...LOADED, invoices: invoicePage([invoiceRow()], "c3") },
+      { cursor: "c2", rows: "25" },
+    );
+    expect(
+      within(section("Invoices")).getByRole("combobox", { name: "Rows" }),
+    ).toHaveTextContent("25");
+    expect(
+      screen.getByRole("link", { name: "Newest invoices" }),
+    ).toHaveAttribute("href", "/acme/billing?rows=25");
+    expect(
+      screen.getByRole("link", { name: "Older invoices" }),
+    ).toHaveAttribute("href", "/acme/billing?rows=25&cursor=c3");
+  });
+
+  it("reads a size Rows does not offer as the default 50 (negative)", async () => {
+    await renderBilling(
+      { ...LOADED, invoices: invoicePage([invoiceRow()], "c3") },
+      { rows: "7" },
+    );
+    expect(
+      within(section("Invoices")).getByRole("combobox", { name: "Rows" }),
+    ).toHaveTextContent("50");
+    expect(
+      screen.getByRole("link", { name: "Older invoices" }),
+    ).toHaveAttribute("href", "/acme/billing?cursor=c3");
+  });
+
+  it("visits the newest page at a new size, and stays put on the size showing", async () => {
+    await renderBilling(
+      { ...LOADED, invoices: invoicePage([invoiceRow()], "c3") },
+      { cursor: "c2" },
+    );
+    const size = within(section("Invoices")).getByRole("combobox", {
+      name: "Rows",
+    });
+    await userEvent.click(size);
+    await userEvent.click(await screen.findByRole("option", { name: "50" }));
+    expect(push).not.toHaveBeenCalled();
+    await userEvent.click(size);
+    await userEvent.click(await screen.findByRole("option", { name: "100" }));
+    // A new size drops the cursor: the reader starts over at the newest page.
+    await waitFor(() => {
+      expect(push).toHaveBeenCalledWith("/acme/billing?rows=100");
+    });
   });
 });
 
