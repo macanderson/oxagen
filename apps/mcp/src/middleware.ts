@@ -5,7 +5,8 @@
 import "@oxagen/handlers/register";
 import "@oxagen/agent/register";
 
-import { apiKeyAuthMiddleware, type Middleware } from "xmcp";
+import type { RequestHandler } from "express";
+import { apiKeyAuthMiddleware } from "xmcp";
 import { bootstrapIAMRuntime } from "@oxagen/iam";
 import { bootstrapBillingRuntime } from "@oxagen/billing";
 import { bootstrapDecisionRulesRuntime } from "@oxagen/rules";
@@ -124,7 +125,7 @@ setSecurityEventEmitter((kernelEvent) => {
 // published tools to tools/list and answer a tools/call that names one.
 // Every other request reaches the transport untouched. The explicit type keeps
 // exported declarations independent of pnpm's internal dependency paths.
-const middleware: Middleware[] = [
+const middleware: RequestHandler[] = [
   apiKeyAuthMiddleware({
     headerName: "authorization",
     validateApiKey: async (authHeader) => {

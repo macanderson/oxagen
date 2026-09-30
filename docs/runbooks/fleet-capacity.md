@@ -57,6 +57,20 @@ capacity measurements. Measure real model-provider admission separately.
 Bound the load generator's own queue. Count scheduled arrivals that it cannot
 send as missed load. Do not slow the arrival clock to match server throughput.
 
+## Runner
+
+The [fleet runner](../../tools/scripts/fleet-capacity/README.md) and the
+`Fleet capacity` workflow provide a staging-only starting point. The default
+workflow validates an illustrative profile and sends no network load. Live
+execution requires measured inputs, pinned staging endpoints and keys, a
+dedicated runner, and explicit request and byte ceilings.
+
+The runner records scheduled, generated, missed, acknowledged, retried, and
+pending work. Its separate store reconciler compares acknowledged work with
+persisted events and derived token counts. Its report keeps `capacityPass` false
+until the remaining acceptance evidence is supplied independently. Do not use
+the illustrative profile as Mac's measured baseline.
+
 ## Acceptance
 
 Require zero lost acknowledged events, zero duplicate charges, and zero heap or
