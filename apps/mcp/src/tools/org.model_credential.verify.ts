@@ -24,18 +24,22 @@ export const schema = {
   ),
   toolProbeModel:
     orgModelCredentialVerifyInputObject.shape.toolProbeModel.describe(
-      "For 'openai_compatible': the model the organisation will use for the balanced tier. The endpoint is asked for one forced tool call on it, because the assistant cannot work on a model that cannot call tools",
+      "The model the organisation will use for the balanced tier, for a caller that names only that one. Ignored when modelMap is given",
     ),
+  modelMap: orgModelCredentialVerifyInputObject.shape.modelMap.describe(
+    "For 'openai', 'anthropic' and 'openai_compatible': the model each tier (fast, balanced, precise) maps to, as set_model_credential would store it. Each mapped model is asked for one forced tool call, because the assistant runs on every tier",
+  ),
 };
 
 export const metadata: ToolMetadata = {
   name: orgModelCredentialVerify.name,
   description: orgModelCredentialVerify.description,
   annotations: {
-    // A metadata read against the vendor's key endpoint, plus — for an
-    // OpenAI-compatible endpoint only — one forced tool call of at most 16
-    // tokens. The one write is a verification timestamp on the stored
-    // credential when it passes, which changes no state a caller relies on.
+    // A metadata read against the vendor's key endpoint, plus one forced
+    // tool call per mapped model on a direct vendor and one JSON-schema
+    // answer from an OpenAI-compatible endpoint. The writes are the stored
+    // credential's verification timestamp and structured-output answer,
+    // which change no state a caller relies on.
     readOnlyHint: true,
     destructiveHint: false,
     idempotentHint: true,

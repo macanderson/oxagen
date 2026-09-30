@@ -196,6 +196,9 @@ describe("org.model_credential.set handler", () => {
     const written = mocks.update.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(written.provider).toBe("openrouter");
     expect(written.lastVerifiedAt).toBeNull();
+    // The old endpoint's structured-output answer is not the new one's
+    // (#3314): unasked until the next verify.
+    expect(written.structuredOutputs).toBeNull();
     expect(written.rotatedAt).toBeInstanceOf(Date);
   });
 

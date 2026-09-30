@@ -129,6 +129,11 @@ export const orgModelCredentialSetHandler: CapabilityHandler<
       // over from the key it replaces.
       status: "active" as const,
       lastVerifiedAt: null,
+      // The endpoint's structured-output answer belongs to the endpoint and
+      // key it was asked on. A new one is unasked until the next verify, so
+      // the provider client stops asserting a JSON schema it never saw
+      // honoured (#3314).
+      structuredOutputs: null,
       rotatedAt: now,
       updatedAt: now,
       updatedById: ctx.userId ?? null,

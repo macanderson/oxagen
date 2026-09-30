@@ -34,7 +34,7 @@ None. The credential is the caller's organisation's.
 
 The same **redacted** view `get_model_credential` returns. After a delete it
 reads `configured: false` with `provider`, `status`, `keyHint`,
-`lastVerifiedAt` and `rotatedAt` all `null`, which is also the answer the
+`lastVerifiedAt`, `rotatedAt` and `structuredOutputs` all `null`, which is also the answer the
 funding-source resolver gives for the platform source.
 
 ## Side effects

@@ -44,6 +44,7 @@ vi.mock("@oxagen/iam/org-role", () => ({
 }));
 
 import { orgModelCredentialGet } from "@oxagen/oxagen/contracts/org.model_credential.get";
+import { modelCredentialViewSchema } from "@oxagen/oxagen/contracts/org.model_credential.shared";
 import { TEST_CTX as CTX } from "./test-utils/fixtures";
 
 const NOT_CONFIGURED = {
@@ -55,6 +56,7 @@ const NOT_CONFIGURED = {
   modelMap: {},
   lastVerifiedAt: null,
   rotatedAt: null,
+  structuredOutputs: null,
 };
 
 beforeEach(() => {
@@ -86,7 +88,23 @@ describe("toCredentialView", () => {
       modelMap: {},
       lastVerifiedAt: "2026-09-09T10:00:00.000Z",
       rotatedAt: "2026-09-08T10:00:00.000Z",
+      structuredOutputs: null,
     });
+  });
+
+  it("returns the endpoint's recorded structured-output answer (#3314)", () => {
+    const view = toCredentialView({
+      provider: "openai_compatible",
+      status: "active",
+      keyHint: "wxyz",
+      baseUrl: "https://api.together.xyz/v1",
+      modelMap: { balanced: "meta-llama/Llama-3.3-70B-Instruct-Turbo" },
+      lastVerifiedAt: null,
+      rotatedAt: null,
+      structuredOutputs: false,
+    });
+    expect(view.structuredOutputs).toBe(false);
+    expect(() => modelCredentialViewSchema.parse(view)).not.toThrow();
   });
 
   it("narrows an unknown status to disabled — the direction the resolver takes", () => {
@@ -221,6 +239,7 @@ describe("org.model_credential.get handler", () => {
       modelMap: {},
       lastVerifiedAt: null,
       rotatedAt: "2026-09-08T10:00:00.000Z",
+      structuredOutputs: null,
     });
     // ADR-053 §2 — a read capability never surfaces the key or its envelope.
     expect(JSON.stringify(out)).not.toContain("ciphertext");

@@ -193,7 +193,8 @@ describe("testModelKey", () => {
         provider: "openai_compatible",
         apiKey: KEY,
         baseUrl: "https://api.together.xyz/v1",
-        toolProbeModel: "llama-70b",
+        // Every mapped tier is asked, not only balanced (#3314).
+        modelMap: { balanced: "llama-70b" },
       },
       expect.anything(),
     );

@@ -87,6 +87,11 @@ export interface ModelCredential {
   readonly baseUrl: string | null;
   /** Per-tier model ids on this key; `{}` for a routed provider. */
   readonly modelMap: ModelCredentialModelMap;
+  /**
+   * Whether the endpoint honoured a JSON-schema request when the verification
+   * probe last asked (#3314). Null when it was never asked.
+   */
+  readonly structuredOutputs?: boolean | null;
 }
 
 /**
@@ -168,6 +173,7 @@ export async function loadModelCredential(
           keyHint: row.keyHint,
           baseUrl: row.baseUrl ?? null,
           modelMap: parseModelMap(row.modelMap),
+          structuredOutputs: row.structuredOutputs ?? null,
         };
       } catch (err) {
         // Never the ciphertext, never the error's own payload: the envelope
