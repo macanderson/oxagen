@@ -14,6 +14,8 @@ You have staged edits to one server folder in Studio and saved them as a draft. 
 
 Review refuses while a tool the draft imports has no risk, side effect, or egress, and while the folder does not compile or lock. A second Review adds a commit to the steering PR already open on the branch. The decision record is [ADR-224](../adr/ADR-224-studio-keeps-a-draft-and-review-opens-a-steering-pr-for-one-server-folder.md).
 
+A new server that runs on machines, a local command or a registry package with `source.machines`, has no tools until a machine starts it. List them first with [start_studio_listing](tool.studio.listing.start.md): a machine in the server's groups starts it at a pinned version and SHA-256, answers tools/list, and the draft's source becomes that answer with the pin. Review then takes the same path as for a remote server, and the folder's first `tools.lock.json` pins the package or command the machine checked ([ADR-233](../adr/ADR-233-a-machine-run-server-is-pinned-before-it-first-runs.md)). A new machine-run server with no listing is refused with `source_required`, because Review writes no lock that says a server offers no tools.
+
 ## Input
 
 | Field | Type | Required | Constraint |

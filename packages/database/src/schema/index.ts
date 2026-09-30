@@ -17,6 +17,7 @@ export * from "./mcp";
 export * from "./mcp-discovery";
 export * from "./mcp-operator-tokens";
 export * from "./mcp-studio-drafts";
+export * from "./mcp-studio-listings";
 export * from "./mcp-relays";
 export * from "./plugin";
 export * from "./notification";

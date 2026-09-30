@@ -66,6 +66,47 @@ function grpcServerToml(name: string): string {
 
 type McpSource = Extract<StudioSource, { type: "mcp" }>;
 
+/** A server.toml for a local command that runs on dev-laptops. */
+function localServerToml(name: string): string {
+  return [
+    "#:schema https://oxagen.sh/schemas/mcp-server/v1.json",
+    'schema = "mcp-server/v1"',
+    `name = "${name}"`,
+    'label = "Notes"',
+    'description = "Notes kept on each machine."',
+    "",
+    "[source]",
+    'type = "local"',
+    'command = "/usr/local/bin/notes-mcp"',
+    'machines = ["dev-laptops"]',
+    "",
+    "[exposure]",
+    'mode = "direct"',
+    "",
+    "[sync]",
+    'schedule = "manual"',
+    "",
+  ].join("\n");
+}
+
+/** What a machine's listing writes into a local server's draft (ADR-233, #4756). */
+const LOCAL_LISTING: McpSource = {
+  type: "mcp",
+  lockSource: {
+    type: "local",
+    command: "/usr/local/bin/notes-mcp",
+    package: { name: "notes-mcp", version: "0.9.2", digest: `sha256:${"c3".repeat(32)}` },
+    server_version: "0.9.2",
+  },
+  tools: [
+    {
+      name: "list_notes",
+      description: "List the notes kept on this machine.",
+      inputSchema: { type: "object", properties: {} },
+    },
+  ],
+};
+
 /** An MCP source with the stripe lock's source and the tools given. */
 function mcpSource(tools: Record<string, unknown>[]): McpSource {
   return {
@@ -164,6 +205,33 @@ function callLines(text: string | undefined): string[] {
 // ── Builds ───────────────────────────────────────────────────────────────────
 
 describe("buildFolder", () => {
+  it("builds a new local server's folder, and its first lock, from a machine's listing (ADR-233)", async () => {
+    const folder = buildFolder(
+      input({
+        server: "notes",
+        serverToml: localServerToml("notes"),
+        source: LOCAL_LISTING,
+        imported: await importSource(LOCAL_LISTING),
+        ops: [imp("list_notes"), classify("list_notes", READ_TENANT)],
+      }),
+    );
+
+    expect(folder.isNew).toBe(true);
+    expect(folder.imported).toStrictEqual(["list_notes"]);
+    const lock = JSON.parse(folder.files.get("tools.lock.json") ?? "{}") as {
+      source: Record<string, unknown>;
+      tools: Record<string, unknown>;
+    };
+    // The lock pins the command the machine checked, and lists the tool the
+    // person imported: never an empty lock for a server that offers tools.
+    expect(lock.source).toMatchObject({
+      type: "local",
+      command: "/usr/local/bin/notes-mcp",
+      package: { name: "notes-mcp", version: "0.9.2", digest: `sha256:${"c3".repeat(32)}` },
+    });
+    expect(Object.keys(lock.tools)).toStrictEqual(["list_notes"]);
+  });
+
   it("keys an MCP tool whose name is not a valid key in snake case, and keeps the name as upstream", async () => {
     const tools = fixtureJson<{ tools: Record<string, unknown>[] }>("mcp/tools-list.json").tools.filter(
       (tool) => tool.name === "search-code",
@@ -239,6 +307,13 @@ describe("buildFolder refuses", () => {
     const err = refusal(() => buildFolder(input({ server: "ledger", serverToml: grpcServerToml("ledger") })));
     expect(err.reason).toBe("source_required");
     expect(err.message).toContain("ledger is a gRPC server");
+  });
+
+  it.each(["openapi", "graphql"] as const)("a new %s server with no definition (#4756)", (type) => {
+    const serverToml = grpcServerToml("ledger").replace('type = "grpc"', `type = "${type}"`);
+    const err = refusal(() => buildFolder(input({ server: "ledger", serverToml })));
+    expect(err.reason).toBe("source_required");
+    expect(err.message).toContain("ledger has no tools.lock.json yet");
   });
 
   it("a new MCP server with no source", () => {

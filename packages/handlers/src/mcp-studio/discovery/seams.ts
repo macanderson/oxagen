@@ -548,6 +548,11 @@ function cloudTransport(): Transport {
   return cloud;
 }
 
+/** The registry catalog over the process's cloud Transport, for a caller outside discovery. */
+export function cloudRegistryCatalog(): RegistryCatalog {
+  return transportRegistryCatalog(cloudTransport);
+}
+
 async function defaultSeams(): Promise<DiscoverySeams> {
   const [{ createSteeringHost }, { createGitHubClient }, { resolveGitHubToken }] =
     await Promise.all([

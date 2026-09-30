@@ -14,8 +14,8 @@
 import { HandlerError } from "@oxagen/oxagen";
 import { schema, type Tx, withTenantDb } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
-import { and, asc, eq, ne } from "drizzle-orm";
-import type { MachineGroupReader, MachineScope } from "./machines";
+import { and, asc, eq, inArray, ne } from "drizzle-orm";
+import type { MachineGroupReader, MachineOwnerReader, MachineScope } from "./machines";
 
 const members = schema.tachoMachineGroupMembers;
 const hosts = schema.tachoHosts;
@@ -215,4 +215,46 @@ export const postgresMachineGroupReader: MachineGroupReader = {
         return rows.map((row) => row.group);
       }),
     ),
+};
+
+/** Who enrolled each machine: tacho.hosts.created_by_id (ADR-233). */
+export const postgresMachineOwnerReader: MachineOwnerReader = {
+  ownerOf: (scope, machine) =>
+    runInTenantScope(scope, () =>
+      withTenantDb(async (tx) => {
+        const [host] = await tx
+          .select({ owner: hosts.createdById })
+          .from(hosts)
+          .where(
+            and(
+              inWorkspace(hosts, scope),
+              eq(hosts.publicId, machine),
+              ne(hosts.status, "revoked"),
+            ),
+          )
+          .limit(1);
+        return host?.owner ?? null;
+      }),
+    ),
+  ownsMachineIn: async (scope, userId, groups) => {
+    if (groups.length === 0) return false;
+    return runInTenantScope(scope, () =>
+      withTenantDb(async (tx) => {
+        const [row] = await tx
+          .select({ host: hosts.id })
+          .from(members)
+          .innerJoin(hosts, eq(hosts.id, members.hostId))
+          .where(
+            and(
+              inWorkspace(members, scope),
+              inArray(members.groupName, [...groups]),
+              eq(hosts.createdById, userId),
+              ne(hosts.status, "revoked"),
+            ),
+          )
+          .limit(1);
+        return row !== undefined;
+      }),
+    );
+  },
 };

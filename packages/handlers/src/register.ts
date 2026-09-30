@@ -1600,6 +1600,19 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./mcp-studio/discovery/discovery.get"))
         .getStudioDiscoveryHandler as CapabilityHandlerFn,
   );
+  // A Studio draft's tool listing on a machine (ADR-233, #4756).
+  registerHandler(
+    "start_studio_listing",
+    async () =>
+      (await import("./mcp-studio/listing/listing.start"))
+        .startStudioListingHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "get_studio_listing",
+    async () =>
+      (await import("./mcp-studio/listing/listing.get"))
+        .getStudioListingHandler as CapabilityHandlerFn,
+  );
   registerHandler(
     "list_studio_tools",
     async () =>
