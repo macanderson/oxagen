@@ -93,13 +93,21 @@ const AUTHORIZATION_SERVER = {
 
 type TokenCall = { grantType: string | null; authorization: string | null };
 
+const CLIENT_METADATA_URL =
+  "https://oxagen.app/api/v1/mcp/oauth/client-metadata";
+
 /**
  * A Linear-shaped authorization server. A client is bound to the method it
  * registered with; a token request that authenticates any other way is
- * refused with invalid_client, which is what Linear answers.
+ * refused with invalid_client, which is what Linear answers. With
+ * `metadataDocumentOnly` it registers no clients and takes Oxagen's client
+ * metadata document URL as a public client ID instead.
  */
-function linear() {
-  const clients = new Map<string, { secret: string; method: string }>();
+function linear(options: { metadataDocumentOnly?: boolean } = {}) {
+  const clients = new Map<string, { secret: string | null; method: string }>();
+  if (options.metadataDocumentOnly === true) {
+    clients.set(CLIENT_METADATA_URL, { secret: null, method: "none" });
+  }
   const tokenCalls: TokenCall[] = [];
   let issued = 0;
   const json = (status: number, body: unknown) =>
@@ -119,9 +127,20 @@ function linear() {
       return json(200, PROTECTED_RESOURCE);
     }
     if (path === "/.well-known/oauth-authorization-server") {
-      return json(200, AUTHORIZATION_SERVER);
+      if (options.metadataDocumentOnly !== true) {
+        return json(200, AUTHORIZATION_SERVER);
+      }
+      return json(200, {
+        ...AUTHORIZATION_SERVER,
+        registration_endpoint: undefined,
+        client_id_metadata_document_supported: true,
+      });
     }
-    if (path === "/register" && init?.method === "POST") {
+    if (
+      path === "/register" &&
+      init?.method === "POST" &&
+      options.metadataDocumentOnly !== true
+    ) {
       const asked = JSON.parse(String(init.body)) as Record<string, unknown>;
       const method = String(
         asked.token_endpoint_auth_method ?? "client_secret_basic",
@@ -185,9 +204,13 @@ const scope = {
   orgListingId: "listing-linear",
 };
 
-async function providerFor(state: string) {
+async function providerFor(
+  state: string,
+  extra: { clientMetadataUrl?: string } = {},
+) {
   const { DbOAuthClientProvider } = await import("./db-oauth-provider");
   return new DbOAuthClientProvider({
+    ...extra,
     ...scope,
     redirectUrl: REDIRECT_URL,
     state,
@@ -272,5 +295,39 @@ describe("DbOAuthClientProvider through the SDK against a method-bound server", 
     expect(server.tokenCalls).toEqual([
       { grantType: "authorization_code", authorization: null },
     ]);
+  });
+
+  it("signs in with the client metadata document at a server that registers no clients", async () => {
+    const server = linear({ metadataDocumentOnly: true });
+
+    const starting = await providerFor("state-cimd-0001", {
+      clientMetadataUrl: CLIENT_METADATA_URL,
+    });
+    await expect(
+      auth(starting, { serverUrl: SERVER_URL, fetchFn: server.fetchFn }),
+    ).resolves.toBe("REDIRECT");
+    expect(starting.pendingRedirect?.searchParams.get("client_id")).toBe(
+      CLIENT_METADATA_URL,
+    );
+    expect(credStore.get("ws-1:listing-linear")).toMatchObject({
+      oauthClientId: CLIENT_METADATA_URL,
+      oauthClientSecret: null,
+      oauthClientAuthMethod: "none",
+    });
+
+    // The callback's provider carries no metadata URL: the stored client ID is
+    // what it presents.
+    const completing = await providerFor("state-cimd-0001");
+    await expect(
+      auth(completing, {
+        serverUrl: SERVER_URL,
+        authorizationCode: "code-from-server",
+        fetchFn: server.fetchFn,
+      }),
+    ).resolves.toBe("AUTHORIZED");
+    expect(server.tokenCalls).toEqual([
+      { grantType: "authorization_code", authorization: null },
+    ]);
+    expect(credStore.get("ws-1:listing-linear")?.accessToken).toBe("access-1");
   });
 });

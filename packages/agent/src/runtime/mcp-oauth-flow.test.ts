@@ -92,6 +92,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 
 import {
   assertRedirectUrl,
+  clientMetadataUrlFor,
   completeMcpAuthorization,
   listingKeyOf,
   startMcpAuthorization,
@@ -139,6 +140,17 @@ describe("assertRedirectUrl", () => {
         expect.objectContaining({ reason: "redirect_url_invalid" }),
       );
     }
+  });
+});
+
+describe("clientMetadataUrlFor", () => {
+  it("names the document on an https callback's origin, and none on local http", () => {
+    expect(clientMetadataUrlFor(REDIRECT)).toBe(
+      "https://app.oxagen.sh/api/v1/mcp/oauth/client-metadata",
+    );
+    expect(
+      clientMetadataUrlFor("http://localhost:3000/api/v1/mcp/oauth/callback"),
+    ).toBeUndefined();
   });
 });
 
@@ -207,6 +219,47 @@ describe("startMcpAuthorization", () => {
       status: "client_required",
       scopesSupported: ["chat:write", "channels:read"],
     });
+    expect(m.auth).not.toHaveBeenCalled();
+  });
+
+  it("signs in with the client metadata document at a server that registers no clients but takes one", async () => {
+    m.discover.mockResolvedValue({
+      authorizationServerMetadata: { client_id_metadata_document_supported: true },
+      resourceMetadata: { scopes_supported: ["read"] },
+    });
+    const providers: unknown[] = [];
+    m.auth.mockImplementation(async (provider: { ctx: unknown }) => {
+      providers.push(provider.ctx);
+      m.pendingRedirect = new URL("https://auth.example.dev/authorize?state=s4");
+      return "REDIRECT";
+    });
+    const out = await startMcpAuthorization(
+      SCOPE,
+      { ...add, name: "Example", endpointUrl: "https://mcp.example.dev/mcp" },
+      { fetchFn, newState: () => "s4" },
+    );
+    expect(out).toMatchObject({ status: "redirect", state: "s4" });
+    expect(providers[0]).toMatchObject({
+      clientMetadataUrl:
+        "https://app.oxagen.sh/api/v1/mcp/oauth/client-metadata",
+    });
+  });
+
+  it("asks for an OAuth app at a metadata-document server when the callback is local http", async () => {
+    m.discover.mockResolvedValue({
+      authorizationServerMetadata: { client_id_metadata_document_supported: true },
+      resourceMetadata: { scopes_supported: [] },
+    });
+    const out = await startMcpAuthorization(
+      SCOPE,
+      {
+        ...add,
+        endpointUrl: "https://mcp.example.dev/mcp",
+        redirectUrl: "http://localhost:3000/api/v1/mcp/oauth/callback",
+      },
+      { fetchFn },
+    );
+    expect(out).toEqual({ status: "client_required", scopesSupported: [] });
     expect(m.auth).not.toHaveBeenCalled();
   });
 

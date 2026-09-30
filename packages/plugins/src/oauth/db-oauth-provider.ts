@@ -48,6 +48,14 @@ export interface DbProviderCtx {
    * matched by this URL's host.
    */
   serverUrl?: string;
+  /**
+   * The https URL of Oxagen's OAuth client metadata document, served by the
+   * app. The SDK presents it as the client ID to any authorization server
+   * that advertises `client_id_metadata_document_supported`, in place of
+   * dynamic registration. Absent (a local http origin, a refresh), the SDK
+   * registers as before.
+   */
+  clientMetadataUrl?: string;
 }
 
 /**
@@ -67,6 +75,10 @@ export class DbOAuthClientProvider implements OAuthClientProvider {
 
   get redirectUrl(): string {
     return this.c.redirectUrl;
+  }
+
+  get clientMetadataUrl(): string | undefined {
+    return this.c.clientMetadataUrl;
   }
 
   get clientMetadata(): OAuthClientMetadata {

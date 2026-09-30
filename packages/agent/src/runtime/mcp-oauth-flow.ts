@@ -51,6 +51,23 @@ import { mcpOAuthFetch } from "./mcp-oauth-fetch";
 /** The path every redirect URL must end in: the app's one callback route. */
 export const MCP_OAUTH_CALLBACK_PATH = "/api/v1/mcp/oauth/callback";
 
+/** Where the app serves Oxagen's OAuth client metadata document. */
+export const MCP_OAUTH_CLIENT_METADATA_PATH =
+  "/api/v1/mcp/oauth/client-metadata";
+
+/**
+ * Oxagen's client ID at a server that accepts a Client ID Metadata Document:
+ * the document's URL on the callback's own origin, since the document lists
+ * that origin's callback. Only an https origin can be one, so a local http
+ * callback gets none and the flow registers as before.
+ */
+export function clientMetadataUrlFor(redirectUrl: string): string | undefined {
+  const url = new URL(redirectUrl);
+  return url.protocol === "https:"
+    ? new URL(MCP_OAUTH_CLIENT_METADATA_PATH, url.origin).toString()
+    : undefined;
+}
+
 const CLIENT_NAME = "Oxagen";
 
 export type FlowScope = {
@@ -137,6 +154,7 @@ function providerFor(
   redirectUrl: string,
   state: string,
 ): DbOAuthClientProvider {
+  const clientMetadataUrl = clientMetadataUrlFor(redirectUrl);
   return new DbOAuthClientProvider({
     orgId: scope.orgId,
     workspaceId: scope.workspaceId,
@@ -147,6 +165,7 @@ function providerFor(
     clientName: CLIENT_NAME,
     now: () => Date.now(),
     serverUrl: listing.endpointUrl,
+    ...(clientMetadataUrl === undefined ? {} : { clientMetadataUrl }),
   });
 }
 
@@ -332,7 +351,16 @@ export async function startMcpAuthorization(
       });
       scopesSupported = info.resourceMetadata?.scopes_supported ?? [];
       const meta = info.authorizationServerMetadata;
-      if (meta !== undefined && !meta.registration_endpoint) {
+      // A server that takes Oxagen's client metadata document needs no
+      // registration endpoint: the document's URL is the client ID.
+      const takesMetadataDocument =
+        meta?.client_id_metadata_document_supported === true &&
+        clientMetadataUrlFor(redirectUrl) !== undefined;
+      if (
+        meta !== undefined &&
+        !meta.registration_endpoint &&
+        !takesMetadataDocument
+      ) {
         return { status: "client_required", scopesSupported };
       }
     } catch {
