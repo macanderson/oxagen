@@ -1,6 +1,12 @@
 import { CapabilityError } from "@oxagen/oxagen/kernel";
 import { isHandlerError } from "@oxagen/oxagen/handler-error";
-import { RUN_CHAIN_HEADS_MAX, runGet } from "@oxagen/oxagen/contracts/run.get";
+import {
+  AGENT_FRAME_LIMIT_DEFAULT,
+  AGENT_FRAME_LIMIT_MAX,
+  FRAME_LIMIT_DEFAULT,
+  RUN_CHAIN_HEADS_MAX,
+  runGet,
+} from "@oxagen/oxagen/contracts/run.get";
 import type { AttemptEventReadRecord } from "@oxagen/run-ledger";
 import type { TachoFrameRow } from "@oxagen/telemetry";
 import { describe, expect, it, vi } from "vitest";
@@ -563,6 +569,69 @@ describe("get_run", () => {
     const out = await get(input({ frameLimit: 1 }), ctx());
     expect(out.frames?.frames).toHaveLength(1);
     expect(decodeFrameCursor(out.frames?.cursor ?? "")).toBe("1");
+  });
+
+  describe("agent-surface bounds (#4222)", () => {
+    const events = () =>
+      Array.from({ length: 300 }, (_, i) => event(i + 1));
+    const on = (invokeSurface: "agent" | "api" | "mcp") => ({
+      ...ctx(),
+      invokeSurface,
+    });
+
+    it("never waits on the agent surface, whatever waitMs the model sent", async () => {
+      const { get, sleeps } = harness({ events: [event(1)] });
+      const out = await get(
+        input({ framesAfter: encodeFrameCursor("1"), waitMs: 20_000 }),
+        on("agent"),
+      );
+      expect(out.frames).toEqual({ frames: [], cursor: null });
+      expect(sleeps).toEqual([]);
+    });
+
+    it("caps an agent-surface page at the agent limit and keeps the cursor past it", async () => {
+      const { get } = harness({ events: events() });
+      const out = await get(input({ frameLimit: 500 }), on("agent"));
+      expect(out.frames?.frames).toHaveLength(AGENT_FRAME_LIMIT_MAX);
+      // More frames lie behind the page, so the read continues from its last.
+      expect(decodeFrameCursor(out.frames?.cursor ?? "")).toBe(
+        String(AGENT_FRAME_LIMIT_MAX),
+      );
+    });
+
+    it("reads the agent default when the model named no frameLimit, and a smaller one as asked", async () => {
+      const { get } = harness({ events: events() });
+      // Zod fills an omitted frameLimit with the contract default.
+      const omitted = await get(
+        runGet.input.parse({ runId: LEDGER_ID }),
+        on("agent"),
+      );
+      expect(omitted.frames?.frames).toHaveLength(AGENT_FRAME_LIMIT_DEFAULT);
+      const small = await get(input({ frameLimit: 7 }), on("agent"));
+      expect(small.frames?.frames).toHaveLength(7);
+    });
+
+    it.each(["api", "mcp"] as const)(
+      "keeps the contract's bounds on the %s surface (negative)",
+      async (surface) => {
+        const { get } = harness({ events: events() });
+        const out = await get(input({ frameLimit: 500 }), on(surface));
+        expect(out.frames?.frames).toHaveLength(300);
+        expect(out.frames?.cursor).toBeNull();
+        const omitted = await get(
+          runGet.input.parse({ runId: LEDGER_ID }),
+          on(surface),
+        );
+        expect(omitted.frames?.frames).toHaveLength(FRAME_LIMIT_DEFAULT);
+
+        const waited = harness({ events: [event(1)] });
+        await waited.get(
+          input({ framesAfter: encodeFrameCursor("1"), waitMs: 1_200 }),
+          on(surface),
+        );
+        expect(waited.sleeps).toEqual([500, 500, 200]);
+      },
+    );
   });
 
   it("answers no cursor for a sealed run whose page is exactly full with nothing behind it (negative)", async () => {
