@@ -708,17 +708,17 @@
       "empty": "No run this month falls in a group here.",
       "unnamedOperator": "Unnamed operator",
       "other": {
-        "label": "Everything else",
-        "note": "Model output, prompts, steering, files, and commands"
+        "label": "Other spend",
+        "note": "Spend outside MCP server calls"
       },
       "moreRuns": "{count, plural, one {# more run} other {# more runs}}",
       "reported": "The harness reported {amount} of this total. The gateway metered or estimated the rest.",
       "ungrouped": {
         "label": "Not grouped",
         "note": {
-          "agent": "Runs with no agent recorded, or not yet in the daily rollup",
-          "operator": "Runs with no operator recorded, or not yet in the daily rollup",
-          "model": "Runs with no model recorded, or not yet in the daily rollup"
+          "agent": "Runs the rollup cannot group by agent",
+          "operator": "Runs the rollup cannot group by operator",
+          "model": "Runs the rollup cannot group by model"
         }
       },
       "budget": {
