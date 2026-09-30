@@ -648,7 +648,7 @@ describe("set_governance_mode in a steering repository", () => {
     expect(deps.events).toEqual([]);
   });
 
-  it("keeps the open governance proposal when the replacement's checks cannot run (negative)", async () => {
+  it("replaces the open governance proposal with one that waits for its checks when the checker is down (negative)", async () => {
     const deps = steeringMode("team");
     await run(deps, { mode: "solo" }, doubles());
     const seams: SteeringGovernanceSeams = {
@@ -658,10 +658,16 @@ describe("set_governance_mode in a steering repository", () => {
       },
     };
 
-    await expect(run(deps, { mode: "solo" }, seams)).rejects.toThrow("the steering checker is down");
-    // The proposal stays open until a replacement is recorded, so the PR
-    // keeps a land path.
-    expect(deps.store.proposals.map((p) => p.status)).toEqual(["checks_passed"]);
+    // A checker that does not answer reports a missing check on the PR, and
+    // the call still records the change it pushed.
+    const out = await run(deps, { mode: "solo" }, seams);
+    expect(out.outcome).toBe("proposed");
+    // The reused PR now carries the new head, so the old proposal no longer
+    // names what would land. The replacement cannot land until its checks pass.
+    expect(deps.store.proposals.at(-1)?.status).toBe("checks_failed");
+    expect(
+      deps.store.proposals.filter((p) => p.status === "checks_passed"),
+    ).toHaveLength(0);
   });
 
   it("keeps the open governance proposal when a later call is refused (negative)", async () => {
