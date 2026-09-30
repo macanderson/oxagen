@@ -4,12 +4,17 @@ import { describe, expect, it, vi } from "vitest";
 import type { GitHubClient } from "@oxagen/github";
 import { HandlerError } from "@oxagen/oxagen";
 import { repositoryTreeGet } from "@oxagen/oxagen/contracts/repository.tree.get";
+import { schemaDirective } from "@oxagen/oxagen/steering-repo/schema-ids";
 import type { BoundRepository } from "./repository.bound";
 import {
   createRepositoryTreeGetHandler,
   declaredMode,
 } from "./repository.tree.get";
 import { makeCTX } from "./test-utils/fixtures";
+
+/** A governance/v1 file with `mode`, as steering/governance.toml opens. */
+const governanceV1 = (mode: string) =>
+  `${schemaDirective("governance/v1")}\nschema = "governance/v1"\nmode = "${mode}"\n`;
 
 const NOW = new Date("2026-09-19T10:00:00.000Z");
 
@@ -148,7 +153,7 @@ describe("get_repository_tree", () => {
       ]),
       getFileContent: vi.fn(async (args: { path: string }) =>
         args.path === "steering/governance.toml"
-          ? 'schema = "governance/v1"\nmode = "solo"\n'
+          ? governanceV1("solo")
           : 'schema = "oxagen-workspace/v0.1"\n',
       ),
     });
@@ -182,7 +187,7 @@ describe("get_repository_tree", () => {
       ]),
       getFileContent: vi.fn(async (args: { path: string }) =>
         args.path === "steering/governance.toml"
-          ? 'schema = "governance/v1"\nmode = "regulated"\n'
+          ? governanceV1("regulated")
           : 'mode = "solo"\n',
       ),
     });
@@ -309,7 +314,7 @@ describe("declaredMode", () => {
   });
 
   it("reads a steering file as governance/v1 in full", () => {
-    const valid = 'schema = "governance/v1"\nmode = "team"\n';
+    const valid = governanceV1("team");
     expect(declaredMode(valid, "steering")).toBe("team");
     // No schema line, an unknown key, and a rule the mode breaks.
     expect(declaredMode('mode = "team"\n', "steering")).toBe("invalid");
