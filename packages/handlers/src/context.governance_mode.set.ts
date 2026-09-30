@@ -8,7 +8,7 @@
 //
 //   steering  `steering/governance.toml`, the top-level `mode` key. Its
 //             presence on the production branch marks a steering repository.
-//             steering-repo/governance-mode.ts handles it (ADR-229).
+//             steering-repo/governance-mode.ts handles it (ADR-232).
 //   legacy    `.oxagen/rules/governance.toml`, handled here.
 //
 // THE MODE IN FORCE DECIDES THE ROUTE. Loosening governance is the change a
@@ -30,11 +30,17 @@
 // parse refuses the call, because the merge queue refuses every steering PR
 // until it parses.
 //
-// The steering review route has no land path yet. Oxagen opens the PR and
-// answers `proposed`, and the mode in force stays as it is. #4795 lands that
-// PR through a proposal row and `merge_context_pr`, with the approver on the
-// record. Apply now is not that land path. In team or regulated it is an
-// override, and it is recorded as one (ADR-229).
+// The steering review route records its PR as a governance proposal (kind
+// and lineage `governance`) and answers `proposed`. The mode in force stays
+// as it is until `merge_context_pr` lands the PR for an approver, with the
+// approver on the record (#4795). A call that proposes a change replaces the
+// governance proposal already open, because the PR it reuses now carries this
+// call's change. The prior proposal is set aside in the same transaction that
+// records its replacement, so a failed write never leaves the PR without one.
+// A call that lands at once, or that picks the mode already in force, sets
+// the open proposal aside, because nothing is waiting for review any more.
+// Apply now is not that land path. In team or regulated it is an override,
+// and it is recorded as one (ADR-232).
 //
 // `applyImmediately` takes the review route back to landing at once. It is
 // not privilege escalation: the contract admits only org Owner/Admin and
@@ -48,10 +54,12 @@ import {
   contextGovernanceModeSet,
   GOVERNANCE_BRANCH,
   GOVERNANCE_FILE,
+  STEERING_GOVERNANCE_BRANCH,
   STEERING_GOVERNANCE_FILE,
 } from "@oxagen/oxagen/contracts/context.governance_mode.set";
 import {
   draftGovernanceToml,
+  GOVERNANCE_LINEAGE,
   type GovernanceMode,
 } from "@oxagen/oxagen/contracts/context.steering.shared";
 import { schema, withTenantDb } from "@oxagen/database";
@@ -64,10 +72,17 @@ import {
   type SteeringRepository,
 } from "./context.steering.github";
 import { parseGovernanceMode } from "./context.steering.policy";
+import {
+  claimCutoff,
+  mergeClaimed,
+  mergeInProgress,
+  type ProposalRow,
+} from "./context.steering.store";
 import { logger } from "./logger";
 import {
   productionSteeringGovernanceSeams,
   readSteeringGovernance,
+  rewriteGovernanceMode,
   setSteeringGovernanceMode,
   type SteeringGovernanceSeams,
 } from "./steering-repo/governance-mode";
@@ -178,6 +193,171 @@ function emitChanged(
   }
 }
 
+/** No proposal has this id, so a lineage lookup excludes nothing. */
+const NO_PROPOSAL = "00000000-0000-0000-0000-000000000000";
+
+/** The statuses a proposal with an open PR holds. */
+const OPEN_PR = [
+  "pr_open",
+  "checks_running",
+  "checks_passed",
+  "checks_failed",
+] as const;
+
+/**
+ * The governance proposal open in the workspace, if any (#4795). A record
+ * proposal on the lineage refuses the call, and so does a merge that has
+ * claimed the proposal. Nothing is written: the caller sets the proposal aside
+ * once the change that replaces it is recorded.
+ */
+async function openGovernanceProposal(
+  deps: SteeringDeps,
+  scope: { orgId: string; workspaceId: string },
+): Promise<ProposalRow | null> {
+  const open = await deps.store.findOpenPrOnLineage(
+    scope,
+    GOVERNANCE_LINEAGE,
+    NO_PROPOSAL,
+  );
+  if (!open) return null;
+  if (open.kind !== "governance") {
+    throw new HandlerError({
+      code: "conflict",
+      reason: "lineage_taken",
+      message: `${open.publicId} is an open record proposal on the lineage ${GOVERNANCE_LINEAGE}, which governance changes use. Dismiss it, then set the mode again.`,
+    });
+  }
+  if (mergeClaimed(open, deps.now())) {
+    throw mergeInProgress(open.publicId, open.mergeClaimedAt);
+  }
+  return open;
+}
+
+/** The write that sets an open governance proposal aside. */
+function setAside(
+  deps: SteeringDeps,
+  open: ProposalRow,
+  reason: string,
+  actingUserId: string,
+) {
+  const now = deps.now();
+  return {
+    id: open.id,
+    patch: {
+      status: "rejected" as const,
+      dismissedAt: now,
+      dismissedReason: reason,
+      updatedById: actingUserId,
+    },
+    from: OPEN_PR,
+    guard: { noClaimSince: claimCutoff(now) },
+  };
+}
+
+/**
+ * The person picked the mode already in force, so a change still waiting for
+ * review no longer stands (#4795). Its proposal is set aside and its PR closed,
+ * or a reviewer could still land a mode nobody wants now. A record proposal on
+ * the lineage is not this call's to touch.
+ */
+async function withdrawGovernanceProposal(
+  deps: SteeringDeps,
+  scope: { orgId: string; workspaceId: string },
+  repo: SteeringRepository,
+  actingUserId: string,
+): Promise<void> {
+  const open = await deps.store.findOpenPrOnLineage(
+    scope,
+    GOVERNANCE_LINEAGE,
+    NO_PROPOSAL,
+  );
+  if (!open || open.kind !== "governance") return;
+  if (mergeClaimed(open, deps.now())) {
+    throw mergeInProgress(open.publicId, open.mergeClaimedAt);
+  }
+  const aside = setAside(
+    deps,
+    open,
+    "Withdrawn: the mode it proposed was set back to the mode in force",
+    actingUserId,
+  );
+  await deps.store.updateProposal(aside.id, aside.patch, aside.from, aside.guard);
+  if (open.prNumber === null) return;
+  // Best effort, as dismiss_proposal's close is: the row already says the
+  // change is withdrawn, and only Oxagen merges on the production branch.
+  try {
+    await deps.github.closePullRequest(repo, open.prNumber);
+    await deps.github.deleteBranch(repo, STEERING_GOVERNANCE_BRANCH);
+  } catch (err) {
+    logger.warn(
+      { err, proposal: open.publicId, pr: open.prNumber },
+      "context.governance_mode.set: could not close a withdrawn governance PR",
+    );
+  }
+}
+
+/**
+ * Record the review-route PR as a governance proposal, so merge_context_pr
+ * lands it for an approver (#4795). It carries no record: `force` is `info`,
+ * the scope is the workspace, and the statement names the change. Its checks
+ * are the steering checks reported on the PR, so the row lists none of the
+ * six record checks.
+ */
+async function recordGovernanceProposal(
+  deps: SteeringDeps,
+  input: {
+    scope: { orgId: string; workspaceId: string };
+    repo: SteeringRepository;
+    actingUserId: string;
+    currentMode: GovernanceMode;
+    mode: GovernanceMode;
+    pullRequest: { number: number; htmlUrl: string };
+    head: string;
+    checksPassed: boolean;
+    /** The governance proposal the reused PR carried until now. */
+    replaces: ProposalRow | null;
+  },
+): Promise<ProposalRow> {
+  const values = {
+    orgId: input.scope.orgId,
+    workspaceId: input.scope.workspaceId,
+    lineageId: GOVERNANCE_LINEAGE,
+    kind: "governance",
+    force: "info",
+    constraintEffect: null,
+    sharingScope: "workspace",
+    statement: `Change the steering governance mode from ${input.currentMode} to ${input.mode}.`,
+    rationale: `Requested in the workspace's governance settings. ${STEERING_GOVERNANCE_FILE} on ${STEERING_GOVERNANCE_BRANCH} carries the change, and it lands after a workspace member other than the author approves it.`,
+    source: `user:${input.actingUserId}`,
+    supportRuns: [],
+    supportAgents: [],
+    supportingRecordIds: [],
+    evidenceLinks: [],
+    createdById: input.actingUserId,
+    status: input.checksPassed ? "checks_passed" : "checks_failed",
+    governanceMode: input.currentMode,
+    provider: input.repo.provider,
+    repository: input.repo.fullName,
+    baseRef: input.repo.defaultBranch,
+    branch: STEERING_GOVERNANCE_BRANCH,
+    path: STEERING_GOVERNANCE_FILE,
+    prNumber: input.pullRequest.number,
+    prUrl: input.pullRequest.htmlUrl,
+    headSha: input.head,
+    checks: [],
+  } satisfies Parameters<SteeringDeps["store"]["insertProposal"]>[0];
+  if (input.replaces === null) return deps.store.insertProposal(values);
+  return deps.store.replaceProposal(
+    setAside(
+      deps,
+      input.replaces,
+      "Replaced by a newer governance change on the same pull request",
+      input.actingUserId,
+    ),
+    values,
+  );
+}
+
 export function makeSetGovernanceModeHandler(
   deps: SteeringDeps,
   seams: SteeringGovernanceSeams = productionSteeringGovernanceSeams,
@@ -242,6 +422,7 @@ export function makeSetGovernanceModeHandler(
             path: STEERING_GOVERNANCE_FILE,
           };
           if (currentMode === input.mode) {
+            await withdrawGovernanceProposal(deps, scope, repo, actingUserId);
             return {
               ...answer,
               outcome: "unchanged" as const,
@@ -253,6 +434,12 @@ export function makeSetGovernanceModeHandler(
           }
           const wantsReview = currentMode !== "solo";
           const overrodeReview = wantsReview && input.applyImmediately;
+          // A mode the rest of the file does not allow refuses here, before
+          // an open proposal is set aside.
+          rewriteGovernanceMode(steeringText, input.mode);
+          // Read only: the open proposal stays until its replacement is
+          // recorded, so a push or a check that fails leaves it standing.
+          const prior = await openGovernanceProposal(deps, scope);
           const result = await setSteeringGovernanceMode({
             host: deps.github,
             repo,
@@ -268,6 +455,17 @@ export function makeSetGovernanceModeHandler(
             seams,
           });
           if (result.outcome === "proposed") {
+            const proposal = await recordGovernanceProposal(deps, {
+              scope,
+              repo,
+              actingUserId,
+              currentMode,
+              mode: input.mode,
+              pullRequest: result.pullRequest,
+              head: result.head,
+              checksPassed: result.checksPassed,
+              replaces: prior,
+            });
             logger.info(
               {
                 orgId: ctx.orgId,
@@ -277,6 +475,8 @@ export function makeSetGovernanceModeHandler(
                 requestedMode: input.mode,
                 pr: result.pullRequest.htmlUrl,
                 reused: result.pullRequest.reused,
+                proposalId: proposal.publicId,
+                checksPassed: result.checksPassed,
               },
               "context.governance_mode.set: proposed governance mode",
             );
@@ -288,6 +488,24 @@ export function makeSetGovernanceModeHandler(
               pullRequest: result.pullRequest,
               overrodeReview: false,
             };
+          }
+          // The change landed on the PR the open proposal named, so nothing
+          // waits for review now.
+          if (prior !== null) {
+            const aside = setAside(
+              deps,
+              prior,
+              "Replaced by a governance change that landed at once",
+              actingUserId,
+            );
+            await deps.store
+              .updateProposal(aside.id, aside.patch, aside.from, aside.guard)
+              .catch((err: unknown) =>
+                logger.warn(
+                  { err, proposal: prior.publicId },
+                  "context.governance_mode.set: could not set aside the governance proposal a landed change replaced",
+                ),
+              );
           }
           emitChanged(deps, ctx, actingUserId, target.id, {
             fullName: repo.fullName,

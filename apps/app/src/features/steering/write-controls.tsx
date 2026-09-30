@@ -136,7 +136,15 @@ export function ProposalWrites({
   ws,
   proposalId,
   status,
-}: Target & { status: ProposalStatus }) {
+  governance = false,
+}: Target & {
+  status: ProposalStatus;
+  /**
+   * A governance change (#4795). open_context_pr refuses it: setting the mode
+   * again runs its steering checks. So it offers dismiss only.
+   */
+  governance?: boolean;
+}) {
   const t = useTranslations("steering.actions");
   // Only `merged` and `rejected` are terminal. `checks_passed` is not: when the
   // head moves after the checks clear, merge_context_pr refuses with
@@ -150,7 +158,7 @@ export function ProposalWrites({
   const prs = routes.steering(org, ws, { tab: "prs", proposal: proposalId });
   return (
     <>
-      {settled ? null : (
+      {settled || governance ? null : (
         <WriteDialog
           testId="open-context-pr"
           copy={{

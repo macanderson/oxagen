@@ -140,6 +140,9 @@ test("a steering PR merged through Oxagen raises the published version", async (
 
   await r.gh.approvePr(fullName, checked.pr.number);
   const merged = await mergeSteeringPr(r.ox, r.settings, proposalId);
+  if (!("record" in merged)) {
+    throw new Error(`The merge of ${MERGE_LINEAGE} answered a governance change, not a record.`);
+  }
   expect(merged.record.lineageId).toBe(MERGE_LINEAGE);
   expect(merged.bundleVersion.after).toBe(merged.bundleVersion.before + 1);
   // The merge answers the steering version it published. Provisioning

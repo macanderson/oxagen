@@ -288,14 +288,28 @@ const steeringPrView = z.object({
 });
 export type SteeringPrView = z.output<typeof steeringPrView>;
 
-const mergeResult = z.object({
+const mergeFacts = {
   proposalId: z.string(),
   status: z.literal("merged"),
-  record: z.object({ lineageId: z.string(), version: z.number().int(), path: z.string() }),
   mergedCommit: z.string(),
   bundleVersion: z.object({ before: z.number().int(), after: z.number().int() }),
   publishedVersion: z.number().int().nullable(),
-});
+};
+
+// The merge answers a union on `kind`: a governance proposal carries the mode
+// it landed, and every record kind carries its record (#4795, ADR-232).
+const mergeResult = z.union([
+  z.object({
+    ...mergeFacts,
+    kind: z.literal("governance"),
+    governance: z.object({ mode: z.string(), path: z.string() }),
+  }),
+  z.object({
+    ...mergeFacts,
+    kind: z.string(),
+    record: z.object({ lineageId: z.string(), version: z.number().int(), path: z.string() }),
+  }),
+]);
 
 const proposalCreated = z.object({
   proposalId: z.string(),

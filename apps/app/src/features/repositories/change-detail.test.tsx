@@ -61,6 +61,7 @@ const { ChangeDetail } = await import("./change-detail");
 const PASSED: ContextPr = {
   proposalId: "prp_open1",
   lineage: "ctx.scr.001-never-push-to-main",
+  kind: "rule",
   status: "checks_passed",
   governanceMode: "team",
   pr: {

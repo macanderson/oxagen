@@ -153,6 +153,7 @@ export function toContextPr(
   return {
     proposalId: out.proposalId,
     lineage: out.lineageId,
+    kind: out.kind,
     status: out.status,
     governanceMode: out.governanceMode,
     pr:
