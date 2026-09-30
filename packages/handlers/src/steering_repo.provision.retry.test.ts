@@ -297,7 +297,7 @@ describe("retry_steering_repo_provision handler", () => {
       const h = harness(choosing());
       await expect(
         retry(h, { connection: { provider: "github", id: 99 } }),
-      ).rejects.toMatchObject({ code: "invalid_input", reason: "unknown_connection" });
+      ).rejects.toMatchObject({ code: "conflict", reason: "unknown_connection" });
       await expect(
         retry(h, { connection: { provider: "gitlab", id: 11 } }),
       ).rejects.toBeInstanceOf(HandlerError);

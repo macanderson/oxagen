@@ -64,4 +64,4 @@ If the send itself fails, the handler records the failure (`enqueue_failed`) and
 |---|---|---|
 | `forbidden` | `no_principal`, `org_role_required` | no signed-in user; not an org Owner or Admin |
 | `not_found` | `no_steering_repo_state` | the scope has no steering repository setup to retry |
-| `invalid_input` | `unknown_connection` | `connection` is not one of the connections the setup found. Nothing changed |
+| `conflict` | `unknown_connection` | `connection` is not one of the connections the setup found. Nothing changed |

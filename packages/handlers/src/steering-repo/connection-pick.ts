@@ -40,7 +40,7 @@ export async function applyWorkspaceConnectionPick(
   const chosen = pickSteeringConnection(state, pick);
   if (state === null || chosen === null)
     throw new HandlerError({
-      code: "invalid_input",
+      code: "conflict",
       reason: "unknown_connection",
       message: `import_workspace_steering: ${pick.provider} ${pick.id} is not one of the connections this workspace's setup found. Read get_steering_repo for its connectionChoices.`,
     });

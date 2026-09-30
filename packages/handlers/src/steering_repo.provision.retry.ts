@@ -99,7 +99,7 @@ export function createRetrySteeringRepoProvisionHandler(
       chosen = pickSteeringConnection(current, input.connection);
       if (chosen === null)
         throw new HandlerError({
-          code: "invalid_input",
+          code: "conflict",
           reason: "unknown_connection",
           message: `retry_steering_repo_provision: ${input.connection.provider} ${input.connection.id} is not one of the connections this setup found. Read get_steering_repo for its connectionChoices.`,
         });

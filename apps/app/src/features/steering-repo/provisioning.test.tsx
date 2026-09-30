@@ -414,7 +414,7 @@ describe("the steering repo provisioning", () => {
       });
       provisioning(choosing({ legacySource: LEGACY_SOURCE }));
       const chooser = screen.getByTestId("steering-repo-choose");
-      await userEvent.click(within(chooser).getByRole("radio", { name: /^acme\b/ }));
+      await userEvent.click(within(chooser).getByRole("radio", { name: /^acme(?!-old)/ }));
       await userEvent.click(screen.getByTestId("steering-repo-use-connection"));
       expect(actions.importWorkspaceSteering).toHaveBeenCalledWith(
         "acme",

@@ -83,7 +83,7 @@ describe("import_workspace_steering handler", () => {
 
   it("runs nothing when the picked connection is refused", async () => {
     mocks.pick.mockRejectedValue(
-      new HandlerError({ code: "invalid_input", reason: "unknown_connection" }),
+      new HandlerError({ code: "conflict", reason: "unknown_connection" }),
     );
     await expect(
       run({ connection: { provider: "github", id: 99 } }),

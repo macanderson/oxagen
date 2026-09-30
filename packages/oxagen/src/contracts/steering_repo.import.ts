@@ -51,7 +51,7 @@ export const STEERING_IMPORT_OUTCOMES = [
  * When setup stopped with `choose_connection`, the call takes `connection`,
  * one of `get_steering_repo`'s `connectionChoices`. The run stores it as the
  * organization's steering connection first, and refuses one that is not on
- * the list (invalid_input `unknown_connection`).
+ * the list (conflict `unknown_connection`).
  *
  * Org Owners and Admins, and workspace Owners. The handler checks the role
  * itself (INV-29). The import is a one-time move a person starts, so the

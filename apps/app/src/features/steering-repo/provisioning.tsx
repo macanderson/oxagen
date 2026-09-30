@@ -26,12 +26,14 @@ import {
   WarningCircleIcon,
 } from "@phosphor-icons/react";
 import { useTranslations } from "next-intl";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
+import { parseGitHubUrl } from "@/shared/github-url";
+import { parseGitLabUrl } from "@/shared/gitlab-url";
 import type { SafePath } from "@/shared/safe-path";
 import { ChoiceGroup } from "@/ui/choice-group";
 import { buttonPrimary, buttonSecondary } from "@/ui/control-styles";
 import { FormAlert } from "@/ui/form-feedback";
-import { useNavigate } from "@/ui/navigation";
+import { GitHubLink, GitLabLink, useNavigate } from "@/ui/navigation";
 import { importWorkspaceSteering, retrySteeringRepoProvision } from "./actions";
 import { UNANSWERED, useSteeringRepoFailure } from "./failure";
 import { steeringGithubHref } from "./hrefs";
@@ -168,6 +170,27 @@ function ConnectGithub({
   );
 }
 
+const prLinkClass = "underline underline-offset-2";
+
+/** A pull request on GitHub or GitLab, or its label alone at any other address. */
+function PullRequestLink({ url, children }: { url: string; children: ReactNode }) {
+  const github = parseGitHubUrl(url);
+  if (github !== null)
+    return (
+      <GitHubLink to={github} className={prLinkClass}>
+        {children}
+      </GitHubLink>
+    );
+  const gitlab = parseGitLabUrl(url);
+  if (gitlab !== null)
+    return (
+      <GitLabLink to={gitlab} className={prLinkClass}>
+        {children}
+      </GitLabLink>
+    );
+  return <span>{children}</span>;
+}
+
 /** What the import did, with the pull requests a person merges. */
 function ImportOutcome({ outcome }: { outcome: SteeringRepoImportOutput }) {
   const t = useTranslations("repositories.steeringRepo.provisioning.imported");
@@ -198,26 +221,16 @@ function ImportOutcome({ outcome }: { outcome: SteeringRepoImportOutput }) {
         <ol className="ml-4 list-decimal text-[12.5px]">
           {outcome.pullRequests.map((pr) => (
             <li key={pr.number}>
-              <a
-                href={pr.url}
-                target="_blank"
-                rel="noreferrer"
-                className="underline underline-offset-2"
-              >
+              <PullRequestLink url={pr.url}>
                 {t("pullRequest", { number: pr.number, branch: pr.branch })}
-              </a>
+              </PullRequestLink>
             </li>
           ))}
           {outcome.cleanup === null ? null : (
             <li>
-              <a
-                href={outcome.cleanup.url}
-                target="_blank"
-                rel="noreferrer"
-                className="underline underline-offset-2"
-              >
+              <PullRequestLink url={outcome.cleanup.url}>
                 {t("cleanup", { number: outcome.cleanup.number })}
-              </a>
+              </PullRequestLink>
             </li>
           )}
         </ol>

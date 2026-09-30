@@ -20,7 +20,7 @@ import { steeringConnectionPick } from "./steering_repo.get";
  * GitHub organizations or GitLab groups `get_steering_repo` lists in
  * `connectionChoices`. The handler stores it as the organization's steering
  * connection before it re-sends the job, and refuses one that is not on the
- * list (invalid_input `unknown_connection`).
+ * list (conflict `unknown_connection`).
  *
  * Org Owners and Admins only, the same as `repair_steering_repo`. Retry is
  * the health banner's other admin button. Stella can run it too, and each
