@@ -12,11 +12,15 @@
  *   (`head` is null when that branch no longer exists on GitHub);
  * - GitHub's current default branch, so a caller can see that it moved without
  *   the binding moving (§11.4: the binding never moves on its own);
- * - whether the tree exists, and every path under it;
- * - the text of `.oxagen/workspace.toml` and `.oxagen/rules/governance.toml`,
- *   and the governance mode the second declares (`absent` when there is no
- *   file, which the Context PR gate reads as `team`; `invalid` when the file
- *   names no mode it knows, which the gate refuses);
+ * - whether the tree exists, and every path under it, and the same for
+ *   `steering/` in a steering repository (#4821);
+ * - the text of `.oxagen/workspace.toml` and of the governance file, and the
+ *   governance mode it declares (`absent` when there is no file, which the
+ *   Context PR gate reads as `team`; `invalid` when the file names no mode it
+ *   knows, which the gate refuses). The governance file is
+ *   `steering/governance.toml` in a steering repository and
+ *   `.oxagen/rules/governance.toml` in a legacy one, and `governancePath`
+ *   names the one read;
  * - the open pull request `open_init_pr` left, if one is waiting.
  *
  * Refusals: `not_found: repository_not_linked` (no head in this workspace
@@ -28,7 +32,7 @@ import { registerCapability } from "../registry";
 import { repositoryBindingIdSchema } from "./repository.shared";
 import { repositoryRole } from "./repository.list";
 
-/** The governance mode `.oxagen/rules/governance.toml` declares, as read. */
+/** The governance mode the repository's governance file declares, as read. */
 export const declaredGovernanceMode = z.enum([
   "solo",
   "team",
@@ -41,7 +45,7 @@ export const repositoryTreeGet = registerCapability({
   name: "get_repository_tree",
   domain: "repository",
   description:
-    "Read what one of the workspace's repositories holds under .oxagen/ on its production branch: the head commit, every path, workspace.toml, governance.toml and its mode, and any open init pull request.",
+    "Read what one of the workspace's repositories holds under .oxagen/ and steering/ on its production branch: the head commit, every path, workspace.toml, the governance file and its mode, and any open init pull request.",
   mode: "sync",
   surfaces: ["api", "mcp", "cli"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
@@ -78,7 +82,20 @@ export const repositoryTreeGet = registerCapability({
           files: z.array(z.string().min(1)),
         })
         .strict(),
+      steering: z
+        .object({
+          present: z.boolean(),
+          /** Every path under `steering/`, sorted, at `head`. */
+          files: z.array(z.string().min(1)),
+        })
+        .strict()
+        .default({ present: false, files: [] }),
       workspaceToml: z.string().nullable(),
+      /**
+       * The governance file read: `steering/governance.toml` when the tree
+       * holds one, else `.oxagen/rules/governance.toml`.
+       */
+      governancePath: z.string().min(1).default(".oxagen/rules/governance.toml"),
       governanceToml: z.string().nullable(),
       governanceMode: declaredGovernanceMode,
       /** The open pull request that adds `.oxagen/`, when one is waiting. */

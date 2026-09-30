@@ -417,6 +417,28 @@ describe("oxagen repo tree", () => {
     ]);
   });
 
+  it("lists a steering repository's steering/ files and never points at init (#4821)", async () => {
+    (apiPostOrThrow as Mock).mockResolvedValueOnce({
+      ...TREE,
+      githubDefaultBranch: "main",
+      oxagen: { present: false, files: [] },
+      steering: {
+        present: true,
+        files: ["steering/constraints/a.md", "steering/governance.toml"],
+      },
+      governancePath: "steering/governance.toml",
+      governanceMode: "solo",
+    });
+    const { writer, out } = memoryWriter();
+    await repoTree("rpb_main", {}, writer);
+    expect(out).toEqual([
+      "acme/control · main · main at abc123",
+      "governance mode: solo",
+      "  steering/constraints/a.md",
+      "  steering/governance.toml",
+    ]);
+  });
+
   it("points at init when there is no tree, and at the open pull request when one waits", async () => {
     const bare = {
       ...TREE,

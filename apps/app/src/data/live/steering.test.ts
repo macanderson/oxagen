@@ -385,7 +385,11 @@ describe("steering.hub", () => {
       if (call.contract === repositoryTreeGet)
         return (
           by.tree ??
-          readOk({ fullName: "acme/platform", governanceMode: "regulated" })
+          readOk({
+            fullName: "acme/platform",
+            governancePath: ".oxagen/rules/governance.toml",
+            governanceMode: "regulated",
+          })
         );
       if (call.contract === contextProposalList) {
         const key = call.input.status ?? "all";
@@ -429,6 +433,7 @@ describe("steering.hub", () => {
         governance: {
           state: "read",
           repository: "acme/platform",
+          path: ".oxagen/rules/governance.toml",
           mode: "regulated",
         },
         proposalsWaiting: 9,

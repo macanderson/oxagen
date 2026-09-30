@@ -2,16 +2,19 @@
 // The governance chip on the Steering header and the dialog it opens
 // (roadmap pages/steering.md, `govChip` and `govmode`).
 //
-// The chip reads the mode `.oxagen/rules/governance.toml` declares on the main
-// repository now, as the Context PR gate reads it; it prints "unbound" or
-// "not read" rather than a mode nobody read. A missing file reads as `team`,
+// The chip reads the mode the main repository's governance file declares now,
+// as the Context PR gate reads it: `steering/governance.toml` in a steering
+// repository, `.oxagen/rules/governance.toml` in a legacy one, and every
+// string names the file the read names (#4821). It prints "unbound" or "not
+// read" rather than a mode nobody read. A missing file reads as `team`,
 // because that is what the gate does with it, and the chip's title says the
 // file is missing. The chip is never gold: gold is identity, not state.
 //
 // The dialog's pick is local state until Open the Context PR. Confirming
 // calls `set_governance_mode`, which writes that file and nothing else: a pull
-// request under `team` or `regulated`, a commit under `solo`. Picking the mode
-// already in force reports that nothing changed and calls nothing.
+// request under `team` or `regulated`, and under `solo` a change that lands at
+// once. Picking the mode already in force reports that nothing changed and
+// calls nothing.
 //
 // The dialog says what that capability does, which is less than the design
 // asks (#3859): the pull request is an ordinary one, not a Context PR, so the
@@ -81,6 +84,10 @@ export function GovernanceChip({
 
   const repository =
     governance?.state === "read" ? governance.repository : t("mainRepository");
+  // The file the mode lives in: steering/governance.toml in a steering
+  // repository, .oxagen/rules/governance.toml in a legacy one (#4821).
+  const path =
+    governance?.state === "read" ? governance.path : t("governanceFile");
   let shown: string;
   let title: string;
   if (governance === null || governance.state === "unread") {
@@ -93,10 +100,10 @@ export function GovernanceChip({
     title = t("unboundTitle");
   } else if (governance.mode === "invalid") {
     shown = t("shown.invalid");
-    title = t("invalidTitle", { repository });
+    title = t("invalidTitle", { repository, path });
   } else if (governance.mode === "absent") {
     shown = "team";
-    title = t("absentTitle", { repository });
+    title = t("absentTitle", { repository, path });
   } else {
     shown = governance.mode;
     title = t("chipTitle");
@@ -117,6 +124,7 @@ export function GovernanceChip({
           mode: picked,
           repository,
           branch: "",
+          path,
           pullRequest: null,
         },
       });
@@ -145,7 +153,7 @@ export function GovernanceChip({
         open={open}
         onOpenChange={setOpen}
         title={t("title", { workspace })}
-        subtitle={t("subtitle", { repository })}
+        subtitle={t("subtitle", { repository, path })}
         closeLabel={outcome?.ok ? t("close") : t("cancel")}
         headerClose
         testId="governance-dialog"
@@ -206,7 +214,7 @@ export function GovernanceChip({
               data-testid="governance-toml"
               className="overflow-x-auto rounded-lg border border-border bg-hl px-3 py-2.5 font-mono text-[12px] leading-relaxed text-foreground"
             >
-              {governanceToml(t("tomlHeader"), picked)}
+              {governanceToml(t("tomlHeader", { path }), picked)}
             </pre>
             <p className={note} data-testid="governance-note">
               {t("note")}
@@ -237,11 +245,16 @@ function GovernanceResult({ value }: { value: GovernanceChanged }) {
     <div role="status" className="flex flex-col gap-2 text-[13px]">
       <p>
         {value.outcome === "proposed"
-          ? t("proposed", { repository: value.repository, mode: value.mode })
+          ? t("proposed", {
+              repository: value.repository,
+              path: value.path,
+              mode: value.mode,
+            })
           : value.outcome === "applied"
             ? t("applied", {
                 repository: value.repository,
                 branch: value.branch,
+                path: value.path,
                 mode: value.mode,
               })
             : t("unchanged", { mode: value.mode })}

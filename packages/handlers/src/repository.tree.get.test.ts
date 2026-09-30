@@ -4,12 +4,17 @@ import { describe, expect, it, vi } from "vitest";
 import type { GitHubClient } from "@oxagen/github";
 import { HandlerError } from "@oxagen/oxagen";
 import { repositoryTreeGet } from "@oxagen/oxagen/contracts/repository.tree.get";
+import { schemaDirective } from "@oxagen/oxagen/steering-repo/schema-ids";
 import type { BoundRepository } from "./repository.bound";
 import {
   createRepositoryTreeGetHandler,
   declaredMode,
 } from "./repository.tree.get";
 import { makeCTX } from "./test-utils/fixtures";
+
+/** A governance/v1 file with `mode`, as steering/governance.toml opens. */
+const governanceV1 = (mode: string) =>
+  `${schemaDirective("governance/v1")}\nschema = "governance/v1"\nmode = "${mode}"\n`;
 
 const NOW = new Date("2026-09-19T10:00:00.000Z");
 
@@ -83,7 +88,9 @@ describe("get_repository_tree", () => {
           ".oxagen/workspace.toml",
         ],
       },
+      steering: { present: false, files: [] },
       workspaceToml: 'schema = "oxagen-workspace/v0.1"\n',
+      governancePath: ".oxagen/rules/governance.toml",
       governanceToml: 'mode = "regulated"\n',
       governanceMode: "regulated",
       initPullRequest: null,
@@ -135,11 +142,79 @@ describe("get_repository_tree", () => {
     });
   });
 
+  it("reads the mode a steering repository keeps in steering/governance.toml (#4821)", async () => {
+    // Conversion moved the mode into steering/ and deleted the legacy file.
+    const client = fakeGithub({
+      getTree: vi.fn(async () => [
+        "README.md",
+        ".oxagen/workspace.toml",
+        "steering/governance.toml",
+        "steering/constraints/ctx.core.no-force-push.md",
+      ]),
+      getFileContent: vi.fn(async (args: { path: string }) =>
+        args.path === "steering/governance.toml"
+          ? governanceV1("solo")
+          : 'schema = "oxagen-workspace/v0.1"\n',
+      ),
+    });
+    const out = await handler(client)({ bindingId: "rpb_0a1b" }, makeCTX());
+    expect(out.governancePath).toBe("steering/governance.toml");
+    expect(out.governanceMode).toBe("solo");
+    expect(out.steering).toEqual({
+      present: true,
+      files: [
+        "steering/constraints/ctx.core.no-force-push.md",
+        "steering/governance.toml",
+      ],
+    });
+    expect(client.getFileContent).toHaveBeenCalledWith({
+      owner: "acme",
+      repo: "widgets",
+      path: "steering/governance.toml",
+      ref: "abc123",
+    });
+    expect(client.getFileContent).not.toHaveBeenCalledWith(
+      expect.objectContaining({ path: ".oxagen/rules/governance.toml" }),
+    );
+    expect(repositoryTreeGet.output.safeParse(out).success).toBe(true);
+  });
+
+  it("prefers the steering file when a half-converted repository holds both", async () => {
+    const client = fakeGithub({
+      getTree: vi.fn(async () => [
+        ".oxagen/rules/governance.toml",
+        "steering/governance.toml",
+      ]),
+      getFileContent: vi.fn(async (args: { path: string }) =>
+        args.path === "steering/governance.toml"
+          ? governanceV1("regulated")
+          : 'mode = "solo"\n',
+      ),
+    });
+    const out = await handler(client)({ bindingId: "rpb_0a1b" }, makeCTX());
+    expect(out.governancePath).toBe("steering/governance.toml");
+    expect(out.governanceMode).toBe("regulated");
+  });
+
+  it("reads a steering file governance/v1 refuses as invalid, whatever its mode line says", async () => {
+    // readSteeringLayout and the merge queue refuse this file, so no mode is
+    // in force, and the page must not report team.
+    const client = fakeGithub({
+      getTree: vi.fn(async () => ["steering/governance.toml"]),
+      getFileContent: vi.fn(async () => 'mode = "team"\n'),
+    });
+    const out = await handler(client)({ bindingId: "rpb_0a1b" }, makeCTX());
+    expect(out.governancePath).toBe("steering/governance.toml");
+    expect(out.governanceMode).toBe("invalid");
+  });
+
   it("answers head null and an empty tree when the production branch is gone from GitHub", async () => {
     const client = fakeGithub({ getBranch: vi.fn(async () => null) });
     const out = await handler(client)({ bindingId: "rpb_0a1b" }, makeCTX());
     expect(out.head).toBeNull();
     expect(out.oxagen.present).toBe(false);
+    expect(out.steering.present).toBe(false);
+    expect(out.governancePath).toBe(".oxagen/rules/governance.toml");
     expect(client.getTree).not.toHaveBeenCalled();
   });
 
@@ -236,5 +311,20 @@ describe("declaredMode", () => {
     expect(declaredMode('mode = "solo"')).toBe("solo");
     expect(declaredMode('mode = "lax"')).toBe("invalid");
     expect(declaredMode("not toml [")).toBe("invalid");
+  });
+
+  it("reads a steering file as governance/v1 in full", () => {
+    const valid = governanceV1("team");
+    expect(declaredMode(valid, "steering")).toBe("team");
+    // No schema line, an unknown key, and a rule the mode breaks.
+    expect(declaredMode('mode = "team"\n', "steering")).toBe("invalid");
+    expect(declaredMode(`${valid}colour = "gold"\n`, "steering")).toBe(
+      "invalid",
+    );
+    expect(
+      declaredMode(`${valid}\n[memory]\nauto_merge = true\n`, "steering"),
+    ).toBe("invalid");
+    // The legacy file still needs only its mode.
+    expect(declaredMode('mode = "team"\n', "legacy")).toBe("team");
   });
 });
