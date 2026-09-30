@@ -15,6 +15,9 @@ import {
   brandPath,
   expectedInk,
   rewriteInk,
+  startupImages,
+  staticPwaHead,
+  withPwaHead,
 } from "./sync-brand-assets.mjs";
 
 describe("brand kit selection", () => {
@@ -205,5 +208,75 @@ describe("the web art palette", () => {
     expect(() => rewriteInk(theme, { gold: "#D4AF37" })).toThrow(
       "INK has no gold colour",
     );
+  });
+});
+
+describe("launch screens and the install prompt", () => {
+  const screens = [
+    {
+      file: "{brand}-splash-1179x2556-{scheme}.png",
+      media:
+        "(device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)",
+    },
+  ];
+
+  it("lists one launch screen per screen and scheme, keyed to the scheme", () => {
+    const images = startupImages(screens, "oxagen", "/pwa/splash/");
+    expect(images).toEqual([
+      {
+        url: "/pwa/splash/oxagen-splash-1179x2556-dark.png",
+        media: `${screens[0]?.media} and (prefers-color-scheme: dark)`,
+      },
+      {
+        url: "/pwa/splash/oxagen-splash-1179x2556-light.png",
+        media: `${screens[0]?.media} and (prefers-color-scheme: light)`,
+      },
+    ]);
+  });
+
+  const block = staticPwaHead(startupImages(screens, "oxagen", "/splash/"), {
+    title: "Oxagen",
+    script: "/assets/install-prompt.js",
+    icon: "/icon-192.png",
+  });
+
+  it("writes the home-screen metas, the launch screens, and the prompt", () => {
+    expect(block).toContain(
+      '<meta name="apple-mobile-web-app-capable" content="yes">',
+    );
+    expect(block.match(/rel="apple-touch-startup-image"/g)).toHaveLength(2);
+    expect(block).toContain(
+      '<script src="/assets/install-prompt.js" defer data-icon="/icon-192.png"></script>',
+    );
+  });
+
+  const page =
+    '<head>\n<link rel="manifest" href="/oxagen.webmanifest">\n<title>x</title>\n</head>';
+
+  it("places the block after the manifest link on a page that has none", () => {
+    const out = withPwaHead(page, block);
+    expect(out).toContain(
+      `<link rel="manifest" href="/oxagen.webmanifest">\n${block}\n<title>`,
+    );
+  });
+
+  it("replaces the block in place, so a re-sync changes nothing", () => {
+    const once = withPwaHead(page, block);
+    expect(withPwaHead(once, block)).toBe(once);
+    const moved = withPwaHead(once, block.replace("Oxagen", "Renamed"));
+    expect(moved).toContain('content="Renamed"');
+    expect(moved.match(/<!-- \/pwa -->/g)).toHaveLength(1);
+  });
+
+  it("refuses a page with no manifest link, or a block with no end (negative)", () => {
+    expect(() => withPwaHead("<head></head>", block)).toThrow(
+      "no manifest link",
+    );
+    expect(() =>
+      withPwaHead(
+        "<!-- pwa: written by tools/scripts/sync-brand-assets.mjs -->",
+        block,
+      ),
+    ).toThrow("no end marker");
   });
 });

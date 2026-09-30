@@ -1,5 +1,7 @@
 ---
 name: oxagen-branding
+version: 1.0.0
+scope: workspace
 description: The authority for anything that carries Oxagen or Stella branding or speaks in Oxagen's voice. Use it whenever you create or edit a page, post, ad, email, deck, doc, spec, UI string, error message, CLI output, README, or any prose a person will read on behalf of either brand, even if the request does not say "brand" or "voice". Covers the marks, tokens, type, layout rules, positioning, one-liners, voice and tone, words to use, words to avoid, and worked examples. Oxagen and Stella share one house system; the logo is the only difference.
 ---
 
@@ -101,3 +103,11 @@ Full guidance, with before and after pairs, is in `references/voice.md`.
 - [ ] Card radius 12px on the website and 13px in the app, 1120px wrap, dark first on obsidian with the white light theme intact
 - [ ] Gold as text on white is gold-deep `#8A7223`
 - [ ] Every text role that carries meaning clears 4.5:1 on its ground
+
+## Headings and labels
+
+A heading names the thing, a caption states one fact, and no label carries a comma, a mid-dot,
+or a "not / never" contrast. Subtext under a heading is one sentence or nothing. Banned on
+2026-09-21: "Retrieval, in numbers", "Summary · what this run changed", "ordered by the frames,
+not by kind", "what Oxagen injected, and what it cut". Write "Retrieval stats", "Summary",
+"Frame order", "Injected context".

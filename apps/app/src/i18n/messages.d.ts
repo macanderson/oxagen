@@ -5,6 +5,13 @@ type Messages = {
   app: {
     name: string;
     description: string;
+    install: {
+      title: string;
+      body: string;
+      bodyIos: string;
+      install: string;
+      dismiss: string;
+    };
   };
   pages: {
     login: string;

@@ -3,6 +3,8 @@
 // assets/blog.css for the parts only the blog has. No colour, no hex, no
 // inline style: the palette lives in the stylesheet's token table.
 
+import { PWA_HEAD } from "./pwa-head.generated.mjs";
+
 export const SITE = "https://oxagen.sh";
 export const BLOG_TITLE = "Oxagen Research";
 export const BLOG_DESCRIPTION =
@@ -225,6 +227,7 @@ export function layout(o) {
 <link rel="icon" href="/favicon.ico" sizes="16x16 32x32 48x48">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="manifest" href="/oxagen.webmanifest">
+${PWA_HEAD}
 <link rel="preload" href="/fonts/space-grotesk-latin-400.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/fonts/space-grotesk-latin-600.woff2" as="font" type="font/woff2" crossorigin>
 ${o.ldjson ? `<script type="application/ld+json">\n${JSON.stringify(o.ldjson, null, 2).replace(/</g, "\\u003c")}\n</script>` : ""}
