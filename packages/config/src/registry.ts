@@ -2570,6 +2570,15 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     valueOrigin: "manual",
     placeholder: "5432",
   },
+  FLEET_OUTPUT_ROOT: {
+    group: "Operator scripts",
+    description: "Existing private persistent runner directory for fleet reports and credentials.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
   FLEET_STAGING_ORIGIN: {
     group: "Operator scripts",
     description: "Exact trusted HTTPS staging origin for the fleet load rig.",
