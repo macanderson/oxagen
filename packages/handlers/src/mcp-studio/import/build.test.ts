@@ -309,6 +309,13 @@ describe("buildFolder refuses", () => {
     expect(err.message).toContain("ledger is a gRPC server");
   });
 
+  it.each(["openapi", "graphql"] as const)("a new %s server with no definition (#4756)", (type) => {
+    const serverToml = grpcServerToml("ledger").replace('type = "grpc"', `type = "${type}"`);
+    const err = refusal(() => buildFolder(input({ server: "ledger", serverToml })));
+    expect(err.reason).toBe("source_required");
+    expect(err.message).toContain("ledger has no tools.lock.json yet");
+  });
+
   it("a new MCP server with no source", () => {
     const err = refusal(() =>
       buildFolder(input({ server: "stripe", serverToml: fixture("servers/stripe/server.toml") })),
