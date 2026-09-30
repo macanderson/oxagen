@@ -678,6 +678,26 @@ describe("the Runs panel", () => {
     expect(row("arun_halted")).toHaveTextContent("not recorded");
   });
 
+  it("badges a ledger run's agent with the harness the agent registered, since the run recorded none", async () => {
+    await renderFleet({
+      runs: runPage([
+        runRow({ id: "arun_known" }),
+        runRow({ id: "arun_stranger", agentKey: "acme.core.stranger" }),
+      ]),
+      approvals: NO_APPROVALS,
+      agents: agentPage(["acme.core.release-bot"]),
+    });
+    expect(
+      row("arun_known").querySelector("[data-harness-badge]"),
+    ).toHaveAttribute("data-harness-badge", "claude-code");
+    // The sub-line still names where the run came from.
+    expect(row("arun_known")).toHaveTextContent("evidence ledger");
+    // An agent the roster does not hold has no harness to show (negative).
+    expect(
+      row("arun_stranger").querySelector("[data-harness-badge]"),
+    ).toBeNull();
+  });
+
   it("draws the operator's avatar when they set one, and their initials when they did not", async () => {
     await renderFleet({
       runs: runPage([

@@ -32,6 +32,7 @@ import type { DataSource } from "@/data/ports";
 import type { Read } from "@/data/read";
 import type { WsCtx } from "@/server/viewer";
 import { routes } from "@/shared/safe-path";
+import { AgentAvatar } from "@/ui/agent-avatar";
 import { Badge } from "@/ui/badge";
 import { mono } from "@/ui/control-styles";
 import { type ListRow, ListTable } from "@/ui/list-table";
@@ -162,12 +163,31 @@ function NamedHosts({ count }: { count: number }) {
   return <Sub>{count === 0 ? t("hostsNone") : t("hosts", { count })}</Sub>;
 }
 
+/**
+ * The agent on a host row, its avatar badged with the harness it runs in. An
+ * enrollment is one agent on one machine, so when the daemon reported one
+ * harness it is the agent's. A host that reported several names no badge
+ * rather than guess among them.
+ */
 function HostAgent({ host }: { host: RuntimeEnrollment }) {
   const t = useTranslations("runtimes.named");
-  return host.agentKey === "" ? (
-    <span className="text-muted-foreground">{t("noAgent")}</span>
-  ) : (
-    <span className={`${mono} block md:truncate`}>{host.agentKey}</span>
+  if (host.agentKey === "")
+    return <span className="text-muted-foreground">{t("noAgent")}</span>;
+  const only = host.harnesses.length === 1 ? host.harnesses[0] : null;
+  return (
+    <span className="flex min-w-0 items-center gap-2">
+      <AgentAvatar
+        value={null}
+        initials={(host.agentKey.split(".").at(-1) ?? "")
+          .slice(0, 2)
+          .toUpperCase()}
+        harness={only}
+        size={24}
+      />
+      <span className={`${mono} block min-w-0 md:truncate`}>
+        {host.agentKey}
+      </span>
+    </span>
   );
 }
 

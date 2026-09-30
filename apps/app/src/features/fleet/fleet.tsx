@@ -182,6 +182,13 @@ export async function Fleet({
         agent.agentKey === null ? [] : [{ agentKey: agent.agentKey }],
       )
     : [];
+  const agentHarnesses: Record<string, string> = {};
+  if (agents.ok) {
+    for (const agent of agents.value.agents) {
+      if (agent.agentKey !== null)
+        agentHarnesses[agent.agentKey] = agent.harness;
+    }
+  }
   const canCommand = canCommandRun(ctx.orgRole, ctx.wsRole);
   const parked = approvals.ok ? [...parkedRunIds(approvals.value.items)] : [];
   return (
@@ -223,6 +230,7 @@ export async function Fleet({
         approvals={approvals}
         interjections={interjections}
         agentTotal={agents.ok ? agents.value.totals.identities : null}
+        agentHarnesses={agentHarnesses}
         liveRuns={runs.value.liveRuns ?? null}
         now={now}
         canCommand={canCommand}
