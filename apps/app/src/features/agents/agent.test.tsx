@@ -385,7 +385,7 @@ describe("Overview", () => {
       within(coaching).getByRole("link", {
         name: "All coaching for this workspace →",
       }),
-    ).toHaveAttribute("href", "/acme/core-platform/spend");
+    ).toHaveAttribute("href", "/acme/core-platform/spend/findings");
   });
 
   it("badges the composition with the health verdict and opens each row's owner", async () => {
@@ -529,7 +529,7 @@ describe("Identity", () => {
       within(credentials).getByRole("link", {
         name: "See the connections that mint them",
       }),
-    ).toHaveAttribute("href", "/acme/core-platform/tools/providers");
+    ).toHaveAttribute("href", "/acme/core-platform/agents?tab=servers");
     const run = region("Run credential");
     expect(run).toHaveTextContent("oxa_ag_7f…");
     expect(run).toHaveTextContent("Purpose locknot recorded");
@@ -867,7 +867,54 @@ describe("Agent tab bodies", () => {
       cursor: "cur_2",
     });
     render(<IntlProvider>{element}</IntlProvider>);
-    expect(calls.incidents[0]?.[2]).toEqual({ cursor: "cur_2" });
+    expect(calls.incidents[0]?.[2]).toEqual({ cursor: "cur_2", limit: 50 });
+  });
+
+  // #4693: Rows per page under the incident list names the page size in the
+  // address, and only Activity reads it.
+  it("reads the incidents at the size the URL names on Activity", async () => {
+    const { source, calls } = agentsSource(allReads());
+    const element = await Agent({
+      ctx,
+      source,
+      agent: "release-bot",
+      tab: "activity",
+      rows: "25",
+      cursor: "cur_2",
+    });
+    render(<IntlProvider>{element}</IntlProvider>);
+    expect(calls.incidents[0]?.[2]).toEqual({ cursor: "cur_2", limit: 25 });
+    expect(screen.getByRole("combobox", { name: "Rows" })).toHaveTextContent(
+      "25",
+    );
+  });
+
+  it("reads a size Rows does not offer as 50 (negative)", async () => {
+    const { source, calls } = agentsSource(allReads());
+    const element = await Agent({
+      ctx,
+      source,
+      agent: "release-bot",
+      tab: "activity",
+      rows: "30",
+      cursor: null,
+    });
+    render(<IntlProvider>{element}</IntlProvider>);
+    expect(calls.incidents[0]?.[2]).toEqual({ cursor: null, limit: 50 });
+  });
+
+  it("leaves the size off the incident read on another tab (negative)", async () => {
+    const { source, calls } = agentsSource(allReads());
+    const element = await Agent({
+      ctx,
+      source,
+      agent: "release-bot",
+      tab: "overview",
+      rows: "25",
+      cursor: "cur_2",
+    });
+    render(<IntlProvider>{element}</IntlProvider>);
+    expect(calls.incidents[0]?.[2]).toEqual({ cursor: null });
   });
 
   it("counts the mandates in effect on the Permissions tab", async () => {

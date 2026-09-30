@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { resolveSteeringRoute } from "@/features/steering";
+import { resolveSteeringRoute, skillRowsParam } from "@/features/steering";
 import { requireViewer } from "@/server/viewer";
 import { permanentRedirectTo } from "@/shared/navigation";
 import { routes } from "@/shared/safe-path";
@@ -29,6 +29,8 @@ export default async function SkillsViewPage({
         view.skill === null && view.skillView !== "catalog"
           ? view.skillView
           : undefined,
+      // The inventory's page size, left off at its default (#4693).
+      rows: view.skill === null ? skillRowsParam(view.rows) : undefined,
       cursor: view.cursor ?? undefined,
     }),
   );

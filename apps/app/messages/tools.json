@@ -1,10 +1,13 @@
 {
   "tools": {
-    "eyebrow": "{workspace}",
-    "lede": "The registry is the only source of tools an agent can see.",
     "loading": "Loading tools",
     "notCarried": "not recorded",
-    "nextPage": "Next page",
+    "pager": {
+      "registry": "Tool version pages",
+      "grants": "Credential grant pages",
+      "first": "First page",
+      "next": "Next page"
+    },
     "roles": {
       "owner": "Owner",
       "admin": "Admin",
@@ -12,17 +15,6 @@
       "billing": "Billing",
       "compliance": "Compliance",
       "viewer": "Viewer"
-    },
-    "tabs": {
-      "label": "Tools sections",
-      "tools": "Tools",
-      "toolbelts": "Toolbelts",
-      "providers": "Providers",
-      "policy": "Policy",
-      "switches": "Kill switches",
-      "atLeast": "{count}+",
-      "switchesOn": "{count, plural, one {# on} other {# on}}",
-      "switchesOnAtLeast": "{count, plural, one {# or more on} other {# or more on}}"
     },
     "gate": {
       "open": "Open",
@@ -1166,6 +1158,13 @@
       "failedTitle": "Sign-in did not finish",
       "denied": "The sign-in was declined. Close this window and try again from Oxagen.",
       "failed": "Close this window. Oxagen shows what went wrong."
+    },
+    "views": {
+      "label": "Tool server views",
+      "providers": "Servers",
+      "tools": "Tools",
+      "toolbelts": "Toolbelts",
+      "atLeast": "{count}+"
     }
   }
 }

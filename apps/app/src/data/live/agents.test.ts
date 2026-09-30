@@ -287,6 +287,20 @@ describe("agents.incidents", () => {
     ]);
   });
 
+  // #4693: Rows per page under the incident list sets the page size.
+  it("reads the page size the caller names", async () => {
+    kernelRead.mockResolvedValue(readOk({ items: [], nextCursor: null }));
+    await agents.incidents(ctx, "agt_releasebot", {
+      cursor: "c2",
+      limit: 25,
+    });
+    expect(kernelRead).toHaveBeenCalledWith(ctx, {
+      contract: tachoIncidentList,
+      input: { agentId: "agt_releasebot", cursor: "c2", limit: 25 },
+      page: "agents",
+    });
+  });
+
   it("passes a refused read through and refuses an unmappable one (negative)", async () => {
     kernelRead.mockResolvedValueOnce(
       readError("iam_principals_unavailable", 503),

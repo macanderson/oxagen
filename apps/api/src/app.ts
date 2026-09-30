@@ -207,6 +207,9 @@ import { toolImportRoute } from "./routes/v1/tool.import";
 import { toolStudioDraftSaveRoute } from "./routes/v1/tool.studio.draft.save";
 import { toolStudioDraftGetRoute } from "./routes/v1/tool.studio.draft.get";
 import { toolStudioReviewOpenRoute } from "./routes/v1/tool.studio.review.open";
+import { toolStudioDiscoveryStartRoute } from "./routes/v1/tool.studio.discovery.start";
+import { toolStudioDiscoveryGetRoute } from "./routes/v1/tool.studio.discovery.get";
+import { toolStudioToolsListRoute } from "./routes/v1/tool.studio.tools.list";
 import { toolRelayCreateRoute } from "./routes/v1/tool.relay.create";
 import { toolRelayRevokeRoute } from "./routes/v1/tool.relay.revoke";
 import { credentialGrantListRoute } from "./routes/v1/credential.grant.list";
@@ -321,6 +324,8 @@ import { runForkRoute } from "./routes/v1/run.fork";
 import { runExportRoute } from "./routes/v1/run.export";
 import { runExportGetRoute } from "./routes/v1/run.export.get";
 import { runExportDownloadRoute } from "./routes/v1/run.export.download";
+import { workDoneBadgeRoute } from "./routes/v1/work.done.badge";
+import { workDoneKeyRoute } from "./routes/v1/work.done.key";
 import { runSealRoute } from "./routes/v1/run.seal";
 import { runSummarizeRoute } from "./routes/v1/run.summarize";
 import { agentListRoute } from "./routes/v1/agent.list";
@@ -474,6 +479,35 @@ app.use(
   }),
 );
 app.route("/v1/run-exports/download", runExportDownloadRoute);
+
+// GET /v1/work/done/badge/<token>.svg and GET /v1/work/done/key: the done
+// record's README badge and the public key that checks its attestation. Both
+// are public. GitHub's image proxy fetches a badge with no credential, and a
+// verifier needs the key with no account. They sit above the auth-gated `/v1`
+// mount with an IP ceiling, as the export download does. The badge ceiling is
+// higher because the image proxy sends many READMEs' badges from few addresses.
+app.use(
+  "/v1/work/done/badge/*",
+  distributedRateLimiter({
+    keyPrefix: "work-done-badge-ip",
+    max: 1_200,
+    bucketKey: trustedClientIpBucketKey,
+    methods: "all",
+    storeErrorPolicy: "degrade-to-local",
+  }),
+);
+app.route("/v1/work/done/badge", workDoneBadgeRoute);
+app.use(
+  "/v1/work/done/key",
+  distributedRateLimiter({
+    keyPrefix: "work-done-key-ip",
+    max: 300,
+    bucketKey: trustedClientIpBucketKey,
+    methods: "all",
+    storeErrorPolicy: "degrade-to-local",
+  }),
+);
+app.route("/v1/work/done/key", workDoneKeyRoute);
 
 // Shared pre-authentication ceilings for credential stuffing on Stella intake.
 // Register both on the concrete root path before the auth-gated subrouter:
@@ -1189,6 +1223,10 @@ orgScoped.route("/tools/import", toolImportRoute);
 orgScoped.route("/tools/studio/draft", toolStudioDraftSaveRoute);
 orgScoped.route("/tools/studio/draft/get", toolStudioDraftGetRoute);
 orgScoped.route("/tools/studio/review", toolStudioReviewOpenRoute);
+// Discovery (lane M10, #4682): start a discovery, read its state, and list a server's tools.
+orgScoped.route("/tools/studio/discovery/start", toolStudioDiscoveryStartRoute);
+orgScoped.route("/tools/studio/discovery/get", toolStudioDiscoveryGetRoute);
+orgScoped.route("/tools/studio/tools/list", toolStudioToolsListRoute);
 // Relays (lane M12, #4685): register and revoke a relay for a private network.
 orgScoped.route("/tools/relays", toolRelayCreateRoute);
 orgScoped.route("/tools/relays/revoke", toolRelayRevokeRoute);

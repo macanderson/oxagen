@@ -4,7 +4,14 @@
 // with an axe check (INV-26). The two writes are proven in actions.test.ts, and
 // what the ledger's search, facet and pager select in view.test.ts; this suite
 // is about what the page renders and what it refuses to claim.
-import { cleanup, render, screen, within } from "@testing-library/react";
+import {
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { OrgRole } from "@/data/contracts/common";
@@ -27,8 +34,10 @@ vi.mock("next/link", () => ({
     <a {...rest}>{children}</a>
   ),
 }));
+const { push } = vi.hoisted(() => ({ push: vi.fn() }));
+
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
+  useRouter: () => ({ push, replace: vi.fn(), refresh: vi.fn() }),
   notFound: () => {
     throw new Error("NEXT_NOT_FOUND");
   },
@@ -564,15 +573,123 @@ describe("Mandate › the ledger's search, facet and pager", () => {
     );
   });
 
+  // The pager sits under the table on every page with rows (#4693): Rows per
+  // page and the count on the left, Newer and Older on the right.
+  const BASE = "/a-intel/core-platform/mandates/mnd_4f2a9c";
+
   it("offers a later page only when one exists", async () => {
     await renderMandate(mandateDetailRead({ ledger: three() }));
-    expect(document.querySelector('[data-page="older"]')).toBeNull();
+    const pages = screen.getByRole("navigation", { name: "Ledger pages" });
+    expect(within(pages).getByRole("button", { name: "Older" })).toBeDisabled();
+    expect(within(pages).queryByRole("link", { name: "Older" })).toBeNull();
+    expect(within(pages).getByRole("button", { name: "Newer" })).toBeDisabled();
+    expect(screen.getByText("3 of 3 movements")).toBeInTheDocument();
     const many = Array.from({ length: 30 }, () => mandateMovement());
     cleanup();
     await renderMandate(mandateDetailRead({ ledger: many }));
     expect(movements()).toHaveLength(25);
+    expect(screen.getByRole("link", { name: "Older" })).toHaveAttribute(
+      "href",
+      `${BASE}?offset=25`,
+    );
+  });
+
+  it("links Newer to the page before, keeping the search, the facet and the size", async () => {
+    const many = Array.from({ length: 30 }, () =>
+      mandateMovement({ kind: "settle" }),
+    );
+    await renderMandate(mandateDetailRead({ ledger: many }), {
+      state: "settle",
+      rows: "10",
+      offset: "20",
+    });
+    expect(movements()).toHaveLength(10);
+    expect(screen.getByRole("link", { name: "Newer" })).toHaveAttribute(
+      "href",
+      `${BASE}?state=settle&rows=10&offset=10`,
+    );
+    expect(screen.getByRole("button", { name: "Older" })).toBeDisabled();
+    expect(screen.getByText("10 of 30 movements")).toBeInTheDocument();
+  });
+
+  it("opens the first page at the size picked from Rows", async () => {
+    push.mockReset();
+    const many = Array.from({ length: 30 }, () => mandateMovement());
+    await renderMandate(mandateDetailRead({ ledger: many }), {
+      q: "amount",
+      offset: "25",
+    });
+    const rows = screen.getByRole("combobox", { name: "Rows" });
+    expect(rows).toHaveTextContent("25");
+    await userEvent.click(rows);
+    await userEvent.click(await screen.findByRole("option", { name: "50" }));
+    await waitFor(() => {
+      expect(push).toHaveBeenCalledWith(`${BASE}?q=amount&rows=50`);
+    });
+  });
+
+  // A get form drops the action's query, so the size rides in a hidden field
+  // or a search would put the reader back at 25 rows.
+  it("keeps the size through a search and a clear", async () => {
+    await renderMandate(mandateDetailRead({ ledger: three() }), {
+      q: "amount",
+      rows: "50",
+    });
+    const filters = screen.getByTestId("ledger-filters");
     expect(
-      document.querySelector('[data-page="older"]')?.getAttribute("href"),
-    ).toContain("offset=25");
+      filters.querySelector('input[type="hidden"][name="rows"]'),
+    ).toHaveAttribute("value", "50");
+    expect(
+      within(filters).getByRole("link", { name: "Clear the search" }),
+    ).toHaveAttribute("href", `${BASE}?rows=50`);
+  });
+
+  it("sends no size from the search at the default (negative)", async () => {
+    await renderMandate(mandateDetailRead({ ledger: three() }));
+    expect(
+      screen
+        .getByTestId("ledger-filters")
+        .querySelector('input[type="hidden"][name="rows"]'),
+    ).toBeNull();
+  });
+
+  it("links Older and Newer at a picked size, dropping the offset on the first page", async () => {
+    const many = Array.from({ length: 30 }, () => mandateMovement());
+    await renderMandate(mandateDetailRead({ ledger: many }), {
+      rows: "10",
+      offset: "10",
+    });
+    expect(movements()).toHaveLength(10);
+    const pages = screen.getByRole("navigation", { name: "Ledger pages" });
+    expect(within(pages).getByRole("link", { name: "Newer" })).toHaveAttribute(
+      "href",
+      `${BASE}?rows=10`,
+    );
+    expect(within(pages).getByRole("link", { name: "Older" })).toHaveAttribute(
+      "href",
+      `${BASE}?rows=10&offset=20`,
+    );
+  });
+
+  // The second Clear sits in the empty state a search leaves, apart from the
+  // one in the filter bar, so it needs its own proof that the size survives.
+  it("keeps the size on the Clear link a search with no match shows, and draws no pager (negative)", async () => {
+    await renderMandate(mandateDetailRead({ ledger: three() }), {
+      q: "nothing-matches-this",
+      rows: "50",
+    });
+    const empty = document.querySelector<HTMLElement>(
+      '[data-state="filtered-empty"]',
+    );
+    if (!empty) throw new Error("the search draws its empty state");
+    expect(
+      within(empty).getByRole("link", {
+        name: "Clear the search",
+      }),
+    ).toHaveAttribute("href", `${BASE}?rows=50`);
+    expect(
+      screen.queryByRole("navigation", { name: "Ledger pages" }),
+    ).toBeNull();
+    expect(screen.queryByRole("combobox", { name: "Rows" })).toBeNull();
   });
 });

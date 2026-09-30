@@ -21,6 +21,7 @@ import type { ComponentProps } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
+import { pickOption } from "@/test/select";
 import { type DraftOp, parseStoredDraft } from "./draft";
 import type { StudioServerView, StudioTool } from "./model";
 import {
@@ -51,6 +52,14 @@ const router = vi.hoisted(() => ({
   refresh: vi.fn(),
 }));
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
+// The discovery section loads Add server, which loads Studio's server
+// actions (review-calls.ts). No test here calls them.
+vi.mock("./actions", () => ({
+  saveStudioDraftAction: vi.fn(),
+  saveNewStudioServerAction: vi.fn(),
+  getStudioDraftAction: vi.fn(),
+  openStudioReviewAction: vi.fn(),
+}));
 
 afterEach(async () => {
   try {
@@ -414,14 +423,14 @@ describe("ToolsTab filters and paging", () => {
     const user = userEvent.setup();
     renderTab(propsOf(studioView(STRIPE)));
     const state = screen.getByRole("combobox", { name: "State" });
-    await user.selectOptions(state, "imported");
+    await pickOption(user, state, "Imported");
     expect(shownTools()).toEqual([
       "create_payment",
       "list_customers",
       "create_coupon",
     ]);
     expect(screen.getByText(range(1, 3, 3))).toBeInTheDocument();
-    await user.selectOptions(state, "available");
+    await pickOption(user, state, "Available");
     expect(screen.getByText(range(1, 20, 20))).toBeInTheDocument();
     expect(screen.queryByTestId("studio-tool-create_coupon")).toBeNull();
   });
@@ -430,10 +439,10 @@ describe("ToolsTab filters and paging", () => {
     const user = userEvent.setup();
     renderTab(propsOf(studioView(STRIPE)));
     const risk = screen.getByRole("combobox", { name: "Risk" });
-    await user.selectOptions(risk, "critical");
+    await pickOption(user, risk, "Critical");
     expect(shownTools()).toEqual(["create_payment", "create_refund"]);
     expect(screen.getByText(range(1, 2, 2))).toBeInTheDocument();
-    await user.selectOptions(risk, "unclassified");
+    await pickOption(user, risk, "Unclassified");
     expect(shownTools()).toEqual(["search_documentation"]);
   });
 
@@ -454,13 +463,13 @@ describe("ToolsTab filters and paging", () => {
     const user = userEvent.setup();
     renderTab(propsOf(studioView(STRIPE)));
     const sideEffect = screen.getByRole("combobox", { name: "Side effect" });
-    await user.selectOptions(sideEffect, "irreversible");
+    await pickOption(user, sideEffect, "irreversible");
     expect(shownTools()).toEqual([
       "create_payment",
       "create_coupon",
       "create_refund",
     ]);
-    await user.selectOptions(sideEffect, "unclassified");
+    await pickOption(user, sideEffect, "Unclassified");
     expect(shownTools()).toEqual(["search_documentation"]);
   });
 
@@ -528,12 +537,14 @@ describe("ToolsTab filters and paging", () => {
   it("combines filters, so Warehouse shows no available tool that only reads", async () => {
     const user = userEvent.setup();
     renderTab(propsOf(studioView(WAREHOUSE)));
-    await user.selectOptions(
+    await pickOption(
+      user,
       screen.getByRole("combobox", { name: "State" }),
-      "available",
+      "Available",
     );
     expect(screen.getByText(range(1, 25, 400))).toBeInTheDocument();
-    await user.selectOptions(
+    await pickOption(
+      user,
       screen.getByRole("combobox", { name: "Side effect" }),
       "read",
     );
@@ -687,6 +698,25 @@ describe("ToolsTab empty and missing states", () => {
   });
 });
 
+describe("ToolsTab discovery", () => {
+  it("says discovery progress is not available while get_studio_discovery is a stub", () => {
+    renderTab(propsOf(studioView(STRIPE)));
+    const section = screen.getByTestId("studio-discovery");
+    const note = within(section).getByTestId("studio-discovery-pending");
+    expect(note).toHaveAttribute("data-capability", "get_studio_discovery");
+    expect(note).toHaveAttribute("data-gap", "#4682");
+    expect(within(section).getByTestId("studio-discovery-start")).toBeDisabled();
+    // Tool counts wait on list_studio_tools, which the page reads.
+    expect(screen.queryByTestId("studio-tools-listed")).toBeNull();
+  });
+
+  it("offers a reader no way to start a discovery", () => {
+    renderTab(propsOf(studioView(STRIPE), { canEdit: false }));
+    expect(screen.getByTestId("studio-discovery-pending")).toBeInTheDocument();
+    expect(screen.queryByTestId("studio-discovery-start")).toBeNull();
+  });
+});
+
 describe("ToolsTab kill switches", () => {
   it("puts each tool's off control in its own row and keeps the facts for the panel", () => {
     renderTab(
@@ -812,18 +842,18 @@ describe("ToolsTab tool panel", () => {
         "Charges a customer once, in cents.",
       );
     });
-    expect(calls).toEqual([{ serverId: STRIPE, tool: "create_payment" }]);
+    expect(calls).toEqual([{ server: "stripe", tool: "create_payment" }]);
     await closePanel(user, panel, "create_payment");
   });
 
-  it("falls back to the not-built draft seam when the page passes none", async () => {
+  it("falls back to the pending Draft stub when the page passes none", async () => {
     const user = userEvent.setup();
     renderTab(propsOf(studioView(STRIPE)));
     const panel = await openPanel(user, "create_payment");
-    await user.click(within(panel).getByTestId("studio-panel-draft"));
-    expect(
-      await within(panel).findByTestId("studio-panel-draft-not-built"),
-    ).toHaveTextContent(COPY.draftNotBuilt);
+    expect(within(panel).getByTestId("studio-panel-draft")).toBeDisabled();
+    const note = within(panel).getByTestId("studio-panel-draft-pending");
+    expect(note).toHaveAttribute("data-gap", "#4742");
+    expect(note).toHaveTextContent(COPY.draftNotBuilt);
     await closePanel(user, panel, "create_payment");
   });
 

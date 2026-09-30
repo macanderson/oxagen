@@ -28,6 +28,7 @@ import { readError, readOk } from "@/data/read";
 import { CREATE_EVENT, createRequestOf } from "@/shared/create";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
+import { pickOption } from "@/test/select";
 import {
   LINEAGE,
   proposal,
@@ -941,7 +942,11 @@ describe("Record › related records", () => {
           .getByTestId("record-related-list")
           .querySelectorAll("li p:first-of-type"),
       ).map((p) => p.textContent);
-    await user.selectOptions(screen.getByLabelText("Sort"), "Label A–Z");
+    await pickOption(
+      user,
+      screen.getByRole("combobox", { name: "Sort" }),
+      "Label A–Z",
+    );
     expect(list()).toEqual(["Alpha", "Beta", "Gamma"]);
     await user.type(screen.getByLabelText("Search records"), "gam");
     expect(list()).toEqual(["Gamma"]);

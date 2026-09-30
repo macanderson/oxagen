@@ -3,8 +3,15 @@
 // book itself, the tab with one of its two reads down, and the tab with
 // nothing unpriced. A rate prints as money per million units, never as the
 // micros the contract carried; a model with no price prints as unpriced, never
-// as $0.00 (INV-09). Axe checks the state each test ends in (INV-26).
-import { cleanup, render, screen, within } from "@testing-library/react";
+// as $0.00 (INV-09). Each price table pages with Rows per page beside
+// Previous and Next (#4693). Axe checks the state each test ends in (INV-26).
+import {
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { NextIntlClientProvider } from "next-intl";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -227,6 +234,32 @@ function panelOf(id: string): HTMLElement {
   if (found === null) throw new Error(`no panel ${id}`);
   return found;
 }
+
+/** A book of `count` list prices, named so they sort in the order made. */
+const catalog = (count: number): PriceBook["entries"] =>
+  Array.from({ length: count }, (_, index) =>
+    entry({ model: `model-${String(index).padStart(3, "0")}` }),
+  );
+
+/** The pager under the rates in effect, the first in the book's panel. */
+function bookPager(): HTMLElement {
+  const found = panelOf("spend-price-book").querySelector<HTMLElement>(
+    "[data-rows-pager]",
+  );
+  if (found === null) throw new Error("no pager under the price book");
+  return found;
+}
+
+/** The rows the table of rates in effect shows on its current page. */
+function bookRows(): HTMLElement[] {
+  const table = panelOf("spend-price-book").querySelector("table");
+  if (table === null) throw new Error("no price table");
+  return [...table.querySelectorAll<HTMLElement>("tbody tr")];
+}
+
+/** The Rows per page select in one pager. */
+const rowsOf = (pager: HTMLElement): HTMLElement =>
+  within(pager).getByRole("combobox", { name: "Rows" });
 
 beforeEach(() => {
   // The page reads the month before any tab, for its summary tiles. Pricing
@@ -451,24 +484,138 @@ describe("Pricing › The price book", () => {
     );
   });
 
-  it("renders at most 100 catalog rows and permits reading the next page", async () => {
+  it("opens at 100 rows and steps to the next page and back", async () => {
+    priceBook.mockResolvedValue(book(catalog(101)));
+    unpricedModels.mockResolvedValue(unpriced([]));
+    await renderPricing();
+    const user = userEvent.setup();
+    const pager = bookPager();
+    expect(rowsOf(pager)).toHaveTextContent("100");
+    expect(bookRows()).toHaveLength(100);
+    expect(pager.querySelector("[data-range]")).toHaveTextContent(
+      "1–100 of 101",
+    );
+    expect(
+      within(pager).getByRole("button", { name: "Previous page" }),
+    ).toBeDisabled();
+
+    await user.click(within(pager).getByRole("button", { name: "Next page" }));
+    expect(bookRows()).toHaveLength(1);
+    expect(panelOf("spend-price-book")).toHaveTextContent("model-100");
+    expect(pager.querySelector("[data-range]")).toHaveTextContent(
+      "101–101 of 101",
+    );
+    expect(
+      within(pager).getByRole("button", { name: "Next page" }),
+    ).toBeDisabled();
+
+    await user.click(
+      within(pager).getByRole("button", { name: "Previous page" }),
+    );
+    expect(bookRows()).toHaveLength(100);
+    expect(pager.querySelector("[data-range]")).toHaveTextContent(
+      "1–100 of 101",
+    );
+  });
+
+  it("shows the size picked from Rows, starting again at the first page", async () => {
+    priceBook.mockResolvedValue(book(catalog(101)));
+    unpricedModels.mockResolvedValue(unpriced([]));
+    await renderPricing();
+    const user = userEvent.setup();
+    const pager = bookPager();
+    await user.click(within(pager).getByRole("button", { name: "Next page" }));
+    expect(bookRows()).toHaveLength(1);
+
+    await user.click(rowsOf(pager));
+    await user.click(await screen.findByRole("option", { name: "25" }));
+    await waitFor(() => {
+      expect(bookRows()).toHaveLength(25);
+    });
+    expect(rowsOf(pager)).toHaveTextContent("25");
+    expect(bookRows()[0]).toHaveAttribute("data-model", "model-000");
+    expect(pager.querySelector("[data-range]")).toHaveTextContent(
+      "1–25 of 101",
+    );
+    expect(
+      within(pager).getByRole("button", { name: "Previous page" }),
+    ).toBeDisabled();
+
+    await user.click(within(pager).getByRole("button", { name: "Next page" }));
+    expect(bookRows()[0]).toHaveAttribute("data-model", "model-025");
+    expect(pager.querySelector("[data-range]")).toHaveTextContent(
+      "26–50 of 101",
+    );
+    await expectNoAxe(panelOf("spend-price-book"));
+  });
+
+  it("draws Rows under a book one page holds, with both steps disabled", async () => {
+    priceBook.mockResolvedValue(book(catalog(2)));
+    unpricedModels.mockResolvedValue(unpriced([]));
+    await renderPricing();
+    const pager = bookPager();
+    expect(pager.querySelector("[data-range]")).toHaveTextContent("1–2 of 2");
+    expect(
+      within(pager).getByRole("button", { name: "Previous page" }),
+    ).toBeDisabled();
+    expect(
+      within(pager).getByRole("button", { name: "Next page" }),
+    ).toBeDisabled();
+  });
+
+  it("draws no pager under an empty book (negative)", async () => {
+    priceBook.mockResolvedValue(book([]));
+    unpricedModels.mockResolvedValue(unpriced([]));
+    await renderPricing();
+    const panel = panelOf("spend-price-book");
+    expect(panel.querySelector("[data-rows-pager]")).toBeNull();
+    expect(within(panel).queryByRole("combobox", { name: "Rows" })).toBeNull();
+    expect(
+      within(panel).queryByRole("navigation", { name: "Price book pages" }),
+    ).toBeNull();
+  });
+
+  it("pages the scheduled rates apart from the rates in effect", async () => {
     priceBook.mockResolvedValue(
-      book(
-        Array.from({ length: 101 }, (_, index) =>
-          entry({ model: `model-${String(index).padStart(3, "0")}` }),
-        ),
-      ),
+      book([
+        ...catalog(101),
+        entry({
+          model: "future-model",
+          negotiated: true,
+          source: "negotiated",
+          effectiveFrom: "2026-12-01T00:00:00.000Z",
+        }),
+      ]),
     );
     unpricedModels.mockResolvedValue(unpriced([]));
     await renderPricing();
+    const scheduled = screen.getByRole("region", {
+      name: "Scheduled negotiated rates",
+    });
+    const pagers = panelOf("spend-price-book").querySelectorAll(
+      "[data-rows-pager]",
+    );
+    expect(pagers).toHaveLength(2);
+    // Each pager names its own table, so a landmark list tells them apart.
     expect(
-      panelOf("spend-price-book").querySelectorAll("tbody tr"),
-    ).toHaveLength(100);
-    await userEvent.setup().click(screen.getByRole("button", { name: "Next" }));
-    expect(
-      panelOf("spend-price-book").querySelectorAll("tbody tr"),
+      screen.getAllByRole("navigation", { name: "Price book pages" }),
     ).toHaveLength(1);
-    expect(panelOf("spend-price-book")).toHaveTextContent("model-100");
+    expect(
+      within(scheduled).queryByRole("navigation", { name: "Price book pages" }),
+    ).toBeNull();
+    const later = within(scheduled).getByRole("navigation", {
+      name: "Scheduled rate pages",
+    });
+    expect(later.closest("[data-rows-pager]")).toHaveTextContent("1–1 of 1");
+
+    await userEvent
+      .setup()
+      .click(within(bookPager()).getByRole("button", { name: "Next page" }));
+    expect(bookPager().querySelector("[data-range]")).toHaveTextContent(
+      "101–101 of 101",
+    );
+    expect(scheduled).toHaveTextContent("future-model");
+    expect(later.closest("[data-rows-pager]")).toHaveTextContent("1–1 of 1");
   });
 
   it("tells this organization's negotiated rows from the platform's list prices", async () => {
