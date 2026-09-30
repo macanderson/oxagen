@@ -74,9 +74,18 @@ export const RUN_KINDS = ["general", "repo_edit"] as const;
 export type RunKind = (typeof RUN_KINDS)[number];
 
 /**
- * Terminal status of a sealed attempt. `abandoned` is the lease-reclaimer's
- * seal for an attempt whose worker disappeared; `denied` is an authorization
- * refusal. Every one of them finalizes evidence (spec.md §"Attempt identity").
+ * Terminal status of a sealed attempt. `denied` is an authorization refusal.
+ * `abandoned` is the seal for an attempt whose producer went silent. Two
+ * writers seal it:
+ *
+ * - The idle close (`ledger-idle-close.ts`, ADR-180, reason `idle_timeout`),
+ *   for an attempt with no event for twelve hours.
+ * - The assistant-run abandon sweep (`assistant-run-abandon.ts` through
+ *   `abandonRun`, ADR-173, reason `producer_silent`), for an in-app
+ *   assistant run.
+ *
+ * ADR-043 retired the lease reclaimer that wrote it before. Every status
+ * finalizes evidence (spec.md §"Attempt identity").
  */
 export const ATTEMPT_TERMINAL_STATUSES = [
   "completed",
@@ -88,8 +97,12 @@ export const ATTEMPT_TERMINAL_STATUSES = [
 export type AttemptTerminalStatus = (typeof ATTEMPT_TERMINAL_STATUSES)[number];
 
 /**
- * Who sealed an attempt. `worker` is the executing worker's own terminal path;
- * `reclaimer` is the lease sweeper sealing an expired attempt it fenced.
+ * The two sealer kinds retired with the runtime (ADR-043). `worker` was the
+ * executing worker's own terminal path, and `reclaimer` was the lease sweeper
+ * sealing an expired attempt it fenced. The store writes `ingress` for every
+ * seal now (`buildInsertAttemptSealSql`, run-store.ts). The
+ * `agent_run_attempt_seals.sealer_kind` CHECK still admits these two, so
+ * historical rows stay valid.
  */
 export const ATTEMPT_SEALER_KINDS = ["worker", "reclaimer"] as const;
 export type AttemptSealerKind = (typeof ATTEMPT_SEALER_KINDS)[number];
