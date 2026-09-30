@@ -117,7 +117,10 @@ enrollment's hook groups from both harnesses, enroll again with `--force`
 keeping the device key, the loopback port and the local bearer, so the fleet
 page sees one continuous host. `reassign --harness claude-code,codex` with no
 target re-enrolls in place, which is the one way to drop a wrapper: `enroll`
-may add a harness on a re-apply but never silently removes one.
+may add a harness on a re-apply but never silently removes one. Both apply to
+a host enrolled through the CLI session. An agent enrolled with a one-time
+token stays in the workspace it is registered in, so `reassign` refuses it
+(see More than one agent below).
 
 ### More than one agent
 
@@ -148,11 +151,19 @@ tacho status --json                       # `enrollments` holds one report per a
 A bare `unenroll` or `reassign` on a machine with two enrollments refuses and
 lists them. `oxagen tacho unenroll` and `oxagen agent unenroll` without an
 agent take the same `--harness` and `--all`. Unenrolling one agent restarts
-the service for the agents that remain. `reassign` enrolls again through the
-CLI session, so a token-enrolled agent comes back under a hostname-derived
-agent key with no registered agent or mandate. It prints a warning before the
-revoke that says how to keep the link (#4410, ADR-203 known gaps). Spec §5.8
-has the full rules.
+the service for the agents that remain. Spec §5.8 has the full rules.
+
+`reassign` moves only an agent enrolled through the CLI session. A token
+enrollment records the registered agent's id in `host.json` (`agent_id`,
+beside `enrollment_source: "token"`), and an agent stays in the workspace it
+is registered in. `reassign` refuses such an agent before it revokes anything,
+whether it is the only agent on the machine or one of several. To report its
+harness to another workspace, register an agent there on the Agents page, run
+`tacho unenroll --harness <harness>`, and run the enroll command the page
+shows. `reassign` enrolls again through the CLI session, which links no agent,
+so it refuses a harness change on a token-enrolled agent too. So does
+`enroll --harness` when it would add a harness to one. Register an agent for
+the new harness instead (#4410, ADR-203).
 
 ### Codex
 

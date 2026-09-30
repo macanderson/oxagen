@@ -42,6 +42,7 @@ import { mergeStellaHooks, stellaHookPresence } from "../host/stella-writer";
 import { Wal } from "../host/wal";
 import {
   HOST_FILE_SCHEMA,
+  enrolledWithToken,
   type HostFile,
   harnessFilesRecord,
   mcpEndpointOverrideRequestFrom,
@@ -710,6 +711,22 @@ async function enrollSteps(
     );
     return { ok: false, warnings };
   }
+  // Adding a harness enrolls again through the CLI session, which links no
+  // agent. On an agent a one-time token enrolled, that detached it from its
+  // registration the way a reassign did (#4410). A harness the agent does
+  // not run is another agent to register (ADR-198), so the addition is
+  // refused before anything changes. A token here takes the branch below.
+  if (
+    live &&
+    added.length > 0 &&
+    options.enrollmentToken === undefined &&
+    enrolledWithToken(existing)
+  ) {
+    deps.err(
+      `Cannot add ${added.join(", ")} to ${existing.agent_key}, so nothing was changed. A one-time token from the Agents page enrolled it as a registered agent. Adding a harness enrolls it again through your CLI session, which links no agent. Register an agent for ${added.length === 1 ? added.join("") : `each of ${added.join(", ")}`} on the Agents page and run the enroll command the page shows.`,
+    );
+    return { ok: false, warnings };
+  }
   // An enrolled host only needs its document rendered: nothing is minted,
   // written or installed for it.
   if (options.printManaged === true && live) {
@@ -954,6 +971,9 @@ async function enrollSteps(
     };
     let response: Awaited<ReturnType<typeof callEnrollment>>;
     let tenant: { orgSlug: string; workspaceSlug: string };
+    // The registered agent a token links this enrollment to. The session
+    // path links none.
+    let agentId: string | undefined;
     try {
       if (credentials) {
         response = await callEnrollment(deps, credentials, facts);
@@ -969,6 +989,7 @@ async function enrollSteps(
           ...(remote !== undefined ? { repositoryRemote: remote } : {}),
         });
         response = answer;
+        agentId = answer.agentId;
         tenant = {
           orgSlug: answer.orgSlug,
           workspaceSlug: answer.workspaceSlug,
@@ -1154,6 +1175,7 @@ async function enrollSteps(
       mcp_stdio_command: deps.runtime.mcpStdioCommand,
       harness_files: harnessFilesRecord(deps.paths),
       enrollment_source: credentials === undefined ? "token" : "session",
+      ...(agentId !== undefined ? { agent_id: agentId } : {}),
       enrolled_at: now,
       expires_at: response.expiresAt,
       revoked_at: null,

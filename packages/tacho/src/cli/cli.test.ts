@@ -1306,6 +1306,9 @@ describe("enroll → status → unenroll", () => {
       org_slug: "acme",
       workspace_slug: "core",
       api_url: "https://api.test",
+      // The registered agent the token linked, which `reassign` reads (#4410).
+      agent_id: "agt_0123456789",
+      enrollment_source: "token",
     });
     expect(d.lines.join("\n")).toContain(
       "Presenting the one-time enrollment token",
@@ -1895,6 +1898,39 @@ describe("harnesses and reassign", () => {
     expect(readHostFile(d.paths.hostFile)).toEqual(before);
   });
 
+  it("refuses to add a harness to a token-enrolled agent through the CLI session", async () => {
+    const d = deps();
+    const enrolled = await enroll(
+      {
+        enrollmentToken: "oxe_1time_0123456789abcdefghjkmnpqrs",
+        apiUrl: "https://api.test",
+      },
+      d,
+    );
+    expect(enrolled.ok, d.errors.join("\n")).toBe(true);
+    const before = readHostFile(d.paths.hostFile);
+    d.requests.length = 0;
+    d.errors.length = 0;
+    // The addition would revoke the agent and enroll it again through the
+    // session, which links no agent (#4410).
+    const refused = await enroll(
+      {
+        token: "tok",
+        org: "acme",
+        workspace: "core",
+        apiUrl: "https://api.test",
+        harnesses: ["claude-code", "codex"],
+      },
+      d,
+    );
+    expect(refused.ok).toBe(false);
+    expect(d.errors).toEqual([
+      "Cannot add codex to acme.core.release-manager, so nothing was changed. A one-time token from the Agents page enrolled it as a registered agent. Adding a harness enrolls it again through your CLI session, which links no agent. Register an agent for codex on the Agents page and run the enroll command the page shows.",
+    ]);
+    expect(d.requests).toEqual([]);
+    expect(readHostFile(d.paths.hostFile)).toEqual(before);
+  });
+
   it("reassigns to another workspace keeping the device key and port", async () => {
     const d = deps();
     await enroll(
@@ -1908,6 +1944,9 @@ describe("harnesses and reassign", () => {
       d,
     );
     const before = readHostFile(d.paths.hostFile);
+    // The CLI session links no agent, so this host moves (#4410).
+    expect(before?.agent_id).toBeUndefined();
+    expect(before?.enrollment_source).toBe("session");
     const keyBefore = readFileSync(d.paths.deviceKey, "utf8");
     d.requests.length = 0;
 
@@ -1978,6 +2017,69 @@ describe("harnesses and reassign", () => {
     const fresh = deps();
     expect((await reassign({ workspace: "edge" }, fresh)).ok).toBe(false);
     expect(fresh.errors[0]).toContain("Not enrolled");
+  });
+
+  it("refuses to reassign a lone token-enrolled agent, before it revokes anything", async () => {
+    const d = deps();
+    const enrolled = await enroll(
+      {
+        enrollmentToken: "oxe_1time_0123456789abcdefghjkmnpqrs",
+        apiUrl: "https://api.test",
+      },
+      d,
+    );
+    expect(enrolled.ok, d.errors.join("\n")).toBe(true);
+    const before = readHostFile(d.paths.hostFile);
+    expect(before).toMatchObject({
+      agent_key: "acme.core.release-manager",
+      agent_id: "agt_0123456789",
+    });
+    const uninstalls = d.service.uninstalled;
+    d.requests.length = 0;
+    d.errors.length = 0;
+
+    // An agent stays in the workspace it is registered in.
+    const moved = await reassign({ token: "tok", workspace: "edge" }, d);
+    expect(moved.ok).toBe(false);
+    expect(moved.from?.enrollmentId).toBe(TEST_ENROLLMENT);
+    expect(moved.to).toBeUndefined();
+    expect(d.errors).toEqual([
+      "Cannot reassign acme.core.release-manager, so nothing was changed. A one-time token from the Agents page enrolled it as an agent registered in acme/core. An agent stays in the workspace it is registered in. To report claude-code to acme/edge, register an agent in acme/edge on the Agents page, run `tacho unenroll --harness claude-code`, and then run the enroll command the page shows.",
+    ]);
+    // Nothing was revoked or minted, and the enrollment and its service are
+    // untouched.
+    expect(d.requests).toEqual([]);
+    expect(readHostFile(d.paths.hostFile)).toEqual(before);
+    expect(d.service.uninstalled).toBe(uninstalls);
+
+    // A harness change enrolls through the CLI session too, which would
+    // unlink the agent the same way.
+    d.errors.length = 0;
+    const widened = await reassign(
+      { token: "tok", harnesses: ["claude-code", "codex"] },
+      d,
+    );
+    expect(widened.ok).toBe(false);
+    expect(d.errors).toEqual([
+      "Cannot change the harnesses of acme.core.release-manager, so nothing was changed. A one-time token from the Agents page enrolled it as a registered agent. A reassign enrolls it again through your CLI session, which links no agent. To hook another harness, register an agent for it on the Agents page and run the enroll command the page shows. To take acme.core.release-manager off this machine, run `tacho unenroll --harness claude-code`.",
+    ]);
+    expect(d.requests).toEqual([]);
+    expect(readHostFile(d.paths.hostFile)).toEqual(before);
+
+    // A host.json written before `agent_id` existed says how it was
+    // enrolled only in `enrollment_source`, and is refused the same way.
+    if (before === undefined) throw new Error("not enrolled");
+    const sourceOnly = { ...before };
+    delete sourceOnly.agent_id;
+    writeHostFile(d.paths.hostFile, sourceOnly);
+    d.errors.length = 0;
+    expect((await reassign({ token: "tok", workspace: "edge" }, d)).ok).toBe(
+      false,
+    );
+    expect(d.errors[0]).toContain(
+      "Cannot reassign acme.core.release-manager, so nothing was changed.",
+    );
+    expect(d.requests).toEqual([]);
   });
 
   it("retries a pending revoke before moving, and leaves host.json retired when the new enrollment fails", async () => {
@@ -4597,40 +4699,48 @@ describe("two agents on one machine (ADR-203)", () => {
     expect(d.service.running).toBe(true);
   });
 
-  it("warns before a reassign unlinks a token-enrolled agent", async () => {
-    const { d } = await twoAgents();
-    // What the terminal held when the revoke went out.
-    let beforeRevoke: string[] | undefined;
-    const controlPlane = d.fetch;
-    d.fetch = async (url, init) => {
-      if (url.endsWith("/tacho/enrollments/revoke"))
-        beforeRevoke = [...d.errors];
-      return controlPlane(url, init);
-    };
-    await reassign(
+  it("refuses to reassign a token-enrolled agent in its own directory, before it revokes anything", async () => {
+    const { d, codex } = await twoAgents();
+    const second = readHostFile(codex.hostFile);
+    expect(second).toMatchObject({
+      agent_id: "agt_codex",
+      enrollment_source: "token",
+    });
+    const first = readHostFile(d.paths.hostFile);
+    expect(first?.agent_id).toBeUndefined();
+    const uninstalls = d.service.uninstalled;
+    d.requests.length = 0;
+    d.errors.length = 0;
+    d.lines.length = 0;
+
+    const moved = await reassign(
       { token: "tok", org: "acme", workspace: "edge", harnesses: ["codex"] },
       d,
     );
-    const warning =
-      "acme.core.codex-agent was enrolled with a one-time token from the Agents page. A reassign enrolls it again with your CLI session, which links the new enrollment to no agent, so its sessions stop reaching that agent's page (#4410). To keep the link, run `tacho unenroll --harness codex`, register the agent in acme/edge, and run the command its page shows.";
-    expect(beforeRevoke).toContain(`warning: ${warning}`);
-
-    // The operator's own enrollment has no agent to lose.
-    d.errors.length = 0;
-    await reassign(
-      {
-        token: "tok",
-        org: "acme",
-        workspace: "edge",
-        harnesses: ["claude-code"],
-      },
-      d,
-    );
-    expect(d.errors.join("\n")).not.toContain("one-time token");
+    expect(moved.ok).toBe(false);
+    expect(moved.from?.enrollmentId).toBe(OTHER_ENROLLMENT);
+    expect(d.errors).toEqual([
+      "Cannot reassign acme.core.codex-agent, so nothing was changed. A one-time token from the Agents page enrolled it as an agent registered in acme/core. An agent stays in the workspace it is registered in. To report codex to acme/edge, register an agent in acme/edge on the Agents page, run `tacho unenroll --harness codex`, and then run the enroll command the page shows.",
+    ]);
+    // Nothing was revoked or minted. Both agents keep their enrollments, and
+    // the service that runs them was never taken down.
+    expect(d.requests).toEqual([]);
+    expect(readHostFile(codex.hostFile)).toEqual(second);
+    expect(readHostFile(d.paths.hostFile)).toEqual(first);
+    expect(d.service.uninstalled).toBe(uninstalls);
+    expect(d.service.running).toBe(true);
+    expect(d.lines.join("\n")).not.toContain("Revoking");
   });
 
-  it("sends a token-enrolled agent whose reassign failed back to the Agents page", async () => {
+  it("sends an operator-enrolled agent whose reassign failed to the enroll command, and restarts the service for the other", async () => {
     const { d, codex } = await twoAgents();
+    // The second agent as an enroll through the CLI session records it: no
+    // agent link, so a reassign moves it.
+    const token = readHostFile(codex.hostFile);
+    if (token === undefined) throw new Error("Codex did not enroll");
+    const operator = { ...token, enrollment_source: "session" as const };
+    delete operator.agent_id;
+    writeHostFile(codex.hostFile, operator);
     const controlPlane = d.fetch;
     d.fetch = async (url, init) => {
       if (url.endsWith("/tacho/enrollments"))
@@ -4644,12 +4754,9 @@ describe("two agents on one machine (ADR-203)", () => {
       d,
     );
     expect(failed.ok).toBe(false);
-    // An enroll through the CLI session would unlink it from its agent
-    // (#4410), so the advice names the Agents page instead.
     expect(d.errors).toContain(
-      "Reassign failed after revoking the old enrollment; acme.core.codex-agent is now unenrolled (host.json kept, marked retired). It was enrolled with a one-time token, so once the cause is fixed, register the agent in acme/edge on the Agents page and run the command its page shows.",
+      "Reassign failed after revoking the old enrollment; this host is now unenrolled (host.json kept, marked retired). Run `tacho enroll --force --org acme --workspace edge --api-url https://api.test --harness codex` once the cause is fixed.",
     );
-    expect(d.errors.join("\n")).not.toContain("tacho enroll --force");
     expect(revoked(d)).toEqual([OTHER_ENROLLMENT]);
     expect(readHostFile(codex.hostFile)?.revoked_at).not.toBeNull();
 
