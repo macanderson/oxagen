@@ -50,7 +50,7 @@ output "pools" {
   description = "Each pool's label, maximum, and warm size."
   value = merge(
     { for name, p in local.pools : name => { max = p.max, warm = var.github_app_ready ? lookup(var.warm_pool, name, 0) : 0, types = p.types } },
-    { "oxagen-deploy" = { max = 6, warm = var.github_app_ready ? lookup(var.warm_pool, "oxagen-deploy", 0) : 0, types = ["m8g.xlarge", "m7g.xlarge", "m8gd.xlarge"] } },
+    { "oxagen-deploy" = { max = 6, warm = var.github_app_ready ? lookup(var.warm_pool, "oxagen-deploy", 0) : 0, types = ["m8gd.4xlarge", "m8g.4xlarge", "m7g.4xlarge"] } },
   )
 }
 

@@ -20,11 +20,17 @@ set -euo pipefail
 
 org=oxageninc
 repo=product
+# Every workflow with a job that declares `environment: production`. Those
+# jobs, and only those, ask for the oxagen-deploy label.
 deploy_workflows=(
   pipeline.yml
   db-migrate.yml
-  store-migrate.yml
+  desktop.yml
   infra.yml
+  store-migrate.yml
+  store-migrate-drift.yml
+  stripe-sync.yml
+  where-is-production.yml
 )
 
 group_id() {

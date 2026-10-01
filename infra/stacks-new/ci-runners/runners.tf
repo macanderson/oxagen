@@ -292,7 +292,8 @@ module "runners" {
     },
     {
       # Every job that touches production (ADR-246, decision 2). On-demand,
-      # in the production VPC, in a runner group that admits only main.
+      # in the production VPC, in a runner group that admits only main. 16
+      # vCPU, because deploy-node builds the Next app for the node.
       "oxagen-deploy" = {
         matcherConfig = {
           labelMatchers           = [["oxagen-deploy"]]
@@ -305,7 +306,7 @@ module "runners" {
           runner_extra_labels           = ["oxagen-deploy"]
           runner_name_prefix            = "oxagen-deploy-"
           runner_group_name             = var.deploy_runner_group
-          instance_types                = ["m8g.xlarge", "m7g.xlarge", "m8gd.xlarge"]
+          instance_types                = ["m8gd.4xlarge", "m8g.4xlarge", "m7g.4xlarge"]
           instance_target_capacity_type = "on-demand"
           instance_allocation_strategy  = "prioritized"
           enable_on_demand_failover_for_errors = []
@@ -320,10 +321,10 @@ module "runners" {
           }
           block_device_mappings = [{
             device_name = "/dev/sda1"
-            volume_size = 80
+            volume_size = 150
             volume_type = "gp3"
-            iops        = 6000
-            throughput  = 500
+            iops        = 16000
+            throughput  = 1000
             encrypted   = true
           }]
           pool_config = var.github_app_ready && lookup(var.warm_pool, "oxagen-deploy", 0) > 0 ? [{

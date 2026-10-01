@@ -15,11 +15,20 @@ A workflow picks a pool by its one label.
 | `oxagen-large-x64` | x64 | 16 vCPU, 64 to 128 GB | 10 | 100 | CI VPC |
 | `oxagen-small-arm64` | arm64 | 4 vCPU, 16 GB | 20 | 150 | CI VPC |
 | `oxagen-small-x64` | x64 | 4 vCPU, 16 GB | 4 | 50 | CI VPC |
-| `oxagen-deploy` | arm64 | 4 vCPU, 16 GB | 1 | 6 | production VPC |
+| `oxagen-deploy` | arm64 | 16 vCPU, 64 GB | 1 | 6 | production VPC |
 
 `locals.pools` in `runners.tf` lists each pool's instance types in priority
 order, and `warm_pool` in `terraform.tfvars` sets the warm sizes. The warm
 pools stay at zero while `github_app_ready` is `false`.
+
+Only jobs that declare `environment: production` ask for `oxagen-deploy`, and
+the `oxagen-production` runner group admits only the workflows listed in
+`scripts/runner-groups.sh`, at `refs/heads/main`. A production job dispatched
+from another branch waits for a runner that never comes. Dispatch from `main`.
+
+`infra.yml`'s apply job runs on `oxagen-deploy` too. If the runners are down,
+roll back with `CI_RUNNERS` first, and the apply that repairs them runs on a
+GitHub-hosted runner.
 
 ## Roll back to GitHub-hosted runners
 
