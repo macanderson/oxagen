@@ -469,7 +469,10 @@ describe("the desktop icon stamp", () => {
     const committed = new Map(
       readdirSync(join(REPO_ROOT, dir))
         .filter((name) => name !== "source.sha256")
-        .map((name) => [`${dir}/${name}`, readFileSync(join(REPO_ROOT, dir, name))]),
+        .map((name): [string, Buffer] => [
+          `${dir}/${name}`,
+          readFileSync(join(REPO_ROOT, dir, name)),
+        ]),
     );
     const current = readFileSync(join(REPO_ROOT, dir, "source.sha256"), "utf8");
     expect(
