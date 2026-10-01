@@ -1,5 +1,5 @@
 // The house palette for generated images. Each value is the kit token
-// `INK_TOKENS` names, from oxagenai/oxagen-brand's tokens/house-tokens.json
+// `INK_TOKENS` names, from macanderson/oxagen-brand's tokens/house-tokens.json
 // (vendored as packages/ui/src/styles/house-tokens.json).
 // `node tools/scripts/sync-brand-assets.mjs` rewrites the values from the kit,
 // and its `--check` fails when one drifts (#3074). Ink only: the site is ink,

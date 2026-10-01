@@ -2455,21 +2455,9 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     group: "Operator scripts",
     description:
       "Path to a checkout of the brand kit, macanderson/oxagen-brand. " +
-      "sync-brand-assets.mjs copies the marks, icons, tokens, fonts, and branding skill from it. " +
-      "When this is unset, the script reads ../oxagen-brand. " +
-      "CI checks out the kit's main branch at .brand-kit and sets this variable to that path.",
-    secret: false,
-    clientExposed: false,
-    services: [],
-    requiredIn: [],
-    valueOrigin: "manual",
-  },
-  OXAGEN_HOUSE_BRAND: {
-    group: "Operator scripts",
-    description:
-      "Deprecated: the old name for OXAGEN_BRAND_KIT. " +
-      "sync-brand-assets.mjs reads it only when OXAGEN_BRAND_KIT is unset. " +
-      "Set OXAGEN_BRAND_KIT instead. The old name stays for one release, as #3074 set out.",
+      "sync-brand-assets.mjs copies the marks, icons, tokens, fonts, and the branding skill stub from it. " +
+      "A --brand argument wins over this variable, and when both are unset the script reads ../oxagen-brand. " +
+      "CI checks out the kit's main branch at .brand-kit and passes it with --brand.",
     secret: false,
     clientExposed: false,
     services: [],
