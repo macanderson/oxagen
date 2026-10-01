@@ -175,6 +175,14 @@ export const CI_REGISTRY: Record<string, CiVarMeta> = {
       how: "At github.com/settings/personal-access-tokens, create a fine-grained token on this repository with contents, pull requests, and workflows write. Give it an expiry and replace it before that date.",
     },
   },
+  ROADMAP_READ_TOKEN: {
+    kind: "secret",
+    description:
+      "Token mockup-parity-capture.yml reads the page registry in the private roadmap repository with.",
+    refresh: {
+      how: "Create a fine-grained personal access token with contents read on the roadmap repository, save it here, then revoke the old one.",
+    },
+  },
   SCR_CORPUS_TOKEN: {
     kind: "secret",
     description:
@@ -243,6 +251,36 @@ export const CI_REGISTRY: Record<string, CiVarMeta> = {
   },
 
   // ── Variables ──────────────────────────────────────────────────────────────
+  CI_HEAVY_POOL: {
+    kind: "variable",
+    description:
+      "The runner pool the heavy jobs use when CI_RUNNERS is aws: large (the default) or small (pipeline.yml, ADR-246).",
+    refresh: {
+      how: "A setting. Change it when the account's EC2 quota changes. docs/runbooks/ci-runners.md explains the pools.",
+    },
+  },
+  CI_IMAGE_REGISTRY: {
+    kind: "variable",
+    description:
+      "Registry the CI toolchain and service images come from, such as an ECR Public alias. Unset, jobs use the frozen GHCR images.",
+    refresh: {
+      how: "A setting. Point it at the registry ci-image.yml publishes to (docs/runbooks/ci-runners.md).",
+    },
+  },
+  CI_RUNNER_ARCH: {
+    kind: "variable",
+    description:
+      "CPU architecture of the self-hosted CI pools when CI_RUNNERS is aws: x64 (the default) or arm64.",
+    refresh: { how: "A setting. Change it with the pools in infra/stacks-new/ci-runners." },
+  },
+  CI_RUNNERS: {
+    kind: "variable",
+    description:
+      "Set to aws to run CI jobs on Oxagen's own runner pools (ADR-246). Any other value, or unset, runs them on GitHub-hosted runners.",
+    refresh: {
+      how: "A switch. Set it to github to move every job back to GitHub-hosted runners on its next run.",
+    },
+  },
   CI_SUPERSEDED_THRESHOLD: {
     kind: "variable",
     description:
