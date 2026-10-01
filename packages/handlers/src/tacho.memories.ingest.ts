@@ -9,8 +9,11 @@
 // other: capture `local_gateway`, the host's agent as its agent, no run, and
 // `<harness>:<path>` as its source.
 //
-// A resend of the same statement from the same file stores nothing, because
-// the dedupe key is the capture, the source, and the statement's hash.
+// A file keeps one waiting memory (ADR-238). A new statement from the same
+// file replaces that memory's statement, hash, and dedupe key in place. A
+// memory an open memory PR already cites keeps its text, and the new
+// statement becomes a new waiting memory. A resend of the statement the file
+// already holds stores nothing.
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { CapabilityError } from "@oxagen/oxagen/kernel";
 import {

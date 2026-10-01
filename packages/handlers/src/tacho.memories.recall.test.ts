@@ -94,9 +94,6 @@ function bundle(
 function port(
   delivery: Delivery,
   files: Record<string, string | Uint8Array>,
-  recallUnreviewed: Awaited<
-    ReturnType<TachoPublished["recallUnreviewed"]>
-  > = "off",
 ) {
   const readAsset = vi.fn(
     async (
@@ -112,7 +109,6 @@ function port(
   const published: TachoPublished = {
     published: vi.fn(async () => delivery),
     readAsset,
-    recallUnreviewed: vi.fn(async () => recallUnreviewed),
   };
   return { published, readAsset };
 }
@@ -159,7 +155,6 @@ describe("recall_tacho_memories", () => {
     );
     expect(mocks.role).toHaveBeenCalledWith(contract, ctx);
     expect(published.published).not.toHaveBeenCalled();
-    expect(published.recallUnreviewed).not.toHaveBeenCalled();
     expect(readAsset).not.toHaveBeenCalled();
     expect(recall).not.toHaveBeenCalled();
   });
@@ -181,27 +176,22 @@ describe("recall_tacho_memories", () => {
     const [scope, request, records] = recall.mock.calls[0]!;
     expect(scope).toEqual(SCOPE);
     expect(records).toEqual([]);
-    expect(request.recallUnreviewed).toBe("off");
+    expect(request.inApp).toBe(false);
   });
 
-  it("passes the host's agent and the prompt to recall", async () => {
-    const { published } = port(
-      { workspace: null, organization: null },
-      {},
-      "same-agent",
-    );
+  it("passes the prompt to recall, with no agent and no governance setting", async () => {
+    // ADR-238: recall answers steering records only, so it needs neither the
+    // host's agent nor recall_unreviewed, which governance/v1 no longer has.
+    const { published } = port({ workspace: null, organization: null }, {});
     const { recall, handler } = handlerWith(published);
     await handler(input, ctx);
-    expect(published.recallUnreviewed).toHaveBeenCalledWith(SCOPE);
     expect(recall.mock.calls[0]![1]).toEqual({
       now: NOW,
-      agent: "agent.laptop",
       inApp: false,
       repositoryDigests: [DIGEST],
       tools: ["Bash", "Edit"],
       paths: ["apps/api/src/billing.ts"],
       text: "Change the proration rule.",
-      recallUnreviewed: "same-agent",
     });
   });
 

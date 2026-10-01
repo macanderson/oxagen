@@ -10,6 +10,7 @@ import { canonicalJson as canonical, isRecord } from "./repo";
 import type { SettingsDifferenceInput } from "./types";
 
 function walk(expected: unknown, actual: unknown, path: string, out: SettingsDifferenceInput[]): void {
+  if (isRecord(expected) && Object.keys(expected).length === 0) return;
   if (isRecord(expected) && isRecord(actual)) {
     for (const key of Object.keys(expected)) {
       walk(expected[key], actual[key], path === "" ? key : `${path}.${key}`, out);

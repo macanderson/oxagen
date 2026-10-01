@@ -110,7 +110,7 @@ Its CI job stays off until `OXAGEN_CONTAINED_ENABLED` is set, and no production
 run has reached the tier yet. Completion checks are an optional
 control for bounded tasks, and a passing verdict means the specified checks held.
 Cost copy claims attribution, not savings, unless the workload was measured. The
-approved copy lives in the message registry in `oxagenai/oxagen-brand` `messages/`.
+approved copy lives in the message registry in `macanderson/oxagen-brand` `messages/`.
 
 Not "another agent framework" and not "another enterprise search box." The knowledge
 graph is the **accuracy moat**, vendor-neutral BYOK (own model keys, own Neo4j

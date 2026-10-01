@@ -1,10 +1,16 @@
-// Which memories reach one request (ADR-206, decision 10).
+// Which memory records reach one request (ADR-206, decision 10, as ADR-238
+// amends it).
 //
-// Recall answers at most 5 memories and 800 tokens. A candidate reaches the
+// Recall answers steering records only, and a memory that waits for review is
+// never a candidate. Mac ruled on 2026-09-30 that a memory steers only the
+// agent that recorded it, which its harness already does, and that it reaches
+// other agents only once a person merges it into a steering record.
+//
+// Recall answers at most 5 records and 800 tokens. A candidate reaches the
 // request only inside its scope: its repositories, its tools, and its paths.
 // Each candidate scores the share of its words the request also holds, times
-// a weight that halves every `halfLifeDays`. A merged steering record ages
-// from its merge, and an unreviewed memory ages from its capture.
+// a weight that halves every `halfLifeDays`. A record ages from its last
+// review, such as its merge.
 import { matchesGlob } from "@oxagen/glob";
 import { toolTargetMatches } from "@oxagen/oxagen/steering-repo/names";
 import {
@@ -31,20 +37,6 @@ function reaches(
 ): boolean {
   if (targets === null || targets.length === 0) return true;
   return targets.some(matches);
-}
-
-/**
- * May the request's agent see this candidate? A steering record reaches every
- * agent. An unreviewed memory reaches only the agent that wrote it, and only
- * while `recall_unreviewed` is `same-agent`.
- */
-function eligible(request: RecallRequest, candidate: RecallCandidate): boolean {
-  if (candidate.source === "record") return true;
-  return (
-    request.recallUnreviewed === "same-agent" &&
-    candidate.agent !== null &&
-    candidate.agent === request.agent
-  );
 }
 
 /**
@@ -90,9 +82,10 @@ function byRank(a: Scored, b: Scored): number {
 }
 
 /**
- * Rank the candidates for one request and keep what fits. Oxagen's in-app
- * agent receives no workspace memories. An item that would take the total
- * past 800 tokens is skipped, and a shorter one after it can still fit.
+ * Rank the records for one request and keep what fits. Every item is a
+ * steering record. Oxagen's in-app agent receives no workspace memories. An
+ * item that would take the total past 800 tokens is skipped, and a shorter
+ * one after it can still fit.
  */
 export function rankRecall(
   request: RecallRequest,
@@ -104,7 +97,7 @@ export function rankRecall(
   const now = request.now.getTime();
   const scored: Scored[] = [];
   for (const candidate of candidates) {
-    if (!eligible(request, candidate) || !inScope(request, candidate)) continue;
+    if (!inScope(request, candidate)) continue;
     const words = statementWords(candidate.statement).words;
     if (words.size === 0) continue;
     let shared = 0;
@@ -125,7 +118,7 @@ export function rankRecall(
     if (total + tokens > MEMORY_RECALL_TOKENS_MAX) continue;
     items.push({
       id: candidate.id,
-      source: candidate.source,
+      source: "record",
       statement: candidate.statement,
       score,
       tokens,
