@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import {
   Bars,
+  columnsFor,
   Curve,
   Dumbbell,
   evenTicks,
@@ -12,6 +13,7 @@ import {
   Ladder,
   scale,
   Schema,
+  STEPS_PER_ROW,
   Timeline,
   valueText,
   visibleTicks,
@@ -263,6 +265,20 @@ describe("Curve", () => {
   });
 });
 
+describe("columnsFor", () => {
+  it("keeps up to six steps on one row and wraps more into rows of at most five", () => {
+    expect(columnsFor(0)).toBe(1);
+    expect(columnsFor(3)).toBe(3);
+    expect(columnsFor(6)).toBe(6);
+    expect(columnsFor(7)).toBe(4);
+    expect(columnsFor(8)).toBe(4);
+    expect(columnsFor(9)).toBe(5);
+    expect(columnsFor(10)).toBe(STEPS_PER_ROW);
+    expect(columnsFor(11)).toBe(4);
+    expect(columnsFor(12)).toBe(4);
+  });
+});
+
 describe("Flow", () => {
   it("numbers the steps, marks the emphasised one, and draws the loop", () => {
     const html = render(Flow, {
@@ -273,22 +289,71 @@ describe("Flow", () => {
         { label: "Verdict", emph: true },
       ],
     });
-    expect(html).toContain('<ol class="fig-flow" style="--n:2">');
     expect(html).toContain(
-      '<span class="fig-step-n" aria-hidden="true">01</span>',
+      '<figure class="fig fig-flow" style="--n:2;--cols:2;--last:1"><p class="fig-title">Loop</p><ol class="fig-steps">',
     );
-    expect(html).toContain('<li class="fig-step is-emph">');
+    expect(html).toContain(
+      '<li class="fig-step" style="--i:0"><span class="fig-step-head" aria-hidden="true"><span class="fig-step-n">01</span></span>',
+    );
+    expect(html).toContain('<li class="fig-step is-emph" style="--i:1">');
     expect(html).toContain('<span class="fig-step-detail">A patch</span>');
     expect(html.match(/fig-step-detail/g)).toHaveLength(1);
-    expect(html).toContain(
-      '<p class="fig-loop" style="--n:2"><span>again</span></p>',
-    );
+    expect(html).toContain('<p class="fig-loop"><span>again</span></p>');
+    expect(html).not.toContain("fig-token");
+    expect(html).not.toContain("fig-step-bar");
+    expect(html).not.toContain("is-row-");
+    expect(html).not.toContain("fig-sr");
   });
 
   it("omits the loop when there is none", () => {
     expect(render(Flow, { steps: [{ label: "a" }] })).not.toContain("fig-loop");
-    expect(render(Flow, {})).toContain('style="--n:0"');
+    expect(render(Flow, {})).toContain('style="--n:0;--cols:1;--last:0"');
   });
+
+  it("wraps more than six steps into rows and marks where each row turns", () => {
+    const steps = Array.from({ length: 10 }, (_, i) => ({ label: `S${i + 1}` }));
+    const html = render(Flow, { steps });
+    expect(html).toContain(
+      '<figure class="fig fig-flow is-dense" style="--n:10;--cols:5;--last:4">',
+    );
+    expect(html).toContain('<li class="fig-step is-row-end" style="--i:4">');
+    expect(html).toContain('<li class="fig-step is-row-start" style="--i:5">');
+    expect(html.match(/is-row-end/g)).toHaveLength(1);
+    expect(html.match(/is-row-start/g)).toHaveLength(1);
+    // nine steps end in the fourth column, so the loop rises from there
+    expect(render(Flow, { steps: steps.slice(0, 9) })).toContain(
+      'style="--n:9;--cols:5;--last:3"',
+    );
+    // six steps still share one row, as they did before wrapping existed
+    expect(render(Flow, { steps: steps.slice(0, 6) })).toContain(
+      '<figure class="fig fig-flow is-dense" style="--n:6;--cols:6;--last:5">',
+    );
+  });
+
+  it("runs a named unit through the steps with a token, a bar, and a hidden table", () => {
+    const html = render(Flow, {
+      unit: "#17",
+      loop: "again",
+      steps: [{ label: "Issue", mark: "filed" }, { label: "Build" }],
+    });
+    expect(html).toContain(
+      '<figure class="fig fig-flow is-run" style="--n:2;--cols:2;--last:1">',
+    );
+    expect(html).toContain(
+      '<span class="fig-step-n">01</span><span class="fig-token"><span class="fig-token-id">#17</span><span class="fig-token-mark">filed</span></span></span>',
+    );
+    expect(html).toContain(
+      '<span class="fig-token"><span class="fig-token-id">#17</span></span>',
+    );
+    expect(html.match(/fig-step-bar/g)).toHaveLength(2);
+    expect(html).toContain(
+      '<th scope="col">Stage</th><th scope="col">#17 after the stage</th>',
+    );
+    expect(html).toContain(
+      '<tr><th scope="row">Issue</th><td>filed</td></tr><tr><th scope="row">Build</th><td></td></tr>',
+    );
+  });
+});
 });
 
 describe("Ladder", () => {
