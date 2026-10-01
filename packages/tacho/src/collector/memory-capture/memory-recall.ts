@@ -2,10 +2,12 @@
  * The daemon's ask for memories at each prompt: one POST to the control
  * plane's `/v1/tacho/memories/recall` (`recall_tacho_memories`),
  * authenticated by the host API key the way the memory upload is. The answer
- * lists the workspace's memories most relevant to the prompt, most relevant
- * first, and the hook hands them to the agent with the prompt. The ask names
- * the session's repository by its remote's digests, and the tools and files
- * the session used, so the control plane can rank the memories scoped to them.
+ * lists the workspace's memory records most relevant to the prompt, most
+ * relevant first, and the hook hands them to the agent with the prompt. The
+ * ask names the session's repository by its remote's digests, and the tools
+ * and files the session used, so the control plane can rank the records
+ * scoped to them. A memory that waits for review is never in the answer
+ * (ADR-238).
  *
  * The prompt waits for the answer, so the ask gets at most 500 ms
  * (`MEMORY_RECALL_TIMEOUT_MS`). A timeout, an unreachable control plane, an
@@ -51,7 +53,7 @@ const ROUTE_MISSING_PAUSE_MS = 15 * 60_000;
 
 /** One memory the control plane recalled for a prompt. */
 export interface RecalledMemory {
-  /** A record's lineage, or a waiting memory's public id. */
+  /** The steering record's lineage. Recall answers no waiting memory (ADR-238). */
   id: string;
   statement: string;
 }
