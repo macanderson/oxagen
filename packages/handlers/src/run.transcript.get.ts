@@ -152,7 +152,7 @@ import {
   type WordsCache,
 } from "./lib/transcript-words-cache";
 import { StorageNotFoundError } from "@oxagen/storage";
-import { digestBytes } from "@oxagen/tacho";
+import { digestBytes } from "@oxagen/recorder";
 import { logger } from "./logger";
 import {
   invalidCursor,

@@ -26,10 +26,10 @@ import {
   replySchema,
   type Delivery,
   type Reply,
-} from "@oxagen/tacho/local-servers";
+} from "@oxagen/recorder/local-servers";
 
 /** The two routes a machine's local gateway dials. tacho's cloud link names them, and apps/mcp serves them. */
-export { LOCAL_SERVERS_NEXT_PATH, LOCAL_SERVERS_REPLY_PATH } from "@oxagen/tacho/local-servers";
+export { LOCAL_SERVERS_NEXT_PATH, LOCAL_SERVERS_REPLY_PATH } from "@oxagen/recorder/local-servers";
 
 /** How long a long-poll waits for a delivery before it returns none. */
 export const LONG_POLL_WAIT_MS = 25_000;

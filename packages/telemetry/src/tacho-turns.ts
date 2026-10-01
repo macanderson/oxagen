@@ -43,7 +43,7 @@ import {
   LLM_CALL_TOKEN_SOURCES,
   TACHO_METERING_ATTR,
   TACHO_METERING_OBSERVED,
-} from "@oxagen/tacho";
+} from "@oxagen/recorder";
 import { TACHO_EVENTS_TABLE } from "./tacho-events-ddl";
 import { chSelect } from "./tenant";
 

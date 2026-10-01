@@ -555,7 +555,7 @@ export function renderWindowsLauncher(
   return [
     "@echo off",
     `"${system}\\chcp.com" 65001 >nul`,
-    "rem Oxagen Tacho collector launcher; written by `tacho enroll`.",
+    "rem Oxagen Tacho collector launcher; written by `oxagen agent enroll`.",
     env,
     `set "TACHOD_LAUNCHER=${generation}"`,
     "set TACHOD_RESTARTS=0",
@@ -754,7 +754,7 @@ function noneManager(): ServiceManager {
     unitPath: "",
     install: () => {
       throw new Error(
-        "no user service manager on this platform; run `tacho daemon` yourself",
+        "no user service manager on this platform; run `oxagen daemon` yourself",
       );
     },
     uninstall: () => undefined,

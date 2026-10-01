@@ -27,7 +27,7 @@ None.
 
 ### Model patterns
 
-An entry is a model id, optionally ending in `*` to match by prefix: `claude-opus-*` covers every dated build. Case is ignored. No other wildcard is honoured — the host applies this rule with no glob library, because `@oxagen/tacho` is a leaf package with no `@oxagen/*` runtime dependency.
+An entry is a model id, optionally ending in `*` to match by prefix: `claude-opus-*` covers every dated build. Case is ignored. No other wildcard is honoured — the host applies this rule with no glob library, because `@oxagen/recorder` is a leaf package with no `@oxagen/*` runtime dependency.
 
 ## Roles
 

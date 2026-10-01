@@ -71,7 +71,7 @@ const nullable = (value: string) => (value.length ? value : null);
 /**
  * The digest a session's `git_remote_digest` carries when it runs in this
  * repository: sha256 of `host/owner/name`, the form `canonicalRemote` in
- * `@oxagen/tacho` reduces a remote to. A remote typed in another case than
+ * `@oxagen/recorder` reduces a remote to. A remote typed in another case than
  * the binding records digests apart.
  */
 export const repositoryDigest = (

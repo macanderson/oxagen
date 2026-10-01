@@ -4,7 +4,7 @@
  *
  * Oxagen writes the file on each publish from two sources: the workspace's
  * imported tools, read from the compiled tool manifest, and the built-in tool
- * vocabulary in `@oxagen/tacho/policy`. A person never edits it. The next
+ * vocabulary in `@oxagen/recorder/policy`. A person never edits it. The next
  * publish replaces it.
  *
  * The schema declares three entity types. An `Agent` is an operator, a
@@ -19,20 +19,20 @@
  * `Call_<n>`, so a rule over `amount` still validates for the tools that
  * agree.
  */
-import type { CedarToolEntry } from "@oxagen/tacho";
+import type { CedarToolEntry } from "@oxagen/recorder";
 import {
   BUILTIN_NAMES,
   CEDAR_ARG_TYPES,
   type CedarArgType,
   type CedarToolClass,
-} from "@oxagen/tacho/policy";
+} from "@oxagen/recorder/policy";
 
 /** Where the schema lives in the steering repo. */
 export const SCHEMA_PATH = "policy/schema.cedarschema";
 
 /**
  * The arguments of a built-in call, in the names the hook sends them
- * (`builtinArgSets` in `@oxagen/tacho/policy`).
+ * (`builtinArgSets` in `@oxagen/recorder/policy`).
  */
 export const BUILTIN_ARG_TYPES: Readonly<Record<string, CedarArgType>> = {
   command: "String",

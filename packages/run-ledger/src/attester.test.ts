@@ -9,7 +9,7 @@ import {
   type Attestation,
   RUN_ATTESTATION_FIELDS,
   verifyAttestation,
-} from "@oxagen/tacho";
+} from "@oxagen/recorder";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   ATTESTER_KEY_ENV,

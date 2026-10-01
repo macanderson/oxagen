@@ -37,7 +37,7 @@ run          trusted RunSpecV2 identity — principals, agent version,
 - **Does not own:**
   - Running an agent. Nothing here executes (ADR-043).
   - The Tacho wire format and its digest patterns:
-    [`@oxagen/tacho`](../tacho/README.md).
+    [`@oxagen/recorder`](../tacho/README.md).
   - The capability handlers that ingest frames and read runs:
     [`@oxagen/handlers`](../handlers/README.md).
   - The durable jobs that enrich, summarize, compact, and export runs:
@@ -46,7 +46,7 @@ run          trusted RunSpecV2 identity — principals, agent version,
     [`@oxagen/database`](../database/README.md).
 - **Depends on:**
   - `@oxagen/database`: the run tables, `withTenantDb`, and the `Tx` type.
-  - `@oxagen/tacho`: the event envelope vocabulary, digest patterns, and
+  - `@oxagen/recorder`: the event envelope vocabulary, digest patterns, and
     archive content types.
   - `@oxagen/storage`: the blob store behind the evidence store.
   - `@oxagen/crypto`: envelope encryption for stored frame bodies.

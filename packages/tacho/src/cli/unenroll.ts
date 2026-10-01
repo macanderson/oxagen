@@ -1,5 +1,5 @@
 /**
- * `tacho unenroll` (spec section 5.1, acceptance 18): strip Tacho's hook
+ * `oxagen agent unenroll` (spec section 5.1, acceptance 18): strip Tacho's hook
  * entries and env keys (every foreign entry survives), stop and remove the
  * service, revoke the enrollment on the control plane, and delete the host
  * key and credentials. The WAL stays for inspection unless `--purge`.
@@ -115,7 +115,7 @@ export async function revokeOnControlPlane(
   );
   if ("missing" in resolved) {
     warnings.push(
-      "no operator token; the host stays active server-side until an operator revokes it (`oxagen login`, then `tacho unenroll` again, or revoke from the fleet page)",
+      "no operator token; the host stays active server-side until an operator revokes it (`oxagen login`, then `oxagen agent unenroll` again, or revoke from the fleet page)",
     );
     return false;
   }
@@ -131,7 +131,7 @@ export async function revokeOnControlPlane(
         },
         body: JSON.stringify({
           hostEnrollmentId: host.host_enrollment_id,
-          reason: options.reason ?? "tacho unenroll",
+          reason: options.reason ?? "oxagen agent unenroll",
         }),
       },
     );
@@ -280,7 +280,7 @@ export async function stopGateway(
 ): Promise<boolean> {
   if (!(await disarmGateway(host, deps, warnings))) {
     warnings.push(
-      "tachod was left running because a harness still points at its model gateway; fix the file named above and run `tacho unenroll`, or enroll again",
+      "tachod was left running because a harness still points at its model gateway; fix the file named above and run `oxagen agent unenroll`, or enroll again",
     );
     return false;
   }
@@ -499,7 +499,7 @@ export async function unenroll(
   options: UnenrollOptions,
   deps: CliDeps,
 ): Promise<UnenrollResult> {
-  // Here rather than in one CLI's option parsing, so `tacho unenroll` and
+  // Here rather than in one CLI's option parsing, so `oxagen agent unenroll` and
   // `oxagen agent unenroll` refuse the pair alike.
   if (options.harness !== undefined && options.all === true) {
     const refusal = "pass --harness or --all, not both";
@@ -513,7 +513,7 @@ export async function unenroll(
   }
   const lock = acquireInstallLock(deps.paths.tachoDir, deps.now);
   if ("heldBy" in lock) {
-    const warning = `another tacho enroll, unenroll or reassign is running on this machine (pid ${lock.heldBy}); wait for it to finish and run this again`;
+    const warning = `another enroll, unenroll, or reassign is running on this machine (pid ${lock.heldBy}); wait for it to finish and run this again`;
     deps.err(`warning: ${warning}`);
     return {
       ok: false,
@@ -638,12 +638,12 @@ export function restartForRemaining(
     );
     return undefined;
   } catch (error) {
-    // Name the harnesses: a bare `tacho enroll` means claude-code, and when
+    // Name the harnesses: a bare `oxagen agent enroll` means claude-code, and when
     // no remaining agent hooks it, that enroll enrolls a new agent. Naming
     // one agent's own harnesses re-applies that agent's enrollment, which
     // installs the service.
     const [first] = remaining;
-    const warning = `the service could not be started again, so ${agents} ${remaining.length === 1 ? "has" : "have"} no collector or model proxy: ${error instanceof Error ? error.message : String(error)}. Run \`tacho enroll --harness ${first?.host.harnesses.join(",") ?? ""}\` to install it again`;
+    const warning = `the service could not be started again, so ${agents} ${remaining.length === 1 ? "has" : "have"} no collector or model proxy: ${error instanceof Error ? error.message : String(error)}. Run \`oxagen agent enroll --harness ${first?.host.harnesses.join(",") ?? ""}\` to install it again`;
     deps.err(`warning: ${warning}`);
     return warning;
   }
@@ -697,7 +697,7 @@ async function unenrollLocked(
   for (const failure of credentials.failed) {
     incomplete = true;
     warnings.push(
-      `could not give a model credential back: ${failure}. The gateway remains installed so the agent can still make model calls. Fix the file and run \`tacho unenroll\` again`,
+      `could not give a model credential back: ${failure}. The gateway remains installed so the agent can still make model calls. Fix the file and run \`oxagen agent unenroll\` again`,
     );
   }
   if (credentials.failed.length > 0) {
@@ -716,7 +716,7 @@ async function unenrollLocked(
   for (const failure of baseUrls.failed) {
     incomplete = true;
     warnings.push(
-      `could not take the model base URL out: ${failure}. The gateway remains installed so the agent can still make model calls. Remove the base URL by hand, or fix the file and run \`tacho unenroll\` again`,
+      `could not take the model base URL out: ${failure}. The gateway remains installed so the agent can still make model calls. Remove the base URL by hand, or fix the file and run \`oxagen agent unenroll\` again`,
     );
   }
 
@@ -772,7 +772,7 @@ async function unenrollLocked(
   for (const failure of stripped.failed) {
     incomplete = true;
     warnings.push(
-      `could not clean ${failure}. The file was left exactly as it is; fix it and run \`tacho unenroll\` again to finish`,
+      `could not clean ${failure}. The file was left exactly as it is; fix it and run \`oxagen agent unenroll\` again to finish`,
     );
   }
 
@@ -808,7 +808,7 @@ async function unenrollLocked(
     );
     revoked = await revokeAndMark(
       host,
-      { ...options, reason: options.reason ?? "tacho unenroll" },
+      { ...options, reason: options.reason ?? "oxagen agent unenroll" },
       deps,
       warnings,
     );
@@ -881,10 +881,10 @@ async function unenrollLocked(
     if (existsSync(deps.paths.hostFile)) unlinkSync(deps.paths.hostFile);
   } else if (host !== undefined && !revoked) {
     deps.out(
-      "      host.json kept (marked retired locally) so a later `tacho unenroll` can finish the server-side revoke",
+      "      host.json kept (marked retired locally) so a later `oxagen agent unenroll` can finish the server-side revoke",
     );
   } else {
-    deps.out("      host.json kept so a later `tacho unenroll` can finish");
+    deps.out("      host.json kept so a later `oxagen agent unenroll` can finish");
   }
   if (options.purge === true) {
     for (const dir of [

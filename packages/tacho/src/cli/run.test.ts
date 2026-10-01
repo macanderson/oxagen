@@ -66,7 +66,7 @@ async function daemon(
   return seen;
 }
 
-describe("tacho run --contained", () => {
+describe("oxagen agent run --contained", () => {
   it("streams the agent's output and exits with its code", async () => {
     const { deps, write, paths } = enrolled({
       OXAGEN_CONTAINED_IMAGE: "oxagen/contained-claude:1",
@@ -181,7 +181,7 @@ describe("tacho run --contained", () => {
       await runContained({ agent: "claude", args: [], image: "img" }, deps),
     ).toBe(1);
     expect(deps.err).toHaveBeenCalledWith(
-      "This machine is not enrolled. Run `tacho enroll` first.",
+      "This machine is not enrolled. Run `oxagen agent enroll` first.",
     );
   });
 });

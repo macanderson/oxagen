@@ -673,7 +673,8 @@
           "action": "Use this one",
           "provider": {
             "github": "GitHub organization",
-            "gitlab": "GitLab group"
+            "gitlab": "GitLab group",
+            "githubUser": "GitHub personal account"
           }
         },
         "connect": {
@@ -693,6 +694,13 @@
         "fresh": {
           "body": "This workspace reads its repository through a retired sources connection, and Oxagen does not import from one. Start with an empty steering repo instead. The .oxagen/ files stay where they are.",
           "action": "Start with an empty steering repo"
+        },
+        "connection": {
+          "organization": "Steering repos go to the {name} organization.",
+          "user": "Steering repos go to {name}'s personal account.",
+          "change": "Use a different organization",
+          "group": "Steering repos go to the {name} group.",
+          "changeGroup": "Use a different group"
         }
       },
       "reauthorize": {

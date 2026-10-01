@@ -41,7 +41,7 @@ import {
   evidenceStore,
 } from "@oxagen/run-ledger/evidence-store";
 import { StorageNotFoundError } from "@oxagen/storage";
-import { digestBytes } from "@oxagen/tacho";
+import { digestBytes } from "@oxagen/recorder";
 import { z } from "zod";
 import type {
   SteeringHost,

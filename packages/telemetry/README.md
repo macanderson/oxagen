@@ -40,7 +40,7 @@ ClickHouse.
     `resolveDataPlane`.
   - `@oxagen/compliance`: `SECURITY_EVENT_TYPES` and the event types, which
     this package re-exports.
-  - `@oxagen/tacho`: the Tacho event envelope columns and body shapes, so the
+  - `@oxagen/recorder`: the Tacho event envelope columns and body shapes, so the
     ClickHouse table and the wire format stay one definition.
 - **Used by:** `apps/api`, `apps/app`, `apps/app_deprecated`, `apps/mcp`,
   `apps/cli` (a dev dependency for one cross-check test), `@oxagen/agent`,

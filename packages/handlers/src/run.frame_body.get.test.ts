@@ -4,7 +4,7 @@ import type {
   AttemptEventReadRecord,
   FrameBodyColumns,
 } from "@oxagen/run-ledger";
-import { digestBytes } from "@oxagen/tacho";
+import { digestBytes } from "@oxagen/recorder";
 import type { TachoFrameRow } from "@oxagen/telemetry";
 import { describe, expect, it, vi } from "vitest";
 import {

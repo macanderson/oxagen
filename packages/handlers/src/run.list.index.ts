@@ -48,7 +48,7 @@ import {
   GRADE_ENFORCEMENT_TIERS,
   REPLAY_GRADES,
   TACHO_METERING_OBSERVED,
-} from "@oxagen/tacho";
+} from "@oxagen/recorder";
 import {
   and,
   desc,

@@ -49,7 +49,7 @@ export const tachoEnrollmentCreate = registerCapability({
       arch: z.string().max(32).optional(),
       /** Ed25519 public key, `ed25519:<base64 SPKI or raw 32 bytes>`. */
       devicePublicKey: z.string().regex(/^ed25519:[A-Za-z0-9+/=]{40,}$/),
-      // Bounded by the enum itself, so a harness added to `@oxagen/tacho`
+      // Bounded by the enum itself, so a harness added to `@oxagen/recorder`
       // cannot make a host that names all of them fail enrollment.
       harnesses: z
         .array(tachoHarnessSchema)
@@ -61,7 +61,7 @@ export const tachoEnrollmentCreate = registerCapability({
       wrapperVersion: z.string().max(32).optional(),
       /**
        * The bundle fields this host's parser understands
-       * (`TACHO_BUNDLE_FEATURES` in `@oxagen/tacho`).
+       * (`TACHO_BUNDLE_FEATURES` in `@oxagen/recorder`).
        *
        * The enrollment response carries the host's first policy bundle, and
        * the host parses it with a `.strict()` schema, so a field it does not

@@ -64,6 +64,26 @@ export const ESCAPE_HATCH_LABEL = "no-issue";
 export const CLOSES_NOTHING_LABEL = "closes-nothing";
 
 /**
+ * The waiver this label names, or `undefined` when it names none.
+ *
+ * Compared without regard to case. oxagen renamed its labels to uppercase on
+ * 2026-09-30 (`NO-ISSUE`, `CLOSES-NOTHING`), while the four repos that fetch
+ * this file from oxagen `main` keep the lowercase names. GitHub matches a
+ * label name without regard to case when one is added, but a pull request
+ * object carries the spelling its repo stores, so an exact comparison read an
+ * uppercase waiver as no waiver at all.
+ *
+ * Returns the canonical constant, not the spelling found, so `formatVerdict`
+ * can compare it exactly.
+ */
+export function waiverLabel(name) {
+  const lower = String(name ?? "").toLowerCase();
+  return [ESCAPE_HATCH_LABEL, CLOSES_NOTHING_LABEL].find(
+    (label) => label === lower,
+  );
+}
+
+/**
  * The `state_reason` values that close an issue without claiming its DoD was
  * met, so the close guard must not reopen them.
  *
@@ -545,7 +565,7 @@ function missingDodReason(ref, heading) {
 export function verdict(pr, issues) {
   const labels = pr.labels ?? [];
   const waiver = [ESCAPE_HATCH_LABEL, CLOSES_NOTHING_LABEL].find((label) =>
-    labels.includes(label),
+    labels.some((name) => waiverLabel(name) === label),
   );
 
   const links = linkedIssues(pr.body);

@@ -358,7 +358,7 @@ export class HarnessFiles {
         path,
         result: "failed",
         reason:
-          "still carries Tacho's hooks, so it was not given back; run `tacho unenroll` again from the environment that enrolled, or remove the entries that name `--enrollment tch_`",
+          "still carries Tacho's hooks, so it was not given back; run `oxagen agent unenroll` again from the environment that enrolled, or remove the entries that name `--enrollment tch_`",
       };
     }
     if (current === undefined) {

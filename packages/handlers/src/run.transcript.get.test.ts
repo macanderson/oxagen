@@ -4,7 +4,7 @@ import {
   TRANSCRIPT_STEP_TEXT_MAX,
   TRANSCRIPT_TEXT_MAX,
 } from "@oxagen/oxagen/contracts/run.transcript.get";
-import { digestBytes } from "@oxagen/tacho";
+import { digestBytes } from "@oxagen/recorder";
 import type { TachoFrameRow } from "@oxagen/telemetry";
 import {
   type RunFrame,

@@ -3,7 +3,7 @@
  *
  * The proxy refuses a call once a session's observed spend reaches
  * `budget.session_limit_usd`, and it has to price each call to know that. The
- * prices are the control plane's: `@oxagen/tacho` is a leaf package and cannot
+ * prices are the control plane's: `@oxagen/recorder` is a leaf package and cannot
  * read the price book, so the rows it needs arrive in the signed bundle as
  * `model_prices` and nothing here holds a number of its own.
  *

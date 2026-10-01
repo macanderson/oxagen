@@ -864,7 +864,7 @@ export function evaluatePreToolUse(input: EvaluationInput): Evaluation {
   if (input.containmentUnmet === true && bundle.mode === "enforce") {
     return deny(
       "containment_required",
-      "This agent's mandate requires the contained tier. Start it with `tacho run --contained`.",
+      "This agent's mandate requires the contained tier. Start it with `oxagen agent run --contained`.",
     );
   }
 

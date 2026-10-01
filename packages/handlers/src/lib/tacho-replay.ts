@@ -16,7 +16,7 @@ import {
   redactBytes,
   type TachoBody,
   type TachoEvent,
-} from "@oxagen/tacho";
+} from "@oxagen/recorder";
 import type { TachoEventsIngestOutput } from "@oxagen/oxagen/contracts/tacho.events.ingest";
 
 export type BodyRejection = TachoEventsIngestOutput["body_rejections"][number];
@@ -143,7 +143,7 @@ export function countBodyFrames(bodies: readonly VerifiedBody[]): {
 
 /**
  * The seal grading for a wrapped session lives beside the grade it computes,
- * in `@oxagen/tacho`, so ingest and the control plane's idle close
+ * in `@oxagen/recorder`, so ingest and the control plane's idle close
  * (`tacho.session-idle-close`) grade a session with the same rule.
  */
-export { sealTachoSession } from "@oxagen/tacho";
+export { sealTachoSession } from "@oxagen/recorder";

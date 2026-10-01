@@ -6,7 +6,7 @@
 // groups is in the server's source.machines. The cloud gateway checks this
 // before it signs an envelope, so a machine outside the group never receives
 // a call. A suspended machine runs nothing, whatever its groups (#4554).
-import { machineSuspended, notInGroup, type LocalServerRefusal } from "@oxagen/tacho/local-servers";
+import { machineSuspended, notInGroup, type LocalServerRefusal } from "@oxagen/recorder/local-servers";
 
 /** The workspace a machine is enrolled in. */
 export interface MachineScope {

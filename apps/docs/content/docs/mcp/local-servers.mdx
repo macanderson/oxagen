@@ -18,13 +18,13 @@ A machine counts as connected while it polls, and for 10 seconds after its last 
 
 ## The machine loop
 
-`tacho enroll` stores a gateway key for the machine, and the collector daemon starts the loop. The loop runs while all three of these hold:
+`oxagen agent enroll` stores a gateway key for the machine, and the collector daemon starts the loop. The loop runs while all three of these hold:
 
 - The machine's `host.json` holds a gateway key.
 - The machine's enrollment is not revoked.
 - The machine is not suspended.
 
-When one stops holding, the loop stops. A revoke or a suspension reaches the daemon from Oxagen, and the loop stops then. `tacho unenroll` stops the daemon, and the loop with it.
+When one stops holding, the loop stops. A revoke or a suspension reaches the daemon from Oxagen, and the loop stops then. `oxagen agent unenroll` stops the daemon, and the loop with it.
 
 The loop pulls from the MCP origin with the gateway key. It never uses a personal API key.
 

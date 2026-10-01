@@ -75,7 +75,7 @@ import {
   TRANSCRIPT_KINDS,
   TRANSCRIPT_NODES,
   TRANSCRIPT_OUTCOMES,
-} from "@oxagen/tacho";
+} from "@oxagen/recorder";
 import { z } from "zod";
 import { registerCapability } from "../registry";
 import { frameFidelitySchema, frameRedactionSchema } from "./run.get";
@@ -152,17 +152,17 @@ export const transcriptMatchSchema = z.enum(TRANSCRIPT_MATCHES);
 
 /**
  * The chips the Transcript tab filters on, in the order the page draws them
- * (`TRANSCRIPT_KINDS` in `@oxagen/tacho` says what each selects).
+ * (`TRANSCRIPT_KINDS` in `@oxagen/recorder` says what each selects).
  */
 export const transcriptKindSchema = z.enum(TRANSCRIPT_KINDS);
 
-/** What kind of row a folded entry is (`TRANSCRIPT_NODES` in `@oxagen/tacho`). */
+/** What kind of row a folded entry is (`TRANSCRIPT_NODES` in `@oxagen/recorder`). */
 export const transcriptNodeSchema = z.enum(TRANSCRIPT_NODES);
 
-/** How an entry's call ended (`TRANSCRIPT_OUTCOMES` in `@oxagen/tacho`). */
+/** How an entry's call ended (`TRANSCRIPT_OUTCOMES` in `@oxagen/recorder`). */
 export const transcriptOutcomeSchema = z.enum(TRANSCRIPT_OUTCOMES);
 
-/** The family a tool belongs to (`TOOL_FAMILIES` in `@oxagen/tacho`). */
+/** The family a tool belongs to (`TOOL_FAMILIES` in `@oxagen/recorder`). */
 export const toolFamilySchema = z.enum(TOOL_FAMILIES);
 
 export const transcriptEntryKindSchema = z.enum([

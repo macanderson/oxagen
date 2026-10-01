@@ -5,7 +5,7 @@ reaches the ones it does not run: the agent's own harness reports what it did,
 and Oxagen records, gates and evidences that from the outside. The thing has no
 product name. Doing it is wrapping an agent (spec §2.1).
 
-`spec.md` (Proposed, 2026-09-06) is the Oxagen contract for it. `@oxagen/tacho`
+`spec.md` (Proposed, 2026-09-06) is the Oxagen contract for it. `@oxagen/recorder`
 is the package that implements the wrapper, with one enrollment contract, one
 evidence contract and one control contract that Stella meets natively. Four
 harnesses are wrapped as equals (`WRAPPED_HARNESSES`,
@@ -44,7 +44,7 @@ exists:
 | The seven organization-scoped `/tacho/` paths | Published API, reached as `POST /v1/:org_slug/:workspace_slug/tacho/...`, and called by operators, scripts and integrations rather than by a host. All seven have a capability document, and three reach a second surface: `create_enrollment_token` is on the CLI, `list_tacho_hosts` and `list_incidents` are MCP tools. Each of those is another place a caller holds the old path. | 4 adds the `agent` paths, but the old ones answer until an announced API deprecation window closes, independent of the fleet. A host re-enrolling does not update a caller's script. |
 | `tacho/1.0` | The envelope version on the wire between hook, collector and server. `TACHO_ENVELOPE_VERSION` in `packages/tacho/src/envelope.ts` accepts this literal and no other, so a producer sends this today. | 5 adds `oxagen.frame/1.0` beside it and the collector reads both indefinitely. This literal is not retired on a release count and may never be: an installed collector has no upgrade signal, the request validator rejects a whole batch, and a sealed WAL entry cannot be rewritten. `envelope.ts` records the same finding for the legacy `user_email` member. |
 | the `tacho` Postgres schema | The schema, not one table. `tacho.ts` declares 10 tables on it and the migrations create `"tacho"."sessions"`, `"tacho"."hosts"` and the rest, so the word qualifies all 10. `tacho_sessions_runtime_check` is a constraint name, and no `tacho_sessions` table exists. | None. Drafts through 2026-09-19 gave it a phase 6; `_schemas.ts:36` is a compile-time `pgSchema("tacho")` so both names cannot resolve at once, `ON CONFLICT` on the ingest path rules out a view-based bridge, and no customer reaches a schema name. ADR-112 has the ledger. |
-| `@oxagen/tacho`, and the seven registered capability names carrying the word | A package name, and the capability names `create_tacho_enrollment`, `revoke_tacho_enrollment`, `ingest_tacho_events`, `get_tacho_bundle`, `list_tacho_hosts`, `list_tacho_sessions` and `get_tacho_session`. `list_tacho_hosts` is the only one on MCP; the other six declare `surfaces: ["api"]`. | None. ADR-112 decision 1 keeps them, and ADR-025 retired the dotted form with no alias fallback, so a rename breaks every caller at once. |
+| `@oxagen/recorder`, and the seven registered capability names carrying the word | A package name, and the capability names `create_tacho_enrollment`, `revoke_tacho_enrollment`, `ingest_tacho_events`, `get_tacho_bundle`, `list_tacho_hosts`, `list_tacho_sessions` and `get_tacho_session`. `list_tacho_hosts` is the only one on MCP; the other six declare `surfaces: ["api"]`. | None. ADR-112 decision 1 keeps them, and ADR-025 retired the dotted form with no alias fallback, so a rename breaks every caller at once. |
 
 ## The Stella-side seam corpus
 

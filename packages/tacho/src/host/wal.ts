@@ -164,7 +164,7 @@ export class Wal {
    * hundreds of megabytes, nearly all of it shipped. Without this index,
    * `unshipped` and `stats` parsed every file on every drain and every health
    * probe, which blocked the event loop for seconds at a time, so the shipper
-   * fell behind and `tacho status` timed out on a live daemon. Filled lazily,
+   * fell behind and `oxagen agent status` timed out on a live daemon. Filled lazily,
    * one read per session per process, and kept current by `append`.
    */
   private readonly lastSeq = new Map<string, number>();
@@ -222,7 +222,7 @@ export class Wal {
     this.bodyIndexes = new BodyIndexStore(dir);
     this.cursorPath = join(dir, "cursor.json");
     // A cursor that does not parse is read as empty rather than thrown, so
-    // neither the daemon nor `tacho status` refuses to start over it (W-05).
+    // neither the daemon nor `oxagen agent status` refuses to start over it (W-05).
     // Every event then reads as unshipped and ships again, which ingest
     // answers idempotently on `event_id_idem`, and `compact` finds each
     // sealed session's seal again from its last event.
@@ -1088,7 +1088,7 @@ export class Wal {
    * the process died mid-`appendFileSync`.
    *
    * Only the daemon calls this, once at startup, and never from this file's
-   * own constructor: a reader building a `Wal` for `tacho status` or `tacho
+   * own constructor: a reader building a `Wal` for `oxagen agent status` or `tacho
    * export` must never rewrite a file the daemon might still be writing to,
    * which is why every reader here already tolerates a torn trailing line
    * instead of throwing on it (`read`, `eventsAfterShipped`). This is what

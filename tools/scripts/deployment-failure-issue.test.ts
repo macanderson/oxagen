@@ -141,18 +141,32 @@ describe("prNumberFrom", () => {
 describe("titleFor", () => {
   it("follows the repo title standard with a P0 prefix", () => {
     expect(titleFor("main-red", [job("checks", "failure")])).toBe(
-      "P0 · ops/CI · main is red: checks",
+      "P0 T3 S DevOps (CI): Main is red: checks",
     );
     expect(titleFor("deploy", [job("deploy api.oxagen.sh", "failure")])).toBe(
-      "P0 · ops/Deploy · Production deploy failed on main: deploy api.oxagen.sh",
+      "P0 T3 S DevOps (Deploy): Production deploy failed on main: deploy api.oxagen.sh",
     );
   });
 
   it("names at most three jobs", () => {
     const jobs = ["a", "b", "c", "d", "e"].map((n) => job(n, "failure"));
     expect(titleFor("main-red", jobs)).toBe(
-      "P0 · ops/CI · main is red: a, b, c, +2 more",
+      "P0 T3 S DevOps (CI): Main is red: a, b, c, +2 more",
     );
+  });
+
+  it("says the pipeline failed when no job is named", () => {
+    expect(titleFor("main-red", [])).toBe(
+      "P0 T3 S DevOps (CI): Main is red: the pipeline failed",
+    );
+  });
+
+  // CLAUDE.md under Issue titles, and the regex /triage-issues checks.
+  it("matches the title format the triage pass reads back", () => {
+    const format =
+      /^P[0-4] T[1-4] (XS|S|M|L|XL) (Bug|Feature|Improvement|Chore|Documentation|DevOps) \([A-Za-z ]+\): /;
+    expect(titleFor("main-red", [job("checks", "failure")])).toMatch(format);
+    expect(titleFor("deploy", [job("deploy app", "failure")])).toMatch(format);
   });
 });
 

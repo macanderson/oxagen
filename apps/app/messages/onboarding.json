@@ -283,7 +283,7 @@
         "notConnectedTitle": "Not connected yet",
         "notConnectedBody": "No frame from this workspace has reached Oxagen yet. This screen reads the record, so it shows Connected only once the first frame lands.",
         "rollback": "Roll back at any time. This removes the hooks, the login item and the base URL, and restores your previous settings file:",
-        "rollbackCommand": "tacho unenroll",
+        "rollbackCommand": "oxagen agent unenroll",
         "backToOxagen": "Back to Oxagen",
         "unlocking": "The operator console is already unlocking in your browser.",
         "rejectedTitle": "Enrollment token rejected",
@@ -413,7 +413,7 @@
         },
         "recommended": "recommended",
         "body": {
-          "claude-code": "Enrolling writes the Claude Code hooks and enrolls this host with its own device key. The hooks report every session to Oxagen through the <code>tachod</code> collector.",
+          "claude-code": "Enrolling writes the Claude Code hooks and enrolls this host with its own device key. The hooks report every session to Oxagen through the collector daemon.",
           "codex": "The same enrollment, with the Codex profile. It writes <code>~/.codex/config.toml</code>: the Oxagen MCP server, the notify hook to the collector, and the approval policy routed through Oxagen.",
           "cursor": "The same enrollment, with the Cursor profile. It writes <code>~/.cursor/hooks.json</code>, which the IDE and <code>cursor-agent</code> both read. Cursor has no ask step, so a policy that asks is answered deny with the reason.",
           "sdk": "Your own process calls Oxagen with the agent credential: the frames it sends, the checkpoint before each turn, and the Oxagen MCP endpoint as the agent's tool server. Works with the OpenAI Agents SDK, the Claude Agent SDK, stella, and any custom loop."

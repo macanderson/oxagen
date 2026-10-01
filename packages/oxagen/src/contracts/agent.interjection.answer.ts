@@ -25,7 +25,7 @@
 // matches no row in scope also answers `interjection_expired`, as
 // `resolve_approval` does, so the answer never tells a caller whether an id
 // exists in another workspace.
-import { INTERJECTION_RECEIPT_ID_PATTERN } from "@oxagen/tacho";
+import { INTERJECTION_RECEIPT_ID_PATTERN } from "@oxagen/recorder";
 import { z } from "zod";
 import { registerCapability } from "../registry";
 import { workspaceSlug } from "../workspace-slug";

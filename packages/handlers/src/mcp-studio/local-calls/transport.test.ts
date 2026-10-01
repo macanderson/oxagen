@@ -10,7 +10,7 @@ import {
   localCallEnvelopeSchema,
   type Delivery,
   type Reply,
-} from "@oxagen/tacho/local-servers";
+} from "@oxagen/recorder/local-servers";
 import { createInProcessBroker, type LocalGatewayBroker } from "./broker";
 import { createLocalTransport, refusalResult, REPLY_GRACE_MS, type LocalTransportOptions } from "./transport";
 import { DEFINITION_HASH, FILES_DIGEST, FILES_LAUNCH, MACHINE, SCOPE, readerOf, testSigner } from "./test-support";

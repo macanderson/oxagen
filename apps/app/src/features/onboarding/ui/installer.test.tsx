@@ -145,7 +145,7 @@ describe("InstallerScreens", () => {
       "aintel.core.release-manager is wrapped.",
     );
     expect(connected).toHaveTextContent("run run_01 countersigned on ingest");
-    expect(connected).toHaveTextContent("tacho unenroll");
+    expect(connected).toHaveTextContent("oxagen agent unenroll");
     expect(
       within(connected).getByRole("link", { name: "Back to Oxagen" }),
     ).toHaveAttribute("href", RUN);
