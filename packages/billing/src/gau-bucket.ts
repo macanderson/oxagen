@@ -452,8 +452,13 @@ export type GauExhaustedReason =
   | "no_signup_grant"
   | "monthly_allowance_used";
 
-function exhaustedMessage(reason: GauExhaustedReason, periodEnd: Date): string {
+function exhaustedMessage(
+  reason: GauExhaustedReason | null,
+  periodEnd: Date,
+): string {
   switch (reason) {
+    case null:
+      return "Governed actions exhausted: add a card and choose a plan to keep governing.";
     case "signup_grant_used":
       return "Signup grant used: add a card and choose a plan to keep governing.";
     case "signup_grant_expired":
@@ -467,13 +472,14 @@ function exhaustedMessage(reason: GauExhaustedReason, periodEnd: Date): string {
 
 export class GauExhaustedError extends Error {
   readonly code = "gau_exhausted" as const;
-  readonly reason: GauExhaustedReason;
+  /** Null only from a caller other than the gate, which always names one. */
+  readonly reason: GauExhaustedReason | null;
   readonly remainingGau: number;
   /** When the refused bucket ends: the grant's expiry, or the month's end. */
   readonly periodEnd: Date;
 
   constructor(args: {
-    reason: GauExhaustedReason;
+    reason: GauExhaustedReason | null;
     remainingGau: number;
     periodEnd: Date;
   }) {
