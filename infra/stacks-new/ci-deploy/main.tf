@@ -44,6 +44,10 @@ locals {
       repo_id     = 1304589599
       description = "Publishes the CGP schema and specification artifacts."
     }
+    # The repository moved to the `oxageninc` organization and was renamed
+    # `product` on 2026-09-30. The move kept `repo_id`. A trust policy that
+    # still names `macanderson/oxagen` refuses every deploy with
+    # `Not authorized to perform sts:AssumeRoleWithWebIdentity`.
     oxagen-platform = {
       repository  = "oxageninc/product"
       owner_id    = 267772457
@@ -53,16 +57,15 @@ locals {
   }
 
   # Names a deployer's repository had before it moved. On 2026-10-01 Mac moved
-  # three of them from the macanderson account (owner 542881) into the
-  # oxageninc organization (owner 267772457), and macanderson/oxagen became
-  # oxageninc/product. A transfer keeps `repo_id`, and GitHub signs new tokens
-  # with the new name only. The old names stay trusted so that applying this
-  # stack never removes a subject a live role holds. Drop an entry once nothing
-  # can run under the old name.
+  # cgp-website and context-graph-protocol from the macanderson account
+  # (owner 542881) into the oxageninc organization (owner 267772457). A
+  # transfer keeps `repo_id`, and GitHub signs new tokens with the new name
+  # only. The old names stay trusted so that applying this stack never removes
+  # a subject a live role holds. Drop an entry once nothing can run under the
+  # old name.
   moved_from = [
     { deployer = "cgp-website", repository = "macanderson/cgp-website", owner_id = 542881 },
     { deployer = "context-graph-protocol", repository = "macanderson/context-graph-protocol", owner_id = 542881 },
-    { deployer = "oxagen-platform", repository = "macanderson/oxagen", owner_id = 542881 },
   ]
 
   deploy_environment = "production"

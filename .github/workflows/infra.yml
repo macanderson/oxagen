@@ -148,6 +148,13 @@ jobs:
         working-directory: infra/stacks-new/${{ matrix.stack }}
         run: tofu fmt -check -diff .
 
+      # A stack that needs files it does not commit (the CI runner module's
+      # Lambda packages, for one) fetches and checks them in its prepare.sh.
+      # Before validate and plan, because both read those files.
+      - name: prepare
+        working-directory: infra/stacks-new/${{ matrix.stack }}
+        run: if [ -x prepare.sh ]; then ./prepare.sh; fi
+
       - name: validate
         working-directory: infra/stacks-new/${{ matrix.stack }}
         run: |
@@ -280,6 +287,13 @@ jobs:
         with:
           role-to-assume: arn:aws:iam::916294258235:role/gha-infra-apply
           aws-region: ${{ env.AWS_REGION }}
+
+      # A stack that needs files it does not commit (the CI runner module's
+      # Lambda packages, for one) fetches and checks them in its prepare.sh.
+      # Before apply, because the apply re-plans.
+      - name: prepare
+        working-directory: infra/stacks-new/${{ matrix.stack }}
+        run: if [ -x prepare.sh ]; then ./prepare.sh; fi
 
       - name: init
         working-directory: infra/stacks-new/${{ matrix.stack }}
