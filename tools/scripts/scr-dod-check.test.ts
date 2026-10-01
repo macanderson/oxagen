@@ -13,6 +13,7 @@ import {
   referencesIssue,
   restatesCiStatus,
   verdict,
+  waiverLabel,
 } from "./scr-dod-check.mjs";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -929,6 +930,70 @@ describe("a waiver label does not waive a PR that closes something (#2742 review
     expect(
       verdict({ labels: [CLOSES_NOTHING_LABEL], body: "Refs #9" }, []).ok,
     ).toBe(true);
+  });
+});
+
+// oxagen#4894. oxagen's labels became uppercase on 2026-09-30, and the four
+// repos that fetch this checker from oxagen `main` kept the lowercase names. A
+// pull request carries its repo's stored spelling, so the exact comparison read
+// `NO-ISSUE` as no waiver and turned every waived oxagen PR red.
+describe("waiver labels in either case (#4894)", () => {
+  it.each(["no-issue", "NO-ISSUE", "No-Issue"])(
+    "waives a trivial change labelled %s",
+    (label) => {
+      const v = verdict({ labels: [label], body: "typo" }, []);
+      expect(v.ok).toBe(true);
+      expect(v.waived).toBe(true);
+      expect(v.waivedBy).toBe(ESCAPE_HATCH_LABEL);
+    },
+  );
+
+  it.each(["closes-nothing", "CLOSES-NOTHING", "Closes-Nothing"])(
+    "waives a substantial change labelled %s",
+    (label) => {
+      const v = verdict({ labels: [label], body: "an audit" }, []);
+      expect(v.ok).toBe(true);
+      expect(v.waivedBy).toBe(CLOSES_NOTHING_LABEL);
+    },
+  );
+
+  it("names the canonical waiver, so an uppercase label reads the right message", () => {
+    // `formatVerdict` compares `waivedBy` to the constant exactly. Returning
+    // the PR's spelling would have reported a substantial PR as trivial.
+    const text = formatVerdict(
+      verdict({ labels: ["CLOSES-NOTHING"], body: "an audit" }, []),
+    );
+    expect(text).toContain("closes no issue by design");
+    expect(text).not.toContain("this change is trivial");
+  });
+
+  it("finds a waiver among the other uppercase labels", () => {
+    const v = verdict(
+      { labels: ["TRIAGE", "AGENT-MONITORED-PR", "NO-ISSUE"], body: "typo" },
+      [],
+    );
+    expect(v.ok).toBe(true);
+    expect(v.waivedBy).toBe(ESCAPE_HATCH_LABEL);
+  });
+
+  it("still refuses an uppercase waiver on a PR that closes an issue", () => {
+    const v = verdict({ labels: ["CLOSES-NOTHING"], body: "Closes #9" }, []);
+    expect(v.ok).toBe(false);
+    expect(v.reasons.join(" ")).toContain("#9");
+  });
+
+  it("does not read a label that only contains a waiver name", () => {
+    // The control: case is ignored, the rest of the name is not.
+    const v = verdict({ labels: ["NO-ISSUE-YET"], body: "typo" }, []);
+    expect(v.ok).toBe(false);
+    expect(v.waived).toBe(false);
+  });
+
+  it("maps each spelling to its constant and anything else to undefined", () => {
+    expect(waiverLabel("NO-ISSUE")).toBe(ESCAPE_HATCH_LABEL);
+    expect(waiverLabel("closes-nothing")).toBe(CLOSES_NOTHING_LABEL);
+    expect(waiverLabel("TRIAGE")).toBeUndefined();
+    expect(waiverLabel(undefined)).toBeUndefined();
   });
 });
 

@@ -114,7 +114,7 @@ jobs:
             const fs = require('fs')
             const drifted = (process.env.DRIFTED || '').split(' ').filter(Boolean)
             const failed  = (process.env.FAILED  || '').split(' ').filter(Boolean)
-            const LABEL = 'infra-drift'
+            const LABEL = 'INFRA-DRIFT'
             const { owner, repo } = context.repo
 
             const existing = (await github.rest.issues.listForRepo({
@@ -170,9 +170,11 @@ jobs:
               return
             }
 
+            // The title format in CLAUDE.md under Issue titles. The workflow
+            // owns this issue, so the triage pass leaves its title alone.
             await github.rest.issues.create({
-              owner, repo, labels: [LABEL, 'triage'],
-              title: 'Infrastructure has drifted from the configuration',
+              owner, repo, labels: [LABEL, 'TRIAGE'],
+              title: 'P1 T3 S DevOps (Deploy): Infrastructure has drifted from the configuration',
               body,
             })
             core.setFailed(`drift: ${[...drifted, ...failed].join(', ')}`)

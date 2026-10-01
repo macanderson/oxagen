@@ -697,16 +697,6 @@ h2 .gold,
     overflow: auto;
     visibility: visible;
   }
-  .drawer h5 {
-    font-family: var(--font-mono);
-  font-feature-settings: "calt", "liga";
-    font-size: 10.5px;
-    letter-spacing: 0.2em;
-    text-transform: uppercase;
-    color: var(--faint);
-    margin: 14px 0 8px;
-    font-weight: 520;
-  }
   .drawer a {
     display: block;
     padding: 9px 0;
@@ -716,10 +706,6 @@ h2 .gold,
   }
   .drawer a:hover {
     color: var(--gold);
-  }
-  .drawer .btn {
-    margin-top: 16px;
-    width: 100%;
   }
 }
 
