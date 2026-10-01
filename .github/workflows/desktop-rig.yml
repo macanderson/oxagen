@@ -59,7 +59,7 @@ jobs:
 
       - name: Tacho rig (enroll and unenroll against a snapshot)
         if: runner.os != 'Windows'
-        run: pnpm --filter @oxagen/tacho exec vitest run src/cli/install-rig.test.ts src/host/install-hardening.test.ts
+        run: pnpm --filter @oxagen/recorder exec vitest run src/cli/install-rig.test.ts src/host/install-hardening.test.ts
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable branch
@@ -132,7 +132,7 @@ jobs:
         env:
           TACHO_RIG_REAL_SERVICES: "1"
           TACHO_RIG_EVIDENCE: ${{ runner.temp }}/rig-evidence
-        run: pnpm --filter @oxagen/tacho exec vitest run src/cli/install-rig-real.test.ts
+        run: pnpm --filter @oxagen/recorder exec vitest run src/cli/install-rig-real.test.ts
 
       - name: Keep the snapshots and service manager calls
         if: always()

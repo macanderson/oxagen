@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { bodyLimit } from "hono/body-limit";
 import { tachoEventsIngest } from "@oxagen/oxagen/contracts/tacho.events.ingest";
-import { TACHO_MAX_REQUEST_BYTES } from "@oxagen/tacho";
+import { TACHO_MAX_REQUEST_BYTES } from "@oxagen/recorder";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { capabilityContext } from "../../lib/context";
 import type { AppEnv } from "../../app";

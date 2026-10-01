@@ -666,17 +666,17 @@ const CREDENTIAL_MESSAGES: Record<CredentialRefusalCode, string> = {
   run_token_malformed:
     "The credential this call carried is not a run token this Oxagen gateway can read.",
   run_token_invalid:
-    "The run token this call carried was not issued by this Oxagen gateway. Run `tacho credential status` on this machine.",
+    "The run token this call carried was not issued by this Oxagen gateway. Run `oxagen credential status` on this machine.",
   run_token_expired:
     "The run token this call carried has expired. The harness fetches a new one from the Oxagen gateway on its next attempt.",
   run_token_mismatch:
     "The run token this call carried was issued for another host or another model provider.",
   run_token_required:
-    "This machine brokers model credentials through the Oxagen gateway, and this call carried none. Run `tacho enroll` again to point the harness at the gateway's run tokens.",
+    "This machine brokers model credentials through the Oxagen gateway, and this call carried none. Run `oxagen agent enroll` again to point the harness at the gateway's run tokens.",
   foreign_credential:
     "This machine brokers model credentials through the Oxagen gateway, and this call brought its own. Unset the provider's API key (ANTHROPIC_API_KEY, ANTHROPIC_AUTH_TOKEN or OPENAI_API_KEY) in the shell and in the env block of any .claude/settings.json or .claude/settings.local.json the harness reads; the gateway supplies the credential.",
   credential_unavailable:
-    "The run token is valid, but the Oxagen gateway holds no credential for this model provider. Run `tacho enroll` again, or `tacho credential status` to see what is in custody.",
+    "The run token is valid, but the Oxagen gateway holds no credential for this model provider. Run `oxagen agent enroll` again, or `oxagen credential status` to see what is in custody.",
 };
 
 export function createModelProxy(deps: ModelProxyDeps): ModelProxy {

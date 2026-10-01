@@ -116,6 +116,7 @@ describe("a retry after a failed step", () => {
         w.state = structuredClone(state);
       },
       saveConnection: async () => {},
+      resetConnection: async () => null,
       send: async (_data, eventId) => {
         sent.push(eventId);
         await provisionSteeringRepo(w.deps(), WS);

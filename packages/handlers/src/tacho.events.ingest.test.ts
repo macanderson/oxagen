@@ -6,7 +6,7 @@ import {
   type UnsealedTachoEvent,
   sealEvent,
   sessionUuid,
-} from "@oxagen/tacho";
+} from "@oxagen/recorder";
 import { resetColumnProbesForTests, schema } from "@oxagen/database";
 import { Column, eq, Param, SQL } from "drizzle-orm";
 import { isHandlerError } from "@oxagen/oxagen/handler-error";
@@ -118,7 +118,7 @@ vi.mock("./event-client", () => ({
   eventClient: { send: mocks.sendEvent },
 }));
 
-import { digestBytes } from "@oxagen/tacho";
+import { digestBytes } from "@oxagen/recorder";
 import { tachoEventsIngest } from "@oxagen/oxagen/contracts/tacho.events.ingest";
 import { clearSteeringCacheForTests } from "./lib/tacho-steering";
 import {

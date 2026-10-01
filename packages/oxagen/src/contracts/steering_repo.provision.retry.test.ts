@@ -41,6 +41,15 @@ describe("retry_steering_repo_provision contract", () => {
     expect(steeringRepoProvisionRetry.input.safeParse({ force: true }).success).toBe(false);
   });
 
+  it("takes resetConnection to clear the stored connection first", () => {
+    expect(
+      steeringRepoProvisionRetry.input.parse({ resetConnection: true }),
+    ).toEqual({ resetConnection: true });
+    expect(
+      steeringRepoProvisionRetry.input.safeParse({ resetConnection: "yes" }).success,
+    ).toBe(false);
+  });
+
   it("answers one steering repo status", () => {
     for (const status of ["provisioning", "ready", "failed", "blocked"] as const)
       expect(steeringRepoProvisionRetry.output.parse({ status })).toEqual({ status });

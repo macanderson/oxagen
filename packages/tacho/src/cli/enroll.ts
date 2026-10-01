@@ -1,5 +1,5 @@
 /**
- * `tacho enroll` (spec section 5.1): the one command that puts a machine
+ * `oxagen agent enroll` (spec section 5.1): the one command that puts a machine
  * under Oxagen control. Each step is idempotent and printed as it runs.
  */
 import { existsSync, lstatSync, rmSync } from "node:fs";
@@ -150,7 +150,7 @@ export function rootRefusal(
 ): string | undefined {
   if (allowRoot === true || deps.getuid?.() !== 0) return undefined;
   const user = deps.env["SUDO_USER"] ?? "<user>";
-  return `tacho ${command} is running as root, which would write root-owned files into ${deps.home} and install tachod for root. Run it as the user whose agents it governs, without sudo or as \`sudo -u ${user} tacho ${command}\`, or pass --allow-root if root's own agents are the ones to govern.`;
+  return `oxagen agent ${command} is running as root, which would write root-owned files into ${deps.home} and install the collector service for root. Run it as the user whose agents it governs, without sudo or as \`sudo -u ${user} oxagen agent ${command}\`, or pass --allow-root if root's own agents are the ones to govern.`;
 }
 
 /**
@@ -192,7 +192,7 @@ export interface EnrollResult {
   warnings: string[];
   /**
    * Whether the new daemon reached Oxagen and shipped what was waiting.
-   * Absent when no service was installed. `tacho enroll` exits 1 when
+   * Absent when no service was installed. `oxagen agent enroll` exits 1 when
    * `healthy` is false, even with every hook written.
    */
   shipping?: ShippingHealth;
@@ -507,7 +507,7 @@ async function portClearOfAgents(deps: CliDeps): Promise<number> {
  *
  * An enroll that names no harness on a machine that holds one agent goes to
  * that agent, whatever it hooks, as it did before agents had directories:
- * the desktop app's Re-apply runs a bare `tacho enroll`. With more agents
+ * the desktop app's Re-apply runs a bare `oxagen agent enroll`. With more agents
  * than one, the harness defaults to claude-code like a first enroll.
  *
  * `fresh` is true when the directory does not exist yet, so a failed enroll
@@ -574,7 +574,7 @@ export async function enroll(
   const lock = acquireInstallLock(deps.paths.tachoDir, deps.now);
   if ("heldBy" in lock) {
     deps.err(
-      `Another tacho enroll, unenroll or reassign is running on this machine (pid ${lock.heldBy}); wait for it to finish and run this again.`,
+      `Another enroll, unenroll, or reassign is running on this machine (pid ${lock.heldBy}); wait for it to finish and run this again.`,
     );
     return { ok: false, warnings: [] };
   }
@@ -652,7 +652,7 @@ async function abandonAddition(
   warnings.push(...own);
   const harnesses = (addition.harnesses ?? revoked.harnesses).join(",");
   deps.err(
-    `Adding a harness failed after revoking ${revoked.host_enrollment_id}; this host is now unenrolled (host.json kept, marked retired)${stopped ? " and tachod was stopped" : ""}. Run \`tacho enroll --harness ${harnesses} --org ${revoked.org_slug} --workspace ${revoked.workspace_slug} --api-url ${options.apiUrl ?? revoked.api_url}\` once the cause is fixed.`,
+    `Adding a harness failed after revoking ${revoked.host_enrollment_id}; this host is now unenrolled (host.json kept, marked retired)${stopped ? " and tachod was stopped" : ""}. Run \`oxagen agent enroll --harness ${harnesses} --org ${revoked.org_slug} --workspace ${revoked.workspace_slug} --api-url ${options.apiUrl ?? revoked.api_url}\` once the cause is fixed.`,
   );
 }
 
@@ -676,7 +676,7 @@ async function enrollSteps(
     existing.host_status === "revoked";
   if (fleetRevoked && options.force !== true) {
     deps.err(
-      `This host's enrollment ${existing.host_enrollment_id} was revoked on the control plane, so its hooks are not applied again. Run \`tacho unenroll\` to remove it, or \`tacho enroll --force\` to enroll this machine again.`,
+      `This host's enrollment ${existing.host_enrollment_id} was revoked on the control plane, so its hooks are not applied again. Run \`oxagen agent unenroll\` to remove it, or \`oxagen agent enroll --force\` to enroll this machine again.`,
     );
     return { ok: false, warnings };
   }
@@ -765,7 +765,7 @@ async function enrollSteps(
       wantsWorkspace !== existing.workspace_slug
     ) {
       warnings.push(
-        `this host reports to ${existing.org_slug}/${existing.workspace_slug}, not ${wantsOrg}/${wantsWorkspace}; run \`tacho reassign --org ${wantsOrg} --workspace ${wantsWorkspace}\` to move it, or pass --force to enroll again`,
+        `this host reports to ${existing.org_slug}/${existing.workspace_slug}, not ${wantsOrg}/${wantsWorkspace}; run \`oxagen agent reassign --org ${wantsOrg} --workspace ${wantsWorkspace}\` to move it, or pass --force to enroll again`,
       );
     }
     harnesses = existing.harnesses as TachoHarness[];
@@ -794,11 +794,11 @@ async function enrollSteps(
     if (repointed !== undefined) {
       if (deps.runtime.transient !== undefined) {
         warnings.push(
-          `tacho is running from ${deps.runtime.transient} (${deps.runtime.binDir}), which is gone once it is closed, so the service and hooks stay on ${host.hook_command}; run enroll again from a permanent install to move them`,
+          `This executable is running from ${deps.runtime.transient} (${deps.runtime.binDir}), which is gone once it is closed, so the service and hooks stay on ${host.hook_command}; run enroll again from a permanent install to move them`,
         );
       } else if (deps.runtime.executableProblem !== undefined) {
         warnings.push(
-          `${deps.runtime.executableProblem}, so the service and hooks stay on ${host.hook_command}; run enroll again from an installed tacho to move them`,
+          `${deps.runtime.executableProblem}, so the service and hooks stay on ${host.hook_command}; run enroll again from an installed oxagen to move them`,
         );
       } else {
         // The files the hooks now go into, so `unenroll` finds them whatever
@@ -818,7 +818,7 @@ async function enrollSteps(
     // mount is up and every hook would fail to spawn afterwards.
     if (deps.runtime.transient !== undefined) {
       deps.err(
-        `tacho is running from ${deps.runtime.transient} (${deps.runtime.binDir}), which is gone once it is closed; hooks and the service written from here would stop working. ` +
+        `This executable is running from ${deps.runtime.transient} (${deps.runtime.binDir}), which is gone once it is closed; hooks and the service written from here would stop working. ` +
           (deps.platform === "darwin"
             ? "Move Oxagen to /Applications (or run the app's Link into PATH, which keeps a copy of the tools) and enroll again, or point TACHO_BIN_DIR at a permanent copy of tacho."
             : "Install the package (.deb/.rpm) or run the app's Link into PATH, which keeps a copy of the tools, and enroll again; or point TACHO_BIN_DIR at a permanent copy of tacho."),
@@ -829,7 +829,7 @@ async function enrollSteps(
     // hook and the service would name a file that is not there.
     if (deps.runtime.executableProblem !== undefined) {
       deps.err(
-        `Cannot enroll from here: ${deps.runtime.executableProblem}, so the hooks and the service would name a file that does not exist. Run enroll from an installed tacho, or point TACHO_BIN_DIR at the directory that holds it.`,
+        `Cannot enroll from here: ${deps.runtime.executableProblem}, so the hooks and the service would name a file that does not exist. Run enroll from an installed oxagen, or point TACHO_BIN_DIR at the directory that holds it.`,
       );
       return { ok: false, warnings };
     }
@@ -911,7 +911,7 @@ async function enrollSteps(
         existing,
         {
           token: credentials.token,
-          reason: `tacho enroll --harness ${harnesses.join(",")}`,
+          reason: `oxagen agent enroll --harness ${harnesses.join(",")}`,
         },
         deps,
         refused,
@@ -1221,7 +1221,7 @@ async function enrollSteps(
         existing,
         {
           ...(options.token !== undefined ? { token: options.token } : {}),
-          reason: "tacho enroll --force",
+          reason: "oxagen agent enroll --force",
         },
         deps,
         problems,
@@ -1261,7 +1261,7 @@ async function enrollSteps(
       deps.out(`      ${deps.serviceManager.unitPath}`);
     } catch (error) {
       warnings.push(
-        `service install failed: ${error instanceof Error ? error.message : String(error)}; run \`tacho daemon\` yourself`,
+        `service install failed: ${error instanceof Error ? error.message : String(error)}; run \`oxagen daemon\` yourself`,
       );
       deps.err(`      ${warnings[warnings.length - 1] ?? ""}`);
     }
@@ -1459,7 +1459,7 @@ async function enrollSteps(
         );
       } else {
         warnings.push(
-          `Codex's hook installation is not ready: ${trust.problem ?? "unknown reason"}. Open Codex and accept the hooks, or re-run \`tacho enroll\`.`,
+          `Codex's hook installation is not ready: ${trust.problem ?? "unknown reason"}. Open Codex and accept the hooks, or re-run \`oxagen agent enroll\`.`,
         );
         deps.out("      needs attention (see the warning below)");
       }
@@ -1683,15 +1683,15 @@ async function enrollSteps(
         }
         if (pointing.length === 0) {
           warnings.push(
-            "the model proxy is not listening, so no model base URL was written and model calls are not routed through Oxagen. Run `tacho enroll` again once tachod is up",
+            "the model proxy is not listening, so no model base URL was written and model calls are not routed through Oxagen. Run `oxagen agent enroll` again once tachod is up",
           );
         } else if (await disarmGateway(host, deps, warnings)) {
           warnings.push(
-            `the model proxy is not listening, so the model base URL was taken out of ${pointing.join(", ")} and model calls are not routed through Oxagen. Run \`tacho enroll\` again once tachod is up`,
+            `the model proxy is not listening, so the model base URL was taken out of ${pointing.join(", ")} and model calls are not routed through Oxagen. Run \`oxagen agent enroll\` again once tachod is up`,
           );
         } else {
           warnings.push(
-            `the model proxy is not listening and the model base URL could not be taken out of ${pointing.join(", ")}, so those model calls fail until tachod is up. Fix the file named above, or run \`tacho enroll\` again once tachod is up`,
+            `the model proxy is not listening and the model base URL could not be taken out of ${pointing.join(", ")}, so those model calls fail until tachod is up. Fix the file named above, or run \`oxagen agent enroll\` again once tachod is up`,
           );
         }
       }
@@ -1721,21 +1721,21 @@ async function enrollSteps(
   const hooked = harnesses.filter((harness) => !unhooked.includes(harness));
   if (unhooked.length > 0) {
     deps.err(
-      `This machine is enrolled as ${host.agent_key}, but ${listLabels(unhooked)} ${unhooked.length === 1 ? "is" : "are"} not hooked (see the warnings above). Fix that and run \`tacho enroll\` again; nothing already written is repeated.`,
+      `This machine is enrolled as ${host.agent_key}, but ${listLabels(unhooked)} ${unhooked.length === 1 ? "is" : "are"} not hooked (see the warnings above). Fix that and run \`oxagen agent enroll\` again; nothing already written is repeated.`,
     );
   } else if (shipping?.healthy === false) {
     deps.err(
-      `This machine is enrolled as ${host.agent_key} and its hooks are written, but it is not reporting: ${shipping.detail}. Run \`tacho status\` once that is fixed.`,
+      `This machine is enrolled as ${host.agent_key} and its hooks are written, but it is not reporting: ${shipping.detail}. Run \`oxagen agent status\` once that is fixed.`,
     );
   } else {
     // The policy mode and the tier are two facts (ADR-095). "(observe mode)"
     // on the end of this line read as "not routed through the gateway", so
     // the line names it as the policy and points at where the tier is shown.
-    // The sentence is the Policy line of `tacho status` and of the desktop
+    // The sentence is the Policy line of `oxagen agent status` and of the desktop
     // app (policy-mode.ts). `host.bundle` passed the bundle schema, so its
     // mode is one of the two the sentence names, and each ends in a period.
     deps.out(
-      `Done. This machine reports to Oxagen as ${host.agent_key}. Every ${listLabels(hooked)} session from now on is recorded. Policy mode is ${policyModeText(host.bundle.mode)} \`tacho status\` shows each agent's tier.`,
+      `Done. This machine reports to Oxagen as ${host.agent_key}. Every ${listLabels(hooked)} session from now on is recorded. Policy mode is ${policyModeText(host.bundle.mode)} \`oxagen agent status\` shows each agent's tier.`,
     );
   }
   return {

@@ -2,7 +2,7 @@
 // tools for lane M10, and the report names the machine.
 import { describe, expect, it, vi } from "vitest";
 import { TransportError } from "@oxagen/mcp-studio";
-import { digestMismatch, type Delivery, type Reply } from "@oxagen/tacho/local-servers";
+import { digestMismatch, type Delivery, type Reply } from "@oxagen/recorder/local-servers";
 import type { LocalGatewayBroker } from "./broker";
 import { DISCOVERY_DEADLINE_MS, discoverLocalTools, type DiscoverLocalToolsOptions } from "./discovery";
 import { LOCAL_CALL_TTL_MS } from "./envelope";

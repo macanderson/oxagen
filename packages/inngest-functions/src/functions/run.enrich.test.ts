@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NonRetriableError } from "@oxagen/functions";
-import { digestBytes } from "@oxagen/tacho";
+import { digestBytes } from "@oxagen/recorder";
 import { tachoFrame } from "@oxagen/run-ledger";
 const state = vi.hoisted(() => ({
   enabled: true,

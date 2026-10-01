@@ -1,7 +1,7 @@
 /**
  * `oxagen verify <bundle>` against a real bundle built in the test.
  *
- * The bundle is assembled here from @oxagen/tacho's own primitives rather
+ * The bundle is assembled here from @oxagen/recorder's own primitives rather
  * than @oxagen/inngest-functions' builder, because the CLI must not depend on
  * the job package. It follows the same rules: three ledger frames whose
  * `payload_digest` and `event_digest` are JCS digests, the attempt's
@@ -21,7 +21,7 @@ import {
   RUN_EXPORT_FORMAT,
   signAttestation,
   summarizeRunExportRedactions,
-} from "@oxagen/tacho";
+} from "@oxagen/recorder";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { CommandWriter } from "../lib/capture-writer.js";
 import { formatVerification, verifyBundle } from "./verify.js";

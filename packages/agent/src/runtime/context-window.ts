@@ -15,7 +15,7 @@ import type { ContextWindowPayload } from "@oxagen/run-ledger";
 
 type ContextWindowBlock = ContextWindowPayload["blocks"][number];
 
-/** The UTF-8 length of `value` as JSON, the measure `@oxagen/tacho` uses. */
+/** The UTF-8 length of `value` as JSON, the measure `@oxagen/recorder` uses. */
 function windowJsonBytes(value: unknown): number {
   if (value === undefined) return 0;
   try {

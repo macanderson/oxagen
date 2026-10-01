@@ -1,7 +1,7 @@
 /**
  * TOML edited as text, for the model base URL contract (`model-base-url.ts`).
  *
- * `@oxagen/tacho` takes no TOML dependency, and people keep comments in
+ * `@oxagen/recorder` takes no TOML dependency, and people keep comments in
  * `config.toml` and `stella.toml`, so a parse-and-reserialize round trip is
  * out. These helpers find one key by line and change that line only, which
  * keeps every comment, blank line and key order in the file.

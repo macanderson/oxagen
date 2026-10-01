@@ -10,7 +10,7 @@ import {
   digestBytes,
   SUMMARY_MAX_CHARS,
   SUMMARY_MAX_SENTENCES,
-} from "@oxagen/tacho";
+} from "@oxagen/recorder";
 import type { RunScope } from "./run-record";
 
 export const ENRICHMENT_CHUNK_CHARS = 24_000;
@@ -280,7 +280,7 @@ export async function collectRunText(
 
 // The prompt-derived title lives beside the place-derived one, so the ingest
 // path can name a run from its first prompt without loading the model stack.
-export { fallbackRunTitle } from "@oxagen/tacho";
+export { fallbackRunTitle } from "@oxagen/recorder";
 
 /**
  * A short code for why an enrichment attempt failed, safe to store on the run

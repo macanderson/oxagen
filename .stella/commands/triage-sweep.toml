@@ -36,6 +36,14 @@ Target repo: **$ARGUMENTS**
 > cleanup PR. Where they overlap, `/backlog-triage` is the more specific tool and
 > wins.
 
+> **A repo's own triage rules win.** `macanderson/oxagen` keeps its rules in
+> `.claude/commands/triage-issues.md` (`/triage-issues`). Read that file in Phase 0
+> when the target repo has it, and follow it wherever it differs from this one.
+> There a triaged issue carries exactly one priority, one `MODEL:`, one `SIZE:`,
+> one `KIND:`, and one `AREA:` label, and its title reads
+> `<Priority> <Tier> <Size> <Kind> (<Area>): <Statement>`. Retitle each issue you
+> label to that format.
+
 
 You are the **triage authority** for this run. Parse `$ARGUMENTS`: the first
 bare token is `<owner/repo>` (default: the current repo via `gh repo view`).
@@ -54,8 +62,7 @@ Flags:
 ## The separation-of-duties question — read this first
 
 Several repos in this org carry **SCR-005**
-(the standing decisions in oxagen's AGENTS.md, and the AGENTS.md summary
-elsewhere), which says the triage agent
+(the standing decisions in oxagen's `AGENTS.md`), which says the triage agent
 *"never implements anything and never closes issues — it only sizes and orders."*
 
 **This command extends that role, at the maintainer's explicit request** for vet +
@@ -111,6 +118,13 @@ Do all of this before touching a single issue.
    - **area** — `area:*` (and `@package/*` / `@app/*` where the repo uses them)
    - **pain** — `pain:*` (and `goal:*`)
    - **state** — `triage`, `blocked`, `HOLD`, `in-progress`, `needs-witness`, `size/*`
+
+   Label names may be uppercase: `TRIAGE`, `KIND:BUG`, `AREA:API`, `SIZE:SMALL`,
+   `MODEL:T2`. `KIND:*` is the type bucket and `AREA:*` the area bucket. `MODEL:*`
+   and `SIZE:*` are families of their own, required where the repo's rules require
+   them. Write the spelling `gh label list` returns. GitHub matches a name without
+   regard to case when you add, filter, or remove a label, but an issue's `labels`
+   array carries the stored spelling, so compare names lowercased.
 3. **Read the guard.** `.github/workflows/triage-guard.yml`, if present (see above).
 4. **Pull the backlog** with everything needed to judge it:
    ```sh
@@ -227,12 +241,15 @@ For each issue, build an **ordered** list:
 ```
 
 1. **Priority — exactly one.** Never zero, never two.
+   **Tier and size — exactly one each** where the repo has `MODEL:*` and `SIZE:*`
+   labels, chosen by the repo's own rules.
 2. **Area — one to three.** Map the file-and-symbol evidence from Phase 1 onto the
    repo's real `area:*` names. Multi-area is expected for cross-cutting work;
    more than three means the issue is too broad — say so in the comment. Where
    the repo also uses `@package/*` / `@app/*`, add the matching one.
 3. **Type — exactly one**, drawn from the vocabulary the repo actually has:
-   `bug`, `feature`, `chore`, `documentation`, `tech-debt`, `epic`. Taxonomies
+   `KIND:*` where it exists, otherwise `bug`, `feature`, `chore`, `documentation`,
+   `tech-debt`, `epic`. Taxonomies
    differ — `tech-debt` exists in some of these repos and not others. Where the
    closest type label is missing, use the nearest one that exists (`chore` for
    `tech-debt`) and say so in the rationale comment. Never create a type label.
@@ -258,7 +275,8 @@ vocabulary — label sprawl is the failure mode this rule exists to prevent.
 
 **No duplicate labels — compute a delta, never a blind add.** For every issue,
 diff your composed set against the labels already on it. Add only what is
-missing, drop `triage` in the same call, and leave everything else alone. Do not
+missing, drop `triage` (in the spelling the repo stores) in the same call, and
+leave everything else alone. Do not
 re-add a label that is already present, and do not strip a human's existing label
 just because your set did not include it — `triage` is the only label you remove.
 

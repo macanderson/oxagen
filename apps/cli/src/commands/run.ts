@@ -30,7 +30,7 @@ import { createHash } from "node:crypto";
 import { writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { formatUsd } from "@oxagen/billing/rate-card";
-import { isTranscriptKind, TRANSCRIPT_KINDS } from "@oxagen/tacho";
+import { isTranscriptKind, TRANSCRIPT_KINDS } from "@oxagen/recorder";
 import { apiPostOrThrow, printTable } from "../lib/api.js";
 import { getApiUrl } from "../lib/config.js";
 import { createOutput } from "../lib/output.js";

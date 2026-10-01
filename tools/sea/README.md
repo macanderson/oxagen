@@ -12,7 +12,7 @@ run `tacho` or `oxagen`. This directory is not a workspace package: it has no
   and re-signing the binary ad hoc.
 - **Does not own:** the bundles it compiles (`scripts/bundle.mjs` in
   [`apps/cli`](../../apps/cli/README.md) and `bundle` in
-  [`@oxagen/tacho`](../../packages/tacho/README.md)); staging the binaries
+  [`@oxagen/recorder`](../../packages/tacho/README.md)); staging the binaries
   as Tauri sidecars ([`apps/desktop`](../../apps/desktop/README.md),
   `scripts/sidecars.mjs`); Authenticode and notarization, which the release
   workflow applies; the Homebrew and Scoop manifests
@@ -27,8 +27,8 @@ run `tacho` or `oxagen`. This directory is not a workspace package: it has no
 
 | Seam | Kind | Source | Wired by |
 |---|---|---|---|
-| `node tools/sea/compile.mjs --entry <bundle.cjs> --name <tacho\|oxagen> --out <dir> [--triple <target>]` | boundary | `tools/sea/compile.mjs` | `pnpm --filter @oxagen/cli compile`, `pnpm --filter @oxagen/tacho compile` |
-| `--asset <key>=<path>`, repeatable, read in the executable with `require("node:sea").getAsset(<key>)` | boundary | `tools/sea/compile.mjs` | `pnpm --filter @oxagen/tacho compile` embeds Cedar's wasm as `cedar_wasm_bg.wasm`, and `packages/tacho/src/policy/runtime.ts` reads it |
+| `node tools/sea/compile.mjs --entry <bundle.cjs> --name <tacho\|oxagen> --out <dir> [--triple <target>]` | boundary | `tools/sea/compile.mjs` | `pnpm --filter @oxagen/cli compile`, `pnpm --filter @oxagen/recorder compile` |
+| `--asset <key>=<path>`, repeatable, read in the executable with `require("node:sea").getAsset(<key>)` | boundary | `tools/sea/compile.mjs` | `pnpm --filter @oxagen/recorder compile` embeds Cedar's wasm as `cedar_wasm_bg.wasm`, and `packages/tacho/src/policy/runtime.ts` reads it |
 | Output name `<name>[-<triple>][.exe]` | boundary | `tools/sea/compile.mjs` | Tauri's `externalBin` expects the triple suffix. `apps/desktop/scripts/sidecars.mjs` currently adds it when it stages the binary |
 
 ## Entry points

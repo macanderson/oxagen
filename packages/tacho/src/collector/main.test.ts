@@ -41,3 +41,27 @@ describe("tachod unhandled rejection safety net", () => {
     }
   });
 });
+
+describe("tachod as an alias of oxagen daemon (#4879)", () => {
+  afterEach(() => {
+    process.removeAllListeners("unhandledRejection");
+    vi.resetModules();
+  });
+
+  it("names `oxagen daemon` once on stderr as it starts, so the log says what replaced it", async () => {
+    const stderr = vi
+      .spyOn(process.stderr, "write")
+      .mockImplementation(() => true);
+    try {
+      await import("./main");
+      const lines = stderr.mock.calls
+        .map(([chunk]) => String(chunk))
+        .filter((line) => line.includes("oxagen daemon"));
+      expect(lines).toEqual([
+        "tachod is now `oxagen daemon`. Run `oxagen agent status` to move this machine's service to the new name.\n",
+      ]);
+    } finally {
+      stderr.mockRestore();
+    }
+  });
+});

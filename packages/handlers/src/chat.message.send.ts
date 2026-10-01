@@ -2,7 +2,7 @@ import type { CapabilityHandler } from "@oxagen/oxagen";
 import { chatMessageSend } from "@oxagen/oxagen/contracts/chat.message.send";
 import { sendConversationOpened } from "@oxagen/agent/runtime/conversation-opened-event";
 import { schema, withTenantDb } from "@oxagen/database";
-import { sessionSubject } from "@oxagen/tacho/session-subject";
+import { sessionSubject } from "@oxagen/recorder/session-subject";
 import { and, eq } from "drizzle-orm";
 import { logger } from "./logger";
 

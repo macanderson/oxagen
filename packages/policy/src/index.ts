@@ -12,7 +12,7 @@
  * - `runPolicyTests` runs `policy/*.tests.jsonl` on publish.
  * - `convertDecisionRules` writes a workspace's decision rules as Cedar.
  */
-export { loadCedarRuntime, requireCedarRuntime, type CedarRuntime } from "@oxagen/tacho/policy";
+export { loadCedarRuntime, requireCedarRuntime, type CedarRuntime } from "@oxagen/recorder/policy";
 export * from "./compile";
 export * from "./decision-rules";
 export * from "./evaluate";

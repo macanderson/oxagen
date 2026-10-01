@@ -1,9 +1,9 @@
 ---
 title: Oxagen app
-description: Download the Oxagen app, open it the first time on macOS, Windows, or Linux, and find the oxagen and tacho commands it puts on your PATH.
+description: Download the Oxagen app, open it the first time on macOS, Windows, or Linux, and find the oxagen command it puts on your PATH.
 ---
 
-The Oxagen app puts one machine under Oxagen control. It bundles the `oxagen` and `tacho` commands, and enrollment runs through them.
+The Oxagen app puts one machine under Oxagen control. It bundles the `oxagen` command, and enrollment runs through it. It also bundles tacho, the older executable for the same commands, so the hooks on a machine enrolled before these commands moved into `oxagen` keep working. You never need to run tacho yourself.
 
 ## Download
 
@@ -49,7 +49,7 @@ chmod +x Oxagen_amd64.AppImage && ./Oxagen_amd64.AppImage
 
 ## Per-user copy
 
-Each time it opens, the app copies `oxagen` and `tacho` out of itself into a directory named for its version:
+Each time it opens, the app copies `oxagen` and the older tacho executable out of itself into a directory named for its version:
 
 | Platform | Directory |
 | --- | --- |
@@ -63,27 +63,27 @@ A new version copies itself beside the old one, so an update never replaces a fi
 
 ## Command line
 
-The app links `oxagen` and `tacho` from the per-user copy into `~/.local/bin` on macOS and Linux. On Windows it writes `.cmd` shims to a directory on your user `PATH`. It never asks for administrator rights, and it never replaces a file it did not write.
+The app links both executables from the per-user copy into `~/.local/bin` on macOS and Linux. On Windows it writes `.cmd` shims to a directory on your user `PATH`. It never asks for administrator rights, and it never replaces a file it did not write.
 
-Open a new terminal after the first launch. On macOS and Linux, this prints both paths:
+Open a new terminal after the first launch. On macOS and Linux, this prints the path of `oxagen`:
 
 ```bash
-command -v oxagen tacho
+command -v oxagen
 ```
 
 ## Uninstall
 
 In the app, **Uninstall** removes every enrollment, the links, every per-user copy, and `~/.config/oxagen`. Then remove the app: drag it to the Trash on macOS, remove it in **Settings > Apps** on Windows, or remove the package on Linux.
 
-If you removed the app first, run the per-user copy's `tacho` to take the hooks and the collector out:
+If you removed the app first, run the per-user copy's `oxagen` to take the hooks and the collector out:
 
 ```bash
-"$HOME/Library/Application Support/oxagen/bin/<version>/tacho" unenroll --all --purge
+"$HOME/Library/Application Support/oxagen/bin/<version>/oxagen" agent unenroll --all --purge
 ```
 
-Use the Linux or Windows directory from the table above on those platforms. Then delete the `oxagen` directory that holds the copy, the `oxagen` and `tacho` links in `~/.local/bin`, and the lines from `# >>> oxagen >>>` to `# <<< oxagen <<<` in your shell profile. With fish, delete `~/.config/fish/conf.d/oxagen.fish` instead.
+Use the Linux or Windows directory from the table above on those platforms. Then delete the `oxagen` directory that holds the copy, both links in `~/.local/bin`, and the lines from `# >>> oxagen >>>` to `# <<< oxagen <<<` in your shell profile. With fish, delete `~/.config/fish/conf.d/oxagen.fish` instead.
 
-If the per-user copy is gone as well, the Cursor and Stella hooks on macOS and Linux allow each action instead of blocking it, and Claude Code and Codex report a hook error on each tool call. On Windows the Cursor and Stella hooks block. Install the app again and use **Uninstall**, or run `tacho unenroll --all --purge` from any other install of `tacho`.
+If the per-user copy is gone as well, the Cursor and Stella hooks on macOS and Linux allow each action instead of blocking it, and Claude Code and Codex report a hook error on each tool call. On Windows the Cursor and Stella hooks block. Install the app again and use **Uninstall**, or run `oxagen agent unenroll --all --purge` from any other install of the `oxagen` CLI.
 
 ## Updates
 

@@ -1,9 +1,9 @@
-# File a P0 `deployment-failure` issue when main goes red or a production
+# File a P0 `DEPLOYMENT-FAILURE` issue when main goes red or a production
 # deploy fails, and close it when main recovers.
 #
 # Mac set this on 2026-09-23 so failures show up in the issue list and their
-# rate can be tracked: filter on the `deployment-failure` label, or on
-# `deployment-failure:deploy` and `deployment-failure:main-red` for each kind.
+# rate can be tracked: filter on the `DEPLOYMENT-FAILURE` label, or on
+# `DEPLOYMENT-FAILURE:DEPLOY` and `DEPLOYMENT-FAILURE:MAIN-RED` for each kind.
 # An issue's open-to-close time is the time main took to recover.
 #
 # The rules (one issue per incident, what counts as green, out-of-order runs)

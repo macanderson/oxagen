@@ -30,7 +30,7 @@ HARD RULES for this repository. Restate them to any subagent you spawn.
 - Generators are allowed and required when their --check fails: pnpm --filter @oxagen/app gen:messages (messages.d.ts) and pnpm docs:schemas. Commit their output.
 - Every badge that describes trust (enforcement tier, replay grade, attestation, cost basis) shows the recorded value and nothing stronger. Every money figure shows its basis. Where the backend has not shipped, render the NotBacked state, never a placeholder value.
 - Read DEREGISTERED.md before removing anything. De-registering is not deleting.
-- Fix any defect you meet in the files you touch (SCR-004) and name it in the PR body. File an issue only when a fix cannot ride the PR, with only the triage label, one full change per issue, and a "- [ ]" definition of done.
+- Fix any defect you meet in the files you touch (SCR-004) and name it in the PR body. File an issue only when a fix cannot ride the PR, with only the TRIAGE label, one full change per issue, and a "- [ ]" definition of done.
 - GitHub: use the gh CLI if it is installed, else the GitHub MCP tools (load with ToolSearch). Never assume either.
 - Do not add a fourth Playwright spec. apps/app/e2e holds login, pay, and page-load only. New routes go in apps/app/e2e/routes.ts for page-load.
 `
@@ -163,7 +163,7 @@ TASK: Integrate session ${session.id} (${session.title}) into one PR.
    Lane summaries: ${JSON.stringify(built.map(b => ({ lane: b.lane, branch: b.branch, summary: b.summary, gaps: b.open_gaps, deviations: b.spec_deviations })))}
 3. Read the combined diff once, end to end, against oxagen-roadmap:docs/oxagen/mission-control/BUILD-CHUNKS.md §${session.id} and the spec sections it names. Fix anything missing or inconsistent. Run the generators whose --check would fail (gen:messages, docs:schemas) and commit their output. Update apps/app/e2e/routes.ts for any new route.
 4. Update apps/app/ARCHITECTURE.md §1.2 rows the session changes, and tick the session's "Done when" boxes in oxagen-roadmap:docs/oxagen/mission-control/BUILD-CHUNKS.md that are now true. Commit and push.
-5. Open a PR against main, ready for review, titled "${session.prTitle}". Body per .github/PULL_REQUEST_TEMPLATE.md: what ships and each defect that rode along, exactly one issue line (Closes #N only when the issue's whole DoD is done, otherwise Refs #N, otherwise the closes-nothing label), vision alignment, checklist, verification. ${session.issueHint} Then add the one-line "Landed in PR <url>" note under the session's heading in BUILD-CHUNKS.md, commit, and push.
+5. Open a PR against main, ready for review, titled "${session.prTitle}". Body per .github/PULL_REQUEST_TEMPLATE.md: what ships and each defect that rode along, exactly one issue line (Closes #N only when the issue's whole DoD is done, otherwise Refs #N, otherwise the CLOSES-NOTHING label), vision alignment, checklist, verification. ${session.issueHint} Then add the one-line "Landed in PR <url>" note under the session's heading in BUILD-CHUNKS.md, commit, and push.
 6. Watch CI. A conflicting PR gets no run, so merge main. Fix every failure and push, up to four rounds. Report exactly what still fails if red. Do not merge the PR.
 7. Remove the lane worktrees (git worktree remove, then prune). Keep the integration worktree.
 Return the structured result with pr_url, head_sha, ci_state.`
@@ -173,7 +173,7 @@ function reviewPrompt(session, pr, specHint) {
   return `${RULES}\n${CONTEXT}
 TASK: Cold review of PR ${pr.pr_url} (branch ${pr.branch}, worktree ${pr.worktree || wt(session.id)}) for session ${session.id} (${session.title}).
 Review against: ${specHint}. Check spec fidelity (states, copy, entry points), tenancy and IAM on every new handler or action (withTenantDb, assertOrgRole where an org role is required), capability parity and the ui-map binding with a real proof file, every trust badge honest to the record, a test beside every new component and action, and clear-prose on every string.
-Fix every P0 and P1 you confirm directly on the branch, commit, push, and watch CI green again (up to three rounds). Carry P2 and below into one residue issue by default; split genuinely unrelated changes so each issue has exactly one kind, one job, and one full change per DoD (SCR-003). Title each issue "Residue from #<PR>: <what is left>" with each finding verbatim, its file and line, why it matters, the pillar it moves, and a "- [ ]" DoD; apply only the triage label. Then, per AGENTS.md (Residue merges), reply on every carried thread that the finding stands and names the residue issue, and resolve that thread: resolving is an acceptance, not a dismissal. Leave a P0 or P1 thread open only if you could not fix it, and say why on the thread. Return what you fixed, what remains with severities, the residue issue URL, and the final ci_state.`
+Fix every P0 and P1 you confirm directly on the branch, commit, push, and watch CI green again (up to three rounds). Carry P2 and below into one residue issue by default; split genuinely unrelated changes so each issue has exactly one kind and one full change per DoD (SCR-003). Title each issue in the queued form CLAUDE.md sets under Issue titles, "Queued <Kind> (<Area>): <what is left> (residue #<PR>)", with each finding verbatim, its file and line, why it matters, the pillar it moves, and a "- [ ]" DoD; apply only the TRIAGE label. Then, per AGENTS.md (Residue merges), reply on every carried thread that the finding stands and names the residue issue, and resolve that thread: resolving is an acceptance, not a dismissal. Leave a P0 or P1 thread open only if you could not fix it, and say why on the thread. Return what you fixed, what remains with severities, the residue issue URL, and the final ci_state.`
 }
 
 async function runSession(session, specHint) {
@@ -242,7 +242,7 @@ const session = {
   id: '2',
   title: 'Tools governance: rules, grants, connections, servers',
   prTitle: 'Oxagen app: auto-approval rules, grant a mandate, connections, and servers on the Tools page',
-  issueHint: 'Read #2970 and #2957. Their DoDs include backend and decision items; use Refs unless every box is done. Label closes-nothing if neither is closed.',
+  issueHint: 'Read #2970 and #2957. Their DoDs include backend and decision items; use Refs unless every box is done. Label CLOSES-NOTHING if neither is closed.',
   lanes: [
     {
       id: 'rules', title: 'Auto-approvals tab: list, create, edit, enable, delete rules; eligibility explained',

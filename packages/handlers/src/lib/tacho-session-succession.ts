@@ -17,7 +17,7 @@
  * on a batch that continues its recorded chain.
  */
 import { schema, type withTenantDb } from "@oxagen/database";
-import { type TachoEvent, verifyChain } from "@oxagen/tacho";
+import { type TachoEvent, verifyChain } from "@oxagen/recorder";
 import { inArray } from "drizzle-orm";
 
 type Tx = Parameters<Parameters<typeof withTenantDb>[0]>[0];

@@ -1287,7 +1287,7 @@ export function runRoster(
 
 /**
  * The question a host shows when a session starts in a repository no
- * workspace bound, as `interjectionQuestion` in @oxagen/tacho writes it for
+ * workspace bound, as `interjectionQuestion` in @oxagen/recorder writes it for
  * core-platform and a 30-minute timeout.
  */
 const HELD_QUESTION =

@@ -1,11 +1,11 @@
-import { evaluatePreToolUse } from "@oxagen/tacho/host";
+import { evaluatePreToolUse } from "@oxagen/recorder/host";
 /**
  * What the policy bundle has to carry for the local MCP gateway to serve a
  * connected app honestly (ADR-078 §4).
  *
  * The gateway key's mandate is a rule over the capability registry — an `mcp`
  * capability that does not mutate and is not high-sensitivity — and only the
- * control plane can evaluate it. `@oxagen/tacho` takes no `@oxagen/*` runtime
+ * control plane can evaluate it. `@oxagen/recorder` takes no `@oxagen/*` runtime
  * dependency, so the collector cannot read a capability's surfaces, mutation
  * or sensitivity, and a second copy of the rule living there is the drift that
  * constraint exists to prevent. Without the rule's answer on the wire the
@@ -60,7 +60,7 @@ const {
   BUNDLE_FEATURE_MODEL_PRICES,
   BUNDLE_FEATURE_STEERING_MANIFEST,
   BUNDLE_FEATURE_UNBOUND_REPO,
-} = await import("@oxagen/tacho");
+} = await import("@oxagen/recorder");
 const { assembleWorkspaceSteering } = await import("./tacho-steering");
 const { PROVIDER_RATE_CARD } = await import("@oxagen/billing");
 

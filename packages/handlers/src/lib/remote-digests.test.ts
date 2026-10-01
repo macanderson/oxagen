@@ -2,7 +2,7 @@
  * `remoteDigests` digests a repository name the way a Tacho host digests its
  * remote, so a name on the control plane and a remote on the host match.
  */
-import { canonicalRemote, digestBytes, foldedRemote } from "@oxagen/tacho";
+import { canonicalRemote, digestBytes, foldedRemote } from "@oxagen/recorder";
 import { describe, expect, it } from "vitest";
 import { remoteDigests } from "./remote-digests";
 

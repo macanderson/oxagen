@@ -5,7 +5,7 @@
  *
  * The host decides at the first prompt, before the first model call, with no
  * round trip. It digests its `origin` remote (`canonicalRemote`, then
- * `foldedRemote`, in `@oxagen/tacho`) and looks for either digest in
+ * `foldedRemote`, in `@oxagen/recorder`) and looks for either digest in
  * `bound_remote_digests`. So this module digests each bound repository the
  * same way, from the name the binding recorded. The remote itself never
  * leaves the host (`collector/git-facts.ts`).
@@ -26,7 +26,7 @@
  * of a new workspace, so asking about it would offer two paths that both
  * fail.
  */
-import { policyBundleSchema, type PolicyBundle } from "@oxagen/tacho";
+import { policyBundleSchema, type PolicyBundle } from "@oxagen/recorder";
 import { SKILL_INTERJECTION_TIMEOUT_MS } from "@oxagen/oxagen/skills";
 import { schema, type Tx, withTransactionOrgWideRead } from "@oxagen/database";
 import { and, desc, eq, inArray, isNull, notInArray, sql } from "drizzle-orm";

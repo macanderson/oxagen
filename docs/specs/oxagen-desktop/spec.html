@@ -434,7 +434,7 @@ pnpm --filter @oxagen/desktop dev          # tauri dev over Vite on :1420
 </blockquote>
 <h2 id="10-what-was-verified">10. What was verified</h2>
 <ul>
-<li><code>@oxagen/tacho</code>: 26 files, 134 tests, typecheck and lint clean. New coverage: the Codex writer (merge, strip, presence, foreign entries kept), <code>--harness</code> parsing and re-apply semantics, <code>reassign</code> (revoke then create, device key and port kept, both hook files carry only the new id, harness-only re-enroll), the Windows service manager and launcher, the native layout, and the harness label reaching sealed events across a daemon restart. That last one is mutation-tested: with the relabel disabled the test fails.</li>
+<li><code>@oxagen/recorder</code>: 26 files, 134 tests, typecheck and lint clean. New coverage: the Codex writer (merge, strip, presence, foreign entries kept), <code>--harness</code> parsing and re-apply semantics, <code>reassign</code> (revoke then create, device key and port kept, both hook files carry only the new id, harness-only re-enroll), the Windows service manager and launcher, the native layout, and the harness label reaching sealed events across a daemon restart. That last one is mutation-tested: with the relabel disabled the test fails.</li>
 <li><code>@oxagen/desktop</code>: typecheck, lint, Vite build; 6 tests over the argv mapping and the primary-action rule.</li>
 <li>Both binaries compiled with Node SEA, run from the mounted <code>.dmg</code>: <code>--version</code>, <code>--help</code>, <code>tacho status</code>, <code>tacho hook</code> with a Codex-shaped payload (null transcript) against an unenrolled scratch home.</li>
 <li>The <code>.dmg</code> built, mounted, the app launched and rendered against this machine's real <code>config.json</code> (which is what surfaced the expired-session case in §5).</li>
@@ -545,7 +545,7 @@ toolbelt without ever holding an Oxagen credential — the gateway holds it, and
 the app is the credential. A non-developer will not paste a token into a JSON
 file, and asking them to would put it on the least protected surface on the
 machine.</p>
-<p>The gateway is a <strong>proxy, not a second materialiser</strong>. <code>@oxagen/tacho</code> is a
+<p>The gateway is a <strong>proxy, not a second materialiser</strong>. <code>@oxagen/recorder</code> is a
 leaf package with no <code>@oxagen/*</code> runtime dependency, so it forwards the
 JSON-RPC envelope to the workspace MCP endpoint with the host's own API key —
 already an Oxagen API key bound to the enrolling org and workspace. One tool

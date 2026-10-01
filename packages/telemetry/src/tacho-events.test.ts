@@ -5,7 +5,7 @@ import {
   type UnsealedTachoEvent,
   sealEvent,
   sessionUuid,
-} from "@oxagen/tacho";
+} from "@oxagen/recorder";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const chInsert = vi.fn(

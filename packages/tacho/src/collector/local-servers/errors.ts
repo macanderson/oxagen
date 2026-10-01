@@ -6,7 +6,7 @@
  * runs on each envelope and launch, written the same way: what happened, then
  * what to do.
  *
- * The cloud gateway imports this table too, through `@oxagen/tacho/local-servers`,
+ * The cloud gateway imports this table too, through `@oxagen/recorder/local-servers`,
  * so a machine outside the group reads the same sentence on both sides.
  */
 

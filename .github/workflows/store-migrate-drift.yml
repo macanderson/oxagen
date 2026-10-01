@@ -145,7 +145,7 @@ jobs:
           script: |
             const fs = require('fs')
             const code = process.env.CODE || '2'
-            const LABEL = 'store-drift'
+            const LABEL = 'STORE-DRIFT'
             const { owner, repo } = context.repo
             const runUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`
 
@@ -172,9 +172,13 @@ jobs:
             catch { detail = '(output unavailable)' }
 
             const behind = code === '1'
-            const title = behind
-              ? 'Production database schema is behind this repository'
-              : 'The store drift check could not read the stores'
+            // The title format in CLAUDE.md under Issue titles. Both verdicts
+            // share one prefix, so moving the title from one statement to the
+            // other leaves the labels the triage pass applied from it correct.
+            const PREFIX = 'P1 T3 S DevOps (Database): '
+            const BEHIND = 'Production database schema is behind this repository'
+            const UNREADABLE = 'The store drift check could not read the stores'
+            const title = PREFIX + (behind ? BEHIND : UNREADABLE)
 
             let body = behind
               ? 'A committed migration has not reached production.\n\n'
@@ -184,20 +188,23 @@ jobs:
                 + 'runs the same script. Read the pending list before setting `apply`: a store whose ledger was lost reports '
                 + 'its whole history as pending, and applying from there is not what you want.\n\n'
                 + 'Until it is applied, `migration-gate` in pipeline.yml blocks every deploy of api and app.\n'
-              : 'The check did not complete, so nothing here says the stores are current — this is not a drift report.\n\n'
+              : 'The check did not complete, so nothing here says the stores are current. This is not a drift report.\n\n'
                 + 'Usual causes are the SSM tunnel not coming up and a credential that no longer reads `/oxagen/production/*`.\n'
 
             body += `\nRun: ${runUrl}\n\n<details><summary>output</summary>\n\n\`\`\`\n${detail}\n\`\`\`\n\n</details>\n`
 
             if (existing) {
-              // Comment, and retitle only UPWARD. A slow tunnel one morning
-              // must not turn an open "the schema is behind" report into "the
-              // check could not read the stores", because the body that
-              // follows would then send the responder to the SSM runbook for a
-              // migration that genuinely has not been applied. infra-drift.yml
-              // never retitles at all; this goes one step further only in the
-              // direction that adds information.
-              if (behind && existing.title !== title) {
+              // Comment, and retitle only UPWARD, from "could not read" to
+              // "behind". A slow tunnel one morning must not turn an open "the
+              // schema is behind" report into "the check could not read the
+              // stores", because the body that follows would then send the
+              // responder to the SSM runbook for a migration that genuinely
+              // has not been applied. The retitle fires only on an unreadable
+              // title this workflow wrote, with the current prefix or the
+              // plain form it used before 2026-09-30. It used to fire on any
+              // title that differed, which undid every retitle a person made.
+              const ownUnreadable = [PREFIX + UNREADABLE, UNREADABLE]
+              if (behind && ownUnreadable.includes(existing.title)) {
                 await github.rest.issues.update({
                   owner, repo, issue_number: existing.number, title,
                 })
@@ -208,7 +215,7 @@ jobs:
               core.info(`commented on #${existing.number}`)
             } else {
               const created = await github.rest.issues.create({
-                owner, repo, title, body, labels: [LABEL, 'triage'],
+                owner, repo, title, body, labels: [LABEL, 'TRIAGE'],
               })
               core.info(`opened #${created.data.number}`)
             }

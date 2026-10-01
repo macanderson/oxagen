@@ -299,7 +299,7 @@ export async function agentStatus(
     );
   writer.write("");
   writer.write("Hosts:");
-  if (result.hosts.length === 0) writer.write("  none (oxagen tacho enroll)");
+  if (result.hosts.length === 0) writer.write("  none (oxagen agent enroll)");
   else
     printTable(
       ["HOST", "HOSTNAME", "STATUS", "MODE", "HOOKS", "LAST SEEN"],

@@ -4,7 +4,7 @@
 // The cloud gateway cannot reach a local server, so a machine in the
 // server's group starts it, lists its tools, and reports them with its own
 // id. The sync PR names the machine the tools came from.
-import type { LocalServerRefusal, LaunchSpec, ToolsReply } from "@oxagen/tacho/local-servers";
+import type { LocalServerRefusal, LaunchSpec, ToolsReply } from "@oxagen/recorder/local-servers";
 import type { LocalGatewayBroker } from "./broker";
 import { LOCAL_CALL_TTL_MS, newNonce } from "./envelope";
 import { checkMachine, type MachineGroupReader, type MachineScope } from "./machines";

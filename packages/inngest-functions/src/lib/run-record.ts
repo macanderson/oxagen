@@ -31,7 +31,7 @@ import {
   type UnflattenReading,
   unflattenEventReading,
   wrappedFrameOf,
-} from "@oxagen/tacho";
+} from "@oxagen/recorder";
 import {
   selectTachoEventRecords,
   selectTachoEvents,
