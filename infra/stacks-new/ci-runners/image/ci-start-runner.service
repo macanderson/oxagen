@@ -1,0 +1,14 @@
+[Unit]
+Description=Register this machine as an ephemeral GitHub Actions runner and run one job
+Wants=network-online.target
+After=network-online.target docker.service ci-local-disk.service
+Requires=docker.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/sbin/ci-start-runner
+StandardOutput=journal+console
+StandardError=journal+console
+
+[Install]
+WantedBy=multi-user.target
