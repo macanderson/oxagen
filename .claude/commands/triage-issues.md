@@ -1,67 +1,77 @@
 ---
-description: Triage every open issue labelled `triage`. Assign priority, kind, size, and area, add the descriptive labels, rewrite the title to `P1 Bug S (Area): Statement`, and strip AI attribution from the body.
+description: Triage every open issue labelled `TRIAGE`. Assign priority, tier, size, kind, and area, add the signal labels, rewrite the title to `P1 T2 S Bug (Area): Statement`, and strip AI attribution from the body.
 argument-hint: "[--all | issue numbers...] [--dry-run]"
 allowed-tools: Bash, Read, Write, Grep, Glob, Agent
 ---
 
 # /triage-issues $ARGUMENTS
 
-Give each issue in the queue a priority, a kind, a size, and an area. Then title it so a reader
-can understand it from the list without opening it.
+Give each issue in the queue a priority, a model tier, a size, a kind, and an area. Then title it
+so a reader can understand it from the list without opening it.
 
 **Scope:** `$ARGUMENTS`.
-- Blank: every open issue in `macanderson/oxagen` labelled `triage`.
+- Blank: every open issue in `macanderson/oxagen` labelled `TRIAGE`.
 - Issue numbers: those issues only.
 - `--all`: every open issue, triaged or not. Use it only for a backlog sweep.
 - `--dry-run`: print the plan and write nothing.
+
+Mac set this scheme on 2026-09-30 for oxagen and stella. Every label name is uppercase.
 
 ## Before you start
 
 1. Run `env -u CLICOLOR_FORCE -u FORCE_COLOR gh api user --jq .login`. It must print
    `macanderson`. `triage-guard.yml` trusts only that login and `triage-bot`. From any other
-   login the guard strips every priority label, re-adds `triage`, and posts a comment on
+   login the guard strips every priority label, re-adds `TRIAGE`, and posts a comment on
    each issue. If the login is wrong, stop.
 2. Prefix every `gh ... --json` call with `env -u CLICOLOR_FORCE -u FORCE_COLOR`. Forced
    colour corrupts the JSON.
-3. Skip workflow-owned issues. Their workflows write the title and labels. Leave them alone if
-   they carry `deployment-failure`, `main-unverified`, `infra-drift`, or `store-drift`. For an
-   issue labelled `agent-escalated`, retitle it but keep that label, because stella's
-   backlog loop owns it.
+3. Do not retitle a workflow-owned issue, one that carries `DEPLOYMENT-FAILURE`,
+   `MAIN-UNVERIFIED`, `INFRA-DRIFT`, or `STORE-DRIFT`. Its workflow writes the title, and the
+   title already names a priority, tier, size, kind, and area. Add whichever of those five
+   labels the issue lacks, so its labels agree with its title and `triage-guard.yml` takes it
+   out of the queue. If an older issue's title has no prefix, copy the title its workflow
+   writes today. `DEPLOYMENT-FAILURE` and `MAIN-UNVERIFIED` issues never enter the queue, so
+   only an `--all` sweep reaches them. For an issue labelled `AGENT-ESCALATED`, retitle it but
+   keep that label, because stella's backlog loop owns it.
 
 ```sh
 env -u CLICOLOR_FORCE -u FORCE_COLOR gh issue list --repo macanderson/oxagen --state open \
-  --label triage --limit 500 --json number,title,labels,body,url
+  --label TRIAGE --limit 500 --json number,title,labels,body,url
 ```
 
 ## Title format
 
 ```
-P<n> <Kind> <Size> (<Area>): <Statement>
+<Priority> <Tier> <Size> <Kind> (<Area>): <Statement>
 ```
 
 Examples:
 
 ```
-P0 Bug XS (CI): Main stays red because the coverage step reads a stale lockfile
-P1 Feature L (Steering): Bulk import memories from Markdown files
-P2 Feature M (CLI): Import memories in bulk from the command line
-P2 Bug S (App shell): The breadcrumb ends on a raw id instead of the record's name (residue #4190)
+P0 T3 XS Bug (CI): Main stays red because the coverage step reads a stale lockfile
+P1 T3 XS Bug (Runs): The run header shows no logo for the agent harness
+P1 T3 L Feature (Steering): Bulk import memories from Markdown files
+P2 T2 M Improvement (CLI): Import memories in bulk from the command line
+P2 T2 S Bug (App shell): The breadcrumb ends on a raw id instead of the record's name (residue #4190)
+P1 T3 L Feature (Repositories): [C2] Turn GitHub issues in the repos a collector names into work items
 ```
 
 Each part copies a label, so the title and the labels always agree:
 
 | Part | Comes from | Values |
 |---|---|---|
-| `P<n>` | the priority label | `P0` `P1` `P2` `P3` `P4` |
-| `<Kind>` | the `kind:` label | `Bug` (`kind:defect`), `Gap` (`kind:gap`), `Feature` (`kind:feature`), `Debt` (`kind:debt`) |
-| `<Size>` | the `size/` label | `XS` `S` `M` `L` `XL` |
-| `(<Area>)` | the `area:` label | the title name in the area table below |
+| `<Priority>` | the priority label | `P0` `P1` `P2` `P3` `P4` |
+| `<Tier>` | the `MODEL:` label | `T1` `T2` `T3` `T4` |
+| `<Size>` | the `SIZE:` label | `XS` `S` `M` `L` `XL` |
+| `<Kind>` | the `KIND:` label | `Bug` `Feature` `Improvement` `Chore` `Documentation` `DevOps` |
+| `(<Area>)` | the `AREA:` label | the title name in the area table below |
 
-Before triage, a creator writes `Queued <Kind> (<Area>): <Statement>` and applies only `triage`.
+Before triage, a creator writes `Queued <Kind> (<Area>): <Statement>` and applies only `TRIAGE`.
 The kind and area in that title are the creator's guess. Triage replaces `Queued` with the
-priority, adds the size, and corrects the kind and area.
+priority, the tier, and the size, and corrects the kind and area.
 
-A residue issue keeps its trailing `(residue #<PR>)`. List every PR when it carries more than one.
+A lane tag such as `[C0]` goes at the start of the statement, after the colon. A residue issue
+keeps its trailing `(residue #<PR>)`. List every PR when it carries more than one.
 
 ### The statement
 
@@ -70,9 +80,13 @@ before you write it.
 
 - **Bug:** say what goes wrong, as a sentence about the product. "Approving a parked tool call
   never runs it" is right. "Fix approvals" is not.
-- **Gap and Feature:** name what a person will be able to do once the work lands. "Bulk import
-  memories from Markdown files" is right. "Memory import" is too vague.
-- **Debt:** name the cleanup and what it buys. "Remove the unused v1 hook installer" is right.
+- **Feature and Improvement:** name what a person will be able to do once the work lands. "Bulk
+  import memories from Markdown files" is right. "Memory import" is too vague.
+- **Chore:** name the cleanup and what it buys. "Remove the unused v1 hook installer" is right.
+- **Documentation:** name the document and what its reader learns. "Explain how a workspace
+  connects its steering repo" is right.
+- **DevOps:** name the change to CI, deploys, or tooling and what it fixes. "Stop the nightly
+  build from retrying a failed deploy" is right.
 - **Plain words.** Someone who has never opened the codebase should follow it. Leave out
   function names, file paths, table names, flags, and internal terms such as frames, seal,
   WAL, belt entry, GAU, or trailer. Say what the person sees instead: "a run", "the tool list",
@@ -89,61 +103,112 @@ Every triaged issue carries exactly one of each of these:
 
 | Dimension | Labels | How to choose |
 |---|---|---|
-| Priority | `P0` `P1` `P2` `P3` `P4` | `P0`: an outage, a security or PII leak, a wrong charge, or a blocked core task with no workaround. `P1`: this cycle. `P2`: next cycle. `P3`: backlog. `P4`: someday. |
-| Kind | `kind:defect` `kind:gap` `kind:feature` `kind:debt` | Defect: something that exists behaves wrongly. Gap: the spec or mockup shows it and the build lacks it. Feature: new capability with a product reason. Debt: maintenance with no visible change. |
-| Size | `size/XS` `size/S` `size/M` `size/L` `size/XL` | Take the largest of effort, risk, and blast radius. XS is under an hour, S half a day, M a day, L several days, XL a week or more. |
-| Area | one `area:` label from the table below | Where a person meets the problem. When it spans two, pick the one the fix changes most. |
-| Job | `job:govern` `job:ground` `job:explain` `job:meter` `job:rate` | The product job it serves (`docs/VISION.md`). |
+| Priority | `P0` `P1` `P2` `P3` `P4` | `P0`: drop everything for an outage, a security or data leak, a wrong charge, or a blocked core task with no workaround. `P1`: this cycle. `P2`: next cycle. `P3`: backlog. `P4`: someday, speculative. |
+| Tier | `MODEL:T1` `MODEL:T2` `MODEL:T3` `MODEL:T4` | The model the work needs. See the tier table below. |
+| Size | `SIZE:EXTRA-SMALL` `SIZE:SMALL` `SIZE:MEDIUM` `SIZE:LARGE` `SIZE:EXTRA-LARGE` | Agent minutes to a merge-ready pull request. See the size table below. |
+| Kind | `KIND:BUG` `KIND:FEATURE` `KIND:IMPROVEMENT` `KIND:CHORE` `KIND:DOCUMENTATION` `KIND:DEVOPS` | See the kind table below. |
+| Area | one `AREA:` label from the table below | Where a person meets the problem. When it spans two, pick the one the fix changes most. |
 
 Then add these where they apply:
 
 | Label | Apply when |
 |---|---|
-| `pillar:*` (one or more) | Fixing it moves stability, reliability, maintainability, innovation, efficiency, or performance. Pick the one or two it moves most, not every one that fits. |
-| `security` | The issue involves credentials, secrets, tenant isolation, access control, or personal data. |
-| `needs:decision` | Only when the body asks the maintainer a specific question and the work is blocked until the answer. Mentioning SCR-004 case 1 is not enough. Remove it from issues that ask nothing. |
-| `needs:rig` | The work needs a rig, a credential, or real spend that only the maintainer can supply. |
+| `JOB:GOVERN` `JOB:GROUND` `JOB:EXPLAIN` `JOB:METER` `JOB:RATE` | The product job the work serves (`docs/VISION.md`). Most issues serve one. |
+| `PILLAR:*` (one or more) | Fixing it moves stability, reliability, maintainability, innovation, efficiency, or performance. Pick the one or two it moves most, not every one that fits. |
+| `SECURITY` | The issue involves credentials, secrets, tenant isolation, access control, or personal data. |
+| `NEEDS:DECISION` | Only when the body asks the maintainer a specific question and the work is blocked until the answer. Mentioning SCR-004 case 1 is not enough. Remove it from issues that ask nothing. |
+| `NEEDS:RIG` | The work needs a rig, a credential, or real spend that only the maintainer can supply. |
+| `BLOCKED` | The work is correct but must not start yet. The body names what it waits on. |
 
-Adding a priority label from the `macanderson` login makes `triage-guard.yml` remove `triage`.
-Do not remove `triage` yourself when you add a priority.
+Adding a priority label from the `macanderson` login makes `triage-guard.yml` remove `TRIAGE`.
+Do not remove `TRIAGE` yourself when you add a priority.
+
+### Tiers
+
+Mac reinstated the model-tier labels on 2026-09-30. This supersedes the 2026-09-25 rule that
+retired `model:tier-*` and left the choice of model to the harness.
+
+| Tier | Label | Model | Choose it when |
+|---|---|---|---|
+| T1 | `MODEL:T1` | Haiku | The work is mechanical and fully specified: a rename, a copy fix, a regenerated file. |
+| T2 | `MODEL:T2` | Sonnet | The work is routine implementation from a clear spec. |
+| T3 | `MODEL:T3` | Opus | The work needs judgment across packages, invariants, security, or migrations. |
+| T4 | `MODEL:T4` | Fable | The work is architecture-critical or a novel design. |
+
+### Sizes
+
+Size counts the agent minutes from the start of the work to a merge-ready pull request. Move up
+one size when the change carries high risk or a wide blast radius.
+
+| Size | Label | Agent minutes |
+|---|---|---|
+| XS | `SIZE:EXTRA-SMALL` | 30 or fewer |
+| S | `SIZE:SMALL` | 31 to 90 |
+| M | `SIZE:MEDIUM` | 91 to 240 |
+| L | `SIZE:LARGE` | 241 to 480 |
+| XL | `SIZE:EXTRA-LARGE` | More than 480, a lane that spans several sessions |
+
+### Kinds
+
+| Label | Title word | Use it when |
+|---|---|---|
+| `KIND:BUG` | Bug | Something that exists behaves wrongly. |
+| `KIND:FEATURE` | Feature | The work adds a capability a person can use, and none of it exists yet. |
+| `KIND:IMPROVEMENT` | Improvement | The work makes an existing capability better: polish, speed, a missing option, or a gap where the spec or mockup shows more than the build has. |
+| `KIND:CHORE` | Chore | The work is maintenance with no visible change: a refactor, a dependency, dead code, or test hygiene. |
+| `KIND:DOCUMENTATION` | Documentation | Docs, READMEs, ADRs, specs, or help text are the main deliverable. |
+| `KIND:DEVOPS` | DevOps | The work changes CI, workflows, deploys, infrastructure, releases, or developer tooling. |
+
+The old kinds map this way: `kind:defect` is `KIND:BUG`, `kind:feature` is `KIND:FEATURE`, and
+`kind:debt` is `KIND:CHORE`. A `kind:gap` issue becomes `KIND:FEATURE` when nothing of it is
+built and `KIND:IMPROVEMENT` when part of it is.
 
 ### Areas
 
 | Label | Title name | Covers |
 |---|---|---|
-| `area:fleet` | Fleet | The workspace home page: live runs, pending approvals, and fleet status |
-| `area:runs` | Runs | The Run page and the run record: transcript, evidence, proof, audit trail, and exports |
-| `area:mandates` | Mandates | Mandates and policy: access, approvals, decision rules, and enforcement |
-| `area:agents` | Agents | Agent registry, identities, roles, enrolled hosts, and runtimes |
-| `area:tools` | Tools | Tools, MCP servers, connections, and the tools an agent is given |
-| `area:steering` | Steering | Steering, context records, memory, the knowledge graph, and ingestion |
-| `area:skills` | Skills | The Skills page, skill publishing, and skill sync |
-| `area:spend` | Spend | Spend, metering, budgets, ceilings, and cost attribution |
-| `area:billing` | Billing | Plans, Stripe, credits, invoices, and checkout |
-| `area:organization` | Organization | Members, roles, invitations, workspaces, API keys, and model funding |
-| `area:auth` | Auth | Sign-in, sessions, two-factor, SSO, IAM checks, and tenant isolation |
-| `area:onboarding` | Onboarding | Sign-up, first run, and the register-an-agent wizard |
-| `area:repositories` | Repositories | Connected GitHub repositories, bindings, and context pull requests |
-| `area:stella` | Stella | The in-app assistant: its tools, turns, and history |
-| `area:app-shell` | App shell | Navigation, top bar, sidebar, breadcrumbs, layout, and theme |
-| `area:tacho` | Tacho | The host recorder: hooks, daemon, enrollment, and what it captures and ships |
-| `area:desktop` | Desktop | The desktop app and its installers |
-| `area:gateway` | Gateway | The model gateway, provider keys, and model routing |
-| `area:api` | API | The HTTP API and SDKs |
-| `area:mcp` | MCP | The Oxagen MCP server and its tools |
-| `area:cli` | CLI | The `oxagen` command-line tool |
-| `area:database` | Database | Postgres, ClickHouse, and Neo4j schema, migrations, queries, and row-level security |
-| `area:ci` | CI | GitHub Actions, checks, git hooks, and developer tooling |
-| `area:deploy` | Deploy | Infrastructure, production deploys, releases, and operations |
-| `area:docs` | Docs | The docs site, the website, READMEs, ADRs, and specs |
-| `area:compliance` | Compliance | Audit events, SOC 2 controls, and security evidence |
+| `AREA:FLEET` | Fleet | The workspace home page, live runs, pending approvals, and fleet status |
+| `AREA:RUNS` | Runs | The Run page and the run record, transcript, evidence, proof, audit trail, and exports |
+| `AREA:MANDATES` | Mandates | Access, approvals, decision rules, and enforcement |
+| `AREA:AGENTS` | Agents | Registry, identities, roles, enrolled hosts, and runtimes |
+| `AREA:TOOLS` | Tools | MCP servers, connections, and the tools an agent is given |
+| `AREA:STEERING` | Steering | Context records, memory, the knowledge graph, and ingestion |
+| `AREA:SKILLS` | Skills | The Skills page, skill publishing, and skill sync |
+| `AREA:SPEND` | Spend | Metering, budgets, ceilings, and cost attribution |
+| `AREA:BILLING` | Billing | Plans, Stripe, credits, invoices, and checkout |
+| `AREA:ORGANIZATION` | Organization | Members, roles, invitations, workspaces, API keys, and model funding |
+| `AREA:AUTH` | Auth | Sign-in, sessions, two-factor, SSO, IAM checks, and tenant isolation |
+| `AREA:ONBOARDING` | Onboarding | Sign-up, first run, and the register-an-agent wizard |
+| `AREA:REPOSITORIES` | Repositories | Connected GitHub repositories, bindings, and context pull requests |
+| `AREA:STELLA` | Stella | The in-app assistant, its tools, turns, and history |
+| `AREA:APP-SHELL` | App shell | Navigation, top bar, sidebar, breadcrumbs, layout, and theme |
+| `AREA:TACHO` | Tacho | The host recorder, hooks, daemon, enrollment, and what it captures and ships |
+| `AREA:DESKTOP` | Desktop | The desktop app and its installers |
+| `AREA:GATEWAY` | Gateway | The model gateway, provider keys, and model routing |
+| `AREA:API` | API | The HTTP API and SDKs |
+| `AREA:MCP` | MCP | The Oxagen MCP server and its tools |
+| `AREA:CLI` | CLI | The `oxagen` command-line tool |
+| `AREA:DATABASE` | Database | Postgres, ClickHouse, and Neo4j schema, migrations, queries, and row-level security |
+| `AREA:CI` | CI | GitHub Actions, checks, git hooks, and developer tooling |
+| `AREA:DEPLOY` | Deploy | Infrastructure, production deploys, releases, and operations |
+| `AREA:DOCS` | Docs | The docs site, the website, READMEs, ADRs, and specs |
+| `AREA:COMPLIANCE` | Compliance | Audit events, SOC 2 controls, and security evidence |
 
 ### Labels that no longer exist
 
-Do not apply these, and remove any you find: `build-time:*`, `model:tier-*`, `schema-change`
-(use `migration-required`, which `migration-label.yml` applies to PRs), and the old code-owner
-areas `area:app`, `area:data`, `area:evidence`, `area:kernel`, `area:knowledge`, `area:ops`,
-`area:platform`, and `area:surfaces`. Size carries effort. The harness picks the model.
+Do not apply these, and remove any you find:
+
+- **Every lowercase label.** The 2026-09-30 scheme renames each one to its uppercase name:
+  `triage` is `TRIAGE`, `area:runs` is `AREA:RUNS`, and `size/S` is `SIZE:SMALL`. GitHub matches a label
+  name without regard to case when you add one, so a lowercase name still adds the uppercase
+  label. Write the uppercase name anyway.
+- **`kind:gap`.** Use `KIND:FEATURE` or `KIND:IMPROVEMENT`, as the kind table says.
+- **`build-time:*`.** Size carries effort.
+- **`schema-change`.** Pull requests use `MIGRATION-REQUIRED`, which `migration-label.yml`
+  applies.
+- **The old code-owner areas** `area:app`, `area:data`, `area:evidence`, `area:kernel`,
+  `area:knowledge`, `area:ops`, `area:platform`, and `area:surfaces`. They have no uppercase
+  successor.
 
 ## Attribution
 
@@ -160,9 +225,10 @@ You cannot edit it.
 
 ## Procedure
 
-1. List the scope and skip the workflow-owned issues.
-2. For each issue, read the full body and the labels it already has. Decide priority, kind, size,
-   area, job, pillars, `security`, and the `needs:` labels. Write the statement.
+1. List the scope. Handle each workflow-owned issue as step 3 of Before you start says.
+2. For each issue, read the full body and the labels it already has. Decide priority, tier,
+   size, kind, area, job, pillars, `SECURITY`, `BLOCKED`, and the `NEEDS:` labels. Write the
+   statement.
 3. Print the plan as a table: number, old title, new title, labels added, labels removed.
    With `--dry-run`, stop here.
 4. Apply each row, one issue at a time, with a one-second pause between writes to stay under
@@ -170,14 +236,16 @@ You cannot edit it.
 
    ```sh
    gh issue edit <n> --repo macanderson/oxagen --title "<new title>" \
-     --add-label "P2,kind:defect,size/S,area:runs,job:explain,pillar:reliability" \
+     --add-label "P2,MODEL:T2,SIZE:SMALL,KIND:BUG,AREA:RUNS,JOB:EXPLAIN,PILLAR:RELIABILITY" \
      --remove-label "<labels that should go>"
    ```
 
    For attribution, save the body to a file, delete the attribution lines, show the diff, and
    write it back with `gh issue edit <n> --body-file <file>`. Edit a comment with
-   `gh api -X PATCH repos/macanderson/oxagen/issues/comments/<id> -F body=@<file>` (`-F`
-   reads the file; `-f` would send the literal text `@<file>`).
-5. Read each issue back. Its title must match `^P[0-4] (Bug|Gap|Feature|Debt) (XS|S|M|L|XL) \([A-Za-z ]+\): `,
-   and it must carry one priority, one kind, one size, one area, and no `triage`. Report
-   any issue that failed and the reason.
+   `gh api -X PATCH repos/macanderson/oxagen/issues/comments/<id> -F body=@<file>`. Use `-F`,
+   which reads the file. `-f` would send the literal text `@<file>`.
+5. Read each issue back. Its title must match
+   `^P[0-4] T[1-4] (XS|S|M|L|XL) (Bug|Feature|Improvement|Chore|Documentation|DevOps) \([A-Za-z ]+\): `,
+   and it must carry one priority, one `MODEL:`, one `SIZE:`, one `KIND:`, one `AREA:`, and no
+   `TRIAGE`. Compare label names without regard to case. Report any issue that failed and the
+   reason.
