@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import {
   mkdirSync,
   mkdtempSync,
@@ -11,14 +12,22 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
+  advancesFeed,
   advancesLatest,
+  checksumFileText,
+  classifyExecutable,
   classifyInstaller,
+  classifyUpdaterArchive,
   compareVersions,
   countPublishedObjects,
+  EXECUTABLE_TARGETS,
+  type ExecutableEntry,
+  FEED_BASE_PLATFORMS,
   isBuildVersion,
   LATEST_CACHE_CONTROL,
   latestCopyArgs,
   latestManifest,
+  missingFeedPlatforms,
   readLatestVersion,
   decidePublication,
   FONT_FILES,
@@ -30,7 +39,11 @@ import {
   reportPublicationDecision,
   reservationArgs,
   sha256SumsText,
+  signedFileOf,
+  sortExecutables,
   sortInstallers,
+  UPDATE_FEED_KEY,
+  updateFeed,
   updatesItself,
 } from "./downloads";
 
@@ -43,6 +56,17 @@ const FILES = [
   "Oxagen_2.1.1_amd64.deb",
   "Oxagen-2.1.1-1.x86_64.rpm",
   "Oxagen_2.1.1_amd64.AppImage",
+];
+
+const EXE_FILES = [
+  "oxagen-aarch64-apple-darwin",
+  "tacho-aarch64-apple-darwin",
+  "oxagen-x86_64-apple-darwin",
+  "tacho-x86_64-apple-darwin",
+  "oxagen-x86_64-pc-windows-msvc.exe",
+  "tacho-x86_64-pc-windows-msvc.exe",
+  "oxagen-x86_64-unknown-linux-gnu",
+  "tacho-x86_64-unknown-linux-gnu",
 ];
 
 describe("classifyInstaller", () => {
@@ -196,6 +220,245 @@ describe("builds of main", () => {
     expect(html).not.toContain(`releases/v${B}`);
     expect(html).not.toContain(`desktop-v${B}`);
     expect(releaseLinks(B).notes).toBe("https://docs.oxagen.sh/docs/releases");
+  });
+});
+
+describe("the bare executables", () => {
+  it("recognises the eight files the sidecar step writes, in page order", () => {
+    const shuffled = [...EXE_FILES].reverse();
+    const got = sortExecutables(
+      shuffled.map((f) => classifyExecutable(f)!),
+    ).map((e) => e.file);
+    expect(got).toEqual(EXE_FILES);
+    const mac = classifyExecutable("oxagen-aarch64-apple-darwin")!;
+    expect(mac).toMatchObject({
+      name: "oxagen",
+      os: "macOS",
+      variant: "Apple silicon",
+      triple: "aarch64-apple-darwin",
+      contentType: "application/octet-stream",
+      latest: "oxagen-aarch64-apple-darwin",
+    });
+    expect(classifyExecutable("tacho-x86_64-pc-windows-msvc.exe")?.os).toBe(
+      "Windows",
+    );
+    expect(EXECUTABLE_TARGETS.map((t) => t.triple)).toEqual([
+      "aarch64-apple-darwin",
+      "x86_64-apple-darwin",
+      "x86_64-pc-windows-msvc",
+      "x86_64-unknown-linux-gnu",
+    ]);
+  });
+
+  it("ignores checksum files, wrong extensions, and other names", () => {
+    for (const other of [
+      "oxagen-aarch64-apple-darwin.sha256",
+      "oxagen-aarch64-apple-darwin.exe",
+      "oxagen-x86_64-pc-windows-msvc",
+      "stella-aarch64-apple-darwin",
+      "oxagen-riscv64gc-unknown-linux-gnu",
+      "Oxagen_2.1.1_aarch64.dmg",
+    ]) {
+      expect(classifyExecutable(other), other).toBeNull();
+    }
+    expect(sortExecutables([])).toEqual([]);
+  });
+
+  it("writes the one-line checksum shasum -c reads", () => {
+    expect(
+      checksumFileText({
+        file: "oxagen-aarch64-apple-darwin",
+        sha256: "d".repeat(64),
+      }),
+    ).toBe(`${"d".repeat(64)}  oxagen-aarch64-apple-darwin\n`);
+  });
+
+  it("follow the newest version under latest/ with their checksums", () => {
+    const executables: ExecutableEntry[] = EXE_FILES.map((f) => ({
+      ...classifyExecutable(f)!,
+      bytes: 5,
+      sha256: "e".repeat(64),
+    }));
+    const manifest = latestManifest({
+      version: "2.2.0",
+      publishedAt: "2026-10-01",
+      entries: [],
+      executables: [...executables].reverse(),
+      host: "downloads.oxagen.sh",
+    });
+    expect(manifest.executables.map((e) => e.file)).toEqual(EXE_FILES);
+    expect(manifest.executables[0]).toEqual({
+      name: "oxagen",
+      os: "macOS",
+      variant: "Apple silicon",
+      triple: "aarch64-apple-darwin",
+      file: "oxagen-aarch64-apple-darwin",
+      url: "https://downloads.oxagen.sh/desktop/2.2.0/oxagen-aarch64-apple-darwin",
+      latestUrl:
+        "https://downloads.oxagen.sh/latest/oxagen-aarch64-apple-darwin",
+      bytes: 5,
+      sha256: "e".repeat(64),
+    });
+    // A manifest written without executables still has the field.
+    expect(
+      latestManifest({
+        version: "2.1.3",
+        publishedAt: "d",
+        entries: [],
+        host: "h",
+      }).executables,
+    ).toEqual([]);
+    const args = latestCopyArgs({
+      bucket: "b",
+      version: "2.2.0",
+      entry: {
+        file: "oxagen-aarch64-apple-darwin.sha256",
+        latest: "oxagen-aarch64-apple-darwin.sha256",
+        contentType: "text/plain; charset=utf-8",
+      },
+    });
+    expect(args.slice(0, 4)).toEqual([
+      "s3",
+      "cp",
+      "s3://b/desktop/2.2.0/oxagen-aarch64-apple-darwin.sha256",
+      "s3://b/latest/oxagen-aarch64-apple-darwin.sha256",
+    ]);
+  });
+});
+
+describe("the update feed", () => {
+  const R = "2.2.0";
+  const SIGNED = [
+    `Oxagen_${R}_aarch64.app.tar.gz`,
+    `Oxagen_${R}_x64.app.tar.gz`,
+    `Oxagen_${R}_x64_en-US.msi`,
+    `Oxagen_${R}_x64-setup.exe`,
+    `Oxagen_${R}_amd64.AppImage`,
+    `Oxagen_${R}_amd64.deb`,
+    `Oxagen-${R}-1.x86_64.rpm`,
+  ];
+  const sig = (file: string) => ({ file, signature: ` sig-of-${file}\n` });
+
+  it("lives outside desktop/, which only holds files that never change", () => {
+    expect(UPDATE_FEED_KEY).toBe("updater/latest.json");
+    const conf = JSON.parse(
+      readFileSync(
+        new URL("../src-tauri/tauri.conf.json", import.meta.url),
+        "utf8",
+      ),
+    ) as { plugins: { updater: { endpoints: string[] } } };
+    expect(conf.plugins.updater.endpoints).toEqual([
+      `https://downloads.oxagen.sh/${UPDATE_FEED_KEY}`,
+    ]);
+  });
+
+  it("names the macOS archives, which the build job renames by version and arch", () => {
+    expect(classifyUpdaterArchive(`Oxagen_${R}_aarch64.app.tar.gz`, R)).toEqual(
+      { file: `Oxagen_${R}_aarch64.app.tar.gz`, contentType: "application/gzip" },
+    );
+    expect(classifyUpdaterArchive(`Oxagen_${R}_x64.app.tar.gz`, R)?.file).toBe(
+      `Oxagen_${R}_x64.app.tar.gz`,
+    );
+    // The bundler's own name, before the rename, and another version's.
+    expect(classifyUpdaterArchive("Oxagen.app.tar.gz", R)).toBeNull();
+    expect(classifyUpdaterArchive("Oxagen_2.1.3_x64.app.tar.gz", R)).toBeNull();
+  });
+
+  it("reads a signature only for a file the updater can install", () => {
+    for (const file of SIGNED) expect(signedFileOf(`${file}.sig`, R)).toBe(file);
+    for (const other of [
+      `Oxagen_${R}_aarch64.dmg.sig`,
+      "Oxagen.app.tar.gz.sig",
+      "Oxagen_2.1.3_amd64.AppImage.sig",
+      `Oxagen_${R}_amd64.AppImage`,
+      "oxagen-aarch64-apple-darwin.sig",
+    ]) {
+      expect(signedFileOf(other, R), other).toBeNull();
+    }
+  });
+
+  it("carries the keys the GitHub feed carried, with the host's versioned URLs", () => {
+    const feed = updateFeed({
+      version: R,
+      pubDate: "2026-10-01T00:00:00.000Z",
+      host: "downloads.oxagen.sh",
+      signed: SIGNED.map(sig),
+    });
+    expect(feed.version).toBe(R);
+    expect(feed.pub_date).toBe("2026-10-01T00:00:00.000Z");
+    expect(feed.notes).toBe(
+      `What changed: https://docs.oxagen.sh/docs/releases/v${R}`,
+    );
+    // The keys desktop-latest/latest.json served for 2.1.3.
+    expect(Object.keys(feed.platforms).sort()).toEqual(
+      [
+        "darwin-aarch64",
+        "darwin-aarch64-app",
+        "darwin-x86_64",
+        "darwin-x86_64-app",
+        "linux-x86_64",
+        "linux-x86_64-appimage",
+        "linux-x86_64-deb",
+        "linux-x86_64-rpm",
+        "windows-x86_64",
+        "windows-x86_64-msi",
+        "windows-x86_64-nsis",
+      ].sort(),
+    );
+    const base = `https://downloads.oxagen.sh/desktop/${R}`;
+    expect(feed.platforms["darwin-aarch64"]).toEqual({
+      signature: `sig-of-Oxagen_${R}_aarch64.app.tar.gz`,
+      url: `${base}/Oxagen_${R}_aarch64.app.tar.gz`,
+    });
+    // Windows without a bundle type gets the .msi, as tauri-action chose.
+    expect(feed.platforms["windows-x86_64"]?.url).toBe(
+      `${base}/Oxagen_${R}_x64_en-US.msi`,
+    );
+    expect(feed.platforms["windows-x86_64-nsis"]?.url).toBe(
+      `${base}/Oxagen_${R}_x64-setup.exe`,
+    );
+    expect(feed.platforms["linux-x86_64"]?.url).toBe(
+      `${base}/Oxagen_${R}_amd64.AppImage`,
+    );
+    expect(missingFeedPlatforms(feed)).toEqual([]);
+    expect(JSON.stringify(feed)).not.toContain("github.com");
+  });
+
+  it("names the platforms a partial feed leaves without an update", () => {
+    const feed = updateFeed({
+      version: R,
+      pubDate: "d",
+      host: "h",
+      signed: [sig(`Oxagen_${R}_amd64.deb`)],
+    });
+    expect(Object.keys(feed.platforms)).toEqual(["linux-x86_64-deb"]);
+    expect(missingFeedPlatforms(feed)).toEqual([...FEED_BASE_PLATFORMS]);
+  });
+
+  it("refuses a deploy build, a stranger version, and an empty signature", () => {
+    expect(() =>
+      updateFeed({ version: "2.2.1-4", pubDate: "d", host: "h", signed: [] }),
+    ).toThrow(/releases only/);
+    expect(() =>
+      updateFeed({ version: "v2.2.0", pubDate: "d", host: "h", signed: [] }),
+    ).toThrow(/releases only/);
+    expect(() =>
+      updateFeed({
+        version: R,
+        pubDate: "d",
+        host: "h",
+        signed: [{ file: `Oxagen_${R}_amd64.deb`, signature: " \n" }],
+      }),
+    ).toThrow(/is empty/);
+  });
+
+  it("moves forward on releases only", () => {
+    expect(advancesFeed(null, "2.2.0")).toBe(true);
+    expect(advancesFeed("2.1.3", "2.2.0")).toBe(true);
+    expect(advancesFeed("2.2.0", "2.2.0")).toBe(true);
+    expect(advancesFeed("2.2.0", "2.1.4")).toBe(false);
+    expect(advancesFeed(null, "2.2.1-4")).toBe(false);
+    expect(advancesFeed("2.1.3", "2.2.1-4")).toBe(false);
   });
 });
 
@@ -464,12 +727,10 @@ describe("page helpers", () => {
     expect(nav.pages).toContain("desktop");
   });
 
-  it("links every version to its release notes and its GitHub release", () => {
+  it("links every version to its release notes and never to a GitHub release", () => {
     expect(releaseLinks("2.1.1")).toEqual({
       notes: "https://docs.oxagen.sh/docs/releases/v2.1.1",
       allReleases: "https://docs.oxagen.sh/docs/releases",
-      githubRelease:
-        "https://github.com/macanderson/oxagen/releases/tag/desktop-v2.1.1",
     });
     expect(releaseLinks("2 1").notes).toBe(
       "https://docs.oxagen.sh/docs/releases/v2%201",
@@ -482,9 +743,44 @@ describe("page helpers", () => {
     expect(html).toContain(
       'href="https://docs.oxagen.sh/docs/releases/v2.1.1"',
     );
-    expect(html).toContain(
-      'href="https://github.com/macanderson/oxagen/releases/tag/desktop-v2.1.1"',
-    );
+    // The repository is private and has moved more than once (ADR-245).
+    expect(html).not.toContain("github.com");
+  });
+
+  it("lists the bare executables on the host, and none for a version without them", () => {
+    const executables = EXE_FILES.map((f) => ({
+      ...classifyExecutable(f)!,
+      bytes: 1,
+      sha256: "c".repeat(64),
+    }));
+    const html = renderIndexHtml({
+      version: "2.2.0",
+      entries: [],
+      executables,
+      publishedAt: "d",
+    });
+    for (const file of EXE_FILES)
+      expect(html).toContain(`href="desktop/2.2.0/${file}"`);
+    expect(html).toContain("macOS Apple silicon");
+    expect(html).toContain("Linux x86_64");
+    expect(html).toContain("rename it to <code>oxagen</code>");
+    // A build lists them too: they are on the host for every version.
+    expect(
+      renderIndexHtml({
+        version: "2.2.1-3",
+        entries: [],
+        executables: executables.slice(0, 2),
+        publishedAt: "d",
+      }),
+    ).toContain('href="desktop/2.2.1-3/oxagen-aarch64-apple-darwin"');
+    const none = renderIndexHtml({
+      version: "2.1.3",
+      entries: [],
+      publishedAt: "d",
+    });
+    expect(none).toContain("links onto your PATH on first launch.</p>");
+    expect(none).not.toContain("rename it to");
+    expect(none).not.toContain("oxagen-aarch64-apple-darwin");
   });
 });
 
@@ -696,24 +992,14 @@ describe("reportPublicationDecision", () => {
   });
 });
 
-describe("resuming an interrupted publish", () => {
-  it("uploads missing installers before publishing the page", () => {
-    const dir = mkdtempSync(join(tmpdir(), "downloads-resume-test-"));
-    try {
-      const source = join(dir, "installers");
-      const bin = join(dir, "bin");
-      mkdirSync(source);
-      mkdirSync(bin);
-      const file = "Oxagen_2.1.1_aarch64.dmg";
-      writeFileSync(join(source, file), "installer bytes");
-      const statePath = join(dir, "bucket.json");
-      writeFileSync(
-        statePath,
-        JSON.stringify({ objects: {}, interrupted: false, writes: [] }),
-      );
-      writeFileSync(
-        join(bin, "aws"),
-        `#!/usr/bin/env node
+/**
+ * A stand-in for `aws` that keeps the bucket in a JSON file
+ * (`TEST_BUCKET_STATE`): `objects` by key, `writes` in order, and the
+ * `--content-disposition` of each server-side copy. The first `.dmg` upload
+ * fails once while `interrupted` is false, which is how a test interrupts a
+ * publish.
+ */
+const FAKE_AWS = `#!/usr/bin/env node
 const fs = require("node:fs");
 const args = process.argv.slice(2);
 const path = process.env.TEST_BUCKET_STATE;
@@ -757,9 +1043,24 @@ if (args[0] === "s3api" && args[1] === "list-objects-v2") {
 } else {
   throw new Error("Unexpected AWS request: " + args.join(" "));
 }
-`,
-        { mode: 0o755 },
+`;
+
+describe("resuming an interrupted publish", () => {
+  it("uploads missing installers before publishing the page", () => {
+    const dir = mkdtempSync(join(tmpdir(), "downloads-resume-test-"));
+    try {
+      const source = join(dir, "installers");
+      const bin = join(dir, "bin");
+      mkdirSync(source);
+      mkdirSync(bin);
+      const file = "Oxagen_2.1.1_aarch64.dmg";
+      writeFileSync(join(source, file), "installer bytes");
+      const statePath = join(dir, "bucket.json");
+      writeFileSync(
+        statePath,
+        JSON.stringify({ objects: {}, interrupted: false, writes: [] }),
       );
+      writeFileSync(join(bin, "aws"), FAKE_AWS, { mode: 0o755 });
       const run = (...args: string[]) =>
         spawnSync(
           process.execPath,
@@ -912,6 +1213,209 @@ if (args[0] === "s3api" && args[1] === "list-objects-v2") {
       };
       expect(untouched.writes).toEqual([]);
       expect(untouched.objects["index.html"]).toBe("the 2.1.2-4 page");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("publishing a release with its executables and update feed", () => {
+  it("uploads every file under the version, moves latest/, and writes the feed for releases only", () => {
+    const dir = mkdtempSync(join(tmpdir(), "downloads-feed-test-"));
+    try {
+      const bin = join(dir, "bin");
+      mkdirSync(bin);
+      writeFileSync(join(bin, "aws"), FAKE_AWS, { mode: 0o755 });
+      const statePath = join(dir, "bucket.json");
+      // `interrupted: true` turns the stand-in's one failed upload off.
+      writeFileSync(
+        statePath,
+        JSON.stringify({ objects: {}, interrupted: true, writes: [] }),
+      );
+      const env = {
+        ...process.env,
+        PATH: `${bin}:${process.env.PATH ?? ""}`,
+        TEST_BUCKET_STATE: statePath,
+      };
+      const state = () =>
+        JSON.parse(readFileSync(statePath, "utf8")) as {
+          objects: Record<string, string>;
+          writes: string[];
+        };
+      // Lay a version out the way download-artifact does: one folder per
+      // leg, the executables under binaries/, the bundles under target/.
+      const lay = (version: string, files: Record<string, string>) => {
+        const root = join(dir, `artifacts-${version}`);
+        for (const [rel, body] of Object.entries(files)) {
+          const path = join(root, rel);
+          mkdirSync(join(path, ".."), { recursive: true });
+          writeFileSync(path, body);
+        }
+        return root;
+      };
+      const publish = (version: string, root: string) =>
+        spawnSync(
+          process.execPath,
+          [
+            fileURLToPath(
+              new URL("../scripts/publish-downloads.mjs", import.meta.url),
+            ),
+            "--dir",
+            root,
+            "--version",
+            version,
+          ],
+          { encoding: "utf8", env },
+        );
+
+      const R = "2.2.0";
+      const mac = "oxagen-desktop-aarch64-apple-darwin";
+      const win = "oxagen-desktop-x86_64-pc-windows-msvc";
+      const lin = "oxagen-desktop-x86_64-unknown-linux-gnu";
+      const bundle = (leg: string, kind: string) =>
+        `${leg}/target/${leg.replace("oxagen-desktop-", "")}/release/bundle/${kind}`;
+      const source = lay(R, {
+        [`${bundle(mac, "dmg")}/Oxagen_${R}_aarch64.dmg`]: "dmg bytes",
+        [`${bundle(mac, "macos")}/Oxagen_${R}_aarch64.app.tar.gz`]:
+          "archive bytes",
+        [`${bundle(mac, "macos")}/Oxagen_${R}_aarch64.app.tar.gz.sig`]:
+          "sig-archive\n",
+        // The bundler's own name, before the build job renames it.
+        [`${bundle(mac, "macos")}/Oxagen.app.tar.gz.sig`]: "stale",
+        [`${mac}/binaries/oxagen-aarch64-apple-darwin`]: "oxagen mac",
+        [`${mac}/binaries/oxagen-aarch64-apple-darwin.sha256`]: "ignored",
+        [`${mac}/binaries/tacho-aarch64-apple-darwin`]: "tacho mac",
+        [`${bundle(win, "msi")}/Oxagen_${R}_x64_en-US.msi`]: "msi bytes",
+        [`${bundle(win, "msi")}/Oxagen_${R}_x64_en-US.msi.sig`]: "sig-msi",
+        [`${bundle(lin, "appimage")}/Oxagen_${R}_amd64.AppImage`]:
+          "appimage bytes",
+        [`${bundle(lin, "appimage")}/Oxagen_${R}_amd64.AppImage.sig`]:
+          "sig-appimage",
+      });
+      const released = publish(R, source);
+      expect(released.status, released.stderr).toBe(0);
+      const after = state();
+      const at = (file: string) => after.objects[`desktop/${R}/${file}`];
+      expect(at("oxagen-aarch64-apple-darwin")).toBe("oxagen mac");
+      const digest = createHash("sha256").update("oxagen mac").digest("hex");
+      expect(at("oxagen-aarch64-apple-darwin.sha256")).toBe(
+        `${digest}  oxagen-aarch64-apple-darwin\n`,
+      );
+      expect(at(`Oxagen_${R}_aarch64.app.tar.gz`)).toBe("archive bytes");
+      expect(at(`Oxagen_${R}_aarch64.app.tar.gz.sig`)).toBe("sig-archive\n");
+      expect(at(`Oxagen_${R}_x64_en-US.msi.sig`)).toBe("sig-msi");
+      expect(at("Oxagen.app.tar.gz.sig")).toBeUndefined();
+      const sums = at("SHA256SUMS.txt") ?? "";
+      for (const file of [
+        `Oxagen_${R}_aarch64.dmg`,
+        `Oxagen_${R}_x64_en-US.msi`,
+        `Oxagen_${R}_amd64.AppImage`,
+        "oxagen-aarch64-apple-darwin",
+        "tacho-aarch64-apple-darwin",
+        `Oxagen_${R}_aarch64.app.tar.gz`,
+      ])
+        expect(sums, file).toContain(`  ${file}\n`);
+      expect(sums).not.toContain(".sig");
+      expect(sums).not.toContain(".sha256");
+
+      // The version-free links carry the executables and their checksums.
+      expect(after.objects["latest/oxagen-aarch64-apple-darwin"]).toBe(
+        "oxagen mac",
+      );
+      expect(after.objects["latest/oxagen-aarch64-apple-darwin.sha256"]).toBe(
+        `${digest}  oxagen-aarch64-apple-darwin\n`,
+      );
+      const listing = JSON.parse(after.objects["latest.json"]!) as {
+        executables: Array<{ file: string; latestUrl: string }>;
+      };
+      expect(listing.executables.map((e) => e.file)).toEqual([
+        "oxagen-aarch64-apple-darwin",
+        "tacho-aarch64-apple-darwin",
+      ]);
+      expect(after.objects["index.html"]).toContain(
+        `href="desktop/${R}/oxagen-aarch64-apple-darwin"`,
+      );
+
+      // The feed names the files on the host, with each signature as text.
+      const feed = JSON.parse(after.objects[UPDATE_FEED_KEY]!) as {
+        version: string;
+        platforms: Record<string, { signature: string; url: string }>;
+      };
+      expect(feed.version).toBe(R);
+      expect(feed.platforms["darwin-aarch64"]).toEqual({
+        signature: "sig-archive",
+        url: `https://downloads.oxagen.sh/desktop/${R}/Oxagen_${R}_aarch64.app.tar.gz`,
+      });
+      expect(feed.platforms["windows-x86_64"]?.signature).toBe("sig-msi");
+      expect(feed.platforms["linux-x86_64-appimage"]?.url).toBe(
+        `https://downloads.oxagen.sh/desktop/${R}/Oxagen_${R}_amd64.AppImage`,
+      );
+      expect(released.stderr).toContain("has no darwin-x86_64");
+      // Every file the feed names went up before the feed did.
+      const feedWrite = after.writes.indexOf(UPDATE_FEED_KEY);
+      for (const key of [
+        `desktop/${R}/Oxagen_${R}_aarch64.app.tar.gz`,
+        `desktop/${R}/Oxagen_${R}_x64_en-US.msi`,
+        `desktop/${R}/Oxagen_${R}_amd64.AppImage.sig`,
+      ])
+        expect(after.writes.indexOf(key), key).toBeLessThan(feedWrite);
+      expect(released.stdout).toContain(
+        `https://downloads.oxagen.sh/${UPDATE_FEED_KEY}`,
+      );
+
+      // A deploy build moves latest/ but never the feed.
+      const B = "2.2.1-3";
+      const build = publish(
+        B,
+        lay(B, {
+          [`${bundle(win, "msi")}/Oxagen_${B}_x64_en-US.msi`]: "build msi",
+          [`${bundle(win, "msi")}/Oxagen_${B}_x64_en-US.msi.sig`]: "sig-b",
+        }),
+      );
+      expect(build.status, build.stderr).toBe(0);
+      const afterBuild = state();
+      expect(afterBuild.objects[`desktop/${B}/Oxagen_${B}_x64_en-US.msi.sig`]).toBe(
+        "sig-b",
+      );
+      expect(
+        (JSON.parse(afterBuild.objects["latest.json"]!) as { version: string })
+          .version,
+      ).toBe(B);
+      expect(afterBuild.objects[UPDATE_FEED_KEY]).toBe(
+        after.objects[UPDATE_FEED_KEY],
+      );
+
+      // An older release finishing late leaves the feed on the newer one.
+      const O = "2.1.9";
+      const older = publish(
+        O,
+        lay(O, {
+          [`${bundle(lin, "appimage")}/Oxagen_${O}_amd64.AppImage`]: "old",
+          [`${bundle(lin, "appimage")}/Oxagen_${O}_amd64.AppImage.sig`]:
+            "sig-old",
+        }),
+      );
+      expect(older.status, older.stderr).toBe(0);
+      expect(older.stderr).toContain(
+        `the update feed names ${R}, newer than ${O}`,
+      );
+      expect(state().objects[UPDATE_FEED_KEY]).toBe(
+        after.objects[UPDATE_FEED_KEY],
+      );
+
+      // A release built without the updater key leaves the feed alone.
+      const U = "2.3.0";
+      const unsigned = publish(
+        U,
+        lay(U, {
+          [`${bundle(lin, "appimage")}/Oxagen_${U}_amd64.AppImage`]: "u",
+        }),
+      );
+      expect(unsigned.status, unsigned.stderr).toBe(0);
+      expect(unsigned.stderr).toContain("carries no updater signatures");
+      expect(state().objects[UPDATE_FEED_KEY]).toBe(
+        after.objects[UPDATE_FEED_KEY],
+      );
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

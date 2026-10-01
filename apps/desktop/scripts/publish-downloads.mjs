@@ -9,20 +9,29 @@
  *
  * With --run it fetches every artifact of a `.github/workflows/desktop.yml`
  * run; with --dir it takes installers already on disk. Either way it keeps
- * only the files that are installers for --version (default: this package's
- * version), hashes them, writes SHA256SUMS.txt to
- * s3://<bucket>/desktop/<version>/ as a conditional write that reserves the
- * version, uploads the installers there with the right content types, then
- * writes the listing page at the bucket root, copies the page's webfonts
- * beside it, and invalidates both on CloudFront.
+ * only the files that belong to --version (default: this package's version):
+ * the installers, the bare `oxagen` and `tacho` executables, the macOS
+ * updater archives, and the updater's `.sig` files. It hashes them, writes
+ * SHA256SUMS.txt to s3://<bucket>/desktop/<version>/ as a conditional write
+ * that reserves the version, uploads every file there with the right content
+ * type (and a `<file>.sha256` beside each executable), then writes the
+ * listing page at the bucket root, copies the page's webfonts beside it, and
+ * invalidates both on CloudFront.
  *
  * The page and the version-free links follow the newest version only. When
  * the version being published is at least as new as the one `latest.json`
- * names, each installer is copied server side to `latest/<name>` (the names
- * are in src/downloads.ts; the web app and the docs link them), `latest.json`
- * is rewritten, and the page is redrawn. An older version still gets its
- * immutable `desktop/<version>/` prefix, but moves nothing, so a slow build
- * finishing after a newer one cannot take the links backwards (ADR-158).
+ * names, each installer and executable is copied server side to
+ * `latest/<name>` (the names are in src/downloads.ts; the web app and the
+ * docs link them), `latest.json` is rewritten, and the page is redrawn. An
+ * older version still gets its immutable `desktop/<version>/` prefix, but
+ * moves nothing, so a slow build finishing after a newer one cannot take the
+ * links backwards (ADR-158).
+ *
+ * The in-app update feed, `updater/latest.json`, follows releases only
+ * (ADR-245). A release (`X.Y.Z`) built with the updater key rewrites it from
+ * the `.sig` files when it is at least as new as the version the feed names.
+ * A deploy build never touches it, and neither does a build without
+ * signatures.
  *
  * The version is either a release (`X.Y.Z`, from a `desktop-v*` tag) or a
  * build of main (`X.Y.Z-N`) that a production deploy published.
@@ -33,17 +42,19 @@
  *
  * --resume is for a re-run of the workflow's publish job after something
  * downstream of the upload failed: when the version is already published,
- * the installers on disk are hashed and compared with the published
- * SHA256SUMS.txt. Missing objects are uploaded before the page is redrawn
- * from the bucket and the job carries on. A different set is still
- * refused: that is a new build under an old version's URLs.
+ * the files on disk are hashed and compared with the published
+ * SHA256SUMS.txt. Missing objects are uploaded, the page is redrawn from the
+ * bucket, a release rewrites the update feed, and the job carries on. A
+ * different set is still refused: that is a new build under an old
+ * version's URLs.
  *
  * --page-only rewrites the listing page (and its fonts) for a version that is
  * already published, from what the bucket holds: the object sizes from a
  * listing of `desktop/<version>/` and the digests from its SHA256SUMS.txt.
- * No installer is read or written. It is how a change to the page's design
- * reaches the live version between releases, and how a version published
- * before `latest/` existed gets its version-free links.
+ * No installer is read or written, and the update feed is left alone. It is
+ * how a change to the page's design reaches the live version between
+ * releases, and how a version published before `latest/` existed gets its
+ * version-free links.
  *
  * Versioned URLs are served immutable, so a version that is already published
  * is refused, and a version two invocations race for is won by one of them:
@@ -73,20 +84,30 @@ import { constants as osConstants, tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  advancesFeed,
   advancesLatest,
   artifactDownloadCurl,
+  checksumFileText,
+  classifyExecutable,
   classifyInstaller,
+  classifyUpdaterArchive,
   decidePublication,
   FONT_FILES,
+  isBuildVersion,
   LATEST_CACHE_CONTROL,
   latestCopyArgs,
   latestManifest,
+  missingFeedPlatforms,
   readLatestVersion,
   renderIndexHtml,
   reportPublicationDecision,
   reservationArgs,
   sha256SumsText,
+  signedFileOf,
+  sortExecutables,
   sortInstallers,
+  UPDATE_FEED_KEY,
+  updateFeed,
 } from "../src/downloads.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -101,7 +122,6 @@ const runId = flag("--run");
 const fromDir = flag("--dir");
 const pageOnly = argv.includes("--page-only");
 const resume = argv.includes("--resume");
-const repo = flag("--repo") ?? "macanderson/oxagen";
 const bucket = flag("--bucket") ?? "oxagen-downloads-916294258235";
 const host = flag("--host") ?? "downloads.oxagen.sh";
 const version =
@@ -113,7 +133,7 @@ const sources = [runId !== undefined, fromDir !== undefined, pageOnly].filter(
 ).length;
 if (sources !== 1) {
   console.error(
-    "usage: publish-downloads.mjs (--run <id> | --dir <folder> | --page-only) [--version x.y.z] [--bucket name] [--host name] [--allow-overwrite] [--resume] [--dry-run]",
+    "usage: publish-downloads.mjs (--run <id> [--repo owner/name] | --dir <folder> | --page-only) [--version x.y.z] [--bucket name] [--host name] [--allow-overwrite] [--resume] [--dry-run]",
   );
   process.exit(2);
 }
@@ -234,11 +254,11 @@ function upload(path, key, contentType, cacheControl) {
  * so a week in caches is safe (the path is invalidated when they are
  * re-uploaded).
  */
-function publishPage(dir, entries, publishedAt, cliRelease = true) {
+function publishPage(dir, entries, executables, publishedAt) {
   const page = join(dir, "index.html");
   writeFileSync(
     page,
-    renderIndexHtml({ version, entries, publishedAt, cliRelease }),
+    renderIndexHtml({ version, entries, executables, publishedAt }),
   );
   upload(
     page,
@@ -335,7 +355,7 @@ function listPublishedObjects() {
 }
 
 /** Refuse incomplete releases before replacing the public download page. */
-async function redrawFromBucket({ probeCliRelease, plannedObjects = [] }) {
+async function redrawFromBucket({ plannedObjects = [] } = {}) {
   const objects = [
     ...listPublishedObjects(),
     ...(dryRun ? plannedObjects : []),
@@ -358,10 +378,12 @@ async function redrawFromBucket({ probeCliRelease, plannedObjects = [] }) {
     process.exit(1);
   }
   const published = [];
+  const executables = [];
   for (const object of objects) {
     const name = String(object.Key).split("/").pop();
     const installer = classifyInstaller(name, version);
-    if (installer === null) continue;
+    const executable = installer === null ? classifyExecutable(name) : null;
+    if (installer === null && executable === null) continue;
     const sha256 = digests.get(name);
     if (sha256 === undefined) {
       console.error(
@@ -369,7 +391,9 @@ async function redrawFromBucket({ probeCliRelease, plannedObjects = [] }) {
       );
       process.exit(1);
     }
-    published.push({ ...installer, bytes: Number(object.Size), sha256 });
+    if (installer !== null)
+      published.push({ ...installer, bytes: Number(object.Size), sha256 });
+    else executables.push({ ...executable, bytes: Number(object.Size), sha256 });
   }
   if (published.length === 0) {
     console.error(`✖ no installers for ${version} under ${prefix}/`);
@@ -383,27 +407,17 @@ async function redrawFromBucket({ probeCliRelease, plannedObjects = [] }) {
   const publishedAt =
     String(sumsObject?.LastModified ?? "").slice(0, 10) ||
     new Date().toISOString().slice(0, 10);
-  // A version published before the release workflow existed has no
-  // desktop-v release with the bare binaries; do not link one that 404s. A
-  // resumed publish skips the probe: its release is a draft at this point
-  // (which HEAD reports as absent) and the job publishes it moments later.
-  let cliRelease = true;
-  if (probeCliRelease) {
-    const releaseUrl = `https://github.com/${repo}/releases/tag/desktop-v${version}`;
-    cliRelease = await fetch(releaseUrl, { method: "HEAD", redirect: "manual" })
-      .then((r) => r.status === 200)
-      .catch(() => false);
-    if (!cliRelease)
-      console.warn(
-        `! ${releaseUrl} does not exist; the page omits the bare-binary link`,
-      );
-  }
+  // The executables listed are the ones the bucket holds for this version. A
+  // version published before the host carried them (2.1.3 and older) lists
+  // none, so the page links nothing that would 404.
   const dir = tempDir("oxagen-downloads-page-");
-  if (advanceLatest(dir, sortInstallers(published), publishedAt)) {
-    publishPage(dir, sortInstallers(published), publishedAt, cliRelease);
+  const installers = sortInstallers(published);
+  const bare = sortExecutables(executables);
+  if (advanceLatest(dir, installers, bare, publishedAt)) {
+    publishPage(dir, installers, bare, publishedAt);
     invalidate(LATEST_PATHS);
   }
-  for (const entry of sortInstallers(published))
+  for (const entry of [...installers, ...bare])
     console.log(`${entry.file}  ${entry.bytes} bytes  ${entry.sha256}`);
   console.log(`https://${host}/`);
   rmSync(dir, { recursive: true, force: true });
@@ -411,39 +425,52 @@ async function redrawFromBucket({ probeCliRelease, plannedObjects = [] }) {
 }
 
 /**
- * The version `latest.json` names, or null when there is none. Anything but
- * "no such key" stops the publish: guessing null here could move the links
- * backwards, and a re-run with --resume finishes the move.
+ * The version the JSON at `key` names (`latest.json` or the update feed), or
+ * null when there is none. Anything but "no such key" stops the publish:
+ * guessing null here could move the links or the feed backwards, and a
+ * re-run with --resume finishes the move.
  */
-function currentLatestVersion() {
+function publishedVersionAt(key) {
   const result = spawnSync(
     "aws",
-    ["s3", "cp", `s3://${bucket}/latest.json`, "-", "--only-show-errors"],
+    ["s3", "cp", `s3://${bucket}/${key}`, "-", "--only-show-errors"],
     { encoding: "utf8", env: NO_COLOUR_ENV },
   );
   if (result.status === 0) return readLatestVersion(result.stdout);
   const stderr = String(result.stderr ?? "");
   if (/NoSuchKey|\(404\)|Not Found|does not exist/i.test(stderr)) return null;
   console.error(
-    `✖ could not read s3://${bucket}/latest.json: ${stderr.trim() || `exit ${result.status}`}`,
+    `✖ could not read s3://${bucket}/${key}: ${stderr.trim() || `exit ${result.status}`}`,
   );
   process.exit(1);
 }
 
 /**
- * Point `latest/` and `latest.json` at `entries` when this version is the
- * newest; returns whether it moved. The installers must already be under
- * `desktop/<version>/`: the copies are server side.
+ * Point `latest/` and `latest.json` at `entries` and `executables` when this
+ * version is the newest; returns whether it moved. The files must already be
+ * under `desktop/<version>/`: the copies are server side. Each executable's
+ * `.sha256` moves with it, so `latest/<name>.sha256` checks `latest/<name>`.
  */
-function advanceLatest(dir, entries, publishedAt) {
-  const current = currentLatestVersion();
+function advanceLatest(dir, entries, executables, publishedAt) {
+  const current = publishedVersionAt("latest.json");
   if (!advancesLatest(current, version)) {
     console.warn(
       `! latest is ${current}, newer than ${version}; the page and latest/ stay on ${current}`,
     );
     return false;
   }
-  for (const entry of entries) {
+  const copies = [
+    ...entries,
+    ...executables.flatMap((e) => [
+      e,
+      {
+        file: `${e.file}.sha256`,
+        latest: `${e.latest}.sha256`,
+        contentType: CHECKSUM_TYPE,
+      },
+    ]),
+  ];
+  for (const entry of copies) {
     const args = latestCopyArgs({ bucket, version, entry });
     if (dryRun) console.log(`[dry-run] aws ${args.join(" ")}`);
     else sh("aws", args);
@@ -451,7 +478,7 @@ function advanceLatest(dir, entries, publishedAt) {
   const manifest = join(dir, "latest.json");
   writeFileSync(
     manifest,
-    `${JSON.stringify(latestManifest({ version, publishedAt, entries, host }), null, 2)}\n`,
+    `${JSON.stringify(latestManifest({ version, publishedAt, entries, executables, host }), null, 2)}\n`,
   );
   upload(
     manifest,
@@ -462,6 +489,53 @@ function advanceLatest(dir, entries, publishedAt) {
   return true;
 }
 
+/**
+ * Rewrite the in-app update feed for this version, from the signature of
+ * each signed file; returns whether it wrote. Only a release at least as new
+ * as the one the feed names writes it (ADR-245), and only after every file
+ * the feed names is under `desktop/<version>/`. A build made without the
+ * updater key has no signatures and leaves the feed as it is, as a deploy
+ * build always does.
+ */
+function publishFeed(dir, signed) {
+  if (isBuildVersion(version)) return false;
+  if (signed.length === 0) {
+    console.warn(
+      `! ${version} carries no updater signatures (built without TAURI_SIGNING_PRIVATE_KEY); the update feed is unchanged`,
+    );
+    return false;
+  }
+  const current = publishedVersionAt(UPDATE_FEED_KEY);
+  if (!advancesFeed(current, version)) {
+    console.warn(
+      `! the update feed names ${current}, newer than ${version}; it stays on ${current}`,
+    );
+    return false;
+  }
+  const feed = updateFeed({
+    version,
+    pubDate: new Date().toISOString(),
+    host,
+    signed,
+  });
+  const missing = missingFeedPlatforms(feed);
+  if (missing.length > 0)
+    console.warn(
+      `! the update feed for ${version} has no ${missing.join(", ")}; apps there are not offered it`,
+    );
+  const path = join(dir, "update-feed.json");
+  writeFileSync(path, `${JSON.stringify(feed, null, 2)}\n`);
+  upload(
+    path,
+    `s3://${bucket}/${UPDATE_FEED_KEY}`,
+    "application/json",
+    LATEST_CACHE_CONTROL,
+  );
+  return true;
+}
+
+const CHECKSUM_TYPE = "text/plain; charset=utf-8";
+
 const LATEST_PATHS = [
   "/",
   "/index.html",
@@ -470,9 +544,11 @@ const LATEST_PATHS = [
   "/latest.json",
 ];
 
+const FEED_PATH = `/${UPDATE_FEED_KEY}`;
+
 // --page-only: the version is already there; describe it from the bucket.
 if (pageOnly) {
-  await redrawFromBucket({ probeCliRelease: true });
+  await redrawFromBucket();
   process.exit(0);
 }
 
@@ -537,10 +613,26 @@ if (resuming) {
   if (report.exitCode !== null) process.exit(report.exitCode);
 }
 
+/**
+ * The repository whose Actions run holds the artifacts, for --run. Never a
+ * fixed name: the repository has changed owner more than once. --repo wins,
+ * then the runner's GITHUB_REPOSITORY, then the checkout's own remote.
+ */
+function repository() {
+  const named = flag("--repo") ?? process.env.GITHUB_REPOSITORY;
+  if (named !== undefined && named !== "") return named;
+  return sh(
+    "gh",
+    ["repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner"],
+    { capture: true },
+  ).trim();
+}
+
 // 1. Collect the build outputs.
 const work = tempDir("oxagen-downloads-");
 let source = fromDir !== undefined ? resolve(fromDir) : work;
 if (runId !== undefined) {
+  const repo = repository();
   const listing = JSON.parse(
     sh(
       "gh",
@@ -573,13 +665,32 @@ if (runId !== undefined) {
   source = work;
 }
 
-// 2. Keep the installers for this version; refuse a partial release.
+// 2. Keep the files that belong to this version; refuse a release with no
+// installers. Each kind keeps the first file of each name it meets.
 const found = new Map();
+const bare = new Map();
+const archives = new Map();
+const signatures = new Map();
 for (const path of walk(source)) {
   const name = path.split(/[\\/]/).pop();
   const installer = classifyInstaller(name, version);
-  if (installer !== null && !found.has(name))
-    found.set(name, { installer, path });
+  if (installer !== null) {
+    if (!found.has(name)) found.set(name, { installer, path });
+    continue;
+  }
+  const executable = classifyExecutable(name);
+  if (executable !== null) {
+    if (!bare.has(name)) bare.set(name, { executable, path });
+    continue;
+  }
+  const archive = classifyUpdaterArchive(name, version);
+  if (archive !== null) {
+    if (!archives.has(name)) archives.set(name, { archive, path });
+    continue;
+  }
+  const signedFile = signedFileOf(name, version);
+  if (signedFile !== null && !signatures.has(signedFile))
+    signatures.set(signedFile, path);
 }
 const installers = sortInstallers([...found.values()].map((f) => f.installer));
 if (installers.length === 0) {
@@ -591,20 +702,67 @@ for (const os of ["macOS", "Windows", "Linux"]) {
   if (!oses.has(os))
     console.warn(`! no ${os} installer for ${version}; the page will omit it`);
 }
+const executables = sortExecutables(
+  [...bare.values()].map((b) => b.executable),
+);
+if (executables.length === 0)
+  console.warn(
+    `! no oxagen or tacho executables for ${version}; the page lists none`,
+  );
 
-// 3. Hash and write SHA256SUMS.txt.
+// 3. Hash every installer, executable, and updater archive, and write
+// SHA256SUMS.txt over all of them.
+const describe = async (path) => ({
+  bytes: statSync(path).size,
+  sha256: await sha256(path),
+  path,
+});
 const entries = [];
 for (const installer of installers) {
   const path = found.get(installer.file).path;
-  entries.push({
-    ...installer,
-    bytes: statSync(path).size,
-    sha256: await sha256(path),
-    path,
+  entries.push({ ...installer, ...(await describe(path)) });
+}
+const executableEntries = [];
+for (const executable of executables) {
+  const path = bare.get(executable.file).path;
+  executableEntries.push({
+    ...executable,
+    ...(await describe(path)),
   });
 }
+const archiveEntries = [];
+for (const { archive, path } of [...archives.values()].sort((a, b) =>
+  a.archive.file.localeCompare(b.archive.file),
+)) {
+  archiveEntries.push({ ...archive, ...(await describe(path)) });
+}
+const hashed = [...entries, ...executableEntries, ...archiveEntries];
 const sums = join(work, "SHA256SUMS.txt");
-writeFileSync(sums, sha256SumsText(entries));
+writeFileSync(sums, sha256SumsText(hashed));
+
+// The small files beside them: a `<file>.sha256` per executable, written here
+// from the digest just taken, and the updater's `<file>.sig` per signed file.
+// Neither goes in SHA256SUMS.txt, since each is a check on a file that does.
+const sidecarDir = tempDir("oxagen-downloads-sidecars-");
+const sidecars = [
+  ...executableEntries.map((e) => {
+    const path = join(sidecarDir, `${e.file}.sha256`);
+    writeFileSync(path, checksumFileText(e));
+    return { file: `${e.file}.sha256`, path, contentType: CHECKSUM_TYPE };
+  }),
+  ...[...signatures]
+    .filter(([file]) => hashed.some((e) => e.file === file))
+    .map(([file, path]) => ({
+      file: `${file}.sig`,
+      path,
+      contentType: CHECKSUM_TYPE,
+    })),
+];
+// What the update feed is written from: each signed file and the text of its
+// signature, which the app checks against its public key before installing.
+const signed = [...signatures]
+  .filter(([file]) => hashed.some((e) => e.file === file))
+  .map(([file, path]) => ({ file, signature: readFileSync(path, "utf8") }));
 
 // A retry must use the same build before it can repair missing objects.
 // Verify the complete bucket listing before the job's later steps run.
@@ -612,9 +770,9 @@ writeFileSync(sums, sha256SumsText(entries));
 // URLs, which is what the refusal above exists to stop.
 if (resuming) {
   const published = readPublishedDigests();
-  const differs = entries.filter((e) => published.get(e.file) !== e.sha256);
+  const differs = hashed.filter((e) => published.get(e.file) !== e.sha256);
   const missing = [...published.keys()].filter(
-    (file) => !entries.some((e) => e.file === file),
+    (file) => !hashed.some((e) => e.file === file),
   );
   if (differs.length > 0 || missing.length > 0) {
     console.error(
@@ -629,7 +787,7 @@ if (resuming) {
   }
   const keys = new Set(listPublishedObjects().map((object) => object.Key));
   const plannedObjects = [];
-  for (const entry of entries) {
+  for (const entry of [...hashed, ...sidecars]) {
     if (!keys.has(`${keyPrefix}${entry.file}`)) {
       upload(
         entry.path,
@@ -640,12 +798,13 @@ if (resuming) {
       if (dryRun) {
         plannedObjects.push({
           Key: `${keyPrefix}${entry.file}`,
-          Size: entry.bytes,
+          Size: statSync(entry.path).size,
         });
       }
     }
   }
-  await redrawFromBucket({ probeCliRelease: false, plannedObjects });
+  await redrawFromBucket({ plannedObjects });
+  if (publishFeed(work, signed)) invalidate([FEED_PATH]);
   console.log(
     dryRun
       ? `[dry-run] ${version} installer recovery and page publication planned.`
@@ -703,29 +862,37 @@ if (dryRun) {
   }
 }
 
-for (const entry of entries) {
+for (const entry of [...hashed, ...sidecars]) {
   upload(entry.path, `${prefix}/${entry.file}`, entry.contentType, immutable);
 }
 
-// 5. Move latest/ and the page when this is the newest version.
+// 5. Move latest/ and the page when this is the newest version, then the
+// update feed when this is a release at least as new as the one it names.
+// Both come after the uploads, so neither names a file that is not there.
 const publishedAt = new Date().toISOString().slice(0, 10);
-const moved = advanceLatest(work, entries, publishedAt);
-if (moved) publishPage(work, entries, publishedAt);
+const moved = advanceLatest(work, entries, executableEntries, publishedAt);
+if (moved) publishPage(work, entries, executableEntries, publishedAt);
+const fed = publishFeed(work, signed);
 
 // 6. Invalidate what changed when the distribution exists. Only an
 // --allow-overwrite republish can have a stale edge copy of the versioned
 // prefix, and only the edge is reachable: anything further downstream was
 // promised a year. Invalidating a prefix that was never cached costs nothing,
 // so it is always included.
-invalidate([...(moved ? LATEST_PATHS : []), `/desktop/${version}/*`]);
+invalidate([
+  ...(moved ? LATEST_PATHS : []),
+  ...(fed ? [FEED_PATH] : []),
+  `/desktop/${version}/*`,
+]);
 
-for (const entry of entries)
+for (const entry of hashed)
   console.log(
     `https://${host}/desktop/${version}/${encodeURIComponent(entry.file)}`,
   );
 console.log(`https://${host}/desktop/${version}/SHA256SUMS.txt`);
 if (moved)
-  for (const entry of entries)
+  for (const entry of [...entries, ...executableEntries])
     console.log(`https://${host}/latest/${encodeURIComponent(entry.latest)}`);
+if (fed) console.log(`https://${host}/${UPDATE_FEED_KEY}`);
 console.log(`https://${host}/`);
 rmSync(work, { recursive: true, force: true });
