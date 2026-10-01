@@ -83,9 +83,11 @@
  * the sender. The app marks a follow-up a stop hook sent
  * (`isAutoFollowupFromStopHook`) and a message it wrote itself
  * (`isSimulatedMsg`), and passes neither mark to the hook, so a typed prompt
- * and a follow-up arrive in the same shape. The adapter adds neither field.
- * A missing source means the harness did not say, and a source guessed from
- * the prompt text would be a value Cursor never reported.
+ * and a follow-up arrive in the same shape. `normalizeHook` copies a
+ * payload's `prompt_source` and `prompt_origin` onto the `turn_start`, and
+ * Codex's adapter sets both from what Codex records. This adapter sets
+ * neither. A missing source means the harness did not say, and a source
+ * guessed from the prompt text would be a value Cursor never reported.
  *
  * Three members do say something about automation, and each reaches the
  * record as an attribute: `is_background_agent` and `composer_mode` on
