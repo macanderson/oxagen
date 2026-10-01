@@ -51,7 +51,7 @@ export async function handleLinearCallback(
   );
   if (!result.ok)
     return new Response(
-      "Linear authorization was refused. Return to the Run to check consent and try again.",
+      "Linear authorization was refused. Return to the Run and try again.",
       { status: 403 },
     );
   return responseRedirect(request, routes.run(org, ws, runId));

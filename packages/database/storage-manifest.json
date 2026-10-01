@@ -1643,16 +1643,6 @@
     },
     {
       "domain": "run",
-      "name": "get_run_outcomes_settings",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "run",
       "name": "get_run_outputs",
       "reads": [],
       "surfaces": [
@@ -3965,22 +3955,6 @@
         "api",
         "cli",
         "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "run",
-      "name": "set_run_outcomes_access",
-      "reads": [],
-      "surfaces": [],
-      "writes": []
-    },
-    {
-      "domain": "run",
-      "name": "set_run_outcomes_settings",
-      "reads": [],
-      "surfaces": [
-        "api"
       ],
       "writes": []
     },

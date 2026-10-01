@@ -271,21 +271,6 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (m) => m.handler as CapabilityHandlerFn,
     ),
   );
-  registerHandler("get_run_outcomes_settings", () =>
-    import("./run.outcomes.settings.get").then(
-      (m) => m.runOutcomesSettingsGetHandler as CapabilityHandlerFn,
-    ),
-  );
-  registerHandler("set_run_outcomes_settings", () =>
-    import("./run.outcomes.settings.set").then(
-      (m) => m.runOutcomesSettingsSetHandler as CapabilityHandlerFn,
-    ),
-  );
-  registerHandler("set_run_outcomes_access", () =>
-    import("./run.outcomes.access.set").then(
-      (m) => m.runOutcomesAccessSetHandler as CapabilityHandlerFn,
-    ),
-  );
   registerHandler("revoke_member_invite", () =>
     import("./org.member_invite.revoke").then(
       (m) => m.handler as CapabilityHandlerFn,
