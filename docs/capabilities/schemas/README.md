@@ -416,7 +416,6 @@ capability rewrites, so two such branches always conflicted on it (ADR-216).
 - get_run_frame_body
 - get_run_issue_providers
 - get_run_issues
-- get_run_outcomes_settings
 - get_run_outputs
 - get_run_proof
 - get_run_transcript
@@ -426,8 +425,6 @@ capability rewrites, so two such branches always conflicted on it (ADR-216).
 - list_recent_runs
 - list_runs
 - seal_run
-- set_run_outcomes_access
-- set_run_outcomes_settings
 - start_issue_authorization
 - summarize_run
 

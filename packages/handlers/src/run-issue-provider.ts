@@ -7,12 +7,9 @@ import {
   type RunIssueReceipt,
 } from "@oxagen/oxagen/run-outcomes";
 import {
-  assertRunOutcomesAllowed,
-  type RunOutcomesScope,
-} from "@oxagen/plugins/run-outcomes-policy";
-import {
   linearGraphql,
   resolveLinearIssueToken,
+  type RunOutcomesScope,
 } from "@oxagen/plugins/run-outcomes-linear";
 import { z } from "zod";
 import { resolveWorkspaceGithubInstallation } from "./repository.github-connection";
@@ -71,7 +68,6 @@ async function githubToken(
       code: "conflict",
       reason: "github_repository_invalid",
     });
-  await assertRunOutcomesAllowed(scope);
   const connection = await resolveWorkspaceGithubInstallation(scope);
   if (!connection || connection.status !== "connected")
     throw new HandlerError({
@@ -85,7 +81,6 @@ async function githubToken(
       code: "conflict",
       reason: "github_app_not_configured",
     });
-  await assertRunOutcomesAllowed(scope);
   const grant = await getInstallationToken({
     appId,
     privateKey,
@@ -101,13 +96,11 @@ async function githubToken(
 }
 
 async function githubRequest<T>(
-  scope: RunOutcomesScope,
   token: string,
   path: string,
   output: z.ZodType<T>,
   body?: unknown,
 ): Promise<T> {
-  await assertRunOutcomesAllowed(scope);
   const response = await fetch(`https://api.github.com${path}`, {
     method: body === undefined ? "GET" : "POST",
     redirect: "error",
@@ -167,7 +160,6 @@ async function createGithubIssue(
   const token = await githubToken(scope, destination);
   const base = `/repos/${encodeURIComponent(destination.owner)}/${encodeURIComponent(destination.repo)}`;
   const repository = await githubRequest(
-    scope,
     token,
     base,
     z.object({ full_name: z.string(), has_issues: z.boolean() }),
@@ -187,7 +179,6 @@ async function createGithubIssue(
       per_page: "100",
     });
     const found = await githubRequest(
-      scope,
       token,
       `/search/issues?${q}`,
       z.object({
@@ -212,7 +203,6 @@ async function createGithubIssue(
   if (!request.allowCreate) uncertain();
   try {
     const created = await githubRequest(
-      scope,
       token,
       `${base}/issues`,
       githubIssue,
@@ -255,7 +245,6 @@ async function createLinearIssue(
   const token = await resolveLinearIssueToken(scope, destination.connectionId);
   // A token can see many teams. Verify the selected team and project now.
   await linearGraphql(
-    scope,
     token,
     "query($id:String!){ team(id:$id){ id } }",
     { id: destination.teamId },
@@ -263,7 +252,6 @@ async function createLinearIssue(
   );
   if (destination.projectId) {
     const project = await linearGraphql(
-      scope,
       token,
       "query($id:String!){ project(id:$id){ id teams(first:250){ nodes { id } pageInfo { hasNextPage } } } }",
       { id: destination.projectId },
@@ -311,7 +299,6 @@ async function createLinearIssue(
   const fields = "id identifier url description team { id } project { id }";
   const reconcile = async (): Promise<RunIssueReceipt | null> => {
     const found = await linearGraphql(
-      scope,
       token,
       `query($id:ID!){ issues(first:2,includeArchived:true,filter:{id:{eq:$id}}){nodes{${fields}}} }`,
       { id },
@@ -324,7 +311,6 @@ async function createLinearIssue(
   if (!request.allowCreate) uncertain();
   try {
     const result = await linearGraphql(
-      scope,
       token,
       `mutation($input:IssueCreateInput!){issueCreate(input:$input){success issue{${fields}}}}`,
       {
@@ -359,7 +345,6 @@ export async function createRunIssue(
   scope: RunOutcomesScope,
   input: RunIssueCreateRequest,
 ): Promise<RunIssueReceipt> {
-  await assertRunOutcomesAllowed(scope);
   const destination = runIssueDestinationSchema.parse(input.destination);
   if (
     !input.title.trim() ||
@@ -415,7 +400,6 @@ export async function readRunRepositoryStyle(
   ];
   let remaining = 65536;
   for (const path of paths) {
-    await assertRunOutcomesAllowed(scope);
     const response = await fetch(
       `https://api.github.com/repos/${encodeURIComponent(input.owner)}/${encodeURIComponent(input.repo)}/contents/${path}?ref=${input.ref}`,
       {

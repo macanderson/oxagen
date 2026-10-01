@@ -268,6 +268,7 @@ import {
 } from "./routes/v1/mcp-studio.oauth";
 import { githubAppWebhookRoute } from "./routes/v1/github-webhook";
 import { gitlabWebhookRoute } from "./routes/v1/gitlab-webhook";
+import { linearWebhookRoute } from "./routes/v1/linear-webhook";
 import { graphNodeGetRoute } from "./routes/v1/graph.node.get";
 import { graphNodeSearchRoute } from "./routes/v1/graph.node.search";
 import { graphSearchRoute } from "./routes/v1/graph.search";
@@ -422,6 +423,10 @@ app.route("/webhooks/github/app", githubAppWebhookRoute);
 // GitLab project webhooks (#3762): one hook per connected project, authenticated
 // by its secret token. Mounted BEFORE the generic /webhooks route for the same reason.
 app.route("/webhooks/gitlab", gitlabWebhookRoute);
+// Linear OAuth app webhook (#4881): one URL for every installed workspace,
+// authenticated by its Linear-Signature HMAC. Mounted BEFORE the generic
+// /webhooks route for the same reason.
+app.route("/webhooks/linear", linearWebhookRoute);
 // Connector webhooks: unauthenticated — HMAC validation is the security boundary.
 app.route("/webhooks", webhookRoute);
 // Inngest cloud polls /api/inngest for the function manifest; signing-key

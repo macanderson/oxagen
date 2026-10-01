@@ -10,7 +10,7 @@
  * - Happy path, with secretEnc (decrypt called) → 200
  * - Invalid JSON payload treated as raw string (no error)
  * - sourceRecordType resolved from x-github-event header
- * - sourceRecordType resolved from x-linear-event header
+ * - sourceRecordType resolved from the Linear-Event header
  * - sourceRecordType falls back to body "type" field
  * - sourceRecordType falls back to "event" when nothing matches
  * - inngest.send receives correct event shape
@@ -365,8 +365,8 @@ describe("sourceRecordType resolution", () => {
     expect(event.data.sourceRecordType).toBe("pull_request");
   });
 
-  it("uses x-linear-event header when present", async () => {
-    await app.fetch(makePost("{}", { "x-linear-event": "Issue" }));
+  it("uses Linear's Linear-Event header when present", async () => {
+    await app.fetch(makePost("{}", { "Linear-Event": "Issue" }));
     const event = mocks.inngestSend.mock.calls[0]?.[0] as {
       data: Record<string, unknown>;
     };
