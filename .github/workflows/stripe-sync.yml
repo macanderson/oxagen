@@ -48,7 +48,7 @@ concurrency:
 jobs:
   sync:
     name: reconcile Stripe with packages/billing/src/pricing.ts
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNERS == 'aws' && 'oxagen-deploy' || 'ubuntu-latest' }}
     # Resolves the `production` environment's secrets. As db-migrate.yml already
     # records, this environment's only protection rule is a branch policy, so it
     # gates nothing and is not claimed to.

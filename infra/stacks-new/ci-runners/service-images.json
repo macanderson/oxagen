@@ -1,0 +1,5 @@
+{
+  "mirror/postgres": "docker.io/library/postgres:16-alpine",
+  "mirror/clickhouse-server": "docker.io/clickhouse/clickhouse-server:24.8-alpine",
+  "mirror/neo4j": "docker.io/library/neo4j:5.24-community"
+}
