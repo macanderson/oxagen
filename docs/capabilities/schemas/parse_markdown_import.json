@@ -1,0 +1,538 @@
+{
+  "name": "parse_markdown_import",
+  "domain": "context",
+  "description": "Read up to 25 Markdown files and propose steering records and Cedar policies from them. Each statement gets a kind with a reason, a force its kind allows with the words that justify it, an effect when it is a constraint, its source line, and any duplicate or conflict with a published record or another statement. Writes nothing.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent",
+    "cli"
+  ],
+  "sensitivity": "medium",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "governance"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "documents": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "filename": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "description": "The file's name, or its path relative to the folder imported, such as docs/release.md"
+            },
+            "content": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100000,
+              "description": "The file's Markdown text"
+            },
+            "target": {
+              "type": "string",
+              "enum": [
+                "records",
+                "policies",
+                "skip"
+              ]
+            }
+          },
+          "required": [
+            "filename",
+            "content"
+          ],
+          "additionalProperties": false
+        },
+        "minItems": 1,
+        "maxItems": 25,
+        "description": "The Markdown files to read, at most 25 per call"
+      }
+    },
+    "required": [
+      "documents"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "files": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "filename": {
+              "type": "string"
+            },
+            "target": {
+              "type": "string",
+              "enum": [
+                "records",
+                "policies",
+                "skip"
+              ],
+              "description": "The target the file was read with"
+            },
+            "detected": {
+              "type": "string",
+              "enum": [
+                "records",
+                "policies",
+                "skip"
+              ],
+              "description": "The target the file's text implies"
+            },
+            "reason": {
+              "type": "string",
+              "description": "Why the file's text implies that target"
+            },
+            "records": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "policies": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "filename",
+            "target",
+            "detected",
+            "reason",
+            "records",
+            "policies",
+            "error"
+          ],
+          "additionalProperties": false
+        },
+        "description": "One entry per file, in the order sent"
+      },
+      "records": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "file": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "description": "The file the statement came from"
+            },
+            "line": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "The line of the file the statement starts on"
+            },
+            "origin": {
+              "type": "string",
+              "enum": [
+                "frontmatter",
+                "split"
+              ],
+              "description": "frontmatter for a file that is one steering record already, split for a statement the model split out"
+            },
+            "lineage": {
+              "type": "string",
+              "maxLength": 200,
+              "description": "The record's lineage, and its file name in the steering repo"
+            },
+            "label": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 36,
+              "description": "The record's name, at most 36 characters"
+            },
+            "statement": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100000,
+              "description": "What the record tells an agent: the record's body"
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "business-rule",
+                "code-rule",
+                "constraint",
+                "procedure",
+                "skill",
+                "fact",
+                "preference",
+                "memory"
+              ]
+            },
+            "kindReason": {
+              "type": "string",
+              "maxLength": 300,
+              "description": "One line on why the statement is this kind"
+            },
+            "force": {
+              "type": "string",
+              "enum": [
+                "must",
+                "should",
+                "may",
+                "info"
+              ],
+              "description": "must, should, may, or info, within the forces the kind allows"
+            },
+            "forceWords": {
+              "type": "string",
+              "maxLength": 200,
+              "description": "The words in the statement that justify the force, or empty when the text gives no signal and the kind's default applies"
+            },
+            "effect": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "require",
+                    "forbid"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "tokens": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "The statement's size in tokens. A must or should record adds this to every request."
+            },
+            "duplicate": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "lineage": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "path": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "published": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "lineage",
+                    "path",
+                    "published"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "conflict": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "lineage": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "path": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "published": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "lineage",
+                    "path",
+                    "published"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "action": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "add",
+                    "skip"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "frontmatter": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 100000
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "file",
+            "line",
+            "origin",
+            "lineage",
+            "label",
+            "statement",
+            "kind",
+            "kindReason",
+            "force",
+            "forceWords",
+            "effect",
+            "tokens",
+            "duplicate",
+            "conflict",
+            "action",
+            "frontmatter"
+          ],
+          "additionalProperties": false,
+          "x-server-validated": true,
+          "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
+        },
+        "description": "The steering records proposed, file by file in source order"
+      },
+      "policies": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "file": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "description": "The Markdown file the policies came from"
+            },
+            "path": {
+              "type": "string",
+              "description": "Where the policy file goes: policy/<file-slug>.cedar"
+            },
+            "text": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200000,
+              "description": "The .cedar file: the prose above each block as a comment, then each statement with its @id"
+            },
+            "statements": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "The statement's @id"
+                  },
+                  "line": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "The line of the file it starts on"
+                  },
+                  "effect": {
+                    "type": "string",
+                    "enum": [
+                      "permit",
+                      "forbid"
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "line",
+                  "effect"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "issues": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "statement": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 1
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "id": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "line": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 1
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "statement",
+                  "id",
+                  "line",
+                  "message"
+                ],
+                "additionalProperties": false
+              },
+              "description": "What the early checks found. A policy with any issue cannot be added."
+            },
+            "duplicate": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "path": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "path"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "replaces": {
+              "type": "boolean",
+              "description": "True when the steering repo already holds a different file at this path, which the commit replaces"
+            },
+            "action": {
+              "type": "string",
+              "enum": [
+                "add",
+                "skip"
+              ]
+            }
+          },
+          "required": [
+            "file",
+            "path",
+            "text",
+            "statements",
+            "issues",
+            "duplicate",
+            "replaces",
+            "action"
+          ],
+          "additionalProperties": false
+        },
+        "description": "The Cedar policy files proposed, one per file"
+      },
+      "pullRequestFiles": {
+        "type": "object",
+        "properties": {
+          "count": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Files the rows marked add would put in the steering PR"
+          },
+          "max": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "description": "The most files one steering PR holds"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "count",
+          "max",
+          "message"
+        ],
+        "additionalProperties": false,
+        "description": "The files the rows marked add would put in one steering PR, and a message when that is more than one PR holds"
+      }
+    },
+    "required": [
+      "files",
+      "records",
+      "policies",
+      "pullRequestFiles"
+    ],
+    "additionalProperties": false
+  }
+}

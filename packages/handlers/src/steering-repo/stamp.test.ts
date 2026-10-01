@@ -16,9 +16,11 @@ import {
   IMPORT_REPLACES_PATH,
   importBranch,
   isImportBranch,
+  isMarkdownImportBranch,
   isStampedRecordPath,
   ledgerInstant,
   ledgerPeriodBounds,
+  markdownImportBranch,
   mergeTrailers,
   parseReplacesFile,
   renderReplacesFile,
@@ -812,6 +814,68 @@ describe("branchScopeRefusal", () => {
         IMPORT_REPLACES_PATH,
       ]),
     ).toBeNull();
+  });
+});
+
+describe("the Markdown import branch", () => {
+  const at = new Date("2026-09-30T23:59:00Z");
+
+  it("names the UTC day, then a number for a later import that day", () => {
+    expect(markdownImportBranch(at)).toBe("steering/import-2026-09-30");
+    expect(markdownImportBranch(at, 2)).toBe("steering/import-2026-09-30-2");
+    expect(() => markdownImportBranch(at, 0)).toThrow(RangeError);
+  });
+
+  it("reads only the names markdownImportBranch writes", () => {
+    expect(isMarkdownImportBranch("steering/import-2026-09-30")).toBe(true);
+    expect(isMarkdownImportBranch("steering/import-2026-09-30-12")).toBe(true);
+    for (const branch of [
+      IMPORT_BRANCH,
+      "steering/import-oxagen-2",
+      "steering/import-2026-09-30-1",
+      "steering/import-2026-09-30-02",
+      "steering/import-2026-9-30",
+      "policy/import-2026-09-30",
+    ]) {
+      expect(isMarkdownImportBranch(branch)).toBe(false);
+    }
+    expect(isImportBranch(markdownImportBranch(at))).toBe(false);
+  });
+
+  it("accepts many records, a skill, a memory record, and policies in one PR", () => {
+    expect(
+      branchScopeRefusal(markdownImportBranch(at), [
+        "steering/business-rules/a-intel.claude.no-push.md",
+        "steering/constraints/a-intel.claude.no-force.md",
+        "steering/memory/workspace/general/a-intel.claude.cache-key.md",
+        "steering/skills/a-intel.claude.release/SKILL.md",
+        "policy/no-branch-delete.cedar",
+        "policy/deploys.cedar",
+      ]),
+    ).toBeNull();
+  });
+
+  it("refuses any other file on a Markdown import branch (negative)", () => {
+    for (const path of [
+      "steering/governance.toml",
+      "workspace.toml",
+      "tools/servers/crm/server.toml",
+      "policy/deploys.tests.jsonl",
+      "steering/skills/a-intel.claude.release/notes.md",
+      IMPORT_REPLACES_PATH,
+    ]) {
+      expect(
+        branchScopeRefusal(markdownImportBranch(at), [
+          "steering/business-rules/a-intel.claude.no-push.md",
+          path,
+        ]),
+      ).toMatchObject({ reason: "branch_scope" });
+    }
+    expect(
+      branchScopeRefusal(markdownImportBranch(at), [
+        "steering/promotions/2026-09.jsonl",
+      ]),
+    ).toMatchObject({ reason: "ledger_owned" });
   });
 });
 
