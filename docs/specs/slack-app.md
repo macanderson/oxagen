@@ -45,7 +45,7 @@ https://app.staging.oxagen.sh/api/slack/oauth/callback
 https://preview-app.oxagen.sh/api/slack/oauth/callback
 ```
 
-`apps/app/src/app/api/slack/oauth/callback/route.ts` serves that path. The app builds the redirect from `APP_URL`, so the URL it sends Slack follows the app's origin. `oxagen.app` is listed ahead of the ADR-215 cutover, when `APP_URL` moves to it. To use a different path, change the manifest first.
+`apps/app/src/app/api/slack/oauth/callback/route.ts` serves that path. The app builds the redirect from `APP_URL`, so the URL it sends Slack follows the app's origin. The `oxagen.app` URL is left from ADR-215, which ADR-236 withdrew. `APP_URL` stays on `app.oxagen.sh`, so nothing uses it, and it goes at the next manifest change. To use a different path, change the manifest first.
 
 ## Scopes
 

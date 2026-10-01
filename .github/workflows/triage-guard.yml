@@ -1,7 +1,7 @@
 # Triage separation of duties (SCR-005): issue creators get exactly one
-# label — `triage`. Priority labels (`P0`–`P4`) come only from the triage identity.
-# Invariant: every open issue carries a P-label or `triage`, never neither,
-# never both.
+# label, `TRIAGE`. Priority labels (`P0` to `P4`) come only from the triage
+# identity. Invariant: every open issue carries a P-label or `TRIAGE`, never
+# neither, never both.
 name: triage-guard
 on:
   issues:
@@ -26,14 +26,20 @@ jobs:
         with:
           script: |
             const issue = context.payload.issue;
-            const P = /^P[0-4]$/;
+            const P = /^P[0-4]$/i;
             const allowed = process.env.TRIAGE_LOGINS.split(/\s+/);
             const names = issue.labels.map(l => (typeof l === 'string' ? l : l.name));
+            // Label names are compared without regard to case. GitHub matches
+            // a name that way when a label is added or filtered, but the
+            // payload carries the spelling the repo stores, and the labels
+            // moved from `triage` to `TRIAGE` on 2026-09-30.
+            const has = (name) => names.some(n => n.toLowerCase() === name.toLowerCase());
+            const stored = (name) => names.find(n => n.toLowerCase() === name.toLowerCase());
             // deployment-failure.yml files P0 issues when main goes red or a
             // deploy fails (Mac, 2026-09-23). That P0 is a standing decision
             // for this one class of issue, so CI may set it there and nowhere else.
             const ciIncident = context.payload.sender.login === 'github-actions[bot]'
-              && names.includes('deployment-failure');
+              && has('DEPLOYMENT-FAILURE');
             const trusted = allowed.includes(context.payload.sender.login) || ciIncident;
             const rm = (name) => github.rest.issues.removeLabel({
               ...context.repo, issue_number: issue.number, name }).catch(() => {});
@@ -41,27 +47,28 @@ jobs:
               ...context.repo, issue_number: issue.number, labels });
             const requeue = () => github.rest.issues.createComment({
               ...context.repo, issue_number: issue.number,
-              body: 'Priority labels are assigned only by the triage agent (SCR-005). Re-queued as `triage`.' });
+              body: 'Priority labels are assigned only by the triage agent (SCR-005). Re-queued as `TRIAGE`.' });
             if (context.payload.action === 'opened') {
               // A creation-time P-label is not a queued state unless the
               // opener is the triage identity: strip it, then queue.
               const pAtOpen = names.filter(n => P.test(n));
               if (!trusted && pAtOpen.length) {
                 for (const n of pAtOpen) await rm(n);
-                if (!names.includes('triage')) await add(['triage']);
+                if (!has('TRIAGE')) await add(['TRIAGE']);
                 await requeue();
-              } else if (!names.includes('triage') && !pAtOpen.length) {
-                await add(['triage']);
+              } else if (!has('TRIAGE') && !pAtOpen.length) {
+                await add(['TRIAGE']);
               }
             }
             if (context.payload.action === 'labeled' && P.test(context.payload.label.name)) {
               if (!trusted) {
                 await rm(context.payload.label.name);
-                if (!names.includes('triage')) await add(['triage']);
+                if (!has('TRIAGE')) await add(['TRIAGE']);
                 await requeue();
-              } else if (names.includes('triage')) {
+              } else if (has('TRIAGE')) {
                 // The triage identity replaced the queue label with a
-                // priority: never both (SCR-005 invariant).
-                await rm('triage');
+                // priority: never both (SCR-005 invariant). Remove the
+                // spelling the issue carries.
+                await rm(stored('TRIAGE'));
               }
             }
