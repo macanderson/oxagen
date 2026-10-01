@@ -703,19 +703,6 @@ describe("recordGovernedAction", () => {
         ...over,
       });
 
-    // A paid top-up lands on the bucket for the month the payment arrives in:
-    // settleGauInvoice calls settleGauPaid without a `now`, so it reads the
-    // real clock. The bucket these tests seed belongs to NOW's month, so the
-    // clock is pinned to NOW. Unpinned, the paid top-up test failed from
-    // 2026-10-01, when the real month moved past September and the grant went
-    // to an October bucket.
-    beforeEach(() => {
-      vi.useFakeTimers({ now: NOW, toFake: ["Date"] });
-    });
-    afterEach(() => {
-      vi.useRealTimers();
-    });
-
     beforeEach(() => {
       order = [];
       mocks.withTenantDb.mockImplementation(
