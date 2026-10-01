@@ -156,6 +156,11 @@ export class ModelCallFailedError extends Error {
  * a stable `code` (the minted key's spend ceiling, `assistant_model_key_limit`)
  * is kept as it is, because a surface branches on that code; anything else is
  * named by the provider's status.
+ *
+ * The AI SDK wraps the last attempt in a `RetryError` after its retries, and
+ * the provider's status sits on `lastError`. Reading only the outer error
+ * named a 402 from an out-of-credits provider "failed before the provider
+ * answered" (#4931). `providerErrorFields` in `@oxagen/ai` reads it the same way.
  */
 export function modelCallFailure(err: unknown): Error {
   if (
@@ -164,7 +169,13 @@ export function modelCallFailure(err: unknown): Error {
   ) {
     return err;
   }
-  const status = (err as { statusCode?: unknown } | null)?.statusCode;
+  const attempt =
+    typeof err === "object" && err !== null && "lastError" in err
+      ? (err as { lastError: unknown }).lastError
+      : err;
+  const status =
+    (attempt as { statusCode?: unknown } | null)?.statusCode ??
+    (err as { statusCode?: unknown } | null)?.statusCode;
   return new ModelCallFailedError(
     typeof status === "number" ? status : null,
     err,
