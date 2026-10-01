@@ -445,10 +445,10 @@ function ResultCap({
   const locale = useLocale();
   const id = useId();
   const staged = stagedCap(tool.name, ops);
-  const [text, setText] = useState(
+  const [text, setText] = useState(() =>
     staged === undefined ? "" : String(capTokens(staged.maxResultBytes)),
   );
-  const [paging, setPaging] = useState<PagingChoice>(
+  const [paging, setPaging] = useState<PagingChoice>(() =>
     pagingChoiceOf(staged?.paging),
   );
   const imported = importedAfter(tool, ops);
