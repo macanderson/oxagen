@@ -104,16 +104,21 @@ on:
 permissions:
   contents: write
 
-# Deploy builds, the daily one included, share one group without cancelling:
-# one builds, the newest waits, and a newer deploy replaces a waiting one, so
-# a burst of merges ends with the tip built rather than every commit or none
-# (the #2730 lesson). Every other run, a release tag above all, gets a group
-# of its own and can never be evicted by a deploy.
+# Deploy builds share one group without cancelling: one builds, the newest
+# waits, and a newer deploy replaces a waiting one, so a burst of merges ends
+# with the tip built rather than every commit or none (the #2730 lesson).
+# Every other run, a release tag above all, gets a group of its own and can
+# never be evicted by a deploy.
+#
+# The daily build keeps a group of its own too. In the deploy group it could
+# evict a waiting deploy build whose commit `publish-installers` had already
+# recorded, then skip that commit as built, and the commit would never be
+# built. Run beside a deploy build, it builds a different commit, because its
+# plan skips the one the record names.
 concurrency:
   group: >-
     desktop-${{
-      (github.event_name == 'schedule' ||
-        (github.event_name == 'workflow_dispatch' && inputs.publish))
+      github.event_name == 'workflow_dispatch' && inputs.publish
         && 'deploy' || github.run_id
     }}
   cancel-in-progress: false
