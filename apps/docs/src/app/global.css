@@ -22,17 +22,21 @@
 }
 
 /*
- * Fumadocs' callout and diff colours, mapped to the house state tokens
- * (#4804). Its defaults are off-palette (warning is #F99C00, an amber the
- * house keeps for nothing), and gold never encodes a state. Each state takes
- * its paper value on light and its ink value under .dark:
+ * Fumadocs' callout and diff colours, replaced with the house state tokens
+ * (#4804). Its defaults are off-palette: the warning is an amber and the idea
+ * an orange, and gold never encodes a state. Fumadocs declares them in
+ * `@theme static`, so an override on :root still shipped its amber in the
+ * stylesheet, and the kit's conformance check read it as an off-palette gold.
+ * A later @theme declaration of the same variable replaces the earlier one,
+ * so only these values reach the output. This block holds the paper values,
+ * and .dark below holds the ink values:
  *   info     approval (a request routed to a person)
  *   warning  denied
  *   error    failed, and the removed side of a diff
  *   success  allowed, and the added side of a diff
  *   idea     proven
  */
-:root {
+@theme static {
   --color-fd-info: var(--ox-st-approval-ink);
   --color-fd-warning: var(--ox-st-denied-ink);
   --color-fd-error: var(--ox-st-failed-ink);
