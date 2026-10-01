@@ -60,9 +60,13 @@ for example `release-notes.ts`, `versions.ts`, and `env-targets.ts`.
 ## Tests
 
 ```bash
-pnpm --filter @oxagen/scripts test:unit app-dir.test.ts
+pnpm --filter @oxagen/scripts test:unit check-restart-alarm.test.ts
+pnpm check:tree-guards app-dir.tree.test.ts
 ```
 
 Never put `--` before the filename. Tests sit beside their scripts as
 `<name>.test.ts`, including under `lib/`, and `vitest.config.ts` collects
-`**/*.test.ts`.
+`**/*.test.ts`. A test that reads the live tree outside this package is named
+`<name>.tree.test.ts`. `vitest.config.ts` leaves those files out of turbo's
+cached tasks, and `pnpm check:tree-guards` runs them uncached in the checks
+job (#4664 item 2).
