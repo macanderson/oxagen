@@ -27,7 +27,7 @@ import {
   TACHO_IDLE_CLOSE_AFTER_MS,
   type TachoSealSource,
 } from "@oxagen/database/schema";
-import { sealTachoSession } from "@oxagen/tacho";
+import { sealTachoSession } from "@oxagen/recorder";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { and, asc, eq, isNull, lt, sql } from "drizzle-orm";
 

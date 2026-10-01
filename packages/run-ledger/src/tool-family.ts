@@ -8,7 +8,7 @@
  * row and a figure can group calls. It never says what the call did: that is
  * the body's job.
  */
-import { TOOL_FAMILIES, type ToolFamily } from "@oxagen/tacho";
+import { TOOL_FAMILIES, type ToolFamily } from "@oxagen/recorder";
 
 // The list of family names is the leaf package's, so the contract that
 // publishes it as an enum and this reading read one list.

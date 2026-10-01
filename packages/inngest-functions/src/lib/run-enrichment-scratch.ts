@@ -23,7 +23,7 @@
 // check, is a failed read that no retry can pass.
 import { NonRetriableError } from "@oxagen/functions";
 import { evidenceStore } from "@oxagen/run-ledger/evidence-store";
-import { digestBytes } from "@oxagen/tacho";
+import { digestBytes } from "@oxagen/recorder";
 import { z } from "zod";
 import {
   ENRICHMENT_CHUNK_CHARS,

@@ -1,5 +1,5 @@
 /**
- * `tacho unenroll` finishes when it cannot remove the Stella identity cache.
+ * `oxagen agent unenroll` finishes when it cannot remove the Stella identity cache.
  * The removal ran unguarded after unenroll shredded the credential store and
  * deleted the keys. An EACCES (entries a Stella under sudo left behind) or an
  * ENOTEMPTY (a Stella hook writing during the removal) threw out of the

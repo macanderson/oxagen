@@ -6,7 +6,7 @@ import {
   sealEvent,
   type TachoEvent,
   type UnsealedTachoEvent,
-} from "@oxagen/tacho";
+} from "@oxagen/recorder";
 import { eq, sql } from "drizzle-orm";
 import { rollupFiles, sessionChangedFilesWhere } from "./file-facts-rollup";
 

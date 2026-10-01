@@ -1155,7 +1155,7 @@ export const agentRunAttemptSeals = agentSchema.table(
     // graded (a row this migration backfilled), never on a new seal.
     replayGrade: text("replay_grade"),
     // The gaps the grade was computed from (closed vocabulary in
-    // @oxagen/tacho COMPLETENESS_GAP_KINDS), as a JSON array of strings.
+    // @oxagen/recorder COMPLETENESS_GAP_KINDS), as a JSON array of strings.
     completenessGaps: jsonb("completeness_gaps")
       .notNull()
       .default(sql`'[]'::jsonb`),

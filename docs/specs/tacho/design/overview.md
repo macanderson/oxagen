@@ -35,7 +35,7 @@ Three lines of positioning:
    enterprise can rip out a logger, but not the thing that signs its agents'
    elevation tokens.
 
-Package names: `@oxagen/tacho` (TypeScript/npm), `tacho` (Python/PyPI),
+Package names: `@oxagen/recorder` (TypeScript/npm), `tacho` (Python/PyPI),
 `tacho-core` (Rust crate, native inside Stella).
 
 ## 2. Design requirements

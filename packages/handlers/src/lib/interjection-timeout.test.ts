@@ -5,7 +5,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
-import { type InterjectBody, interjectBodySchema } from "@oxagen/tacho";
+import { type InterjectBody, interjectBodySchema } from "@oxagen/recorder";
 
 vi.mock("../logger", () => ({
   logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() },

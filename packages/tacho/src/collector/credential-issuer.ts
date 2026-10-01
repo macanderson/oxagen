@@ -1,5 +1,5 @@
 /**
- * The gateway mints run tokens (ADR-143). `tacho credential issue` asks the
+ * The gateway mints run tokens (ADR-143). `oxagen credential issue` asks the
  * daemon over the local socket, the daemon answers with a token from here,
  * and every mint is sealed on the host's own chain as a `token_issued` frame
  * that names the token's id and expiry and never the token.
@@ -128,7 +128,7 @@ export function issueRunToken(
     return {
       status: 403,
       body: {
-        error: `the gateway holds no ${provider} credential in custody, so a run token would buy nothing; run \`tacho enroll\` again`,
+        error: `the gateway holds no ${provider} credential in custody, so a run token would buy nothing; run \`oxagen agent enroll\` again`,
         code: "credential_unavailable",
       },
     };
@@ -141,7 +141,7 @@ export function issueRunToken(
     return {
       status: 403,
       body: {
-        error: `this host's enrollment expired at ${host.expires_at}, so no static run token is issued; run \`tacho enroll\` again`,
+        error: `this host's enrollment expired at ${host.expires_at}, so no static run token is issued; run \`oxagen agent enroll\` again`,
         code: "host_expired",
       },
     };

@@ -35,6 +35,17 @@ if (!existsSync(bundle)) {
 
 const src = JSON.parse(readFileSync(resolve(cliRoot, "package.json"), "utf8"));
 
+// `oxagen hook` and `oxagen daemon` decide Cedar policies (#4879). The bundle
+// loads Cedar's Node build from `node_modules` at run time, the way the
+// recorder's own npm package does, so the published manifest carries it.
+const CEDAR = "@cedar-policy/cedar-wasm";
+const cedarVersion = src.dependencies?.[CEDAR];
+if (typeof cedarVersion !== "string" || cedarVersion.length === 0) {
+  throw new Error(
+    `package.json names no ${CEDAR} dependency, and \`oxagen hook\` cannot decide Cedar policies without it`,
+  );
+}
+
 const manifest = {
   name: src.name,
   version: src.version,
@@ -45,6 +56,7 @@ const manifest = {
   bin: { oxagen: "oxagen.mjs" },
   files: ["oxagen.mjs", "README.md"],
   engines: { node: ">=20" },
+  dependencies: { [CEDAR]: cedarVersion },
   keywords: src.keywords,
   homepage: src.homepage,
   repository: src.repository,

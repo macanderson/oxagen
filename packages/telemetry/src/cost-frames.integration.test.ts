@@ -6,7 +6,7 @@ import {
   sessionUuid,
   type TachoEvent,
   type UnsealedTachoEvent,
-} from "@oxagen/tacho";
+} from "@oxagen/recorder";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { describe, expect, it } from "vitest";
 import { readModelCallFrames } from "./cost-frames";

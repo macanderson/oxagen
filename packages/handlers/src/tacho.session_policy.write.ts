@@ -1,7 +1,7 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { CapabilityError } from "@oxagen/oxagen/kernel";
 import { tachoSessionPolicyWrite } from "@oxagen/oxagen/contracts/tacho.session_policy.write";
-import { BUNDLE_FEATURE_INDEPENDENT_MODELS } from "@oxagen/tacho";
+import { BUNDLE_FEATURE_INDEPENDENT_MODELS } from "@oxagen/recorder";
 import { schema, withTenantDb } from "@oxagen/database";
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { and, eq, ne } from "drizzle-orm";

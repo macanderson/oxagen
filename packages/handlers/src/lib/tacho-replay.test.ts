@@ -8,7 +8,7 @@ import {
   digestBytes,
   sealEvent,
   sessionUuid,
-} from "@oxagen/tacho";
+} from "@oxagen/recorder";
 import { describe, expect, it } from "vitest";
 import {
   countBodyFrames,
@@ -16,7 +16,7 @@ import {
   sealTachoSession,
   verifyBatchBodies,
 } from "./tacho-replay";
-import { sealTachoSession as fromTacho } from "@oxagen/tacho";
+import { sealTachoSession as fromTacho } from "@oxagen/recorder";
 
 const SESSION = sessionUuid("tch_host", "sess-1");
 const OUTPUT = "hello";
@@ -280,10 +280,10 @@ describe("countContentFrames", () => {
   });
 });
 
-// The grading moved to `@oxagen/tacho` (#3980), where its cases now live, so
+// The grading moved to `@oxagen/recorder` (#3980), where its cases now live, so
 // the idle close grades with the same rule. Ingest still imports it from here.
 describe("sealTachoSession", () => {
-  it("is the one in @oxagen/tacho", () => {
+  it("is the one in @oxagen/recorder", () => {
     expect(sealTachoSession).toBe(fromTacho);
   });
 });

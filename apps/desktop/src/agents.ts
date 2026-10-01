@@ -405,7 +405,7 @@ function customRow(
     wrapped: true,
     health,
     summary,
-    details: ["reports through tacho hook"],
+    details: ["reports its own steps"],
     lastSeenAt: agent.last_seen_at,
     sessionsLive: agent.sessions_live,
     sessionsTotal: agent.sessions_total,

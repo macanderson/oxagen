@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from "vitest";
-import { requireCedarRuntime, type CedarRuntime } from "@oxagen/tacho/policy";
+import { requireCedarRuntime, type CedarRuntime } from "@oxagen/recorder/policy";
 import type { CompiledPolicySet } from "./compile";
 import { toolVisibility, type VisibilityInput } from "./visibility";
 import {

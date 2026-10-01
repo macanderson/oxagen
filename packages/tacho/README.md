@@ -1,15 +1,24 @@
-# @oxagen/tacho
+# @oxagen/recorder
 
-Tacho is the Oxagen wrapper that records, gates, and evidences agents Oxagen
+The recorder is the library that records, gates, and evidences agents Oxagen
 does not run itself: the four wrapped harnesses (Claude Code, Codex CLI,
-Cursor, and Stella, ADR-101), Claude Agent SDK agents, and custom agents.
-Spec: `docs/specs/tacho/spec.md`. Column contract:
+Cursor, and Stella, ADR-101), Claude Agent SDK agents, and custom agents. The
+`oxagen` CLI ([`apps/cli`](../../apps/cli/README.md)) runs it.
+`oxagen agent enroll` and the other machine commands call into it, and the
+hooks and the service an enroll installs run `oxagen hook` and
+`oxagen daemon`. Spec: `docs/specs/tacho/spec.md`. Column contract:
 `docs/specs/tacho/data-model.md`. The desktop app that installs it:
 `docs/specs/oxagen-desktop/spec.html`.
 
-This package is a leaf: no `@oxagen/*` runtime dependency, so it publishes on
-its own with three executables — or, compiled, as one multi-call binary (see
-[Building the executables](#building-the-executables)). The one list it shares
+The directory is still `packages/tacho`. The wire format (`tacho/1.0`), the
+event names, the `tacho.*` database schema, and the paths under
+`~/.config/oxagen/tacho/` keep the old name.
+
+This package is a leaf: no `@oxagen/*` runtime dependency. It is private and
+not published. The `@oxagen/cli` package bundles it, and the desktop app also
+ships it compiled as one multi-call binary under its older name (see
+[Building the executables](#building-the-executables) and
+[Older executable names](#older-executable-names)). The one list it shares
 with the control plane by copy rather than import is `TACHO_RUNTIMES`
 (`src/envelope.ts`), the values `agent.runtime` may take;
 `packages/database/src/schema/tacho.ts` holds the same list for the
@@ -21,8 +30,10 @@ name (`contextForHarness` and `RUNTIME_FOR_HARNESS` in
 ## Boundary
 
 - **Owns:** the `tacho/1.0` event envelope and per-session hash chain, the
-  host executables (`tacho`, `tachod`, `tacho-hook`), the hook adapters and
-  settings writers for each wrapped harness, the signed policy bundle's
+  work behind the machine commands the `oxagen` CLI runs (`oxagen agent …`,
+  `oxagen hook`, `oxagen daemon`, and the rest), the older executable names
+  kept as aliases, the hook adapters and settings writers for each wrapped
+  harness, the signed policy bundle's
   offline evaluation, the loopback model proxy and MCP gateway, the evidence
   primitives (Merkle, attestation, run export), and the `contextgraph-trace`
   journal.
@@ -32,12 +43,12 @@ name (`contextForHarness` and `RUNTIME_FOR_HARNESS` in
   under `/v1/tacho`); the capability contracts that carry these documents
   ([`@oxagen/oxagen`](../oxagen/README.md), `src/tacho/schemas.ts`); the
   `tacho_events` store ([`@oxagen/telemetry`](../telemetry/README.md)) and the
-  `tacho` Postgres schema ([`@oxagen/database`](../database/README.md),
-  `src/schema/tacho.ts`); the `oxagen tacho` command wrapper
+  `tacho.*` Postgres schema ([`@oxagen/database`](../database/README.md),
+  `src/schema/tacho.ts`); the `oxagen` command tree that wraps these commands
   ([`apps/cli`](../../apps/cli/README.md)); the desktop installer
   ([`apps/desktop`](../../apps/desktop/README.md)).
-- **Depends on:** No `@oxagen/*` runtime dependencies. The package is a leaf
-  and publishes on its own.
+- **Depends on:** No `@oxagen/*` runtime dependencies. The package is a
+  leaf.
 - **Used by:** `@oxagen/oxagen`, `@oxagen/handlers`, `@oxagen/telemetry`,
   `@oxagen/run-ledger`, `@oxagen/inngest-functions`, `apps/api`, and
   `apps/cli`.
@@ -47,10 +58,10 @@ name (`contextForHarness` and `RUNTIME_FOR_HARNESS` in
 | Seam | Kind | Source | Wired by |
 |---|---|---|---|
 | Host and control-plane documents (bundle, claims, batch, envelope, commands) | export | `packages/tacho/src/wire.ts` | Re-exported by `packages/oxagen/src/tacho/schemas.ts` for its contracts |
-| `CliDeps` | port | `packages/tacho/src/cli/deps.ts` | `defaultCliDeps`, called from `apps/cli/src/commands/tacho.ts` |
-| `ControlClient` (ingest, bundle, commands endpoints) | boundary | `packages/tacho/src/host/control-client.ts` | `tachod` and `tacho` on the host, answered by `apps/api/src/app.ts` routes under `/v1/tacho` |
-| Harness hook and settings writers | boundary | `packages/tacho/src/host/settings-writer.ts`, `codex-writer.ts`, `cursor-writer.ts`, `stella-writer.ts` | `tacho enroll`, `reassign`, `unenroll` |
-| Cursor and Stella payload adapters | adapter | `packages/tacho/src/claude-code/cursor-adapter.ts`, `stella-adapter.ts` | `packages/tacho/src/claude-code/hook-client.ts`, for `tacho-hook --harness cursor` and `--harness stella` |
+| `CliDeps` | port | `packages/tacho/src/cli/deps.ts` | `defaultCliDeps` with `oxagenRuntimeCommands`, called from `apps/cli/src/commands/tacho.ts` |
+| `ControlClient` (ingest, bundle, commands endpoints) | boundary | `packages/tacho/src/host/control-client.ts` | `oxagen daemon` and the `oxagen agent` commands on the host, answered by `apps/api/src/app.ts` routes under `/v1/tacho` |
+| Harness hook and settings writers | boundary | `packages/tacho/src/host/settings-writer.ts`, `codex-writer.ts`, `cursor-writer.ts`, `stella-writer.ts` | `oxagen agent enroll`, `reassign`, `unenroll` |
+| Cursor and Stella payload adapters | adapter | `packages/tacho/src/claude-code/cursor-adapter.ts`, `stella-adapter.ts` | `packages/tacho/src/claude-code/hook-client.ts`, for `oxagen hook --harness cursor` and `--harness stella` |
 | Collector socket and loopback listeners | boundary | `packages/tacho/src/collector/server.ts`, `model-proxy-listener.ts` | `startDaemon` in `packages/tacho/src/collector/daemon.ts` |
 | `TACHO_RUNTIMES` copy | boundary | `packages/tacho/src/envelope.ts` | Must equal `packages/database/src/schema/tacho.ts`. `packages/handlers/src/tacho.runtimes.test.ts` fails on drift |
 | `STEERING_MANIFEST_SCHEMA` copy | boundary | `packages/tacho/src/wire.ts` | Must equal the constant in `packages/steering-assembler/src/assemble.ts` |
@@ -64,10 +75,15 @@ name (`contextForHarness` and `RUNTIME_FOR_HARNESS` in
   with `FAIL_OPEN_HOOK_PATHS`.
 - `./collector` → `src/collector/index.ts`: the daemon and its parts.
 - `./host` → `src/host/index.ts`: host primitives and settings writers.
-- `./cli` → `src/cli/index.ts`: the `tacho` commands and `defaultCliDeps`.
+- `./cli` → `src/cli/index.ts`: the machine commands (`enroll`, `status`,
+  `run`, `detect`, and the rest), `defaultCliDeps`, and
+  `oxagenRuntimeCommands`.
+- `./program` → `src/cli/main.ts`: the recorder's own command tree and
+  `recordedCliDeps`.
+- `./hook` → `src/claude-code/hook-process.ts`: what `oxagen hook` runs.
 - `./trace` → `src/trace/index.ts`: the `contextgraph-trace` journal.
-- `bin`: `tacho` (`bin/tacho.mjs`), `tachod` (`bin/tachod.mjs`), and
-  `tacho-hook` (`bin/tacho-hook.mjs`).
+- `bin`: the three older executable names, in `bin/`. See
+  [Older executable names](#older-executable-names).
 
 ## Rules
 
@@ -83,7 +99,7 @@ name (`contextForHarness` and `RUNTIME_FOR_HARNESS` in
 ## Tests
 
 ```bash
-pnpm --filter @oxagen/tacho test:unit src/chain.test.ts
+pnpm --filter @oxagen/recorder test:unit src/chain.test.ts
 ```
 
 Never put `--` before the filename. Tests sit beside their modules as
@@ -93,21 +109,23 @@ the recorded sessions and the daemon end-to-end test.
 ## Enrolling a machine
 
 ```
-oxagen login                      # once, on the machine
-oxagen tacho enroll               # or: npx @oxagen/tacho enroll --token ... --org ... --workspace ...
-oxagen tacho status
-oxagen tacho verify               # one headless claude turn, confirmed chained
-oxagen tacho reassign --workspace other   # move the host; keeps the device key
-oxagen tacho unenroll
+oxagen login                                # once, on the machine
+oxagen agent enroll                         # or: oxagen agent enroll --token ... --org ... --workspace ...
+oxagen agent status
+oxagen agent verify                         # one headless claude turn, confirmed chained
+oxagen agent reassign --workspace other     # move the host; keeps the device key
+oxagen agent unenroll
 ```
 
 `enroll` generates an Ed25519 device key, calls `create_tacho_enrollment`,
 writes `~/.config/oxagen/tacho/host.json` (0600) with the host API key and the
-signed policy bundle, installs `tachod` as a launchd agent, a systemd user
-unit, or a per-user Task Scheduler task, and merges Tacho's hook entries into
-each harness named by `--harness` (`claude-code`, `codex`, `cursor`, `stella`,
-or a comma list; `claude-code` by default on a fresh enrollment, the current
-list on a re-apply) without touching any entry it did not write. From that point
+signed policy bundle, installs the collector service, which runs
+`oxagen daemon`, as a launchd agent (`sh.oxagen.tachod`), a systemd user unit
+(`tachod.service`), or a per-user Task Scheduler task, and merges its hook
+entries into each harness named by `--harness` (`claude-code`, `codex`,
+`cursor`, `stella`, or a comma list; `claude-code` by default on a fresh
+enrollment, the current list on a re-apply) without touching any entry it did
+not write. From that point
 every session of those harnesses on the machine is chained and shipped.
 
 `reassign --org … --workspace …` points the host at another workspace or org.
@@ -137,21 +155,20 @@ already hooks acts on that agent. An enroll for harnesses no live agent hooks
 creates a new agent directory and revokes nothing, with a token or without
 one.
 
-One `tachod` runs a collector per agent, on that agent's ports, and one
-service serves them all. The commands that act on one agent name it by
+One collector process runs a collector per agent, on that agent's ports, and
+one service serves them all. The commands that act on one agent name it by
 harness:
 
 ```
-tacho unenroll --harness codex            # remove the agent that hooks Codex
-tacho unenroll --all                      # remove every agent on the machine
-tacho reassign --harness codex --workspace other
-tacho status --json                       # `enrollments` holds one report per agent
+oxagen agent unenroll --harness codex       # remove the agent that hooks Codex
+oxagen agent unenroll --all                 # remove every agent on the machine
+oxagen agent reassign --harness codex --workspace other
+oxagen agent status --json                  # `enrollments` holds one report per agent
 ```
 
 A bare `unenroll` or `reassign` on a machine with two enrollments refuses and
-lists them. `oxagen tacho unenroll` and `oxagen agent unenroll` without an
-agent take the same `--harness` and `--all`. Unenrolling one agent restarts
-the service for the agents that remain. Spec §5.8 has the full rules.
+lists them. Unenrolling one agent restarts the service for the agents that
+remain. Spec §5.8 has the full rules.
 
 `reassign` moves only an agent enrolled through the CLI session. A token
 enrollment records the registered agent's id in `host.json` (`agent_id`,
@@ -159,8 +176,8 @@ beside `enrollment_source: "token"`), and an agent stays in the workspace it
 is registered in. `reassign` refuses such an agent before it revokes anything,
 whether it is the only agent on the machine or one of several. To report its
 harness to another workspace, register an agent there on the Agents page, run
-`tacho unenroll --harness <harness>`, and run the enroll command the page
-shows. `reassign` enrolls again through the CLI session, which links no agent,
+`oxagen agent unenroll --harness <harness>`, and run the enroll command the
+page shows. `reassign` enrolls again through the CLI session, which links no agent,
 so it refuses a harness change on a token-enrolled agent too. So does
 `enroll --harness` when it would add a harness to one. Register an agent for
 the new harness instead (#4410, ADR-203).
@@ -192,22 +209,22 @@ command lines are double-quoted for `cmd.exe`, and paths go through
 
 ## What runs on the host
 
-| Executable | Role |
+| Command | Role |
 |---|---|
-| `tachod` (`src/collector/`) | The collector. Listens on a Unix socket and `127.0.0.1:<port>` with a per-install bearer; normalizes hooks, OTLP, and spool replays into per-session hash chains; appends to an NDJSON WAL; ships batches to `ingest_tacho_events` at least once with backoff and bisection; applies operator commands from the control envelope; watches for hooks removed and transcripts that advance with no hook stream; signs chain-head checkpoints with the device key; continues every chain across a restart from `daemon.json` |
-| `tacho-hook` (`src/claude-code/hook-main.ts`) | The command hook Claude Code runs on `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PermissionRequest`, `Stop`, and `SessionEnd`. Hands the payload to the daemon over the socket inside a 50 ms connect budget; if the daemon is down it decides from the cached, signature-verified bundle, spools the event, and still answers, so enforcement never depends on the daemon |
-| `tacho` (`src/cli/`) | `enroll`, `status`, `reassign`, `unenroll`, `export` (tacho NDJSON, `contextgraph-trace` journal, OTLP JSON), `verify`, `daemon`, `hook`, `credential issue` (what Claude Code runs as its `apiKeyHelper`) and `credential status` |
+| `oxagen daemon` (`src/collector/`) | The collector. Listens on a Unix socket and `127.0.0.1:<port>` with a per-install bearer; normalizes hooks, OTLP, and spool replays into per-session hash chains; appends to an NDJSON WAL; ships batches to `ingest_tacho_events` at least once with backoff and bisection; applies operator commands from the control envelope; watches for hooks removed and transcripts that advance with no hook stream; signs chain-head checkpoints with the device key; continues every chain across a restart from `daemon.json` |
+| `oxagen hook` (`src/claude-code/hook-process.ts`) | The command hook Claude Code runs on `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PermissionRequest`, `Stop`, and `SessionEnd`. Hands the payload to the daemon over the socket inside a 50 ms connect budget; if the daemon is down it decides from the cached, signature-verified bundle, spools the event, and still answers, so enforcement never depends on the daemon |
+| `oxagen agent …` (`src/cli/`) | `enroll`, `status`, `reassign`, `unenroll`, `export` (the recorder's NDJSON, the `contextgraph-trace` journal, or OTLP JSON), `verify`, `run` (`agent-run.ts`), and `detect`. The hidden `oxagen credential issue` (what Claude Code runs as its `apiKeyHelper`), `oxagen credential status`, `oxagen mcp-stdio`, `oxagen github`, and `oxagen arp` live here too |
 
 Telemetry-only events (`PostToolUse`, `SubagentStart`, and the rest of the
 25 http events) post straight to the daemon; a failure there is recorded as a
 chained `telemetry_gap`, never as a blocked action. `SessionEnd` is the
-exception: it runs `tacho-hook` like the enforcement events, so a session
+exception: it runs `oxagen hook` like the enforcement events, so a session
 that ends while the daemon is down is spooled and sealed when the daemon
 replays the spool (`SPOOLED_HOOK_EVENTS`).
 
 The daemon also seals a session when its harness process exits, within one
 sweep (30 s). Claude Code exports its pid as `CLAUDE_PID`. For Stella and
-Codex, `tacho-hook` walks up from its parent with `ps` to the harness process
+Codex, `oxagen hook` walks up from its parent with `ps` to the harness process
 and passes it as `TACHO_HARNESS_PID`. The Stella walk reads `/proc` on Linux
 instead of `ps`, and takes `STELLA_PID` without a walk when Stella exports it
 (`docs/specs/tacho/spec.md` §10.1). An operator's `cancel` sends that pid
@@ -222,9 +239,30 @@ of them. A Cursor session ends on Cursor's own `sessionEnd`, or after one
 hour with no hook (ADR-141). A session sealed that way reopens on its next
 hook.
 
+## Older executable names
+
+Machines enrolled before #4879 run three older executables by name from their
+hooks and their user service. The package keeps them as hidden aliases, so
+those machines keep recording (`src/cli/alias.ts`, `bin/`):
+
+- `tacho` runs the recorder's own commands and prints one line on stderr naming the `oxagen` command that replaced the one it ran. <!-- tacho-command-check: alias -->
+- `tachod` runs the collector and writes one line to the service log naming `oxagen daemon`. <!-- tacho-command-check: alias -->
+- `tacho-hook` runs the hook, and prints its line only when a person typed it at a terminal. <!-- tacho-command-check: alias -->
+
+A command another program runs and reads (`hook`, `mcp-stdio`, `credential`,
+`github`) prints its line only at a terminal too, so a harness, a connected
+app, or git never reads it as output. `oxagen agent status`, and a successful
+`oxagen agent enroll`, move every agent whose hooks or service still name an
+older executable to `oxagen hook` and `oxagen daemon` (`moveOffTachoNames`,
+`src/cli/move-commands.ts`). `oxagen agent enroll` writes only the `oxagen`
+names.
+`pnpm check:tacho-commands` fails CI on a user-facing string that tells a
+person to type an older one.
+
 ## The gateway: the loopback model proxy
 
-`tachod` also stands between a wrapped harness and its model vendor (ADR-094).
+The collector also stands between a wrapped harness and its model vendor
+(ADR-094).
 It serves a second loopback listener, on the port after the collector's unless
 `host.json` pins `model_proxy_port`, and forwards each request to the vendor.
 The prompt goes from your machine to the vendor you chose. Oxagen receives a
@@ -243,10 +281,11 @@ written to a frame or a log.
 Stella's URL has a prefix of its own because Stella sends no session header.
 The prefix tells the proxy the call is Stella's, and the one live Stella
 session gets it; with two live Stella sessions the call is filed on the
-daemon's chain. The table goes directly before Tacho's hooks block in
+daemon's chain. The table goes directly before the recorder's hooks block in
 `stella.toml`, so each enroll's re-append of that block leaves it in place. A
-`providers.anthropic.base_url` you set yourself is left alone, and `tacho
-enroll` and `tacho status` say Stella's calls are not routed. Stella's other
+`providers.anthropic.base_url` you set yourself is left alone, and
+`oxagen agent enroll` and `oxagen agent status` say Stella's calls are not
+routed. Stella's other
 providers (OpenRouter, Z.ai, xAI, DeepSeek, Gemini and the rest) still go
 straight to the vendor, because the proxy has no upstream for them.
 
@@ -259,12 +298,12 @@ The daemon reports what each of these files holds now on every health poll
 still one edit; it is no longer a silent one.
 ### The credential seam: the harness holds a run token
 
-By default `tacho enroll` also takes the vendor key out of the harness and
+By default `oxagen agent enroll` also takes the vendor key out of the harness and
 gives the harness a **run token** instead (ADR-143). It seals the key first
 and edits the file second, so a crash between the two leaves the key where it
 was. The key is sealed in
 `credentials.json` under `TACHO_HOME`, AES-256-GCM under `credentials.key`
-beside it, both mode 0600, and it is read by `tachod` and by nothing else. A
+beside it, both mode 0600, and it is read by the collector and by nothing else. A
 run token is `oxrt_<claims>.<hmac>`, signed by `run-token.key`, naming this
 host, the harness, the provider and an expiry. It works at this machine's
 gateway and nowhere else: the vendor refuses it, and reverting the base URL
@@ -272,8 +311,8 @@ leaves the harness with no credential the vendor accepts.
 
 | Harness | What the harness holds | How it is refreshed |
 |---|---|---|
-| Claude Code | `apiKeyHelper` in `~/.claude/settings.json` runs `tacho credential issue --harness claude-code`, which prints a fifteen-minute token; `env.ANTHROPIC_API_KEY` and `env.ANTHROPIC_AUTH_TOKEN` are taken into custody, since either would win over the helper | Claude Code re-runs the helper every five minutes and on any 401 |
-| Codex | `OPENAI_API_KEY` in `~/.codex/auth.json` holds a static token bounded by the enrollment's expiry | `tachod` re-mints it once an hour when it nears expiry or no longer verifies for the enrollment; `tacho enroll` does the same; it dies with the enrollment, the signing key, or a host revoke |
+| Claude Code | `apiKeyHelper` in `~/.claude/settings.json` runs `oxagen credential issue --harness claude-code`, which prints a fifteen-minute token; `env.ANTHROPIC_API_KEY` and `env.ANTHROPIC_AUTH_TOKEN` are taken into custody, since either would win over the helper | Claude Code re-runs the helper every five minutes and on any 401 |
+| Codex | `OPENAI_API_KEY` in `~/.codex/auth.json` holds a static token bounded by the enrollment's expiry | The collector re-mints it once an hour when it nears expiry or no longer verifies for the enrollment. `oxagen agent enroll` does the same. It dies with the enrollment, the signing key, or a host revoke |
 
 The proxy verifies the token, drops it, and attaches the custody credential in
 the vendor's own header. A call to a brokered provider that brings its own
@@ -290,15 +329,15 @@ claude.ai subscription has no key to take (the helper wins over it, so a
 brokered host sends the token however the person signed in), and a ChatGPT
 login in Codex's `auth.json` cannot be brokered, so a call carrying
 `ChatGPT-Account-ID` crosses as the harness's own whatever the host holds,
-and `tacho status` says so. Only `tachod` mints: when it is not running,
-`tacho credential issue` prints nothing and says why, since the proxy the
-token would be spent at is the daemon.
+and `oxagen agent status` says so. Only the collector mints. When it is not
+running, `oxagen credential issue` prints nothing and says why, since the
+proxy the token would be spent at is the collector.
 `TACHO_BROKER_ANTHROPIC_API_KEY` and `TACHO_BROKER_OPENAI_API_KEY` in the
 enrolling shell hand a key to custody that was never in a harness file.
-`tacho enroll --credentials passthrough` gives every key back; `tacho
-unenroll` does the same first of all, then shreds the store and the signing
-key. `tacho credential status` shows what is held by provider, kind, source
-and date, and never the secret.
+`oxagen agent enroll --credentials passthrough` gives every key back.
+`oxagen agent unenroll` does the same first of all, then shreds the store and
+the signing key. `oxagen credential status` shows what is held by provider,
+kind, source and date, and never the secret.
 
 `src/host/model-credential.ts` writes and restores the harness files,
 `src/host/credential-store.ts` is the custody, and `src/host/run-token.ts`
@@ -394,7 +433,7 @@ came, zstd included.
 **Websockets.** An upgrade is answered `426`, which is the status Codex falls
 back to HTTP on for the rest of the run.
 
-`GET /healthz` on the proxy port and `gateway` in `tacho status` report
+`GET /healthz` on the proxy port and `gateway` in `oxagen agent status` report
 `{ listening, port, routes, calls_observed }`.
 
 ## Honesty
@@ -459,7 +498,7 @@ the design is in `docs/mission-control-spec.md` §7 and §10.5, the phases in
   query, under a tight timeout, and fails open. Every assembly seals a
   `steering.manifest` frame.
 - **Phase 4**, in build now on branches `gateway-model-proxy` and
-  `desktop-install-hardening` (issues #3299 and #3301, ADR-094). `tachod` grows
+  `desktop-install-hardening` (issues #3299 and #3301, ADR-094). The collector grows
   into the gateway: a loopback model proxy (Anthropic
   Messages and OpenAI Responses passthrough with streaming, enrollment writes the
   base URL) and an MCP aggregator that re-serves the harness's existing MCP servers
@@ -501,7 +540,7 @@ denies non-read-only tools regardless. An unverified bundle denies them in
 either mode, because the mode it claims is not signed. A bundle signed for
 another host counts as unverified. Five events run as
 command hooks (`COMMAND_HOOK_EVENTS`), and four of them can refuse. `Stop` is
-the fifth. `SessionEnd` also runs `tacho-hook`, so it spools, and it refuses
+the fifth. `SessionEnd` also runs `oxagen hook`, so it spools, and it refuses
 nothing.
 
 The tier words are fixed by ADR-095: `observe`, `harness`, `gateway`,
@@ -514,9 +553,9 @@ The tier words are fixed by ADR-095: `observe`, `harness`, `gateway`,
 | `envelope.ts`, `chain.ts`, `columns.ts`, `ids.ts`, `digest.ts`, `timestamp.ts` | The `tacho/1.0` event schema, the per-session hash chain, the `tacho_events` row flattening, deterministic identity, RFC 8785 digests, the CGP timestamp profile |
 | `wire.ts` | The documents that cross between host and control plane: policy bundle, enrollment claims, batch, control envelope, commands. `packages/oxagen` re-exports these for its contracts |
 | `host/` | Host primitives: paths, `host.json`, the device key, offline bundle verification and the ordered `PreToolUse` evaluation over Claude Code rule syntax, the WAL, the Claude Code settings writer and the Codex hooks writer, launchd / systemd / Task Scheduler units, process scan, the control-plane client |
-| `claude-code/` | Pure normalizers for hook payloads, the OpenTelemetry export, transcripts, and the headless result stream; the recorder that seals them into parent and subagent chains (restorable across restarts); the `tacho-hook` client |
+| `claude-code/` | Pure normalizers for hook payloads, the OpenTelemetry export, transcripts, and the headless result stream; the recorder that seals them into parent and subagent chains (restorable across restarts); the hook client `oxagen hook` runs |
 | `collector/` | `handleHookEvent`, the session registry, the listener, the shipper, the command inbox, the detector, the exporters, the loopback model proxy (`model-proxy.ts`, `model-usage.ts`, `model-pricing.ts`, `model-routes.ts`), and `startDaemon` that composes them |
-| `cli/` | The `tacho` commands behind an injectable `CliDeps` port; `native.ts` is the compiled binary's multi-call entry |
+| `cli/` | The machine commands behind an injectable `CliDeps` port. `agent-run.ts` is `oxagen agent run`, `alias.ts` is the one line each older executable prints, and `native.ts` is the older compiled binary's multi-call entry |
 | `trace/` | The `contextgraph-trace` journal vocabulary, its strict parser, a port of the eight replay oracles, and the projection from Tacho events |
 
 ## Test fixtures and suites
@@ -532,10 +571,19 @@ latency figures recorded in the tacho build plan, now
 
 ## Building the executables
 
+The `oxagen` CLI runs the recorder, so its build is the one a machine needs:
+
 ```
-pnpm --filter @oxagen/tacho bundle          # dist-standalone/{tacho,tachod,tacho-hook}.mjs
-pnpm --filter @oxagen/tacho publish:standalone
-pnpm --filter @oxagen/tacho compile         # dist-bin/tacho: one self-contained executable
+pnpm --filter @oxagen/cli bundle               # apps/cli/dist-standalone/oxagen.mjs
+pnpm --filter @oxagen/cli compile              # apps/cli/dist-bin/oxagen: one self-contained executable
+```
+
+This package still builds the older executable names, which the desktop app
+ships beside `oxagen` for machines enrolled before the move:
+
+```
+pnpm --filter @oxagen/recorder bundle          # dist-standalone/{tacho,tachod,tacho-hook}.mjs
+pnpm --filter @oxagen/recorder compile         # dist-bin/tacho: the older multi-call executable
 ```
 
 ### The compiled binary
@@ -547,22 +595,25 @@ postject, ad-hoc re-sign; on Windows inject only). The host node is the
 runtime that ships, so each OS builds its own; there is no cross-compile.
 One binary weighs about 120 MB.
 
-The result is one multi-call binary rather than three: `tacho daemon` is the
-service body and `tacho hook` the command hook, dispatched in
-`src/cli/native.ts` before commander is built because the hook runs on every
-tool call (cold start about 111 ms, the same process-start cost as the
-separate `.mjs`; the 50 ms budget is the time allowed to *reach* the daemon).
-`runtimeCommands` writes `<bin>/tacho hook` and `[<bin>/tacho, daemon]`
-whenever it finds that layout, in a Homebrew prefix or in the `TACHO_BIN_DIR`
-the desktop app points it at. A `TACHO_BIN_DIR` with no `tacho` in it is an
-`executableProblem`, and `enroll` refuses: the running process is not named in
-its place, because for the desktop app that process is the bundle's sidecar.
+The result is one multi-call binary. `oxagen daemon` is the service body and
+`oxagen hook` the command hook, dispatched in `apps/cli/src/index.ts` before
+the command tree loads, because the hook runs on every tool call. The older
+binary, which dispatches the same two commands in `src/cli/native.ts`,
+measured a cold start of about 111 ms, the same process-start cost as a
+separate `.mjs`. The 50 ms budget is the time allowed to *reach* the daemon.
+`oxagenRuntimeCommands` (`src/cli/deps.ts`) writes `<bin>/oxagen hook` and
+`[<bin>/oxagen, daemon]`, naming the compiled executable by its own path, or
+the one in the `TACHO_BIN_DIR` the desktop app points it at. A
+`TACHO_BIN_DIR` with no `oxagen` in it is an `executableProblem`, and
+`enroll` refuses: the running process is not named in its place, because for
+the desktop app that process is the bundle's sidecar.
 
 ### The desktop app
 
-`apps/desktop` (Tauri 2) ships this binary and the compiled `oxagen` CLI as
-sidecars, signs the machine in, enrolls it, and manages the workspace and
-the wrappers by running these same commands; it owns no state of its own.
+`apps/desktop` (Tauri 2) ships the compiled `oxagen` CLI and the older
+compiled binary as sidecars. It signs the machine in, enrolls it, and manages
+the workspace and the wrappers by running these same commands. It owns no
+state of its own.
 
 Every command enrollment writes names a versioned per-user copy of the
 sidecars, never a path inside the app bundle (ADR-230). On each launch the app
@@ -573,15 +624,19 @@ on macOS, `~/.local/share/oxagen/bin/<version>` on Linux, or
 helper, the Claude Desktop MCP entry, and the service unit therefore survive
 the app going to the Trash or its package being removed. An update copies its
 version beside the old one, so no file the running daemon holds is replaced.
-`tacho enroll` run from the new copy (the app's Re-apply) moves the hooks and
-the service to it, and the app removes an old copy once no `host.json` and no
+An enroll run from the new copy (the app's Re-apply) moves the hooks and the
+service to it, and the app removes an old copy once no `host.json` and no
 PATH link names it.
 
-To uninstall without the app, run the copy's own `tacho unenroll --all
---purge`, for example `"$HOME/Library/Application
-Support/oxagen/bin/<version>/tacho" unenroll --all --purge`. It removes what
-enrollment wrote: the harness files from their receipts (`install-receipts.json`,
-`host/harness-file.ts`), the service, and the agent state. The copy itself,
+To uninstall without the app, run the copy's own `oxagen`:
+
+```
+"$HOME/Library/Application Support/oxagen/bin/<version>/oxagen" agent unenroll --all --purge
+```
+
+It removes what enrollment wrote: the harness files from their receipts
+(`install-receipts.json`, `host/harness-file.ts`), the service, and the agent
+state. The copy itself,
 the PATH links, and the shell profile block are the app's, and its
 **Uninstall** removes them.
 
@@ -599,7 +654,8 @@ release; `tools/packaging/` holds the Homebrew and Scoop templates that
 install from those assets.
 
 Not here yet: elevation through the control plane with Biscuit tokens (plan
-PR 6), the Claude Agent SDK and custom-agent adapters (PR 5).
+PR 6), and the Claude Agent SDK adapter (PR 5). A custom agent reports through
+`oxagen agent run` and `oxagen hook --agent <name>`.
 
 ### Recovery during shipment and uninstall
 

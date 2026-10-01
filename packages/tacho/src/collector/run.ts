@@ -1,8 +1,9 @@
 /**
  * The daemon process body: run the collector in the foreground until
  * SIGTERM, writing the pid file and refreshing the bundle on SIGHUP. Shared
- * by the `tachod` executable and `tacho daemon` (the compiled single binary
- * is multi-call, so the service unit runs `tacho daemon`).
+ * by `oxagen daemon` and its hidden aliases, the `tachod` executable and
+ * `tacho daemon` from the compiled single binary (#4879). A service unit
+ * written by `oxagen agent enroll` runs `oxagen daemon`.
  *
  * One process serves every agent on the machine (ADR-203): a collector per
  * agent, each on its own ports and with its own state, under one service,
@@ -220,7 +221,7 @@ export async function startAgents(
   if (started.length === 0)
     throw (
       firstError ??
-      new Error("no enrollment on this machine; run `tacho enroll` first")
+      new Error("no enrollment on this machine; run `oxagen agent enroll` first")
     );
 }
 

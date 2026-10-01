@@ -14,7 +14,7 @@
  * runs no hooks. That is why enrollment looked complete — the file was on
  * disk, every event was present — while the daemon never saw a single Codex
  * hook event, the chain was opened only by the model proxy and never sealed,
- * and `tacho verify --harness codex` waited out its deadline.
+ * and `oxagen agent verify --harness codex` waited out its deadline.
  *
  * The digest is Codex's own and its input is not documented, so this module
  * never computes one. It asks: `hooks/list` reports each hook's `key`, its
@@ -235,10 +235,10 @@ export async function codexTrustProblem(
     return "Codex has disabled Tacho hooks; open `/hooks` to review and enable them";
   const missing = missingEvents(listing.hooks);
   if (missing.length > 0)
-    return `Codex is missing Tacho hooks for ${missing.join(", ")}; run \`tacho enroll\` again`;
+    return `Codex is missing Tacho hooks for ${missing.join(", ")}; run \`oxagen agent enroll\` again`;
   const untrusted = hooksNeedingTrust(listing.hooks);
   if (untrusted.length === 0) return undefined;
-  return `Codex has ${untrusted.length} of Tacho's ${listing.hooks.length} hooks recorded as ${[...new Set(untrusted.map((hook) => hook.trustStatus))].join(" or ")}, and it skips a hook it does not trust. Run \`tacho enroll\` again to record them.`;
+  return `Codex has ${untrusted.length} of Tacho's ${listing.hooks.length} hooks recorded as ${[...new Set(untrusted.map((hook) => hook.trustStatus))].join(" or ")}, and it skips a hook it does not trust. Run \`oxagen agent enroll\` again to record them.`;
 }
 
 export interface CodexHookTrustResult {

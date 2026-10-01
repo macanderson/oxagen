@@ -75,7 +75,7 @@ import {
   TRANSCRIPT_OUTCOMES,
   type TranscriptNode,
   type TranscriptOutcome,
-} from "@oxagen/tacho";
+} from "@oxagen/recorder";
 import { bareToolName, type ToolFamily, toolFamilyOf } from "./tool-family";
 
 export type TranscriptZoom = "turns" | "steps" | "everything";

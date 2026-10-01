@@ -277,7 +277,7 @@ export type ServiceRestart = Awaited<ReturnType<typeof restartTachoService>>;
  */
 export function describeRestart(result: ServiceRestart): string | null {
   if (!result.ok) {
-    return `The collector did not restart, so it runs the old build until you sign out or run tacho enroll: ${result.error}`;
+    return `The collector did not restart, so it runs the old build until you sign out or run oxagen agent enroll: ${result.error}`;
   }
   return result.outcome === "restarted"
     ? "Restarted the collector on the new build."

@@ -5,17 +5,17 @@
  *
  * The host digests its `origin` remote twice: `canonicalRemote`, and
  * `foldedRemote` of that, which lowercases the path on a forge that ignores
- * its case (`collector/git-facts.ts` in `@oxagen/tacho`). The remote never
+ * its case (`collector/git-facts.ts` in `@oxagen/recorder`). The remote never
  * leaves the host. A bound repository's name (`boundRemoteDigests`), a
  * repository an interjection asks about (`repositoryDigests`), and a
  * steering record's `repos` entry (`recall_tacho_memories`) are all
  * `<host>/<owner>/<name>`, which `canonicalRemote` takes as it is, so one
  * rule digests all three.
  *
- * This module imports nothing but `@oxagen/tacho`, so recall can match
+ * This module imports nothing but `@oxagen/recorder`, so recall can match
  * repositories without loading the database.
  */
-import { canonicalRemote, digestBytes, foldedRemote } from "@oxagen/tacho";
+import { canonicalRemote, digestBytes, foldedRemote } from "@oxagen/recorder";
 
 /**
  * The canonical and folded digests of one remote, canonical first. The two

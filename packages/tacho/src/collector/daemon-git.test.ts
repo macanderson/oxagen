@@ -907,7 +907,7 @@ describe("the daemon's git seam", () => {
     // A new install ships its whole backlog inside one tick, and on one
     // laptop that tick ran for two minutes and forty-one seconds. The tick
     // starts the git lane only at its end, so a parked SessionEnd waited that
-    // long for its final read, and `tacho verify` gave up after fifteen
+    // long for its final read, and `oxagen agent verify` gave up after fifteen
     // seconds. The driver now starts that read while the tick is still
     // running. Shipping never answers here, so the tick never reaches its end.
     let shipping = false;
@@ -943,7 +943,7 @@ describe("the daemon's git seam", () => {
   });
 
   it("lists a parked SessionEnd as ending until its final read seals the chain", async () => {
-    // `tacho verify` waits longer only when `/sessions` says the chain is
+    // `oxagen agent verify` waits longer only when `/sessions` says the chain is
     // ending, so this field is the contract between the two.
     const handle = await boot(fakeGit(() => REPO_ANSWERS, []), () => 1_000);
     const listed = () =>

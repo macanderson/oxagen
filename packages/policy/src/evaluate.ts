@@ -11,7 +11,7 @@
  * argument of the wrong type, or a context the schema does not describe,
  * denies the call instead of slipping past a rule.
  */
-import type { CedarToolEntry } from "@oxagen/tacho";
+import type { CedarToolEntry } from "@oxagen/recorder";
 import {
   BUILTIN_TOOLS,
   CALL_RESOURCE,
@@ -29,7 +29,7 @@ import {
   type CedarRuntime,
   type CedarToolClass,
   type CedarVerdict,
-} from "@oxagen/tacho/policy";
+} from "@oxagen/recorder/policy";
 import type { CompiledPolicySet } from "./compile";
 import { BUILTIN_ARG_TYPES } from "./schema";
 

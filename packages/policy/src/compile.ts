@@ -19,13 +19,13 @@ import {
   type CedarBundle,
   type CedarPrincipalEntry,
   type CedarToolEntry,
-} from "@oxagen/tacho";
+} from "@oxagen/recorder";
 import {
   APPROVAL_ANNOTATION,
   APPROVAL_VALUE,
   harnessBuiltinActions,
   type CedarRuntime,
-} from "@oxagen/tacho/policy";
+} from "@oxagen/recorder/policy";
 import { cedarString, writeCedarSchema } from "./schema";
 
 /** One file under `policy/` in the steering repo. */

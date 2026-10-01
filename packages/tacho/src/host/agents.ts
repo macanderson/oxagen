@@ -223,7 +223,7 @@ export function newAgentId(): string {
 /**
  * The agent a command acts on when nothing names one: the oldest live agent,
  * else the oldest agent, else a new agent whose directory does not exist
- * yet, which is where a first `tacho enroll` writes.
+ * yet, which is where a first `oxagen agent enroll` writes.
  */
 export function defaultAgentPaths(home: TachoHome): TachoPaths {
   const agents = listAgents(home);

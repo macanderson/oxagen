@@ -18,7 +18,7 @@ import {
   INTERJECTION_PATHS,
   INTERJECTION_RECEIPT_ID_PATTERN,
   interjectBodySchema,
-} from "@oxagen/tacho";
+} from "@oxagen/recorder";
 import { z } from "zod";
 import { registerCapability } from "../registry";
 

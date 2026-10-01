@@ -10,7 +10,7 @@ import {
   type McpLockSource,
   type ServerSource,
 } from "@oxagen/mcp-studio";
-import { launchSpecSchema } from "@oxagen/tacho/local-servers";
+import { launchSpecSchema } from "@oxagen/recorder/local-servers";
 import { launchSpecFor, machineGroupsOf } from "./launch";
 import { FILES_DIGEST, FILES_LAUNCH } from "./test-support";
 

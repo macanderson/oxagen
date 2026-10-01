@@ -4,7 +4,7 @@ import {
   type TachoEvent,
   type UnsealedTachoEvent,
   sealEvent,
-} from "@oxagen/tacho";
+} from "@oxagen/recorder";
 import { describe, expect, it } from "vitest";
 import {
   type SuccessionHost,

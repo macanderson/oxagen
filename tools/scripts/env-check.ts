@@ -169,7 +169,7 @@ export const PLATFORM_ALLOWLIST = new Set<string>([
   // (tools/scripts/ensure-e2e-failure-ticket.ts). A workflow input, never an
   // operator's.
   "NIGHTLY_FAILED_JOB",
-  // @oxagen/tacho's own placement knobs, all three local to a machine running
+  // @oxagen/recorder's own placement knobs, all three local to a machine running
   // the collector rather than to any deployed service. TACHO_BUNDLED is set by
   // esbuild's `define` at bundle time and never read from a real environment;
   // TACHO_BIN_DIR and TACHO_HOME relocate the binary and the state directory,
@@ -179,6 +179,12 @@ export const PLATFORM_ALLOWLIST = new Set<string>([
   "TACHO_BUNDLED",
   "TACHO_BIN_DIR",
   "TACHO_HOME",
+  // Set by the desktop app on every sidecar it starts
+  // (apps/desktop/src-tauri/src/cli_install.rs, `sidecar_env_for`). The
+  // recorder's old executable names and `oxagen tacho` read it to skip the
+  // one line naming their replacement, since the app streams a sidecar's
+  // stderr into its log (#4879). Never an operator's variable.
+  "OXAGEN_DESKTOP_SIDECAR",
   // Set by the AppImage runtime on every process the image starts; tacho
   // reads it to know its exec path is a per-launch mount and refuse to bake
   // that path into hooks (packages/tacho/src/cli/deps.ts). Never an
