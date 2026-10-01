@@ -313,34 +313,35 @@ describe("Detector cards", () => {
   });
 
   it("draws the generic card for a kind with no card of its own", () => {
-    // A kind a later lane adds, with the label and definition that lane writes.
-    const later = "retry_loops" as unknown as Kind;
-    const spend = structuredClone(messages.spend);
-    Reflect.set(spend.findings.kind, later, "Retry loops");
-    Reflect.set(
-      spend.findings.kindDefinition,
-      later,
-      "The same call failed the same way 3 or more times in a row.",
-    );
-    list(
-      [
-        findingOf("spin_loops", {
-          id: "fnd_retry",
-          kind: later,
-          why: "On 2 runs, a call failed the same way 3 times in a row.",
-        }),
-      ],
-      SPEND,
-      (node) => (
-        <NextIntlClientProvider
-          locale="en"
-          messages={{ ...messages, spend }}
-          timeZone="UTC"
-        >
-          {node}
-        </NextIntlClientProvider>
-      ),
-    );
+    // A kind a later lane adds, with the label and definition that lane
+    // writes. The contract here does not list the kind yet, so the test sets
+    // it on the record the way a wider contract would deliver it.
+    const later = findingOf("spin_loops", {
+      id: "fnd_retry",
+      why: "On 2 runs, a call failed the same way 3 times in a row.",
+    });
+    Reflect.set(later, "kind", "retry_loops");
+    const { spend } = messages;
+    const withLater = {
+      ...messages,
+      spend: {
+        ...spend,
+        findings: {
+          ...spend.findings,
+          kind: { ...spend.findings.kind, retry_loops: "Retry loops" },
+          kindDefinition: {
+            ...spend.findings.kindDefinition,
+            retry_loops:
+              "The same call failed the same way 3 or more times in a row.",
+          },
+        },
+      },
+    };
+    list([later], SPEND, (node) => (
+      <NextIntlClientProvider locale="en" messages={withLater} timeZone="UTC">
+        {node}
+      </NextIntlClientProvider>
+    ));
     const li = card("fnd_retry");
     expect(
       within(li).getByRole("heading", { name: "Retry loops" }),
