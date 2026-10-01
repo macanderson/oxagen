@@ -309,7 +309,7 @@ jobs:
           docs:architecture:check
 
       # #3074: check:brand ran only in the local gate, so CI checked no
-      # vendored brand file. The checkout follows oxageninc/brand's
+      # vendored brand file. The checkout follows macanderson/oxagen-brand's
       # main branch, with no pin, tag, or sha, by Mac's decision of
       # 2026-09-29. The repository is public, so it needs no token. A kit push
       # to main fails the next step until someone runs
@@ -319,7 +319,7 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         uses: actions/checkout@v5
         with:
-          repository: oxageninc/brand
+          repository: macanderson/oxagen-brand
           ref: main
           path: .brand-kit
           persist-credentials: false
@@ -339,7 +339,7 @@ jobs:
         continue-on-error: true
         run: |
           node tools/scripts/sync-brand-assets.mjs --brand .brand-kit --check || {
-            echo "::error::Brand files differ from oxageninc/brand main. Run node tools/scripts/sync-brand-assets.mjs --brand <kit checkout> and commit the result."
+            echo "::error::Brand files differ from macanderson/oxagen-brand main. Run node tools/scripts/sync-brand-assets.mjs --brand <kit checkout> and commit the result."
             exit 1
           }
 
