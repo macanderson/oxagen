@@ -1,9 +1,10 @@
 // context.steering.sync.ts: the repository sync (ADR-184). The record files on
 // the steering repository's production branch are the records in force; the
 // registry mirrors them for listing, the ledger, and the policy bundle every
-// wrapped agent receives. This makes the mirror match the branch, whatever
-// changed it: a Context PR merged in Oxagen or on the host, a direct push, a
-// renamed or deleted file.
+// wrapped agent receives. Provisioned GitHub repositories verify the captured
+// commit before changing live state. Their changes must come through an
+// authenticated Oxagen merge or restore the published tree. Legacy repositories
+// and GitLab keep their existing host synchronization behavior.
 //
 // A push or a merge on the host starts it through the webhook, a scheduled
 // sweep catches a delivery the webhook missed, and it is idempotent: the
@@ -14,8 +15,8 @@
 //   1. The workspace's steering repository. No repository, no sync.
 //   2. Every open Context PR, read from the host before the branch, so a merge
 //      seen here is already on the head read next.
-//   3. The production branch's head. Unchanged since the last sync with
-//      nothing merged to settle: done.
+//   3. The production branch's head and its provenance. A missing or refused
+//      verifier on a provisioned GitHub repository stops all live writes.
 //   4. Every file under `.oxagen/rules/` at that head, planned against the
 //      registry and written in one transaction (context.steering.sync.store).
 //   5. workspace.toml at that head. Its settings go to the workspace row, and
@@ -97,6 +98,7 @@ import {
   readWorkspaceToml,
 } from "./repository.workspace-toml";
 import { withToolProjection } from "./mcp-studio/publish-deps";
+import { assertSteeringCommit } from "./steering-repo/provenance";
 import { versionTrailer } from "./steering-repo/diverged";
 import { readSteeringHealth } from "./steering-repo/health.read";
 import {
@@ -178,7 +180,7 @@ export function syncDeps(): SyncDeps {
     steeringVersionAt: (scope, repo, commitSha) =>
       postgresVersionStore(scope).versionAt(steeringRepositoryKey(repo), commitSha),
     // The same publisher merge_context_pr calls, over the same host, so a
-    // merge made on the host reaches the same version sequence.
+    // verified GitHub merge reaches the same version sequence.
     // The publish refuses while the steering repo is not healthy (S2).
     publish: steeringSyncPublish({
       host: github,
@@ -529,6 +531,8 @@ export async function syncWorkspaceSteering(
         message: `${repo.fullName} has no branch ${repo.defaultBranch}, the production branch its binding approved.`,
       });
     outcome.headSha = head;
+    // The trusted binding requires this even if the commit deletes governance.toml.
+    await assertSteeringCommit(deps.github, repo, head);
 
     // 4. The record files at that head, planned and written. A push that
     // left `.oxagen/rules/` alone changes no record: the newest commit that

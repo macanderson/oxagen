@@ -280,6 +280,8 @@ export const baseEnvSchema = z.object({
 
   LINEAR_API_KEY: z.string().optional(),
   LINEAR_OAUTH_CLIENT_ID: z.string().optional(),
+  // Signs every delivery from the Linear OAuth app's webhook (#4881).
+  LINEAR_WEBHOOK_SECRET: z.string().optional(),
 
   // ── CRM (Attio) ──────────────────────────────────────────────────────────
   // Optional: when set, every lead captured by /v1/cms/leads is also upserted

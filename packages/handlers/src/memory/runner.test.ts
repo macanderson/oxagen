@@ -4,7 +4,8 @@
 // the run handlers' tests share. The curator reads and writes the fixture
 // steering repo through FakeGitHub. FakeMemoryStore keeps the five memory
 // tables in memory and follows store.ts: a repeated dedupe key writes
-// nothing, a run holds one reflection, and only an open memory PR settles.
+// nothing, a run holds one reflection, a source keeps one waiting memory, and
+// only an open memory PR settles.
 import { OXAGEN_PR_LABELS } from "@oxagen/github";
 import { fixtureRepo } from "@oxagen/oxagen/steering-repo/fixture-repo";
 import { digestBytes } from "@oxagen/recorder";
@@ -207,6 +208,46 @@ class FakeMemoryStore implements MemoryStore {
       written += 1;
     }
     return written;
+  }
+
+  async replaceSourceMemory(
+    scope: MemoryScope,
+    draft: MemoryDraft,
+  ): Promise<boolean> {
+    if (draft.source === null)
+      return (await this.insertMemories(scope, [draft])) > 0;
+    const [kept, ...stale] = this.memories
+      .filter(
+        (m) =>
+          m.memoryPrId === null &&
+          m.capture === draft.capture &&
+          m.source === draft.source,
+      )
+      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+    await this.deleteMemories(
+      scope,
+      stale.map((m) => m.id),
+    );
+    if (kept === undefined)
+      return (await this.insertMemories(scope, [draft])) > 0;
+    if (kept.dedupeKey === draft.dedupeKey) return false;
+    if (this.memories.some((m) => m.dedupeKey === draft.dedupeKey)) {
+      await this.deleteMemories(scope, [kept.id]);
+      return false;
+    }
+    Object.assign(kept, {
+      agentLineage: draft.agentLineage,
+      runPublicId: draft.runPublicId,
+      statement: draft.statement,
+      statementHash: draft.statementHash,
+      kind: draft.kind,
+      repos: draft.repos,
+      appliesTo: draft.appliesTo,
+      tools: draft.tools,
+      evidence: draft.evidence,
+      dedupeKey: draft.dedupeKey,
+    });
+    return true;
   }
 
   async countWaiting(_scope: MemoryScope): Promise<number> {
@@ -1289,13 +1330,11 @@ function activeRecord(
 function request(over: Partial<RecallRequest> = {}): RecallRequest {
   return {
     now: NOW,
-    agent: AGENT,
     inApp: false,
     repositoryDigests: remoteDigests("github.com/a-intel/platform"),
     tools: [],
     paths: [],
     text: RECALLED,
-    recallUnreviewed: "same-agent",
     ...over,
   };
 }
@@ -1339,42 +1378,29 @@ describe("recallMemories", () => {
     ]);
   });
 
-  it("recalls a waiting memory only for the agent that kept it", async () => {
+  it("recalls no waiting memory, even for the agent that kept it", async () => {
+    // ADR-238: a memory steers only the agent that recorded it, and its
+    // harness already does that. It reaches other agents only once a person
+    // merges it into a steering record.
     const store = new FakeMemoryStore();
     store.now = NOW;
     await store.insertMemories(SCOPE, [
       draft(RECALLED),
       draft(RECALLED, {
-        agentLineage: "acme.core.other-laptop",
-        runPublicId: "tse_other",
-        dedupeKey: `tse_other:${statementHash(RECALLED)}`,
+        capture: "local_gateway",
+        runPublicId: null,
+        source: "claude-code:/home/dev/.claude/projects/-p/memory/migrate.md",
+        dedupeKey: `local_gateway:claude-code:migrate:${statementHash(RECALLED)}`,
       }),
     ]);
-    const items = await recallMemories(store, SCOPE, request(), []);
-    expect(items).toEqual([
-      {
-        id: "mem_1",
-        source: "memory",
-        statement: RECALLED,
-        score: 1,
-        tokens: expect.any(Number),
-      },
-    ]);
-    expect(store.recalls.size).toBe(0);
-  });
-
-  it("reads no waiting memories when recall_unreviewed is off", async () => {
-    const store = new FakeMemoryStore();
-    store.now = NOW;
-    await store.insertMemories(SCOPE, [draft(RECALLED)]);
     const listWaiting = vi.spyOn(store, "listWaiting");
-    const items = await recallMemories(
-      store,
-      SCOPE,
-      request({ recallUnreviewed: "off" }),
-      [activeRecord({ lineage: "migrate-after-schema-edit" })],
-    );
-    expect(items.map((item) => item.id)).toEqual(["migrate-after-schema-edit"]);
+    expect(await recallMemories(store, SCOPE, request(), [])).toEqual([]);
+    const items = await recallMemories(store, SCOPE, request(), [
+      activeRecord({ lineage: "migrate-after-schema-edit" }),
+    ]);
+    expect(items.map((item) => [item.id, item.source])).toEqual([
+      ["migrate-after-schema-edit", "record"],
+    ]);
     expect(listWaiting).not.toHaveBeenCalled();
   });
 
@@ -1487,6 +1513,135 @@ describe("ingestMemories", () => {
       refused: 0,
     });
     expect(store.memories).toHaveLength(1);
+  });
+
+  it("adds a memory for each new statement from one pull request", async () => {
+    const store = new FakeMemoryStore();
+    const lesson = (statement: string) => ({
+      capture: "pull_request",
+      source: PR_SOURCE,
+      statement,
+      agentLineage: null,
+      runPublicId: null,
+    });
+    await ingestMemories(store, SCOPE, [lesson(STATEMENT)]);
+    await ingestMemories(store, SCOPE, [lesson(LESSON)]);
+    expect(store.memories.map((m) => m.statement)).toEqual([STATEMENT, LESSON]);
+  });
+});
+
+// ADR-238: a memory file on a host keeps one waiting memory.
+describe("ingestMemories from a memory file", () => {
+  const FILE = "claude-code:/home/dev/.claude/projects/-proj/memory/use-pnpm.md";
+  const EDITED = "Use pnpm, never npm, in this repository.";
+
+  function fromFile(statement: string, source = FILE) {
+    return {
+      capture: "local_gateway",
+      source,
+      statement,
+      agentLineage: AGENT,
+      runPublicId: null,
+    };
+  }
+
+  /** Cite every waiting memory in an open memory PR, as the curator does. */
+  async function cite(store: FakeMemoryStore): Promise<void> {
+    const waiting = await store.listWaiting(SCOPE);
+    await store.insertMemoryPr(SCOPE, {
+      provider: "github",
+      repository: "a-intel/steering",
+      branch: "memory/2026-09-27",
+      number: 9,
+      url: "https://github.com/a-intel/steering/pull/9",
+      records: [
+        {
+          action: "propose",
+          lineage: "use-pnpm",
+          path: "steering/memory/workspace/general/use-pnpm.md",
+          kind: "memory",
+          memoryIds: waiting.map((m) => m.id),
+          statementHashes: waiting.map((m) => m.statementHash),
+        },
+      ],
+    });
+  }
+
+  it("replaces the waiting memory's text when the file changes", async () => {
+    const store = new FakeMemoryStore();
+    expect(await ingestMemories(store, SCOPE, [fromFile(STATEMENT)])).toEqual({
+      written: 1,
+      refused: 0,
+    });
+    const [before] = store.memories;
+    expect(await ingestMemories(store, SCOPE, [fromFile(EDITED)])).toEqual({
+      written: 1,
+      refused: 0,
+    });
+    expect(store.memories).toHaveLength(1);
+    expect(first(store.memories)).toMatchObject({
+      id: before?.id,
+      publicId: before?.publicId,
+      createdAt: before?.createdAt,
+      memoryPrId: null,
+      source: FILE,
+      statement: EDITED,
+      statementHash: statementHash(EDITED),
+      dedupeKey: `local_gateway:${FILE}:${statementHash(EDITED)}`,
+    });
+  });
+
+  it("stores nothing when the file sends the text its waiting memory holds", async () => {
+    const store = new FakeMemoryStore();
+    await ingestMemories(store, SCOPE, [fromFile(STATEMENT)]);
+    expect(await ingestMemories(store, SCOPE, [fromFile(STATEMENT)])).toEqual({
+      written: 0,
+      refused: 0,
+    });
+    expect(store.memories).toHaveLength(1);
+  });
+
+  it("keeps the text an open memory PR cites and adds the new text as a waiting memory", async () => {
+    const store = new FakeMemoryStore();
+    await ingestMemories(store, SCOPE, [fromFile(STATEMENT)]);
+    await cite(store);
+    expect(await ingestMemories(store, SCOPE, [fromFile(EDITED)])).toEqual({
+      written: 1,
+      refused: 0,
+    });
+    expect(
+      store.memories.map((m) => [m.statement, m.memoryPrId !== null]),
+    ).toEqual([
+      [STATEMENT, true],
+      [EDITED, false],
+    ]);
+  });
+
+  it("drops the waiting memory when the file goes back to the text a memory PR cites", async () => {
+    const store = new FakeMemoryStore();
+    await ingestMemories(store, SCOPE, [fromFile(STATEMENT)]);
+    await cite(store);
+    await ingestMemories(store, SCOPE, [fromFile(EDITED)]);
+    expect(await ingestMemories(store, SCOPE, [fromFile(STATEMENT)])).toEqual({
+      written: 0,
+      refused: 0,
+    });
+    expect(store.memories.map((m) => m.statement)).toEqual([STATEMENT]);
+    expect(await store.countWaiting(SCOPE)).toBe(0);
+  });
+
+  it("keeps a waiting memory for each file", async () => {
+    const store = new FakeMemoryStore();
+    const other = "claude-code:/home/dev/.claude/projects/-proj/memory/deploy.md";
+    await ingestMemories(store, SCOPE, [
+      fromFile(STATEMENT),
+      fromFile(STATEMENT, other),
+    ]);
+    await ingestMemories(store, SCOPE, [fromFile(EDITED)]);
+    expect(store.memories.map((m) => [m.source, m.statement])).toEqual([
+      [FILE, EDITED],
+      [other, STATEMENT],
+    ]);
   });
 });
 

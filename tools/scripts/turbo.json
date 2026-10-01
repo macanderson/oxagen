@@ -38,10 +38,7 @@
         "$TURBO_ROOT$/tools/packaging/**",
         "$TURBO_ROOT$/apps/*/package.json",
         "$TURBO_ROOT$/apps/app/vitest.config.ts",
-        "$TURBO_ROOT$/apps/app/public/favicon/**",
-        "$TURBO_ROOT$/apps/app/public/pwa/**",
         "$TURBO_ROOT$/apps/mcp/vercel.json",
-        "$TURBO_ROOT$/apps/web/favicon.ico",
         "$TURBO_ROOT$/apps/web/scripts/lib/theme.mjs",
         "$TURBO_ROOT$/packages/database/atlas/migrations/*_book_second_edition.sql",
         "$TURBO_ROOT$/packages/database/seed-assets/books/**",
@@ -53,7 +50,9 @@
         "$TURBO_ROOT$/packages/tacho/package.json",
         "$TURBO_ROOT$/packages/tacho/src/**",
         "$TURBO_ROOT$/packages/telemetry/src/migrate.ts",
-        "$TURBO_ROOT$/packages/telemetry/src/migrations/**"
+        "$TURBO_ROOT$/packages/telemetry/src/migrations/**",
+        "$TURBO_ROOT$/packages/ui/src/lib/house-grounds.ts",
+        "$TURBO_ROOT$/packages/ui/src/styles/house-tokens.json"
       ]
     },
     "test:coverage": {
@@ -75,10 +74,7 @@
         "$TURBO_ROOT$/tools/packaging/**",
         "$TURBO_ROOT$/apps/*/package.json",
         "$TURBO_ROOT$/apps/app/vitest.config.ts",
-        "$TURBO_ROOT$/apps/app/public/favicon/**",
-        "$TURBO_ROOT$/apps/app/public/pwa/**",
         "$TURBO_ROOT$/apps/mcp/vercel.json",
-        "$TURBO_ROOT$/apps/web/favicon.ico",
         "$TURBO_ROOT$/apps/web/scripts/lib/theme.mjs",
         "$TURBO_ROOT$/packages/database/atlas/migrations/*_book_second_edition.sql",
         "$TURBO_ROOT$/packages/database/seed-assets/books/**",
@@ -90,7 +86,9 @@
         "$TURBO_ROOT$/packages/tacho/package.json",
         "$TURBO_ROOT$/packages/tacho/src/**",
         "$TURBO_ROOT$/packages/telemetry/src/migrate.ts",
-        "$TURBO_ROOT$/packages/telemetry/src/migrations/**"
+        "$TURBO_ROOT$/packages/telemetry/src/migrations/**",
+        "$TURBO_ROOT$/packages/ui/src/lib/house-grounds.ts",
+        "$TURBO_ROOT$/packages/ui/src/styles/house-tokens.json"
       ]
     }
   }

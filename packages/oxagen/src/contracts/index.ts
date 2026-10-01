@@ -1,9 +1,6 @@
 import { runIssueProvidersGet } from "./run.issue.providers.get";
 import { runIssueAuthorizationComplete } from "./run.issue.authorization.complete";
 import { runIssueAuthorizationBegin } from "./run.issue.authorization.begin";
-import { runOutcomesSettingsGet } from "./run.outcomes.settings.get";
-import { runOutcomesSettingsSet } from "./run.outcomes.settings.set";
-import { runOutcomesAccessSet } from "./run.outcomes.access.set";
 import { configurationCloneGet } from "./configuration.clone.get";
 import { configurationClonePropose } from "./configuration.clone.propose";
 // contracts/index.ts — canonical per-package contracts array.
@@ -1178,9 +1175,6 @@ export const contracts: readonly CapabilityDeclaration[] = [
   runIssueAuthorizationBegin,
   runIssueAuthorizationComplete,
   runIssueProvidersGet,
-  runOutcomesSettingsGet,
-  runOutcomesSettingsSet,
-  runOutcomesAccessSet,
 
   apiKeyCreate,
   apiKeyList,
@@ -1614,10 +1608,6 @@ export const contracts: readonly CapabilityDeclaration[] = [
   routerStatsList,
   routerDecisionPreview,
 ] as const;
-
-export * from "./run.outcomes.settings.get";
-export * from "./run.outcomes.settings.set";
-export * from "./run.outcomes.access.set";
 
 export * from "./run.issue.authorization.begin";
 

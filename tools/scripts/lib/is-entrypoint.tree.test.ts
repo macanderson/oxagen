@@ -90,8 +90,9 @@ const CASES: Case[] = [
   {
     file: "sync-brand-assets.mjs",
     args: ["--check", "--brand", "/no/such/kit"],
+    // Off CI too: a check with no kit fails rather than skipping (#4804).
     env: { CI: "" },
-    ran: { status: 0, output: "brand: SKIPPED" },
+    ran: { status: 2, output: "brand: FAILED" },
   },
   {
     file: "sync-brand-assets.mjs",

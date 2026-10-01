@@ -249,6 +249,38 @@ describe("a later scan", () => {
     expect(sent[1]?.modifiedAt).toBe(new Date(MTIME + 60_000).toISOString());
   });
 
+  it("sends a file again when it changes back to text it held before", async () => {
+    // The API keeps one waiting memory per file and replaces its text at
+    // each send, so a file edited back must be sent, or the waiting memory
+    // keeps the text in between.
+    const fs = new FakeFs();
+    fs.write(memoryPath("-proj", "rule.md"), "Use pnpm.");
+    const { memoryReader, sent } = reader(fs);
+    await memoryReader.scan();
+    fs.write(memoryPath("-proj", "rule.md"), "Use npm.", MTIME + 60_000);
+    await memoryReader.scan();
+    fs.write(memoryPath("-proj", "rule.md"), "Use pnpm.", MTIME + 120_000);
+    expect(await memoryReader.scan()).toEqual({ sent: 1 });
+    expect(sent.map((entry) => entry.statement)).toEqual([
+      "Use pnpm.",
+      "Use npm.",
+      "Use pnpm.",
+    ]);
+  });
+
+  it("sends two files with the same text once each", async () => {
+    const fs = new FakeFs();
+    fs.write(memoryPath("-proj-a", "rule.md"), "Use pnpm.");
+    fs.write(memoryPath("-proj-b", "rule.md"), "Use pnpm.");
+    const { memoryReader, sent } = reader(fs);
+    expect(await memoryReader.scan()).toEqual({ sent: 2 });
+    expect(sent.map((entry) => entry.path)).toEqual([
+      memoryPath("-proj-a", "rule.md"),
+      memoryPath("-proj-b", "rule.md"),
+    ]);
+    expect(await memoryReader.scan()).toEqual({ sent: 0 });
+  });
+
   it("sends again what a failed send left, and stops the scan at the failure", async () => {
     const fs = new FakeFs();
     fs.write(memoryPath("-proj", "a.md"), "First.");

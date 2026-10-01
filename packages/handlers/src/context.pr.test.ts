@@ -1231,6 +1231,36 @@ describe("merge_context_pr", () => {
     expect(h.store.records).toHaveLength(1);
   });
 
+  it("refuses a manually merged commit before changing records or deleting its branch", async () => {
+    const h = harness();
+    const id = await opened(h);
+    const merged = await h.github.mergePullRequest(REPO, {
+      number: 519,
+      commitTitle: "Context PR (#519)",
+      sha: "head1",
+    });
+    const verify = vi.fn(async () => {
+      throw new Error("The merge has no authenticated Oxagen provenance.");
+    });
+    Object.assign(h.github, { assertSteeringCommit: verify });
+    const readHealth = vi.fn(async () => "healthy" as const);
+
+    await expect(
+      createMergeContextPrHandler(h, { readHealth })(
+        { proposalId: id },
+        ctx({ userId: REVIEWER }),
+      ),
+    ).rejects.toThrow("The merge has no authenticated Oxagen provenance.");
+
+    expect(readHealth).toHaveBeenCalled();
+    expect(verify).toHaveBeenCalledWith(REPO, merged.sha);
+    expect(h.github.merges).toHaveLength(1);
+    expect(h.github.deletedBranches).toEqual([]);
+    expect(h.store.records).toEqual([]);
+    expect(h.store.ledger).toEqual([]);
+    expect(h.store.proposals[0]!.status).toBe("checks_passed");
+  });
+
   it("re-runs the checks on a PR merged on the host at the commit they passed on, and merge still publishes it", async () => {
     const h = harness();
     const id = await opened(h);
@@ -2319,6 +2349,40 @@ describe("merge_context_pr", () => {
     expect(h.github.deployments).toEqual([
       expect.objectContaining({ sha: "0000000000000000000000000000000000000519", environment: "steering" }),
     ]);
+  });
+
+  it("resumes a stamped merge after its provenance lookup recovers", async () => {
+    const h = steeringHarness();
+    const { id } = await steeringPrPassed(h);
+    const main = await h.github.branchHead(REPO, REPO.defaultBranch);
+    const verify = vi.fn(async (_repo: unknown, commit: string) => {
+      if (commit !== main) throw new Error("GitHub provenance lookup failed.");
+    });
+    Object.assign(h.github, { assertSteeringCommit: verify });
+    const s5 = s5Publisher();
+    const merge = createMergeContextPrHandler(h, { publisher: () => s5.publisher });
+
+    await expect(merge({ proposalId: id }, ctx({ userId: REVIEWER }))).rejects.toThrow(
+      "GitHub provenance lookup failed.",
+    );
+
+    expect(h.github.merges).toHaveLength(1);
+    expect(h.github.stamps).toHaveLength(1);
+    expect(h.store.proposals[0]!.headSha).toBe(h.github.stamps[0]!.sha);
+    expect(h.store.records).toEqual([]);
+    expect(h.store.ledger).toEqual([]);
+    expect(h.github.deletedBranches).toEqual([]);
+    expect(s5.publish).not.toHaveBeenCalled();
+
+    verify.mockImplementation(async () => undefined);
+    const out = await merge({ proposalId: id }, ctx({ userId: REVIEWER }));
+
+    expect(out.status).toBe("merged");
+    expect(h.github.merges).toHaveLength(1);
+    expect(h.github.stamps).toHaveLength(1);
+    expect(h.store.records).toHaveLength(1);
+    expect(h.store.ledger).toHaveLength(1);
+    expect(s5.publish).toHaveBeenCalledWith(REPO, out.mergedCommit);
   });
 
   it("in a steering repo, stamps the version S5's publish() assigns into the Oxagen-Version trailer", async () => {

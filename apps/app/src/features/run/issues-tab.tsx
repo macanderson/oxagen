@@ -1,6 +1,6 @@
 // The Issues tab (mockup `issuesTab` then `linkedWork`, pages/run.md, Issues
 // tab): every issue the session touched, then the work it linked to, then
-// the run's follow-through settings.
+// the issue connections panel.
 //
 // The table is `get_run_issues` (#3970, ADR-197), row for row: the task the
 // run was started on (stated), the issues its recorded pull requests close,
@@ -12,13 +12,9 @@
 import { useLocale, useTranslations } from "next-intl";
 import { type ReactNode, Suspense, use } from "react";
 import type { RunIssues } from "@/data/contracts/run-issues";
-import type { RunOutcomesPolicy } from "@/data/contracts/run-work";
 import type { RunRow } from "@/data/contracts/runs";
-import { PAGE_FAILURES, type Read, readError } from "@/data/read";
-import {
-  RunIssueConnections,
-  RunOutcomesConsent,
-} from "@/features/run-outcomes";
+import type { Read } from "@/data/read";
+import { RunIssueConnections } from "@/features/run-outcomes";
 import { parseGitHubUrl } from "@/shared/github-url";
 import { Badge, type BadgeTone } from "@/ui/badge";
 import { mono } from "@/ui/control-styles";
@@ -240,44 +236,16 @@ function IssuesFromRead({
   return <IssuesPanel place={place} read={use(issues)} />;
 }
 
-/** The run follow-through panels, which the page drew above its columns before the tabs owned them. */
-function FollowThrough({
-  outcomes,
-  place,
-  canManage,
-}: {
-  outcomes: Read<RunOutcomesPolicy>;
-  place: Place;
-  canManage: boolean;
-}) {
-  const at = { org: place.org, ws: place.ws };
-  return (
-    <div className="grid gap-3.5 [grid-template-columns:repeat(auto-fit,minmax(320px,1fr))]">
-      <RunOutcomesConsent at={at} policy={outcomes} canManage={canManage} />
-      <RunIssueConnections
-        at={at}
-        runId={place.runId}
-        enabled={outcomes.ok && outcomes.value.effectiveEnabled}
-        canManage={canManage}
-      />
-    </div>
-  );
-}
-
 /**
- * The Issues tab over the page's bundle. It makes one read of its own, the
- * organization's follow-through setting, and leaves the issues and work
- * reads to stream inside the Issues table's and Linked work's boundaries.
+ * The Issues tab over the page's bundle. The page awaits every tab the same
+ * way, so this answers a promise although it makes no read of its own. The
+ * issues and work reads stream inside the Issues table's and Linked work's
+ * boundaries.
  */
-export async function IssuesTab(props: RunTabProps): Promise<ReactNode> {
-  const { ctx, source, place, work, issues, outputs } = props;
-  const outcomes = await source.runs
-    .outcomesSettings(ctx)
-    .catch(() =>
-      readError(PAGE_FAILURES.run.error.code, PAGE_FAILURES.run.error.status),
-    );
+export function IssuesTab(props: RunTabProps): Promise<ReactNode> {
+  const { ctx, place, work, issues, outputs } = props;
   const canManage = ctx.orgRole === "owner" || ctx.orgRole === "admin";
-  return (
+  return Promise.resolve(
     <>
       <Suspense fallback={<IssuesPanel place={place} read={null} />}>
         <IssuesFromRead place={place} issues={issues} />
@@ -285,7 +253,11 @@ export async function IssuesTab(props: RunTabProps): Promise<ReactNode> {
       <Suspense fallback={<LinkedWorkLoading />}>
         <LinkedWork work={work} outputs={outputs} place={place} />
       </Suspense>
-      <FollowThrough outcomes={outcomes} place={place} canManage={canManage} />
-    </>
+      <RunIssueConnections
+        at={{ org: place.org, ws: place.ws }}
+        runId={place.runId}
+        canManage={canManage}
+      />
+    </>,
   );
 }

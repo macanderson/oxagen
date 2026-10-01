@@ -192,6 +192,76 @@ export const postgresMemoryStore: MemoryStore = {
     );
   },
 
+  async replaceSourceMemory(scope, draft) {
+    const m = schema.memories;
+    const source = draft.source;
+    return inScope(scope, async (tx) => {
+      if (source === null)
+        return (await insertMemoryRows(tx, scope, [draft], null)) > 0;
+      // Two sends from one source wait on each other, so the second reads the
+      // waiting row the first wrote and never adds a second one.
+      await tx.execute(
+        sql`select pg_advisory_xact_lock(hashtextextended(${`agent.memories:${scope.workspaceId}:${draft.capture}:${source}`}::text, 0))`,
+      );
+      const waiting = await tx
+        .select({ id: m.id, dedupeKey: m.dedupeKey })
+        .from(m)
+        .where(
+          and(
+            scoped(m, scope),
+            eq(m.capture, draft.capture),
+            eq(m.source, source),
+            isNull(m.memoryPrId),
+          ),
+        )
+        .orderBy(asc(m.createdAt), asc(m.id));
+      // A source written before ADR-238 can hold several waiting rows. The
+      // oldest stays and takes the new text. The others hold text the file
+      // no longer says, so they go.
+      const [kept, ...stale] = waiting;
+      if (stale.length > 0)
+        await tx.delete(m).where(
+          and(
+            scoped(m, scope),
+            inArray(
+              m.id,
+              stale.map((row) => row.id),
+            ),
+          ),
+        );
+      if (kept === undefined)
+        return (await insertMemoryRows(tx, scope, [draft], null)) > 0;
+      if (kept.dedupeKey === draft.dedupeKey) return false;
+      const [held] = await tx
+        .select({ id: m.id })
+        .from(m)
+        .where(and(scoped(m, scope), eq(m.dedupeKey, draft.dedupeKey)))
+        .limit(1);
+      if (held !== undefined) {
+        // The file went back to a statement an open memory PR already cites.
+        // That row holds the file's text now, so the waiting row is stale.
+        await tx.delete(m).where(and(scoped(m, scope), eq(m.id, kept.id)));
+        return false;
+      }
+      await tx
+        .update(m)
+        .set({
+          agentLineage: draft.agentLineage,
+          runPublicId: draft.runPublicId,
+          statement: draft.statement,
+          statementHash: draft.statementHash,
+          kind: draft.kind,
+          repos: draft.repos,
+          appliesTo: draft.appliesTo,
+          tools: draft.tools,
+          evidence: draft.evidence,
+          dedupeKey: draft.dedupeKey,
+        })
+        .where(and(scoped(m, scope), eq(m.id, kept.id)));
+      return true;
+    });
+  },
+
   async countWaiting(scope) {
     const m = schema.memories;
     const [row] = await inScope(scope, (tx) =>

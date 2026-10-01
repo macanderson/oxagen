@@ -66,7 +66,7 @@ import type {
 } from "./contracts/run";
 import type { RunContext } from "./contracts/run-context";
 import type { RunIssues } from "./contracts/run-issues";
-import type { RunWork, RunOutcomesPolicy } from "./contracts/run-work";
+import type { RunWork } from "./contracts/run-work";
 import type { InterjectionQueue } from "./contracts/interjections";
 import type {
   CommandReport,
@@ -353,7 +353,6 @@ export interface DataSource {
      * features/run/context-tab.tsx.
      */
     context(ctx: WsCtx, runId: string): Promise<Read<RunContext>>;
-    outcomesSettings(ctx: WsCtx): Promise<Read<RunOutcomesPolicy>>;
   };
   /** list_approvals, the workspace's pending approvals or one run's; caller: features/fleet/fleet.tsx. */
   approvals: {

@@ -1,6 +1,5 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
-  guard: vi.fn(),
   system: vi.fn(),
   tenant: vi.fn(),
   values: vi.fn(),
@@ -8,9 +7,6 @@ const mocks = vi.hoisted(() => ({
   predicate: vi.fn(),
   remove: vi.fn(),
   update: vi.fn(),
-}));
-vi.mock("./run-outcomes-policy", () => ({
-  assertRunOutcomesAllowed: mocks.guard,
 }));
 vi.mock("@oxagen/database", async (original) => {
   const actual = await original<typeof import("@oxagen/database")>();
@@ -69,7 +65,6 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.stubEnv("LINEAR_OAUTH_CLIENT_ID", "linear-client");
   vi.stubEnv("APP_URL", "https://app.oxagen.sh");
-  mocks.guard.mockResolvedValue(undefined);
   mocks.values.mockResolvedValue(undefined);
   mocks.remove.mockResolvedValue(undefined);
   fetchMock = vi.fn();
@@ -84,7 +79,7 @@ describe("native Linear OAuth", () => {
     const result = await beginLinearAuthorization(scope, userId);
     const url = new URL(result.authorizeUrl);
     expect(url.origin).toBe("https://linear.app");
-    expect(url.searchParams.get("scope")).toBe("read,issues:create");
+    expect(url.searchParams.get("scope")).toBe("read,write");
     expect(url.searchParams.get("actor")).toBe("app");
     expect(url.searchParams.get("code_challenge_method")).toBe("S256");
     expect(url.searchParams.has("client_secret")).toBe(false);
@@ -140,7 +135,7 @@ describe("native Linear OAuth", () => {
           access_token: "access",
           refresh_token: "refresh",
           expires_in: 86400,
-          scope: ["read", "issues:create"],
+          scope: ["read", "write"],
         }),
       )
       .mockResolvedValueOnce(
@@ -174,7 +169,7 @@ describe("native Linear OAuth", () => {
       fetchMock.mock.calls.every((call) => call[1].redirect === "error"),
     ).toBe(true);
   });
-  it("refuses a revoked policy between exchange and provider identity lookup", async () => {
+  it("refuses a grant without write before it looks up the provider identity", async () => {
     mocks.rows.mockResolvedValue([
       {
         value: JSON.stringify({
@@ -185,18 +180,17 @@ describe("native Linear OAuth", () => {
         }),
       },
     ]);
-    fetchMock.mockImplementation(async () => {
-      mocks.guard.mockRejectedValue(new Error("disabled"));
-      return response({
+    fetchMock.mockResolvedValue(
+      response({
         access_token: "a",
         refresh_token: "r",
         expires_in: 86400,
         scope: "read,issues:create",
-      });
-    });
+      }),
+    );
     await expect(
       completeLinearAuthorization(scope, userId, "a".repeat(43), "code"),
-    ).rejects.toThrow("disabled");
+    ).rejects.toMatchObject({ reason: "linear_issue_scope_required" });
     expect(fetchMock).toHaveBeenCalledOnce();
     expect(mocks.values).not.toHaveBeenCalled();
   });
@@ -206,7 +200,6 @@ describe("native Linear OAuth", () => {
     );
     await expect(
       linearGraphql(
-        scope,
         "token",
         "query{}",
         {},
@@ -232,7 +225,7 @@ describe("native Linear OAuth", () => {
   it("rotates expired tokens under the locked connection and token rows", async () => {
     mocks.rows.mockResolvedValueOnce([{ id: "row" }]).mockResolvedValueOnce([
       {
-        scopes: ["read", "issues:create"],
+        scopes: ["read", "write"],
         expiresAt: new Date(0),
         refreshTokenEnc: {
           keyId: "test-key",
@@ -245,7 +238,7 @@ describe("native Linear OAuth", () => {
         access_token: "new-access",
         refresh_token: "new-refresh",
         expires_in: 86400,
-        scope: "read,issues:create",
+        scope: "read,write",
       }),
     );
     expect(await resolveLinearIssueToken(scope, "con_one")).toBe("new-access");

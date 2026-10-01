@@ -2,7 +2,7 @@ import type { CapabilityHandler } from "@oxagen/oxagen";
 import { runIssueProvidersGet } from "@oxagen/oxagen/contracts/run.issue.providers.get";
 import { assertCallerRole } from "./lib/capability-role-guard";
 import { schema, withTenantDb } from "@oxagen/database";
-import { and, eq, isNull, arrayContains, or, sql } from "drizzle-orm";
+import { and, eq, isNull, arrayContains, sql } from "drizzle-orm";
 import {
   linearOAuthConfigured,
   linearGraphql,
@@ -50,11 +50,7 @@ export const handler: CapabilityHandler<typeof runIssueProvidersGet> = async (
           sql`${schema.sourceConnections.deliveryConfig}->>'runOutcomesOnly' = 'true'`,
           eq(schema.sourceConnections.status, "connected"),
           isNull(schema.sourceConnections.deletedAt),
-          arrayContains(schema.oauthTokens.scopes, ["read"]),
-          or(
-            arrayContains(schema.oauthTokens.scopes, ["issues:create"]),
-            arrayContains(schema.oauthTokens.scopes, ["write"]),
-          ),
+          arrayContains(schema.oauthTokens.scopes, ["read", "write"]),
         ),
       ),
   );
@@ -69,7 +65,6 @@ export const handler: CapabilityHandler<typeof runIssueProvidersGet> = async (
     );
     teams = (
       await linearGraphql(
-        scope,
         token,
         "query($after:String){teams(first:50,after:$after){nodes{id name key} pageInfo{hasNextPage endCursor}}}",
         { after: input.after ?? null },
