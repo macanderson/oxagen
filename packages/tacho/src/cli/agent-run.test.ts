@@ -7,9 +7,11 @@ import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { writeHostFile } from "../host/host-file";
+import { agentPaths } from "../host/paths";
 import {
   bundleSigner,
   scratchPaths,
+  TEST_ENROLLMENT,
   testHostFile,
   unsignedBundle,
 } from "../host/test-support";
@@ -112,6 +114,8 @@ describe("oxagen agent run with a custom agent", () => {
         "node",
         "oxagen",
         "hook",
+        "--enrollment",
+        TEST_ENROLLMENT,
         "--agent",
         "release-bot",
       ]);
@@ -124,7 +128,7 @@ describe("oxagen agent run with a custom agent", () => {
       PATH: "/usr/bin",
       OXAGEN_AGENT: "release-bot",
       OXAGEN_SESSION_ID: SESSION,
-      OXAGEN_HOOK: "/opt/oxagen/oxagen hook --agent release-bot",
+      OXAGEN_HOOK: `/opt/oxagen/oxagen hook --enrollment ${TEST_ENROLLMENT} --agent release-bot`,
     });
   });
 
@@ -168,6 +172,28 @@ describe("oxagen agent run with a custom agent", () => {
     expect(code).toBe(2);
     expect(m.hookCalls).toEqual([]);
     expect(m.errors.join("\n")).toContain("--name");
+  });
+
+  it("reports under a live agent when the first agent directory is retired", async () => {
+    const m = machine();
+    // A retired agent whose directory sorts before the live one.
+    const signer = bundleSigner();
+    const retired = agentPaths(m.deps.paths, "00000000");
+    mkdirSync(dirname(retired.hostFile), { recursive: true });
+    writeHostFile(
+      retired.hostFile,
+      testHostFile(signer, signer.sign(unsignedBundle()), {
+        host_enrollment_id: "tch_retired0000000000000000",
+        enrolled_at: "2026-09-01T00:00:00.000Z",
+        revoked_at: "2026-09-02T00:00:00.000Z",
+      }),
+    );
+    await runAgentSession({ command: ["./my-agent"] }, m.deps);
+    for (const call of m.hookCalls)
+      expect(call.argv.slice(3, 5)).toEqual(["--enrollment", TEST_ENROLLMENT]);
+    expect(m.spawned[0]?.env["OXAGEN_HOOK"]).toContain(
+      `--enrollment ${TEST_ENROLLMENT}`,
+    );
   });
 
   it("refuses on a machine that is not enrolled (negative)", async () => {

@@ -15,7 +15,8 @@
  *     pause or suspension refuses before the agent starts. The agent then runs
  *     with `OXAGEN_AGENT`, `OXAGEN_SESSION_ID`, and `OXAGEN_HOOK` in its
  *     environment, so it can report its own steps on the same session, and
- *     the session closes with `SessionEnd` when it exits.
+ *     the session closes with `SessionEnd` when it exits. Every call names
+ *     the live enrollment the session reports under.
  *
  * Only the start and the end are recorded for a custom agent that never
  * calls `OXAGEN_HOOK` itself. The hook call is voluntary, the same limit the
@@ -236,18 +237,31 @@ export async function runAgentSession(
     );
     return 2;
   }
-  if (!listAgents(deps.paths).some(agentIsLive)) {
+  // The session reports under one live agent, named by its enrollment in
+  // every hook call. A call that names none falls back to the first agent
+  // directory, which may be a retired one whose spool never ships.
+  const live = listAgents(deps.paths).find(agentIsLive);
+  if (live === undefined) {
     deps.err(
       "This machine is not enrolled, so nothing would record this session. Run `oxagen agent enroll` first.",
     );
     return 1;
   }
+  const enrollment = live.host.host_enrollment_id;
   const hook =
     deps.hook ??
     ((payload: string, argv: readonly string[]) =>
       runHookCall(payload, argv, deps.env));
   const sessionId = (deps.newSessionId ?? randomUUID)();
-  const hookArgv = ["node", "oxagen", "hook", "--agent", name];
+  const hookArgv = [
+    "node",
+    "oxagen",
+    "hook",
+    "--enrollment",
+    enrollment,
+    "--agent",
+    name,
+  ];
   const start = await hook(
     JSON.stringify({
       session_id: sessionId,
@@ -270,7 +284,7 @@ export async function runAgentSession(
       ...deps.env,
       OXAGEN_AGENT: name,
       OXAGEN_SESSION_ID: sessionId,
-      OXAGEN_HOOK: `${deps.runtime.hookCommand} --agent ${name}`,
+      OXAGEN_HOOK: `${deps.runtime.hookCommand} --enrollment ${enrollment} --agent ${name}`,
     },
     cwd: deps.cwd,
   });
