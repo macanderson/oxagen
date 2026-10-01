@@ -14,13 +14,17 @@
  * ## Three states, not two
  *
  * The runs are read newest first. Runs still queued or in progress are no
- * answer yet and are skipped. Each `cancelled` run extends the streak. The
+ * answer yet and are skipped. Each `cancelled` run that a newer run follows
+ * extends the streak. A push cancels a run by starting the run that replaces
+ * it, so no push cancelled a run with no newer run behind it. Such a run
+ * neither extends nor ends the streak (#4664 item 23). The
  * first run that concluded any other way (success, failure, timed out, and so
  * on) ends it, because that run reported something a person can see.
  *
  *   superseded  the streak reached THRESHOLD: the branch keeps getting cancelled
  *   answered    a run concluded before the streak reached THRESHOLD
- *   pending     no run has concluded yet and the streak is short
+ *   pending     no run finished with a conclusion other than `cancelled`,
+ *               and the streak is shorter than THRESHOLD
  *
  * Only `superseded` reports. One supersede followed by a finished run is
  * `answered`, and a first run still going is `pending`, so neither fires.
@@ -35,9 +39,11 @@
  *
  * ## Paging
  *
- * A short page of runs reads the same as no runs. The script pages until a run
- * concluded with an answer, the history ends, or MAX_PAGES is read, and says
- * "at least" when the page cap cut the streak short.
+ * A full page of cancelled runs does not show where the streak ends, so the
+ * script reads the next page. A short page means the history ended. The
+ * script pages until a run concluded with an answer, the history ends, or
+ * MAX_PAGES is read, and says "at least" when the page cap cut the streak
+ * short.
  *
  * ## It fails open
  *
@@ -50,6 +56,8 @@ import { isEntrypoint } from "./lib/is-entrypoint.mjs";
 export const MARKER = "<!-- ci-superseded -->";
 export const RESOLVED_MARKER = "<!-- ci-superseded:resolved -->";
 export const STATUS_CONTEXT = "ci-superseded";
+/** The login GitHub gives writes made with a workflow's `GITHUB_TOKEN`. */
+export const REPORTER_LOGIN = "github-actions[bot]";
 const WORKFLOW = "pipeline.yml";
 const MAX_PAGES = 5;
 const PER_PAGE = 100;
@@ -77,14 +85,22 @@ export function relevantRuns(runs, { headRepo, since } = {}) {
  *
  * Returns the state, the cancelled streak (newest first), and the run that
  * ended it, or null when none did.
+ *
+ * A cancelled run counts toward the streak only when a newer run follows it.
+ * The list's order carries "newer", not `created_at`: every run before index
+ * `i` is newer than run `i`, whatever its status. A push that cancels a run
+ * starts its replacement first, so that replacement is in the list by the
+ * time this script reads it. A cancelled run at index 0 has no replacement,
+ * so no push cancelled it. Counting it would tell the author to stop pushing
+ * when nothing was pushed.
  */
 export function classify(runs, { threshold = 3 } = {}) {
   const streak = [];
   let answered = null;
-  for (const run of runs) {
+  for (const [index, run] of runs.entries()) {
     if (run.status !== "completed") continue;
     if (run.conclusion === "cancelled") {
-      streak.push(run);
+      if (index > 0) streak.push(run);
       continue;
     }
     answered = run;
@@ -288,10 +304,36 @@ export async function readRuns(get, { repo = REPO, branch, headRepo, since, thre
   return { runs, capped };
 }
 
+/**
+ * The report this workflow wrote earlier, from one page of PR comments, or
+ * null.
+ *
+ * Anyone who can comment on the pull request can post a comment that starts
+ * with MARKER, a fork's author included. Adopting that comment would put the
+ * report in a stranger's comment, or the edit would fail with 403 and the job
+ * would report nothing (#4664 item 8). So a comment counts only when
+ * `REPORTER_LOGIN`, the identity `GITHUB_TOKEN` writes as, posted it.
+ *
+ * @template {{ body?: unknown, user?: { login?: string, type?: string } | null }} C
+ * @param {C[]} comments
+ * @returns {C | null}
+ */
+export function ownReport(comments) {
+  return (
+    comments.find(
+      (c) =>
+        typeof c.body === "string" &&
+        c.body.startsWith(MARKER) &&
+        c.user?.type === "Bot" &&
+        c.user.login === REPORTER_LOGIN,
+    ) ?? null
+  );
+}
+
 async function findComment(prNumber) {
   for (let page = 1; page <= 10; page++) {
     const list = await api(`/repos/${REPO}/issues/${prNumber}/comments?per_page=100&page=${page}`);
-    const hit = list.find((c) => typeof c.body === "string" && c.body.startsWith(MARKER));
+    const hit = ownReport(list);
     if (hit) return hit;
     if (list.length < 100) return null;
   }
