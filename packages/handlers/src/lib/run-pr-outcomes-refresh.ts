@@ -812,10 +812,11 @@ export async function readLedgerRunPrs(
 ): Promise<LedgerRunRead[]> {
   if (runs.length === 0) return [];
   const repositories = new Map(
-    (await connectedRunRepositories(scope)).map((r) => [
-      r.providerRepositoryId,
-      r,
-    ]),
+    (await connectedRunRepositories(scope)).flatMap((r) =>
+      r.providerRepositoryId === undefined
+        ? []
+        : [[r.providerRepositoryId, r] as const],
+    ),
   );
   const out: LedgerRunRead[] = [];
   for (const request of runs)
