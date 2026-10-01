@@ -12,7 +12,7 @@
 Contract: `packages/oxagen/src/contracts/org.slack_connection.authorize.ts`
 Handler: `packages/handlers/src/org.slack_connection.authorize.ts`
 App: `apps/app/src/app/api/slack/oauth/callback/route.ts`
-Issue: [#4608](https://github.com/macanderson/oxagen/issues/4608)
+Issue: [#4608](https://github.com/oxageninc/product/issues/4608)
 
 ## Intent
 

@@ -17,7 +17,7 @@ already exists.
 path below exists on `main` today.
 
 A path written `oxagen-roadmap:<path>` is in
-https://github.com/macanderson/oxagen-roadmap. The rev1 spec and plan moved
+https://github.com/oxageninc/roadmap. The rev1 spec and plan moved
 there from this repository's `docs/` on 2026-09-23 (#3895), and the copies this
 file cites are kept there unchanged.
 

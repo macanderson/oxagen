@@ -5,7 +5,7 @@
 // Invoices and the pager under them that pages by address with Rows per
 // page (#4693), the list controls on those three tables, the price list, Billable
 // units, the three panels that buy through Stripe (Auto top-up, Buy governed
-// actions and Token balance, kept by macanderson/oxagen-roadmap#67), the
+// actions and Token balance, kept by oxageninc/roadmap#67), the
 // checkout banner,
 // and the empty, error, denied and pending states with the design's copy
 // verbatim, with an axe check in every one (INV-26). The

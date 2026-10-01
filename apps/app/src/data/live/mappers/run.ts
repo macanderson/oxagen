@@ -555,7 +555,7 @@ export function toRunChain(out: RunChainOutput): z.input<typeof RunChain> {
       recorded: out.gaps.recorded,
     },
     // One entry per attempt, oldest first; empty while the run is unsealed
-    // (finding 8, macanderson/oxagen#3370).
+    // (finding 8, oxageninc/product#3370).
     seals: out.seals.map((seal) => ({
       sealedAt: seal.sealedAt,
       terminalStatus: seal.terminalStatus,

@@ -33,34 +33,58 @@ locals {
       description = "Publishes stella.oxagen.sh from website/."
     }
     cgp-website = {
-      repository  = "macanderson/cgp-website"
-      owner_id    = 542881
+      repository  = "oxageninc/cgp-website"
+      owner_id    = 267772457
       repo_id     = 1310376825
       description = "Publishes contextgraphprotocol.org."
     }
     context-graph-protocol = {
-      repository  = "macanderson/context-graph-protocol"
-      owner_id    = 542881
+      repository  = "oxageninc/context-graph-protocol"
+      owner_id    = 267772457
       repo_id     = 1304589599
       description = "Publishes the CGP schema and specification artifacts."
     }
     oxagen-platform = {
-      repository  = "macanderson/oxagen"
-      owner_id    = 542881
+      repository  = "oxageninc/product"
+      owner_id    = 267772457
       repo_id     = 1252628274
       description = "Publishes oxagen.sh and the docs/app/api/mcp services on the node."
     }
   }
 
+  # Names a deployer's repository had before it moved. On 2026-10-01 Mac moved
+  # three of them from the macanderson account (owner 542881) into the
+  # oxageninc organization (owner 267772457), and macanderson/oxagen became
+  # oxageninc/product. A transfer keeps `repo_id`, and GitHub signs new tokens
+  # with the new name only. The old names stay trusted so that applying this
+  # stack never removes a subject a live role holds. Drop an entry once nothing
+  # can run under the old name.
+  moved_from = [
+    { deployer = "cgp-website", repository = "macanderson/cgp-website", owner_id = 542881 },
+    { deployer = "context-graph-protocol", repository = "macanderson/context-graph-protocol", owner_id = 542881 },
+    { deployer = "oxagen-platform", repository = "macanderson/oxagen", owner_id = 542881 },
+  ]
+
   deploy_environment = "production"
 }
 
 locals {
+  # Every name each deployer's tokens may carry: the earlier names first, then
+  # the current one.
+  deploy_names = {
+    for key, d in local.deployers : key => concat(
+      [for m in local.moved_from : { repository = m.repository, owner_id = m.owner_id } if m.deployer == key],
+      [{ repository = d.repository, owner_id = d.owner_id }],
+    )
+  }
+
   deploy_subjects = {
-    for key, d in local.deployers : key => [
-      "repo:${d.repository}:environment:${local.deploy_environment}",
-      "repo:${split("/", d.repository)[0]}@${d.owner_id}/${split("/", d.repository)[1]}@${d.repo_id}:environment:${local.deploy_environment}",
-    ]
+    for key, d in local.deployers : key => flatten([
+      for n in local.deploy_names[key] : [
+        "repo:${n.repository}:environment:${local.deploy_environment}",
+        "repo:${split("/", n.repository)[0]}@${n.owner_id}/${split("/", n.repository)[1]}@${d.repo_id}:environment:${local.deploy_environment}",
+      ]
+    ])
   }
 }
 

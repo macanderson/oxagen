@@ -82,7 +82,7 @@ resource "aws_iam_role_policy" "stella" {
 }
 
 # --------------------------------------------------------------------------
-# macanderson/cgp-website -> contextgraphprotocol.org
+# oxageninc/cgp-website -> contextgraphprotocol.org
 # --------------------------------------------------------------------------
 
 data "aws_iam_policy_document" "cgp_website" {
@@ -119,7 +119,7 @@ resource "aws_iam_role_policy" "cgp_website" {
 }
 
 # --------------------------------------------------------------------------
-# macanderson/context-graph-protocol -> the schema and spec on that same site
+# oxageninc/context-graph-protocol -> the schema and spec on that same site
 # --------------------------------------------------------------------------
 
 data "aws_iam_policy_document" "cgp_protocol" {
@@ -155,7 +155,7 @@ resource "aws_iam_role_policy" "cgp_protocol" {
 }
 
 # --------------------------------------------------------------------------
-# macanderson/oxagen -> oxagen.sh and the four services on the node
+# oxageninc/product -> oxagen.sh and the four services on the node
 # --------------------------------------------------------------------------
 
 data "aws_iam_policy_document" "oxagen_platform" {

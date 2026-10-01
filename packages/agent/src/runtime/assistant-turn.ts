@@ -520,7 +520,7 @@ async function runPreparedTurn(
   // `capCtx` carries no agent run before the run opens or after it. The
   // listing's kill-switch cut keys on the caller and on the agent the turn
   // acts as (`actingAgent`, read in `prepareAssistantTurn` before the run
-  // exists), not on a run (R4, macanderson/oxagen#3370 finding 9). A switched
+  // exists), not on a run (R4, oxageninc/product#3370 finding 9). A switched
   // tool is left out of the allowlist as well. The delegation ceiling is an
   // agent run's gate. A person's call passes the kernel's IAM check as that
   // person at invoke.
@@ -672,7 +672,7 @@ async function runPreparedTurn(
   });
   hooks.onRun?.({ runId: run.runPublicId });
   // Every materialized tool's `execute` closure reads this at call time
-  // (finding 9, macanderson/oxagen#3370): a call parked from here on attaches
+  // (finding 9, oxageninc/product#3370): a call parked from here on attaches
   // to the run whose Policy tab a person can actually see. The value is the
   // internal UUID — `createApprovalRequest` → `resolveRunPublicId` only
   // accepts a uuid and looks up `agent_runs.id`; a public `arun_…` id would

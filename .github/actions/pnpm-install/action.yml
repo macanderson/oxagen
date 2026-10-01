@@ -1,7 +1,7 @@
 name: pnpm install (cached store)
 description: >-
   Restore the pnpm content-addressable store cache and install with a frozen
-  lockfile. Jobs inside the ghcr.io/macanderson/oxagen-ci-* toolchain images
+  lockfile. Jobs inside the ghcr.io/oxageninc/oxagen-ci-* toolchain images
   already ship Node and corepack-managed pnpm and use them as they are; a job on
   a bare runner (one that needs a toolchain the image does not carry, such as
   Rust or an arm64 build) gets Node and pnpm installed here, pinned to

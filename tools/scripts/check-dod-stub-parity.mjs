@@ -23,13 +23,17 @@
 // It is named here rather than left to be rediscovered, and naming it is what
 // makes a FIFTH shape fail instead of joining it.
 
-const OWNER = "macanderson";
-const CALLERS = [
-  "stella",
-  "arenabench",
-  "cgp-website",
-  "context-graph-protocol",
-];
+// Where the implementation and each caller live. Owners differ since
+// 2026-10-01: this repository became `oxageninc/product`, `cgp-website` and
+// `context-graph-protocol` moved to `oxageninc`, and `stella` and `arenabench`
+// stayed on `macanderson`. Keys stay the short names the report prints.
+const HOME = "oxageninc/product";
+const CALLERS = {
+  stella: "macanderson/stella",
+  arenabench: "macanderson/arenabench",
+  "cgp-website": "oxageninc/cgp-website",
+  "context-graph-protocol": "oxageninc/context-graph-protocol",
+};
 const CHECK = ".github/workflows/dod-check.yml";
 const RECHECK = ".github/workflows/dod-recheck.yml";
 const CLOSE_GUARD = ".github/workflows/dod-close-guard.yml";
@@ -167,17 +171,17 @@ async function resolveWorkflowBlob(source, workflow) {
   const ref = pinnedRef(source, workflow);
   if (!ref) return null;
   const at = await api(
-    `/repos/${OWNER}/oxagen/contents/.github/workflows/${workflow}?ref=${ref}`,
+    `/repos/${HOME}/contents/.github/workflows/${workflow}?ref=${ref}`,
   );
   return at?.sha ?? null;
 }
 
 async function main() {
   const observed = {};
-  for (const repo of CALLERS) {
-    const check = await api(`/repos/${OWNER}/${repo}/contents/${CHECK}`);
-    const recheck = await api(`/repos/${OWNER}/${repo}/contents/${RECHECK}`);
-    const guard = await api(`/repos/${OWNER}/${repo}/contents/${CLOSE_GUARD}`);
+  for (const [repo, fullName] of Object.entries(CALLERS)) {
+    const check = await api(`/repos/${fullName}/contents/${CHECK}`);
+    const recheck = await api(`/repos/${fullName}/contents/${RECHECK}`);
+    const guard = await api(`/repos/${fullName}/contents/${CLOSE_GUARD}`);
     const guardSource = guard
       ? Buffer.from(guard.content, "base64").toString("utf8")
       : "";

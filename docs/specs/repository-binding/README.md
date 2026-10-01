@@ -5,7 +5,7 @@
 | **Status** | Spec, describes `main` at 3527edbef |
 | **Date** | 2026-09-27 (first written 2026-09-17) |
 | **Surface** | `apps/app`, `apps/api`, `apps/mcp`, `apps/cli`, `packages/handlers`, `packages/oxagen` |
-| **Design** | `mockups/pages/repositories.md` in `macanderson/tmp-oxagen-mockups` |
+| **Design** | `mockups/pages/repositories.md` in `oxageninc/roadmap` |
 | **Builds on** | ADR-212 (a workspace links a code repository by a steering PR), ADR-073 (an API key names a workspace), ADR-020 (the token chain), ADR-043 (Oxagen governs and does not run), `docs/specs/steering/README.md` |
 | **Job it serves** | `govern`, the mandate's Record clause: what is in force is what a named reviewer merged. |
 

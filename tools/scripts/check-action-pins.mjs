@@ -11,7 +11,7 @@
  *
  * First-party references are exempt: `actions/*` and `github/*` are GitHub's
  * own, `./` paths are this repository's composite actions, and
- * `macanderson/oxagen/...` is this repository's reusable workflows. A
+ * `oxageninc/product/...` is this repository's reusable workflows. A
  * `docker://` image must carry a `@sha256:` digest for the same reason a tag
  * must carry a SHA.
  *
@@ -26,7 +26,7 @@ import { isEntrypoint } from "./lib/is-entrypoint.mjs";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
-const FIRST_PARTY_PREFIXES = ["actions/", "github/", "macanderson/oxagen/"];
+const FIRST_PARTY_PREFIXES = ["actions/", "github/", "oxageninc/product/"];
 const SHA = /^[0-9a-f]{40}$/;
 const DIGEST = /@sha256:[0-9a-f]{64}$/;
 const USES_LINE = /^\s*(?:-\s+)?uses:\s*["']?([^"'\s#]+)["']?/;

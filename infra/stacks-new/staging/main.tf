@@ -22,9 +22,13 @@ module "environment" {
   hosted_zone_id     = var.hosted_zone_id
   vpc_cidr           = "10.70.0.0/16"
   oidc_provider_arn  = "arn:aws:iam::${var.account_id}:oidc-provider/token.actions.githubusercontent.com"
+  # The repository moved from macanderson/oxagen to oxageninc/product on
+  # 2026-10-01. Both names stay trusted, as in ci-deploy's `moved_from`.
   oidc_subjects = [
     "repo:macanderson/oxagen:environment:staging",
-    "repo:macanderson@542881/oxagen@1252628274:environment:staging"
+    "repo:macanderson@542881/oxagen@1252628274:environment:staging",
+    "repo:oxageninc/product:environment:staging",
+    "repo:oxageninc@267772457/product@1252628274:environment:staging"
   ]
 }
 output "deployment" { value = module.environment }

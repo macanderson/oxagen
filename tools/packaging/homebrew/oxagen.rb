@@ -14,7 +14,7 @@ cask "oxagen" do
   # stamp:        intel: "{{sha256:Oxagen_{{version}}_x64.dmg}}"
   sha256 :no_check
 
-  url "https://github.com/macanderson/oxagen/releases/download/desktop-v#{version}/Oxagen_#{version}_#{arch}.dmg"
+  url "https://github.com/oxageninc/product/releases/download/desktop-v#{version}/Oxagen_#{version}_#{arch}.dmg"
   name "Oxagen"
   desc "Put this machine's coding agent sessions under Oxagen control"
   homepage "https://oxagen.sh/"

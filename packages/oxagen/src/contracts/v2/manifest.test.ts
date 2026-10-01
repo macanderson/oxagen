@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
  *
  * The matrix (fixtures/matrix.json) is derived from Appendix E of
  * the Mission Control spec joined against the live contracts. The spec and the
- * scripts that generated the matrix live in macanderson/oxagen-roadmap
+ * scripts that generated the matrix live in oxageninc/roadmap
  * (docs/mission-control-spec.md, docs/oxagen/mission-control/). It is the plan;
  * this directory is the execution. The two drifting silently is the failure
  * this test exists to prevent — a tool that quietly stops carrying one of its
