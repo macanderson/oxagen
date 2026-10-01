@@ -93,7 +93,9 @@ The app installs automatically only when your account can replace it without a p
 
 Windows and Linux always ask first.
 
-Every update is signed, and the app installs nothing whose signature fails. Updates come only from published releases.
+Every update is signed, and the app installs nothing whose signature fails. Updates come only from published releases, and the app downloads them from downloads.oxagen.sh.
+
+If the app has offered no update since 1 October 2026, it is checking an address that no longer answers. Install the app once more from [downloads.oxagen.sh](https://downloads.oxagen.sh/) over the old one. From then on it finds new versions by itself.
 
 To turn automatic installs off, clear **Install updates automatically** in the Updates panel. The checkbox writes `autoUpdate` to `~/.config/oxagen/desktop.json`, so an administrator can set it for you with a management tool:
 

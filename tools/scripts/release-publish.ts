@@ -28,12 +28,14 @@
  *   4. The `desktop-v*` tag starts `.github/workflows/desktop.yml`, one job per
  *      OS, because the sidecars embed the runner's node and cannot be
  *      cross-compiled from here. Wait for it.
- *   5. Upload: the installers to downloads.oxagen.sh with their checksums and
- *      the listing page (`apps/desktop/scripts/publish-downloads.mjs`), and
+ *   5. Upload: the installers, the bare executables, and the updater files to
+ *      downloads.oxagen.sh with their checksums, the listing page, and the
+ *      in-app update feed (`apps/desktop/scripts/publish-downloads.mjs`), and
  *      `@oxagen/cli` to npm from this tree (`tools/scripts/lib/npm-cli.ts`).
- *   6. Check that every file the notes link to is on the GitHub release, set
- *      the release's notes, and publish it. Publishing moves the in-app
- *      updater feed (`desktop.yml`, job `feed`).
+ *   6. Check that every file the notes link to is on the GitHub release, the
+ *      mirror for people with repository access, set the release's notes,
+ *      and publish it. Publishing moves the GitHub feed that apps built
+ *      before ADR-245 poll (`desktop.yml`, job `feed`).
  *
  * Steps 5 and 6 are also what `desktop.yml`'s `publish` job does on the tag,
  * so on a healthy run this script finds both already done and says so. It
@@ -74,7 +76,6 @@ import {
   expectedAssets,
   downloadUrl,
   releaseTag,
-  releaseUrl,
 } from "./lib/release-artifacts";
 import { readRootVersion, versionDrift } from "./lib/versions";
 import { parseWrittenList } from "./release";
@@ -658,7 +659,7 @@ async function main(): Promise<void> {
 
   // ── summary ──
   console.log(kleur.bold("\n  Where it is:"));
-  console.log(`    ${releaseUrl(version)}`);
+  console.log(`    ${release.url}`);
   for (const f of expected.installers)
     console.log(`    ${downloadUrl(version, f)}`);
   console.log(`    ${downloadUrl(version, "SHA256SUMS.txt")}`);

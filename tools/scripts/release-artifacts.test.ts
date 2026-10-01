@@ -6,7 +6,6 @@ import {
   downloadUrl,
   expectedAssets,
   installSection,
-  releaseAssetUrl,
   releaseTag,
 } from "./lib/release-artifacts";
 
@@ -54,13 +53,13 @@ describe("expectedAssets", () => {
 });
 
 describe("urls", () => {
-  it("point at the versioned download path and the desktop-v release", () => {
+  it("point every file at its versioned path on the downloads host", () => {
     expect(releaseTag("2.2.0")).toBe("desktop-v2.2.0");
     expect(downloadUrl("2.2.0", "Oxagen_2.2.0_aarch64.dmg")).toBe(
       "https://downloads.oxagen.sh/desktop/2.2.0/Oxagen_2.2.0_aarch64.dmg",
     );
-    expect(releaseAssetUrl("2.2.0", "tacho-x86_64-pc-windows-msvc.exe")).toBe(
-      "https://github.com/macanderson/oxagen/releases/download/desktop-v2.2.0/tacho-x86_64-pc-windows-msvc.exe",
+    expect(downloadUrl("2.2.0", "tacho-x86_64-pc-windows-msvc.exe")).toBe(
+      "https://downloads.oxagen.sh/desktop/2.2.0/tacho-x86_64-pc-windows-msvc.exe",
     );
   });
 });
@@ -75,6 +74,11 @@ describe("installSection", () => {
     }
     expect(section).toContain("npm install -g @oxagen/cli@2.2.0");
     expect(section).toContain("desktop/2.2.0/SHA256SUMS.txt");
+    // The repository is private, so the notes link no GitHub release (ADR-245).
+    expect(section).not.toContain("github.com");
+    expect(section).toContain(
+      "[oxagen-aarch64-apple-darwin](https://downloads.oxagen.sh/desktop/2.2.0/oxagen-aarch64-apple-darwin)",
+    );
     expect(section.startsWith("## Install\n")).toBe(true);
     // The prose rules the repository holds: no em dashes, no exclamation marks.
     expect(section).not.toMatch(/[—!]/);

@@ -11,7 +11,9 @@
  * target, add it here too, or the publish stops with the new asset unnamed.
  */
 
-export const GITHUB_REPO = "macanderson/oxagen";
+// No GitHub repository is named here. The repository is private and has
+// changed owner more than once, so every link in the notes points at the
+// downloads host (ADR-245).
 export const DOWNLOADS_HOST = "downloads.oxagen.sh";
 export const NPM_CLI_PACKAGE = "@oxagen/cli";
 
@@ -70,11 +72,11 @@ export const RELEASE_TARGETS: readonly ReleaseTarget[] = [
 ];
 
 export interface ExpectedAssets {
-  /** Installers, served from downloads.oxagen.sh and attached to the release. */
+  /** Installers, served from downloads.oxagen.sh and mirrored on the release. */
   installers: string[];
-  /** Bare executables, attached to the GitHub release only. */
+  /** Bare executables, served from downloads.oxagen.sh and mirrored on the release. */
   binaries: string[];
-  /** `<asset>.sha256` files the release must carry for the binaries. */
+  /** `<asset>.sha256` files beside the binaries, in both places. */
   checksums: string[];
 }
 
@@ -93,14 +95,6 @@ export function releaseTag(version: string): string {
   return `desktop-v${version}`;
 }
 
-export function releaseUrl(version: string): string {
-  return `https://github.com/${GITHUB_REPO}/releases/tag/${releaseTag(version)}`;
-}
-
-export function releaseAssetUrl(version: string, file: string): string {
-  return `https://github.com/${GITHUB_REPO}/releases/download/${releaseTag(version)}/${encodeURIComponent(file)}`;
-}
-
 export function downloadUrl(version: string, file: string): string {
   return `https://${DOWNLOADS_HOST}/desktop/${version}/${encodeURIComponent(file)}`;
 }
@@ -113,7 +107,7 @@ export function installSection(version: string): string {
   const lines: string[] = ["## Install", ""];
 
   lines.push(
-    `The desktop app installs \`oxagen\` and \`tacho\` and links them onto PATH. Every file below is also on the [GitHub release](${releaseUrl(version)}).`,
+    `The desktop app installs \`oxagen\` and \`tacho\` and links them onto PATH. Every file below is on [${DOWNLOADS_HOST}](https://${DOWNLOADS_HOST}/).`,
     "",
   );
   for (const t of RELEASE_TARGETS) {
@@ -131,13 +125,13 @@ export function installSection(version: string): string {
   );
   for (const t of RELEASE_TARGETS) {
     const links = t.binaries
-      .map((b) => `[${b}](${releaseAssetUrl(version, b)})`)
+      .map((b) => `[${b}](${downloadUrl(version, b)})`)
       .join(", ");
     lines.push(`- ${t.os}, ${t.variant}: ${links}`);
   }
   lines.push(
     `- npm: \`npm install -g ${NPM_CLI_PACKAGE}@${version}\` ([package page](https://www.npmjs.com/package/${NPM_CLI_PACKAGE}/v/${version}))`,
-    "- Each executable has a `.sha256` beside it on the release.",
+    "- Each executable has a `.sha256` beside it.",
     "",
   );
   return lines.join("\n");

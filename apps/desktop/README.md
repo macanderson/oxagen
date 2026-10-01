@@ -140,11 +140,16 @@ pnpm --filter @oxagen/desktop test:coverage  # the same with the 90% ratchet
 A release is one button: Actions, Release, Run workflow, pick `patch`,
 `minor` or `major` (CONTRIBUTING.md, Release Process). The merge of the
 release PR pushes `desktop-v<version>`, and `.github/workflows/desktop.yml`
-does the rest: four builds, then the `publish` job copies the installers and
-`SHA256SUMS.txt` to https://downloads.oxagen.sh/desktop/<version>/, rewrites
-the listing page, opens the GitHub release with the bare `oxagen` and
-recorder binaries attached, and moves the updater feed. Nothing below is needed for
-that path.
+does the rest: four builds, then the `publish` job copies the installers, the
+bare `oxagen` and `tacho` executables with a `.sha256` each, the macOS updater
+archives, the updater signatures, and `SHA256SUMS.txt` to
+https://downloads.oxagen.sh/desktop/<version>/, rewrites the listing page,
+writes the update feed at https://downloads.oxagen.sh/updater/latest.json,
+and opens the GitHub release as a mirror for people with repository access.
+Nothing below is needed for that path. Every file a person or an installed
+app downloads comes from downloads.oxagen.sh, never from a GitHub release,
+because the repository is private and has changed owner more than once
+(ADR-245).
 
 Every production deploy publishes too (ADR-158). Once `deploy-node` has
 shipped, `publish-installers` in `pipeline.yml` dispatches `desktop.yml` with
@@ -152,9 +157,9 @@ shipped, `publish-installers` in `pipeline.yml` dispatches `desktop.yml` with
 `X.Y.(Z+1)-N`, N commits after release `X.Y.Z`, and lands under
 `desktop/<version>/` like a release, without a tag, a GitHub release, or an
 updater entry. Whichever version is newest also sits at
-`https://downloads.oxagen.sh/latest/<name>` with `latest.json` beside it; the
-web app's enrollment screens and the docs link those names, which
-`src/downloads.ts` owns. To publish the build of one commit by hand:
+`https://downloads.oxagen.sh/latest/<name>` with `latest.json` beside it, the
+executables and their `.sha256` files included; the web app's enrollment
+screens and the docs link those names, which `src/downloads.ts` owns. To publish the build of one commit by hand:
 `gh workflow run desktop.yml --ref main -f publish=true -f sha=<commit>`.
 
 For a build made some other way:
@@ -167,10 +172,13 @@ pnpm --filter @oxagen/desktop smoke:e2e -- --login --enroll --org <org> --worksp
 ```
 
 `publish:downloads` streams the run's artifacts to disk (never `gh run
-download`, which holds each zip in memory), keeps only the installers for the
-package version, writes `SHA256SUMS.txt` to `desktop/<version>/`, uploads the
-installers beside it, rewrites the listing page, and invalidates it. `--dir
-<folder>` publishes installers already on disk; `--dry-run` prints the uploads.
+download`, which holds each zip in memory), keeps only the files that belong to
+the package version (installers, executables, updater archives, and
+signatures), writes `SHA256SUMS.txt` to `desktop/<version>/`, uploads the files
+beside it, rewrites the listing page, writes the update feed for a release,
+and invalidates what changed. `--run` reads the repository from `--repo`,
+then `GITHUB_REPOSITORY`, then the checkout's remote. `--dir <folder>`
+publishes files already on disk; `--dry-run` prints the uploads.
 
 Those versioned URLs are served `immutable`, a promise to every cache that
 fetches them and not only to CloudFront, so publishing a version that is
@@ -232,9 +240,8 @@ icons` (needs `rsvg-convert`) and committed.
 ## Updates
 
 `src/updater.ts` wraps `@tauri-apps/plugin-updater`: **Check for updates** in
-the masthead fetches
-`https://github.com/macanderson/oxagen/releases/download/desktop-latest/latest.json`,
-and **Install** downloads the bundle for this platform, verifies it against
+the masthead fetches `https://downloads.oxagen.sh/updater/latest.json`, and
+**Install** downloads the bundle for this platform, verifies it against
 the minisign public key in `tauri.conf.json` (`plugins.updater.pubkey`),
 installs it, restarts the collector, and relaunches. Download milestones
 stream into the Activity panel. The pure half (caption, byte formatting, the
@@ -274,6 +281,15 @@ stays away for the running one, and never downloads or relaunches on its own.
 The feed carries releases only. Deploy builds reach downloads.oxagen.sh
 without an updater entry (ADR-158), so an open app offers the next release,
 not every deploy.
+
+### Apps installed before the move
+
+Until ADR-245, the app polled the `latest.json` on the `desktop-latest`
+GitHub release. The repository is now private, so that feed answers 404, and
+an app cannot learn a new feed address from a feed it cannot read. Every app installed
+before the move (2.1.3 and older, and builds of main before ADR-245) needs one
+manual reinstall from https://downloads.oxagen.sh/. After that it updates
+from the downloads host on its own.
 
 The decision comment on #3697 (2026-09-25) records this mechanism, and the
 issue carries `needs:decision` until the maintainer confirms it. The hourly
@@ -339,12 +355,11 @@ that line as an unused secret would hang, then fail, every signed build. With th
 yields the `Oxagen.app.tar.gz` + `.sig` the updater installs) and attaches
 `latest.json` to the release; without it, the workflow passes
 `--config src-tauri/tauri.unsigned.conf.json` (`createUpdaterArtifacts:
-false`) so the build still succeeds, and publishes no feed. The feed is the
-rolling `desktop-latest` release, not the repository's `/releases/latest`
-(which any platform `v*` release published from a newer commit would take
-over): when a `desktop-v*` release is published, the workflow's `feed` job
-copies its `latest.json` onto `desktop-latest`, so a draft feeds nothing
-until it is published.
+false`) so the build still succeeds, and publishes no feed. Each Mac leg names
+its `Oxagen.app.tar.gz` `Oxagen_<version>_<arch>.app.tar.gz` before the upload,
+and the `publish` job builds the feed from the `.sig` files, with the platform
+keys tauri-action used to write. The GitHub `desktop-latest` release still
+gets tauri-action's `latest.json` for the apps installed before the move.
 
 Locally, `bundle` / `bundle:dmg` need either the key or the unsigned overlay,
 because `createUpdaterArtifacts` is on in `tauri.conf.json`:

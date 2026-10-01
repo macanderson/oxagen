@@ -1,11 +1,14 @@
 #!/usr/bin/env bash
-# Point the desktop updater feed at release $TAG.
+# Point the GitHub update feed at release $TAG.
 #
-# The installed app polls the `desktop-latest` release's latest.json (the
-# endpoint in apps/desktop/src-tauri/tauri.conf.json), so this copies the
-# just-published release's latest.json there. Its platform URLs point at the
-# versioned release's assets, which stay put. A release built without the
-# updater key carries no latest.json and leaves the feed as it was.
+# Apps built before ADR-245 (2.1.3, and builds of main before it) poll the
+# `desktop-latest` release's latest.json, so this copies the just-published
+# release's latest.json there. Its platform URLs point at the versioned
+# release's assets, which stay put. A release built without the updater key
+# carries no latest.json and leaves the feed as it was. While the repository
+# is private, that feed answers those apps 404. Every later app polls
+# https://downloads.oxagen.sh/updater/latest.json, which
+# apps/desktop/scripts/publish-downloads.mjs writes.
 #
 # Needs GH_TOKEN, TAG and GITHUB_REPOSITORY. Run by .github/workflows/desktop.yml
 # from the `publish` job (a tagged build) and the `feed` job (a release a

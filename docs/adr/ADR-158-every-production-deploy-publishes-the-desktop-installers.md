@@ -1,8 +1,8 @@
 # ADR-158: Every production deploy publishes the desktop installers
 
-Status: Accepted
+Status: Accepted. Amended by ADR-245 (2026-10-01): the update feed that decision 3 keeps builds out of is now `updater/latest.json` on downloads.oxagen.sh, and every other release file is there too.
 Date: 2026-09-24
-Related: ADR-046, ADR-101, ADR-114
+Related: ADR-046, ADR-101, ADR-114, ADR-245
 
 ## Context
 

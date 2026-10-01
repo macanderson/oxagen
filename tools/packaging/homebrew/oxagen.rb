@@ -1,8 +1,9 @@
 # Homebrew cask for the Oxagen desktop app (apps/desktop): the .dmg the
-# Desktop workflow attaches to the desktop-v<version> GitHub release.
+# Desktop workflow publishes to downloads.oxagen.sh/desktop/<version>/.
+# Nothing here reads a GitHub release: the repository is private (ADR-245).
 #
 # This is a template until a tap exists. `tools/packaging/stamp.mjs` fills
-# the version and the `# stamp:` line from the release's .sha256 files; see
+# the version and the `# stamp:` line from the version's SHA256SUMS.txt; see
 # tools/packaging/README.md for the flow.
 cask "oxagen" do
   arch arm: "aarch64", intel: "x64"
@@ -14,15 +15,17 @@ cask "oxagen" do
   # stamp:        intel: "{{sha256:Oxagen_{{version}}_x64.dmg}}"
   sha256 :no_check
 
-  url "https://github.com/macanderson/oxagen/releases/download/desktop-v#{version}/Oxagen_#{version}_#{arch}.dmg"
+  url "https://downloads.oxagen.sh/desktop/#{version}/Oxagen_#{version}_#{arch}.dmg"
   name "Oxagen"
   desc "Put this machine's coding agent sessions under Oxagen control"
   homepage "https://oxagen.sh/"
 
+  # The in-app update feed names the newest release and never a build.
   livecheck do
-    url :url
-    strategy :github_releases
-    regex(/^desktop-v(\d+(?:\.\d+)+)$/i)
+    url "https://downloads.oxagen.sh/updater/latest.json"
+    strategy :json do |json|
+      json["version"]
+    end
   end
 
   # tauri.conf.json: bundle.macOS.minimumSystemVersion = 12.0
