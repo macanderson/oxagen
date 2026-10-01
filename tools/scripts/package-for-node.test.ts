@@ -11,7 +11,6 @@
  */
 import { execFileSync } from "node:child_process";
 import {
-  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -75,15 +74,8 @@ describe("resolve_app_dir", () => {
     expect(resolveIn(tree)).toBe("apps/app");
   });
 
-  it("names, on this tree, a workspace package with a next build", () => {
-    const appDir = resolveIn(root);
-    expect(existsSync(join(root, appDir, "package.json"))).toBe(true);
-    const pkg = JSON.parse(
-      readFileSync(join(root, appDir, "package.json"), "utf8"),
-    ) as { name: string; scripts: Record<string, string> };
-    expect(pkg.name).toMatch(/^@oxagen\/app/);
-    expect(pkg.scripts.build).toMatch(/next build/);
-  });
+  // The run of resolve_app_dir on this tree reads the live tree, so it lives in
+  // package-for-node.tree.test.ts.
 });
 
 describe("package-for-node.sh app", () => {

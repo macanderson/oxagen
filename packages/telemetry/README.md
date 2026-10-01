@@ -114,7 +114,7 @@ the API, from MCP, or by a person, writes NULL. Do not fill the column with a
 request id, a message id, or a fresh UUID. A made-up key joins to nothing, and
 a reader cannot tell it from a real one.
 
-Two tests hold this. `tools/scripts/tool-invocation-execution-identity.test.ts`
+Two tests hold this. `tools/scripts/tool-invocation-execution-identity.tree.test.ts`
 finds every file that calls `insertToolInvocation` and fails on a bare
 `execution_step_id: null`. `src/tool-invocation-execution-join.integration.test.ts`
 runs the join against a live ClickHouse.

@@ -1,5 +1,5 @@
 /**
- * tool-invocation-execution-identity.test.ts — repo-wide regression guard for
+ * tool-invocation-execution-identity.tree.test.ts — repo-wide regression guard for
  * ClickHouse `tool_invocations.execution_step_id` (#2597, #2615).
  *
  * `tool_invocations` carries an `execution_step_id` column so a recorded tool
@@ -20,8 +20,12 @@
  * literal is the regression: it says "no run" for every row unconditionally,
  * including the ones that had one.
  *
+ * The guard reads the live source of every package and app, so this is a
+ * `*.tree.test.ts` file. `pnpm check:tree-guards` runs it uncached in the
+ * checks job, outside turbo's cached `test:unit` task (#4664 item 2).
+ *
  * Narrow run:
- *   pnpm --filter @oxagen/scripts test:unit -- tool-invocation-execution-identity.test.ts
+ *   pnpm check:tree-guards tool-invocation-execution-identity.tree.test.ts
  */
 
 import { describe, it, expect } from "vitest";

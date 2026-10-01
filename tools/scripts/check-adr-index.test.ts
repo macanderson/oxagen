@@ -2,9 +2,6 @@
  * The guard for #2978: an ADR that merges without an entry in
  * `docs/adr/README.md` is a decision no reader can find.
  */
-import { readdirSync, readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   deadIndexLinks,
@@ -103,22 +100,5 @@ describe("duplicateNumbers", () => {
     expect(duplicateNumbers(["ADR-18-short.md", "ADR-182-long.md"])).toEqual(
       [],
     );
-  });
-});
-
-describe("the repository's ADR index", () => {
-  it("links every ADR in docs/adr and no missing file", () => {
-    const adrDir = join(
-      dirname(fileURLToPath(import.meta.url)),
-      "..",
-      "..",
-      "docs",
-      "adr",
-    );
-    const files = readdirSync(adrDir);
-    const readme = readFileSync(join(adrDir, "README.md"), "utf8");
-    expect(missingFromIndex(files, readme)).toEqual([]);
-    expect(deadIndexLinks(files, readme)).toEqual([]);
-    expect(duplicateNumbers(files)).toEqual([]);
   });
 });

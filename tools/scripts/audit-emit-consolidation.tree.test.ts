@@ -1,5 +1,5 @@
 /**
- * audit-emit-consolidation.test.ts — repo-wide invariant for the SOC2 audit
+ * audit-emit-consolidation.tree.test.ts — repo-wide invariant for the SOC2 audit
  * emit path (OXA-N1 / Rec 1 of docs/architecture/security/soc2-simplification.html).
  *
  * Before consolidation, every audit call site hand-rolled the same lazy-singleton
@@ -21,6 +21,10 @@
  * it constructs makeSecurityEventInserter() once and registers it with the
  * capability kernel, which is a different (per-invocation) path than discrete
  * mutation emits. We assert those bootstraps still wire the inserter.
+ *
+ * These tests read the live source of every package and app, so this is a
+ * `*.tree.test.ts` file. `pnpm check:tree-guards` runs it uncached in the
+ * checks job, outside turbo's cached `test:unit` task (#4664 item 2).
  */
 
 import { describe, it, expect } from "vitest";

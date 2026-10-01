@@ -1,4 +1,4 @@
-import { defineConfig } from "vitest/config";
+import { configDefaults, defineConfig } from "vitest/config";
 
 export default defineConfig({
   test: {
@@ -10,6 +10,15 @@ export default defineConfig({
     // would have done the same. A test that cannot run is worse than no test,
     // because the file reads like coverage.
     include: ["**/*.test.ts"],
+    // `*.tree.test.ts` files read files outside this package: every package's
+    // source, the workflows, the docs. Turbo hashes this suite over the
+    // package's own files, so a cached run of them could replay a pass after
+    // the files they read changed (#4664 item 2). They run in
+    // vitest.tree.config.ts instead, which the checks job's
+    // `pnpm check:tree-guards` step starts outside turbo, so it never reads a
+    // cache. lib/outside-reads.test.ts fails a test left here that reads a
+    // file outside the package without a declared input in turbo.json.
+    exclude: [...configDefaults.exclude, "**/*.tree.test.ts"],
     // The one package in the repo whose coverage nothing enforced. Every other
     // vitest config here declares thresholds — 36 of 37 — and the exception was
     // this one, which holds the guards that decide whether anything else may
