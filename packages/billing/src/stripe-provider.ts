@@ -602,16 +602,14 @@ function stripeInvoiceToNeutral(invoice: Stripe.Invoice): BillingInvoice {
     ? (invoice.status as string)
     : "draft";
 
-  const lineItems: BillingInvoiceLineItem[] = (invoice.lines?.data ?? []).map(
-    (line) => ({
-      description: line.description ?? "",
-      quantity: line.quantity ?? 1,
-      unitAmountCents: line.price?.unit_amount ?? 0,
-      totalCents: line.amount,
-      metric: (line.metadata?.metric as string | undefined) ?? null,
-      metadata: (line.metadata as Record<string, string>) ?? {},
-    }),
-  );
+  // The pagination rule for every Stripe list field (#4895). A list nested in
+  // an object, such as `invoice.lines`, is one page. Stripe sets `has_more`
+  // when there are others, and `.data` alone is then a truncated list. This
+  // mapper makes no network call, so it maps the page it was given and says
+  // whether that page is the whole list. `getInvoice` pages the rest, and
+  // `processStripeEvent` swaps a webhook payload's first page for that read.
+  const lineItems = (invoice.lines?.data ?? []).map(stripeLineToNeutral);
+  const lineItemsComplete = invoice.lines?.has_more !== true;
 
   const orgId = resolveInvoiceOrgId(invoice);
   const subId = resolveInvoiceSubscriptionId(invoice);
@@ -640,8 +638,32 @@ function stripeInvoiceToNeutral(invoice: Stripe.Invoice): BillingInvoice {
       (invoice.metadata?.gau_settlement_id as string | undefined) ?? null,
     prepaidOrder: prepaidOrderOf(invoice.metadata),
     lineItems,
+    lineItemsComplete,
   };
 }
+
+function stripeLineToNeutral(
+  line: Stripe.InvoiceLineItem,
+): BillingInvoiceLineItem {
+  return {
+    description: line.description ?? "",
+    quantity: line.quantity ?? 1,
+    unitAmountCents: line.price?.unit_amount ?? 0,
+    totalCents: line.amount,
+    metric: (line.metadata?.metric as string | undefined) ?? null,
+    metadata: (line.metadata as Record<string, string>) ?? {},
+  };
+}
+
+/**
+ * The most invoice lines `getInvoice` reads. Stripe pages them 100 at a
+ * time, so the cap is ten round trips, the bound `MAX_PREVIEW_LINES` sets on
+ * the preview path. An invoice with more lines is returned with the first
+ * 1,000 and `lineItemsComplete: false` rather than refused: a receipt or an
+ * invoice sync that stopped on it would lose the whole invoice to protect a
+ * list of rows.
+ */
+export const MAX_INVOICE_LINES = 1000;
 
 /**
  * The prepaid order an invoice bills, from the metadata createPrepaidInvoice
@@ -1221,10 +1243,29 @@ export class StripeProvider implements BillingProvider {
   // ── Invoice ─────────────────────────────────────────────────────────────────
 
   async getInvoice(invoiceId: string): Promise<BillingInvoice> {
-    const invoice = await this.client().invoices.retrieve(invoiceId, {
+    const stripe = this.client();
+    const invoice = await stripe.invoices.retrieve(invoiceId, {
       expand: ["lines.data.price"],
     });
-    return stripeInvoiceToNeutral(invoice);
+    const mapped = stripeInvoiceToNeutral(invoice);
+    // One page holds every line: no second call.
+    if (mapped.lineItemsComplete) return mapped;
+    // One past the cap, so an invoice of exactly the cap reads as complete.
+    const lines = await stripe.invoices
+      .listLineItems(invoiceId, { limit: 100, expand: ["data.price"] })
+      .autoPagingToArray({ limit: MAX_INVOICE_LINES + 1 });
+    const lineItemsComplete = lines.length <= MAX_INVOICE_LINES;
+    if (!lineItemsComplete) {
+      logger.warn(
+        { invoiceId, cap: MAX_INVOICE_LINES },
+        "billing: invoice holds more lines than getInvoice reads; returning it marked partial",
+      );
+    }
+    return {
+      ...mapped,
+      lineItems: lines.slice(0, MAX_INVOICE_LINES).map(stripeLineToNeutral),
+      lineItemsComplete,
+    };
   }
 
   async createGauInvoice(

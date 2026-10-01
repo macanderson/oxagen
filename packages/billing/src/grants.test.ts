@@ -212,6 +212,7 @@ function makeInvoice(overrides: Partial<BillingInvoice> = {}): BillingInvoice {
     orgId: "org-abc",
     billingReason: "subscription_create",
     gauSettlementId: null,
+    lineItemsComplete: true,
     lineItems: [],
     ...overrides,
   };
