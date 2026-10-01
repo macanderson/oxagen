@@ -62,7 +62,9 @@ jobs:
     if: >-
       github.event_name != 'issues'
       || github.event.changes.body != null
-    runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-small-{0}', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
+    # ubuntu-slim (one vCPU, $0.002 a minute): a sparse checkout and a few
+    # API calls, done in seconds (#4918).
+    runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-small-{0}', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-slim' }}
     timeout-minutes: 5
     steps:
       # The checker lives in oxagen, and a caller repo does not have it. Same
@@ -73,7 +75,7 @@ jobs:
         uses: actions/checkout@v5
         with:
           repository: macanderson/oxagen
-          ref: ${{ github.repository == 'macanderson/oxagen' && github.sha || 'main' }}
+          ref: ${{ github.repository == 'oxageninc/product' && github.sha || 'main' }}
           path: .scr-tools
           sparse-checkout: tools/scripts
           sparse-checkout-cone-mode: false
@@ -119,9 +121,29 @@ jobs:
                   head_sha: pr.head.sha,
                   per_page: 100,
                 })
-                const dod = runs.data.workflow_runs.sort(
-                  (a, b) => Date.parse(b.created_at) - Date.parse(a.created_at),
-                )[0]
+                // A run whose job was skipped (dod-check.yml skips a bot's
+                // edit or label change) judged nothing, so the newest run
+                // that did is the one whose verdict stands. GitHub can report
+                // such a run as `success`, because a skipped job counts as
+                // passing, so a successful run is kept only when one of its
+                // jobs actually ran.
+                const ordered = runs.data.workflow_runs
+                  .filter((run) => run.conclusion !== "skipped")
+                  .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))
+                let dod
+                for (const run of ordered) {
+                  if (run.conclusion === "success") {
+                    const jobs = await github.rest.actions.listJobsForWorkflowRun({
+                      owner, repo, run_id: run.id, per_page: 100,
+                    })
+                    const judged = jobs.data.jobs.some(
+                      (job) => job.conclusion !== "skipped",
+                    )
+                    if (!judged) continue
+                  }
+                  dod = run
+                  break
+                }
 
                 if (!dod) {
                   core.notice(`#${pr.number}: no dod run on ${pr.head.sha.slice(0, 8)}.`)

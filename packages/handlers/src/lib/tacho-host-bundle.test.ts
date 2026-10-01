@@ -992,3 +992,41 @@ describe("the unbound repository clause on the bundle (#3941)", () => {
     expect(mandate).not.toHaveProperty("unboundRepo");
   });
 });
+
+// Mac's ruling of 2026-10-01: the open-source Stella coding agent a customer
+// runs as a CLI is governed exactly like Claude Code and Codex (ADR-235). The
+// signed bundle carries the agent's budget and the workspace's permissions to
+// the host, and a host enrolled for Stella gets the same bundle as one enrolled
+// for Claude Code or Codex.
+describe("the signed bundle for a Stella CLI host", () => {
+  it("carries the same budget, permissions, and etag as for Claude Code and Codex", async () => {
+    const bundles = await Promise.all(
+      (["claude-code", "codex", "stella"] as const).map(async (harness) => {
+        const enrolled = { ...governedHost(), harnesses: [harness] };
+        const { tx } = budgetTransaction({
+          budget: { per_run_micros: 2_500_000 },
+        });
+        const mandate = await resolveHostMandate(tx, mandateCtx, enrolled);
+        return unsignedBundle(
+          enrolled,
+          { org: 1, workspace: 1 },
+          { mode: "digest_only", classes: [] },
+          STEERING,
+          mandate,
+          NOW,
+        );
+      }),
+    );
+    const [claude, ...others] = bundles;
+    expect(claude!.budget).toEqual({
+      mode: "enforced",
+      session_limit_usd: 2.5,
+    });
+    for (const other of others) {
+      expect(other.budget).toEqual(claude!.budget);
+      expect(other.permissions).toEqual(claude!.permissions);
+      expect(other.host_status).toBe(claude!.host_status);
+      expect(other.etag).toBe(claude!.etag);
+    }
+  });
+});

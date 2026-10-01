@@ -66,12 +66,17 @@ jobs:
     if: >-
       github.event_name == 'workflow_dispatch' ||
       github.event.workflow_run.event == 'pull_request'
-    runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-small-{0}', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
+    # ubuntu-slim (one vCPU, $0.002 a minute): a sparse checkout and a script
+    # that makes a few API calls (#4918).
+    runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-small-{0}', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-slim' }}
     timeout-minutes: 5
     steps:
+      # The script and its one import live in tools/scripts. Cone mode keeps
+      # the root files too, .node-version among them.
       - uses: actions/checkout@v5
         with:
           persist-credentials: false
+          sparse-checkout: tools/scripts
       - uses: actions/setup-node@v4
         with:
           node-version-file: .node-version

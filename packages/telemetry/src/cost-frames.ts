@@ -6,7 +6,8 @@
  * `token_usage` row keyed on the run it ran for (`execution_step_id`), priced
  * by the gateway: `gateway_observed`. A wrapped agent's call is one
  * `tacho_events` row of kind `llm_call`, reported by the harness:
- * `client_attested`. Both come back in one shape with the token classes of
+ * `client_attested`, unless the loopback model proxy carried the call and sealed
+ * it with `oxagen.metering: observed`, which reads `gateway_observed`. Both come back in one shape with the token classes of
  * spec §12.6, so the rollup prices them the same way.
  *
  * The tacho table receives the same model call from more than one source
@@ -67,6 +68,8 @@ import type { ClickHouseSettings } from "@clickhouse/client";
 import {
   LLM_CALL_DUPLICATE_OF_ATTR,
   LLM_CALL_TOKEN_SOURCES,
+  TACHO_METERING_ATTR,
+  TACHO_METERING_OBSERVED,
   SYSTEM_CONTEXT_PARTS_MAX,
   systemContextPartSchema,
   type SystemContextPart,
@@ -356,6 +359,22 @@ const RUN_SESSIONS = "session_uuid IN {sessionUuids:Array(UUID)}";
 const PROXY_SIGHTING = "source = 'collector' AND fidelity = 'proxy'";
 
 /**
+ * The metering mark the loopback proxy seals on every call it carries
+ * (`oxagen.metering: observed`). A row written before the mark existed, or by
+ * a source the proxy never saw, reads an empty string. The names are fixed
+ * constants, so they sit in the SQL as literals and add no query parameters.
+ */
+const METERING_VALUE = `attrs['${TACHO_METERING_ATTR}']`;
+
+/**
+ * The proxy saw the call when the priced row carries the mark or the proxy
+ * sighting joined back to it does. The proxy sighting can be the unpriced one
+ * (an OTel or hook row sealed the call first), so the join is read too. Returns
+ * 1 for a call the proxy observed and 0 otherwise.
+ */
+const FRAME_PROXY_OBSERVED = `toUInt8(c.metering = '${TACHO_METERING_OBSERVED}' OR r.metering = '${TACHO_METERING_OBSERVED}' OR q.metering = '${TACHO_METERING_OBSERVED}')`;
+
+/**
  * The proxy sighting's token sources and system context, grouped on one
  * call id, for the join named `alias` on `c.<key>`. Keyed on each id apart
  * for the reason the transcript joins are (`TRANSCRIPT_THINKING`). The
@@ -372,6 +391,7 @@ function proxySightingJoin(
           max(tool_definition_tokens) AS tool_definitions,
           max(context_frame_tokens) AS context_frames,
           max(steering_tokens) AS steering,
+          max(${METERING_VALUE}) AS metering,
           max(system_context_digest) AS context_digest,
           argMax(system_context_parts, (system_context_digest, length(system_context_parts))) AS context_parts
         FROM tacho_events FINAL
@@ -577,14 +597,16 @@ export async function readModelCallFrames(args: {
         ${proxiedCount("context_frame_tokens", "context_frames")} AS context_frame_tokens,
         ${proxiedCount("steering_tokens", "steering")} AS steering_tokens,
         ${FRAME_CONTEXT_DIGEST} AS system_context_digest,
-        ${consume === undefined ? FRAME_CONTEXT_PARTS : "NULL"} AS system_context_parts
+        ${consume === undefined ? FRAME_CONTEXT_PARTS : "NULL"} AS system_context_parts,
+        ${FRAME_PROXY_OBSERVED} AS proxy_observed
       FROM (
         SELECT
           ts, seq, session_uuid, model, provider, input_tokens, output_tokens,
           cache_read_tokens, cache_creation_tokens, cache_creation_1h_tokens,
           thinking_tokens, web_search_requests, cost_usd_micros, request_id,
           message_id, tool_definition_tokens, context_frame_tokens,
-          steering_tokens, system_context_digest, system_context_parts
+          steering_tokens, system_context_digest, system_context_parts,
+          ${METERING_VALUE} AS metering
         FROM tacho_events FINAL
         WHERE org_id = {orgId:UUID}
           AND workspace_id = {workspaceId:UUID}
@@ -660,6 +682,7 @@ export async function readModelCallFrames(args: {
     steering_tokens?: string | number | null;
     system_context_digest?: string | null;
     system_context_parts?: string | null;
+    proxy_observed?: string | number | null;
   };
   return consumeFrames<Row, ModelCallFrameRow>(result, (r) => {
     const parts = parseSystemContextParts(r.system_context_parts);
@@ -675,7 +698,12 @@ export async function readModelCallFrames(args: {
       reasoning: Number(r.reasoning),
       serverToolRequests: Number(r.server_tool_request),
       reportedCostMicros: r.cost_micros,
-      basis: "client_attested",
+      // A call the loopback proxy carried is gateway_observed. A row with no
+      // mark (older rows, or a call the proxy never saw) stays client_attested.
+      basis:
+        Number(r.proxy_observed ?? 0) === 1
+          ? "gateway_observed"
+          : "client_attested",
       sessionUuid: r.session_uuid,
       toolDefinitionTokens: nullableCount(r.tool_definition_tokens),
       contextFrameTokens: nullableCount(r.context_frame_tokens),

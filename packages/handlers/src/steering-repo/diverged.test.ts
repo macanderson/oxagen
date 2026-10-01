@@ -485,6 +485,35 @@ describe("githubPublished", () => {
     await expect(githubPublished(gh.target)).resolves.toEqual({ sha: P, version: null });
   });
 
+  it("anchors on the app's bot user when GitHub names no app (#4949)", async () => {
+    const gh = github({
+      [DEPLOYMENTS]: ok([
+        {
+          sha: P,
+          performed_via_github_app: null,
+          creator: { login: "oxagen-steering[bot]", type: "Bot" },
+        },
+      ]),
+    });
+    await expect(githubPublished(gh.target)).resolves.toEqual({
+      sha: P,
+      version: null,
+    });
+  });
+
+  it("refuses a deployment by a person or another bot when GitHub names no app (negative)", async () => {
+    for (const creator of [
+      { login: "oxagen-steering[bot]", type: "User" },
+      { login: "someone-else[bot]", type: "Bot" },
+      null,
+    ]) {
+      const gh = github({
+        [DEPLOYMENTS]: ok([{ sha: P, performed_via_github_app: null, creator }]),
+      });
+      await expect(githubPublished(gh.target)).resolves.toBeNull();
+    }
+  });
+
   it("returns null when the app recorded no deployment", async () => {
     const deployments = fixture<GithubDeploymentFixture[]>("github-deployments");
     const gh = github({ [DEPLOYMENTS]: ok(deployments.slice(0, 1)) });

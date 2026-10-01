@@ -10,6 +10,10 @@ import type {
 } from "./types";
 import type { AuthorizationDecisionRef } from "./iam/agent-run";
 import { getSurfaces, ORG_ONLY_WORKSPACE_ID } from "./types";
+import {
+  isKernelIssuedOxagenAssistant,
+  isOxagenAssistantCall,
+} from "./oxagen-assistant";
 import { isKernelIssuedPlatformOperator } from "./platform-operator";
 import { isHandlerError, type HandlerErrorCode } from "./handler-error";
 import { getCapability, listCapabilities } from "./registry";
@@ -1193,7 +1197,11 @@ async function _invokeCoreInner(
   //   deployedAgentInvocation minted only by createDeployedAgentInvocationContext
   //                           and tracked in the kernel's own registry;
   //   platformOperator        minted only by createPlatformOperatorContext and
-  //                           tracked in platform-operator.ts's registry.
+  //                           tracked in platform-operator.ts's registry;
+  //   oxagenAssistant         minted only by createOxagenAssistantBinding and
+  //                           tracked in oxagen-assistant.ts's registry. It
+  //                           takes Stella's calls out of workspace governance
+  //                           (ADR-235), so a claimed one is an escalation.
   //
   // Reject the invocation rather than silently stripping the field. Stripping
   // would let the probe succeed and leave no trace; a hard deny plus a security
@@ -1208,7 +1216,10 @@ async function _invokeCoreInner(
         : ctx.platformOperator !== undefined &&
             !isKernelIssuedPlatformOperator(ctx.platformOperator)
           ? "platformOperator"
-          : null;
+          : ctx.oxagenAssistant !== undefined &&
+              !isKernelIssuedOxagenAssistant(ctx.oxagenAssistant)
+            ? "oxagenAssistant"
+            : null;
   if (forgedBinding !== null) {
     emitSecurityEvent({
       capability: canonical,
@@ -1691,10 +1702,18 @@ async function _invokeCoreInner(
       // ── Decision-rules gate ─────────────────────────────────────────────────
       // Same skip conditions as billing: unscoped and platform-internal
       // (org-less) invocations pass. Fires for agent-facing surfaces and API
-      // alike — a rule about refunds binds the action, not the door it came
-      // through.
+      // alike: a rule about refunds binds the action whatever door a
+      // customer's agent or a person's API call came through.
+      //
+      // Stella's calls skip it (ADR-235). The rules are the workspace's, and
+      // the workspace does not govern Oxagen's own agent. The IAM check above
+      // still bounds what Stella may do for the person who asked. The
+      // binding that marks the call is kernel-minted, so no request can claim
+      // it, and a context that names a customer's agent never counts.
+      const skipWorkspaceRules = isOxagenAssistantCall(ctx);
       if (
         opts.requireFreshRules &&
+        !skipWorkspaceRules &&
         (!_decisionRulesGate || !ctx.orgId || !ctx.workspaceId)
       ) {
         throw new CapabilityError(
@@ -1705,6 +1724,7 @@ async function _invokeCoreInner(
       }
       if (
         _decisionRulesGate !== null &&
+        !skipWorkspaceRules &&
         ctx.orgId &&
         (isScoped || opts.requireFreshRules)
       ) {

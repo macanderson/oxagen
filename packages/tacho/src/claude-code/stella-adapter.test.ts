@@ -451,3 +451,28 @@ describe("a Stella payload carries the same frame bodies a Claude Code one does"
     expect(JSON.stringify(frame)).not.toContain("refactor the parser");
   });
 });
+
+describe("the sender on a Stella prompt", () => {
+  // Stella's `UserPromptSubmit` payload is `{event, cwd, prompt}` on every
+  // send path (`HookPayload::user_prompt_submit`, read 2026-10-01 at
+  // macanderson/stella `729c07a60`). Nothing in it names who sent the
+  // prompt, so the adapter adds nothing and the `turn_start` carries null
+  // until Stella sends a sender (macanderson/stella#6640).
+  it("leaves both fields absent on the turn_start", () => {
+    const translated = translateStellaPayload(
+      { event: "UserPromptSubmit", cwd: "/repo", prompt: "fix the flaky test" },
+      4242,
+      "tok",
+    );
+    expect(translated).not.toHaveProperty("prompt_source");
+    expect(translated).not.toHaveProperty("prompt_origin");
+    const [turn] = normalizeHook(
+      translated,
+      {},
+      { sessionUuid: "11111111-1111-4111-8111-111111111111" },
+    );
+    expect(turn?.kind).toBe("turn_start");
+    expect(turn?.body).not.toHaveProperty("prompt_source");
+    expect(turn?.body).not.toHaveProperty("prompt_origin");
+  });
+});
