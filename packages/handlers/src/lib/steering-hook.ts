@@ -27,7 +27,7 @@ export function isSteeringHookScopeKind(
 /** The steering project a hook serves. */
 export interface SteeringHookIdentity {
   kind: SteeringHookScopeKind;
-  /** The workspace id, or the organization id for `<org>/oxagen`. */
+  /** The workspace id, or the organization id for `<org>/oxagen-config`. */
   scopeId: string;
   /** GitLab's project id. */
   projectId: number;

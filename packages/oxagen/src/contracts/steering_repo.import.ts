@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { registerCapability } from "../registry";
 import { recordEffectSchema } from "../steering-repo/record-effect";
+import { steeringConnectionPick } from "./steering_repo.get";
 
 /** How the import ended. */
 export const STEERING_IMPORT_OUTCOMES = [
@@ -47,6 +48,11 @@ export const STEERING_IMPORT_OUTCOMES = [
  * such a workspace an empty steering repo and imports nothing from the legacy
  * repository.
  *
+ * When setup stopped with `choose_connection`, the call takes `connection`,
+ * one of `get_steering_repo`'s `connectionChoices`. The run stores it as the
+ * organization's steering connection first, and refuses one that is not on
+ * the list (conflict `unknown_connection`).
+ *
  * Org Owners and Admins, and workspace Owners. The handler checks the role
  * itself (INV-29). The import is a one-time move a person starts, so the
  * contract is not on the agent surface and carries no agent metadata.
@@ -58,7 +64,7 @@ export const steeringRepoImport = registerCapability({
     "Move the workspace's steering from .oxagen/ in the repository it binds to a steering repo, and open the steering PRs a person merges. A workspace on a legacy sources connection sets startFresh instead: the run creates an empty steering repo and imports nothing.",
   mode: "sync",
   surfaces: ["api", "mcp"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
   mutates: true,
@@ -82,6 +88,11 @@ export const steeringRepoImport = registerCapability({
         .boolean()
         .describe(
           "Set true for a workspace on a legacy sources connection. The run creates an empty steering repo and imports nothing, and the steering repo steers the workspace from then on. The .oxagen/ files stay in the legacy repository.",
+        )
+        .optional(),
+      connection: steeringConnectionPick
+        .describe(
+          "The GitHub organization or GitLab group to create the steering repo in, when setup stopped with choose_connection. One of get_steering_repo's connectionChoices.",
         )
         .optional(),
     })

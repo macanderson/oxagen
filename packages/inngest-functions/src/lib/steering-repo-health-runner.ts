@@ -10,7 +10,7 @@
 /** Whose steering repo the job reads. */
 export interface SteeringRepoHealthScope {
   orgId: string;
-  /** Null for the organization repository `<org>/oxagen`. */
+  /** Null for the organization repository `<org>/oxagen-config`. */
   workspaceId: string | null;
 }
 

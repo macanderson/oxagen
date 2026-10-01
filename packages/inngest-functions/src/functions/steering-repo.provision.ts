@@ -38,7 +38,7 @@ async function runStep(
  * Provision a steering repo (steering-repo-spec, Provisioning; lane S1).
  *
  * `create_workspace` sends `steering-repo/provision.requested` for the new
- * workspace, and `create_organization` sends it for `<org>/oxagen`. The
+ * workspace, and `create_organization` sends it for `<org>/oxagen-config`. The
  * headless backfill (`steering-repo.backfill.ts`, #4683) sends it for each
  * workspace that never started provisioning. Each step
  * is its own durable step, so a retry starts at the step that failed. Every
