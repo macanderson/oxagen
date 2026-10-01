@@ -3,10 +3,13 @@
 import { describe, expect, it } from "vitest";
 import type { ToolCallFrame } from "./cost-rollup";
 import {
+  classifySteps,
   gradeSteps,
   RepeatedCalls,
   repeatKindOf,
   SHELL_TOOL,
+  stepClassOf,
+  type StepRequest,
 } from "./step-grade";
 
 /** A tool call that ran and returned, read-only unless a test says otherwise. */
@@ -204,5 +207,103 @@ describe("RepeatedCalls", () => {
     seen.repeats("", "Read", "sha256:in", "");
     expect(seen.repeats("", "Read", "sha256:in", "")).toBe(false);
     expect(seen.repeats("", "Read", "sha256:in", null)).toBe(false);
+  });
+});
+
+describe("stepClassOf", () => {
+  const reads = { isMutating: false };
+  const writes = { isMutating: true };
+  const unknown = { isMutating: null };
+
+  it("classes a step whose calls all change nothing as read_only", () => {
+    expect(stepClassOf({ calls: [reads, reads], changedFile: false })).toBe(
+      "read_only",
+    );
+  });
+
+  it("classes a step that made no call as read_only", () => {
+    expect(stepClassOf({ calls: [], changedFile: false })).toBe("read_only");
+  });
+
+  it("classes a step with a mutating call as an edit", () => {
+    expect(stepClassOf({ calls: [reads, writes], changedFile: false })).toBe(
+      "edit",
+    );
+  });
+
+  it("classes a step with a call the classifier said nothing about as an edit", () => {
+    expect(stepClassOf({ calls: [reads, unknown], changedFile: false })).toBe(
+      "edit",
+    );
+  });
+
+  it("classes a step in which a file changed as an edit", () => {
+    expect(stepClassOf({ calls: [reads], changedFile: true })).toBe("edit");
+    expect(stepClassOf({ calls: [], changedFile: true })).toBe("edit");
+  });
+});
+
+describe("classifySteps", () => {
+  const reads = { isMutating: false };
+  const writes = { isMutating: true };
+
+  /** A model call that made the calls given. */
+  const request = (
+    ...calls: { isMutating: boolean | null }[]
+  ): StepRequest => ({ modelCall: true, calls });
+
+  it("gives every step one class, so the classes sum to the steps", () => {
+    const requests = [request(reads, reads), request(writes), request()];
+    const classes = classifySteps({ requests, changedFile: false });
+    // Model calls: read, edit, read. Tool calls: read, read, edit.
+    expect(classes).toEqual({ readOnly: 4, edit: 2 });
+    const steps = requests.length + requests.flatMap((r) => r.calls).length;
+    expect(classes.readOnly + classes.edit).toBe(steps);
+  });
+
+  it("classes 50 steps that only read and 1 that edits", () => {
+    const requests = [
+      ...Array.from({ length: 50 }, () => request(reads)),
+      request(writes),
+    ];
+    // Each request is a model call and the one tool call it made.
+    expect(classifySteps({ requests, changedFile: false })).toEqual({
+      readOnly: 100,
+      edit: 2,
+    });
+  });
+
+  it("counts calls made before the first model call as tool-call steps only", () => {
+    expect(
+      classifySteps({
+        requests: [{ modelCall: false, calls: [reads, writes] }, request()],
+        changedFile: false,
+      }),
+    ).toEqual({ readOnly: 2, edit: 1 });
+  });
+
+  it("places a run's file change on its steps that may write", () => {
+    expect(
+      classifySteps({
+        requests: [request(reads), request(writes)],
+        changedFile: true,
+      }),
+    ).toEqual({ readOnly: 2, edit: 2 });
+  });
+
+  it("counts every step as an edit when the run changed a file and no call may write", () => {
+    expect(
+      classifySteps({
+        requests: [request(reads), request()],
+        changedFile: true,
+      }),
+    ).toEqual({ readOnly: 0, edit: 3 });
+  });
+
+  it("answers zero of each for a run with no step", () => {
+    expect(classifySteps({ requests: [], changedFile: false })).toEqual({
+      readOnly: 0,
+      edit: 0,
+    });
   });
 });

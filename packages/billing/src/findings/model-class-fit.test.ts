@@ -17,6 +17,7 @@ import {
   lighterModel,
   modelClassFit,
   modelClassFitWith,
+  readOnlyFrames,
 } from "./model-class-fit";
 import { buildRunViews } from "./requests";
 import { SPIN_LOOP_REPEATS } from "./spin-loops";
@@ -26,6 +27,7 @@ import {
   toDraft,
   type DetectInput,
   type FindingDraft,
+  type PricedRequestFrame,
   type ToolCallObservation,
 } from "./shared";
 
@@ -288,15 +290,23 @@ describe("model class fit", () => {
     );
   });
 
-  it("leaves out a run with a call that changed something", () => {
+  it("leaves out a run with an edit when the pass read no frame for it", () => {
     const r = run([opus()], { toolCalls: 2 });
     const calls = [call(r, 1), call(r, 2, { tool: "Edit", isMutating: true })];
     expect(detect(input([r], calls))).toEqual([]);
   });
 
-  it("leaves out a run with a call the classifier said nothing about", () => {
+  it("leaves out a run with an unclassified call when the pass read no frame for it", () => {
     const r = run();
     expect(detect(input([r], [call(r, 1, { isMutating: null })]))).toEqual([]);
+  });
+
+  it("leaves out a run that changed a file while every call changed nothing", () => {
+    const r = run();
+    const changed = new Map([[r.runId, true]]);
+    expect(
+      detect(input([r], readOnly([r]), { fileChanges: changed })),
+    ).toEqual([]);
   });
 
   it("leaves out a run that has not ended", () => {
@@ -477,6 +487,244 @@ describe("model class fit", () => {
   });
 });
 
+/**
+ * A model call of `r` on Opus `at` seconds into the run, on the run's own
+ * chain: 20k input and 2k output, $0.12 measured and $0.06 on Sonnet 5.
+ */
+function frame(
+  r: RunTotalsRecord,
+  at: number,
+  over: Partial<PricedRequestFrame> = {},
+): PricedRequestFrame {
+  const when = new Date(r.startedAt.getTime() + at * 1_000);
+  return {
+    key: `${when.toISOString()}#0`,
+    at: when,
+    costMicros: 120_000n,
+    tokens: 22_000,
+    basis: "gateway_observed",
+    sessionUuid: null,
+    model: OPUS,
+    provider: null,
+    classTokens: tokens({ input_uncached: 20_000, output: 2_000 }),
+    ...over,
+  };
+}
+
+/**
+ * A run of `reads` steps that only read, then one step that edits. Each step
+ * is one model call on an even second and the tool call it made on the odd
+ * second after.
+ */
+function editRun(reads: number): {
+  r: RunTotalsRecord;
+  frames: PricedRequestFrame[];
+  calls: ToolCallObservation[];
+} {
+  const r = run([opus()], { toolCalls: reads + 1 });
+  r.sealedAt = new Date(r.startedAt.getTime() + 10 * 60_000);
+  const frames: PricedRequestFrame[] = [];
+  const calls: ToolCallObservation[] = [];
+  for (let k = 1; k <= reads + 1; k += 1) {
+    frames.push(frame(r, 2 * k));
+    calls.push(
+      call(r, 2 * k + 1, k > reads ? { tool: "Edit", isMutating: true } : {}),
+    );
+  }
+  return { r, frames, calls };
+}
+
+/** The input with each run's frames read. */
+function withFrames(
+  runs: RunTotalsRecord[],
+  calls: ToolCallObservation[],
+  frames: Record<string, PricedRequestFrame[]>,
+  over: Partial<DetectInput> = {},
+): DetectInput {
+  return input(runs, calls, {
+    frames: new Map(Object.entries(frames)),
+    ...over,
+  });
+}
+
+describe("model class fit on step classes", () => {
+  it("prices the 50 read-only steps of a run with 1 edit step, as an estimate", () => {
+    const { r, frames, calls } = editRun(50);
+    const [f, ...rest] = detect(withFrames([r], calls, { [r.runId]: frames }));
+    expect(rest).toEqual([]);
+    expect(f).toMatchObject({
+      kind: "model_class_fit",
+      level: "agent",
+      subject: AGENT,
+      basis: "estimated",
+      confidence: "high",
+      savingMicros: 3_000_000n,
+      citedRuns: [r.runId],
+    });
+    expect(f!.evidence).toMatchObject({
+      calls: 1,
+      coveredCalls: 1,
+      measuredMicros: "6000000",
+      counterfactualMicros: "3000000",
+      measuredTokens: 50 * 22_000,
+    });
+    expect(f!.why).toBe(
+      "1 run with edit steps also had steps that only read. Repriced from claude-opus-5-5 to claude-sonnet-5 at list prices, those steps would have cost an estimated 50% less.",
+    );
+    expect(f!.fix).toContain("subagent on claude-sonnet-5");
+    expect(f!.fix).toContain("model-route steering record");
+    expect(f!.fix).toContain("stays an estimate");
+  });
+
+  it("claims no frame and pins no call for a run with an edit", () => {
+    const { r, frames, calls } = editRun(50);
+    const [f] = detect(withFrames([r], calls, { [r.runId]: frames }));
+    expect(f!.claims).toBeUndefined();
+    expect(f!.evidence.frames).toBeUndefined();
+  });
+
+  it("leaves the edit step out of the read-only frames", () => {
+    const { r, frames, calls } = editRun(3);
+    const i = withFrames([r], calls, { [r.runId]: frames });
+    const runs = new Map([[r.runId, r]]);
+    const [view] = buildRunViews(i, runs);
+    expect(readOnlyFrames(view!, frames)).toEqual(frames.slice(0, 3));
+    expect(readOnlyFrames(view!, undefined)).toBeNull();
+  });
+
+  it("shows a run with no edits the same figure as before, with its frames read", () => {
+    const r = run();
+    const calls = readOnly([r]);
+    // Frames that would price differently from the run's own breakdown.
+    const frames = { [r.runId]: [frame(r, 0), frame(r, 2)] };
+    const before = detect(input([r], calls));
+    const after = detect(
+      withFrames([r], calls, frames, {
+        fileChanges: new Map([[r.runId, false]]),
+      }),
+    );
+    expect(after).toEqual(before);
+    expect(after[0]!.savingMicros).toBe(3_000_000n);
+    expect(after[0]!.why).toBe(
+      "1 run changed no file. Repriced from claude-opus-5-5 to claude-sonnet-5 at list prices, it would have cost an estimated 50% less.",
+    );
+  });
+
+  it("classes a model call that made no tool call as read-only", () => {
+    const r = run([opus()], { toolCalls: 2 });
+    const frames = [frame(r, 2), frame(r, 4), frame(r, 6)];
+    const calls = [call(r, 3), call(r, 5, { tool: "Edit", isMutating: true })];
+    const [f] = detect(withFrames([r], calls, { [r.runId]: frames }));
+    expect(f!.evidence.measuredMicros).toBe("240000");
+    expect(f!.evidence.counterfactualMicros).toBe("120000");
+  });
+
+  it("classes a step with a call the classifier said nothing about as an edit", () => {
+    const r = run([opus()], { toolCalls: 2 });
+    const frames = [frame(r, 2), frame(r, 4)];
+    const calls = [call(r, 3), call(r, 5, { isMutating: null })];
+    const [f] = detect(withFrames([r], calls, { [r.runId]: frames }));
+    expect(f!.evidence.measuredMicros).toBe("120000");
+    expect(f!.savingMicros).toBe(60_000n);
+  });
+
+  it("classes a step with any call that may write as an edit", () => {
+    const r = run([opus()], { toolCalls: 3 });
+    const frames = [frame(r, 2), frame(r, 4)];
+    const calls = [
+      call(r, 3),
+      call(r, 5),
+      call(r, 6, { tool: "Write", isMutating: true }),
+    ];
+    const [f] = detect(withFrames([r], calls, { [r.runId]: frames }));
+    expect(f!.evidence.measuredMicros).toBe("120000");
+  });
+
+  it("still prices the read-only steps of a run whose edit changed a file", () => {
+    const { r, frames, calls } = editRun(50);
+    const [f] = detect(
+      withFrames([r], calls, { [r.runId]: frames }, {
+        fileChanges: new Map([[r.runId, true]]),
+      }),
+    );
+    expect(f!.savingMicros).toBe(3_000_000n);
+  });
+
+  it("adds a run with no edits and a run with an edit into one finding", () => {
+    const whole = run();
+    const { r, frames, calls } = editRun(50);
+    const [f] = detect(
+      withFrames([whole, r], [...readOnly([whole]), ...calls], {
+        [r.runId]: frames,
+      }),
+    );
+    expect(f!.savingMicros).toBe(6_000_000n);
+    expect(f!.citedRuns).toHaveLength(2);
+    expect(f!.why).toBe(
+      "1 run changed no file, and 1 run with edit steps also had steps that only read. Repriced from claude-opus-5-5 to claude-sonnet-5 at list prices, the steps that only read would have cost an estimated 50% less.",
+    );
+    expect(f!.fix).toContain(
+      "Replay a sample of the runs that changed no file",
+    );
+  });
+
+  it("cites but does not cover a run with an edit whose read-only frame has no price", () => {
+    const covered = editRun(50);
+    const unpriced = editRun(50);
+    unpriced.frames[0] = frame(unpriced.r, 2, {
+      costMicros: null,
+      basis: null,
+    });
+    const [f] = detect(
+      withFrames(
+        [covered.r, unpriced.r],
+        [...covered.calls, ...unpriced.calls],
+        {
+          [covered.r.runId]: covered.frames,
+          [unpriced.r.runId]: unpriced.frames,
+        },
+      ),
+    );
+    expect(f!.evidence.calls).toBe(2);
+    expect(f!.evidence.coveredCalls).toBe(1);
+    expect(f!.confidence).toBe("medium");
+    expect(f!.savingMicros).toBe(3_000_000n);
+  });
+
+  it("does not cover a read-only frame that names no model", () => {
+    const { r, frames, calls } = editRun(2);
+    const bare = { ...frames[1]! };
+    delete bare.model;
+    frames[1] = bare;
+    expect(detect(withFrames([r], calls, { [r.runId]: frames }))).toEqual([]);
+  });
+
+  it("keeps a read-only step on the smallest class at its measured cost", () => {
+    const { r, frames, calls } = editRun(2);
+    frames[0] = frame(r, 2, { model: "claude-haiku-4-5" });
+    const [f] = detect(withFrames([r], calls, { [r.runId]: frames }));
+    expect(f!.evidence.measuredMicros).toBe("240000");
+    expect(f!.evidence.counterfactualMicros).toBe("180000");
+  });
+
+  it("leaves out a run with an edit whose read-only steps all ran on the smallest class", () => {
+    const { r, frames, calls } = editRun(2);
+    const small = frames.map((f) => ({ ...f, model: "claude-haiku-4-5" }));
+    expect(detect(withFrames([r], calls, { [r.runId]: small }))).toEqual([]);
+  });
+
+  it("leaves out a run with an edit and a spin loop, so detector 1 keeps its spend", () => {
+    const { r, frames, calls } = editRun(2);
+    const loop = Array.from({ length: SPIN_LOOP_REPEATS + 1 }, (_, i) =>
+      call(r, 200 + i, { inputDigest: "in-same", outputDigest: "out-same" }),
+    );
+    r.toolCalls = calls.length + loop.length;
+    expect(
+      detect(withFrames([r], [...calls, ...loop], { [r.runId]: frames })),
+    ).toEqual([]);
+  });
+});
+
 describe("the registered detector", () => {
   it("reads the in-code list book, which prices each smaller model", () => {
     const book = inCodeListBook();
@@ -507,5 +755,17 @@ describe("the registered detector", () => {
     expect(f!.why).toContain("to claude-sonnet-5 at list prices");
     expect(f!.claims).toBeUndefined();
     expect(modelClassFit.kinds).toEqual(["model_class_fit"]);
+  });
+
+  it("prices the read-only steps of a run with an edit in the pass", () => {
+    const { r, frames, calls } = editRun(50);
+    const findings = detectFindings(
+      withFrames([r], calls, { [r.runId]: frames }),
+    );
+    const f = findings.find((d) => d.kind === "model_class_fit");
+    expect(f).toMatchObject({ basis: "estimated", citedRuns: [r.runId] });
+    expect(f!.savingMicros).toBeGreaterThan(0n);
+    expect(f!.why).toContain("with edit steps also had steps that only read");
+    expect(f!.claims).toBeUndefined();
   });
 });

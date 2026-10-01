@@ -22,6 +22,10 @@
  * evidence it cannot read. Time spent waiting has no record and is not a
  * cause. `advanced` is `steps - unproductive` by construction, so the two
  * always sum to the run's steps, as `run_totals_steps_graded_check` requires.
+ *
+ * Each step also has a class (F17): `read_only` when none of its calls may
+ * write and no file changed in it, and `edit` otherwise (`stepClassOf`,
+ * `classifySteps`). Model class fit reprices the read-only steps.
  */
 import type { StepCauses, ToolCallFrame } from "./cost-rollup";
 
@@ -70,6 +74,77 @@ export class RepeatedCalls {
     outputs.add(outputDigest);
     return repeated;
   }
+}
+
+/**
+ * Whether a step only read or also changed something (F17). Model class fit
+ * (detector 4) reprices the steps that only read on a smaller model class.
+ */
+export type StepClass = "read_only" | "edit";
+
+/** A run's steps by class. The two sum to the steps they count. */
+export interface StepClasses {
+  readOnly: number;
+  edit: number;
+}
+
+/**
+ * A step's class from the calls it made. A step is `read_only` when the
+ * classifier marked every one of its calls as one that changes nothing and
+ * no file changed in it. Any other step is an `edit`. A call the classifier
+ * said nothing about may have written, so it makes the step an edit. A step
+ * that made no call, such as a model call that answered in text, changed
+ * nothing, so it reads as `read_only` unless a file changed in it.
+ */
+export function stepClassOf(step: {
+  calls: readonly { isMutating: boolean | null }[];
+  changedFile: boolean;
+}): StepClass {
+  if (step.changedFile) return "edit";
+  return step.calls.every((c) => c.isMutating === false) ? "read_only" : "edit";
+}
+
+/**
+ * One model call of a run and the tool calls it made, in the order they ran.
+ * `modelCall` is false for the calls recorded before the run's first model
+ * call, which no model call made.
+ */
+export interface StepRequest {
+  modelCall: boolean;
+  calls: readonly { isMutating: boolean | null }[];
+}
+
+/**
+ * Class every step of a run (ADR-199: one model call or one tool call). A
+ * tool call is the only call of its own step. A model call's calls are the
+ * tool calls it made.
+ *
+ * The record keeps file changes per run, not per step. A run's change is
+ * placed on its steps that hold a call that may write, which are edits
+ * already. When the run changed a file and no call may have written, no step
+ * can hold the change, so the record cannot show any step only read, and
+ * every step counts as an edit.
+ */
+export function classifySteps(args: {
+  requests: readonly StepRequest[];
+  changedFile: boolean;
+}): StepClasses {
+  let readOnly = 0;
+  let edit = 0;
+  const count = (cls: StepClass) => {
+    if (cls === "read_only") readOnly += 1;
+    else edit += 1;
+  };
+  const unplaced =
+    args.changedFile &&
+    args.requests.every((r) => r.calls.every((c) => c.isMutating === false));
+  for (const request of args.requests) {
+    if (request.modelCall)
+      count(stepClassOf({ calls: request.calls, changedFile: unplaced }));
+    for (const call of request.calls)
+      count(stepClassOf({ calls: [call], changedFile: unplaced }));
+  }
+  return { readOnly, edit };
 }
 
 export interface StepGrade {
