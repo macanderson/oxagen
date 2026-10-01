@@ -23,7 +23,7 @@
  * `permissions.{allow,deny,ask}`. That function never reads a database and
  * never reads the clock; every caller resolves its inputs first.
  */
-import type { PolicyBundle } from "@oxagen/tacho";
+import type { PolicyBundle } from "@oxagen/recorder";
 import { agentVersionBudget } from "@oxagen/oxagen/agent-version-config";
 
 /** The harness's own three-value permission vocabulary (mcp-config, tacho's rule evaluator). */

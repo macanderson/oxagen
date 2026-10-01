@@ -1,6 +1,6 @@
 ---
 title: Wrap an agent
-description: "What wrapping means, how to wrap Claude Code, Codex, Cursor, and Stella, how to run two agents on one machine, and how to wrap a custom agent by calling tacho hook around its steps."
+description: "What wrapping means, how to wrap Claude Code, Codex, Cursor, and Stella, how to run two agents on one machine, and how to wrap a custom agent with oxagen agent run or oxagen hook."
 ---
 
 Wrapping an agent puts its runs under a mandate: the access it used, the budget it spent, and a record of every step, all attributed to the workspace it ran for. For the capabilities it hands the agent, Oxagen checks the access and budget clauses on the server. The wrapper this page covers is how a run's steps become that record.
@@ -11,11 +11,11 @@ The collector also has a loopback model proxy and an MCP gateway. Their controls
 
 The MCP gateway serves Oxagen's own tools to Claude Desktop only. Claude Code, Codex, Cursor, and Stella call the MCP servers you configure directly, and their hooks check each call. See the [harness matrix](https://github.com/macanderson/oxagen/blob/main/docs/reference/harness-matrix.md#mcp-gateway) for what can be routed later and what never can.
 
-Supported harness adapters include Claude Code, Codex, Cursor, and Stella. A custom agent can call `tacho hook` around its own steps. The table below describes all four hook adapters.
+Supported harness adapters include Claude Code, Codex, Cursor, and Stella. A custom agent runs under `oxagen agent run`, or calls `oxagen hook` around its own steps. The table below describes all four hook adapters.
 
 ## Install the Oxagen app
 
-Install the app on the machine the agent runs on before you enroll it. The app bundles `tacho` and `oxagen` and links both onto your PATH on first launch, so every command on this page runs from a new terminal.
+Install the app on the machine the agent runs on before you enroll it. The app links the `oxagen` command onto your PATH on first launch, so every command on this page runs from a new terminal.
 
 <LatestDownloads />
 
@@ -26,24 +26,24 @@ To install the `oxagen` CLI alone, without the app, see [Installing the CLI](/do
 Name the harness on `enroll` or `reassign`:
 
 ```bash
-tacho enroll --harness claude-code,codex,cursor,stella
+oxagen agent enroll --harness claude-code,codex,cursor,stella
 ```
 
-`enroll` merges the wrapper's hook entries into each harness's own configuration without touching an entry it did not write, and never removes a harness on a re-apply; `reassign --harness <list>` with no `--workspace` is the one way to drop one. See [Account setup](/docs/cli/account-setup) for CLI authentication. You can also use `oxagen agent enroll` with the one-time token issued during agent registration. On a machine that holds more than one agent, `--harness` on `reassign` also names the agent to change. See [Two agents on one machine](#two-agents-on-one-machine).
+`enroll` merges the wrapper's hook entries into each harness's own configuration without touching an entry it did not write. It never removes a harness on a re-apply. `oxagen agent reassign --harness <list>` with no `--workspace` is the one way to drop one. Without a token, `enroll` uses your CLI login. See [Account setup](/docs/cli/account-setup). To enroll the machine as a registered agent's host, pass the one-time token from agent registration with `--token`. On a machine that holds more than one agent, `--harness` on `reassign` also names the agent to change. See [Two agents on one machine](#two-agents-on-one-machine).
 
 | | Claude Code | Codex CLI | Stella | Cursor |
 | --- | --- | --- | --- | --- |
 | Hook file | `~/.claude/settings.json` (`CLAUDE_CONFIG_DIR`) | `~/.codex/hooks.json` (`CODEX_HOME`) | `~/.stella/stella.toml`, or `~/.stella/settings.json` when only that exists (`STELLA_HOME`) | `~/.cursor/hooks.json`. When `CURSOR_CONFIG_DIR` or Linux/BSD `XDG_CONFIG_HOME` changes the config directory, enrollment writes both locations |
 | How the entry is written | merged into the JSON hook block | merged into the JSON hook block | a marker-delimited block, `# >>> tacho enrollment tch_… >>>` to `# <<< … <<<`, so your own comments and settings around it survive | Version 1 JSON with flat hook entries, merged by enrollment ID |
 | Events wrapped | SessionStart, UserPromptSubmit, PreToolUse, PermissionRequest, Stop as blocking command hooks. SessionEnd as a command hook that is spooled while the collector is down. PostToolUse, SubagentStart, SubagentStop, PreCompact, PostCompact, Interrupt as telemetry | same shape as Claude Code; no PermissionRequest as its own event, no OTel export | SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop, PreCompact, SubagentStart, SubagentStop. Stella has no SessionEnd, PermissionRequest, PostCompact, or Interrupt hook | `sessionStart`, `sessionEnd`, `beforeSubmitPrompt`, `preToolUse`, `postToolUse`, `postToolUseFailure`, `subagentStart`, `subagentStop`, `preCompact`, and `stop` |
-| Hook command | `tacho hook --enrollment tch_…` | `tacho hook --enrollment tch_… --harness codex` | `tacho hook --enrollment tch_… --harness stella` | `tacho hook --enrollment tch_… --harness cursor` |
+| Hook command | `oxagen hook --enrollment tch_…` | `oxagen hook --enrollment tch_… --harness codex` | `oxagen hook --enrollment tch_… --harness stella` | `oxagen hook --enrollment tch_… --harness cursor` |
 | Session boundary | one hooked Claude Code session. It closes on SessionEnd, or within a minute of the `claude` process exiting | one hooked Codex session. It closes on SessionEnd, or within a minute of the `codex` CLI process exiting. On Windows, and under the app server the Codex app and IDE extension drive, it closes on SessionEnd or after six idle hours | keyed on the Stella process. The session closes when the process exits, since Stella sends no session id and no SessionEnd | Cursor's `conversation_id` identifies the run across turns. It closes on `sessionEnd`, or after one idle hour, because no Cursor process lives exactly as long as one conversation. A later hook reopens it |
 | Session label | `agent.harness = claude-code`, `runtime = claude-code` | `agent.harness = codex`, `runtime = codex` | `agent.harness = stella`, `runtime = stella` | `agent.harness = cursor`, `runtime = cursor` |
-| Verify it | `tacho verify --harness claude-code` | `tacho verify --harness codex` | `tacho verify --harness stella` runs `stella run "<prompt>"` | `tacho verify --harness cursor` runs Cursor CLI with `-p` |
+| Verify it | `oxagen agent verify --harness claude-code` | `oxagen agent verify --harness codex` | `oxagen agent verify --harness stella` runs `stella run "<prompt>"` | `oxagen agent verify --harness cursor` runs Cursor CLI with `-p` |
 
 Cursor uses native camelCase hook events. Enrollment does not import Claude Code hooks or add an MCP server entry. At the veto points (`beforeSubmitPrompt`, `preToolUse`, and `subagentStart`), the writer sets `failClosed: true`. Telemetry-only hooks use `failClosed: false`. The adapter turns an approval request into a denial because Cursor does not enforce `ask` at `preToolUse`. `sessionStart` can supply context but cannot veto. These checks remain client-attested and depend on the installed hooks.
 
-Stella itself is not required before you enroll: `enroll --harness stella` only writes the hook entry. Install Stella when you are ready for it to run:
+Stella itself is not required before you enroll. `oxagen agent enroll --harness stella` only writes the hook entry. Install Stella when you are ready for it to run:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/macanderson/stella/main/install.sh | sh
@@ -51,36 +51,88 @@ curl -fsSL https://raw.githubusercontent.com/macanderson/stella/main/install.sh 
 
 ## Wrap a custom agent
 
-Any agent you run yourself, in a script, a CI job, or your own loop, wraps by piping one JSON payload into `tacho hook --agent <name>` before and after each step. There is no settings file to merge into, because there is no fixed harness: you own the call sites.
+Any agent you run yourself, in a script, a CI job, or your own loop, can report to Oxagen. There is no settings file to merge into, because there is no fixed harness. You own the call sites. Start the agent with `oxagen agent run`, and Oxagen records the session around it. To record and gate each step, the agent also pipes the step into the hook. An agent you start some other way calls `oxagen hook --agent <name>` itself.
+
+Enroll the machine first with `oxagen agent enroll`. `oxagen hook` reads the enrollment in `~/.config/oxagen/tacho/` itself, so your agent never sees a credential.
+
+### Run it under Oxagen
 
 ```bash
-tacho hook --agent <name>
+oxagen agent run --name my-agent -- ./my-agent --task build
 ```
 
-`<name>` matches `^[a-z0-9][a-z0-9._-]{0,63}$` and becomes the session's harness label. It cannot be a built-in harness or runtime name (`claude-code`, `codex`, `cursor`, `stella`, `claude-desktop`, `claude-agent-sdk`, `custom`, `proxy`): `tacho hook` refuses those, so a custom agent is never filed as a built-in one. The machine still has to be enrolled first (`tacho enroll`) so `tacho hook` can read `~/.config/oxagen/tacho/host.json` itself; your agent never sees a credential. On a machine with more than one agent enrolled, a custom agent reports under that first enrollment, the one in `~/.config/oxagen/tacho`.
+Everything after `--` is the agent's command and its arguments. The command does this, in order:
 
-For a complete wrapped agent with tests, see [oxagenai/oxagen-wrapped-agents](https://github.com/oxagenai/oxagen-wrapped-agents). Its Stripe refund agent sends every step through `tacho hook --agent stripe-refunds`, fails closed when `tacho` does not answer, and shows an operator pause denying the next refund before it reaches Stripe.
+1. Refuses on a machine with no enrollment, and exits `1`.
+2. Opens the session with a `SessionStart` hook call under the agent's name. If Oxagen refuses the session, for example because an operator paused or suspended this machine, the agent does not start and the command exits `1`.
+3. Starts the agent with three variables added to its environment.
+4. Closes the session with `SessionEnd` when the agent exits.
+
+The command exits with the agent's own exit code. An agent stopped by a signal exits with 128 plus the signal number.
+
+| Variable | Holds |
+| --- | --- |
+| `OXAGEN_AGENT` | The name the session is recorded under |
+| `OXAGEN_SESSION_ID` | The session's id |
+| `OXAGEN_HOOK` | The shell command line of `oxagen hook --agent <name>` for this install |
+
+`--name` sets the name the session is recorded under. Without it, the name comes from the command's file name: lowercased, with a script extension such as `.py` or `.sh` removed, and each run of characters the name pattern refuses turned into `-`. A script run through an interpreter, such as `python3 agent.py`, takes its name from the interpreter, so pass `--name` for it. A name that does not match the pattern in [Call the hook yourself](#call-the-hook-yourself), or that names a built-in harness or runtime, is refused with exit `2`.
+
+A command that names a harness, `claude`, `codex`, `cursor-agent`, or `stella`, runs as it is, and that harness's own hooks record the session. If no agent on this machine wraps that harness, the command exits `2` and prints the `oxagen agent enroll --harness` command to run. With `--name`, the command is recorded as a custom agent whatever it names.
+
+Pass `--contained` to start Claude Code or Codex in the contained launcher instead. It needs Linux with Docker. `oxagen run -- claude …` does the same. See [Run an agent in the contained tier](https://github.com/macanderson/oxagen/blob/main/docs/guides/contained-runs.md).
+
+### Report each step
+
+`oxagen agent run` records the session's start and end. To record and gate the steps in between, pipe one JSON payload per step into `$OXAGEN_HOOK`, with `session_id` set to `$OXAGEN_SESSION_ID`:
+
+```bash
+printf '{"session_id":"%s","hook_event_name":"UserPromptSubmit","prompt":"fix the failing test"}' "$OXAGEN_SESSION_ID" \
+  | sh -c "$OXAGEN_HOOK"
+```
+
+`$OXAGEN_HOOK` is a shell command line with its words quoted, so run it through a shell. From Python, pass it to `subprocess.run` with `shell=True`. From Node, pass it to `spawnSync` with `shell: true`.
+
+Send `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, and `Stop` this way, as [The call sequence](#the-call-sequence) describes. Skip `SessionStart` and `SessionEnd`, because `oxagen agent run` sends them. The payloads and the answers are the ones below. An agent that never calls `$OXAGEN_HOOK` is recorded only at its start and its end.
+
+### Call the hook yourself
+
+An agent you do not start with `oxagen agent run` pipes one JSON payload into `oxagen hook --agent <name>` before and after each step, all six events of the call sequence:
+
+```bash
+oxagen hook --agent <name>
+```
+
+`<name>` matches `^[a-z0-9][a-z0-9._-]{0,63}$` and becomes the session's harness label. It cannot be a built-in harness or runtime name (`claude-code`, `codex`, `cursor`, `stella`, `claude-desktop`, `claude-agent-sdk`, `custom`, `proxy`). `oxagen hook` refuses those, so a custom agent is never filed as a built-in one.
+
+On a machine with more than one agent enrolled, a custom agent reports under one of them: the agent whose directory under `~/.config/oxagen/tacho/agents/` comes first in name order. `oxagen agent status` prints each agent's directory.
+
+An agent written against the hook command's older name keeps working. Change the command to `oxagen hook --agent <name>`. The payloads and the answers are the same.
+
+For a complete wrapped agent with tests, see [oxagenai/oxagen-wrapped-agents](https://github.com/oxagenai/oxagen-wrapped-agents). Its Stripe refund agent sends every step through the hook under the name `stripe-refunds`, fails closed when the hook does not answer, and shows an operator pause denying the next refund before it reaches Stripe.
 
 ### The call sequence
 
-Call `tacho hook --agent <name>` around each step of a run, in this order:
+Call the hook around each step of a run, in this order:
 
 1. `SessionStart`, once, before the first prompt.
 2. `UserPromptSubmit`, once per prompt the agent receives.
-3. `PreToolUse`, before each tool call, and wait for the answer before running the tool.
+3. `PreToolUse`, before each tool call. Wait for the answer before running the tool.
 4. `PostToolUse`, after each tool call, with its result.
 5. `Stop`, when the agent finishes a turn.
 6. `SessionEnd`, once, when the run ends.
 
-Skip a call and that step is invisible to Oxagen. A `PreToolUse` you skip is a tool call nobody gated; see Limits below.
+Under `oxagen agent run`, skip the first and the last.
+
+Skip a call and that step is invisible to Oxagen. A `PreToolUse` you skip is a tool call nobody gated. See [Limits](#limits).
 
 ### Payload
 
-The payload is the same JSON shape Claude Code sends on stdin. Fields you don't have, omit; unrecognized fields are kept, not dropped.
+The payload is the same JSON shape Claude Code sends on stdin. Omit the fields you don't have. Unrecognized fields are kept, not dropped.
 
 | Field | Type | Carries |
-| --- | --- | --- | --- |
-| `session_id` | string | your agent's own id for this run |
+| --- | --- | --- |
+| `session_id` | string | your agent's own id for this run, or `$OXAGEN_SESSION_ID` under `oxagen agent run` |
 | `hook_event_name` | string | one of the six events above |
 | `cwd` | string, optional | the working directory the step ran in |
 | `prompt` | string, optional | the prompt on `UserPromptSubmit` |
@@ -92,16 +144,16 @@ The payload is the same JSON shape Claude Code sends on stdin. Fields you don't 
 
 ### Answers
 
-`tacho hook` always exits `0` and prints one JSON document on stdout. Read it before you act.
+`oxagen hook` always exits `0` and prints one JSON document on stdout. Read it before you act.
 
 | Event | Field | Meaning |
-| --- | --- | --- | --- |
+| --- | --- | --- |
 | `PreToolUse` | `hookSpecificOutput.permissionDecision` | `allow`, `deny`, or `ask`, with `permissionDecisionReason` |
 | `UserPromptSubmit` | `decision` | `"block"` stops the prompt from reaching the agent |
-| `SessionStart` | `continue` / `additionalContext` | `continue: false` stops the run before it starts; `additionalContext` is text to fold into the system prompt |
+| `SessionStart` | `continue` / `additionalContext` | `continue: false` stops the run before it starts. `additionalContext` is text to fold into the system prompt |
 | every event | (no special field) | an empty object means continue |
 
-When the collector is unreachable, `tacho hook` decides from the last signed policy bundle it cached and spools the event for the daemon to replay once it is back. The answer still exits `0` and still carries a decision; that decision is `enforcement_tier: client_attested`, the same tier Claude Code and Codex run at, so a run that skips the call is the failure mode, not a run that gets a deny.
+When the collector is unreachable, `oxagen hook` decides from the last signed policy bundle it cached and spools the event for the collector to replay once it is back. The answer still exits `0` and still carries a decision. That decision is `enforcement_tier: client_attested`, the same tier Claude Code and Codex run at. The failure mode is a run that skips the call, not a run that gets a deny.
 
 ### A runnable example
 
@@ -112,10 +164,10 @@ import json
 import subprocess
 
 
-def tacho(agent: str, event: str, **fields) -> dict:
+def hook(agent: str, event: str, **fields) -> dict:
     payload = {"session_id": SESSION_ID, "hook_event_name": event, **fields}
     result = subprocess.run(
-        ["tacho", "hook", "--agent", agent],
+        ["oxagen", "hook", "--agent", agent],
         input=json.dumps(payload),
         capture_output=True,
         text=True,
@@ -125,10 +177,10 @@ def tacho(agent: str, event: str, **fields) -> dict:
 
 
 SESSION_ID = "my-run-42"
-tacho("my-agent", "SessionStart", cwd="/work")
-tacho("my-agent", "UserPromptSubmit", prompt="fix the failing test")
+hook("my-agent", "SessionStart", cwd="/work")
+hook("my-agent", "UserPromptSubmit", prompt="fix the failing test")
 
-answer = tacho(
+answer = hook(
     "my-agent",
     "PreToolUse",
     tool_name="run_shell",
@@ -141,15 +193,15 @@ if decision == "deny":
 
 # … run the tool only after an allow or ask you've resolved …
 
-tacho(
+hook(
     "my-agent",
     "PostToolUse",
     tool_name="run_shell",
     tool_use_id="call-1",
     tool_response={"exit_code": 0},
 )
-tacho("my-agent", "Stop")
-tacho("my-agent", "SessionEnd")
+hook("my-agent", "Stop")
+hook("my-agent", "SessionEnd")
 ```
 
 TypeScript, using `node:child_process`:
@@ -157,17 +209,17 @@ TypeScript, using `node:child_process`:
 ```typescript
 import { spawnSync } from "node:child_process";
 
-function tacho(agent: string, event: string, fields: Record<string, unknown> = {}) {
+function hook(agent: string, event: string, fields: Record<string, unknown> = {}) {
   const payload = JSON.stringify({ session_id: SESSION_ID, hook_event_name: event, ...fields });
-  const result = spawnSync("tacho", ["hook", "--agent", agent], { input: payload, encoding: "utf8" });
+  const result = spawnSync("oxagen", ["hook", "--agent", agent], { input: payload, encoding: "utf8" });
   return JSON.parse(result.stdout || "{}");
 }
 
 const SESSION_ID = "my-run-42";
-tacho("my-agent", "SessionStart", { cwd: "/work" });
-tacho("my-agent", "UserPromptSubmit", { prompt: "fix the failing test" });
+hook("my-agent", "SessionStart", { cwd: "/work" });
+hook("my-agent", "UserPromptSubmit", { prompt: "fix the failing test" });
 
-const answer = tacho("my-agent", "PreToolUse", {
+const answer = hook("my-agent", "PreToolUse", {
   tool_name: "run_shell",
   tool_input: { command: "pytest -x" },
   tool_use_id: "call-1",
@@ -179,27 +231,29 @@ if (decision === "deny") {
 
 // … run the tool only after an allow or ask you've resolved …
 
-tacho("my-agent", "PostToolUse", {
+hook("my-agent", "PostToolUse", {
   tool_name: "run_shell",
   tool_use_id: "call-1",
   tool_response: { exit_code: 0 },
 });
-tacho("my-agent", "Stop");
-tacho("my-agent", "SessionEnd");
+hook("my-agent", "Stop");
+hook("my-agent", "SessionEnd");
 ```
+
+To run either example under `oxagen agent run`, drop the `SessionStart` and `SessionEnd` calls, take `SESSION_ID` from `OXAGEN_SESSION_ID`, and run `OXAGEN_HOOK` through a shell in place of `oxagen hook --agent`.
 
 A shell one-liner for a quick check:
 
 ```bash
 echo '{"session_id":"probe-1","hook_event_name":"SessionStart","cwd":"'"$PWD"'"}' \
-  | tacho hook --agent my-agent
+  | oxagen hook --agent my-agent
 ```
 
 ## Confirm it works
 
 Three places agree, because they all read the same record:
 
-- `tacho status` on the machine: shows each enrollment, each wrapped harness, and whether hooks are present.
+- `oxagen agent status` on the machine: shows each enrollment, each wrapped harness, and whether hooks are present.
 - The app's Wrapped agents panel: lists Claude Code, Codex, Cursor, Stella, and every custom agent the collector has seen, each with a health state:
 
   | State | Means |
@@ -213,9 +267,13 @@ Three places agree, because they all read the same record:
 
 - The operator console: **Open Oxagen** opens this workspace in the browser, where the run lands in the workspace's fleet record once the collector ships it.
 
+## Older enrollments
+
+A machine enrolled before these commands moved into the `oxagen` CLI has hooks and a collector service that run the older tacho executable. They keep working. Run `oxagen agent status` on that machine, and it moves every agent's hooks and service to `oxagen hook` and `oxagen daemon` before it reports. A successful `oxagen agent enroll` does the same. Each prints one line for each agent it moved.
+
 ## Two agents on one machine
 
-An agent is one operator on one runtime with one harness, so Claude Code and Codex on your laptop are two agents. Each one gets its own enrollment: its own agent key, device key, credentials, collector port, and event log. One `tachod` service runs a collector for every agent on the machine.
+An agent is one operator on one runtime with one harness, so Claude Code and Codex on your laptop are two agents. Each one gets its own enrollment: its own agent key, device key, credentials, collector port, and event log. One collector service runs a collector for every agent on the machine.
 
 ### Enroll the second agent
 
@@ -231,12 +289,12 @@ Three rules decide what an enroll does on a machine that already has an agent:
 
 - A harness belongs to one agent. A token for a harness that an agent on the machine already hooks is refused. Pass `--force` to replace that agent's enrollment with the agent the token names. The other agents keep theirs.
 - An enroll for a harness that no agent hooks enrolls a new agent in a new directory, with a token or without one.
-- To add a harness to an agent, name the harness it already hooks and the new one: `tacho enroll --harness claude-code,codex`. The command revokes that agent and enrolls it again under a new id with both harnesses. An enroll that names harnesses two different agents hook is refused.
+- To add a harness to an agent, name the harness it already hooks and the new one: `oxagen agent enroll --harness claude-code,codex`. The command revokes that agent and enrolls it again under a new id with both harnesses. An enroll that names harnesses two different agents hook is refused.
 
 ### Check both agents
 
 ```bash
-tacho status
+oxagen agent status
 ```
 
 On a machine with more than one enrollment, the output starts with a count. Each agent's report follows a line that names its harnesses, its agent key, and its directory:
@@ -253,56 +311,56 @@ Agent       codex as acme.core.codex-laptop in /Users/you/.config/oxagen/tacho/a
 
 An agent removed on this machine whose revoke has not reached Oxagen yet reads `(retired on this machine)`. An agent revoked from the fleet page reads `(revoked on the fleet page)`.
 
-`tacho status --json` keeps the shape a script already reads. Its top-level fields are the report of the first agent still enrolled on this machine. The output always carries `enrollments`: one full report per agent, oldest first, each with an `id` and a `dir` that name its directory. This command lists every agent:
+`oxagen agent status --json` keeps the shape a script already reads. Its top-level fields are the report of the first agent still enrolled on this machine. The output always carries `enrollments`: one full report per agent, oldest first, each with an `id` and a `dir` that name its directory. This command lists every agent:
 
 ```bash
-tacho status --json | jq -r '.enrollments[] | [.host.agent_key, (.host.harnesses // [] | join(",")), .enrolled, .shipping.healthy] | @tsv'
+oxagen agent status --json | jq -r '.enrollments[] | [.host.agent_key, (.host.harnesses // [] | join(",")), .enrolled, .shipping.healthy] | @tsv'
 ```
 
-`tacho status` exits `1` when no agent on the machine is enrolled, or when any agent's events are not reaching Oxagen (`shipping.healthy` is `false`).
+`oxagen agent status` exits `1` when no agent on the machine is enrolled, or when any agent's events are not reaching Oxagen (`shipping.healthy` is `false`).
 
 ### Remove one agent
 
 ```bash
-tacho unenroll --harness codex
+oxagen agent unenroll --harness codex
 ```
 
 `--harness` names the agent by the harness it hooks. The command removes that agent's hooks, revokes its enrollment, and deletes its keys. The other agents stay enrolled. To remove every agent on the machine, pass `--all`:
 
 ```bash
-tacho unenroll --all
+oxagen agent unenroll --all
 ```
 
-Pass one of the two flags. Passing both is an error. On a machine with more than one enrollment, `tacho unenroll` with neither flag changes nothing. It lists the agents and exits `1`:
+Pass one of the two flags. Passing both is an error. On a machine with more than one enrollment, `oxagen agent unenroll` with neither flag changes nothing. It lists the agents and exits `1`:
 
 ```text
 error: this machine holds 2 enrollments: claude-code as acme.core.cc-laptop; codex as acme.core.codex-laptop. Pass --harness to name the one to remove, or --all to remove them all
 ```
 
-Removing one agent restarts the `tachod` service, because one service runs every agent's collector. Until the service is back, the other agents have no collector and no model proxy. Their hooks decide from the cached policy bundle and spool their events, and the collector sends the spooled events when it starts. A model call routed through the proxy fails in that window. If the service does not start again, the command names the agents left without a collector and exits `1`. Run `tacho enroll --harness <harness>` with a harness one of those agents hooks to install the service again.
+Removing one agent restarts the collector service, because one service runs every agent's collector. Until the service is back, the other agents have no collector and no model proxy. Their hooks decide from the cached policy bundle and spool their events, and the collector sends the spooled events when it starts. A model call routed through the proxy fails in that window. If the service does not start again, the command names the agents left without a collector and exits `1`. Run `oxagen agent enroll --harness <harness>` with a harness one of those agents hooks to install the service again.
 
 With `--purge`, the collector log is kept while another agent is still enrolled, because every agent writes to the same log.
 
 ### Reassign one agent
 
 ```bash
-tacho reassign --harness codex --workspace <slug>
+oxagen agent reassign --harness codex --workspace <slug>
 ```
 
 On a machine with more than one enrollment, `reassign` needs `--harness`. The list picks the agent that hooks at least one of those harnesses, and it becomes that agent's harness list. A list that names harnesses of two agents is refused. Reassign one agent at a time.
 
-`reassign` enrolls the agent again through your CLI session, the way `tacho enroll` does without a token, so run `oxagen login` first. It moves only an agent you enrolled that way.
+`reassign` enrolls the agent again through your CLI session, the way `oxagen agent enroll` does without a token, so run `oxagen login` first. It moves only an agent you enrolled that way.
 
 An agent you enrolled with a one-time token from the Agents page stays in the workspace it is registered in. `reassign` refuses it and changes nothing: the agent keeps its enrollment, its hooks, and its record. It refuses a `--harness` change on such an agent too, because the new enrollment would go through your CLI session and would not be linked to the agent. To report the harness to another workspace:
 
 1. Register an agent in the target workspace on the Agents page.
-2. Run `tacho unenroll --harness <harness>` with a harness the current agent hooks.
+2. Run `oxagen agent unenroll --harness <harness>` with a harness the current agent hooks.
 3. Run the enroll command the new agent's page shows.
 
-Adding a harness to an agent with `tacho enroll --harness` also enrolls it again through your CLI session, so it is refused on an agent you enrolled with a token. Register an agent for the new harness on the Agents page and run the enroll command its page shows. The new agent gets a directory of its own beside the first.
+Adding a harness to an agent with `oxagen agent enroll --harness` also enrolls it again through your CLI session, so it is refused on an agent you enrolled with a token. Register an agent for the new harness on the Agents page and run the enroll command its page shows. The new agent gets a directory of its own beside the first.
 
 ## Limits
 
 A run's cost comes from the usage its model calls reported. Claude Code reports it itself. Codex and Stella on Anthropic report it through the local model proxy once enrollment points them at it. Cursor never does, because Cursor has no setting that routes its model calls through the proxy. Stella on another provider, or with an Anthropic base URL you set yourself, does not either. Such a run records its tool calls and no usage, so its cost is not in any spend total. The Spend page and the Fleet spend tile say how many runs reported no usage, and on which harness, beside each total that leaves them out.
 
-Wrapping is `client_attested`: the hook call is voluntary, so a custom agent that skips it is not gated and not recorded. Nothing on the collector side can force the call or detect that a step happened without it; a missing event shows up in the fleet record as silence, not as a flagged violation. Each agent enrolled with its own one-time token has its own enrollment, host identity, and key. Harnesses enrolled together in one `tacho enroll` share one enrollment. Custom agents report under the first enrollment on the machine, the one in `~/.config/oxagen/tacho`, and stop being recorded when that enrollment is removed.
+Wrapping is `client_attested`: the hook call is voluntary, so a custom agent that skips it is not gated and not recorded. Under `oxagen agent run`, such an agent is recorded only at its start and its end. Nothing on the collector side can force the call or detect that a step happened without it. A missing event shows up in the fleet record as silence, not as a flagged violation. Each agent enrolled with its own one-time token has its own enrollment, host identity, and key. Harnesses enrolled together in one `oxagen agent enroll` share one enrollment. Custom agents report under the agent whose directory under `~/.config/oxagen/tacho/agents/` comes first in name order. When that agent is removed, they report under the next one, and with no agent left on the machine they are not recorded.

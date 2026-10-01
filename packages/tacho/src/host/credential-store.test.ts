@@ -48,7 +48,7 @@ describe("the custody store", () => {
       prefix: "sk-ant-a…",
     });
     // No digest of the secret leaves the store either: a hash of a key is
-    // an oracle, and `status` is what `tacho status` repeats.
+    // an oracle, and `status` is what `oxagen agent status` repeats.
     expect(JSON.stringify(store.status())).not.toContain("sha256");
     for (const name of readdirSync(dir)) {
       const text = readFileSync(join(dir, name), "utf8");

@@ -1,5 +1,5 @@
 /**
- * What `tacho status` says about the gateway. The tier word comes from what
+ * What `oxagen agent status` says about the gateway. The tier word comes from what
  * the daemon saw routed (ADR-095), never from what is installed.
  */
 import { describe, expect, it } from "vitest";

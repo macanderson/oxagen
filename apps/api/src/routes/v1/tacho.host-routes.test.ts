@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
-import { TACHO_MAX_REQUEST_BYTES } from "@oxagen/tacho";
+import { TACHO_MAX_REQUEST_BYTES } from "@oxagen/recorder";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AppEnv } from "../../app";
 

@@ -21,8 +21,8 @@
   "dependencies": {
     "@oxagen/crypto": "workspace:*",
     "@oxagen/database": "workspace:*",
+    "@oxagen/recorder": "workspace:*",
     "@oxagen/storage": "workspace:*",
-    "@oxagen/tacho": "workspace:*",
     "drizzle-orm": "0.45.3",
     "typescript": "6.0.3",
     "zod": "3.25.76"

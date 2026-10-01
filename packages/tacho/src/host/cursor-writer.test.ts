@@ -269,7 +269,7 @@ describe("an invalid schema version", () => {
 
 describe("a hooks value that is not a list", () => {
   it("reads as no entries so `status` reports rather than crashes", () => {
-    // `tacho status` is the command someone runs to find out what is wrong
+    // `oxagen agent status` is the command someone runs to find out what is wrong
     // with a file they hand-edited, so it is the one that must not throw on
     // one.
     //

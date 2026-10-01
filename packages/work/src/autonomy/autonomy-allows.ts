@@ -58,7 +58,7 @@ export interface AutonomyFacts {
   maxDailyUsd?: number;
 }
 
-/** Cedar's answer, in the shape @oxagen/tacho's CedarVerdict uses. */
+/** Cedar's answer, in the shape @oxagen/recorder's CedarVerdict uses. */
 export interface AutonomyDecision {
   decision: "allow" | "deny";
   /** The ids of the policies that decided, sorted. Empty for a deny no policy permitted. */

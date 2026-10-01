@@ -70,7 +70,7 @@ vi.mock("@oxagen/run-ledger/evidence-store", () => ({
   evidenceStore: () => ({ putBundle: mocks.putBundle }),
 }));
 
-vi.mock("@oxagen/tacho", () => ({
+vi.mock("@oxagen/recorder", () => ({
   attesterKeyFromPem: mocks.attesterKeyFromPem,
 }));
 

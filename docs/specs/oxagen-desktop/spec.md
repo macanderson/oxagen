@@ -231,7 +231,7 @@ pnpm --filter @oxagen/desktop dev          # tauri dev over Vite on :1420
 
 ## 10. What was verified
 
-- `@oxagen/tacho`: 26 files, 134 tests, typecheck and lint clean. New coverage: the Codex writer (merge, strip, presence, foreign entries kept), `--harness` parsing and re-apply semantics, `reassign` (revoke then create, device key and port kept, both hook files carry only the new id, harness-only re-enroll), the Windows service manager and launcher, the native layout, and the harness label reaching sealed events across a daemon restart. That last one is mutation-tested: with the relabel disabled the test fails.
+- `@oxagen/recorder`: 26 files, 134 tests, typecheck and lint clean. New coverage: the Codex writer (merge, strip, presence, foreign entries kept), `--harness` parsing and re-apply semantics, `reassign` (revoke then create, device key and port kept, both hook files carry only the new id, harness-only re-enroll), the Windows service manager and launcher, the native layout, and the harness label reaching sealed events across a daemon restart. That last one is mutation-tested: with the relabel disabled the test fails.
 - `@oxagen/desktop`: typecheck, lint, Vite build; 6 tests over the argv mapping and the primary-action rule.
 - Both binaries compiled with Node SEA, run from the mounted `.dmg`: `--version`, `--help`, `tacho status`, `tacho hook` with a Codex-shaped payload (null transcript) against an unenrolled scratch home.
 - The `.dmg` built, mounted, the app launched and rendered against this machine's real `config.json` (which is what surfaced the expired-session case in §5).
@@ -297,7 +297,7 @@ the app is the credential. A non-developer will not paste a token into a JSON
 file, and asking them to would put it on the least protected surface on the
 machine.
 
-The gateway is a **proxy, not a second materialiser**. `@oxagen/tacho` is a
+The gateway is a **proxy, not a second materialiser**. `@oxagen/recorder` is a
 leaf package with no `@oxagen/*` runtime dependency, so it forwards the
 JSON-RPC envelope to the workspace MCP endpoint with the host's own API key —
 already an Oxagen API key bound to the enrolling org and workspace. One tool

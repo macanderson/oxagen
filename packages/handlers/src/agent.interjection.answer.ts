@@ -95,7 +95,7 @@ import {
   type InterjectionPath,
   interjectBodySchema,
   interjectionAnswerPayloadSchema,
-} from "@oxagen/tacho";
+} from "@oxagen/recorder";
 import { and, eq, gte, isNull, sql } from "drizzle-orm";
 import { resolveInterjectionRepository } from "./lib/interjection-repository";
 import { logger } from "./logger";

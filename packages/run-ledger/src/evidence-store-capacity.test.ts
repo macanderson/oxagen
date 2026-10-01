@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { createLocalKmsAdapter } from "@oxagen/crypto/kms";
 import { StorageNotFoundError, type StorageAdapter } from "@oxagen/storage";
-import { digestBytes } from "@oxagen/tacho";
+import { digestBytes } from "@oxagen/recorder";
 import { describe, expect, it, vi } from "vitest";
 import {
   createEvidenceStore,

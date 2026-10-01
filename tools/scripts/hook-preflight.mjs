@@ -95,7 +95,7 @@ export async function preflight(
     // A workspace package is a link to its own directory in the tree. Its
     // code runs from there and resolves its own imports from there, so the
     // packages it declares must be installed there too. `pnpm install
-    // --filter @oxagen/tacho...` links `@oxagen/oxagen` at the root and
+    // --filter @oxagen/recorder...` links `@oxagen/oxagen` at the root and
     // installs none of its dependencies, so `docs:schemas --check` died on
     // "Cannot find package 'zod'" after this preflight had passed (scratch
     // run 36664757916). npm packages are not walked: pnpm installs a
@@ -144,13 +144,22 @@ export async function preflight(
 }
 
 /**
+ * The filtered install the message names. #3403 asked that a fresh worktree
+ * installed with `pnpm install --filter @oxagen/cli... --filter
+ * oxagen-monorepo...` run `pnpm check:contracts` to completion, and #4879
+ * folded the recorder's commands into that CLI, so it is the one filtered
+ * install a person needs to run the root checks.
+ */
+export const FILTERED_INSTALL_PACKAGE = "@oxagen/cli";
+
+/**
  * The message a person reads when the check cannot run.
  *
  * It gives two ways out. A full `pnpm install` always works. A filtered
- * install works too once it adds the root package's own dependency graph
- * (`--filter <root>...`), which installs every workspace package the root
- * scripts run, such as `@oxagen/oxagen` and its `zod` (scratch run
- * 36665719175, step F5).
+ * install works too once it holds the CLI and the root package's own
+ * dependency graph (`--filter @oxagen/cli... --filter <root>...`), which
+ * installs every workspace package the root scripts run, such as
+ * `@oxagen/oxagen` and its `zod` (scratch run 36665719175, step F5).
  *
  * @param {string} name
  * @param {{ missing: { name: string, neededBy: string }[], unknownScript: boolean }} result
@@ -171,7 +180,7 @@ export function report(name, result, rootPackage = "oxagen-monorepo") {
     ),
     "This checkout is missing packages, which usually means it was installed with `pnpm install --filter`.",
     "Run `pnpm install` at the repository root, then try again.",
-    `To keep a filtered install, add the root's dependencies to it: \`pnpm install --filter <your package>... --filter ${rootPackage}...\`.`,
+    `To keep a filtered install, install the oxagen CLI and the root with it: \`pnpm install --filter ${FILTERED_INSTALL_PACKAGE}... --filter ${rootPackage}...\`. Add \`--filter <your package>...\` for the package you work on.`,
   ];
   return `${lines.join("\n")}\n`;
 }

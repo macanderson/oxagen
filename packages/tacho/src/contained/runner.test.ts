@@ -1,5 +1,5 @@
 /**
- * The daemon side of `tacho run --contained` (ADR-152): what the runner
+ * The daemon side of `oxagen agent run --contained` (ADR-152): what the runner
  * refuses before Docker is ever asked, what it hands the launcher, and what
  * it cleans up whether the run succeeds or throws. The launcher and the
  * bridge are replaced with doubles so the lifecycle can be driven step by

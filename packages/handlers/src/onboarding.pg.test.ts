@@ -33,7 +33,7 @@ import {
   digestBytes,
   sealEvent,
   sessionUuid,
-} from "@oxagen/tacho";
+} from "@oxagen/recorder";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { and, eq, inArray } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";

@@ -21,8 +21,8 @@
 import { Command } from "commander";
 import pkg from "../package.json" with { type: "json" };
 import {
-  printDeprecatedNotice,
   printRetiredNotice,
+  printTachoAliasNotice,
 } from "./commands/retired.js";
 
 const { version } = pkg;
@@ -62,11 +62,11 @@ function refusesMisplacedFlags(
  * The four wrapping subcommands whose names collide with nothing, attached to
  * whichever group asks for them.
  *
- * ADR-112 phase 1b moves the wrapping commands onto `oxagen agent` and leaves
- * the deprecated `oxagen tacho` working through the deprecation window, so both
- * groups carry these four. They must not drift apart: a runbook that says
- * `oxagen tacho hosts` and one that says `oxagen agent hosts` have to do the
- * same thing, so there is one definition and both parents get it.
+ * ADR-112 phase 1b moved the wrapping commands onto `oxagen agent`, and #4879
+ * keeps the hidden `oxagen tacho` group as an alias of them, so both groups
+ * carry these four. They must not drift apart: a runbook that says the old
+ * spelling and one that says `oxagen agent hosts` have to do the same thing,
+ * so there is one definition and both parents get it.
  *
  * The other three — `enroll`, `status`, `unenroll` — are not here because their
  * shape differs by parent. On `agent` each also has to serve the server-scoped
@@ -85,6 +85,7 @@ function addHostWrapCommands(parent: Command): void {
       "--token <apiKey>",
       "Platform API token (default: the logged-in session)",
     )
+    .option("--api-url <url>", "Oxagen API base URL")
     .option(
       "--harness <list>",
       "Replace the harness list (default: keep the current one)",
@@ -99,6 +100,7 @@ function addHostWrapCommands(parent: Command): void {
         token?: string;
         org?: string;
         workspace?: string;
+        apiUrl?: string;
         harness?: string;
         reason?: string;
         default?: boolean;
@@ -129,10 +131,17 @@ function addHostWrapCommands(parent: Command): void {
 
   parent
     .command("verify")
-    .description("Run one headless Claude Code turn and confirm it was chained")
-    .action(async () => {
+    .description(
+      "Run one headless turn (Claude Code by default) and confirm it was chained",
+    )
+    .option(
+      "--harness <name>",
+      "claude-code | codex | cursor | stella (default: claude-code)",
+    )
+    .option("--json", "Machine-readable result")
+    .action(async (opts: { harness?: string; json?: boolean }) => {
       const { handleTachoVerify } = await import("./commands/tacho.js");
-      if (!(await handleTachoVerify())) process.exitCode = 1;
+      if (!(await handleTachoVerify(opts))) process.exitCode = 1;
     });
 
   parent
@@ -204,7 +213,6 @@ export function buildProgram(): Command {
   retiredCommand("view", "The agent-work dashboard");
   retiredCommand("agents", "The fleet agents screen");
   retiredCommand("solve", "Best-of-N task solving");
-  retiredCommand("daemon", "The local context daemon");
   retiredCommand("replay", "Local turn replay");
   retiredCommand("fleet", "The session fleet");
 
@@ -228,6 +236,57 @@ export function buildProgram(): Command {
   retiredCommand("pr", "Pull-request CI watching and merging");
   retiredCommand("recover", "Agent commit-ledger recovery");
   retiredCommand("lineage", "The subagent dispatch-tree explorer");
+
+  // ── machine commands: what the recorder writes into a machine (#4879) ──────
+  //
+  // A harness runs `oxagen hook` on every tool call, the user service runs
+  // `oxagen daemon`, a connected app runs `oxagen mcp-stdio`, Claude Code runs
+  // `oxagen credential issue`, and git runs `oxagen github credential`. No
+  // person types them, so they are hidden from help. `index.ts` sends each
+  // straight to `machine/` before this tree is built; they are registered
+  // here too so the tree describes every command the executable answers, and
+  // a call that reaches the tree still runs the same code. `daemon` names the
+  // context daemon ADR-043 retired; the recorder's collector took the name.
+  program
+    .command("hook", { hidden: true })
+    .description(
+      "The command hook a wrapped harness runs: reads the payload on stdin and prints the answer",
+    )
+    .helpOption(false)
+    .allowUnknownOption()
+    .allowExcessArguments()
+    .action(async () => {
+      const { runHook } = await import("./machine/hook.js");
+      await runHook(process.argv);
+    });
+  const recorderCommands = [
+    [
+      "daemon",
+      "Run the collector daemon in the foreground (what the service runs)",
+    ],
+    [
+      "mcp-stdio",
+      "Serve this machine's Oxagen toolbelt to a connected app over stdio",
+    ],
+    ["credential", "The gateway's custody of model credentials"],
+    [
+      "github",
+      "Route repository Git requests through the host's credential custody",
+    ],
+    ["arp", "Capture and prepare local Agent Run Protocol checkpoints"],
+  ] as const;
+  for (const [name, description] of recorderCommands) {
+    program
+      .command(name, { hidden: true })
+      .description(description)
+      .helpOption(false)
+      .allowUnknownOption()
+      .allowExcessArguments()
+      .action(async () => {
+        const { runRecorderCommand } = await import("./machine/recorder.js");
+        await runRecorderCommand(process.argv);
+      });
+  }
 
   // ── cost: project model cost from the baked-in rate card ────────────────────
 
@@ -1461,13 +1520,13 @@ export function buildProgram(): Command {
       handleTelemetry(subcommand);
     });
 
-  // ── tacho: wrap this machine's agent sessions under Oxagen control ───────────
+  // ── tacho: the hidden alias of `oxagen agent`'s machine commands ───────────
   //
-  // Hidden, and deprecated in favour of `oxagen agent` (ADR-112 phase 1, spec
-  // §2.1: the old word does not appear in the product). It still runs, and the
-  // subcommands below are unchanged, because every machine enrolled so far was
-  // enrolled with `oxagen tacho enroll` and that string is in scripts, runbooks,
-  // and the managed settings documents MDM has already pushed. Refusing it would
+  // Hidden, and replaced by `oxagen agent` (ADR-112 phase 1, spec §2.1, #4879:
+  // nobody types the old word). It still runs, and the subcommands below are
+  // unchanged, because every machine enrolled before the rename was enrolled
+  // with this group's `enroll` and that string is in scripts, runbooks, and
+  // the managed settings documents MDM has already pushed. Refusing it would
   // turn a rename into an outage.
   //
   // All seven now also live on `oxagen agent` (ADR-112 phase 1b). Three of the
@@ -1482,7 +1541,7 @@ export function buildProgram(): Command {
   // the merged command and be re-parsed, which is a behaviour change dressed up
   // as compatibility.
   //
-  // docs/specs/tacho/spec.md section 5.1. The work lives in @oxagen/tacho;
+  // docs/specs/tacho/spec.md section 5.1. The work lives in @oxagen/recorder;
   // these commands lend it the CLI's credentials so enrolling this machine
   // needs no --token after `oxagen login`.
 
@@ -1492,16 +1551,17 @@ export function buildProgram(): Command {
       "Deprecated. Wrap this machine's agent sessions: record and gate them through Oxagen",
     );
 
-  // One line on the way past, naming the replacement. On stderr so it never
-  // lands in the output of `--json` subcommands that a script is parsing.
-  tacho.hook("preSubcommand", () => {
-    printDeprecatedNotice("`oxagen tacho`", "`oxagen agent`");
+  // One line on the way past, naming the command that replaced this one. On
+  // stderr so it never lands in the output of `--json` subcommands that a
+  // script is parsing.
+  tacho.hook("preSubcommand", (_group, subcommand) => {
+    printTachoAliasNotice(subcommand.name());
   });
 
   tacho
     .command("enroll")
     .description(
-      "Enroll this machine: device key, host API key, tachod service, Claude Code hooks",
+      "Enroll this machine: device key, host API key, collector service, Claude Code hooks",
     )
     .option(
       "--token <apiKey>",
@@ -1512,7 +1572,11 @@ export function buildProgram(): Command {
       "--workspace <slug>",
       "Workspace slug (default: the logged-in workspace)",
     )
-    .option("--port <n>", "Loopback port for tachod", (v: string) => Number(v))
+    .option(
+      "--port <n>",
+      "Loopback port for the collector daemon",
+      (v: string) => Number(v),
+    )
     .option("--no-service", "Do not install the user service")
     .option("--managed", "Also print the managed settings document for MDM")
     .option(
@@ -1829,14 +1893,16 @@ export function buildProgram(): Command {
       await handleAgentEnvList(agentHandle, opts);
     });
 
-  // ── agent enroll: wrap this machine (#2967, ADR-112 phase 1b) ──────────────
+  // ── agent enroll: wrap this machine (#2967, ADR-112 phase 1b, #4879) ───────
   //
   // One command over two scopes, because §2.1 names one. With a single-use
   // enrollment token (the scripted path of the register flow, MC spec §14.1)
   // this machine becomes that registered agent's host and no `oxagen login` is
   // needed. With a platform API token, or with nothing, it wraps this machine
-  // under the logged-in session. Both end in the same `@oxagen/tacho/cli`
-  // routine; they differ in the credential presented.
+  // under the logged-in session. Both end in the same `@oxagen/recorder/cli`
+  // routine; they differ in the credential presented. Either one also moves
+  // every agent the machine enrolled under the old names to `oxagen hook` and
+  // `oxagen daemon`.
   //
   // The dispatch is on the token's prefix rather than on whether a token was
   // given, because `--token` means something different on each side and an
@@ -1844,7 +1910,7 @@ export function buildProgram(): Command {
   agent
     .command("enroll")
     .description(
-      "Wrap this machine: device key, host credential, tachod service, harness hooks. A single-use enrollment token (oxe_1time_…) enrolls it as that registered agent's host; anything else uses a platform API token or the logged-in session",
+      "Wrap this machine: device key, host credential, collector service, harness hooks. A single-use enrollment token (oxe_1time_…) enrolls it as that registered agent's host; anything else uses a platform API token or the logged-in session",
     )
     .option(
       "--token <token>",
@@ -1855,7 +1921,12 @@ export function buildProgram(): Command {
       "--workspace <slug>",
       "Workspace slug (default: the logged-in workspace)",
     )
-    .option("--port <n>", "Loopback port for tachod", (v: string) => Number(v))
+    .option("--api-url <url>", "Oxagen API base URL")
+    .option(
+      "--port <n>",
+      "Loopback port for the collector daemon",
+      (v: string) => Number(v),
+    )
     .option("--no-service", "Do not install the user service")
     .option("--managed", "Also print the managed settings document for MDM")
     .option(
@@ -1867,18 +1938,30 @@ export function buildProgram(): Command {
       "--harness <list>",
       "Harnesses to hook: claude-code, codex, cursor, stella, or a comma list such as claude-code,cursor",
     )
+    .option(
+      "--credentials <mode>",
+      "brokered (default): the gateway holds each model vendor key and the harness holds a run token; passthrough: the harness keeps its own key",
+    )
+    .option(
+      "--validity-days <n>",
+      "How many days the enrollment stays valid (default: 180)",
+      (v: string) => Number(v),
+    )
     .option("--verify", "Run a headless Claude Code turn afterwards")
     .action(
       async (opts: {
         token?: string;
         org?: string;
         workspace?: string;
+        apiUrl?: string;
         port?: number;
         service?: boolean;
         managed?: boolean;
         printManaged?: boolean;
         force?: boolean;
         harness?: string;
+        credentials?: string;
+        validityDays?: number;
         verify?: boolean;
       }) => {
         const token = opts.token;
@@ -1908,6 +1991,9 @@ export function buildProgram(): Command {
             port: opts.port,
             service: opts.service,
             force: opts.force,
+            apiUrl: opts.apiUrl,
+            credentials: opts.credentials,
+            validityDays: opts.validityDays,
           });
           if (!enrolled) process.exitCode = 1;
           return;
@@ -1918,6 +2004,61 @@ export function buildProgram(): Command {
     );
 
   addHostWrapCommands(agent);
+
+  // ── agent run and detect: the rest of the recorder's commands (#4879) ──────
+  agent
+    .command("run")
+    .description(
+      "Run one agent session under Oxagen control: a custom agent by its own command (`oxagen agent run --name my-agent -- ./my-agent`), a wrapped harness through its hooks, or Claude Code or Codex in the contained launcher with --contained",
+    )
+    .option(
+      "--name <agent>",
+      "The custom agent's name: lowercase letters, digits, '.', '_', '-' (default: from the command)",
+    )
+    .option(
+      "--contained",
+      "Start Claude Code or Codex in the contained launcher (Linux and Docker)",
+    )
+    .option(
+      "--image <ref>",
+      "With --contained: the image (or OXAGEN_CONTAINED_IMAGE)",
+    )
+    .option(
+      "--workspace <dir>",
+      "With --contained: the repository root to mount at /workspace (default: the current directory)",
+    )
+    .option(
+      "--github-repository <owner/name>",
+      "With --contained: the one repository the run may reach, with a token in OXAGEN_CONTAINED_GITHUB_TOKEN",
+    )
+    .argument("[command...]", "After --: the agent's command and its arguments")
+    .action(
+      async (
+        command: string[],
+        opts: {
+          name?: string;
+          contained?: boolean;
+          image?: string;
+          workspace?: string;
+          githubRepository?: string;
+        },
+      ) => {
+        // An empty command reaches the recorder too, which names the form.
+        const { handleAgentRun } = await import("./commands/tacho.js");
+        process.exitCode = await handleAgentRun(command, opts);
+      },
+    );
+
+  agent
+    .command("detect")
+    .description(
+      "Which harnesses this machine has (claude, codex, cursor-agent, stella) and which are enrolled",
+    )
+    .option("--json", "Machine-readable output")
+    .action(async (opts: { json?: boolean }) => {
+      const { handleAgentDetect } = await import("./commands/tacho.js");
+      if (!(await handleAgentDetect(opts))) process.exitCode = 1;
+    });
 
   // ── env: workspace environments ─────────────────────────────────────────────
 

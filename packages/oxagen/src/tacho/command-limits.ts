@@ -4,7 +4,7 @@
  * A steer reaches the agent as hook `additionalContext`, and Claude Code keeps
  * only 10,000 characters of that: past it the text is saved to a file and the
  * model sees a preview. The collector delivers a hook's messages together
- * under 9,500 characters (`ADDITIONAL_CONTEXT_MAX_CHARS` in `@oxagen/tacho`
+ * under 9,500 characters (`ADDITIONAL_CONTEXT_MAX_CHARS` in `@oxagen/recorder`
  * `collector/hook-handler.ts`), so one message has to fit well inside that to
  * be delivered whole.
  */

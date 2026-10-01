@@ -19,7 +19,7 @@ import {
 } from "vitest";
 import { PgDialect } from "drizzle-orm/pg-core";
 import type { SQL } from "drizzle-orm";
-import { interjectBodySchema } from "@oxagen/tacho";
+import { interjectBodySchema } from "@oxagen/recorder";
 
 const mocks = vi.hoisted(() => ({ withTenantDb: vi.fn(), useReal: false }));
 

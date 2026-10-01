@@ -1,5 +1,5 @@
 /**
- * What `tacho status` says about shipping. A host that records but never
+ * What `oxagen agent status` says about shipping. A host that records but never
  * ships is not working, so the verdict must fail loudly rather than trail
  * the error at the end of the daemon line.
  */

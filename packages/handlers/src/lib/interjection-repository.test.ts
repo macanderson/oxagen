@@ -4,7 +4,7 @@
 // may hold (scp, https, a token in the userinfo, another case) finds its
 // repository, and nothing else does.
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { canonicalRemote, digestBytes, foldedRemote } from "@oxagen/tacho";
+import { canonicalRemote, digestBytes, foldedRemote } from "@oxagen/recorder";
 
 vi.mock("../logger", () => ({
   logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() },

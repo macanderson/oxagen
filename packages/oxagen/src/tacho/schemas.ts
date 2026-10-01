@@ -30,14 +30,14 @@ export {
   tachoHarnessSchema,
   tachoHostStatusSchema,
   tachoPlatformSchema,
-} from "@oxagen/tacho";
-export type { EnrollmentClaims, PolicyBundle, TachoBatch } from "@oxagen/tacho";
+} from "@oxagen/recorder";
+export type { EnrollmentClaims, PolicyBundle, TachoBatch } from "@oxagen/recorder";
 import {
   hostEnrollmentIdSchema,
   tachoBundleModeSchema,
   tachoHostStatusSchema,
   tachoPlatformSchema,
-} from "@oxagen/tacho";
+} from "@oxagen/recorder";
 
 export const tachoSessionOutcomeSchema = z.enum([
   "running",

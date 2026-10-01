@@ -1,4 +1,4 @@
-import type { TachoEvent } from "@oxagen/tacho";
+import type { TachoEvent } from "@oxagen/recorder";
 
 /** Keep one frame's host observation together. Enrollment is a separate source. */
 export function machineSnapshotOf(events: readonly TachoEvent[]) {

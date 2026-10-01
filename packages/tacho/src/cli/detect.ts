@@ -1,5 +1,5 @@
 /**
- * `tacho detect`: which AI apps this machine has, and which of them Oxagen
+ * `oxagen agent detect`: which AI apps this machine has, and which of them Oxagen
  * already covers. The desktop first run calls it before asking the operator
  * what to connect.
  *

@@ -1,18 +1,23 @@
 /**
- * `oxagen tacho` — put this machine's Claude Code sessions under Oxagen
- * control (docs/specs/tacho/spec.md section 5.1).
+ * `oxagen agent <verb>` for this machine: put its agent sessions under Oxagen
+ * control (docs/specs/tacho/spec.md section 5.1, #4879).
  *
- *   oxagen tacho enroll     enroll this host: device key, host API key, tachod service, hooks
- *   oxagen tacho status     enrollment, daemon, hooks, bundle, spool
- *   oxagen tacho reassign   move the host to another workspace; --default moves the CLI default too
- *   oxagen tacho unenroll   remove hooks and service, revoke, delete the host key
- *   oxagen tacho export     a session from the local WAL (tacho | trace | otlp)
- *   oxagen tacho verify     one headless Claude Code turn, confirmed chained
- *   oxagen tacho hosts      every machine enrolled in this workspace, with its tier
+ *   oxagen agent enroll     enroll this host: device key, host API key, collector service, hooks
+ *   oxagen agent status     enrollment, daemon, hooks, bundle, spool
+ *   oxagen agent reassign   move the host to another workspace; --default moves the CLI default too
+ *   oxagen agent unenroll   remove hooks and service, revoke, delete the host key
+ *   oxagen agent export     a session from the local WAL (tacho | trace | otlp)
+ *   oxagen agent verify     one headless harness turn, confirmed chained
+ *   oxagen agent hosts      every machine enrolled in this workspace, with its tier
+ *   oxagen agent run        one agent session under Oxagen control
+ *   oxagen agent detect     which harnesses this machine has, and which are enrolled
  *
- * The work lives in `@oxagen/tacho/cli`; this module only supplies the CLI's
- * own credentials (`oxagen login`, or OXAGEN_* env) and output plumbing, so
- * `oxagen tacho enroll` needs no --token when the user is logged in.
+ * The hidden `oxagen tacho <verb>` group calls the same handlers. The work
+ * lives in `@oxagen/recorder/cli`; this module supplies the CLI's own
+ * credentials (`oxagen login`, or OXAGEN_* env), its output plumbing, and
+ * its runtime commands, so what enrollment writes into a machine names
+ * `oxagen hook` and `oxagen daemon`, and `oxagen agent enroll` needs no
+ * --token when the user is logged in.
  */
 import {
   getApiUrl,
@@ -23,11 +28,17 @@ import {
 } from "../lib/config.js";
 import { stdoutWriter, type CommandWriter } from "../lib/capture-writer.js";
 import { apiPostOrThrow, printTable } from "../lib/api.js";
+import { moveOffTacho } from "./move-off-tacho.js";
 
 export interface TachoEnrollOptions {
   token?: string;
   org?: string;
   workspace?: string;
+  /** The control plane's base URL, when it is not the one `oxagen login` chose. */
+  apiUrl?: string;
+  /** `brokered` (the default) or `passthrough` (ADR-143). */
+  credentials?: string;
+  validityDays?: number;
   managed?: boolean;
   printManaged?: boolean;
   port?: number;
@@ -42,12 +53,13 @@ export interface TachoReassignOptions {
   token?: string;
   org?: string;
   workspace?: string;
+  apiUrl?: string;
   harness?: string;
   reason?: string;
   /**
    * `--default`: after a successful reassign, also make the host's new org
    * and workspace the CLI's default pair in config.json. The CLI owns that
-   * file; @oxagen/tacho only ever writes host.json.
+   * file; @oxagen/recorder only ever writes host.json.
    */
   default?: boolean;
 }
@@ -84,27 +96,52 @@ export function tachoCredentials(
   };
 }
 
-async function tachoDeps(writer: CommandWriter) {
-  const { defaultCliDeps } = await import("@oxagen/tacho/cli");
-  return defaultCliDeps({
-    out: (line) => writer.write(line),
-    err: (line) => writer.writeErr(line),
-  });
+/**
+ * The recorder's deps for a command the CLI runs: its output goes through
+ * the CLI's writer, and its runtime commands name this `oxagen` executable,
+ * so every hook, service unit, and credential helper an enroll writes runs
+ * `oxagen` (#4879). `recorded` binds the harness files the machine's enroll
+ * recorded, which `unenroll` and `reassign` take hooks back out of, whatever
+ * this shell's environment says.
+ */
+async function tachoDeps(writer: CommandWriter, recorded = false) {
+  const { defaultCliDeps, oxagenRuntimeCommands } = await import(
+    "@oxagen/recorder/cli"
+  );
+  const overrides = {
+    out: (line: string) => writer.write(line),
+    err: (line: string) => writer.writeErr(line),
+    runtime: oxagenRuntimeCommands(),
+  };
+  if (!recorded) return defaultCliDeps(overrides);
+  const { recordedCliDeps } = await import("@oxagen/recorder/program");
+  return recordedCliDeps(overrides);
 }
 
 export async function handleTachoEnroll(
   opts: TachoEnrollOptions,
   writer: CommandWriter = stdoutWriter,
 ): Promise<boolean> {
-  const { enroll, parseHarnesses, verify } = await import("@oxagen/tacho/cli");
+  const { enroll, parseCredentialMode, parseHarnesses, verify } =
+    await import("@oxagen/recorder/cli");
   const deps = await tachoDeps(writer);
-  // Without `apiUrl`: tacho reads the same env and config.json when the
-  // machine has no host yet, and on an enrolled host its own `api_url` must
-  // win, which an explicit value here would override.
+  // Without the CLI's default `apiUrl`: the recorder reads the same env and
+  // config.json when the machine has no host yet, and on an enrolled host its
+  // own `api_url` must win, which an implicit value here would override. An
+  // explicit --api-url is the operator's, and goes through.
   const { apiUrl: _cliDefaultApiUrl, ...credentials } = tachoCredentials(opts);
+  const harnesses =
+    opts.harness !== undefined ? parseHarnesses(opts.harness) : undefined;
   const result = await enroll(
     {
       ...credentials,
+      ...(opts.apiUrl !== undefined ? { apiUrl: opts.apiUrl } : {}),
+      ...(opts.credentials !== undefined
+        ? { credentials: parseCredentialMode(opts.credentials) }
+        : {}),
+      ...(opts.validityDays !== undefined
+        ? { validityDays: opts.validityDays }
+        : {}),
       ...(opts.managed !== undefined ? { managed: opts.managed } : {}),
       ...(opts.printManaged !== undefined
         ? { printManaged: opts.printManaged }
@@ -112,15 +149,23 @@ export async function handleTachoEnroll(
       ...(opts.port !== undefined ? { port: opts.port } : {}),
       ...(opts.service !== undefined ? { service: opts.service } : {}),
       ...(opts.force !== undefined ? { force: opts.force } : {}),
-      ...(opts.harness !== undefined
-        ? { harnesses: parseHarnesses(opts.harness) }
-        : {}),
+      ...(harnesses !== undefined ? { harnesses } : {}),
     },
     deps,
   );
   if (!result.ok) return false;
+  // The other agents on this machine move to the new names too, unless this
+  // run only printed the managed settings document.
+  if (opts.printManaged !== true) await moveOffTacho(writer);
   if (opts.verify === true) {
-    const verified = await verify({}, deps);
+    // Drive a harness this enrollment hooks, so the turn lands in the
+    // collector just enrolled (ADR-203), the way the recorder's own
+    // `enroll --verify` does.
+    const wrapped = harnesses?.find((harness) => harness !== "claude-desktop");
+    const verified = await verify(
+      wrapped !== undefined ? { harness: wrapped } : {},
+      deps,
+    );
     writer.write(
       verified.ok
         ? `Verified: ${verified.detail}`
@@ -135,7 +180,9 @@ export async function handleTachoStatus(
   opts: { json?: boolean },
   writer: CommandWriter = stdoutWriter,
 ): Promise<boolean> {
-  const { status } = await import("@oxagen/tacho/cli");
+  const { status } = await import("@oxagen/recorder/cli");
+  // Before the report, so it describes the machine as it now is.
+  await moveOffTacho(writer);
   const report = await status(opts, await tachoDeps(writer));
   // The same exit rule as `tacho status`: a host whose events are not
   // reaching Oxagen is not working, and every agent on the machine counts.
@@ -150,7 +197,7 @@ export async function handleTachoUnenroll(
   opts: TachoUnenrollOptions,
   writer: CommandWriter = stdoutWriter,
 ): Promise<boolean> {
-  const { parseHarnesses, unenroll } = await import("@oxagen/tacho/cli");
+  const { parseHarnesses, unenroll } = await import("@oxagen/recorder/cli");
   // `--harness` names one agent, so it takes one harness, as `tacho
   // unenroll` does.
   const harnesses =
@@ -171,7 +218,7 @@ export async function handleTachoUnenroll(
       ...(harness !== undefined ? { harness } : {}),
       ...(opts.all === true ? { all: true } : {}),
     },
-    await tachoDeps(writer),
+    await tachoDeps(writer, true),
   );
   return result.ok;
 }
@@ -180,19 +227,20 @@ export async function handleTachoReassign(
   opts: TachoReassignOptions,
   writer: CommandWriter = stdoutWriter,
 ): Promise<boolean> {
-  const { parseHarnesses, reassign } = await import("@oxagen/tacho/cli");
+  const { parseHarnesses, reassign } = await import("@oxagen/recorder/cli");
   const credentials = tachoCredentials(opts);
   const result = await reassign(
     {
       ...(credentials.token !== undefined ? { token: credentials.token } : {}),
       ...(opts.org !== undefined ? { org: opts.org } : {}),
       ...(opts.workspace !== undefined ? { workspace: opts.workspace } : {}),
+      ...(opts.apiUrl !== undefined ? { apiUrl: opts.apiUrl } : {}),
       ...(opts.reason !== undefined ? { reason: opts.reason } : {}),
       ...(opts.harness !== undefined
         ? { harnesses: parseHarnesses(opts.harness) }
         : {}),
     },
-    await tachoDeps(writer),
+    await tachoDeps(writer, true),
   );
   if (!result.ok) return false;
   if (opts.default === true && result.to !== undefined) {
@@ -211,17 +259,95 @@ export async function handleTachoExport(
   opts: TachoExportOptions,
   writer: CommandWriter = stdoutWriter,
 ): Promise<boolean> {
-  const { exportCommand } = await import("@oxagen/tacho/cli");
+  const { exportCommand } = await import("@oxagen/recorder/cli");
   return exportCommand(opts, await tachoDeps(writer));
 }
 
 export async function handleTachoVerify(
+  opts: { harness?: string; json?: boolean } = {},
   writer: CommandWriter = stdoutWriter,
 ): Promise<boolean> {
-  const { verify } = await import("@oxagen/tacho/cli");
-  const result = await verify({}, await tachoDeps(writer));
-  writer.write(result.ok ? `OK: ${result.detail}` : `FAILED: ${result.detail}`);
+  const { parseHarnesses, verify } = await import("@oxagen/recorder/cli");
+  const [harness] =
+    opts.harness !== undefined ? parseHarnesses(opts.harness) : [];
+  const result = await verify(
+    harness !== undefined ? { harness } : {},
+    await tachoDeps(writer),
+  );
+  if (opts.json === true) writer.write(JSON.stringify(result));
+  else
+    writer.write(
+      result.ok ? `OK: ${result.detail}` : `FAILED: ${result.detail}`,
+    );
   return result.ok;
+}
+
+/** `oxagen agent detect`: which harnesses this machine has, and which are enrolled. */
+export async function handleAgentDetect(
+  opts: { json?: boolean },
+  writer: CommandWriter = stdoutWriter,
+): Promise<boolean> {
+  const { detect } = await import("@oxagen/recorder/cli");
+  detect(
+    opts.json !== undefined ? { json: opts.json } : {},
+    await tachoDeps(writer),
+  );
+  return true;
+}
+
+export interface AgentRunOptions {
+  name?: string;
+  contained?: boolean;
+  image?: string;
+  workspace?: string;
+  githubRepository?: string;
+}
+
+/**
+ * `oxagen agent run -- <command>`: one agent session under Oxagen control.
+ * A custom agent is recorded under its name, a wrapped harness through its
+ * own hooks, and `--contained` starts Claude Code or Codex in the contained
+ * launcher (`runAgentSession` in the recorder).
+ */
+export async function handleAgentRun(
+  command: string[],
+  opts: AgentRunOptions,
+  writer: CommandWriter = stdoutWriter,
+): Promise<number> {
+  const { runAgentSession } = await import("@oxagen/recorder/cli");
+  const deps = await tachoDeps(writer);
+  const controller = new AbortController();
+  const stop = () => controller.abort();
+  // Only the contained launcher stops on these; a session's own agent
+  // receives the terminal's signals itself (`spawnAgent`).
+  if (opts.contained === true) {
+    process.once("SIGINT", stop);
+    process.once("SIGTERM", stop);
+  }
+  try {
+    return await runAgentSession(
+      {
+        command,
+        ...(opts.name !== undefined ? { name: opts.name } : {}),
+        ...(opts.contained === true ? { contained: true } : {}),
+        ...(opts.image !== undefined ? { image: opts.image } : {}),
+        ...(opts.workspace !== undefined ? { workspace: opts.workspace } : {}),
+        ...(opts.githubRepository !== undefined
+          ? { githubRepository: opts.githubRepository }
+          : {}),
+      },
+      {
+        ...deps,
+        cwd: process.cwd(),
+        signal: controller.signal,
+        write: (stream, text) =>
+          (stream === "stdout" ? process.stdout : process.stderr).write(text),
+      },
+    );
+  } finally {
+    process.off("SIGINT", stop);
+    process.off("SIGTERM", stop);
+  }
 }
 
 export interface TachoHostsOptions {
@@ -242,8 +368,8 @@ interface HostRow {
 }
 
 /**
- * `oxagen tacho hosts` — the fleet, from the control plane rather than from
- * this machine's `host.json`. Unlike the other `tacho` subcommands this one
+ * `oxagen agent hosts` — the fleet, from the control plane rather than from
+ * this machine's `host.json`. Unlike the other machine subcommands this one
  * does no local work at all; it calls `list_tacho_hosts` and prints what came
  * back.
  *
@@ -319,16 +445,16 @@ export async function handleTachoHosts(
 
 /**
  * `oxagen run -- <agent> [args...]`: the contained launcher (ADR-096,
- * ADR-152). The platform CLI adds nothing to the run: tacho's own command
- * asks the local daemon, which measures and registers the container before
- * the agent starts.
+ * ADR-152), the same as `oxagen agent run --contained`. The platform CLI adds
+ * nothing to the run: the recorder's run command asks the local daemon,
+ * which measures and registers the container before the agent starts.
  */
 export async function handleContainedRun(
   command: string[],
   opts: { image?: string; workspace?: string; githubRepository?: string },
   writer: CommandWriter = stdoutWriter,
 ): Promise<number> {
-  const { runContained } = await import("@oxagen/tacho/cli");
+  const { runContained } = await import("@oxagen/recorder/cli");
   const deps = await tachoDeps(writer);
   const controller = new AbortController();
   const stop = () => controller.abort();

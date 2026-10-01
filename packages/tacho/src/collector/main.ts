@@ -1,8 +1,10 @@
 /**
- * `tachod` entry: run the collector in the foreground until SIGTERM. The
- * service unit written by `tacho enroll` runs exactly this (or, from the
- * compiled single binary, `tacho daemon`, which is the same body).
+ * `tachod` entry: run the collector in the foreground until SIGTERM. A
+ * service unit written before the `oxagen` CLI took the recorder's commands
+ * (#4879) runs exactly this, or `tacho daemon` from the compiled single
+ * binary. New enrollments run `oxagen daemon`. All three run the same body.
  */
+import { printAliasNotice } from "../cli/alias";
 import { runDaemonProcess } from "./run";
 
 export async function main(): Promise<void> {
@@ -28,6 +30,7 @@ process.on("unhandledRejection", (reason) => {
   );
 });
 
+printAliasNotice("tachod");
 main().catch((error) => {
   process.stderr.write(
     `tachod: ${error instanceof Error ? error.message : String(error)}\n`,
