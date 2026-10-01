@@ -1859,6 +1859,8 @@ type Messages = {
       };
       governed: string;
       governedNote: string;
+      grantNote: string;
+      grantEndedNote: string;
       sealed: string;
       sealedNote: string;
       retained: string;
@@ -1943,6 +1945,7 @@ type Messages = {
       title: string;
       free: string;
       freeTerms: string;
+      freeTermsNotRecorded: string;
       blocks: string;
       blocksTerms: string;
       negotiated: string;
