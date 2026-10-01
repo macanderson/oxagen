@@ -248,9 +248,6 @@ const STATIC_TOKEN_RENEWAL_CHECK_MS = 60 * 60_000;
 /** How often the daemon reads the harnesses' memory folders. */
 const MEMORY_SCAN_MS = 5 * 60_000;
 
-/** Set to `1` to turn memory capture on. It is off otherwise. */
-const MEMORY_CAPTURE_ENV = "TACHO_MEMORY_CAPTURE";
-
 export interface DaemonOptions {
   paths: TachoPaths;
   host?: HostFile;
@@ -291,12 +288,6 @@ export interface DaemonOptions {
   beforeForward?: BeforeForward;
   /** The home directory the harness config files live under. */
   home?: string;
-  /**
-   * Upload the harnesses' memory files to Oxagen every five minutes. Off
-   * unless this is true or `TACHO_MEMORY_CAPTURE=1` is set. Only a started
-   * listener scans.
-   */
-  memoryCapture?: boolean;
   /**
    * Ask the control plane for the memories most relevant to each live
    * prompt, and hand them to the agent with it (`recall_tacho_memories`).
@@ -4608,13 +4599,14 @@ async function initializeDaemon(
     timer.unref();
   }
 
-  // Memory capture (opt-in): the harnesses' memory files go to the API as
-  // `local_gateway` memories, with the host key the GitHub broker uses.
+  // Memory capture: every daemon with a started listener reads the
+  // harnesses' memory folders every five minutes and sends each new or
+  // changed file to the API as a `local_gateway` memory, with the host key
+  // the GitHub broker uses. Nothing turns it off: Mac ruled on 2026-09-30
+  // that a core capability carries no flag while Oxagen has no customers
+  // (ADR-238).
   let memoryTimer: NodeJS.Timeout | undefined;
-  if (
-    (options.listen ?? true) &&
-    (options.memoryCapture ?? process.env[MEMORY_CAPTURE_ENV] === "1")
-  ) {
+  if (options.listen ?? true) {
     const memoryReader = createMemoryReader({
       home: options.home ?? homedir(),
       fs: {

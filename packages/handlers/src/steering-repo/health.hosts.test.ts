@@ -142,13 +142,26 @@ describe("githubHealthHost.observe", () => {
     });
   });
 
-  it("reports a ruleset someone renamed away as missing", async () => {
+  it("stays connected when private repository protection endpoints require a paid plan", async () => {
+    const { hub, id } = await baselineRepo();
+    hub.failNext({
+      path: /\/(?:rulesets|environments)(?:[/?]|$)/,
+      status: 403,
+      message: "Upgrade your GitHub plan to use this feature.",
+    });
+    const fetch = withRepositories(hub, new Map([[id, REPO]]));
+    const host = githubHost(async () => gh.createGithubRest({ token: "app-token", fetch }), {
+      repositoryId: id,
+    });
+
+    expect(await host.observe()).toMatchObject({ kind: "connected", differences: [] });
+    expect(hub.calls.some((call) => /\/(?:rulesets|environments)(?:[/?]|$)/.test(call.path))).toBe(false);
+  });
+
+  it("reports a changed merge setting", async () => {
     const { hub, id } = await baselineRepo();
     const rest = hub.appRest();
-    const list = await rest.request<{ id: number; name: string }[]>("GET", `${ROOT}/rulesets`);
-    const merges = list.data?.find((r) => r.name === "Oxagen merges");
-    if (merges === undefined) throw new Error("The baseline has no Oxagen merges ruleset.");
-    await rest.request("PUT", `${ROOT}/rulesets/${merges.id}`, { name: "Old merges" });
+    await rest.request("PATCH", ROOT, { allow_rebase_merge: true });
     const fetch = withRepositories(hub, new Map([[id, REPO]]));
     const host = githubHost(async () => gh.createGithubRest({ token: "app-token", fetch }), {
       repositoryId: id,
@@ -158,7 +171,7 @@ describe("githubHealthHost.observe", () => {
 
     if (seen.kind !== "connected") throw new Error(`Expected connected, got ${seen.reason}`);
     expect(seen.differences).toContainEqual(
-      expect.objectContaining({ setting: "rulesets.oxagen_merges", actual: null }),
+      expect.objectContaining({ setting: "merge.allow_rebase_merge", expected: false, actual: true }),
     );
   });
 
@@ -190,7 +203,11 @@ describe("githubHealthHost.observe", () => {
 
   it("reads a refused settings read as disconnected", async () => {
     const { hub, id } = await baselineRepo();
-    hub.failNext({ path: "/rulesets", status: 403, message: "Resource not accessible by integration" });
+    hub.failNext({
+      path: "/actions/permissions",
+      status: 403,
+      message: "Resource not accessible by integration",
+    });
     const fetch = withRepositories(hub, new Map([[id, REPO]]));
     const host = githubHost(async () => gh.createGithubRest({ token: "app-token", fetch }), {
       repositoryId: id,
@@ -280,7 +297,7 @@ describe("githubHealthHost.observe", () => {
 describe("githubHealthHost history", () => {
   it("hands each history call the repository it read last", async () => {
     const { rest, host } = scriptedGithub({});
-    const target = { rest, repo: REPO, app: APP };
+    const target = { rest, repo: { ...REPO, id: 1 }, app: APP };
     vi.mocked(history.githubPublished).mockResolvedValue(PUBLISHED);
     vi.mocked(history.githubDiverged).mockResolvedValue(DIVERGENCE);
     vi.mocked(history.githubOpenRevert).mockResolvedValue(13);

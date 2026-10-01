@@ -4,8 +4,8 @@
 // its relation, its edge with the frames that show it, and a link to its
 // tracker; the Status filter and the Rows pager over them; then Linked work,
 // whose every row says how Oxagen knows it, from the same work and outputs
-// reads the header and the Changes panel draw; then the run follow-through
-// panels.
+// reads the header and the Changes panel draw; then the issue connections
+// panel.
 import {
   act,
   cleanup,
@@ -41,9 +41,6 @@ vi.mock("next/link", () => ({
 }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
-}));
-vi.mock("../run-outcomes/actions", () => ({
-  setRunOutcomesConsentAction: vi.fn(),
 }));
 vi.mock("../run-outcomes/provider-actions", () => ({
   loadRunIssueProviders: vi.fn(),
@@ -115,29 +112,13 @@ async function renderIssues({
   work = readOk(runWork()),
   issues = readOk(runIssues()),
   outputs = readOk(OUTPUTS),
-  outcomes,
 }: {
   run?: ReturnType<typeof runRow>;
   work?: Read<RunWork>;
   issues?: Read<RunIssues>;
   outputs?: Read<RunOutputs>;
-  outcomes?: "throws";
 } = {}) {
   const { source } = runSource({ detail: readOk(runDetail({ run })) });
-  const settings = vi.fn(() =>
-    Promise.resolve(
-      readOk({
-        customerEnabled: false,
-        platformDisabled: false,
-        platformDisabledReason: null,
-        effectiveEnabled: false,
-      }),
-    ),
-  );
-  source.runs.outcomesSettings =
-    outcomes === "throws"
-      ? () => Promise.reject(new Error("store down"))
-      : settings;
   const body = await IssuesTab(
     tabProps({ ctx, source, run, work, issues, outputs }),
   );
@@ -148,7 +129,7 @@ async function renderIssues({
     await Promise.resolve();
     return rendered;
   });
-  return { container, settings };
+  return { container };
 }
 
 const region = (name: string) => within(screen.getByRole("region", { name }));
@@ -896,24 +877,14 @@ describe("Linked work", () => {
   });
 });
 
-describe("the follow-through panels", () => {
-  it("mounts the consent and issue connection panels over the organization's setting, read once", async () => {
-    const { settings } = await renderIssues();
-    expect(settings).toHaveBeenCalledTimes(1);
-    expect(
-      screen.getByRole("region", { name: "Run follow-through" }),
-    ).toBeTruthy();
+describe("the issue connections panel", () => {
+  it("mounts with no organization setting in front of it", async () => {
+    await renderIssues();
     expect(
       screen.getByRole("region", { name: "Issue connections" }),
     ).toBeTruthy();
-  });
-
-  it("names a setting read that throws as a read failure (negative)", async () => {
-    await renderIssues({ outcomes: "throws" });
     expect(
-      within(
-        screen.getByRole("region", { name: "Run follow-through" }),
-      ).getByText(/could not|failed|unavailable|error/i),
-    ).toBeTruthy();
+      screen.queryByRole("region", { name: "Run follow-through" }),
+    ).toBeNull();
   });
 });

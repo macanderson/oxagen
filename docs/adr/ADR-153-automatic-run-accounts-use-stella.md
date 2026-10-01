@@ -38,7 +38,7 @@ A named run that changed after its account now waits `LIVE_ENRICHMENT_INTERVAL_M
 
 Old runs are worked through newest first whenever no newer run is waiting. The paragraphs above that give 500 rows per store per pass and a dedup id without a window describe the sweep before this amendment.
 
-A model call that fails inside the turn is now recorded by the provider's status (`model_refused`, `rate_limited`, `provider_error`, `request_rejected`, `provider_unreachable`) rather than as `empty_account`. A refusal other than a timeout or a rate limit ends the job without its retries.
+A model call that fails inside the turn is now recorded by the provider's status (`model_refused`, `provider_out_of_credits`, `rate_limited`, `provider_error`, `request_rejected`, `provider_unreachable`) rather than as `empty_account`. A refusal other than a timeout or a rate limit ends the job without its retries.
 
 ## Amendment 2026-09-26: retry backoff for failed and partial runs
 

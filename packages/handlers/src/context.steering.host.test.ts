@@ -3,6 +3,7 @@
 // head whose connection was retired still names GitLab and is refused there,
 // never sent to the GitHub reader's legacy fallback.
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { SteeringHost, SteeringRepository } from "./context.steering.github";
 
 const mocks = vi.hoisted(() => ({
   heads: [] as { provider: string }[],
@@ -32,6 +33,7 @@ vi.mock("./context.steering.gitlab", async (importOriginal) => ({
 }));
 
 import {
+  createSteeringHost,
   readMainRepositoryProvider,
   readSteeringConnection,
 } from "./context.steering.host";
@@ -101,5 +103,34 @@ describe("readSteeringConnection", () => {
       source: "legacy_delivery_config",
     });
     expect(mocks.readGitLab).not.toHaveBeenCalled();
+  });
+});
+
+
+describe("steering commit verification routing", () => {
+  it("forwards the exact commit to its host", async () => {
+    const assertSteeringCommit = vi.fn(async () => undefined);
+    const github = { assertSteeringCommit } as unknown as SteeringHost;
+    const host = createSteeringHost({ github, gitlab: github, mainProvider: async () => "github" });
+    const repo: SteeringRepository = {
+      provider: "github", owner: "acme", repo: "steering", fullName: "acme/steering",
+      currentFullName: "acme/steering", defaultBranch: "main", requiresSteeringProvenance: true,
+    };
+    await host.assertSteeringCommit?.(repo, "captured-sha");
+    expect(assertSteeringCommit).toHaveBeenCalledWith(repo, "captured-sha");
+  });
+
+  it("refuses a missing GitHub verifier and leaves GitLab unchanged", async () => {
+    const empty = {} as SteeringHost;
+    const host = createSteeringHost({ github: empty, gitlab: empty, mainProvider: async () => "github" });
+    const repo: SteeringRepository = {
+      provider: "github", owner: "acme", repo: "steering", fullName: "acme/steering",
+      currentFullName: "acme/steering", defaultBranch: "main",
+    };
+    await expect(host.assertSteeringCommit?.(repo, "captured-sha")).rejects.toMatchObject({
+      reason: "steering_provenance_unavailable",
+    });
+    await expect(host.assertSteeringCommit?.({ ...repo, provider: "gitlab", projectId: "42" }, "captured-sha"))
+      .resolves.toBeUndefined();
   });
 });

@@ -10,7 +10,6 @@ const nav = vi.hoisted(() => ({
 }));
 vi.mock("next/navigation", () => nav);
 
-const { canonicalHostRedirect } = await import("./canonical-host");
 const { parseCheckoutUrl } = await import("./checkout-url");
 const { parseLoopbackUri } = await import("./loopback-uri");
 const { routes } = await import("./safe-path");
@@ -20,7 +19,6 @@ const { parseSlackAuthorizationUrl } = await import(
 const {
   permanentRedirectTo,
   redirectTo,
-  redirectToCanonicalHost,
   redirectToCheckout,
   redirectToLoopback,
   redirectToSlackAuthorization,
@@ -128,42 +126,5 @@ describe("responseRedirect", () => {
       routes.root(),
     );
     expect(res.headers.get("location")).toBe("https://app.oxagen.sh/");
-  });
-});
-
-describe("redirectToCanonicalHost", () => {
-  /** The move a page visit on `host` makes while `origin` is canonical. */
-  function moveFrom(host: string, origin: string) {
-    vi.stubEnv("NEXT_PUBLIC_APP_URL", origin);
-    const move = canonicalHostRedirect({
-      method: "GET",
-      host,
-      pathname: "/acme",
-      search: "?tab=runs",
-    });
-    if (move === null) throw new Error(`fixture: ${host} did not move`);
-    return move;
-  }
-
-  it("answers 308, cached for an hour, when the target is oxagen.app", () => {
-    const res = redirectToCanonicalHost(
-      moveFrom("app.oxagen.sh", "https://oxagen.app"),
-    );
-    expect(res.status).toBe(308);
-    expect(res.headers.get("location")).toBe(
-      "https://oxagen.app/acme?tab=runs",
-    );
-    expect(res.headers.get("cache-control")).toBe("public, max-age=3600");
-  });
-
-  it("answers 307, never cached, when the target is any other host", () => {
-    const res = redirectToCanonicalHost(
-      moveFrom("oxagen.app", "https://app.oxagen.sh"),
-    );
-    expect(res.status).toBe(307);
-    expect(res.headers.get("location")).toBe(
-      "https://app.oxagen.sh/acme?tab=runs",
-    );
-    expect(res.headers.get("cache-control")).toBe("no-store");
   });
 });

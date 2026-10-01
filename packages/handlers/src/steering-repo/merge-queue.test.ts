@@ -776,6 +776,28 @@ describe("landSteeringPr: the import branch", () => {
 });
 
 describe("landSteeringPr: refusals before the stamp", () => {
+  it("refuses an unverified production base before approval or writes", async () => {
+    const gh = steeringRepo();
+    const pr = await openPr(gh, "a-intel.platform.release-notes");
+    const main = await gh.branchHead(REPO, REPO.defaultBranch);
+    const verify = vi.fn(async () => {
+      throw new Error("The production branch has no authenticated provenance.");
+    });
+    Object.assign(gh, { assertSteeringCommit: verify });
+    const approve = vi.fn(async () => ({ approvedBy: [REVIEWER], withoutReview: false }));
+    const recheck = vi.fn(async () => ({ ok: true, checks: CHECKS }));
+
+    await expect(land(gh, pr, { approve, recheck })).rejects.toThrow(
+      "The production branch has no authenticated provenance.",
+    );
+
+    expect(verify).toHaveBeenCalledWith(REPO, main);
+    expect(approve).not.toHaveBeenCalled();
+    expect(recheck).not.toHaveBeenCalled();
+    expect(gh.stamps).toEqual([]);
+    expect(gh.merges).toEqual([]);
+  });
+
   async function refusedLanding(
     setup: (gh: FakeGitHub) => Promise<OpenPr>,
   ): Promise<{ gh: FakeGitHub; err: Awaited<ReturnType<typeof refusal>> }> {
