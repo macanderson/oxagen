@@ -54,7 +54,9 @@ permissions:
 
 jobs:
   recheck:
-    runs-on: ubuntu-latest
+    # ubuntu-slim (one vCPU, $0.002 a minute): a sparse checkout and a few
+    # API calls, done in seconds (#4918).
+    runs-on: ubuntu-slim
     timeout-minutes: 5
     steps:
       # The checker lives in oxagen, and a caller repo does not have it. Same
