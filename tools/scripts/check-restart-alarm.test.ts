@@ -17,7 +17,6 @@ import {
   matchesFilterPattern,
   renderEventLine,
   resourceBlock,
-  run,
   stringAttr,
   stringListAttr,
 } from "./check-restart-alarm.mjs";
@@ -346,13 +345,8 @@ resource "aws_cloudwatch_metric_alarm" "container_restart_loop" {
 });
 
 describe("the repository's own infrastructure", () => {
-  // Would still pass on: nothing. This is the assertion the check exists for —
-  // the other tests prove the checker can tell good from bad, this one asks it
-  // about the files that are actually deployed.
-  it("has an intact collector -> log group -> metric filter -> alarm chain", () => {
-    expect(run()).toEqual([]);
-  });
-
+  // The chain check over the deployed files reads the live tree, so it lives in
+  // check-restart-alarm.tree.test.ts.
   it("agrees with the incident's recorded rate and the estate's size", () => {
     expect(INCIDENT_STARTS_PER_MINUTE).toBe(14);
     expect(FULL_ESTATE_DEPLOY_STARTS).toBe(9);
