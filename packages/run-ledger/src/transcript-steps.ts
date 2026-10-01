@@ -990,6 +990,23 @@ function withRelations(folds: TranscriptFold[]): TranscriptFold[] {
 
 // ── Zooms ───────────────────────────────────────────────────────────────────
 
+/**
+ * A model step's further reply parts: the wrapped model-call frames it holds
+ * besides its request and response halves, in the order recorded (#4351). A
+ * reader shows them after the response. Empty for any other step.
+ */
+export function replyPartsOf(
+  fold: Pick<TranscriptFold, "node" | "members" | "request" | "response">,
+): RunFrame[] {
+  if (fold.node !== "model") return [];
+  return fold.members.filter(
+    (frame) =>
+      frame.llmCall !== undefined &&
+      frame !== fold.request &&
+      frame !== fold.response,
+  );
+}
+
 /** The `steps` zoom: one entry per step, by the rules at the top of this file. */
 export function stepFolds(frames: readonly RunFrame[]): TranscriptFold[] {
   const turns = turnOrdinals(frames);

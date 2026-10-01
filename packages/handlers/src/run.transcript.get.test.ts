@@ -403,6 +403,55 @@ describe("get_run_transcript", () => {
     expect(out.entries.map((entry) => entry.effort)).toEqual(["low"]);
   });
 
+  // #4351: one model reply is one step, however many parts it arrives in. A
+  // transcript writes one record per content block, and the host marks each
+  // block after the first as a later sighting of its own source.
+  it("steps: a reply in two parts is one model step that carries both parts", async () => {
+    const part = (seq: number, text: string, attrs: Record<string, string>) =>
+      tachoRow(seq, {
+        kind: "llm_call",
+        toolName: "",
+        toolStatus: "",
+        toolUseId: "",
+        source: "transcript",
+        attrs,
+        body: JSON.stringify({ request_id: "req_parts" }),
+        ...stored(text),
+      });
+    const { transcript } = harness([
+      part(0, "Reading the config first.", {}),
+      part(1, "The flag is off in prod.", {
+        "oxagen.llm_call_duplicate_of": "transcript",
+      }),
+    ]);
+    const out = await transcript(input({ zoom: "steps" }), ctx());
+    expect(runTranscriptGet.output.parse(out)).toEqual(out);
+    expect(out.entries).toHaveLength(1);
+    const [entry] = out.entries;
+    expect(entry).toMatchObject({ node: "model", frames: 2 });
+    expect(entry?.response?.text).toBe("Reading the config first.");
+    expect(entry?.parts?.map((p) => p.text)).toEqual([
+      "The flag is off in prod.",
+    ]);
+  });
+
+  it("steps: a reply in one part carries no parts (negative)", async () => {
+    const { transcript } = harness([
+      tachoRow(0, {
+        kind: "llm_call",
+        toolName: "",
+        toolStatus: "",
+        toolUseId: "",
+        source: "transcript",
+        attrs: {},
+        body: JSON.stringify({ request_id: "req_one" }),
+        ...stored("Done."),
+      }),
+    ]);
+    const out = await transcript(input({ zoom: "steps" }), ctx());
+    expect(out.entries[0]?.parts).toBeUndefined();
+  });
+
   it("steps: a second response of the same kind opens a new step, it does not join the first", async () => {
     const { transcript } = harness([
       tachoRow(0, {
