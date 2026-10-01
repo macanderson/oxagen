@@ -39,6 +39,8 @@ export function prepaidBucket(
 ): GauBucket {
   return {
     mode: "prepaid",
+    basis: "subscription",
+    signupGrant: null,
     period: SEPTEMBER,
     includedGau: 50000,
     purchasedGau: 5000,
@@ -74,10 +76,40 @@ export function freeNoCardBucket(
   );
 }
 
+/**
+ * An organization on its signup grant (ADR-NEW, #3844): 33,000 governed
+ * actions granted on 2026-09-10 for 30 days, 1,500 used.
+ */
+export function grantBucket(
+  grant: Partial<NonNullable<GauBucket["signupGrant"]>> = {},
+): GauBucket {
+  const signupGrant = {
+    grantedGau: 33000,
+    grantedAt: "2026-09-10T00:00:00.000Z",
+    expiresAt: "2026-10-10T00:00:00.000Z",
+    active: true,
+    remainingGau: 31500,
+    evidenceDays: 30,
+    ...grant,
+  };
+  return prepaidBucket({
+    basis: signupGrant.active ? "signup_grant" : "after_signup_grant",
+    signupGrant,
+    period: { start: signupGrant.grantedAt, end: signupGrant.expiresAt },
+    includedGau: signupGrant.grantedGau,
+    purchasedGau: 0,
+    carriedGau: 0,
+    usedGau: signupGrant.grantedGau - signupGrant.remainingGau,
+    remainingGau: signupGrant.remainingGau,
+  });
+}
+
 /** An invoice-billed month past its allowance. */
 export function invoiceBucket(invoice: Partial<InvoiceTerms> = {}): GauBucket {
   return {
     mode: "invoice",
+    basis: "subscription",
+    signupGrant: null,
     period: SEPTEMBER,
     includedGau: 300000,
     purchasedGau: 0,

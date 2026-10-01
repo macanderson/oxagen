@@ -103,6 +103,8 @@ const {
   RETENTION_INCLUDED_MONTHS,
   RETENTION_USD_PER_GB_MONTH,
   actionPeriodStart,
+  includedRetentionDays,
+  SIGNUP_GRANT_RETENTION_DAYS,
   recordGovernedAction,
   recordGovernedActions,
 } = await import("./action-metering");
@@ -242,6 +244,21 @@ describe("retention constants", () => {
 // ---------------------------------------------------------------------------
 // actionPeriodStart — first instant of the UTC calendar year.
 // ---------------------------------------------------------------------------
+
+// #3844: an account on the signup grant keeps 30 days of evidence.
+describe("includedRetentionDays", () => {
+  it("keeps 30 days of evidence for an org on its signup grant or past it", () => {
+    expect(SIGNUP_GRANT_RETENTION_DAYS).toBe(30);
+    expect(includedRetentionDays("signup_grant")).toBe(30);
+    expect(includedRetentionDays("after_signup_grant")).toBe(30);
+  });
+
+  it("keeps the included months for a subscriber", () => {
+    expect(includedRetentionDays("subscription")).toBe(
+      RETENTION_INCLUDED_MONTHS * 30,
+    );
+  });
+});
 
 describe("actionPeriodStart", () => {
   it("returns the first instant of the UTC calendar year containing `now`", () => {

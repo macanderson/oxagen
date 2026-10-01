@@ -23,6 +23,7 @@ const prepaid = {
     expiresAt: "2026-10-01T00:00:00.000Z",
     active: true,
     remainingGau: 9350,
+    evidenceDays: 30,
   },
   period,
   includedGau: 5000,

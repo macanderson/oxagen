@@ -310,7 +310,10 @@ export async function Billing({
           />
         </div>
         <div className="flex min-w-0 flex-col gap-4">
-          <PriceList retention={retention.value} />
+          <PriceList
+            retention={retention.value}
+            signupGrant={bucket.value.signupGrant}
+          />
           <BillableUnits />
           <PaymentControls
             ctx={ctx}

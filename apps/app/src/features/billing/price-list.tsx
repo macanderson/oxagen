@@ -3,15 +3,16 @@
 // come from PUBLISHED_TERMS in the start_subscription_upgrade contract, which
 // pricing.test.ts in @oxagen/billing holds equal to the schedule Stripe is
 // synced from; the retention window and its price come from
-// get_evidence_retention. The Free row is the design's wording, "an included
-// monthly allowance" with no figure. The free tier's evidence days and seats
-// have no published term yet (#3844), so each says "not recorded" in its
-// place. A floor price for Enterprise has none either and is left out. One of
-// the files money renders in (INV-25).
+// get_evidence_retention. The Free row prints the signup grant (ADR-NEW,
+// #3844): its size, its lifetime in days, and the evidence an account on it
+// keeps, all from get_gau_bucket's read of the organization's own grant. An
+// organization with no grant row prints "not recorded" for each. Enterprise
+// is negotiated per organization and carries no published floor. One of the
+// files money renders in (INV-25).
 import { PUBLISHED_TERMS } from "@oxagen/oxagen/contracts/billing.subscription_upgrade.start";
 import { useLocale, useTranslations } from "next-intl";
 import type { ReactNode } from "react";
-import type { EvidenceRetention } from "@/data/contracts/billing";
+import type { EvidenceRetention, GauBucket } from "@/data/contracts/billing";
 import { type Money as MoneyValue, mulMicros } from "@/data/contracts/money";
 import { panelBody } from "@/ui/control-styles";
 import { Money } from "@/ui/money";
@@ -47,7 +48,15 @@ function Price({
   );
 }
 
-export function PriceList({ retention }: { retention: EvidenceRetention }) {
+const DAY_MS = 86_400_000;
+
+export function PriceList({
+  retention,
+  signupGrant,
+}: {
+  retention: EvidenceRetention;
+  signupGrant: GauBucket["signupGrant"];
+}) {
   const t = useTranslations("billing");
   const locale = useLocale();
   const count = (n: number) => formatCount(n, locale);
@@ -61,9 +70,23 @@ export function PriceList({ retention }: { retention: EvidenceRetention }) {
       >
         <tbody className="divide-y divide-border">
           <Price name="free" term={t("priceList.free")}>
-            {t.rich("priceList.freeTerms", {
-              nr: (chunks) => <NotRecordedValue>{chunks}</NotRecordedValue>,
-            })}
+            {signupGrant === null
+              ? t.rich("priceList.freeTermsNotRecorded", {
+                  nr: (chunks) => (
+                    <NotRecordedValue>{chunks}</NotRecordedValue>
+                  ),
+                })
+              : t("priceList.freeTerms", {
+                  grant: count(signupGrant.grantedGau),
+                  days: count(
+                    Math.round(
+                      (Date.parse(signupGrant.expiresAt) -
+                        Date.parse(signupGrant.grantedAt)) /
+                        DAY_MS,
+                    ),
+                  ),
+                  evidence: count(signupGrant.evidenceDays),
+                })}
           </Price>
           <Price
             name="blocks"
@@ -95,9 +118,7 @@ export function PriceList({ retention }: { retention: EvidenceRetention }) {
             {t("priceList.tokensTerms")}
           </Price>
           <Price name="enterprise" term={t("priceList.enterprise")}>
-            {t.rich("priceList.enterpriseTerms", {
-              nr: (chunks) => <NotRecordedValue>{chunks}</NotRecordedValue>,
-            })}
+            {t("priceList.enterpriseTerms")}
           </Price>
         </tbody>
       </table>

@@ -363,6 +363,7 @@ describe("get_gau_bucket signup grant", () => {
         expiresAt: "2026-10-10T00:00:00.000Z",
         active: true,
         remainingGau: 32_000,
+        evidenceDays: 30,
       });
     } finally {
       vi.useRealTimers();

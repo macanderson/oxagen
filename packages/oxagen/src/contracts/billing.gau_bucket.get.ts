@@ -111,6 +111,8 @@ const gauSignupGrantSchema = z
     expiresAt: z.string().datetime(),
     active: z.boolean(),
     remainingGau: z.number().int(),
+    /** Days of evidence an account on the grant keeps (#3844). */
+    evidenceDays: z.number().int().positive(),
   })
   .strict();
 

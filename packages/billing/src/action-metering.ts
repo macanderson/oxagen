@@ -198,6 +198,29 @@ export const RETENTION_INCLUDED_MONTHS = 12;
 /** USD per GB-month for evidence held beyond {@link RETENTION_INCLUDED_MONTHS}. */
 export const RETENTION_USD_PER_GB_MONTH = 0.08;
 
+/**
+ * Evidence retention included for an organisation with no subscription, in
+ * days: 30, as the v3 design shows for an account on the signup grant (Mac,
+ * 2026-10-01, #3844).
+ */
+export const SIGNUP_GRANT_RETENTION_DAYS = 30;
+
+const DAYS_PER_INCLUDED_MONTH = 30;
+
+/**
+ * The evidence window an organisation's billing basis includes, in days. A
+ * subscriber keeps {@link RETENTION_INCLUDED_MONTHS} months, counted as 30
+ * days each. An organisation on its signup grant, or past it with no
+ * subscription, keeps {@link SIGNUP_GRANT_RETENTION_DAYS}.
+ */
+export function includedRetentionDays(
+  basis: "subscription" | "signup_grant" | "after_signup_grant",
+): number {
+  return basis === "subscription"
+    ? RETENTION_INCLUDED_MONTHS * DAYS_PER_INCLUDED_MONTH
+    : SIGNUP_GRANT_RETENTION_DAYS;
+}
+
 // ── The entitlement period ──────────────────────────────────────────────────
 
 /**

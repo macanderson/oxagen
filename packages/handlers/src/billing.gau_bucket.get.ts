@@ -43,6 +43,7 @@ import {
 } from "@oxagen/oxagen/contracts/billing.gau_bucket.get";
 import {
   bucketBasis,
+  SIGNUP_GRANT_RETENTION_DAYS,
   readBucket,
   readDefaultPaymentMethod,
   readOrgBillingSettings,
@@ -202,6 +203,7 @@ export function createBillingGauBucketGetHandler(
             active: basis.kind === "signup_grant",
             remainingGau:
               basis.kind === "signup_grant" ? bucket.remainingGau : 0,
+            evidenceDays: SIGNUP_GRANT_RETENTION_DAYS,
           };
 
     const counts = {
