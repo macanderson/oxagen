@@ -1,4 +1,4 @@
-# A pull request that changes a schema carries `migration-required`, applied
+# A pull request that changes a schema carries `MIGRATION-REQUIRED`, applied
 # here rather than asked of the author (SCR-006).
 #
 # WHY THIS IS A WORKFLOW AND NOT A CHECKLIST
@@ -18,14 +18,13 @@
 #
 # WHAT IT DOES NOT DO
 #
-# It applies no migration and blocks no merge. CLAUDE.md sends production
-# Postgres applies through `infra/tools/run-db-migrations.sh` and the store
-# applies through `store-migrate.yml`, and #3653 leaves "may CI apply
-# migrations" a maintainer decision.
-# A label is a statement about the diff, which is exactly as much as this can
-# know: whether the migration SHOULD be applied before this deploy is a
-# judgement about production, and `migration-gate` is where that is made,
-# against the real stores.
+# It applies no migration and blocks no merge. `migration-gate` in
+# pipeline.yml applies the pending migrations when the pull request merges and
+# holds the deploy until every store carries the schema (Mac decided this on
+# 2026-09-23, #3653). A label is a statement about the diff, which is exactly
+# as much as this can know. Whether production can take the migration is a
+# judgement about production, and `migration-gate` makes it against the real
+# stores.
 name: migration-label
 
 on:
@@ -58,7 +57,7 @@ jobs:
       - uses: actions/github-script@v7
         with:
           script: |
-            const LABEL = 'migration-required'
+            const LABEL = 'MIGRATION-REQUIRED'
             const pr = context.payload.pull_request
             const { owner, repo } = context.repo
 
@@ -100,8 +99,13 @@ jobs:
               }
             }
 
+            // Compared without regard to case. GitHub matches a name that way
+            // when a label is added, but the payload carries the spelling the
+            // repo stores, and the label moved from `migration-required` to
+            // `MIGRATION-REQUIRED` on 2026-09-30.
             const names = (pr.labels || []).map(l => (typeof l === 'string' ? l : l.name))
-            const labelled = names.includes(LABEL)
+            const stored = names.find(n => n.toLowerCase() === LABEL.toLowerCase())
+            const labelled = stored !== undefined
 
             if (hits.length === 0) {
               // The label is removed when the schema change is gone, so it
@@ -109,7 +113,7 @@ jobs:
               // is worse than none: it teaches the next reader to discount it.
               if (labelled) {
                 await github.rest.issues.removeLabel({
-                  owner, repo, issue_number: pr.number, name: LABEL,
+                  owner, repo, issue_number: pr.number, name: stored,
                 }).catch(() => {})
                 core.info(`removed ${LABEL}: no schema paths remain in the diff`)
               } else {
@@ -144,15 +148,9 @@ jobs:
               owner, repo, issue_number: pr.number,
               body:
                 `Labelled \`${LABEL}\`: this branch changes a schema.\n\n${list}\n\n` +
-                'Production must carry the migration **before or with** the deploy of this change. ' +
-                'For Postgres, run `infra/tools/run-db-migrations.sh packages/database --apply` from a laptop ' +
-                'with AWS credentials, on a checkout of `origin/main`, or dispatch the **DB Migrate (manual)** ' +
-                'workflow with target production, which runs the same script. For ClickHouse and Neo4j, ' +
-                'dispatch **Store Migrate (manual)**.\n\n' +
-                'Merging is not blocked. `migration-gate` in `pipeline.yml` holds the deploy ' +
-                'until the stores actually carry the schema, so an unapplied migration stops ' +
-                'the rollout rather than breaking production — but it stops it after merge, ' +
-                'when you have moved on. Sequencing it now is cheaper.\n\n' +
-                'Removing this label re-adds it while the diff still changes a schema (SCR-006).',
+                'Write no apply steps and apply nothing by hand. When this pull request merges, ' +
+                '`migration-gate` in `pipeline.yml` applies the pending migrations to production ' +
+                'and holds the deploy until every store carries the schema (SCR-006).\n\n' +
+                'Removing this label re-adds it while the diff still changes a schema.',
             })
             core.info(`applied ${LABEL}`)

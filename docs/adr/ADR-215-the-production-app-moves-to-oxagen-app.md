@@ -1,6 +1,6 @@
 # ADR-215: The production app moves to oxagen.app
 
-- **Status:** Accepted
+- **Status:** Superseded by [ADR-236](./ADR-236-the-production-app-stays-on-oxagen-sh.md). Mac stopped the move on 2026-09-30, and every service stays on `oxagen.sh`.
 - **Date:** 2026-09-28
 - **Owners:** deploy
 - **Related:** issue #4655, PRs #4631 and #4641 (`oxagen.app` as a vanity

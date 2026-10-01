@@ -54,6 +54,14 @@ permissions:
 
 jobs:
   recheck:
+    # A title-only edit changes no checklist. GitHub sends `changes.body` only
+    # when the body changed, so a retitle or a label sweep starts no runner.
+    # In a `workflow_call`, `github.event_name` and `github.event` are the
+    # caller's, so the filter holds for the caller repos too. Same expression
+    # as stella's own dod-recheck.yml.
+    if: >-
+      github.event_name != 'issues'
+      || github.event.changes.body != null
     # ubuntu-slim (one vCPU, $0.002 a minute): a sparse checkout and a few
     # API calls, done in seconds (#4918).
     runs-on: ubuntu-slim
