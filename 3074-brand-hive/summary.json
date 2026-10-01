@@ -1,0 +1,189 @@
+{
+  "repoSha": "4edfa9b890f8e366dfc657f2d0e04e332409c5e8",
+  "kitSha": "9a14177be0306d7b250901802ed1bbab7cc38076",
+  "size": 256,
+  "tile": 320,
+  "deviceScaleFactor": 2,
+  "themes": {
+    "light": {
+      "colours": {
+        "icon": {
+          "background": "rgb(255, 255, 255)",
+          "svgColor": "rgb(9, 9, 11)",
+          "svgClass": "size-7 text-foreground",
+          "width": 256,
+          "height": 256,
+          "paths": [
+            {
+              "fill": "none",
+              "stroke": "rgb(9, 9, 11)",
+              "opacity": "1"
+            },
+            {
+              "fill": "none",
+              "stroke": "rgb(9, 9, 11)",
+              "opacity": "1"
+            },
+            {
+              "fill": "none",
+              "stroke": "rgb(9, 9, 11)",
+              "opacity": "1"
+            },
+            {
+              "fill": "rgb(212, 175, 55)",
+              "stroke": "none",
+              "opacity": "1"
+            },
+            {
+              "fill": "rgb(212, 175, 55)",
+              "stroke": "none",
+              "opacity": "0.55"
+            },
+            {
+              "fill": "none",
+              "stroke": "rgb(9, 9, 11)",
+              "opacity": "1"
+            }
+          ]
+        },
+        "reference": {
+          "background": "rgb(255, 255, 255)",
+          "svgColor": "rgb(9, 9, 11)",
+          "svgClass": null,
+          "width": 256,
+          "height": 256,
+          "paths": [
+            {
+              "fill": "none",
+              "stroke": "rgb(9, 9, 11)",
+              "opacity": "1"
+            },
+            {
+              "fill": "none",
+              "stroke": "rgb(9, 9, 11)",
+              "opacity": "1"
+            },
+            {
+              "fill": "none",
+              "stroke": "rgb(9, 9, 11)",
+              "opacity": "1"
+            },
+            {
+              "fill": "rgb(212, 175, 55)",
+              "stroke": "none",
+              "opacity": "1"
+            },
+            {
+              "fill": "rgb(212, 175, 55)",
+              "stroke": "none",
+              "opacity": "0.55"
+            },
+            {
+              "fill": "none",
+              "stroke": "rgb(9, 9, 11)",
+              "opacity": "1"
+            }
+          ]
+        }
+      },
+      "diff": {
+        "sameSize": true,
+        "width": 640,
+        "height": 640,
+        "total": 409600,
+        "differing": 1465,
+        "maxDelta": 22
+      }
+    },
+    "dark": {
+      "colours": {
+        "icon": {
+          "background": "rgb(9, 9, 11)",
+          "svgColor": "rgb(255, 255, 255)",
+          "svgClass": "size-7 text-foreground",
+          "width": 256,
+          "height": 256,
+          "paths": [
+            {
+              "fill": "none",
+              "stroke": "rgb(255, 255, 255)",
+              "opacity": "1"
+            },
+            {
+              "fill": "none",
+              "stroke": "rgb(255, 255, 255)",
+              "opacity": "1"
+            },
+            {
+              "fill": "none",
+              "stroke": "rgb(255, 255, 255)",
+              "opacity": "1"
+            },
+            {
+              "fill": "rgb(212, 175, 55)",
+              "stroke": "none",
+              "opacity": "1"
+            },
+            {
+              "fill": "rgb(212, 175, 55)",
+              "stroke": "none",
+              "opacity": "0.55"
+            },
+            {
+              "fill": "none",
+              "stroke": "rgb(255, 255, 255)",
+              "opacity": "1"
+            }
+          ]
+        },
+        "reference": {
+          "background": "rgb(9, 9, 11)",
+          "svgColor": "rgb(255, 255, 255)",
+          "svgClass": null,
+          "width": 256,
+          "height": 256,
+          "paths": [
+            {
+              "fill": "none",
+              "stroke": "rgb(255, 255, 255)",
+              "opacity": "1"
+            },
+            {
+              "fill": "none",
+              "stroke": "rgb(255, 255, 255)",
+              "opacity": "1"
+            },
+            {
+              "fill": "none",
+              "stroke": "rgb(255, 255, 255)",
+              "opacity": "1"
+            },
+            {
+              "fill": "rgb(212, 175, 55)",
+              "stroke": "none",
+              "opacity": "1"
+            },
+            {
+              "fill": "rgb(212, 175, 55)",
+              "stroke": "none",
+              "opacity": "0.55"
+            },
+            {
+              "fill": "none",
+              "stroke": "rgb(255, 255, 255)",
+              "opacity": "1"
+            }
+          ]
+        }
+      },
+      "diff": {
+        "sameSize": true,
+        "width": 640,
+        "height": 640,
+        "total": 409600,
+        "differing": 1480,
+        "maxDelta": 22
+      }
+    }
+  }
+}
