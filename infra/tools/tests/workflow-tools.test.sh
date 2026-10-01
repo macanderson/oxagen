@@ -13,9 +13,19 @@ set -uo pipefail
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 ROOT=$(cd "$HERE/../../.." && pwd)
 
-# `rg` at the start of a command: line start, after a pipe, `;`, `&`, `(`, or
-# `$(`. Comment lines are skipped.
-hits=$(grep -nE '(^|[|;&(]|\$\()[[:space:]]*rg[[:space:]]' "$ROOT"/.github/workflows/*.yml \
+# `rg` at the start of a command: line start, after a pipe, `;`, `&`, `(`,
+# `$(`, or a one-line `run:` key. Comment lines are skipped.
+RG_COMMAND='(^|[|;&(]|\$\(|run:)[[:space:]]*rg[[:space:]]'
+
+# The pattern itself, checked against the shapes a workflow step takes.
+for shape in 'rg -q x' '  | rg -q x' 'a; rg x' '$(rg x)' '- run: rg x f' '  run: rg x'; do
+  grep -qE "$RG_COMMAND" <<<"$shape" || { echo "FAIL: the guard misses '$shape'" >&2; exit 1; }
+done
+for shape in 'grep -q x' '# not rg here' 'cargo x' 'run: grep x'; do
+  if grep -qE "$RG_COMMAND" <<<"$shape"; then echo "FAIL: the guard flags '$shape'" >&2; exit 1; fi
+done
+
+hits=$(grep -nE "$RG_COMMAND" "$ROOT"/.github/workflows/*.yml \
   | grep -vE '^[^:]+:[0-9]+:[[:space:]]*#' || true)
 
 if [[ -n $hits ]]; then

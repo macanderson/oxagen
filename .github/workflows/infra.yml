@@ -86,14 +86,16 @@ jobs:
           # green here — including a change that broke planning outright.
           # A manual dispatch had the same hole from the other end: it carries
           # no base ref, so the fallback diffs one arbitrary commit.
-          if echo "$changed" | grep -qE '^infra/modules/|^\.github/workflows/infra\.yml$' \
+          if grep -qE '^infra/modules/|^\.github/workflows/infra\.yml$' <<<"$changed" \
             || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             stacks=$(find infra/stacks-new -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort)
           else
             stacks=$(echo "$changed" | sed -n 's#^infra/stacks-new/\([^/]*\)/.*#\1#p' | sort -u)
             # grep, not rg: ubuntu-latest has no ripgrep, and with rg this test
-            # read false on every run, so node tools never published.
-            if printf '%s\n' "$changed" | grep -qE '^infra/tools/(node/|publish-node-tools\.sh$)'; then
+            # read false on every run, so node tools never published. A
+            # here-string, not a pipe: grep -q stops at its first match, and
+            # under pipefail a producer killed by SIGPIPE turns the match false.
+            if grep -qE '^infra/tools/(node/|publish-node-tools\.sh$)' <<<"$changed"; then
               stacks=$(printf '%s\nci-deploy\nstaging\n' "$stacks" | sed '/^$/d' | sort -u)
             fi
           fi
