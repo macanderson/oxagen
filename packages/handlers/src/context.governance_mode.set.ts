@@ -284,7 +284,7 @@ async function withdrawGovernanceProposal(
   await deps.store.updateProposal(aside.id, aside.patch, aside.from, aside.guard);
   if (open.prNumber === null) return;
   // Best effort, as dismiss_proposal's close is: the row already says the
-  // change is withdrawn, and only Oxagen merges on the production branch.
+  // change is withdrawn, so Oxagen refuses to merge it.
   try {
     await deps.github.closePullRequest(repo, open.prNumber);
     await deps.github.deleteBranch(repo, STEERING_GOVERNANCE_BRANCH);

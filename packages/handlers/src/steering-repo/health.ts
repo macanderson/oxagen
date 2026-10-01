@@ -315,6 +315,8 @@ const REPAIR_SETTINGS =
   "Repair: an admin selects Repair settings on the steering repo banner in Oxagen.";
 
 function rulesetName(key: string): string {
+  if (key === "oxagen_steering") return "Oxagen steering";
+  if (key === "oxagen_merges") return "Oxagen merges";
   return GITHUB_SETTINGS_BASELINE.rulesets[key]?.name ?? key;
 }
 
@@ -899,7 +901,7 @@ export async function checkRepoHealth(
     repository = observation.repository;
     differences = attribute(observation.differences, previous?.differences ?? [], trigger);
     // 2. History: main against the last published commit.
-    history = await readHistory(host, previous, log);
+    history = await readHistory(host, previous, log, target.provider === "github");
     if (history.divergence !== null) reason = history.divergence.reason;
   }
 
@@ -1020,19 +1022,30 @@ interface History {
 
 /**
  * Compare main with the last published commit, and keep a revert pull request
- * open while main has diverged. A failed history read keeps the last verdict:
- * a repo that was diverged stays diverged until a read says otherwise.
+ * open while main has diverged. GitHub history must be readable and have an
+ * authenticated publication anchor before the repository reads healthy.
  */
 async function readHistory(
   host: HealthHost,
   previous: HealthRow | null,
   log: LogScope,
+  requireProvenance: boolean,
 ): Promise<History> {
   const priorRevert = previous?.revertPrNumber ?? null;
   let published: PublishedCommit | null;
   let divergence: Divergence | null;
   try {
     published = await host.published();
+    if (published === null && requireProvenance) {
+      return {
+        published: null,
+        divergence: {
+          reason: "Oxagen could not find an authenticated published commit for this steering repository.",
+          main_sha: "",
+        },
+        revertPrNumber: priorRevert,
+      };
+    }
     divergence = published === null ? null : await host.diverged(published);
   } catch (err) {
     if (isRateLimited(err)) throw err;
@@ -1045,7 +1058,12 @@ async function readHistory(
       divergence:
         previous !== null && previous.health === "diverged"
           ? { reason: previous.reason ?? HEALTH_TITLES.diverged, main_sha: "" }
-          : null,
+          : requireProvenance
+            ? {
+                reason: "Oxagen could not verify this steering repository's commit history. Retry the health check.",
+                main_sha: "",
+              }
+            : null,
       revertPrNumber: priorRevert,
     };
   }

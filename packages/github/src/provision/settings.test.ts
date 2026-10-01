@@ -24,6 +24,11 @@ const REPO: RepoAddress = { owner: "acme", name: "oxagen-support" };
 const ROOT = "/repos/acme/oxagen-support";
 const BASELINE: SteeringGithubSettings = EXAMPLE_GITHUB_BASELINE;
 const ENVIRONMENTS = Object.keys(BASELINE.environments);
+const FREE_BASELINE: SteeringGithubSettings = {
+  ...BASELINE,
+  rulesets: {},
+  environments: {},
+};
 
 /** A fake whose steering repo holds its first commit and no settings yet. */
 async function provisioned(orgDefaultBranch = "main"): Promise<FakeGithub> {
@@ -97,6 +102,22 @@ function failingWrite(fake: FakeGithub, n: number, when: "before" | "after"): Gi
     return { status: 502, text: () => Promise.resolve('{"message":"injected failure"}') };
   };
   return createGithubRest({ token: "app-token", fetch });
+}
+
+/** Reject paid settings endpoints as GitHub does for private Free repositories. */
+function freePlanClient(fake: FakeGithub) {
+  const paidCalls: string[] = [];
+  const fetch: HttpFetch = (url, init) => {
+    if (/\/(rulesets|environments|branches)\b/.test(url)) {
+      paidCalls.push(`${init.method} ${url}`);
+      return Promise.resolve({
+        status: 403,
+        text: () => Promise.resolve('{"message":"Upgrade your GitHub plan"}'),
+      });
+    }
+    return fake.fetch(url, init);
+  };
+  return { rest: createGithubRest({ token: "app-token", fetch }), paidCalls };
 }
 
 /** A client that returns the given answers in order, for shapes the fake never sends. */
@@ -177,6 +198,10 @@ describe("rulesetBody", () => {
 });
 
 describe("compareSettings", () => {
+  it("ignores existing rulesets and environments with the Free baseline", () => {
+    expect(compareSettings(FREE_BASELINE, observed(), { require_deployment: true })).toEqual([]);
+  });
+
   it("finds nothing when the repository matches", () => {
     expect(compareSettings(BASELINE, observed())).toEqual([]);
   });
@@ -391,6 +416,25 @@ describe("readSettings", () => {
       actions: { enabled: true },
       environments: {},
     });
+  });
+
+  it("skips paid endpoints when rulesets and environments are unmanaged", async () => {
+    const fake = await provisioned();
+    const { rest, paidCalls } = freePlanClient(fake);
+
+    const read = await readSettings(rest, REPO, APP, [], false);
+
+    expect(read.rulesets).toEqual({});
+    expect(read.environments).toEqual({});
+    expect(read.visibility).toBe("private");
+    expect(paidCalls).toEqual([]);
+  });
+
+  it("propagates a ruleset permission failure when rulesets are requested", async () => {
+    const fake = await provisioned();
+    const { rest } = freePlanClient(fake);
+
+    await expect(readSettings(rest, REPO, APP, [])).rejects.toBeInstanceOf(GitHubApiError);
   });
 
   it("reads rulesets back in the baseline's terms", async () => {
@@ -651,6 +695,79 @@ describe("applySettings", () => {
     expect(writesSince(fake, from)).toEqual([]);
     expect(fake.snapshot()).toEqual(before);
   });
+
+  it("applies Free settings and reruns without accessing paid endpoints", async () => {
+    const fake = await provisioned();
+    const { rest, paidCalls } = freePlanClient(fake);
+    const from = fake.calls.length;
+
+    const result = await applySettings(rest, REPO, APP, FREE_BASELINE);
+
+    expect(result.remaining).toEqual([]);
+    expect(result.changed.map((d) => d.setting)).toEqual([
+      "merge.allow_merge_commit",
+      "merge.allow_rebase_merge",
+      "merge.delete_branch_on_merge",
+      "actions.enabled",
+    ]);
+    expect(writesSince(fake, from)).toEqual([
+      { method: "PATCH", path: ROOT },
+      { method: "PUT", path: `${ROOT}/actions/permissions` },
+    ]);
+    const applied = fake.snapshot();
+    const rerunFrom = fake.calls.length;
+
+    const again = await applySettings(rest, REPO, APP, FREE_BASELINE);
+
+    expect(again.changed).toEqual([]);
+    expect(again.remaining).toEqual([]);
+    expect(writesSince(fake, rerunFrom)).toEqual([]);
+    expect(fake.snapshot()).toEqual(applied);
+    expect(paidCalls).toEqual([]);
+  });
+
+  it("preserves existing protections and environments when they become unmanaged", async () => {
+    const fake = await provisioned();
+    await applySettings(fake.appRest(), REPO, APP, BASELINE);
+    await fake.appRest().request("POST", `${ROOT}/rulesets`, {
+      name: "Customer rules",
+      target: "branch",
+      enforcement: "active",
+      rules: [{ type: "deletion" }],
+    });
+    await fake.appRest().request("PUT", `${ROOT}/environments/customer`, {
+      deployment_branch_policy: null,
+    });
+    const before = fake.snapshot();
+    await fake.appRest().request("PUT", `${ROOT}/actions/permissions`, { enabled: true });
+    const { rest, paidCalls } = freePlanClient(fake);
+
+    const result = await applySettings(rest, REPO, APP, FREE_BASELINE);
+
+    expect(result.remaining).toEqual([]);
+    expect(fake.snapshot()).toEqual(before);
+    expect(paidCalls).toEqual([]);
+  });
+
+  for (const status of [403, 500]) {
+    for (const [method, path] of [
+      ["GET", ROOT],
+      ["GET", `${ROOT}/actions/permissions`],
+      ["PATCH", ROOT],
+      ["PUT", `${ROOT}/actions/permissions`],
+    ] as const) {
+      it(`propagates ${status} from ${method} ${path} with the Free baseline`, async () => {
+        const fake = await provisioned();
+        fake.failNext({ method, path, status });
+        const { rest, paidCalls } = freePlanClient(fake);
+
+        await expect(applySettings(rest, REPO, APP, FREE_BASELINE)).rejects.toBeInstanceOf(
+          GitHubApiError,
+        );
+        expect(paidCalls).toEqual([]);
+      });
+    }
+  }
 
   it("switches the default branch to main", async () => {
     const fake = await provisioned();

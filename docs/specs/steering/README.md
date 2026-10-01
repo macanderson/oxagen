@@ -1,8 +1,8 @@
 # The steering repo
 
 Each workspace keeps its steering in a repository of its own, the steering
-repo. Oxagen creates it when you create the workspace, merges every change to
-it, and publishes each merge as a numbered version. Each organization has one
+repo. Oxagen creates it when you create the workspace and publishes each merge
+through its merge queue as a numbered version. Each organization has one
 more, `<org>/oxagen-config`, for the records every workspace in it shares. Code
 repositories hold no committed steering. A workspace links a code repository
 with a steering PR (ADR-212, `docs/specs/repository-binding/README.md`).
@@ -11,8 +11,9 @@ Steering repos go where the organization's steering connection points: a
 GitHub organization with the Oxagen app installed, a GitLab group, or, since
 2026-10-01, the personal GitHub account of the owner who connected GitHub
 (#4899). A personal account's repository is created with that owner's own
-token, and a private one needs GitHub Pro for its branch rules. When the owner's
-tokens reach more than one, setup asks which. An owner can change the choice
+token. GitHub Free organizations and personal accounts are supported. Oxagen
+does not configure or require GitHub branch protection, rulesets, or environment
+protection. When the owner's tokens reach more than one, setup asks which. An owner can change the choice
 until Oxagen has created a steering repo there (`resetConnection` on
 `retry_steering_repo_provision` and `import_workspace_steering`).
 
@@ -196,6 +197,19 @@ steering PR at a time per repository:
 
 While the repository fails its health check, Oxagen merges nothing.
 
+On GitHub, these checks govern merges requested through Oxagen. Repository
+permissions govern direct pushes and merges in GitHub. Oxagen leaves existing
+branch protections untouched and detects unpublished changes through its
+divergence checks. Before synchronization or publication changes steering, Oxagen
+verifies the exact GitHub commit against its deployment history and GitHub
+records of pull requests merged by the Oxagen App. A commit message cannot prove
+approval. Missing or unreadable provenance refuses the update.
+
+Provisioning, health, and repair manage private visibility,
+the default branch, squash merge settings, and disabled Actions. They do not
+read or write rulesets or environment protection. Deployment records still
+identify published versions. See [ADR-237](../../adr/ADR-237-steering-repositories-support-github-free.md).
+
 ### Stamp
 
 The stamp computes each record's identity from its content:
@@ -226,7 +240,8 @@ chain.
 After the merge, `merge_context_pr` publishes the new head
 (`packages/steering-bundle/src/publish.ts`,
 `packages/handlers/src/steering-repo/publisher.ts`). The repository sync
-publishes too, as its last step, so a merge made on the host still publishes.
+publishes too, as its last step. On GitHub steering repositories, it accepts
+only commits backed by authenticated Oxagen publication or merge evidence.
 A publish takes these steps:
 
 1. It checks the repository's health and takes the repository's lock.
