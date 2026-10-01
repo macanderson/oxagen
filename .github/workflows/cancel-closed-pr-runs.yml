@@ -24,7 +24,8 @@ permissions:
 
 jobs:
   cancel:
-    runs-on: ubuntu-latest
+    # ubuntu-slim (one vCPU, $0.002 a minute): a few API calls (#4918).
+    runs-on: ubuntu-slim
     timeout-minutes: 5
     steps:
       - uses: actions/github-script@v7

@@ -150,27 +150,57 @@ interface FirstPromptRow {
   root: string;
   at: string;
   prompt_digest: string;
-  prompt_source: string | null;
-  prompt_origin: string | null;
-  command_name: string | null;
+  first_source: string | null;
+  first_origin: string | null;
+  first_command: string | null;
 }
 
 /**
- * The first `turn_start` frame with a prompt on each root's own chain. A
- * slash command is kept, with its name, so a detector can tell it from typed
- * text. A text column takes an alias of its own, since a ClickHouse alias
- * that names a column replaces the column everywhere in the query.
+ * The first `turn_start` frame with a prompt on each root's own chain, and
+ * who sent it. A slash command is kept, with its name, so a detector can tell
+ * it from typed text.
+ *
+ * The sender sits on one of two frames. A harness adapter writes
+ * `prompt_source` and `prompt_origin` on the `turn_start` itself (Codex).
+ * Claude Code's hook carries neither, and its transcript copy of the prompt
+ * carries both on an `oxagen:message` frame with the same `prompt_digest` on
+ * the same chain. So the read groups each chain's prompt frames by digest,
+ * keeps the groups that hold a `turn_start`, and takes the group whose first
+ * `turn_start` came first. That frame's own pair wins. When it has none, the
+ * pair on the earliest message that names a sender fills in, and a prompt
+ * neither frame names reads as empty, which `readFirstPrompts` takes as null.
+ *
+ * The tenant fence (`scopeSelectSource`) admits one single-table SELECT, so
+ * the read aggregates rather than joins. Every alias names no stored column,
+ * since a ClickHouse alias that names a column replaces the column
+ * everywhere in the query.
  */
 export const FIRST_PROMPTS_QUERY = `SELECT toString(root_session_uuid) AS root,
-  formatDateTime(ts, '%Y-%m-%dT%H:%i:%S.%fZ', 'UTC') AS at,
-  prompt_digest, prompt_source, prompt_origin, command_name
+  argMinIf(ts, (ts, seq), kind = 'turn_start') AS first_ts,
+  argMinIf(seq, (ts, seq), kind = 'turn_start') AS first_seq,
+  formatDateTime(first_ts, '%Y-%m-%dT%H:%i:%S.%fZ', 'UTC') AS at,
+  prompt_digest,
+  argMinIf(prompt_source, (ts, seq), kind = 'turn_start') AS turn_source,
+  argMinIf(prompt_origin, (ts, seq), kind = 'turn_start') AS turn_origin,
+  argMinIf(prompt_source, (ts, seq), kind = 'oxagen:message')
+    AS message_source,
+  argMinIf(prompt_origin, (ts, seq), kind = 'oxagen:message')
+    AS message_origin,
+  if(turn_source != '' OR turn_origin != '', turn_source, message_source)
+    AS first_source,
+  if(turn_source != '' OR turn_origin != '', turn_origin, message_origin)
+    AS first_origin,
+  argMinIf(command_name, (ts, seq), kind = 'turn_start') AS first_command
   FROM tacho_events FINAL
-  WHERE kind = 'turn_start'
+  WHERE kind IN ('turn_start', 'oxagen:message')
     AND root_session_uuid IN {roots:Array(UUID)}
     AND session_uuid = root_session_uuid
     AND received_at >= {from:DateTime64(3)} - ${RECEIVED_SLACK}
     AND prompt_digest != ''
-  ORDER BY root_session_uuid, ts, seq
+    AND (kind = 'turn_start' OR prompt_source != '' OR prompt_origin != '')
+  GROUP BY root_session_uuid, prompt_digest
+  HAVING countIf(kind = 'turn_start') > 0
+  ORDER BY root_session_uuid, first_ts, first_seq
   LIMIT 1 BY root_session_uuid`;
 
 /**
@@ -200,9 +230,9 @@ export async function readFirstPrompts(
         at: new Date(r.at),
         atMicros: microsOf(r.at),
         digest: r.prompt_digest,
-        source: text(r.prompt_source),
-        origin: text(r.prompt_origin),
-        commandName: text(r.command_name),
+        source: text(r.first_source),
+        origin: text(r.first_origin),
+        commandName: text(r.first_command),
       });
     }
   }

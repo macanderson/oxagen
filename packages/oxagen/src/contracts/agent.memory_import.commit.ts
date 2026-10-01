@@ -22,10 +22,11 @@ export const agentMemoryImportCommit = registerCapability({
   description:
     "Write a batch of confirmed draft memories into the workspace AgentMemory graph. Per-item error capture — not all-or-nothing. Backs the bulk-import button.",
   mode: "sync",
-  surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  // Retired (DEREGISTERED.md §8): on no surface and with no handler. The
+  // Markdown import (commit_markdown_import) replaced it.
+  surfaces: [],
+  layers: ["schema", "unit", "docs"],
   scoped: true,
-  agent: { requiresApproval: false, riskLevel: "low", category: "memory" },
   sensitivity: "medium",
   mutates: true,
   defaultEffect: "deny",

@@ -3,11 +3,12 @@ import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-// Mock the network calls; keep the real formatters (formatImportDrafts /
-// formatImportResults) so the printed output is exercised end-to-end.
+// Mock the network calls and keep the real formatters (formatImportRows and
+// formatImportPullRequest), so the printed output is read end to end through
+// the one-shot stdout and exit path.
 const mocks = vi.hoisted(() => ({
-  parseImportMemories: vi.fn(),
-  commitImportMemories: vi.fn(),
+  parseMarkdownImport: vi.fn(),
+  commitMarkdownImport: vi.fn(),
 }));
 
 vi.mock("../../lib/memory-client.js", async (importActual) => {
@@ -15,12 +16,12 @@ vi.mock("../../lib/memory-client.js", async (importActual) => {
     await importActual<typeof import("../../lib/memory-client.js")>();
   return {
     ...actual,
-    parseImportMemories: mocks.parseImportMemories,
-    commitImportMemories: mocks.commitImportMemories,
+    parseMarkdownImport: mocks.parseMarkdownImport,
+    commitMarkdownImport: mocks.commitMarkdownImport,
   };
 });
 
-import { handleMemoryImport } from "../memory.js";
+import { handleMemoryImport, MEMORY_IMPORT_CAPABILITIES } from "../memory.js";
 
 let dir: string;
 let out: string[];
@@ -32,22 +33,30 @@ function md(name: string, body: string): string {
   return p;
 }
 
-function draft(overrides: Record<string, unknown> = {}) {
+function row(overrides: Record<string, unknown> = {}) {
   return {
-    lesson: "Never push to main.",
-    memoryKind: "constraint",
-    memoryClass: "RULE",
-    enforcementScore: 95,
-    source: "user",
-    nodeRef: "user-memory",
-    sourceDocument: "rules.md",
-    classified: true,
+    file: "CLAUDE.md",
+    line: 3,
+    origin: "split",
+    lineage: "a-intel.claude.no-push-to-main",
+    label: "No push to main",
+    statement: "Never push to main.",
+    kind: "constraint",
+    kindReason: "It forbids an action.",
+    force: "must",
+    forceWords: "Never",
+    effect: "forbid",
+    tokens: 5,
+    duplicate: null,
+    conflict: null,
+    action: "add",
+    frontmatter: null,
     ...overrides,
   };
 }
 
 beforeEach(() => {
-  dir = mkdtempSync(join(tmpdir(), "oxagen-mem-import-"));
+  dir = mkdtempSync(join(tmpdir(), "oxagen-md-import-"));
   out = [];
   err = [];
   vi.spyOn(process.stdout, "write").mockImplementation(
@@ -62,7 +71,7 @@ beforeEach(() => {
       return true;
     },
   );
-  // fail() calls process.exit(1); make it throw so tests can assert on it.
+  // fail() calls process.exit(1). Make it throw so a test can assert on it.
   vi.spyOn(process, "exit").mockImplementation(((code?: number) => {
     throw new Error(`process.exit:${code}`);
   }) as never);
@@ -70,8 +79,8 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks();
-  mocks.parseImportMemories.mockReset();
-  mocks.commitImportMemories.mockReset();
+  mocks.parseMarkdownImport.mockReset();
+  mocks.commitMarkdownImport.mockReset();
   rmSync(dir, { recursive: true, force: true });
 });
 
@@ -79,139 +88,77 @@ const text = () => out.join("");
 const errText = () => err.join("");
 
 describe("handleMemoryImport", () => {
-  it("previews drafts and writes nothing without --yes", async () => {
-    mocks.parseImportMemories.mockResolvedValue({
-      drafts: [
-        draft({ lesson: "Lesson one." }),
-        draft({ lesson: "Lesson two." }),
-      ],
-      documentCount: 1,
-      skipped: [],
-    });
-    const file = md("rules.md", "- never push to main");
-
-    await handleMemoryImport([file], {});
-
-    expect(mocks.parseImportMemories).toHaveBeenCalledTimes(1);
-    // Filename is the basename, content is the file body.
-    expect(mocks.parseImportMemories.mock.calls[0]?.[0]).toEqual([
-      { filename: "rules.md", content: "- never push to main" },
-    ]);
-    expect(mocks.commitImportMemories).not.toHaveBeenCalled();
-    expect(text()).toContain("Lesson one.");
-    expect(text()).toContain("Re-run with --yes to import");
-  });
-
-  it("emits JSON of the parsed drafts (no commit) with --json and no --yes", async () => {
-    mocks.parseImportMemories.mockResolvedValue({
-      drafts: [draft({ lesson: "Preview me." })],
-      documentCount: 1,
-      skipped: [],
-    });
-    await handleMemoryImport([md("rules.md", "- content")], { json: true });
-
-    expect(mocks.commitImportMemories).not.toHaveBeenCalled();
-    const parsed = JSON.parse(text());
-    expect(parsed.drafts).toHaveLength(1);
-    expect(parsed.drafts[0].lesson).toBe("Preview me.");
-  });
-
-  it("passes --node through as the default anchor", async () => {
-    mocks.parseImportMemories.mockResolvedValue({
-      drafts: [draft()],
-      documentCount: 1,
-      skipped: [],
-    });
-    const file = md("rules.md", "- content");
-
-    await handleMemoryImport([file], { node: "team:platform" });
-    expect(mocks.parseImportMemories.mock.calls[0]?.[1]).toBe("team:platform");
-  });
-
-  it("commits the parsed drafts with --yes and prints the result summary", async () => {
-    mocks.parseImportMemories.mockResolvedValue({
-      drafts: [draft({ lesson: "Lesson one." })],
-      documentCount: 1,
-      skipped: [],
-    });
-    mocks.commitImportMemories.mockResolvedValue({
-      results: [
-        { lesson: "Lesson one.", ok: true, memoryId: "m_1", error: null },
-      ],
-      imported: 1,
-      failed: 0,
-    });
-    const file = md("rules.md", "- content");
-
-    await handleMemoryImport([file], { yes: true });
-
-    expect(mocks.commitImportMemories).toHaveBeenCalledTimes(1);
-    expect(mocks.commitImportMemories.mock.calls[0]?.[0]).toHaveLength(1);
-    expect(text()).toContain("Imported 1 memory, 0 failed");
-  });
-
-  it("emits JSON for the commit result with --yes --json", async () => {
-    mocks.parseImportMemories.mockResolvedValue({
-      drafts: [draft()],
-      documentCount: 1,
-      skipped: [],
-    });
-    mocks.commitImportMemories.mockResolvedValue({
-      results: [{ lesson: "L", ok: true, memoryId: "m_1", error: null }],
-      imported: 1,
-      failed: 0,
-    });
-    await handleMemoryImport([md("rules.md", "- content")], {
-      yes: true,
-      json: true,
-    });
-    const parsed = JSON.parse(text());
-    expect(parsed.imported).toBe(1);
-  });
-
-  it("skips unreadable / empty files and reports them", async () => {
-    mocks.parseImportMemories.mockResolvedValue({
-      drafts: [draft()],
-      documentCount: 1,
-      skipped: [],
-    });
-    const good = md("good.md", "- real content");
-    const empty = md("empty.md", "   ");
-    const missing = join(dir, "nope.md");
-
-    await handleMemoryImport([good, empty, missing], {});
-
-    expect(errText()).toContain("Skipped unreadable/empty files");
-    expect(errText()).toContain("empty.md");
-    expect(errText()).toContain("nope.md");
-    // Only the readable, non-empty file is sent.
-    expect(mocks.parseImportMemories.mock.calls[0]?.[0]).toEqual([
-      { filename: "good.md", content: "- real content" },
+  it("names the two capabilities it calls", () => {
+    expect(MEMORY_IMPORT_CAPABILITIES).toEqual([
+      "parse_markdown_import",
+      "commit_markdown_import",
     ]);
   });
 
-  it("fails when no files are passed", async () => {
+  it("previews the records with their kind, force, and words, and writes nothing without --yes", async () => {
+    mocks.parseMarkdownImport.mockResolvedValue({
+      files: [],
+      records: [row(), row({ statement: "Prefer rg.", kind: "preference", force: "may", forceWords: "Prefer", effect: null })],
+      policies: [],
+    });
+
+    await handleMemoryImport([md("CLAUDE.md", "Never push to main.")], {});
+
+    expect(mocks.parseMarkdownImport).toHaveBeenCalledTimes(1);
+    expect(mocks.parseMarkdownImport.mock.calls[0]?.[0]).toEqual([
+      expect.objectContaining({ content: "Never push to main.", target: "records" }),
+    ]);
+    expect(mocks.commitMarkdownImport).not.toHaveBeenCalled();
+    expect(text()).toContain("constraint (forbid)");
+    expect(text()).toContain('"Never"');
+    expect(text()).toContain("2 proposed records. The must and should rows marked add load 5 tokens on every request.");
+    expect(text()).toContain("Run again with --yes to open the steering PR.");
+  });
+
+  it("opens the steering PR with --yes and prints it", async () => {
+    mocks.parseMarkdownImport.mockResolvedValue({ files: [], records: [row()], policies: [] });
+    mocks.commitMarkdownImport.mockResolvedValue({
+      pullRequest: {
+        number: 12,
+        url: "https://github.com/a-intel/steering/pull/12",
+        branch: "steering/import-2026-09-30",
+        headSha: "abc",
+      },
+      paths: ["steering/constraints/a-intel.claude.no-push-to-main.md"],
+      records: 1,
+      policies: 0,
+      skipped: 0,
+    });
+
+    await handleMemoryImport([md("CLAUDE.md", "Never push to main.")], { yes: true });
+
+    expect(mocks.commitMarkdownImport).toHaveBeenCalledWith({ records: [row()] });
+    expect(text()).toContain("Opened steering PR #12 on steering/import-2026-09-30 with 1 record.");
+    expect(text()).toContain("Nothing steers an agent until the PR merges.");
+  });
+
+  it("emits the commit result as JSON with --yes --json", async () => {
+    mocks.parseMarkdownImport.mockResolvedValue({ files: [], records: [row()], policies: [] });
+    mocks.commitMarkdownImport.mockResolvedValue({
+      pullRequest: { number: 3, url: "u", branch: "b", headSha: "h" },
+      paths: [],
+      records: 1,
+      policies: 0,
+      skipped: 0,
+    });
+    await handleMemoryImport([md("CLAUDE.md", "x")], { yes: true, json: true });
+    expect(JSON.parse(text()).pullRequest.number).toBe(3);
+  });
+
+  it("fails when no files are passed (negative)", async () => {
     await expect(handleMemoryImport([], {})).rejects.toThrow("process.exit:1");
     expect(errText()).toContain("Nothing to import");
   });
 
-  it("fails when no documents are readable", async () => {
-    await expect(
-      handleMemoryImport([join(dir, "ghost.md")], {}),
-    ).rejects.toThrow("process.exit:1");
-    expect(errText()).toContain("No readable, non-empty documents");
-  });
-
-  it("fails on --yes when extraction yields zero drafts", async () => {
-    mocks.parseImportMemories.mockResolvedValue({
-      drafts: [],
-      documentCount: 0,
-      skipped: [{ filename: "toc.md", reason: "No durable rules found." }],
-    });
-    await expect(
-      handleMemoryImport([md("toc.md", "# Table of contents")], { yes: true }),
-    ).rejects.toThrow("process.exit:1");
-    expect(errText()).toContain("No memories could be extracted");
-    expect(mocks.commitImportMemories).not.toHaveBeenCalled();
+  it("fails when no file is readable (negative)", async () => {
+    await expect(handleMemoryImport([join(dir, "ghost.md")], {})).rejects.toThrow(
+      "process.exit:1",
+    );
+    expect(errText()).toContain("No readable, non-empty files to import.");
   });
 });
