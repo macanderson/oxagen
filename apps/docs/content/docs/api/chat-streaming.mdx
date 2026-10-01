@@ -66,7 +66,7 @@ data: [DONE]
 | `tool-input-delta` | `toolCallId`, `delta` | A chunk of tool-input text. |
 | `tool-call-start` | `toolCallId`, `capability`, `inputPreview`, `riskLevel` | The tool call is about to run. |
 | `tool-call-end` | `toolCallId`, `status`, `durationMs`, `output?`, `errorReason?` | The tool call finished. `status` is `"completed"` or `"failed"`. |
-| `approval-required` | `approvalId`, `capability`, `inputPreview`, `riskLevel`, `expiresAt` | The rule routed the request to a person, and the turn waits for the answer. Answer it with `resolve_approval`. |
+| `approval-required` | `approvalId`, `capability`, `inputPreview`, `riskLevel`, `expiresAt` | The capability requires a person's approval, and the turn waits for the answer. Answer it with `resolve_approval`. |
 | `usage` | `usage.promptTokens`, `usage.completionTokens`, `usage.totalTokens` | Token totals for the turn, sent after the model call finishes. |
 | `budget-notice` | `state`, `costUsd`, `limitUsd`, `mode` | The turn reached its per-turn budget. `state` is `"within_grace"` or `"stopped"`. Sent only when a per-turn budget is set. |
 | `error` | `message` | Something failed. The stream closes after this event. |

@@ -310,6 +310,65 @@ describe("list_runs", () => {
     expect(out.runs.map((r) => r.id)).toEqual(["arun_a2a", "arun_external"]);
   });
 
+  // Mac's ruling of 2026-10-01: the open-source Stella coding agent a
+  // customer runs as a CLI is monitored exactly like Claude Code and Codex
+  // (ADR-235). Its sessions list beside theirs. Only the in-app assistant's
+  // ledger turns leave the list.
+  it("lists a Stella CLI session like a Claude Code or Codex session, and still leaves out the assistant's turns", async () => {
+    const { list } = handlerOver(
+      [
+        ledgerRun({
+          publicId: "arun_assistant_app",
+          runId: RUN_A,
+          surface: "chat",
+          run: {
+            runId: RUN_A,
+            publicId: "arun_assistant_app",
+            status: "completed",
+            createdAt: at("2026-09-11T12:00:00.000Z"),
+            startedAt: at("2026-09-11T12:00:01.000Z"),
+            name: null,
+            summary: null,
+            summaryGeneratedAt: null,
+            summaryModel: null,
+          },
+        }),
+      ],
+      [
+        tachoSession({
+          publicId: "tse_claude",
+          session: {
+            runtime: "claude-code",
+            harness: "Claude Code",
+            startedAt: at("2026-09-11T10:00:00.000Z"),
+          },
+        }),
+        tachoSession({
+          publicId: "tse_codex",
+          session: {
+            runtime: "codex",
+            harness: "Codex",
+            startedAt: at("2026-09-11T10:15:00.000Z"),
+          },
+        }),
+        tachoSession({
+          publicId: "tse_stella",
+          session: {
+            runtime: "stella",
+            harness: "Stella",
+            startedAt: at("2026-09-11T10:30:00.000Z"),
+          },
+        }),
+      ],
+    );
+    const out = await list({ limit: 50 }, ctx());
+    expect(out.runs.map((r) => [r.id, r.source])).toEqual([
+      ["tse_stella", "tacho"],
+      ["tse_codex", "tacho"],
+      ["tse_claude", "tacho"],
+    ]);
+  });
+
   it("costs a run from its rollup row with the basis the row recorded, and leaves an unrolled one null", async () => {
     const { list, stores } = handlerOver(
       [
