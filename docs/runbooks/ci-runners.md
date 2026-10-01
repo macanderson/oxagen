@@ -176,8 +176,19 @@ topic. Confirm the subscription email once after the first apply.
 | `ci-runners-webhook-5xx` | API Gateway answered GitHub with 5xx | The same log group, and the App's "Advanced" tab for failed deliveries |
 | `ci-runners-image-build-failed` (an EventBridge rule, not an alarm) | A runner image failed to build | The `/aws/imagebuilder/oxagen-ci-runner` log group. Runners keep the previous image |
 
+| `ci-runners-<spot or on-demand>-vcpu-near-quota` | Running vCPUs passed 80% of the EC2 quota for 5 minutes | Compare busy runners with instances: `gh api orgs/oxageninc/actions/runners --paginate --jq '[.runners[] \| select(.busy)] \| length'` against the instance count above. Busy close to instances means real demand, so raise the quota. Many instances and few busy runners means machines that boot and never register: drain the pools, read one instance's console (`aws ec2 get-console-output --latest`), and fix the image |
+
 The AWS Budget `ci-runners-monthly` emails at 80% and 100% of actual spend and
 at 100% of forecast spend.
+
+## Runners that never register
+
+The runner registers with a JIT config made at launch, so GitHub lists a
+booting runner as `offline`. The pool Lambda counts only idle online runners,
+so a runner that takes longer than the pool's 2-minute interval to come
+online is launched again. On 2026-10-01 a broken image did that to 121
+machines in 15 minutes. Drain the pools as above whenever the image is
+suspect, and resume them once a runner registers in under a minute.
 
 ## A job that waits
 
