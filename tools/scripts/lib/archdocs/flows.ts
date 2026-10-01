@@ -512,7 +512,6 @@ export const flows: Flow[] = [
       },
       { id: "ai", label: "@oxagen/ai", sub: "provider port" },
       PG,
-      NEO,
       CH,
     ],
     steps: [
@@ -522,7 +521,8 @@ export const flows: Flow[] = [
         to: "kernel",
         label:
           "invoke('ask_assistant', { conversationId, content, pageContext })",
-        detail: "surface 'api' · IAM, audit and rules gates · noBillingGate",
+        detail:
+          "surface 'api' · IAM and audit · no workspace rules (inAppAssistant) · noBillingGate",
       },
       {
         from: "kernel",
@@ -552,24 +552,6 @@ export const flows: Flow[] = [
       },
       {
         from: "turn",
-        to: "kernel",
-        label: "invoke('get_user_budget') · invoke('get_budget_policy')",
-        detail: "each fails open",
-      },
-      {
-        from: "turn",
-        to: "kernel",
-        label: "recallWorkspaceMemoryMessage → invoke('recall_memory')",
-        detail: "limit 6 · 2.5 s timeout · fails open",
-      },
-      {
-        from: "kernel",
-        to: "neo4j",
-        label: "vector recall",
-        detail: "memory_embedding_index over :AgentMemory",
-      },
-      {
-        from: "turn",
         to: "pg",
         label: "openAssistantRun",
         detail:
@@ -591,7 +573,7 @@ export const flows: Flow[] = [
         from: "engine",
         to: "ai",
         label: "onProviderRequest → streamAgentReply (1 step)",
-        detail: "budget guard may abort: 'turn budget exhausted'",
+        detail: "no customer budget guard (ADR-235)",
       },
       {
         from: "ai",
@@ -612,19 +594,13 @@ export const flows: Flow[] = [
         label:
           "onToolRequest → tool.execute → invoke(capability, …, { surface: 'agent' })",
         detail:
-          "external MCP tools use the MCP transport · approvals park as cards · mutating tools serialised",
-      },
-      {
-        from: "agent",
-        to: "ch",
-        label: "tool_invocations row",
-        detail: "one per tool call, failure-isolated",
+          "the call carries the assistant binding, so no workspace rule judges it · approvals park as cards · mutating tools serialised",
       },
       {
         from: "route",
         to: "client",
         label:
-          "SSE: run · parts · approval-required · budget-notice · usage · done",
+          "SSE: run · parts · approval-required · usage · done",
         detail: "createApiStreamTranslator owns the part shapes",
       },
       {
@@ -651,8 +627,6 @@ export const flows: Flow[] = [
       "packages/agent/src/runtime/assistant-turn.ts#HISTORY_LIMIT = 50",
       "packages/agent/src/runtime/assistant-turn.ts#recordTurnExecution",
       "packages/agent/src/runtime/assistant-run.ts#openAssistantRun",
-      "packages/agent/src/runtime/assistant-recall.ts#recallWorkspaceMemoryMessage",
-      "packages/agent/src/memory/neo4j.ts#memory_embedding_index",
       "packages/ai/src/funding-source.ts#resolveModelFundingSource",
       "packages/ai/src/record-token-usage.ts#finalizeUsage",
       "packages/billing/src/turn-credit-gate.ts#evaluateTurnCreditGate",
@@ -667,10 +641,10 @@ export const flows: Flow[] = [
     notes: [
       "The same turn runs behind four adapters: the SSE route drawn here, <code>POST /assistant/ask</code>, the MCP tool, and the app's shell flyout, which invokes <code>ask_assistant</code> from a Server Action and receives the whole reply rather than a stream.",
       "stella-serve holds no key and runs no tool. Every completion comes back as a provider request answered through <code>streamAgentReply</code>, and every tool call comes back as a tool request. Each request is written ahead as a ledger receipt, and the run is sealed when the engine reports its outcome.",
-      "A write that needs approval is parked as a card in the reply, not awaited. The waits that remain are first-use MCP consent and the budget prompt, each up to 5 minutes.",
+      "A write that needs approval is parked as a card in the reply, not awaited. Only the person who asked can answer it (ADR-235).",
       "There is no Inngest hop for messages: <code>assistant-turn.ts</code> writes them inline inside <code>withTenantDb</code>. Token usage alone goes through the usage outbox. The <code>chat.persist-stream</code> function named in older codemaps has no sender and no file.",
       "Role routing inside the provider port: verdict and judge calls run on a tier other than the worker's (<code>precise</code>, or <code>balanced</code> when the worker is <code>precise</code>). Summarisation, reflection and domain inference use <code>fast</code>. Everything else runs on the turn's worker model.",
-      "Context records (ADR-051, superseded by ADR-043) do not enter this turn. ADR-091 re-lands their delivery for external agents through the policy bundle. The volatile user messages here are the page context and recalled workspace memory. Checked workspace instructions ride in the system prompt.",
+      "The workspace does not govern or monitor this turn (ADR-235): no decision rule, steering record, workspace instruction, recalled memory, or customer budget reaches it. The one volatile user message is the page context.",
     ],
   },
 

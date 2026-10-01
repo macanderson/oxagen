@@ -633,7 +633,7 @@ describe("materializeTools", () => {
     await expect(
       (
         tools[alias] as unknown as { execute: (i: unknown) => Promise<unknown> }
-      ).execute({ formId: "f", values: {} }),
+      ).execute({ y: 1 }),
     ).rejects.toMatchObject({ reason: "run_not_open" });
     expect(mocks.createApprovalRequest).not.toHaveBeenCalled();
     expect(invoke).not.toHaveBeenCalled();

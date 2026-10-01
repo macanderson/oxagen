@@ -3736,6 +3736,13 @@
       "writes": []
     },
     {
+      "domain": "assistant",
+      "name": "set_assistant_switch",
+      "reads": [],
+      "surfaces": [],
+      "writes": []
+    },
+    {
       "domain": "plugin",
       "name": "set_auth_alerts",
       "reads": [],

@@ -732,7 +732,7 @@ describe("dispatch_command — a direct target that cannot receive is refused, n
   it.each(["cancel", "pause"] as const)(
     "answers another person's in-app run not_found for %s, and touches nothing",
     async (command) => {
-      const ledger = "arun_assistant_turn";
+      const ledger = "arun_5f0c2e9a1b7d4c3e8f6a77";
       const store = new MemoryStore([], [ledger]);
       const cancel = vi.spyOn(store, "cancelLedgerRun");
       const pause = vi.spyOn(store, "setLedgerPaused");

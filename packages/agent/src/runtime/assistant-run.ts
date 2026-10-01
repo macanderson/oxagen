@@ -165,7 +165,8 @@ function summaryCallPayload(call: HistorySummaryCall): {
 
 /**
  * The context the turn frames, as the spec names it. `engram` is the
- * workspace memory `recallWorkspaceMemoryMessage` reads; `page` is the
+ * workspace memory a turn recalled before ADR-235, and no turn recalls it
+ * now. The name stays so a run recorded before then still reads. `page` is the
  * page-context message the app's turn carries; `conversation_history` is the
  * summary of the messages older than the turn's history window (#4171). All
  * three are assembled in this process, which is why they are named here

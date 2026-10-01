@@ -714,7 +714,6 @@ describe("assistantBindingFor", () => {
     expect(second.oxagenAssistant).not.toBe(first.oxagenAssistant);
   });
 });
-});
 
 describe("the prepared turn", () => {
   it("writes the question, admits the run, then drives the engine on the belt with the run as its ledger", async () => {

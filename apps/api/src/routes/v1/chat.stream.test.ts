@@ -19,7 +19,6 @@ interface Stream {
     onRun?: (r: { runId: string }) => void;
     onPart?: (p: unknown) => void;
     onApprovalRequired?: (e: unknown) => void;
-    onBudgetNotice?: (n: unknown) => void;
     onUsage?: (u: unknown) => void;
     abortSignal?: AbortSignal;
   };

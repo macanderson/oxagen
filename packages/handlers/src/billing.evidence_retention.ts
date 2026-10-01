@@ -115,6 +115,8 @@ export const billingEvidenceRetentionHandler: CapabilityHandler<
   const periodStart = actionPeriodStart(new Date());
   const periodEnd = new Date(Date.UTC(periodStart.getUTCFullYear() + 1, 0, 1));
 
+  // tenancy: every read below is filtered on ctx.orgId, the caller's own
+  // organisation, verified by the kernel scope before this handler runs.
   const [settingsRows, policyRows, ledgerRows] = await withSystemDb(
     async (tx) => {
       const settings = await tx
