@@ -259,11 +259,6 @@ const RAW_FONT = new RegExp(
  */
 const COLOUR_ALLOWED: ReadonlyMap<string, string> = new Map([
   [
-    "src/app/layout.tsx",
-    "`themeColor` metadata takes a value: the kit's ink and paper",
-  ],
-  ["src/app/manifest.ts", "the PWA manifest takes a value: the kit's ink"],
-  [
     "src/features/auth/ui/oauth-buttons.tsx",
     "Google's mark, in Google's colours",
   ],
@@ -343,13 +338,17 @@ const SPACE_GROTESK = /--ox-font-display|--font-wordmark|Space Grotesk/;
 
 describe("design record: one face for every heading and every line", () => {
   it("the heading token is Geist, and Space Grotesk is left to the wordmark", () => {
-    const shared = readFileSync(
-      path.join(APP_DIR, "../../packages/ui/src/styles/globals.css"),
-      "utf8",
+    const styles = path.join(APP_DIR, "../../packages/ui/src/styles");
+    const kit = readFileSync(path.join(styles, "house-tailwind.css"), "utf8");
+    expect(kit).toMatch(/--font-display:\s*var\(--font-geist, "Geist"\)/);
+    expect(kit).toMatch(/--font-sans:\s*var\(--font-geist, "Geist"\)/);
+    expect(kit).toMatch(
+      /--font-wordmark:\s*var\(--font-space-grotesk, "Space Grotesk"\)/,
     );
-    expect(shared).toMatch(/--font-display:\s*var\(--ox-font\);/);
-    expect(shared).toMatch(/--font-sans:\s*var\(--ox-font\);/);
-    expect(shared).toMatch(/--font-wordmark:\s*var\(--ox-font-display\);/);
+    // The kit's tokens are the rule. A local @theme that re-points a face
+    // would be a second copy of it (macanderson/oxagen-brand#27).
+    const shared = readFileSync(path.join(styles, "globals.css"), "utf8");
+    expect(shared).not.toMatch(/^\s*--font-(display|sans|wordmark|mono):/m);
   });
 
   it(

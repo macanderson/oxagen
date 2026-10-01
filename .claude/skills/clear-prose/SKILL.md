@@ -45,8 +45,10 @@ number, stop.
 - Overclaims: guaranteed, always and never about outcomes, 100 percent,
   eliminates, AI-powered.
 
-The full use and avoid lists, with replacements, are in
-`.claude/skills/oxagen-branding/references/words.md`.
+The full use and avoid lists, with replacements, are in the branding skill's
+`references/words.md`, which lives in `macanderson/oxagen-brand` under
+`skills/oxagen-branding/`. The stub at `.claude/skills/oxagen-branding/` says
+how to read it from `main`.
 
 ## Shape of a piece
 
