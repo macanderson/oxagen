@@ -153,13 +153,23 @@ export async function preflight(
 export const FILTERED_INSTALL_PACKAGE = "@oxagen/cli";
 
 /**
+ * The package that owns the root check scripts. They live in tools/scripts
+ * and import workspace packages such as `@oxagen/oxagen` through
+ * `tools/scripts/node_modules`, so a filtered install must include it. The
+ * root `package.json` does not declare those workspace packages. Turbo hashes
+ * the files of each workspace package the root depends on into every task's
+ * hash, so a change to `packages/oxagen` re-ran every task in CI (#4918).
+ */
+export const SCRIPTS_PACKAGE = "@oxagen/scripts";
+
+/**
  * The message a person reads when the check cannot run.
  *
  * It gives two ways out. A full `pnpm install` always works. A filtered
- * install works too once it holds the CLI and the root package's own
- * dependency graph (`--filter @oxagen/cli... --filter <root>...`), which
- * installs every workspace package the root scripts run, such as
- * `@oxagen/oxagen` and its `zod` (scratch run 36665719175, step F5).
+ * install works too once it holds the CLI, the scripts package, and the root
+ * package's own dependency graph (`--filter @oxagen/cli... --filter
+ * @oxagen/scripts... --filter <root>...`), which installs every workspace
+ * package the root scripts run, such as `@oxagen/oxagen` and its `zod`.
  *
  * @param {string} name
  * @param {{ missing: { name: string, neededBy: string }[], unknownScript: boolean }} result
@@ -180,7 +190,7 @@ export function report(name, result, rootPackage = "oxagen-monorepo") {
     ),
     "This checkout is missing packages, which usually means it was installed with `pnpm install --filter`.",
     "Run `pnpm install` at the repository root, then try again.",
-    `To keep a filtered install, install the oxagen CLI and the root with it: \`pnpm install --filter ${FILTERED_INSTALL_PACKAGE}... --filter ${rootPackage}...\`. Add \`--filter <your package>...\` for the package you work on.`,
+    `To keep a filtered install, install the oxagen CLI, the scripts package, and the root with it: \`pnpm install --filter ${FILTERED_INSTALL_PACKAGE}... --filter ${SCRIPTS_PACKAGE}... --filter ${rootPackage}...\`. Add \`--filter <your package>...\` for the package you work on.`,
   ];
   return `${lines.join("\n")}\n`;
 }
