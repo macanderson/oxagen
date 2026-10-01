@@ -4,7 +4,11 @@ import { describe, expect, it, vi } from "vitest";
 import type { AgentPage } from "@/data/contracts/agents";
 import type { DataSource } from "@/data/ports";
 import { type Read, readError, readOk } from "@/data/read";
-import { agentPage as pageOf, enrolledAgent } from "@/test/steering-views";
+import {
+  agentPage as pageOf,
+  enrolledAgent,
+  steeringSource,
+} from "@/test/steering-views";
 
 vi.mock("@/server/session", () => ({ getSession: vi.fn() }));
 vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
@@ -50,8 +54,9 @@ function sourceOf(
       pages[cursor] ?? readError("agent_index_unavailable", 503),
     );
   };
-  // Only the agents port is read; the cast keeps the fake to that one port.
-  const source = { agents: { list } } as unknown as DataSource;
+  // Only the agents port is read. The steering fake answers every other port.
+  const base = steeringSource().source;
+  const source: DataSource = { ...base, agents: { ...base.agents, list } };
   return { source, calls };
 }
 
