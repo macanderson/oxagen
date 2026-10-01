@@ -285,7 +285,7 @@ describe("tenant policy manifest", () => {
     // 2026-09-29).
     // 163 adds mcp.studio_listings (ADR-233, #4756, 2026-09-30).
     // 164 adds billing.gau_signup_grants, one org_only row per organization
-    // (ADR-NEW signup grant, #4886, 2026-10-01).
+    // (ADR-241 signup grant, #4886, 2026-10-01).
     expect(POLICY_MANIFEST.length).toBe(164);
   });
 

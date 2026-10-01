@@ -1,4 +1,4 @@
-# ADR-NEW: One model reply is one step, however many parts it arrives in
+# ADR-242: One model reply is one step, however many parts it arrives in
 
 - **Status:** Accepted
 - **Date:** 2026-10-01

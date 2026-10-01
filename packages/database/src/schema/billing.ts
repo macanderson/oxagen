@@ -71,7 +71,7 @@ export const plans = billingSchema.table(
     // org with no negotiated billing.contract_terms row, so nothing copies
     // them into the org and a plan change shows on the next read.
     ...gauTermsColumns(),
-    // ADR-NEW (signup grant): the one-time grant a new organisation receives,
+    // ADR-241 (signup grant): the one-time grant a new organisation receives,
     // and whether it must subscribe once the grant is spent or expired. Only
     // the Free row's values are read (readGauEntitlement), at signup for the
     // size and the lifetime and on every gate check for the rule. The seed
@@ -976,7 +976,7 @@ export const gauBuckets = billingSchema.table(
 );
 
 // ── gau_signup_grants ────────────────────────────────────────────────────────
-// ADR-NEW (signup grant): the one bucket of governed actions an organisation
+// ADR-241 (signup grant): the one bucket of governed actions an organisation
 // receives when it is created, granted once and never renewed. The size and
 // the lifetime are copied from the Free plan row at the moment of the grant,
 // so a later change to that row reaches the next signup and leaves every

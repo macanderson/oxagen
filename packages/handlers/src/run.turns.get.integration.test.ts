@@ -372,7 +372,7 @@ const INDEXED_ROWS: Row[] = [
  * between an unkeyed tool request and its receipt, with no proxy sighting.
  * The fold gathers the further block into its reply's model step, and it no
  * longer parts the request from its receipt. The query leaves it out of
- * both. ADR-NEW (one model reply is one step, #4351) records the decision.
+ * both. ADR-242 (one model reply is one step, #4351) records the decision.
  */
 const SPLIT_ROWS: Row[] = [
   row(SPLIT, 0, 0, "turn_start", { root: SPLIT }),

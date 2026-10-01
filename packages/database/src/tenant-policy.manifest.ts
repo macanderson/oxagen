@@ -135,7 +135,7 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   // through withSystemDb.
   { table: "billing.contract_terms", policyClass: "org_only" },
   { table: "billing.gau_buckets", policyClass: "org_only" },
-  // ADR-NEW (signup grant): one row per org, org_id NOT NULL, no
+  // ADR-241 (signup grant): one row per org, org_id NOT NULL, no
   // workspace_id. create_org writes it through its system transaction; the
   // gate and the recorder read it through withTenantDb.
   { table: "billing.gau_signup_grants", policyClass: "org_only" },

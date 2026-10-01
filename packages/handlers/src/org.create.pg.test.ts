@@ -340,7 +340,7 @@ describe.skipIf(!enabled)("create_org against Postgres", () => {
     // billing.* table keyed by org_id has no row for the new org. Enumerated
     // from the catalog (inside the snapshot transaction) so a table added
     // later (contract_terms, gau_buckets, gau_settlements) is covered
-    // without an edit here. The one-time governed-action grant (ADR-NEW,
+    // without an edit here. The one-time governed-action grant (ADR-241,
     // #4886) is the fourth: one gau_signup_grants row.
     const GRANT_TABLES = new Set([
       "credit_balances",

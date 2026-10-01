@@ -79,7 +79,7 @@ priced from `ACTION_RATE_BANDS` and debited from a cents credit balance by
 | `packages/billing/src/billing-settings.ts` | `readOrgBillingSettings(orgId)`: the org's billing mode (`approved_for_invoice_billing`, `invoice_gau_max`) and auto top-up preferences (`auto_topup_enabled`, `auto_topup_blocks`); column defaults for an org with no row, never an insert. |
 | `packages/billing/src/action-metering.ts` | `recordGovernedAction` debits the bucket, runs the auto top-up (prepaid) or the interim-invoice threshold (invoice billing), and never throws. |
 | `packages/billing/src/gau-settlements.ts` | `billing.gau_settlements`: every block purchase, auto top-up, interim and period-close charge as a Stripe Invoice, with `paid` the only terminal state. |
-| `packages/oxagen/src/kernel.ts` | The admission gate is `assertGauAvailable`: refuses an org with no subscription once its signup grant is spent or expired (`gau_exhausted`, 402, with `reason` `signup_grant_used`, `signup_grant_expired` or `no_signup_grant`; 2026-10-01, ADR-NEW signup grant) and a suspended org in any mode; never a subscriber or an invoice-billed org for lack of GAUs; never charges. Skipped when the contract sets `noBillingGate: true`. |
+| `packages/oxagen/src/kernel.ts` | The admission gate is `assertGauAvailable`: refuses an org with no subscription once its signup grant is spent or expired (`gau_exhausted`, 402, with `reason` `signup_grant_used`, `signup_grant_expired` or `no_signup_grant`; 2026-10-01, ADR-241 signup grant) and a suspended org in any mode; never a subscriber or an invoice-billed org for lack of GAUs; never charges. Skipped when the contract sets `noBillingGate: true`. |
 | `packages/inngest-functions/src/functions/billing.gau-close.ts` | Hourly, per org: closes ended months (period-close invoice in invoice mode) and resumes settlements Stripe never answered. |
 
 ---
@@ -213,7 +213,7 @@ IAM and the SOC 2 controls included, is on for every tier (ADR-055 §2,
 WL-55).
 
 **Amended 2026-10-01: a one-time signup grant, then a subscription
-(maintainer, #4886, ADR-NEW signup grant).** A new organization gets one
+(maintainer, #4886, ADR-241 signup grant).** A new organization gets one
 grant of governed actions, sized and timed by the Free plan row
 (`signup_grant_gau`, 33,000, and `signup_grant_days`, 30). It is granted once
 at signup, expires 30 days after it, and never renews. Signing up asks for no

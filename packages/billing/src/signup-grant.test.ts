@@ -1,5 +1,5 @@
 /**
- * signup-grant.test.ts: the one-time signup grant (ADR-NEW, #4886).
+ * signup-grant.test.ts: the one-time signup grant (ADR-241, #4886).
  *
  * The fake executor below answers the Free row's grant figures and keeps the
  * grant rows by org id, the way the unique index on

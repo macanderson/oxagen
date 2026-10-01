@@ -322,7 +322,7 @@ describe("get_gau_bucket counts", () => {
   });
 });
 
-// ── the signup grant (ADR-NEW, #4886) ─────────────────────────────────────────
+// ── the signup grant (ADR-241, #4886) ─────────────────────────────────────────
 
 describe("get_gau_bucket signup grant", () => {
   const GRANT = {

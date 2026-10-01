@@ -88,7 +88,7 @@ const gauAutoTopupSchema = z
   .strict();
 
 /**
- * What the current bucket is measured against (ADR-NEW, signup grant):
+ * What the current bucket is measured against (ADR-241, signup grant):
  * a subscription's month, the signup grant's window, or the calendar month
  * after the grant, whose allowance is zero while a subscription is required.
  */

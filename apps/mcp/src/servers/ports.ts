@@ -190,7 +190,7 @@ export async function admitServed(run: ServedRun): Promise<Admission> {
     if (error instanceof GauExhaustedError) {
       // A spent, expired or missing signup grant asks for a plan; the Free
       // row's monthly allowance, when an operator has turned the plan rule
-      // off, renews (ADR-NEW, signup grant).
+      // off, renews (ADR-241, signup grant).
       return { admitted: false, reason: error.reason === "monthly_allowance_used" ? "units_exhausted" : "subscription_required" };
     }
     if (error instanceof BillingSuspendedError) return { admitted: false, reason: "suspended" };

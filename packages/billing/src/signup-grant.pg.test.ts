@@ -1,4 +1,4 @@
-// The signup grant against a real Postgres (ADR-NEW, #4886): the unique
+// The signup grant against a real Postgres (ADR-241, #4886): the unique
 // index on gau_signup_grants.org_id refuses a second grant to one
 // organisation, and the size a signup receives is the one on the Free plan
 // row at that moment. Runs wherever DATABASE_URL points at a migrated

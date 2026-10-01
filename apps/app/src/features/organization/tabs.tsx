@@ -7,7 +7,7 @@
 // reload and a shared link. A count follows a tab only where the frame read its
 // rows, and it is the length of the table that tab draws.
 //
-// The row is a `RouteTabs` row (ADR-NEW-route-tabs-are-tabs): a tablist of
+// The row is a `RouteTabs` row (ADR-243): a tablist of
 // links with one tab stop and the arrow keys. The selected tab names the panel
 // the page draws under the row (`ORGANIZATION_PANEL`).
 //

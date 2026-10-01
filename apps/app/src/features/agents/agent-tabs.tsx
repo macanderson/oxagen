@@ -1,6 +1,6 @@
 // The eight tabs of the agent page (spec pages/agent.md, Tabs). Each is a
 // route segment, so a tab is linkable and the back button moves between tabs.
-// The strip is a `RouteTabs` row (ADR-NEW-route-tabs-are-tabs): a tablist of
+// The strip is a `RouteTabs` row (ADR-243): a tablist of
 // links with one tab stop and the arrow keys, scrolling in its own row on a
 // phone. The selected tab names the panel the page draws (`AGENT_PANEL`).
 //

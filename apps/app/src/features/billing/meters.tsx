@@ -31,7 +31,7 @@ export function Meters({
   const governedValue = count(bucket.usedGau);
   // An organization on its signup grant reads the grant: its size, what is
   // left, and the day it ends. Past the grant, the note says when it ended
-  // (ADR-NEW, signup grant; #3844).
+  // (ADR-241, signup grant; #3844).
   const grant = bucket.signupGrant;
   const governedNote =
     grant !== null && grant.active

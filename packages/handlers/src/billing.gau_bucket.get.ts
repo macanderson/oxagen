@@ -189,7 +189,7 @@ export function createBillingGauBucketGetHandler(
     const { period, terms } = basis;
     const bucket = await queries.bucket(orgId, { period, terms });
 
-    // The signup grant as the page prints it (ADR-NEW, signup grant). While
+    // The signup grant as the page prints it (ADR-241, signup grant). While
     // it is active the current bucket is the grant's, so what is left of the
     // grant is that bucket's remaining figure. An expired grant has none.
     const grant = entitlement.grant ?? null;

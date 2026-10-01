@@ -304,7 +304,7 @@ function AuditBody({
   return (
     <div className="flex flex-col gap-3.5">
       {/* A tablist of tabs, each still a link to its own segment
-          (ADR-NEW-route-tabs-are-tabs, #3995). */}
+          (ADR-243, #3995). */}
       <RouteTabs
         label={t("label")}
         panel={AUDIT_PANEL}

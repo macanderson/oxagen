@@ -197,7 +197,7 @@ export async function grantFreeCredits(orgId: string): Promise<void> {
     // The governed-action signup grant rides the same transaction as the
     // credits: this path creates organisations for the deprecated app until
     // cutover, and an organisation without its grant is refused at its first
-    // governed action (ADR-NEW, signup grant).
+    // governed action (ADR-241, signup grant).
     await issueSignupGrant(tx, orgId);
     return grantSignupCredits(tx, orgId);
   });

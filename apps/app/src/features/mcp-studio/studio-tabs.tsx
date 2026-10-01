@@ -1,7 +1,7 @@
 "use client";
 // A Studio server's four tabs (#4678): Tools, Connection, Test and Changes,
 // each a path segment under the server. The strip is a `RouteTabs` row
-// (ADR-NEW-route-tabs-are-tabs): a tablist of links with one tab stop and the
+// (ADR-243): a tablist of links with one tab stop and the
 // arrow keys, scrolling in its own row on a phone. The selected tab names the
 // panel the server page draws (`STUDIO_PANEL`, ./route.ts).
 //

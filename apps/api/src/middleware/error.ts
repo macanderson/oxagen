@@ -16,7 +16,7 @@ import type { AppEnv } from "../app";
 //   - budget_exceeded      — a spend ceiling was reached (spend-budget.ts)
 //   - gau_exhausted        — an org with no subscription has spent or
 //                            outlived its signup grant (gau-bucket.ts,
-//                            ADR-NEW signup grant); carries a `reason`
+//                            ADR-241 signup grant); carries a `reason`
 //                            ("signup_grant_used", "signup_grant_expired",
 //                            "no_signup_grant", "monthly_allowance_used")
 //                            the client prints as "add a card and choose a

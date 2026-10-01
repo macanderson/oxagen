@@ -35,7 +35,7 @@ export type PlanCard = z.infer<typeof PlanCard>;
  */
 export const GauBucket = z.object({
   mode: z.enum(["prepaid", "invoice"]),
-  /** What the bucket is measured against (ADR-NEW, signup grant). */
+  /** What the bucket is measured against (ADR-241, signup grant). */
   basis: z.enum(["subscription", "signup_grant", "after_signup_grant"]),
   /** The organization's one-time signup grant, or null when it has none. */
   signupGrant: z

@@ -77,7 +77,7 @@ export function freeNoCardBucket(
 }
 
 /**
- * An organization on its signup grant (ADR-NEW, #3844): 33,000 governed
+ * An organization on its signup grant (ADR-241, #3844): 33,000 governed
  * actions granted on 2026-09-10 for 30 days, 1,500 used.
  */
 export function grantBucket(

@@ -43,7 +43,7 @@
  * A model step also takes its reply's further parts: a transcript writes one
  * record per content block, and the host marks each block after the first as
  * a later sighting of its own source. One reply is one model step, however
- * many parts it arrives in (ADR-199 §1, ADR-NEW, one model reply is one step).
+ * many parts it arrives in (ADR-199 §1, ADR-242, one model reply is one step).
  *
  * A tool step also takes the effect frames (`command`, `file_io`, `network`)
  * right after it that name its call, or that name no call when the step

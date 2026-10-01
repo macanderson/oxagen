@@ -202,7 +202,7 @@ export const organizationCreateHandler: CapabilityHandler<
       // back rather than leaving an org whose first assistant turn the credit
       // gate refuses.
       await grantSignupCredits(tx, org.id);
-      // The one-time governed-action grant (ADR-NEW, signup grant): sized and
+      // The one-time governed-action grant (ADR-241, signup grant): sized and
       // timed by the Free plan row as it stands now, and committed with the
       // org so no organisation exists without it.
       await issueSignupGrant(tx, org.id, org.createdAt);

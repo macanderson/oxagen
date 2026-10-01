@@ -16,7 +16,7 @@
  * (signup-grant.ts). Past the allowance a subscriber or an invoice-billed
  * organisation is never capped and is invoiced for its overage; an
  * organisation with no subscription is refused by the gate once its grant is
- * spent or expired (ADR-NEW, signup grant). Nothing about the charge
+ * spent or expired (ADR-241, signup grant). Nothing about the charge
  * depends on how long a run took or how many tokens it spent, because under
  * ADR-043 nothing in this repo costs more for either.
  *
@@ -325,7 +325,7 @@ export interface RecordActionsArgs {
  *      settlement sequence for the customer `ensureStripeCustomer` resolves,
  *      collected from the org's default card or emailed when it has none.
  *      Auto top-up no longer runs here: the 2026-10-01 decision took prepaid
- *      blocks off the governed-action path (ADR-NEW, signup grant).
+ *      blocks off the governed-action path (ADR-241, signup grant).
  *
  * Step c runs only when this call billed something: when every entry was a
  * duplicate, the call that first recorded them already ran it.
@@ -351,7 +351,7 @@ export async function recordGovernedActions(
     ? "invoice"
     : "prepaid";
   const { kind: basis, period, terms } = bucketBasis(entitlement, now);
-  // Who is billed for actions past the allowance (ADR-NEW, signup grant): an
+  // Who is billed for actions past the allowance (ADR-241, signup grant): an
   // organisation approved for invoice billing, and every subscriber. An
   // organisation on its signup grant has no overage to bill, because the
   // gate refuses it at zero.
@@ -385,7 +385,7 @@ export async function recordGovernedActions(
     }
     // c. Overage: one interim settlement per threshold crossing, for every
     //    organisation that is billed for overage (ADR-055 §7, applied to
-    //    every subscriber by ADR-NEW, signup grant).
+    //    every subscriber by ADR-241, signup grant).
     if (billsOverage && uninvoicedGau(bucket) >= settings.invoiceGauMax) {
       interimInvoice = await withTenantDb((tx) =>
         claimInterimInvoice(tx, bucket, terms, settings.invoiceGauMax),

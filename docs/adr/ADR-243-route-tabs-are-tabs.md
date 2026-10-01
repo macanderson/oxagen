@@ -1,4 +1,4 @@
-# ADR-NEW: A row of route tabs is a tab widget
+# ADR-243: A row of route tabs is a tab widget
 
 - **Status:** Accepted
 - **Date:** 2026-10-01

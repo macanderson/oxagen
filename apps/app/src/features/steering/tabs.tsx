@@ -2,7 +2,7 @@
 // The Steering hub's five tabs (roadmap pages/steering.md): Library,
 // Assignments, Gates, Proposals, Compiler, in that order, each a link to its
 // own path so a tab survives a reload and a shared link. The row is a
-// `RouteTabs` row (ADR-NEW-route-tabs-are-tabs), which carries the tabs
+// `RouteTabs` row (ADR-243), which carries the tabs
 // pattern: one tab stop, the arrow keys, Home and End, and Enter or Space to
 // follow a tab. The selected tab names the panel (./steering.tsx), and the
 // panel takes that tab as its label.

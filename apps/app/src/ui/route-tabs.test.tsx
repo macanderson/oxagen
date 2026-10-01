@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// A row of route tabs is a tab widget (ADR-NEW-route-tabs-are-tabs, #3995): a
+// A row of route tabs is a tab widget (ADR-243, #3995): a
 // labelled tablist of tabs, each still a link to its own URL. The selected tab
 // is the row's one stop in the tab order and names the panel the page draws,
 // and the panel takes that tab as its label. The arrow keys, Home, and End move

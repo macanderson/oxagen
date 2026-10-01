@@ -475,7 +475,7 @@ describe("organizationCreateHandler (@oxagen/handlers)", () => {
     );
   });
 
-  // ADR-NEW (signup grant, #4886): the governed-action grant commits with
+  // ADR-241 (signup grant, #4886): the governed-action grant commits with
   // the org, dated from the org's creation.
   it("issues the one-time governed-action grant on the org transaction", async () => {
     mocks.issueSignupGrant.mockClear();

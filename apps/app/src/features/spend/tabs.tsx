@@ -2,7 +2,7 @@
 // current one selected, each with the live count the design shows beside it
 // (findings open, runs with waste, ceilings set). A count whose read did not
 // answer is left off rather than printed as a zero. The row is a `RouteTabs`
-// row (ADR-NEW-route-tabs-are-tabs), and the selected tab names the panel the
+// row (ADR-243), and the selected tab names the panel the
 // page draws under it (`SPEND_PANEL`).
 import { useLocale, useTranslations } from "next-intl";
 import { routes } from "@/shared/safe-path";

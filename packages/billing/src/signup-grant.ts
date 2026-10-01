@@ -1,5 +1,5 @@
 /**
- * signup-grant.ts: the one-time signup grant of governed actions (ADR-NEW,
+ * signup-grant.ts: the one-time signup grant of governed actions (ADR-241,
  * amending ADR-055; Mac's decision of 2026-10-01, #4886).
  *
  * A new organisation receives one grant, sized and timed by the Free plan

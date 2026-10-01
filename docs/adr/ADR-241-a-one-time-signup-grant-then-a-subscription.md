@@ -1,4 +1,4 @@
-# ADR-NEW: A new organization gets one grant of governed actions, then subscribes
+# ADR-241: A new organization gets one grant of governed actions, then subscribes
 
 - **Status:** Accepted
 - **Date:** 2026-10-01

@@ -1,7 +1,7 @@
 // Tabs that are URL segments (ARCHITECTURE.md §1.2): each tab links to its own
 // route, so the tab survives a reload and a shared link.
 //
-// Every row is a tab widget (ADR-NEW-route-tabs-are-tabs, #3995). The row is a
+// Every row is a tab widget (ADR-243, #3995). The row is a
 // tablist with the row's label, each link is a tab, and the selected tab
 // carries `aria-selected`. The selected tab is the row's one stop in the tab
 // order, and the arrow keys, Home, and End move along the row (./tab-row.tsx).

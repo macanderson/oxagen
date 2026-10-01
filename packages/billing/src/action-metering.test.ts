@@ -557,7 +557,7 @@ describe("recordGovernedAction", () => {
     expect(result.bucket.usedGau).toBe(1);
   });
 
-  // ── ADR-NEW (signup grant): no auto top-up on the governed-action path ────
+  // ── ADR-241 (signup grant): no auto top-up on the governed-action path ────
 
   const MONTH_SUB = {
     billingInterval: "month" as const,

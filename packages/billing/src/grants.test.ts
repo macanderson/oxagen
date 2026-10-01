@@ -263,7 +263,7 @@ describe("grantFreeCredits", () => {
     expect(txMock.insert).toHaveBeenCalledTimes(3);
     expect(txMock._lotInsertCalled).toBe(true);
     expect(txMock._balanceUpsertCalled).toBe(true);
-    // ADR-NEW (signup grant): the deprecated app's signups get the
+    // ADR-241 (signup grant): the deprecated app's signups get the
     // governed-action grant on the same transaction.
     expect(issueSignupGrantMock).toHaveBeenCalledWith(
       expect.anything(),

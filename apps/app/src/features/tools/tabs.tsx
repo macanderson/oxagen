@@ -4,7 +4,7 @@
 // own: they are views of Tool servers, beside the servers list, so the chain
 // the Tools page made readable (Provider → Tool → Toolbelt → Agent) stays one
 // click apart. The row is a `RouteTabs` row in the `pill` look
-// (ADR-NEW-route-tabs-are-tabs): a tablist with one tab stop and the arrow
+// (ADR-243): a tablist with one tab stop and the arrow
 // keys, drawn smaller than the tab strip so it reads as part of the tab. The
 // selected view names the panel the Tool servers tab draws under the row
 // (`SERVER_VIEW_PANEL`).

@@ -917,7 +917,7 @@ describe("tabs", () => {
     answer({ window: recordOf([event()]) });
     await renderAudit({}, { tab: "keys" });
 
-    // A tab row is a tab widget (ADR-NEW-route-tabs-are-tabs): a tablist of
+    // A tab row is a tab widget (ADR-243): a tablist of
     // tabs with aria-selected, each still a link to its own segment.
     const list = screen.getByRole("tablist", { name: "Audit sections" });
     expect(

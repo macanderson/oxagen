@@ -513,7 +513,7 @@ async function closeGauPeriod(bucket: GauBucketRow, now: Date): Promise<void> {
     isNull(schema.gauBuckets.closedAt),
   );
   // Overage is billed for an organisation approved for invoice billing and,
-  // since the 2026-10-01 decision, for every subscriber (ADR-NEW, signup
+  // since the 2026-10-01 decision, for every subscriber (ADR-241, signup
   // grant). An organisation with no subscription is refused at its
   // allowance, so it has no overage to bill.
   const billsOverage =

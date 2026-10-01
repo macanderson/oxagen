@@ -3,7 +3,7 @@
 // come from PUBLISHED_TERMS in the start_subscription_upgrade contract, which
 // pricing.test.ts in @oxagen/billing holds equal to the schedule Stripe is
 // synced from; the retention window and its price come from
-// get_evidence_retention. The Free row prints the signup grant (ADR-NEW,
+// get_evidence_retention. The Free row prints the signup grant (ADR-241,
 // #3844): its size, its lifetime in days, and the evidence an account on it
 // keeps, all from get_gau_bucket's read of the organization's own grant. An
 // organization with no grant row prints "not recorded" for each. Enterprise

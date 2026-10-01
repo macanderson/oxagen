@@ -1,5 +1,5 @@
 "use client";
-// The keyboard of a tab row (ADR-NEW-route-tabs-are-tabs, #3995). RouteTabs
+// The keyboard of a tab row (ADR-243, #3995). RouteTabs
 // draws the tabs; this module holds the one part that needs the browser. The
 // selected tab is the row's one stop in the tab order. The arrow keys, Home,
 // and End move focus along the row, and Enter or Space follows the focused

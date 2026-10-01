@@ -1470,7 +1470,7 @@ describe("closeEndedGauPeriods", () => {
     expect(providerCalls()).toEqual([]);
   });
 
-  // ADR-NEW (signup grant): every subscriber is billed for its overage.
+  // ADR-241 (signup grant): every subscriber is billed for its overage.
   it("invoices an ended subscriber's month as one period_close settlement without invoice-billing approval", async () => {
     mocks.readGauEntitlement.mockResolvedValue({
       ...FREE_ENTITLEMENT,

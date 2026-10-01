@@ -3,7 +3,7 @@
 // cost in the muted face, and a dot where a call is parked on the run.
 //
 // A tab is a query value on the run's one route, so it survives a reload and
-// a shared link. The strip is a `RouteTabs` row (ADR-NEW-route-tabs-are-tabs):
+// a shared link. The strip is a `RouteTabs` row (ADR-243):
 // a tablist of links, one tab stop, and the arrow keys. Only the open tab's
 // panel is on the page, so only the open tab names it, and the panel the page
 // draws under the strip (`RUN_TAB_PANEL`) takes that tab as its label.

@@ -80,7 +80,7 @@ export interface GauEntitlement {
    * The Free row's `subscription_required_after_grant`: whether an
    * organisation with no subscription is refused once its grant is spent or
    * expired. When an operator clears it, such an organisation falls back to
-   * the Free row's monthly allowance instead (ADR-NEW, signup grant).
+   * the Free row's monthly allowance instead (ADR-241, signup grant).
    */
   subscriptionRequiredAfterGrant: boolean;
 }
