@@ -332,7 +332,7 @@ async function generateNotes(h: NotesInput): Promise<ReleaseNotes> {
   const fallback = () => fallbackNotes(h);
   let system: string;
   try {
-    system = systemPrompt(loadSkills(ROOT));
+    system = systemPrompt(await loadSkills(ROOT));
   } catch (err) {
     console.log(
       kleur.yellow(`[release] ${formatError(err)}; using commit-log notes.`),

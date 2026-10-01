@@ -259,11 +259,6 @@ const RAW_FONT = new RegExp(
  */
 const COLOUR_ALLOWED: ReadonlyMap<string, string> = new Map([
   [
-    "src/app/layout.tsx",
-    "`themeColor` metadata takes a value: the kit's ink and paper",
-  ],
-  ["src/app/manifest.ts", "the PWA manifest takes a value: the kit's ink"],
-  [
     "src/features/auth/ui/oauth-buttons.tsx",
     "Google's mark, in Google's colours",
   ],

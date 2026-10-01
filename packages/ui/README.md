@@ -23,7 +23,7 @@ Import Convention).
   stylesheet (`apps/web/assets/oxagen.css`, see
   [`apps/web/README.md`](../../apps/web/README.md)), which mirrors these
   tokens without importing the package; the house brand kit itself
-  (`oxagenai/oxagen-brand`, checked by `pnpm check:brand`), from which
+  (`macanderson/oxagen-brand`, checked by `brand-drift.yml` and `pnpm check:brand`), from which
   `src/styles/house-tokens.css` is vendored.
 - **Depends on:** No `@oxagen/*` runtime dependencies. `react`, `react-dom`,
   and `tailwindcss` are peer dependencies.

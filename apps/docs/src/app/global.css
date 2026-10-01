@@ -21,6 +21,40 @@
   --color-fd-ring: var(--ring);
 }
 
+/*
+ * Fumadocs' callout and diff colours, mapped to the house state tokens
+ * (#4804). Its defaults are off-palette (warning is #F99C00, an amber the
+ * house keeps for nothing), and gold never encodes a state. Each state takes
+ * its paper value on light and its ink value under .dark:
+ *   info     approval (a request routed to a person)
+ *   warning  denied
+ *   error    failed, and the removed side of a diff
+ *   success  allowed, and the added side of a diff
+ *   idea     proven
+ */
+:root {
+  --color-fd-info: var(--ox-st-approval-ink);
+  --color-fd-warning: var(--ox-st-denied-ink);
+  --color-fd-error: var(--ox-st-failed-ink);
+  --color-fd-success: var(--ox-st-allowed-ink);
+  --color-fd-idea: var(--ox-st-proven-ink);
+  --color-fd-diff-remove: color-mix(in oklab, var(--ox-st-failed-ink) 12%, transparent);
+  --color-fd-diff-remove-symbol: var(--ox-st-failed-ink);
+  --color-fd-diff-add: color-mix(in oklab, var(--ox-st-allowed-ink) 12%, transparent);
+  --color-fd-diff-add-symbol: var(--ox-st-allowed-ink);
+}
+.dark {
+  --color-fd-info: var(--ox-st-approval);
+  --color-fd-warning: var(--ox-st-denied);
+  --color-fd-error: var(--ox-st-failed);
+  --color-fd-success: var(--ox-st-allowed);
+  --color-fd-idea: var(--ox-st-proven);
+  --color-fd-diff-remove: color-mix(in oklab, var(--ox-st-failed) 16%, transparent);
+  --color-fd-diff-remove-symbol: var(--ox-st-failed);
+  --color-fd-diff-add: color-mix(in oklab, var(--ox-st-allowed) 16%, transparent);
+  --color-fd-diff-add-symbol: var(--ox-st-allowed);
+}
+
 /* ───────────────────────────────────────────────────────────────────────────
  * Docs diagrams (<Mermaid>, src/components/mdx/mermaid.tsx).
  *

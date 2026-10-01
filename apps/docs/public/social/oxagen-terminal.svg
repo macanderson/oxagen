@@ -22,9 +22,9 @@
       --redorange: #d94f2a;   /* logo bottom                    */
       --pink:      #d47ba8;   /* REPO header                    */
       --warn:      #e6b34a;   /* scroll marker                  */
-      --dot-r:     #ff5f57;
-      --dot-y:     #febc2e;
-      --dot-g:     #28c840;
+      --dot-r:     #3F3F46;   /* window lights: the kit's zinc rule */
+      --dot-y:     #3F3F46;
+      --dot-g:     #3F3F46;
     }
     @media (prefers-color-scheme: light) {
       :root {
