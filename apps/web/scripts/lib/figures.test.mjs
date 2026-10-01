@@ -353,7 +353,24 @@ describe("Flow", () => {
       '<tr><th scope="row">Issue</th><td>filed</td></tr><tr><th scope="row">Build</th><td></td></tr>',
     );
   });
-});
+
+  it("runs a unit through a wrapped flow, as the post draws it", () => {
+    const steps = Array.from({ length: 10 }, (_, i) => ({
+      label: `S${i + 1}`,
+      mark: `m${i + 1}`,
+    }));
+    const html = render(Flow, { unit: "#17", loop: "again", steps });
+    expect(html).toContain(
+      '<figure class="fig fig-flow is-run is-dense" style="--n:10;--cols:5;--last:4">',
+    );
+    // the step that ends the first row carries its token and bar like any other
+    expect(html).toContain(
+      '<li class="fig-step is-row-end" style="--i:4"><span class="fig-step-head" aria-hidden="true"><span class="fig-step-n">05</span><span class="fig-token"><span class="fig-token-id">#17</span><span class="fig-token-mark">m5</span></span></span><span class="fig-step-label">S5</span><span class="fig-step-bar"></span></li>',
+    );
+    expect(html.match(/class="fig-token"/g)).toHaveLength(10);
+    expect(html.match(/fig-step-bar/g)).toHaveLength(10);
+    expect(html).toContain('<p class="fig-loop"><span>again</span></p>');
+  });
 });
 
 describe("Ladder", () => {
@@ -595,6 +612,8 @@ describe("in a post", () => {
     );
     expect(html).toContain('<figure class="fig fig-bars">');
     expect(html).toContain('<span class="fig-value">40.9%</span>');
-    expect(html).toContain('<ol class="fig-flow" style="--n:2">');
+    expect(html).toContain(
+      '<figure class="fig fig-flow" style="--n:2;--cols:2;--last:1"><ol class="fig-steps">',
+    );
   });
 });
