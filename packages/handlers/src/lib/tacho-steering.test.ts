@@ -10,7 +10,7 @@ import { resetColumnProbesForTests, runOnPlane } from "@oxagen/database";
 import { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 import { policyBundleSchema } from "@oxagen/oxagen/tacho/schemas";
-import { steeringManifestSchema } from "@oxagen/tacho";
+import { steeringManifestSchema } from "@oxagen/recorder";
 import {
   SMALLEST_HARNESS_CONTEXT_MAX_CHARS,
   STEERING_HEADER,

@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from "vitest";
-import type { CedarToolEntry } from "@oxagen/tacho";
+import type { CedarToolEntry } from "@oxagen/recorder";
 import {
   CALL_RESOURCE,
   callContext,
@@ -8,7 +8,7 @@ import {
   requireCedarRuntime,
   typedArgs,
   type CedarRuntime,
-} from "@oxagen/tacho/policy";
+} from "@oxagen/recorder/policy";
 import {
   convertDecisionRules,
   type ConditionLike,

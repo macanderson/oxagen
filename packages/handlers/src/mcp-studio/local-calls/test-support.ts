@@ -1,7 +1,7 @@
 // test-support.ts: shared builders for the local-calls tests. Nothing in
 // production imports this file.
 import { generateKeyPairSync } from "node:crypto";
-import { deliverySchema, type Delivery, type LaunchSpec } from "@oxagen/tacho/local-servers";
+import { deliverySchema, type Delivery, type LaunchSpec } from "@oxagen/recorder/local-servers";
 import type { MachineGroupReader, MachineScope } from "./machines";
 import { localCallSignerFromPem, type LocalCallSigner } from "./signer";
 

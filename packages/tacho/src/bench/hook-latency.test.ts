@@ -237,7 +237,7 @@ describe("hook latency", () => {
   it("measures tacho-hook start-to-decision against the bundled executable", async () => {
     if (!existsSync(HOOK_BIN)) {
       process.stdout.write(
-        "\n[bench] dist-standalone/tacho-hook.mjs missing; run `pnpm --filter @oxagen/tacho bundle` to measure\n",
+        "\n[bench] dist-standalone/tacho-hook.mjs missing; run `pnpm --filter @oxagen/recorder bundle` to measure\n",
       );
       return;
     }

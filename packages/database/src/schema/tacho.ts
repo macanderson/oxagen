@@ -261,7 +261,7 @@ export const tachoHosts = tachoSchema.table(
     daemonUptimeS: integer("daemon_uptime_s"),
     /**
      * The bundle fields this host told us it can parse
-     * (`TACHO_BUNDLE_FEATURES` in `@oxagen/tacho`). Written at enrollment and
+     * (`TACHO_BUNDLE_FEATURES` in `@oxagen/recorder`). Written at enrollment and
      * refreshed from the daemon's health report on every control poll, so it
      * tracks the code the host is *running* rather than the code it enrolled
      * with — `wrapper_version` and `daemon_version` both come from

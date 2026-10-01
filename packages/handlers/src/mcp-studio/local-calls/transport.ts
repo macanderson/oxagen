@@ -21,7 +21,7 @@ import {
   refusalText,
   type LaunchSpec,
   type LocalServerRefusal,
-} from "@oxagen/tacho/local-servers";
+} from "@oxagen/recorder/local-servers";
 import type { LocalGatewayBroker } from "./broker";
 import { signLocalCall } from "./envelope";
 import { checkMachine, type MachineGroupReader, type MachineScope } from "./machines";

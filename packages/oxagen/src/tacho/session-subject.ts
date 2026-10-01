@@ -9,4 +9,4 @@ export {
   capSubject,
   clipSummary,
   sessionSubject,
-} from "@oxagen/tacho/session-subject";
+} from "@oxagen/recorder/session-subject";

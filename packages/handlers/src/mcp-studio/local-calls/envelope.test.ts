@@ -8,12 +8,12 @@ import {
   envelopeSigningBytes as m0SigningBytes,
   localCallEnvelopeSchema as m0EnvelopeSchema,
 } from "@oxagen/mcp-studio";
-import { keyIdForPublicKey } from "@oxagen/tacho/host";
+import { keyIdForPublicKey } from "@oxagen/recorder/host";
 import {
   argumentsHashOf,
   envelopeSigningBytes as tachoSigningBytes,
   localCallEnvelopeSchema as tachoEnvelopeSchema,
-} from "@oxagen/tacho/local-servers";
+} from "@oxagen/recorder/local-servers";
 import { LOCAL_CALL_TTL_MS, newNonce, signLocalCall } from "./envelope";
 import { DEFINITION_HASH, FILES_DIGEST, MACHINE, testSigner } from "./test-support";
 

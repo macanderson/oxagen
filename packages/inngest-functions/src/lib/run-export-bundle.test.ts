@@ -29,7 +29,7 @@ import {
   verifyAttestation,
   verifyRunExport,
   wrappedFrameOf,
-} from "@oxagen/tacho";
+} from "@oxagen/recorder";
 import { afterAll, describe, expect, it } from "vitest";
 import { buildRunExportBundle, BUNDLE_FORMAT } from "./run-export-bundle";
 import type { SealedSegment } from "./run-record";

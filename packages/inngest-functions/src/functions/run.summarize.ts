@@ -18,7 +18,7 @@ import { schema, withTenantDb } from "@oxagen/database";
 import { NonRetriableError } from "@oxagen/functions";
 import { foldTranscript, type RunFrame } from "@oxagen/run-ledger";
 import { evidenceStore } from "@oxagen/run-ledger/evidence-store";
-import { digestBytes } from "@oxagen/tacho";
+import { digestBytes } from "@oxagen/recorder";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";

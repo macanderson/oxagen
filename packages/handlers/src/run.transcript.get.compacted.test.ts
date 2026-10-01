@@ -30,7 +30,7 @@ import {
   createPostgresRunStore,
   mapAttemptEventReadRow,
 } from "@oxagen/run-ledger";
-import { buildArchiveSegment } from "@oxagen/tacho";
+import { buildArchiveSegment } from "@oxagen/recorder";
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 import {

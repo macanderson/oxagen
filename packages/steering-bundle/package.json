@@ -19,7 +19,7 @@
     "@oxagen/glob": "workspace:*",
     "@oxagen/mcp-studio": "workspace:*",
     "@oxagen/oxagen": "workspace:*",
-    "@oxagen/tacho": "workspace:*",
+    "@oxagen/recorder": "workspace:*",
     "zod": "3.25.76"
   },
   "devDependencies": {

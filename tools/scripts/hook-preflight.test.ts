@@ -11,6 +11,7 @@ import ts from "typescript";
 import { describe, expect, it } from "vitest";
 import {
   CANNOT_RUN,
+  FILTERED_INSTALL_PACKAGE,
   commandFor,
   preflight,
   report,
@@ -169,7 +170,7 @@ describe("preflight", () => {
 });
 
 describe("preflight through a workspace package", () => {
-  // A filtered install such as `pnpm install --filter @oxagen/tacho...` links
+  // A filtered install such as `pnpm install --filter @oxagen/recorder...` links
   // @oxagen/oxagen at the root and installs none of its own dependencies.
   // The preflight passed there, and `pnpm check:contracts` then died on
   // "Cannot find package 'zod'" (scratch run 36664757916).
@@ -330,15 +331,20 @@ describe("report", () => {
     expect(text).toContain("Run `pnpm install` at the repository root");
   });
 
-  it("names a filtered install that works, by adding the root's dependency graph", () => {
+  it("names the filtered install that works: the CLI and the root's dependency graph", () => {
     // A filtered install that adds `--filter oxagen-monorepo...` ran
-    // `pnpm check:contracts` to exit 0 (scratch run 36665719175, step F5).
+    // `pnpm check:contracts` to exit 0 (scratch run 36665719175, step F5),
+    // and #3403's last item names the CLI's install as the real case.
     const result = {
       unknownScript: false,
       missing: [{ name: "zod", neededBy: "@oxagen/oxagen" }],
     };
+    expect(FILTERED_INSTALL_PACKAGE).toBe("@oxagen/cli");
     expect(report("check:contracts", result)).toContain(
-      "`pnpm install --filter <your package>... --filter oxagen-monorepo...`",
+      "`pnpm install --filter @oxagen/cli... --filter oxagen-monorepo...`",
+    );
+    expect(report("check:contracts", result)).toContain(
+      "Add `--filter <your package>...` for the package you work on.",
     );
     expect(report("check:contracts", result, "renamed-root")).toContain(
       "--filter renamed-root...",

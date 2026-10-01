@@ -455,7 +455,7 @@ export interface HookPresence {
    * writes: the http `SessionEnd` an enrollment before #3989 wrote, which is
    * lost while the daemon is down. They stay in `present` and leave
    * `complete` alone, because the detector raises `hooks_removed` whenever
-   * `complete` is false. `tacho enroll` rewrites them.
+   * `complete` is false. `oxagen agent enroll` rewrites them.
    */
   stale: HookEventName[];
   envOk: boolean;

@@ -171,7 +171,7 @@ describe("a re-enroll whose daemon does not come back", () => {
     const rig = await brokeredRig();
     const d: CliDeps = { ...rig.deps, daemonGet: async () => undefined };
     const result = await enroll({}, d);
-    // `tacho enroll` exits 1 on a host that is not reporting (`main.ts`).
+    // `oxagen agent enroll` exits 1 on a host that is not reporting (`main.ts`).
     expect(result.shipping).toMatchObject({ healthy: false });
     expect(result.shipping?.detail).toContain("tachod did not answer");
     expect(result.host?.host_enrollment_id).toBe(TEST_ENROLLMENT);
@@ -329,7 +329,7 @@ describe("enroll --force over a live enrollment", () => {
     ]);
     expect(rig.requests[1]?.body).toMatchObject({
       hostEnrollmentId: TEST_ENROLLMENT,
-      reason: "tacho enroll --force",
+      reason: "oxagen agent enroll --force",
     });
   });
 
@@ -391,8 +391,8 @@ describe("a host revoked from the fleet page", () => {
     const refused = await enroll({}, rig.deps);
     expect(refused.ok).toBe(false);
     expect(rig.errors.at(-1)).toContain("was revoked on the control plane");
-    expect(rig.errors.at(-1)).toContain("tacho unenroll");
-    expect(rig.errors.at(-1)).toContain("tacho enroll --force");
+    expect(rig.errors.at(-1)).toContain("oxagen agent unenroll");
+    expect(rig.errors.at(-1)).toContain("oxagen agent enroll --force");
     expect(rig.requests).toEqual([]);
     expect(bootstraps()).toBe(before);
 
@@ -414,7 +414,7 @@ describe("enroll --print-managed", () => {
     try {
       const result = await enroll({ printManaged: true }, rig.deps);
       expect(result.ok).toBe(false);
-      expect(rig.errors.join("\n")).toMatch(/another tacho enroll/i);
+      expect(rig.errors.join("\n")).toMatch(/another enroll, unenroll, or reassign/i);
       expect(rig.requests).toEqual([]);
     } finally {
       lock.release();
@@ -456,11 +456,11 @@ describe("running as root", () => {
     const refused = await enroll({ harnesses: ["claude-code"] }, root);
     expect(refused.ok).toBe(false);
     expect(rig.errors.at(-1)).toContain("running as root");
-    expect(rig.errors.at(-1)).toContain("sudo -u dev tacho enroll");
+    expect(rig.errors.at(-1)).toContain("sudo -u dev oxagen agent enroll");
     expect(rig.requests).toEqual([]);
     expect(readHostFile(rig.deps.paths.hostFile)).toBeUndefined();
     expect((await reassign({ workspace: "edge" }, root)).ok).toBe(false);
-    expect(rig.errors.at(-1)).toContain("sudo -u dev tacho reassign");
+    expect(rig.errors.at(-1)).toContain("sudo -u dev oxagen agent reassign");
 
     expect(
       (await enroll({ harnesses: ["claude-code"], allowRoot: true }, root)).ok,

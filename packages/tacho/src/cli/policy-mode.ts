@@ -1,6 +1,6 @@
 /**
  * The Policy line: what the host's policy mode does, in one sentence per
- * mode. `tacho status` prints it on its Policy line and `tacho enroll` ends
+ * mode. `oxagen agent status` prints it on its Policy line and `oxagen agent enroll` ends
  * with it. The desktop app's This machine panel prints the same sentences
  * from its own copy (`policyText` in apps/desktop/src/tacho-status.ts),
  * because the app shares no runtime code with the CLI. This file's test and
@@ -10,7 +10,7 @@
  * The mode decides the whole evaluation of a governed tool call
  * (`evaluatePreToolUse` in packages/tacho/src/host/bundle.ts), not only the
  * permission rules. Under `enforce`, a mandate that requires the contained
- * tier denies every tool in a session `tacho run --contained` did not start.
+ * tier denies every tool in a session `oxagen agent run --contained` did not start.
  * A stale bundle denies a call that can change something while the control
  * plane is unreachable. A deny rule or a Cedar forbid denies, an ask rule
  * asks, and a call no rule covers goes to the harness's own permission flow.

@@ -42,9 +42,9 @@ run its scripts with `node`.
 - A checked-in template carries no digest for a build nobody has made.
 - `stamp.mjs` fails on a token with no matching `.sha256` rather than writing
   a file that installs nothing.
-- Every package runs `tacho unenroll --all` before it removes the binaries.
-  Bare `tacho unenroll` refuses a machine that holds more than one agent
-  (ADR-203).
+- Every package runs `oxagen agent unenroll --all` before it removes the
+  binaries. Without `--all`, the command refuses a machine that holds more
+  than one agent (ADR-203).
 
 ## Tests
 
@@ -134,7 +134,7 @@ stamped copies.
 
 ## Uninstall order, everywhere
 
-All three carry the order the app enforces: `tacho unenroll --all` first
+All three carry the order the app enforces: `oxagen agent unenroll --all` first
 (for every agent on the machine, it strips the hooks it wrote into each
 enrolled harness, stops the service, revokes on the control plane and
 deletes the host credentials), then the package. The cask runs it in

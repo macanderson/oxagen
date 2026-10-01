@@ -1,9 +1,13 @@
 /**
  * The hook process body: read the harness payload from stdin, answer on
- * stdout, always exit 0 with a JSON decision. Shared by the `tacho-hook`
- * executable and `tacho hook` (the compiled single binary is multi-call, so
- * the settings writers install `tacho hook --enrollment ... [--harness ...]`;
- * a custom agent runs `tacho hook --agent <name>`).
+ * stdout, always exit 0 with a JSON decision. `oxagen hook` runs it, and so
+ * do the hidden aliases `tacho-hook` and `tacho hook` that machines enrolled
+ * before #4879 still call. The settings writers install `<hook command>
+ * --enrollment ... [--harness ...]`, and a custom agent runs `oxagen hook
+ * --agent <name>`.
+ *
+ * `oxagen hook` loads this module and nothing from the CLI's command tree,
+ * because it runs on every tool call (`apps/cli/src/machine/hook.ts`).
  */
 import { agentPathsForEnrollment } from "../host/agents";
 import { tachoHome } from "../host/paths";
@@ -12,6 +16,7 @@ import {
   agentFromArgv,
   enrollmentFromArgv,
   harnessFromArgv,
+  type HookRunResult,
   runTachoHook,
 } from "./hook-client";
 
@@ -85,6 +90,36 @@ export async function readStdin(
     source.destroy?.();
   }
   return { text: Buffer.concat(chunks).toString("utf8"), truncated };
+}
+
+/**
+ * One hook call with `payload` as its stdin, routed the way `runHookProcess`
+ * routes a call that carries these flags. `oxagen agent run` makes its
+ * session's start and end calls through this, in its own process. The
+ * response budget counts from this call, not from process start, because
+ * that process may have been running for an hour.
+ */
+export function runHookCall(
+  payload: string,
+  argv: readonly string[],
+  env: Record<string, string | undefined> = process.env,
+): Promise<HookRunResult> {
+  const started = Date.now();
+  const agent = agentFromArgv(argv);
+  return runTachoHook({
+    paths: agentPathsForEnrollment(
+      tachoHome(env),
+      enrollmentFromArgv(argv),
+      harnessFromArgv(argv),
+    ),
+    env,
+    stdin: payload,
+    hookId: ulid(started),
+    harness: harnessFromArgv(argv),
+    ...(agent !== undefined ? { agent } : {}),
+    platform: process.platform,
+    elapsedMs: () => Date.now() - started,
+  });
 }
 
 export async function runHookProcess(

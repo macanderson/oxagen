@@ -512,7 +512,7 @@ describe("install rig: the gateway's model base URLs", () => {
 
   // #4318 item 8: a harness brokered before a managed file appeared kept its
   // run token after the next enroll, and every call to the managed URL was
-  // refused until the operator ran `tacho enroll --credentials passthrough`.
+  // refused until the operator ran `oxagen agent enroll --credentials passthrough`.
   it("give the key back to a harness a managed file overrides after it was brokered, and keep the routed one brokered", async () => {
     const seed = seedHome();
     const settingsPath = join(seed.home, ".claude", "settings.json");
@@ -1275,7 +1275,7 @@ describe("install rig: failure injection", () => {
     await new Promise((resolve) => setTimeout(resolve, 20));
     const second = await enroll({ harnesses: ["claude-code"] }, rig.deps);
     expect(second.ok).toBe(false);
-    expect(rig.errors.join("\n")).toMatch(/another tacho/i);
+    expect(rig.errors.join("\n")).toMatch(/another enroll, unenroll, or reassign/i);
     release();
     expect((await first).ok).toBe(true);
     expect(

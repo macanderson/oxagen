@@ -118,7 +118,7 @@ export interface TachoPaths extends TachoHome {
   /**
    * The Stella identity cache: one file per Stella process, holding its pid
    * and start time, so most Stella hooks run no `ps` (`resolveStellaIdentity`).
-   * A cache only, so `tacho unenroll` removes it.
+   * A cache only, so `oxagen agent unenroll` removes it.
    */
   stellaIdentity: string;
 }

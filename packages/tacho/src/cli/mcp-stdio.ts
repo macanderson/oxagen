@@ -163,7 +163,7 @@ export async function runMcpStdio(
         if (expectsReply || response.ok) deps.stdout.write(`${body}\n`);
       } else if (!response.ok || (expectsReply && body.length > 0)) {
         deps.stderr.write(
-          `tacho mcp-stdio: the gateway answered ${response.status}: ${body.slice(0, 200)}\n`,
+          `oxagen mcp-stdio: the gateway answered ${response.status}: ${body.slice(0, 200)}\n`,
         );
         reply(
           shimError(
@@ -174,7 +174,7 @@ export async function runMcpStdio(
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      deps.stderr.write(`tacho mcp-stdio: ${message}\n`);
+      deps.stderr.write(`oxagen mcp-stdio: ${message}\n`);
       reply(
         shimError(
           id,

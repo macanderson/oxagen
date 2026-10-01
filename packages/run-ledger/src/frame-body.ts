@@ -27,7 +27,7 @@ import {
   digestBytes,
   normalizeInstant,
   redactBytes,
-} from "@oxagen/tacho";
+} from "@oxagen/recorder";
 import {
   isContentClassRetained,
   stepKindOfEventType,

@@ -7,7 +7,7 @@
 // A local server's args and every server's env list come from server.toml.
 // env holds names only: the machine fills the values and passes nothing else.
 import type { McpLockSource, ServerSource } from "@oxagen/mcp-studio";
-import type { LaunchSpec } from "@oxagen/tacho/local-servers";
+import type { LaunchSpec } from "@oxagen/recorder/local-servers";
 
 /** The groups that may run the server: source.machines, or none for a server that runs in the cloud. */
 export function machineGroupsOf(source: ServerSource): readonly string[] {

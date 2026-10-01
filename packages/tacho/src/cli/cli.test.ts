@@ -97,6 +97,7 @@ import { detect } from "./detect";
 import { enroll, parseHarnesses } from "./enroll";
 import { exportCommand, resolveSessionUuid } from "./export";
 import { buildTachoProgram } from "./main";
+import { moveOffTachoNames, namesTachoExecutable } from "./move-commands";
 import { reassign } from "./reassign";
 import { status } from "./status";
 import { unenroll } from "./unenroll";
@@ -562,10 +563,10 @@ describe("enroll → status → unenroll", () => {
       "http://127.0.0.1:47123",
     );
     expect(d.lines.some((l) => l.includes("tachod healthy"))).toBe(true);
-    // The policy sentence is the one `tacho status` and the desktop app
+    // The policy sentence is the one `oxagen agent status` and the desktop app
     // print (policy-mode.ts), so the whole of it is asserted here.
     expect(d.lines.at(-1)).toContain(
-      "Policy mode is observe: Oxagen records what the policy would decide on a governed call and lets it go ahead. Budget and model limits still apply to model calls routed through Oxagen. `tacho status` shows each agent's tier.",
+      "Policy mode is observe: Oxagen records what the policy would decide on a governed call and lets it go ahead. Budget and model limits still apply to model calls routed through Oxagen. `oxagen agent status` shows each agent's tier.",
     );
     // Idempotent: a second run re-applies without another enrollment call.
     const again = await enroll({}, d);
@@ -769,7 +770,7 @@ describe("enroll → status → unenroll", () => {
   });
 
   it("re-applies the service and the hooks from the binary running now, not the one that enrolled", async () => {
-    // The regression this guards: on 2026-09-18 `tacho enroll` from a fresh
+    // The regression this guards: on 2026-09-18 `oxagen agent enroll` from a fresh
     // install reused host.json's hook_command and daemon_command, so it wrote
     // the launchd unit and every hook back to the wedged binary it was run to
     // replace, and reported "already present; nothing to change" because the
@@ -1467,7 +1468,7 @@ describe("enroll → status → unenroll", () => {
     );
     // Enrolled, but the hooks post to a daemon that is not there: exit 0
     // told the desktop app the machine was covered. The enrollment stands
-    // and `tacho enroll` exits 1 on the shipping verdict (`main.ts`).
+    // and `oxagen agent enroll` exits 1 on the shipping verdict (`main.ts`).
     expect(result.ok).toBe(true);
     expect(result.host).toBeDefined();
     expect(result.shipping).toMatchObject({ healthy: false });
@@ -1637,8 +1638,8 @@ describe("harnesses and reassign", () => {
     );
   });
 
-  it("`tacho enroll` passes no harness list unless --harness is given", () => {
-    // A commander default of "claude-code" would make a bare `tacho enroll`
+  it("`oxagen agent enroll` passes no harness list unless --harness is given", () => {
+    // A commander default of "claude-code" would make a bare `oxagen agent enroll`
     // on a Codex-only host add Claude Code hooks; enroll() defaults the
     // fresh-enrollment case itself.
     const enrollCommand = buildTachoProgram()
@@ -2051,7 +2052,7 @@ describe("harnesses and reassign", () => {
     expect(moved.from?.enrollmentId).toBe(TEST_ENROLLMENT);
     expect(moved.to).toBeUndefined();
     expect(d.errors).toEqual([
-      "Cannot reassign acme.core.release-manager, so nothing was changed. A one-time token from the Agents page enrolled it as an agent registered in acme/core. An agent stays in the workspace it is registered in. To report claude-code to acme/edge, register an agent in acme/edge on the Agents page, run `tacho unenroll --harness claude-code`, and then run the enroll command the page shows.",
+      "Cannot reassign acme.core.release-manager, so nothing was changed. A one-time token from the Agents page enrolled it as an agent registered in acme/core. An agent stays in the workspace it is registered in. To report claude-code to acme/edge, register an agent in acme/edge on the Agents page, run `oxagen agent unenroll --harness claude-code`, and then run the enroll command the page shows.",
     ]);
     // Nothing was revoked or minted, and the enrollment and its service are
     // untouched.
@@ -2068,7 +2069,7 @@ describe("harnesses and reassign", () => {
     );
     expect(widened.ok).toBe(false);
     expect(d.errors).toEqual([
-      "Cannot change the harnesses of acme.core.release-manager, so nothing was changed. A one-time token from the Agents page enrolled it as a registered agent. A reassign enrolls it again through your CLI session, which links no agent. To hook another harness, register an agent for it on the Agents page and run the enroll command the page shows. To take acme.core.release-manager off this machine, run `tacho unenroll --harness claude-code`.",
+      "Cannot change the harnesses of acme.core.release-manager, so nothing was changed. A one-time token from the Agents page enrolled it as a registered agent. A reassign enrolls it again through your CLI session, which links no agent. To hook another harness, register an agent for it on the Agents page and run the enroll command the page shows. To take acme.core.release-manager off this machine, run `oxagen agent unenroll --harness claude-code`.",
     ]);
     expect(d.requests).toEqual([]);
     expect(readHostFile(d.paths.hostFile)).toEqual(before);
@@ -4186,7 +4187,7 @@ describe("brokered credentials (ADR-143)", () => {
     );
     const back = await enroll({ token: "tok", credentials: "passthrough" }, d);
     expect(back.warnings.join("\n")).toContain(
-      "stays in custody; run `tacho credential status`",
+      "stays in custody; run `oxagen credential status`",
     );
     expect(authOf(d.home).OPENAI_API_KEY).toBe("sk-proj-NEWER-OWN-KEY");
     expect(d.store.has("openai")).toBe(true);
@@ -4688,7 +4689,7 @@ describe("two agents on one machine (ADR-203)", () => {
     };
     const result = await unenroll({ token: "tok", harness: "codex" }, d);
     const warning =
-      "the service could not be started again, so acme.core.cc-laptop has no collector or model proxy: launchctl missing. Run `tacho enroll --harness claude-code` to install it again";
+      "the service could not be started again, so acme.core.cc-laptop has no collector or model proxy: launchctl missing. Run `oxagen agent enroll --harness claude-code` to install it again";
     expect(result.ok).toBe(false);
     expect(result.warnings).toContain(warning);
     expect(d.errors).toContain(`warning: ${warning}`);
@@ -4727,7 +4728,7 @@ describe("two agents on one machine (ADR-203)", () => {
     expect(moved.ok).toBe(false);
     expect(moved.from?.enrollmentId).toBe(OTHER_ENROLLMENT);
     expect(d.errors).toEqual([
-      "Cannot reassign acme.core.codex-agent, so nothing was changed. A one-time token from the Agents page enrolled it as an agent registered in acme/core. An agent stays in the workspace it is registered in. To report codex to acme/edge, register an agent in acme/edge on the Agents page, run `tacho unenroll --harness codex`, and then run the enroll command the page shows.",
+      "Cannot reassign acme.core.codex-agent, so nothing was changed. A one-time token from the Agents page enrolled it as an agent registered in acme/core. An agent stays in the workspace it is registered in. To report codex to acme/edge, register an agent in acme/edge on the Agents page, run `oxagen agent unenroll --harness codex`, and then run the enroll command the page shows.",
     ]);
     // Nothing was revoked or minted. Both agents keep their enrollments, and
     // the service that runs them was never taken down.
@@ -4762,7 +4763,7 @@ describe("two agents on one machine (ADR-203)", () => {
     );
     expect(failed.ok).toBe(false);
     expect(d.errors).toContain(
-      "Reassign failed after revoking the old enrollment; this host is now unenrolled (host.json kept, marked retired). Run `tacho enroll --force --org acme --workspace edge --api-url https://api.test --harness codex` once the cause is fixed.",
+      "Reassign failed after revoking the old enrollment; this host is now unenrolled (host.json kept, marked retired). Run `oxagen agent enroll --force --org acme --workspace edge --api-url https://api.test --harness codex` once the cause is fixed.",
     );
     expect(revoked(d)).toEqual([OTHER_ENROLLMENT]);
     expect(readHostFile(codex.hostFile)?.revoked_at).not.toBeNull();
@@ -4790,5 +4791,109 @@ describe("two agents on one machine (ADR-203)", () => {
       `This machine holds 2 enrollments: ${BOTH}. Pass --harness with the harnesses of the one to reassign.`,
     );
     expect(d.requests).toEqual([]);
+  });
+});
+
+describe("moving a machine off the tacho names (#4879)", () => {
+  const OXAGEN_RUNTIME = {
+    hookCommand: "/opt/oxagen/oxagen hook",
+    credentialHelperCommand:
+      "/opt/oxagen/oxagen credential issue --harness claude-code",
+    daemonCommand: ["/opt/oxagen/oxagen", "daemon"],
+    mcpStdioCommand: ["/opt/oxagen/oxagen", "mcp-stdio"],
+    binDir: "/opt/oxagen",
+    program: "oxagen" as const,
+  };
+
+  /** Every command a harness file runs, whatever its format. */
+  function commandsIn(document: unknown): string[] {
+    const found: string[] = [];
+    const walk = (value: unknown) => {
+      if (Array.isArray(value)) value.forEach(walk);
+      else if (typeof value === "object" && value !== null)
+        for (const [key, child] of Object.entries(value)) {
+          if (key === "command" && typeof child === "string")
+            found.push(child);
+          else walk(child);
+        }
+    };
+    walk(document);
+    return found;
+  }
+
+  it("rewrites the Claude Code, Codex, Cursor, and Stella hooks and the service to the oxagen commands", async () => {
+    const before = deps();
+    const enrolled = await enroll(
+      {
+        token: "tok",
+        org: "acme",
+        workspace: "core",
+        apiUrl: "https://api.test",
+        harnesses: ["claude-code", "codex", "cursor", "stella"],
+      },
+      before,
+    );
+    expect(enrolled.ok).toBe(true);
+    const legacy = readHostFile(before.paths.hostFile);
+    expect(legacy?.hook_command).toBe("node /opt/tacho/tacho-hook.mjs");
+    expect(legacy && namesTachoExecutable(legacy)).toBe(true);
+    expect(before.service.installed?.command).toEqual([
+      "node",
+      "/opt/tacho/tachod.mjs",
+    ]);
+
+    // `oxagen agent status` on the same machine: the same files and the same
+    // service, run from the `oxagen` executable.
+    const after = { ...before, runtime: OXAGEN_RUNTIME };
+    const moved = await moveOffTachoNames(after);
+    expect(moved).toEqual([
+      {
+        agentKey: "acme.core.cc-laptop",
+        from: "node /opt/tacho/tacho-hook.mjs",
+        ok: true,
+      },
+    ]);
+    // The same enrollment, moved in place: nothing new was minted.
+    expect(
+      before.requests.filter((r) => r.url.endsWith("/tacho/enrollments")),
+    ).toHaveLength(1);
+    const host = readHostFile(before.paths.hostFile);
+    expect(host).toMatchObject({
+      host_enrollment_id: legacy?.host_enrollment_id,
+      hook_command: "/opt/oxagen/oxagen hook",
+      daemon_command: ["/opt/oxagen/oxagen", "daemon"],
+      mcp_stdio_command: ["/opt/oxagen/oxagen", "mcp-stdio"],
+    });
+    expect(host && namesTachoExecutable(host)).toBe(false);
+    expect(before.service.installed?.command).toEqual([
+      "/opt/oxagen/oxagen",
+      "daemon",
+    ]);
+
+    const claude = commandsIn(before.readSettings());
+    const codex = commandsIn(before.readCodexHooks());
+    const cursor = before.paths.cursorHooks.flatMap((path) =>
+      commandsIn(before.readCursorHooks(path)),
+    );
+    const stella = before.readStellaHooks().text ?? "";
+    for (const [harness, commands] of [
+      ["claude-code", claude],
+      ["codex", codex],
+      ["cursor", cursor],
+    ] as const) {
+      const ours = commands.filter((command) =>
+        command.includes(`--enrollment ${TEST_ENROLLMENT}`),
+      );
+      expect(ours.length, `${harness} has hooks`).toBeGreaterThan(0);
+      for (const command of ours) {
+        expect(command, harness).toContain("/opt/oxagen/oxagen hook");
+        expect(command, harness).not.toContain("tacho-hook");
+      }
+    }
+    expect(stella).toContain("/opt/oxagen/oxagen hook");
+    expect(stella).not.toContain("tacho-hook");
+
+    // A second run finds nothing left to move.
+    expect(await moveOffTachoNames(after)).toEqual([]);
   });
 });

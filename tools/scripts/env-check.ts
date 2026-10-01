@@ -169,7 +169,7 @@ export const PLATFORM_ALLOWLIST = new Set<string>([
   // (tools/scripts/ensure-e2e-failure-ticket.ts). A workflow input, never an
   // operator's.
   "NIGHTLY_FAILED_JOB",
-  // @oxagen/tacho's own placement knobs, all three local to a machine running
+  // @oxagen/recorder's own placement knobs, all three local to a machine running
   // the collector rather than to any deployed service. TACHO_BUNDLED is set by
   // esbuild's `define` at bundle time and never read from a real environment;
   // TACHO_BIN_DIR and TACHO_HOME relocate the binary and the state directory,

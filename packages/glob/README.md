@@ -1,7 +1,7 @@
 # @oxagen/glob
 
 The path glob for every package that can take a workspace dependency.
-`@oxagen/tacho` cannot, and keeps its own copy (see "Other globs in the tree").
+`@oxagen/recorder` cannot, and keeps its own copy (see "Other globs in the tree").
 
 ```ts
 import { globToRegExp, matchesGlob } from "@oxagen/glob";
@@ -19,7 +19,7 @@ matchesGlob("src/*.ts", "src/a/b.ts"); // false — `*` stays in one segment
 - **Does not own:**
   - Flat-value matching for MCP tool names and URLs, where `*` crosses every
     separator: [`@oxagen/mcp-config`](../mcp-config/README.md) (`matchGlob`).
-  - Path rules in Tacho's policy bundle: [`@oxagen/tacho`](../tacho/README.md)
+  - Path rules in Tacho's policy bundle: [`@oxagen/recorder`](../tacho/README.md)
     (`globToRegex` in `packages/tacho/src/host/bundle.ts`).
 - **Depends on:** No `@oxagen/*` runtime dependencies. It has no runtime
   dependencies at all.

@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { beforeAll, describe, expect, it } from "vitest";
-import { requireCedarRuntime, type CedarRuntime } from "@oxagen/tacho/policy";
+import { requireCedarRuntime, type CedarRuntime } from "@oxagen/recorder/policy";
 import { compilePolicies, type AgentDeclaration, type CompiledPolicySet } from "./compile";
 import { cedarTools, type ManifestToolLike } from "./schema";
 import { runPolicyTests } from "./tests";

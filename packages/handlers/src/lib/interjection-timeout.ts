@@ -31,7 +31,7 @@ import type {
   InterjectionDenyOutcome,
   InterjectionResolveOutcome,
 } from "@oxagen/inngest-functions/interjection-timeout-runner";
-import type { InterjectBody } from "@oxagen/tacho";
+import type { InterjectBody } from "@oxagen/recorder";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { and, eq, isNotNull, isNull } from "drizzle-orm";
 import {

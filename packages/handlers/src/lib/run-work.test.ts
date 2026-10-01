@@ -1,5 +1,5 @@
 import type { Tx } from "@oxagen/database";
-import { canonicalRemote, digestBytes, foldedRemote } from "@oxagen/tacho";
+import { canonicalRemote, digestBytes, foldedRemote } from "@oxagen/recorder";
 import { tachoEventsColumns } from "@oxagen/telemetry";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {

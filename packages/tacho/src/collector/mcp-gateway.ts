@@ -7,7 +7,7 @@
  * into a JSON file, and asking them to would put the credential on the least
  * protected surface on the machine; the app *is* the credential.
  *
- * It is a **proxy, not a second materialiser.** `@oxagen/tacho` is a leaf
+ * It is a **proxy, not a second materialiser.** `@oxagen/recorder` is a leaf
  * package with no `@oxagen/*` runtime dependency, so nothing here imports
  * `materializeTools`, `mcp-rbac` or `tool-budget` — and that constraint
  * pushes toward the right shape anyway. The JSON-RPC envelope is forwarded to
@@ -453,7 +453,7 @@ export function gatewayToolsOf(
  * A `tools/list` result with everything outside the mandate removed, or the
  * result untouched when there is nothing to filter by.
  *
- * The gateway does not evaluate the mandate — `@oxagen/tacho` takes no
+ * The gateway does not evaluate the mandate — `@oxagen/recorder` takes no
  * `@oxagen/*` runtime dependency, so it cannot read a capability's surfaces,
  * mutation or sensitivity, and a second copy of that rule living here is
  * exactly the drift ADR-078 §4 keeps out. It applies the answer the signed

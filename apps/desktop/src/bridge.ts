@@ -384,9 +384,13 @@ export async function runSidecar(
         if (options.timeoutMs === undefined || settled) return;
         timer = setTimeout(() => {
           void invoke("kill_sidecar", { id }).catch(() => undefined);
+          // The recorder's argv is not a command a person types any more
+          // (#4879), so the message names the recorder, not `tacho <verb>`.
+          const what =
+            name === "tacho" ? "The recorder" : `oxagen ${args.join(" ")}`;
           fail(
             new Error(
-              `${name} ${args.join(" ")} did not finish within ${Math.round(options.timeoutMs! / 1000)}s`,
+              `${what} did not finish within ${Math.round(options.timeoutMs! / 1000)}s`,
             ),
           );
         }, options.timeoutMs);
@@ -416,7 +420,8 @@ export async function tachoStatus(): Promise<TachoStatus | null> {
   const detail = result.stderr.trim();
   if (detail !== "" || result.code !== 0)
     throw new Error(
-      detail || `tacho status exited ${result.code ?? "?"} without a document`,
+      detail ||
+        `Reading this machine's status exited ${result.code ?? "?"} without a document`,
     );
   return null;
 }
@@ -469,7 +474,7 @@ export async function detectHarnesses(): Promise<DetectReport> {
   if (report !== null) return report;
   throw new Error(
     result.stderr.trim() ||
-      `tacho detect exited ${result.code ?? "?"} without a report`,
+      `Scanning for agents exited ${result.code ?? "?"} without a report`,
   );
 }
 
@@ -512,7 +517,7 @@ export function parseConnect(result: RunResult): ConnectResult {
     ok: false,
     detail:
       result.stderr.trim() ||
-      `tacho verify exited ${result.code ?? "?"} without a result`,
+      `Verifying the agent exited ${result.code ?? "?"} without a result`,
   };
 }
 

@@ -5,7 +5,7 @@ import {
   TACHO_MAX_REQUEST_BYTES,
   sealEvent,
   sessionUuid,
-} from "@oxagen/tacho";
+} from "@oxagen/recorder";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({

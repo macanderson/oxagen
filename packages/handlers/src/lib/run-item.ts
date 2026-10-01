@@ -20,7 +20,7 @@ import {
   isGradeEnforcementTier,
   isReplayGrade,
   TACHO_METERING_OBSERVED,
-} from "@oxagen/tacho";
+} from "@oxagen/recorder";
 import { modelFactsOf } from "./model-facts";
 import { operatorRoleOf } from "./operator-role";
 import { compactedField } from "./run-list-status";
