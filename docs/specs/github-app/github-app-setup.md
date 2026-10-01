@@ -145,8 +145,8 @@ Create each App at **GitHub → Settings → Developer settings → GitHub Apps 
 - **The first Callback URL is the one GitHub uses.** `buildInstallAuthUrl` and
   `buildIdentityAuthUrl` (`packages/github/src/install-url.ts`) pass no `redirect_uri`, so GitHub
   returns every connect to the first URL in the list. A second or wildcard entry never receives a
-  connect. Keep `https://api.oxagen.sh/oauth/github/callback` first until ADR-215 step A3 puts
-  `https://api.oxagen.app/oauth/github/callback` there.
+  connect. Keep `https://api.oxagen.sh/oauth/github/callback` first. The API stays on `oxagen.sh`
+  (ADR-236), so no `api.oxagen.app` URL belongs in the list.
 - **Every connect returns here.** The code repository connect and the steering connect both land on
   this callback. The signed state names what the connect is for, so no connect needs a URL of its
   own.

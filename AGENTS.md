@@ -39,7 +39,7 @@ docs/       VISION.md, capability specs, ADRs, specs (docs/specs)
 
 ### Domains
 
-Mac owns `oxagen.app`, bought on 2026-09-27. It is registered at Vercel, in the team with slug `oxagen-inc`, which Mac migrated to from an earlier Vercel team. Vercel stays the registrar, so a nameserver change happens in that team. The nameservers point at the Route 53 zone in `infra/stacks-new/oxagen/dns-oxagen-app.tf`. `oxagen.app` is the production web app's domain (ADR-215, #4655). Until ADR-215's cutover, the app is canonical at `app.oxagen.sh`. After it, `app.oxagen.sh` redirects page visits to `oxagen.app` and keeps answering `/api/*`. The API moves to `api.oxagen.app` and keeps answering on `api.oxagen.sh` (ADR-215, amendment of 2026-09-28, #4709). MCP and the docs move the same way, to `mcp.oxagen.app` and `docs.oxagen.app`, and keep answering on their `.sh` names (#4717). `oxagen.dev`, bought the same day, only redirects to the docs (`dns-vanity-domains.tf`).
+Mac owns `oxagen.app`, bought on 2026-09-27. It is registered at Vercel, in the team with slug `oxagen-inc`, which Mac migrated to from an earlier Vercel team. Vercel stays the registrar, so a nameserver change happens in that team. The nameservers point at the Route 53 zone in `infra/stacks-new/oxagen/dns-oxagen-app.tf`. Every service stays on `oxagen.sh` (ADR-236, which supersedes ADR-215): the app at `app.oxagen.sh`, the API at `api.oxagen.sh`, MCP at `mcp.oxagen.sh`, and the docs at `docs.oxagen.sh`. `oxagen.app` only redirects to the app. Register only `oxagen.sh` URLs with third-party apps. The leftover `api`, `mcp`, and `docs` names on `oxagen.app` come out in #4882. `oxagen.dev`, bought the same day, only redirects to the docs (`dns-vanity-domains.tf`).
 
 ### Core Packages
 
