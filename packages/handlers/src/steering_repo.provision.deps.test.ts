@@ -1389,7 +1389,7 @@ describe("steeringRepoProvisionDeps", () => {
       expect(mocks.dbCalls).toEqual([]);
     });
 
-    it("names the organization for <org>/oxagen", () => {
+    it("names the organization for <org>/oxagen-config", () => {
       expect(deps(HOOK_ENV).steeringHook(ORGANIZATION, 7)).toEqual({
         url: `https://api.example.test/webhooks/gitlab/steering/organization/${ORG}`,
         token: steeringHookToken(HOOK_ENV.BETTER_AUTH_SECRET, {

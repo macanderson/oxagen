@@ -26,9 +26,11 @@ export async function generateMetadata(): Promise<Metadata> {
 // GitHub's install flow returns here with `?settings=repository`; the page
 // then reopens the init wizard, whose first step carries the connection.
 //
-// The workspace's steering repo (#4518) sits above the code repositories. It
-// reads at render through the DataSource (`get_steering_repo`), and streams in
-// its own <Suspense>, so a slow read never holds the tabs.
+// The workspace's steering repo (#4518) sits under the page header, above the
+// tabs. It reads at render through the DataSource (`get_steering_repo`), and
+// streams in its own <Suspense>, so a slow read never holds the tabs. Until
+// the repo is ready it is one line that opens the setup dialog, which
+// `?setup=steering` opens on arrival (#4875).
 // Instruction files that drifted in the code repositories sit below them, in
 // their own <Suspense> for the same reason.
 export default async function RepositoriesPage({
@@ -44,16 +46,22 @@ export default async function RepositoriesPage({
   const t = await getTranslations("repositories.steeringRepo");
   return (
     <>
-      <Suspense
-        fallback={
-          <p role="status" className="text-[13px] text-muted-foreground">
-            {t("loading")}
-          </p>
-        }
-      >
-        <SteeringRepoSection ctx={ctx} source={dataSource()} />
-      </Suspense>
       <Repositories
+        steering={
+          <Suspense
+            fallback={
+              <p role="status" className="text-[13px] text-muted-foreground">
+                {t("loading")}
+              </p>
+            }
+          >
+            <SteeringRepoSection
+              ctx={ctx}
+              source={dataSource()}
+              setupOpen={query.setup === "steering"}
+            />
+          </Suspense>
+        }
         org={org}
         ws={ws}
         orgName={ctx.orgName}

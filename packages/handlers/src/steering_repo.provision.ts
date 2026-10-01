@@ -2,7 +2,7 @@
 // (steering-repo-spec, Provisioning; lane S1, #4450).
 //
 // Creating a workspace creates its private steering repo `oxagen-<slug>`, and
-// creating an organization creates `<org>/oxagen`. The durable job
+// creating an organization creates `<org>/oxagen-config`. The durable job
 // `steering-repo/provision` runs the steps below one at a time:
 //
 //   1. pick_connection      The organization's Oxagen GitHub App installation or
@@ -24,9 +24,20 @@
 //                           PR publishes version 2 (#4732).
 //
 // Every step is safe to repeat. The state lives in the `steering_repo` key of
-// the workspace's settings, or of the organization's for `<org>/oxagen`, and
+// the workspace's settings, or of the organization's for `<org>/oxagen-config`, and
 // records what each step made, so a rerun adopts it instead of making another.
 // A failed step records its name and error, and the job retries from it.
+//
+// Two stops wait on a person (#4875). A workspace still steered by the
+// `.oxagen/` tree of a code repository stops at pick_connection with
+// `steering_import_required`, before anything is created, because the bind
+// step would refuse a second steering head. import_workspace_steering moves
+// that steering and provisions in the same run. An organization whose owner
+// token reaches more than one GitHub organization or GitLab group stops with
+// `choose_connection` and records the candidates, and a retry or an import
+// that names one of them stores it (`pickSteeringConnection`,
+// `storeChosenSteeringConnection`). The organization has one connection, so
+// the first pick stands and a later, different pick is refused.
 import { decrypt, resolveIngestionCryptoAdapterForKeyId } from "@oxagen/crypto";
 import { schema, withSystemDb, withTenantDb } from "@oxagen/database";
 import {
@@ -45,6 +56,7 @@ import {
   STEERING_ENVIRONMENT,
   steeringRepoName,
 } from "@oxagen/oxagen/steering-repo";
+import { HandlerError } from "@oxagen/oxagen";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import {
@@ -60,6 +72,10 @@ import {
 import type { SyncPublish } from "./context.steering.sync";
 import { logger } from "./logger";
 import { publishFirstVersion } from "./steering-repo/first-version";
+import {
+  readLegacySteeringSource,
+  type LegacySteeringSource,
+} from "./steering-repo/legacy-source";
 import {
   workspaceRepositoriesLock,
   writeRepositoryHead,
@@ -106,6 +122,15 @@ export function isSteeringRepoStep(name: string): name is SteeringRepoStep {
 
 /** The error code of a step that needs an owner to authorize again. */
 export const REAUTHORIZE = "steering_reauthorize";
+
+/** The error code of a setup that waits on a person to pick its connection. */
+export const CHOOSE_CONNECTION = "choose_connection";
+
+/**
+ * The error code of a workspace whose steering still lives in a code
+ * repository. import_workspace_steering moves it and provisions.
+ */
+export const STEERING_IMPORT_REQUIRED = "steering_import_required";
 
 /** The first commit's message. */
 export const FIRST_COMMIT_MESSAGE = "Seed the steering repo";
@@ -163,6 +188,11 @@ export interface SteeringRepoState {
   deployment_id: number | null;
   /** `rpb_…` of the steering binding. The organization repo has none. */
   binding_id: string | null;
+  /**
+   * The connections pick_connection found when there was more than one, for a
+   * person to choose between. Empty otherwise.
+   */
+  connection_choices: SteeringConnection[];
   updated_at: string;
 }
 
@@ -180,6 +210,7 @@ export function initialSteeringRepoState(now: Date): SteeringRepoState {
     commit_sha: null,
     deployment_id: null,
     binding_id: null,
+    connection_choices: [],
     updated_at: now.toISOString(),
   };
 }
@@ -249,6 +280,13 @@ export interface ProvisionDeps {
    * step publishes nothing.
    */
   publishFirst?: SyncPublish;
+  /**
+   * The code repository that still steers the workspace, or null. Unset, as
+   * in tests that do not exercise it, pick_connection checks nothing.
+   */
+  legacySteeringSource?(
+    scope: Extract<SteeringRepoScope, { kind: "workspace" }>,
+  ): Promise<LegacySteeringSource | null>;
 }
 
 /**
@@ -382,8 +420,17 @@ function seedFiles(
 }
 
 async function pickConnection(ctx: StepContext): Promise<void> {
+  if (ctx.scope.kind === "workspace" && ctx.deps.legacySteeringSource) {
+    const legacy = await ctx.deps.legacySteeringSource(ctx.scope);
+    if (legacy !== null)
+      throw new SteeringProvisionBlockedError(
+        STEERING_IMPORT_REQUIRED,
+        `${legacy.full_name} still steers this workspace through its .oxagen/ tree. Move its steering to a steering repo, and Oxagen creates the repo in the same run.`,
+      );
+  }
   if (ctx.connection !== null) {
     ctx.state.provider = ctx.connection.provider;
+    ctx.state.connection_choices = [];
     return;
   }
   // A stored token that the host refuses stops this step with a reauthorize
@@ -413,11 +460,14 @@ async function pickConnection(ctx: StepContext): Promise<void> {
     });
 
   const [only] = candidates;
-  if (candidates.length > 1)
+  if (candidates.length > 1) {
+    // The blocked step saves the state, so the read can list the choices.
+    ctx.state.connection_choices = candidates;
     throw new SteeringProvisionBlockedError(
-      "choose_connection",
+      CHOOSE_CONNECTION,
       `This organization has ${candidates.length} GitHub organizations and GitLab groups. Choose the one that holds steering repos, then retry.`,
     );
+  }
   if (only === undefined)
     throw new SteeringProvisionBlockedError(
       "no_connection",
@@ -426,12 +476,54 @@ async function pickConnection(ctx: StepContext): Promise<void> {
   await ctx.deps.saveConnection(ctx.scope, only);
   ctx.connection = only;
   ctx.state.provider = only.provider;
+  ctx.state.connection_choices = [];
+}
+
+/** A connection a person picked by its provider and id. */
+export interface SteeringConnectionPick {
+  provider: "github" | "gitlab";
+  /** The GitHub installation id or the GitLab group id. */
+  id: number;
+}
+
+/** The id a person picks a connection by. */
+export function steeringConnectionId(connection: SteeringConnection): number {
+  return connection.provider === "github"
+    ? connection.installation_id
+    : connection.group_id;
+}
+
+/** The name a person reads a connection by. */
+export function steeringConnectionName(connection: SteeringConnection): string {
+  return connection.provider === "github"
+    ? connection.account_login
+    : connection.group_path;
+}
+
+/**
+ * The recorded choice that `pick` names, or null when the state records no
+ * such choice. Only a connection pick_connection found can be stored, so a
+ * caller cannot point the organization at a host its tokens do not reach.
+ */
+export function pickSteeringConnection(
+  state: SteeringRepoState | null,
+  pick: SteeringConnectionPick,
+): SteeringConnection | null {
+  return (
+    state?.connection_choices.find(
+      (c) => c.provider === pick.provider && steeringConnectionId(c) === pick.id,
+    ) ?? null
+  );
 }
 
 async function createRepositoryStep(ctx: StepContext): Promise<void> {
   if (ctx.state.repository !== null) return;
   const connection = requireConnection(ctx);
-  const first_attempt = Math.max(1, ctx.state.attempt);
+  // The `config` workspace's first name is the organization's own
+  // `oxagen-config`, so it starts at `oxagen-config-2`.
+  const reserved =
+    ctx.scope.kind === "workspace" && baseName(ctx) === ORGANIZATION_REPO_NAME;
+  const first_attempt = Math.max(reserved ? 2 : 1, ctx.state.attempt);
   const max_attempts =
     ctx.scope.kind === "organization" ? 1 : WORKSPACE_NAME_ATTEMPTS;
   const on_attempt = async (attempt: number, name: string) => {
@@ -1001,6 +1093,70 @@ export async function saveSteeringRepoState(
 }
 
 /**
+ * Store `connection` as the organization's steering connection: the one
+ * connection pick_connection found that the owner's tokens reach. A person's
+ * pick goes through `storeChosenSteeringConnection` instead.
+ */
+export async function saveSteeringConnection(
+  orgId: string,
+  connection: SteeringConnection,
+): Promise<void> {
+  const patch = { [STEERING_CONNECTION_SETTING]: connection };
+  // tenancy: filtered by orgId from the provision event. The connection is
+  // the one candidate this org's own stored tokens reach.
+  await withSystemDb((tx) =>
+    tx
+      .update(schema.organizations)
+      .set({ settings: mergeSettings(schema.organizations.settings, patch) })
+      .where(eq(schema.organizations.id, orgId)),
+  );
+}
+
+/** Whether two connections name the same installation or group. */
+function sameSteeringConnection(
+  a: SteeringConnection,
+  b: SteeringConnection,
+): boolean {
+  return (
+    a.provider === b.provider &&
+    steeringConnectionId(a) === steeringConnectionId(b)
+  );
+}
+
+/**
+ * Store the connection a person picked from a setup's recorded choices. The
+ * organization has one steering connection, so the store is a compare and
+ * set: the first pick stands, the same pick again is a no-op, and a different
+ * one is refused (conflict `connection_already_chosen`). Without this, two
+ * workspaces waiting on a choice could each store their own, and a queued job
+ * would create its repo wherever the last pick pointed (#4877).
+ */
+export async function storeChosenSteeringConnection(
+  orgId: string,
+  connection: SteeringConnection,
+): Promise<void> {
+  if (await keepSteeringConnection(orgId, connection)) return;
+  // tenancy: filtered by orgId, which the kernel's capability context names.
+  const [org] = await withSystemDb((tx) =>
+    tx
+      .select({ settings: schema.organizations.settings })
+      .from(schema.organizations)
+      .where(eq(schema.organizations.id, orgId))
+      .limit(1),
+  );
+  const stored = readSteeringConnection(org?.settings);
+  if (stored !== null && sameSteeringConnection(stored, connection)) return;
+  throw new HandlerError({
+    code: "conflict",
+    reason: "connection_already_chosen",
+    message:
+      stored === null
+        ? "The organization's steering connection could not be stored. Try again."
+        : `This organization already creates steering repos in ${steeringConnectionName(stored)}. Retry without a connection to use it.`,
+  });
+}
+
+/**
  * Store `connection` as the organization's steering connection unless the
  * organization already has one. The choice is permanent, so a later connect
  * never replaces it. Returns whether this call stored it.
@@ -1182,16 +1338,13 @@ export function steeringRepoProvisionDeps(options: {
     saveState: saveSteeringRepoState,
 
     async saveConnection(scope, connection) {
-      const patch = { [STEERING_CONNECTION_SETTING]: connection };
-      // tenancy: filtered by orgId from the provision event. The connection
-      // is the one installation or group this org's own stored tokens reach.
-      await withSystemDb((tx) =>
-        tx
-          .update(schema.organizations)
-          .set({
-            settings: mergeSettings(schema.organizations.settings, patch),
-          })
-          .where(eq(schema.organizations.id, scope.orgId)),
+      await saveSteeringConnection(scope.orgId, connection);
+    },
+
+    legacySteeringSource(scope) {
+      return runInTenantScope(
+        { orgId: scope.orgId, workspaceId: scope.workspaceId },
+        () => readLegacySteeringSource(scope),
       );
     },
 

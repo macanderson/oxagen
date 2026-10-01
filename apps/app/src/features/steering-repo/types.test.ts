@@ -8,6 +8,10 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   REPO_HEALTH_STATES,
+  STEERING_CHOOSE_CONNECTION,
+  STEERING_IMPORT_LEGACY_CONNECTION,
+  STEERING_IMPORT_REQUIRED,
+  STEERING_NO_CONNECTION,
   STEERING_REAUTHORIZE,
   STEERING_REPO_STEPS,
 } from "./types";
@@ -46,5 +50,19 @@ describe("the steering repo copies", () => {
     expect(platformSource(PROVISION)).toContain(
       `export const REAUTHORIZE = "${STEERING_REAUTHORIZE}";`,
     );
+  });
+
+  it("reads the connection and import stops by the codes the job records", () => {
+    const source = platformSource(PROVISION);
+    expect(source).toContain(
+      `export const CHOOSE_CONNECTION = "${STEERING_CHOOSE_CONNECTION}";`,
+    );
+    expect(source).toContain(
+      `export const STEERING_IMPORT_REQUIRED = "${STEERING_IMPORT_REQUIRED}";`,
+    );
+    expect(source).toContain(`"${STEERING_NO_CONNECTION}",`);
+    expect(
+      platformSource("packages/handlers/src/steering-repo/import-run.ts"),
+    ).toContain(`"${STEERING_IMPORT_LEGACY_CONNECTION}"`);
   });
 });

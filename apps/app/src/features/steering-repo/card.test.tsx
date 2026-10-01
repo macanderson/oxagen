@@ -1,11 +1,13 @@
 // @vitest-environment jsdom
 // The steering repo card on the repositories page (#4518): the repository
 // link, the published version, and the health row once the repo is ready.
-// While it provisions, the step list takes the health row's place. When the
-// read fails, the card says who was denied what, or which code the control
-// plane answered, and draws no state. The page's section reads through the
-// DataSource it is handed and decides that only an owner or admin may retry.
+// While it is not ready, one setup line takes the summary's place, and the
+// steps open in the setup dialog (#4875). When the read fails, the card says
+// who was denied what, or which code the control plane answered, and draws no
+// state. The page's section reads through the DataSource it is handed and
+// decides that only an owner or admin may retry.
 import { cleanup, render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readError, readOk } from "@/data/read";
@@ -23,6 +25,7 @@ import type { SteeringRepoRead } from "./types";
 
 const actions = vi.hoisted(() => ({
   retrySteeringRepoProvision: vi.fn(),
+  importWorkspaceSteering: vi.fn(),
   repairSteeringRepo: vi.fn(),
 }));
 vi.mock("./actions", () => actions);
@@ -63,7 +66,10 @@ const FAILED = failedSteeringRepo("create_repository", {
   message: "GitHub already has a repository named acme/oxagen-core-platform.",
 });
 
-function card(answer: SteeringRepoRead, { canAct = true } = {}) {
+function card(
+  answer: SteeringRepoRead,
+  { canAct = true, setupOpen = false } = {},
+) {
   render(
     <IntlProvider>
       <SteeringRepoCard
@@ -72,6 +78,7 @@ function card(answer: SteeringRepoRead, { canAct = true } = {}) {
         read={answer}
         canAct={canAct}
         returnTo={RETURN_TO}
+        setupOpen={setupOpen}
       />
     </IntlProvider>,
   );
@@ -204,7 +211,7 @@ describe("the steering repo card", () => {
     );
   });
 
-  it("shows the provisioning steps in place of the health row while the repo provisions", () => {
+  it("shows one setup line while the repo provisions, and the steps in the dialog it opens", async () => {
     const root = card({
       kind: "ok",
       view: steeringRepoView({
@@ -216,27 +223,37 @@ describe("the steering repo card", () => {
       }),
     });
     expect(root).toHaveAttribute("data-health", "none");
-    expect(root).toHaveTextContent("Not created yet");
+    const notice = screen.getByTestId("steering-repo-setup-notice");
+    expect(notice).toHaveAttribute("data-status", "provisioning");
+    expect(notice).toHaveTextContent("Setting up");
+    expect(notice).toHaveTextContent("Oxagen is creating the steering repo.");
     expect(screen.queryByTestId("steering-repo-link")).toBeNull();
-    expect(screen.getByTestId("steering-repo-version")).toHaveTextContent(
-      "None yet",
-    );
+    expect(screen.queryByTestId("steering-repo-version")).toBeNull();
     expect(screen.queryByTestId("steering-repo-health")).toBeNull();
-    expect(screen.getByTestId("steering-repo-provisioning")).toHaveAttribute(
-      "data-status",
-      "provisioning",
-    );
+    expect(screen.queryByTestId("steering-repo-provisioning")).toBeNull();
+    await userEvent.click(screen.getByTestId("steering-repo-setup-open"));
+    expect(
+      await screen.findByTestId("steering-repo-provisioning"),
+    ).toHaveAttribute("data-status", "provisioning");
+  });
+
+  it("draws no setup line once the repo is ready", () => {
+    card({ kind: "ok", view: steeringRepoView() });
+    expect(screen.queryByTestId("steering-repo-setup-notice")).toBeNull();
   });
 
   it("shows an owner or admin Retry on a failed step", () => {
-    card({ kind: "ok", view: FAILED });
+    card({ kind: "ok", view: FAILED }, { setupOpen: true });
+    expect(screen.getByTestId("steering-repo-setup-notice")).toHaveTextContent(
+      "Setup failed at Repository.",
+    );
     expect(screen.getByTestId("steering-repo-retry")).toHaveTextContent(
       "Retry",
     );
   });
 
   it("shows a member the failed step and no Retry (negative)", () => {
-    card({ kind: "ok", view: FAILED }, { canAct: false });
+    card({ kind: "ok", view: FAILED }, { canAct: false, setupOpen: true });
     expect(screen.getByTestId("steering-repo-step-error")).toHaveTextContent(
       "GitHub already has a repository named acme/oxagen-core-platform.",
     );
@@ -268,7 +285,7 @@ describe("the repositories page's steering repo section", () => {
     const { source } = steeringRepoSource(readOk(steeringRepoView()));
     render(
       <IntlProvider>
-        {await SteeringRepoSection({ ctx: viewer, source })}
+        {await SteeringRepoSection({ ctx: viewer, source, setupOpen: true })}
       </IntlProvider>,
     );
     expect(read.readSteeringRepo).toHaveBeenCalledWith(source, viewer);
@@ -303,7 +320,7 @@ describe("the repositories page's steering repo section", () => {
     },
   );
 
-  it("returns an owner who re-authorizes to the repositories page", async () => {
+  it("returns an owner who re-authorizes to the repositories page with setup open", async () => {
     await section(
       {
         kind: "ok",
@@ -324,6 +341,11 @@ describe("the repositories page's steering repo section", () => {
       link.getAttribute("href") ?? "",
       "https://app.oxagen.sh",
     );
-    expect(href.searchParams.get("return_to")).toBe(RETURN_TO);
+    expect(href.searchParams.get("return_to")).toBe(
+      routes.steeringSetup("acme", "core-platform"),
+    );
+    expect(routes.steeringSetup("acme", "core-platform")).toBe(
+      "/acme/core-platform/repositories?setup=steering",
+    );
   });
 });

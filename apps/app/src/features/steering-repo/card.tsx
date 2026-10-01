@@ -1,8 +1,9 @@
-// The steering repo card on the repositories page: the repository, its
-// published version, and its health in one sentence. While the repo is not
-// ready, provisioning takes the health row's place. When the read fails, the
-// card says who was denied what, or which code the control plane answered.
-// The async read is ./section.
+// The steering repo on the repositories page, under the page header: the
+// repository, its published version, and its health once the repo is ready.
+// While it is not ready, one line says where setup stands and opens the setup
+// dialog (./setup-dialog, #4875), so the steps no longer fill the page. When
+// the read fails, the card says who was denied what, or which code the
+// control plane answered. The async read is ./section.
 import { useTranslations } from "next-intl";
 import type { SafePath } from "@/shared/safe-path";
 import { Badge, type BadgeTone } from "@/ui/badge";
@@ -14,9 +15,13 @@ import {
   panelBody,
 } from "@/ui/control-styles";
 import { ReadFailure } from "@/ui/read-failure";
-import { SteeringRepoProvisioning } from "./provisioning";
 import { SteeringRepositoryLink } from "./repository-link";
-import type { RepoHealth, SteeringRepoRead } from "./types";
+import { SteeringRepoSetup } from "./setup-dialog";
+import type {
+  RepoHealth,
+  SteeringRepoRead,
+  SteeringRepoView,
+} from "./types";
 
 // The page shows one card, so a fixed id is unique. The card renders on the
 // server, where the app uses no useId.
@@ -35,13 +40,17 @@ export function SteeringRepoCard({
   read,
   canAct,
   returnTo,
+  setupOpen = false,
 }: {
   org: string;
   ws: string;
   read: SteeringRepoRead;
-  /** An owner or admin: Retry is theirs. */
+  /** An owner or admin: the setup's actions and Repair are theirs. */
   canAct: boolean;
+  /** Where GitHub returns the person: this page with the setup dialog open. */
   returnTo: SafePath;
+  /** The address asked for the setup dialog (`?setup=steering`). */
+  setupOpen?: boolean;
 }) {
   const t = useTranslations("repositories.steeringRepo");
   return (
@@ -61,62 +70,67 @@ export function SteeringRepoCard({
       {read.kind === "failed" ? (
         <ReadFailure read={read.failure} section={t("heading")} />
       ) : (
-        <div className={`${panel} ${panelBody} flex flex-col gap-3`}>
-          <dl className={kvList}>
-            <dt className={kvTerm}>{t("card.repository")}</dt>
-            <dd className={kvValue}>
-              {read.view.repository === null ? (
-                <span className="text-muted-foreground">
-                  {t("card.notCreated")}
-                </span>
-              ) : (
-                <SteeringRepositoryLink
-                  provider={read.view.provider}
-                  repository={read.view.repository}
-                  testId="steering-repo-link"
-                />
-              )}
-            </dd>
-            <dt className={kvTerm}>{t("card.version")}</dt>
-            <dd className={kvValue} data-testid="steering-repo-version">
-              {read.view.publishedVersion === null
-                ? t("card.notPublished")
-                : t("card.versionNumber", {
-                    version: String(read.view.publishedVersion),
-                  })}
-            </dd>
-            {read.view.status === "ready" ? (
-              <>
-                <dt className={kvTerm}>{t("card.health")}</dt>
-                <dd
-                  className={`${kvValue} flex flex-col items-start gap-1`}
-                  data-testid="steering-repo-health"
-                >
-                  {read.view.health === null ? (
-                    <Badge tone="quiet">{t("health.unknown")}</Badge>
-                  ) : (
-                    <Badge tone={HEALTH_TONE[read.view.health]}>
-                      {t(`health.${read.view.health}`)}
-                    </Badge>
-                  )}
-                  <span className="text-muted-foreground">
-                    {t(`healthNote.${read.view.health ?? "unknown"}`)}
-                  </span>
-                </dd>
-              </>
-            ) : null}
-          </dl>
-          {read.view.status === "ready" ? null : (
-            <SteeringRepoProvisioning
-              org={org}
-              ws={ws}
-              view={read.view}
-              canAct={canAct}
-              returnTo={returnTo}
-            />
-          )}
-        </div>
+        <>
+          {read.view.status === "ready" ? (
+            <ReadySummary view={read.view} />
+          ) : null}
+          <SteeringRepoSetup
+            org={org}
+            ws={ws}
+            view={read.view}
+            canAct={canAct}
+            returnTo={returnTo}
+            initiallyOpen={setupOpen}
+          />
+        </>
       )}
     </section>
+  );
+}
+
+/** The ready repository: its link, its published version, and its health. */
+function ReadySummary({ view }: { view: SteeringRepoView }) {
+  const t = useTranslations("repositories.steeringRepo");
+  return (
+    <div className={`${panel} ${panelBody}`}>
+      <dl className={kvList}>
+        <dt className={kvTerm}>{t("card.repository")}</dt>
+        <dd className={kvValue}>
+          {view.repository === null ? (
+            <span className="text-muted-foreground">{t("card.notCreated")}</span>
+          ) : (
+            <SteeringRepositoryLink
+              provider={view.provider}
+              repository={view.repository}
+              testId="steering-repo-link"
+            />
+          )}
+        </dd>
+        <dt className={kvTerm}>{t("card.version")}</dt>
+        <dd className={kvValue} data-testid="steering-repo-version">
+          {view.publishedVersion === null
+            ? t("card.notPublished")
+            : t("card.versionNumber", {
+                version: String(view.publishedVersion),
+              })}
+        </dd>
+        <dt className={kvTerm}>{t("card.health")}</dt>
+        <dd
+          className={`${kvValue} flex flex-col items-start gap-1`}
+          data-testid="steering-repo-health"
+        >
+          {view.health === null ? (
+            <Badge tone="quiet">{t("health.unknown")}</Badge>
+          ) : (
+            <Badge tone={HEALTH_TONE[view.health]}>
+              {t(`health.${view.health}`)}
+            </Badge>
+          )}
+          <span className="text-muted-foreground">
+            {t(`healthNote.${view.health ?? "unknown"}`)}
+          </span>
+        </dd>
+      </dl>
+    </div>
   );
 }

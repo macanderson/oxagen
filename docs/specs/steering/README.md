@@ -3,7 +3,7 @@
 Each workspace keeps its steering in a repository of its own, the steering
 repo. Oxagen creates it when you create the workspace, merges every change to
 it, and publishes each merge as a numbered version. Each organization has one
-more, `<org>/oxagen`, for the records every workspace in it shares. Code
+more, `<org>/oxagen-config`, for the records every workspace in it shares. Code
 repositories hold no committed steering. A workspace links a code repository
 with a steering PR (ADR-212, `docs/specs/repository-binding/README.md`).
 

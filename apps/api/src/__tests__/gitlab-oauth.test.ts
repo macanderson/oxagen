@@ -325,6 +325,7 @@ function reauthorizeState(provider: "github" | "gitlab") {
     commit_sha: null,
     deployment_id: null,
     binding_id: null,
+    connection_choices: [],
     updated_at: "2026-09-27T00:00:00.000Z",
   };
 }

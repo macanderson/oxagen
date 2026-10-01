@@ -54,6 +54,25 @@ describe("the provisioning steps", () => {
     ]);
   });
 
+  it("leaves every step waiting, and none running, when setup never started (#4875)", () => {
+    expect(
+      states({
+        status: "not_started",
+        step: null,
+        failedStep: null,
+        provider: null,
+      }),
+    ).toEqual([
+      ["pick_connection", "waiting"],
+      ["create_repository", "waiting"],
+      ["add_to_installation", "waiting"],
+      ["write_first_commit", "waiting"],
+      ["apply_settings", "waiting"],
+      ["publish_version", "waiting"],
+      ["bind_repository", "waiting"],
+    ]);
+  });
+
   it("runs the first step before any step finished", () => {
     expect(
       states({
