@@ -1,6 +1,6 @@
 // merge_context_pr (ADR-061; MC spec §10.3 steps 3-4; steering-repo-spec,
-// Steering PR flow). Oxagen is the only merger of a steering repo, and it
-// merges one steering PR at a time per repository (steering-repo/merge-queue).
+// Steering PR flow). Oxagen merges one steering PR at a time per repository
+// through steering-repo/merge-queue. GitHub permissions govern host merges.
 //
 // Refused until every check passed; refused unless the caller is a reviewer
 // the governance mode allows (context.steering.policy.ts), read from the

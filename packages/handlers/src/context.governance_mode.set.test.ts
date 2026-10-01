@@ -569,6 +569,11 @@ describe("set_governance_mode in a steering repository", () => {
     // The PR tells nobody to land it with Apply now: that is an override.
     expect(deps.github.pulls[0]?.body).toBe(STEERING_GOVERNANCE_PR_BODY);
     expect(STEERING_GOVERNANCE_PR_BODY).not.toMatch(/Apply now/);
+    expect(deps.github.pulls[0]?.body).toContain("Who merges through Oxagen");
+    expect(deps.github.pulls[0]?.body).toContain(
+      "GitHub repository permissions govern direct pushes and merges in GitHub.",
+    );
+    expect(deps.github.pulls[0]?.body).not.toContain("only Oxagen merges");
     // The required check is on the PR's head, compared with the production head.
     const head = await deps.github.branchHead(REPO, STEERING_BRANCH);
     expect(deps.github.checkRuns).toEqual([
