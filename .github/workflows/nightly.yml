@@ -21,7 +21,7 @@ jobs:
   # job needs the same DB services + env block the ci.yml gate uses, otherwise
   # every build/test leg fails before doing any work.
   full:
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-large-{0}', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
     container:
       image: ghcr.io/macanderson/oxagen-ci-base:latest
       credentials:
@@ -191,7 +191,7 @@ jobs:
   # server via its `webServer` block).
   # ────────────────────────────────────────────────────────────────────────
   e2e:
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-large-{0}', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
     container:
       image: ghcr.io/macanderson/oxagen-ci-e2e:latest
       credentials:
