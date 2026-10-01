@@ -974,29 +974,13 @@
 }
 
 /*
- * Brand type tokens. NON-inline @theme so the --font-* names are emitted to
- * :root for both the Tailwind font-* utilities AND the raw var(--font-*) refs
- * below.
- *
- * Every heading and every line of text is Geist. Space Grotesk sets only the
- * wordmark (and, on oxagen.sh, the first line of a hero). Mac set this on
- * 2026-09-29. The kit's --ox-font-display still names Space Grotesk, so
- * --font-display is pointed at --ox-font here. This @theme comes after the
- * house-tailwind.css import, so it overrides that file's --font-display, which
- * its h1 to h3 rule and the text-m-h* and text-a-h* utilities read. The token
- * pair is kept so headings can be retuned (weight, tracking) in one place.
- *
- * --font-sans takes --ox-font straight from the kit's token file, so the
- * fallback stack is the kit's too.
+ * Brand type tokens come from the kit's house-tailwind.css, imported above, in
+ * its non-inline @theme: --font-sans and --font-display are Geist, --font-mono
+ * is Monaspace Neon, and --font-wordmark is Space Grotesk. Every heading and
+ * every line of text is Geist, and Space Grotesk sets the wordmark and line 1
+ * of a marketing hero (Mac, 2026-09-29). Kit 2.4.0 (macanderson/oxagen-brand
+ * #27) made that the kit's own rule, so this file no longer overrides it.
  */
-@theme {
-  --font-sans: var(--ox-font); /* Geist: body, UI, every heading */
-  --font-display: var(--ox-font); /* Geist too: the heading token, same face */
-  /* Monaspace Neon: code, logs, ids, and numbers in tables. */
-  --font-mono: var(--ox-font-mono);
-  /* Space Grotesk: the wordmark and nothing else. */
-  --font-wordmark: var(--ox-font-display);
-}
 
 @custom-variant dark (&:is(.dark *));
 
