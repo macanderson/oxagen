@@ -20,7 +20,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { pathOf, routes } from "@/shared/safe-path";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { phoneWidth } from "@/test/phone";
-import { RouteTabPanel, RouteTabs, routeTabId } from "./route-tabs";
+import { RouteTabPanel, RouteTabs } from "./route-tabs";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
@@ -102,7 +102,8 @@ describe("RouteTabs", () => {
     );
     const selected = tab("Assignments");
     const panel = screen.getByRole("tabpanel", { name: "Assignments" });
-    expect(selected).toHaveAttribute("id", routeTabId("steering-panel"));
+    expect(panel).toHaveAttribute("aria-labelledby", selected.id);
+    expect(selected.id).not.toBe("");
     expect(selected).toHaveAttribute("aria-controls", panel.id);
     expect(panel).toHaveAttribute("id", "steering-panel");
     // The other tabs' panels are not on the page, so nothing points at them.
@@ -213,15 +214,15 @@ describe("RouteTabs", () => {
     );
   });
 
-  it("leaves a panel with no tab selected unlabelled rather than pointing at nothing", () => {
+  it("draws the body under a row with no tab selected as no tab's panel (negative)", () => {
     render(
-      <RouteTabPanel panel="org-panel" labelled={false}>
+      <RouteTabPanel panel="org-panel" selected={false}>
         <p>Single sign-on</p>
       </RouteTabPanel>,
     );
-    expect(screen.getByRole("tabpanel")).not.toHaveAttribute(
-      "aria-labelledby",
-    );
+    expect(screen.queryByRole("tabpanel")).toBeNull();
+    expect(document.getElementById("org-panel")).toBeNull();
+    expect(screen.getByText("Single sign-on")).toBeInTheDocument();
   });
 
   it("snaps each tab to its start on a phone", () => {

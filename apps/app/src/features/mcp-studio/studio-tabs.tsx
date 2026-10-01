@@ -1,8 +1,9 @@
 "use client";
 // A Studio server's four tabs (#4678): Tools, Connection, Test and Changes,
-// each a path segment under the server. The strip is the Tools page's own
-// (tabs.tsx): a tablist of links marked with `aria-selected` and
-// `aria-current`, scrolling in its own row on a phone.
+// each a path segment under the server. The strip is a `RouteTabs` row
+// (ADR-NEW-route-tabs-are-tabs): a tablist of links with one tab stop and the
+// arrow keys, scrolling in its own row on a phone. The selected tab names the
+// panel the server page draws (`STUDIO_PANEL`, ./route.ts).
 //
 // Tools counts the tools the page lists, with a plus when the registry read
 // stopped at its page bound with a page left. Changes counts the draft's
@@ -10,11 +11,16 @@
 // appears once the draft holds one.
 import { useLocale, useTranslations } from "next-intl";
 import { formatCount } from "@/ui/money-format";
-import { SafeLink } from "@/ui/navigation";
-import { tabCount, tabLink } from "@/ui/route-tabs";
+import { RouteTabs } from "@/ui/route-tabs";
 import { draftCount } from "./draft";
 import type { StudioTool } from "./model";
-import { STUDIO_TABS, type StudioAt, type StudioTab, studioHref } from "./route";
+import {
+  STUDIO_PANEL,
+  STUDIO_TABS,
+  type StudioAt,
+  type StudioTab,
+  studioHref,
+} from "./route";
 import { useStudioDraft } from "./use-draft";
 
 export function StudioTabs({
@@ -55,36 +61,19 @@ export function StudioTabs({
     }
   };
   return (
-    <div className="min-w-0 overflow-x-auto border-b border-border">
-      <div
-        role="tablist"
-        aria-label={t("label")}
-        className="flex w-max min-w-full gap-0.5"
-      >
-        {STUDIO_TABS.map((tab) => {
-          const n = count(tab);
-          return (
-            <SafeLink
-              key={tab}
-              id={`studio-tab-${tab}`}
-              role="tab"
-              to={studioHref(at, serverId, tab)}
-              data-tab={tab}
-              aria-selected={tab === current}
-              aria-controls={tab === current ? `studio-panel-${tab}` : undefined}
-              aria-current={tab === current ? "page" : undefined}
-              className={tabLink}
-            >
-              {t(tab)}
-              {n === null ? null : (
-                <span data-count={tab} className={tabCount}>
-                  {n}
-                </span>
-              )}
-            </SafeLink>
-          );
-        })}
-      </div>
-    </div>
+    <RouteTabs
+      label={t("label")}
+      panel={STUDIO_PANEL}
+      tabs={STUDIO_TABS.map((tab) => {
+        const n = count(tab);
+        return {
+          to: studioHref(at, serverId, tab),
+          label: t(tab),
+          current: tab === current,
+          name: tab,
+          ...(n === null ? {} : { count: <span data-count={tab}>{n}</span> }),
+        };
+      })}
+    />
   );
 }

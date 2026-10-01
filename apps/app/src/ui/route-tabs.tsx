@@ -40,7 +40,11 @@ export type RouteTab = {
   mark?: ReactNode;
 };
 
-/** The one tab recipe. */
+/**
+ * The one tab recipe. Every tab row draws it through `RouteTabs`.
+ *
+ * @internal Exported for design-record.test.ts, which pins the selected style.
+ */
 export const tabLink =
   "-mb-px inline-flex min-h-10 max-md:min-h-11 shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 border-transparent px-[13px] py-2 text-[13px] font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring aria-selected:border-gold aria-selected:text-foreground";
 export const tabCount = "font-mono text-[10.5px] font-normal text-dim";
@@ -66,7 +70,7 @@ const LOOKS = {
 } as const;
 
 /** The id of the selected tab, which labels the panel `panel` names. */
-export function routeTabId(panel: string): string {
+function routeTabId(panel: string): string {
   return `${panel}-tab`;
 }
 
@@ -120,24 +124,25 @@ export function RouteTabs({
 }
 
 /**
- * The body under a row of route tabs. `labelled` is false on a page that
- * renders under the row with no tab selected, because the panel then has no
- * tab to take its name from.
+ * The body under a row of route tabs. A page that renders under the row with
+ * no tab selected passes `selected={false}`, and the body is a plain block:
+ * no tab names it, so it is no tab's panel.
  */
 export function RouteTabPanel({
   panel,
-  labelled = true,
+  selected = true,
   ...props
 }: Omit<ComponentProps<"div">, "id" | "role" | "aria-labelledby"> & {
   panel: string;
-  labelled?: boolean;
+  selected?: boolean;
 }) {
+  if (!selected) return <div {...props} />;
   return (
     <div
       {...props}
       role="tabpanel"
       id={panel}
-      aria-labelledby={labelled ? routeTabId(panel) : undefined}
+      aria-labelledby={routeTabId(panel)}
     />
   );
 }

@@ -53,7 +53,8 @@ prop is gone.
   Control, or Meta stays the browser's, so Alt+ArrowLeft still goes back.
 - **A row with no tab selected.** Organization renders Cost centers and
   Single sign-on under its row with no tab selected. The first tab then takes
-  the tab stop, so the row stays reachable, and the panel has no label.
+  the tab stop, so the row stays reachable. No tab names the body under the
+  row, so the body is a plain block and no tab's panel.
 - **Panels.** Only the selected tab's panel is on the page. The selected tab
   names it in `aria-controls`, and the panel (`RouteTabPanel`) takes that tab
   as its label through `aria-labelledby`. No other tab names a panel, because

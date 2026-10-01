@@ -564,8 +564,8 @@ describe("Spend › header, tiles and tabs", () => {
   it("lists Month, then the earlier design's five tabs it keeps, in order, with live counts, as path links", async () => {
     loaded();
     await renderSpend(["waste"]);
-    const nav = screen.getByRole("navigation", { name: "Spend views" });
-    const links = within(nav).getAllByRole("link");
+    const nav = screen.getByRole("tablist", { name: "Spend views" });
+    const links = within(nav).getAllByRole("tab");
     expect(links.slice(0, 6).map((a) => a.textContent)).toEqual([
       "Month",
       "Findings3",
@@ -576,7 +576,7 @@ describe("Spend › header, tiles and tabs", () => {
     ]);
     // Month groups by operator, agent, and model, so those tabs and Coaching are gone.
     for (const gone of ["Coaching", "By operator", "By agent", "By model"]) {
-      expect(within(nav).queryByRole("link", { name: gone })).toBeNull();
+      expect(within(nav).queryByRole("tab", { name: gone })).toBeNull();
     }
     expect(links[0]).toHaveAttribute("href", "/acme/core-platform/spend");
     expect(links[1]).toHaveAttribute(
@@ -584,7 +584,11 @@ describe("Spend › header, tiles and tabs", () => {
       "/acme/core-platform/spend/findings",
     );
     expect(links[4]).toHaveAttribute("href", "/acme/core-platform/spend/waste");
-    expect(links[4]).toHaveAttribute("aria-current", "page");
+    expect(links[4]).toHaveAttribute("aria-selected", "true");
+    expect(links[4]).toHaveAttribute("tabindex", "0");
+    // The selected tab names the panel the tab's body draws in.
+    const panel = screen.getByRole("tabpanel", { name: /^Wasted spend/ });
+    expect(links[4]).toHaveAttribute("aria-controls", panel.id);
   });
 
   it("leaves a count off when its read did not answer, rather than printing a zero", async () => {
@@ -592,9 +596,9 @@ describe("Spend › header, tiles and tabs", () => {
     findings.mockResolvedValue(readError("findings_down", 503));
     waste.mockResolvedValue(readError("waste_down", 503));
     await renderSpend(["tokens"]);
-    const nav = screen.getByRole("navigation", { name: "Spend views" });
+    const nav = screen.getByRole("tablist", { name: "Spend views" });
     expect(
-      within(nav).getByRole("link", { name: "Findings" }),
+      within(nav).getByRole("tab", { name: "Findings" }),
     ).toBeInTheDocument();
     expect(tile("Wasted")).toHaveTextContent("not recorded");
   });
@@ -660,10 +664,10 @@ describe("Spend › Month", () => {
     expect(
       screen.getByText("What every run cost, from its own model requests."),
     ).toBeInTheDocument();
-    const nav = screen.getByRole("navigation", { name: "Spend views" });
-    expect(within(nav).getByRole("link", { name: "Month" })).toHaveAttribute(
-      "aria-current",
-      "page",
+    const nav = screen.getByRole("tablist", { name: "Spend views" });
+    expect(within(nav).getByRole("tab", { name: "Month" })).toHaveAttribute(
+      "aria-selected",
+      "true",
     );
     const total = screen
       .getByRole("heading", { name: "September 2026" })
