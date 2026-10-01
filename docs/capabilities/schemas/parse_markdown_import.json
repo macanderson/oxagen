@@ -493,12 +493,45 @@
           "additionalProperties": false
         },
         "description": "The Cedar policy files proposed, one per file"
+      },
+      "pullRequestFiles": {
+        "type": "object",
+        "properties": {
+          "count": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Files the rows marked add would put in the steering PR"
+          },
+          "max": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "description": "The most files one steering PR holds"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "count",
+          "max",
+          "message"
+        ],
+        "additionalProperties": false,
+        "description": "The files the rows marked add would put in one steering PR, and a message when that is more than one PR holds"
       }
     },
     "required": [
       "files",
       "records",
-      "policies"
+      "policies",
+      "pullRequestFiles"
     ],
     "additionalProperties": false
   }

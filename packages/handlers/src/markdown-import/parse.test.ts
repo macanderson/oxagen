@@ -180,6 +180,37 @@ describe("parse_markdown_import", () => {
       expect(forceAllowed(r.kind, r.force)).toBe(true);
       expect(r.kind === "constraint" ? r.effect !== null : r.effect === null).toBe(true);
     }
+    expect(out.pullRequestFiles).toEqual({ count: 4, max: 299, message: null });
+    expect(steeringMarkdownImportParse.output.safeParse(out).success).toBe(true);
+  });
+
+  it("says when the rows marked add are more than one steering PR holds", async () => {
+    let n = 0;
+    // Fifty short statements per file, none alike, so none is a duplicate.
+    const split = vi.fn<SplitModel>().mockImplementation(async () => ({
+      statements: Array.from({ length: 50 }, () => {
+        n += 1;
+        return {
+          statement: `Use tool ${n}.`,
+          label: `Tool ${n}`,
+          line: 1,
+          kind: "code-rule" as const,
+          kindReason: "It says how code is written.",
+          force: "should" as const,
+          forceWords: "",
+          effect: null,
+        };
+      }),
+    }));
+    const documents = Array.from({ length: 7 }, (_, i) => ({ filename: `rules-${i}.md`, content: "Use the tools." }));
+    const out = await run(deps({ split }), documents);
+    expect(out.records).toHaveLength(350);
+    expect(out.pullRequestFiles).toEqual({
+      count: 350,
+      max: 299,
+      message:
+        "The import marks 350 records and policy files add, and one steering PR holds at most 299 files. Mark 51 of them skip, or import the files in smaller sets.",
+    });
     expect(steeringMarkdownImportParse.output.safeParse(out).success).toBe(true);
   });
 
@@ -289,6 +320,35 @@ describe("parse_markdown_import", () => {
       action: "skip",
       issues: [],
     });
+  });
+
+  it("frees the ids of a policy file the import rebuilds, for any file in the import", async () => {
+    const published = [
+      {
+        path: "policy/deploys.cedar",
+        text: '@id("deploys")\nforbid (principal, action, resource);\n@id("staging.deploys")\npermit (principal, action, resource);\n',
+      },
+    ];
+    // staging.md claims the id deploys.md's rebuild drops, and comes first.
+    const staging = ["```cedar", '@id("staging.deploys")', "permit (principal, action, resource);", "```"].join("\n");
+    const deploys = ["```cedar", "forbid (principal, action, resource);", "```"].join("\n");
+    const out = await run(deps({ publishedPolicies: async () => published }), [
+      { filename: "staging.md", content: staging },
+      { filename: "deploys.md", content: deploys },
+    ]);
+    expect(out.policies.map((p) => [p.path, p.statements.map((s) => s.id), p.issues, p.action])).toEqual([
+      ["policy/staging.cedar", ["staging.deploys"], [], "add"],
+      ["policy/deploys.cedar", ["deploys"], [], "add"],
+    ]);
+    expect(out.policies[1]?.replaces).toBe(true);
+  });
+
+  it("still refuses an id a policy file the import leaves alone holds (negative)", async () => {
+    const published = [{ path: "policy/money.cedar", text: '@id("money.refund")\nforbid (principal, action, resource);\n' }];
+    const refunds = ["```cedar", '@id("money.refund")', "permit (principal, action, resource);", "```"].join("\n");
+    const out = await run(deps({ publishedPolicies: async () => published }), [{ filename: "refunds.md", content: refunds }]);
+    expect(out.policies[0]?.action).toBe("skip");
+    expect(out.policies[0]?.issues[0]?.message).toContain("which policy/money.cedar already uses");
   });
 
   it("refuses a policy with a broken statement, and one whose path another file takes (negative)", async () => {

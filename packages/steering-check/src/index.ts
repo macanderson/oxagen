@@ -32,3 +32,9 @@ export {
   type ComparedStatement,
   type StatementMatch,
 } from "./checks/conflicts";
+export {
+  markImportMatches,
+  type ImportMatch,
+  type ImportMatchRow,
+  type ImportPublishedRecord,
+} from "./import-matches";

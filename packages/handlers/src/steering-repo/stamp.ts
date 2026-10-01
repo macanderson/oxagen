@@ -20,6 +20,7 @@ import { readJsonLines } from "@oxagen/oxagen/steering-repo/files";
 import {
   BRANCH_PREFIXES,
   branchPrefixOf,
+  STEERING_PR_MAX_FILES,
   type BranchPrefix,
 } from "@oxagen/oxagen/steering-repo/names";
 import {
@@ -423,9 +424,10 @@ export const IMPORT_BRANCH = "steering/import-oxagen";
 /**
  * The most files one steering PR may change. The host's compare lists at most
  * 300 files and does not say when it cut the list, so `refuseLongCompare`
- * refuses a steering PR at 300.
+ * refuses a steering PR at 300. The contracts read the same number from
+ * @oxagen/oxagen/steering-repo/names.
  */
-export const STEERING_PR_MAX_FILES = 299;
+export { STEERING_PR_MAX_FILES };
 
 const IMPORT_BATCH = /^steering\/import-oxagen-([2-9]|[1-9][0-9]+)$/;
 

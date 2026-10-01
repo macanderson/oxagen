@@ -61,7 +61,7 @@ beforeEach(() => {
 });
 
 describe("settleStatements", () => {
-  it("keeps a force the kind allows when the file holds the words behind it", () => {
+  it("keeps a force the kind allows when the statement holds the words behind it", () => {
     const [s] = settleStatements({ statements: [proposed({})] }, CLAUDE_MD);
     expect(s).toMatchObject({ kind: "constraint", force: "must", forceWords: "Never", effect: "forbid" });
   });
@@ -99,6 +99,44 @@ describe("settleStatements", () => {
       ["should", ""],
       ["should", ""],
     ]);
+  });
+
+  it("takes a force's words only from the statement or its own source lines (negative)", () => {
+    const content = ["# Rules", "", "You must sign every commit.", "Tag the release after review."].join("\n");
+    const settled = settleStatements(
+      {
+        statements: [
+          proposed({ statement: "Sign every commit.", line: 3, kind: "code-rule", force: "must", forceWords: "must", effect: null }),
+          // The only "must" in the file is on line 3, which belongs to the other rule.
+          proposed({ statement: "Tag the release after review.", line: 4, kind: "procedure", force: "must", forceWords: "must", effect: null }),
+        ],
+      },
+      content,
+    );
+    expect(settled.map((s) => [s.statement, s.force, s.forceWords])).toEqual([
+      ["Sign every commit.", "must", "must"],
+      ["Tag the release after review.", "should", ""],
+    ]);
+  });
+
+  it("reads a procedure's steps as its own source lines", () => {
+    const content = ["Release:", "1. Tag the release.", "2. You must publish the notes.", "Never skip CI."].join("\n");
+    const [procedure] = settleStatements(
+      {
+        statements: [
+          proposed({
+            statement: "1. Tag the release.\n2. Publish the notes.",
+            line: 2,
+            kind: "procedure",
+            force: "must",
+            forceWords: "must",
+            effect: null,
+          }),
+        ],
+      },
+      content,
+    );
+    expect(procedure).toMatchObject({ force: "must", forceWords: "must" });
   });
 
   it("gives every constraint an effect, and every other kind none", () => {

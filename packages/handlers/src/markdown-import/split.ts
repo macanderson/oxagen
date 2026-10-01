@@ -9,8 +9,9 @@
 // Billing page counts it as in-app agent spend, as that importer's did.
 //
 // The model proposes. This module decides: a force the kind does not allow
-// moves to the kind's default, words the file does not hold justify nothing,
-// a constraint always leaves with an effect, and every other kind with none.
+// moves to the kind's default, words outside the statement and its own source
+// lines justify nothing, a constraint always leaves with an effect, and every
+// other kind with none.
 import { z } from "zod";
 import { generateObjectFor, selectModelForOrg } from "@oxagen/ai";
 import { CREDIT_REASONS } from "@oxagen/billing";
@@ -67,7 +68,7 @@ export const SPLIT_SYSTEM = [
   "- label: a name of at most 36 characters, in sentence case.",
   "- line: the number of the line the statement comes from, as the document below numbers its lines.",
   "- kind: one of the eight kinds below, and kindReason: one line on why it is that kind.",
-  "- force: must, should, may, or info, and forceWords: the exact words from the document that justify it. 'must', 'never', 'always', and 'do not' point to must. 'should' and 'prefer to' point to should. 'consider' and 'can' point to may. When no words signal a force, leave forceWords empty and use the kind's default: should for business-rule, code-rule, constraint, procedure, and skill, may for a preference, and info for a fact or a memory.",
+  "- force: must, should, may, or info, and forceWords: the exact words from the statement's own lines in the document that justify it. Words from another rule justify nothing. 'must', 'never', 'always', and 'do not' point to must. 'should' and 'prefer to' point to should. 'consider' and 'can' point to may. When no words signal a force, leave forceWords empty and use the kind's default: should for business-rule, code-rule, constraint, procedure, and skill, may for a preference, and info for a fact or a memory.",
   "- effect: require or forbid for a constraint, and null for every other kind.",
   "",
   "Kinds:",
@@ -144,38 +145,54 @@ export function effectOf(statement: string): RecordEffect {
   return FORBID_WORDS.test(statement) ? "forbid" : "require";
 }
 
-/** True when `words` appear in the statement or in the file, ignoring case and spacing. */
-function quoted(words: string, statement: string, content: string): boolean {
+/**
+ * The file lines a statement came from: its source line, and as many lines
+ * after it as the statement itself holds, so a procedure's steps count.
+ */
+export function sourceLines(lines: readonly string[], line: number, statement: string): string {
+  const span = Math.max(1, statement.split("\n").length);
+  return lines.slice(line - 1, line - 1 + span).join("\n");
+}
+
+/**
+ * True when `words` appear in the statement or in its own source lines,
+ * ignoring case and spacing. Words found anywhere else in the file justify
+ * nothing: another rule's "must" does not make this one a must.
+ */
+export function justifies(words: string, statement: string, source: string): boolean {
   const needle = words.trim().replace(/\s+/g, " ").toLowerCase();
   if (needle === "") return false;
   const hay = (text: string) => text.replace(/\s+/g, " ").toLowerCase();
-  return hay(statement).includes(needle) || hay(content).includes(needle);
+  return hay(statement).includes(needle) || hay(source).includes(needle);
 }
 
 /**
  * Apply the import's rules to what the model proposed. A blank statement is
  * dropped. A statement whose force its kind forbids takes the kind's default,
- * and so does one whose justifying words the file does not hold. Lines
- * outside the file move to its first or last line.
+ * and so does one whose justifying words are neither in the statement nor in
+ * its own source lines. Lines outside the file move to its first or last
+ * line.
  */
 export function settleStatements(
   output: SplitOutput,
   content: string,
 ): SplitStatement[] {
-  const lineCount = content.split("\n").length;
+  const lines = content.split("\n");
   const kept = output.statements
     .filter((s) => s.statement.trim() !== "")
     .slice(0, MARKDOWN_IMPORT_STATEMENTS_MAX);
   return kept.map((s) => {
     const statement = s.statement.trim();
     const kind = s.kind;
+    const line = Math.min(Math.max(1, s.line), lines.length);
     const words = s.forceWords.trim();
-    const signalled = words !== "" && quoted(words, statement, content);
+    const signalled =
+      words !== "" && justifies(words, statement, sourceLines(lines, line, statement));
     const allowed = signalled && forceAllowed(kind, s.force);
     return {
       statement,
       label: s.label.trim(),
-      line: Math.min(Math.max(1, s.line), lineCount),
+      line,
       kind,
       kindReason: s.kindReason.trim().slice(0, 300),
       force: allowed ? s.force : clampForce(kind, null),

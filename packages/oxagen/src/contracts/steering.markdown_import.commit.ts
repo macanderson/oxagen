@@ -2,9 +2,28 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 import {
   MARKDOWN_IMPORT_ROWS_MAX,
+  markdownImportFileCount,
   markdownImportPolicySchema,
   markdownImportRecordSchema,
+  markdownImportTooManyFiles,
 } from "./steering.markdown_import.shared";
+
+/**
+ * The commit's fields. The MCP tool lists them, and the contract wraps them in
+ * the refinement that holds the PR to STEERING_PR_MAX_FILES files.
+ */
+export const markdownImportCommitFields = {
+  records: z
+    .array(markdownImportRecordSchema)
+    .max(MARKDOWN_IMPORT_ROWS_MAX)
+    .default([])
+    .describe("The record rows from parse_markdown_import, as edited"),
+  policies: z
+    .array(markdownImportPolicySchema)
+    .max(MARKDOWN_IMPORT_ROWS_MAX)
+    .default([])
+    .describe("The policy rows from parse_markdown_import, as edited"),
+};
 
 /**
  * commit_markdown_import: the second half of the Markdown import
@@ -19,7 +38,9 @@ import {
  * as the "Oxagen steering" check. Nothing steers until the PR merges.
  *
  * It refuses a row whose force its kind forbids, a constraint with no
- * effect, a conflict nobody chose for, and a policy the early checks failed.
+ * effect, rows that mark more than STEERING_PR_MAX_FILES (299) records and
+ * policies add, a conflict nobody chose for, and a policy the early checks
+ * failed.
  */
 export const steeringMarkdownImportCommit = registerCapability({
   name: "commit_markdown_import",
@@ -40,19 +61,14 @@ export const steeringMarkdownImportCommit = registerCapability({
     workspace: { Owner: "allow", Member: "allow" },
   },
   input: z
-    .object({
-      records: z
-        .array(markdownImportRecordSchema)
-        .max(MARKDOWN_IMPORT_ROWS_MAX)
-        .default([])
-        .describe("The record rows from parse_markdown_import, as edited"),
-      policies: z
-        .array(markdownImportPolicySchema)
-        .max(MARKDOWN_IMPORT_ROWS_MAX)
-        .default([])
-        .describe("The policy rows from parse_markdown_import, as edited"),
-    })
-    .strict(),
+    .object(markdownImportCommitFields)
+    .strict()
+    .superRefine((rows, ctx) => {
+      const message = markdownImportTooManyFiles(markdownImportFileCount(rows));
+      if (message !== null) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: [], message });
+      }
+    }),
   output: z
     .object({
       pullRequest: z

@@ -579,14 +579,17 @@ export {
   MARKDOWN_IMPORT_ROWS_MAX,
   MARKDOWN_IMPORT_STATEMENTS_MAX,
   markdownImportDocumentSchema,
+  markdownImportFileCount,
   markdownImportFileSchema,
   markdownImportMatchSchema,
   markdownImportOriginSchema,
   markdownImportPolicyIssueSchema,
   markdownImportPolicySchema,
   markdownImportPolicyStatementSchema,
+  markdownImportPullRequestFilesSchema,
   markdownImportRecordSchema,
   markdownImportTargetSchema,
+  markdownImportTooManyFiles,
 } from "./steering.markdown_import.shared";
 export type {
   MarkdownImportDocument,

@@ -15,17 +15,22 @@
 //      rows (matches.ts). A duplicate defaults to skip. A conflict waits for
 //      a person's choice. A policy whose statements match a published policy
 //      file is a duplicate and defaults to skip.
+//   5. The rows marked add are counted against the 299 files one steering PR
+//      holds, and the result says when the import is over.
 //
 // Nothing is written.
 import type { CapabilityHandler } from "@oxagen/oxagen";
-import type {
-  MarkdownImportDocument,
-  MarkdownImportFile,
-  MarkdownImportPolicy,
-  MarkdownImportRecord,
-  MarkdownImportTarget,
+import {
+  markdownImportFileCount,
+  markdownImportTooManyFiles,
+  type MarkdownImportDocument,
+  type MarkdownImportFile,
+  type MarkdownImportPolicy,
+  type MarkdownImportRecord,
+  type MarkdownImportTarget,
 } from "@oxagen/oxagen/contracts/steering.markdown_import.shared";
 import { steeringMarkdownImportParse } from "@oxagen/oxagen/contracts/steering.markdown_import.parse";
+import { STEERING_PR_MAX_FILES } from "@oxagen/oxagen/steering-repo/names";
 import { policyFilePath } from "@oxagen/oxagen/steering-repo/paths";
 import { clampForce } from "@oxagen/oxagen/steering-repo/record-force";
 import { countTokens } from "@oxagen/oxagen/steering-repo/tokens";
@@ -237,19 +242,28 @@ export function createParseMarkdownImportHandler(
       },
     );
 
-    // Policies run in file order, so the ids each one takes are stable. A
-    // file replaces the published policy file at its path, so that file's ids
-    // are free to it.
+    // An import file replaces the published policy file at its path, so every
+    // id the published file holds is free once the import rebuilds it. They
+    // are released before any file is built, so a file earlier in the import
+    // can take an id a later file's rebuild drops.
+    const rebuilt = new Set(
+      results.flatMap((result, index) =>
+        result.file.target === "policies"
+          ? [policyFilePath(policySlug((input.documents[index] as MarkdownImportDocument).filename))]
+          : [],
+      ),
+    );
+    for (const [id, holder] of [...takenIds]) {
+      if (rebuilt.has(holder)) takenIds.delete(id);
+    }
+
+    // Policies run in file order, so the ids each one takes are stable.
     const written = new Map<string, string>();
     for (const [index, result] of results.entries()) {
       const document = input.documents[index] as MarkdownImportDocument;
       if (result.file.target !== "policies") continue;
       const slug = policySlug(document.filename);
-      const path = policyFilePath(slug);
-      const taken = new Map(
-        [...takenIds].filter(([, holder]) => holder !== path),
-      );
-      const built = policyFile({ content: document.content, slug, taken });
+      const built = policyFile({ content: document.content, slug, taken: takenIds });
       for (const statement of built.statements) takenIds.set(statement.id, built.path);
       const issues = [...built.issues];
       const other = written.get(built.path);
@@ -317,10 +331,17 @@ export function createParseMarkdownImportHandler(
       };
     });
 
+    const policyRows = results.flatMap((result) => (result.policy ? [result.policy] : []));
+    const count = markdownImportFileCount({ records: rows, policies: policyRows });
     return {
       files: results.map((result) => result.file),
       records: rows,
-      policies: results.flatMap((result) => (result.policy ? [result.policy] : [])),
+      policies: policyRows,
+      pullRequestFiles: {
+        count,
+        max: STEERING_PR_MAX_FILES,
+        message: markdownImportTooManyFiles(count),
+      },
     };
   };
 }

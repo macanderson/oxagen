@@ -42,6 +42,7 @@ other file implies `records`.
 | `files` | one per file | the target used, the target implied and why, the row counts, and an `error` when the file yielded nothing |
 | `records` | record rows | the proposed steering records, file by file in source order |
 | `policies` | policy rows | the proposed Cedar policy files, one per file |
+| `pullRequestFiles` | `{ count, max, message }` | the files the rows marked add would put in the steering PR, against the 299 one PR holds. `message` says what to do when the count is over, and is null when it fits |
 
 ### Record row
 
@@ -77,7 +78,8 @@ other file implies `records`.
 2. Any other `records` file goes to one model call, which splits it into at most 50
    statements. A numbered list of steps stays one procedure.
 3. The model proposes each statement's kind and force. The handler keeps a force only when the
-   kind allows it and the justifying words are in the file. Otherwise the kind's default
+   kind allows it and the justifying words are in the statement or in its own source lines. A
+   "must" on another rule's line justifies nothing. Otherwise the kind's default
    applies: `should` for `business-rule`, `code-rule`, `constraint`, `procedure`, and `skill`,
    `may` for a `preference`, and `info` for a `fact` or a `memory`. A preference never carries
    `must` or `should`, and a fact or a memory carries only `info`.
