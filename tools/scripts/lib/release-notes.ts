@@ -30,7 +30,7 @@ export const TREE_SKILL_FILES = [".claude/skills/clear-prose/SKILL.md"] as const
  * The brand kit. This repo carries only the branding skill's stub, so the
  * references the model reads come from here.
  */
-export const BRAND_KIT_REPO = "oxageninc/brand";
+export const BRAND_KIT_REPO = "macanderson/oxagen-brand";
 
 /** The branding references the model reads from the kit before it writes. */
 export const KIT_SKILL_FILES = [

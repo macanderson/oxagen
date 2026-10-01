@@ -1,6 +1,6 @@
 # Fail CI when this repo's copies of the brand kit fall behind the kit.
 #
-# oxageninc/brand is the one source for every colour, face, mark, and
+# macanderson/oxagen-brand is the one source for every colour, face, mark, and
 # icon Oxagen and Stella ship. tools/scripts/sync-brand-assets.mjs copies the
 # files this repo uses byte for byte, and its --check lists every file that
 # differs, is missing, or should not be here. This job runs that check
@@ -39,7 +39,7 @@ jobs:
       - name: Check out the brand kit
         uses: actions/checkout@v5
         with:
-          repository: oxageninc/brand
+          repository: macanderson/oxagen-brand
           ref: main
           path: .brand-kit
           persist-credentials: false
@@ -51,6 +51,6 @@ jobs:
       - name: Brand files match the kit
         run: |
           node tools/scripts/sync-brand-assets.mjs --brand .brand-kit --check || {
-            echo "::error::Brand files differ from oxageninc/brand main. Run node tools/scripts/sync-brand-assets.mjs --brand <kit checkout> and commit the result."
+            echo "::error::Brand files differ from macanderson/oxagen-brand main. Run node tools/scripts/sync-brand-assets.mjs --brand <kit checkout> and commit the result."
             exit 1
           }

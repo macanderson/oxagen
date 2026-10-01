@@ -35,7 +35,7 @@ UI, and Monaspace Neon for code, and the app loads the kit's faces.
    `mockups/src/` (`v3.css`, `shared.css`, and the area modules), and the demo
    record in `mockups/fixtures/`.
 2. **The brand kit sets tokens, type, marks, and components.** The kit is
-   `oxageninc/brand`. `tools/scripts/sync-brand-assets.mjs` copies its
+   `macanderson/oxagen-brand`. `tools/scripts/sync-brand-assets.mjs` copies its
    `tokens/house-tokens.css` to `packages/ui/src/styles/house-tokens.css`, and
    `pnpm check:brand` fails on drift. `packages/ui/src/styles/globals.css` and
    `house-tailwind.css` map those tokens to the semantic names the app uses,

@@ -7,7 +7,7 @@
   the agent asks for the keys and a rule answers, stands.
 - **Related:** `docs/VISION.md`, ADR-043 (Oxagen governs agents, it does not
   run them), ADR-052 (the governed action is the billable unit), PR #3075 (the
-  branding skill and ADR-066), `oxageninc/brand` `messages/` (the message
+  branding skill and ADR-066), `macanderson/oxagen-brand` `messages/` (the message
   registry) and `skills/oxagen-branding/` (the copy every agent reads)
 
 ## Context
@@ -93,7 +93,7 @@ the dod ships and are never the lead.
   durations need dated evidence before publication.
 
 **The message registry is the source of truth for copy.** Every approved line,
-section, card, email and ad is one YAML entry in `oxageninc/brand`
+section, card, email and ad is one YAML entry in `macanderson/oxagen-brand`
 `messages/`, carrying its audience, release status, gate, qualifier, required
 evidence, owner and review date. The message bank page, the JSON export and the
 ad recipes are generated from it, and a check fails when a rendered ad maps to

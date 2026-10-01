@@ -2,7 +2,7 @@
 // vitest.config.ts leaves `*.tree.test.ts` files out of turbo's cached tasks,
 // so `pnpm check:tree-guards` runs them uncached in the checks job (#4664
 // item 2). The branding references come from a fake kit here, because the
-// real ones live in oxageninc/brand (#4804).
+// real ones live in macanderson/oxagen-brand (#4804).
 import { describe, expect, it } from "vitest";
 import {
   BRAND_KIT_REPO,
