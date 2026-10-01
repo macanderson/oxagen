@@ -1130,7 +1130,8 @@ export const flows: Flow[] = [
         exit: "BillingSuspendedError",
       },
       { label: "Invoice billing?", sub: "admit" },
-      { label: "Remaining > 0?", sub: "readBucket → admit" },
+      { label: "Subscribed?", sub: "admit" },
+      { label: "Grant left?", sub: "readBucket → admit" },
       {
         label: "Refuse",
         sub: "bucket exhausted",
@@ -1144,7 +1145,7 @@ export const flows: Flow[] = [
       "packages/billing/src/spend-budget-gate.ts#assertWithinSpendBudget",
     ],
     notes: [
-      "A Free-tier org with no saved card is refused with the reason <code>free_no_payment_method</code>.",
+      "An org with no subscription is refused once its signup grant is spent or expired, with the reason <code>signup_grant_used</code>, <code>signup_grant_expired</code> or <code>no_signup_grant</code>. A saved card alone unlocks nothing.",
       "The spend-budget gate runs right after it in <code>kernel.invoke()</code>, on the same skip conditions. It checks the org and workspace ceilings in <code>billing.spend_budgets</code> against <code>billing.spend_counters</code>. A breach throws <code>budget_exceeded</code>, and a database error fails open.",
     ],
   },

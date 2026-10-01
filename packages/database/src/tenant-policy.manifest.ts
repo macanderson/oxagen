@@ -135,6 +135,10 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   // through withSystemDb.
   { table: "billing.contract_terms", policyClass: "org_only" },
   { table: "billing.gau_buckets", policyClass: "org_only" },
+  // ADR-NEW (signup grant): one row per org, org_id NOT NULL, no
+  // workspace_id. create_org writes it through its system transaction; the
+  // gate and the recorder read it through withTenantDb.
+  { table: "billing.gau_signup_grants", policyClass: "org_only" },
   { table: "billing.gau_settlements", policyClass: "org_only" },
   // The refunded/disputed half of the settlement ledger (ADR-085). org_id NOT
   // NULL, no workspace_id, written only by the webhook through withSystemDb.

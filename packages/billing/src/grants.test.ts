@@ -48,6 +48,13 @@ vi.mock("./invoices", () => ({
   syncInvoiceFromStripe: syncInvoiceMock,
 }));
 
+// The governed-action grant has its own tests (signup-grant.test.ts). Here
+// only its call on the credits' transaction is checked.
+const issueSignupGrantMock = vi.fn().mockResolvedValue(null);
+vi.mock("./signup-grant", () => ({
+  issueSignupGrant: issueSignupGrantMock,
+}));
+
 // billingProvider mock — only getCheckoutSessionCreditPacks is used in grants.
 const getCheckoutSessionCreditPacksMock = vi.fn().mockResolvedValue([]);
 vi.mock("./client", () => ({
@@ -212,6 +219,7 @@ function makeInvoice(overrides: Partial<BillingInvoice> = {}): BillingInvoice {
     orgId: "org-abc",
     billingReason: "subscription_create",
     gauSettlementId: null,
+    lineItemsComplete: true,
     lineItems: [],
     ...overrides,
   };
@@ -255,6 +263,12 @@ describe("grantFreeCredits", () => {
     expect(txMock.insert).toHaveBeenCalledTimes(3);
     expect(txMock._lotInsertCalled).toBe(true);
     expect(txMock._balanceUpsertCalled).toBe(true);
+    // ADR-NEW (signup grant): the deprecated app's signups get the
+    // governed-action grant on the same transaction.
+    expect(issueSignupGrantMock).toHaveBeenCalledWith(
+      expect.anything(),
+      "org-abc",
+    );
   });
 
   it("already granted (ledger conflict) — lot and balance inserts NOT called", async () => {

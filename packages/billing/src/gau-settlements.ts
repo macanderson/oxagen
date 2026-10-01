@@ -33,7 +33,7 @@ import {
   ensureCurrentBucket,
   gauRemainingSql,
   gauUninvoicedSql,
-  periodFor,
+  bucketBasis,
   remainingGau,
   uninvoicedGau,
   type GauBucketRow,
@@ -239,13 +239,12 @@ export async function settleGauPaid(
   const row = rows[0];
   if (!row) return null;
   if (row.kind === "checkout" || row.kind === "auto_topup") {
-    const { terms, subscription } = await readGauEntitlement(
-      tx,
-      row.orgId,
+    const { terms, period } = bucketBasis(
+      await readGauEntitlement(tx, row.orgId, now),
       now,
     );
     await ensureCurrentBucket(tx, row.orgId, {
-      period: periodFor(subscription, now),
+      period,
       terms,
       usedDelta: 0,
       purchasedDelta: row.quantityGau,
@@ -513,7 +512,19 @@ async function closeGauPeriod(bucket: GauBucketRow, now: Date): Promise<void> {
     eq(schema.gauBuckets.id, bucket.id),
     isNull(schema.gauBuckets.closedAt),
   );
-  if (!settings.approvedForInvoiceBilling || quantity === 0) {
+  // Overage is billed for an organisation approved for invoice billing and,
+  // since the 2026-10-01 decision, for every subscriber (ADR-NEW, signup
+  // grant). An organisation with no subscription is refused at its
+  // allowance, so it has no overage to bill.
+  const billsOverage =
+    quantity > 0 &&
+    (settings.approvedForInvoiceBilling ||
+      (
+        await withSystemDb((tx) =>
+          readGauEntitlement(tx, bucket.orgId, now),
+        )
+      ).subscription !== null);
+  if (!billsOverage) {
     await withSystemDb((tx) =>
       tx
         .update(schema.gauBuckets)
@@ -583,8 +594,10 @@ export async function closeInvoiceAccrual(
   }
 
   const claimed = await withSystemDb(async (tx) => {
-    const { terms, subscription } = await readGauEntitlement(tx, orgId, now);
-    const period = periodFor(subscription, now);
+    const { terms, period } = bucketBasis(
+      await readGauEntitlement(tx, orgId, now),
+      now,
+    );
     const buckets = await tx
       .select()
       .from(schema.gauBuckets)
@@ -851,12 +864,10 @@ export async function grantGauPurchaseForCheckout(
         sql`SELECT pg_advisory_xact_lock(hashtextextended(${`gau_purchase:${session.paymentIntentId}`}::text, 0))`,
       );
     }
-    const { terms, subscription } = await readGauEntitlement(
-      tx,
-      purchase.orgId,
+    const { terms, period } = bucketBasis(
+      await readGauEntitlement(tx, purchase.orgId, now),
       now,
     );
-    const period = periodFor(subscription, now);
     const bucket = await ensureCurrentBucket(tx, purchase.orgId, {
       period,
       terms,

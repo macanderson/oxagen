@@ -79,7 +79,7 @@ priced from `ACTION_RATE_BANDS` and debited from a cents credit balance by
 | `packages/billing/src/billing-settings.ts` | `readOrgBillingSettings(orgId)`: the org's billing mode (`approved_for_invoice_billing`, `invoice_gau_max`) and auto top-up preferences (`auto_topup_enabled`, `auto_topup_blocks`); column defaults for an org with no row, never an insert. |
 | `packages/billing/src/action-metering.ts` | `recordGovernedAction` debits the bucket, runs the auto top-up (prepaid) or the interim-invoice threshold (invoice billing), and never throws. |
 | `packages/billing/src/gau-settlements.ts` | `billing.gau_settlements`: every block purchase, auto top-up, interim and period-close charge as a Stripe Invoice, with `paid` the only terminal state. |
-| `packages/oxagen/src/kernel.ts` | The admission gate is `assertGauAvailable`: refuses a prepaid org at `remaining ≤ 0` (`gau_exhausted`, 402; for a Free org with no default payment method the error carries `reason: "free_no_payment_method"`) and a suspended org in either mode; never an invoice-billed org for lack of GAUs; never charges. Skipped when the contract sets `noBillingGate: true`. |
+| `packages/oxagen/src/kernel.ts` | The admission gate is `assertGauAvailable`: refuses an org with no subscription once its signup grant is spent or expired (`gau_exhausted`, 402, with `reason` `signup_grant_used`, `signup_grant_expired` or `no_signup_grant`; 2026-10-01, ADR-NEW signup grant) and a suspended org in any mode; never a subscriber or an invoice-billed org for lack of GAUs; never charges. Skipped when the contract sets `noBillingGate: true`. |
 | `packages/inngest-functions/src/functions/billing.gau-close.ts` | Hourly, per org: closes ended months (period-close invoice in invoice mode) and resumes settlements Stripe never answered. |
 
 ---
@@ -185,9 +185,9 @@ organisation. v1 rates, set by the maintainer 2026-09-14:
 
 | Tier | Platform | Included GAUs / month | Rate per GAU | Block size | Currency | Evidence retention | Past the allowance |
 |---|---|---|---|---|---|---|---|
-| `free` | $0 | 5,000 | 5,000 micros ($5 per 1,000) | 5,000 GAU ($25.00) | USD | 30 days | refused until the org saves a card or the next month opens; with a saved card, auto top-up at list |
-| `build` | $199 / mo | 50,000 | 5,000 micros ($5 per 1,000) | 5,000 GAU ($25.00) | USD | 12 months | auto top-up at list |
-| `scale` | $999 / mo | 300,000 | 5,000 micros ($5 per 1,000) | 5,000 GAU ($25.00) | USD | 12 months | auto top-up at list; invoice billing eligible |
+| `free` (signup grant) | $0 | none: one grant of 33,000 GAU at signup, expiring 30 days later, never renewed | n/a | n/a | USD | 30 days | refused until the org subscribes; a saved card alone unlocks nothing |
+| `build` | $199 / mo | 50,000 | 5,000 micros ($5 per 1,000) | 5,000 GAU ($25.00) | USD | 12 months | overage invoiced at the plan rate |
+| `scale` | $999 / mo | 300,000 | 5,000 micros ($5 per 1,000) | 5,000 GAU ($25.00) | USD | 12 months | overage invoiced at the plan rate; invoice billing eligible |
 | `enterprise` | committed annual, negotiated | negotiated (`billing.contract_terms`) | negotiated: $2.50 – $3.00 per 1,000 at ≥ 5M / year | negotiated | USD | 12 months, extensible | invoice billing |
 
 These figures are the published terms `billing.plans` carries
@@ -212,7 +212,25 @@ WL-56 lands. No feature is gated on the enterprise licence: every feature,
 IAM and the SOC 2 controls included, is on for every tier (ADR-055 §2,
 WL-55).
 
-**Free saves a card or waits (maintainer, 2026-09-14).** A Free org that
+**Amended 2026-10-01: a one-time signup grant, then a subscription
+(maintainer, #4886, ADR-NEW signup grant).** A new organization gets one
+grant of governed actions, sized and timed by the Free plan row
+(`signup_grant_gau`, 33,000, and `signup_grant_days`, 30). It is granted once
+at signup, expires 30 days after it, and never renews. Signing up asks for no
+card. When the grant is spent or expires, the gate refuses the next governed
+action with `gau_exhausted` and a reason (`signup_grant_used`,
+`signup_grant_expired`, or `no_signup_grant`) that says to add a card and
+choose a plan. A saved card with no subscription leaves the refusal in place.
+A subscriber is never refused for lack of GAUs: its actions past the plan's
+allowance are billed as overage at the plan's rate, with ADR-055 §7's interim
+threshold applied to every subscriber. An operator changes the grant's size,
+its lifetime, or `subscription_required_after_grant` on the Free row with no
+deploy. With that rule cleared, an organization past its grant falls back to
+the Free row's `included_gau_per_month` each calendar month. This replaces
+the "Free saves a card or waits" rule below and the prepaid path under
+"Beyond the allowance", which stay for the record.
+
+**Free saves a card or waits (maintainer, 2026-09-14; replaced 2026-10-01).** A Free org that
 exhausts its monthly allowance (5,000 GAU) is refused further governed actions
 (`gau_exhausted` / 402) until either (a) the next monthly period opens a new
 allowance, or (b) the org saves a payment method. Saving a card is the gate,

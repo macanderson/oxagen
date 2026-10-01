@@ -9,6 +9,7 @@ import { syncInvoiceFromStripe } from "./invoices";
 import { CREDIT_REASONS } from "./constants";
 import { settleOwedCredits, upsertBalanceMirror } from "./credits";
 import { logger } from "./logger";
+import { issueSignupGrant } from "./signup-grant";
 import type { BillingCheckoutSession, BillingInvoice } from "./provider";
 
 /**
@@ -192,7 +193,14 @@ export async function grantFreeCredits(orgId: string): Promise<void> {
   // RLS, silently dropping the $5 signup grant. credit_* tables are org_only and
   // every write is scoped by the explicit orgId. Mirrors grantPlanCreditsForInvoicePaid
   // / grantCreditPackForCheckout.
-  const granted = await withSystemDb((tx) => grantSignupCredits(tx, orgId));
+  const granted = await withSystemDb(async (tx) => {
+    // The governed-action signup grant rides the same transaction as the
+    // credits: this path creates organisations for the deprecated app until
+    // cutover, and an organisation without its grant is refused at its first
+    // governed action (ADR-NEW, signup grant).
+    await issueSignupGrant(tx, orgId);
+    return grantSignupCredits(tx, orgId);
+  });
 
   if (granted) {
     logger.info(

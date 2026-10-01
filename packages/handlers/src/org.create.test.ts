@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   bootstrapOrgIAM: vi.fn(),
   bootstrapWorkspace: vi.fn(),
   grantSignupCredits: vi.fn(),
+  issueSignupGrant: vi.fn(),
   openOnboardingGate: vi.fn(),
   provisionOrgGraph: vi.fn(),
   recordOrgGraphDatabase: vi.fn(),
@@ -101,10 +102,13 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 
 // The signup grant is written on the org transaction (grants.test.ts covers
 // the ledger, lot and balance rows it writes). The mock exposes only
-// grantSignupCredits, so any other billing call fails the test.
+// grantSignupCredits and issueSignupGrant, so any other billing call fails
+// the test. signup-grant.test.ts covers the grant row itself.
 mocks.grantSignupCredits.mockResolvedValue(true);
+mocks.issueSignupGrant.mockResolvedValue(null);
 vi.mock("@oxagen/billing", () => ({
   grantSignupCredits: mocks.grantSignupCredits,
+  issueSignupGrant: mocks.issueSignupGrant,
 }));
 
 // IAM provisioning is tested in iam-provision.test.ts and the workspace
@@ -468,6 +472,21 @@ describe("organizationCreateHandler (@oxagen/handlers)", () => {
     expect(mocks.grantSignupCredits).toHaveBeenCalledWith(
       iamTx,
       "internal_org_id",
+    );
+  });
+
+  // ADR-NEW (signup grant, #4886): the governed-action grant commits with
+  // the org, dated from the org's creation.
+  it("issues the one-time governed-action grant on the org transaction", async () => {
+    mocks.issueSignupGrant.mockClear();
+    await organizationCreateHandler(INPUT, CTX);
+
+    const iamTx = mocks.bootstrapOrgIAM.mock.calls[0]?.[0]?.tx;
+    expect(mocks.issueSignupGrant).toHaveBeenCalledTimes(1);
+    expect(mocks.issueSignupGrant).toHaveBeenCalledWith(
+      iamTx,
+      "internal_org_id",
+      ORG_ROW.createdAt,
     );
   });
 

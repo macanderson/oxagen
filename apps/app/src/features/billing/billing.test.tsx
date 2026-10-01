@@ -32,6 +32,7 @@ import {
   contractRate,
   evidenceRetention,
   freeNoCardBucket,
+  grantBucket,
   invoiceBucket,
   invoicePage,
   invoiceRow,
@@ -487,6 +488,28 @@ describe("Meters", () => {
     );
   });
 
+  // #3844: an organization on its signup grant sees what is left and when it ends.
+  it("shows what is left of the signup grant and its expiry on the governed row", async () => {
+    await renderBilling({ ...LOADED, bucket: readOk(grantBucket()) });
+    const governed = section("Meters").querySelector(
+      '[data-meter="governed"]',
+    );
+    expect(governed).toHaveTextContent(
+      "Governed actions1,50031,500 of the 33,000 signup grant left until 2026-10-10",
+    );
+  });
+
+  it("says when an expired signup grant ended", async () => {
+    await renderBilling({
+      ...LOADED,
+      bucket: readOk(grantBucket({ active: false, remainingGau: 0 })),
+    });
+    const governed = section("Meters").querySelector(
+      '[data-meter="governed"]',
+    );
+    expect(governed).toHaveTextContent("signup grant ended 2026-10-10");
+  });
+
   it("draws the design's note and nothing else under the table: no billing mode, overdraft or exhausted line (negative)", async () => {
     await renderBilling({
       ...LOADED,
@@ -743,16 +766,25 @@ describe("Price list", () => {
     expect(
       [...list.querySelectorAll("tr")].map((tr) => tr.textContent),
     ).toEqual([
-      "Freeevery governance feature, an included monthly allowance, days of evidence not recorded, seats not recorded",
+      "Freeevery governance feature and a signup grant not recorded",
       "Governed actions in blocks of 5,000$25.00 per block at the published rate",
       "Negotiated agreementthe same four figures negotiated per organization",
       "Invoice billinguncapped with overage invoiced at the contracted rate at period end",
       "Evidence retention12 months included on paid plans and $0.08 per GB-month after that",
       "Tokens Oxagen buys for youat cost and capped",
-      "Enterprise (annual)from not recorded per year",
+      "Enterprise (annual)negotiated per organization",
     ]);
     expect(list).toHaveTextContent(
-      "The free tier includes every feature at any volume. Its limits are evidence retention and seats.",
+      "The free tier includes every feature. Its limits are the signup grant and evidence retention.",
+    );
+  });
+
+  // #3844: the Free row prints the signup grant read from get_gau_bucket.
+  it("prints the signup grant's size, lifetime and evidence days on the Free row", async () => {
+    await renderBilling({ ...LOADED, bucket: readOk(grantBucket()) });
+    const free = section("Price list").querySelector('[data-price="free"]');
+    expect(free).toHaveTextContent(
+      "Freeevery governance feature and one signup grant of 33,000 governed actions for 30 days with 30 days of evidence",
     );
   });
 });

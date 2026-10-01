@@ -10,12 +10,13 @@
  * The shape of the meter, in one paragraph. Every top-level `invoke()` that
  * passes its gates, runs its handler and validates its output is one governed
  * action. Actions debit the organisation's month bucket of governed action
- * units (`billing.gau_buckets`, gau-bucket.ts): the month's included units
- * come from the customer's contracted terms (contract-terms.ts), bought units
- * arrive through Checkout or auto top-up, and unused bought units carry into
- * the next month. Past the bucket a prepaid organisation is topped up from
- * its saved card or refused by the gate; an invoice-billed organisation is
- * never capped and is invoiced for its overage. Nothing about the charge
+ * units (`billing.gau_buckets`, gau-bucket.ts): a subscriber's month holds
+ * its plan's or its agreement's allowance (contract-terms.ts), and a new
+ * organisation's first bucket holds its one-time signup grant
+ * (signup-grant.ts). Past the allowance a subscriber or an invoice-billed
+ * organisation is never capped and is invoiced for its overage; an
+ * organisation with no subscription is refused by the gate once its grant is
+ * spent or expired (ADR-NEW, signup grant). Nothing about the charge
  * depends on how long a run took or how many tokens it spent, because under
  * ADR-043 nothing in this repo costs more for either.
  *
@@ -31,7 +32,7 @@ import { readOrgBillingSettings } from "./billing-settings";
 import { resolveGauEntitlement } from "./contract-terms";
 import { ensureStripeCustomer } from "./customers";
 import {
-  periodFor,
+  bucketBasis,
   remainingGau,
   uninvoicedGau,
   type GauBucketRow,
@@ -42,7 +43,6 @@ import {
   type GovernedActionEntry,
 } from "./gau-ledger";
 import {
-  claimAutoTopup,
   claimInterimInvoice,
   settleGauInvoice,
   type GauSettlementRow,
@@ -198,6 +198,29 @@ export const RETENTION_INCLUDED_MONTHS = 12;
 /** USD per GB-month for evidence held beyond {@link RETENTION_INCLUDED_MONTHS}. */
 export const RETENTION_USD_PER_GB_MONTH = 0.08;
 
+/**
+ * Evidence retention included for an organisation with no subscription, in
+ * days: 30, as the v3 design shows for an account on the signup grant (Mac,
+ * 2026-10-01, #3844).
+ */
+export const SIGNUP_GRANT_RETENTION_DAYS = 30;
+
+const DAYS_PER_INCLUDED_MONTH = 30;
+
+/**
+ * The evidence window an organisation's billing basis includes, in days. A
+ * subscriber keeps {@link RETENTION_INCLUDED_MONTHS} months, counted as 30
+ * days each. An organisation on its signup grant, or past it with no
+ * subscription, keeps {@link SIGNUP_GRANT_RETENTION_DAYS}.
+ */
+export function includedRetentionDays(
+  basis: "subscription" | "signup_grant" | "after_signup_grant",
+): number {
+  return basis === "subscription"
+    ? RETENTION_INCLUDED_MONTHS * DAYS_PER_INCLUDED_MONTH
+    : SIGNUP_GRANT_RETENTION_DAYS;
+}
+
 // ── The entitlement period ──────────────────────────────────────────────────
 
 /**
@@ -244,8 +267,6 @@ export interface RecordActionResult {
   billedUnits: number;
   /** Entries whose idempotency key was already on the ledger. */
   duplicates: number;
-  /** The auto top-up episode this action claimed, as claimed, or null when none was. */
-  autoTopup: GauSettlementRow | null;
   /** The interim invoice this action's threshold crossing claimed, as claimed, or null. */
   interimInvoice: GauSettlementRow | null;
 }
@@ -298,21 +319,16 @@ export interface RecordActionsArgs {
  *      bucket, in one transaction of its own, so the count lands whatever
  *      happens after it. Duplicates (a retried tool call, a re-sent Tacho
  *      batch) insert nothing and debit nothing.
- *   c. Prepaid, at `remaining ≤ 0`, with auto top-up on and a saved default
- *      card: claim at most one auto top-up episode (`claimAutoTopup`, its own
- *      transaction, committed before any provider call), then run the
- *      settlement sequence charging that card, for the customer on
- *      `org_billing_settings.stripe_customer_id`. A Free organisation with no
- *      card claims nothing — the gate refuses its next action with
- *      `reason: "free_no_payment_method"` until it saves one or the next month
- *      opens (ADR-055 §6).
- *   d. Invoice billing, with uninvoiced overage at `invoice_gau_max`: claim
+ *   c. Overage, for an organisation approved for invoice billing and for
+ *      every subscriber, with uninvoiced overage at `invoice_gau_max`: claim
  *      exactly `invoice_gau_max` as an interim invoice (committed), then the
- *      same sequence for the customer `ensureStripeCustomer` resolves,
+ *      settlement sequence for the customer `ensureStripeCustomer` resolves,
  *      collected from the org's default card or emailed when it has none.
+ *      Auto top-up no longer runs here: the 2026-10-01 decision took prepaid
+ *      blocks off the governed-action path (ADR-NEW, signup grant).
  *
- * Steps c and d run only when this call billed something: when every entry was
- * a duplicate, the call that first recorded them already ran them.
+ * Step c runs only when this call billed something: when every entry was a
+ * duplicate, the call that first recorded them already ran it.
  *
  * Runs inside the tenant scope of its caller. Everything after the debit is
  * caught here so a claim that fails cannot surface as a broken request whose
@@ -327,14 +343,20 @@ export async function recordGovernedActions(
   const now = args.now ?? new Date();
 
   // a. Resolve.
-  const [{ terms, subscription }, settings] = await Promise.all([
+  const [entitlement, settings] = await Promise.all([
     resolveGauEntitlement(args.orgId, now),
     readOrgBillingSettings(args.orgId),
   ]);
   const mode: RecordActionResult["mode"] = settings.approvedForInvoiceBilling
     ? "invoice"
     : "prepaid";
-  const period = periodFor(subscription, now);
+  const { kind: basis, period, terms } = bucketBasis(entitlement, now);
+  // Who is billed for actions past the allowance (ADR-NEW, signup grant): an
+  // organisation approved for invoice billing, and every subscriber. An
+  // organisation on its signup grant has no overage to bill, because the
+  // gate refuses it at zero.
+  const billsOverage =
+    settings.approvedForInvoiceBilling || basis === "subscription";
 
   // b. Debit and itemise, one transaction.
   const { bucket, billedUnits, duplicates } = await withTenantDb((tx) =>
@@ -347,7 +369,6 @@ export async function recordGovernedActions(
   );
   const remaining = remainingGau(bucket);
 
-  let autoTopup: GauSettlementRow | null = null;
   let interimInvoice: GauSettlementRow | null = null;
   try {
     if (billedUnits === 0) {
@@ -359,39 +380,13 @@ export async function recordGovernedActions(
         mode,
         billedUnits,
         duplicates,
-        autoTopup,
         interimInvoice,
       };
     }
-    // c. Prepaid: at most one auto top-up episode at a time.
-    if (mode === "prepaid" && remaining <= 0 && settings.autoTopupEnabled) {
-      const card = await readDefaultPaymentMethod(args.orgId);
-      if (card !== null) {
-        autoTopup = await withTenantDb((tx) =>
-          claimAutoTopup(tx, bucket, terms, settings.autoTopupBlocks),
-        );
-        if (autoTopup !== null) {
-          const customerId = settings.stripeCustomerId;
-          await settleGauInvoice(autoTopup, {
-            run: withTenantDb,
-            customerId: async () => {
-              // A default card exists only after a Checkout or a SetupIntent,
-              // each of which wrote the column through ensureStripeCustomer.
-              if (customerId === null) {
-                throw new Error(
-                  "billing: org has a default card and no stripe_customer_id",
-                );
-              }
-              return customerId;
-            },
-            defaultPaymentMethodId: async () => card.stripePaymentMethodId,
-          });
-        }
-      }
-    }
-
-    // d. Invoice billing: one interim settlement per threshold crossing.
-    if (mode === "invoice" && uninvoicedGau(bucket) >= settings.invoiceGauMax) {
+    // c. Overage: one interim settlement per threshold crossing, for every
+    //    organisation that is billed for overage (ADR-055 §7, applied to
+    //    every subscriber by ADR-NEW, signup grant).
+    if (billsOverage && uninvoicedGau(bucket) >= settings.invoiceGauMax) {
       interimInvoice = await withTenantDb((tx) =>
         claimInterimInvoice(tx, bucket, terms, settings.invoiceGauMax),
       );
@@ -437,7 +432,7 @@ export async function recordGovernedActions(
       mode,
       tier: terms.tier,
       termsSource: terms.source,
-      autoTopupSettlementId: autoTopup?.id ?? null,
+      basis,
       interimInvoiceSettlementId: interimInvoice?.id ?? null,
       durationMs: Date.now() - start,
     },
@@ -450,7 +445,6 @@ export async function recordGovernedActions(
     mode,
     billedUnits,
     duplicates,
-    autoTopup,
     interimInvoice,
   };
 }

@@ -135,6 +135,8 @@ function entitlement(over: Partial<GauEntitlement> = {}): GauEntitlement {
       currentPeriodStart: SEPTEMBER.start,
       currentPeriodEnd: SEPTEMBER.end,
     },
+    grant: null,
+    subscriptionRequiredAfterGrant: true,
     ...over,
   };
 }
@@ -317,6 +319,79 @@ describe("get_gau_bucket counts", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+// ── the signup grant (ADR-NEW, #4886) ─────────────────────────────────────────
+
+describe("get_gau_bucket signup grant", () => {
+  const GRANT = {
+    grantedGau: 33_000,
+    grantedAt: new Date("2026-09-10T00:00:00.000Z"),
+    expiresAt: new Date("2026-10-10T00:00:00.000Z"),
+  };
+
+  it("measures the bucket against the grant's window and reports what is left", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-14T12:00:00.000Z"));
+    try {
+      const bucket = vi.fn((_org: string, args: { period: { start: Date } }) =>
+        Promise.resolve({
+          ...bucketView(),
+          periodStart: args.period.start,
+          includedGau: 33_000,
+          usedGau: 1_000,
+          remainingGau: 32_000,
+        }),
+      );
+      const out = await handlerWith({
+        entitlement: () =>
+          Promise.resolve(entitlement({ subscription: null, grant: GRANT })),
+        bucket,
+      })({}, ctx());
+      expect(out.basis).toBe("signup_grant");
+      expect(out.period).toEqual({
+        start: "2026-09-10T00:00:00.000Z",
+        end: "2026-10-10T00:00:00.000Z",
+      });
+      expect(bucket.mock.calls[0]?.[1]).toMatchObject({
+        terms: { includedGauPerMonth: 33_000 },
+      });
+      expect(out.signupGrant).toEqual({
+        grantedGau: 33_000,
+        grantedAt: "2026-09-10T00:00:00.000Z",
+        expiresAt: "2026-10-10T00:00:00.000Z",
+        active: true,
+        remainingGau: 32_000,
+        evidenceDays: 30,
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("reports an expired grant with nothing left", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-20T12:00:00.000Z"));
+    try {
+      const out = await handlerWith({
+        entitlement: () =>
+          Promise.resolve(entitlement({ subscription: null, grant: GRANT })),
+      })({}, ctx());
+      expect(out.basis).toBe("after_signup_grant");
+      // The month after the grant starts at the grant's expiry, never before.
+      expect(out.period.start).toBe("2026-10-10T00:00:00.000Z");
+      expect(out.signupGrant?.active).toBe(false);
+      expect(out.signupGrant?.remainingGau).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("reports no grant for a subscriber with none", async () => {
+    const out = await handlerWith({})({}, ctx());
+    expect(out.basis).toBe("subscription");
+    expect(out.signupGrant).toBeNull();
   });
 });
 
