@@ -288,9 +288,14 @@ module "runners" {
             iops        = p.disk.iops
             throughput  = p.disk.throughput
             encrypted   = true
+
+            # EBS fetches the AMI's snapshot into the new volume at this
+            # rate in the background, so the image's Docker layers and pnpm
+            # store are local within seconds instead of on first read.
+            volume_initialization_rate = 300
           }]
           pool_config = var.github_app_ready && lookup(var.warm_pool, name, 0) > 0 ? [{
-            schedule_expression = "rate(1 minute)"
+            schedule_expression = "rate(2 minutes)"
             size                = var.warm_pool[name]
           }] : []
         })
@@ -332,9 +337,11 @@ module "runners" {
             iops        = 16000
             throughput  = 1000
             encrypted   = true
+
+            volume_initialization_rate = 300
           }]
           pool_config = var.github_app_ready && lookup(var.warm_pool, "oxagen-deploy", 0) > 0 ? [{
-            schedule_expression = "rate(1 minute)"
+            schedule_expression = "rate(2 minutes)"
             size                = var.warm_pool["oxagen-deploy"]
           }] : []
         })
