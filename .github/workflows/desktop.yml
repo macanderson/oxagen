@@ -610,6 +610,16 @@ jobs:
           for _ in 1 2 3 4 5 6; do
             if curl -fsS "https://downloads.oxagen.sh/updater/latest.json" -o feed.json &&
               node apps/desktop/scripts/check-latest.mjs feed.json "$VERSION" downloads.oxagen.sh/updater/latest.json; then
+              # A feed without a platform's key leaves every app there on its
+              # old version, and the publish script only warns about it.
+              if [ "$(jq -r .version feed.json)" = "$VERSION" ]; then
+                for key in darwin-aarch64 darwin-x86_64 windows-x86_64 linux-x86_64; do
+                  if ! jq -e --arg k "$key" '.platforms[$k].url and .platforms[$k].signature' feed.json >/dev/null; then
+                    echo "::error::the update feed for $VERSION has no $key entry, so apps there are not offered it"
+                    exit 1
+                  fi
+                done
+              fi
               exit 0
             fi
             sleep 20

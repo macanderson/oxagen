@@ -368,15 +368,6 @@ async function redrawFromBucket({ plannedObjects = [] } = {}) {
   }
   const digests = readPublishedDigests();
   const keys = new Set(objects.map((object) => object.Key));
-  const missing = [...digests.keys()].filter(
-    (file) => !keys.has(`${keyPrefix}${file}`),
-  );
-  if (missing.length > 0) {
-    console.error(
-      `Installers are missing from ${prefix}/: ${missing.join(", ")}. Resume the upload before publishing.`,
-    );
-    process.exit(1);
-  }
   const published = [];
   const executables = [];
   for (const object of objects) {
@@ -394,6 +385,22 @@ async function redrawFromBucket({ plannedObjects = [] } = {}) {
     if (installer !== null)
       published.push({ ...installer, bytes: Number(object.Size), sha256 });
     else executables.push({ ...executable, bytes: Number(object.Size), sha256 });
+  }
+  // Every file SHA256SUMS.txt lists, and the `.sha256` beside each
+  // executable, which moves to `latest/` with it. A publish interrupted before
+  // its small files went up would otherwise move `latest/<executable>` and then
+  // stop at a checksum that is not there.
+  const missing = [
+    ...[...digests.keys()].filter((file) => !keys.has(`${keyPrefix}${file}`)),
+    ...executables
+      .map((e) => `${e.file}.sha256`)
+      .filter((file) => !keys.has(`${keyPrefix}${file}`)),
+  ];
+  if (missing.length > 0) {
+    console.error(
+      `Installers are missing from ${prefix}/: ${missing.join(", ")}. Resume the upload before publishing.`,
+    );
+    process.exit(1);
   }
   if (published.length === 0) {
     console.error(`✖ no installers for ${version} under ${prefix}/`);

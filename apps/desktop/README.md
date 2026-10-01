@@ -141,8 +141,8 @@ A release is one button: Actions, Release, Run workflow, pick `patch`,
 `minor` or `major` (CONTRIBUTING.md, Release Process). The merge of the
 release PR pushes `desktop-v<version>`, and `.github/workflows/desktop.yml`
 does the rest: four builds, then the `publish` job copies the installers, the
-bare `oxagen` and `tacho` executables with a `.sha256` each, the macOS updater
-archives, the updater signatures, and `SHA256SUMS.txt` to
+bare executables (`oxagen-<triple>` and `tacho-<triple>`, a `.sha256` each),
+the macOS updater archives, the updater signatures, and `SHA256SUMS.txt` to
 https://downloads.oxagen.sh/desktop/<version>/, rewrites the listing page,
 writes the update feed at https://downloads.oxagen.sh/updater/latest.json,
 and opens the GitHub release as a mirror for people with repository access.

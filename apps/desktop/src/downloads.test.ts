@@ -996,8 +996,9 @@ describe("reportPublicationDecision", () => {
  * A stand-in for `aws` that keeps the bucket in a JSON file
  * (`TEST_BUCKET_STATE`): `objects` by key, `writes` in order, and the
  * `--content-disposition` of each server-side copy. The first `.dmg` upload
- * fails once while `interrupted` is false, which is how a test interrupts a
- * publish.
+ * fails once while `interrupted` is false, and the first upload whose key ends
+ * with `failOn` fails once, which is how a test interrupts a publish. A copy
+ * from a key that does not exist fails, as S3 answers it with a 404.
  */
 const FAKE_AWS = `#!/usr/bin/env node
 const fs = require("node:fs");
@@ -1023,6 +1024,10 @@ if (args[0] === "s3api" && args[1] === "list-objects-v2") {
   } else if (args[2].startsWith("s3://")) {
     const from = args[2].replace(/^s3:\\/\\/[^/]+\\//, "");
     const key = args[3].replace(/^s3:\\/\\/[^/]+\\//, "");
+    if (state.objects[from] === undefined) {
+      console.error('fatal error: An error occurred (404) when calling the CopyObject operation: Key "' + from + '" does not exist');
+      process.exit(1);
+    }
     state.objects[key] = state.objects[from];
     state.disposition = { ...(state.disposition ?? {}), [key]: arg("--content-disposition") };
     state.writes.push(key);
@@ -1031,6 +1036,11 @@ if (args[0] === "s3api" && args[1] === "list-objects-v2") {
     const key = args[3].replace(/^s3:\\/\\/[^/]+\\//, "");
     if (key.endsWith(".dmg") && !state.interrupted) {
       state.interrupted = true;
+      save();
+      process.exit(1);
+    }
+    if (state.failOn !== undefined && key.endsWith(state.failOn)) {
+      delete state.failOn;
       save();
       process.exit(1);
     }
@@ -1219,78 +1229,97 @@ describe("resuming an interrupted publish", () => {
   });
 });
 
+/**
+ * A scratch bucket behind the stand-in `aws`, a way to lay a version's build
+ * out the way download-artifact does (one folder per leg, the executables
+ * under binaries/, the bundles under target/), and a way to run the script.
+ */
+function scratchBucket(initial: Record<string, unknown> = {}) {
+  const dir = mkdtempSync(join(tmpdir(), "downloads-feed-test-"));
+  const bin = join(dir, "bin");
+  mkdirSync(bin);
+  writeFileSync(join(bin, "aws"), FAKE_AWS, { mode: 0o755 });
+  const statePath = join(dir, "bucket.json");
+  // `interrupted: true` turns the stand-in's one failed .dmg upload off.
+  writeFileSync(
+    statePath,
+    JSON.stringify({ objects: {}, interrupted: true, writes: [], ...initial }),
+  );
+  const env = {
+    ...process.env,
+    PATH: `${bin}:${process.env.PATH ?? ""}`,
+    TEST_BUCKET_STATE: statePath,
+  };
+  const state = () =>
+    JSON.parse(readFileSync(statePath, "utf8")) as {
+      objects: Record<string, string>;
+      writes: string[];
+    };
+  const lay = (version: string, files: Record<string, string>) => {
+    const root = join(dir, `artifacts-${version}`);
+    for (const [rel, body] of Object.entries(files)) {
+      const path = join(root, rel);
+      mkdirSync(join(path, ".."), { recursive: true });
+      writeFileSync(path, body);
+    }
+    return root;
+  };
+  const run = (...args: string[]) =>
+    spawnSync(
+      process.execPath,
+      [
+        fileURLToPath(
+          new URL("../scripts/publish-downloads.mjs", import.meta.url),
+        ),
+        ...args,
+      ],
+      { encoding: "utf8", env },
+    );
+  const publish = (version: string, root: string, ...more: string[]) =>
+    run("--dir", root, "--version", version, ...more);
+  return {
+    dir,
+    statePath,
+    state,
+    lay,
+    run,
+    publish,
+    done: () => rmSync(dir, { recursive: true, force: true }),
+  };
+}
+
+const MAC = "oxagen-desktop-aarch64-apple-darwin";
+const WIN = "oxagen-desktop-x86_64-pc-windows-msvc";
+const LIN = "oxagen-desktop-x86_64-unknown-linux-gnu";
+const bundle = (leg: string, kind: string) =>
+  `${leg}/target/${leg.replace("oxagen-desktop-", "")}/release/bundle/${kind}`;
+
+/** A signed release of `v`: one Mac leg, the .msi, and the AppImage. */
+const signedRelease = (v: string) => ({
+  [`${bundle(MAC, "dmg")}/Oxagen_${v}_aarch64.dmg`]: "dmg bytes",
+  [`${bundle(MAC, "macos")}/Oxagen_${v}_aarch64.app.tar.gz`]: "archive bytes",
+  [`${bundle(MAC, "macos")}/Oxagen_${v}_aarch64.app.tar.gz.sig`]:
+    "sig-archive\n",
+  [`${MAC}/binaries/oxagen-aarch64-apple-darwin`]: "oxagen mac",
+  [`${MAC}/binaries/tacho-aarch64-apple-darwin`]: "tacho mac",
+  [`${bundle(WIN, "msi")}/Oxagen_${v}_x64_en-US.msi`]: "msi bytes",
+  [`${bundle(WIN, "msi")}/Oxagen_${v}_x64_en-US.msi.sig`]: "sig-msi",
+  [`${bundle(LIN, "appimage")}/Oxagen_${v}_amd64.AppImage`]: "appimage bytes",
+  [`${bundle(LIN, "appimage")}/Oxagen_${v}_amd64.AppImage.sig`]:
+    "sig-appimage",
+});
+
 describe("publishing a release with its executables and update feed", () => {
   it("uploads every file under the version, moves latest/, and writes the feed for releases only", () => {
-    const dir = mkdtempSync(join(tmpdir(), "downloads-feed-test-"));
+    const bucket = scratchBucket();
     try {
-      const bin = join(dir, "bin");
-      mkdirSync(bin);
-      writeFileSync(join(bin, "aws"), FAKE_AWS, { mode: 0o755 });
-      const statePath = join(dir, "bucket.json");
-      // `interrupted: true` turns the stand-in's one failed upload off.
-      writeFileSync(
-        statePath,
-        JSON.stringify({ objects: {}, interrupted: true, writes: [] }),
-      );
-      const env = {
-        ...process.env,
-        PATH: `${bin}:${process.env.PATH ?? ""}`,
-        TEST_BUCKET_STATE: statePath,
-      };
-      const state = () =>
-        JSON.parse(readFileSync(statePath, "utf8")) as {
-          objects: Record<string, string>;
-          writes: string[];
-        };
-      // Lay a version out the way download-artifact does: one folder per
-      // leg, the executables under binaries/, the bundles under target/.
-      const lay = (version: string, files: Record<string, string>) => {
-        const root = join(dir, `artifacts-${version}`);
-        for (const [rel, body] of Object.entries(files)) {
-          const path = join(root, rel);
-          mkdirSync(join(path, ".."), { recursive: true });
-          writeFileSync(path, body);
-        }
-        return root;
-      };
-      const publish = (version: string, root: string) =>
-        spawnSync(
-          process.execPath,
-          [
-            fileURLToPath(
-              new URL("../scripts/publish-downloads.mjs", import.meta.url),
-            ),
-            "--dir",
-            root,
-            "--version",
-            version,
-          ],
-          { encoding: "utf8", env },
-        );
-
+      const { state, lay, publish } = bucket;
       const R = "2.2.0";
-      const mac = "oxagen-desktop-aarch64-apple-darwin";
-      const win = "oxagen-desktop-x86_64-pc-windows-msvc";
-      const lin = "oxagen-desktop-x86_64-unknown-linux-gnu";
-      const bundle = (leg: string, kind: string) =>
-        `${leg}/target/${leg.replace("oxagen-desktop-", "")}/release/bundle/${kind}`;
       const source = lay(R, {
-        [`${bundle(mac, "dmg")}/Oxagen_${R}_aarch64.dmg`]: "dmg bytes",
-        [`${bundle(mac, "macos")}/Oxagen_${R}_aarch64.app.tar.gz`]:
-          "archive bytes",
-        [`${bundle(mac, "macos")}/Oxagen_${R}_aarch64.app.tar.gz.sig`]:
-          "sig-archive\n",
+        ...signedRelease(R),
         // The bundler's own name, before the build job renames it.
-        [`${bundle(mac, "macos")}/Oxagen.app.tar.gz.sig`]: "stale",
-        [`${mac}/binaries/oxagen-aarch64-apple-darwin`]: "oxagen mac",
-        [`${mac}/binaries/oxagen-aarch64-apple-darwin.sha256`]: "ignored",
-        [`${mac}/binaries/tacho-aarch64-apple-darwin`]: "tacho mac",
-        [`${bundle(win, "msi")}/Oxagen_${R}_x64_en-US.msi`]: "msi bytes",
-        [`${bundle(win, "msi")}/Oxagen_${R}_x64_en-US.msi.sig`]: "sig-msi",
-        [`${bundle(lin, "appimage")}/Oxagen_${R}_amd64.AppImage`]:
-          "appimage bytes",
-        [`${bundle(lin, "appimage")}/Oxagen_${R}_amd64.AppImage.sig`]:
-          "sig-appimage",
+        [`${bundle(MAC, "macos")}/Oxagen.app.tar.gz.sig`]: "stale",
+        [`${MAC}/binaries/oxagen-aarch64-apple-darwin.sha256`]: "ignored",
       });
       const released = publish(R, source);
       expect(released.status, released.stderr).toBe(0);
@@ -1351,14 +1380,17 @@ describe("publishing a release with its executables and update feed", () => {
         `https://downloads.oxagen.sh/desktop/${R}/Oxagen_${R}_amd64.AppImage`,
       );
       expect(released.stderr).toContain("has no darwin-x86_64");
-      // Every file the feed names went up before the feed did.
+      // Every file the feed names, and its signature, went up before it.
       const feedWrite = after.writes.indexOf(UPDATE_FEED_KEY);
       for (const key of [
         `desktop/${R}/Oxagen_${R}_aarch64.app.tar.gz`,
+        `desktop/${R}/Oxagen_${R}_aarch64.app.tar.gz.sig`,
         `desktop/${R}/Oxagen_${R}_x64_en-US.msi`,
         `desktop/${R}/Oxagen_${R}_amd64.AppImage.sig`,
-      ])
+      ]) {
+        expect(after.writes.indexOf(key), key).toBeGreaterThanOrEqual(0);
         expect(after.writes.indexOf(key), key).toBeLessThan(feedWrite);
+      }
       expect(released.stdout).toContain(
         `https://downloads.oxagen.sh/${UPDATE_FEED_KEY}`,
       );
@@ -1368,15 +1400,15 @@ describe("publishing a release with its executables and update feed", () => {
       const build = publish(
         B,
         lay(B, {
-          [`${bundle(win, "msi")}/Oxagen_${B}_x64_en-US.msi`]: "build msi",
-          [`${bundle(win, "msi")}/Oxagen_${B}_x64_en-US.msi.sig`]: "sig-b",
+          [`${bundle(WIN, "msi")}/Oxagen_${B}_x64_en-US.msi`]: "build msi",
+          [`${bundle(WIN, "msi")}/Oxagen_${B}_x64_en-US.msi.sig`]: "sig-b",
         }),
       );
       expect(build.status, build.stderr).toBe(0);
       const afterBuild = state();
-      expect(afterBuild.objects[`desktop/${B}/Oxagen_${B}_x64_en-US.msi.sig`]).toBe(
-        "sig-b",
-      );
+      expect(
+        afterBuild.objects[`desktop/${B}/Oxagen_${B}_x64_en-US.msi.sig`],
+      ).toBe("sig-b");
       expect(
         (JSON.parse(afterBuild.objects["latest.json"]!) as { version: string })
           .version,
@@ -1390,8 +1422,8 @@ describe("publishing a release with its executables and update feed", () => {
       const older = publish(
         O,
         lay(O, {
-          [`${bundle(lin, "appimage")}/Oxagen_${O}_amd64.AppImage`]: "old",
-          [`${bundle(lin, "appimage")}/Oxagen_${O}_amd64.AppImage.sig`]:
+          [`${bundle(LIN, "appimage")}/Oxagen_${O}_amd64.AppImage`]: "old",
+          [`${bundle(LIN, "appimage")}/Oxagen_${O}_amd64.AppImage.sig`]:
             "sig-old",
         }),
       );
@@ -1408,7 +1440,7 @@ describe("publishing a release with its executables and update feed", () => {
       const unsigned = publish(
         U,
         lay(U, {
-          [`${bundle(lin, "appimage")}/Oxagen_${U}_amd64.AppImage`]: "u",
+          [`${bundle(LIN, "appimage")}/Oxagen_${U}_amd64.AppImage`]: "u",
         }),
       );
       expect(unsigned.status, unsigned.stderr).toBe(0);
@@ -1417,7 +1449,64 @@ describe("publishing a release with its executables and update feed", () => {
         after.objects[UPDATE_FEED_KEY],
       );
     } finally {
-      rmSync(dir, { recursive: true, force: true });
+      bucket.done();
+    }
+  });
+
+  it("refuses to redraw a release whose small files never went up, and writes the feed when resumed", () => {
+    // The first `.sha256` upload fails: every installer, executable, and
+    // archive is up, and no checksum or signature is.
+    const bucket = scratchBucket({ failOn: ".sha256" });
+    try {
+      const { state, lay, publish, run } = bucket;
+      const R = "2.2.0";
+      const source = lay(R, signedRelease(R));
+      const first = publish(R, source);
+      expect(first.status, first.stderr).toBe(1);
+      const interrupted = state();
+      expect(
+        interrupted.objects[`desktop/${R}/oxagen-aarch64-apple-darwin`],
+      ).toBe("oxagen mac");
+      expect(
+        interrupted.objects[`desktop/${R}/oxagen-aarch64-apple-darwin.sha256`],
+      ).toBeUndefined();
+      expect(interrupted.objects["latest.json"]).toBeUndefined();
+      expect(interrupted.objects[UPDATE_FEED_KEY]).toBeUndefined();
+
+      // Redrawing from the bucket would move latest/oxagen-… and then stop
+      // at a checksum that is not there, so it refuses before any copy.
+      const pageOnly = run("--page-only", "--version", R);
+      expect(pageOnly.status, pageOnly.stderr).toBe(1);
+      expect(pageOnly.stderr).toContain("oxagen-aarch64-apple-darwin.sha256");
+      expect(state().writes).toEqual(interrupted.writes);
+
+      // A dry run of the resume plans the feed and writes nothing.
+      const before = readFileSync(bucket.statePath, "utf8");
+      const preview = publish(R, source, "--resume", "--dry-run");
+      expect(preview.status, preview.stderr).toBe(0);
+      expect(preview.stdout).toContain(`/${UPDATE_FEED_KEY}`);
+      expect(readFileSync(bucket.statePath, "utf8")).toBe(before);
+
+      const resumed = publish(R, source, "--resume");
+      expect(resumed.status, resumed.stderr).toBe(0);
+      const after = state();
+      const feedWrite = after.writes.indexOf(UPDATE_FEED_KEY);
+      expect(feedWrite).toBeGreaterThanOrEqual(0);
+      for (const key of [
+        `desktop/${R}/oxagen-aarch64-apple-darwin.sha256`,
+        `desktop/${R}/Oxagen_${R}_aarch64.app.tar.gz.sig`,
+        `desktop/${R}/Oxagen_${R}_x64_en-US.msi.sig`,
+        "latest/oxagen-aarch64-apple-darwin.sha256",
+      ]) {
+        expect(after.writes.indexOf(key), key).toBeGreaterThanOrEqual(0);
+        expect(after.writes.indexOf(key), key).toBeLessThan(feedWrite);
+      }
+      const feed = JSON.parse(after.objects[UPDATE_FEED_KEY]!) as {
+        version: string;
+      };
+      expect(feed.version).toBe(R);
+    } finally {
+      bucket.done();
     }
   });
 });
