@@ -6,7 +6,8 @@
 // findings the server listed, largest saving first, so a finding's rank is its
 // place in that list and never changes with a filter. Each card names who the
 // finding is about, the finding, what it cites, the amount at stake and its
-// share of the identified total, and opens Evidence and Fix.
+// share of the identified total, and opens Evidence and Fix. A finding about
+// an agent draws the agent's avatar with its registered harness (#4871).
 import { useLocale, useTranslations } from "next-intl";
 import { useState } from "react";
 import { byMicrosDescending } from "@/data/contracts/money";
@@ -24,6 +25,7 @@ import {
 } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
 import { RowsPager } from "@/ui/pagination";
+import { type AgentHarnesses, AgentMark, harnessIn } from "./agent-mark";
 import { FixDialog } from "./fix-dialog";
 import type { SpendAt } from "./view";
 
@@ -74,10 +76,12 @@ function Filter<T extends string>({
 function Card({
   item,
   names,
+  harnesses,
   at,
 }: {
   item: Ranked;
   names: Readonly<Record<string, string>>;
+  harnesses: AgentHarnesses;
   at: SpendAt;
 }) {
   const t = useTranslations("spend");
@@ -117,11 +121,22 @@ function Card({
         <p className="text-[12px] text-muted-foreground">
           {t(`findings.kindDefinition.${finding.kind}`)}
         </p>
-        <p
-          className={`text-[12.5px] ${finding.level === "operator" ? "" : mono}`}
-        >
-          {who}
-        </p>
+        {finding.level === "agent" ? (
+          <p className="flex min-w-0 items-center gap-2 text-[12.5px]">
+            <AgentMark
+              agentKey={finding.subject}
+              harness={harnessIn(harnesses, finding.subject)}
+              size={20}
+            />
+            <span className={`${mono} min-w-0 truncate`}>{who}</span>
+          </p>
+        ) : (
+          <p
+            className={`text-[12.5px] ${finding.level === "operator" ? "" : mono}`}
+          >
+            {who}
+          </p>
+        )}
         <p className="text-[13px]">{finding.why}</p>
         <p className={`${mono} text-[11px] text-muted-foreground`}>
           {t("findings.evidenceLine", {
@@ -194,12 +209,15 @@ export function FindingsList({
   findings,
   shares,
   names,
+  harnesses = {},
   at,
 }: {
   findings: readonly SpendFinding[];
   shares: readonly (number | null)[];
   /** An operator finding's subject is a `prn_…` id; this is the person's name for it. */
   names: Readonly<Record<string, string>>;
+  /** An agent finding's subject is an agent key; this is its harness by key. */
+  harnesses?: AgentHarnesses;
   at: SpendAt;
 }) {
   const t = useTranslations("spend.findings");
@@ -290,7 +308,13 @@ export function FindingsList({
       ) : (
         <ol aria-label={t("list")} className="flex flex-col gap-2.5">
           {slice.map((item) => (
-            <Card key={item.finding.id} item={item} names={names} at={at} />
+            <Card
+              key={item.finding.id}
+              item={item}
+              names={names}
+              harnesses={harnesses}
+              at={at}
+            />
           ))}
         </ol>
       )}

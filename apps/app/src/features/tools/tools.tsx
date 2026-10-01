@@ -17,6 +17,7 @@ import { useTranslations } from "next-intl";
 import type { AgentPage } from "@/data/contracts/agents";
 import type { DataSource } from "@/data/ports";
 import type { Read } from "@/data/read";
+import { EMPTY_HARNESS_INDEX, readAgentHarnessIndex } from "@/features/agent-harness";
 import type { WsCtx } from "@/server/viewer";
 import { panel, statStrip, statTile } from "@/ui/control-styles";
 import { ImportProvider } from "./import-provider";
@@ -103,6 +104,7 @@ function grantableAgents(read: Read<AgentPage>): LedgerGrant {
         id: agent.id,
         slug: agent.slug,
         name: agent.name,
+        harness: agent.harness,
       })),
       partial: read.value.nextCursor !== null,
     },
@@ -236,14 +238,26 @@ async function TabBody({
     }
     case "toolbelts": {
       // The list, and the belt the URL opens below it. A refusal of the one
-      // leaves the other readable.
-      const [list, open] = await Promise.all([
+      // leaves the other readable. An open belt names its agents by slug, so
+      // the harness index badges them (#4871).
+      const [list, open, harnesses] = await Promise.all([
         source.tools.toolbelts(ctx),
         view.belt === null
           ? Promise.resolve(null)
           : source.tools.toolbelt(ctx, view.belt),
+        view.belt === null
+          ? Promise.resolve(EMPTY_HARNESS_INDEX)
+          : readAgentHarnessIndex(ctx, source),
       ]);
-      return <Toolbelts at={at} canEdit={admin} list={list} open={open} />;
+      return (
+        <Toolbelts
+          at={at}
+          canEdit={admin}
+          list={list}
+          open={open}
+          agentHarnesses={harnesses.bySlug}
+        />
+      );
     }
     case "providers": {
       // Three reads, each answered on its own: a refusal of the grants log
@@ -279,13 +293,15 @@ async function TabBody({
       // `list_approval_rules` admits an org Owner, Admin or Compliance; its
       // three writes an org Owner or Admin. The mandates ledger reads every
       // mandate in the workspace, and a reader who may grant also gets the
-      // agents read the picker needs.
-      const [rules, mandates, agents] = await Promise.all([
+      // agents read the picker needs. A mandate names its agent by slug, so
+      // the harness index badges the ledger's Agent column (#4871).
+      const [rules, mandates, agents, harnesses] = await Promise.all([
         source.tools.approvalRules(ctx),
         source.mandates.list(ctx, { agentId: null }),
         canGrantMandates(ctx)
           ? source.agents.list(ctx, { cursor: null })
           : Promise.resolve(null),
+        readAgentHarnessIndex(ctx, source),
       ]);
       return (
         <Policy
@@ -295,6 +311,7 @@ async function TabBody({
           rules={rules}
           mandates={mandates}
           grant={agents === null ? null : grantableAgents(agents)}
+          agentHarnesses={harnesses.bySlug}
         />
       );
     }
@@ -326,6 +343,7 @@ async function TabBody({
                     id: agent.id,
                     slug: agent.slug,
                     name: agent.name,
+                    harness: agent.harness,
                   }))
               : []
           }

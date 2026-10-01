@@ -6,7 +6,8 @@
 // totals, the averages, the series and the tools its runs called; every other
 // tile the design draws prints "not recorded" until the rollup carries it
 // (#2962), and the per-key report behind Export this view waits on a contract
-// that takes a key.
+// that takes a key. An agent's drill draws its avatar with the harness it
+// registered beside its name (#4871).
 import { useLocale, useTranslations } from "next-intl";
 import { divMicros, maxMoney } from "@/data/contracts/money";
 import type {
@@ -27,6 +28,7 @@ import { Money } from "@/ui/money";
 import { formatCount, formatRatio } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
 import { cell, numericCell, Table } from "@/ui/table";
+import { AgentMark } from "./agent-mark";
 import {
   BasisLabel,
   CostFigure,
@@ -193,11 +195,14 @@ export function DrillSection({
   findings,
   operator,
   at,
+  harness = null,
 }: {
   drill: SpendDrill;
   findings: readonly SpendFinding[] | null;
   operator: Operator;
   at: SpendAt;
+  /** An agent drill's registered harness; null for another kind or none. */
+  harness?: string | null;
 }) {
   const t = useTranslations("spend");
   const locale = useLocale();
@@ -244,11 +249,20 @@ export function DrillSection({
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex min-w-0 flex-col gap-1">
           <p className={eyebrow}>{kindLabel}</p>
-          <h2
-            className={`text-lg font-semibold ${drill.kind === "operator" ? "" : `${mono} break-all`}`}
-          >
-            {name}
-          </h2>
+          {drill.kind === "agent" ? (
+            <span className="flex min-w-0 items-center gap-2.5">
+              <AgentMark agentKey={drill.key} harness={harness} size={28} />
+              <h2 className={`text-lg font-semibold ${mono} break-all`}>
+                {name}
+              </h2>
+            </span>
+          ) : (
+            <h2
+              className={`text-lg font-semibold ${drill.kind === "operator" ? "" : `${mono} break-all`}`}
+            >
+              {name}
+            </h2>
+          )}
           <p className="text-[13px] text-muted-foreground">
             {t("drill.counts", {
               runs: formatCount(drill.total.runs, locale),
