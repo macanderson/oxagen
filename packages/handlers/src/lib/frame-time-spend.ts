@@ -5,56 +5,68 @@
 // and ran into it adds only its frames inside the window, and a run that ran
 // past the window's end adds only the frames before it.
 //
-// `cost.run_totals` holds one figure per run. A run whose priced frames all
-// fall inside the window adds that figure whole. Every other run that
-// overlaps the window has its frames read from the frame store and priced
-// one by one, by the rule the rollup prices them with. At most
-// `CROSSING_RUNS_PRICED_MAX` such runs are read, largest first. An operator
-// whose crossing run was not read, or could not be priced, has no figure, so
-// a caller reports no share for it rather than a share of part of its spend.
-// A frame store that fails a read leaves the run unpriced and is reported to
-// `error_events`: the share is the only figure that needs the read, so the
-// figures beside it still answer.
+// `cost.run_totals` holds one figure per run. The runs whose priced frames all
+// fall inside the window are summed in Postgres, per operator and currency.
+// Every other run that overlaps the window is listed, and its frames are read
+// from the frame store and priced one by one, by the rule the rollup prices
+// them with. At most `CROSSING_RUNS_PRICED_MAX` such runs are read, largest
+// first. An operator whose crossing run was not read, or could not be priced,
+// has no figure, so a caller reports no share for it rather than a share of
+// part of its spend. A frame store that fails a read leaves the run unpriced
+// and is reported to `error_events`: the share is the only figure that needs
+// the read, so the figures beside it still answer.
+//
+// A run's last priced frame is bounded by its seal, or by its last rollup
+// when that came first. An unsealed run's bound is its last rollup, so a
+// price-book rebuild that rolls old unsealed runs up again makes each of them
+// a crossing run until it seals. Past the cap, the shares that need them read
+// null for the period.
 import {
   divideHalfEven,
   loadPriceBookSliceInTenantScope,
-  loadRunSource,
   type ModelCallFrame,
   type PriceBook,
   priceFrame,
   runPriceSlice,
 } from "@oxagen/billing";
 import { schema, withTenantDb } from "@oxagen/database";
+import { subagentSessionsQuery } from "@oxagen/run-ledger";
 import {
   captureError,
+  type FrameRunRef,
   type ModelCallFrameRow,
   readModelCallFrames,
 } from "@oxagen/telemetry";
-import { and, eq, gte, inArray, isNotNull, lt, sql } from "drizzle-orm";
+import {
+  and,
+  eq,
+  gte,
+  inArray,
+  isNotNull,
+  isNull,
+  lt,
+  or,
+  type SQL,
+  sql,
+} from "drizzle-orm";
 
 export type SpendScope = { orgId: string; workspaceId: string };
 export type SpendWindow = { start: Date; end: Date };
-
-/** One run that overlaps the window, as `cost.run_totals` holds it. */
-export type OverlappingRun = {
-  runId: string;
-  operatorKey: string | null;
-  currency: string;
-  costMicros: bigint;
-  startedAt: Date;
-  /**
-   * The latest instant any of the run's priced frames can carry: the seal,
-   * or the last rollup when that came first, since a rollup prices only the
-   * frames it has seen.
-   */
-  lastFrameBound: Date;
-};
 
 /** One operator's frame-time spend in one currency; `operatorKey` is null for runs that name none. */
 export type FrameTimeSpend = {
   operatorKey: string | null;
   currency: string;
   micros: bigint;
+};
+
+/** A priced run that holds frames on both sides of a window's edge, or may. */
+export type CrossingRun = {
+  runId: string;
+  operatorKey: string | null;
+  currency: string;
+  /** The run's whole priced cost; it orders the runs the cap reads. */
+  costMicros: bigint;
 };
 
 export type FrameTimeSpendResult = {
@@ -65,15 +77,17 @@ export type FrameTimeSpendResult = {
 
 export type FrameTimeSpendDeps = {
   /**
-   * The priced runs that may hold a frame in the window: started before its
-   * end, with a last frame bound at or after its start. `operatorKeys` limits
-   * the read to those operators; null reads every run.
+   * The priced runs that may hold a frame in the window. `contained` sums the
+   * runs whose every priced frame falls inside it, per operator and currency.
+   * `crossing` lists the rest: started before the window, or with a last
+   * frame bound at or past its end. `operatorKeys` limits both to those
+   * operators; null reads every run.
    */
   readRuns: (
     scope: SpendScope,
     window: SpendWindow,
     operatorKeys: readonly string[] | null,
-  ) => Promise<OverlappingRun[]>;
+  ) => Promise<{ contained: FrameTimeSpend[]; crossing: CrossingRun[] }>;
   /** The cost of the run's frames that ran in the window; null when they cannot be priced. */
   priceRunFrames: (
     scope: SpendScope,
@@ -96,14 +110,6 @@ const PRICE_CONCURRENCY = 8;
 export const RUN_LOOKBACK_DAYS = 30;
 const DAY_MS = 86_400_000;
 
-/** Whether every priced frame of the run fell inside the window. */
-export function insideWindow(run: OverlappingRun, window: SpendWindow): boolean {
-  return (
-    run.startedAt.getTime() >= window.start.getTime() &&
-    run.lastFrameBound.getTime() < window.end.getTime()
-  );
-}
-
 /**
  * The frame-time spend per operator and currency. Rows come back in no
  * particular order. An operator in `partial` has a row that misses the
@@ -117,25 +123,28 @@ export async function readFrameTimeSpend(
 ): Promise<FrameTimeSpendResult> {
   if (operatorKeys !== null && operatorKeys.length === 0)
     return { rows: [], partial: new Set() };
-  const runs = await deps.readRuns(scope, window, operatorKeys);
+  const { contained, crossing } = await deps.readRuns(
+    scope,
+    window,
+    operatorKeys,
+  );
   const totals = new Map<string, FrameTimeSpend>();
-  const add = (run: OverlappingRun, micros: bigint) => {
-    const key = `${run.operatorKey ?? ""}\u0000${run.currency}`;
+  const add = (
+    row: { operatorKey: string | null; currency: string },
+    micros: bigint,
+  ) => {
+    const key = `${row.operatorKey ?? ""}\u0000${row.currency}`;
     const held = totals.get(key);
     if (held) held.micros += micros;
     else
       totals.set(key, {
-        operatorKey: run.operatorKey,
-        currency: run.currency,
+        operatorKey: row.operatorKey,
+        currency: row.currency,
         micros,
       });
   };
-  const crossing: OverlappingRun[] = [];
-  for (const run of runs) {
-    if (insideWindow(run, window)) add(run, run.costMicros);
-    else crossing.push(run);
-  }
-  crossing.sort((a, b) =>
+  for (const row of contained) add(row, row.micros);
+  const ordered = [...crossing].sort((a, b) =>
     a.costMicros !== b.costMicros
       ? a.costMicros > b.costMicros
         ? -1
@@ -145,9 +154,9 @@ export async function readFrameTimeSpend(
         : 1,
   );
   const partial = new Set<string | null>();
-  for (const run of crossing.slice(CROSSING_RUNS_PRICED_MAX))
+  for (const run of ordered.slice(CROSSING_RUNS_PRICED_MAX))
     partial.add(run.operatorKey);
-  const read = crossing.slice(0, CROSSING_RUNS_PRICED_MAX);
+  const read = ordered.slice(0, CROSSING_RUNS_PRICED_MAX);
   for (let i = 0; i < read.length; i += PRICE_CONCURRENCY) {
     const batch = read.slice(i, i + PRICE_CONCURRENCY);
     const priced = await Promise.all(
@@ -171,47 +180,141 @@ async function readRuns(
   scope: SpendScope,
   window: SpendWindow,
   operatorKeys: readonly string[] | null,
-): Promise<OverlappingRun[]> {
+): Promise<{ contained: FrameTimeSpend[]; crossing: CrossingRun[] }> {
   const totals = schema.runTotals;
-  const lastFrameBound = sql<Date>`least(coalesce(${totals.sealedAt}, ${totals.rolledUpAt}), ${totals.rolledUpAt})`;
-  const rows = await withTenantDb((tx) =>
-    tx
+  // The latest instant a priced frame of the run can carry: a rollup prices
+  // only the frames it has seen, and a sealed run has no frame past its seal.
+  const lastFrameBound = sql`least(coalesce(${totals.sealedAt}, ${totals.rolledUpAt}), ${totals.rolledUpAt})`;
+  const start = window.start.toISOString();
+  const end = window.end.toISOString();
+  const overlaps: (SQL | undefined)[] = [
+    eq(totals.orgId, scope.orgId),
+    eq(totals.workspaceId, scope.workspaceId),
+    gte(
+      totals.startedAt,
+      new Date(window.start.getTime() - RUN_LOOKBACK_DAYS * DAY_MS),
+    ),
+    lt(totals.startedAt, window.end),
+    sql`${lastFrameBound} >= ${start}::timestamptz`,
+    isNotNull(totals.costMicros),
+    operatorKeys === null
+      ? undefined
+      : inArray(totals.operatorKey, [...operatorKeys]),
+  ];
+  const { contained, crossing } = await withTenantDb(async (tx) => {
+    const containedRows = await tx
+      .select({
+        operatorKey: totals.operatorKey,
+        currency: totals.currency,
+        micros: sql<string>`sum(${totals.costMicros})::text`,
+      })
+      .from(totals)
+      .where(
+        and(
+          ...overlaps,
+          gte(totals.startedAt, window.start),
+          sql`${lastFrameBound} < ${end}::timestamptz`,
+        ),
+      )
+      .groupBy(totals.operatorKey, totals.currency);
+    const crossingRows = await tx
       .select({
         runId: totals.runId,
         operatorKey: totals.operatorKey,
         currency: totals.currency,
         micros: sql<string>`${totals.costMicros}::text`,
-        startedAt: totals.startedAt,
-        lastFrameBound: sql<Date>`${lastFrameBound}`.mapWith(
-          totals.rolledUpAt,
-        ),
       })
       .from(totals)
       .where(
         and(
-          eq(totals.orgId, scope.orgId),
-          eq(totals.workspaceId, scope.workspaceId),
-          gte(
-            totals.startedAt,
-            new Date(window.start.getTime() - RUN_LOOKBACK_DAYS * DAY_MS),
+          ...overlaps,
+          or(
+            lt(totals.startedAt, window.start),
+            sql`${lastFrameBound} >= ${end}::timestamptz`,
           ),
-          lt(totals.startedAt, window.end),
-          sql`${lastFrameBound} >= ${window.start.toISOString()}::timestamptz`,
-          isNotNull(totals.costMicros),
-          operatorKeys === null
-            ? undefined
-            : inArray(totals.operatorKey, [...operatorKeys]),
         ),
-      ),
-  );
-  return rows.map((r) => ({
-    runId: r.runId,
-    operatorKey: r.operatorKey,
-    currency: r.currency,
-    costMicros: BigInt(r.micros),
-    startedAt: r.startedAt,
-    lastFrameBound: r.lastFrameBound,
-  }));
+      );
+    return { contained: containedRows, crossing: crossingRows };
+  });
+  return {
+    contained: contained.map((r) => ({
+      operatorKey: r.operatorKey,
+      currency: r.currency,
+      micros: BigInt(r.micros),
+    })),
+    crossing: crossing.map((r) => ({
+      runId: r.runId,
+      operatorKey: r.operatorKey,
+      currency: r.currency,
+      costMicros: BigInt(r.micros),
+    })),
+  };
+}
+
+/**
+ * Where the run's frames live, read in the caller's tenant scope: a ledger
+ * run by its uuid and the message that asked for it, a wrapped run by its
+ * root session and every subagent chain under it. These are the refs the
+ * rollup reads the run's frames by (`loadRunSource`), without its system
+ * connection. Null when the workspace holds no such run.
+ */
+async function readRunRef(
+  scope: SpendScope,
+  runId: string,
+): Promise<FrameRunRef | null> {
+  return withTenantDb(async (tx): Promise<FrameRunRef | null> => {
+    if (runId.startsWith("arun_")) {
+      const runs = schema.agentRuns;
+      const [row] = await tx
+        .select({ id: runs.id, originMessageId: runs.originMessageId })
+        .from(runs)
+        .where(
+          and(
+            eq(runs.orgId, scope.orgId),
+            eq(runs.workspaceId, scope.workspaceId),
+            eq(runs.publicId, runId),
+          ),
+        )
+        .limit(1);
+      return row
+        ? {
+            kind: "ledger",
+            runUuid: row.id,
+            originMessageId: row.originMessageId,
+          }
+        : null;
+    }
+    if (runId.startsWith("tse_")) {
+      const sessions = schema.tachoSessions;
+      const [root] = await tx
+        .select({ sessionUuid: sessions.sessionUuid })
+        .from(sessions)
+        .where(
+          and(
+            eq(sessions.orgId, scope.orgId),
+            eq(sessions.workspaceId, scope.workspaceId),
+            eq(sessions.publicId, runId),
+            isNull(sessions.parentSessionUuid),
+          ),
+        )
+        .limit(1);
+      if (!root) return null;
+      const children = await subagentSessionsQuery(
+        tx,
+        scope,
+        root.sessionUuid,
+      );
+      return {
+        kind: "tacho",
+        rootSessionUuid: root.sessionUuid,
+        sessionUuids: [
+          root.sessionUuid,
+          ...children.map((child) => child.sessionUuid),
+        ],
+      };
+    }
+    return null;
+  });
 }
 
 function toFrame(row: ModelCallFrameRow): ModelCallFrame {
@@ -261,17 +364,9 @@ async function priceRunFrames(
   runId: string,
   window: SpendWindow,
 ): Promise<bigint | null> {
-  // loadRunSource finds the run by its public id on the system connection,
-  // as the rollup does. The run id came from this workspace's own
-  // run_totals rows, and the check below refuses a source from any other.
-  const source = await loadRunSource(runId);
-  if (
-    source === null ||
-    source.meta.orgId !== scope.orgId ||
-    source.meta.workspaceId !== scope.workspaceId
-  )
-    return null;
-  const rows = await readModelCallFrames({ ...scope, run: source.frames });
+  const ref = await readRunRef(scope, runId);
+  if (ref === null) return null;
+  const rows = await readModelCallFrames({ ...scope, run: ref });
   const frames = rows
     .map(toFrame)
     .filter(
@@ -301,6 +396,7 @@ function reportPriceFailure(
   });
 }
 
+/** The production reads; exported for the Postgres test that runs their SQL. */
 export const frameTimeSpendDeps: FrameTimeSpendDeps = {
   readRuns,
   priceRunFrames,

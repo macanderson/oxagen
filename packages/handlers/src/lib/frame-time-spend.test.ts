@@ -2,9 +2,9 @@ import { type ModelCallFrame, ZERO_TOKENS } from "@oxagen/billing";
 import { describe, expect, it, vi } from "vitest";
 import {
   CROSSING_RUNS_PRICED_MAX,
+  type CrossingRun,
+  type FrameTimeSpend,
   type FrameTimeSpendDeps,
-  insideWindow,
-  type OverlappingRun,
   priceFramesIn,
   readFrameTimeSpend,
 } from "./frame-time-spend";
@@ -24,76 +24,40 @@ function runId(n: number): string {
   return `tse_${String(n).padStart(22, "0")}`;
 }
 
-function run(
-  n: number,
-  over: Partial<OverlappingRun> & { startedAt: string; lastFrameBound: string },
-): OverlappingRun {
+function crossing(n: number, over: Partial<CrossingRun> = {}): CrossingRun {
   return {
     runId: runId(n),
     operatorKey: ANA,
     currency: "USD",
     costMicros: 1_000n,
     ...over,
-    startedAt: new Date(over.startedAt),
-    lastFrameBound: new Date(over.lastFrameBound),
   };
 }
 
 function deps(
-  runs: OverlappingRun[],
+  runs: { contained?: FrameTimeSpend[]; crossing?: CrossingRun[] },
   priced: (id: string) => Promise<bigint | null> = async () => 0n,
 ) {
   return {
-    readRuns: vi.fn(async () => runs),
+    readRuns: vi.fn(async () => ({
+      contained: runs.contained ?? [],
+      crossing: runs.crossing ?? [],
+    })),
     priceRunFrames: vi.fn(async (_scope: unknown, id: string) => priced(id)),
     reportPriceFailure: vi.fn(),
   } satisfies FrameTimeSpendDeps;
 }
 
-describe("insideWindow", () => {
-  it("holds a run whose start and last frame bound fall in the window", () => {
-    expect(
-      insideWindow(
-        run(1, {
-          startedAt: "2026-09-01T00:00:00Z",
-          lastFrameBound: "2026-09-30T23:59:59Z",
-        }),
-        SEPTEMBER,
-      ),
-    ).toBe(true);
-  });
-
-  it.each([
-    ["started before the window", "2026-08-31T23:59:59Z", "2026-09-01T01:00:00Z"],
-    ["ran up to the window's end", "2026-09-30T23:00:00Z", "2026-10-01T00:00:00Z"],
-  ])("leaves out a run that %s", (_label, startedAt, lastFrameBound) => {
-    expect(insideWindow(run(1, { startedAt, lastFrameBound }), SEPTEMBER)).toBe(
-      false,
-    );
-  });
-});
-
 describe("readFrameTimeSpend", () => {
-  it("adds a run inside the window whole and prices a crossing run by its frames", async () => {
+  it("adds the runs inside the window whole and a crossing run by its frames in the window", async () => {
     const d = deps(
-      [
-        run(1, {
-          costMicros: 3_000n,
-          startedAt: "2026-09-10T00:00:00Z",
-          lastFrameBound: "2026-09-10T01:00:00Z",
-        }),
-        run(2, {
-          costMicros: 9_000n,
-          startedAt: "2026-08-31T23:00:00Z",
-          lastFrameBound: "2026-09-01T01:00:00Z",
-        }),
-        run(3, {
-          operatorKey: null,
-          costMicros: 500n,
-          startedAt: "2026-09-12T00:00:00Z",
-          lastFrameBound: "2026-09-12T00:10:00Z",
-        }),
-      ],
+      {
+        contained: [
+          { operatorKey: ANA, currency: "USD", micros: 3_000n },
+          { operatorKey: null, currency: "USD", micros: 500n },
+        ],
+        crossing: [crossing(2, { costMicros: 9_000n })],
+      },
       async () => 1_000n,
     );
     const out = await readFrameTimeSpend(d, SCOPE, SEPTEMBER, null);
@@ -105,24 +69,21 @@ describe("readFrameTimeSpend", () => {
       ]),
     );
     expect(out.rows).toHaveLength(2);
-    expect(d.priceRunFrames).toHaveBeenCalledTimes(1);
-    expect(d.priceRunFrames).toHaveBeenCalledWith(SCOPE, runId(2), SEPTEMBER);
+    expect(d.priceRunFrames).toHaveBeenCalledExactlyOnceWith(
+      SCOPE,
+      runId(2),
+      SEPTEMBER,
+    );
     expect(d.readRuns).toHaveBeenCalledWith(SCOPE, SEPTEMBER, null);
   });
 
   it("keeps each currency apart", async () => {
-    const d = deps([
-      run(1, {
-        startedAt: "2026-09-10T00:00:00Z",
-        lastFrameBound: "2026-09-10T01:00:00Z",
-      }),
-      run(2, {
-        currency: "EUR",
-        costMicros: 700n,
-        startedAt: "2026-09-11T00:00:00Z",
-        lastFrameBound: "2026-09-11T01:00:00Z",
-      }),
-    ]);
+    const d = deps({
+      contained: [
+        { operatorKey: ANA, currency: "USD", micros: 1_000n },
+        { operatorKey: ANA, currency: "EUR", micros: 700n },
+      ],
+    });
     const out = await readFrameTimeSpend(d, SCOPE, SEPTEMBER, [ANA]);
     expect(out.rows).toEqual(
       expect.arrayContaining([
@@ -130,21 +91,12 @@ describe("readFrameTimeSpend", () => {
         { operatorKey: ANA, currency: "EUR", micros: 700n },
       ]),
     );
+    expect(d.readRuns).toHaveBeenCalledWith(SCOPE, SEPTEMBER, [ANA]);
   });
 
   it("marks an operator partial when its crossing run cannot be priced", async () => {
     const d = deps(
-      [
-        run(1, {
-          startedAt: "2026-08-30T00:00:00Z",
-          lastFrameBound: "2026-09-02T00:00:00Z",
-        }),
-        run(2, {
-          operatorKey: BEN,
-          startedAt: "2026-08-30T00:00:00Z",
-          lastFrameBound: "2026-09-02T00:00:00Z",
-        }),
-      ],
+      { crossing: [crossing(1), crossing(2, { operatorKey: BEN })] },
       async (id) => (id === runId(1) ? null : 200n),
     );
     const out = await readFrameTimeSpend(d, SCOPE, SEPTEMBER, [ANA, BEN]);
@@ -156,34 +108,22 @@ describe("readFrameTimeSpend", () => {
 
   it("reports a price read that throws and marks its operator partial", async () => {
     const failure = new Error("clickhouse unavailable");
-    const d = deps(
-      [
-        run(1, {
-          startedAt: "2026-08-30T00:00:00Z",
-          lastFrameBound: "2026-09-02T00:00:00Z",
-        }),
-      ],
-      async () => {
-        throw failure;
-      },
-    );
+    const d = deps({ crossing: [crossing(1)] }, async () => {
+      throw failure;
+    });
     const out = await readFrameTimeSpend(d, SCOPE, SEPTEMBER, [ANA]);
     expect([...out.partial]).toEqual([ANA]);
     expect(d.reportPriceFailure).toHaveBeenCalledWith(SCOPE, runId(1), failure);
   });
 
   it("prices the largest crossing runs up to the cap and marks the rest partial", async () => {
-    const crossing = Array.from(
-      { length: CROSSING_RUNS_PRICED_MAX + 1 },
-      (_, i) =>
-        run(i + 1, {
-          operatorKey: i === 0 ? BEN : ANA,
-          costMicros: BigInt(i + 1),
-          startedAt: "2026-08-30T00:00:00Z",
-          lastFrameBound: "2026-09-02T00:00:00Z",
-        }),
+    const runs = Array.from({ length: CROSSING_RUNS_PRICED_MAX + 1 }, (_, i) =>
+      crossing(i + 1, {
+        operatorKey: i === 0 ? BEN : ANA,
+        costMicros: BigInt(i + 1),
+      }),
     );
-    const d = deps(crossing, async () => 1n);
+    const d = deps({ crossing: runs }, async () => 1n);
     const out = await readFrameTimeSpend(d, SCOPE, SEPTEMBER, null);
     expect(d.priceRunFrames).toHaveBeenCalledTimes(CROSSING_RUNS_PRICED_MAX);
     // Run 1 is Ben's and the smallest, so it is the one left unread.
@@ -196,7 +136,7 @@ describe("readFrameTimeSpend", () => {
   });
 
   it("reads nothing for an empty operator list", async () => {
-    const d = deps([]);
+    const d = deps({});
     expect(await readFrameTimeSpend(d, SCOPE, SEPTEMBER, [])).toEqual({
       rows: [],
       partial: new Set(),

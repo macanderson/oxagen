@@ -234,7 +234,7 @@ describe("Findings hero", () => {
         .querySelector('[data-recorded="false"]'),
     ).not.toBeNull();
     expect(screen.getByTestId("spend-findings-hero")).toHaveTextContent(
-      /so it shows no share/,
+      /No share: this month’s spend has no single priced figure\./,
     );
   });
 

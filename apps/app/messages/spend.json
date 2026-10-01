@@ -133,7 +133,7 @@
       "hero": "Unproductive spend",
       "heroShareOf": "of",
       "heroPeriod": "spent this month.",
-      "heroNoSpend": "Oxagen could not price all of this month’s spend in one currency, so it shows no share.",
+      "heroNoSpend": "No share: this month’s spend has no single priced figure.",
       "mixedCurrency": "This month holds unproductive spend in more than one currency. Each figure adds up one currency, so Oxagen built none.",
       "parts": {
         "title": "Parts and estimates",

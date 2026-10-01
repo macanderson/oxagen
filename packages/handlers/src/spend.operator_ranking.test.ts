@@ -8,7 +8,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   type FrameTimeSpend,
   type FrameTimeSpendDeps,
-  type OverlappingRun,
   readFrameTimeSpend,
 } from "./lib/frame-time-spend";
 import { operatorPseudonym } from "./lib/operator-pseudonyms";
@@ -407,32 +406,18 @@ describe("get_operator_ranking share window", () => {
   const SEP_1 = new Date("2026-09-01T00:00:00.000Z");
   const OCT_1 = new Date("2026-10-01T00:00:00.000Z");
 
-  function overlapping(
-    n: number,
-    operatorKey: string,
-    costMicros: bigint,
-    startedAt: string,
-    lastFrameBound: string,
-  ): OverlappingRun {
-    return {
-      runId: runId(n),
-      operatorKey,
-      currency: "USD",
-      costMicros,
-      startedAt: new Date(startedAt),
-      lastFrameBound: new Date(lastFrameBound),
-    };
-  }
-
   // Ana's run 1 started on August 31 and ran into September: 9,000 priced in
   // all, 1,000 of it on September 1. Her run 2 ran inside September: 3,000.
   // Ben's run 3 started on September 30 and ran into October: 8,000 in all,
-  // 2,000 of it on September 30.
-  const runs = [
-    overlapping(1, ANA, 9_000n, "2026-08-31T23:00:00Z", "2026-09-01T01:00:00Z"),
-    overlapping(2, ANA, 3_000n, "2026-09-10T00:00:00Z", "2026-09-10T02:00:00Z"),
-    overlapping(3, BEN, 8_000n, "2026-09-30T23:00:00Z", "2026-10-01T03:00:00Z"),
+  // 2,000 of it on September 30. Postgres sorts the runs into the two lists
+  // (frame-time-spend.pg.test.ts runs that SQL).
+  const contained = [{ operatorKey: ANA, currency: "USD", micros: 3_000n }];
+  const crossing = [
+    { runId: runId(1), operatorKey: ANA, currency: "USD", costMicros: 9_000n },
+    { runId: runId(3), operatorKey: BEN, currency: "USD", costMicros: 8_000n },
   ];
+  // Run 1's claimed frame ran on September 1, and run 3's on September 30.
+  const claims = [claim(1, "f1", ANA, 1_000n), claim(3, "f1", BEN, 500n)];
   const inPeriod = new Map([
     [runId(1), 1_000n],
     [runId(3), 2_000n],
@@ -440,7 +425,7 @@ describe("get_operator_ranking share window", () => {
 
   function spendDeps() {
     return {
-      readRuns: vi.fn(async () => runs),
+      readRuns: vi.fn(async () => ({ contained, crossing })),
       priceRunFrames: vi.fn(
         async (_scope: unknown, id: string) => inPeriod.get(id) ?? null,
       ),
@@ -450,8 +435,7 @@ describe("get_operator_ranking share window", () => {
 
   it("divides by the frames that ran in the period for a run that crosses its first day", async () => {
     const deps = spendDeps();
-    // Run 1's claimed frame ran on September 1, inside the period.
-    const out = await harness([claim(1, "f1", ANA, 1_000n), claim(3, "f1", BEN, 500n)], {
+    const out = await harness(claims, {
       readOperatorSpend: (scope, window, keys) =>
         readFrameTimeSpend(deps, scope, window, keys),
     }).handler({ period: PERIOD }, ctx());
@@ -460,16 +444,15 @@ describe("get_operator_ranking share window", () => {
     );
     // 1,000 over (1,000 from run 1 on September 1 + 3,000 from run 2).
     expect(ana?.unproductiveShare).toBe(0.25);
-    expect(deps.priceRunFrames).toHaveBeenCalledWith(
-      SCOPE,
-      runId(1),
-      { start: SEP_1, end: OCT_1 },
-    );
+    expect(deps.priceRunFrames).toHaveBeenCalledWith(SCOPE, runId(1), {
+      start: SEP_1,
+      end: OCT_1,
+    });
   });
 
   it("divides by the frames that ran in the period for a run that crosses its last day", async () => {
     const deps = spendDeps();
-    const out = await harness([claim(1, "f1", ANA, 1_000n), claim(3, "f1", BEN, 500n)], {
+    const out = await harness(claims, {
       readOperatorSpend: (scope, window, keys) =>
         readFrameTimeSpend(deps, scope, window, keys),
     }).handler({ period: PERIOD }, ctx());
@@ -478,11 +461,7 @@ describe("get_operator_ranking share window", () => {
     );
     // 500 over the 2,000 run 3 spent on September 30, not its 8,000 in all.
     expect(ben?.unproductiveShare).toBe(0.25);
-    expect(deps.priceRunFrames).not.toHaveBeenCalledWith(
-      SCOPE,
-      runId(2),
-      expect.anything(),
-    );
+    expect(deps.priceRunFrames).toHaveBeenCalledTimes(2);
   });
 });
 

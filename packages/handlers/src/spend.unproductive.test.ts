@@ -1,5 +1,10 @@
 import type { UnproductiveClaim } from "@oxagen/billing";
-import { spendUnproductive } from "@oxagen/oxagen/contracts/spend.unproductive";
+import { FINDING_KINDS } from "@oxagen/database/schema";
+import {
+  spendUnproductive,
+  UNPRODUCTIVE_ESTIMATE,
+  UNPRODUCTIVE_PARTS,
+} from "@oxagen/oxagen/contracts/spend.unproductive";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { FrameTimeSpend } from "./lib/frame-time-spend";
 import { createOperatorRankingHandler } from "./spend.operator_ranking";
@@ -103,6 +108,15 @@ describe("get_unproductive_spend headline", () => {
       readPolicy: async () => ({ pseudonyms: false, salt: null }),
     })({ period: PERIOD }, ctx());
     expect(headline.unproductive).toEqual(ranking.unproductive);
+  });
+
+  it("names only kinds the findings job writes, so a renamed kind fails here", () => {
+    const kinds: readonly string[] = FINDING_KINDS;
+    for (const kind of [
+      ...UNPRODUCTIVE_PARTS.flatMap((p) => p.kinds),
+      ...UNPRODUCTIVE_ESTIMATE.kinds,
+    ])
+      expect(kinds).toContain(kind);
   });
 
   it("reads the caller's workspace over the whole last day", async () => {
