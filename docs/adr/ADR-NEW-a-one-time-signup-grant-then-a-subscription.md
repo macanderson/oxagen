@@ -170,3 +170,8 @@ migration's header says so.
   no effect on governed actions.
 - An overage invoice is a separate invoice from the subscription's until the
   metered-usage step in §5 lands.
+- An organization with a negotiated `billing.contract_terms` row, no
+  subscription, and no invoice-billing approval is refused once its grant
+  ends, like any organization with no subscription. An operator approves it
+  for invoice billing, or gives it a subscription, before this change
+  deploys.

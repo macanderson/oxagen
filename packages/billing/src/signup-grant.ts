@@ -1,5 +1,5 @@
 /**
- * signup-grant.ts — the one-time signup grant of governed actions (ADR-NEW,
+ * signup-grant.ts: the one-time signup grant of governed actions (ADR-NEW,
  * amending ADR-055; Mac's decision of 2026-10-01, #4886).
  *
  * A new organisation receives one grant, sized and timed by the Free plan
@@ -69,7 +69,7 @@ export async function readSignupGrantPolicy(
     // The Free plan is written by `pnpm db:migrate` (seedPlatform). Granting
     // a guessed size would hand out a figure nobody set.
     throw new Error(
-      "billing: no signup grant terms — the Free plan row is not seeded",
+      "billing: no signup grant terms because the Free plan row is not seeded",
     );
   }
   return { grantGau: Number(row.grantGau), grantDays: Number(row.grantDays) };

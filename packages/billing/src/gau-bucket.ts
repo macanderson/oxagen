@@ -1,5 +1,5 @@
 /**
- * gau-bucket.ts — the organisation's bucket of governed action units
+ * gau-bucket.ts: the organisation's bucket of governed action units
  * (ADR-055 §4, amended by ADR-NEW signup grant; apps/app/ARCHITECTURE.md §3.9
  * items 4, 5 and 9).
  *
