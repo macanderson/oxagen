@@ -200,7 +200,12 @@ While the repository fails its health check, Oxagen merges nothing.
 On GitHub, these checks govern merges requested through Oxagen. Repository
 permissions govern direct pushes and merges in GitHub. Oxagen leaves existing
 branch protections untouched and detects unpublished changes through its
-divergence checks. Provisioning, health, and repair manage private visibility,
+divergence checks. Before synchronization or publication changes steering, Oxagen
+verifies the exact GitHub commit against its deployment history and GitHub
+records of pull requests merged by the Oxagen App. A commit message cannot prove
+approval. Missing or unreadable provenance refuses the update.
+
+Provisioning, health, and repair manage private visibility,
 the default branch, squash merge settings, and disabled Actions. They do not
 read or write rulesets or environment protection. Deployment records still
 identify published versions. See [ADR-237](../../adr/ADR-237-steering-repositories-support-github-free.md).
@@ -235,7 +240,8 @@ chain.
 After the merge, `merge_context_pr` publishes the new head
 (`packages/steering-bundle/src/publish.ts`,
 `packages/handlers/src/steering-repo/publisher.ts`). The repository sync
-publishes too, as its last step, so a merge made on the host still publishes.
+publishes too, as its last step. On GitHub steering repositories, it accepts
+only commits backed by authenticated Oxagen publication or merge evidence.
 A publish takes these steps:
 
 1. It checks the repository's health and takes the repository's lock.

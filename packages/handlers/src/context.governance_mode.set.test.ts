@@ -939,6 +939,36 @@ describe("merge_context_pr on a governance proposal", () => {
     });
   });
 
+  it("refuses a claimed governance merge when the host cannot authenticate its commit", async () => {
+    const deps = steeringMode("team");
+    const proposalId = await proposeSolo(deps);
+    deps.store.proposals[0]!.mergeClaimedAt = new Date("2026-09-15T09:00:00.000Z");
+    const mergeSha = deps.github.mergeOnHost(deps.github.pulls[0]!.number);
+    const verify = vi.fn(async () => {
+      throw new Error("The governance merge has no authenticated provenance.");
+    });
+    Object.assign(deps.github, { assertSteeringCommit: verify });
+    const seams = doubles();
+
+    await expect(
+      createMergeContextPrHandler(deps, mergeSeams(seams))(
+        { proposalId },
+        ctx({ userId: REVIEWER }),
+      ),
+    ).rejects.toThrow("The governance merge has no authenticated provenance.");
+
+    expect(verify).toHaveBeenCalledWith(REPO, mergeSha);
+    expect(deps.store.proposals[0]).toMatchObject({
+      status: "checks_passed",
+      mergedByUserId: null,
+    });
+    expect(deps.github.deletedBranches).toEqual([]);
+    expect(deps.store.records).toEqual([]);
+    expect(deps.store.ledger).toEqual([]);
+    expect(seams.published).toEqual([]);
+    expect(deps.events).toEqual([]);
+  });
+
   it("answers the version an earlier call published when it resumes a merged PR", async () => {
     const deps = steeringMode("team");
     const proposalId = await proposeSolo(deps);

@@ -43,6 +43,7 @@ import {
   parseGovernanceMode,
 } from "../context.steering.policy";
 import { logger } from "../logger";
+import { assertSteeringCommit } from "./provenance";
 import {
   branchScopeRefusal,
   buildLedgerLine,
@@ -534,7 +535,7 @@ export async function landSteeringPr(input: LandInput): Promise<Landed> {
   let head = input.checkedHead;
   let heads: string[] = [head];
   let checks = input.checks;
-  let approval = await input.approve(heads);
+  let approval: MergeApproval | null = null;
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     const main = await host.branchHead(repo, repo.defaultBranch);
     if (main === null) {
@@ -544,6 +545,8 @@ export async function landSteeringPr(input: LandInput): Promise<Landed> {
         message: `${repo.fullName} has no ${repo.defaultBranch} branch`,
       });
     }
+    await assertSteeringCommit(host, repo, main);
+    approval ??= await input.approve(heads);
     if (!(await host.holdsCommit(repo, head, main))) {
       const update = await host.updateBranch(repo, {
         number: input.number,

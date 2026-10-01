@@ -104,6 +104,49 @@ const active = (r: Rig) =>
   r.h.store.records.filter((x) => x.status === "active");
 
 describe("syncWorkspaceSteering", () => {
+  it.each(["missing", "refused", "unavailable"] as const)(
+    "keeps live records and settings unchanged when provenance is %s",
+    async (failure) => {
+      const r = rig({
+        [`${RULES}/ctx.a.one.toml`]: recordText("ctx.a.one"),
+        "steering/governance.toml": 'mode = "solo"',
+      });
+      r.h.github.remove("main", "steering/governance.toml", "Oxagen-Version: 2");
+      const repo = { ...REPO, requiresSteeringProvenance: true };
+      vi.spyOn(r.h.github, "resolveRepository").mockResolvedValue(repo);
+      const apply = vi.spyOn(r.sync, "apply");
+      const settings = vi.spyOn(r.sync, "publishWorkspaceSettings");
+      const links = vi.fn(async () => ({ linked: [], unlinked: [], findings: [] }));
+      r.deps.reconcileLinks = links;
+      const publish = vi.fn(async () => null);
+      r.deps.publish = publish;
+      if (failure !== "missing")
+        r.deps.github.assertSteeringCommit = vi.fn(async () => {
+          throw new Error(failure);
+        });
+
+      await expect(r.run()).rejects.toThrow();
+
+      expect(apply).not.toHaveBeenCalled();
+      expect(settings).not.toHaveBeenCalled();
+      expect(links).not.toHaveBeenCalled();
+      expect(publish).not.toHaveBeenCalled();
+      expect(active(r)).toEqual([]);
+    },
+  );
+
+  it("verifies the captured head even when it has no governance file", async () => {
+    const r = rig({ [`${RULES}/ctx.a.one.toml`]: recordText("ctx.a.one") });
+    const verify = vi.fn(async () => undefined);
+    r.deps.github.assertSteeringCommit = verify;
+    const head = await r.h.github.branchHead(REPO, "main");
+
+    const result = await r.run();
+
+    expect(verify).toHaveBeenCalledWith(REPO, head);
+    expect(result.created).toBe(1);
+  });
+
   it("publishes every record file on the production branch", async () => {
     const r = rig();
     r.h.github.commit(

@@ -139,7 +139,7 @@ export function githubHealthHost(input: GithubHealthHostInput): HealthHost {
   const root = () => `/repos/${seg(address.owner)}/${seg(address.name)}`;
   const target = async (): Promise<history.GithubHistoryTarget> => ({
     rest: await rest(),
-    repo: address,
+    repo: { ...address, id: input.repositoryId },
     app: input.app,
   });
   const fullName = () => `${address.owner}/${address.name}`;

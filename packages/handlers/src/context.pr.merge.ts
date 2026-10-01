@@ -129,6 +129,7 @@ import {
   type SteeringLayout,
 } from "./steering-repo/merge-queue";
 import { readSteeringHealth } from "./steering-repo/health.read";
+import { assertSteeringCommit } from "./steering-repo/provenance";
 import {
   type HeldPublish,
   type SteeringPublisher,
@@ -466,6 +467,7 @@ export function createMergeContextPrHandler(
             row.prUrl,
           );
         }
+        await assertSteeringCommit(deps.github, repo, commitSha);
         await deps.github.deleteBranch(repo, branch);
         const result = await deps.store.publishMerge({
           scope,
@@ -673,12 +675,12 @@ async function mergeGovernanceProposal(
     // row before it landed the PR, and failed before its record did. A PR
     // someone merged on the host carries no claim. Finishing it here would
     // record this caller as its merger and an approval nobody gave, so the
-    // repository sync records it as a change made outside Oxagen instead.
+    // repository sync accepts it only when that host's provenance rules allow it.
     if (recorded.mergeClaimedAt === null) {
       await requestSync(deps, scope, recorded);
       throw governanceRefusal(
         "merged_outside_oxagen",
-        `${recorded.prUrl ?? recorded.publicId} was merged outside Oxagen, so no approval in Oxagen stands behind it. The repository sync records the change within a minute.`,
+        `${recorded.prUrl ?? recorded.publicId} was merged outside Oxagen, so no approval in Oxagen stands behind it. Review the repository health before making another change.`,
       );
     }
     // The host merged it on an earlier call whose record did not land. The
@@ -691,6 +693,7 @@ async function mergeGovernanceProposal(
       });
     }
     commitSha = pr.mergeCommitSha;
+    await assertSteeringCommit(deps.github, repo, commitSha);
     mergedAt = requireMergedAt(pr.mergedAt, recorded.prUrl);
     // The earlier call may have published the merge before its record
     // failed. The version store says so, as it does for a record's resume, so
@@ -792,6 +795,7 @@ async function mergeGovernanceProposal(
     publishedVersion = landed.live ? landed.version : null;
   }
 
+  await assertSteeringCommit(deps.github, repo, commitSha);
   row = await deps.store.mergeGovernance({
     proposal: row,
     commitSha,

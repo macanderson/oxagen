@@ -297,7 +297,7 @@ describe("githubHealthHost.observe", () => {
 describe("githubHealthHost history", () => {
   it("hands each history call the repository it read last", async () => {
     const { rest, host } = scriptedGithub({});
-    const target = { rest, repo: REPO, app: APP };
+    const target = { rest, repo: { ...REPO, id: 1 }, app: APP };
     vi.mocked(history.githubPublished).mockResolvedValue(PUBLISHED);
     vi.mocked(history.githubDiverged).mockResolvedValue(DIVERGENCE);
     vi.mocked(history.githubOpenRevert).mockResolvedValue(13);

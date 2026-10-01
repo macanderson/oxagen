@@ -855,18 +855,26 @@ describe("checkRepoHealth", () => {
     expect(r.row()).toMatchObject({ revertPrNumber: 13, publishedSha: P, publishedVersion: 7 });
   });
 
-  it("does not call a healthy repo diverged when the history read fails", async () => {
+  it("refuses a healthy GitHub repo when its commit history cannot be verified", async () => {
     const r = rig({
       published: async () => {
         throw new Error("GitHub answered 502");
       },
     });
-    expect((await r.read())?.health).toBe("healthy");
+    expect(await r.read()).toMatchObject({
+      health: "diverged",
+      reason: "Oxagen could not verify this steering repository's commit history. Retry the health check.",
+    });
+    expect(r.host.openRevert).not.toHaveBeenCalled();
   });
 
-  it("reads no history before anything is published", async () => {
+  it("refuses GitHub history without an authenticated published commit", async () => {
     const r = rig({ published: null, divergence: DIVERGENCE });
-    expect((await r.read())?.health).toBe("healthy");
+    expect(await r.read()).toMatchObject({
+      health: "diverged",
+      reason: "Oxagen could not find an authenticated published commit for this steering repository.",
+    });
+    expect(r.host.openRevert).not.toHaveBeenCalled();
     expect(r.host.diverged).not.toHaveBeenCalled();
     expect(r.row()?.publishedSha).toBeNull();
   });

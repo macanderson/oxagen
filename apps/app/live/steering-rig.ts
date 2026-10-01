@@ -526,7 +526,7 @@ function repoPath(fullName: string): string {
 
 export function githubRig(token: string): GithubRig {
   async function send(
-    method: "GET" | "POST" | "DELETE",
+    method: "GET" | "POST" | "PATCH" | "DELETE",
     path: string,
     body?: unknown,
   ): Promise<{ status: number; text: string }> {
@@ -544,7 +544,7 @@ export function githubRig(token: string): GithubRig {
   }
 
   async function call<S extends z.ZodType>(
-    method: "GET" | "POST" | "DELETE",
+    method: "GET" | "POST" | "PATCH" | "DELETE",
     path: string,
     body: unknown,
     schema: S,

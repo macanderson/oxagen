@@ -31,6 +31,14 @@ Repository permissions govern direct pushes and merges in GitHub. Existing
 protections may add restrictions, and Oxagen leaves them untouched. Divergence
 detection still reports changes outside the published version.
 
+Before synchronization or publication changes any records, Oxagen verifies the
+exact GitHub commit against an authenticated deployment anchor. Each subsequent
+change must belong to a pull request that GitHub records as merged by the Oxagen
+App into this repository and branch. Commit trailers, author names, and cached
+health cannot authorize a change. A tree restored to the authenticated published
+content carries no new steering content. Missing or unreadable provenance refuses
+the update and preserves the last published version.
+
 GitLab's prescribed settings remain unchanged. This decision replaces the GitHub
 ruleset requirement in the steering specification and the ruleset assumptions in
 ADR-228. It also replaces #4899's requirement to upgrade a personal account.
