@@ -1,8 +1,11 @@
+import { createHash } from "node:crypto";
 import {
   copyFileSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  readdirSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -10,15 +13,13 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   assertSurfaceMark,
   brandPath,
-  comparesRasterBytes,
+  desktopIconDrift,
   expectedInk,
-  icoSizes,
-  isCi,
-  pngSize,
+  houseGroundsModule,
   rewriteInk,
   startupImages,
   staticPwaHead,
@@ -28,35 +29,142 @@ import {
 const SCRIPT = fileURLToPath(new URL("./sync-brand-assets.mjs", import.meta.url));
 const REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));
 
+const sha256 = (data: string | Buffer) =>
+  createHash("sha256").update(data).digest("hex");
+
+/** Write `content` at `root/rel`, making the folders it needs. */
+function put(root: string, rel: string, content: string | Buffer) {
+  const path = join(root, rel);
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, content);
+}
+
 /**
- * `process.env` with `CI` set to `ci`. GitHub Actions sets `CI=true` for every
- * step, and the script fails a check without a kit there, so a spawn that
- * means to test the local skip has to clear it.
+ * A copy of the repo with just what the script imports and edits in place:
+ * the script, its entrypoint helper, apps/web's palette module, and the four
+ * hand-authored pages the sync writes a <head> block into.
  */
-function envWithCi(ci: string): NodeJS.ProcessEnv {
-  return { ...process.env, CI: ci };
+function fixtureRepo(root: string) {
+  const copyIn = (rel: string) => {
+    mkdirSync(dirname(join(root, rel)), { recursive: true });
+    copyFileSync(join(REPO_ROOT, rel), join(root, rel));
+  };
+  copyIn("tools/scripts/sync-brand-assets.mjs");
+  copyIn("tools/scripts/lib/is-entrypoint.mjs");
+  copyIn("apps/web/scripts/lib/theme.mjs");
+  for (const page of [
+    "index.html",
+    "story/index.html",
+    "read/index.html",
+    "products/oxagen/index.html",
+  ]) {
+    put(
+      root,
+      `apps/web/${page}`,
+      '<head>\n<link rel="manifest" href="/oxagen.webmanifest">\n</head>\n',
+    );
+  }
+  return join(root, "tools/scripts/sync-brand-assets.mjs");
+}
+
+const TOKENS = {
+  ink: "#09090B",
+  paper: "#FFFFFF",
+  panel: "#18181B",
+  hl: "#27272A",
+  border: "#27272A",
+  rule: "#3F3F46",
+  dim: "#71717A",
+  muted: "#A1A1AA",
+  "text-body": "#E4E4E7",
+  text: "#FFFFFF",
+  gold: "#D4AF37",
+};
+
+/**
+ * A kit with every file the sync reads. Each file's bytes name the file, so
+ * no two are alike. The marks carry the shapes `marks()` parses.
+ */
+function fakeKit(kit: string) {
+  put(
+    kit,
+    "tokens/house-tokens.json",
+    JSON.stringify({ version: "9.9.9", gold: { hex: TOKENS.gold }, tokens: TOKENS }),
+  );
+  for (const f of ["house-tokens.css", "house-tailwind.css"]) put(kit, `tokens/${f}`, `/* ${f} */\n`);
+  put(kit, "tokens/house-fonts.css", "@font-face { src: url(../fonts/face.woff2); }\n");
+  put(kit, "fonts/face.woff2", "face");
+  put(kit, "fonts/LICENSE-OFL.txt", "licence");
+  for (const b of ["oxagen", "stella"]) {
+    const wordmark =
+      '<svg viewBox="0 0 120 30"><path class="letters" d="M0 0h1"/><path class="accent" d="M2 0h1"/></svg>';
+    const icon =
+      '<svg viewBox="0 0 96 96"><g transform="translate(1 1)"><path d="M0 0h1" stroke="currentColor" stroke-width="2"/><path d="M1 1h1" fill="#D4AF37" opacity="0.55"/></g></svg>';
+    put(kit, `logo/svg/${b}-wordmark-adaptive.svg`, wordmark);
+    put(kit, `logo/svg/${b}-icon-adaptive.svg`, icon);
+    for (const v of ["wordmark-dark", "wordmark-light", "icon-tile-dark", "icon-tile-light"]) {
+      put(kit, `logo/svg/${b}-${v}.svg`, `<svg id="${b}-${v}"/>`);
+    }
+    for (const v of ["avatar-light", "avatar-dark"]) put(kit, `social/${b}-${v}.svg`, `<svg id="${b}-${v}"/>`);
+  }
+  put(kit, "logo/svg/oxagen-favicon.svg", '<svg id="favicon"/>');
+  for (const scheme of ["dark", "light"]) {
+    put(kit, `social/oxagen-og-1200x630-${scheme}.png`, `og ${scheme}`);
+    put(kit, `splash/oxagen-splash-1x2-${scheme}.png`, `splash ${scheme}`);
+  }
+  put(
+    kit,
+    "splash/splash-screens.json",
+    JSON.stringify({
+      screens: [{ file: "{brand}-splash-1x2-{scheme}.png", media: "(device-width: 1px)" }],
+    }),
+  );
+  for (const f of ["oxagen-spinner.svg", "oxagen-spinner-wordmark.svg"]) put(kit, `spinners/${f}`, f);
+  for (const size of [16, 32, 48, 180, 192, 512]) put(kit, `icons/oxagen-icon-${size}.png`, `icon ${size}`);
+  for (const size of [192, 512]) {
+    put(kit, `icons/oxagen-icon-maskable-${size}.png`, `maskable ${size}`);
+    put(kit, `icons/oxagen-icon-maskable-light-${size}.png`, `maskable light ${size}`);
+  }
+  put(kit, "icons/oxagen-favicon.ico", "ico");
+  put(
+    kit,
+    "icons/oxagen.webmanifest",
+    JSON.stringify({ name: "Oxagen", theme_color: TOKENS.ink, icons: [] }),
+  );
+  put(kit, "pwa/install-prompt.js", "// prompt\n");
+  put(kit, "skills/stub/oxagen-branding/SKILL.md", "---\nname: oxagen-branding\n---\nstub\n");
+}
+
+/** Every file under `root`, as relative paths with their sha256. */
+function snapshot(root: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  const walk = (rel: string) => {
+    for (const e of readdirSync(join(root, rel), { withFileTypes: true })) {
+      const child = rel ? `${rel}/${e.name}` : e.name;
+      if (e.isDirectory()) walk(child);
+      else out[child] = sha256(readFileSync(join(root, child)));
+    }
+  };
+  walk("");
+  return out;
 }
 
 describe("brand kit selection", () => {
-  it("finds the current sibling checkout without an override", () => {
-    expect(brandPath([], {}, "/projects/oxagen")).toBe(
-      "/projects/oxagen-brand",
-    );
+  it("finds the sibling checkout without an override", () => {
+    expect(brandPath([], {}, "/projects/oxagen")).toBe("/projects/oxagen-brand");
   });
 
-  it("prefers the new variable while accepting the transition alias", () => {
-    expect(brandPath([], { OXAGEN_HOUSE_BRAND: "/old-kit" })).toBe("/old-kit");
+  it("prefers --brand, then OXAGEN_BRAND_KIT", () => {
+    expect(brandPath([], { OXAGEN_BRAND_KIT: "/kit" })).toBe("/kit");
     expect(
-      brandPath([], {
-        OXAGEN_BRAND_KIT: "/kit",
-        OXAGEN_HOUSE_BRAND: "/old-kit",
-      }),
-    ).toBe("/kit");
-    expect(
-      brandPath(["--brand", "/explicit-kit"], {
-        OXAGEN_BRAND_KIT: "/kit",
-      }),
+      brandPath(["--brand", "/explicit-kit"], { OXAGEN_BRAND_KIT: "/kit" }),
     ).toBe("/explicit-kit");
+  });
+
+  it("no longer reads the retired OXAGEN_HOUSE_BRAND name", () => {
+    expect(
+      brandPath([], { OXAGEN_HOUSE_BRAND: "/old-kit" }, "/projects/oxagen"),
+    ).toBe("/projects/oxagen-brand");
   });
 });
 
@@ -100,166 +208,240 @@ describe("surface mark selection", () => {
   });
 });
 
-describe("surface checks without a kit", () => {
-  it("ignores Finder metadata but still refuses an unselected mark", () => {
-    const root = mkdtempSync(join(tmpdir(), "oxagen-brand-check-"));
-    try {
-      const script = join(root, "tools/scripts/sync-brand-assets.mjs");
-      mkdirSync(dirname(script), { recursive: true });
-      copyFileSync(SCRIPT, script);
-      // The script finds its entrypoint through the shared helper (#4664
-      // item 1), so the fixture tree carries that module too.
-      const helper = join(root, "tools/scripts/lib/is-entrypoint.mjs");
-      mkdirSync(dirname(helper), { recursive: true });
-      copyFileSync(
-        fileURLToPath(new URL("./lib/is-entrypoint.mjs", import.meta.url)),
-        helper,
-      );
-      // The script imports apps/web's INK map (#3074), so the fixture tree
-      // carries that module where the repo does, or the child exits on
-      // ERR_MODULE_NOT_FOUND before it checks anything.
-      const theme = join(root, "apps/web/scripts/lib/theme.mjs");
-      mkdirSync(dirname(theme), { recursive: true });
-      copyFileSync(
-        fileURLToPath(
-          new URL("../../apps/web/scripts/lib/theme.mjs", import.meta.url),
-        ),
-        theme,
-      );
-      const surface = join(root, "apps/app/public/brand");
-      mkdirSync(surface, { recursive: true });
-      writeFileSync(join(surface, ".DS_Store"), "finder metadata");
-      const run = () =>
-        spawnSync(
-          process.execPath,
-          [script, "--check", "--brand", join(root, "missing-kit")],
-          { encoding: "utf8", env: envWithCi("") },
-        );
-      const valid = run();
-      expect(valid.status).toBe(0);
-      expect(valid.stdout).toContain("brand: SKIPPED");
-      writeFileSync(join(surface, "oxagen-lockup.svg"), "<svg/>");
-      const invalid = run();
-      expect(invalid.status).not.toBe(0);
-      expect(invalid.stderr).toContain("not selected");
-      expect(invalid.stdout).not.toContain("brand: SKIPPED");
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
+describe("a run without a kit", () => {
+  let root: string;
+  beforeEach(() => {
+    root = mkdtempSync(join(tmpdir(), "oxagen-brand-nokit-"));
   });
-});
+  afterEach(() => rmSync(root, { recursive: true, force: true }));
 
-// #3074: CI runs the check against the kit's main branch. A missing kit there
-// means the checkout step broke, and the old skip-and-exit-0 would pass with
-// nothing verified. Off CI, the loud skip stays.
-describe("a check without a kit", () => {
-  const run = (ci: string) =>
-    spawnSync(process.execPath, [SCRIPT, "--check", "--brand", "/no/such/kit"], {
+  const run = (script: string, args: string[]) =>
+    spawnSync(process.execPath, [script, ...args, "--brand", join(root, "missing-kit")], {
       encoding: "utf8",
-      env: envWithCi(ci),
     });
 
-  it("fails in CI and names the kit it could not find", () => {
-    const result = run("true");
+  // #4804: the check used to print SKIPPED and exit 0 off CI, so a gate with
+  // no kit read green having verified nothing.
+  it("fails a check and names the kit it could not find", () => {
+    const result = spawnSync(process.execPath, [SCRIPT, "--check", "--brand", "/no/such/kit"], {
+      encoding: "utf8",
+      env: { ...process.env, CI: "" },
+    });
     expect(result.status).toBe(2);
     expect(result.stderr).toContain("brand: FAILED");
     expect(result.stderr).toContain("/no/such/kit");
-    expect(result.stdout).not.toContain("brand: SKIPPED");
+    expect(result.stderr).toContain("nothing was checked");
+    expect(result.stdout).not.toContain("SKIPPED");
   });
 
-  it("skips with a notice off CI", () => {
-    const result = run("");
-    expect(result.status).toBe(0);
-    expect(result.stdout).toContain("brand: SKIPPED");
-    expect(result.stdout).toContain("no asset was verified");
-  });
-});
-
-describe("CI and raster comparison", () => {
-  it("reads CI from the variable GitHub Actions sets", () => {
-    expect(isCi({ CI: "true" })).toBe(true);
-    expect(isCi({ CI: "1" })).toBe(true);
-    expect(isCi({})).toBe(false);
-    expect(isCi({ CI: "" })).toBe(false);
-    expect(isCi({ CI: "false" })).toBe(false);
-    expect(isCi({ CI: "0" })).toBe(false);
+  it("fails a sync, so the fan-out cannot open an empty PR", () => {
+    const script = fixtureRepo(root);
+    const result = run(script, []);
+    expect(result.status).toBe(2);
+    expect(result.stderr).toContain("nothing was synced");
   });
 
-  it("compares raster bytes off CI and by size in CI", () => {
-    expect(comparesRasterBytes(["--check"], {})).toBe(true);
-    expect(comparesRasterBytes(["--check"], { CI: "true" })).toBe(false);
-  });
-
-  it("lets a flag override either default", () => {
-    expect(comparesRasterBytes(["--check", "--rasters"], { CI: "true" })).toBe(
-      true,
-    );
-    expect(comparesRasterBytes(["--check", "--no-rasters"], {})).toBe(false);
-  });
-
-  it("always renders rasters for a write", () => {
-    expect(comparesRasterBytes([], { CI: "true" })).toBe(true);
-    expect(comparesRasterBytes(["--no-rasters"], {})).toBe(true);
+  it("ignores Finder metadata but still refuses an unselected mark first", () => {
+    const script = fixtureRepo(root);
+    const surface = join(root, "apps/app/public/brand");
+    mkdirSync(surface, { recursive: true });
+    writeFileSync(join(surface, ".DS_Store"), "finder metadata");
+    const valid = run(script, ["--check"]);
+    expect(valid.status).toBe(2);
+    expect(valid.stderr).toContain("No house kit");
+    writeFileSync(join(surface, "oxagen-lockup.svg"), "<svg/>");
+    const invalid = run(script, ["--check"]);
+    expect(invalid.status).not.toBe(0);
+    expect(invalid.stderr).toContain("not selected");
   });
 });
 
-// The CI image renders with librsvg 2.54 and the committed rasters came from
-// 2.62, so a CI check reads each raster's size instead of its bytes. These
-// readers are that check.
-describe("raster size readers", () => {
-  const committed = (path: string) => readFileSync(join(REPO_ROOT, path));
+// The contract every consumer repo meets (macanderson/oxagen-brand
+// CHANGING.md): a sync copies the kit byte for byte, a check right after it
+// passes, and a check writes nothing and lists every file out of step.
+describe("a sync and a check against a kit", () => {
+  let root: string;
+  let kit: string;
+  let script: string;
+  beforeEach(() => {
+    root = mkdtempSync(join(tmpdir(), "oxagen-brand-sync-"));
+    kit = join(root, "kit");
+    const repo = join(root, "repo");
+    script = fixtureRepo(repo);
+    fakeKit(kit);
+    // The vendored skill this repo used to carry.
+    put(repo, ".claude/skills/oxagen-branding/SKILL.md", "full skill\n");
+    put(repo, ".claude/skills/oxagen-branding/references/voice.md", "voice\n");
+    put(repo, ".claude/skills/oxagen-branding/assets/tokens.css", "tokens\n");
+  });
+  afterEach(() => rmSync(root, { recursive: true, force: true }));
 
-  it("reads a committed PNG's size", () => {
-    expect(pngSize(committed("apps/app/public/favicon/favicon-32.png"))).toEqual(
-      { width: 32, height: 32 },
+  const repo = () => join(root, "repo");
+  const sync = (...args: string[]) =>
+    spawnSync(process.execPath, [script, "--brand", kit, ...args], { encoding: "utf8" });
+  /** Stamp the desktop icons as cut from the avatar the sync wrote. */
+  const stampDesktop = () => {
+    const avatar = "apps/app/public/brand/oxagen-avatar-light.svg";
+    put(
+      repo(),
+      "apps/desktop/src-tauri/icons/source.sha256",
+      `${sha256(readFileSync(join(repo(), avatar)))}  ${avatar}\n`,
     );
-    expect(pngSize(committed("apps/app/public/pwa/icon-512.png"))).toEqual({
-      width: 512,
-      height: 512,
-    });
+  };
+
+  it("passes a check right after a sync", () => {
+    expect(sync().status).toBe(0);
+    stampDesktop();
+    const check = sync("--check");
+    expect(check.status, check.stderr).toBe(0);
+    expect(check.stdout).toMatch(/^brand: \d+ files match oxagen-brand 9\.9\.9/);
   });
 
-  it("reads the sizes a committed icon file lists", () => {
-    expect(icoSizes(committed("apps/app/public/favicon/favicon.ico"))).toEqual([
-      16, 32, 48,
-    ]);
-    expect(icoSizes(committed("apps/web/favicon.ico"))).toEqual([16, 32, 48]);
+  it("copies every raster byte for byte and renders none", () => {
+    sync();
+    const pairs: Array<[string, string]> = [
+      ["icons/oxagen-icon-16.png", "apps/app/public/favicon/favicon-16.png"],
+      ["icons/oxagen-favicon.ico", "apps/docs/public/favicon/favicon.ico"],
+      ["icons/oxagen-icon-180.png", "apps/app/public/pwa/apple-touch-icon.png"],
+      ["icons/oxagen-icon-maskable-light-512.png", "apps/app/public/pwa/maskable-light-512.png"],
+      ["icons/oxagen-icon-maskable-192.png", "apps/web/maskable-192.png"],
+      ["splash/oxagen-splash-1x2-dark.png", "apps/app/public/pwa/splash/oxagen-splash-1x2-dark.png"],
+    ];
+    for (const [from, to] of pairs) {
+      expect(readFileSync(join(repo(), to))).toEqual(readFileSync(join(kit, from)));
+    }
   });
 
-  it("returns null for a file that is not a PNG or an icon", () => {
-    const svgText = Buffer.from("<svg xmlns='http://www.w3.org/2000/svg'/>");
-    expect(pngSize(null)).toBeNull();
-    expect(pngSize(svgText)).toBeNull();
-    expect(pngSize(Buffer.alloc(8))).toBeNull();
-    expect(icoSizes(null)).toBeNull();
-    expect(icoSizes(svgText)).toBeNull();
-    expect(icoSizes(committed("apps/app/public/favicon/favicon-32.png"))).toBeNull();
+  it("replaces the vendored skill with the kit's stub and nothing else", () => {
+    const result = sync();
+    expect(result.stdout).toContain("removed 2 file(s)");
+    const dir = join(repo(), ".claude/skills/oxagen-branding");
+    expect(readdirSync(dir)).toEqual(["SKILL.md"]);
+    expect(readFileSync(join(dir, "SKILL.md"))).toEqual(
+      readFileSync(join(kit, "skills/stub/oxagen-branding/SKILL.md")),
+    );
   });
 
-  it("reads a width byte of 0 as 256", () => {
-    const icon = Buffer.alloc(6 + 16);
-    icon.writeUInt16LE(1, 2);
-    icon.writeUInt16LE(1, 4);
-    icon.writeUInt8(0, 6);
-    expect(icoSizes(icon)).toEqual([256]);
+  it("writes the two grounds from the kit's tokens", () => {
+    sync();
+    const module = readFileSync(join(repo(), "packages/ui/src/lib/house-grounds.ts"), "utf8");
+    expect(module).toContain('export const HOUSE_INK = "#09090B";');
+    expect(module).toContain('export const HOUSE_PAPER = "#FFFFFF";');
+  });
+
+  it("writes nothing on a check, and lists each file out of step", () => {
+    sync();
+    stampDesktop();
+    put(repo(), "apps/app/public/favicon/favicon-32.png", "edited by hand");
+    rmSync(join(repo(), "apps/web/icon-512.png"));
+    put(repo(), ".claude/skills/oxagen-branding/references/words.md", "stray\n");
+    const before = snapshot(repo());
+    const check = sync("--check");
+    expect(snapshot(repo())).toEqual(before);
+    expect(check.status).toBe(1);
+    expect(check.stderr).toMatch(/differs\s+apps\/app\/public\/favicon\/favicon-32\.png/);
+    expect(check.stderr).toMatch(/missing\s+apps\/web\/icon-512\.png/);
+    expect(check.stderr).toMatch(/extra\s+\.claude\/skills\/oxagen-branding\/references\/words\.md/);
+    expect(check.stderr).toContain("Run node tools/scripts/sync-brand-assets.mjs --brand <kit>");
+  });
+
+  it("fails a check when the kit changes, until the sync runs", () => {
+    sync();
+    stampDesktop();
+    put(kit, "icons/oxagen-icon-192.png", "a new hive");
+    const stale = sync("--check");
+    expect(stale.status).toBe(1);
+    expect(stale.stderr).toMatch(/differs\s+apps\/app\/public\/pwa\/icon-192\.png/);
+    sync();
+    const fixed = sync("--check");
+    expect(fixed.status, fixed.stderr).toBe(0);
+  });
+
+  // #4892: a kit icon change must keep CI red until the desktop icons follow.
+  it("fails a check when the avatar changes, until the desktop icons are cut again", () => {
+    sync();
+    stampDesktop();
+    put(kit, "social/oxagen-avatar-light.svg", '<svg id="a new avatar"/>');
+    const write = sync();
+    expect(write.status).toBe(0);
+    expect(write.stderr).toContain("the desktop icons are stale");
+    const check = sync("--check");
+    expect(check.status).toBe(1);
+    expect(check.stderr).toMatch(
+      /stale\s+apps\/desktop\/src-tauri\/icons\/source\.sha256 \(the icons were cut from an older apps\/app\/public\/brand\/oxagen-avatar-light\.svg\)/,
+    );
+    expect(check.stderr).toContain("pnpm --filter @oxagen/desktop icons");
+    stampDesktop();
+    const fixed = sync("--check");
+    expect(fixed.status, fixed.stderr).toBe(0);
+  });
+
+  it("fails a check when the desktop icons carry no stamp", () => {
+    sync();
+    const check = sync("--check");
+    expect(check.status).toBe(1);
+    expect(check.stderr).toContain("no stamp");
+    expect(existsSync(join(repo(), "apps/desktop/src-tauri/icons/source.sha256"))).toBe(false);
+  });
+});
+
+describe("the desktop icon stamp", () => {
+  const avatar = "apps/app/public/brand/oxagen-avatar-light.svg";
+  const bytes = Buffer.from("<svg/>");
+  const synced = new Map([[avatar, bytes]]);
+
+  it("matches the avatar the sync writes, in shasum's own format", () => {
+    expect(desktopIconDrift(`${sha256(bytes)}  ${avatar}\n`, synced)).toBeNull();
+    expect(desktopIconDrift(`${sha256(bytes)} *${avatar}`, synced)).toBeNull();
+  });
+
+  it("names an older source, a missing stamp, and a path the sync does not write", () => {
+    expect(desktopIconDrift(`${"0".repeat(64)}  ${avatar}`, synced)).toBe(
+      `the icons were cut from an older ${avatar}`,
+    );
+    expect(desktopIconDrift(null, synced)).toContain("no stamp");
+    expect(desktopIconDrift(`${sha256(bytes)}  elsewhere.svg`, synced)).toContain(
+      "elsewhere.svg, which this sync does not write",
+    );
+    expect(desktopIconDrift("not a stamp", synced)).toContain("not one");
+  });
+
+  it("is committed for the icons in this tree, cut from the synced avatar", () => {
+    const stamp = readFileSync(
+      join(REPO_ROOT, "apps/desktop/src-tauri/icons/source.sha256"),
+      "utf8",
+    );
+    const committed = new Map([[avatar, readFileSync(join(REPO_ROOT, avatar))]]);
+    expect(desktopIconDrift(stamp, committed)).toBeNull();
+  });
+});
+
+describe("the two grounds", () => {
+  it("are the kit's ink and paper tokens", () => {
+    const module = houseGroundsModule(TOKENS);
+    expect(module).toContain('export const HOUSE_INK = "#09090B";');
+    expect(module).toContain('export const HOUSE_PAPER = "#FFFFFF";');
+  });
+
+  it("fail loudly on a token the kit does not define", () => {
+    expect(() => houseGroundsModule({ ink: "#09090B" })).toThrow(
+      'house kit has no colour token "paper"',
+    );
+  });
+
+  it("are what the committed module says", () => {
+    const tokens = JSON.parse(
+      readFileSync(join(REPO_ROOT, "packages/ui/src/styles/house-tokens.json"), "utf8"),
+    ).tokens;
+    expect(
+      readFileSync(join(REPO_ROOT, "packages/ui/src/lib/house-grounds.ts"), "utf8"),
+    ).toBe(houseGroundsModule(tokens));
   });
 });
 
 // #3074: the check verified nothing about apps/web's art modules, and
 // theme.mjs had drifted (INK.dim #52525B against the kit's #71717A).
 describe("the web art palette", () => {
-  const kit = {
-    ink: "#09090B",
-    panel: "#18181B",
-    hl: "#27272A",
-    border: "#27272A",
-    rule: "#3F3F46",
-    dim: "#71717A",
-    muted: "#A1A1AA",
-    "text-body": "#E4E4E7",
-    text: "#FFFFFF",
-    gold: "#D4AF37",
-  };
   const theme = [
     "// header",
     "export const INK = Object.freeze({",
@@ -276,7 +458,7 @@ describe("the web art palette", () => {
   const map = { ground: "ink", dim: "dim", silver: "muted" };
 
   it("maps each INK key to the hex of the kit token it names", () => {
-    expect(expectedInk(kit, map)).toEqual({
+    expect(expectedInk(TOKENS, map)).toEqual({
       ground: "#09090B",
       dim: "#71717A",
       silver: "#A1A1AA",
@@ -284,7 +466,7 @@ describe("the web art palette", () => {
   });
 
   it("covers every INK key with a real kit token by default", () => {
-    const ink = expectedInk(kit);
+    const ink = expectedInk(TOKENS);
     expect(Object.keys(ink).sort()).toEqual(
       [
         "body",
@@ -309,14 +491,14 @@ describe("the web art palette", () => {
   });
 
   it("rewrites a drifted value and leaves everything else byte for byte", () => {
-    const out = rewriteInk(theme, expectedInk(kit, map));
+    const out = rewriteInk(theme, expectedInk(TOKENS, map));
     expect(out).not.toBe(theme);
     expect(out).toBe(theme.replace('dim: "#52525B"', 'dim: "#71717A"'));
   });
 
   it("returns the source unchanged when it already matches, so --check passes", () => {
     const current = theme.replace('dim: "#52525B"', 'dim: "#71717A"');
-    expect(rewriteInk(current, expectedInk(kit, map))).toBe(current);
+    expect(rewriteInk(current, expectedInk(TOKENS, map))).toBe(current);
   });
 
   it("refuses a palette it cannot read rather than passing over it", () => {
@@ -329,10 +511,57 @@ describe("the web art palette", () => {
   });
 });
 
+/** The text of the step named `name` in `steps`, up to the next step. */
+function stepIn(steps: string, name: string) {
+  const at = steps.indexOf(`- name: ${name}\n`);
+  if (at < 0) return "";
+  const next = steps.indexOf("\n      - ", at + 1);
+  return steps.slice(at, next < 0 ? undefined : next);
+}
+
+const CHECK_COMMAND = "node tools/scripts/sync-brand-assets.mjs --brand .brand-kit --check";
+
+// The kit's conformance check looks for this file, and the kit's CHANGING.md
+// sets its shape: every PR, every push to main, daily, and by hand, against
+// the kit's main branch with no pin.
+describe("brand-drift.yml", () => {
+  const workflow = readFileSync(
+    join(REPO_ROOT, ".github/workflows/brand-drift.yml"),
+    "utf8",
+  );
+
+  it("is the brand-drift workflow with one Brand drift job", () => {
+    expect(workflow).toMatch(/^name: brand-drift$/m);
+    expect(workflow).toMatch(/^jobs:\n {2}brand-drift:\n {4}name: Brand drift\n/m);
+  });
+
+  it("runs on every pull request, on main, daily, and by hand", () => {
+    expect(workflow).toMatch(/^ {2}pull_request:$/m);
+    expect(workflow).toMatch(/^ {2}push:\n {4}branches: \[main\]$/m);
+    expect(workflow).toMatch(/^ {2}schedule:\n {4}- cron: "[^"]+"$/m);
+    expect(workflow).toMatch(/^ {2}workflow_dispatch:$/m);
+  });
+
+  it("checks out the kit at main into .brand-kit, with no pin", () => {
+    const checkout = stepIn(workflow, "Check out the brand kit");
+    expect(checkout).toContain("repository: macanderson/oxagen-brand");
+    expect(checkout).toMatch(/\n\s+ref: main\n/);
+    expect(checkout).toContain("path: .brand-kit");
+    expect(checkout).not.toContain("token:");
+  });
+
+  it("sets up Node 24 and runs the check with nothing installed", () => {
+    expect(workflow).toMatch(/node-version: 24\n/);
+    expect(workflow).not.toMatch(/run: pnpm|pnpm\/action-setup/);
+    const check = stepIn(workflow, "Brand files match the kit");
+    expect(check).toContain(CHECK_COMMAND);
+    expect(check).toMatch(/::error::.*Run node tools\/scripts\/sync-brand-assets\.mjs/);
+  });
+});
+
 // #3074: check:brand ran only in the local gate, so CI checked no vendored
-// brand file. The checks job now checks out the kit and runs the check. Mac
-// decided on 2026-09-29 that the checkout follows the kit's main branch, with
-// no pin, tag, or sha.
+// brand file. The checks job, which the main ruleset requires, runs the same
+// command as brand-drift.yml, so the two cannot disagree (#4804).
 describe("the checks job runs the brand check", () => {
   const pipeline = readFileSync(
     join(REPO_ROOT, ".github/workflows/pipeline.yml"),
@@ -341,13 +570,6 @@ describe("the checks job runs the brand check", () => {
   const start = pipeline.indexOf("\n  checks:\n");
   const end = pipeline.indexOf("\n  build:\n", start);
   const checks = pipeline.slice(start, end);
-  /** The text of the step named `name`, up to the next step. */
-  const step = (name: string) => {
-    const at = checks.indexOf(`- name: ${name}\n`);
-    if (at < 0) return "";
-    const next = checks.indexOf("\n      - ", at + 1);
-    return checks.slice(at, next < 0 ? undefined : next);
-  };
 
   it("finds the checks job", () => {
     expect(start).toBeGreaterThan(0);
@@ -355,17 +577,17 @@ describe("the checks job runs the brand check", () => {
   });
 
   it("checks out the kit at main into .brand-kit", () => {
-    const checkout = step("Check out the brand kit");
+    const checkout = stepIn(checks, "Check out the brand kit");
     expect(checkout).toContain("uses: actions/checkout@");
     expect(checkout).toContain("repository: macanderson/oxagen-brand");
     expect(checkout).toContain("path: .brand-kit");
     expect(checkout).toMatch(/\n\s+ref: main\n/);
   });
 
-  it("runs pnpm check:brand against that checkout, after it", () => {
-    const check = step("Brand assets match the house kit");
-    expect(check).toContain("OXAGEN_BRAND_KIT: .brand-kit");
-    expect(check).toContain("run: pnpm check:brand");
+  it("runs the same command as brand-drift.yml, after the checkout", () => {
+    const check = stepIn(checks, "Brand assets match the house kit");
+    expect(check).toContain(CHECK_COMMAND);
+    expect(check).not.toContain("pnpm check:brand");
     const checkoutAt = checks.indexOf("- name: Check out the brand kit");
     const checkAt = checks.indexOf("- name: Brand assets match the house kit");
     expect(checkAt).toBeGreaterThan(checkoutAt);
@@ -373,11 +595,11 @@ describe("the checks job runs the brand check", () => {
 
   it("runs both steps after an earlier check fails", () => {
     const guard = "if: ${{ !cancelled() && steps.install.outcome == 'success' }}";
-    expect(step("Check out the brand kit")).toContain(guard);
-    expect(step("Brand assets match the house kit")).toContain(guard);
+    expect(stepIn(checks, "Check out the brand kit")).toContain(guard);
+    expect(stepIn(checks, "Brand assets match the house kit")).toContain(guard);
   });
 
-  it("runs the script's --check through the root script", () => {
+  it("keeps the local root script on the same check", () => {
     const { scripts } = JSON.parse(
       readFileSync(join(REPO_ROOT, "package.json"), "utf8"),
     ) as { scripts: Record<string, string> };

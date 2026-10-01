@@ -318,16 +318,20 @@ jobs:
           repository: macanderson/oxagen-brand
           ref: main
           path: .brand-kit
+          persist-credentials: false
 
-      # With CI=true a missing kit fails the check, and PNG and ICO files are
-      # compared by size, because this image's librsvg renders different
-      # bytes from the one that made them. Every SVG, token, font, the web
-      # palette, and the branding skill are compared byte for byte.
+      # The same command as brand-drift.yml, so the two cannot disagree. This
+      # copy runs here because the main ruleset requires the checks job and
+      # not brand-drift. The script copies the kit's committed rasters instead
+      # of rendering them, so every file, PNG and ICO included, is compared
+      # byte for byte, and a missing kit fails the step (#4804).
       - name: Brand assets match the house kit
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
-        env:
-          OXAGEN_BRAND_KIT: .brand-kit
-        run: pnpm check:brand
+        run: |
+          node tools/scripts/sync-brand-assets.mjs --brand .brand-kit --check || {
+            echo "::error::Brand files differ from macanderson/oxagen-brand main. Run node tools/scripts/sync-brand-assets.mjs --brand <kit checkout> and commit the result."
+            exit 1
+          }
 
       # Unconditional, and that is the whole point. The affected-package gate
       # (`turbo … --filter=…[<base sha>]`) selects a package only when it or one
