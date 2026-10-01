@@ -15,6 +15,8 @@ import { describe, expect, it } from "vitest";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import ts from "typescript";
+import { IN_APP_AGENT_SURFACES } from "../contracts/run.list";
 
 /** Repo root: packages/oxagen/src/test/<this file> → four levels up. */
 const REPO_ROOT = join(
@@ -145,5 +147,72 @@ describe("ADR-235: only Stella's path mints the Stella binding", () => {
         path.startsWith("packages/tacho/"),
     );
     expect(surfaces).toEqual([]);
+  });
+});
+
+/**
+ * Mac's ruling of 2026-10-01 has two halves. Oxagen's in-app assistant is
+ * outside workspace governance. The open-source Stella coding agent a
+ * customer runs as a CLI is a customer agent, governed and monitored exactly
+ * like Claude Code and Codex. The two share a name, so the exemption must key
+ * on the kernel-minted binding and the in-app run surfaces, never on the word
+ * "stella". A wrapped session's harness or runtime is `stella`, and a check
+ * that read that name would exempt the customer's agent.
+ *
+ * This prints each piece of exemption code without its comments and asserts
+ * the word appears nowhere in it.
+ */
+describe("ADR-235: the exemption never keys on the name stella", () => {
+  const printer = ts.createPrinter({ removeComments: true });
+  const parse = (path: string) =>
+    ts.createSourceFile(
+      path,
+      readFileSync(join(REPO_ROOT, path), "utf8"),
+      ts.ScriptTarget.Latest,
+      true,
+    );
+  const printed = (node: ts.Node, source: ts.SourceFile) =>
+    printer.printNode(ts.EmitHint.Unspecified, node, source);
+  const functionNamed = (path: string, name: string): string => {
+    const source = parse(path);
+    let found: ts.Node | undefined;
+    const visit = (node: ts.Node) => {
+      if (
+        (ts.isFunctionDeclaration(node) && node.name?.text === name) ||
+        (ts.isVariableDeclaration(node) &&
+          ts.isIdentifier(node.name) &&
+          node.name.text === name)
+      )
+        found = node;
+      ts.forEachChild(node, visit);
+    };
+    visit(source);
+    if (found === undefined) throw new Error(`${name} not found in ${path}`);
+    return printed(found, source);
+  };
+
+  it.each([
+    ["packages/oxagen/src/oxagen-assistant.ts", "createOxagenAssistantBinding"],
+    ["packages/oxagen/src/oxagen-assistant.ts", "isKernelIssuedOxagenAssistant"],
+    ["packages/oxagen/src/oxagen-assistant.ts", "isOxagenAssistantCall"],
+    ["packages/oxagen/src/kernel.ts", "skipWorkspaceRules"],
+    ["packages/oxagen/src/kernel.ts", "forgedBinding"],
+    ["packages/agent/src/runtime/assistant-turn.ts", "assistantBindingFor"],
+    ["packages/agent/src/handlers/_agent-identity.ts", "runFiguresByAgent"],
+  ])("%s `%s` names no stella", (path, name) => {
+    const code = functionNamed(path, name);
+    // The walk found real code, so the assertion below proves something.
+    expect(code.length).toBeGreaterThan(20);
+    expect(code).not.toMatch(/stella/i);
+  });
+
+  it("prints the whole kernel without the word outside its comments", () => {
+    const kernel = printer.printFile(parse("packages/oxagen/src/kernel.ts"));
+    expect(kernel).toContain("skipWorkspaceRules");
+    expect(kernel).not.toMatch(/stella/i);
+  });
+
+  it("excludes exactly the two in-app run surfaces, neither a harness name", () => {
+    expect([...IN_APP_AGENT_SURFACES]).toEqual(["chat", "api-chat"]);
   });
 });

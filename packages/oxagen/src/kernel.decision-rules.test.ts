@@ -524,6 +524,33 @@ describe("kernel decision-rules gate: Stella's calls (ADR-235)", () => {
     expect(handler).not.toHaveBeenCalled();
   });
 
+  // Mac's ruling of 2026-10-01: the open-source Stella coding agent a
+  // customer runs as a CLI is a customer agent, governed like Claude Code
+  // and Codex. Its calls reach the kernel through the MCP gateway carrying
+  // the name wherever a caller can write one, and no binding. The name
+  // exempts nothing.
+  it("runs the gate for a context that names stella everywhere but holds no binding", async () => {
+    registerSharedRefund();
+    const handler = vi.fn(async () => ({ ok: true }));
+    registerHandler("test.refund", async () => handler);
+    setDecisionRulesGate(denyBigRefunds);
+    const named: CapabilityContext = {
+      ...ctx,
+      userId: "stella",
+      apiKeyId: "stella",
+      requestId: "stella",
+      messageId: "stella",
+      toolCallId: "stella",
+      surface: "mcp",
+    };
+
+    await expect(
+      invoke("test.refund", { amount_usd: 900 }, named, { surface: "agent" }),
+    ).rejects.toThrow(/deny-big/);
+    expect(handler).not.toHaveBeenCalled();
+    expect(denyBigRefunds).toHaveBeenCalledOnce();
+  });
+
   it("resumes a parked Stella call with no rules gate registered", async () => {
     registerSharedRefund();
     const handler = vi.fn(async () => ({ ok: true }));
