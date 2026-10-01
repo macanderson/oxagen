@@ -148,7 +148,8 @@ export async function preflight(
  * installed with `pnpm install --filter @oxagen/cli... --filter
  * oxagen-monorepo...` run `pnpm check:contracts` to completion, and #4879
  * folded the recorder's commands into that CLI, so it is the one filtered
- * install a person needs to run the root checks.
+ * install a person needs to run the root checks. Since #4918 that install
+ * also needs `--filter @oxagen/scripts...` (see SCRIPTS_PACKAGE below).
  */
 export const FILTERED_INSTALL_PACKAGE = "@oxagen/cli";
 
