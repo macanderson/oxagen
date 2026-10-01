@@ -281,6 +281,9 @@ module "runners" {
             filter               = { name = ["ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-*"] }
             id_ssm_parameter_arn = local.runner_ami_arn[p.arch]
           }
+          # No volume_initialization_rate: EBS caps the combined rate across
+          # volumes being created at once, and at 300 MiB/s each a burst of
+          # 100 runners hit VolumeInitializationLimitExceeded on 2026-10-01.
           block_device_mappings = [{
             device_name = "/dev/sda1"
             volume_size = p.disk.size
@@ -288,11 +291,6 @@ module "runners" {
             iops        = p.disk.iops
             throughput  = p.disk.throughput
             encrypted   = true
-
-            # EBS fetches the AMI's snapshot into the new volume at this
-            # rate in the background, so the image's Docker layers and pnpm
-            # store are local within seconds instead of on first read.
-            volume_initialization_rate = 300
           }]
           pool_config = var.github_app_ready && lookup(var.warm_pool, name, 0) > 0 ? [{
             schedule_expression = "rate(2 minutes)"
@@ -337,8 +335,6 @@ module "runners" {
             iops        = 16000
             throughput  = 1000
             encrypted   = true
-
-            volume_initialization_rate = 300
           }]
           pool_config = var.github_app_ready && lookup(var.warm_pool, "oxagen-deploy", 0) > 0 ? [{
             schedule_expression = "rate(2 minutes)"
