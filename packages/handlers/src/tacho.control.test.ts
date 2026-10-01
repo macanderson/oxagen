@@ -785,7 +785,6 @@ describe("control envelope etag", () => {
         outside();
         return readFixtureFile(source, bundle, file);
       },
-      recallUnreviewed: async () => "off",
     };
     const poll = (published: TachoPublished) =>
       createTachoCommandFetchHandler({ published })(

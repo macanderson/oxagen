@@ -1,8 +1,6 @@
-// baseline.ts: the GitHub settings baseline, as tests use it.
-//
-// This package does not depend on @oxagen/oxagen, so this file repeats the
-// values of GITHUB_SETTINGS_BASELINE in settings-baseline.ts. A test that
-// needs the real baseline imports it from @oxagen/oxagen instead.
+// baseline.ts: a fixture covering every supported GitHub settings operation.
+// It includes paid features for adapter tests. Production steering settings
+// come from GITHUB_SETTINGS_BASELINE in @oxagen/oxagen.
 import type { SteeringGithubSettings } from "../types";
 
 export const EXAMPLE_GITHUB_BASELINE: SteeringGithubSettings = {

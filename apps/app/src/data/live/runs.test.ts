@@ -7,7 +7,6 @@ import { runCostGet } from "@oxagen/oxagen/contracts/run.cost";
 import { runFrameBodyGet } from "@oxagen/oxagen/contracts/run.frame_body.get";
 import { runGet } from "@oxagen/oxagen/contracts/run.get";
 import { runList } from "@oxagen/oxagen/contracts/run.list";
-import { runOutcomesSettingsGet } from "@oxagen/oxagen/contracts/run.outcomes.settings.get";
 import { runOutputsGet } from "@oxagen/oxagen/contracts/run.outputs.get";
 import { runTranscriptGet } from "@oxagen/oxagen/contracts/run.transcript.get";
 import { runIssuesGet } from "@oxagen/oxagen/contracts/run.issues.get";
@@ -1898,7 +1897,6 @@ describe("a refused read passes through every run read (negative)", () => {
     readError("frame_store_unreachable", 503),
   ];
   const reads: [string, () => Promise<unknown>][] = [
-    ["outcomesSettings", () => runs.outcomesSettings(ctx)],
     ["work", () => runs.work(ctx, "tse_4f0a")],
     ["issues", () => runs.issues(ctx, "tse_4f0a")],
     ["context", () => runs.context(ctx, "tse_4f0a")],
@@ -2170,36 +2168,6 @@ describe("runs.findings", () => {
     if (!read.ok) throw new Error("expected an ok read");
     expect(read.value.findings).toHaveLength(1);
     expect(read.value.findings[0]?.citation.frames).toBeNull();
-  });
-});
-
-describe("runs.outcomesSettings", () => {
-  const policy = {
-    customerEnabled: true,
-    platformDisabled: true,
-    platformDisabledReason: "outcome scoring is paused platform-wide",
-    effectiveEnabled: false,
-  };
-
-  it("reads get_run_outcomes_settings and carries the policy as recorded", async () => {
-    kernelRead.mockResolvedValue(readOk(policy));
-    expect(await runs.outcomesSettings(ctx)).toEqual(readOk(policy));
-    expect(kernelRead).toHaveBeenCalledWith(ctx, {
-      contract: runOutcomesSettingsGet,
-      input: {},
-      page: "run",
-    });
-  });
-
-  it("answers record_unmappable and reports once for a policy the view refuses (negative)", async () => {
-    kernelRead.mockResolvedValue(readOk({ ...policy, effectiveEnabled: "no" }));
-    expect(await runs.outcomesSettings(ctx)).toEqual(
-      readError("record_unmappable", 502),
-    );
-    expect(captureError).toHaveBeenCalledOnce();
-    expect(captureError.mock.calls[0]?.[0]).toMatchObject({
-      context: "runs.outcomesSettings record_unmappable",
-    });
   });
 });
 

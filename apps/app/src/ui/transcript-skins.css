@@ -159,19 +159,13 @@
     flex: none;
     gap: 6px;
   }
+  /* The window lights are the kit's zinc rule, on paper and on ink. The
+     macOS red, amber, and green were not house values (#4804). */
   .term-dots i {
     width: 10px;
     height: 10px;
     border-radius: 50%;
-  }
-  .term-dots i:nth-child(1) {
-    background: #ff5f57;
-  }
-  .term-dots i:nth-child(2) {
-    background: #febc2e;
-  }
-  .term-dots i:nth-child(3) {
-    background: #28c840;
+    background: light-dark(var(--ox-paper-rule), var(--ox-rule));
   }
   .term-t {
     flex: 1 1 12rem;

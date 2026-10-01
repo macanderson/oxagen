@@ -32,10 +32,9 @@ import {
   LIST_COMMANDS_IDS_MAX,
   tachoCommandList,
 } from "@oxagen/oxagen/contracts/tacho.command.list";
-import { runOutcomesSettingsGet } from "@oxagen/oxagen/contracts/run.outcomes.settings.get";
 import { RunContext } from "@/data/contracts/run-context";
 import { RunIssues } from "@/data/contracts/run-issues";
-import { RunWork, RunOutcomesPolicy } from "@/data/contracts/run-work";
+import { RunWork } from "@/data/contracts/run-work";
 import { runOutputsGet } from "@oxagen/oxagen/contracts/run.outputs.get";
 import {
   runTranscriptGet,
@@ -114,20 +113,6 @@ function view<S extends z.ZodType>(
 }
 
 export const runs: DataSource["runs"] = {
-  async outcomesSettings(ctx) {
-    const read = await kernelRead(ctx, {
-      contract: runOutcomesSettingsGet,
-      input: {},
-      page: "run",
-    });
-    if (!read.ok) return read;
-    return view(
-      ctx.orgId,
-      RunOutcomesPolicy,
-      read.value,
-      "runs.outcomesSettings",
-    );
-  },
   async work(ctx, runId) {
     const read = await kernelRead(ctx, {
       contract: runWorkGet,

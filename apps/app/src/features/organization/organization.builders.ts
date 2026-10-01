@@ -251,7 +251,6 @@ export function orgSource(reads: OrgReads): {
       commands: refuse,
       outputs: refuse,
       work: refuse,
-      outcomesSettings: refuse,
       issues: refuse,
       context: refuse,
       findings: refuse,

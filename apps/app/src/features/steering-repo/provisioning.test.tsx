@@ -569,7 +569,7 @@ describe("the steering repo provisioning", () => {
         REFUSED({
           repository: GITHUB_REPOSITORY,
           failedStep: "apply_settings",
-          error: { code: "github_plan_required", message: "Upgrade to GitHub Pro." },
+          error: { code: "repository_settings_refused", message: "GitHub refused to update repository settings." },
         }),
       );
       expect(

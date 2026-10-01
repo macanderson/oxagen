@@ -2,11 +2,9 @@
 // read makes, against a scripted host and an in-memory health row.
 import { GitHubApiError, GitHubRateLimitedError } from "@oxagen/github";
 import type * as gh from "@oxagen/github/provision";
+import { EXAMPLE_GITHUB_BASELINE } from "@oxagen/github/provision/testing";
 import * as gl from "@oxagen/gitlab/provision";
-import {
-  GITHUB_SETTINGS_BASELINE,
-  GITLAB_SETTINGS_BASELINE,
-} from "@oxagen/oxagen/steering-repo";
+import { GITLAB_SETTINGS_BASELINE } from "@oxagen/oxagen/steering-repo";
 import type { SettingsDifference } from "@oxagen/oxagen/steering-repo/health";
 import { describe, expect, it, vi } from "vitest";
 import {
@@ -46,7 +44,7 @@ import {
 
 /** GitHub settings that match the baseline, as `readSettings` reports them. */
 function githubMatching(): gh.ObservedGithubSettings {
-  const b = GITHUB_SETTINGS_BASELINE;
+  const b = EXAMPLE_GITHUB_BASELINE;
   return {
     visibility: b.visibility,
     default_branch: b.default_branch,
@@ -100,7 +98,7 @@ function gitlabMatching(): gl.ObservedGitlabSettings {
 }
 
 function github(actual: gh.ObservedGithubSettings) {
-  return { provider: "github" as const, baseline: GITHUB_SETTINGS_BASELINE, actual };
+  return { provider: "github" as const, baseline: EXAMPLE_GITHUB_BASELINE, actual };
 }
 
 // ── Comparison ───────────────────────────────────────────────────────────────
@@ -325,7 +323,7 @@ describe("describeDifference", () => {
   });
 
   it("says a ruleset no longer requires the check", () => {
-    const rules = GITHUB_SETTINGS_BASELINE.rulesets.oxagen_steering?.rules ?? [];
+    const rules = EXAMPLE_GITHUB_BASELINE.rulesets.oxagen_steering?.rules ?? [];
     expect(
       describeDifference(
         difference({
@@ -857,18 +855,26 @@ describe("checkRepoHealth", () => {
     expect(r.row()).toMatchObject({ revertPrNumber: 13, publishedSha: P, publishedVersion: 7 });
   });
 
-  it("does not call a healthy repo diverged when the history read fails", async () => {
+  it("refuses a healthy GitHub repo when its commit history cannot be verified", async () => {
     const r = rig({
       published: async () => {
         throw new Error("GitHub answered 502");
       },
     });
-    expect((await r.read())?.health).toBe("healthy");
+    expect(await r.read()).toMatchObject({
+      health: "diverged",
+      reason: "Oxagen could not verify this steering repository's commit history. Retry the health check.",
+    });
+    expect(r.host.openRevert).not.toHaveBeenCalled();
   });
 
-  it("reads no history before anything is published", async () => {
+  it("refuses GitHub history without an authenticated published commit", async () => {
     const r = rig({ published: null, divergence: DIVERGENCE });
-    expect((await r.read())?.health).toBe("healthy");
+    expect(await r.read()).toMatchObject({
+      health: "diverged",
+      reason: "Oxagen could not find an authenticated published commit for this steering repository.",
+    });
+    expect(r.host.openRevert).not.toHaveBeenCalled();
     expect(r.host.diverged).not.toHaveBeenCalled();
     expect(r.row()?.publishedSha).toBeNull();
   });

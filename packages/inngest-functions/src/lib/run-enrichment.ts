@@ -300,6 +300,9 @@ export function enrichmentFailureReason(error: unknown): string {
   if (name === "ZodError" || name === "SyntaxError") return "invalid_account";
   // `ModelCallFailedError` (@oxagen/agent) names the provider's status and
   // never its body, so the status is the only fact there is to read.
+  // 402 is the provider's bill, not the model: OpenRouter answers it when
+  // the account cannot afford the request (#4931).
+  if (/\banswered 402\b/u.test(text)) return "provider_out_of_credits";
   if (/\banswered 429\b|rate.?limit/iu.test(text)) return "rate_limited";
   if (/\banswered 5\d\d\b/u.test(text)) return "provider_error";
   if (/failed before the provider answered/u.test(text))

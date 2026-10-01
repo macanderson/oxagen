@@ -1,3 +1,4 @@
+import { HOUSE_INK } from "@oxagen/ui/lib/house-grounds";
 import type { MetadataRoute } from "next";
 
 /**
@@ -5,8 +6,9 @@ import type { MetadataRoute } from "next";
  * auto-linked into <head> by Next's metadata file-convention system, so
  * layout.tsx needs no `metadata.manifest` string.
  *
- * Every icon below is an existing file under public/pwa/ — this route adds no
- * new image assets.
+ * Every icon below is a file the brand sync copies into public/pwa/ from the
+ * kit, which ships 192 and 512 and the maskable pair. The grounds come from
+ * the kit through @oxagen/ui/lib/house-grounds (#4892).
  */
 export default function manifest(): MetadataRoute.Manifest {
   return {
@@ -21,55 +23,13 @@ export default function manifest(): MetadataRoute.Manifest {
     display: "standalone",
     display_override: ["standalone", "minimal-ui"],
     orientation: "any",
-    background_color: "#09090B",
-    theme_color: "#09090B",
+    background_color: HOUSE_INK,
+    theme_color: HOUSE_INK,
     categories: ["productivity", "developer", "business"],
     icons: [
       {
-        src: "/pwa/icon-72.png",
-        sizes: "72x72",
-        type: "image/png",
-        purpose: "any",
-      },
-      {
-        src: "/pwa/icon-96.png",
-        sizes: "96x96",
-        type: "image/png",
-        purpose: "any",
-      },
-      {
-        src: "/pwa/icon-128.png",
-        sizes: "128x128",
-        type: "image/png",
-        purpose: "any",
-      },
-      {
-        src: "/pwa/icon-144.png",
-        sizes: "144x144",
-        type: "image/png",
-        purpose: "any",
-      },
-      {
-        src: "/pwa/icon-152.png",
-        sizes: "152x152",
-        type: "image/png",
-        purpose: "any",
-      },
-      {
         src: "/pwa/icon-192.png",
         sizes: "192x192",
-        type: "image/png",
-        purpose: "any",
-      },
-      {
-        src: "/pwa/icon-256.png",
-        sizes: "256x256",
-        type: "image/png",
-        purpose: "any",
-      },
-      {
-        src: "/pwa/icon-384.png",
-        sizes: "384x384",
         type: "image/png",
         purpose: "any",
       },

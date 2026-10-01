@@ -1,6 +1,6 @@
 // The stella marks and spinner, drawn inline so they follow the app's theme.
 //
-// The house kit (`oxagenai/oxagen-brand`) generates both marks and
+// The house kit (`macanderson/oxagen-brand`) generates both marks and
 // `tools/scripts/sync-brand-assets.mjs` vendors its adaptive files into
 // `public/brand/stella-wordmark.svg` and `public/brand/stella-icon.svg`. Those
 // files adapt with `prefers-color-scheme`, which follows the operating system.

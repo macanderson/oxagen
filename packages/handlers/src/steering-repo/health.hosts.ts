@@ -139,7 +139,7 @@ export function githubHealthHost(input: GithubHealthHostInput): HealthHost {
   const root = () => `/repos/${seg(address.owner)}/${seg(address.name)}`;
   const target = async (): Promise<history.GithubHistoryTarget> => ({
     rest: await rest(),
-    repo: address,
+    repo: { ...address, id: input.repositoryId },
     app: input.app,
   });
   const fullName = () => `${address.owner}/${address.name}`;
@@ -198,6 +198,7 @@ export function githubHealthHost(input: GithubHealthHostInput): HealthHost {
           address,
           input.app,
           Object.keys(GITHUB_SETTINGS_BASELINE.environments),
+          Object.keys(GITHUB_SETTINGS_BASELINE.rulesets).length > 0,
         );
       } catch (err) {
         if (!refused(err)) throw err;
