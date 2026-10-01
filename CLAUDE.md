@@ -151,7 +151,7 @@ Mac set this on 2026-09-29. The app uses Geist for every heading and every line 
 
 - The kit's `packages/ui/src/styles/house-tailwind.css` sets `--font-display` and `--font-sans` to Geist, so every heading and the `text-m-h*` and `text-a-h*` utilities draw in Geist. Space Grotesk reaches the page only through `--font-wordmark`, the `.ox-wordmark` class, and the kit's `hero-line-1` class on a marketing hero.
 - Do not write `--ox-font-display`, `--font-wordmark`, or "Space Grotesk" in app source outside a comment. `apps/app/src/test/arch/design-record.test.ts` fails on each of them.
-- The brand kit (`macanderson/oxagen-brand`) has set every heading in Geist since 2.4.0 (#27), so `globals.css` carries no font override. The files the sync writes into `packages/ui/src/styles/` stay byte-identical to the kit.
+- The brand kit (`oxageninc/brand`) has set every heading in Geist since 2.4.0 (#27), so `globals.css` carries no font override. The files the sync writes into `packages/ui/src/styles/` stay byte-identical to the kit.
 
 ## Runtime checks that matter
 
