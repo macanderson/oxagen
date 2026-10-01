@@ -1071,9 +1071,10 @@ describe("rowsOf", () => {
       parts: [transcriptBody({ seq: "13", text: "The flag is off in prod." })],
     });
     const said = rowsOf(entry).filter((row) => row.kind === "text");
-    expect(said.map((row) => (row.kind === "text" ? row.text : null))).toEqual(
-      ["Reading the config first.", "The flag is off in prod."],
-    );
+    expect(said.map((row) => row.text)).toEqual([
+      "Reading the config first.",
+      "The flag is off in prod.",
+    ]);
     // Both rows belong to the one step, keyed apart so neither replaces the
     // other.
     expect(said.map((row) => row.entry)).toEqual(["11", "11"]);

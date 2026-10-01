@@ -180,12 +180,13 @@ describe.skipIf(!process.env.DATABASE_URL)(
           .delete(schema.mandateLedger)
           .where(eq(schema.mandateLedger.mandateId, mandateId));
         await tx.delete(schema.mandates).where(eq(schema.mandates.id, mandateId));
-        await tx
-          .delete(schema.toolVersions)
-          .where(eq(schema.toolVersions.workspaceId, workspaceId));
+        // tools.active_version_id points at a version, so the tool goes first.
         await tx
           .delete(schema.tools)
           .where(eq(schema.tools.workspaceId, workspaceId));
+        await tx
+          .delete(schema.toolVersions)
+          .where(eq(schema.toolVersions.workspaceId, workspaceId));
         await tx
           .delete(schema.agentRuns)
           .where(inArray(schema.agentRuns.id, [runId]));
