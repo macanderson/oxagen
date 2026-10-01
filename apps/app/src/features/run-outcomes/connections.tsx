@@ -11,12 +11,10 @@ type ProviderRead = Awaited<ReturnType<typeof loadRunIssueProviders>>;
 export function RunIssueConnections({
   at,
   runId,
-  enabled,
   canManage,
 }: {
   at: { org: string; ws: string };
   runId: string;
-  enabled: boolean;
   canManage: boolean;
 }) {
   const t = useTranslations("runOutcomes");
@@ -70,11 +68,6 @@ export function RunIssueConnections({
           >
             {loading ? t("loadingProviders") : t("loadProviders")}
           </button>
-          {!enabled ? (
-            <p className="text-sm text-muted-foreground">
-              {t("providerConsent")}
-            </p>
-          ) : null}
           {read && !read.ok ? (
             <FormAlert>{t("providerFailed")}</FormAlert>
           ) : null}
@@ -91,7 +84,7 @@ export function RunIssueConnections({
                   <p className="text-sm text-muted-foreground">
                     {t("githubUnconfigured")}
                   </p>
-                ) : enabled ? (
+                ) : (
                   <div className="flex flex-wrap gap-2">
                     {connect ? (
                       <GitHubLink to={connect} className={buttonSecondary}>
@@ -104,7 +97,7 @@ export function RunIssueConnections({
                       </GitHubLink>
                     ) : null}
                   </div>
-                ) : null}
+                )}
               </div>
               <div className="space-y-2">
                 <h3 className="text-sm font-medium">{t("linearTitle")}</h3>
@@ -126,7 +119,7 @@ export function RunIssueConnections({
                   <button
                     type="button"
                     className={buttonSecondary}
-                    disabled={!enabled || authorizing}
+                    disabled={authorizing}
                     onClick={() => {
                       void authorize();
                     }}

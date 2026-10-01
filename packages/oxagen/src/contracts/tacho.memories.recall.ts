@@ -2,9 +2,8 @@
  * The memories most relevant to one prompt on an enrolled host, asked for by
  * the Tacho daemon once per prompt (ADR-206). The answer holds active memory
  * records from the workspace's and the organization's published steering,
- * and waiting memories where the workspace's governance lets them be
- * recalled before review. Each record served counts as recalled, which keeps
- * it from going stale, so the call writes.
+ * and no memory that waits for review (ADR-238). Each record served counts as
+ * recalled, which keeps it from going stale, so the call writes.
  *
  * Machine-to-machine, authenticated by the host's API key. The host names
  * itself so the handler can check the key's scope names the same host.
@@ -64,9 +63,14 @@ export const tachoMemoriesRecall = registerCapability({
         .array(
           z
             .object({
-              /** A record's lineage, or a waiting memory's public id. */
+              /** The record's lineage. */
               id: z.string().min(1),
-              /** `record` for a merged memory record, `memory` for one waiting for review. */
+              /**
+               * Always `record` since ADR-238. `memory` named a memory that
+               * waited for review, which recall no longer answers. The enum
+               * keeps the value, so the published answer schema stays as it
+               * was.
+               */
               source: z.enum(["record", "memory"]),
               statement: z.string(),
               score: z.number(),

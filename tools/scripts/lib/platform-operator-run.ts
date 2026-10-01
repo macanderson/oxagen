@@ -20,8 +20,8 @@
  *      because the script closes the pool and exits right after.
  *
  * This module is the one place outside packages/oxagen besides
- * billing-terms.ts and run-outcomes-access.ts that mints the binding
- * (INV-31, packages/oxagen/src/test/platform-operator-field.test.ts).
+ * billing-terms.ts that mints the binding (INV-31,
+ * packages/oxagen/src/test/platform-operator-field.test.ts).
  */
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";

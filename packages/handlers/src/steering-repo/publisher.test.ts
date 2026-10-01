@@ -64,6 +64,7 @@ function fakeHost(files: Map<string, string> = fixtureRepo()) {
   const host = {
     tags,
     resolveRepository: vi.fn(async () => REPO),
+    assertSteeringCommit: vi.fn(async (_repo: SteeringRepository, _commit: string) => undefined),
     readFile: vi.fn(
       async (_repo: SteeringRepository, path: string) =>
         files.get(path) ?? null,
@@ -224,6 +225,40 @@ describe("steeringPublishDeps", () => {
 });
 
 describe("steeringPublisher", () => {
+  it.each(["missing", "refused", "unavailable"] as const)(
+    "publishes nothing with healthy stored health when provenance is %s",
+    async (failure) => {
+      const { fake, host } = fakeHost();
+      if (failure === "missing") delete host.assertSteeringCommit;
+      else fake.assertSteeringCommit.mockRejectedValueOnce(new Error(failure));
+      const store = memoryVersionStore();
+      const project = vi.fn(async () => undefined);
+      const publisher = steeringPublisher({
+        scope: SCOPE,
+        host,
+        store,
+        readHealth: async () => "healthy",
+        extend: (deps) => ({ ...noCompiler(deps), project }),
+      });
+
+      await expect(publisher.publish(REPO, HEAD)).rejects.toThrow();
+
+      expect(fake.listTree).not.toHaveBeenCalled();
+      expect(project).not.toHaveBeenCalled();
+      expect(fake.createTag).not.toHaveBeenCalled();
+      expect(await store.current(KEY)).toBeNull();
+      expect(await store.highestVersion(KEY)).toBe(0);
+    },
+  );
+
+  it("keeps GitLab publication independent of the GitHub verifier", async () => {
+    const { host } = fakeHost();
+    delete host.assertSteeringCommit;
+    const repo: SteeringRepository = { ...REPO, provider: "gitlab", projectId: "42" };
+    const deps = steeringPublishDeps({ scope: SCOPE, host, repo });
+    await expect(deps.tree(steeringRepositoryKey(repo), HEAD)).resolves.toBeDefined();
+  });
+
   it("publishes a merge into the store the merge reads, and tags it", async () => {
     const { fake, host } = fakeHost();
     const store = memoryVersionStore();
@@ -255,6 +290,7 @@ describe("steeringPublisher", () => {
       published: true,
     });
     expect(fake.tags.get("steering/1")).toBe(HEAD);
+    expect(fake.assertSteeringCommit).toHaveBeenCalledWith(REPO, HEAD);
 
     // The same commit again is already published.
     await expect(publisher.publish(REPO, HEAD)).resolves.toMatchObject({

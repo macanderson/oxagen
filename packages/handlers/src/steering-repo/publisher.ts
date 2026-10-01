@@ -30,12 +30,10 @@ import {
   type VersionStore,
 } from "@oxagen/steering-bundle";
 import { and, eq } from "drizzle-orm";
-import type {
-  SteeringHost,
-  SteeringRepository,
-} from "../context.steering.github";
+import type { SteeringHost, SteeringRepository } from "../context.steering.github";
 import type { SyncPublish, SyncPublished } from "../context.steering.sync";
 import { readSteeringLayout } from "./merge-queue";
+import { assertSteeringCommit } from "./provenance";
 import {
   heldVersionStore,
   postgresVersionStore,
@@ -206,6 +204,8 @@ export function steeringPublishDeps(
     },
     tree: async (repository, commit): Promise<SteeringTree> => {
       own(repository);
+      // publish() calls this under its version lock with the exact candidate SHA.
+      await assertSteeringCommit(host, repo, commit, true);
       return {
         list: () => host.listTree(repo, commit),
         read: async (path) => {
@@ -276,8 +276,8 @@ export type SteeringSyncPublishOptions = Omit<
 /**
  * The repository sync's publish port (`SyncDeps.publish`). Each call resolves
  * the workspace's steering head and publishes its production branch's head
- * through the publisher merge_context_pr uses, so a merge made on the host
- * reaches the same version sequence as one made from Oxagen. A repository in
+ * through the publisher merge_context_pr uses. Provisioned GitHub repositories
+ * verify the exact commit before reading its tree. A repository in
  * the legacy layout has no bundle to publish, and the port answers null.
  *
  * The host resolves a head with either steering role (`STEERING_HEAD_ROLES`):

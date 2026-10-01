@@ -72,8 +72,8 @@ const MESSAGES: Readonly<Record<string, RegExp | string>> = {
   "secrets/token-in-record": CREDENTIAL,
   "settings/actions-enabled": /^GitHub Actions is on/,
   "settings/force-push-allowed": /^The protected branch main allows force pushes/,
-  "settings/required-check-removed": /^The ruleset "[^"]+" no longer requires the check "/,
-  "settings/ruleset-deleted": /^The ruleset "[^"]+" was deleted/,
+  "settings/required-check-removed": /^Merge requests no longer require the status "/,
+  "settings/merge-commit-enabled": "merge.allow_merge_commit is true.",
 };
 
 /**

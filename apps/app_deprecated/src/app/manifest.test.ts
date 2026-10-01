@@ -1,3 +1,4 @@
+import { HOUSE_INK } from "@oxagen/ui/lib/house-grounds";
 import { describe, expect, it } from "vitest";
 
 import manifest from "./manifest";
@@ -13,26 +14,19 @@ describe("app manifest route", () => {
     expect(result.scope).toBe("/");
   });
 
-  it("includes the full icon ladder plus maskable variants", () => {
+  it("lists the sizes the brand kit ships, plus the maskable pair", () => {
     const sizes = result.icons?.map((icon) => icon.sizes);
-    expect(sizes).toEqual([
-      "72x72",
-      "96x96",
-      "128x128",
-      "144x144",
-      "152x152",
-      "192x192",
-      "256x256",
-      "384x384",
-      "512x512",
-      "192x192",
-      "512x512",
-    ]);
+    expect(sizes).toEqual(["192x192", "512x512", "192x192", "512x512"]);
     const maskable = result.icons?.filter(
       (icon) => icon.purpose === "maskable",
     );
     expect(maskable).toHaveLength(2);
     const any = result.icons?.filter((icon) => icon.purpose === "any");
-    expect(any).toHaveLength(9);
+    expect(any).toHaveLength(2);
+  });
+
+  it("takes its grounds from the brand kit", () => {
+    expect(result.theme_color).toBe(HOUSE_INK);
+    expect(result.background_color).toBe(HOUSE_INK);
   });
 });

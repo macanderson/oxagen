@@ -94,7 +94,6 @@ describe("governance schema", () => {
     expect(GOVERNANCE_DEFAULTS).toEqual({
       rotate: "month",
       max_lines: 10000,
-      recall_unreviewed: "same-agent",
       batch_size: 20,
       retire_after_days: 180,
       auto_merge: false,
@@ -150,7 +149,8 @@ describe("governance schema", () => {
     ["a steering field it does not know", { steering: { budget: 1 } }, ["steering"]],
     ["a rotation of hour", { ledger: { rotate: "hour" } }, ["ledger", "rotate"]],
     ["a ledger of zero lines", { ledger: { max_lines: 0 } }, ["ledger", "max_lines"]],
-    ["recall_unreviewed all", { memory: { recall_unreviewed: "all" } }, ["memory", "recall_unreviewed"]],
+    // ADR-238 took recall_unreviewed out of governance/v1.
+    ["recall_unreviewed, which Oxagen no longer reads", { memory: { recall_unreviewed: "same-agent" } }, ["memory"]],
     ["a batch of zero", { memory: { batch_size: 0 } }, ["memory", "batch_size"]],
     ["retiring after zero days", { memory: { retire_after_days: 0 } }, ["memory", "retire_after_days"]],
     ["auto_merge as text", { memory: { auto_merge: "yes" } }, ["memory", "auto_merge"]],
@@ -200,19 +200,9 @@ describe("resolveGovernance", () => {
     { name: "a line limit only", file: { ledger: { max_lines: 500 } }, settings: { max_lines: 500 } },
     { name: "an empty memory table", file: { memory: {} }, settings: {} },
     {
-      name: "recall turned off in team mode",
-      file: { memory: { recall_unreviewed: "off" } },
-      settings: { recall_unreviewed: "off" },
-    },
-    {
-      name: "recall set in regulated mode",
-      file: { mode: "regulated", memory: { recall_unreviewed: "same-agent" } },
-      settings: { mode: "regulated", recall_unreviewed: "off" },
-    },
-    {
       name: "regulated mode with no memory table",
       file: { mode: "regulated" },
-      settings: { mode: "regulated", recall_unreviewed: "off" },
+      settings: { mode: "regulated" },
     },
     {
       name: "every memory setting in solo mode",
