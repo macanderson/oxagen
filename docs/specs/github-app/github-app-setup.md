@@ -210,7 +210,7 @@ permissions, and the repositories an installation covers, are the whole grant.
 > **The live copies differ from this set (2026-09-30).** Production held about 89 permissions,
 > organization and enterprise ones among them. Staging held 5 and local held 13, both short of the
 > write access the code needs. Apply the set below on each copy's **Permissions & events** page, and
-> remove this note once all three match (#4887).
+> remove this note once all three match.
 
 **Repository permissions:**
 
