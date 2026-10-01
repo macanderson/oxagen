@@ -2,11 +2,14 @@
  * work.* RLS: one org never reads or writes another org's work records.
  *
  * 20260929000000_work_schema.sql creates ten tables in the work schema, from
- * collectors and work items to done records and training exports. Each one
- * forces RLS and carries two policies: tenant_isolation (org and workspace
- * must match the GUCs) and tenant_org_wide_read (org must match when
- * app.org_wide is on). manifest-coverage.test.ts proves the policies exist.
- * This suite proves what they do with rows in them.
+ * collectors and work items to done records and training exports, and
+ * 20261001100000_work_records.sql adds the Phase 1 work records: briefs,
+ * orders, and item facts (P1-02, #4897). Each one forces RLS and carries two
+ * policies: tenant_isolation (org and workspace must match the GUCs) and
+ * tenant_org_wide_read (org must match when app.org_wide is on).
+ * manifest-coverage.test.ts proves the policies exist. This suite proves what
+ * they do with rows in them. work-records.test.ts proves the Phase 1 records'
+ * other guarantees.
  *
  * Two orgs each get one row in every table (two work items, so an item link
  * has both ends). Every read asks for the seeded ids of both orgs and asserts
@@ -41,7 +44,7 @@ const sql = postgres(process.env["DATABASE_URL"]!, { max: 1, prepare: false });
  */
 const APP_ROLE = "oxagen_app";
 
-/** A fixed id in this suite's reserved block. Blocks 0061 to 006c are unused elsewhere in integration/. */
+/** A fixed id in this suite's reserved block. Blocks 0061 to 006f are unused elsewhere in integration/. */
 function id(block: string, n: number): string {
   return `00000000-0000-0000-${block}-${String(n).padStart(12, "0")}`;
 }
@@ -65,11 +68,17 @@ const WORK_TABLES = [
   "work.done_verdicts",
   "work.autonomy_events",
   "work.training_exports",
+  "work.briefs",
+  "work.orders",
+  "work.item_facts",
 ] as const;
 type WorkTable = (typeof WORK_TABLES)[number];
 
 /** Children before parents, so a delete never trips a foreign key. */
 const CLEANUP_ORDER: readonly WorkTable[] = [
+  "work.item_facts",
+  "work.orders",
+  "work.briefs",
   "work.triage_corrections",
   "work.triage_decisions",
   "work.done_records",
@@ -106,6 +115,9 @@ function tenant(key: "a" | "b", n: 1 | 2, org: string, workspace: string): Tenan
       "work.done_verdicts": [id("006a", n)],
       "work.autonomy_events": [id("006b", n)],
       "work.training_exports": [id("006c", n)],
+      "work.briefs": [id("006d", n)],
+      "work.orders": [id("006e", n)],
+      "work.item_facts": [id("006f", n)],
     },
   };
 }
@@ -164,6 +176,25 @@ async function seedTenant(tx: postgres.TransactionSql, t: Tenant): Promise<void>
   await tx`
     INSERT INTO work.training_exports (id, org_id, workspace_id, consent_hash, count, positive, negative, digest)
     VALUES (${one(t, "work.training_exports")}, ${t.org}, ${t.workspace}, ${DIGEST}, 0, 0, 0, ${DIGEST})
+  `;
+  await tx`
+    INSERT INTO work.briefs (id, public_id, org_id, workspace_id, item_id, revision, item_revision, body, digest, author)
+    VALUES (${one(t, "work.briefs")}, ${`brf_rlsproof_${t.key}`}, ${t.org}, ${t.workspace}, ${itemFrom}, 1, 1, '{}'::jsonb, ${DIGEST}, 'rls-proof')
+  `;
+  await tx`
+    INSERT INTO work.orders
+      (id, public_id, org_id, workspace_id, item_id, item_revision, send, brief_id, brief_revision, brief_digest,
+       idempotency_key, agent_id, runtime_id, runtime_tier, operator_id, repository)
+    VALUES
+      (${one(t, "work.orders")}, ${`wo_rlsproof_${t.key}`}, ${t.org}, ${t.workspace}, ${itemFrom}, 1, 1, ${one(t, "work.briefs")}, 1, ${DIGEST},
+       ${`rls-proof-${t.key}:r1:s1`}, ${t.org}, ${t.workspace}, 'gateway', ${t.org}, 'aintel/platform')
+  `;
+  await tx`
+    INSERT INTO work.item_facts
+      (id, org_id, workspace_id, item_id, order_id, kind, source, item_revision, brief_id, brief_digest, actor, occurred_at, dedupe_key)
+    VALUES
+      (${one(t, "work.item_facts")}, ${t.org}, ${t.workspace}, ${itemFrom}, ${one(t, "work.orders")}, 'send_requested', 'person', 1,
+       ${one(t, "work.briefs")}, ${DIGEST}, 'rls-proof', now(), ${`rls-proof-${t.key}`})
   `;
 }
 
@@ -283,6 +314,36 @@ describe("work.* RLS writes", () => {
         VALUES (${id("006a", 9)}, ${ORG_A}, ${WS_A1}, ${DIGEST}, 'pending')
       `),
     ).rejects.toThrow(/row-level security/i);
+  });
+
+  it("refuses a work.item_facts row that org B stamps with org A", async () => {
+    await expect(
+      inScope(TENANT_B, (tx) => tx`
+        INSERT INTO work.item_facts (id, org_id, workspace_id, item_id, kind, source, item_revision, actor, occurred_at, dedupe_key)
+        VALUES (${id("006f", 9)}, ${ORG_A}, ${WS_A1}, ${one(A, "work.items")}, 'closed', 'person', 1, 'rls-proof', now(), 'rls-proof-forged')
+      `),
+    ).rejects.toThrow(/row-level security/i);
+  });
+
+  it("refuses a work.orders row that org B stamps with org A", async () => {
+    await expect(
+      inScope(TENANT_B, (tx) => tx`
+        INSERT INTO work.orders
+          (id, public_id, org_id, workspace_id, item_id, item_revision, send, brief_id, brief_revision, brief_digest,
+           idempotency_key, agent_id, runtime_id, runtime_tier, operator_id, repository)
+        VALUES
+          (${id("006e", 9)}, 'wo_rlsproof_forged', ${ORG_A}, ${WS_A1}, ${one(A, "work.items")}, 1, 2, ${one(A, "work.briefs")}, 1, ${DIGEST},
+           'rls-proof-forged:r1:s2', ${ORG_B}, ${WS_B}, 'gateway', ${ORG_B}, 'aintel/platform')
+      `),
+    ).rejects.toThrow(/row-level security/i);
+  });
+
+  it("matches no org A order when org B closes it", async () => {
+    const closed = await inScope(TENANT_B, (tx) => tx`
+      UPDATE work.orders SET released_at = now(), closed_at = now()
+      WHERE id = ${one(A, "work.orders")} RETURNING id
+    `);
+    expect(closed).toHaveLength(0);
   });
 
   it("refuses to move org B's collector into org A", async () => {

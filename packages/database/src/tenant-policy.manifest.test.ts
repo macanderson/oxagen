@@ -284,7 +284,9 @@ describe("tenant policy manifest", () => {
     // done_verdicts, autonomy_events and training_exports (C0, #4735,
     // 2026-09-29).
     // 163 adds mcp.studio_listings (ADR-233, #4756, 2026-09-30).
-    expect(POLICY_MANIFEST.length).toBe(163);
+    // 166 adds the Phase 1 work records: work.briefs, work.orders and
+    // work.item_facts (P1-02, #4897, 2026-10-01).
+    expect(POLICY_MANIFEST.length).toBe(166);
   });
 
   it("covers the ADR-055 GAU tables as org_only (WL-24)", () => {

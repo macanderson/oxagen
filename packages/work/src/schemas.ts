@@ -6,6 +6,7 @@
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { SCHEMA_BASE_URL, schemaFileName } from "@oxagen/done-record";
+import { WORK_BRIEF_SCHEMA } from "./records/brief";
 import {
   COLLECTOR_SCHEMA,
   TRAINING_EXAMPLE_SCHEMA,
@@ -21,6 +22,7 @@ export const WORK_SCHEMA_IDS = [
   WORKFLOW_SCHEMA,
   TRIAGE_SCHEMA,
   TRAINING_EXAMPLE_SCHEMA,
+  WORK_BRIEF_SCHEMA,
 ] as const;
 export type WorkSchemaId = (typeof WORK_SCHEMA_IDS)[number];
 
