@@ -450,6 +450,10 @@ if [[ $deployed != true ]]; then
     rm -rf "${release:?}"
   else
     echo "error: no previous release to roll back to — $SERVICE is down" >&2
+    # The container still mounts the failed release, so its directory stays.
+    # `current` must not name it, or the next deploy takes a release that
+    # failed as its rollback target.
+    rm -f "$CURRENT"
   fi
 
   # Either way this deploy did not succeed, so the SSM command fails and the

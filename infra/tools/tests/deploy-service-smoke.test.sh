@@ -107,6 +107,11 @@ done
 
 if grep -q 'rm -rf "${release:?}"' "$SCRIPT"; then pass; else fail "a rolled-back release should be removed so it does not count toward the kept releases"; fi
 
+# With no release to roll back to, `current` must stop naming the failed one,
+# or the next deploy takes it as its rollback target.
+no_previous=$(sed -n '/no previous release to roll back to/,/^  fi$/p' "$SCRIPT")
+if grep -q 'rm -f "$CURRENT"' <<<"$no_previous"; then pass; else fail "a failed deploy with no rollback target should clear current"; fi
+
 # --- result ---------------------------------------------------------------
 
 if [[ $FAILED -gt 0 ]]; then
