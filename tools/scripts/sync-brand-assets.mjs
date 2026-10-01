@@ -3,7 +3,7 @@
  * Copy the Oxagen brand kit into this repo, or check that the copies still
  * match it.
  *
- * The kit, macanderson/oxagen-brand, builds every mark, icon, social card,
+ * The kit, oxageninc/brand, builds every mark, icon, social card,
  * launch screen, and spinner with the scripts in its `build/` folder and
  * commits the result. This script copies those committed files byte for byte,
  * so nobody edits a brand file here by hand. It renders nothing: every PNG and
@@ -796,7 +796,7 @@ if (isEntrypoint(import.meta.url)) {
   } catch {
     console.error(
       `brand: FAILED. No house kit at ${BRAND}, so nothing was ${CHECK ? "checked" : "synced"}. ` +
-        "Clone macanderson/oxagen-brand and pass --brand <dir>, or set OXAGEN_BRAND_KIT.",
+        "Clone oxageninc/brand and pass --brand <dir>, or set OXAGEN_BRAND_KIT.",
     );
     process.exit(2);
   }
@@ -818,7 +818,7 @@ if (isEntrypoint(import.meta.url)) {
   staticSurface("apps/web", "oxagen");
   const desktop = desktopIcons();
 
-  const kitName = `oxagen-brand ${kit.version} at ${BRAND}`;
+  const kitName = `brand kit ${kit.version} at ${BRAND}`;
   if (CHECK) {
     if (drifted.length) {
       console.error(`brand: ${drifted.length} file(s) out of step with ${kitName}:`);

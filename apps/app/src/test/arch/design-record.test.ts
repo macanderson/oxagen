@@ -1,6 +1,6 @@
 // INV-32 (ARCHITECTURE.md §4, ADR-226): the app has two sources of record. The
 // v3 mockup at the pin in ADR-226 (`mockups/src/v3.css` in oxagen-roadmap) sets
-// layout and behavior. The brand kit (`macanderson/oxagen-brand`, synced into
+// layout and behavior. The brand kit (`oxageninc/brand`, synced into
 // `packages/ui/src/styles/house-tokens.css`) sets tokens, type, and marks.
 // `src/ui/control-styles.ts`, `src/ui/table.tsx`, `src/ui/route-tabs.tsx`,
 // `src/ui/badge.tsx` and `src/app/globals.css` carry the rules as recipes.

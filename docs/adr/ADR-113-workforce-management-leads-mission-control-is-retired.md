@@ -8,7 +8,7 @@
   rules, its completion rule, its ruling that the agent control plane is the
   technical category, and its ruling that the message registry is the source
   of copy all stand.
-- **Related:** `docs/VISION.md`, `macanderson/oxagen-brand` `messages/` (the
+- **Related:** `docs/VISION.md`, `oxageninc/brand` `messages/` (the
   message registry) and `skills/oxagen-branding/` (the copy every agent
   reads), ADR-066 (the two names ADR-067 replaced), ADR-043 (Oxagen governs
   agents, it does not run them)
@@ -86,7 +86,7 @@ is to an architect, it is contested by nobody, and ADR-067 settled it.
    founder alone.** It is not in use, not in the registry, and no surface
    ships it until the founder says so.
 10. **The message registry stays the source of copy** (ADR-067). A line that
-    is not in `macanderson/oxagen-brand` `messages/` is not approved copy,
+    is not in `oxageninc/brand` `messages/` is not approved copy,
     whatever this ADR says about the direction.
 
 ## Consequences

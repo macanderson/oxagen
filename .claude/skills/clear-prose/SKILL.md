@@ -46,7 +46,7 @@ number, stop.
   eliminates, AI-powered.
 
 The full use and avoid lists, with replacements, are in the branding skill's
-`references/words.md`, which lives in `macanderson/oxagen-brand` under
+`references/words.md`, which lives in `oxageninc/brand` under
 `skills/oxagen-branding/`. The stub at `.claude/skills/oxagen-branding/` says
 how to read it from `main`.
 
