@@ -607,7 +607,7 @@
       },
       "noProgress": {
         "title": "No-progress limit",
-        "note": "A loop is one call made again and again in a row with an unchanged result. Each loop below reached the workspace's limit.",
+        "note": "A loop is one call made again and again in a row with an unchanged result.",
         "line": "{tool} ran {repeats} times in a row with an unchanged result. The loop reached the limit of {limit} at call {atCall}.",
         "mode": {
           "observe": "observe mode",
