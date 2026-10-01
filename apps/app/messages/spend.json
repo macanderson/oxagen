@@ -231,7 +231,7 @@
         "idleWhileParked": "idle while parked",
         "haltedEarly": "halted early"
       },
-      "causesMissing": "Retry loops come from the open findings, and the waste record reads one cause. The five other causes the design meters are not recorded yet.",
+      "causesMissing": "Retry loops come from the open findings, and one other cause is recorded. The five other causes the design meters are not recorded yet.",
       "retryLoopsWhy": "a call failed with the same error 3 or more times in a row (open findings, last 30 days)",
       "retryLoopsNone": "No retry loop found",
       "retryLoopsFindings": "{findings} findings",

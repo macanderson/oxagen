@@ -12,6 +12,7 @@ vi.mock("@oxagen/database", () => ({
 }));
 vi.mock("@oxagen/telemetry", () => ({
   readTachoToolCallObservations: vi.fn(),
+  readTachoFileChanges: vi.fn(),
   readModelCallFrames: vi.fn(),
   chSelect: vi.fn(() => {
     throw new Error("the pass must not reach ClickHouse in this test");
