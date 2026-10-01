@@ -28,12 +28,14 @@
  * generated icons are committed so a CI runner needs no librsvg. The Tauri CLI
  * runs from this app's node_modules, so run `pnpm install` once first.
  *
- * A full cut ends by writing src-tauri/icons/source.sha256: the sha256 of the
- * SVG it cut from, in `shasum -a 256` form. The brand check
- * (tools/scripts/sync-brand-assets.mjs --check) compares that stamp with the
- * avatar it syncs from the kit, so a kit icon change fails CI until someone
- * cuts the icons again (#4892). A `--maskable-only` run leaves the stamp
- * alone, because it does not cut the app icons.
+ * Every run ends by writing src-tauri/icons/source.sha256 in `shasum -a 256`
+ * form: the first line is the SVG the icons were cut from, and each line
+ * after it is a file in src-tauri/icons. The brand check
+ * (tools/scripts/sync-brand-assets.mjs --check) compares the first line with
+ * the avatar it syncs from the kit and the rest with the committed icons, so
+ * a kit icon change, or an icon edited by hand, fails CI until someone cuts
+ * the icons again (#4892). A `--maskable-only` run does not cut the app
+ * icons, so it keeps the stamp's source line and refreshes only the files.
  *
  * Maskable icons are emitted alongside: full bleed, the hive pulled into the
  * 80% safe circle a round mask keeps. Tauri does not consume them — they are
@@ -47,6 +49,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
   writeFileSync,
@@ -188,12 +191,22 @@ for (const size of MASKABLE_SIZES) {
   ]);
 }
 
-if (!maskableOnly) {
-  // Last, so a cut that failed part way leaves the old stamp and the brand
-  // check keeps failing. The path is relative to the repo root, where the
-  // check reads it, with forward slashes on every platform.
-  const hash = createHash("sha256").update(readFileSync(source)).digest("hex");
-  const from = relative(repo, source).split("\\").join("/");
-  writeFileSync(stamp, `${hash}  ${from}\n`);
+// Last, so a cut that failed part way leaves the old stamp and the brand
+// check keeps failing. Paths are relative to the repo root, where the check
+// reads them, with forward slashes on every platform.
+const sha256 = (path) => createHash("sha256").update(readFileSync(path)).digest("hex");
+const repoPath = (path) => relative(repo, path).split("\\").join("/");
+const sourceLine = maskableOnly
+  ? existsSync(stamp)
+    ? readFileSync(stamp, "utf8").split("\n")[0]
+    : null
+  : `${sha256(source)}  ${repoPath(source)}`;
+if (sourceLine) {
+  const outputs = readdirSync(work, { withFileTypes: true })
+    .filter((e) => e.isFile() && e.name !== "source.sha256" && e.name !== ".DS_Store")
+    .map((e) => join(work, e.name))
+    .sort()
+    .map((path) => `${sha256(path)}  ${repoPath(path)}`);
+  writeFileSync(stamp, `${[sourceLine, ...outputs].join("\n")}\n`);
 }
 console.log(`✔ ${requested} icons in ${work}`);

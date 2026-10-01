@@ -376,6 +376,47 @@ describe("a sync and a check against a kit", () => {
     expect(fixed.status, fixed.stderr).toBe(0);
   });
 
+  // Codex review on #4906: a file the kit stopped shipping stayed in place,
+  // and the check passed over it.
+  it("removes an icon the kit no longer ships, and a check lists it first", () => {
+    sync();
+    stampDesktop();
+    put(repo(), "apps/app/public/pwa/icon-128.png", "an old size");
+    put(repo(), "apps/web/icon-96.png", "an old size");
+    put(repo(), "apps/web/robots.txt", "not an icon");
+    const check = sync("--check");
+    expect(check.status).toBe(1);
+    expect(check.stderr).toMatch(/extra\s+apps\/app\/public\/pwa\/icon-128\.png/);
+    expect(check.stderr).toMatch(/extra\s+apps\/web\/icon-96\.png/);
+    expect(check.stderr).not.toContain("robots.txt");
+    expect(sync().status).toBe(0);
+    expect(existsSync(join(repo(), "apps/app/public/pwa/icon-128.png"))).toBe(false);
+    expect(existsSync(join(repo(), "apps/web/icon-96.png"))).toBe(false);
+    expect(existsSync(join(repo(), "apps/web/robots.txt"))).toBe(true);
+    const fixed = sync("--check");
+    expect(fixed.status, fixed.stderr).toBe(0);
+  });
+
+  // Codex review on #4906: a stamp that held only the source accepted a
+  // desktop icon edited after the cut.
+  it("fails a check when a desktop icon changes after the cut", () => {
+    sync();
+    const avatar = "apps/app/public/brand/oxagen-avatar-light.svg";
+    const icon = "apps/desktop/src-tauri/icons/icon.png";
+    put(repo(), icon, "cut from the avatar");
+    put(
+      repo(),
+      "apps/desktop/src-tauri/icons/source.sha256",
+      `${sha256(readFileSync(join(repo(), avatar)))}  ${avatar}\n${sha256("cut from the avatar")}  ${icon}\n`,
+    );
+    const cut = sync("--check");
+    expect(cut.status, cut.stderr).toBe(0);
+    put(repo(), icon, "edited by hand");
+    const edited = sync("--check");
+    expect(edited.status).toBe(1);
+    expect(edited.stderr).toContain(`${icon} changed after the cut`);
+  });
+
   it("fails a check when the desktop icons carry no stamp", () => {
     sync();
     const check = sync("--check");
@@ -387,32 +428,53 @@ describe("a sync and a check against a kit", () => {
 
 describe("the desktop icon stamp", () => {
   const avatar = "apps/app/public/brand/oxagen-avatar-light.svg";
+  const icon = "apps/desktop/src-tauri/icons/icon.png";
   const bytes = Buffer.from("<svg/>");
+  const png = Buffer.from("png");
   const synced = new Map([[avatar, bytes]]);
+  const icons = new Map([[icon, png]]);
+  const stamp = `${sha256(bytes)}  ${avatar}\n${sha256(png)}  ${icon}\n`;
 
-  it("matches the avatar the sync writes, in shasum's own format", () => {
-    expect(desktopIconDrift(`${sha256(bytes)}  ${avatar}\n`, synced)).toBeNull();
-    expect(desktopIconDrift(`${sha256(bytes)} *${avatar}`, synced)).toBeNull();
+  it("matches the avatar the sync writes and the icons the cut wrote, in shasum's own format", () => {
+    expect(desktopIconDrift(stamp, synced, icons)).toBeNull();
+    expect(
+      desktopIconDrift(`${sha256(bytes)} *${avatar}\n${sha256(png)} *${icon}`, synced, icons),
+    ).toBeNull();
   });
 
   it("names an older source, a missing stamp, and a path the sync does not write", () => {
-    expect(desktopIconDrift(`${"0".repeat(64)}  ${avatar}`, synced)).toBe(
+    expect(desktopIconDrift(`${"0".repeat(64)}  ${avatar}`, synced, new Map())).toBe(
       `the icons were cut from an older ${avatar}`,
     );
-    expect(desktopIconDrift(null, synced)).toContain("no stamp");
-    expect(desktopIconDrift(`${sha256(bytes)}  elsewhere.svg`, synced)).toContain(
+    expect(desktopIconDrift(null, synced, icons)).toContain("no stamp");
+    expect(desktopIconDrift(`${sha256(bytes)}  elsewhere.svg`, synced, icons)).toContain(
       "elsewhere.svg, which this sync does not write",
     );
-    expect(desktopIconDrift("not a stamp", synced)).toContain("not one");
+    expect(desktopIconDrift("not a stamp", synced, icons)).toContain("not `<sha256>");
+  });
+
+  it("names an icon changed after the cut, a missing one, and one no cut wrote", () => {
+    expect(desktopIconDrift(stamp, synced, new Map([[icon, Buffer.from("edited")]]))).toBe(
+      `${icon} changed after the cut`,
+    );
+    expect(desktopIconDrift(stamp, synced, new Map())).toBe(`${icon} is in the stamp but missing`);
+    const extra = "apps/desktop/src-tauri/icons/extra.png";
+    expect(desktopIconDrift(stamp, synced, new Map([...icons, [extra, png]]))).toBe(
+      `${extra} is not in the stamp, so no cut wrote it`,
+    );
   });
 
   it("is committed for the icons in this tree, cut from the synced avatar", () => {
-    const stamp = readFileSync(
-      join(REPO_ROOT, "apps/desktop/src-tauri/icons/source.sha256"),
-      "utf8",
+    const dir = "apps/desktop/src-tauri/icons";
+    const committed = new Map(
+      readdirSync(join(REPO_ROOT, dir))
+        .filter((name) => name !== "source.sha256")
+        .map((name) => [`${dir}/${name}`, readFileSync(join(REPO_ROOT, dir, name))]),
     );
-    const committed = new Map([[avatar, readFileSync(join(REPO_ROOT, avatar))]]);
-    expect(desktopIconDrift(stamp, committed)).toBeNull();
+    const current = readFileSync(join(REPO_ROOT, dir, "source.sha256"), "utf8");
+    expect(
+      desktopIconDrift(current, new Map([[avatar, readFileSync(join(REPO_ROOT, avatar))]]), committed),
+    ).toBeNull();
   });
 });
 

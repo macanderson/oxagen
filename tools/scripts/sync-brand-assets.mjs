@@ -39,12 +39,18 @@
  *   other file in that folder is removed: agents read the full skill from the
  *   kit's main branch.
  *
+ * The folders that hold only kit files (each Next surface's favicon/ and
+ * pwa/, apps/web/splash/, and apps/web's root icons) are reconciled: a sync
+ * removes a file there that the kit no longer ships, and a check lists it.
+ *
  * The desktop app's icons are the one brand file this script cannot write.
  * apps/desktop/scripts/icons.mjs cuts them from the synced avatar with
- * rsvg-convert and the Tauri CLI, and records the avatar's sha256 in
- * apps/desktop/src-tauri/icons/source.sha256. This script compares that
- * stamp with the avatar it syncs, so a kit icon change fails the check until
- * someone runs `pnpm --filter @oxagen/desktop icons` (#4892).
+ * rsvg-convert and the Tauri CLI, and records in
+ * apps/desktop/src-tauri/icons/source.sha256 the sha256 of the avatar and of
+ * every file it wrote. This script compares that stamp with the avatar it
+ * syncs and with the committed icons, so a kit icon change, or an icon
+ * edited by hand, fails the check until someone runs
+ * `pnpm --filter @oxagen/desktop icons` (#4892).
  *
  * CI runs `--check` against the kit's main branch in brand-drift.yml and in
  * the pipeline's checks job, as Mac decided on 2026-09-29 (#3074). After a
@@ -203,30 +209,45 @@ export function withPwaHead(html, block) {
 
 /* ── the desktop icons ───────────────────────────────────────────────────── */
 
-/** Where apps/desktop/scripts/icons.mjs records what it cut the icons from. */
-const DESKTOP_STAMP = "apps/desktop/src-tauri/icons/source.sha256";
+/** The desktop app's icons, which apps/desktop/scripts/icons.mjs cuts. */
+const DESKTOP_ICONS = "apps/desktop/src-tauri/icons";
+/** Where that cut records what it read and what it wrote. */
+const DESKTOP_STAMP = `${DESKTOP_ICONS}/source.sha256`;
+
+const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
 
 /**
- * Whether the desktop icons were cut from the avatar this sync writes.
+ * Whether the desktop icons are the ones a cut from the synced avatar wrote.
  *
- * `stamp` is the text of DESKTOP_STAMP, or null when there is none: one line
- * in `shasum -a 256` form, the hash and then the repo path of the SVG the
- * icons were cut from. `synced` maps each path this run writes to its bytes.
- * Returns null when the stamp matches, or the reason it does not.
+ * `stamp` is the text of DESKTOP_STAMP, or null when there is none. It is in
+ * `shasum -a 256` form: the first line is the hash and repo path of the SVG
+ * the icons were cut from, and each line after it is the hash and repo path
+ * of a file the cut wrote. `synced` maps each path this run writes to its
+ * bytes. `icons` maps every other file in DESKTOP_ICONS to its bytes.
+ * Returns null when everything matches, or the first reason it does not.
  *
  * @param {string | null} stamp
  * @param {ReadonlyMap<string, Buffer>} synced
+ * @param {ReadonlyMap<string, Buffer>} icons
  * @returns {string | null}
  */
-export function desktopIconDrift(stamp, synced) {
+export function desktopIconDrift(stamp, synced, icons) {
   if (stamp === null) return "no stamp, so no record of what the icons were cut from";
-  const line = stamp.trim().match(/^([0-9a-f]{64}) [ *]?(\S+)$/);
-  if (!line) return "the stamp is not one `<sha256>  <path>` line";
-  const [, hash, source] = line;
+  const lines = stamp.trim().split("\n").map((l) => l.match(/^([0-9a-f]{64}) [ *]?(\S+)$/));
+  if (lines.some((l) => !l)) return "the stamp is not `<sha256>  <path>` lines";
+  const [[, hash, source], ...outputs] = lines;
   const bytes = synced.get(source);
   if (!bytes) return `the stamp names ${source}, which this sync does not write`;
-  if (createHash("sha256").update(bytes).digest("hex") !== hash) {
-    return `the icons were cut from an older ${source}`;
+  if (sha256(bytes) !== hash) return `the icons were cut from an older ${source}`;
+  const listed = new Set();
+  for (const [, want, path] of outputs) {
+    listed.add(path);
+    const file = icons.get(path);
+    if (!file) return `${path} is in the stamp but missing`;
+    if (sha256(file) !== want) return `${path} changed after the cut`;
+  }
+  for (const path of icons.keys()) {
+    if (!listed.has(path)) return `${path} is not in the stamp, so no cut wrote it`;
   }
   return null;
 }
@@ -271,10 +292,11 @@ const kitScreens = () =>
 const copy = (from, to) => emit(to, readFileSync(join(BRAND, from)));
 
 /**
- * Every file under `relDir` except `keep`, as repo paths, deepest first.
- * Finder's `.DS_Store` is skipped, since git never carries it.
+ * Every file under `relDir` except `keep`, as repo paths. With `deep` false,
+ * only the files directly in it. Finder's `.DS_Store` is skipped, since git
+ * never carries it.
  */
-function filesUnder(relDir, keep) {
+function filesUnder(relDir, keep, deep = true) {
   const out = [];
   const walk = (rel) => {
     let entries;
@@ -286,12 +308,40 @@ function filesUnder(relDir, keep) {
     }
     for (const entry of entries) {
       const child = `${rel}/${entry.name}`;
-      if (entry.isDirectory()) walk(child);
-      else if (entry.name !== ".DS_Store" && child !== keep) out.push(child);
+      if (entry.isDirectory()) {
+        if (deep) walk(child);
+      } else if (entry.name !== ".DS_Store" && child !== keep) out.push(child);
     }
   };
   walk(relDir);
   return out;
+}
+
+/**
+ * A file in a folder this script owns that the run did not write: the kit no
+ * longer ships it. A sync removes it, and a check lists it as extra.
+ */
+function stray(rel) {
+  if (CHECK) {
+    drifted.push({ kind: "extra", path: rel });
+    return;
+  }
+  rmSync(join(REPO, rel));
+  removed.push(rel);
+}
+
+/**
+ * Remove or list every file under `relDir` this run did not write. Only
+ * folders that hold nothing but kit files are reconciled. `only`, when given,
+ * limits the sweep to the file names it matches, for a folder the kit shares
+ * with other files.
+ */
+function reconcile(relDir, { deep = true, only } = {}) {
+  for (const rel of filesUnder(relDir, undefined, deep)) {
+    if (synced.has(rel)) continue;
+    if (only && !only.test(rel.slice(rel.lastIndexOf("/") + 1))) continue;
+    stray(rel);
+  }
 }
 
 /* ── the plan ────────────────────────────────────────────────────────────── */
@@ -766,7 +816,14 @@ export const STELLA: BrandGeometry = ${JSON.stringify(data.stella, null, 2)};
  * then fails until someone cuts the icons on its branch.
  */
 function desktopIcons() {
-  const reason = desktopIconDrift(committed(DESKTOP_STAMP)?.toString("utf8") ?? null, synced);
+  const icons = new Map(
+    filesUnder(DESKTOP_ICONS, DESKTOP_STAMP).map((rel) => [rel, committed(rel)]),
+  );
+  const reason = desktopIconDrift(
+    committed(DESKTOP_STAMP)?.toString("utf8") ?? null,
+    synced,
+    icons,
+  );
   if (!reason) return null;
   if (CHECK) drifted.push({ kind: "stale", path: DESKTOP_STAMP, why: reason });
   return reason;
@@ -816,6 +873,17 @@ if (isEntrypoint(import.meta.url)) {
   nextAppIcon("apps/docs", "oxagen");
   nextAppIcon("apps/app_deprecated", "oxagen");
   staticSurface("apps/web", "oxagen");
+  for (const app of ["apps/app", "apps/docs", "apps/app_deprecated"]) {
+    reconcile(`${app}/public/favicon`);
+    reconcile(`${app}/public/pwa`);
+  }
+  reconcile("apps/web/splash");
+  // apps/web's root holds the pages and everything else beside its icons, so
+  // only the names an icon takes are swept.
+  reconcile("apps/web", {
+    deep: false,
+    only: /^(favicon-\d+\.png|icon-\d+\.png|maskable(-light)?-\d+\.png|apple-touch-icon.*\.png|favicon.*\.ico)$/,
+  });
   const desktop = desktopIcons();
 
   const kitName = `brand kit ${kit.version} at ${BRAND}`;
