@@ -9,7 +9,7 @@
  * `billing.gau_buckets` and `billing.gau_settlements`. The recorder's other
  * reads — terms, settings, the default card — are module doubles.
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   fakeGauExecutor,
   makeFakeGauStore,
@@ -335,12 +335,23 @@ describe("recordGovernedAction", () => {
     });
 
   beforeEach(() => {
+    // settleGauInvoice grants a paid top-up to the month the payment arrives
+    // in, and it reads that month from the wall clock (gau-settlements.ts).
+    // Pin the clock to NOW so the grant lands on the September bucket these
+    // tests seed. With a real clock, the paid top-up test failed from
+    // 2026-10-01.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(NOW);
     mocks.resolveGauEntitlement.mockResolvedValue({
       terms: BUILD_TERMS,
       subscription: null,
     });
     mocks.readOrgBillingSettings.mockResolvedValue(SETTINGS);
     mocks.readDefaultPaymentMethod.mockResolvedValue(null);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("debits the month bucket through ensureCurrentBucket and returns the post-debit row", async () => {
