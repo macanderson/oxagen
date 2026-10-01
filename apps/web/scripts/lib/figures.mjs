@@ -42,10 +42,16 @@ export function valueText(d, unit = "") {
 
 const cls = (...names) => names.filter(Boolean).join(" ");
 
-function Frame({ kind, title, caption, children }) {
+/**
+ * The box every figure sits in. `modifier` adds state classes to the figure
+ * and `style` carries the custom properties its stylesheet rules read, so a
+ * figure's shape (how many steps, how many per row) stays in the markup as
+ * positions and never as colour.
+ */
+function Frame({ kind, title, caption, modifier, style, children }) {
   return h(
     "figure",
-    { className: `fig fig-${kind}` },
+    { className: cls(`fig fig-${kind}`, modifier), style },
     title ? h("p", { className: "fig-title" }, title) : null,
     children,
     caption ? h("figcaption", null, caption) : null,
@@ -358,43 +364,100 @@ export function Curve({
   );
 }
 
+/** The most steps one row holds once a flow wraps. */
+export const STEPS_PER_ROW = 5;
+
 /**
- * A process as numbered steps joined by arrows, in a row when the column is
- * wide enough and a column when it is not. `loop` draws the return from the
- * last step to the first and names it. `emph` marks the step the post
- * argues about.
- * @param {{ title?: string, caption?: string, loop?: string,
- *   steps: Array<{ label: string, detail?: string, emph?: boolean }> }} props
+ * How many steps share a row when the column is wide enough. Up to six sit
+ * on one row. More than six wrap into the fewest rows that hold at most
+ * `STEPS_PER_ROW` each, so ten steps read as two rows of five. On one row a
+ * step would get a tenth of the column, and its detail would wrap into a
+ * stripe too narrow to read.
+ * @param {number} n
  */
-export function Flow({ title, caption, loop, steps = [] }) {
+export function columnsFor(n) {
+  if (n <= 6) return Math.max(1, n);
+  return Math.ceil(n / Math.ceil(n / STEPS_PER_ROW));
+}
+
+/**
+ * A process as numbered steps joined by arrows: a column when the figure is
+ * narrow, rows of `columnsFor(n)` steps when it is wide, with a return rail
+ * from the end of one row to the start of the next. `loop` draws the return
+ * from the last step to the first and names it. `emph` marks the step the
+ * post argues about.
+ *
+ * `unit` names one piece of work and runs it through the steps: each step
+ * gets a token carrying the unit's name and that step's `mark` (what the
+ * unit is once the step is done), the stylesheet shows one token at a time
+ * in step order, fills a bar under each step the unit has passed, and lights
+ * the loop on the way back. The animation is CSS alone, on the figure's
+ * `--n`, `--cols` and each step's `--i`; it stops under reduced motion with
+ * the unit resting on the first step. A hidden table lists each step's mark,
+ * so a screen reader gets the same account as the animation.
+ * @param {{ title?: string, caption?: string, loop?: string, unit?: string,
+ *   steps: Array<{ label: string, detail?: string, emph?: boolean, mark?: string }> }} props
+ */
+export function Flow({ title, caption, loop, unit, steps = [] }) {
+  const n = steps.length;
+  const cols = columnsFor(n);
+  const last = n > 0 ? (n - 1) % cols : 0;
+  const run = Boolean(unit);
   return h(
     Frame,
-    { kind: "flow", title, caption },
+    {
+      kind: "flow",
+      title,
+      caption,
+      modifier: cls(run && "is-run", cols >= STEPS_PER_ROW && "is-dense"),
+      style: { "--n": n, "--cols": cols, "--last": last },
+    },
     h(
       "ol",
-      { className: "fig-flow", style: { "--n": steps.length } },
-      ...steps.map((s, i) =>
-        h(
+      { className: "fig-steps" },
+      ...steps.map((s, i) => {
+        const rowStart = i > 0 && i % cols === 0;
+        const rowEnd = i < n - 1 && i % cols === cols - 1;
+        return h(
           "li",
-          { className: cls("fig-step", s.emph && "is-emph") },
+          {
+            className: cls(
+              "fig-step",
+              s.emph && "is-emph",
+              rowStart && "is-row-start",
+              rowEnd && "is-row-end",
+            ),
+            style: { "--i": i },
+          },
           h(
             "span",
-            { className: "fig-step-n", "aria-hidden": "true" },
-            String(i + 1).padStart(2, "0"),
+            { className: "fig-step-head", "aria-hidden": "true" },
+            h("span", { className: "fig-step-n" }, String(i + 1).padStart(2, "0")),
+            run
+              ? h(
+                  "span",
+                  { className: "fig-token" },
+                  h("span", { className: "fig-token-id" }, unit),
+                  s.mark
+                    ? h("span", { className: "fig-token-mark" }, s.mark)
+                    : null,
+                )
+              : null,
           ),
           h("span", { className: "fig-step-label" }, s.label),
           s.detail
             ? h("span", { className: "fig-step-detail" }, s.detail)
             : null,
-        ),
-      ),
+          run ? h("span", { className: "fig-step-bar" }) : null,
+        );
+      }),
     ),
-    loop
-      ? h(
-          "p",
-          { className: "fig-loop", style: { "--n": steps.length } },
-          h("span", null, loop),
-        )
+    loop ? h("p", { className: "fig-loop" }, h("span", null, loop)) : null,
+    run
+      ? h(DataTable, {
+          head: ["Stage", `${unit} after the stage`],
+          rows: steps.map((s) => [s.label, s.mark ?? ""]),
+        })
       : null,
   );
 }
