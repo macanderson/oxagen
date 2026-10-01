@@ -1,11 +1,14 @@
-// Spend › Findings (#2963, ADR-062; spec "Findings"): the workspace's open
-// findings ranked by the money at stake. The hero sums them (Savings
-// identified, its share of the window's spend, a year at this run rate, the
-// share strip with its legend and the four facts); the list filters, sorts and
-// pages them; Evidence opens one finding's arithmetic in a dialog and Fix opens
-// the change that removes it. Every figure is the findings job's. The one
-// thing computed here is a finding's share of the listed total, divided
-// through the micros seam and printed as a ratio (INV-09, INV-10).
+// Spend › Findings (#2963, ADR-062; spec "Findings" and "Counting"): the
+// workspace's open findings ranked by the money at stake, under a hero that
+// leads with the period's unproductive spend. The hero prints the headline
+// get_unproductive_spend answers (the same total the operator ranking's Total
+// row prints) beside its share of the period's spend (counting rule 5). Beside
+// them sit what detectors 2, 3, and 5 price and what detector 4 estimates,
+// none of which adds to the headline (rules 2 and 3). The list filters, sorts
+// and pages the findings; Evidence opens one finding's arithmetic in a dialog
+// and Fix opens the change that removes it. The one figure computed here is a
+// finding's share of the listed total, divided through the micros seam and
+// printed as a ratio (INV-09, INV-10).
 import { useLocale, useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import { ratioOfMicros } from "@/data/contracts/money";
@@ -14,6 +17,7 @@ import type {
   SpendFindingEvidence,
   SpendFindings,
   SpendReport,
+  UnproductiveSpend,
 } from "@/data/contracts/spend";
 import type { Read } from "@/data/read";
 import { routes, type SafePath } from "@/shared/safe-path";
@@ -38,14 +42,8 @@ import { NotBacked } from "./not-backed";
 import { Empty, Panel } from "./tables";
 import type { SpendAt } from "./view";
 
-/** Findings named in the legend; the rest roll into one entry, since at forty a name per slice is unreadable. */
-const LEGEND_MAX = 8;
-
-/** The strip's shading, darkest for the largest saving. */
-const RAMP = [1, 0.8, 0.64, 0.5, 0.38, 0.28];
-
-const opacityOf = (index: number): number =>
-  RAMP[index % RAMP.length] ?? RAMP[0] ?? 1;
+/** The handler's refusal for a period whose figures hold two currencies. */
+const MIXED_CURRENCY = "unproductive_mixed_currency";
 
 /** Each listed finding's saving over the listed total; null where the total does not divide it. */
 function sharesOf(
@@ -58,110 +56,110 @@ function sharesOf(
 }
 
 /**
- * The composition of the identified savings. A slice's width is layout and
- * never a printed figure; the legend beside it carries the numbers as text.
+ * The headline and its share of the period's spend, side by side (rule 5).
+ * A read that did not answer says why in place of the figures.
  */
-function CompositionStrip({
-  findings,
-  shares,
-}: {
-  findings: readonly SpendFinding[];
-  shares: readonly (number | null)[];
-}) {
-  const t = useTranslations("spend");
+function Headline({ headline }: { headline: Read<UnproductiveSpend> }) {
+  const t = useTranslations("spend.findings");
+  const locale = useLocale();
+  if (!headline.ok) {
+    if (headline.reason === "error" && headline.code === MIXED_CURRENCY)
+      return (
+        <p className="text-sm text-muted-foreground">{t("mixedCurrency")}</p>
+      );
+    return <ReadFailure read={headline} section={t("hero")} />;
+  }
+  const { unproductive, spend, share } = headline.value;
   return (
-    <div
-      role="img"
-      aria-label={t("findings.strip.label")}
-      className="flex h-2 w-full overflow-hidden rounded-full bg-muted"
-    >
-      {findings.map((finding, index) => {
-        const share = shares[index];
-        if (share === null || share === undefined || share <= 0) return null;
-        return (
-          <span
-            key={finding.id}
-            data-finding={finding.id}
-            className="block h-full bg-link"
-            style={{
-              width: `${String(Math.round(share * 1000) / 10)}%`,
-              opacity: opacityOf(index),
-            }}
-          />
-        );
-      })}
+    <>
+      <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+        <span
+          data-testid="spend-headline"
+          className="text-4xl font-bold tracking-tight tabular-nums"
+        >
+          <Money value={unproductive} />
+        </span>
+        <span
+          data-testid="spend-headline-share"
+          className="text-2xl font-semibold tracking-tight tabular-nums"
+        >
+          {share === null ? <NotRecordedValue /> : formatRatio(share, locale)}
+        </span>
+      </div>
+      <p className="text-[12.5px] text-muted-foreground">
+        {spend === null ? (
+          t("heroNoSpend")
+        ) : (
+          <>
+            {t("heroShareOf")} <Money value={spend} /> {t("heroPeriod")}
+          </>
+        )}
+      </p>
+    </>
+  );
+}
+
+/**
+ * What detectors 2, 3, and 5 price and what detector 4 estimates, each
+ * beside the headline and none added to it (rules 2 and 3).
+ */
+function PartFigures({ headline }: { headline: Read<UnproductiveSpend> }) {
+  const t = useTranslations("spend.findings.parts");
+  if (!headline.ok) return null;
+  const { parts, estimate } = headline.value;
+  return (
+    <div className="flex flex-col gap-2">
+      <h3 className={eyebrow}>{t("title")}</h3>
+      <dl
+        data-testid="spend-headline-parts"
+        className="grid grid-cols-[minmax(0,1fr)_max-content_max-content] gap-x-4 gap-y-1.5 text-[12.5px]"
+      >
+        {parts.map((part) => (
+          <div
+            key={part.detector}
+            data-detector={part.detector}
+            className="contents"
+          >
+            <dt className="text-muted-foreground">
+              {t(`detector.${part.detector}`)}
+            </dt>
+            <dd className="text-right font-medium tabular-nums">
+              <Money value={part.saving} />
+            </dd>
+            <dd className="text-right text-muted-foreground tabular-nums">
+              {t("findings", { count: part.findings })}
+            </dd>
+          </div>
+        ))}
+        <div data-detector="4" className="contents">
+          <dt className="text-muted-foreground">
+            {t("estimate")}{" "}
+            <span className="rounded-sm border border-border px-1 text-[11px]">
+              {t("estimated")}
+            </span>
+          </dt>
+          <dd className="text-right font-medium tabular-nums">
+            <Money value={estimate.saving} />
+          </dd>
+          <dd className="text-right text-muted-foreground tabular-nums">
+            {t("findings", { count: estimate.findings })}
+          </dd>
+        </div>
+      </dl>
+      <p className="text-[12px] text-muted-foreground">{t("note")}</p>
     </div>
   );
 }
 
-function Legend({
-  findings,
-  shares,
-}: {
-  findings: readonly SpendFinding[];
-  shares: readonly (number | null)[];
-}) {
-  const t = useTranslations("spend");
-  const locale = useLocale();
-  const tail = findings.slice(LEGEND_MAX);
-  const tailShares = shares.slice(LEGEND_MAX);
-  const known = tailShares.filter((share): share is number => share !== null);
-  const tailShare =
-    known.length === tailShares.length
-      ? known.reduce((sum, share) => sum + share, 0)
-      : null;
-  return (
-    <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-      {findings.slice(0, LEGEND_MAX).map((finding, index) => {
-        const share = shares[index];
-        return (
-          <li key={finding.id} className="flex items-center gap-1.5">
-            <span
-              aria-hidden="true"
-              className="size-2 rounded-sm bg-link"
-              style={{ opacity: opacityOf(index) }}
-            />
-            <span>{t(`findings.kind.${finding.kind}`)}</span>
-            <span className="tabular-nums">
-              {share === null || share === undefined ? (
-                <NotRecordedValue />
-              ) : (
-                formatRatio(share, locale)
-              )}
-            </span>
-          </li>
-        );
-      })}
-      {tail.length === 0 ? null : (
-        <li className="flex items-center gap-1.5">
-          <span
-            aria-hidden="true"
-            className="size-2 rounded-sm bg-link opacity-20"
-          />
-          <span>
-            {t("findings.strip.tail", {
-              count: formatCount(tail.length, locale),
-            })}
-          </span>
-          <span className="tabular-nums">
-            {tailShare === null ? (
-              <NotRecordedValue />
-            ) : (
-              formatRatio(tailShare, locale)
-            )}
-          </span>
-        </li>
-      )}
-    </ul>
-  );
-}
-
 export function FindingsSection({
+  headline,
   findings,
   operators,
   at,
   evidence,
 }: {
+  /** The period's unproductive spend, the figure the hero leads with. */
+  headline: Read<UnproductiveSpend>;
   findings: SpendFindings;
   /** The operator rollup, to name the person an operator finding is about. */
   operators: SpendReport["rows"];
@@ -188,36 +186,10 @@ export function FindingsSection({
           <h2 id="spend-findings-hero" className={eyebrow}>
             {t("hero")}
           </h2>
-          <span className="text-4xl font-bold tracking-tight tabular-nums">
-            <MoneyFigure money={findings.saving} />
-          </span>
-          <EstimateBasis cost={findings.saving} />
-          <p className="text-[12.5px] text-muted-foreground">
-            {findings.share === null || findings.spend === null ? (
-              <NotRecordedValue />
-            ) : (
-              <>
-                {t("heroShare", {
-                  share: formatRatio(findings.share, locale),
-                })}{" "}
-                <Money value={findings.spend} /> {t("heroWindow")}
-              </>
-            )}{" "}
-            {findings.annualised === null ? null : (
-              <>
-                {t("heroYearStart")} <Money value={findings.annualised} />{" "}
-                {t("heroYearEnd")}
-              </>
-            )}
-          </p>
+          <Headline headline={headline} />
         </div>
         <div className="flex min-w-0 flex-col gap-3">
-          {findings.findings.length === 0 ? null : (
-            <>
-              <CompositionStrip findings={findings.findings} shares={shares} />
-              <Legend findings={findings.findings} shares={shares} />
-            </>
-          )}
+          <PartFigures headline={headline} />
           <ul className="flex flex-wrap gap-x-5 gap-y-1 border-t border-border pt-3 text-[12.5px] text-muted-foreground">
             <li>
               <b className="text-foreground">

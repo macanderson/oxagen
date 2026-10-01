@@ -26,10 +26,6 @@
       "setBudget": "Set a budget"
     },
     "findings": {
-      "strip": {
-        "label": "Share of the identified savings by finding",
-        "tail": "{count} smaller findings"
-      },
       "facts": {
         "findings": "findings",
         "operators": "operators involved",
@@ -134,11 +130,23 @@
         "codeDraft": "Inspect this spend finding and read the cited calls before proposing a change. Plan the smallest harness hook, custom tool, or code fix that addresses the behavior, with tests. Separate measured costs from potential savings. Estimate implementation cost only with stated assumptions. Open a reviewable code PR only if repository tools and access are available. Otherwise report the missing access. Do not mark the finding fixed.\n\n{finding}"
       },
       "costData": "Cost data: {basis}",
-      "hero": "Savings identified",
-      "heroShare": "{share} of",
-      "heroWindow": "spent over these findings’ window.",
-      "heroYearStart": "About",
-      "heroYearEnd": "a year at this run rate.",
+      "hero": "Unproductive spend",
+      "heroShareOf": "of",
+      "heroPeriod": "spent this month.",
+      "heroNoSpend": "Oxagen could not price all of this month’s spend in one currency, so it shows no share.",
+      "mixedCurrency": "This month holds unproductive spend in more than one currency. Each figure adds up one currency, so Oxagen built none.",
+      "parts": {
+        "title": "Parts and estimates",
+        "note": "Each of these prices part of a request or estimates a change, so none of them adds to unproductive spend.",
+        "detector": {
+          "2": "Standing context",
+          "3": "Cache rewrites",
+          "5": "Context carry"
+        },
+        "estimate": "Model class fit",
+        "estimated": "Estimated",
+        "findings": "{count, plural, one {# finding} other {# findings}}"
+      },
       "attributionMissing": "The operator and agent behind a tool or workspace finding, and each finding’s trend, are not recorded yet.",
       "evidenceLine": "evidence {runs} runs · {calls} calls · {from} to {to}",
       "atStake": "at stake ({share} of identified)",
@@ -651,7 +659,7 @@
     "ranking": {
       "title": "Operator ranking",
       "note": "Operators by unproductive spend for this period, highest first. Each figure links to its definition.",
-      "managersOnly": "An org Owner or Admin, or the workspace Owner, can read the operator ranking. Ask one of them for the figures.",
+      "managersOnly": "An org Owner or Admin can read the operator ranking. Ask one of them for the figures.",
       "empty": "No run has unproductive spend in this period.",
       "mixedCurrency": "This period holds unproductive spend in more than one currency. The ranking adds up one currency, so Oxagen built no ranking.",
       "unnamed": "Unnamed operator",
@@ -673,7 +681,7 @@
       "definitions": {
         "unproductive": "The cost of the frames Oxagen marked unproductive in this operator's runs during the period. A frame that two checks mark counts once.",
         "shareOfTotal": "This operator's unproductive spend divided by the workspace total for the period.",
-        "unproductiveShare": "This operator's unproductive spend divided by everything this operator's runs cost in the period.",
+        "unproductiveShare": "This operator’s unproductive spend divided by the cost of the frames this operator’s runs ran in the period.",
         "runs": "The runs in the period with at least one frame marked unproductive."
       },
       "pseudonyms": {
@@ -683,7 +691,8 @@
         "turnOff": "Turn off pseudonyms",
         "saving": "Saving",
         "denied": "Only an org Owner or Admin can change this setting.",
-        "failed": "The setting did not save. Try again."
+        "failed": "The setting did not save. Try again.",
+        "unknown": "The ranking did not load, so the current setting is not shown."
       }
     },
     "toolChart": {

@@ -493,6 +493,7 @@ capability rewrites, so two such branches always conflicted on it (ADR-216).
 - get_operator_ranking
 - get_spend
 - get_spend_drill
+- get_unproductive_spend
 - list_cost_centers
 - list_findings
 - list_waste

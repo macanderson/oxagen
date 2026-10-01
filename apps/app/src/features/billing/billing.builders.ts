@@ -272,6 +272,7 @@ export function billingSource(overrides: Partial<BillingReads> = {}) {
       priceBook: refuse,
       operatorRanking: refuse,
       unpricedModels: refuse,
+      unproductive: refuse,
     },
     onboarding: { state: refuse, firstFrame: refuse },
     org: {

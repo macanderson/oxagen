@@ -264,6 +264,30 @@ export const OperatorRanking = z.object({
 export type OperatorRanking = z.infer<typeof OperatorRanking>;
 export type OperatorRankingRow = OperatorRanking["operators"][number];
 
+/** The findings behind one figure beside the headline: their savings summed, and how many. */
+const FindingFigure = z.object({ saving: Money, findings: Count });
+
+/**
+ * `get_unproductive_spend` (spend spec, Counting): the workspace's
+ * unproductive spend for a period, the same total the operator ranking
+ * totals. `spend` and `share` are null when the period's spend has no single
+ * figure. `parts` holds detectors 2, 3, and 5 in that order and `estimate`
+ * detector 4: each sits beside the headline and stays out of it.
+ */
+export const UnproductiveSpend = z.object({
+  period: DayRange,
+  unproductive: Money,
+  spend: Money.nullable(),
+  share: Ratio.nullable(),
+  parts: z.array(
+    FindingFigure.extend({
+      detector: z.union([z.literal(2), z.literal(3), z.literal(5)]),
+    }),
+  ),
+  estimate: FindingFigure,
+});
+export type UnproductiveSpend = z.infer<typeof UnproductiveSpend>;
+
 /** An instant a contract carries as ISO 8601 in UTC. */
 const Instant = z.iso.datetime();
 

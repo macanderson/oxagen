@@ -5,7 +5,7 @@
 // to their Cost tab. Anyone else sees who can read it. With pseudonyms on, the
 // pseudonym replaces the name and the figures that could match it to a name
 // are hidden, and only an org Owner or Admin sees the switch. A period in two
-// currencies says why no ranking was built.
+// currencies says why no ranking was built and keeps the switch in reach.
 import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
@@ -31,7 +31,7 @@ vi.mock("next/link", () => ({
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh }),
 }));
-vi.mock("./operator-ranking-actions", () => ({
+vi.mock("./actions", () => ({
   setOperatorPseudonymsAction: action,
 }));
 
@@ -155,28 +155,17 @@ function microsIn(row: HTMLElement): bigint {
 }
 
 describe("canReadOperatorRanking", () => {
-  it("admits an org Owner or Admin whatever their workspace role", () => {
-    expect(
-      canReadOperatorRanking({ orgRole: "owner", wsRole: "member" }),
-    ).toBe(true);
-    expect(
-      canReadOperatorRanking({ orgRole: "admin", wsRole: "member" }),
-    ).toBe(true);
+  it("admits an org Owner or Admin", () => {
+    expect(canReadOperatorRanking({ orgRole: "owner" })).toBe(true);
+    expect(canReadOperatorRanking({ orgRole: "admin" })).toBe(true);
   });
 
-  it("admits the workspace's Owner, as the contract does", () => {
-    expect(
-      canReadOperatorRanking({ orgRole: "member", wsRole: "owner" }),
-    ).toBe(true);
-  });
-
-  it("refuses everyone else (negative)", () => {
-    expect(
-      canReadOperatorRanking({ orgRole: "member", wsRole: "member" }),
-    ).toBe(false);
-    expect(
-      canReadOperatorRanking({ orgRole: "billing", wsRole: "admin" }),
-    ).toBe(false);
+  // No person holds a workspace IAM role yet (#3198), so the kernel cannot
+  // admit a workspace Owner in an Enterprise org, and the ranking names org
+  // roles only (#4574).
+  it("refuses every other org role, a workspace Owner's included (negative)", () => {
+    expect(canReadOperatorRanking({ orgRole: "member" })).toBe(false);
+    expect(canReadOperatorRanking({ orgRole: "billing" })).toBe(false);
   });
 });
 
@@ -286,7 +275,7 @@ describe("Operator ranking", () => {
       screen.getByRole("heading", { name: "Operator ranking" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(/or the workspace Owner, can read the operator ranking/),
+      screen.getByText(/An org Owner or Admin can read the operator ranking/),
     ).toBeInTheDocument();
     expect(screen.queryByRole("table")).toBeNull();
     expect(screen.queryByTestId("money")).toBeNull();
@@ -309,6 +298,29 @@ describe("Operator ranking", () => {
     expect(
       screen.getByText(/more than one currency/),
     ).toBeInTheDocument();
+  });
+
+  it("keeps the pseudonym switch for an org Owner or Admin when the period holds two currencies (#4574)", async () => {
+    action.mockResolvedValue({ ok: true, value: { pseudonyms: true } });
+    show(readError("ranking_mixed_currency", 409));
+    expect(
+      screen.getByText(
+        "The ranking did not load, so the current setting is not shown.",
+      ),
+    ).toBeInTheDocument();
+    await userEvent.click(
+      screen.getByRole("button", { name: "Turn on pseudonyms" }),
+    );
+    expect(action).toHaveBeenCalledWith(AT, true);
+    expect(refresh).toHaveBeenCalledOnce();
+    expect(
+      screen.getByRole("button", { name: "Turn off pseudonyms" }),
+    ).toBeInTheDocument();
+  });
+
+  it("shows no switch on a period in two currencies to a reader who cannot set it (negative)", () => {
+    show(readError("ranking_mixed_currency", 409), false);
+    expect(screen.queryByRole("button", { name: /pseudonyms/ })).toBeNull();
   });
 
   it("says so when no run has unproductive spend", () => {

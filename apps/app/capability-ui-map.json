@@ -494,6 +494,14 @@
       "verifiedAt": "2026-09-27",
       "verifiedBy": "session-b2d598df-spend-f5"
     },
+    "get_unproductive_spend": {
+      "route": "/[org]/[ws]/spend/findings",
+      "page": "apps/app/src/app/[org]/[ws]/spend/[[...tab]]/page.tsx",
+      "entry": "Spend \u203a Findings hero: the unproductive spend headline and its share of the period's spend, with the part figures and the estimate beside it (features/spend/findings.tsx, data/live/spend.ts, data/live/mappers/spend.ts)",
+      "proof": "apps/app/src/features/spend/findings.test.tsx",
+      "verifiedAt": "2026-10-01",
+      "verifiedBy": "session-3867219c-spend-f23"
+    },
     "get_record": {
       "route": "/[org]/[ws]/steering/records/[lineage]",
       "page": "apps/app/src/app/[org]/[ws]/steering/records/[lineage]/page.tsx",
