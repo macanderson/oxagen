@@ -14,6 +14,7 @@
     "./styles/fonts/space-grotesk.css": "./src/styles/fonts/space-grotesk.css",
     "./lib/motion": "./src/lib/motion.ts",
     "./lib/splash-screens": "./src/lib/splash-screens.ts",
+    "./lib/house-grounds": "./src/lib/house-grounds.ts",
     "./components/*": "./src/components/*.tsx"
   },
   "scripts": {
