@@ -10,6 +10,8 @@ import xmcpConfig from "../xmcp.config";
  */
 
 interface FakeBundlerConfig {
+  entry?: Record<string, string>;
+  output?: Record<string, unknown>;
   resolve?: Record<string, unknown>;
   externals?: unknown;
 }
@@ -85,6 +87,42 @@ describe("xmcp bundler externals", () => {
     expect(alias).not.toHaveProperty("zod/v3");
     expect(alias).not.toHaveProperty("zod/v4-mini");
     expect(alias["@oxagen/oxagen"]).toBe("/workspace/oxagen");
+  });
+
+  it("resolves tests and `_` helpers under src/tools to an empty module", () => {
+    // xmcp registers every file under src/tools as a tool. The import map asks
+    // for each one as `../src/tools/<file>`. An empty module is skipped.
+    expect(runExternal("../src/tools/agent.handlers.test.ts")).toBe("var {}");
+    expect(runExternal("../src/tools/tool-registry.test.ts")).toBe("var {}");
+    expect(runExternal("../src/tools/_schema-test-helpers.ts")).toBe("var {}");
+    expect(runExternal("/app/src/tools/nested/x.test.tsx")).toBe("var {}");
+  });
+
+  it("keeps every real tool in the bundle", () => {
+    expect(runExternal("../src/tools/agent.memory.write.ts")).toBe(undefined);
+    expect(runExternal("../src/tools/tool.studio.listing.get.ts")).toBe(undefined);
+    // A test outside src/tools is not the tool loader's concern.
+    expect(runExternal("./context.test.ts")).toBe(undefined);
+  });
+
+  it("builds one bundle so the tools share one copy of their dependencies", () => {
+    // Per-tool chunks with splitChunks off came to 2.6 GB, and the first
+    // request loaded them all (#4829).
+    const bundler = xmcpConfig.bundler as (
+      c: FakeBundlerConfig,
+    ) => FakeBundlerConfig;
+    const out = bundler({ output: { path: "/dist", filename: "[name].js" } });
+    expect(out.output).toEqual({ path: "/dist", filename: "[name].js", asyncChunks: false });
+  });
+
+  it("leaves xmcp's own HTTP entry in place", () => {
+    // The owned edge in src/http-app.ts stays unwired until a test drives a
+    // real POST /mcp through it with the real middleware (#4202).
+    const bundler = xmcpConfig.bundler as (
+      c: FakeBundlerConfig,
+    ) => FakeBundlerConfig;
+    const out = bundler({ entry: { http: "/xmcp/runtime/http.js" } });
+    expect(out.entry).toEqual({ http: "/xmcp/runtime/http.js" });
   });
 
   it("maps .js/.mjs/.cjs imports back to their TypeScript sources", () => {

@@ -24,6 +24,26 @@ artifact bucket, and `/oxagen/staging` configuration. It uses the
 `environments/staging/terraform.tfstate`. Applying this stack does not apply
 `stacks-new/oxagen` or `stacks-new/ci-deploy`.
 
+### Dormant until customers are live
+
+Mac made staging dormant on 2026-09-30 (#4868), to stop paying for it while
+no customers use Oxagen. `dormant = true` in `stacks-new/staging/main.tf`
+stops the app node and the NAT instance and removes the ALB, its listeners,
+and the `*.staging.oxagen.sh` records. The certificate, parameters, bucket,
+EBS volumes, and Aurora cluster stay, and Aurora scales to zero while nothing
+connects. `pipeline.yml` skips the `staging` job, and production deploys
+without it, unless the `STAGING_ENABLED` repository variable is `true`.
+
+To wake staging:
+
+1. Set `dormant = false` in `stacks-new/staging/main.tf` and merge it.
+   `infra.yml` starts both instances and recreates the ALB and DNS records.
+2. Set the repository variable: `gh variable set STAGING_ENABLED --body true`.
+   Production deploys wait on staging again from the next `main` run.
+3. Nothing else. The node is a `t4g.xlarge` and `oxagen-local-inngest` is
+   capped at 4 GiB (#4867), so the deploy memory guard (#4202) admits
+   staging's deploys once it is running.
+
 ```bash
 tofu -chdir=infra/stacks-new/staging init
 tofu -chdir=infra/stacks-new/staging plan -out=staging.plan

@@ -25,7 +25,6 @@ import { fileURLToPath } from "node:url";
 import {
   ALB_SUBNETS_PLACEHOLDER,
   BOOTSTRAP,
-  CADDYFILE_ALB,
   caddyBootstrapBlock,
   caddyInstallBlock,
   CANONICAL_KEY,
@@ -38,7 +37,6 @@ import {
   inspect,
   OVERBROAD_RANGES,
   registryPlaceholder,
-  run,
   trustedProxyDirectives,
 } from "./check-caddy-config-pipeline.mjs";
 
@@ -603,29 +601,6 @@ describe("remoteTemplate and lineIndexOf", () => {
     // silently satisfy an ordering assertion.
     expect(lineIndexOf("a\nb", /zzz/)).toBe(-1);
     expect(lineIndexOf("a\nb", /b/)).toBe(1);
-  });
-});
-
-describe("the repository as it stands", () => {
-  it("has no proxy-trust list wide enough to hold a caller", () => {
-    expect(run()).toEqual([]);
-  });
-
-  it("still substitutes the ALB subnets rather than naming them", () => {
-    // Guards the check itself: if CADDYFILE_ALB ever pointed at a file with no
-    // directive at all, every overbroad assertion above would vacuously pass
-    // against the real repo while `run()` reported the missing directive.
-    expect(run()).toEqual([]);
-    expect(CADDYFILE_ALB).toBe("infra/tools/caddy/Caddyfile.alb");
-  });
-
-  it("reads the real installer and the real bootstrap, not a stale path", () => {
-    // If either constant pointed at a file that no longer exists, run() would
-    // throw rather than pass — but if one pointed at the WRONG file, every
-    // ordering assertion above would pass vacuously against the real repo.
-    expect(BOOTSTRAP).toBe("infra/modules/app-node/user-data.sh.tftpl");
-    expect(CANONICAL_KEY).toBe("_caddy/Caddyfile");
-    expect(run()).toEqual([]);
   });
 });
 

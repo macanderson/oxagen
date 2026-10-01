@@ -32,7 +32,7 @@ describe("resolveOAuthProxyProductionURL", () => {
     expect(resolveOAuthProxyProductionURL(undefined)).toBe(
       DEFAULT_OAUTH_PROXY_PRODUCTION_URL,
     );
-    expect(DEFAULT_OAUTH_PROXY_PRODUCTION_URL).toBe("https://oxagen.app");
+    expect(DEFAULT_OAUTH_PROXY_PRODUCTION_URL).toBe("https://app.oxagen.sh");
   });
 
   it("falls back when given an empty or whitespace-only value", () => {
@@ -115,7 +115,7 @@ describe("buildOAuthProxyPlugins", () => {
       betterAuthSecret: "main-secret",
     });
     const opts = (plugins[0] as ProxyPluginShape).options;
-    expect(opts?.productionURL).toBe("https://oxagen.app");
+    expect(opts?.productionURL).toBe("https://app.oxagen.sh");
     expect(opts?.secret).toBe("main-secret");
   });
 });

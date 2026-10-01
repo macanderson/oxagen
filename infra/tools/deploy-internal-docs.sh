@@ -23,7 +23,7 @@
 # the two password parameters exist.
 #
 # After the deploy the script checks from outside: no credentials must get 401,
-# the password must get 200, and oxagen.app/login and api.oxagen.sh/health
+# the password must get 200, and app.oxagen.sh/login and api.oxagen.sh/health
 # must still answer 200, because the site's Caddy shares the host network with
 # the front door's.
 
@@ -135,7 +135,7 @@ internal_docs_verdict() {
   }
   check "https://$INTERNAL_DOCS_HOST/ without credentials" "$anonymous" 401
   check "https://$INTERNAL_DOCS_HOST/ with the password" "$authenticated" 200
-  check "https://oxagen.app/login" "$app" 200
+  check "https://app.oxagen.sh/login" "$app" 200
   check "https://api.oxagen.sh/health" "$api" 200
   unset -f check
   return "$bad"
@@ -221,7 +221,7 @@ password=$(aws ssm get-parameter --region "$REGION" --name "$INTERNAL_DOCS_PASSW
   --with-decryption --query Parameter.Value --output text)
 authenticated=$(http_status_with_password "https://$INTERNAL_DOCS_HOST/" "$password")
 unset password
-app=$(http_status "https://oxagen.app/login")
+app=$(http_status "https://app.oxagen.sh/login")
 api=$(http_status "https://api.oxagen.sh/health")
 
 internal_docs_verdict "$anonymous" "$authenticated" "$app" "$api"

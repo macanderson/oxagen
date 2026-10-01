@@ -70,7 +70,7 @@ export async function markCredentialNeedsReauth(
   }
 
   const serverName = listing.title ?? listing.name;
-  const appUrl = process.env["APP_URL"] ?? "https://oxagen.app";
+  const appUrl = process.env["APP_URL"] ?? "https://app.oxagen.sh";
 
   // Deep-link to the workspace's Providers tab, where the provider's status
   // light reads red and its row offers Reconnect (#4132). The deprecated

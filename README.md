@@ -108,7 +108,7 @@ Model resolution goes through `modelIdOf()` and an AI gateway — no hard-coded 
 oxagen/
 ├── apps/
 │   ├── api          REST API + Inngest handler (Hono) — api.oxagen.sh
-│   ├── app          Next.js web app (App Router, RSC) — oxagen.app
+│   ├── app          Next.js web app (App Router, RSC) — app.oxagen.sh
 │   ├── mcp          MCP server (streamable HTTP at /mcp) — mcp.oxagen.sh
 │   ├── cli          Governance-operations CLI (Commander; no agent loop — ADR-043)
 │   ├── docs         Documentation site (Fumadocs) — docs.oxagen.sh
@@ -193,7 +193,7 @@ Open `http://localhost:3000`. When you're done: `pnpm kill` (add `-- --volumes` 
 
 | Surface | Local | Production |
 |---|---|---|
-| **Web App** | `http://localhost:3000` | `https://oxagen.app` |
+| **Web App** | `http://localhost:3000` | `https://app.oxagen.sh` |
 | **API** | `http://localhost:4000` | `https://api.oxagen.sh` |
 | **MCP** | `http://localhost:4100/mcp` | `https://mcp.oxagen.sh/mcp` |
 | **Docs** | `http://localhost:3300` | `https://docs.oxagen.sh` |
@@ -301,7 +301,7 @@ may depend on it.
 | --- | --- | --- |
 | `apps/web` | S3 + CloudFront | `oxagen.sh` |
 | `apps/docs` | Node on the shared instance | `docs.oxagen.sh` |
-| `apps/app` | Node on the shared instance | `oxagen.app` |
+| `apps/app` | Node on the shared instance | `app.oxagen.sh` |
 | `apps/api` | Node on the shared instance | `api.oxagen.sh` |
 | `apps/mcp` | Node on the shared instance | `mcp.oxagen.sh` |
 

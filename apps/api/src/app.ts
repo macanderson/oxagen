@@ -431,7 +431,7 @@ app.route("/api/inngest", inngestRoute);
 // SCIM 2.0 provisioning (#3734). An identity provider holds no session and no
 // API key: the organization's SCIM bearer token is the boundary, resolved
 // inside the route, so it is mounted before the auth-gated /v1 groups. The
-// app proxies https://oxagen.app/api/scim/v2/* here. The ceiling keys on
+// app proxies https://app.oxagen.sh/api/scim/v2/* here. The ceiling keys on
 // the Authorization header, so one token cannot drown another organization's
 // provisioning; Okta and Entra ID push well under 600 requests a minute.
 app.use(

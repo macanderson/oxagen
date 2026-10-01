@@ -265,7 +265,7 @@ kbd{font-family:var(--mono);font-size:11px;border:1px solid var(--line);border-b
   <div class="inner">
     <div class="eyebrow"><span class="idx">01</span>How Oxagen chooses what to build</div>
     <h2>Every item deepens the wedge, or it waits.</h2>
-    <p class="lede">A feature earns a slot only if it deepens metering into billing, contract governance, graph grounding, vendor neutrality, or fleet lineage. Connector breadth, standalone evaluation tools, and framework mindshare are fast-follows, never the lead. That discipline is enforced in CI: a vision gate reads every change and flags drift.</p>
+    <p class="lede">A feature earns a slot only if it deepens metering into billing, contract governance, graph grounding, vendor neutrality, or fleet lineage. Connector breadth, standalone evaluation tools, and framework mindshare are fast-follows, never the lead. That discipline is checked in CI: a vision gate reads every change and flags drift.</p>
     <div class="grid3">
       <div class="card"><span class="k">Accuracy moat</span><p>The graph gets righter as it grows. Grounding work compounds.</p></div>
       <div class="card"><span class="k">Trust moat</span><p>Vendor-neutral BYOK. Oxagen protects neutrality on purpose.</p></div>
@@ -282,8 +282,7 @@ kbd{font-family:var(--mono);font-size:11px;border:1px solid var(--line);border-b
     <div class="grid4">
       <div class="card"><h3><span class="g">Govern</span>Typed contracts + RBAC</h3><p>Capability contracts, role gating, and RLS tenant isolation at the database.</p></div>
       <div class="card"><h3><span class="g">Ground</span>Two graphs</h3><p>Neo4j ontology plus an AST-derived code graph agents query before editing.</p></div>
-      <div class="card"><h3><span class="g">Meter</span>ClickHouse → Stripe</h3><p>Every token observed, attributed, priced, with per-turn USD budgets.</p></div>
-      <div class="card"><h3><span class="g">Operate</span>One agent engine</h3><p>Chat, CLI, and fleet fan-out on one engine, with lineage per run.</p></div>
+      <div class="card"><h3><span class="g">Meter</span>ClickHouse → Stripe</h3><p>Every token observed, attributed, and priced, with per-run and daily USD limits on model calls routed through Oxagen.</p></div>
       <div class="card"><h3><span class="g">See</span>Run record + audit</h3><p>A span tree for every run, OTel export, and signed audit export.</p></div>
       <div class="card"><h3><span class="g">Score</span>Evaluation v1</h3><p>Datasets built from metered runs, scored by an LLM judge, tenant-scoped.</p></div>
       <div class="card"><h3><span class="g">Interop</span>A2A + MCP</h3><p>A2A v1.0 surface and one MCP endpoint for every agent you run.</p></div>
@@ -297,7 +296,7 @@ kbd{font-family:var(--mono);font-size:11px;border:1px solid var(--line);border-b
   <div class="inner">
     <div class="eyebrow"><span class="idx">03</span>Next · in flight this cycle</div>
     <h2>Push authorization into the graph edge.</h2>
-    <p class="lede">The wedge slide of the investor story becomes product: enforcement moves from the application layer into the traversal itself, so an agent inherits exactly its principal's surface.</p>
+    <p class="lede">The wedge becomes product: enforcement moves from the application layer into the traversal itself, so an agent inherits exactly its principal's surface.</p>
     <div class="grid3">
       <div class="card em" style="border-color:rgba(255,176,0,.4)"><h3><span class="g">Context governance</span>Node and edge ACLs</h3><p>Query-time authorization compiled from repo, team, and tenant boundaries. An allowed node cannot bridge into a denied subgraph.</p></div>
       <div class="card"><h3><span class="g">Context governance</span>Parity reports</h3><p>Diff any agent's visible surface against its principal's entitlements. The number to show an auditor is zero.</p></div>
@@ -319,7 +318,6 @@ kbd{font-family:var(--mono);font-size:11px;border:1px solid var(--line);border-b
       <div class="card"><h3><span class="g">Evidence</span>One-click compliance packs</h3><p>Retrieval lineage mapped to SOC 2, ISO 42001, and EU AI Act documentation, exported in minutes.</p></div>
       <div class="card"><h3><span class="g">Marketplace</span>Two-sided agent tools</h3><p>A governed marketplace where partners publish capability packs that install into a workspace under RBAC.</p></div>
       <div class="card"><h3><span class="g">Deny with reason</span>Injection made inert</h3><p>Poisoned instructions retrieve nothing outside the caller's entitled surface. Solve prompt injection at the knowledge layer.</p></div>
-      <div class="card"><h3><span class="g">Fleet lineage</span>Governed sub-agent teams</h3><p>Fan-out under hard caps, every descendant metered and attributed, lineage end to end.</p></div>
       <div class="card"><h3><span class="g">Reliability</span>Breakers everywhere</h3><p>Dependency-free circuit breakers around every external store and provider boundary.</p></div>
       <div class="card"><h3><span class="g">Neutral settlement</span>Agents billing agents</h3><p>The metering loop as a settlement layer between agents inside one enterprise.</p></div>
     </div>
@@ -330,7 +328,7 @@ kbd{font-family:var(--mono);font-size:11px;border:1px solid var(--line);border-b
 <section class="slide" aria-label="Pillar view">
   <div class="inner">
     <div class="eyebrow"><span class="idx">05</span>The same roadmap, by pillar</div>
-    <h2>Each pillar moves every cycle.</h2>
+    <h2>The roadmap by pillar.</h2>
     <div class="matrix">
       <div class="mx-row mx-head">
         <div class="mx-c lbl">Pillar</div>
@@ -340,9 +338,9 @@ kbd{font-family:var(--mono);font-size:11px;border:1px solid var(--line);border-b
       </div>
       <div class="mx-row"><div class="mx-c lbl">Context governance</div><div class="mx-c">Typed contracts, RBAC, RLS</div><div class="mx-c">Graph-edge ACLs, parity reports</div><div class="mx-c ox">Injection made inert</div></div>
       <div class="mx-row"><div class="mx-c lbl">Graph grounding</div><div class="mx-c">Ontology + code graph</div><div class="mx-c">Live IdP sync</div><div class="mx-c ox">Deeper temporal reasoning</div></div>
-      <div class="mx-row"><div class="mx-c lbl">Metering → billing</div><div class="mx-c">ClickHouse → Stripe, budgets</div><div class="mx-c">Chargeback views</div><div class="mx-c ox">Agent-to-agent settlement</div></div>
+      <div class="mx-row"><div class="mx-c lbl">Metering → billing</div><div class="mx-c">ClickHouse → Stripe, limits on routed calls</div><div class="mx-c">Chargeback views</div><div class="mx-c ox">Agent-to-agent settlement</div></div>
       <div class="mx-row"><div class="mx-c lbl">Vendor neutrality</div><div class="mx-c">BYOK core</div><div class="mx-c">Full provider breadth</div><div class="mx-c ox">Neutral marketplace</div></div>
-      <div class="mx-row"><div class="mx-c lbl">Fleet lineage</div><div class="mx-c">One engine, per-run lineage</div><div class="mx-c">Governed fan-out caps</div><div class="mx-c ox">Team lineage from root to leaf</div></div>
+      <div class="mx-row"><div class="mx-c lbl">Fleet lineage</div><div class="mx-c">Per-run lineage</div><div class="mx-c">Not scheduled</div><div class="mx-c ox">Team lineage from root to leaf</div></div>
     </div>
     <p class="footnote">Now is shipped. Next is in flight. Later is directional, sequenced after the wedge.</p>
   </div>
@@ -360,7 +358,7 @@ kbd{font-family:var(--mono);font-size:11px;border:1px solid var(--line);border-b
       <span class="pill">Next: authorization at the edge</span>
       <span class="pill">Later: the governed standard</span>
     </div>
-    <p class="footnote">oxagen.app · api.oxagen.sh · mcp.oxagen.sh · docs.oxagen.sh</p>
+    <p class="footnote">app.oxagen.sh · api.oxagen.sh · mcp.oxagen.sh · docs.oxagen.sh</p>
   </div>
 </section>
 </div>
@@ -372,7 +370,7 @@ kbd{font-family:var(--mono);font-size:11px;border:1px solid var(--line);border-b
   </div>
   <div class="dots" id="dots" role="tablist" aria-label="Slides"></div>
   <div class="counterwrap">
-    <span class="counter" id="counter">01 / 13</span>
+    <span class="counter" id="counter">01 / 07</span>
     <div class="arrows">
       <button class="arr presenter" id="presenter" aria-label="Open private presenter script">▤ Presenter</button>
       <button class="arr" id="prev" aria-label="Previous slide">←</button>

@@ -20,12 +20,15 @@ import {
   failedSteeringRepo,
   GITHUB_REPOSITORY,
   GITLAB_REPOSITORY,
+  LEGACY_SOURCE,
+  notStartedSteeringRepo,
   steeringRepoView,
 } from "./steering-repo.builders";
 import type { SteeringRepoView } from "./types";
 
 const actions = vi.hoisted(() => ({
   retrySteeringRepoProvision: vi.fn(),
+  importWorkspaceSteering: vi.fn(),
   repairSteeringRepo: vi.fn(),
 }));
 vi.mock("./actions", () => actions);
@@ -84,6 +87,7 @@ const FAILED = failedSteeringRepo("create_repository", {
 
 beforeEach(() => {
   actions.retrySteeringRepoProvision.mockReset();
+  actions.importWorkspaceSteering.mockReset();
   actions.repairSteeringRepo.mockReset();
   nav.refresh.mockReset();
 });
@@ -341,5 +345,282 @@ describe("the steering repo provisioning", () => {
     const name = screen.getByTestId("steering-repo-ready-link");
     expect(name).toHaveTextContent("acme/oxagen-core-platform");
     expect(name).not.toHaveAttribute("href");
+  });
+
+  describe("the way on when setup stopped (#4875)", () => {
+    const CHOICES = [
+      { provider: "github" as const, id: 11, name: "acme" },
+      { provider: "github" as const, id: 12, name: "acme-old" },
+    ];
+    const choosing = (overrides: Partial<SteeringRepoView> = {}) =>
+      failedSteeringRepo(
+        "pick_connection",
+        {
+          code: "choose_connection",
+          message:
+            "This organization has 2 GitHub organizations and GitLab groups. Choose the one that holds steering repos, then retry.",
+        },
+        { status: "blocked", provider: null, connectionChoices: CHOICES, ...overrides },
+      );
+    const IMPORTED = {
+      outcome: "imported",
+      steeringRepository: "acme/oxagen-core-platform",
+      pullRequests: [
+        {
+          branch: "steering/import-workspace",
+          number: 1,
+          url: "https://github.com/acme/oxagen-core-platform/pull/1",
+        },
+        {
+          branch: "steering/import-records",
+          number: 2,
+          url: "https://github.com/acme/oxagen-core-platform/pull/2",
+        },
+      ],
+      cleanup: { number: 7, url: "https://github.com/acme/agent-harness/pull/7" },
+      leftForAPerson: 0,
+      rulesNeedingKind: [],
+      constraintsNeedingEffect: [],
+    };
+
+    it("lists the organizations to choose from and goes on with the one picked", async () => {
+      actions.retrySteeringRepoProvision.mockResolvedValue({
+        ok: true,
+        value: { status: "provisioning" },
+      });
+      provisioning(choosing());
+      expect(screen.queryByTestId("steering-repo-retry")).toBeNull();
+      const use = screen.getByTestId("steering-repo-use-connection");
+      expect(use).toBeDisabled();
+      const chooser = screen.getByTestId("steering-repo-choose");
+      await userEvent.click(within(chooser).getByRole("radio", { name: /acme-old/ }));
+      expect(use).toBeEnabled();
+      await userEvent.click(use);
+      expect(actions.retrySteeringRepoProvision).toHaveBeenCalledWith(
+        "acme",
+        "core-platform",
+        { provider: "github", id: 12 },
+      );
+      await waitFor(() => {
+        expect(nav.refresh).toHaveBeenCalledTimes(1);
+      });
+      expect(actions.importWorkspaceSteering).not.toHaveBeenCalled();
+    });
+
+    it("goes on through the import when a code repository still steers the workspace", async () => {
+      actions.importWorkspaceSteering.mockResolvedValue({
+        ok: true,
+        value: IMPORTED,
+      });
+      provisioning(choosing({ legacySource: LEGACY_SOURCE }));
+      const chooser = screen.getByTestId("steering-repo-choose");
+      await userEvent.click(within(chooser).getByRole("radio", { name: /^acme(?!-old)/ }));
+      await userEvent.click(screen.getByTestId("steering-repo-use-connection"));
+      expect(actions.importWorkspaceSteering).toHaveBeenCalledWith(
+        "acme",
+        "core-platform",
+        { connection: { provider: "github", id: 11 } },
+      );
+      expect(actions.retrySteeringRepoProvision).not.toHaveBeenCalled();
+      const outcome = await screen.findByTestId("steering-repo-import-outcome");
+      expect(outcome).toHaveTextContent(
+        "Oxagen created acme/oxagen-core-platform and opened 2 steering PRs. Merge them in order, then the cleanup PR.",
+      );
+      expect(
+        within(outcome).getByRole("link", { name: "Cleanup PR #7" }),
+      ).toHaveAttribute("href", "https://github.com/acme/agent-harness/pull/7");
+    });
+
+    it("shows a member the choices' question and no picker (negative)", () => {
+      provisioning(choosing(), { canAct: false });
+      expect(screen.getByTestId("steering-repo-step-error")).toBeInTheDocument();
+      expect(screen.queryByTestId("steering-repo-choose")).toBeNull();
+    });
+
+    it("offers Install and Authorize on GitHub when setup found no organization", () => {
+      provisioning(
+        failedSteeringRepo(
+          "pick_connection",
+          {
+            code: "no_connection",
+            message:
+              "This organization has no GitHub organization with the Oxagen GitHub App installed and no GitLab group token. Connect one, then retry.",
+          },
+          { status: "blocked", provider: null },
+        ),
+      );
+      for (const [testId, mode] of [
+        ["steering-repo-connect-install", "install"],
+        ["steering-repo-connect-authorize", "authorize"],
+      ] as const) {
+        const href = new URL(
+          screen.getByTestId(testId).getAttribute("href") ?? "",
+          "https://app.oxagen.sh",
+        );
+        expect(href.pathname).toBe("/api/v1/acme/connections/steering/github");
+        expect(Object.fromEntries(href.searchParams)).toEqual({
+          mode,
+          return_to: RETURN_TO,
+        });
+      }
+      expect(screen.getByTestId("steering-repo-retry")).toHaveTextContent("Retry");
+    });
+
+    it("moves steering in place of a retry while a code repository steers the workspace", async () => {
+      actions.importWorkspaceSteering.mockResolvedValue({
+        ok: false,
+        reason: "conflict",
+        code: "no_connection",
+      });
+      provisioning(
+        failedSteeringRepo(
+          "pick_connection",
+          {
+            code: "steering_import_required",
+            message:
+              "acme/agent-harness still steers this workspace through its .oxagen/ tree.",
+          },
+          { status: "blocked", provider: null, legacySource: LEGACY_SOURCE },
+        ),
+      );
+      const move = screen.getByTestId("steering-repo-retry");
+      expect(move).toHaveTextContent("Move steering");
+      await userEvent.click(move);
+      expect(actions.importWorkspaceSteering).toHaveBeenCalledWith(
+        "acme",
+        "core-platform",
+      );
+      expect(
+        await screen.findByTestId("steering-repo-retry-failure"),
+      ).toHaveTextContent("This was refused: no_connection.");
+      // A refused import records where setup stopped, so the page reads it.
+      expect(nav.refresh).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("a setup that never started (#4875)", () => {
+    it("draws every step waiting and starts the import from the workspace's old repository", async () => {
+      actions.importWorkspaceSteering.mockResolvedValue({
+        ok: false,
+        reason: "conflict",
+        code: "no_connection",
+      });
+      const root = provisioning(
+        notStartedSteeringRepo({ legacySource: LEGACY_SOURCE }),
+      );
+      expect(root).toHaveAttribute("data-status", "not_started");
+      expect(stepStates(root).every(([, state]) => state === "waiting")).toBe(true);
+      expect(within(root).queryByRole("listitem", { current: "step" })).toBeNull();
+      const start = screen.getByTestId("steering-repo-start");
+      expect(start).toHaveTextContent("Move steering");
+      await userEvent.click(start);
+      expect(actions.importWorkspaceSteering).toHaveBeenCalledWith(
+        "acme",
+        "core-platform",
+      );
+    });
+
+    it("creates the repo through the import when nothing steers the workspace", async () => {
+      actions.importWorkspaceSteering.mockResolvedValue({
+        ok: true,
+        value: {
+          outcome: "provisioned",
+          steeringRepository: "acme/oxagen-core-platform",
+          pullRequests: [],
+          cleanup: null,
+          leftForAPerson: 0,
+          rulesNeedingKind: [],
+          constraintsNeedingEffect: [],
+        },
+      });
+      provisioning(notStartedSteeringRepo());
+      const start = screen.getByTestId("steering-repo-start");
+      expect(start).toHaveTextContent("Create the steering repo");
+      await userEvent.click(start);
+      expect(
+        await screen.findByTestId("steering-repo-import-outcome"),
+      ).toHaveTextContent("Oxagen created acme/oxagen-core-platform.");
+    });
+
+    it("says which choices the import needs before it can move anything", async () => {
+      actions.importWorkspaceSteering.mockResolvedValue({
+        ok: true,
+        value: {
+          outcome: "needs_choices",
+          steeringRepository: null,
+          pullRequests: [],
+          cleanup: null,
+          leftForAPerson: 0,
+          rulesNeedingKind: ["rule-a", "rule-b"],
+          constraintsNeedingEffect: ["constraint-a"],
+        },
+      });
+      provisioning(notStartedSteeringRepo({ legacySource: LEGACY_SOURCE }));
+      await userEvent.click(screen.getByTestId("steering-repo-start"));
+      expect(
+        await screen.findByTestId("steering-repo-import-outcome"),
+      ).toHaveTextContent(
+        "2 rules need a kind and 1 constraint needs an effect before Oxagen can move them. Nothing changed.",
+      );
+    });
+
+    it("offers an empty steering repo, once a person confirms it, when the import refuses a retired sources connection", async () => {
+      actions.importWorkspaceSteering
+        .mockResolvedValueOnce({
+          ok: false,
+          reason: "conflict",
+          code: "steering_import_legacy_connection",
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          value: {
+            outcome: "provisioned",
+            steeringRepository: "acme/oxagen-core-platform",
+            pullRequests: [],
+            cleanup: null,
+            leftForAPerson: 0,
+            rulesNeedingKind: [],
+            constraintsNeedingEffect: [],
+          },
+        });
+      provisioning(notStartedSteeringRepo());
+      expect(screen.queryByTestId("steering-repo-fresh")).toBeNull();
+      await userEvent.click(screen.getByTestId("steering-repo-start"));
+      const fresh = await screen.findByTestId("steering-repo-fresh");
+      expect(fresh).toHaveTextContent(
+        "This workspace reads its repository through a retired sources connection",
+      );
+      await userEvent.click(screen.getByTestId("steering-repo-start-fresh"));
+      expect(actions.importWorkspaceSteering).toHaveBeenLastCalledWith(
+        "acme",
+        "core-platform",
+        { startFresh: true },
+      );
+      expect(
+        await screen.findByTestId("steering-repo-import-outcome"),
+      ).toHaveTextContent("Oxagen created acme/oxagen-core-platform.");
+      expect(screen.queryByTestId("steering-repo-fresh")).toBeNull();
+    });
+
+    it("offers no move out of a GitLab repository, which the import cannot read (negative)", () => {
+      provisioning(
+        notStartedSteeringRepo({
+          legacySource: {
+            fullName: "acme/platform",
+            url: "https://gitlab.com/acme/platform",
+            provider: "gitlab",
+          },
+        }),
+      );
+      expect(screen.queryByTestId("steering-repo-start")).toBeNull();
+      expect(screen.getByTestId("steering-repo-gitlab-source")).toHaveTextContent(
+        "Oxagen moves steering only out of GitHub repositories, and acme/platform is on GitLab.",
+      );
+    });
+
+    it("offers a member no start (negative)", () => {
+      provisioning(notStartedSteeringRepo(), { canAct: false });
+      expect(screen.queryByTestId("steering-repo-start")).toBeNull();
+    });
   });
 });

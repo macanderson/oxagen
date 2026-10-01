@@ -6,11 +6,11 @@ window.OX_SCRIPT = [
   },
   {
     title: "Historical: How Oxagen chooses what to build",
-    say: "First, how Oxagen says no. A feature earns a slot only if it deepens one of five things: metering into billing, contract governance, graph grounding, vendor neutrality, or fleet lineage. Connector breadth, standalone evaluation tools, framework mindshare: those are fast-follows, never the lead. And this is enforced, not a slogan. A vision gate in CI reads every change and flags drift from the wedge.",
+    say: "First, how Oxagen says no. A feature earns a slot only if it deepens one of five things: metering into billing, contract governance, graph grounding, vendor neutrality, or fleet lineage. Connector breadth, standalone evaluation tools, framework mindshare: those are fast-follows, never the lead. And this is checked. A vision gate in CI reads every change and flags drift from the wedge.",
   },
   {
     title: "Historical: Now · shipped and running",
-    say: "Start with what is already live, because the roadmap sits on a real spine. Typed contracts with RBAC and database-level tenant isolation. Two graphs: the ontology and an AST code graph agents query before they edit. The full metering loop, ClickHouse to Stripe, with per-turn budgets. One agent engine for chat, CLI, and fleet fan-out. A span tree for every run with signed audit export. Evaluation scoring, an A2A surface, and bi-temporal facts. This is not a promise slide.",
+    say: "Start with what is already live, because the roadmap sits on a real spine. Typed contracts with RBAC and database-level tenant isolation. Two graphs: the ontology and an AST code graph agents query before they edit. The full metering loop, ClickHouse to Stripe, with per-run and daily spend limits on model calls routed through Oxagen. A span tree for every run with signed audit export. Evaluation scoring, an A2A surface, and bi-temporal facts. This is not a promise slide.",
   },
   {
     title: "Historical: Next · in flight this cycle",
@@ -22,7 +22,7 @@ window.OX_SCRIPT = [
   },
   {
     title: "Historical: The same roadmap, by pillar",
-    say: "If you prefer it as a grid, here is the same plan cut by pillar. The point of this view is that no pillar sits still. Context governance, graph grounding, metering, neutrality, and fleet lineage each move every cycle, from Now through Next to Later. No pillar advances while the others rot.",
+    say: "If you prefer it as a grid, here is the same plan cut by pillar. Each row runs from Now through Next to Later. Fleet lineage has nothing scheduled for Next.",
   },
   {
     title: "Historical: The through-line",

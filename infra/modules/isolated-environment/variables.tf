@@ -22,6 +22,19 @@ variable "oidc_subjects" {
   type        = list(string)
 }
 
+variable "app_instance_type" {
+  description = <<-EOT
+    Graviton instance type of the environment's app node. It carries the
+    services at production's container limits, and with local_inngest and
+    capture_email it also carries Inngest and the mail capture beside
+    ClickHouse and Neo4j. The node memory preflight
+    (infra/tools/node/memory-budget.py) refuses a deploy when the hard
+    limits plus a 1 GiB host reserve pass physical memory.
+  EOT
+  type        = string
+  default     = "t4g.large"
+}
+
 variable "local_inngest" {
   description = "Run an isolated Inngest development server for a test environment."
   type        = bool
@@ -30,6 +43,20 @@ variable "local_inngest" {
 
 variable "capture_email" {
   description = "Capture test email in a private local inbox without outbound delivery."
+  type        = bool
+  default     = false
+}
+
+variable "dormant" {
+  description = <<-EOT
+    Keep the environment defined but not running, so it costs next to nothing
+    until it is needed. The app node and the NAT instance are stopped, and the
+    ALB, its listeners, and the service DNS records are removed. The
+    certificate, parameters, deploy bucket, EBS volumes, and database stay.
+    Aurora Serverless v2 already scales to zero once nothing connects. Set it
+    back to false to wake the environment: the instances start and the ALB and
+    DNS records come back.
+  EOT
   type        = bool
   default     = false
 }

@@ -103,7 +103,7 @@ type Events = {
   };
 
   // Provision a steering repo (lane S1, #4450). create_workspace sends it for
-  // the new workspace, and create_organization for `<org>/oxagen`, where
+  // the new workspace, and create_organization for `<org>/oxagen-config`, where
   // workspaceId is null. The headless backfill (#4683) sends it for each
   // workspace that never started provisioning. Sending it again resumes from
   // the step that stopped.

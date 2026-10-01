@@ -101,7 +101,7 @@ Register the app twice, and keep each copy's credentials in its own environment:
 | App | Used by | API origin (`NEXT_PUBLIC_API_URL`) | App origin (`NEXT_PUBLIC_APP_URL`) |
 | --- | --- | --- | --- |
 | **Oxagen (Dev)** | localhost + Vercel preview | `http://localhost:4000` | `http://localhost:3000` |
-| **Oxagen** | production | `https://api.oxagen.sh` | `https://oxagen.app` |
+| **Oxagen** | production | `https://api.oxagen.sh` | `https://app.oxagen.sh` |
 
 Reasons:
 
@@ -128,7 +128,7 @@ Create each App at **GitHub → Settings → Developer settings → GitHub Apps 
 | Field | Dev | Prod |
 | --- | --- | --- |
 | **GitHub App name** | `Oxagen (Dev)` | `Oxagen` |
-| **Homepage URL** | `http://localhost:3000` | `https://oxagen.app` |
+| **Homepage URL** | `http://localhost:3000` | `https://app.oxagen.sh` |
 | **Description** | Source-code & repo-activity ingestion for the Oxagen knowledge graph. | same |
 
 ### Identifying and authorizing users (OAuth)
@@ -315,7 +315,7 @@ Most GitHub connector variables live in the **`api`** service (read in `apps/api
 | `GITHUB_APP_PRIVATE_KEY` | yes | api, app, mcp (installation tokens, steering) | Dev App → generated private key (PEM) | Prod App → generated private key (PEM) |
 | `GITHUB_APP_SLUG` | no | api (required for the steering connect and provisioning); app, mcp (optional) | Dev App → public slug | Prod App → public slug |
 | `NEXT_PUBLIC_API_URL` | no | all | `http://localhost:4000` | `https://api.oxagen.sh` |
-| `NEXT_PUBLIC_APP_URL` | no | all | `http://localhost:3000` | `https://oxagen.app` |
+| `NEXT_PUBLIC_APP_URL` | no | all | `http://localhost:3000` | `https://app.oxagen.sh` |
 | `INGESTION_CRYPTO_PROVIDER` | no | optional | `env` | `env` (or `kms`) |
 | `INGESTION_ENCRYPTION_KEY` | yes | preview/prod | `openssl rand -base64 32` | required — wraps OAuth token encryption |
 | `AUTH_TOKEN_ENCRYPTION_KEY` | yes | preview/prod | blank ok locally | required (auth startup guard) |
@@ -373,7 +373,7 @@ After configuring an App and its env vars:
 ## Steering repos
 
 A steering repo holds steering records. Each workspace gets a private repository named
-`oxagen-<workspace-slug>`, and the organization gets `<org>/oxagen`. The Oxagen app creates and
+`oxagen-<workspace-slug>`, and the organization gets `<org>/oxagen-config`. The Oxagen app creates and
 runs them with the permissions in [Permissions](#permissions), Administration and Deployments
 write included.
 

@@ -217,6 +217,6 @@ describe("entrypoint", () => {
     expect(result.stderr).toContain("name at least one pnpm script");
   });
 
-  // lib/is-entrypoint.test.ts starts this runner, and each guard that shares
+  // lib/is-entrypoint.tree.test.ts starts this runner, and each guard that shares
   // its entrypoint test, through a symlink.
 });

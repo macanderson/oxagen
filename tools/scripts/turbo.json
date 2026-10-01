@@ -1,15 +1,22 @@
 {
-  // Files this package's tests read from outside the package (#4664 item 2).
-  // Turbo hashes a test task over its own package, so a change to one of
-  // these files alone would restore a cached pass. Listing them as inputs
-  // re-runs the tests when they change. A package config replaces the root
-  // `inputs` array rather than adding to it, so the root's entries come first.
-  // tools/scripts/turbo-test-inputs.test.ts holds both rules.
+  // Files this package's cached tests read from outside the package (#4664
+  // item 2). Turbo hashes a test task over its own package, so a change to
+  // one of these files alone would restore a cached pass. Listing them as
+  // inputs re-runs the tests when they change. A package config replaces the
+  // root `inputs` array rather than adding to it, so the root's entries come
+  // first.
   //
-  // Guard tests here read the workflows, the root manifests and docs, and a
-  // few files in other packages. Tests that scan every package's source
-  // (tool-invocation-execution-identity, audit-emit-consolidation) are not
-  // covered: listing packages/** and apps/** would turn off this suite's cache.
+  // A test that reads more than a few named files, such as a guard that scans
+  // every package's source, is a `*.tree.test.ts` file instead. Those never
+  // run through turbo: `pnpm check:tree-guards` runs them uncached in the
+  // checks job. lib/outside-reads.test.ts fails a cached test that reads a
+  // file outside the package with no input here, and
+  // turbo-test-inputs.tree.test.ts checks that each input still exists.
+  //
+  // Two inputs cover reads the scan cannot see. build-book-editions.test.ts
+  // reads the book migration through expectedOutputs(), and tacho's
+  // src/version.ts reads packages/tacho/package.json when fleet-capacity
+  // imports it.
   "extends": ["//"],
   "tasks": {
     "test:unit": {
@@ -20,20 +27,33 @@
         "tests/**",
         "vitest.config.*",
         "$TURBO_ROOT$/.github/workflows/**",
+        "$TURBO_ROOT$/.github/actions/**",
+        "$TURBO_ROOT$/.github/ISSUE_TEMPLATE/**",
         "$TURBO_ROOT$/.claude/workflows/**",
         "$TURBO_ROOT$/package.json",
-        "$TURBO_ROOT$/lefthook.yml",
         "$TURBO_ROOT$/AGENTS.md",
-        "$TURBO_ROOT$/DEREGISTERED.md",
+        "$TURBO_ROOT$/docker-compose.dev.yml",
         "$TURBO_ROOT$/docs/capabilities/**",
         "$TURBO_ROOT$/infra/**",
         "$TURBO_ROOT$/tools/packaging/**",
         "$TURBO_ROOT$/apps/*/package.json",
         "$TURBO_ROOT$/apps/app/vitest.config.ts",
+        "$TURBO_ROOT$/apps/app/public/favicon/**",
+        "$TURBO_ROOT$/apps/app/public/pwa/**",
+        "$TURBO_ROOT$/apps/mcp/vercel.json",
+        "$TURBO_ROOT$/apps/web/favicon.ico",
         "$TURBO_ROOT$/apps/web/scripts/lib/theme.mjs",
+        "$TURBO_ROOT$/packages/database/atlas/migrations/*_book_second_edition.sql",
+        "$TURBO_ROOT$/packages/database/seed-assets/books/**",
         "$TURBO_ROOT$/packages/database/src/storage-manifest/canonical-json.ts",
         "$TURBO_ROOT$/packages/database/src/tenant-policy.manifest.ts",
-        "$TURBO_ROOT$/packages/stella-engine-client/src/version.ts"
+        "$TURBO_ROOT$/packages/inngest-functions/src/env-check.ts",
+        "$TURBO_ROOT$/packages/inngest-functions/src/events.ts",
+        "$TURBO_ROOT$/packages/stella-engine-client/src/version.ts",
+        "$TURBO_ROOT$/packages/tacho/package.json",
+        "$TURBO_ROOT$/packages/tacho/src/**",
+        "$TURBO_ROOT$/packages/telemetry/src/migrate.ts",
+        "$TURBO_ROOT$/packages/telemetry/src/migrations/**"
       ]
     },
     "test:coverage": {
@@ -44,20 +64,33 @@
         "tests/**",
         "vitest.config.*",
         "$TURBO_ROOT$/.github/workflows/**",
+        "$TURBO_ROOT$/.github/actions/**",
+        "$TURBO_ROOT$/.github/ISSUE_TEMPLATE/**",
         "$TURBO_ROOT$/.claude/workflows/**",
         "$TURBO_ROOT$/package.json",
-        "$TURBO_ROOT$/lefthook.yml",
         "$TURBO_ROOT$/AGENTS.md",
-        "$TURBO_ROOT$/DEREGISTERED.md",
+        "$TURBO_ROOT$/docker-compose.dev.yml",
         "$TURBO_ROOT$/docs/capabilities/**",
         "$TURBO_ROOT$/infra/**",
         "$TURBO_ROOT$/tools/packaging/**",
         "$TURBO_ROOT$/apps/*/package.json",
         "$TURBO_ROOT$/apps/app/vitest.config.ts",
+        "$TURBO_ROOT$/apps/app/public/favicon/**",
+        "$TURBO_ROOT$/apps/app/public/pwa/**",
+        "$TURBO_ROOT$/apps/mcp/vercel.json",
+        "$TURBO_ROOT$/apps/web/favicon.ico",
         "$TURBO_ROOT$/apps/web/scripts/lib/theme.mjs",
+        "$TURBO_ROOT$/packages/database/atlas/migrations/*_book_second_edition.sql",
+        "$TURBO_ROOT$/packages/database/seed-assets/books/**",
         "$TURBO_ROOT$/packages/database/src/storage-manifest/canonical-json.ts",
         "$TURBO_ROOT$/packages/database/src/tenant-policy.manifest.ts",
-        "$TURBO_ROOT$/packages/stella-engine-client/src/version.ts"
+        "$TURBO_ROOT$/packages/inngest-functions/src/env-check.ts",
+        "$TURBO_ROOT$/packages/inngest-functions/src/events.ts",
+        "$TURBO_ROOT$/packages/stella-engine-client/src/version.ts",
+        "$TURBO_ROOT$/packages/tacho/package.json",
+        "$TURBO_ROOT$/packages/tacho/src/**",
+        "$TURBO_ROOT$/packages/telemetry/src/migrate.ts",
+        "$TURBO_ROOT$/packages/telemetry/src/migrations/**"
       ]
     }
   }

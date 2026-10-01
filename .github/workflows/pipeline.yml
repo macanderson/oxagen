@@ -341,6 +341,19 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: pnpm check:audit-coverage
 
+      # #4664 item 2, Mac's decision of 2026-09-30. Turbo hashes a test task
+      # over its own package's files. The tools/scripts tests that read
+      # outside the package (every package's source, the workflows, the docs)
+      # kept their cache key when those files changed, so main replayed a
+      # pass they had not earned: run 36790132956 replayed @oxagen/scripts
+      # from the cache. Those tests are `*.tree.test.ts` files, which the
+      # package's turbo tasks leave out. This step runs them with vitest
+      # directly, outside turbo, on every run, so each one reads the current
+      # tree.
+      - name: Guard tests that read the whole tree
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: pnpm check:tree-guards
+
       # UI Capability Parity is now a hard gate (web-app-2.0 Phase 0). --strict
       # fails only on NON-grandfathered forward gaps: every app-layer capability
       # shipped from here on must have a binding + existing page + runtime proof.
@@ -1230,10 +1243,24 @@ jobs:
     # the commit. A commit that fails `test` or `staging` never migrates prod.
     # A superseded commit skips `checks` and `test` on preflight, and this job
     # skips with them, so `deploy-node` never waits on a job that never runs.
-    needs: [preflight, checks, test, staging]
+    #
+    # Staging is dormant while no customers are live (#4868): `staging` runs
+    # only when the STAGING_ENABLED repository variable is `true`. `!cancelled()`
+    # lets this job run past a skipped `staging`, so every other result is named
+    # here. The four checks `staging` used to carry are named directly, and a
+    # skipped `staging` counts only while the variable is off.
+    needs:
+      [preflight, checks, test, e2e, atlas-validate, rls-integration, rds-compatibility, staging]
     if: >-
+      !cancelled() &&
       github.event_name == 'push' && github.ref == 'refs/heads/main' &&
-      needs.preflight.outputs.proceed == 'true'
+      needs.preflight.outputs.proceed == 'true' &&
+      needs.checks.result == 'success' && needs.test.result == 'success' &&
+      needs.e2e.result == 'success' && needs.atlas-validate.result == 'success' &&
+      needs.rls-integration.result == 'success' &&
+      needs.rds-compatibility.result == 'success' &&
+      (needs.staging.result == 'success' ||
+       (needs.staging.result == 'skipped' && vars.STAGING_ENABLED != 'true'))
     runs-on: ubuntu-latest
     # An apply adds the platform seed over SSM and a pnpm install for the
     # stores, on top of the ~2 minutes of tunnel setup a check alone needs.
@@ -1426,9 +1453,14 @@ jobs:
 
   # ==========================================================================
 
+  # Dormant while no customers are live (#4868). Set the STAGING_ENABLED
+  # repository variable to `true`, and `dormant = false` in
+  # infra/stacks-new/staging/main.tf, to run it and gate production on it again.
   staging:
     name: Verify this commit in staging
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: >-
+      github.event_name == 'push' && github.ref == 'refs/heads/main' &&
+      vars.STAGING_ENABLED == 'true'
     needs: [checks, test, e2e, atlas-validate, rls-integration, rds-compatibility]
     permissions:
       contents: read
@@ -1438,13 +1470,24 @@ jobs:
 
   deploy-web:
     name: deploy oxagen.sh
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # Past a skipped `staging` only while staging is dormant; migration-gate's
+    # header explains the conditions.
+    if: >-
+      !cancelled() &&
+      github.event_name == 'push' && github.ref == 'refs/heads/main' &&
+      needs.checks.result == 'success' && needs.test.result == 'success' &&
+      needs.e2e.result == 'success' && needs.atlas-validate.result == 'success' &&
+      needs.rls-integration.result == 'success' &&
+      needs.rds-compatibility.result == 'success' &&
+      (needs.staging.result == 'success' ||
+       (needs.staging.result == 'skipped' && vars.STAGING_ENABLED != 'true'))
     # Deliberately NOT gated on `migration-gate`, unlike `deploy-node`. This
     # publishes apps/web — hand-authored HTML and a compiled blog — to S3. It
     # opens no database connection, so a pending migration cannot break it, and
     # blocking the marketing site on the schema would only train people to treat
     # a red gate as noise.
-    needs: [checks, test, staging]
+    needs:
+      [checks, test, e2e, atlas-validate, rls-integration, rds-compatibility, staging]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment: production
@@ -1561,7 +1604,16 @@ jobs:
 
   deploy-node:
     name: deploy ${{ matrix.service }}.oxagen.sh
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # `migration-gate` succeeds only after every check and, when staging is
+    # awake, `staging`. `!cancelled()` lets this job run past a dormant
+    # `staging`; see migration-gate's header.
+    if: >-
+      !cancelled() &&
+      github.event_name == 'push' && github.ref == 'refs/heads/main' &&
+      needs.migration-gate.result == 'success' &&
+      needs.checks.result == 'success' && needs.test.result == 'success' &&
+      (needs.staging.result == 'success' ||
+       (needs.staging.result == 'skipped' && vars.STAGING_ENABLED != 'true'))
     # This used to also wait on `migrate`, because api and app read a schema the
     # same merge may have changed, and deploying code ahead of its migration is
     # what took production login down once already. That job is retired (#1341)
@@ -1573,8 +1625,9 @@ jobs:
     # ahead of its schema. See its header for why unknown blocks as well as
     # behind, and why `manual-app-deploy` is exempt.
     needs: [checks, test, migration-gate, staging]
-    # arm64, matching the t4g.large these ship to (verified 2026-09-10 via
-    # where-is-production.yml, run 34456388188 — instance `oxagen-app`). An
+    # arm64, matching the Graviton node these ship to (a t4g.large when
+    # verified 2026-09-10 via where-is-production.yml, run 34456388188 —
+    # instance `oxagen-app`; an m7g.xlarge after #4866). An
     # x86 build passes every check here and fails to load a native module
     # there, at first request rather than at build.
     runs-on: ubuntu-24.04-arm
@@ -1611,7 +1664,7 @@ jobs:
           - service: docs
             hostname: docs.oxagen.sh
           - service: app
-            hostname: oxagen.app
+            hostname: app.oxagen.sh
           - service: api
             hostname: api.oxagen.sh
           - service: mcp
@@ -1868,4 +1921,4 @@ jobs:
         with:
           service: app
           directory: dist-deploy/app
-          hostname: oxagen.app
+          hostname: app.oxagen.sh

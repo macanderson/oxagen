@@ -6,7 +6,8 @@
 - **Decided under:** SCR-002. Issue #3257 listed three options and chose none.
 - **Related:** issue #3257, ADR-046 (per-commit CI concurrency on main),
   ADR-147 (the merge queue), issue #3686 (the `main` ruleset's bypass actor),
-  `.github/workflows/ci-superseded.yml`, `tools/scripts/check-superseded-runs.mjs`
+  `.github/workflows/ci-superseded.yml`,
+  `tools/scripts/check-superseded-runs.mjs`
 
 ## Context
 
@@ -34,13 +35,20 @@ Issue #3257 named three ways out:
 ## Decision
 
 **Option 1. A detector reports a pull request whose last 3 concluded CI runs
-were all cancelled.**
+were all cancelled by newer runs.**
 
 `.github/workflows/ci-superseded.yml` runs after every CI run on a pull
 request completes. `tools/scripts/check-superseded-runs.mjs` reads the
 branch's CI runs, newest first, and skips runs still queued or in progress.
-Each `cancelled` run extends a streak. The first run that concluded any other
-way ends it, because that run reported something a person can see.
+Each `cancelled` run that a newer run follows extends a streak. The first run
+that concluded any other way ends it, because that run reported something a
+person can see.
+
+A push cancels a run by starting the run that replaces it, so the newest run,
+when it was cancelled, has no replacement and no push cancelled it. It
+neither extends nor ends the streak. Before this rule, three runs a person
+cancelled in a row, with no push after them, read as a superseded streak,
+and the status told the author to stop pushing (2026-09-30, #4664 item 23).
 
 - **Superseded:** the streak reached 3. The script sets a failing
   `ci-superseded` commit status on the pull request's head and posts one
@@ -48,18 +56,25 @@ way ends it, because that run reported something a person can see.
 - **Answered:** a run concluded before the streak reached 3. If an earlier
   report exists, the status turns to success and the comment says the streak
   ended. Otherwise nothing is written.
-- **Pending:** no run has concluded and the streak is short. Nothing is
-  written. This is how "not finished yet" stays apart from "keeps getting
+- **Pending:** no run has finished with a conclusion other than `cancelled`,
+  and the cancelled streak is shorter than the threshold. The script writes
+  nothing. This is how "not finished yet" stays apart from "keeps getting
   superseded".
 
 One supersede followed by a finished run is answered and reports nothing.
 The status is not a required check, so the detector never blocks a merge. The
 script fails open: an unreadable API prints a warning and exits 0.
 
+The script finds its earlier comment by the marker it starts with and by its
+author. It adopts only a comment `github-actions[bot]` wrote, since anyone
+who can comment on the pull request can post the marker (2026-09-30, #4664
+item 8).
+
 The script pages the run history until a run answered, the history ends, or
-5 pages of 100 are read. A short page and no runs read the same, so a
-single page is not enough. It drops runs from a fork's branch of the same
-name and runs from before the pull request opened, which covers the runs
+5 pages of 100 are read. A full page of cancelled runs does not show where
+the streak ends, so the script reads the next page. A short page means the
+history ended. It drops runs from a fork's branch of the same name and runs
+from before the pull request opened, which covers the runs
 `cancel-closed-pr-runs.yml` cancels when an earlier pull request on a reused
 branch closed.
 
@@ -74,8 +89,9 @@ the runner pool is already the resource the `main` deploy waits on
 
 **Option 3** is ADR-147's merge queue, accepted on 2026-09-23. It removes the
 trap: the required checks run on the `merge_group` commit at merge time, so
-runs cancelled while the branch is still being pushed stop mattering. It does nothing until the ruleset on `main` turns the queue on,
-and #3686 records that the ruleset still carries an actor with
+runs cancelled while the branch is still being pushed stop mattering. It does
+nothing until the ruleset on `main` turns the queue on, and #3686 records
+that the ruleset still carries an actor with
 `bypass_mode: always`, so a pull request can merge before its checks report.
 That is a maintainer decision this record cannot make. The detector does not
 conflict with the queue and stays useful once the queue is on, because a pull
@@ -90,8 +106,9 @@ request still needs its own finished run for review.
   threshold would fire on ordinary back-to-back pushes.
 - Live proof waits for the merge. `workflow_run` runs the copy of the
   workflow on the default branch, so the workflow cannot run from this
-  branch. The unit tests rebuild #3233's three cancelled runs and a
-  one-cancel-then-green branch.
+  branch. The unit tests rebuild #3233's three cancelled runs under the run
+  still in progress, a one-cancel-then-green branch, and three cancelled
+  runs with no run after them.
 
 ## Consequences
 

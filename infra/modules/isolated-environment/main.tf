@@ -73,6 +73,7 @@ module "app" {
   bootstrap_artifact_access = true
   source                    = "../app-node"
   name                      = local.node_name
+  instance_type             = var.app_instance_type
   ami_id                    = var.ami_id
   deploy_bucket             = aws_s3_bucket.deploy.id
   region                    = var.region
@@ -83,7 +84,34 @@ module "app" {
   alb_security_group_id     = aws_security_group.alb.id
   tags                      = local.tags
 }
+# A dormant environment runs nothing it pays for by the hour. The node and the
+# NAT instance keep their volumes and come back with `dormant = false`.
+resource "aws_ec2_instance_state" "app" {
+  instance_id = module.app.instance_id
+  state       = var.dormant ? "stopped" : "running"
+}
+resource "aws_ec2_instance_state" "nat" {
+  instance_id = module.network.nat_instance_id
+  state       = var.dormant ? "stopped" : "running"
+}
+
+# The ALB bills by the hour whether anything answers behind it or not, so a
+# dormant environment has none. Its listeners and the service DNS records go
+# with it. The certificate stays, so waking does not wait on validation.
+moved {
+  from = aws_lb.app
+  to   = aws_lb.app[0]
+}
+moved {
+  from = aws_lb_listener.https
+  to   = aws_lb_listener.https[0]
+}
+moved {
+  from = aws_lb_listener.http
+  to   = aws_lb_listener.http[0]
+}
 resource "aws_lb" "app" {
+  count              = var.dormant ? 0 : 1
   name               = local.node_name
   internal           = false
   load_balancer_type = "application"
@@ -128,7 +156,8 @@ resource "aws_acm_certificate_validation" "app" {
   validation_record_fqdns = [for record in aws_route53_record.certificate : record.fqdn]
 }
 resource "aws_lb_listener" "https" {
-  load_balancer_arn = aws_lb.app.arn
+  count             = var.dormant ? 0 : 1
+  load_balancer_arn = aws_lb.app[0].arn
   port              = 443
   protocol          = "HTTPS"
   ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06"
@@ -139,7 +168,8 @@ resource "aws_lb_listener" "https" {
   }
 }
 resource "aws_lb_listener" "http" {
-  load_balancer_arn = aws_lb.app.arn
+  count             = var.dormant ? 0 : 1
+  load_balancer_arn = aws_lb.app[0].arn
   port              = 80
   protocol          = "HTTP"
   default_action {
@@ -152,13 +182,13 @@ resource "aws_lb_listener" "http" {
   }
 }
 resource "aws_route53_record" "service" {
-  for_each = local.services
+  for_each = var.dormant ? toset([]) : local.services
   zone_id  = var.hosted_zone_id
   name     = "${each.key}.${var.domain}"
   type     = "A"
   alias {
-    name                   = aws_lb.app.dns_name
-    zone_id                = aws_lb.app.zone_id
+    name                   = aws_lb.app[0].dns_name
+    zone_id                = aws_lb.app[0].zone_id
     evaluate_target_health = true
   }
 }
