@@ -325,8 +325,14 @@ jobs:
       # not brand-drift. The script copies the kit's committed rasters instead
       # of rendering them, so every file, PNG and ICO included, is compared
       # byte for byte, and a missing kit fails the step (#4804).
+      #
+      # Offline for now (Mac, 2026-10-01): the step still runs and reports
+      # drift, but a stale brand file no longer fails the job. Remove
+      # `continue-on-error` to make it blocking again. brand-drift.yml still
+      # fails on drift, but the ruleset does not require it.
       - name: Brand assets match the house kit
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        continue-on-error: true
         run: |
           node tools/scripts/sync-brand-assets.mjs --brand .brand-kit --check || {
             echo "::error::Brand files differ from macanderson/oxagen-brand main. Run node tools/scripts/sync-brand-assets.mjs --brand <kit checkout> and commit the result."

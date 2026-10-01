@@ -22,7 +22,8 @@ MCP registry catalog.
   - The MCP registry client, catalog row mapping, README rendering
     (`src/registry/`), and the sync into `mcp.catalog_servers`
     (`src/catalog-sync.ts`).
-  - The stored run-outcomes consent policy (`src/run-outcomes-policy.ts`).
+  - Linear OAuth for issue connections, token refresh, and Linear GraphQL
+    requests (`src/run-outcomes-linear.ts`).
 - **Does not own:**
   - Which plugin claims which contract. The manifest registry lives in
     [`@oxagen/oxagen`](../oxagen/README.md) (`src/plugins/`).
@@ -36,8 +37,7 @@ MCP registry catalog.
     [`@oxagen/inngest-functions`](../inngest-functions/README.md).
 - **Depends on:**
   - `@oxagen/oxagen`: `setCapabilityEntitlementGate`,
-    `capabilityNotInstalledError`, `pluginForContract`, `HandlerError`, and
-    the run-outcomes policy type.
+    `capabilityNotInstalledError`, `pluginForContract`, and `HandlerError`.
   - `@oxagen/database`: Postgres tables for installed plugins, credentials,
     the vault, environments, and the MCP catalog.
   - `@oxagen/crypto`: envelope encryption and the local KEK adapter for
@@ -69,8 +69,8 @@ MCP registry catalog.
 - `./registry` (`src/registry/index.ts`): the MCP registry client and catalog
   mapping.
 - `./catalog-sync` (`src/catalog-sync.ts`): the catalog upsert.
-- `./run-outcomes-policy` (`src/run-outcomes-policy.ts`): read and write the
-  run-outcomes consent policy.
+- `./run-outcomes-linear` (`src/run-outcomes-linear.ts`): Linear
+  authorization, issue tokens, and GraphQL requests.
 
 ## Rules
 

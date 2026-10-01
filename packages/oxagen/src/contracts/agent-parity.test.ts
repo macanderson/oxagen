@@ -93,8 +93,6 @@ const OFF_AGENT: Readonly<Record<string, string>> = {
     "It returns the new SCIM bearer token once, which would land in Stella's transcript.",
   set_model_credential:
     "Its input carries a model-vendor API key, which would land in Stella's transcript.",
-  set_run_outcomes_settings:
-    "It records the organization's consent to metered charges, and consent has to come from a person.",
   set_slack_channel:
     "It belongs to the Slack connection flow, which is on no surface.",
   set_sso_group_roles:

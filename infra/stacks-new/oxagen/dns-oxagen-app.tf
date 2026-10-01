@@ -1,30 +1,22 @@
 /**
- * oxagen.app, the production web app's own domain (ADR-215).
+ * oxagen.app, a domain Mac holds that only redirects to app.oxagen.sh
+ * (ADR-236, which supersedes ADR-215).
  *
  * The name was bought at Vercel on 2026-09-27, in the `oxagen-inc` team, and
  * came into Route 53 as a vanity redirect to app.oxagen.sh
  * (dns-vanity-domains.tf, #4631 and #4641). Vercel stays the registrar, and
  * the registry has listed this zone's nameservers since 2026-09-28.
  *
- * This file takes the name out of the vanity set without recreating anything
- * the delegation or the certificate depends on. The `moved` blocks at the end
- * re-address the zone, its mail and CAA records, the certificate the redirect
- * was served with, and that certificate's validation records. A new zone would
- * come with new nameservers while the registrar still named the old ones.
+ * ADR-215 moved the name out of the vanity set to serve the app there. The
+ * `moved` blocks at the end re-addressed the zone, its mail and CAA records,
+ * the certificate, and that certificate's validation records, so the
+ * delegation and the issued certificate survived. They stay, because putting
+ * the name back into the vanity set would move them again for nothing.
  *
- * What changes: the certificate joins the ALB's HTTPS listener, and the apex
- * and www records move from the CloudFront redirect to the ALB. The redirect's
- * distribution, function, header policy, and IPv6 records are destroyed. The
- * ALB has no IPv6 address, so the names lose their AAAA records, as
- * app.oxagen.sh never had any.
- *
- * The ALB forwards both names to the node, and Caddyfile.alb routes them to the
- * app. The app decides which host is canonical and sends a page visit on any
- * other production host there (apps/app/src/shared/canonical-host.ts), so no
- * rule here redirects. An interim listener rule answered both names with a 302
- * to app.oxagen.sh until Caddy routed them. It was deleted in its own change,
- * before the build that makes oxagen.app canonical, because that build's 308
- * from app.oxagen.sh and the rule's 302 back to it would have looped (ADR-215).
+ * Mac stopped the move on 2026-09-30, for now. The apex and www keep pointing
+ * at the ALB, and a listener rule answers both with a 302 to app.oxagen.sh, so
+ * no request on either name reaches the node. api, mcp, and docs on oxagen.app
+ * are gone (#4882).
  */
 
 resource "aws_route53_zone" "oxagen_app" {
@@ -129,7 +121,7 @@ resource "aws_lb_listener_certificate" "oxagen_app" {
 # The ALB
 # ---------------------------------------------------------------------------
 
-# www answers only to redirect to the apex, which the app does.
+# Both names reach the ALB only to be redirected by the rule below.
 resource "aws_route53_record" "oxagen_app_alb" {
   for_each = toset(["oxagen.app", "www.oxagen.app"])
 
@@ -143,201 +135,43 @@ resource "aws_route53_record" "oxagen_app_alb" {
     evaluate_target_health = true
   }
 
-  # The records point at the ALB only after it holds the certificate, so
-  # neither name reaches it before it can answer.
-  depends_on = [aws_lb_listener_certificate.oxagen_app]
+  # The records point at the ALB only after it holds the certificate and the
+  # redirect rule, so neither name reaches it before it can answer.
+  depends_on = [
+    aws_lb_listener_certificate.oxagen_app,
+    aws_lb_listener_rule.oxagen_app_redirect,
+  ]
 }
 
 # ---------------------------------------------------------------------------
-# The API
+# The redirect
 # ---------------------------------------------------------------------------
 
-# api.oxagen.app serves the API beside api.oxagen.sh, which stays in service
-# for the CLIs, webhooks, and OAuth callbacks that call it (ADR-215, amendment
-# of 2026-09-28, #4709). No listener rule redirects it: a webhook POST and an
-# Authorization header do not survive a redirect. Until Caddyfile.alb is
-# installed with the name, Caddy answers it with a 404.
-#
-# The name has its own certificate. A new name on either certificate above
-# would replace one the ALB is serving.
-resource "aws_acm_certificate" "api_oxagen_app" {
-  domain_name       = "api.oxagen.app"
-  validation_method = "DNS"
+# The same path and query on app.oxagen.sh. A 302, like every vanity redirect
+# (dns-vanity-domains.tf): a browser may keep a 301 forever, and Mac stopped
+# the move only for now (ADR-236).
+resource "aws_lb_listener_rule" "oxagen_app_redirect" {
+  listener_arn = aws_lb_listener.https.arn
+  priority     = 10
 
-  lifecycle {
-    create_before_destroy = true
-  }
-
-  tags = { Brand = local.brand }
-}
-
-resource "aws_route53_record" "api_oxagen_app_cert_validation" {
-  for_each = {
-    for dvo in aws_acm_certificate.api_oxagen_app.domain_validation_options : dvo.domain_name => {
-      name  = dvo.resource_record_name
-      type  = dvo.resource_record_type
-      value = dvo.resource_record_value
+  condition {
+    host_header {
+      values = ["oxagen.app", "www.oxagen.app"]
     }
   }
 
-  zone_id         = aws_route53_zone.oxagen_app.zone_id
-  name            = each.value.name
-  type            = each.value.type
-  ttl             = 60
-  records         = [each.value.value]
-  allow_overwrite = true
-}
+  action {
+    type = "redirect"
 
-resource "aws_acm_certificate_validation" "api_oxagen_app" {
-  certificate_arn         = aws_acm_certificate.api_oxagen_app.arn
-  validation_record_fqdns = [for r in aws_route53_record.api_oxagen_app_cert_validation : r.fqdn]
-}
-
-resource "aws_lb_listener_certificate" "api_oxagen_app" {
-  listener_arn    = aws_lb_listener.https.arn
-  certificate_arn = aws_acm_certificate_validation.api_oxagen_app.certificate_arn
-}
-
-resource "aws_route53_record" "api_oxagen_app" {
-  zone_id = aws_route53_zone.oxagen_app.zone_id
-  name    = "api.oxagen.app"
-  type    = "A"
-
-  alias {
-    name                   = aws_lb.app.dns_name
-    zone_id                = aws_lb.app.zone_id
-    evaluate_target_health = true
-  }
-
-  # The name reaches the ALB only after the ALB holds its certificate.
-  depends_on = [aws_lb_listener_certificate.api_oxagen_app]
-}
-
-# ---------------------------------------------------------------------------
-# MCP
-# ---------------------------------------------------------------------------
-
-# mcp.oxagen.app serves the MCP server beside mcp.oxagen.sh, which stays in
-# service for the MCP clients configured with it (ADR-215, amendment of
-# 2026-09-28, #4717). No listener rule redirects it: an MCP client sends its
-# key in an Authorization header, which a redirect drops. Until Caddyfile.alb
-# is installed with the name, Caddy answers it with a 404.
-#
-# Each name has its own certificate, so either can leave the ALB without
-# replacing a certificate the other is served with.
-resource "aws_acm_certificate" "mcp_oxagen_app" {
-  domain_name       = "mcp.oxagen.app"
-  validation_method = "DNS"
-
-  lifecycle {
-    create_before_destroy = true
-  }
-
-  tags = { Brand = local.brand }
-}
-
-resource "aws_route53_record" "mcp_oxagen_app_cert_validation" {
-  for_each = {
-    for dvo in aws_acm_certificate.mcp_oxagen_app.domain_validation_options : dvo.domain_name => {
-      name  = dvo.resource_record_name
-      type  = dvo.resource_record_type
-      value = dvo.resource_record_value
+    redirect {
+      host        = "app.oxagen.sh"
+      port        = "443"
+      protocol    = "HTTPS"
+      status_code = "HTTP_302"
     }
   }
 
-  zone_id         = aws_route53_zone.oxagen_app.zone_id
-  name            = each.value.name
-  type            = each.value.type
-  ttl             = 60
-  records         = [each.value.value]
-  allow_overwrite = true
-}
-
-resource "aws_acm_certificate_validation" "mcp_oxagen_app" {
-  certificate_arn         = aws_acm_certificate.mcp_oxagen_app.arn
-  validation_record_fqdns = [for r in aws_route53_record.mcp_oxagen_app_cert_validation : r.fqdn]
-}
-
-resource "aws_lb_listener_certificate" "mcp_oxagen_app" {
-  listener_arn    = aws_lb_listener.https.arn
-  certificate_arn = aws_acm_certificate_validation.mcp_oxagen_app.certificate_arn
-}
-
-resource "aws_route53_record" "mcp_oxagen_app" {
-  zone_id = aws_route53_zone.oxagen_app.zone_id
-  name    = "mcp.oxagen.app"
-  type    = "A"
-
-  alias {
-    name                   = aws_lb.app.dns_name
-    zone_id                = aws_lb.app.zone_id
-    evaluate_target_health = true
-  }
-
-  # The name reaches the ALB only after the ALB holds its certificate.
-  depends_on = [aws_lb_listener_certificate.mcp_oxagen_app]
-}
-
-# ---------------------------------------------------------------------------
-# The docs
-# ---------------------------------------------------------------------------
-
-# docs.oxagen.app serves the docs site beside docs.oxagen.sh (ADR-215,
-# amendment of 2026-09-28, #4717). The sitemap, llms.txt, and the oxagen.dev
-# redirect still name docs.oxagen.sh, and they move in the cutover PR once this
-# name answers. Until Caddyfile.alb is installed with the name, Caddy answers
-# it with a 404.
-resource "aws_acm_certificate" "docs_oxagen_app" {
-  domain_name       = "docs.oxagen.app"
-  validation_method = "DNS"
-
-  lifecycle {
-    create_before_destroy = true
-  }
-
   tags = { Brand = local.brand }
-}
-
-resource "aws_route53_record" "docs_oxagen_app_cert_validation" {
-  for_each = {
-    for dvo in aws_acm_certificate.docs_oxagen_app.domain_validation_options : dvo.domain_name => {
-      name  = dvo.resource_record_name
-      type  = dvo.resource_record_type
-      value = dvo.resource_record_value
-    }
-  }
-
-  zone_id         = aws_route53_zone.oxagen_app.zone_id
-  name            = each.value.name
-  type            = each.value.type
-  ttl             = 60
-  records         = [each.value.value]
-  allow_overwrite = true
-}
-
-resource "aws_acm_certificate_validation" "docs_oxagen_app" {
-  certificate_arn         = aws_acm_certificate.docs_oxagen_app.arn
-  validation_record_fqdns = [for r in aws_route53_record.docs_oxagen_app_cert_validation : r.fqdn]
-}
-
-resource "aws_lb_listener_certificate" "docs_oxagen_app" {
-  listener_arn    = aws_lb_listener.https.arn
-  certificate_arn = aws_acm_certificate_validation.docs_oxagen_app.certificate_arn
-}
-
-resource "aws_route53_record" "docs_oxagen_app" {
-  zone_id = aws_route53_zone.oxagen_app.zone_id
-  name    = "docs.oxagen.app"
-  type    = "A"
-
-  alias {
-    name                   = aws_lb.app.dns_name
-    zone_id                = aws_lb.app.zone_id
-    evaluate_target_health = true
-  }
-
-  # The name reaches the ALB only after the ALB holds its certificate.
-  depends_on = [aws_lb_listener_certificate.docs_oxagen_app]
 }
 
 # ---------------------------------------------------------------------------

@@ -1,16 +1,5 @@
 import { z } from "zod";
 
-/** Customer consent and platform suspension are independent decisions. */
-export const runOutcomesPolicySchema = z
-  .object({
-    customerEnabled: z.boolean(),
-    platformDisabled: z.boolean(),
-    platformDisabledReason: z.string().nullable(),
-    effectiveEnabled: z.boolean(),
-  })
-  .strict();
-export type RunOutcomesPolicy = z.output<typeof runOutcomesPolicySchema>;
-
 export const runIssueDestinationSchema = z.discriminatedUnion("provider", [
   z
     .object({
