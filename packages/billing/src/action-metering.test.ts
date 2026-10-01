@@ -9,7 +9,7 @@
  * `billing.gau_buckets` and `billing.gau_settlements`. The recorder's other
  * reads — terms, settings, the default card — are module doubles.
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   fakeGauExecutor,
   makeFakeGauStore,
@@ -691,6 +691,19 @@ describe("recordGovernedAction", () => {
         invoiceGauMax: 1_000,
         ...over,
       });
+
+    // A paid top-up lands on the bucket for the month the payment arrives in:
+    // settleGauInvoice calls settleGauPaid without a `now`, so it reads the
+    // real clock. The bucket these tests seed belongs to NOW's month, so the
+    // clock is pinned to NOW. Unpinned, the paid top-up test failed from
+    // 2026-10-01, when the real month moved past September and the grant went
+    // to an October bucket.
+    beforeEach(() => {
+      vi.useFakeTimers({ now: NOW, toFake: ["Date"] });
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+    });
 
     beforeEach(() => {
       order = [];
