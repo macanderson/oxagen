@@ -651,10 +651,13 @@ async function githubConnections(scope: OutcomeScope) {
   );
 }
 
-/** The receipt an event records, or null when it is not a well-formed `provider_publish.pull_request_opened`. */
+/**
+ * The receipt an event records, or null when it is not a well-formed
+ * `provider_publish.pull_request_opened`. It reads the payload as
+ * `readLedgerPrReceipts` (run-work-prs.ts) does, which always walks from a
+ * run's first event.
+ */
 function receiptOf(event: AttemptEventReadRecord): LedgerReceipt | null {
-  // The same reading as `readLedgerPrReceipts` (run-work-prs.ts), which
-  // always walks from a run's first event.
   if (
     event.eventType !== "provider_publish.pull_request_opened" ||
     typeof event.payload !== "object" ||
@@ -662,9 +665,13 @@ function receiptOf(event: AttemptEventReadRecord): LedgerReceipt | null {
   )
     return null;
   const payload = event.payload as Record<string, unknown>;
+  // A number that is not a positive integer could never be written to
+  // `cost.run_pr_outcomes`, and the walk would wait on it pass after pass.
   if (
     typeof payload.provider_repository_id !== "string" ||
-    typeof payload.pull_request_number !== "number"
+    typeof payload.pull_request_number !== "number" ||
+    !Number.isSafeInteger(payload.pull_request_number) ||
+    payload.pull_request_number <= 0
   )
     return null;
   return {

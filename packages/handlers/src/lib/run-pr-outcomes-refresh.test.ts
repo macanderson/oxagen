@@ -949,6 +949,15 @@ describe("walkLedgerReceipts", () => {
     expect(pages.at(-1)).toEqual({ runId: "arun_d4", after: String(WALK_BOUND) });
   });
 
+  it("skips a receipt whose number could not be stored", async () => {
+    const { store } = ledgerOf({ arun_d4: [opened(1, "R_1", 0), opened(2, "R_1", 1.5)] });
+    expect(await walkLedgerReceipts(store, "uuid-arun_d4", null)).toEqual({
+      receipts: [],
+      afterSeq: "2",
+      complete: true,
+    });
+  });
+
   it("keeps its position when a resumed walk finds no new event", async () => {
     const { store } = ledgerOf({ arun_d4: eventsOf(WALK_BOUND) });
     const first = await walkLedgerReceipts(store, "uuid-arun_d4", null);
