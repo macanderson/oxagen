@@ -40,9 +40,10 @@ export const DESCRIPTION_MAX = 1024;
 /**
  * tools.toml's largest result cap, in bytes: MAX_RESULT_BYTES_LIMIT in
  * @oxagen/mcp-studio and STUDIO_MAX_RESULT_BYTES in save_studio_draft's
- * contract. The app imports neither, and draft.test.ts holds them together.
+ * contract. The app imports neither, and draft.test.ts holds them together
+ * through the largest cap a draft takes.
  */
-export const MAX_RESULT_BYTES = 1_048_576;
+const MAX_RESULT_BYTES = 1_048_576;
 
 /** The result cap a tool takes when tools.toml names none, in bytes (DEFAULT_MAX_RESULT_BYTES). */
 export const DEFAULT_MAX_RESULT_BYTES = 65_536;
@@ -52,7 +53,7 @@ export const DEFAULT_MAX_RESULT_BYTES = 65_536;
  * token count. tools.toml caps a result in bytes, and the panel asks for
  * tokens, the unit spend prices a result in.
  */
-export const BYTES_PER_TOKEN = 4;
+const BYTES_PER_TOKEN = 4;
 
 /** The cap in bytes for a cap in tokens. */
 export function capBytes(tokens: number): number {

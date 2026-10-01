@@ -9,7 +9,7 @@
 // tool no agent called.
 import type { StudioRecord, StudioTool } from "./model";
 
-export type ToolCalls =
+type ToolCalls =
   /** No record, or no imported tool has a recorded call count. */
   | { kind: "notRecorded" }
   /** The server imports no tool, so there is nothing to count. */

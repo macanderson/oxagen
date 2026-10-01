@@ -18,7 +18,6 @@ import {
   draftLines,
   draftTokens,
   importedAfter,
-  MAX_RESULT_BYTES,
   MAX_RESULT_TOKENS,
   mergeDrafts,
   opTool,
@@ -211,27 +210,28 @@ describe("stageChecked with caps and exposure", () => {
     ]);
   });
 
-  it("refuses a cap outside tools.toml's range", () => {
+  it("takes a cap up to save_studio_draft's largest and refuses one outside it", () => {
     expect(stageChecked([], capOf("create_payment", 0))).toBeNull();
-    expect(stageChecked([], capOf("create_payment", MAX_RESULT_BYTES + 1))).toBeNull();
+    expect(
+      stageChecked([], capOf("create_payment", STUDIO_MAX_RESULT_BYTES + 1)),
+    ).toBeNull();
     expect(stageChecked([], capOf("create_payment", 1.5))).toBeNull();
-    expect(stageChecked([], capOf("create_payment", MAX_RESULT_BYTES))).toEqual([
-      capOf("create_payment", MAX_RESULT_BYTES),
-    ]);
+    expect(
+      stageChecked([], capOf("create_payment", STUDIO_MAX_RESULT_BYTES)),
+    ).toEqual([capOf("create_payment", STUDIO_MAX_RESULT_BYTES)]);
   });
 });
 
 describe("the result cap's units", () => {
-  it("holds the largest cap to save_studio_draft's", () => {
-    expect(MAX_RESULT_BYTES).toBe(STUDIO_MAX_RESULT_BYTES);
-  });
-
   it("writes 4 bytes for each token and reads them back", () => {
     expect(capBytes(4_000)).toBe(16_000);
     expect(capTokens(16_000)).toBe(4_000);
     expect(capTokens(16_003)).toBe(4_000);
+  });
+
+  it("takes as many tokens as save_studio_draft's largest cap holds", () => {
     expect(MAX_RESULT_TOKENS).toBe(262_144);
-    expect(capBytes(MAX_RESULT_TOKENS)).toBe(MAX_RESULT_BYTES);
+    expect(capBytes(MAX_RESULT_TOKENS)).toBe(STUDIO_MAX_RESULT_BYTES);
   });
 });
 
