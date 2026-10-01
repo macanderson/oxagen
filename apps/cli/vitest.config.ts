@@ -18,10 +18,13 @@ export default defineConfig({
       exclude: [
         "src/**/*.test.ts",
         "src/**/*.test.tsx",
-        // The bin entrypoint: it parses argv, calls main(), and prints a fatal
-        // error. Nothing here is unit-drivable — it is exercised by running the
-        // binary — and counting it only drags the pool down by its own length.
+        // The bin entrypoint and the body it loads: they register the process
+        // handlers, parse argv, and print a fatal error. Nothing here is
+        // unit-drivable (it is exercised by running the binary), and counting
+        // it only drags the pool down by its own length. hook-entry.test.ts
+        // pins what `index.ts` imports.
         "src/index.ts",
+        "src/main.ts",
       ],
       thresholds: {
         // ONE glob, matching src/** exactly, so nothing is ungated. No

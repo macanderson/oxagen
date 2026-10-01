@@ -1,7 +1,8 @@
 /**
- * `oxagen tacho` delegates to @oxagen/tacho/cli with the platform CLI's
- * credentials. Mocks: the config store and the tacho CLI module; no
- * filesystem or network.
+ * `oxagen agent <verb>` (and the hidden `oxagen tacho <verb>`) delegates to
+ * @oxagen/recorder/cli with the platform CLI's credentials and its own
+ * runtime commands. Mocks: the config store and the recorder's CLI modules;
+ * no filesystem or network.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { captureWriter } from "../../lib/capture-writer.js";
@@ -19,6 +20,9 @@ vi.mock("../../lib/config.js", () => ({
 }));
 
 const calls: Array<{ name: string; args: unknown[] }> = [];
+/** The most recent call of one recorder function. */
+const lastCall = (name: string) =>
+  calls.filter((call) => call.name === name).at(-1);
 const outcomes = {
   enroll: { ok: true, warnings: [] as string[] },
   verify: { ok: true, detail: "chained" },
@@ -34,6 +38,8 @@ const outcomes = {
     to: undefined as { org: string; workspace: string } | undefined,
   },
   exportCommand: true,
+  moved: [] as Array<{ agentKey: string; from: string; ok: boolean }>,
+  run: 0,
 };
 // The real parser: what the operator sees on a typo is its message, so the
 // mock must not paper over it. It is pulled in `vi.hoisted`, which runs while
@@ -45,19 +51,44 @@ const outcomes = {
 // spends more than the whole budget: the first test times out, and the
 // half-applied mock then hands the second test the real `status`, which
 // throws on the fake deps. That is nightly #35579035588 and #35442768833.
-const { parseHarnesses: actualParseHarnesses } = await vi.hoisted(async () => {
-  const actual =
-    await vi.importActual<typeof import("@oxagen/tacho/cli")>(
-      "@oxagen/tacho/cli",
-    );
-  return { parseHarnesses: actual.parseHarnesses };
-});
-vi.mock("@oxagen/tacho/cli", () => ({
+const {
   parseHarnesses: actualParseHarnesses,
+  parseCredentialMode: actualParseCredentialMode,
+} = await vi.hoisted(async () => {
+  const actual =
+    await vi.importActual<typeof import("@oxagen/recorder/cli")>(
+      "@oxagen/recorder/cli",
+    );
+  return {
+    parseHarnesses: actual.parseHarnesses,
+    parseCredentialMode: actual.parseCredentialMode,
+  };
+});
+const OXAGEN_RUNTIME = {
+  hookCommand: "/opt/oxagen/oxagen hook",
+  daemonCommand: ["/opt/oxagen/oxagen", "daemon"],
+  program: "oxagen",
+};
+vi.mock("@oxagen/recorder/cli", () => ({
+  parseHarnesses: actualParseHarnesses,
+  parseCredentialMode: actualParseCredentialMode,
+  oxagenRuntimeCommands: () => OXAGEN_RUNTIME,
   defaultCliDeps: (overrides: Record<string, unknown>) => ({
     fake: true,
     ...overrides,
   }),
+  moveOffTachoNames: async (...args: unknown[]) => {
+    calls.push({ name: "move", args });
+    return outcomes.moved;
+  },
+  detect: (...args: unknown[]) => {
+    calls.push({ name: "detect", args });
+    return { enrolled: true, harnesses: [] };
+  },
+  runAgentSession: async (...args: unknown[]) => {
+    calls.push({ name: "runAgentSession", args });
+    return outcomes.run;
+  },
   enroll: async (...args: unknown[]) => {
     calls.push({ name: "enroll", args });
     return outcomes.enroll;
@@ -84,7 +115,17 @@ vi.mock("@oxagen/tacho/cli", () => ({
   },
 }));
 
+vi.mock("@oxagen/recorder/program", () => ({
+  recordedCliDeps: (overrides: Record<string, unknown>) => ({
+    fake: true,
+    recorded: true,
+    ...overrides,
+  }),
+}));
+
 import {
+  handleAgentDetect,
+  handleAgentRun,
   handleTachoEnroll,
   handleTachoExport,
   handleTachoReassign,
@@ -105,6 +146,8 @@ describe("oxagen tacho", () => {
     outcomes.verify = { ok: true, detail: "chained" };
     outcomes.status = { enrolled: true };
     outcomes.reassign = { ok: true, warnings: [], to: undefined };
+    outcomes.moved = [];
+    outcomes.run = 0;
   });
 
   it("lends the logged-in credentials and lets flags override them", () => {
@@ -135,7 +178,9 @@ describe("oxagen tacho", () => {
         writer,
       ),
     ).toBe(true);
-    expect(calls.map((c) => c.name)).toEqual(["enroll", "verify"]);
+    // The other agents on the machine move to the new names after a
+    // successful enroll, and before the verify turn.
+    expect(calls.map((c) => c.name)).toEqual(["enroll", "move", "verify"]);
     expect(calls[0]?.args[0]).toEqual({
       token: "session-token",
       org: "acme",
@@ -149,10 +194,17 @@ describe("oxagen tacho", () => {
     // went to the host's. tacho resolves the same config when there is no host.
     expect(calls[0]?.args[0]).not.toHaveProperty("apiUrl");
     expect((calls[0]?.args[1] as { fake: boolean }).fake).toBe(true);
+    // Everything the enroll writes names this `oxagen` executable.
+    expect((calls[0]?.args[1] as { runtime: unknown }).runtime).toBe(
+      OXAGEN_RUNTIME,
+    );
+    expect((calls[1]?.args[0] as { runtime: unknown }).runtime).toBe(
+      OXAGEN_RUNTIME,
+    );
     expect(output()).toContain("Verified: chained");
     // --harness reaches enroll as a parsed list; absent, it is not passed.
     await handleTachoEnroll({ harness: "claude-code,codex" }, writer);
-    expect(calls.at(-1)?.args[0]).toMatchObject({
+    expect(lastCall("enroll")?.args[0]).toMatchObject({
       harnesses: ["claude-code", "codex"],
     });
     expect(calls[0]?.args[0]).not.toHaveProperty("harnesses");
@@ -160,9 +212,9 @@ describe("oxagen tacho", () => {
     // line (the bin's fatal handler prints err.message verbatim) with no
     // enroll call behind it.
     await handleTachoEnroll({ harness: " codex, codex " }, writer);
-    expect(calls.at(-1)?.args[0]).toMatchObject({ harnesses: ["codex"] });
+    expect(lastCall("enroll")?.args[0]).toMatchObject({ harnesses: ["codex"] });
     await handleTachoEnroll({ harness: "claude-code,cursor" }, writer);
-    expect(calls.at(-1)?.args[0]).toMatchObject({
+    expect(lastCall("enroll")?.args[0]).toMatchObject({
       harnesses: ["claude-code", "cursor"],
     });
     const before = calls.length;
@@ -177,15 +229,18 @@ describe("oxagen tacho", () => {
     ).rejects.toThrow(/unknown harness "claude_code"/);
     expect(calls.length).toBe(before);
     // The managed-settings flags and an explicit port travel too.
+    calls.length = 0;
     await handleTachoEnroll(
       { managed: true, printManaged: true, port: 47010 },
       writer,
     );
-    expect(calls.at(-1)?.args[0]).toMatchObject({
+    expect(lastCall("enroll")?.args[0]).toMatchObject({
       managed: true,
       printManaged: true,
       port: 47010,
     });
+    // Printing the managed document changes nothing else on the machine.
+    expect(calls.map((c) => c.name)).toEqual(["enroll"]);
     outcomes.enroll = { ok: false, warnings: [] };
     expect(await handleTachoEnroll({}, writer)).toBe(false);
     outcomes.enroll = { ok: true, warnings: [] };
@@ -194,10 +249,126 @@ describe("oxagen tacho", () => {
     expect(output()).toContain("Verify failed: no session");
   });
 
+  it("enroll passes the flags the recorder's own enroll takes, and verifies the harness it enrolled", async () => {
+    const { writer } = captureWriter();
+    await handleTachoEnroll(
+      {
+        apiUrl: "https://api.example",
+        credentials: "passthrough",
+        validityDays: 30,
+        harness: "codex",
+        verify: true,
+      },
+      writer,
+    );
+    expect(calls[0]?.args[0]).toMatchObject({
+      apiUrl: "https://api.example",
+      credentials: "passthrough",
+      validityDays: 30,
+      harnesses: ["codex"],
+    });
+    expect(calls.at(-1)?.name).toBe("verify");
+    expect(lastCall("verify")?.args[0]).toEqual({ harness: "codex" });
+    calls.length = 0;
+    await expect(
+      handleTachoEnroll({ credentials: "borrowed" }, writer),
+    ).rejects.toThrow(/unknown credential mode "borrowed"/);
+    expect(calls).toEqual([]);
+  });
+
+  it("says on stderr which agents it moved off the tacho names, and which it could not", async () => {
+    const stdout: string[] = [];
+    const stderr: string[] = [];
+    const writer = {
+      write: (line: string) => {
+        stdout.push(line);
+      },
+      writeErr: (line: string) => {
+        stderr.push(line);
+      },
+    };
+    const output = () => stdout.join("\n");
+    const errors = () => stderr.join("\n");
+    outcomes.moved = [
+      { agentKey: "acme.core.cc-laptop", from: "tacho hook", ok: true },
+      { agentKey: "acme.core.codex-laptop", from: "tacho hook", ok: false },
+    ];
+    expect(await handleTachoStatus({ json: true }, writer)).toBe(true);
+    expect(calls.map((c) => c.name)).toEqual(["move", "status"]);
+    // stdout carries only the status document a script parses.
+    expect(output()).not.toContain("Moved");
+    expect(errors()).toContain(
+      "Moved acme.core.cc-laptop's hooks and service from tacho hook to the oxagen CLI.",
+    );
+    expect(errors()).toContain(
+      "Could not move acme.core.codex-laptop's hooks and service off tacho hook",
+    );
+    // The move's own step lines are dropped, and its errors reach stderr.
+    const moveDeps = calls[0]?.args[0] as {
+      out: (line: string) => void;
+      err: (line: string) => void;
+    };
+    moveDeps.out("[4/6] Installing the service");
+    moveDeps.err("cannot write ~/.claude/settings.json");
+    expect(output()).not.toContain("Installing the service");
+    expect(errors()).toContain("cannot write ~/.claude/settings.json");
+  });
+
+  it("detect and run hand the recorder this executable's deps", async () => {
+    const { writer } = captureWriter();
+    expect(await handleAgentDetect({ json: true }, writer)).toBe(true);
+    expect(calls.at(-1)?.args[0]).toEqual({ json: true });
+    expect(await handleAgentDetect({}, writer)).toBe(true);
+    expect(calls.at(-1)?.args[0]).toEqual({});
+
+    outcomes.run = 3;
+    expect(
+      await handleAgentRun(
+        ["./my-agent", "--task", "build"],
+        { name: "my-agent" },
+        writer,
+      ),
+    ).toBe(3);
+    expect(calls.at(-1)?.args[0]).toEqual({
+      command: ["./my-agent", "--task", "build"],
+      name: "my-agent",
+    });
+    const deps = calls.at(-1)?.args[1] as {
+      runtime: unknown;
+      cwd: string;
+      signal: AbortSignal;
+    };
+    expect(deps.runtime).toBe(OXAGEN_RUNTIME);
+    expect(deps.cwd).toBe(process.cwd());
+
+    const listeners = process.listenerCount("SIGINT");
+    await handleAgentRun(
+      ["claude", "-p", "fix it"],
+      {
+        contained: true,
+        image: "ghcr.io/acme/contained:1",
+        workspace: "/repo",
+        githubRepository: "acme/app",
+      },
+      writer,
+    );
+    expect(calls.at(-1)?.args[0]).toEqual({
+      command: ["claude", "-p", "fix it"],
+      contained: true,
+      image: "ghcr.io/acme/contained:1",
+      workspace: "/repo",
+      githubRepository: "acme/app",
+    });
+    // The contained launcher's interrupt handlers come off with the run.
+    expect(process.listenerCount("SIGINT")).toBe(listeners);
+  });
+
   it("status, unenroll, export, and verify report their outcome as the exit status", async () => {
     const { writer, output } = captureWriter();
     expect(await handleTachoStatus({ json: true }, writer)).toBe(true);
-    expect(calls[0]?.args[0]).toEqual({ json: true });
+    // The move runs first, so the report describes the machine as it now is.
+    expect(calls.map((c) => c.name)).toEqual(["move", "status"]);
+    expect(calls[1]?.args[0]).toEqual({ json: true });
     outcomes.status = { enrolled: false };
     expect(await handleTachoStatus({}, writer)).toBe(false);
     expect(
@@ -213,6 +384,11 @@ describe("oxagen tacho", () => {
       token: "session-token",
       purge: true,
       reason: "laptop retired",
+    });
+    // Unenroll takes hooks out of the files the machine's enroll recorded.
+    expect(calls.at(-1)?.args[1]).toMatchObject({
+      recorded: true,
+      runtime: OXAGEN_RUNTIME,
     });
     store.token = undefined;
     expect(await handleTachoUnenroll({}, writer)).toBe(true);
@@ -230,6 +406,14 @@ describe("oxagen tacho", () => {
       harnesses: ["codex"],
       reason: "moved",
     });
+    expect(calls.at(-1)?.args[1]).toMatchObject({ recorded: true });
+    await handleTachoReassign(
+      { workspace: "edge", apiUrl: "https://api.example" },
+      writer,
+    );
+    expect(calls.at(-1)?.args[0]).toMatchObject({
+      apiUrl: "https://api.example",
+    });
     // Moving org too: the flag names the target, and a session without a
     // token sends none rather than an undefined field.
     store.token = undefined;
@@ -244,11 +428,18 @@ describe("oxagen tacho", () => {
     expect(configWrites).toEqual([]);
     expect(await handleTachoExport({ list: true }, writer)).toBe(true);
     expect(calls.at(-1)?.args[0]).toEqual({ list: true });
-    expect(await handleTachoVerify(writer)).toBe(true);
+    expect(await handleTachoVerify({}, writer)).toBe(true);
+    expect(calls.at(-1)?.args[0]).toEqual({});
     expect(output()).toContain("OK: chained");
     outcomes.verify = { ok: false, detail: "daemon down" };
-    expect(await handleTachoVerify(writer)).toBe(false);
+    expect(await handleTachoVerify({}, writer)).toBe(false);
     expect(output()).toContain("FAILED: daemon down");
+    // --harness names the turn's harness, and --json prints the result.
+    expect(
+      await handleTachoVerify({ harness: "stella", json: true }, writer),
+    ).toBe(false);
+    expect(calls.at(-1)?.args[0]).toEqual({ harness: "stella" });
+    expect(output()).toContain('{"ok":false,"detail":"daemon down"}');
   });
 
   it("status fails when any agent on the machine is not shipping, as `tacho status` does", async () => {
@@ -307,7 +498,7 @@ describe("oxagen tacho", () => {
         writer,
       ),
     ).toBe(true);
-    // The flag never reaches @oxagen/tacho: config.json is the CLI's file.
+    // The flag never reaches @oxagen/recorder: config.json is the CLI's file.
     expect(calls.at(-1)?.args[0]).not.toHaveProperty("default");
     expect(configWrites).toEqual([{ orgSlug: "other", workspaceSlug: "edge" }]);
     expect(output()).toContain("CLI default is now other/edge");

@@ -392,7 +392,7 @@ export function cursorHookPresence(
   for (const event of CURSOR_HOOK_EVENTS) {
     // A value that is not a list is read as no entries rather than trusted.
     // A hand-edited `{"hooks":{"preToolUse":null}}` reaches here through
-    // `tacho status`, which is the command someone runs to find out what is
+    // `oxagen agent status`, which is the command someone runs to find out what is
     // wrong with their file, and it threw on the `.filter` instead of
     // reporting the event missing.
     const raw = document.hooks?.[event];

@@ -259,8 +259,8 @@ describe("a read started before an action", () => {
   });
 });
 
-describe("the tacho status banner", () => {
-  const failure = "tacho status failed: timed out";
+describe("the machine status banner", () => {
+  const failure = "Reading this machine's status failed: timed out";
 
   it("shows a failure once and leaves it while it repeats", () => {
     expect(statusBanner(null, null, { ok: false, error: failure })).toBe(
@@ -270,7 +270,8 @@ describe("the tacho status banner", () => {
     expect(statusBanner(null, failure, { ok: false, error: failure })).toBe(
       null,
     );
-    const other = "tacho status failed: cannot read host.json";
+    const other =
+      "Reading this machine's status failed: cannot read host.json";
     expect(statusBanner(failure, failure, { ok: false, error: other })).toBe(
       other,
     );
@@ -280,10 +281,12 @@ describe("the tacho status banner", () => {
     expect(statusBanner(failure, failure, { ok: true })).toBeNull();
     // An action's own error is not the status failure: it stays.
     expect(
-      statusBanner("tacho reassign exited 1; see the output below.", failure, {
-        ok: true,
-      }),
-    ).toBe("tacho reassign exited 1; see the output below.");
+      statusBanner(
+        "Reassigning this machine exited 1. See the output below.",
+        failure,
+        { ok: true },
+      ),
+    ).toBe("Reassigning this machine exited 1. See the output below.");
     expect(statusBanner("some other error", null, { ok: true })).toBe(
       "some other error",
     );

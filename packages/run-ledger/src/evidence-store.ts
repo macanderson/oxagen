@@ -39,7 +39,7 @@ import {
 import {
   ARCHIVE_SEGMENT_CONTENT_TYPE,
   SHA256_DIGEST_PATTERN,
-} from "@oxagen/tacho";
+} from "@oxagen/recorder";
 import {
   storage,
   StorageNotFoundError,

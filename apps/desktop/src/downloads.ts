@@ -545,10 +545,10 @@ ${section("Linux", "x86_64. Install the package for your distribution. The AppIm
 ${sorted.some((e) => e.os === "macOS") ? MACOS_FIRST_LAUNCH : ""}
 ${macUpdates ? MACOS_UPDATES : ""}
 <div><h2>Verify a download</h2><p>Every file in this version is listed in <a href="desktop/${encodeURIComponent(input.version)}/SHA256SUMS.txt">SHA256SUMS.txt</a>. Put it beside the file you downloaded and run:</p><pre>shasum -a 256 -c SHA256SUMS.txt</pre></div>
-<div><h2>Command line only</h2><p>The <code>tacho</code> and <code>oxagen</code> executables ship inside the app and link onto your PATH on first launch.${
+<div><h2>Command line only</h2><p>The <code>oxagen</code> command ships inside the app and links onto your PATH on first launch.${
     input.cliRelease === false || build
       ? ""
-      : ` To install them without the app, take the bare binaries from the <a href="${links.githubRelease}">GitHub release</a> for ${version}.`
+      : ` To install it without the app, take the bare binaries from the <a href="${links.githubRelease}">GitHub release</a> for ${version}.`
   }</p></div>
 </section>
 <footer>${build ? "" : `<a href="${links.notes}">What changed in ${version}</a>`}<a href="${links.allReleases}">All releases</a><a href="https://docs.oxagen.sh/docs/cli/desktop">App guide</a><a href="https://oxagen.sh/">oxagen.sh</a></footer>

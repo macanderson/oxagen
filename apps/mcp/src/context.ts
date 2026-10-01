@@ -59,7 +59,7 @@ import { extractTrustedClientIp } from "@oxagen/oxagen/client-ip";
 import type { CapabilityContext } from "@oxagen/oxagen";
 import { resolveApiKey } from "@oxagen/auth";
 // Through `@oxagen/oxagen`, which re-exports the leaf package's wire
-// constants, rather than adding `@oxagen/tacho` to this app's dependencies —
+// constants, rather than adding `@oxagen/recorder` to this app's dependencies —
 // the header name is the contract, and it is still spelled in exactly one
 // place.
 import {

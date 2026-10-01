@@ -45,7 +45,7 @@
     "zod": "3.25.76"
   },
   "devDependencies": {
-    "@oxagen/tacho": "workspace:*",
+    "@oxagen/recorder": "workspace:*",
     "@vitest/coverage-v8": "2.1.9",
     "esbuild": "0.28.2",
     "tsx": "4.23.5",

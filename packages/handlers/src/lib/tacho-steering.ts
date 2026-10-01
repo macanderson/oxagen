@@ -82,7 +82,7 @@ export {
 
 /**
  * The host's limit on `context.system` (`policyBundleSchema` in
- * `@oxagen/tacho` `wire.ts`). The host parses the bundle `.strict()`, so a
+ * `@oxagen/recorder` `wire.ts`). The host parses the bundle `.strict()`, so a
  * longer string would make it reject the whole bundle and keep its old
  * mandate. The assembler stays under it by leaving records out.
  */
@@ -108,7 +108,7 @@ export const CONTEXT_SYSTEM_BUDGET_TOKENS = Math.min(
 /**
  * The most items the signed manifest lists. The host parses
  * `context.manifest` `.strict()` with at most 2,000 items
- * (`steeringManifestSchema` in `@oxagen/tacho` `wire.ts`), so a longer list
+ * (`steeringManifestSchema` in `@oxagen/recorder` `wire.ts`), so a longer list
  * would make every host that reads the manifest reject the whole bundle and
  * keep its old mandate. The 100 below that are room for the steers the host
  * appends to the frame it seals from this manifest.

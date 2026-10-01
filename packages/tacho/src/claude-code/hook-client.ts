@@ -122,10 +122,10 @@ function cursorRefusal(raw: unknown, message: string): string {
  * the person seeing it did nothing wrong and can act on it.
  */
 const CURSOR_UNREADABLE_PAYLOAD =
-  "Oxagen could not read this hook payload, so it cannot say what this agent is permitted to do. Run `tacho status` and check that the wrapper matches this version of Cursor.";
+  "Oxagen could not read this hook payload, so it cannot say what this agent is permitted to do. Run `oxagen agent status` and check that the wrapper matches this version of Cursor.";
 
 const UNREADABLE_ENROLLMENT =
-  "Oxagen cannot read this machine's enrollment, so it cannot say what this agent is permitted to do. Run `tacho status` to repair it.";
+  "Oxagen cannot read this machine's enrollment, so it cannot say what this agent is permitted to do. Run `oxagen agent status` to repair it.";
 
 /**
  * The fields that route a hook to the daemon. A `host.json` the full schema
@@ -833,7 +833,7 @@ const MAX_QUARANTINED_PAYLOAD_BYTES = 65_536;
  * The most hook payloads `quarantine/` holds at once. Past it a new one is
  * not written. Without a cap, a harness that changed its payload shape would
  * write a file for every event until the sweep ages them out, a week later,
- * and `tacho status` reads the whole folder on every call.
+ * and `oxagen agent status` reads the whole folder on every call.
  */
 export const MAX_QUARANTINED_HOOK_PAYLOADS = 1_000;
 
@@ -876,7 +876,7 @@ function quarantineUnreadablePayload(
 
 /**
  * Keep one hook payload that cannot become an event in `quarantine/`, where
- * `tacho status` counts it and the daemon's sweep ages it out. `tacho-hook`
+ * `oxagen agent status` counts it and the daemon's sweep ages it out. `tacho-hook`
  * calls it for stdin it cannot read, and the daemon for an http hook body it
  * cannot file on a session. Best-effort and silent on its own failure.
  *
@@ -1178,7 +1178,7 @@ export async function runTachoHook(deps: HookRunDeps): Promise<HookRunResult> {
     enrollment !== undefined && enrollment !== current
       ? {
           stdout: emptyAnswer,
-          stderr: `tacho-hook: this hook entry is for enrollment ${enrollment}, not this machine's ${current}; ignored it. Run \`tacho enroll\` to rewrite the hooks.\n`,
+          stderr: `tacho-hook: this hook entry is for enrollment ${enrollment}, not this machine's ${current}; ignored it. Run \`oxagen agent enroll\` to rewrite the hooks.\n`,
           exitCode: 0,
           path: "invalid",
         }
@@ -1254,7 +1254,7 @@ export async function runTachoHook(deps: HookRunDeps): Promise<HookRunResult> {
   if (host === undefined) {
     return {
       stdout: emptyAnswer,
-      stderr: "tacho-hook: this machine is not enrolled; run `tacho enroll`\n",
+      stderr: "tacho-hook: this machine is not enrolled; run `oxagen agent enroll`\n",
       exitCode: 0,
       path: "unenrolled",
     };

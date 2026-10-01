@@ -1,6 +1,8 @@
 /**
- * `tacho run --contained -- <claude|codex> [args...]`: ask the local daemon to
- * start one agent run under the contained launcher (ADR-096, ADR-152).
+ * `oxagen agent run --contained -- <claude|codex> [args...]` (and `oxagen run
+ * -- <claude|codex>`): ask the local daemon to start one agent run under the
+ * contained launcher (ADR-096, ADR-152). `agent-run.ts` builds the rest of
+ * `oxagen agent run` on this.
  *
  * This process holds nothing the run needs. It names the harness, the
  * operator's image, the repository, and optionally a GitHub installation
@@ -130,7 +132,7 @@ export async function runContained(
       : CONTAINED_AGENTS[command.agent as keyof typeof CONTAINED_AGENTS];
   if (harness === undefined) {
     deps.err(
-      "Name the agent after --: `tacho run --contained -- claude -p <task>` or `-- codex exec <task>`.",
+      "Name the agent after --: `oxagen agent run --contained -- claude -p <task>` or `-- codex exec <task>`.",
     );
     return 2;
   }
@@ -146,7 +148,7 @@ export async function runContained(
   const paths = agentHolding(deps.paths, harness)?.paths ?? deps.paths;
   const host = readHostFile(paths.hostFile);
   if (host === undefined) {
-    deps.err("This machine is not enrolled. Run `tacho enroll` first.");
+    deps.err("This machine is not enrolled. Run `oxagen agent enroll` first.");
     return 1;
   }
   const token = deps.env[CONTAINED_GITHUB_TOKEN_ENV];

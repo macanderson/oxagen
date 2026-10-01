@@ -8,7 +8,7 @@
  * mode alone would keep a prompt for a workspace that authorised tool results
  * and nothing else, which is the opposite of what the operator asked for.
  *
- * The vocabulary is mirrored here rather than imported: `@oxagen/tacho` takes
+ * The vocabulary is mirrored here rather than imported: `@oxagen/recorder` takes
  * no `@oxagen/*` runtime dependency (ADR-078 section 4). `retention.test.ts`
  * is where the two are held in step, and the ingest handler applies this same
  * function on the way in, so a body is never kept at one end and refused at

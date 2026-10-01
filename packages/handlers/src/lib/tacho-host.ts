@@ -33,8 +33,8 @@ import {
   digestJcs,
   type JsonValue,
   type SteeringManifest,
-} from "@oxagen/tacho";
-import { FAIL_OPEN_HOOK_PATHS } from "@oxagen/tacho/claude-code";
+} from "@oxagen/recorder";
+import { FAIL_OPEN_HOOK_PATHS } from "@oxagen/recorder/claude-code";
 import { readLatestRetentionPolicy, schema, type Tx } from "@oxagen/database";
 import { RETENTION_CONTENT_CLASSES } from "@oxagen/run-ledger";
 import { selectAgentDaySpend } from "@oxagen/telemetry";
@@ -136,7 +136,7 @@ export function tachoDenied(
  * its keys, so most of its requests never get this far: the API's auth
  * middleware answers the same 403 and reason for a retired key
  * (`resolveApiKey`, @oxagen/auth), and the host's shipper stops on it
- * (`spool.ts`, @oxagen/tacho).
+ * (`spool.ts`, @oxagen/recorder).
  */
 export const TACHO_HOST_REVOKED = "host_revoked";
 
@@ -293,7 +293,7 @@ export async function readWorkspaceRetention(
  * (ADR-078 §4).
  *
  * `gatewayMayInvoke` is a rule over the capability registry, and only the
- * control plane can evaluate it: `@oxagen/tacho` takes no `@oxagen/*` runtime
+ * control plane can evaluate it: `@oxagen/recorder` takes no `@oxagen/*` runtime
  * dependency, so the local MCP gateway cannot read a capability's surfaces,
  * mutation or sensitivity. Without the answer on the wire the gateway
  * advertised the whole workspace toolbelt and left the mandate to refuse a
@@ -357,7 +357,7 @@ function parsesGatewayTools(host: TachoHostRow): boolean {
  * The price rows the host's loopback model proxy prices an observed call with
  * (ADR-094), so `budget.session_limit_usd` can be enforced on the machine.
  *
- * `@oxagen/tacho` is a leaf package and cannot read the price book, so the
+ * `@oxagen/recorder` is a leaf package and cannot read the price book, so the
  * rows it needs are signed into the mandate. They are the list prices of the
  * two vendors the proxy routes, from the same in-code card that seeds
  * `cost.price_entries`, in the price book's own unit: integer micro-USD per one
@@ -419,7 +419,7 @@ export interface HostMandate {
 }
 
 /**
- * `FAIL_OPEN_HOOK_PATHS` (`@oxagen/tacho/claude-code`, `hook-client.ts`) is
+ * `FAIL_OPEN_HOOK_PATHS` (`@oxagen/recorder/claude-code`, `hook-client.ts`) is
  * the canonical list: the same file that decides. Signed verbatim onto a
  * bundle whose host advertised it can parse one, so the set an operator
  * relies on is read from the record, not from source.

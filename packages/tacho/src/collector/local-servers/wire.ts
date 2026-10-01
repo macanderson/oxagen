@@ -7,7 +7,7 @@
  * local gateway answers each one with a reply. Neither side keeps a decision
  * the other made.
  *
- * `@oxagen/tacho` is a leaf package with no `@oxagen/*` runtime dependency,
+ * `@oxagen/recorder` is a leaf package with no `@oxagen/*` runtime dependency,
  * so the envelope's schema here copies lane M0's
  * `localCallEnvelopeSchema` (packages/mcp-studio/src/contract/local-call-envelope.ts).
  * The cloud gateway validates every envelope against M0's schema before it

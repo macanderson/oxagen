@@ -5,7 +5,7 @@
 // organization's published versions, and sends them in the policy bundle.
 // The collector writes them where the harness reads user skills and removes
 // them at session end (`placeSkills` and `removeSkills` in
-// `@oxagen/tacho/skills`).
+// `@oxagen/recorder/skills`).
 //
 // This module reads assets through `ReadAsset` and hashes with node:crypto,
 // so it has its own entry point (`@oxagen/steering-bundle/session`) and stays
@@ -13,13 +13,13 @@
 import { createHash } from "node:crypto";
 import type { Bundle, BundleRecord } from "@oxagen/oxagen/steering-repo/bundle";
 import { readSteeringRecord } from "@oxagen/oxagen/steering-repo/record";
-import { SKILL_NAME_MAX, type SessionSkill, type SkillFile } from "@oxagen/tacho/skills";
+import { SKILL_NAME_MAX, type SessionSkill, type SkillFile } from "@oxagen/recorder/skills";
 import { renderMentions, toolModesOf } from "./mentions";
 import { RecordFileError } from "./read";
 import type { BundleSource, Delivery } from "./render";
 import { compareText } from "./tree";
 
-export type { SessionSkill, SkillFile } from "@oxagen/tacho/skills";
+export type { SessionSkill, SkillFile } from "@oxagen/recorder/skills";
 
 /**
  * The folder name for a skill: its lineage with dots as hyphens, since Claude

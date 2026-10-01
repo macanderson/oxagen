@@ -1,6 +1,7 @@
 # Homebrew formula for the two compiled CLIs without the desktop app:
-# `tacho` (the wrapper: enroll, status, reassign, unenroll, daemon, hook) and
-# `oxagen` (the platform CLI), each a Node single-executable the Desktop
+# `oxagen` (the platform CLI, which enrolls the machine and runs its hooks and
+# collector) and the recorder's legacy executable, kept under its old name for
+# machines enrolled before #4879. Each is a Node single-executable the Desktop
 # workflow builds per OS (tools/sea/compile.mjs) and attaches to the
 # desktop-v<version> release next to a `<asset>.sha256` file.
 #
@@ -9,7 +10,7 @@
 # per-asset digest token that `tools/packaging/stamp.mjs` fills from the
 # release's .sha256 files; see tools/packaging/README.md for the flow.
 class Tacho < Formula
-  desc "Wrapper putting coding agents under Oxagen control, plus the oxagen CLI"
+  desc "The oxagen CLI, which puts coding agents under Oxagen control"
   homepage "https://oxagen.sh/"
   version "{{version}}"
   license :cannot_represent
@@ -56,9 +57,9 @@ class Tacho < Formula
   end
 
   def install
-    # Both assets are bare executables named with their Rust triple; tacho's
-    # `runtimeCommands` finds the multi-call layout (`<bin>/tacho hook`,
-    # `<bin>/tacho daemon`) in a Homebrew prefix as it does inside the app.
+    # Both assets are bare executables named with their Rust triple. The
+    # recorder names the `oxagen` executable in a Homebrew prefix's stable
+    # `opt` path in every hook and the service, as it does inside the app.
     bin.install Dir["tacho-*"].first => "tacho"
     resource("oxagen").stage do
       bin.install Dir["oxagen-*"].first => "oxagen"
@@ -67,15 +68,16 @@ class Tacho < Formula
 
   def caveats
     <<~EOS
-      Sign in, then enroll this machine (installs the tachod user service
+      Sign in, then enroll this machine (installs the collector user service
       and the hooks for the harnesses you name):
         oxagen login
-        tacho enroll --harness claude-code,codex,cursor,stella
+        oxagen agent enroll --harness claude-code,codex,cursor,stella
 
-      Before `brew uninstall tacho`, run `tacho unenroll --all` so the hooks,
-      the service and every enrollment on the control plane are removed with it.
+      Before you uninstall this formula, run `oxagen agent unenroll --all` so
+      the hooks, the service, and every enrollment on the control plane are
+      removed with it.
       Managed machines enroll without a browser:
-        tacho enroll --token <apiKey> --org <org> --workspace <ws> --managed --harness claude-code,codex,cursor,stella
+        oxagen agent enroll --token <apiKey> --org <org> --workspace <ws> --managed --harness claude-code,codex,cursor,stella
     EOS
   end
 
@@ -83,6 +85,6 @@ class Tacho < Formula
     assert_match version.to_s, shell_output("#{bin}/tacho --version")
     assert_match version.to_s, shell_output("#{bin}/oxagen --version")
     # Not enrolled: status reports it and exits 1.
-    assert_match "not enrolled", shell_output("#{bin}/tacho status", 1).downcase
+    assert_match "not enrolled", shell_output("#{bin}/oxagen agent status", 1).downcase
   end
 end

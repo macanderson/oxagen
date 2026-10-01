@@ -7,7 +7,7 @@
  * typecheck break that three PRs then fixed at once. No deploy ran for the
  * whole window, and nothing outside the Actions tab said so. The issue is the
  * record: its count is how often main breaks, and the time from open to close
- * is how long it stays broken. Filter on the `deployment-failure` label.
+ * is how long it stays broken. Filter on the `DEPLOYMENT-FAILURE` label.
  *
  * ## One issue per incident, not per run
  *
@@ -23,7 +23,7 @@
  * - `main-red`: any other job failed. The commit never reached the deploy.
  *
  * They are separate issues because they have different owners and fixes, and
- * a label per kind (`deployment-failure:deploy`, `deployment-failure:main-red`)
+ * a label per kind (`DEPLOYMENT-FAILURE:DEPLOY`, `DEPLOYMENT-FAILURE:MAIN-RED`)
  * lets each be counted on its own.
  *
  * ## What counts as green
@@ -47,25 +47,33 @@ const REPO = process.env.GITHUB_REPOSITORY ?? "macanderson/oxagen";
 const TOKEN = process.env.GITHUB_TOKEN;
 const WORKFLOW = "pipeline.yml";
 
-export const LABEL = "deployment-failure";
+// Uppercase since 2026-09-30. GitHub matches a label name without regard to
+// case when it adds, filters, or reads one by name, so these find and reuse
+// the labels the repo stored under the old lowercase names too. The colours
+// and descriptions are the label manifest's, used only if a label is missing.
+export const LABEL = "DEPLOYMENT-FAILURE";
 export const KIND_LABEL = {
-  deploy: "deployment-failure:deploy",
-  "main-red": "deployment-failure:main-red",
+  deploy: "DEPLOYMENT-FAILURE:DEPLOY",
+  "main-red": "DEPLOYMENT-FAILURE:MAIN-RED",
 };
 const LABEL_SPECS = {
   [LABEL]: {
-    color: "b60205",
+    color: "D5584D",
     description: "CI filed this: main went red or a production deploy failed",
   },
   [KIND_LABEL.deploy]: {
-    color: "d93f0b",
+    color: "D5584D",
     description: "A deploy or migration-gate job failed on main",
   },
   [KIND_LABEL["main-red"]]: {
-    color: "e99695",
+    color: "D5584D",
     description: "A check failed on main before the deploy",
   },
-  P0: { color: "b60205", description: "Priority 0" },
+  P0: {
+    color: "FFFFFF",
+    description:
+      "Drop everything: an outage, a security or data leak, a wrong charge, or a blocked core task",
+  },
 };
 
 const FAILED = new Set(["failure", "timed_out", "startup_failure"]);
@@ -115,14 +123,19 @@ export function prNumberFrom(message) {
 
 const MARKER = (kind) => `<!-- deployment-failure:kind=${kind} -->`;
 
+/**
+ * The title format in CLAUDE.md under Issue titles:
+ * `<Priority> <Tier> <Size> <Kind> (<Area>): <Statement>`. This workflow owns
+ * the issue, so the triage pass leaves the title alone.
+ */
 export function titleFor(kind, jobs) {
   const names = [...new Set(jobs.map((j) => j.name))];
   const shown =
     names.slice(0, 3).join(", ") +
     (names.length > 3 ? `, +${names.length - 3} more` : "");
   return kind === "deploy"
-    ? `P0 · ops/Deploy · Production deploy failed on main: ${shown}`
-    : `P0 · ops/CI · main is red: ${shown || "the pipeline failed"}`;
+    ? `P0 T3 S DevOps (Deploy): Production deploy failed on main: ${shown}`
+    : `P0 T3 S DevOps (CI): Main is red: ${shown || "the pipeline failed"}`;
 }
 
 function jobLines(jobs) {

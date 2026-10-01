@@ -23,7 +23,7 @@ import {
   COMPLETENESS_GAP_KINDS,
   GRADE_ENFORCEMENT_TIERS,
   REPLAY_GRADES,
-} from "@oxagen/tacho";
+} from "@oxagen/recorder";
 import { z } from "zod";
 import { PROOF_VERDICTS } from "@oxagen/run-evidence";
 import { registerCapability } from "../registry";

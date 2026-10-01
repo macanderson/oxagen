@@ -249,6 +249,49 @@
           }
         ]
       },
+      "connection": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "provider": {
+                "type": "string",
+                "enum": [
+                  "github",
+                  "gitlab"
+                ]
+              },
+              "id": {
+                "type": "integer",
+                "exclusiveMinimum": 0
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "description": "The GitHub organization's or personal account's login, or the GitLab group's path."
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "organization",
+                  "user"
+                ],
+                "description": "organization for a GitHub organization or GitLab group, user for the owner's own personal GitHub account."
+              }
+            },
+            "required": [
+              "provider",
+              "id",
+              "name",
+              "kind"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
       "connectionChoices": {
         "type": "array",
         "items": {
@@ -268,13 +311,22 @@
             "name": {
               "type": "string",
               "minLength": 1,
-              "description": "The GitHub organization's login or the GitLab group's path."
+              "description": "The GitHub organization's or personal account's login, or the GitLab group's path."
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "organization",
+                "user"
+              ],
+              "description": "organization for a GitHub organization or GitLab group, user for the owner's own personal GitHub account."
             }
           },
           "required": [
             "provider",
             "id",
-            "name"
+            "name",
+            "kind"
           ],
           "additionalProperties": false
         },
@@ -292,6 +344,7 @@
       "health",
       "differences",
       "legacySource",
+      "connection",
       "connectionChoices"
     ],
     "additionalProperties": false

@@ -16,7 +16,7 @@
   },
   "dependencies": {
     "@cedar-policy/cedar-wasm": "4.13.0",
-    "@oxagen/tacho": "workspace:*",
+    "@oxagen/recorder": "workspace:*",
     "zod": "3.25.76"
   },
   "devDependencies": {

@@ -14,7 +14,7 @@
 
 ## 1. Executive decision
 
-**One package, `@oxagen/tacho`, is the Oxagen wrapper for every agent Oxagen does not run itself.** It carries three adapters over one core, and one per-host daemon:
+**One package, `@oxagen/recorder`, is the Oxagen wrapper for every agent Oxagen does not run itself.** It carries three adapters over one core, and one per-host daemon:
 
 | Surface | How it attaches | Enrollment unit |
 |---|---|---|
@@ -37,13 +37,13 @@ Codex CLI is out of scope for v1 (§13). Its hook surface is documented upstream
 
 Tacho's seven product requirements (`design/overview.md` §2: R1 SDK-agnostic, R2 one-line, R3 no hot-path drag, R4 tamper-evident traces, R5 permission authority, R6 trust over time, R7 insurable) stand. This spec adds the harness requirements that the product brief did not have to state:
 
-- **H1 — One command per machine.** `oxagen tacho enroll` (or `npx @oxagen/tacho enroll` on a machine without the CLI) enrolls the host. From that moment every Claude Code session started by that OS user, in any directory, in any mode (`claude`, `claude -p`, `--resume`, subagents, worktrees, `claude --settings`), is observed and gated. Nothing else needs to be installed, cloned, or edited, and no repository needs a `.claude/settings.json` change.
+- **H1 — One command per machine.** `oxagen tacho enroll` (or `npx @oxagen/recorder enroll` on a machine without the CLI) enrolls the host. From that moment every Claude Code session started by that OS user, in any directory, in any mode (`claude`, `claude -p`, `--resume`, subagents, worktrees, `claude --settings`), is observed and gated. Nothing else needs to be installed, cloned, or edited, and no repository needs a `.claude/settings.json` change.
 - **H2 — Parity of controls with the Oxagen kernel.** Every control Oxagen has for its own agents has a defined effect on an enrolled Claude Code session: IAM role grants and denies, `iam.emergency_denies` and the deny-generation counter, approval requests, budget ceilings, and the audit chain. Where a control cannot be made to bite (a hard process kill), the spec says "best effort" and the record says so too.
 - **H3 — One contract, three producers.** The event envelope, policy bundle, elevation exchange, and evidence finalization are the same for the Claude Code adapter, the Claude Agent SDK adapter, the custom-agent SDK, and Stella's native `tacho-core`. A session from any producer lands in the same tables and compares in the same UI.
 - **H4 — Two projections, one record.** The hash-chained `tacho/1.0` stream is the evidentiary record. The OpenTelemetry view (`design/trace-model.md` §4) and the CGP host-trace journal (§6.4) are derived projections. A projection is never the source of truth and is never chain-verified on its own.
 - **H5 — Fail-open telemetry, fail-closed enforcement.** Verbatim from the design and restated because Claude Code's own hook semantics would otherwise invert it: a failed telemetry hook must never block a session; a failed **enforcement** hook must never let an out-of-grant action proceed. §5.4 shows how the two are separated at the hook level.
 - **H6 — Tamper-evident, not tamper-proof.** An engineer can edit `~/.claude/settings.json`, set `disableAllHooks`, or run an unenrolled Claude Code binary. As in the design, this is visible evidence (an `unobserved_session` or `hooks_removed` incident, a chain gap), it lowers the trust score, and an enterprise that needs prevention deploys the managed-settings lockdown (§5.5). The spec never claims the hooks cannot be removed.
-- **H7 — Zero coupling in the published artifact.** `@oxagen/tacho` is one of three public npm packages (with `@oxagen/cli` and `@oxagen/skills`). It ships with no `@oxagen/*` runtime dependency, following the CLI's standalone-publish discipline (`apps/cli/scripts/prepare-standalone-publish.mjs`) and the usage-telemetry pattern of carrying its own copy of a schema with a test-only cross-check against the server package.
+- **H7 — Zero coupling in the published artifact.** `@oxagen/recorder` is one of three public npm packages (with `@oxagen/cli` and `@oxagen/skills`). It ships with no `@oxagen/*` runtime dependency, following the CLI's standalone-publish discipline (`apps/cli/scripts/prepare-standalone-publish.mjs`) and the usage-telemetry pattern of carrying its own copy of a schema with a test-only cross-check against the server package.
 - **H8 — An app with no hook surface is connected, not unsupported.** The AI applications a non-developer runs — Claude Desktop and its kin — have no hook surface, and wrapping is therefore not available on them. They do have an MCP client config, so enrollment writes one Oxagen server into it and the collector's local gateway serves the workspace toolbelt under the mandate (§5.6). That is the `gateway` tier, and it is neither a degraded wrap nor a superset of one: wrapping is **broader and weaker** (it sees every action, but the hook runs in a process Oxagen does not own, so the record is `client_attested`), connection is **narrower and stronger** (Oxagen sees only what routes through it, but a denied call does not execute). No surface may put the two on a single "more governed / less governed" axis; ADR-078 §2 bans it in both directions.
 
 Non-goals for v1: an egress proxy or eBPF ambient capture (`design/overview.md` §4(c)), the insurer attestation API (`oxagen-roadmap:docs/oxagen/specs/tacho/design/insurer-api.md`), and a Codex adapter. The event model reserves room for all three.
@@ -117,18 +117,18 @@ Shipping a batch costs the batch, not the session. Each session's body file carr
 
 ### 4.1 Where it lives
 
-`packages/tacho/` in this monorepo, published as **`@oxagen/tacho`**. It is a leaf package: no `@oxagen/*` runtime dependency (H7). Subpath exports:
+`packages/tacho/` in this monorepo, published as **`@oxagen/recorder`**. It is a leaf package: no `@oxagen/*` runtime dependency (H7). Subpath exports:
 
 | Export | Contents |
 |---|---|
-| `@oxagen/tacho` | core: `tacho/1.0` zod schema, JCS digest and chain, `startSession`, `emit`, `authorize`, `wrapTool`, `wrapModel`, `wrap`, transport client, inline emitter |
-| `@oxagen/tacho/claude-agent-sdk` | `govern(options, identity)` merging `hooks` and `env` into `ClaudeAgentOptions`; `wrapQuery(query)` |
-| `@oxagen/tacho/claude-code` | the hook handler (`handleHookEvent(input) → output`, shared by `tacho-hook` and the SDK adapter), the settings writer, the enrollment routine, the OTel env block |
-| `@oxagen/tacho/collector` | `tachod`: receivers, WAL, chain, spool, inbox, detector, exporters |
-| `@oxagen/tacho/trace` | projection to `contextgraph-trace` NDJSON and the TypeScript port of its eight oracles (§6.4) |
+| `@oxagen/recorder` | core: `tacho/1.0` zod schema, JCS digest and chain, `startSession`, `emit`, `authorize`, `wrapTool`, `wrapModel`, `wrap`, transport client, inline emitter |
+| `@oxagen/recorder/claude-agent-sdk` | `govern(options, identity)` merging `hooks` and `env` into `ClaudeAgentOptions`; `wrapQuery(query)` |
+| `@oxagen/recorder/claude-code` | the hook handler (`handleHookEvent(input) → output`, shared by `tacho-hook` and the SDK adapter), the settings writer, the enrollment routine, the OTel env block |
+| `@oxagen/recorder/collector` | `tachod`: receivers, WAL, chain, spool, inbox, detector, exporters |
+| `@oxagen/recorder/trace` | projection to `contextgraph-trace` NDJSON and the TypeScript port of its eight oracles (§6.4) |
 | bins | `tacho` (enroll, status, unenroll, daemon, export, verify), `tacho-hook`, `tachod` |
 
-The `oxagen` CLI (`apps/cli`) gains `oxagen tacho <enroll|status|unenroll|export|verify>` as thin delegates to the same functions, so a machine that already has the CLI uses it and a machine that does not runs `npx @oxagen/tacho enroll`. Both paths are the same code and the same enrollment contract.
+The `oxagen` CLI (`apps/cli`) gains `oxagen tacho <enroll|status|unenroll|export|verify>` as thin delegates to the same functions, so a machine that already has the CLI uses it and a machine that does not runs `npx @oxagen/recorder enroll`. Both paths are the same code and the same enrollment contract.
 
 Server-side code lives where every other capability lives: contracts in `packages/oxagen/src/contracts/tacho.*.ts`, handlers in `packages/handlers/src/tacho.*.ts`, routes in `apps/api/src/routes/v1/tacho.*.ts`, ClickHouse migrations in `packages/telemetry/src/migrations/`, Drizzle schema in `packages/database/src/schema/agent.ts`. A shared-schema package is not introduced; the published wrapper carries its own copy of the wire schema and a test asserts byte parity with the contract's zod-to-JSON-Schema output, as `apps/cli/src/telemetry/usage.ts` does for usage telemetry.
 
@@ -237,7 +237,7 @@ Enrollment is per agent (§5.8), and **an enrollment carries a tier per harness,
 
 **The app never holds an Oxagen credential.** The gateway holds it; the app holds a loopback URL. A non-developer will not paste a token into a JSON file, and asking them to would move the credential onto the least protected surface on the machine. The app *is* the credential.
 
-**The gateway is a proxy, not a second materialiser.** H7 keeps `@oxagen/tacho` free of any `@oxagen/*` runtime dependency, so the gateway imports no `materializeTools`, no `mcp-rbac`, no `tool-budget`. It forwards the MCP JSON-RPC envelope to the workspace MCP endpoint over HTTPS. There is exactly one tool materialiser, one RBAC evaluation, one entitlement gate and one meter, and they are the ones that already exist on the control plane. The gateway runs no turn, calls no model and spawns no worker, so ADR-043 holds with no exception.
+**The gateway is a proxy, not a second materialiser.** H7 keeps `@oxagen/recorder` free of any `@oxagen/*` runtime dependency, so the gateway imports no `materializeTools`, no `mcp-rbac`, no `tool-budget`. It forwards the MCP JSON-RPC envelope to the workspace MCP endpoint over HTTPS. There is exactly one tool materialiser, one RBAC evaluation, one entitlement gate and one meter, and they are the ones that already exist on the control plane. The gateway runs no turn, calls no model and spawns no worker, so ADR-043 holds with no exception.
 
 **Two keys, and the purpose of each is enforced.** Enrollment mints the host key (purpose `tacho_host_v1`) and a second key for the gateway (purpose `tacho_gateway_v1`); the gateway presents the second and never the first. The reason is not tidiness. An API-key principal has no `org_users` row, so `assertCallerRole` returns early for one and `checkIAM` takes a tier fast-path; a connected app forwarding under the host key would hold **owner authority over the workspace** and could reach MCP-only operations such as `set_model_credential`. `machineKeyDenial` (`packages/iam/src/machine-key-scope.ts`) runs in the kernel's IAM adapter *before* `checkIAM`, so it sits ahead of that fast-path and on the single `invoke()` path rather than in each handler. A key whose scope names a purpose may invoke only what that purpose is for, and an unrecognised purpose is allowed nothing. `tacho_host_v1` is held to the three calls the control client makes; `tacho_gateway_v1`'s mandate is a rule rather than a list — an `mcp`-surface capability that does not mutate and is not high-sensitivity. **A host with no gateway key serves no tools and never falls back to the host key**, which is the point of the split.
 
@@ -476,7 +476,7 @@ There is no offline queue. A machine counts as connected while it polls and for 
 
 ```ts
 import { query } from "@anthropic-ai/claude-agent-sdk";
-import { govern } from "@oxagen/tacho/claude-agent-sdk";
+import { govern } from "@oxagen/recorder/claude-agent-sdk";
 
 for await (const msg of query({
   prompt,
@@ -488,7 +488,7 @@ for await (const msg of query({
 
 ## 9. Custom agents
 
-`@oxagen/tacho` is the SDK of `design/overview.md` §4: `startSession({ agentKey, apiKey })`, `wrap(agent)` (Proxy with SDK detection: Vercel AI `wrapLanguageModel` middleware, OpenAI Agents `RunHooks`, LangChain callbacks, generic proxy), `wrapTool(tool, session)` (standing-grant check, elevation, `token_use`, execute, `tool_call`), `wrapModel(model, session)` (`llm_call` with digests and usage), `authorize(action)` (explicit elevation), `emit(event)`, `end(outcome)`. The `design/examples/` sketches are the reference; the plan turns `wrap-vercel-ai.ts` into the first runnable example.
+`@oxagen/recorder` is the SDK of `design/overview.md` §4: `startSession({ agentKey, apiKey })`, `wrap(agent)` (Proxy with SDK detection: Vercel AI `wrapLanguageModel` middleware, OpenAI Agents `RunHooks`, LangChain callbacks, generic proxy), `wrapTool(tool, session)` (standing-grant check, elevation, `token_use`, execute, `tool_call`), `wrapModel(model, session)` (`llm_call` with digests and usage), `authorize(action)` (explicit elevation), `emit(event)`, `end(outcome)`. The `design/examples/` sketches are the reference; the plan turns `wrap-vercel-ai.ts` into the first runnable example.
 
 Custom agents are `client_attested` by construction. They reach the `gateway` tier only when their tools are Oxagen capabilities called through the workspace MCP endpoint or the metered inference endpoint, which the SDK makes the easy path (`tacho.tools.oxagen(session)` returns the governed toolset).
 
@@ -528,15 +528,15 @@ Accepted limitation, stated as the design states it: a fully compromised host ca
 3. **Trace format.** The design's ADR 0005 keeps `tacho/1.0` standalone and exports to OTel and CGP frames. This spec adds a third export, the `contextgraph-trace` journal, and makes passing its oracles a release gate. The ADR's reasoning ("two projections must be kept in sync with the envelope") now covers three.
 4. **Consent unit.** The host enrollment is the consent unit for Claude Code; the agent registration is the consent unit for SDK agents; retention of raw bodies is a further per-workspace grant. This answers Stella's drain analysis open question 2 for every producer.
 5. **Fidelity vocabulary.** Hooks are `sdk` fidelity; no fourth value is added.
-6. **Naming.** The product name is Tacho, the package is `@oxagen/tacho`, the daemon is `tachod`, the hook binary is `tacho-hook`. The `cgp-website` copies of the design are superseded by `design/` here and the site links to this folder (plan §PR 0).
+6. **Naming.** The product name is Tacho, the package is `@oxagen/recorder`, the daemon is `tachod`, the hook binary is `tacho-hook`. The `cgp-website` copies of the design are superseded by `design/` here and the site links to this folder (plan §PR 0).
 
 ## 13. Codex CLI
 
-Out of scope for v1. The upstream documentation at `developers.openai.com/codex/hooks` describes a hook system with a `PreToolUse`-style pre-execution decision, which suggests the Claude Code adapter's shape would transfer, but the field names, configuration location, blocking semantics, and telemetry surface were not verified in this design pass. `@oxagen/tacho/codex` is reserved as a subpath; the plan carries a one-day spike whose output is either a mapping table like §5.4 or a note that Codex needs a proxy-fidelity adapter instead.
+Out of scope for v1. The upstream documentation at `developers.openai.com/codex/hooks` describes a hook system with a `PreToolUse`-style pre-execution decision, which suggests the Claude Code adapter's shape would transfer, but the field names, configuration location, blocking semantics, and telemetry surface were not verified in this design pass. `@oxagen/recorder/codex` is reserved as a subpath; the plan carries a one-day spike whose output is either a mapping table like §5.4 or a note that Codex needs a proxy-fidelity adapter instead.
 
 ## 14. Acceptance criteria
 
-1. On a clean macOS or Linux machine with Claude Code installed, `oxagen tacho enroll` (or `npx @oxagen/tacho enroll`) completes with one authentication and no further edits, and `oxagen tacho status` reports healthy.
+1. On a clean macOS or Linux machine with Claude Code installed, `oxagen tacho enroll` (or `npx @oxagen/recorder enroll`) completes with one authentication and no further edits, and `oxagen tacho status` reports healthy.
 2. After enrollment, an interactive `claude` session, a `claude -p` session, a `--resume` of each, a session in a new directory, and a subagent spawned inside one all produce chained sessions visible on the fleet page within 10 seconds of `SessionEnd`, each with a matching `agent_start`/`agent_stop`, dense `seq`, and verifiable chain.
 3. Every tool call in those sessions appears as `tool_requested` + `tool_call` with input and output digests, latency, status, and a side-effect classification; every model call appears as `llm_call` with model, token tiers, and cost; the session total reconciles with Claude Code's own `total_cost_usd` for `-p` runs within rounding.
 4. A tool matching a bundle `deny` rule is refused at `PreToolUse` with the rule named, and the refusal is a chained `policy_decision` and an `iam.authorization_decisions` row.
@@ -551,7 +551,7 @@ Out of scope for v1. The upstream documentation at `developers.openai.com/codex/
 13. The session record's `enforcement_tier` is `gateway` only when every tool call in it was served by the Oxagen MCP endpoint or a reverse-RPC engine; the fleet UI, exports, and reports never use the word "enforced" for a `harness` or `observe` session, and no surface ranks the two tiers on a single "more governed / less governed" axis.
 14. Sealed sessions finalize a `RunEvidenceManifestV1` with `evidence_authority: client_attested` and a replay grade derived from `completeness.gaps[]`; the manifest verifies offline with the published platform key.
 15. Tenant identity is never taken from an ingest body: a batch whose events name another workspace is rejected, and the accepted rows carry the API key's scope.
-16. `@oxagen/tacho` publishes with no `@oxagen/*` runtime dependency, and its wire schema is byte-identical to the contract's generated JSON Schema in a test.
+16. `@oxagen/recorder` publishes with no `@oxagen/*` runtime dependency, and its wire schema is byte-identical to the contract's generated JSON Schema in a test.
 17. A telemetry hook round-trip (`PostToolUse` to acknowledged WAL append) measures p50 under 5 ms and `tacho-hook` start-to-decision measures p95 under 30 ms on the reference laptop; the numbers are recorded in the plan's verification section.
 18. `oxagen tacho unenroll` leaves `~/.claude/settings.json` with every non-Tacho entry intact, stops the service, and the host shows `revoked` on the fleet page.
 19. On a machine with Claude Desktop installed, enrollment writes exactly one Oxagen MCP server into its client config, leaves every other entry byte-identical, and the app lists the workspace toolbelt after a restart without any credential in that file; `unenroll` removes our entry and only ours.

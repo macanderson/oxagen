@@ -4,7 +4,7 @@
   // these files alone would restore a cached pass. Listing them as inputs
   // re-runs the tests when they change. A package config replaces the root
   // `inputs` array rather than adding to it, so the root's entries come first.
-  // tools/scripts/turbo-test-inputs.test.ts holds both rules.
+  // tools/scripts/turbo-test-inputs.tree.test.ts holds both rules.
   //
   // role-check.test.ts imports the role-gate reader from tools/scripts, and the
   // mcp-studio tests read that package's fixtures.

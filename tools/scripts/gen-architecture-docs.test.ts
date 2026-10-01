@@ -1,20 +1,9 @@
 import { createHash } from "node:crypto";
-import {
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import {
-  ROOT,
-  build,
-  canonicalJson,
-  readOrNull,
-} from "./gen-architecture-docs";
+import { canonicalJson } from "./gen-architecture-docs";
 import {
   collectAdrs,
   collectApiRoutes,
@@ -32,7 +21,7 @@ import {
   type Capability,
   type StorageManifest,
 } from "./lib/archdocs/collect";
-import { flows, verifyRefs } from "./lib/archdocs/flows";
+import { verifyRefs } from "./lib/archdocs/flows";
 import {
   layer,
   layoutDag,
@@ -821,11 +810,6 @@ describe("collectors", () => {
 // ── flows: the ref guard ─────────────────────────────────────────────────────
 
 describe("curated flows", () => {
-  it("every flow cites at least one source and every ref resolves in this tree", () => {
-    for (const f of flows) expect(f.refs.length, f.id).toBeGreaterThan(0);
-    expect(verifyRefs(ROOT, readOrNull)).toEqual([]);
-  });
-
   it("verifyRefs names the missing file and the missing symbol", () => {
     const fake = (p: string): string | null =>
       p.endsWith("kernel.ts") ? "nothing here" : null;
@@ -844,32 +828,5 @@ describe("build", () => {
     expect(canonicalJson({ b: [{ z: 1, a: 2 }], a: 1 })).toBe(
       '{\n "a": 1,\n "b": [\n  {\n   "a": 2,\n   "z": 1\n  }\n ]\n}\n',
     );
-  });
-
-  it("builds the atlas from the real tree deterministically", {
-    timeout: 120_000,
-  }, async () => {
-    const first = await build(ROOT);
-    const second = await build(ROOT);
-    expect(first.html).toBe(second.html);
-    expect(first.json).toBe(second.json);
-    expect(first.html.startsWith("<!doctype html>")).toBe(true);
-    expect(first.html).toContain("<title>Oxagen Architecture Atlas</title>");
-    expect(first.html).not.toMatch(/\b20\d\d-\d\d-\d\dT/); // no build timestamps
-    for (const f of flows) expect(first.html).toContain(`id="${f.id}"`);
-    expect(first.model.capabilities.length).toBeGreaterThan(100);
-    expect(
-      first.model.apiRoutes.filter((r) => r.capability).length /
-        first.model.apiRoutes.length,
-    ).toBeGreaterThan(0.85);
-  });
-
-  it("the generated output is not tracked, so a moving main can never make it stale", () => {
-    const ignore = readFileSync(join(ROOT, ".gitignore"), "utf8");
-    expect(ignore).toContain("apps/docs/public/architecture/");
-    const docsPkg = JSON.parse(
-      readFileSync(join(ROOT, "apps/docs/package.json"), "utf8"),
-    ) as { scripts: Record<string, string> };
-    expect(docsPkg.scripts.prebuild).toContain("docs:architecture");
   });
 });

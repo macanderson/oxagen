@@ -3,7 +3,7 @@
 // call, and each delivery settles once.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TransportError } from "@oxagen/mcp-studio";
-import { digestMismatch, type Delivery } from "@oxagen/tacho/local-servers";
+import { digestMismatch, type Delivery } from "@oxagen/recorder/local-servers";
 import {
   createInProcessBroker,
   LONG_POLL_WAIT_MS,

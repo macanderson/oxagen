@@ -4,7 +4,7 @@
  * mapping is pinned here rather than inferred at each surface.
  */
 import { describe, expect, it } from "vitest";
-import { TACHO_HARNESS_TIERS, tachoHarnessSchema } from "@oxagen/tacho";
+import { TACHO_HARNESS_TIERS, tachoHarnessSchema } from "@oxagen/recorder";
 import { tiersFor } from "./tacho.host.list";
 
 describe("tiersFor", () => {

@@ -15,6 +15,7 @@ const SOURCES: Record<string, unknown> = {
   createOrAdoptRepository: repository.createOrAdoptRepository,
   createRepository: repository.createRepository,
   getRepository: repository.getRepository,
+  getUserLogin: repository.getUserLogin,
   listSteeringInstallations: repository.listSteeringInstallations,
   SteeringReauthorizeError: repository.SteeringReauthorizeError,
   STEERING_BRANCH: firstCommit.STEERING_BRANCH,

@@ -8,8 +8,8 @@
  * `claude_code__Bash` is `builtin__shell`, `claude_code__Edit` is
  * `builtin__write_file`, and a tool version is a Long.
  */
-import type { CedarToolEntry } from "@oxagen/tacho";
-import type { CedarArgType, CedarRuntime, CedarToolClass } from "@oxagen/tacho/policy";
+import type { CedarToolEntry } from "@oxagen/recorder";
+import type { CedarArgType, CedarRuntime, CedarToolClass } from "@oxagen/recorder/policy";
 import { compilePolicies, type AgentDeclaration, type CompiledPolicySet } from "./compile";
 
 export const CORE = "core-platform";

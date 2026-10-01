@@ -998,7 +998,7 @@ describe("the daemon's audit wiring", () => {
   });
 
   it("stops shipping but keeps serving live sessions when this machine started the revoke", async () => {
-    // `tacho reassign`, `unenroll` and a harness add revoke first and mark
+    // `oxagen agent reassign`, `unenroll` and a harness add revoke first and mark
     // host.json `revoked_at`, then replace or remove this daemon. Until then
     // the harnesses still call through it, and a harness-only reassign keeps
     // their sessions (ADR-179), so the old key's refusal must not refuse

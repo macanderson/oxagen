@@ -2,7 +2,7 @@
 // host already trusts.
 import { generateKeyPairSync, verify, createPublicKey } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { keyIdForPublicKey } from "@oxagen/tacho/host";
+import { keyIdForPublicKey } from "@oxagen/recorder/host";
 import { TACHO_BUNDLE_SIGNING_KEY_ENV } from "../../lib/tacho-bundle-signing";
 import { localCallSignerFromEnv, localCallSignerFromPem } from "./signer";
 

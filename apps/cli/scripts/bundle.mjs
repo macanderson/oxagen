@@ -22,6 +22,14 @@ import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const cliRoot = resolve(here, "..");
+// The recorder reads its version from `__TACHO_VERSION__` once bundled, and
+// every manifest carries the same number (`pnpm check:versions`), so the
+// CLI's own is the recorder's. Without it, the bundled recorder looks for a
+// package.json beside the bundle, which an installed `oxagen` does not have,
+// and reports 0.0.0.
+const version = JSON.parse(
+  readFileSync(resolve(cliRoot, "package.json"), "utf8"),
+).version;
 const entry = resolve(cliRoot, "src/index.ts");
 const outfile = resolve(cliRoot, "dist-standalone/oxagen.mjs");
 
@@ -75,6 +83,7 @@ await build({
       "const __dirname = __ox_dirname(__filename);",
     ].join("\n"),
   },
+  define: { __TACHO_VERSION__: JSON.stringify(version) },
   plugins: [tsExtensionResolver],
   loader: { ".node": "copy" },
   logLevel: "info",
@@ -109,7 +118,10 @@ await build({
   banner: {
     js: 'const __importMetaUrl = require("node:url").pathToFileURL(__filename).href;',
   },
-  define: { "import.meta.url": "__importMetaUrl" },
+  define: {
+    "import.meta.url": "__importMetaUrl",
+    __TACHO_VERSION__: JSON.stringify(version),
+  },
   plugins: [tsExtensionResolver],
   loader: { ".node": "copy" },
   logLevel: "info",

@@ -11,7 +11,6 @@
  */
 import { execFileSync } from "node:child_process";
 import {
-  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -75,15 +74,8 @@ describe("resolve_app_dir", () => {
     expect(resolveIn(tree)).toBe("apps/app");
   });
 
-  it("names, on this tree, a workspace package with a next build", () => {
-    const appDir = resolveIn(root);
-    expect(existsSync(join(root, appDir, "package.json"))).toBe(true);
-    const pkg = JSON.parse(
-      readFileSync(join(root, appDir, "package.json"), "utf8"),
-    ) as { name: string; scripts: Record<string, string> };
-    expect(pkg.name).toMatch(/^@oxagen\/app/);
-    expect(pkg.scripts.build).toMatch(/next build/);
-  });
+  // The run of resolve_app_dir on this tree reads the live tree, so it lives in
+  // package-for-node.tree.test.ts.
 });
 
 describe("package-for-node.sh app", () => {
@@ -210,6 +202,70 @@ describe("package-for-node.sh runtime env", () => {
         RUNTIME_ENV_FILE: join(tmpdir(), "no-such-runtime-env.json"),
       }),
     ).toThrow();
+  });
+});
+
+// On 2026-09-30 mcp answered /health inside the deploy's grace window and ran
+// its heap out on the first POST /mcp (#4829). The manifest now carries a
+// request down the real path, and deploy-service.sh rolls back a release that
+// does not answer it.
+describe("package-for-node.sh smoke request", () => {
+  interface Smoke {
+    method: string;
+    path: string;
+    headers: Record<string, string>;
+    body: string;
+    expect?: string;
+  }
+  const smokeOf = (env: Record<string, string>): Smoke | undefined =>
+    (nodeManifest(env) as { env: Record<string, string>; smoke?: Smoke }).smoke;
+
+  const mcpSmoke = (): Smoke => {
+    const match = /^readonly MCP_SMOKE_REQUEST='(.*)'$/m.exec(script);
+    expect(match, "package-for-node.sh defines MCP_SMOKE_REQUEST").not.toBeNull();
+    return JSON.parse(match?.[1] ?? "") as Smoke;
+  };
+
+  it("writes no smoke request unless one is named", () => {
+    expect(smokeOf({ WRITE_MANIFEST_SMOKE: "" })).toBeUndefined();
+  });
+
+  it("carries the named request into the manifest", () => {
+    const request = { method: "GET", path: "/ready", headers: {}, body: "" };
+    expect(smokeOf({ WRITE_MANIFEST_SMOKE: JSON.stringify(request) })).toEqual(request);
+  });
+
+  it("refuses a request without a method or an absolute path", () => {
+    expect(() => smokeOf({ WRITE_MANIFEST_SMOKE: '{"path":"/mcp"}' })).toThrow();
+    expect(() =>
+      smokeOf({ WRITE_MANIFEST_SMOKE: '{"method":"POST","path":"mcp"}' }),
+    ).toThrow();
+    expect(() => smokeOf({ WRITE_MANIFEST_SMOKE: "not json" })).toThrow();
+  });
+
+  it("gives mcp a tools/list past the bearer gate that must return schemas", () => {
+    // tools/list answered 200 with an MCP error for every tool (#4829), so the
+    // reply has to carry an inputSchema, not only a status.
+    const smoke = mcpSmoke();
+    expect(smoke.method).toBe("POST");
+    expect(smoke.path).toBe("/mcp");
+    expect(smoke.headers.Authorization).toMatch(/^Bearer \S+$/);
+    expect(smoke.headers.Accept).toContain("text/event-stream");
+    expect((JSON.parse(smoke.body) as { method: string }).method).toBe("tools/list");
+    expect(smoke.expect).toBe('"inputSchema"');
+    expect(smokeOf({ WRITE_MANIFEST_SMOKE: JSON.stringify(smoke) })).toEqual(smoke);
+  });
+
+  it("refuses an expect that is not a string", () => {
+    expect(() =>
+      smokeOf({ WRITE_MANIFEST_SMOKE: '{"method":"GET","path":"/","expect":3}' }),
+    ).toThrow();
+  });
+
+  it("passes the mcp request to the mcp manifest", () => {
+    expect(script).toMatch(
+      /WRITE_MANIFEST_SMOKE="\$MCP_SMOKE_REQUEST" \\\n\s+write_manifest "\$\(port_for mcp\)"/,
+    );
   });
 });
 

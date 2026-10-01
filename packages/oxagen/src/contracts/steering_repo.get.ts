@@ -44,7 +44,14 @@ export const steeringConnectionChoice = z.object({
   name: z
     .string()
     .min(1)
-    .describe("The GitHub organization's login or the GitLab group's path."),
+    .describe(
+      "The GitHub organization's or personal account's login, or the GitLab group's path.",
+    ),
+  kind: z
+    .enum(["organization", "user"])
+    .describe(
+      "organization for a GitHub organization or GitLab group, user for the owner's own personal GitHub account.",
+    ),
 });
 
 /**
@@ -115,6 +122,11 @@ export const steeringRepoView = z.object({
     .nullable()
     .describe(
       "The code repository that still steers the workspace through its .oxagen/ tree, or null. import_workspace_steering moves it to a steering repo when it is on GitHub, and refuses one on GitLab.",
+    ),
+  connection: steeringConnectionChoice
+    .nullable()
+    .describe(
+      "Where this organization creates its steering repos: the stored GitHub installation or GitLab group, or null before one is chosen. retry_steering_repo_provision and import_workspace_steering take resetConnection to change it until Oxagen has created a steering repo there.",
     ),
   connectionChoices: z
     .array(steeringConnectionChoice)

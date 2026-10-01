@@ -784,7 +784,7 @@ describe("tools/list is served through the gateway mandate", () => {
    * could only fail when selected, and `tool_ceiling` was counted against a
    * list including tools the mandate forbids.
    *
-   * The rule itself stays on the control plane: `@oxagen/tacho` takes no
+   * The rule itself stays on the control plane: `@oxagen/recorder` takes no
    * `@oxagen/*` runtime dependency, so it cannot read a capability's surfaces,
    * mutation or sensitivity. The bundle carries the rule's answer.
    */

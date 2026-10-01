@@ -30,7 +30,7 @@ const SRC = join(HERE, "..");
 
 /** The attribute, spelled as the daemon spells it. */
 const ATTR = "oxagen.enforcement_tier";
-/** …and as `@oxagen/tacho` names it, which is how a handler would import it. */
+/** …and as `@oxagen/recorder` names it, which is how a handler would import it. */
 const CONST = "TACHO_ENFORCEMENT_TIER_ATTR";
 
 function sourceFiles(dir: string): string[] {
