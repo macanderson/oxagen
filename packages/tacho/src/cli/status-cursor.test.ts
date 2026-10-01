@@ -1,6 +1,6 @@
 /**
- * What `tacho status` says about which Cursor a machine has (#3349, carried
- * by #3367). `tacho detect` already told the `cursor-agent` CLI apart from
+ * What `oxagen agent status` says about which Cursor a machine has (#3349, carried
+ * by #3367). `oxagen agent detect` already told the `cursor-agent` CLI apart from
  * the editor; status printed only the version enrollment recorded, so an
  * editor-only machine could not tell from status what it was covering.
  */

@@ -23,7 +23,7 @@ import {
   type TachoEvent,
   type UnsealedTachoEvent,
   sealEvent,
-} from "@oxagen/tacho";
+} from "@oxagen/recorder";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { eq } from "drizzle-orm";
 import {

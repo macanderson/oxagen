@@ -137,7 +137,7 @@ export function readJsonFileIfExists(path: string): unknown | undefined {
  *
  * A truncated state file used to throw here, and the daemon refused to
  * start until someone deleted the file by hand (W-05). Only the process that
- * writes the file may call this: a reader such as `tacho status` must not
+ * writes the file may call this: a reader such as `oxagen agent status` must not
  * move a file the daemon may be writing.
  */
 export function readJsonStateFile(

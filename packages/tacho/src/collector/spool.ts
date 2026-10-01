@@ -196,11 +196,11 @@ export function isHostRevokedRefusal(error: ControlError): boolean {
 }
 
 /**
- * What `tacho status` shows once the control plane has said this host is
+ * What `oxagen agent status` shows once the control plane has said this host is
  * revoked: what happened, where the events are, and what to run.
  */
 export const HOST_REVOKED_MESSAGE =
-  "an operator revoked this host's enrollment, so the collector stopped shipping. Recorded events stay in the local spool. Run `tacho unenroll` to remove the hooks and the service.";
+  "an operator revoked this host's enrollment, so the collector stopped shipping. Recorded events stay in the local spool. Run `oxagen agent unenroll` to remove the hooks and the service.";
 
 /**
  * Whether a refusal is about one session that cannot land yet. Two 409s say

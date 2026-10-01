@@ -2,7 +2,7 @@
 // (steering-repo-spec, Provisioning; lane S1, #4450).
 //
 // Creating a workspace creates its private steering repo `oxagen-<slug>`, and
-// creating an organization creates `<org>/oxagen`. The durable job
+// creating an organization creates `<org>/oxagen-config`. The durable job
 // `steering-repo/provision` runs the steps below one at a time:
 //
 //   1. pick_connection      The organization's Oxagen GitHub App installation or
@@ -24,14 +24,26 @@
 //                           PR publishes version 2 (#4732).
 //
 // Every step is safe to repeat. The state lives in the `steering_repo` key of
-// the workspace's settings, or of the organization's for `<org>/oxagen`, and
+// the workspace's settings, or of the organization's for `<org>/oxagen-config`, and
 // records what each step made, so a rerun adopts it instead of making another.
 // A failed step records its name and error, and the job retries from it.
+//
+// Two stops wait on a person (#4875). A workspace still steered by the
+// `.oxagen/` tree of a code repository stops at pick_connection with
+// `steering_import_required`, before anything is created, because the bind
+// step would refuse a second steering head. import_workspace_steering moves
+// that steering and provisions in the same run. An organization whose owner
+// token reaches more than one GitHub organization or GitLab group stops with
+// `choose_connection` and records the candidates, and a retry or an import
+// that names one of them stores it (`pickSteeringConnection`,
+// `storeChosenSteeringConnection`). The organization has one connection, so
+// the first pick stands and a later, different pick is refused.
 import { decrypt, resolveIngestionCryptoAdapterForKeyId } from "@oxagen/crypto";
 import { schema, withSystemDb, withTenantDb } from "@oxagen/database";
 import {
   createAppInstallationToken,
   GitHubApiError,
+  GitHubRateLimitedError,
 } from "@oxagen/github";
 import * as gh from "@oxagen/github/provision";
 import * as gl from "@oxagen/gitlab/provision";
@@ -45,6 +57,7 @@ import {
   STEERING_ENVIRONMENT,
   steeringRepoName,
 } from "@oxagen/oxagen/steering-repo";
+import { HandlerError } from "@oxagen/oxagen";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import {
@@ -60,6 +73,10 @@ import {
 import type { SyncPublish } from "./context.steering.sync";
 import { logger } from "./logger";
 import { publishFirstVersion } from "./steering-repo/first-version";
+import {
+  readLegacySteeringSource,
+  type LegacySteeringSource,
+} from "./steering-repo/legacy-source";
 import {
   workspaceRepositoriesLock,
   writeRepositoryHead,
@@ -107,6 +124,27 @@ export function isSteeringRepoStep(name: string): name is SteeringRepoStep {
 /** The error code of a step that needs an owner to authorize again. */
 export const REAUTHORIZE = "steering_reauthorize";
 
+/** The error code of a setup that waits on a person to pick its connection. */
+export const CHOOSE_CONNECTION = "choose_connection";
+
+/**
+ * The error code of a workspace whose steering still lives in a code
+ * repository. import_workspace_steering moves it and provisions.
+ */
+export const STEERING_IMPORT_REQUIRED = "steering_import_required";
+
+/**
+ * The error code of a create the host refused for a reason other than a taken
+ * name, such as an organization policy or a billing lock (#4899).
+ */
+export const REPOSITORY_CREATE_REFUSED = "repository_create_refused";
+
+/**
+ * The error code of a personal account whose GitHub plan cannot protect a
+ * private repository's branches. GitHub Free cannot, and Pro can.
+ */
+export const GITHUB_PLAN_REQUIRED = "github_plan_required";
+
 /** The first commit's message. */
 export const FIRST_COMMIT_MESSAGE = "Seed the steering repo";
 
@@ -125,8 +163,23 @@ export type SteeringRepoScope =
 
 /** The provider connection that holds the organization's steering repos. */
 export type SteeringConnection =
-  | { provider: "github"; installation_id: number; account_login: string }
+  | {
+      provider: "github";
+      installation_id: number;
+      account_login: string;
+      /**
+       * `User` for the owner's own personal account (#4899). A connection
+       * stored before personal accounts were admitted has none, and is an
+       * organization.
+       */
+      account_type?: "Organization" | "User";
+    }
   | { provider: "gitlab"; group_id: number; group_path: string };
+
+/** Whether a connection is a person's own GitHub account. */
+export function isPersonalConnection(connection: SteeringConnection): boolean {
+  return connection.provider === "github" && connection.account_type === "User";
+}
 
 export type SteeringRepoStatus = "provisioning" | "ready" | "failed" | "blocked";
 
@@ -163,6 +216,11 @@ export interface SteeringRepoState {
   deployment_id: number | null;
   /** `rpb_…` of the steering binding. The organization repo has none. */
   binding_id: string | null;
+  /**
+   * The connections pick_connection found when there was more than one, for a
+   * person to choose between. Empty otherwise.
+   */
+  connection_choices: SteeringConnection[];
   updated_at: string;
 }
 
@@ -180,6 +238,7 @@ export function initialSteeringRepoState(now: Date): SteeringRepoState {
     commit_sha: null,
     deployment_id: null,
     binding_id: null,
+    connection_choices: [],
     updated_at: now.toISOString(),
   };
 }
@@ -249,6 +308,13 @@ export interface ProvisionDeps {
    * step publishes nothing.
    */
   publishFirst?: SyncPublish;
+  /**
+   * The code repository that still steers the workspace, or null. Unset, as
+   * in tests that do not exercise it, pick_connection checks nothing.
+   */
+  legacySteeringSource?(
+    scope: Extract<SteeringRepoScope, { kind: "workspace" }>,
+  ): Promise<LegacySteeringSource | null>;
 }
 
 /**
@@ -382,8 +448,17 @@ function seedFiles(
 }
 
 async function pickConnection(ctx: StepContext): Promise<void> {
+  if (ctx.scope.kind === "workspace" && ctx.deps.legacySteeringSource) {
+    const legacy = await ctx.deps.legacySteeringSource(ctx.scope);
+    if (legacy !== null)
+      throw new SteeringProvisionBlockedError(
+        STEERING_IMPORT_REQUIRED,
+        `${legacy.full_name} still steers this workspace through its .oxagen/ tree. Move its steering to a steering repo, and Oxagen creates the repo in the same run.`,
+      );
+  }
   if (ctx.connection !== null) {
     ctx.state.provider = ctx.connection.provider;
+    ctx.state.connection_choices = [];
     return;
   }
   // A stored token that the host refuses stops this step with a reauthorize
@@ -395,12 +470,25 @@ async function pickConnection(ctx: StepContext): Promise<void> {
   if (github !== null) {
     const user = await github.user();
     if (user !== null) {
+      // A personal account is a candidate only when it is the owner's own
+      // (#4899): GitHub creates a repository there only with that person's
+      // token. The login is read only when such an installation is listed.
+      let login: string | null | undefined;
       for (const installation of await gh.listSteeringInstallations(user)) {
-        if (installation.account_type !== "Organization") continue;
+        if (installation.account_type === "User") {
+          login ??= await gh.getUserLogin(user);
+          if (
+            login === null ||
+            installation.account_login.toLowerCase() !== login.toLowerCase()
+          )
+            continue;
+        } else if (installation.account_type !== "Organization") continue;
         candidates.push({
           provider: "github",
           installation_id: installation.id,
           account_login: installation.account_login,
+          account_type:
+            installation.account_type === "User" ? "User" : "Organization",
         });
       }
     }
@@ -413,11 +501,14 @@ async function pickConnection(ctx: StepContext): Promise<void> {
     });
 
   const [only] = candidates;
-  if (candidates.length > 1)
+  if (candidates.length > 1) {
+    // The blocked step saves the state, so the read can list the choices.
+    ctx.state.connection_choices = candidates;
     throw new SteeringProvisionBlockedError(
-      "choose_connection",
+      CHOOSE_CONNECTION,
       `This organization has ${candidates.length} GitHub organizations and GitLab groups. Choose the one that holds steering repos, then retry.`,
     );
+  }
   if (only === undefined)
     throw new SteeringProvisionBlockedError(
       "no_connection",
@@ -426,12 +517,54 @@ async function pickConnection(ctx: StepContext): Promise<void> {
   await ctx.deps.saveConnection(ctx.scope, only);
   ctx.connection = only;
   ctx.state.provider = only.provider;
+  ctx.state.connection_choices = [];
+}
+
+/** A connection a person picked by its provider and id. */
+export interface SteeringConnectionPick {
+  provider: "github" | "gitlab";
+  /** The GitHub installation id or the GitLab group id. */
+  id: number;
+}
+
+/** The id a person picks a connection by. */
+export function steeringConnectionId(connection: SteeringConnection): number {
+  return connection.provider === "github"
+    ? connection.installation_id
+    : connection.group_id;
+}
+
+/** The name a person reads a connection by. */
+export function steeringConnectionName(connection: SteeringConnection): string {
+  return connection.provider === "github"
+    ? connection.account_login
+    : connection.group_path;
+}
+
+/**
+ * The recorded choice that `pick` names, or null when the state records no
+ * such choice. Only a connection pick_connection found can be stored, so a
+ * caller cannot point the organization at a host its tokens do not reach.
+ */
+export function pickSteeringConnection(
+  state: SteeringRepoState | null,
+  pick: SteeringConnectionPick,
+): SteeringConnection | null {
+  return (
+    state?.connection_choices.find(
+      (c) => c.provider === pick.provider && steeringConnectionId(c) === pick.id,
+    ) ?? null
+  );
 }
 
 async function createRepositoryStep(ctx: StepContext): Promise<void> {
   if (ctx.state.repository !== null) return;
   const connection = requireConnection(ctx);
-  const first_attempt = Math.max(1, ctx.state.attempt);
+  // The `config` workspace's first name is the organization's own
+  // `oxagen-config`, so it starts at `oxagen-config-2`.
+  const reserved =
+    ctx.scope.kind === "workspace" && baseName(ctx) === ORGANIZATION_REPO_NAME;
+  const first_attempt = Math.max(reserved ? 2 : 1, ctx.state.attempt);
   const max_attempts =
     ctx.scope.kind === "organization" ? 1 : WORKSPACE_NAME_ATTEMPTS;
   const on_attempt = async (attempt: number, name: string) => {
@@ -443,22 +576,34 @@ async function createRepositoryStep(ctx: StepContext): Promise<void> {
     const github = requireGithub(ctx);
     const rest = await github.installation(connection.installation_id);
     const user = await github.user();
+    // A personal account's repository is created with the owner's own token,
+    // because GitHub lets no installation token create one there (#4899).
+    const personal = isPersonalConnection(connection);
+    if (personal && user === null)
+      throw new SteeringProvisionBlockedError(
+        REAUTHORIZE,
+        `Oxagen needs ${connection.account_login}'s own authorization to create a repository in that personal account. Authorize the Oxagen GitHub App again.`,
+      );
     let created: gh.CreateOrAdoptResult;
     try {
-      created = await gh.createOrAdoptRepository(rest, {
-        org: connection.account_login,
-        base_name: baseName(ctx),
-        description: describeRepository(ctx),
-        marker: steeringRepoMarker(ctx.scope),
-        first_attempt,
-        max_attempts,
-        // The app cannot see a repository outside its installation. The
-        // owner's token can, so it looks a taken name up too.
-        lookups: user === null ? [rest] : [rest, user],
-        on_attempt,
-      });
+      created = await gh.createOrAdoptRepository(
+        personal && user !== null ? user : rest,
+        {
+          org: connection.account_login,
+          owner_kind: personal ? "user" : "organization",
+          base_name: baseName(ctx),
+          description: describeRepository(ctx),
+          marker: steeringRepoMarker(ctx.scope),
+          first_attempt,
+          max_attempts,
+          // The app cannot see a repository outside its installation. The
+          // owner's token can, so it looks a taken name up too.
+          lookups: user === null ? [rest] : [rest, user],
+          on_attempt,
+        },
+      );
     } catch (err) {
-      throw nameTaken(err);
+      throw createRefused(err, "GitHub", connection.account_login);
     }
     const { repository } = created;
     ctx.state.repository = {
@@ -483,7 +628,7 @@ async function createRepositoryStep(ctx: StepContext): Promise<void> {
       on_attempt,
     });
   } catch (err) {
-    throw nameTaken(err);
+    throw createRefused(err, "GitLab", connection.group_path);
   }
   const { project } = created;
   ctx.state.repository = {
@@ -495,18 +640,33 @@ async function createRepositoryStep(ctx: StepContext): Promise<void> {
   };
 }
 
-/** Every name is taken by a repository this scope did not create. */
-function nameTaken(err: unknown): unknown {
+/**
+ * Why the create step cannot go on. Every name taken by a repository this
+ * scope did not create is `repository_name_taken`. Any other refusal of the
+ * create, such as an organization policy or a billing lock, is
+ * `repository_create_refused` with the host's own message (#4899). Before,
+ * both read as a taken name. Anything else is retried.
+ */
+function createRefused(
+  err: unknown,
+  host: "GitHub" | "GitLab",
+  account: string,
+): unknown {
   const status =
     err instanceof GitHubApiError
       ? err.status
       : err instanceof gl.GitLabApiError
         ? err.status
         : null;
-  if (status !== 422 && status !== 400) return err;
+  // A rate limit is a 403 too, and the job retries it after the window.
+  if (err instanceof GitHubRateLimitedError) return err;
+  if (status !== 422 && status !== 400 && status !== 403) return err;
+  const message = err instanceof Error ? err.message : String(err);
+  if (/Every name from /.test(message))
+    return new SteeringProvisionBlockedError("repository_name_taken", message);
   return new SteeringProvisionBlockedError(
-    "repository_name_taken",
-    err instanceof Error ? err.message : String(err),
+    REPOSITORY_CREATE_REFUSED,
+    `${host} refused to create a repository in ${account}: ${message} Check that account's billing and repository settings, or use a different organization.`,
   );
 }
 
@@ -570,12 +730,16 @@ async function applySettingsStep(ctx: StepContext): Promise<void> {
   if (connection.provider === "github") {
     const github = requireGithub(ctx);
     const rest = await github.installation(connection.installation_id);
-    ({ remaining } = await gh.applySettings(
-      rest,
-      { owner: repository.owner, name: repository.name },
-      github.app,
-      GITHUB_SETTINGS_BASELINE,
-    ));
+    try {
+      ({ remaining } = await gh.applySettings(
+        rest,
+        { owner: repository.owner, name: repository.name },
+        github.app,
+        GITHUB_SETTINGS_BASELINE,
+      ));
+    } catch (err) {
+      throw planRequired(err, connection);
+    }
   } else {
     const rest = await requireGitlab(ctx, connection);
     ({ remaining } = await gl.applyGitlabSettings(
@@ -589,6 +753,27 @@ async function applySettingsStep(ctx: StepContext): Promise<void> {
     throw new Error(
       `After applying the settings, ${remaining.length} still differ: ${remaining.map((d) => d.setting).join(", ")}`,
     );
+}
+
+/**
+ * GitHub answers 403 with "Upgrade to GitHub Pro" when a personal account on
+ * GitHub Free asks for a private repository's branch rules. A retry gets the
+ * same answer, so the step stops and says what to change (#4899).
+ */
+function planRequired(err: unknown, connection: SteeringConnection): unknown {
+  if (
+    !(err instanceof GitHubApiError) ||
+    err instanceof GitHubRateLimitedError ||
+    err.status !== 403 ||
+    !/upgrade to github pro|github pro\b/i.test(err.message)
+  )
+    return err;
+  const account =
+    connection.provider === "github" ? connection.account_login : "this account";
+  return new SteeringProvisionBlockedError(
+    GITHUB_PLAN_REQUIRED,
+    `${account} cannot protect a private repository's branches on its GitHub plan: ${err.message} Upgrade the account to GitHub Pro, or use an organization.`,
+  );
 }
 
 /**
@@ -829,6 +1014,9 @@ export function readSteeringConnection(
       provider: "github",
       installation_id: c["installation_id"],
       account_login: c["account_login"],
+      ...(c["account_type"] === "User" || c["account_type"] === "Organization"
+        ? { account_type: c["account_type"] }
+        : {}),
     };
   if (
     c["provider"] === "gitlab" &&
@@ -998,6 +1186,253 @@ export async function saveSteeringRepoState(
       .set({ settings: mergeSettings(schema.organizations.settings, patch) })
       .where(eq(schema.organizations.id, scope.orgId)),
   );
+}
+
+/**
+ * Store `connection` as the organization's steering connection: the one
+ * connection pick_connection found that the owner's tokens reach. A person's
+ * pick goes through `storeChosenSteeringConnection` instead.
+ */
+export async function saveSteeringConnection(
+  orgId: string,
+  connection: SteeringConnection,
+): Promise<void> {
+  const patch = { [STEERING_CONNECTION_SETTING]: connection };
+  // tenancy: filtered by orgId from the provision event. The connection is
+  // the one candidate this org's own stored tokens reach.
+  await withSystemDb((tx) =>
+    tx
+      .update(schema.organizations)
+      .set({ settings: mergeSettings(schema.organizations.settings, patch) })
+      .where(eq(schema.organizations.id, orgId)),
+  );
+}
+
+/** Whether two connections name the same installation or group. */
+function sameSteeringConnection(
+  a: SteeringConnection,
+  b: SteeringConnection,
+): boolean {
+  return (
+    a.provider === b.provider &&
+    steeringConnectionId(a) === steeringConnectionId(b)
+  );
+}
+
+/**
+ * Store the connection a person picked from a setup's recorded choices. The
+ * organization has one steering connection, so the store is a compare and
+ * set: the first pick stands, the same pick again is a no-op, and a different
+ * one is refused (conflict `connection_already_chosen`). Without this, two
+ * workspaces waiting on a choice could each store their own, and a queued job
+ * would create its repo wherever the last pick pointed (#4877).
+ */
+export async function storeChosenSteeringConnection(
+  orgId: string,
+  connection: SteeringConnection,
+): Promise<void> {
+  if (await keepSteeringConnection(orgId, connection)) return;
+  // tenancy: filtered by orgId, which the kernel's capability context names.
+  const [org] = await withSystemDb((tx) =>
+    tx
+      .select({ settings: schema.organizations.settings })
+      .from(schema.organizations)
+      .where(eq(schema.organizations.id, orgId))
+      .limit(1),
+  );
+  const stored = readSteeringConnection(org?.settings);
+  if (stored !== null && sameSteeringConnection(stored, connection)) return;
+  throw new HandlerError({
+    code: "conflict",
+    reason: "connection_already_chosen",
+    message:
+      stored === null
+        ? "The organization's steering connection could not be stored. Try again."
+        : `This organization already creates steering repos in ${steeringConnectionName(stored)}. Retry without a connection to use it.`,
+  });
+}
+
+/**
+ * The first repository a setup recorded in the account `connection` names,
+ * or null when no setup made one there. A GitLab project in a subgroup of the
+ * connected group counts as the group's.
+ */
+export function repositoryOnConnection(
+  connection: SteeringConnection,
+  states: readonly (SteeringRepoState | null)[],
+): SteeringRepository | null {
+  for (const state of states) {
+    const repository = state?.repository ?? null;
+    if (repository === null) continue;
+    if (connection.provider === "github") {
+      if (state?.provider !== "github") continue;
+      if (repository.owner.toLowerCase() === connection.account_login.toLowerCase())
+        return repository;
+      continue;
+    }
+    if (state?.provider !== "gitlab") continue;
+    if (
+      repository.owner === connection.group_path ||
+      repository.owner.startsWith(`${connection.group_path}/`)
+    )
+      return repository;
+  }
+  return null;
+}
+
+/** How long a `provisioning` setup that has not saved still counts as running. */
+export const RESET_RUNNING_MS = 10 * 60 * 1000;
+
+/** One setup of the organization: its own (`key` null) or a workspace's. */
+export interface ResetScope {
+  key: string | null;
+  state: SteeringRepoState | null;
+}
+
+/** What a reset of the organization's connection would do. */
+export type ConnectionResetPlan =
+  | {
+      kind: "refuse";
+      reason: "setup_running" | "connection_in_use";
+      repository?: SteeringRepository;
+    }
+  | { kind: "clear"; release: (string | null)[] };
+
+/**
+ * Decide a reset of the organization's steering connection (#4899, #4900).
+ *
+ * - A setup that saved as `provisioning` within `RESET_RUNNING_MS` may be
+ *   between reading the old connection and recording a repository there, so
+ *   the reset waits for it (`setup_running`).
+ * - A repository in the stored account pins the connection once its setup
+ *   published a version, bound it, or finished (`connection_in_use`).
+ * - A repository in the stored account whose setup stopped before any of
+ *   that, such as at prescribed settings on a plan that cannot protect its
+ *   branches, does not pin it. The reset releases that setup: its record of
+ *   the repository is cleared, so the next run creates one in the new place.
+ *   The repository stays on the host for a person to delete.
+ */
+export function planConnectionReset(
+  connection: SteeringConnection,
+  scopes: readonly ResetScope[],
+  now: Date,
+): ConnectionResetPlan {
+  const release: (string | null)[] = [];
+  for (const { key, state } of scopes) {
+    if (state === null) continue;
+    if (
+      state.status === "provisioning" &&
+      now.getTime() - Date.parse(state.updated_at) < RESET_RUNNING_MS
+    )
+      return { kind: "refuse", reason: "setup_running" };
+    const repository = repositoryOnConnection(connection, [state]);
+    if (repository === null) continue;
+    if (
+      state.status === "ready" ||
+      state.deployment_id !== null ||
+      state.binding_id !== null
+    )
+      return { kind: "refuse", reason: "connection_in_use", repository };
+    release.push(key);
+  }
+  return { kind: "clear", release };
+}
+
+/** A setup's state with its record of an unpublished repository cleared. */
+export function releasedSteeringRepoState(
+  state: SteeringRepoState,
+  now: Date,
+): SteeringRepoState {
+  return {
+    ...state,
+    step: null,
+    attempt: 1,
+    candidate: null,
+    repository: null,
+    commit_sha: null,
+    connection_choices: [],
+    updated_at: now.toISOString(),
+  };
+}
+
+/**
+ * Clear the organization's steering connection so the next run lists the
+ * candidates again and a person picks one (#4899). Mac decided on 2026-10-01
+ * that an owner may change the organization until Oxagen has created a
+ * steering repo in it. `planConnectionReset` decides what that means for each
+ * setup. Answers the connection it cleared, or null when none was stored.
+ */
+export async function resetSteeringConnection(
+  orgId: string,
+): Promise<SteeringConnection | null> {
+  const now = new Date();
+  // tenancy: filtered by orgId, which the kernel's capability context names.
+  // The check reads every setup of the organization, and the writes touch
+  // only that organization's own settings and its workspaces' settings.
+  return withSystemDb(async (tx) => {
+    const [org] = await tx
+      .select({ settings: schema.organizations.settings })
+      .from(schema.organizations)
+      .where(eq(schema.organizations.id, orgId))
+      .limit(1);
+    const stored = readSteeringConnection(org?.settings);
+    if (stored === null) return null;
+    const workspaces = await tx
+      .select({ id: schema.workspaces.id, settings: schema.workspaces.settings })
+      .from(schema.workspaces)
+      .where(eq(schema.workspaces.orgId, orgId));
+    const states = new Map<string | null, SteeringRepoState | null>([
+      [null, readSteeringRepoState(org?.settings)],
+      ...workspaces.map(
+        (w): [string, SteeringRepoState | null] => [
+          w.id,
+          readSteeringRepoState(w.settings),
+        ],
+      ),
+    ]);
+    const plan = planConnectionReset(
+      stored,
+      [...states].map(([key, state]) => ({ key, state })),
+      now,
+    );
+    if (plan.kind === "refuse")
+      throw new HandlerError({
+        code: "conflict",
+        reason: plan.reason,
+        message:
+          plan.reason === "setup_running"
+            ? "A steering repo setup of this organization is running. Wait for it to stop, then change the organization."
+            : `Oxagen already created ${plan.repository?.full_name ?? "a steering repo"} in ${steeringConnectionName(stored)}, so this organization's steering repos stay there.`,
+      });
+    for (const key of plan.release) {
+      const state = states.get(key) ?? null;
+      if (state === null) continue;
+      const released = releasedSteeringRepoState(state, now);
+      if (key === null)
+        await tx
+          .update(schema.organizations)
+          .set({
+            settings: settingsWithSteeringRepo(schema.organizations.settings, released),
+          })
+          .where(eq(schema.organizations.id, orgId));
+      else
+        await tx
+          .update(schema.workspaces)
+          .set({
+            settings: settingsWithSteeringRepo(schema.workspaces.settings, released),
+          })
+          .where(
+            and(eq(schema.workspaces.id, key), eq(schema.workspaces.orgId, orgId)),
+          );
+    }
+    await tx
+      .update(schema.organizations)
+      .set({
+        settings: sql`CASE WHEN jsonb_typeof(${schema.organizations.settings}) = 'object' THEN ${schema.organizations.settings} ELSE '{}'::jsonb END - ${STEERING_CONNECTION_SETTING}::text`,
+      })
+      .where(eq(schema.organizations.id, orgId));
+    return stored;
+  });
 }
 
 /**
@@ -1182,16 +1617,13 @@ export function steeringRepoProvisionDeps(options: {
     saveState: saveSteeringRepoState,
 
     async saveConnection(scope, connection) {
-      const patch = { [STEERING_CONNECTION_SETTING]: connection };
-      // tenancy: filtered by orgId from the provision event. The connection
-      // is the one installation or group this org's own stored tokens reach.
-      await withSystemDb((tx) =>
-        tx
-          .update(schema.organizations)
-          .set({
-            settings: mergeSettings(schema.organizations.settings, patch),
-          })
-          .where(eq(schema.organizations.id, scope.orgId)),
+      await saveSteeringConnection(scope.orgId, connection);
+    },
+
+    legacySteeringSource(scope) {
+      return runInTenantScope(
+        { orgId: scope.orgId, workspaceId: scope.workspaceId },
+        () => readLegacySteeringSource(scope),
       );
     },
 

@@ -19,18 +19,26 @@ type Opts = Record<string, unknown>;
 type HostHandler = (opts: Opts) => Promise<boolean>;
 type AgentHandler = (agent: string, opts: Opts) => Promise<void>;
 
+type RunHandler = (command: string[], opts: Opts) => Promise<number>;
+
 const {
   handleTachoEnroll,
   handleTachoStatus,
   handleTachoUnenroll,
+  handleTachoVerify,
   handleAgentEnroll,
+  handleAgentRun,
+  handleAgentDetect,
   agentStatus,
   agentUnenroll,
 } = vi.hoisted(() => ({
   handleTachoEnroll: vi.fn<HostHandler>(async () => true),
   handleTachoStatus: vi.fn<HostHandler>(async () => true),
   handleTachoUnenroll: vi.fn<HostHandler>(async () => true),
+  handleTachoVerify: vi.fn<HostHandler>(async () => true),
   handleAgentEnroll: vi.fn<HostHandler>(async () => true),
+  handleAgentRun: vi.fn<RunHandler>(async () => 0),
+  handleAgentDetect: vi.fn<HostHandler>(async () => true),
   agentStatus: vi.fn<AgentHandler>(async () => undefined),
   agentUnenroll: vi.fn<AgentHandler>(async () => undefined),
 }));
@@ -41,8 +49,10 @@ vi.mock("../commands/tacho.js", () => ({
   handleTachoUnenroll,
   handleTachoReassign: vi.fn(async () => true),
   handleTachoExport: vi.fn(async () => true),
-  handleTachoVerify: vi.fn(async () => true),
+  handleTachoVerify,
   handleTachoHosts: vi.fn(async () => true),
+  handleAgentRun,
+  handleAgentDetect,
 }));
 vi.mock("../commands/agent-enroll.js", () => ({ handleAgentEnroll }));
 vi.mock("../commands/agent.js", () => ({
@@ -214,17 +224,111 @@ describe("oxagen agent unenroll", () => {
   });
 });
 
-// The deprecated group keeps the exact shape every enrolled machine was
-// enrolled with. It does not forward to the merged commands: a forwarded
-// `tacho enroll` would be re-parsed by a command with different flags, which is
-// a behaviour change dressed up as compatibility.
-describe("the deprecated tacho group still runs the host-scoped commands", () => {
-  it("enrolls this machine, warning once on stderr", async () => {
+describe("oxagen agent run, detect, and verify", () => {
+  it("hands everything after -- to the session, with its flags", async () => {
+    handleAgentRun.mockResolvedValueOnce(7);
+    await run(
+      "agent",
+      "run",
+      "--name",
+      "release-bot",
+      "--",
+      "./release-bot",
+      "--dry-run",
+    );
+    expect(handleAgentRun).toHaveBeenCalledTimes(1);
+    expect(handleAgentRun.mock.calls[0]?.[0]).toEqual([
+      "./release-bot",
+      "--dry-run",
+    ]);
+    expect(handleAgentRun.mock.calls[0]?.[1]).toMatchObject({
+      name: "release-bot",
+    });
+    // The agent's exit code is the command's.
+    expect(process.exitCode).toBe(7);
+  });
+
+  it("carries the contained launcher's flags", async () => {
+    await run(
+      "agent",
+      "run",
+      "--contained",
+      "--image",
+      "ghcr.io/acme/contained:1",
+      "--workspace",
+      "/repo",
+      "--github-repository",
+      "acme/app",
+      "--",
+      "claude",
+      "-p",
+      "fix the build",
+    );
+    expect(handleAgentRun.mock.calls[0]?.[0]).toEqual([
+      "claude",
+      "-p",
+      "fix the build",
+    ]);
+    expect(handleAgentRun.mock.calls[0]?.[1]).toMatchObject({
+      contained: true,
+      image: "ghcr.io/acme/contained:1",
+      workspace: "/repo",
+      githubRepository: "acme/app",
+    });
+  });
+
+  it("passes an empty command on, for the recorder to refuse with the form", async () => {
+    await run("agent", "run");
+    expect(handleAgentRun.mock.calls[0]?.[0]).toEqual([]);
+  });
+
+  it("detects this machine's harnesses", async () => {
+    await run("agent", "detect", "--json");
+    expect(handleAgentDetect).toHaveBeenCalledWith({ json: true });
+  });
+
+  it("verifies the named harness, with the result as JSON", async () => {
+    await run("agent", "verify", "--harness", "codex", "--json");
+    expect(handleTachoVerify).toHaveBeenCalledWith({
+      harness: "codex",
+      json: true,
+    });
+  });
+});
+
+// The hidden group keeps the exact shape every enrolled machine was enrolled
+// with. It does not forward to the merged commands: a forwarded `tacho
+// enroll` would be re-parsed by a command with different flags, which is a
+// behaviour change dressed up as compatibility.
+describe("the hidden tacho group still runs the host-scoped commands", () => {
+  it("enrolls this machine, saying once on stderr which command replaced it", async () => {
     await run("tacho", "enroll");
     expect(handleTachoEnroll).toHaveBeenCalledTimes(1);
     expect(handleAgentEnroll).not.toHaveBeenCalled();
-    expect(stderr).toContain("`oxagen agent`");
+    expect(stderr).toBe(
+      "`oxagen tacho enroll` is now `oxagen agent enroll`. The old name still works.\n",
+    );
   });
+
+  // #4879: every alias names its own replacement, not just the group's.
+  it.each([
+    "enroll",
+    "status",
+    "reassign",
+    "unenroll",
+    "export",
+    "verify",
+    "hosts",
+  ])(
+    "names the command that replaced `oxagen tacho %s`",
+    async (verb) => {
+      await run("tacho", verb);
+      expect(stderr).toBe(
+        `\`oxagen tacho ${verb}\` is now \`oxagen agent ${verb}\`. The old name still works.\n`,
+      );
+      expect(process.exitCode ?? 0).toBe(0);
+    },
+  );
 
   it("takes no agent argument, so it cannot reach the server-scoped read (negative)", async () => {
     await run("tacho", "status");

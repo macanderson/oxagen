@@ -16,7 +16,7 @@ capability contract as an MCP tool and calls the kernel's `invoke()` with
   [`@oxagen/agent`](../../packages/agent/README.md)); API-key resolution
   ([`@oxagen/auth`](../../packages/auth/README.md), `resolveApiKey`); the MCP
   gateway a Tacho host serves to Claude Desktop
-  ([`@oxagen/tacho`](../../packages/tacho/README.md),
+  ([`@oxagen/recorder`](../../packages/tacho/README.md),
   `src/collector/mcp-gateway.ts`).
 - **Depends on:** `@oxagen/oxagen` (contracts, `invoke`, security-event
   emitter), `@oxagen/handlers` and `@oxagen/agent` (handler registration),

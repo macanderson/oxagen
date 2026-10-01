@@ -2,7 +2,7 @@
 // public registry the way a machine reads it (ADR-233, #4756).
 //
 // The local gateway compares the digest of what it would run with the lock
-// before it starts anything, through @oxagen/tacho's digester. Oxagen reads
+// before it starts anything, through @oxagen/recorder's digester. Oxagen reads
 // with the same digester, so the two reads agree by construction: npm's
 // tarball hashed, the NuGet package hashed, and one PyPI file hashed. The
 // machine only checks a digest and never supplies one. An OCI image pins its
@@ -23,7 +23,7 @@ import {
 import {
   createPackageDigester,
   type LaunchPackage,
-} from "@oxagen/tacho/local-servers";
+} from "@oxagen/recorder/local-servers";
 
 /** Reads the digest a registry package's launch would run. */
 export interface RegistryDigests {

@@ -1,6 +1,6 @@
 // key-id.ts: the id of the signing key, and the public key form it hashes.
 import { generateKeyPairSync } from "node:crypto";
-import { keyIdForPublicKey } from "@oxagen/tacho/host";
+import { keyIdForPublicKey } from "@oxagen/recorder/host";
 import { describe, expect, it } from "vitest";
 import { normalizePublicKeyPem, relayKeyId } from "./key-id";
 

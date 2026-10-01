@@ -16,7 +16,7 @@ stored error, and re-sends the provision event with a fresh id, so the same job
 
 ## Surface
 
-- API: `POST /v1/:org_slug/:workspace_slug/context/steering/repo/retry` with the body `{}` returns 200
+- API: `POST /v1/:org_slug/:workspace_slug/context/steering/repo/retry` with the body `{}`, or `{ "connection": { "provider": "github", "id": 11 } }`, returns 200
 - MCP: none
 - Agent: Stella finds it with `search_tools` and loads it with `load_tools`. Each call waits for a person's approval (`riskLevel: medium`).
 - CLI: none
@@ -25,9 +25,17 @@ stored error, and re-sends the provision event with a fresh id, so the same job
 
 ## Input
 
-None. The org and workspace come from the capability context. A workspace-scoped context names
-the workspace; an organization-only context (the sentinel workspace id) retries the
-organization's own setup.
+| Field | Type | Description |
+|---|---|---|
+| `resetConnection` | boolean, optional | clear the organization's stored steering connection first, so the job lists the candidates again (#4899). Refused once Oxagen has created a steering repo in the stored account |
+| `connection` | `{ provider, id }`, optional | the GitHub organization or GitLab group to create steering repos in, when setup stopped with `choose_connection`. It must be one of [get_steering_repo](steering_repo.get.md)'s `connectionChoices` |
+
+The org and workspace come from the capability context. A workspace-scoped context names the
+workspace. An organization-only context (the sentinel workspace id) retries the organization's
+own setup.
+
+A `connection` is stored as the organization's steering connection before the job is sent
+again, so `pick_connection` finds it and goes on (#4875).
 
 ## Output
 
@@ -57,3 +65,7 @@ If the send itself fails, the handler records the failure (`enqueue_failed`) and
 |---|---|---|
 | `forbidden` | `no_principal`, `org_role_required` | no signed-in user; not an org Owner or Admin |
 | `not_found` | `no_steering_repo_state` | the scope has no steering repository setup to retry |
+| `conflict` | `unknown_connection` | `connection` is not one of the connections the setup found. Nothing changed |
+| `conflict` | `connection_in_use` | `resetConnection` was sent, and a setup of the organization has a repository in the stored account that published a version, was bound, or finished. Nothing changed |
+| `conflict` | `setup_running` | `resetConnection` was sent while a setup of the organization saved as `provisioning` in the last 10 minutes. Nothing changed |
+| `conflict` | `connection_already_chosen` | the organization already holds a different steering connection, because another setup's pick stored it first. Retry without `connection` to use it |

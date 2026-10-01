@@ -10,11 +10,13 @@
 //   version       the steering publication of that repository (S3), or
 //                 version 1 once provisioning recorded it
 //   health        the last health read and the settings it found different
+//   legacy source the code repository that still steers a workspace made
+//                 before steering repos existed (#4875)
 //
-// A workspace with no provisioning state answers `provisioning` with every
-// other field null. The health banner sits in the workspace layout and reads
-// this on every page, so an error here would break every page of a workspace
-// made before provisioning existed.
+// A workspace with no provisioning state answers `not_started` with every
+// other provisioning field null. The health banner sits in the workspace
+// layout and reads this on every page, so an error here would break every
+// page of a workspace made before provisioning existed.
 import { schema, withTenantDb } from "@oxagen/database";
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import type {
@@ -25,9 +27,18 @@ import type {
 import { repoRef } from "@oxagen/oxagen/steering-repo/names";
 import { and, eq } from "drizzle-orm";
 import {
+  isPersonalConnection,
+  readSteeringConnection,
   readSteeringRepoState,
+  steeringConnectionId,
+  steeringConnectionName,
+  type SteeringConnection,
   type SteeringRepoState,
 } from "./steering_repo.provision";
+import {
+  readLegacySteeringSource,
+  type LegacySteeringSource,
+} from "./steering-repo/legacy-source";
 import {
   displaySettingValue,
   readRepoHealthDetail,
@@ -60,6 +71,12 @@ export interface SteeringRepoReadDeps {
   ): Promise<number | null>;
   /** The last health read, or null before the first. */
   readHealth(scope: SteeringRepoReadScope): Promise<RepoHealthDetail | null>;
+  /** The code repository that still steers the workspace, or null. */
+  readLegacySource(
+    scope: SteeringRepoReadScope,
+  ): Promise<LegacySteeringSource | null>;
+  /** The organization's stored steering connection, or null. */
+  readConnection(scope: SteeringRepoReadScope): Promise<SteeringConnection | null>;
 }
 
 /**
@@ -89,7 +106,7 @@ export function steeringRepoUrl(
 
 /** The answer for a workspace with no provisioning state. */
 export const NO_STEERING_REPO: SteeringRepoGetOutput = {
-  status: "provisioning",
+  status: "not_started",
   step: null,
   failedStep: null,
   error: null,
@@ -98,7 +115,34 @@ export const NO_STEERING_REPO: SteeringRepoGetOutput = {
   publishedVersion: null,
   health: null,
   differences: [],
+  legacySource: null,
+  connection: null,
+  connectionChoices: [],
 };
+
+/** A connection as the read names it. */
+function connectionView(
+  c: SteeringConnection,
+): SteeringRepoGetOutput["connectionChoices"][number] {
+  return {
+    provider: c.provider,
+    id: steeringConnectionId(c),
+    name: steeringConnectionName(c),
+    kind: isPersonalConnection(c) ? "user" : "organization",
+  };
+}
+
+function legacySourceView(
+  legacy: LegacySteeringSource | null,
+): SteeringRepoGetOutput["legacySource"] {
+  if (legacy === null) return null;
+  const provider = legacy.provider === "gitlab" ? "gitlab" : "github";
+  return {
+    fullName: legacy.full_name,
+    url: steeringRepoUrl(provider, legacy.full_name),
+    provider,
+  };
+}
 
 function workspaceScope(ctx: {
   orgId: string;
@@ -114,8 +158,15 @@ export function createGetSteeringRepoHandler(
 ): CapabilityHandler<typeof steeringRepoGet> {
   return async (_input, ctx): Promise<SteeringRepoGetOutput> => {
     const scope = workspaceScope(ctx);
-    const state = await deps.readState(scope);
-    if (state === null) return NO_STEERING_REPO;
+    const [state, legacy, stored] = await Promise.all([
+      deps.readState(scope),
+      deps.readLegacySource(scope),
+      deps.readConnection(scope),
+    ]);
+    const legacySource = legacySourceView(legacy);
+    const connection = stored === null ? null : connectionView(stored);
+    if (state === null)
+      return { ...NO_STEERING_REPO, legacySource, connection };
 
     const provider = state.provider;
     const repository =
@@ -157,6 +208,9 @@ export function createGetSteeringRepoHandler(
         published ?? (state.deployment_id !== null ? PROVISIONED_VERSION : null),
       health: detail?.health ?? null,
       differences,
+      legacySource,
+      connection,
+      connectionChoices: state.connection_choices.map(connectionView),
     };
   };
 }
@@ -192,6 +246,20 @@ export const productionSteeringRepoReadDeps: SteeringRepoReadDeps = {
     return row?.version ?? null;
   },
   readHealth: readRepoHealthDetail,
+  readLegacySource: readLegacySteeringSource,
+  async readConnection(scope) {
+    const o = schema.organizations;
+    // tenancy: filtered by the orgId the kernel scoped the read to. It reads
+    // one key of the organization's own settings.
+    const [row] = await withTenantDb((tx) =>
+      tx
+        .select({ settings: o.settings })
+        .from(o)
+        .where(eq(o.id, scope.orgId))
+        .limit(1),
+    );
+    return row === undefined ? null : readSteeringConnection(row.settings);
+  },
 };
 
 export const getSteeringRepoHandler = createGetSteeringRepoHandler(

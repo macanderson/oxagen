@@ -117,7 +117,7 @@ export function containmentUnmet(
 }
 
 export const CONTAINMENT_REQUIRED_REASON =
-  "This agent's mandate requires the contained tier. Start it with `tacho run --contained`.";
+  "This agent's mandate requires the contained tier. Start it with `oxagen agent run --contained`.";
 
 export interface HookHandlerDeps {
   registry: SessionRegistry;

@@ -20,10 +20,59 @@ export const STEERING_REPO_STEPS = [
 ] as const;
 export type SteeringRepoStep = (typeof STEERING_REPO_STEPS)[number];
 
-type SteeringRepoStatus = "provisioning" | "ready" | "failed" | "blocked";
+/**
+ * `not_started` is a workspace that never recorded a setup: one made before
+ * steering repos existed (#4875). The job's own states follow.
+ */
+type SteeringRepoStatus =
+  | "not_started"
+  | "provisioning"
+  | "ready"
+  | "failed"
+  | "blocked";
 
 /** The error code of a step that needs an owner to authorize Oxagen again. */
 export const STEERING_REAUTHORIZE = "steering_reauthorize";
+
+/** The error code of a setup that waits on a person to pick its connection. */
+export const STEERING_CHOOSE_CONNECTION = "choose_connection";
+
+/**
+ * The import's refusal for a workspace that reads its repository through a
+ * retired sources connection. It goes on only with `startFresh`.
+ */
+export const STEERING_IMPORT_LEGACY_CONNECTION =
+  "steering_import_legacy_connection";
+
+/** The error code of a setup that found no GitHub organization or GitLab group. */
+export const STEERING_NO_CONNECTION = "no_connection";
+
+/**
+ * @internal Exported for types.test.ts, which pins it to the job's code.
+ * The error code of a workspace still steered by a code repository. The
+ * setup reads `legacySource` for it and goes on through the import.
+ */
+export const STEERING_IMPORT_REQUIRED = "steering_import_required";
+
+/**
+ * A GitHub organization, the owner's own personal GitHub account, or a GitLab
+ * group that setup can create steering repos in.
+ */
+type SteeringConnectionChoice = {
+  provider: "github" | "gitlab";
+  /** The GitHub installation id or the GitLab group id. */
+  id: number;
+  /** The organization's or account's login, or the group's path. */
+  name: string;
+  /** `user` for a personal GitHub account (#4899). */
+  kind: "organization" | "user";
+};
+
+/** The connection a person picks, by provider and id. */
+export type SteeringConnectionPick = Pick<
+  SteeringConnectionChoice,
+  "provider" | "id"
+>;
 
 /**
  * @internal Exported for types.test.ts, which pins it to the platform's list.
@@ -66,6 +115,23 @@ export type SteeringRepoView = {
   /** Null while provisioning, before the first health read. */
   health: RepoHealth | null;
   differences: readonly SettingsDifferenceView[];
+  /**
+   * The code repository that still steers the workspace through its
+   * `.oxagen/` tree, or null. Setup for such a workspace runs the import,
+   * which reads only a GitHub repository.
+   */
+  legacySource: {
+    fullName: string;
+    url: string;
+    provider: "github" | "gitlab";
+  } | null;
+  /**
+   * Where the organization creates its steering repos, or null before one is
+   * chosen. An owner can reset it until Oxagen has created a repo there.
+   */
+  connection: SteeringConnectionChoice | null;
+  /** The connections to pick from when setup stopped with `choose_connection`. */
+  connectionChoices: readonly SteeringConnectionChoice[];
 };
 
 /**

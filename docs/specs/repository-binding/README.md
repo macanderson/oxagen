@@ -60,11 +60,11 @@ lane S1, #4450) runs seven steps, one at a time:
 `create_workspace` (`workspace.create.ts`), the organization create, and the
 GitHub OAuth callback start the job with `steering-repo/provision.requested`.
 Every step is safe to repeat. The job keeps its state in the `steering_repo`
-key of the workspace's settings, or of the organization's for `<org>/oxagen`.
+key of the workspace's settings, or of the organization's for `<org>/oxagen-config`.
 A rerun adopts what an earlier run made. A failed step records its name and
 error, and the job retries from that step.
 
-Creating an organization runs the same steps for `<org>/oxagen`, which holds
+Creating an organization runs the same steps for `<org>/oxagen-config`, which holds
 organization records. That repository has no `workspace.toml` and no head.
 
 PR #4600 adds a GitLab-only `register_webhook` step between steps 5 and 6.

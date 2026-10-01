@@ -56,6 +56,22 @@ describe("import_workspace_steering contract", () => {
     ).toBe(false);
   });
 
+  it("takes resetConnection to clear the stored connection first", () => {
+    expect(steeringRepoImport.input.parse({ resetConnection: true })).toEqual({
+      resetConnection: true,
+    });
+  });
+
+  it("takes the connection a blocked setup chooses", () => {
+    const pick = { connection: { provider: "gitlab", id: 22 } };
+    expect(steeringRepoImport.input.parse(pick)).toEqual(pick);
+    expect(
+      steeringRepoImport.input.safeParse({
+        connection: { provider: "github", id: -1 },
+      }).success,
+    ).toBe(false);
+  });
+
   it("refuses an unknown kind, an unknown effect, and an unknown field", () => {
     expect(
       steeringRepoImport.input.safeParse({ ruleKinds: { a: "rule" } }).success,

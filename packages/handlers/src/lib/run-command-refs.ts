@@ -25,7 +25,7 @@ import type {
   RunCheckout,
   RunRepository,
 } from "@oxagen/oxagen/contracts/run.work.get";
-import { splitCommandList, tokenizeSimpleCommand } from "@oxagen/tacho/claude-code";
+import { splitCommandList, tokenizeSimpleCommand } from "@oxagen/recorder/claude-code";
 import { chSelect } from "@oxagen/telemetry";
 import type { ConnectedRunRepository } from "./run-work";
 

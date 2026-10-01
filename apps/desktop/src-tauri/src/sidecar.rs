@@ -12,8 +12,8 @@
 //! `shell:allow-kill`, and the page asks this module instead. `check_call`
 //! holds the allowlist: each subcommand the app runs, the flags it passes to
 //! it, and what each flag's value may be. The environment is the app's own
-//! plus what `cli_install::sidecar_env` adds (`TACHO_BIN_DIR`), and nothing
-//! from the page. `src/commands.ts` builds every argv the app sends, and
+//! plus what `cli_install::sidecar_env` adds (`TACHO_BIN_DIR` and
+//! `OXAGEN_DESKTOP_SIDECAR`), and nothing from the page. `src/commands.ts` builds every argv the app sends, and
 //! `sidecar-calls.json`, which its test keeps in step with those builders,
 //! lists one of each for the test below.
 

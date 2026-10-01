@@ -3,9 +3,18 @@
 Each workspace keeps its steering in a repository of its own, the steering
 repo. Oxagen creates it when you create the workspace, merges every change to
 it, and publishes each merge as a numbered version. Each organization has one
-more, `<org>/oxagen`, for the records every workspace in it shares. Code
+more, `<org>/oxagen-config`, for the records every workspace in it shares. Code
 repositories hold no committed steering. A workspace links a code repository
 with a steering PR (ADR-212, `docs/specs/repository-binding/README.md`).
+
+Steering repos go where the organization's steering connection points: a
+GitHub organization with the Oxagen app installed, a GitLab group, or, since
+2026-10-01, the personal GitHub account of the owner who connected GitHub
+(#4899). A personal account's repository is created with that owner's own
+token, and a private one needs GitHub Pro for its branch rules. When the owner's
+tokens reach more than one, setup asks which. An owner can change the choice
+until Oxagen has created a steering repo there (`resetConnection` on
+`retry_steering_repo_provision` and `import_workspace_steering`).
 
 The code is in seven places:
 

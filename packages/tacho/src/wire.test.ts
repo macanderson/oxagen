@@ -22,7 +22,7 @@ import { minimalSession } from "./test-helpers";
  * it; the control plane deploys continuously, so it WILL answer hosts older
  * than itself. Under a strict response schema each additive server field is a
  * fleet-wide ingest outage that reports itself as health: the response fails to
- * parse, the batch is never acknowledged, the spool grows, and `tacho status`
+ * parse, the batch is never acknowledged, the spool grows, and `oxagen agent status`
  * still says the daemon is up. `body_rejections` did exactly that — 3,526
  * events stranded on one host with "last ingest never" — and it was the third
  * time, after `user_email` and the bundle.

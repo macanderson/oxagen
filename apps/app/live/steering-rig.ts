@@ -238,11 +238,19 @@ export async function trySignIn(
 // contract change breaks CI on the pull request instead of the live run.
 
 const provisionStatus = z.enum(["provisioning", "ready", "failed", "blocked"]);
+/** The read adds `not_started` for a workspace that never recorded a setup (#4875). */
+const readStatus = z.enum([
+  "not_started",
+  "provisioning",
+  "ready",
+  "failed",
+  "blocked",
+]);
 const healthState = z.enum(["healthy", "drifted", "disconnected", "diverged"]);
 export type HealthState = z.infer<typeof healthState>;
 
 export const steeringRepoView = z.object({
-  status: provisionStatus,
+  status: readStatus,
   failedStep: z.string().nullable(),
   error: z.object({ code: z.string(), message: z.string() }).nullable(),
   repository: z.object({ fullName: z.string(), url: z.string() }).nullable(),

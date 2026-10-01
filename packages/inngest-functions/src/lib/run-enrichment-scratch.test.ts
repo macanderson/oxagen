@@ -63,7 +63,7 @@ vi.mock("@oxagen/run-ledger/evidence-store", () => ({
 vi.mock("@oxagen/agent", () => ({ runGovernedTurn: vi.fn() }));
 
 import { NonRetriableError } from "@oxagen/functions";
-import { digestBytes } from "@oxagen/tacho";
+import { digestBytes } from "@oxagen/recorder";
 import {
   createEnrichmentChunkWriter,
   discardEnrichmentChunks,

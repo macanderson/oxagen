@@ -26,7 +26,7 @@
 // each command.
 import { schema, type Tx } from "@oxagen/database";
 import { steerBlockOf } from "@oxagen/oxagen/contracts/run.list";
-import type { TachoDeliveryMode } from "@oxagen/tacho";
+import type { TachoDeliveryMode } from "@oxagen/recorder";
 import { and, eq, gt, isNull, lte, or, type SQL, sql } from "drizzle-orm";
 import { resolveDeliveryMode } from "../tacho.command.dispatch";
 import type { RunScope } from "../run.list";
@@ -43,7 +43,7 @@ const REQUESTABLE_MODES: readonly TachoDeliveryMode[] = [
 /**
  * The daemon's own chain opens a root session too (`tachod-<ulid>`). It is
  * host bookkeeping, not an agent's run, and the host refuses a command
- * addressed to it (`isInternalSession` in `@oxagen/tacho/collector`).
+ * addressed to it (`isInternalSession` in `@oxagen/recorder/collector`).
  */
 const DAEMON_CHAIN_PREFIX = "tachod-";
 

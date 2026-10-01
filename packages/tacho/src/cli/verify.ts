@@ -1,5 +1,5 @@
 /**
- * `tacho verify` (spec section 5.1 step 6, `--verify`): run one headless
+ * `oxagen agent verify` (spec section 5.1 step 6, `--verify`): run one headless
  * harness turn and confirm the daemon chained its `agent_start` and
  * `agent_stop`. Proves the hooks, the socket, and the recorder end to end
  * on this machine; the control plane's copy is checked by `oxagen tacho`.
@@ -49,16 +49,16 @@ const ENDING_GRACE_MS = 30_000;
 
 /** Said when SessionEnd arrived but the chain had not sealed in time. */
 const ENDING_DETAIL =
-  "SessionEnd arrived, but tachod had not finished the session's final worktree read. The chain seals once that read lands. Run `tacho verify` again in a minute";
+  "SessionEnd arrived, but tachod had not finished the session's final worktree read. The chain seals once that read lands. Run `oxagen agent verify` again in a minute";
 
 /** Name the final evidence that verification is still waiting for. */
 const UNSEALED_DETAIL: Record<WrappedHarness, string> = {
   "claude-code":
     "session started but SessionEnd never arrived within the timeout",
   codex:
-    "session started but its final chain seal never arrived; check Codex Stop and SessionEnd hook delivery with `tacho status`",
+    "session started but its final chain seal never arrived; check Codex Stop and SessionEnd hook delivery with `oxagen agent status`",
   cursor:
-    "session started but its final chain seal never arrived; check Cursor stop and sessionEnd hook delivery with `tacho status`",
+    "session started but its final chain seal never arrived; check Cursor stop and sessionEnd hook delivery with `oxagen agent status`",
   stella:
     "session started but was not sealed within the timeout; Stella sends no SessionEnd, so tachod seals the chain once the stella process has exited and its sweep has run",
 };

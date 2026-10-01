@@ -42,6 +42,21 @@ export interface FoundRepository extends ProvisionedRepository {
   description: string;
 }
 
+/**
+ * The login of the person whose user token `rest` holds, or null when GitHub
+ * refuses the token. Provisioning admits a personal account only when it is
+ * this person's own.
+ */
+export async function getUserLogin(rest: GithubRest): Promise<string | null> {
+  const res = await rest.request<{ login: string }>(
+    "GET",
+    "/user",
+    undefined,
+    [401, 403],
+  );
+  return res.data?.login ?? null;
+}
+
 /** Read one repository. Null when the token cannot see it. */
 export async function getRepository(
   rest: GithubRest,
@@ -62,16 +77,31 @@ export type CreateRepositoryResult =
   | { status: "name_taken" };
 
 /**
- * Create a private repository in an organization. GitHub answers 422 when the
- * name is taken, and that comes back as `name_taken`.
+ * Who owns a new repository. An organization's repository is created with
+ * the app's installation token on `/orgs/{org}/repos`. A personal account's
+ * is created with that person's own user token on `/user/repos`, because
+ * GitHub lets no installation token create one there.
+ */
+export type RepositoryOwnerKind = "organization" | "user";
+
+/**
+ * Create a private repository in an organization, or in the personal account
+ * of the user whose token `rest` holds. GitHub answers 422 when the name is
+ * taken, and that comes back as `name_taken`. Any other 422, such as a policy
+ * refusal, throws with GitHub's message.
  */
 export async function createRepository(
   rest: GithubRest,
-  input: { org: string; name: string; description: string },
+  input: {
+    org: string;
+    name: string;
+    description: string;
+    owner_kind?: RepositoryOwnerKind;
+  },
 ): Promise<CreateRepositoryResult> {
   const res = await rest.request<GhRepository>(
     "POST",
-    `/orgs/${seg(input.org)}/repos`,
+    input.owner_kind === "user" ? "/user/repos" : `/orgs/${seg(input.org)}/repos`,
     {
       name: input.name,
       description: input.description,
@@ -101,7 +131,10 @@ export function candidateName(base: string, n: number): string {
 }
 
 export interface CreateOrAdoptInput {
+  /** The organization, or the personal account's login. */
   org: string;
+  /** Defaults to `organization`. */
+  owner_kind?: RepositoryOwnerKind;
   /** The name to try first, such as `oxagen-support`. */
   base_name: string;
   /**
@@ -150,6 +183,7 @@ export async function createOrAdoptRepository(
       org: input.org,
       name,
       description: input.description,
+      ...(input.owner_kind === undefined ? {} : { owner_kind: input.owner_kind }),
     });
     if (created.status === "created")
       return { repository: created.repository, attempt, adopted: false };

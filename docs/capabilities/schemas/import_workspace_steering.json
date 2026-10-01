@@ -42,6 +42,32 @@
       "startFresh": {
         "type": "boolean",
         "description": "Set true for a workspace on a legacy sources connection. The run creates an empty steering repo and imports nothing, and the steering repo steers the workspace from then on. The .oxagen/ files stay in the legacy repository."
+      },
+      "connection": {
+        "type": "object",
+        "properties": {
+          "provider": {
+            "type": "string",
+            "enum": [
+              "github",
+              "gitlab"
+            ]
+          },
+          "id": {
+            "type": "integer",
+            "exclusiveMinimum": 0
+          }
+        },
+        "required": [
+          "provider",
+          "id"
+        ],
+        "additionalProperties": false,
+        "description": "The GitHub organization or GitLab group to create the steering repo in, when setup stopped with choose_connection. One of get_steering_repo's connectionChoices."
+      },
+      "resetConnection": {
+        "type": "boolean",
+        "description": "Set true to clear the organization's stored steering connection first, so the run lists the GitHub organizations and GitLab groups again. Refused (conflict connection_in_use) once Oxagen has created a steering repo in the stored one."
       }
     },
     "additionalProperties": false

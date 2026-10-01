@@ -479,7 +479,7 @@ describe("handleHookEvent over the recorded session", () => {
       expect(start.response).toEqual({
         continue: false,
         stopReason:
-          "This agent's mandate requires the contained tier. Start it with `tacho run --contained`.",
+          "This agent's mandate requires the contained tier. Start it with `oxagen agent run --contained`.",
       });
       expect(start.events[1]?.body).toMatchObject({
         policy_decision: "deny",

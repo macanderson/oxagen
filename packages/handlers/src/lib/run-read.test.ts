@@ -35,7 +35,7 @@ import {
   readRunChains,
   type SealedFrameRow,
 } from "@oxagen/run-ledger";
-import { buildArchiveSegment } from "@oxagen/tacho";
+import { buildArchiveSegment } from "@oxagen/recorder";
 import {
   defaultRunReadDeps,
   readFrameAt,

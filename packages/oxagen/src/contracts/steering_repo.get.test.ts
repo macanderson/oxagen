@@ -23,6 +23,9 @@ const VIEW = {
       changedAt: "2026-09-27T09:00:00.000Z",
     },
   ],
+  legacySource: null,
+  connection: null,
+  connectionChoices: [],
 } as const;
 
 describe("get_steering_repo contract", () => {
@@ -59,7 +62,7 @@ describe("get_steering_repo contract", () => {
 
   it("answers a workspace with no steering repo yet", () => {
     const none = {
-      status: "provisioning",
+      status: "not_started",
       step: null,
       failedStep: null,
       error: null,
@@ -68,8 +71,49 @@ describe("get_steering_repo contract", () => {
       publishedVersion: null,
       health: null,
       differences: [],
+      legacySource: {
+        fullName: "acme/platform",
+        url: "https://github.com/acme/platform",
+        provider: "github",
+      },
+      connection: {
+        provider: "github",
+        id: 11,
+        name: "oxageninc-old",
+        kind: "organization",
+      },
+      connectionChoices: [],
     };
     expect(steeringRepoGet.output.parse(none)).toEqual(none);
+  });
+
+  it("lists the connections a blocked setup chooses between", () => {
+    const blocked = {
+      ...VIEW,
+      status: "blocked",
+      step: null,
+      failedStep: "pick_connection",
+      error: { code: "choose_connection", message: "Choose one." },
+      repository: null,
+      publishedVersion: null,
+      health: null,
+      differences: [],
+      connection: null,
+      connectionChoices: [
+        { provider: "github", id: 11, name: "acme", kind: "organization" },
+        { provider: "github", id: 12, name: "octocat", kind: "user" },
+        { provider: "gitlab", id: 22, name: "acme/platform", kind: "organization" },
+      ],
+    };
+    expect(steeringRepoGet.output.parse(blocked)).toEqual(blocked);
+    expect(
+      steeringRepoGet.output.safeParse({
+        ...blocked,
+        connectionChoices: [
+          { provider: "github", id: 0, name: "acme", kind: "organization" },
+        ],
+      }).success,
+    ).toBe(false);
   });
 
   it("accepts every provisioning step and every health state", () => {

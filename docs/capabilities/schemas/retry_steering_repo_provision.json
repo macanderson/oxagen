@@ -22,7 +22,34 @@
   "input": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
-    "properties": {},
+    "properties": {
+      "connection": {
+        "type": "object",
+        "properties": {
+          "provider": {
+            "type": "string",
+            "enum": [
+              "github",
+              "gitlab"
+            ]
+          },
+          "id": {
+            "type": "integer",
+            "exclusiveMinimum": 0
+          }
+        },
+        "required": [
+          "provider",
+          "id"
+        ],
+        "additionalProperties": false,
+        "description": "The GitHub organization or GitLab group to create steering repos in, when setup stopped with choose_connection. One of get_steering_repo's connectionChoices."
+      },
+      "resetConnection": {
+        "type": "boolean",
+        "description": "Set true to clear the organization's stored steering connection first, so the run lists the GitHub organizations and GitLab groups again. Refused (conflict connection_in_use) once Oxagen has created a steering repo in the stored one."
+      }
+    },
     "additionalProperties": false
   },
   "output": {

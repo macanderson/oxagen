@@ -178,6 +178,13 @@ turns the field off while **Request user authorization (OAuth) during installati
   to `{NEXT_PUBLIC_APP_URL}/?github_installed=1`. The `installation` webhook enriches the record.
 - `apps/app/src/app/github/setup/route.ts` (`handleGithubSetup`) still answers a Setup URL leg from
   an older registration. A current registration never sends one.
+- **A return to the Homepage URL with `?code=…&state=…` means a field above drifted.** GitHub
+  falls back to the Homepage URL when **Redirect on update** is on and the Setup URL is blank, so
+  a person lands on the marketing site holding an unused code. On 2026-10-01 the production app
+  (`oxagen-connect`, 4168398) had **Redirect on update** on and its **Homepage URL** set to
+  `https://oxagen.sh`, and a steering connect from the Repositories page ended on
+  `https://oxagen.sh/?code=…`. Set the two values in the tables above, and check them again after
+  anyone edits the app.
 
 ### Permissions
 
@@ -373,7 +380,7 @@ After configuring an App and its env vars:
 ## Steering repos
 
 A steering repo holds steering records. Each workspace gets a private repository named
-`oxagen-<workspace-slug>`, and the organization gets `<org>/oxagen`. The Oxagen app creates and
+`oxagen-<workspace-slug>`, and the organization gets `<org>/oxagen-config`. The Oxagen app creates and
 runs them with the permissions in [Permissions](#permissions), Administration and Deployments
 write included.
 

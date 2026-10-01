@@ -40,7 +40,7 @@ ClickHouse.
     `resolveDataPlane`.
   - `@oxagen/compliance`: `SECURITY_EVENT_TYPES` and the event types, which
     this package re-exports.
-  - `@oxagen/tacho`: the Tacho event envelope columns and body shapes, so the
+  - `@oxagen/recorder`: the Tacho event envelope columns and body shapes, so the
     ClickHouse table and the wire format stay one definition.
 - **Used by:** `apps/api`, `apps/app`, `apps/app_deprecated`, `apps/mcp`,
   `apps/cli` (a dev dependency for one cross-check test), `@oxagen/agent`,
@@ -114,7 +114,7 @@ the API, from MCP, or by a person, writes NULL. Do not fill the column with a
 request id, a message id, or a fresh UUID. A made-up key joins to nothing, and
 a reader cannot tell it from a real one.
 
-Two tests hold this. `tools/scripts/tool-invocation-execution-identity.test.ts`
+Two tests hold this. `tools/scripts/tool-invocation-execution-identity.tree.test.ts`
 finds every file that calls `insertToolInvocation` and fails on a bare
 `execution_step_id: null`. `src/tool-invocation-execution-join.integration.test.ts`
 runs the join against a live ClickHouse.

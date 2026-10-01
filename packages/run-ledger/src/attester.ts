@@ -19,7 +19,7 @@ import {
   attesterKeyFromPem,
   type AttesterKey,
   signAttestation,
-} from "@oxagen/tacho";
+} from "@oxagen/recorder";
 import { ATTESTER_KEY_ENV } from "./attester-key";
 
 export { ATTESTER_KEY_ENV };

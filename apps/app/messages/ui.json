@@ -184,7 +184,7 @@
     },
     "desktopDownloads": {
       "title": "Install the Oxagen app",
-      "lead": "Install the app on the machine the agent runs on to put the <code>oxagen</code> and <code>tacho</code> commands that enrollment uses on PATH.",
+      "lead": "Install the app on the machine the agent runs on to put the <code>oxagen</code> command that enrollment uses on PATH.",
       "platforms": {
         "macos": "macOS",
         "windows": "Windows",

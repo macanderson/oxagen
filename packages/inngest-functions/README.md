@@ -42,7 +42,7 @@ definition into an Inngest function.
   - `@oxagen/crypto`: connector credential encryption and decryption.
   - `@oxagen/storage`: privacy export archives.
   - `@oxagen/run-ledger`: the run store and the evidence store.
-  - `@oxagen/tacho`: digests, export-bundle shapes, and the attester key.
+  - `@oxagen/recorder`: digests, export-bundle shapes, and the attester key.
   - `@oxagen/agent` and `@oxagen/ai`: the governed turn and model calls behind
     run enrichment and summaries.
   - `@oxagen/oxagen`: the run-enrichment setting and context-record labels.

@@ -17,14 +17,14 @@
  * later sighting of a call it already sealed from another source with
  * `oxagen.llm_call_duplicate_of`, and every reader below drops a stamped row
  * ({@link NOT_A_DUPLICATE}). That is the same rule `countsLlmCallUsage` in
- * @oxagen/tacho folds session totals by, so the rollup and the fold cannot
+ * @oxagen/recorder folds session totals by, so the rollup and the fold cannot
  * price a call a different number of times. Those sources carry cache writes
  * as one `cache_creation_tokens` figure; the 5m/1h split is a transcript
  * column (docs/specs/tacho/data-model.md §2.7). The book prices the two TTLs
  * at different rates, so the wrap below recovers the one-hour portion the
  * same way it recovers thinking: from the transcript row, joined back when
  * the duplicate filter dropped it. The remainder of `cache_creation_tokens`
- * is the five-minute write, matching `priceObservedUsage` in @oxagen/tacho.
+ * is the five-minute write, matching `priceObservedUsage` in @oxagen/recorder.
  * A gateway frame has no 1h column, so its `cacheWrite1h` stays zero.
  *
  * Reasoning is another class a wrapped call reports that the gateway does
@@ -47,7 +47,7 @@
  * records those columns. The read therefore joins that dropped transcript
  * row back on the vendor request id or the message id
  * ({@link TRANSCRIPT_THINKING}, {@link TRANSCRIPT_CACHE_1H}) and takes both
- * figures, the same rule `countsLlmCallSplit` in @oxagen/tacho states.
+ * figures, the same rule `countsLlmCallSplit` in @oxagen/recorder states.
  * Nothing is added by the join: the call is still priced from one row, and
  * the figures only move tokens between classes that row already counted.
  *
@@ -70,7 +70,7 @@ import {
   SYSTEM_CONTEXT_PARTS_MAX,
   systemContextPartSchema,
   type SystemContextPart,
-} from "@oxagen/tacho";
+} from "@oxagen/recorder";
 import { clickhouse } from "./clickhouse";
 
 type CostFrameBasis = "gateway_observed" | "client_attested";
@@ -224,7 +224,7 @@ export type FrameRunRef =
 
 /**
  * The rollup prices each model call once, by the rule the ingest fold uses
- * (`countsLlmCallUsage` in @oxagen/tacho): a token-bearing source, transcript
+ * (`countsLlmCallUsage` in @oxagen/recorder): a token-bearing source, transcript
  * included, and no duplicate stamp. The host stamps a later sighting of a call
  * it already sealed from another source, and a transcript continuation block,
  * with `oxagen.llm_call_duplicate_of`.
@@ -255,7 +255,7 @@ const TACHO_RECEIVED_SINCE = receivedFrom("since");
 /**
  * A transcript row's thinking figure, joined back once per id the host's
  * ledger matches two sightings on: `t` on the vendor request id, `m` on the
- * message id (`llmCallKeys` in @oxagen/tacho). They are separate joins, not
+ * message id (`llmCallKeys` in @oxagen/recorder). They are separate joins, not
  * one key that prefers the request id, because the ledger matches on EITHER
  * id: a proxy row that carries only the message id is stamped against a
  * transcript row that carries both, and a single preferred key would give
@@ -289,7 +289,7 @@ const TRANSCRIPT_SEARCHES =
 
 /**
  * The rows that carry a call's thinking and cache-TTL split, which is
- * `countsLlmCallSplit` in @oxagen/tacho spelled for the store: a transcript
+ * `countsLlmCallSplit` in @oxagen/recorder spelled for the store: a transcript
  * row counts whether it was the first sighting of its call or the duplicate
  * of an OTel or proxy row, and a transcript continuation block, stamped a
  * duplicate of `transcript`, had its usage removed and carries nothing. This
@@ -314,7 +314,7 @@ const FRAME_REASONING = `toInt64(if(${TRANSCRIPT_THINKING} > 0, ${TRANSCRIPT_THI
  * The one-hour write figure, joined the same way as thinking. Capped at the
  * priced row's total `cache_creation_tokens` so a transcript that over-reports
  * cannot invent writes the call did not make; the five-minute class is the
- * remainder (`priceObservedUsage` in @oxagen/tacho).
+ * remainder (`priceObservedUsage` in @oxagen/recorder).
  */
 const FRAME_CACHE_WRITE = "toInt64(coalesce(c.cache_creation_tokens, 0))";
 const FRAME_CACHE_1H = `toInt64(least(${FRAME_CACHE_WRITE}, if(${TRANSCRIPT_CACHE_1H} > 0, ${TRANSCRIPT_CACHE_1H}, coalesce(c.cache_creation_1h_tokens, 0))))`;

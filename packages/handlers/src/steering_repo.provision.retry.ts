@@ -13,6 +13,16 @@
 // already created, a candidate name already chosen, the `attempt` counter
 // the job itself increments on a naming collision. Preserving those fields
 // is what makes the retry resume the run instead of starting it over.
+//
+// A setup that stopped with `choose_connection` recorded its candidates. A
+// retry that names one of them stores it as the organization's steering
+// connection first, so the job's pick_connection finds it and goes on
+// (#4875). A pick the state did not record is refused before anything
+// changes.
+//
+// `resetConnection` clears the organization's stored connection first, so the
+// job lists the candidates again (#4899). The reset is refused once Oxagen has
+// created a steering repo in the stored organization.
 import { schema, withSystemDb } from "@oxagen/database";
 import { resolveActingUserId } from "@oxagen/iam/org-role";
 import { HandlerError, type CapabilityContext, type CapabilityHandler } from "@oxagen/oxagen";
@@ -24,8 +34,12 @@ import { assertContractRole } from "./lib/capability-role-guard";
 import { logger } from "./logger";
 import {
   STEERING_REPO_PROVISION_EVENT,
+  pickSteeringConnection,
   readSteeringRepoState,
+  resetSteeringConnection,
   saveSteeringRepoState,
+  storeChosenSteeringConnection,
+  type SteeringConnection,
   type SteeringRepoProvisionRequest,
   type SteeringRepoScope,
   type SteeringRepoState,
@@ -34,6 +48,16 @@ import {
 export interface RetrySteeringRepoProvisionDeps {
   loadState(scope: SteeringRepoScope): Promise<SteeringRepoState | null>;
   saveState(scope: SteeringRepoScope, state: SteeringRepoState): Promise<void>;
+  /**
+   * Store the picked connection as the organization's steering connection,
+   * or refuse it when the organization already holds a different one.
+   */
+  saveConnection(orgId: string, connection: SteeringConnection): Promise<void>;
+  /**
+   * Clear the organization's stored connection, or refuse while a setup of
+   * the organization recorded a repository in it.
+   */
+  resetConnection(orgId: string): Promise<SteeringConnection | null>;
   send(data: SteeringRepoProvisionRequest, eventId: string): Promise<void>;
   now(): Date;
 }
@@ -52,7 +76,7 @@ function retryEventId(scope: SteeringRepoScope, now: Date): string {
 export function createRetrySteeringRepoProvisionHandler(
   deps: RetrySteeringRepoProvisionDeps,
 ): CapabilityHandler<typeof steeringRepoProvisionRetry> {
-  return async (_input, ctx) => {
+  return async (input, ctx) => {
     // The kernel's IAM check allows every capability for a non-enterprise
     // org, so the handler asks for the contract's roles itself (INV-29).
     await assertContractRole(steeringRepoProvisionRetry, ctx);
@@ -83,11 +107,26 @@ export function createRetrySteeringRepoProvisionHandler(
       });
     }
 
+    if (input.resetConnection === true) await deps.resetConnection(ctx.orgId);
+
+    let chosen: SteeringConnection | null = null;
+    if (input.connection !== undefined) {
+      chosen = pickSteeringConnection(current, input.connection);
+      if (chosen === null)
+        throw new HandlerError({
+          code: "conflict",
+          reason: "unknown_connection",
+          message: `retry_steering_repo_provision: ${input.connection.provider} ${input.connection.id} is not one of the connections this setup found. Read get_steering_repo for its connectionChoices.`,
+        });
+      await deps.saveConnection(ctx.orgId, chosen);
+    }
+
     const now = deps.now();
     const retrying: SteeringRepoState = {
       ...current,
       status: "provisioning",
       error: null,
+      ...(chosen === null ? {} : { connection_choices: [] }),
       updated_at: now.toISOString(),
     };
     await deps.saveState(scope, retrying);
@@ -159,6 +198,8 @@ async function loadSteeringRepoState(scope: SteeringRepoScope): Promise<Steering
 export const retrySteeringRepoProvisionHandler = createRetrySteeringRepoProvisionHandler({
   loadState: loadSteeringRepoState,
   saveState: saveSteeringRepoState,
+  saveConnection: storeChosenSteeringConnection,
+  resetConnection: resetSteeringConnection,
   send: async (data, eventId) => {
     await eventClient.send({ name: STEERING_REPO_PROVISION_EVENT, data, id: eventId });
   },

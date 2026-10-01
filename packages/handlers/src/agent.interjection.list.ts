@@ -24,7 +24,7 @@ import type {
 } from "@oxagen/oxagen/contracts/agent.interjection.list";
 import { CapabilityError } from "@oxagen/oxagen/kernel";
 import { schema, withTenantDb } from "@oxagen/database";
-import { INTERJECTION_PATHS, interjectBodySchema } from "@oxagen/tacho";
+import { INTERJECTION_PATHS, interjectBodySchema } from "@oxagen/recorder";
 import { and, asc, eq, gt, isNull, or, type SQL, sql } from "drizzle-orm";
 import { isCursorInstant } from "./lib/cursor-instant";
 

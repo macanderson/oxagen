@@ -286,7 +286,7 @@ describe("readModelCallFrames", () => {
     expect(joined).not.toContain("attrs[{duplicateAttr:String}] = ''");
 
     // Joined on the vendor request id and, separately, on the message id:
-    // `llmCallKeys` in @oxagen/tacho matches two sightings on either, so a
+    // `llmCallKeys` in @oxagen/recorder matches two sightings on either, so a
     // proxy row carrying only the message id is stamped against a transcript
     // row carrying both. One key preferring the request id would give those
     // two rows different keys and drop the call's thinking figure.

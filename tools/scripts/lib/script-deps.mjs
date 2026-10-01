@@ -15,7 +15,7 @@
  *   - `tools/scripts/hook-preflight.mjs` asks, at hook time, whether each
  *     import is installed, and says plainly that the check could not run when
  *     one is not.
- *   - `tools/scripts/root-hook-deps.test.ts` asks, in CI, whether each import
+ *   - `tools/scripts/root-hook-deps.tree.test.ts` asks, in CI, whether each import
  *     is declared in the root `package.json`, so the sweep #3403 asked for
  *     keeps holding after it lands.
  *

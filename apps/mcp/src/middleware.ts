@@ -6,7 +6,6 @@ import "@oxagen/handlers/register";
 import "@oxagen/agent/register";
 
 import type { RequestHandler } from "express";
-import { apiKeyAuthMiddleware } from "xmcp";
 import { bootstrapIAMRuntime } from "@oxagen/iam";
 import { bootstrapBillingRuntime } from "@oxagen/billing";
 import { bootstrapDecisionRulesRuntime } from "@oxagen/rules";
@@ -20,7 +19,7 @@ import {
 import { makeSecurityEventInserter } from "@oxagen/database/security";
 import { assertRlsConnectionSafe } from "@oxagen/database";
 import { bootstrapDataPlaneResolver } from "@oxagen/database/data-plane";
-import { extractBearerToken } from "./context";
+import { apiKeyGate } from "./api-key-gate";
 import { localServersRoute } from "./local-servers";
 import { servedToolsMiddleware } from "./servers/serve";
 // The relay's upgrade mount (lane M12, ADR-225). xmcp gives no handle to its
@@ -126,13 +125,7 @@ setSecurityEventEmitter((kernelEvent) => {
 // Every other request reaches the transport untouched. The explicit type keeps
 // exported declarations independent of pnpm's internal dependency paths.
 const middleware: RequestHandler[] = [
-  apiKeyAuthMiddleware({
-    headerName: "authorization",
-    validateApiKey: async (authHeader) => {
-      if (typeof authHeader !== "string") return false;
-      return extractBearerToken(authHeader) !== null;
-    },
-  }),
+  apiKeyGate,
   localServersRoute,
   servedToolsMiddleware,
 ];

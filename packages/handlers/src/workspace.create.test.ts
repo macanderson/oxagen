@@ -532,6 +532,7 @@ describe("createWorkspaceCreateHandler: the creating transaction", () => {
       commit_sha: null,
       deployment_id: null,
       binding_id: null,
+      connection_choices: [],
       updated_at: NOW.toISOString(),
     });
   });

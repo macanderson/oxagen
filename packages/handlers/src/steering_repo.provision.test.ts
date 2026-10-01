@@ -6,6 +6,7 @@
 // dependency factory has its own test in steering_repo.provision.deps.test.ts.
 import * as gh from "@oxagen/github/provision";
 import {
+  FAKE_USER_LOGIN,
   FakeGithub,
   type FakeGithubOptions,
 } from "@oxagen/github/provision/testing";
@@ -27,7 +28,14 @@ import { steeringHookTarget } from "./lib/steering-hook";
 import {
   FIRST_COMMIT_MESSAGE,
   initialSteeringRepoState,
+  GITHUB_PLAN_REQUIRED,
   isSteeringRepoStep,
+  pickSteeringConnection,
+  planConnectionReset,
+  releasedSteeringRepoState,
+  REPOSITORY_CREATE_REFUSED,
+  RESET_RUNNING_MS,
+  repositoryOnConnection,
   provisionSteeringRepo,
   readSteeringConnection,
   readSteeringRepoState,
@@ -45,6 +53,7 @@ import {
   type SteeringRepository,
   type StepOutcome,
 } from "./steering_repo.provision";
+import type { LegacySteeringSource } from "./steering-repo/legacy-source";
 
 const { warn } = vi.hoisted(() => ({ warn: vi.fn() }));
 
@@ -98,6 +107,7 @@ const GITHUB_CONNECTION: SteeringConnection = {
   provider: "github",
   installation_id: 77,
   account_login: ORG,
+  account_type: "Organization",
 };
 const GITLAB_CONNECTION: SteeringConnection = {
   provider: "gitlab",
@@ -261,6 +271,10 @@ class Harness {
   groupsRefused = false;
   githubConfigured = true;
   workspaceGone = false;
+  /** The workspace the job provisions for. A test names another slug. */
+  workspaceTarget: ProvisionTarget = WORKSPACE_TARGET;
+  /** The code repository that still steers the workspace, if any. */
+  legacy: LegacySteeringSource | null = null;
   /** The secret the hook's token is made with. A test rotates it. */
   hookSecret = HOOK_SECRET;
   /** Every scope and project the hook step asked a target for. */
@@ -289,7 +303,8 @@ class Harness {
         const state = this.states.get(keyOf(scope));
         const connection = this.connections.get(scope.orgId);
         return Promise.resolve({
-          target: scope.kind === "workspace" ? WORKSPACE_TARGET : ORG_TARGET,
+          target:
+            scope.kind === "workspace" ? this.workspaceTarget : ORG_TARGET,
           state: state === undefined ? null : structuredClone(state),
           connection:
             connection === undefined ? null : structuredClone(connection),
@@ -351,6 +366,7 @@ class Harness {
         this.hookRequests.push({ scope, projectId });
         return hookOf(scope, projectId, this.hookSecret);
       },
+      legacySteeringSource: () => Promise.resolve(this.legacy),
       // The version store answers `published` for the first head it sees and
       // `current` after that, as steeringSyncPublish does.
       publishFirst: (scope) => {
@@ -446,6 +462,7 @@ describe("initialSteeringRepoState", () => {
       commit_sha: null,
       deployment_id: null,
       binding_id: null,
+      connection_choices: [],
       updated_at: "2026-09-26T12:00:00.000Z",
     });
   });
@@ -613,6 +630,7 @@ describe("a GitHub workspace", () => {
       commit_sha: sha,
       deployment_id: expect.any(Number),
       binding_id: BINDING_ID,
+      connection_choices: [],
       updated_at: NOW.toISOString(),
     });
     expect(h.notified).toEqual([]);
@@ -860,6 +878,7 @@ describe("a GitLab workspace", () => {
       commit_sha: sha,
       deployment_id: 1,
       binding_id: BINDING_ID,
+      connection_choices: [],
       updated_at: NOW.toISOString(),
     });
   });
@@ -1027,7 +1046,7 @@ describe("a GitLab hook URL that GitLab refuses", () => {
 // ── Organization scope ───────────────────────────────────────────────────────
 
 describe("the organization repo", () => {
-  it("creates <org>/oxagen with no workspace.toml and binds nothing", async () => {
+  it("creates <org>/oxagen-config with no workspace.toml and binds nothing", async () => {
     const hub = githubFake();
     const h = new Harness(hub, null);
     const deps = h.deps();
@@ -1046,16 +1065,16 @@ describe("the organization repo", () => {
       ["bind_repository", "ready", false],
     ]);
     expect(h.hookRequests).toEqual([]);
-    const repo = githubRepo(hub, "oxagen");
+    const repo = githubRepo(hub, "oxagen-config");
     expect(repo?.description).toBe(ORG_DESCRIPTION);
-    const files = seedFilesOf("github", "acme/oxagen", false);
+    const files = seedFilesOf("github", "acme/oxagen-config", false);
     expect(files["workspace.toml"]).toBeUndefined();
     expect(repo?.files).toEqual({ main: files });
     expect(h.binds).toEqual([]);
     expect(h.state(ORG_SCOPE)).toMatchObject({
       status: "ready",
       step: "publish_version",
-      repository: { name: "oxagen", full_name: "acme/oxagen" },
+      repository: { name: "oxagen-config", full_name: "acme/oxagen-config" },
       binding_id: null,
     });
     expect(h.state(WS)).toBeUndefined();
@@ -1072,13 +1091,13 @@ describe("the organization repo", () => {
 
   it("stops when another repository already holds the one name it may use", async () => {
     const hub = githubFake();
-    hub.seedRepository({ name: "oxagen", description: "Someone else's." });
+    hub.seedRepository({ name: "oxagen-config", description: "Someone else's." });
     const h = new Harness(hub, null);
     const err = await runUntilStopped(h.deps(), ORG_SCOPE);
     expect(err).toBeInstanceOf(SteeringProvisionBlockedError);
     expect(err).toMatchObject({ code: "repository_name_taken" });
     expect((err as Error).message).toContain(
-      "Every name from oxagen to oxagen is taken in acme.",
+      "Every name from oxagen-config to oxagen-config is taken in acme.",
     );
     expect(h.state(ORG_SCOPE)).toMatchObject({
       status: "blocked",
@@ -1087,6 +1106,23 @@ describe("the organization repo", () => {
       repository: null,
     });
     expect(h.notified).toEqual([]);
+  });
+
+  it("starts the config workspace at oxagen-config-2, beside the organization's repo", async () => {
+    const hub = githubFake();
+    const h = new Harness(hub, null);
+    h.workspaceTarget = {
+      org_slug: WORKSPACE_TARGET.org_slug,
+      workspace: { slug: "config", name: "Config" },
+    };
+    await runSteeringRepoStep(h.deps(), WS, "pick_connection");
+    await runSteeringRepoStep(h.deps(), WS, "create_repository");
+    expect(githubRepo(hub, "oxagen-config")).toBeUndefined();
+    expect(githubRepo(hub, "oxagen-config-2")).toBeDefined();
+    expect(h.state(WS)).toMatchObject({
+      attempt: 2,
+      repository: { name: "oxagen-config-2" },
+    });
   });
 });
 
@@ -1188,6 +1224,55 @@ describe("pick_connection", () => {
       failed_step: "pick_connection",
       error: { code: "choose_connection" },
     });
+    // The blocked state lists both, so a person can pick one (#4875).
+    expect(h.state(WS)?.connection_choices).toHaveLength(2);
+    expect(h.savedConnections).toEqual([]);
+  });
+
+  it("records the choices a person picks from, and only those can be picked", async () => {
+    const h = new Harness(githubFake(), gitlabFake());
+    await stepError(h.deps(), WS, "pick_connection");
+    const state = h.state(WS) ?? null;
+    expect(state?.connection_choices).toEqual([
+      expect.objectContaining({ provider: "github" }),
+      expect.objectContaining({ provider: "gitlab", group_id: 42 }),
+    ]);
+    expect(
+      pickSteeringConnection(state, { provider: "gitlab", id: 42 }),
+    ).toEqual(GITLAB_CONNECTION);
+    expect(pickSteeringConnection(state, { provider: "github", id: 42 })).toBeNull();
+    expect(pickSteeringConnection(null, { provider: "gitlab", id: 42 })).toBeNull();
+  });
+
+  it("clears the recorded choices once a connection is stored", async () => {
+    const h = new Harness(githubFake(), gitlabFake());
+    await stepError(h.deps(), WS, "pick_connection");
+    h.connections.set("org_1", GITLAB_CONNECTION);
+    await runSteeringRepoStep(h.deps(), WS, "pick_connection");
+    expect(h.state(WS)).toMatchObject({
+      provider: "gitlab",
+      connection_choices: [],
+    });
+  });
+
+  it("blocks with steering_import_required before anything is made while a code repository steers the workspace", async () => {
+    const hub = githubFake();
+    const h = new Harness(hub, null);
+    h.legacy = { provider: "github", full_name: "acme/agent-harness" };
+    h.connections.set("org_1", GITHUB_CONNECTION);
+    const err = await stepError(h.deps(), WS, "pick_connection");
+    expect(err).toMatchObject({
+      code: "steering_import_required",
+      isNonRetriable: true,
+    });
+    expect((err as Error).message).toContain("acme/agent-harness");
+    expect(h.state(WS)).toMatchObject({
+      status: "blocked",
+      step: null,
+      failed_step: "pick_connection",
+      error: { code: "steering_import_required" },
+    });
+    expect(hub.calls).toEqual([]);
     expect(h.savedConnections).toEqual([]);
   });
 
@@ -1813,3 +1898,275 @@ describe("the first steering version (#4732)", () => {
     expect(h.firstPublishes).toEqual([]);
   });
 });
+
+// ── Personal accounts and refused creates (#4899) ────────────────────────────
+
+describe("a personal GitHub account", () => {
+  const personalFake = () =>
+    new FakeGithub({
+      org: FAKE_USER_LOGIN,
+      app: APP,
+      user_installations: [
+        {
+          id: 78,
+          account_login: FAKE_USER_LOGIN,
+          account_type: "User",
+          repository_selection: "selected",
+        },
+      ],
+    });
+  const PERSONAL: SteeringConnection = {
+    provider: "github",
+    installation_id: 78,
+    account_login: FAKE_USER_LOGIN,
+    account_type: "User",
+  };
+
+  it("is a candidate when it is the owner's own account", async () => {
+    const h = new Harness(personalFake(), null);
+    await runSteeringRepoStep(h.deps(), WS, "pick_connection");
+    expect(h.savedConnections).toEqual([PERSONAL]);
+  });
+
+  it("is skipped when it belongs to someone else (negative)", async () => {
+    const hub = githubFake({
+      user_installations: [
+        {
+          id: 79,
+          account_login: "someone-else",
+          account_type: "User",
+          repository_selection: "selected",
+        },
+      ],
+    });
+    const h = new Harness(hub, null);
+    const err = await stepError(h.deps(), WS, "pick_connection");
+    expect(err).toMatchObject({ code: "no_connection" });
+    expect(h.savedConnections).toEqual([]);
+  });
+
+  it("gets its repository from the owner's token on /user/repos", async () => {
+    const hub = personalFake();
+    const h = new Harness(hub, null);
+    h.connections.set("org_1", PERSONAL);
+    await runSteeringRepoStep(h.deps(), WS, "pick_connection");
+    await runSteeringRepoStep(h.deps(), WS, "create_repository");
+    expect(githubRepo(hub, "oxagen-support")).toBeDefined();
+    expect(h.state(WS)?.repository).toMatchObject({
+      owner: FAKE_USER_LOGIN,
+      name: "oxagen-support",
+    });
+  });
+
+  it("asks the owner to authorize again when no owner token is stored", async () => {
+    const h = new Harness(personalFake(), null);
+    h.connections.set("org_1", PERSONAL);
+    h.userToken = false;
+    await runSteeringRepoStep(h.deps(), WS, "pick_connection");
+    const err = await stepError(h.deps(), WS, "create_repository");
+    expect(err).toMatchObject({ code: REAUTHORIZE });
+  });
+});
+
+describe("a refused create", () => {
+  it("stops with repository_create_refused and GitHub's message, not a taken name", async () => {
+    const hub = githubFake();
+    const h = new Harness(hub, null);
+    h.connections.set("org_1", GITHUB_CONNECTION);
+    await runSteeringRepoStep(h.deps(), WS, "pick_connection");
+    hub.failNext({
+      method: "POST",
+      path: "/orgs/acme/repos",
+      status: 422,
+      message:
+        "Due to policy, you are not permitted to perform that operation on this repository.",
+    });
+    const err = await stepError(h.deps(), WS, "create_repository");
+    expect(err).toMatchObject({
+      code: REPOSITORY_CREATE_REFUSED,
+      isNonRetriable: true,
+    });
+    expect((err as Error).message).toContain("GitHub refused to create a repository in acme");
+    expect((err as Error).message).toContain("Due to policy");
+    expect(h.state(WS)).toMatchObject({
+      status: "blocked",
+      failed_step: "create_repository",
+      error: { code: REPOSITORY_CREATE_REFUSED },
+    });
+  });
+
+  it("leaves a rate limit to the job's retry", async () => {
+    const hub = githubFake();
+    const h = new Harness(hub, null);
+    h.connections.set("org_1", GITHUB_CONNECTION);
+    await runSteeringRepoStep(h.deps(), WS, "pick_connection");
+    hub.failNext({
+      method: "POST",
+      path: "/orgs/acme/repos",
+      status: 403,
+      message: "API rate limit exceeded for installation.",
+    });
+    const err = await stepError(h.deps(), WS, "create_repository");
+    expect(err).not.toBeInstanceOf(SteeringProvisionBlockedError);
+    expect(h.state(WS)).toMatchObject({ status: "failed" });
+  });
+
+  it("still reads every name taken as repository_name_taken", async () => {
+    const hub = githubFake();
+    for (let n = 1; n <= 20; n++)
+      hub.seedRepository({
+        name: n === 1 ? "oxagen-support" : `oxagen-support-${n}`,
+        description: "Someone else's.",
+      });
+    const h = new Harness(hub, null);
+    const err = await runUntilStopped(h.deps(), WS);
+    expect(err).toMatchObject({ code: "repository_name_taken" });
+  });
+});
+
+describe("prescribed settings on a GitHub plan that cannot protect branches", () => {
+  it("stops with github_plan_required", async () => {
+    const hub = githubFake();
+    const h = new Harness(hub, null);
+    h.connections.set("org_1", GITHUB_CONNECTION);
+    const deps = h.deps();
+    for (const step of [
+      "pick_connection",
+      "create_repository",
+      "add_to_installation",
+      "write_first_commit",
+    ] as const)
+      await runSteeringRepoStep(deps, WS, step);
+    hub.failNext({
+      method: "POST",
+      path: "/rulesets",
+      status: 403,
+      message:
+        "Upgrade to GitHub Pro or make this repository public to enable this feature.",
+    });
+    const err = await stepError(deps, WS, "apply_settings");
+    expect(err).toMatchObject({ code: GITHUB_PLAN_REQUIRED });
+    expect((err as Error).message).toContain("Upgrade the account to GitHub Pro");
+  });
+});
+
+describe("repositoryOnConnection", () => {
+  const repo = (owner: string): SteeringRepository => ({
+    id: 1,
+    owner,
+    name: "oxagen-support",
+    full_name: `${owner}/oxagen-support`,
+    initial_branch: "main",
+  });
+  const state = (
+    provider: "github" | "gitlab",
+    owner: string | null,
+  ): SteeringRepoState => ({
+    ...initialSteeringRepoState(NOW),
+    provider,
+    repository: owner === null ? null : repo(owner),
+  });
+
+  it("finds a repository a setup made in the connected account", () => {
+    expect(
+      repositoryOnConnection(GITHUB_CONNECTION, [
+        null,
+        state("github", null),
+        state("github", "ACME"),
+      ]),
+    ).toMatchObject({ full_name: "ACME/oxagen-support" });
+    expect(
+      repositoryOnConnection(GITLAB_CONNECTION, [state("gitlab", `${ORG}/steering`)]),
+    ).toMatchObject({ owner: `${ORG}/steering` });
+  });
+
+  it("finds none in another account or on another host (negative)", () => {
+    expect(
+      repositoryOnConnection(GITHUB_CONNECTION, [
+        state("github", "acme-old"),
+        state("gitlab", ORG),
+      ]),
+    ).toBeNull();
+    expect(
+      repositoryOnConnection(GITLAB_CONNECTION, [state("gitlab", `${ORG}x`)]),
+    ).toBeNull();
+  });
+});
+
+describe("planConnectionReset", () => {
+  const made = (owner: string): SteeringRepository => ({
+    id: 1,
+    owner,
+    name: "oxagen-support",
+    full_name: `${owner}/oxagen-support`,
+    initial_branch: "main",
+  });
+  const at = (overrides: Partial<SteeringRepoState>): SteeringRepoState => ({
+    ...initialSteeringRepoState(new Date(NOW.getTime() - RESET_RUNNING_MS - 1)),
+    provider: "github",
+    status: "blocked",
+    ...overrides,
+  });
+
+  it("waits for a setup that saved as provisioning within the window", () => {
+    expect(
+      planConnectionReset(
+        GITHUB_CONNECTION,
+        [{ key: "ws_1", state: at({ status: "provisioning", updated_at: NOW.toISOString() }) }],
+        NOW,
+      ),
+    ).toEqual({ kind: "refuse", reason: "setup_running" });
+  });
+
+  it("treats an old provisioning state that never saved again as stopped", () => {
+    expect(
+      planConnectionReset(
+        GITHUB_CONNECTION,
+        [{ key: "ws_1", state: at({ status: "provisioning" }) }],
+        NOW,
+      ),
+    ).toEqual({ kind: "clear", release: [] });
+  });
+
+  it("refuses once a repo in the stored account published, bound, or finished", () => {
+    for (const pinned of [
+      { deployment_id: 9 },
+      { binding_id: "rpb_1" },
+      { status: "ready" as const },
+    ])
+      expect(
+        planConnectionReset(
+          GITHUB_CONNECTION,
+          [{ key: "ws_1", state: at({ repository: made(ORG), ...pinned }) }],
+          NOW,
+        ),
+      ).toMatchObject({ kind: "refuse", reason: "connection_in_use" });
+  });
+
+  it("releases a setup that stopped before publishing its repo there", () => {
+    expect(
+      planConnectionReset(
+        GITHUB_CONNECTION,
+        [
+          { key: null, state: null },
+          { key: "ws_1", state: at({ repository: made(ORG), failed_step: "apply_settings" }) },
+          { key: "ws_2", state: at({ repository: made("elsewhere"), deployment_id: 3 }) },
+        ],
+        NOW,
+      ),
+    ).toEqual({ kind: "clear", release: ["ws_1"] });
+    const released = releasedSteeringRepoState(
+      at({ repository: made(ORG), step: "write_first_commit", commit_sha: "abc", attempt: 2 }),
+      NOW,
+    );
+    expect(released).toMatchObject({
+      status: "blocked",
+      step: null,
+      repository: null,
+      commit_sha: null,
+      attempt: 1,
+      candidate: null,
+    });
+  });
+});
+

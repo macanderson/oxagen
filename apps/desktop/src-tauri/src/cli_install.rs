@@ -257,9 +257,15 @@ pub fn sidecar_env() -> std::collections::BTreeMap<String, String> {
 /// Pure: `TACHO_BIN_DIR` at the per-user copy, always. Before the launch
 /// has made the copy, the directory holds no `tacho`, and tacho refuses to
 /// enroll rather than name the bundle it runs from.
+///
+/// `OXAGEN_DESKTOP_SIDECAR` tells the sidecar the app started it. The
+/// recorder's old executable names print one line saying which `oxagen`
+/// command replaced them (#4879), and the app streams a sidecar's stderr into
+/// its log, where the person reading it did not type the command.
 pub fn sidecar_env_for(kept: &Path) -> std::collections::BTreeMap<String, String> {
     let mut env = std::collections::BTreeMap::new();
     env.insert("TACHO_BIN_DIR".to_string(), kept.display().to_string());
+    env.insert("OXAGEN_DESKTOP_SIDECAR".to_string(), "1".to_string());
     env
 }
 
@@ -2692,7 +2698,8 @@ mod tests {
         assert_eq!(kept, durable.join("2.1.4-17"));
         let env = sidecar_env_for(&kept);
         assert_eq!(env.get("TACHO_BIN_DIR"), Some(&kept.display().to_string()));
-        assert_eq!(env.len(), 1);
+        assert_eq!(env.get("OXAGEN_DESKTOP_SIDECAR").map(String::as_str), Some("1"));
+        assert_eq!(env.len(), 2);
         // The real one names this app's version under the durable directory.
         let real = sidecar_env();
         assert_eq!(

@@ -33,7 +33,7 @@ import {
   mcpToolSchema,
   registryEntrySchema,
 } from "@oxagen/mcp-studio";
-import { refusalText } from "@oxagen/tacho/local-servers";
+import { refusalText } from "@oxagen/recorder/local-servers";
 import type { SteeringHost } from "../../context.steering.github";
 import type { LocalGatewayBroker } from "../local-calls/broker";
 import { discoverLocalTools } from "../local-calls/discovery";
