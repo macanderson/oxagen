@@ -38,9 +38,9 @@ Every PR you open gets a watcher from the first push until it merges or closes. 
 - **Poll every 60 seconds.** Each poll reads `gh pr view <n> --json state,headRefOid,mergeable,mergeStateStatus,statusCheckRollup`. Judge only the runs for the current head commit. A run cancelled because you pushed again is not a failure.
 - **Read each job as it finishes, not the whole run.** A job that fails is a signal the moment it fails, while the rest of the run is still going. Read its failing step with `gh run view --job <job-id> --log-failed`, fix the cause on the branch, and push. Do not wait for the workflow to finish before you start the fix.
 - **Resolve conflicts as soon as they appear.** When `mergeable` reads `CONFLICTING`, merge current `origin/main` into the branch, resolve each conflict, check the behavior both sides changed (ADR-110), and push. A conflicting PR gets no CI run at all, so `gh pr checks` can read green while nothing ran.
-- **A schema change needs only its label.** If the diff changes a schema, confirm `migration-required` is on the PR, and add it if `migration-label.yml` has not. `migration-gate` applies the migration on merge (SCR-006).
+- **A schema change needs only its label.** If the diff changes a schema, confirm `MIGRATION-REQUIRED` is on the PR, and add it if `migration-label.yml` has not. `migration-gate` applies the migration on merge (SCR-006).
 - **Report checks as they are.** Pending is pending. A cancelled or skipped required job is not a pass. Name the job and its state.
-- **Answer review findings** under the severity and round rules in `AGENTS.md` under Git Workflow. On a PR labelled `agent-monitored-pr`, the pass rule in Agent-monitored pull requests replaces the round rule.
+- **Answer review findings** under the severity and round rules in `AGENTS.md` under Git Workflow. On a PR labelled `AGENT-MONITORED-PR`, the pass rule in Agent-monitored pull requests replaces the round rule.
 
 Stop the watcher when the PR merges or closes, and say which in your report.
 
@@ -58,16 +58,16 @@ Agents chose these details on 2026-09-28, and Mac has not ruled on them. Cut the
 
 ## Agent-monitored pull requests
 
-Mac set this on 2026-09-26 for every repository. The `agent-monitored-pr` label marks a PR that an agent watches until it merges or closes. A labelled PR comes before other work, and its fixes run in parallel wherever that is safe.
+Mac set this on 2026-09-26 for every repository. The `AGENT-MONITORED-PR` label marks a PR that an agent watches until it merges or closes. A labelled PR comes before other work, and its fixes run in parallel wherever that is safe.
 
-- **Label every PR an agent opens.** Pass `--label agent-monitored-pr` to `gh pr create`. If the repository has no such label, create it first: `gh label create agent-monitored-pr --color fd0880 --description "Agent polls every 60 seconds fixes CI, comments, conflicts."`
+- **Label every PR an agent opens.** Pass `--label AGENT-MONITORED-PR` to `gh pr create`. If the repository has no such label, create it first: `gh label create AGENT-MONITORED-PR --color FD0880 --description "An agent polls every 60 seconds and fixes CI, comments, and conflicts"`
 - **Poll the PR every 60 seconds.** Each poll reads the PR's state, its mergeability, and the checks on the head commit. It reads every review thread that still needs a reply: one with no inline reply after the reviewer's last comment, or one whose fix-branch reply has no commit-SHA reply after it. `gh pr view --json` does not return review threads, so read them with `gh api graphql` (`pullRequest.reviewThreads`). It also reads review bodies and top-level comments, because a finding there has no thread. Answer each finding there as Replies to PR feedback sets out, with PR comments that quote it, and record the id of the comment you answered. Start every comment a watcher posts with `<!-- pr-watch -->`. Skip comments that start with that marker or with `<!-- pr-claim -->`, so a watcher does not answer its own comments.
 - **Fix by review pass.** Pass N is the Nth review one reviewer submits on the PR. On pass 1, fix every P0, P1, and P2 finding. On pass 2, fix P0 and P1. From pass 3 on, fix P0 only. A P0 blocks the PR at every pass.
 - **File one residue issue.** Carry every P1 and P2 finding left unfixed into a single issue for the PR. Its title ends with `(residue #<PR>)`, and its body links the PR. Reply inline on every thread you handle. A finding you fix gets the two replies in Replies to PR feedback. A finding you carry gets a reply that links the residue issue.
 - **Let the pass rule govern review findings.** On a labelled PR, the pass rule decides which review findings get fixed, in place of any repository rule on review rounds or on fixing every finding in the PR. Residue goes to one issue, even where a repository files each finding alone. Where a repository allows one change per issue, residue from unrelated changes splits into one issue per change. A defect you notice yourself still follows fix over file. A P3 finding follows the repository's usual rules.
 - **Clear conflicts and CI failures as they appear.** When the PR conflicts, merge the base branch in, resolve it, and push. When a job fails, read its failing step with `gh run view --job <id> --log-failed`, fix it, and push without waiting for the rest of the run.
 - **Dispatch subagents.** Give each independent fix its own subagent when no two fixes touch the same file. Stay active until the PR merges or closes.
-- **Search for the label every 60 seconds.** A session that watches PRs runs `gh search prs --owner macanderson --label agent-monitored-pr --state open --limit 1000` every 60 seconds. Without `--limit`, gh returns 30 results, and GitHub search returns at most 1000. The session takes each labelled PR that no live claim holds.
+- **Search for the label every 60 seconds.** A session that watches PRs runs `gh search prs --owner macanderson --label AGENT-MONITORED-PR --state open --limit 1000` every 60 seconds. Without `--limit`, gh returns 30 results, and GitHub search returns at most 1000. The session takes each labelled PR that no live claim holds.
 - **Claim a PR before the first write.** A PR has one writer. Two writers on one branch restart each other's CI and reject each other's pushes. To claim, post a PR comment whose first line is `<!-- pr-claim --> <login> <session-word> <runtime> <session name>`, then read the PR's comments again. The session word is one word that names your session, such as a job id. A claim holds for 90 minutes after it is posted. The oldest claim that still holds owns the PR. If that claim is not yours, delete your comment and message the owner instead of pushing. Before your claim lapses, post a new one and delete the old one. Delete your claim when you stop watching the PR. Agents chose this claim on 2026-09-26 to answer review findings, in the format of stella's `scripts/pr-claim.sh`, and Mac has not ruled on it.
 
 ## Verification policy
@@ -90,7 +90,7 @@ Lightweight file, link, contract, and prose integrity checks remain part of revi
 - From `packages/database`, regenerate the checksum with `atlas migrate hash --dir "file://atlas/migrations"`. Do not hand-edit `atlas.sum`.
 - Confirm the database host and database name before mutation. Do not print credentials. A shell-exported `DATABASE_URL` overrides `tsx --env-file=.env.local`; unset it when the env file should choose the target.
 - CI applies production migrations. On every push to `main`, `migration-gate` in `pipeline.yml` applies pending Postgres migrations with `infra/tools/apply-postgres-migrations.sh` and pending ClickHouse and Neo4j migrations with `tools/scripts/db-migrate.ts`, then re-checks all three stores. A Postgres apply runs `run-db-migrations.sh --apply`, which also runs `seedPlatform()`, so the Free plan and the book editions reach production with the migrations (ADR-123). Mac decided this on 2026-09-23 (#3653). The gate refuses an unreadable store and a Postgres revision table that lists every migration as pending. For those cases, apply by hand: `infra/tools/run-db-migrations.sh packages/database --apply` from a laptop with AWS credentials on a checkout of `origin/main`, the `db-migrate.yml` dispatch with target production, or the `store-migrate.yml` dispatch. See README.md Deployment.
-- Label a schema-changing PR `migration-required` (SCR-006). `.github/workflows/migration-label.yml` reads the diff and applies it, and re-applies it if it is removed while the diff still changes a schema. The label is the only thing a schema change adds to a PR. Do not write apply steps in the PR or apply anything by hand. `migration-gate` applies the migration when the PR merges.
+- Label a schema-changing PR `MIGRATION-REQUIRED` (SCR-006). `.github/workflows/migration-label.yml` reads the diff and applies it, and re-applies it if it is removed while the diff still changes a schema. The label is the only thing a schema change adds to a PR. Do not write apply steps in the PR or apply anything by hand. `migration-gate` applies the migration when the PR merges.
 - The migration reaches production before or with the deploy of the code that assumes it, never after. `migration-gate` blocks `deploy-node` until every store reads current after its apply. An unreadable store blocks too, so a failed SSM tunnel stops a deploy that has no missing migration. Re-run the job before reaching for a manual apply.
 - Stamp a new Postgres migration later than every migration on `main`. The gate does not pass `--exec-order non-linear`, so a migration stamped before one production already carries makes the apply fail and blocks the deploy until the branch renumbers it.
 
@@ -167,53 +167,62 @@ Mac set this on 2026-09-29. The app uses Geist for every heading and every line 
 
 ## Issue titles
 
-After triage, an issue title gives its priority, kind, size, and area, then the problem
-in plain words, so a person can read the backlog without opening an issue:
+Mac set this format on 2026-09-30 for oxagen and stella. After triage, an issue title
+gives its priority, model tier, size, kind, and area, then the problem in plain words, so
+a person can read the backlog without opening an issue:
 
 ```
-P<n> <Kind> <Size> (<Area>): <statement>
-P0 Bug XS (CI): Main stays red because the coverage step reads a stale lockfile
-P1 Feature L (Steering): Bulk import memories from Markdown files
+<Priority> <Tier> <Size> <Kind> (<Area>): <Statement>
+P0 T3 XS Bug (CI): Main stays red because the coverage step reads a stale lockfile
+P1 T3 L Feature (Steering): Bulk import memories from Markdown files
 ```
 
-Before triage, use `Queued <Kind> (<Area>): <statement>` and apply only `triage`. The
+Before triage, use `Queued <Kind> (<Area>): <Statement>` and apply only `TRIAGE`. The
 kind and area in that title are the creator's guess. The triage pass (`/triage-issues`)
-replaces `Queued` with the priority, adds the size, and corrects the kind and area.
-Mac replaced the older `P<n> · <area>/<surface> · <statement>` shape on 2026-09-25.
+replaces `Queued` with the priority, the tier, and the size, and corrects the kind and
+area. The 2026-09-30 format replaced `P<n> <Kind> <Size> (<Area>)`, which carried no tier
+and put the kind before the size. That shape had replaced `P<n> · <area>/<surface> ·
+<statement>` on 2026-09-25.
 
 - **Each prefix part copies a label.** The label is the source of truth. The title is
-  what a list, a search result, and a notification show. `P<n>` is the `P0`-`P4` label.
-  `<Kind>` is `Bug` (`kind:defect`), `Gap`, `Feature`, or `Debt`. `<Size>` is the
-  `size/` label. `<Area>` is the title name of the one `area:` label. Retitle whenever
-  one of those labels changes.
+  what a list, a search result, and a notification show. `<Priority>` is the `P0` to `P4`
+  label. `<Tier>` is the `MODEL:` label, `T1` to `T4`. `<Size>` is the `SIZE:` label, `XS`
+  to `XL`. `<Kind>` is the `KIND:` label: `Bug`, `Feature`, `Improvement`, `Chore`,
+  `Documentation`, or `DevOps`. `<Area>` is the title name of the one `AREA:` label.
+  Retitle whenever one of those labels changes.
 - **The statement** says what goes wrong for a bug, and what a person will be able to do
-  for a gap or feature. Write it for a reader who has never opened the codebase: no
-  function names, paths, or internal terms. Aim for 80 characters and never exceed 100.
-  Follow `clear-prose`, and do not write "Mission Control" (ADR-113).
+  for a feature or an improvement. Write it for a reader who has never opened the
+  codebase: no function names, paths, or internal terms. Aim for 80 characters and never
+  exceed 100. Follow `clear-prose`, and do not write "Mission Control" (ADR-113).
+- **A lane tag** such as `[C0]` goes at the start of the statement, after the colon.
 - **Residue issues** carry their PR in a trailing `(residue #<PR>)`. List every PR when a
   residue issue carries more than one.
+- **A workflow-owned issue** (`DEPLOYMENT-FAILURE`, `MAIN-UNVERIFIED`, `INFRA-DRIFT`,
+  `STORE-DRIFT`) gets its whole title from the workflow that files it, and the triage pass
+  leaves it alone.
 
-`.claude/commands/triage-issues.md` holds the full rules: the area table, how to choose
-each label, and the procedure. Run `/triage-issues` to work the `triage` queue.
+`.claude/commands/triage-issues.md` holds the full rules: the tier, size, kind, and area
+tables, how to choose each label, and the procedure. Run `/triage-issues` to work the
+`TRIAGE` queue.
 
 ## Issues and labels
 
 Track work in GitHub issues on `macanderson/oxagen`. Follow SCR-003, SCR-004, and SCR-005 in the standing decisions at the end of `AGENTS.md`.
 
-**Assigned work carries an issue.** When you are asked to change functional code, tests, or documentation and no issue covers it, open one before the PR, apply only `triage`, and cite it in the PR body with `Closes #N` or `Refs #N`. A chore needs none: an edit to rules or agent instructions, a dependency or lockfile bump, formatting, or release bookkeeping. Mac set this on 2026-09-23. SCR-004 below covers a different case, a defect you notice along the way: fix it in the PR, and file it only when it cannot ride.
+**Assigned work carries an issue.** When you are asked to change functional code, tests, or documentation and no issue covers it, open one before the PR, apply only `TRIAGE`, and cite it in the PR body with `Closes #N` or `Refs #N`. A chore needs none: an edit to rules or agent instructions, a dependency or lockfile bump, formatting, or release bookkeeping. Mac set this on 2026-09-23. SCR-004 below covers a different case, a defect you notice along the way: fix it in the PR, and file it only when it cannot ride.
 
 Fix defects in the task's PR when the fix can responsibly ride it. File an issue only when the work needs a maintainer decision, a rig, credentials, real spend, or more work than the session can carry. State that constraint and the maintainability, stability, reliability, innovation, efficiency, or performance benefit.
 
 One issue carries one full change. Include context, paths, reproduction steps where relevant, a proposed approach, and a `- [ ]` definition of done. Do not create sub-issues, parents, or epics. Use the templates in `.github/ISSUE_TEMPLATE/`.
 
 - A PR uses `Closes #N` only when it finishes every item in that issue's definition of done. Otherwise use `Refs #N`.
-- A PR that closes no issue, such as a chore, uses `no-issue` for a trivial change or `closes-nothing` for a substantial change. These are PR labels, not substitute text in the body.
-- A PR that changes a schema carries `migration-required` (SCR-006). `migration-label.yml` applies it from the diff. Add it yourself only if the workflow has not, and never remove it while the diff still changes a schema, because the workflow puts it back. Nothing else about the PR changes: `migration-gate` applies the migration on merge.
-- Apply only `triage` to an issue you create. The triage identity applies priority, size, and descriptive labels. Never apply workflow-owned labels manually.
+- A PR that closes no issue, such as a chore, uses `NO-ISSUE` for a trivial change or `CLOSES-NOTHING` for a substantial change. These are PR labels, not substitute text in the body.
+- A PR that changes a schema carries `MIGRATION-REQUIRED` (SCR-006). `migration-label.yml` applies it from the diff. Add it yourself only if the workflow has not, and never remove it while the diff still changes a schema, because the workflow puts it back. Nothing else about the PR changes: `migration-gate` applies the migration on merge.
+- Apply only `TRIAGE` to an issue you create. The triage identity applies priority, tier, size, and descriptive labels. Never apply workflow-owned labels manually.
 - Add no attribution to an issue, an issue comment, or a PR: no "Generated with Claude Code" footer, no `claude.ai/code` session link, and no co-author line. Mac had them stripped from every issue on 2026-09-25.
-- CI files a `P0` issue labelled `deployment-failure` when `main` goes red or a production deploy fails, and closes it when a later run recovers (`.github/workflows/deployment-failure.yml`). This is the one priority label a workflow applies; `triage-guard.yml` exempts it. Record the root cause and the fixing commit (it lands straight on `main`, per AGENTS.md under Git Workflow) in a comment, and leave the open and close to CI, because the time between them is the recovery-time statistic.
+- CI files a `P0` issue labelled `DEPLOYMENT-FAILURE` when `main` goes red or a production deploy fails, and closes it when a later run recovers (`.github/workflows/deployment-failure.yml`). This is the one priority label a workflow applies, and `triage-guard.yml` exempts it. Record the root cause and the fixing commit (it lands straight on `main`, per AGENTS.md under Git Workflow) in a comment, and leave the open and close to CI, because the time between them is the recovery-time statistic.
 - Close an issue as completed only with verification. Use not planned with an explanation for duplicates, superseded work, or a decision not to proceed.
-- Follow the review severity and three-round residue rules in `AGENTS.md` under Git Workflow. That file owns the rule, including the fourth-round P1 exception and the P0 block. On a PR labelled `agent-monitored-pr`, the pass rule replaces the round rule.
+- Follow the review severity and three-round residue rules in `AGENTS.md` under Git Workflow. That file owns the rule, including the fourth-round P1 exception and the P0 block. On a PR labelled `AGENT-MONITORED-PR`, the pass rule replaces the round rule.
 
 Three issue fields carry what a label cannot. When these fields are available in GitHub,
 set them when you open an issue and correct them when you learn better. Until they are
@@ -226,23 +235,40 @@ its value. Keep those values current, then copy them into the fields when availa
 | Breaking change | Yes / No | The change alters a capability contract, an API response, a CLI flag, a hook payload or a stored format that a consumer already depends on. |
 | Customer reported | Yes / No | A customer or prospect reported the problem. An audit, a reviewer, CI or telemetry did not. |
 
-Size labels stay: they size the change, while `agent_mins_est` on the `All issues` board sizes the work (see Issue fields and reflection below).
-
-A triaged issue carries one priority, one `kind:`, one `size/`, one `area:`, and one `job:` label:
+Mac set this label scheme on 2026-09-30 for oxagen and stella, and every label name is
+uppercase. A triaged issue carries exactly one priority, one `MODEL:`, one `SIZE:`, one
+`KIND:`, and one `AREA:` label:
 
 | Dimension | Values |
 |---|---|
-| Kind | `defect`, `gap`, `feature`, `debt` |
-| Job | `govern`, `ground`, `explain`, `meter`, `rate` |
-| Area | `fleet`, `runs`, `mandates`, `agents`, `tools`, `steering`, `skills`, `spend`, `billing`, `organization`, `auth`, `onboarding`, `repositories`, `stella`, `app-shell`, `tacho`, `desktop`, `gateway`, `api`, `mcp`, `cli`, `database`, `ci`, `deploy`, `docs`, `compliance` |
-| Pillar | one or two of `stability`, `reliability`, `maintainability`, `innovation`, `efficiency`, `performance` |
-| Need | `decision`, `rig`, when they apply |
+| Priority | `P0`, `P1`, `P2`, `P3`, `P4` |
+| Tier | `MODEL:T1` (Haiku: mechanical, fully specified work), `MODEL:T2` (Sonnet: routine implementation from a clear spec), `MODEL:T3` (Opus: judgment across packages, invariants, security, or migrations), `MODEL:T4` (Fable: architecture-critical or novel design) |
+| Size | `SIZE:EXTRA-SMALL`, `SIZE:SMALL`, `SIZE:MEDIUM`, `SIZE:LARGE`, `SIZE:EXTRA-LARGE` |
+| Kind | `KIND:BUG`, `KIND:FEATURE`, `KIND:IMPROVEMENT`, `KIND:CHORE`, `KIND:DOCUMENTATION`, `KIND:DEVOPS` |
+| Area | `AREA:FLEET`, `AREA:RUNS`, `AREA:MANDATES`, `AREA:AGENTS`, `AREA:TOOLS`, `AREA:STEERING`, `AREA:SKILLS`, `AREA:SPEND`, `AREA:BILLING`, `AREA:ORGANIZATION`, `AREA:AUTH`, `AREA:ONBOARDING`, `AREA:REPOSITORIES`, `AREA:STELLA`, `AREA:APP-SHELL`, `AREA:TACHO`, `AREA:DESKTOP`, `AREA:GATEWAY`, `AREA:API`, `AREA:MCP`, `AREA:CLI`, `AREA:DATABASE`, `AREA:CI`, `AREA:DEPLOY`, `AREA:DOCS`, `AREA:COMPLIANCE` |
 
-The area names where a person meets the problem, not the package that holds the code. Add `security` when the issue involves credentials, secrets, tenant isolation, access control, or personal data.
+Add these where they apply:
 
-A missing part of an existing spec or implementation is a gap. A feature introduces new behavior with a rationale against `docs/VISION.md`. A decision belongs in an ADR. Use `needs:decision` only when the body asks the maintainer a specific question and the work waits on the answer. Read `gh label list` for current labels and descriptions.
+| Dimension | Values |
+|---|---|
+| Job | `JOB:GOVERN`, `JOB:GROUND`, `JOB:EXPLAIN`, `JOB:METER`, `JOB:RATE` |
+| Pillar | one or two of `PILLAR:STABILITY`, `PILLAR:RELIABILITY`, `PILLAR:MAINTAINABILITY`, `PILLAR:INNOVATION`, `PILLAR:EFFICIENCY`, `PILLAR:PERFORMANCE` |
+| Need | `NEEDS:DECISION`, `NEEDS:RIG` |
+| Other | `SECURITY`, `BLOCKED` |
 
-Retired on 2026-09-25, so do not apply them: `build-time:*`, `model:tier-*`, `schema-change` (PRs use `migration-required`), and the code-owner areas `area:app`, `area:data`, `area:evidence`, `area:kernel`, `area:knowledge`, `area:ops`, `area:platform`, and `area:surfaces`.
+A `SIZE:` label is the band of agent minutes the work should take to reach a merge-ready
+pull request: XS is 30 or fewer, S is 31 to 90, M is 91 to 240, L is 241 to 480, and XL
+is more than 480. Move up one size for high risk or a wide blast radius. `agent_mins_est`
+on the `All issues` board holds the same estimate as a number (see Issue fields and
+reflection below).
+
+The area names where a person meets the problem, not the package that holds the code. Add `SECURITY` when the issue involves credentials, secrets, tenant isolation, access control, or personal data.
+
+A bug is something that exists and behaves wrongly. A feature adds a capability none of which exists yet, with a rationale against `docs/VISION.md`. An improvement makes an existing capability better, and a gap where the spec or mockup shows more than the build has is an improvement. A chore is maintenance with no visible change. Documentation and DevOps name their deliverable. A decision belongs in an ADR. Use `NEEDS:DECISION` only when the body asks the maintainer a specific question and the work waits on the answer. Read `gh label list` for current labels and descriptions.
+
+Mac reinstated the `MODEL:` tier labels on 2026-09-30. This supersedes the 2026-09-25 retirement of `model:tier-*`, which left the choice of model to the harness.
+
+Do not apply these: any lowercase label (the 2026-09-30 scheme renames each one to its uppercase name), `kind:gap` (now `KIND:FEATURE` when nothing is built, `KIND:IMPROVEMENT` when part is), `build-time:*`, `schema-change` (PRs use `MIGRATION-REQUIRED`), and the code-owner areas `area:app`, `area:data`, `area:evidence`, `area:kernel`, `area:knowledge`, `area:ops`, `area:platform`, and `area:surfaces`, which have no uppercase successor. GitHub matches a label name without regard to case when you add or filter one. Every issue and PR payload still carries the stored spelling, so code that reads a label compares the names lowercased.
 
 `check:manifest:tickets` and `e2e:failure-ticket` still target Linear and no-op without `LINEAR_API_KEY`. Issue #2980 tracks their move to GitHub. `linear-release.yml` publishes release notes and is separate from issue tracking.
 
@@ -259,7 +285,7 @@ Mac set this on 2026-09-28 for every repository. Every issue in Mac's repositori
 | Field | Values | Meaning |
 |---|---|---|
 | Prompt | Text | The prompt that starts an agent on the work |
-| Model Tier | Ultra, Pro, Standard, Lite | The model tier the work needs |
+| Model Tier | T1, T2, T3, T4 (formerly Lite, Standard, Pro, Ultra) | The model tier the work needs, the same tier as the issue's `MODEL:` label |
 | Size | XS, S, M, L, XL | The size of the change |
 | `agent_mins_est` | Number | Agent minutes the work should take |
 | `agent_mins` | Number | Agent minutes the work took |
