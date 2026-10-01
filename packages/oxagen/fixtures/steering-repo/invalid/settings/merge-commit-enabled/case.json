@@ -1,14 +1,14 @@
 {
   "check": "settings",
-  "rule": "actions-enabled",
+  "rule": "setting-differs",
   "severity": "error",
-  "description": "GitHub Actions is on.",
+  "description": "GitHub allows merge commits.",
   "refused_by_reader": false,
   "changed": [],
   "removed": [],
   "expect": [
     {
-      "path": "actions.enabled"
+      "path": "merge.allow_merge_commit"
     }
   ],
   "actual_settings": {
@@ -19,12 +19,12 @@
       "rulesets": {},
       "merge": {
         "allow_squash_merge": true,
-        "allow_merge_commit": false,
+        "allow_merge_commit": true,
         "allow_rebase_merge": false,
         "delete_branch_on_merge": true
       },
       "actions": {
-        "enabled": true
+        "enabled": false
       },
       "environments": {}
     }

@@ -1,8 +1,8 @@
 // steering-repo/merge-queue.ts: how Oxagen merges a steering PR
 // (steering-repo-spec, Steering PR flow: Queue, Stamp and Merge).
 //
-// Oxagen is the only merger of a steering repo, and it merges one steering PR
-// at a time per repository. At the head of the queue the PR's branch must
+// Oxagen merges one steering PR at a time per repository.
+// At the head of the queue the PR's branch must
 // hold the production branch. When it does not, Oxagen brings the branch up
 // to date and runs the checks again. In the steering layout Oxagen then pushes
 // one stamp commit: the `id` and `hash` of each steering record the PR changes

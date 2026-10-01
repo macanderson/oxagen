@@ -315,6 +315,8 @@ const REPAIR_SETTINGS =
   "Repair: an admin selects Repair settings on the steering repo banner in Oxagen.";
 
 function rulesetName(key: string): string {
+  if (key === "oxagen_steering") return "Oxagen steering";
+  if (key === "oxagen_merges") return "Oxagen merges";
   return GITHUB_SETTINGS_BASELINE.rulesets[key]?.name ?? key;
 }
 

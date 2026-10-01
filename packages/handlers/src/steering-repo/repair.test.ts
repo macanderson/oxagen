@@ -383,13 +383,15 @@ describe("repair", () => {
 const ROOT = "/repos/acme/steering";
 
 describe("githubRepairHost.applyBaseline", () => {
-  it("puts back a ruleset someone renamed away", async () => {
+  it("repairs merge settings without paid protection endpoints", async () => {
     const { hub, id } = await baselineRepo();
     const rest = hub.appRest();
-    const list = await rest.request<{ id: number; name: string }[]>("GET", `${ROOT}/rulesets`);
-    const merges = list.data?.find((r) => r.name === "Oxagen merges");
-    if (merges === undefined) throw new Error("The baseline has no Oxagen merges ruleset.");
-    await rest.request("PUT", `${ROOT}/rulesets/${merges.id}`, { name: "Old merges" });
+    await rest.request("PATCH", ROOT, { allow_rebase_merge: true });
+    hub.failNext({
+      path: /\/(?:rulesets|environments)(?:[/?]|$)/,
+      status: 403,
+      message: "Upgrade your GitHub plan to use this feature.",
+    });
     const fetch = withRepositories(hub, new Map([[id, REPO]]));
     const host = githubRepairHost({
       rest: async () => gh.createGithubRest({ token: "app-token", fetch }),
@@ -405,8 +407,10 @@ describe("githubRepairHost.applyBaseline", () => {
       REPO,
       APP,
       Object.keys(GITHUB_SETTINGS_BASELINE.environments),
+      false,
     );
     expect(gh.compareSettings(GITHUB_SETTINGS_BASELINE, after)).toEqual([]);
+    expect(hub.calls.some((call) => /\/(?:rulesets|environments)(?:[/?]|$)/.test(call.path))).toBe(false);
   });
 
   it("finds the repository by id after a rename and writes it at its new name", async () => {

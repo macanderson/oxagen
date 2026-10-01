@@ -2,11 +2,9 @@
 // read makes, against a scripted host and an in-memory health row.
 import { GitHubApiError, GitHubRateLimitedError } from "@oxagen/github";
 import type * as gh from "@oxagen/github/provision";
+import { EXAMPLE_GITHUB_BASELINE } from "@oxagen/github/provision/testing";
 import * as gl from "@oxagen/gitlab/provision";
-import {
-  GITHUB_SETTINGS_BASELINE,
-  GITLAB_SETTINGS_BASELINE,
-} from "@oxagen/oxagen/steering-repo";
+import { GITLAB_SETTINGS_BASELINE } from "@oxagen/oxagen/steering-repo";
 import type { SettingsDifference } from "@oxagen/oxagen/steering-repo/health";
 import { describe, expect, it, vi } from "vitest";
 import {
@@ -46,7 +44,7 @@ import {
 
 /** GitHub settings that match the baseline, as `readSettings` reports them. */
 function githubMatching(): gh.ObservedGithubSettings {
-  const b = GITHUB_SETTINGS_BASELINE;
+  const b = EXAMPLE_GITHUB_BASELINE;
   return {
     visibility: b.visibility,
     default_branch: b.default_branch,
@@ -100,7 +98,7 @@ function gitlabMatching(): gl.ObservedGitlabSettings {
 }
 
 function github(actual: gh.ObservedGithubSettings) {
-  return { provider: "github" as const, baseline: GITHUB_SETTINGS_BASELINE, actual };
+  return { provider: "github" as const, baseline: EXAMPLE_GITHUB_BASELINE, actual };
 }
 
 // ── Comparison ───────────────────────────────────────────────────────────────
@@ -325,7 +323,7 @@ describe("describeDifference", () => {
   });
 
   it("says a ruleset no longer requires the check", () => {
-    const rules = GITHUB_SETTINGS_BASELINE.rulesets.oxagen_steering?.rules ?? [];
+    const rules = EXAMPLE_GITHUB_BASELINE.rulesets.oxagen_steering?.rules ?? [];
     expect(
       describeDifference(
         difference({

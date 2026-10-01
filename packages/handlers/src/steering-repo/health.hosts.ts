@@ -198,6 +198,7 @@ export function githubHealthHost(input: GithubHealthHostInput): HealthHost {
           address,
           input.app,
           Object.keys(GITHUB_SETTINGS_BASELINE.environments),
+          Object.keys(GITHUB_SETTINGS_BASELINE.rulesets).length > 0,
         );
       } catch (err) {
         if (!refused(err)) throw err;

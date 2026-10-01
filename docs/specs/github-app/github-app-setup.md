@@ -368,7 +368,7 @@ permissions, and the repositories an installation covers, are the whole grant.
 | Permission | Access | What uses it |
 | --- | --- | --- |
 | **Actions** | Read and write | Steering settings read the `steering` environment and its branch policies (`packages/github/src/provision/settings.ts:160` and `:172`), and GitHub gates those reads on Actions. Write lets Oxagen re-run a pull request's CI. |
-| **Administration** | Read and write | Steering provisioning creates the repository (`POST /orgs/{org}/repos` in `packages/github/src/provision/repository.ts`), applies its settings and rulesets, turns Actions off, and creates the `steering` environment (`settings.ts`). See [Steering repos](#steering-repos). |
+| **Administration** | Read and write | Steering provisioning creates the repository (`POST /orgs/{org}/repos` in `packages/github/src/provision/repository.ts`), applies private visibility and merge settings, and turns Actions off (`settings.ts`). See [Steering repos](#steering-repos). |
 | **Checks** | Read and write | Oxagen posts its own check run on a pull request's head commit: the `Oxagen steering` check (`packages/handlers/src/steering-repo/health.hosts.ts:243`) and each governed-file check (`packages/github/src/fetch-client.ts:1297`). A required Oxagen check turns a pull request red, the way Vercel's and Greptile's do, which PR verification needs. |
 | **Commit statuses** | Read and write | `listCiChecks` (`packages/github/src/fetch-client.ts:1095`) reads the combined status on every CI status read. Write lets Oxagen post a commit status where a repository requires one. |
 | **Contents** | Read and write | Branches, commits, file writes, and merges for governed pull requests and steering repos. The git push token Tacho mints (`packages/handlers/src/tacho.github_token.issue.ts`) narrows to Contents write. |
@@ -403,8 +403,8 @@ budget. See `docs/specs/repository-binding/README.md`.
 
 **Administration write reaches every repository an installation covers** (ADR-228). Before ADR-228
 a second app held it, so an installation on code repositories never did. Oxagen uses it only in the
-steering repo code paths, and the steering repo's `Oxagen merges` ruleset names this app as its only
-bypass actor. ADR-228 lists the token paths that can reach a steering repo and which of them refuse
+steering repo code paths. Steering setup supports GitHub Free and does not configure rulesets
+or branch protection. ADR-228 lists the token paths that can reach a steering repo and which of them refuse
 it.
 
 ### Where can this App be installed?
@@ -590,8 +590,8 @@ repositories never did. ADR-228 folds it into the Oxagen app for two reasons:
    own credentials, and its own webhook secret, and production never registered it (#4634).
 2. An owner had to install two apps on one organization and could install one without the other.
 
-The cost is that Administration write reaches every repository an installation covers, and the app
-that holds the `Oxagen merges` bypass is the app every Oxagen installation token comes from.
+The cost is that Administration write reaches every repository an installation covers.
+Every Oxagen installation token comes from that app.
 ADR-228 records which token paths refuse the steering repo and which do not yet.
 
 ### Provisioning steps
@@ -607,13 +607,14 @@ step 2. Every step is safe to repeat, and a rerun adopts what an earlier run mad
 3. It writes the first commit to `main`.
 4. It applies the prescribed settings (`packages/oxagen/src/steering-repo/settings-baseline.ts`) and
    reads them back:
-   - The `Oxagen steering` ruleset on `main` requires the `Oxagen steering` status check, pinned to
-     the Oxagen app so no one else can post it. It has no bypass actors.
-   - The `Oxagen merges` ruleset on `main` restricts updates. Its only bypass actor is the Oxagen
-     app, so every steering PR reaches `main` through Oxagen.
+   - Private visibility and `main` as the default branch.
    - Squash merges only, and head branches deleted after a merge.
    - Actions off.
-   - The `steering` environment, which accepts deployments from `main` only.
+
+   GitHub Free organizations and personal accounts are supported. Oxagen does not create or
+   require branch protection, rulesets, or environment protection. Health and repair use the same
+   baseline. Existing repository protections remain untouched. Oxagen's checks govern merges
+   requested through Oxagen, while repository permissions govern direct pushes and host merges.
 5. It records version 1 as a deployment to the `steering` environment.
 6. For a workspace repo, it binds the repository to the workspace with role `steering`.
 
@@ -727,10 +728,10 @@ owner connects again from onboarding.
 2. Finish the connect. The callback replaces the retired installation id in the organization's
    steering connection and in each steering source connection. It moves an id only on the same
    account, because a GitHub App has one installation per account.
-3. Repair each steering repo (`repair_steering_repo`). A steering repo the retired app set up names
-   that app in its rulesets, so its health read reports drift until an organization admin repairs
-   it.
-4. Uninstall the retired app from the organization after the repair.
+3. Repair each steering repo (`repair_steering_repo`). Review any existing rulesets in GitHub
+   separately. Older repositories can still name the retired app as a bypass actor, and repair
+   leaves those rulesets untouched. Update those actors before uninstalling the retired app.
+4. Uninstall the retired app from the organization after the repair and ruleset review.
 5. Once no account has it installed, delete it from its **Advanced** settings page. Deletion cannot
    be undone.
 
