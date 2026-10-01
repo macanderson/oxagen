@@ -24,7 +24,8 @@ concurrency:
 
 jobs:
   vision-gate:
-    runs-on: ubuntu-latest
+    # ubuntu-slim (one vCPU, $0.002 a minute): a checkout and one model call.
+    runs-on: ubuntu-slim
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
