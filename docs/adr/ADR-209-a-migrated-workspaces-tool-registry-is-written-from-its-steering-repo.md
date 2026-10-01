@@ -1,6 +1,6 @@
 # ADR-209: A migrated workspace's tool registry is written from its steering repo
 
-- **Status:** Accepted (amended by ADR-211: the migration moves streamable-http rows only, and an sse row stays a legacy row that no longer holds a workspace on direct writes)
+- **Status:** Accepted (amended by ADR-211: the migration moves streamable-http rows only, and an sse row stays a legacy row that no longer holds a workspace on direct writes, and by ADR-245: `migrate_tools_to_steering` and steering repo provisioning start the migration)
 - **Date:** 2026-09-27
 - **Owners:** tools, steering
 - **Related:** issue #4478 (lane M13), PR #4480, PR #4472 (S5 publish),

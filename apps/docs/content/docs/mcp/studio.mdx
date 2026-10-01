@@ -161,6 +161,18 @@ Below the figures, the panel lists what agents' reflections said about the tool,
 
 Oxagen counts only calls made through its served tools, from the day the count started. When the call store does not answer, the panel shows the counts as not recorded and still lists the notes.
 
+## Move connected servers into the steering repo
+
+A workspace that connected MCP servers before it had a steering repo keeps them as rows in Oxagen. One migration steering PR moves them: a folder under `tools/servers/` for each server, built from those rows and their pinned tool lists. When the PR merges, the next publish takes each server over. From then on, a change to the workspace's tools is a steering PR.
+
+Oxagen opens the migration PR when a workspace's steering repo finishes its setup. To start a workspace that never started, or to retry one that failed, call `migrate_tools_to_steering`, or run `oxagen tools migrate`.
+
+| Capability | API route | What it does |
+|---|---|---|
+| `migrate_tools_to_steering` | `POST /v1/{org}/{ws}/tools/steering/migrate` | Opens the migration PR, or answers the one already open |
+
+An org Owner or Admin can call it. A repeat call opens nothing new. It answers `already_open` with the open PR, or `already_migrated` once no server is left to move. A `stdio` server stays a row, and the PR body lists it with the reason.
+
 ## Other writers of the folder
 
 Oxagen's MCP server discovery also opens steering PRs under `tools/`. It uses the same writer as Review, so every tools steering PR follows the same branch rule, file limit, labels, and `Oxagen steering` check. ADR-224 (`docs/adr/ADR-224-studio-keeps-a-draft-and-review-opens-a-steering-pr-for-one-server-folder.md` in the repository) records the design.
