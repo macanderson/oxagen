@@ -26,8 +26,8 @@
 # in oxagen; the other four repos carry a ~12-line caller. ADR-039 relied on
 # all five repos being public, so `uses:` resolved with no extra credentials.
 # Since 2026-10-01 this repository is the private `oxageninc/product`, and the
-# callers can no longer reach this file or the tooling checkout below. #4973
-# holds the decision on where the shared check lives now.
+# callers can no longer reach this file or the tooling checkout below.
+# macanderson/stella#6638 holds the decision on where the shared check lives.
 #
 # ## Why the check runs on the PR, not on the close
 #
