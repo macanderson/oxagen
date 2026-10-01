@@ -6,7 +6,10 @@
 import { describe, expect, it, vi } from "vitest";
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
-import type { NoProgressPauseRequest } from "@oxagen/billing";
+import type {
+  NoProgressPauseBlock,
+  NoProgressPauseRequest,
+} from "@oxagen/billing";
 
 vi.mock("../logger", () => ({
   logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() },
@@ -166,7 +169,7 @@ describe("pauseForNoProgress", () => {
     expect(rows).toHaveLength(2);
   });
 
-  it.each([
+  const unreachable: [NoProgressPauseBlock, RecipientSession][] = [
     [
       "host_offline",
       session({
@@ -185,7 +188,8 @@ describe("pauseForNoProgress", () => {
       }),
     ],
     ["run_sealed", session({ outcome: "completed" })],
-  ] as const)(
+  ];
+  it.each(unreachable)(
     "answers %s and writes no row when the run cannot take the pause (negative)",
     async (block, found) => {
       const { rows, deps } = fakeStore(found);
