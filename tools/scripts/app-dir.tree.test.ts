@@ -1,3 +1,6 @@
+// This test reads the live tree under APP_DIR, so it is a `*.tree.test.ts`
+// file. `pnpm check:tree-guards` runs it uncached in the checks job, outside
+// turbo's cached `test:unit` task (#4664 item 2).
 import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
