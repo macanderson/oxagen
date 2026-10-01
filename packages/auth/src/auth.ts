@@ -57,8 +57,8 @@ const env = requireEnv([
 // Startup guard — AUTH_TOKEN_ENCRYPTION_KEY must be set in non-local
 // environments so that OAuth token encryption is NEVER silently skipped in
 // production.  In local/development the key is optional so engineers can boot
-// without it.  This is a Vercel-native master key (KEK) held in encrypted env
-// storage — no cloud KMS / AWS dependency.
+// without it.  The master key (KEK) is a SecureString in Parameter Store
+// (ADR-240) that the process reads from its environment. No KMS call is made.
 // ---------------------------------------------------------------------------
 const tokenEncryptionKey = process.env.AUTH_TOKEN_ENCRYPTION_KEY;
 

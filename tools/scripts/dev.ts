@@ -11,7 +11,7 @@ import { startStripeTunnel } from "./stripe-tunnel";
 import { startInngestDevServer } from "./inngest-dev";
 import { formatError } from "./lib/format-error";
 import { inspectAppPorts, type AppPort } from "./lib/preflight-ports";
-import { linkHint, missingEnvTargets } from "./lib/env-targets";
+import { missingEnvTargets } from "./lib/env-targets";
 import {
   guardTurbopackCaches,
   markCleanShutdown,
@@ -77,15 +77,14 @@ async function checkDocker(): Promise<void> {
 }
 
 async function ensureEnvFile(): Promise<void> {
-  // Vercel is the source of truth for env vars. Each `.env.local` is hydrated
-  // from its linked project's Development environment via `vercel env pull`.
-  // If any is absent, we bootstrap here so first-time setup is one command.
+  // `pnpm env:pull` writes every `.env.local` from SSM Parameter Store
+  // (ADR-240). If any is absent, pull here so first-time setup is one command.
   let missing = missingEnvTargets(ROOT);
   if (missing.length === 0) return;
 
   console.log(
     kleur.cyan(
-      `[dev] .env.local missing in ${missing.map((t) => t.dir).join(", ")} — running \`pnpm env:pull\``,
+      `[dev] .env.local is missing in ${missing.map((t) => t.dir).join(", ")}. Running \`pnpm env:pull\`.`,
     ),
   );
   try {
@@ -94,16 +93,17 @@ async function ensureEnvFile(): Promise<void> {
     console.error(kleur.red(`[dev] pnpm env:pull failed: ${formatError(err)}`));
   }
 
-  // env:pull silently skips any directory without a `.vercel/project.json`
-  // link, so a successful pull can still leave files missing. Name exactly
-  // which links to create rather than dying later with `.env.local: not found`.
+  // The pull writes every target or stops at the first error, so a file still
+  // missing here means it could not read Parameter Store or write a file.
+  // Say so now rather than dying later with `.env.local: not found`.
   missing = missingEnvTargets(ROOT);
   if (missing.length === 0) return;
   console.error(
     kleur.red(
-      "Could not hydrate every .env.local from Vercel. Run `vercel login`, then " +
-        "link each missing directory and re-run `pnpm env:pull`:\n" +
-        linkHint(missing),
+      `[dev] Could not write every .env.local from Parameter Store. Still ` +
+        `missing: ${missing.map((t) => t.dir).join(", ")}. Check that the ` +
+        "AWS CLI is signed in with `aws sts get-caller-identity`, then run " +
+        "`pnpm env:pull`.",
     ),
   );
   process.exit(1);
@@ -343,11 +343,12 @@ async function main(): Promise<void> {
   // docker/migrate/tunnel/turbo work that would conflict or double-spawn.
   await preflightAppPorts();
 
-  // The shell (or a Vercel-pulled .env) may export over-quoted values — e.g.
-  // NODE_ENV='"development"' — which every spawned dev server (Next, api, mcp)
-  // inherits, producing Next's "non-standard NODE_ENV" warning and @oxagen/config
-  // normalizeEnv-stripped warnings on boot. Strip one surrounding double-quote
-  // pair from every value here so the children see clean env.
+  // The shell, or a .env written by the old Vercel pull, may export
+  // over-quoted values such as NODE_ENV='"development"'. Every spawned dev
+  // server (Next, api, mcp) inherits them, which produces Next's "non-standard
+  // NODE_ENV" warning and @oxagen/config normalizeEnv-stripped warnings on
+  // boot. Strip one surrounding double-quote pair from every value here so the
+  // children see clean env.
   for (const [key, value] of Object.entries(process.env)) {
     if (
       typeof value === "string" &&
@@ -364,7 +365,8 @@ async function main(): Promise<void> {
   // verification, no mandatory OAuth-token-encryption key). Without this those
   // controls keyed off NODE_ENV, which next dev sets slightly late and tsx-run
   // services (api/mcp) never set — intermittently 403'ing local sign-in until an
-  // unrelated recompile (OXA-1752). Never set on Vercel, so prod is unaffected.
+  // unrelated recompile (OXA-1752). A deployed node never runs this script, so
+  // production never sees it.
   process.env.OXAGEN_LOCAL_DEV = "1";
 
   await ensureEnvFile();

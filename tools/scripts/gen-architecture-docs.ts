@@ -4,8 +4,9 @@
  * A self-contained HTML page of architecture diagrams generated from the
  * tree: the workspace graph, the storage manifest (Postgres ERDs, ClickHouse,
  * Neo4j, Blob), capability contracts and their handler bindings, API routes
- * and auth tiers, Inngest event graph, environment contract, CI workflows,
- * ADRs, plus curated mechanism flows whose source references are verified.
+ * and auth tiers, Inngest event graph, environment contract, the inventory of
+ * secrets and variables, CI workflows, ADRs, plus curated mechanism flows
+ * whose source references are verified.
  *
  *   pnpm docs:architecture           # write apps/docs/public/architecture/
  *   pnpm docs:architecture --check   # build in memory: refs resolve, output is
@@ -82,7 +83,7 @@ export async function build(root: string): Promise<BuildResult> {
 function summary(m: Model): string {
   return (
     `  ${m.packages.length} workspaces · ${m.manifest.tables.length} manifest tables · ${m.clickhouse.length} ClickHouse tables · ${m.capabilities.length} capabilities\n` +
-    `  ${m.apiRoutes.length} API routes · ${m.mcpTools.length} MCP tools · ${m.inngest.length} Inngest functions · ${m.env.length} env vars · ${m.workflows.length} workflows · ${m.adrs.length} ADRs\n`
+    `  ${m.apiRoutes.length} API routes · ${m.mcpTools.length} MCP tools · ${m.inngest.length} Inngest functions · ${m.env.length} env vars · ${m.ci.length} CI values · ${m.workflows.length} workflows · ${m.adrs.length} ADRs\n`
   );
 }
 

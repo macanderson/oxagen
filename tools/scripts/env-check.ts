@@ -17,6 +17,15 @@
  *     scripts, `next.config.mjs` and shell were invisible in both directions:
  *     a var they read went unregistered, and a var only they read read as dead.
  *
+ * It also checks the CI inventory (ADR-240). It reads the workflows under
+ * `.github/workflows` and every composite action under `.github/actions` for
+ * `secrets.NAME` and `vars.NAME`, and reconciles them against CI_REGISTRY
+ * (packages/config/src/ci-registry.ts). Three things fail the run: a name a
+ * workflow reads that CI_REGISTRY does not list, an entry no workflow reads,
+ * and a name read as the other kind (`vars.NAME` for a listed secret, or the
+ * reverse). `GITHUB_TOKEN` is GitHub's own and needs no entry. A whole-line
+ * YAML comment is not a read.
+ *
  * Modes:
  *   (default)   reconcile + example-check; exit 1 on any FAIL
  *   --write     regenerate .env.example from the registry and exit 0
@@ -27,11 +36,17 @@
  */
 
 import { readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
-import { join, relative, resolve } from "node:path";
+import { join, relative, resolve, sep } from "node:path";
 import { argv, exit } from "node:process";
 import { fileURLToPath } from "node:url";
 import kleur from "kleur";
-import { ENV_REGISTRY, registryKeys, renderEnvExample } from "@oxagen/config";
+import {
+  CI_REGISTRY,
+  ENV_REGISTRY,
+  registryKeys,
+  renderEnvExample,
+  type CiValueKind,
+} from "@oxagen/config";
 import { baseEnvSchema } from "@oxagen/config/env";
 
 // ── Platform / test-injected vars ────────────────────────────────────────────
@@ -714,18 +729,200 @@ export function reconcile({
   return report;
 }
 
+// ── CI inventory ──────────────────────────────────────────────────────────────
+
+/** One workflow file's text, with its path relative to the repository root. */
+export interface CiFile {
+  file: string;
+  text: string;
+}
+
+/** How the workflows read one name. */
+export interface CiRead {
+  /** Sorted. Two kinds when one file reads `secrets.NAME` and another `vars.NAME`. */
+  kinds: CiValueKind[];
+  /** The files that read it, sorted. */
+  files: string[];
+}
+
+/** What the workflows read, reconciled against CI_REGISTRY. */
+export interface CiReport {
+  /** Read by a workflow, absent from CI_REGISTRY. */
+  unlisted: Finding[];
+  /** In CI_REGISTRY, read by no workflow. */
+  unused: Finding[];
+  /** Read as the kind CI_REGISTRY does not give it. */
+  wrongKind: Finding[];
+}
+
+/** GitHub mints this one for every run, so CI_REGISTRY does not list it. */
+const CI_UNLISTED = new Set(["GITHUB_TOKEN"]);
+
+const RE_CI_READ = /\b(secrets|vars)\.([A-Za-z_][A-Za-z0-9_]*)/g;
+const RE_YAML_COMMENT_LINE = /^\s*#/;
+
+const ciReadOf = (kind: CiValueKind, name: string): string =>
+  `${kind === "secret" ? "secrets" : "vars"}.${name}`;
+
+/**
+ * Every `secrets.NAME` and `vars.NAME` the given workflow files read, by name.
+ * Pure: the caller reads the files. A whole-line comment is skipped, and
+ * `GITHUB_TOKEN` is left out.
+ */
+export function scanCiReads(files: readonly CiFile[]): Map<string, CiRead> {
+  const kinds = new Map<string, Set<CiValueKind>>();
+  const readers = new Map<string, Set<string>>();
+  for (const { file, text } of files) {
+    for (const line of text.split("\n")) {
+      if (RE_YAML_COMMENT_LINE.test(line)) continue;
+      for (const m of line.matchAll(RE_CI_READ)) {
+        const name = m[2]!;
+        if (CI_UNLISTED.has(name)) continue;
+        const kind: CiValueKind = m[1] === "secrets" ? "secret" : "variable";
+        const seenKinds = kinds.get(name) ?? new Set<CiValueKind>();
+        seenKinds.add(kind);
+        kinds.set(name, seenKinds);
+        const seenFiles = readers.get(name) ?? new Set<string>();
+        seenFiles.add(file);
+        readers.set(name, seenFiles);
+      }
+    }
+  }
+  const out = new Map<string, CiRead>();
+  for (const name of [...kinds.keys()].sort()) {
+    out.set(name, {
+      kinds: [...kinds.get(name)!].sort(),
+      files: [...readers.get(name)!].sort(),
+    });
+  }
+  return out;
+}
+
+function listDir(dir: string): string[] {
+  try {
+    return readdirSync(dir).sort();
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * The files under `<root>/.github` that can read a secret or a variable: each
+ * workflow in `.github/workflows`, and each `action.yml` or `action.yaml` at
+ * any depth under `.github/actions`. Paths come back relative to `root`, with
+ * forward slashes, sorted.
+ */
+export function readCiFiles(root: string): CiFile[] {
+  const out: CiFile[] = [];
+  const add = (full: string): void => {
+    out.push({
+      file: relative(root, full).split(sep).join("/"),
+      text: readFileSync(full, "utf8"),
+    });
+  };
+  const workflows = join(root, ".github", "workflows");
+  for (const name of listDir(workflows)) {
+    const full = join(workflows, name);
+    if (
+      /\.ya?ml$/.test(name) &&
+      statSync(full, { throwIfNoEntry: false })?.isFile()
+    )
+      add(full);
+  }
+  const walk = (dir: string): void => {
+    for (const name of listDir(dir)) {
+      const full = join(dir, name);
+      const stat = statSync(full, { throwIfNoEntry: false });
+      if (stat?.isDirectory()) walk(full);
+      else if (stat?.isFile() && /^action\.ya?ml$/.test(name)) add(full);
+    }
+  };
+  walk(join(root, ".github", "actions"));
+  return out.sort((a, b) => (a.file < b.file ? -1 : a.file > b.file ? 1 : 0));
+}
+
+/**
+ * Pure reconciler for the CI inventory. `registry` is CI_REGISTRY in the CLI
+ * and a fixture in tests.
+ */
+export function reconcileCi(
+  reads: ReadonlyMap<string, CiRead>,
+  registry: Readonly<Record<string, { kind: CiValueKind }>>,
+): CiReport {
+  const report: CiReport = { unlisted: [], unused: [], wrongKind: [] };
+  for (const [name, read] of reads) {
+    const listed = Object.hasOwn(registry, name) ? registry[name] : undefined;
+    const spelled = read.kinds.map((k) => ciReadOf(k, name)).join(" and ");
+    if (!listed) {
+      report.unlisted.push({
+        key: name,
+        locations: read.files,
+        reason: `read as ${spelled}, absent from CI_REGISTRY`,
+      });
+      continue;
+    }
+    const wrong = read.kinds.filter((k) => k !== listed.kind);
+    if (wrong.length > 0) {
+      report.wrongKind.push({
+        key: name,
+        locations: read.files,
+        reason: `listed as a ${listed.kind}, read as ${wrong.map((k) => ciReadOf(k, name)).join(" and ")}`,
+      });
+    }
+  }
+  for (const name of Object.keys(registry).sort()) {
+    if (reads.has(name)) continue;
+    report.unused.push({
+      key: name,
+      reason: `listed as a ${registry[name]!.kind}, read by no workflow`,
+    });
+  }
+  const byKey = (a: Finding, b: Finding): number =>
+    a.key < b.key ? -1 : a.key > b.key ? 1 : 0;
+  report.unlisted.sort(byKey);
+  report.wrongKind.sort(byKey);
+  return report;
+}
+
 // ── Reporter ──────────────────────────────────────────────────────────────────
 
-/** Everything that makes this run exit non-zero. */
+/**
+ * Everything that makes this run exit non-zero. `ci` is optional so a caller
+ * that checks only the environment registry keeps its count.
+ */
 export function failureCount(
   report: EnvCheckReport,
   exampleDrift: boolean,
+  ci?: CiReport,
 ): number {
-  return report.fail.length + report.dead.length + (exampleDrift ? 1 : 0);
+  const ciFailures = ci
+    ? ci.unlisted.length + ci.unused.length + ci.wrongKind.length
+    : 0;
+  return (
+    report.fail.length + report.dead.length + (exampleDrift ? 1 : 0) + ciFailures
+  );
 }
 
-function printReport(report: EnvCheckReport, exampleDrift: boolean): void {
-  const failCount = failureCount(report, exampleDrift);
+function printCiFindings(
+  title: string,
+  findings: Finding[],
+  fix: string,
+): void {
+  if (findings.length === 0) return;
+  console.log(kleur.red().bold(`\n✗ FAIL: ${title}`));
+  for (const f of findings) {
+    console.log(kleur.red(`  ${f.key}`) + `: ${f.reason}`);
+    for (const loc of f.locations ?? []) console.log(kleur.dim(`    ${loc}`));
+  }
+  console.log(kleur.dim(`  ${fix}`));
+}
+
+function printReport(
+  report: EnvCheckReport,
+  exampleDrift: boolean,
+  ci: CiReport,
+): void {
+  const failCount = failureCount(report, exampleDrift, ci);
   const warnCount = report.warnUnvalidated.length;
 
   // One-line summary for CI log scanners
@@ -765,6 +962,22 @@ function printReport(report: EnvCheckReport, exampleDrift: boolean): void {
       ),
     );
   }
+
+  printCiFindings(
+    "CI secrets and variables absent from CI_REGISTRY",
+    ci.unlisted,
+    "Add each one to packages/config/src/ci-registry.ts with a refresh, or delete the read.",
+  );
+  printCiFindings(
+    "CI values read as the wrong kind",
+    ci.wrongKind,
+    "Fix the kind in packages/config/src/ci-registry.ts, or change the read to match it.",
+  );
+  printCiFindings(
+    "CI_REGISTRY entries no workflow reads",
+    ci.unused,
+    "Delete each entry from packages/config/src/ci-registry.ts.",
+  );
 
   if (exampleDrift) {
     console.log(
@@ -810,6 +1023,8 @@ function main(): void {
     registryServiceMap,
   });
 
+  const ci = reconcileCi(scanCiReads(readCiFiles(MONOREPO_ROOT)), CI_REGISTRY);
+
   // Check .env.example drift
   let exampleDrift = false;
   try {
@@ -820,12 +1035,12 @@ function main(): void {
   }
 
   if (jsonMode) {
-    console.log(JSON.stringify({ ...report, exampleDrift }, null, 2));
-    exit(failureCount(report, exampleDrift) > 0 ? 1 : 0);
+    console.log(JSON.stringify({ ...report, exampleDrift, ci }, null, 2));
+    exit(failureCount(report, exampleDrift, ci) > 0 ? 1 : 0);
   }
 
-  printReport(report, exampleDrift);
-  exit(failureCount(report, exampleDrift) > 0 ? 1 : 0);
+  printReport(report, exampleDrift, ci);
+  exit(failureCount(report, exampleDrift, ci) > 0 ? 1 : 0);
 }
 
 // Only run when this file is the entrypoint (tsx env-check.ts), not when imported by tests.

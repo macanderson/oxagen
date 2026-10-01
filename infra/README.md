@@ -497,6 +497,11 @@ Parameter Store rather than Secrets Manager because standard parameters are
 free where Secrets Manager bills $0.40 per secret per month — for this many
 secrets, more per month than every website in this account combined.
 
+ADR-240 makes Parameter Store the store for every environment and for local
+development: `/oxagen/staging`, `/oxagen/development`, and `/oxagen/operator`
+sit beside `/oxagen/production`. `docs/runbooks/secrets-and-variables.md` has
+the pull, save, and rotation steps.
+
 `tools/migrate-secrets.py --plan` classifies a `.env` file into four buckets
 and writes nothing until `--apply`, and even then writes only the first:
 
