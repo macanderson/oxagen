@@ -3,8 +3,12 @@ import type { XmcpConfig } from "xmcp";
 /** A test or a `_` helper under src/tools, by relative or absolute request. */
 const NOT_A_TOOL = /(?:^|[\\/])src[\\/]tools[\\/](?:[^\\/]+[\\/])*(?:_[^\\/]*|[^\\/]+\.test)\.tsx?$/;
 
-/** xmcp's prebuilt server runtimes that register tools. */
-const XMCP_RUNTIME_SERVER = /[\\/]xmcp[\\/]dist[\\/]runtime[\\/](?:http|adapter-express)\.js$/;
+/**
+ * xmcp's prebuilt server runtimes that register tools. `xmcp build` copies
+ * them into .xmcp/ and builds its entries from there, so both places match.
+ */
+const XMCP_RUNTIME_SERVER =
+  /(?:[\\/]\.xmcp[\\/]|[\\/]xmcp[\\/]dist[\\/]runtime[\\/])(?:http|adapter-express)\.js$/;
 
 const config: XmcpConfig = {
   http: {
