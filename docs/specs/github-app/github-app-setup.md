@@ -1,8 +1,8 @@
 # GitHub App setup
 
 **Audience:** operators / platform engineers configuring the GitHub connector.
-**Last verified against code and the live apps:** 2026-09-30. The live permissions still differ;
-see [Permissions](#permissions).
+**Last verified against code and the live apps:** 2026-10-01. Staging and local still lack the
+required permissions. See [Permissions](#permissions).
 
 This document is the setup reference for the GitHub App Oxagen uses (ADR-228). It lists every
 configuration value, the callback and webhook endpoints the code expects, the permissions and
@@ -109,17 +109,119 @@ copy's credentials:
 | **Oxagen Github Connect Local** | `oxagen-github-connect-local` | 4055401 | local | `http://localhost:4000` | `http://localhost:3000` |
 | **Oxagen Github Connect** | `oxagen-github-connect` | 5121606 | retired | none | none |
 
-- **Settings page:** `https://github.com/organizations/oxageninc/settings/apps/<slug>`. GitHub asks
-  an organization owner to confirm access (sudo mode) before it shows it.
-- **Install page:** `https://github.com/apps/<slug>/installations/new`.
-- **The retired app** is the Oxagen Steering app that ADR-228 folded into this one. Nothing reads its
-  credentials, its callbacks point at `/oauth/github/steering`, which answers 404, and its webhook
-  still delivers to production. Uninstall it after
-  [Moving from the Oxagen Steering app](#moving-from-the-oxagen-steering-app), then delete it.
-- **Staging is dormant** while the `STAGING_ENABLED` repository variable is not `true` (#4868). Keep
-  its app configured so staging works when it wakes.
+Each app's settings page sits at `https://github.com/organizations/oxageninc/settings/apps/<slug>`.
+GitHub asks an organization owner to confirm access (sudo mode) before it shows one. The sections
+below record each app's settings as read from GitHub on 2026-10-01. No section holds a secret: the
+credentials live where each section's **Credentials** row says.
 
-Reasons for one copy per environment:
+### Oxagen Connect
+
+The production app. Customers install it on their GitHub organizations so Oxagen can ingest their
+repository metadata, open governed pull requests, post its pull request check, and create and run
+their steering repos.
+
+| Setting | Value |
+| --- | --- |
+| Display name | Oxagen Connect |
+| Slug | `oxagen-connect` |
+| App ID | 4168398 |
+| Owner | `oxageninc` (GitHub organization) |
+| Environment | production |
+| Public page | `https://github.com/apps/oxagen-connect` |
+| Install page | `https://github.com/apps/oxagen-connect/installations/new` |
+| Settings page | `https://github.com/organizations/oxageninc/settings/apps/oxagen-connect` |
+| Homepage URL | `https://oxagen.sh` |
+| Redirect URIs | `https://api.oxagen.sh/oauth/github/callback`, wildcard matching off. The only entry. |
+| Request user authorization (OAuth) during installation | on |
+| Enable Device Flow | off |
+| Setup URL | blank. GitHub disables the field while OAuth during installation is on. |
+| Redirect on update | on. It does nothing without a Setup URL. |
+| Webhook | `https://api.oxagen.sh/webhooks/github/app`, active |
+| Permissions | The [required set](#permissions), applied 2026-10-01T00:34:16Z |
+| Events | The [15 required events](#webhook-config-on-the-app), applied the same time. App-level `installation_target` and `meta` on, `security_advisory` off. |
+| Credentials | Parameter Store SecureStrings under `/oxagen/production/`: `GITHUB_APP_ID`, `GITHUB_APP_SLUG`, `GITHUB_APP_CLIENT_ID`, `GITHUB_APP_CLIENT_SECRET`, `GITHUB_APP_PRIVATE_KEY`, `GITHUB_APP_WEBHOOK_SECRET`, and `GITHUB_APP_INSTALL_STATE_SECRET` |
+
+### Oxagen Github Connect Staging
+
+The staging app. It serves `api.staging.oxagen.sh` and `app.staging.oxagen.sh`, so a change can be
+connected end to end before it reaches production. Staging is dormant while the `STAGING_ENABLED`
+repository variable is not `true` (#4868). Keep the app configured so staging works when it wakes.
+
+| Setting | Value |
+| --- | --- |
+| Display name | Oxagen Github Connect Staging |
+| Slug | `oxagen-github-connect-staging` |
+| App ID | 4993204 |
+| Owner | `oxageninc` (GitHub organization) |
+| Environment | staging |
+| Public page | `https://github.com/apps/oxagen-github-connect-staging` |
+| Settings page | `https://github.com/organizations/oxageninc/settings/apps/oxagen-github-connect-staging` |
+| Homepage URL | `https://app.staging.oxagen.sh` |
+| Redirect URIs | `https://api.staging.oxagen.sh/oauth/github/callback`, wildcard matching off. The only entry. |
+| Request user authorization (OAuth) during installation | on |
+| Enable Device Flow | off |
+| Setup URL | blank |
+| Redirect on update | off |
+| Webhook | `https://api.staging.oxagen.sh/webhooks/github/app`, active |
+| Permissions | The [required set](#permissions). Not applied yet on 2026-10-01. |
+| Events | The [15 required events](#webhook-config-on-the-app). Not applied yet on 2026-10-01. |
+| Credentials | Parameter Store SecureStrings under `/oxagen/staging/`, the same seven `GITHUB_APP_*` names as production |
+
+### Oxagen Github Connect Local
+
+The local development app. It serves an API on `localhost:4000` and the web app on
+`localhost:3000`, so a developer can run a connect without touching staging or production
+credentials.
+
+| Setting | Value |
+| --- | --- |
+| Display name | Oxagen Github Connect Local |
+| Slug | `oxagen-github-connect-local` |
+| App ID | 4055401 |
+| Owner | `oxageninc` (GitHub organization) |
+| Environment | local |
+| Public page | `https://github.com/apps/oxagen-github-connect-local` |
+| Settings page | `https://github.com/organizations/oxageninc/settings/apps/oxagen-github-connect-local` |
+| Homepage URL | `http://localhost:3000` |
+| Redirect URIs | `http://localhost:4000/oauth/github/callback`, wildcard matching off. The only entry. |
+| Request user authorization (OAuth) during installation | on |
+| Enable Device Flow | off |
+| Setup URL | `http://localhost:3000/connections/github/setup`. GitHub greys it out and ignores it while OAuth during installation is on. |
+| Redirect on update | on. It does nothing while the Setup URL is ignored. |
+| Webhook | inactive, URL blank. Point it at a tunnel to test webhooks (see [Webhooks](#webhooks)). |
+| Permissions | The [required set](#permissions). Not applied yet on 2026-10-01. |
+| Events | The [15 required events](#webhook-config-on-the-app). Not applied yet on 2026-10-01. |
+| Credentials | `apps/api/.env.local` on the developer's machine. See [Environment variables](#environment-variables). |
+
+### Oxagen Github Connect (retired)
+
+The retired steering app. Until ADR-228 it created and ran steering repos as a second app, the
+Oxagen Steering app. ADR-228 folded steering into the one app per environment. Nothing reads its
+credentials, and its redirect URIs point at `/oauth/github/steering`, which answers 404. Uninstall
+it after [Moving from the Oxagen Steering app](#moving-from-the-oxagen-steering-app), then delete
+it. Do not bring its permissions or events in line with the required set.
+
+| Setting | Value |
+| --- | --- |
+| Display name | Oxagen Github Connect |
+| Slug | `oxagen-github-connect` |
+| App ID | 5121606 |
+| Owner | `oxageninc` (GitHub organization) |
+| Environment | none (retired) |
+| Public page | `https://github.com/apps/oxagen-github-connect` |
+| Settings page | `https://github.com/organizations/oxageninc/settings/apps/oxagen-github-connect` |
+| Homepage URL | `https://app.oxagen.sh` |
+| Redirect URIs | `https://api.oxagen.sh/oauth/github/steering` and `https://api.oxagen.app/oauth/github/steering`, wildcard matching off on both |
+| Request user authorization (OAuth) during installation | on |
+| Enable Device Flow | off |
+| Setup URL | blank |
+| Redirect on update | off |
+| Webhook | `https://api.oxagen.sh/webhooks/github/app`, active |
+| Permissions | 25 repository permissions, left as they were at retirement |
+| Events | 32 repository events, plus the app-level `security_advisory` event |
+| Credentials | Retired Parameter Store SecureStrings under `/oxagen/production/`: `OXAGEN_STEERING_APP_ID`, `OXAGEN_STEERING_APP_SLUG`, `OXAGEN_STEERING_APP_CLIENT_ID`, `OXAGEN_STEERING_APP_CLIENT_SECRET`, `OXAGEN_STEERING_APP_PRIVATE_KEY`, and `OXAGEN_STEERING_APP_WEBHOOK_SECRET`. Delete them once a production steering delivery returns 200 through Oxagen Connect. |
+
+### Reasons for one app per environment
 
 1. **A GitHub App has a single global webhook URL.** Local must point at a public tunnel
    (smee.io or cloudflared), and staging and production each point at their own API. One App cannot
@@ -207,10 +309,9 @@ turns the field off while **Request user authorization (OAuth) during installati
 Local, staging, and production each need exactly this set. Oxagen sends no OAuth `scope`, so these
 permissions, and the repositories an installation covers, are the whole grant.
 
-> **The live copies differ from this set (2026-09-30).** Production held about 89 permissions,
-> organization and enterprise ones among them. Staging held 5 and local held 13, both short of the
-> write access the code needs. Apply the set below on each copy's **Permissions & events** page, and
-> remove this note once all three match.
+> **Staging and local do not match this set yet (2026-10-01).** Production has carried it since
+> 2026-10-01T00:34:16Z. Apply it on the staging and local apps' **Permissions & events** pages, and
+> remove this note once both match.
 
 **Repository permissions:**
 
@@ -306,7 +407,7 @@ How it works:
 
 Do not point a webhook at `api.oxagen.app`. #4882 removes that name, and the API stays on
 `oxagen.sh` (ADR-236). Production's webhook moved from `api.oxagen.app` to `api.oxagen.sh` on
-2026-09-30.
+2026-10-01.
 
 **Subscribe to these 15 events.** The route verifies every delivery and answers 200. An event no
 code reads yet costs the API a signature check and one connection lookup, and dispatches nothing.
