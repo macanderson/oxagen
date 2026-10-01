@@ -61,7 +61,7 @@ describe("findTachoCommands", () => {
       'const d = "Run `oxagen agent status`.";',
     ].join("\n");
     expect(
-      findTachoCommands("apps/desktop/src/x.tsx", source).map((f) => f.line),
+      findTachoCommands("apps/desktop/src/x.tsx", source).map((f: { line: number }) => f.line),
     ).toEqual([3, 4, 5]);
   });
 
@@ -75,7 +75,7 @@ describe("findTachoCommands", () => {
     ].join("\n");
     expect(
       findTachoCommands("packages/tacho/src/cli/x.ts", source).map(
-        (f) => f.line,
+        (f: { line: number }) => f.line,
       ),
     ).toEqual([5]);
   });
