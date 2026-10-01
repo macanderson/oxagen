@@ -702,6 +702,12 @@ export async function appendFacts(tx: Tx, scope: WorkScope, input: AppendFactsIn
       }
       requireVersion(loaded, input.expectedVersion);
       if (decision !== null) admitDecision(loaded.projection, decision);
+      if (fact.kind === "accepted") {
+        // Record the required checks the gate evaluated on this head, never a
+        // list the caller sent: the acceptance is evidence of what was checked.
+        const order = byOrder.get(fact.orderId as string);
+        fact = { ...fact, data: { ...fact.data, required_checks: [...(order?.requiredChecks ?? [])] } };
+      }
       const occurredAt = await clock(tx);
       fact = {
         ...fact,
