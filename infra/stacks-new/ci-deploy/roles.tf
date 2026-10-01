@@ -155,7 +155,7 @@ resource "aws_iam_role_policy" "cgp_protocol" {
 }
 
 # --------------------------------------------------------------------------
-# macanderson/oxagen -> oxagen.sh and the four services on the node
+# oxageninc/product -> oxagen.sh and the four services on the node
 # --------------------------------------------------------------------------
 
 data "aws_iam_policy_document" "oxagen_platform" {

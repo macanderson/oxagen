@@ -12,6 +12,7 @@ import { describe, expect, it } from "vitest";
 import {
   CANNOT_RUN,
   FILTERED_INSTALL_PACKAGE,
+  SCRIPTS_PACKAGE,
   commandFor,
   preflight,
   report,
@@ -331,17 +332,18 @@ describe("report", () => {
     expect(text).toContain("Run `pnpm install` at the repository root");
   });
 
-  it("names the filtered install that works: the CLI and the root's dependency graph", () => {
-    // A filtered install that adds `--filter oxagen-monorepo...` ran
-    // `pnpm check:contracts` to exit 0 (scratch run 36665719175, step F5),
-    // and #3403's last item names the CLI's install as the real case.
+  it("names the filtered install that works: the CLI, the scripts package, and the root's dependency graph", () => {
+    // #3403's last item names the CLI's install as the real case. The root
+    // check scripts live in @oxagen/scripts and import @oxagen/oxagen through
+    // it, since the root no longer declares workspace packages (#4918).
     const result = {
       unknownScript: false,
       missing: [{ name: "zod", neededBy: "@oxagen/oxagen" }],
     };
     expect(FILTERED_INSTALL_PACKAGE).toBe("@oxagen/cli");
+    expect(SCRIPTS_PACKAGE).toBe("@oxagen/scripts");
     expect(report("check:contracts", result)).toContain(
-      "`pnpm install --filter @oxagen/cli... --filter oxagen-monorepo...`",
+      "`pnpm install --filter @oxagen/cli... --filter @oxagen/scripts... --filter oxagen-monorepo...`",
     );
     expect(report("check:contracts", result)).toContain(
       "Add `--filter <your package>...` for the package you work on.",
@@ -357,6 +359,12 @@ describe("report", () => {
       readFileSync(join(here, "..", "..", "package.json"), "utf8"),
     );
     expect(root.name).toBe("oxagen-monorepo");
+  });
+
+  it("names the real scripts package in that remedy", () => {
+    const here = dirname(fileURLToPath(import.meta.url));
+    const own = JSON.parse(readFileSync(join(here, "package.json"), "utf8"));
+    expect(own.name).toBe(SCRIPTS_PACKAGE);
   });
 
   it("uses an exit code no check uses, so it cannot read as a failed check", () => {
