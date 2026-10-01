@@ -193,6 +193,7 @@ describe("cost.run-progress", () => {
     await handler!({ event: { data: { runId: "tse_sealed" } }, step });
     expect(mocks.checkNoProgress).toHaveBeenCalledWith(
       expect.objectContaining({ runId: "tse_sealed", sealed: true }),
+      expect.any(Object),
     );
   });
 
