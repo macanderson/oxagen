@@ -1,9 +1,15 @@
-import { describe, expect, it } from "vitest";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterAll, describe, expect, it } from "vitest";
 import {
+  BRAND_KIT_REPO,
   changelogEntry,
   compareSemverDesc,
   escapeMdx,
   fallbackNotes,
+  KIT_SKILL_FILES,
+  type KitSource,
   loadSkills,
   parseNotes,
   proseHits,
@@ -25,11 +31,72 @@ const HISTORY = {
 const GOOD =
   "SUMMARY: The Spend page shows an agent's budget as entered, and the Agents page edits an agent's file as a form.\n\n## What changed\n\n- The Spend page kept a budget as a number and rounded it. It now keeps the string you typed.\n- The Configuration tab on an agent's page is a form over the agent file, with a coloured source view beside it.";
 
+const KIT_SHA = "3ab3085aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+
+/**
+ * A kit whose `main` is KIT_SHA and which answers `status` for every file. It
+ * records each URL it was asked for, so a test can see that every reference
+ * came from the one resolved commit.
+ */
+function fakeKit(status = 200): KitSource & { urls: string[] } {
+  const urls: string[] = [];
+  return {
+    urls,
+    head: () => `${KIT_SHA}\n`,
+    fetch: async (url) => {
+      urls.push(url);
+      const file = url.split("/").pop();
+      return new Response(status === 200 ? `# ${file} from the kit\n` : "", {
+        status,
+      });
+    },
+  };
+}
+
+/** A tree that holds only clear-prose, the one skill read from the repo. */
+const TREE = mkdtempSync(join(tmpdir(), "release-notes-skills-"));
+mkdirSync(join(TREE, ".claude/skills/clear-prose"), { recursive: true });
+writeFileSync(join(TREE, ".claude/skills/clear-prose/SKILL.md"), "# clear-prose\n");
+afterAll(() => rmSync(TREE, { recursive: true, force: true }));
+
 describe("the model's instructions", () => {
-  // The test that reads the skills from the live tree lives in
+  // The test that reads clear-prose from the live tree lives in
   // release-notes.tree.test.ts.
-  it("refuse to run without a skill file rather than write unguided", () => {
-    expect(() => loadSkills("/nonexistent")).toThrow(/clear-prose\/SKILL\.md/);
+  it("read the branding references from the kit, at the commit main resolved to", async () => {
+    const kit = fakeKit();
+    const skills = await loadSkills(TREE, kit);
+    expect(kit.urls).toEqual(
+      KIT_SKILL_FILES.map(
+        (rel) =>
+          `https://raw.githubusercontent.com/${BRAND_KIT_REPO}/${KIT_SHA}/${rel}`,
+      ),
+    );
+    for (const rel of KIT_SKILL_FILES)
+      expect(skills).toContain(
+        `<skill path="${BRAND_KIT_REPO}@${KIT_SHA}/${rel}">`,
+      );
+    expect(skills).toContain("# voice.md from the kit");
+    expect(skills).toContain("# words.md from the kit");
+    expect(skills).toContain("# clear-prose");
+  });
+
+  it("refuse to run without a skill file rather than write unguided", async () => {
+    await expect(loadSkills("/nonexistent", fakeKit())).rejects.toThrow(
+      /clear-prose\/SKILL\.md/,
+    );
+  });
+
+  it("refuse to run when the kit does not serve a reference", async () => {
+    await expect(loadSkills(TREE, fakeKit(404))).rejects.toThrow(
+      /references\/voice\.md from macanderson\/oxagen-brand@3ab3085, and the fetch returned 404/,
+    );
+  });
+
+  it("refuse to run when main does not resolve to a commit", async () => {
+    const kit = { ...fakeKit(), head: () => "" };
+    await expect(loadSkills(TREE, kit)).rejects.toThrow(
+      /could not resolve macanderson\/oxagen-brand main/,
+    );
   });
 
   it("hand the model the log, the diffstat and the diff", () => {

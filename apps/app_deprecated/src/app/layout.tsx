@@ -18,6 +18,7 @@ import { Suspense } from "react";
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { ThemeProvider, MotionProvider } from "@oxagen/ui";
+import { HOUSE_INK, HOUSE_PAPER } from "@oxagen/ui/lib/house-grounds";
 import { ToastProvider, ToastViewport } from "@/components/ui/toast";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppearanceBootstrap } from "@/components/appearance-bootstrap";
@@ -90,12 +91,12 @@ export const viewport: Viewport = {
   // edge-to-edge rendering. Pair with CSS `env(safe-area-inset-*)` in layouts
   // that need to respect device insets.
   viewportFit: "cover",
-  // Match the browser/OS chrome to the active theme: warm charcoal on dark,
-  // ivory paper on light. (Manifest theme_color is a single value for the
-  // standalone PWA toolbar — kept on the charcoal.)
+  // Match the browser and OS chrome to the active theme: the kit's ink on
+  // dark and its paper on light. The manifest's theme_color is one value for
+  // the installed app's toolbar, so it stays on the ink.
   themeColor: [
-    { media: "(prefers-color-scheme: dark)", color: "#09090B" },
-    { media: "(prefers-color-scheme: light)", color: "#FFFFFF" },
+    { media: "(prefers-color-scheme: dark)", color: HOUSE_INK },
+    { media: "(prefers-color-scheme: light)", color: HOUSE_PAPER },
   ],
 };
 

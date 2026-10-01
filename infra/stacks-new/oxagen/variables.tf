@@ -75,8 +75,9 @@ variable "vanity_domains" {
     redirect_to = string
     delegated   = bool
   }))
-  # oxagen.app left this map for dns-oxagen-app.tf (ADR-215). Its zone and
-  # records moved with it, so dropping the entry destroys nothing it needs.
+  # oxagen.app left this map for dns-oxagen-app.tf (ADR-215), which now answers
+  # it with a redirect from the ALB (ADR-236). Its zone and records moved with
+  # it, so dropping the entry destroyed nothing it needs.
   default = {
     "oxagen.dev" = {
       redirect_to = "https://docs.oxagen.sh/"

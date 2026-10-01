@@ -6,6 +6,7 @@
 // The GitHub seam keeps its legacy fallback (a sources-wizard connection with
 // no binding), so a workspace with no GitLab main head goes to GitHub exactly
 // as it did before GitLab existed.
+import { assertSteeringCommit } from "./steering-repo/provenance";
 import { schema, withTenantDb } from "@oxagen/database";
 import { and, eq, inArray } from "drizzle-orm";
 import {
@@ -105,6 +106,8 @@ export function createSteeringHost(
         provider === "gitlab" ? deps.gitlab : deps.github
       ).resolveRepository(scope);
     },
+    assertSteeringCommit: (repo, commit) =>
+      assertSteeringCommit(on(repo), repo, commit, true),
     readFile: (repo, path, ref) => on(repo).readFile(repo, path, ref),
     lastCommitForPath: (repo, path, ref) =>
       on(repo).lastCommitForPath(repo, path, ref),

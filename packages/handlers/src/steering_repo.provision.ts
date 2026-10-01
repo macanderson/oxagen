@@ -139,12 +139,6 @@ export const STEERING_IMPORT_REQUIRED = "steering_import_required";
  */
 export const REPOSITORY_CREATE_REFUSED = "repository_create_refused";
 
-/**
- * The error code of a personal account whose GitHub plan cannot protect a
- * private repository's branches. GitHub Free cannot, and Pro can.
- */
-export const GITHUB_PLAN_REQUIRED = "github_plan_required";
-
 /** The first commit's message. */
 export const FIRST_COMMIT_MESSAGE = "Seed the steering repo";
 
@@ -666,7 +660,7 @@ function createRefused(
     return new SteeringProvisionBlockedError("repository_name_taken", message);
   return new SteeringProvisionBlockedError(
     REPOSITORY_CREATE_REFUSED,
-    `${host} refused to create a repository in ${account}: ${message} Check that account's billing and repository settings, or use a different organization.`,
+    `${host} refused to create a repository in ${account}: ${message} If ${account} has a repository policy that restricts creations, add the Oxagen app to its allow list. Otherwise check the account's billing and repository settings, or use a different organization.`,
   );
 }
 
@@ -730,16 +724,12 @@ async function applySettingsStep(ctx: StepContext): Promise<void> {
   if (connection.provider === "github") {
     const github = requireGithub(ctx);
     const rest = await github.installation(connection.installation_id);
-    try {
-      ({ remaining } = await gh.applySettings(
-        rest,
-        { owner: repository.owner, name: repository.name },
-        github.app,
-        GITHUB_SETTINGS_BASELINE,
-      ));
-    } catch (err) {
-      throw planRequired(err, connection);
-    }
+    ({ remaining } = await gh.applySettings(
+      rest,
+      { owner: repository.owner, name: repository.name },
+      github.app,
+      GITHUB_SETTINGS_BASELINE,
+    ));
   } else {
     const rest = await requireGitlab(ctx, connection);
     ({ remaining } = await gl.applyGitlabSettings(
@@ -753,27 +743,6 @@ async function applySettingsStep(ctx: StepContext): Promise<void> {
     throw new Error(
       `After applying the settings, ${remaining.length} still differ: ${remaining.map((d) => d.setting).join(", ")}`,
     );
-}
-
-/**
- * GitHub answers 403 with "Upgrade to GitHub Pro" when a personal account on
- * GitHub Free asks for a private repository's branch rules. A retry gets the
- * same answer, so the step stops and says what to change (#4899).
- */
-function planRequired(err: unknown, connection: SteeringConnection): unknown {
-  if (
-    !(err instanceof GitHubApiError) ||
-    err instanceof GitHubRateLimitedError ||
-    err.status !== 403 ||
-    !/upgrade to github pro|github pro\b/i.test(err.message)
-  )
-    return err;
-  const account =
-    connection.provider === "github" ? connection.account_login : "this account";
-  return new SteeringProvisionBlockedError(
-    GITHUB_PLAN_REQUIRED,
-    `${account} cannot protect a private repository's branches on its GitHub plan: ${err.message} Upgrade the account to GitHub Pro, or use an organization.`,
-  );
 }
 
 /**
@@ -1307,8 +1276,8 @@ export type ConnectionResetPlan =
  * - A repository in the stored account pins the connection once its setup
  *   published a version, bound it, or finished (`connection_in_use`).
  * - A repository in the stored account whose setup stopped before any of
- *   that, such as at prescribed settings on a plan that cannot protect its
- *   branches, does not pin it. The reset releases that setup: its record of
+ *   that, such as when GitHub refuses a prescribed settings write, does not
+ *   pin it. The reset releases that setup: its record of
  *   the repository is cleared, so the next run creates one in the new place.
  *   The repository stays on the host for a person to delete.
  */

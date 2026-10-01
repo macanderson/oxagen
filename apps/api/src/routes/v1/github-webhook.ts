@@ -7,27 +7,24 @@
  * payload's `installation.id` + `repository.full_name`, rather than from a
  * per-connection path segment like the generic `/webhooks/:connector/:conn` route.
  *
- * Security boundary: HMAC-SHA256 over the raw body, verified against the
- * secret belonging to the App that SENT the delivery, using the
- * `x-hub-signature-256` header. There is no HTTP auth on this route.
+ * Security boundary: HMAC-SHA256 over the raw body, verified against
+ * `GITHUB_APP_WEBHOOK_SECRET` with the `x-hub-signature-256` header. There is
+ * no HTTP auth on this route.
  *
- * Two Apps deliver here. The Oxagen GitHub App (`oxagen-connect` in
- * production, `GITHUB_APP_ID`) signs with `GITHUB_APP_WEBHOOK_SECRET`. A
- * second App, `oxagen-sh`, signs with `GITHUB_WEBHOOK_SECRET`, confirmed by
- * HMAC-verifying a captured delivery (#1200), which is why that parameter
- * existed in Parameter Store while no code read it. Every one of its
- * deliveries was rejected 401.
- *
- * The sender is identified by `x-github-hook-installation-target-id`, and each
- * App is verified against its OWN secret, not against whichever one happens to
- * match, which would let either secret authorise a payload claiming to be from
- * the other.
+ * One App delivers here: the Oxagen GitHub App (`oxagen-connect` in
+ * production, `GITHUB_APP_ID`). The route reads the sender from
+ * `x-github-hook-installation-target-id`. A delivery that names any other App
+ * gets 200 with nothing dispatched and one log line naming its target ID,
+ * because GitHub retries every non-2xx answer. The retired steering app
+ * (5121606) still sends deliveries here. #4937 removed the second App's
+ * secret, so no other App's secret can verify a delivery.
  *
  * Steering repos run on the Oxagen GitHub App too (ADR-228), so a delivery
  * from it that can change a steering repo's health asks for a health read
  * (S2, #4560) before anything else reads it.
  *
  * Flow:
+ *   0. A delivery from another App → ack and drop, unverified (#4937).
  *   1. Verify the signature against GITHUB_APP_WEBHOOK_SECRET.
  *   2. `ping` → ack.
  *   2a. A delivery that can change a steering repo's health asks for one
@@ -178,42 +175,28 @@ async function requestSteeringHealthRead(
 }
 
 githubAppWebhookRoute.post("/", async (c) => {
-  const {
-    GITHUB_APP_WEBHOOK_SECRET: appSecret,
-    GITHUB_WEBHOOK_SECRET: secondAppSecret,
-    GITHUB_APP_ID: appId,
-  } = requireEnv([
-    "GITHUB_APP_WEBHOOK_SECRET",
-    "GITHUB_WEBHOOK_SECRET",
-    "GITHUB_APP_ID",
-  ] as const);
+  const { GITHUB_APP_WEBHOOK_SECRET: secret, GITHUB_APP_ID: appId } =
+    requireEnv(["GITHUB_APP_WEBHOOK_SECRET", "GITHUB_APP_ID"] as const);
 
-  // Pick the secret by SENDER. A delivery from the primary App is verified
-  // against the primary secret and nothing else; anything else that arrives
-  // here is verified against the second App's secret, when one is configured.
-  //
-  // GITHUB_APP_ID is what tells the two Apps apart, and it is optional. With
-  // it unset there is no second App to route to, so every delivery is the
-  // primary App's — which is what this route did before it learned about a
-  // second one. Reading an absent id as "not the primary App" instead sent
-  // real primary deliveries to the second App's secret, where they failed
-  // signature verification (401) or, with no second secret configured either,
-  // were acked and dropped (200).
+  // Only the Oxagen GitHub App's deliveries are processed (#4937). The target
+  // ID header names the sending App. A delivery with no header, or any
+  // delivery while GITHUB_APP_ID is unset, counts as the primary App's and is
+  // verified below. Reading an absent ID as "another App" would drop real
+  // primary deliveries.
   const targetId = c.req.header("x-github-hook-installation-target-id");
   const fromPrimaryApp = !targetId || !appId || targetId === appId;
-  const secret = fromPrimaryApp ? appSecret : secondAppSecret;
 
-  if (!secret && !fromPrimaryApp) {
-    // A second App is delivering and we hold no secret for it. Ack so GitHub
-    // stops retrying — the same reasoning as the branch below — and name the
-    // sender so this is one log line rather than an investigation.
-    logger.error(
-      { reason: "webhook_secret_missing_for_sender", targetId },
-      "GitHub App webhook from an App this deployment holds no secret for — " +
-        "acking with 200 to stop retries; set GITHUB_WEBHOOK_SECRET for it",
+  if (!fromPrimaryApp) {
+    // Another App is delivering, such as the retired steering app (5121606).
+    // This route holds no secret for it and does nothing with its events, so
+    // it skips verification. It acks with 200, because GitHub records every
+    // non-2xx answer as a failed delivery and retries it.
+    logger.warn(
+      { reason: "webhook_from_other_app", targetId },
+      "GitHub App webhook from an App other than GITHUB_APP_ID: acking with 200 and dropping it",
     );
     return c.json(
-      { received: true, dispatched: 0, reason: "no secret for sender" },
+      { received: true, dispatched: 0, reason: "not the primary app" },
       200,
     );
   }
@@ -271,8 +254,9 @@ githubAppWebhookRoute.post("/", async (c) => {
   // Steering repos run on the Oxagen GitHub App (ADR-228). This runs before
   // the installation lifecycle below, which answers early, because an
   // uninstall or a repository removed from an installation changes a
-  // steering repo's health too.
-  if (fromPrimaryApp) await requestSteeringHealthRead(eventName, body);
+  // steering repo's health too. Every delivery that reaches this line came
+  // from the Oxagen GitHub App.
+  await requestSteeringHealthRead(eventName, body);
 
   const installation = body["installation"] as
     | { id?: number | string }

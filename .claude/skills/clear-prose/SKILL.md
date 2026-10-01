@@ -28,7 +28,10 @@ not help.
 
 # Writing rules
 
-## Names and labels
+The full use and avoid lists, with replacements, are in the branding skill's
+`references/words.md`, which lives in `macanderson/oxagen-brand` under
+`skills/oxagen-branding/`. The stub at `.claude/skills/oxagen-branding/` says
+how to read it from `main`.
 
 - Always use plain nouns or noun phrases for names, headings, section labels,
   and table headers. For example: "Steering records" or "Deleted steering

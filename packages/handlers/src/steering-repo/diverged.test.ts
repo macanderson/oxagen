@@ -11,6 +11,7 @@ import {
   type GitlabHistoryTarget,
   type HistoryCommit,
   type HistoryRange,
+  assertGithubSteeringCommit,
   githubCloseRevert,
   githubDiverged,
   githubOpenRevert,
@@ -226,6 +227,20 @@ describe("judgeHistory", () => {
     expect(judgeHistory(PUBLISHED, range([squash(S1, P, 8), merge]))).toBeNull();
   });
 
+  it("does not infer authenticated provenance from a merge parent", () => {
+    const verified = { ...squash(S1, P, 8), authenticated: true };
+    const merge: HistoryCommit = {
+      sha: S2,
+      parents: [P, S1],
+      message: mergeMessage("Forged merge", 43, 9),
+      authenticated: false,
+    };
+    expect(judgeHistory(PUBLISHED, range([verified, merge]))).toEqual({
+      reason: "main holds 1 commit Oxagen did not merge: d4d4d4d",
+      main_sha: S2,
+    });
+  });
+
   it("rejects a merge commit over a commit Oxagen did not make", () => {
     const merge: HistoryCommit = {
       sha: S2,
@@ -393,7 +408,11 @@ interface GithubDeploymentFixture {
 interface GithubCompareFixture {
   status: string;
   total_commits: number;
-  commits: { sha: string; commit: { tree: { sha: string } } }[];
+  commits: {
+    sha: string;
+    parents: { sha: string }[];
+    commit: { message: string; tree: { sha: string } };
+  }[];
 }
 
 interface GithubPullFixture {
@@ -412,6 +431,36 @@ const CHECK_RUNS = `GET ${GH}/commits/${R}/check-runs?check_name=Oxagen%20steeri
 
 function branchReply(sha: string): Reply {
   return ok({ name: "main", commit: { sha }, protected: true });
+}
+
+function authenticatedPull(sha: string, number: number) {
+  return {
+    number,
+    merged: true,
+    merge_commit_sha: sha,
+    base: { ref: "main", repo: { id: 812, full_name: "acme/steering" } },
+    merged_by: { type: "Bot", login: "oxagen-steering[bot]" },
+  };
+}
+
+function authenticatedRoutes(...commits: string[]): Record<string, Reply> {
+  return Object.fromEntries(
+    commits.flatMap((sha, index) => {
+      const number = 42 + index;
+      return [
+        [`GET ${GH}/commits/${sha}/pulls?per_page=100`, ok([{ number }])],
+        [`GET ${GH}/pulls/${number}`, ok(authenticatedPull(sha, number))],
+      ];
+    }),
+  );
+}
+
+function singleGithubCommit(message: string): GithubCompareFixture {
+  const compare = fixture<GithubCompareFixture>("github-compare-ahead");
+  compare.commits = compare.commits.slice(0, 1);
+  compare.commits[0]!.commit.message = message;
+  compare.total_commits = 1;
+  return compare;
 }
 
 describe("githubPublished", () => {
@@ -436,6 +485,35 @@ describe("githubPublished", () => {
     await expect(githubPublished(gh.target)).resolves.toEqual({ sha: P, version: null });
   });
 
+  it("anchors on the app's bot user when GitHub names no app (#4949)", async () => {
+    const gh = github({
+      [DEPLOYMENTS]: ok([
+        {
+          sha: P,
+          performed_via_github_app: null,
+          creator: { login: "oxagen-steering[bot]", type: "Bot" },
+        },
+      ]),
+    });
+    await expect(githubPublished(gh.target)).resolves.toEqual({
+      sha: P,
+      version: null,
+    });
+  });
+
+  it("refuses a deployment by a person or another bot when GitHub names no app (negative)", async () => {
+    for (const creator of [
+      { login: "oxagen-steering[bot]", type: "User" },
+      { login: "someone-else[bot]", type: "Bot" },
+      null,
+    ]) {
+      const gh = github({
+        [DEPLOYMENTS]: ok([{ sha: P, performed_via_github_app: null, creator }]),
+      });
+      await expect(githubPublished(gh.target)).resolves.toBeNull();
+    }
+  });
+
   it("returns null when the app recorded no deployment", async () => {
     const deployments = fixture<GithubDeploymentFixture[]>("github-deployments");
     const gh = github({ [DEPLOYMENTS]: ok(deployments.slice(0, 1)) });
@@ -444,14 +522,21 @@ describe("githubPublished", () => {
 });
 
 describe("githubDiverged", () => {
-  it("passes a main ahead by trailered squash merges", async () => {
-    const gh = github({ [COMPARE]: ok(fixture("github-compare-ahead")) });
+  it("passes a main ahead by authenticated app merges", async () => {
+    const gh = github({
+      [COMPARE]: ok(fixture("github-compare-ahead")),
+      ...authenticatedRoutes(S1, S2),
+    });
     await expect(githubDiverged(gh.target, PUBLISHED)).resolves.toBeNull();
-    expect(gh.calls).toHaveLength(1);
+    expect(gh.calls).toHaveLength(5);
   });
 
   it("names a foreign commit and takes main from the compare", async () => {
-    const gh = github({ [COMPARE]: ok(fixture("github-compare-foreign")) });
+    const gh = github({
+      [COMPARE]: ok(fixture("github-compare-foreign")),
+      ...authenticatedRoutes(S1, S2),
+      [`GET ${GH}/commits/${X}/pulls?per_page=100`]: ok([]),
+    });
     await expect(githubDiverged(gh.target, PUBLISHED)).resolves.toEqual(DIVERGENCE);
     expect(gh.sent(MAIN_BRANCH)).toHaveLength(0);
   });
@@ -508,8 +593,272 @@ describe("githubDiverged", () => {
   it("forgives commits before a commit that restored the published files", async () => {
     const compare = fixture<GithubCompareFixture>("github-compare-foreign");
     compare.commits[1]!.commit.tree.sha = TREE_P;
+    const gh = github({ [COMPARE]: ok(compare), ...authenticatedRoutes(S2) });
+    await expect(githubDiverged(gh.target, PUBLISHED)).resolves.toBeNull();
+  });
+});
+
+describe("GitHub commit provenance", () => {
+  for (const message of [
+    mergeMessage("Forged version", 42, 8),
+    revertMessage(PUBLISHED),
+  ]) {
+    it(`rejects a forged trailer in ${message.split("\n")[0]}`, async () => {
+      const compare = singleGithubCommit(message);
+      const commit = compare.commits[0]!;
+      Object.assign(commit, {
+        author: { login: "oxagen-steering[bot]", type: "Bot" },
+        committer: { login: "web-flow", type: "User" },
+      });
+      Object.assign(commit.commit, {
+        author: { name: "Oxagen", email: "steering@oxagen.sh" },
+        verification: { verified: true },
+      });
+      const gh = github({
+        [COMPARE]: ok(compare),
+        [`GET ${GH}/commits/${S1}/pulls?per_page=100`]: ok([]),
+      });
+      await expect(githubDiverged(gh.target, PUBLISHED)).resolves.toEqual({
+        reason: "main holds 1 commit Oxagen did not merge: b2b2b2b",
+        main_sha: S1,
+      });
+    });
+  }
+
+  for (const [name, fields] of [
+    ["human merger", { merged_by: { type: "User", login: "maintainer" } }],
+    ["another app", { merged_by: { type: "Bot", login: "other-app[bot]" } }],
+    [
+      "spoofed app login",
+      { merged_by: { type: "User", login: "oxagen-steering[bot]" } },
+    ],
+    ["unmerged pull", { merged: false }],
+    ["another merge commit", { merge_commit_sha: X }],
+    [
+      "another branch",
+      { base: { ref: "release", repo: { full_name: "acme/steering" } } },
+    ],
+    [
+      "another repository",
+      { base: { ref: "main", repo: { full_name: "attacker/steering" } } },
+    ],
+    ["missing repository", { base: { ref: "main" } }],
+    ["missing merger", { merged_by: null }],
+  ] as const) {
+    it(`rejects a full pull request with ${name}`, async () => {
+      const gh = github({
+        [COMPARE]: ok(singleGithubCommit(mergeMessage("Forged merge", 42, 8))),
+        [`GET ${GH}/commits/${S1}/pulls?per_page=100`]: ok([
+          authenticatedPull(S1, 42),
+        ]),
+        [`GET ${GH}/pulls/42`]: ok({ ...authenticatedPull(S1, 42), ...fields }),
+      });
+      await expect(githubDiverged(gh.target, PUBLISHED)).resolves.toMatchObject({
+        main_sha: S1,
+      });
+      expect(gh.sent(`GET ${GH}/pulls/42`)).toHaveLength(1);
+    });
+  }
+
+  it("accepts an authenticated merge without a version trailer", async () => {
+    const gh = github({
+      [COMPARE]: ok(singleGithubCommit("Change a rule")),
+      ...authenticatedRoutes(S1),
+    });
+    await expect(githubDiverged(gh.target, PUBLISHED)).resolves.toBeNull();
+  });
+
+  it("matches the repository name without case sensitivity", async () => {
+    const gh = github({
+      [COMPARE]: ok(singleGithubCommit("Change a rule")),
+      ...authenticatedRoutes(S1),
+      [`GET ${GH}/pulls/42`]: ok({
+        ...authenticatedPull(S1, 42),
+        base: { ref: "main", repo: { full_name: "ACME/Steering" } },
+      }),
+    });
+    await expect(githubDiverged(gh.target, PUBLISHED)).resolves.toBeNull();
+  });
+
+  it("rejects an authenticated repository ID mismatch despite a matching name", async () => {
+    const gh = github({
+      [COMPARE]: ok(singleGithubCommit("Change a rule")),
+      ...authenticatedRoutes(S1),
+    });
+    gh.target.repo.id = 999;
+    await expect(githubDiverged(gh.target, PUBLISHED)).resolves.toMatchObject({
+      main_sha: S1,
+    });
+  });
+
+  it("rejects a missing repository ID when the target pins its ID", async () => {
+    const gh = github({
+      [COMPARE]: ok(singleGithubCommit("Change a rule")),
+      ...authenticatedRoutes(S1),
+      [`GET ${GH}/pulls/42`]: ok({
+        ...authenticatedPull(S1, 42),
+        base: { ref: "main", repo: { full_name: "acme/steering" } },
+      }),
+    });
+    gh.target.repo.id = 812;
+    await expect(githubDiverged(gh.target, PUBLISHED)).resolves.toMatchObject({
+      main_sha: S1,
+    });
+  });
+
+  it("does not let an app merge launder an unauthorized ancestor", async () => {
+    const gh = github({
+      [COMPARE]: ok(fixture("github-compare-ahead")),
+      ...authenticatedRoutes(S2),
+      [`GET ${GH}/commits/${S1}/pulls?per_page=100`]: ok([]),
+    });
+    await expect(githubDiverged(gh.target, PUBLISHED)).resolves.toEqual({
+      reason: "main holds 1 commit Oxagen did not merge: b2b2b2b",
+      main_sha: S2,
+    });
+    expect(gh.sent(`GET ${GH}/commits/${S1}/pulls?per_page=100`)).toHaveLength(1);
+    expect(gh.sent(`GET ${GH}/commits/${S2}/pulls?per_page=100`)).toHaveLength(1);
+  });
+
+  it("accepts a restored tree without trusting a revert trailer", async () => {
+    const compare = singleGithubCommit("Restore the published files");
+    compare.commits[0]!.commit.tree.sha = TREE_P;
     const gh = github({ [COMPARE]: ok(compare) });
     await expect(githubDiverged(gh.target, PUBLISHED)).resolves.toBeNull();
+    expect(gh.calls).toHaveLength(1);
+  });
+
+  it("compares the exact candidate and authenticates its configured base branch", async () => {
+    const exact = `GET ${GH}/compare/${P}...${S1}?per_page=100`;
+    const gh = github({
+      [exact]: ok(singleGithubCommit("Change a rule")),
+      ...authenticatedRoutes(S1),
+      [`GET ${GH}/pulls/42`]: ok({
+        ...authenticatedPull(S1, 42),
+        base: { ref: "release", repo: { full_name: "acme/steering" } },
+      }),
+    });
+    gh.target.defaultBranch = "release";
+    await expect(githubDiverged(gh.target, PUBLISHED, S1)).resolves.toBeNull();
+    expect(gh.sent(exact)).toHaveLength(1);
+    expect(gh.sent(MAIN_BRANCH)).toHaveLength(0);
+  });
+
+  it("rejects a mutable ref passed as an exact candidate", async () => {
+    const gh = github({});
+    await expect(githubDiverged(gh.target, PUBLISHED, "main")).rejects.toThrow(
+      /full commit SHA/,
+    );
+    expect(gh.calls).toHaveLength(0);
+  });
+
+  it("fails closed on truncated history for an exact candidate", async () => {
+    const compare = fixture<GithubCompareFixture>("github-compare-ahead");
+    compare.total_commits = 250;
+    const gh = github({
+      [`GET ${GH}/compare/${P}...${HEAD}?per_page=100`]: ok(compare),
+    });
+    await expect(githubDiverged(gh.target, PUBLISHED, HEAD)).resolves.toMatchObject({
+      reason: expect.stringContaining("more commits"),
+      main_sha: HEAD,
+    });
+    expect(gh.calls).toHaveLength(1);
+  });
+
+  it("fails a missing exact candidate without reading mutable main", async () => {
+    const gh = github({
+      [`GET ${GH}/compare/${P}...${X}?per_page=100`]: fail(404, "Not Found"),
+    });
+    await expect(githubDiverged(gh.target, PUBLISHED, X)).resolves.toMatchObject({
+      main_sha: X,
+    });
+    expect(gh.sent(MAIN_BRANCH)).toHaveLength(0);
+  });
+
+  for (const failurePath of [
+    `GET ${GH}/commits/${S1}/pulls?per_page=100`,
+    `GET ${GH}/pulls/42`,
+  ]) {
+    it(`propagates failure from ${failurePath}`, async () => {
+      const gh = github({
+        [COMPARE]: ok(singleGithubCommit("Change a rule")),
+        ...authenticatedRoutes(S1),
+        [failurePath]: fail(403, "Permission denied"),
+      });
+      await expect(githubDiverged(gh.target, PUBLISHED)).rejects.toThrow(
+        /Permission denied/,
+      );
+    });
+  }
+});
+
+describe("assertGithubSteeringCommit", () => {
+  it("authenticates the deployment anchor and the exact candidate", async () => {
+    const gh = github({
+      [DEPLOYMENTS]: ok(fixture("github-deployments")),
+      [`GET ${GH}/compare/${P}...${S1}?per_page=100`]: ok(
+        singleGithubCommit("Change a rule"),
+      ),
+      ...authenticatedRoutes(S1),
+    });
+    await expect(assertGithubSteeringCommit(gh.target, S1)).resolves.toBeUndefined();
+    expect(gh.sent(MAIN_BRANCH)).toHaveLength(0);
+  });
+
+  it("refuses a commit when no authenticated deployment exists", async () => {
+    const gh = github({ [DEPLOYMENTS]: ok([]) });
+    await expect(assertGithubSteeringCommit(gh.target, X)).rejects.toThrow(
+      /No authenticated/,
+    );
+    expect(gh.calls).toHaveLength(1);
+  });
+
+  it("refuses a candidate with forged provenance", async () => {
+    const gh = github({
+      [DEPLOYMENTS]: ok(fixture("github-deployments")),
+      [`GET ${GH}/compare/${P}...${S1}?per_page=100`]: ok(
+        singleGithubCommit(mergeMessage("Forged", 42, 8)),
+      ),
+      [`GET ${GH}/commits/${S1}/pulls?per_page=100`]: ok([]),
+    });
+    await expect(assertGithubSteeringCommit(gh.target, S1)).rejects.toThrow(
+      /Oxagen did not merge/,
+    );
+  });
+
+  it("propagates deployment lookup errors", async () => {
+    const gh = github({ [DEPLOYMENTS]: fail(502, "Deployment lookup failed") });
+    await expect(assertGithubSteeringCommit(gh.target, S1)).rejects.toThrow(
+      /Deployment lookup failed/,
+    );
+  });
+
+  it("refuses deployments from another app despite its matching slug", async () => {
+    const gh = github({
+      [DEPLOYMENTS]: ok([
+        {
+          sha: P,
+          performed_via_github_app: { id: 999, slug: "oxagen-steering" },
+        },
+      ]),
+    });
+    await expect(assertGithubSteeringCommit(gh.target, S1)).rejects.toThrow(
+      /No authenticated/,
+    );
+  });
+
+  it("fails closed when the bounded deployment history contains no app anchor", async () => {
+    const gh = github({
+      [DEPLOYMENTS]: ok(
+        Array.from({ length: 30 }, () => ({
+          sha: X,
+          performed_via_github_app: null,
+        })),
+      ),
+    });
+    await expect(assertGithubSteeringCommit(gh.target, S1)).rejects.toThrow(
+      /No authenticated/,
+    );
   });
 });
 

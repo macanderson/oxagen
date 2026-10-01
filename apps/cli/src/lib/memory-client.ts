@@ -16,6 +16,13 @@
  *   - confidenceScore (0-100) — how sure we are it is TRUE. Auto-decays, recovers on evidence.
  *   - enforcementScore (1-100, null for OBSERVATION) — how strongly it SHOULD be followed.
  */
+import type {
+  MarkdownImportPolicy,
+  MarkdownImportRecord,
+  MarkdownImportTarget,
+} from "@oxagen/oxagen/contracts/steering.markdown_import.shared";
+import type { SteeringMarkdownImportCommitOutput } from "@oxagen/oxagen/contracts/steering.markdown_import.commit";
+import type { SteeringMarkdownImportParseOutput } from "@oxagen/oxagen/contracts/steering.markdown_import.parse";
 import { apiPostOrThrow } from "./api.js";
 
 export type MemoryClass = "OBSERVATION" | "RULE" | "FACT";
@@ -620,123 +627,97 @@ export function formatPromotionCandidates(
   return [header, ...rows].join("\n");
 }
 
-// ── Bulk import (agent.memory.import.parse + .commit) ────────────────────────
+// ── Markdown import (parse_markdown_import + commit_markdown_import) ─────────
 
-/**
- * A draft memory as returned by the parse step.  Mirrors the `z.output` of
- * `memoryImportDraftSchema` without importing the contracts package.
- */
-export interface MemoryImportDraft {
-  lesson: string;
-  memoryClass: MemoryClass;
-  memoryKind: MemoryKind;
-  enforcementScore?: number;
-  source: string;
-  nodeRef: string;
-  sourceDocument: string;
-  classified: boolean;
+/** The most files one parse call takes. Larger imports go in calls of this size. */
+export const MARKDOWN_IMPORT_FILES_PER_CALL = 25;
+
+/** One file the import reads, with the target it is read as. */
+export interface MarkdownImportDocumentInput {
+  filename: string;
+  content: string;
+  target?: MarkdownImportTarget;
 }
 
 /**
- * Input shape accepted by commit — defaults for source/nodeRef/sourceDocument/
- * classified are filled server-side, so the caller may omit them.
+ * Call `parse_markdown_import`: split each file into proposed steering
+ * records, each with a kind, a force, and any duplicate or conflict. Writes
+ * nothing.
  */
-export interface MemoryImportDraftInput {
-  lesson: string;
-  memoryClass?: MemoryClass;
-  memoryKind: MemoryKind;
-  enforcementScore?: number;
-  source?: string;
-  nodeRef?: string;
-  sourceDocument?: string;
-  classified?: boolean;
-}
-
-/** Output of `agent.memory.import.parse`. */
-export interface ParseImportOutput {
-  drafts: MemoryImportDraft[];
-  documentCount: number;
-  skipped: { filename: string; reason: string }[];
-}
-
-/** One per-draft row in `agent.memory.import.commit` output. */
-export interface CommitImportResultRow {
-  lesson: string;
-  ok: boolean;
-  memoryId: string | null;
-  error: string | null;
-}
-
-/** Output of `agent.memory.import.commit`. */
-export interface CommitImportOutput {
-  results: CommitImportResultRow[];
-  imported: number;
-  failed: number;
-}
-
-/**
- * Call `agent.memory.import.parse` — extracts classified draft memories from
- * the supplied documents.  Writes nothing; returns editable drafts.
- */
-export async function parseImportMemories(
-  documents: { filename: string; content: string }[],
-  defaultNodeRef?: string,
-): Promise<ParseImportOutput> {
-  return apiPostOrThrow<ParseImportOutput>("agent/memory/import/parse", {
-    documents,
-    ...(defaultNodeRef !== undefined ? { defaultNodeRef } : {}),
-  });
-}
-
-/**
- * Call `agent.memory.import.commit` — writes the confirmed drafts into the
- * workspace AgentMemory graph. Per-item error capture; not all-or-nothing.
- */
-export async function commitImportMemories(
-  drafts: MemoryImportDraftInput[],
-): Promise<CommitImportOutput> {
-  return apiPostOrThrow<CommitImportOutput>("agent/memory/import/commit", {
-    drafts,
-  });
-}
-
-/**
- * Render a numbered draft table consistent with `formatMemoryLines` style.
- * Columns: index, class, kind, sourceDocument, truncated lesson.
- *
- * NOTE: the interactive edit grid (where the user can tweak individual drafts)
- * is an app-only TUI component — the CLI's review step is this read-only table
- * plus a y/N confirmation prompt.
- */
-export function formatImportDrafts(drafts: MemoryImportDraft[]): string {
-  if (drafts.length === 0) return "No memories could be extracted.";
-  const header =
-    `${"#".padEnd(4)}  ${"class".padEnd(12)} ${"kind".padEnd(22)}` +
-    ` ${"source doc".padEnd(24)} lesson`;
-  const rows = drafts.map((d, i) => {
-    const num = String(i + 1).padEnd(4);
-    const cls = d.memoryClass.padEnd(12);
-    const kind = d.memoryKind.padEnd(22);
-    const src = (d.sourceDocument || "(none)").padEnd(24);
-    const lesson = truncate(d.lesson, 60);
-    return `${num}  ${cls} ${kind} ${src} ${lesson}`;
-  });
-  const count = drafts.length;
-  return (
-    [header, ...rows].join("\n") +
-    `\n${count} draft ${count === 1 ? "memory" : "memories"}.`
+export async function parseMarkdownImport(
+  documents: MarkdownImportDocumentInput[],
+): Promise<SteeringMarkdownImportParseOutput> {
+  return apiPostOrThrow<SteeringMarkdownImportParseOutput>(
+    "context/steering/import/parse",
+    { documents },
   );
 }
 
 /**
- * Render a commit result summary: imported/failed totals and any per-item
- * error messages for failed rows.
+ * Call `commit_markdown_import`: open one steering PR with every row marked
+ * add. Nothing steers until the PR merges.
  */
-export function formatImportResults(output: CommitImportOutput): string {
-  const noun = output.imported === 1 ? "memory" : "memories";
-  const summary = `✓ Imported ${output.imported} ${noun}, ${output.failed} failed.`;
-  const errors = output.results
-    .filter((r) => !r.ok)
-    .map((r) => `  ✗ ${truncate(r.lesson, 60)}: ${r.error ?? "unknown error"}`);
-  return errors.length > 0 ? `${summary}\n${errors.join("\n")}` : summary;
+export async function commitMarkdownImport(input: {
+  records: MarkdownImportRecord[];
+  policies?: MarkdownImportPolicy[];
+}): Promise<SteeringMarkdownImportCommitOutput> {
+  return apiPostOrThrow<SteeringMarkdownImportCommitOutput>(
+    "context/steering/import/commit",
+    { records: input.records, policies: input.policies ?? [] },
+  );
+}
+
+/** What a row's mark column shows: its duplicate, its conflict, or nothing. */
+function importMark(row: MarkdownImportRecord): string {
+  if (row.conflict) return `conflicts with ${row.conflict.lineage}`;
+  if (row.duplicate) return `duplicate of ${row.duplicate.lineage}`;
+  return "";
+}
+
+/**
+ * The proposed records as a numbered table: source, kind, force with the
+ * words that justify it, the action, any duplicate or conflict, and the
+ * statement. A must or should row adds its tokens to every request, so the
+ * table ends with that total.
+ */
+export function formatImportRows(rows: MarkdownImportRecord[]): string {
+  if (rows.length === 0) return "No records were proposed.";
+  const header =
+    `${"#".padEnd(4)}  ${"source".padEnd(24)} ${"kind".padEnd(22)}` +
+    ` ${"force".padEnd(7)} ${"action".padEnd(7)} statement`;
+  const lines = rows.map((row, i) => {
+    const kind = row.effect ? `${row.kind} (${row.effect})` : row.kind;
+    const source = truncate(`${row.file}:${row.line}`, 24).padEnd(24);
+    const action = (row.action ?? "choose").padEnd(7);
+    const words = row.forceWords ? ` "${row.forceWords}"` : "";
+    const mark = importMark(row);
+    return (
+      `${String(i + 1).padEnd(4)}  ${source} ${kind.padEnd(22)} ${row.force.padEnd(7)} ${action} ${truncate(row.statement, 60)}` +
+      (words || mark ? `\n      ${[words.trim(), mark].filter(Boolean).join(". ")}` : "")
+    );
+  });
+  const alwaysOn = rows
+    .filter((row) => row.action === "add" && (row.force === "must" || row.force === "should"))
+    .reduce((sum, row) => sum + row.tokens, 0);
+  const count = rows.length;
+  return (
+    [header, ...lines].join("\n") +
+    `\n${count} proposed ${count === 1 ? "record" : "records"}. The must and should rows marked add load ${alwaysOn} tokens on every request.`
+  );
+}
+
+/** The commit result: the steering PR, and what it holds. */
+export function formatImportPullRequest(
+  output: SteeringMarkdownImportCommitOutput,
+): string {
+  const noun = output.records === 1 ? "record" : "records";
+  const lines = [
+    `Opened steering PR #${output.pullRequest.number} on ${output.pullRequest.branch} with ${output.records} ${noun}.`,
+    output.pullRequest.url,
+  ];
+  if (output.skipped > 0) {
+    lines.push(`${output.skipped} ${output.skipped === 1 ? "row was" : "rows were"} left out.`);
+  }
+  lines.push("Nothing steers an agent until the PR merges.");
+  return lines.join("\n");
 }

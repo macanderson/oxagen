@@ -623,18 +623,6 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
   },
-  GITHUB_WEBHOOK_SECRET: {
-    group: "github",
-    description:
-      "Webhook signing secret for the SECOND GitHub App (oxagen-sh, app id " +
-      "4055615), which delivers to the same /webhooks/github/app endpoint as " +
-      "the Oxagen GitHub App (oxagen-connect). Optional: unset means that App's deliveries are rejected.",
-    secret: true,
-    clientExposed: false,
-    services: ["api"],
-    requiredIn: [],
-    valueOrigin: "manual",
-  },
   GITHUB_APP_INSTALL_STATE_SECRET: {
     group: "github",
     description:
@@ -1103,20 +1091,6 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
       "Linux, after CURSOR_CONFIG_DIR and before ~/.cursor. Set by the operator's own " +
       "environment rather than by Oxagen, and ignored on macOS and Windows, which do not " +
       "follow the XDG layout.",
-    secret: false,
-    clientExposed: false,
-    services: [],
-    requiredIn: [],
-    valueOrigin: "manual",
-    placeholder: "",
-  },
-  TACHO_MEMORY_CAPTURE: {
-    group: "Inngest",
-    description:
-      "Set to 1 on the operator's machine to let the Tacho collector read each wrapped " +
-      "harness's memory folder and send what changed to the workspace as memories for the " +
-      "curator (ADR-206). Off by default, and never a deployment value: it is read by the " +
-      "collector on the laptop, not by the server.",
     secret: false,
     clientExposed: false,
     services: [],
@@ -2409,6 +2383,26 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
   },
+  PR_DRAFT: {
+    group: "Operator scripts",
+    description:
+      "Whether the pull request a CI run tests is a draft (true or false). pipeline.yml sets it on the preflight job, and ci-pr-scope.mjs runs only the light lanes for a draft (#4918).",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  PR_CHANGED_FILES: {
+    group: "Operator scripts",
+    description:
+      "How many files the pull request a CI run tests changes, from the pull_request event. ci-pr-scope.mjs checks that it read every file before it calls a pull request docs-only (#4918).",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
   HEAD_REPO: {
     group: "Operator scripts",
     description:
@@ -2465,21 +2459,9 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     group: "Operator scripts",
     description:
       "Path to a checkout of the brand kit, macanderson/oxagen-brand. " +
-      "sync-brand-assets.mjs copies the marks, icons, tokens, fonts, and branding skill from it. " +
-      "When this is unset, the script reads ../oxagen-brand. " +
-      "CI checks out the kit's main branch at .brand-kit and sets this variable to that path.",
-    secret: false,
-    clientExposed: false,
-    services: [],
-    requiredIn: [],
-    valueOrigin: "manual",
-  },
-  OXAGEN_HOUSE_BRAND: {
-    group: "Operator scripts",
-    description:
-      "Deprecated: the old name for OXAGEN_BRAND_KIT. " +
-      "sync-brand-assets.mjs reads it only when OXAGEN_BRAND_KIT is unset. " +
-      "Set OXAGEN_BRAND_KIT instead. The old name stays for one release, as #3074 set out.",
+      "sync-brand-assets.mjs copies the marks, icons, tokens, fonts, and the branding skill stub from it. " +
+      "A --brand argument wins over this variable, and when both are unset the script reads ../oxagen-brand. " +
+      "CI checks out the kit's main branch at .brand-kit and passes it with --brand.",
     secret: false,
     clientExposed: false,
     services: [],
