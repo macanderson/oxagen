@@ -856,10 +856,17 @@ describe("memory import", () => {
 
   it("--yes leaves a conflicting row out, names it, and opens the steering PR", async () => {
     readFile.mockResolvedValue("# rules\n");
+    // Its own statement, so the CLI's cross-chunk match pass finds the
+    // conflict alone and no duplicate of the first row.
     const conflict = row({
       lineage: "a-intel.rules.friday-deploys",
+      statement: "Deploy on Fridays after the freeze lifts.",
+      label: "Friday deploys",
+      line: 4,
       kind: "constraint",
+      kindReason: "It states when deploys may run.",
       force: "must",
+      forceWords: "Deploy",
       effect: "require",
       action: null,
       conflict: { lineage: "a-intel.no-friday-deploys", path: null, published: true },
@@ -887,7 +894,7 @@ describe("memory import", () => {
       policies: [],
     });
     const out = captured.output();
-    expect(out).toContain("Left out docs/rules.md:2 (a-intel.rules.friday-deploys)");
+    expect(out).toContain("Left out docs/rules.md:4 (a-intel.rules.friday-deploys)");
     expect(out).toContain("Opened steering PR #7 on steering/import-2026-09-30 with 1 record.");
     expect(out).toContain("https://github.com/a-intel/steering/pull/7");
     expect(out).toContain("1 row was left out.");
