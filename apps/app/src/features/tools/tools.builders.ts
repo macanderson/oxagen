@@ -396,7 +396,6 @@ export function toolsSource(reads: ToolsReads) {
       commands: refuse,
       outputs: refuse,
       work: refuse,
-      outcomesSettings: refuse,
       issues: refuse,
       context: refuse,
       findings: refuse,

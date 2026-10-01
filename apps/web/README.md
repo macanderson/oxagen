@@ -7,9 +7,7 @@ and tooling, plus the generated `blog/` tree and a `sitemap.xml` that includes
 it. **oxagen.sh is served from an S3 bucket behind CloudFront** (ids in
 `infra/stacks-new/ci-deploy/terraform.tfvars`): CI's `deploy-web` job builds
 and syncs `dist/` there on every push to `main`, then checks the public
-hostname. There is no per-branch preview deployment. `vercel.json` is kept
-pointing at the same build command and output directory for the legacy Vercel
-project, but nothing in CI deploys through it. Nothing in `dist/` is
+hostname. There is no per-branch preview deployment. Nothing in `dist/` is
 committed.
 
 ## Boundary
@@ -122,9 +120,10 @@ Never put `--` before the filename. Each build module has a co-located
   the author headshot the page-flip edition loads. It lives here rather than
   inside the seed HTML because Chromium misplaces images inside multi-column
   fragments, so the reader swaps each `<img>` for a background-image span when
-  it clones a page. `vercel.json` redirects the human-facing
+  it clones a page. CloudFront redirects the human-facing
   `/research/deterministic-systems-optimizations-for-ai-agents` path to
-  `/read?e=page-flip-reader`; there is no `index.html` at that path.
+  `/read?e=page-flip-reader` (`prefix_redirects` in
+  `infra/stacks-new/oxagen/main.tf`). There is no `index.html` at that path.
 - `fonts/`: the house faces (Geist, Monaspace Neon, and Space Grotesk at
   400/500/600/700), vendored from the brand kit by
   `node tools/scripts/sync-brand-assets.mjs`, plus Literata variable serif
@@ -139,10 +138,12 @@ Never put `--` before the filename. Each build module has a co-located
   one-line hero it goes on the `<h1>`. A page preloads only the Space Grotesk
   weight its hero line or text wordmark uses, and a page with neither
   preloads none.
-- `favicon.svg`: the house `Ox` lettermark: the word's own first two letters
-  in Space Grotesk, ONE colour, adaptive to the tab's colour scheme. It is
-  never the wordmark and never a lockup, and it never carries the gold. The
-  metal belongs to the `x` of the word.
+- `favicon.svg`: the hive, the kit's Oxagen icon: six hexagonal cells, four
+  drawn as an outline in the tab's ink and two filled with the gold, one of
+  them at half strength. The outline adapts to the tab's colour scheme. The
+  PNG and ICO favicons beside it are the kit's own renders on the obsidian
+  tile. `node tools/scripts/sync-brand-assets.mjs` copies all of them from the
+  kit, so none is edited here.
 - `og/<page>-{dark,light}.png` (in `dist/` only): a share card for every
   hand-authored page, drawn by the build from the page's own `<title>` and
   description; the copy in `dist/` has its `og:image` / `twitter:image`

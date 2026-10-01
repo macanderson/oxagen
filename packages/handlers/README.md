@@ -17,7 +17,7 @@
   - `@oxagen/tenancy`: tenant scope and the data-plane seam.
   - `@oxagen/iam`: `assertOrgRole`, mandate-role checks, and organisation IAM provisioning.
   - `@oxagen/billing`: subscriptions, credits, spend, and metering reads.
-  - `@oxagen/plugins`: plugin registry, installs, credentials, and the run-outcomes policy.
+  - `@oxagen/plugins`: plugin registry, installs, credentials, and Linear issue authorization.
   - `@oxagen/agent`: agent identity, definitions, and tool-registry facts.
   - `@oxagen/recorder`: host enrollment, sessions, and the Tacho wire types.
   - `@oxagen/github`: GitHub App tokens and the REST client for repository handlers.

@@ -1,0 +1,32 @@
+{
+  "check": "settings",
+  "rule": "setting-differs",
+  "severity": "error",
+  "description": "GitHub allows merge commits.",
+  "refused_by_reader": false,
+  "changed": [],
+  "removed": [],
+  "expect": [
+    {
+      "path": "merge.allow_merge_commit"
+    }
+  ],
+  "actual_settings": {
+    "provider": "github",
+    "settings": {
+      "visibility": "private",
+      "default_branch": "main",
+      "rulesets": {},
+      "merge": {
+        "allow_squash_merge": true,
+        "allow_merge_commit": true,
+        "allow_rebase_merge": false,
+        "delete_branch_on_merge": true
+      },
+      "actions": {
+        "enabled": false
+      },
+      "environments": {}
+    }
+  }
+}

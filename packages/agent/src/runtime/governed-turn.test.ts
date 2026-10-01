@@ -1201,6 +1201,25 @@ describe("runGovernedTurn on the engine", () => {
       }
     });
 
+    // The AI SDK wraps the last attempt in a RetryError after its retries,
+    // so the provider's status sits on `lastError` (#4931).
+    it("names the status the SDK keeps on a RetryError's last attempt", async () => {
+      const errors = await failWith(
+        Object.assign(new Error("Failed after 3 attempts"), {
+          name: "AI_RetryError",
+          lastError: Object.assign(new Error("requires more credits"), {
+            statusCode: 402,
+          }),
+        }),
+      );
+      expect(errors.length).toBeGreaterThan(0);
+      for (const error of errors) {
+        expect(error).toBeInstanceOf(ModelCallFailedError);
+        expect(error).toMatchObject({ code: "model_call_failed", status: 402 });
+        expect((error as Error).message).toBe("the model provider answered 402");
+      }
+    });
+
     it("says the call failed before the provider answered when there is no status", async () => {
       const errors = await failWith(new Error("socket hang up"));
       expect(errors.length).toBeGreaterThan(0);

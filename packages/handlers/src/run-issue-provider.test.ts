@@ -1,13 +1,9 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
-  guard: vi.fn(),
   installation: vi.fn(),
   token: vi.fn(),
   linearToken: vi.fn(),
   linear: vi.fn(),
-}));
-vi.mock("@oxagen/plugins/run-outcomes-policy", () => ({
-  assertRunOutcomesAllowed: mocks.guard,
 }));
 vi.mock("@oxagen/github", () => ({ getInstallationToken: mocks.token }));
 vi.mock("./repository.github-connection", () => ({
@@ -54,7 +50,6 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.stubEnv("GITHUB_APP_ID", "app");
   vi.stubEnv("GITHUB_APP_PRIVATE_KEY", "key");
-  mocks.guard.mockResolvedValue(undefined);
   mocks.installation.mockResolvedValue({
     installationId: "123",
     status: "connected",
@@ -130,14 +125,6 @@ describe("native issue receipts", () => {
       fetchMock.mock.calls.some((call) => call[1]?.method === "POST"),
     ).toBe(false);
   });
-  it("refuses suspended policy before the next provider request", async () => {
-    fetchMock.mockImplementation(async () => {
-      mocks.guard.mockRejectedValue(new Error("disabled"));
-      return response({ full_name: "acme/control", has_issues: true });
-    });
-    await expect(createRunIssue(scope, request)).rejects.toThrow("disabled");
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-  });
   it("refuses paused GitHub connections before minting credentials", async () => {
     mocks.installation.mockResolvedValue({
       installationId: "123",
@@ -208,7 +195,7 @@ describe("native issue receipts", () => {
       await createRunIssue(scope, { ...request, destination: d }),
     ).toMatchObject({ identifier: "OPS-9", url: receipt.url });
     expect(mocks.linearToken).toHaveBeenCalledWith(scope, "con_1");
-    expect(mocks.linear.mock.calls[2]?.[3]).toMatchObject({
+    expect(mocks.linear.mock.calls[2]?.[2]).toMatchObject({
       input: { id, teamId: d.teamId },
     });
   });

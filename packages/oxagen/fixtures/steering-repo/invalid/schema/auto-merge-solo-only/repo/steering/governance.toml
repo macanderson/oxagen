@@ -10,7 +10,6 @@ rotate = "month"                     # day, week, month, or year
 max_lines = 10000                    # a new file starts here even mid-period
 
 [memory]
-recall_unreviewed = "same-agent"     # same-agent, or off
 batch_size = 20                      # memories per memory PR
 retire_after_days = 180
 auto_merge = true                    # allowed in solo mode only

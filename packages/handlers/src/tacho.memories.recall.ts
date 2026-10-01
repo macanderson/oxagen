@@ -1,5 +1,5 @@
-// tacho.memories.recall.ts: the memories most relevant to one prompt on an
-// enrolled host (ADR-206).
+// tacho.memories.recall.ts: the memory records most relevant to one prompt on
+// an enrolled host (ADR-206, as ADR-238 amends it).
 //
 // The daemon calls this once per prompt, for Claude Code, Codex, Cursor, and
 // Stella alike. The handler checks the host key the way every Tacho control
@@ -7,8 +7,9 @@
 // grants. It reads the memory records from the workspace's and the
 // organization's published steering through the same port as the skills,
 // bound to the Postgres version store (#4550). `recallMemories` ranks them
-// with the waiting memories governance allows and stamps each record it
-// serves.
+// and stamps each record it serves. A memory that waits for review is never
+// recalled: it reaches other agents only once a person merges it into a
+// steering record.
 import type { CapabilityContext, CapabilityHandler } from "@oxagen/oxagen";
 import {
   tachoMemoriesRecall,
@@ -149,7 +150,7 @@ async function readMemoryRecord(
 
 /**
  * The active memory records in the published steering. A version that
- * cannot be read gives none, and recall still serves the waiting memories.
+ * cannot be read gives none, and recall answers nothing.
  */
 async function publishedMemoryRecords(
   published: TachoPublished,
@@ -185,26 +186,21 @@ export function createTachoMemoriesRecallHandler(
   deps: TachoMemoriesRecallDeps,
 ): CapabilityHandler<typeof tachoMemoriesRecall> {
   return async (input, ctx): Promise<TachoMemoriesRecallOutput> => {
-    const host = await withTenantDb((tx) =>
+    await withTenantDb((tx) =>
       resolveEnrolledHost(CAPABILITY, ctx, tx as never, input.host_enrollment_id),
     );
     await assertContractRole(tachoMemoriesRecall, ctx);
     const scope: MemoryScope = { orgId: ctx.orgId, workspaceId: ctx.workspaceId };
-    const [records, recallUnreviewed] = await Promise.all([
-      publishedMemoryRecords(deps.published, ctx),
-      deps.published.recallUnreviewed(scope),
-    ]);
+    const records = await publishedMemoryRecords(deps.published, ctx);
     const items = await deps.recall(
       scope,
       {
         now: deps.now?.() ?? new Date(),
-        agent: host.agentKey,
         inApp: false,
         repositoryDigests: input.repository_digests,
         tools: input.tools,
         paths: input.paths,
         text: input.text,
-        recallUnreviewed,
       },
       records,
     );
