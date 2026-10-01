@@ -120,7 +120,7 @@ describe.each(PACKAGES)("%s", (pkg) => {
     expect(missing).toEqual([]);
   });
 
-  const reads = OUTSIDE_READS[pkg] ?? {};
+  const reads: Record<string, string[]> = OUTSIDE_READS[pkg] ?? {};
   describe.each(Object.entries(reads))("%s", (testFile, files) => {
     it("exists, and so does each file it reads", () => {
       expect(existsSync(join(REPO_ROOT, pkg, testFile))).toBe(true);
