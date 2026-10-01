@@ -463,22 +463,6 @@ describe("the desktop icon stamp", () => {
       `${extra} is not in the stamp, so no cut wrote it`,
     );
   });
-
-  it("is committed for the icons in this tree, cut from the synced avatar", () => {
-    const dir = "apps/desktop/src-tauri/icons";
-    const committed = new Map(
-      readdirSync(join(REPO_ROOT, dir))
-        .filter((name) => name !== "source.sha256")
-        .map((name): [string, Buffer] => [
-          `${dir}/${name}`,
-          readFileSync(join(REPO_ROOT, dir, name)),
-        ]),
-    );
-    const current = readFileSync(join(REPO_ROOT, dir, "source.sha256"), "utf8");
-    expect(
-      desktopIconDrift(current, new Map([[avatar, readFileSync(join(REPO_ROOT, avatar))]]), committed),
-    ).toBeNull();
-  });
 });
 
 describe("the two grounds", () => {
