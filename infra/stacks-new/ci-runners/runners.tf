@@ -60,6 +60,12 @@ locals {
 
   ssm_arn = "arn:aws:ssm:${var.region}:${var.account_id}:parameter"
 
+  # The module decides counts from whether this ARN is set, so it must be known
+  # at plan time. The parameter's computed `arn` is not, until it exists. Its
+  # `name` is, and referencing it keeps the parameter ahead of the launch
+  # templates that resolve it.
+  runner_ami_arn = { for arch, p in aws_ssm_parameter.runner_ami : arch => "${local.ssm_arn}${p.name}" }
+
   # The runner's own settings, shared by every pool.
   runner_defaults = {
     runner_os                       = "linux"
@@ -273,7 +279,7 @@ module "runners" {
           ami = {
             owners               = ["099720109477"]
             filter               = { name = ["ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-*"] }
-            id_ssm_parameter_arn = aws_ssm_parameter.runner_ami[p.arch].arn
+            id_ssm_parameter_arn = local.runner_ami_arn[p.arch]
           }
           block_device_mappings = [{
             device_name = "/dev/sda1"
@@ -317,7 +323,7 @@ module "runners" {
           ami = {
             owners               = ["099720109477"]
             filter               = { name = ["ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-*"] }
-            id_ssm_parameter_arn = aws_ssm_parameter.runner_ami["arm64"].arn
+            id_ssm_parameter_arn = local.runner_ami_arn["arm64"]
           }
           block_device_mappings = [{
             device_name = "/dev/sda1"
