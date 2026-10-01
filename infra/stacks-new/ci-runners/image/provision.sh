@@ -7,7 +7,8 @@
 #   provision.sh validate <dir>   check the image before Image Builder snapshots it
 #
 # <dir> holds the files Terraform uploaded beside this script: config.json,
-# start-runner.sh, daemon.json, ci-local-disk.sh, and ci-local-disk.service.
+# start-runner.sh, daemon.json, and the ci-local-disk and ci-volume-warm
+# scripts and services.
 #
 # The image carries what a job would otherwise download first: the runner
 # agent, Docker, the host tools our workflows call, Node in the runner's tool
@@ -54,7 +55,7 @@ build() {
   # The tools GitHub's ubuntu-24.04 image ships that our host-level jobs and
   # composite actions call. Jobs that run in a container bring their own.
   retry apt-get -y install --no-install-recommends \
-    acl build-essential ca-certificates curl fd-find file git git-lfs gnupg \
+    acl build-essential ca-certificates curl fd-find file fio git git-lfs gnupg \
     lsb-release mdadm nvme-cli openssh-client pigz postgresql-client \
     python3 python3-pip python3-venv pipx ripgrep rsync shellcheck \
     software-properties-common sudo time tree unzip wget xfsprogs xz-utils \
@@ -141,6 +142,13 @@ EOF
   install -m 0644 "$dir/ci-local-disk.service" /etc/systemd/system/ci-local-disk.service
   systemctl enable ci-local-disk.service
 
+  # The root volume comes from the AMI's snapshot and loads lazily. This reads
+  # it once at boot, in the background, so the images and the store are local
+  # before a job needs them.
+  install -m 0755 "$dir/ci-volume-warm.sh" /usr/local/sbin/ci-volume-warm
+  install -m 0644 "$dir/ci-volume-warm.service" /etc/systemd/system/ci-volume-warm.service
+  systemctl enable ci-volume-warm.service
+
   # --- Container images ----------------------------------------------------
   # Every image a CI job starts, for this architecture. The runner still asks
   # the registry for the tag at job time, and finds the layers already here.
@@ -181,6 +189,8 @@ validate() {
   test -x /var/lib/cloud/scripts/per-boot/start-runner.sh
   "/opt/hostedtoolcache/node/$node_version/$runner_arch/bin/node" --version
   systemctl is-enabled ci-local-disk.service
+  systemctl is-enabled ci-volume-warm.service
+  fio --version
   id runner
   jq -r '.images[]' "$config" | while read -r image; do
     docker image inspect "$image" >/dev/null
