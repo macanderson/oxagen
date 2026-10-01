@@ -24,6 +24,14 @@
   --state-proven: #3FA2A2;
   --state-failed: #C0453C;
   --state-critical: #D6455E;
+  --state-allowed-text: #57A97C;
+  --state-approval-text: #6098DB;
+  --state-denied-text: #D67858;
+  --state-proven-text: #44A7A7;
+  --state-failed-text: #E7685C;
+  --state-critical-text: #EF5C72;
+  --destructive-text: #E7685C;
+  --muted-text: #A1A1AA;
   --font-display: "Geist", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-wordmark: "Space Grotesk", "Helvetica Neue", Arial, sans-serif;
   --font-hero: "Space Grotesk", "Helvetica Neue", Arial, sans-serif;
@@ -52,6 +60,14 @@
     --state-proven: #1F7676;
     --state-failed: #992F28;
     --state-critical: #AE2540;
+    --state-allowed-text: #2F7D52;
+    --state-approval-text: #2E6BA8;
+    --state-denied-text: #9B4526;
+    --state-proven-text: #1F7676;
+    --state-failed-text: #992F28;
+    --state-critical-text: #AE2540;
+    --destructive-text: #992F28;
+    --muted-text: #6E6E77;
   }
 }
 :root[data-theme="light"] {
@@ -73,4 +89,12 @@
   --state-proven: #1F7676;
   --state-failed: #992F28;
   --state-critical: #AE2540;
+  --state-allowed-text: #2F7D52;
+  --state-approval-text: #2E6BA8;
+  --state-denied-text: #9B4526;
+  --state-proven-text: #1F7676;
+  --state-failed-text: #992F28;
+  --state-critical-text: #AE2540;
+  --destructive-text: #992F28;
+  --muted-text: #6E6E77;
 }
