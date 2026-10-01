@@ -640,6 +640,17 @@ describe("model class fit on step classes", () => {
     expect(f!.evidence.measuredMicros).toBe("120000");
   });
 
+  it("leaves out a run whose edit came before the first frame read", () => {
+    const r = run([opus()], { toolCalls: 3 });
+    const frames = [frame(r, 2), frame(r, 4)];
+    const calls = [
+      call(r, 1, { tool: "Edit", isMutating: true }),
+      call(r, 3),
+      call(r, 5),
+    ];
+    expect(detect(withFrames([r], calls, { [r.runId]: frames }))).toEqual([]);
+  });
+
   it("still prices the read-only steps of a run whose edit changed a file", () => {
     const { r, frames, calls } = editRun(50);
     const [f] = detect(

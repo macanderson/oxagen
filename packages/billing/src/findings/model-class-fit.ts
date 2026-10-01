@@ -19,8 +19,8 @@
  *   file, is priced whole, as it was before steps had a class. The measured
  *   side is what the rollup priced for each model the run used.
  * - A run with an edit is priced on its read-only model calls alone: each
- *   frame's own priced cost. The pass must have read the run's frames, or the
- *   run is left out.
+ *   frame's own priced cost. The pass must have read the run's frames, and
+ *   each call that may write must follow a frame, or the run is left out.
  * - A run that changed a file while every call says it changed nothing is left
  *   out. The record keeps file changes per run, so no step can hold the change.
  *
@@ -270,7 +270,9 @@ export function measureSteps(
 /**
  * The model calls of a run whose steps only read: every frame the pass read
  * for the run except those that made a call that may write. A frame that made
- * no tool call is read-only. Null when the pass read no frame for the run.
+ * no tool call is read-only. Null when the pass read no frame for the run, or
+ * when a call that may write came before the run's first frame read, since
+ * no frame can hold that edit.
  */
 export function readOnlyFrames(
   view: RunView,
@@ -279,12 +281,13 @@ export function readOnlyFrames(
   if (frames === undefined || view.requests === null) return null;
   const edits = new Set<PricedRequestFrame>();
   for (const request of view.requests) {
-    if (request.frame === null) continue;
     const cls = stepClassOf({
       calls: request.calls.map((c) => c.call),
       changedFile: false,
     });
-    if (cls === "edit") edits.add(request.frame);
+    if (cls === "read_only") continue;
+    if (request.frame === null) return null;
+    edits.add(request.frame);
   }
   return frames.filter((f) => !edits.has(f));
 }
