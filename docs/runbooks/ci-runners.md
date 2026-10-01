@@ -97,7 +97,7 @@ done
 A build takes 20 to 40 minutes. When it finishes, Image Builder writes the new
 AMI id to `/imagebuilder/oxagen-ci-runner/arm64` and `/imagebuilder/oxagen-ci-runner/x64`,
 and the next runner launches from it. Build logs are in the
-`/oxagen/ci-runners/image-builds` log group and under `logs/` in
+`/aws/imagebuilder/oxagen-ci-runner` log group and under `logs/` in
 `s3://oxagen-ci-runners-916294258235`.
 
 To roll an image back, point the parameter at an older AMI:
@@ -174,7 +174,7 @@ topic. Confirm the subscription email once after the first apply.
 | `ci-runners-<pool>-scale-up-errors` | The scale-up Lambda threw 3 or more times in 5 minutes | Same log group. `Bad credentials` means the App's key is wrong. `VcpuLimitExceeded` means a quota |
 | `ci-runners-webhook-errors` | GitHub's events are not reaching the queues | `/aws/lambda/ci-webhook`. `signature` errors mean the webhook secret differs between GitHub and Parameter Store |
 | `ci-runners-webhook-5xx` | API Gateway answered GitHub with 5xx | The same log group, and the App's "Advanced" tab for failed deliveries |
-| `ci-runners-image-build-failed` (an EventBridge rule, not an alarm) | A runner image failed to build | The `/oxagen/ci-runners/image-builds` log group. Runners keep the previous image |
+| `ci-runners-image-build-failed` (an EventBridge rule, not an alarm) | A runner image failed to build | The `/aws/imagebuilder/oxagen-ci-runner` log group. Runners keep the previous image |
 
 The AWS Budget `ci-runners-monthly` emails at 80% and 100% of actual spend and
 at 100% of forecast spend.
