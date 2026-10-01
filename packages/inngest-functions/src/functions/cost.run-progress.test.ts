@@ -42,6 +42,9 @@ mocks.createFunction.mockImplementation(
 );
 
 await import("./cost.run-progress");
+const { setNoProgressPauseRunner } = await import(
+  "../lib/no-progress-pause-runner"
+);
 
 const sendEvent = vi.fn(async () => {});
 const steps: string[] = [];
@@ -130,14 +133,52 @@ describe("cost.run-progress", () => {
       paused: false,
     });
     const out = await handler!({ event: { data: { runId: "tse_loop" } }, step });
-    expect(mocks.checkNoProgress).toHaveBeenCalledWith({
-      runId: "tse_loop",
+    // No runner is installed in this process, so the check gets no pause path.
+    expect(mocks.checkNoProgress).toHaveBeenCalledWith(
+      {
+        runId: "tse_loop",
+        orgId: "org-1",
+        workspaceId: "ws-1",
+        sealed: false,
+      },
+      { pauseRun: null },
+    );
+    expect(steps).toEqual(["run-totals", "daily-totals", "no-progress"]);
+    expect(out).toEqual({ runId: "tse_loop", rolledUp: true });
+  });
+
+  it("hands the check the pause path the handlers installed", async () => {
+    mocks.rebuildRunTotals.mockResolvedValue({
+      orgId: "org-1",
+      workspaceId: "ws-1",
+      startedAt: new Date("2026-09-26T10:00:00.000Z"),
+      sealedAt: null,
+      costMicros: 900n,
+      costBasis: "client_attested",
+    });
+    const pause = vi.fn(async () => ({
+      paused: true as const,
+      commandId: "tcm_1",
+    }));
+    setNoProgressPauseRunner({ pause });
+    await handler!({ event: { data: { runId: "tse_enforced" } }, step });
+    const overrides = mocks.checkNoProgress.mock.calls[0]?.[1] as {
+      pauseRun: ((request: unknown) => Promise<unknown>) | null;
+    };
+    expect(overrides.pauseRun).not.toBeNull();
+    const request = {
+      runId: "tse_enforced",
       orgId: "org-1",
       workspaceId: "ws-1",
       sealed: false,
+      loops: [],
+      limit: { repeats: 20, mode: "enforced" },
+    };
+    await expect(overrides.pauseRun?.(request)).resolves.toEqual({
+      paused: true,
+      commandId: "tcm_1",
     });
-    expect(steps).toEqual(["run-totals", "daily-totals", "no-progress"]);
-    expect(out).toEqual({ runId: "tse_loop", rolledUp: true });
+    expect(pause).toHaveBeenCalledWith(request);
   });
 
   it("tells the check a sealed run is sealed, so an enforced limit does not pause it", async () => {

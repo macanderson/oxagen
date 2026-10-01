@@ -604,6 +604,29 @@
         "productive": "Productive ratio",
         "productiveValue": "{ratio} of steps advanced the task",
         "productiveSteps": "{advanced} of {total} {steps, plural, one {step} other {steps}} advanced the task"
+      },
+      "noProgress": {
+        "title": "No-progress limit",
+        "note": "A loop is one call made again and again in a row with an unchanged result. Each loop below reached the workspace's limit.",
+        "line": "{tool} ran {repeats} times in a row with an unchanged result. The loop reached the limit of {limit} at call {atCall}.",
+        "mode": {
+          "observe": "observe mode",
+          "enforced": "enforced mode"
+        },
+        "outcome": {
+          "observe": "Recorded. The run went on.",
+          "paused": "Paused. The pause takes hold at the run's next checkpoint.",
+          "blocked": "Could not pause the run: {reason}.",
+          "blockedUnrecorded": "Could not pause the run. The record does not say why."
+        },
+        "block": {
+          "run_sealed": "the run had ended",
+          "no_host": "the run names no enrolled host to carry a pause",
+          "host_revoked": "the run's host enrollment was revoked",
+          "host_offline": "the run's host had not checked in for five minutes",
+          "no_connection_point": "no host carries commands for this run, so it has no governed call to pause at",
+          "pause_unavailable": "the check could not reach the pause path"
+        }
       }
     },
     "commands": {

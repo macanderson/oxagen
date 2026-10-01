@@ -254,6 +254,39 @@ const RunCostProvisional = z.object({
 });
 
 /**
+ * One loop that reached the workspace's no-progress limit (#4490): the same
+ * call made again and again in a row with an unchanged result. `paused` means
+ * an enforced limit sent a pause that takes hold at the run's next
+ * checkpoint. `pauseBlock` says why an enforced limit could not pause the
+ * run, and is null on every other hit.
+ */
+const RunNoProgressHit = z.object({
+  tool: z.string().min(1),
+  /** 1 for the call's first loop in the run, 2 for its second. */
+  loop: z.number().int().positive(),
+  /** The calls in the loop so far, the first one included. */
+  repeats: z.number().int().positive(),
+  /** The limit the loop reached. */
+  limit: z.number().int().min(2),
+  /** The call that reached the limit, counted from 1 in the run's order. */
+  atCall: z.number().int().positive(),
+  mode: z.enum(["observe", "enforced"]),
+  outcome: z.enum(["would_pause", "paused"]),
+  pauseBlock: z
+    .enum([
+      "run_sealed",
+      "no_host",
+      "host_revoked",
+      "host_offline",
+      "no_connection_point",
+      "pause_unavailable",
+    ])
+    .nullable(),
+  detectedAt: z.iso.datetime({ offset: true }),
+});
+export type RunNoProgressHit = z.infer<typeof RunNoProgressHit>;
+
+/**
  * `get_run_cost`: `rollup` is null until the rollup has built a row for the
  * run, which it does while the run is open; `provisional` fills that gap for
  * a wrapped run.
@@ -277,6 +310,8 @@ export const RunCost = z.object({
     })
     .nullable()
     .optional(),
+  /** Each loop that reached the no-progress limit, in the order each reached it. */
+  noProgressHits: z.array(RunNoProgressHit).optional(),
 });
 export type RunCost = z.infer<typeof RunCost>;
 
