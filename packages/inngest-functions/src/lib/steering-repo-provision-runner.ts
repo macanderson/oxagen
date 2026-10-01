@@ -10,7 +10,7 @@
 /** Whose steering repo the job provisions. */
 export interface SteeringRepoProvisionScope {
   orgId: string;
-  /** Null for the organization repository `<org>/oxagen`. */
+  /** Null for the organization repository `<org>/oxagen-config`. */
   workspaceId: string | null;
   /** The person who created the workspace or the organization. */
   actorUserId: string;

@@ -13,14 +13,20 @@ export const CODE_REPOSITORY_CHECK_NAME = "Oxagen";
 export const STEERING_ENVIRONMENT = "steering";
 /** The branch Oxagen publishes from. */
 export const STEERING_DEFAULT_BRANCH = "main";
-/** The organization's repository for `scope: organization` records: `<org>/oxagen`. */
-export const ORGANIZATION_REPO_NAME = "oxagen";
+/**
+ * The organization's repository for `scope: organization` records:
+ * `<org>/oxagen-config`. Mac chose the name on 2026-09-30 (#4877), so the
+ * repository no longer takes the plain `oxagen` name in the organization.
+ */
+export const ORGANIZATION_REPO_NAME = "oxagen-config";
 /** Every steering repo name starts with this. */
 export const STEERING_REPO_NAME_PREFIX = "oxagen-";
 
 /**
  * The name of a workspace's steering repo: `oxagen-<slug>`, then
- * `oxagen-<slug>-2`, `-3`, and so on when the name is taken.
+ * `oxagen-<slug>-2`, `-3`, and so on when the name is taken. The `config`
+ * workspace's first name is the organization's `oxagen-config`, so
+ * provisioning starts it at `oxagen-config-2`.
  */
 export function steeringRepoName(workspaceSlug: string, n = 1): string {
   if (!WORKSPACE_SLUG_PATTERN.test(workspaceSlug)) {

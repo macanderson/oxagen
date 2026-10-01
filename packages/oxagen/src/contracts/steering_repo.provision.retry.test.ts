@@ -24,8 +24,20 @@ describe("retry_steering_repo_provision contract", () => {
     expect(steeringRepoProvisionRetry.agent?.requiresApproval).toBe(true);
   });
 
-  it("takes nothing", () => {
+  it("takes nothing, or the connection a blocked setup chooses", () => {
     expect(steeringRepoProvisionRetry.input.parse({})).toEqual({});
+    const pick = { connection: { provider: "github", id: 11 } };
+    expect(steeringRepoProvisionRetry.input.parse(pick)).toEqual(pick);
+    expect(
+      steeringRepoProvisionRetry.input.safeParse({
+        connection: { provider: "bitbucket", id: 11 },
+      }).success,
+    ).toBe(false);
+    expect(
+      steeringRepoProvisionRetry.input.safeParse({
+        connection: { provider: "github", id: 11, name: "acme" },
+      }).success,
+    ).toBe(false);
     expect(steeringRepoProvisionRetry.input.safeParse({ force: true }).success).toBe(false);
   });
 

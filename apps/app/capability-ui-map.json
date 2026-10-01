@@ -671,6 +671,15 @@
       "verifiedAt": "2026-09-23",
       "verifiedBy": "session_01BgZ1geHLLuub8kPYfH8Qup"
     },
+    "import_workspace_steering": {
+      "route": "/[org]/[ws]/repositories",
+      "page": "apps/app/src/app/[org]/[ws]/repositories/[[...tab]]/page.tsx",
+      "entry": "Repositories › Steering repo › “Set up” › the setup dialog’s “Move steering” or “Create the steering repo”, shown while the workspace has no steering repo (features/steering-repo/setup-dialog.tsx, features/steering-repo/provisioning.tsx, features/steering-repo/actions.ts)",
+      "testid": "steering-repo-start",
+      "proof": "apps/app/src/features/steering-repo/setup-dialog.test.tsx",
+      "verifiedAt": "2026-09-30",
+      "verifiedBy": "steering-setup-4875"
+    },
     "link_repository": {
       "route": "/[org]/[ws]/repositories",
       "page": "apps/app/src/app/[org]/[ws]/repositories/[[...tab]]/page.tsx",

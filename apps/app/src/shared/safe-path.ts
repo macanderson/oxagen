@@ -563,6 +563,12 @@ export const routes = {
       : tab === "changes" && change !== undefined
         ? pathOf(org, ws, "repositories", tab, change)
         : pathOf(org, ws, "repositories", tab),
+  /**
+   * The Repositories page with the steering repo setup dialog open (#4875).
+   * GitHub's connect returns here, so the person lands back in the dialog.
+   */
+  steeringSetup: (org: string, ws: string): SafePath =>
+    withQuery(pathOf(org, ws, "repositories"), { setup: "steering" }),
   /** Runtimes, the hosts agents run on: a tab of the Agents page (roadmap mockups/pages/runtimes.md). */
   runtimes: (org: string, ws: string): SafePath =>
     withQuery(pathOf(org, ws, "agents"), { tab: "runtimes" }),
