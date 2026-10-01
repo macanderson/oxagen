@@ -29,13 +29,16 @@ export const importWorkspaceSteeringHandler: CapabilityHandler<
   if (!actorUserId)
     throw new HandlerError({ code: "forbidden", reason: "no_principal" });
   const scope = { orgId: ctx.orgId, workspaceId: ctx.workspaceId };
-  // A setup that stopped with choose_connection takes the person's pick
-  // before the run provisions (#4875).
-  if (input.connection) {
-    const { applyWorkspaceConnectionPick } = await import(
-      "./steering-repo/connection-pick"
-    );
-    await applyWorkspaceConnectionPick(scope, input.connection);
+  // A reset clears the stored connection, and a setup that stopped with
+  // choose_connection takes the person's pick, both before the run
+  // provisions (#4875, #4899).
+  if (input.resetConnection === true || input.connection) {
+    const { applyWorkspaceConnectionPick, resetOrganizationConnection } =
+      await import("./steering-repo/connection-pick");
+    if (input.resetConnection === true)
+      await resetOrganizationConnection(scope.orgId);
+    if (input.connection)
+      await applyWorkspaceConnectionPick(scope, input.connection);
   }
   const [{ runSteeringImport }, { steeringImportDeps }] = await Promise.all([
     import("./steering-repo/import-run"),

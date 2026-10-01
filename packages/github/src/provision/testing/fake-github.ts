@@ -137,8 +137,14 @@ const STATUS_STATES = new Set([
   "success",
 ]);
 
-/** The login a deployment made with the user token names as its creator. */
-const USER_LOGIN = "fake-owner";
+/**
+ * The login of the person who holds the user token: the creator a deployment
+ * made with it names, and what `GET /user` answers. A fake whose `org` is this
+ * login stands for that person's own account, where `POST /user/repos`
+ * creates repositories.
+ */
+export const FAKE_USER_LOGIN = "fake-owner";
+const USER_LOGIN = FAKE_USER_LOGIN;
 
 interface FakeRepo {
   id: number;
@@ -590,6 +596,19 @@ export class FakeGithub {
       handle: (c) => this.createRepo(c),
     },
     {
+      method: "POST",
+      pattern: "user/repos",
+      handle: (c) => this.createUserRepo(c),
+    },
+    {
+      method: "GET",
+      pattern: "user",
+      handle: (c) =>
+        c.who === "user"
+          ? reply(200, { login: USER_LOGIN, type: "User" })
+          : reply(403, { message: "Resource not accessible by integration" }),
+    },
+    {
       method: "GET",
       pattern: "user/installations",
       handle: (c) => this.listInstallations(c),
@@ -626,6 +645,21 @@ export class FakeGithub {
     );
     if (c.body.private === false) repo.visibility = "public";
     return reply(201, this.repoJson(repo));
+  }
+
+  /**
+   * `POST /user/repos`: a repository in the token owner's own account. Only
+   * the user token may call it, as on GitHub, and only a fake that stands for
+   * that account (`org` is the owner's login) holds the repository.
+   */
+  private createUserRepo(c: RequestContext): Reply {
+    if (c.who !== "user")
+      return reply(403, { message: "Resource not accessible by integration" });
+    if (this.org !== USER_LOGIN)
+      return reply(422, {
+        message: `The fake stands for ${this.org}, not the user's own account.`,
+      });
+    return this.createRepo({ ...c, params: { ...c.params, org: this.org } });
   }
 
   private listInstallations(c: RequestContext): Reply {

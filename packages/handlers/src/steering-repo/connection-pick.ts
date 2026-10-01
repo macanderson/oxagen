@@ -12,10 +12,20 @@ import { and, eq } from "drizzle-orm";
 import {
   pickSteeringConnection,
   readSteeringRepoState,
+  resetSteeringConnection,
   saveSteeringRepoState,
   storeChosenSteeringConnection,
   type SteeringConnectionPick,
 } from "../steering_repo.provision";
+
+/**
+ * Clear the organization's stored connection before an import provisions, so
+ * its run lists the candidates again (#4899). Refused once Oxagen has created
+ * a steering repo in the stored one.
+ */
+export async function resetOrganizationConnection(orgId: string): Promise<void> {
+  await resetSteeringConnection(orgId);
+}
 
 /** Store `pick` as the organization's steering connection, or refuse it. */
 export async function applyWorkspaceConnectionPick(

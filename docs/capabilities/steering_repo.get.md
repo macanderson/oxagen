@@ -37,7 +37,8 @@ None. The org and workspace come from the capability context.
 | `health` | `healthy`, `drifted`, `disconnected`, `diverged`, or null | the settings health from the last health read, null before the first |
 | `differences` | array | each prescribed setting that differs: `setting`, `expected`, `actual`, `changedBy`, and `changedAt` |
 | `legacySource` | `{ fullName, url, provider }` or null | the code repository that still steers the workspace through its `.oxagen/` tree. [import_workspace_steering](steering_repo.import.md) moves that steering to a steering repo when `provider` is `github`, and refuses a GitLab repository (`steering_import_provider_unsupported`) |
-| `connectionChoices` | array | the GitHub organizations and GitLab groups to choose from when setup stopped with `choose_connection`: `provider`, `id` (the installation id or the group id), and `name`. Empty otherwise |
+| `connection` | `{ provider, id, name, kind }` or null | where the organization creates its steering repos: the stored GitHub installation or GitLab group. `kind` is `user` for the owner's own personal GitHub account and `organization` otherwise. Null before one is chosen |
+| `connectionChoices` | array | the GitHub organizations, personal account, and GitLab groups to choose from when setup stopped with `choose_connection`, each shaped like `connection`. Empty otherwise |
 
 The steps, in the order provisioning runs them, are `pick_connection`, `create_repository`, `add_to_installation`, `write_first_commit`, `apply_settings`, `register_webhook`, `publish_version`, and `bind_repository`.
 
@@ -54,6 +55,10 @@ The steps, in the order provisioning runs them, are `pick_connection`, `create_r
 A workspace with no `steering_repo` state answers `status: "not_started"` with every other provisioning field null and no differences (#4875). Before #4875 it answered `provisioning`, which read the same as a setup whose job was queued. The read does not fail, because the banner that calls it sits on every page of the workspace.
 
 A workspace made before steering repos existed has no state, and its old main repository still steers it. `legacySource` names that repository. Setup for such a workspace runs through [import_workspace_steering](steering_repo.import.md), because provisioning stops with `steering_import_required` while a code repository holds the workspace's steering head.
+
+## Changing the connection
+
+Mac decided on 2026-10-01 that an owner may change the stored connection until Oxagen has created a steering repo in it (#4899). Send `resetConnection: true` to [retry_steering_repo_provision](steering_repo.provision.retry.md), or to `import_workspace_steering` for a workspace with a `legacySource`. The run lists the candidates again. The reset is refused (`connection_in_use`) once any setup of the organization recorded a repository in the stored account.
 
 ## Choosing a connection
 

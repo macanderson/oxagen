@@ -24,6 +24,7 @@ const VIEW = {
     },
   ],
   legacySource: null,
+  connection: null,
   connectionChoices: [],
 } as const;
 
@@ -75,6 +76,12 @@ describe("get_steering_repo contract", () => {
         url: "https://github.com/acme/platform",
         provider: "github",
       },
+      connection: {
+        provider: "github",
+        id: 11,
+        name: "oxageninc-old",
+        kind: "organization",
+      },
       connectionChoices: [],
     };
     expect(steeringRepoGet.output.parse(none)).toEqual(none);
@@ -91,16 +98,20 @@ describe("get_steering_repo contract", () => {
       publishedVersion: null,
       health: null,
       differences: [],
+      connection: null,
       connectionChoices: [
-        { provider: "github", id: 11, name: "acme" },
-        { provider: "gitlab", id: 22, name: "acme/platform" },
+        { provider: "github", id: 11, name: "acme", kind: "organization" },
+        { provider: "github", id: 12, name: "octocat", kind: "user" },
+        { provider: "gitlab", id: 22, name: "acme/platform", kind: "organization" },
       ],
     };
     expect(steeringRepoGet.output.parse(blocked)).toEqual(blocked);
     expect(
       steeringRepoGet.output.safeParse({
         ...blocked,
-        connectionChoices: [{ provider: "github", id: 0, name: "acme" }],
+        connectionChoices: [
+          { provider: "github", id: 0, name: "acme", kind: "organization" },
+        ],
       }).success,
     ).toBe(false);
   });

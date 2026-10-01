@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   ),
   deps: vi.fn((options: unknown) => ({ deps: options })),
   pick: vi.fn(async (_scope: unknown, _pick: unknown): Promise<void> => {}),
+  reset: vi.fn(async (_orgId: unknown): Promise<void> => {}),
 }));
 
 vi.mock("./lib/capability-role-guard", () => ({
@@ -28,6 +29,7 @@ vi.mock("./steering-repo/import-deps", () => ({
 }));
 vi.mock("./steering-repo/connection-pick", () => ({
   applyWorkspaceConnectionPick: mocks.pick,
+  resetOrganizationConnection: mocks.reset,
 }));
 
 import { importWorkspaceSteeringHandler } from "./steering_repo.import";
@@ -45,6 +47,8 @@ beforeEach(() => {
   mocks.run.mockResolvedValue({ outcome: "imported" });
   mocks.pick.mockReset();
   mocks.pick.mockResolvedValue(undefined);
+  mocks.reset.mockReset();
+  mocks.reset.mockResolvedValue(undefined);
 });
 
 describe("import_workspace_steering handler", () => {
@@ -78,6 +82,15 @@ describe("import_workspace_steering handler", () => {
     );
     mocks.pick.mockClear();
     await run();
+    expect(mocks.pick).not.toHaveBeenCalled();
+  });
+
+  it("clears the stored connection before the run when asked", async () => {
+    await run({ resetConnection: true });
+    expect(mocks.reset).toHaveBeenCalledWith("org_1");
+    expect(mocks.reset.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.run.mock.invocationCallOrder[0] as number,
+    );
     expect(mocks.pick).not.toHaveBeenCalled();
   });
 

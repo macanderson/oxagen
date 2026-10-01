@@ -6,6 +6,7 @@
 // dependency factory has its own test in steering_repo.provision.deps.test.ts.
 import * as gh from "@oxagen/github/provision";
 import {
+  FAKE_USER_LOGIN,
   FakeGithub,
   type FakeGithubOptions,
 } from "@oxagen/github/provision/testing";
@@ -27,8 +28,11 @@ import { steeringHookTarget } from "./lib/steering-hook";
 import {
   FIRST_COMMIT_MESSAGE,
   initialSteeringRepoState,
+  GITHUB_PLAN_REQUIRED,
   isSteeringRepoStep,
   pickSteeringConnection,
+  REPOSITORY_CREATE_REFUSED,
+  repositoryOnConnection,
   provisionSteeringRepo,
   readSteeringConnection,
   readSteeringRepoState,
@@ -100,6 +104,7 @@ const GITHUB_CONNECTION: SteeringConnection = {
   provider: "github",
   installation_id: 77,
   account_login: ORG,
+  account_type: "Organization",
 };
 const GITLAB_CONNECTION: SteeringConnection = {
   provider: "gitlab",
@@ -1888,5 +1893,183 @@ describe("the first steering version (#4732)", () => {
     const { publishFirst: _unused, ...deps } = h.deps();
     expect(await provisionSteeringRepo(deps, WS)).toBe("ready");
     expect(h.firstPublishes).toEqual([]);
+  });
+});
+
+// ── Personal accounts and refused creates (#4899) ────────────────────────────
+
+describe("a personal GitHub account", () => {
+  const personalFake = () =>
+    new FakeGithub({
+      org: FAKE_USER_LOGIN,
+      app: APP,
+      user_installations: [
+        {
+          id: 78,
+          account_login: FAKE_USER_LOGIN,
+          account_type: "User",
+          repository_selection: "selected",
+        },
+      ],
+    });
+  const PERSONAL: SteeringConnection = {
+    provider: "github",
+    installation_id: 78,
+    account_login: FAKE_USER_LOGIN,
+    account_type: "User",
+  };
+
+  it("is a candidate when it is the owner's own account", async () => {
+    const h = new Harness(personalFake(), null);
+    await runSteeringRepoStep(h.deps(), WS, "pick_connection");
+    expect(h.savedConnections).toEqual([PERSONAL]);
+  });
+
+  it("is skipped when it belongs to someone else (negative)", async () => {
+    const hub = githubFake({
+      user_installations: [
+        {
+          id: 79,
+          account_login: "someone-else",
+          account_type: "User",
+          repository_selection: "selected",
+        },
+      ],
+    });
+    const h = new Harness(hub, null);
+    const err = await stepError(h.deps(), WS, "pick_connection");
+    expect(err).toMatchObject({ code: "no_connection" });
+    expect(h.savedConnections).toEqual([]);
+  });
+
+  it("gets its repository from the owner's token on /user/repos", async () => {
+    const hub = personalFake();
+    const h = new Harness(hub, null);
+    h.connections.set("org_1", PERSONAL);
+    await runSteeringRepoStep(h.deps(), WS, "pick_connection");
+    await runSteeringRepoStep(h.deps(), WS, "create_repository");
+    expect(githubRepo(hub, "oxagen-support")).toBeDefined();
+    expect(h.state(WS)?.repository).toMatchObject({
+      owner: FAKE_USER_LOGIN,
+      name: "oxagen-support",
+    });
+  });
+
+  it("asks the owner to authorize again when no owner token is stored", async () => {
+    const h = new Harness(personalFake(), null);
+    h.connections.set("org_1", PERSONAL);
+    h.userToken = false;
+    await runSteeringRepoStep(h.deps(), WS, "pick_connection");
+    const err = await stepError(h.deps(), WS, "create_repository");
+    expect(err).toMatchObject({ code: REAUTHORIZE });
+  });
+});
+
+describe("a refused create", () => {
+  it("stops with repository_create_refused and GitHub's message, not a taken name", async () => {
+    const hub = githubFake();
+    const h = new Harness(hub, null);
+    h.connections.set("org_1", GITHUB_CONNECTION);
+    await runSteeringRepoStep(h.deps(), WS, "pick_connection");
+    hub.failNext({
+      method: "POST",
+      path: "/orgs/acme/repos",
+      status: 422,
+      message:
+        "Due to policy, you are not permitted to perform that operation on this repository.",
+    });
+    const err = await stepError(h.deps(), WS, "create_repository");
+    expect(err).toMatchObject({
+      code: REPOSITORY_CREATE_REFUSED,
+      isNonRetriable: true,
+    });
+    expect((err as Error).message).toContain("GitHub refused to create a repository in acme");
+    expect((err as Error).message).toContain("Due to policy");
+    expect(h.state(WS)).toMatchObject({
+      status: "blocked",
+      failed_step: "create_repository",
+      error: { code: REPOSITORY_CREATE_REFUSED },
+    });
+  });
+
+  it("still reads every name taken as repository_name_taken", async () => {
+    const hub = githubFake();
+    for (let n = 1; n <= 20; n++)
+      hub.seedRepository({
+        name: n === 1 ? "oxagen-support" : `oxagen-support-${n}`,
+        description: "Someone else's.",
+      });
+    const h = new Harness(hub, null);
+    const err = await runUntilStopped(h.deps(), WS);
+    expect(err).toMatchObject({ code: "repository_name_taken" });
+  });
+});
+
+describe("prescribed settings on a GitHub plan that cannot protect branches", () => {
+  it("stops with github_plan_required", async () => {
+    const hub = githubFake();
+    const h = new Harness(hub, null);
+    h.connections.set("org_1", GITHUB_CONNECTION);
+    const deps = h.deps();
+    for (const step of [
+      "pick_connection",
+      "create_repository",
+      "add_to_installation",
+      "write_first_commit",
+    ] as const)
+      await runSteeringRepoStep(deps, WS, step);
+    hub.failNext({
+      method: "POST",
+      path: "/rulesets",
+      status: 403,
+      message:
+        "Upgrade to GitHub Pro or make this repository public to enable this feature.",
+    });
+    const err = await stepError(deps, WS, "apply_settings");
+    expect(err).toMatchObject({ code: GITHUB_PLAN_REQUIRED });
+    expect((err as Error).message).toContain("Upgrade the account to GitHub Pro");
+  });
+});
+
+describe("repositoryOnConnection", () => {
+  const repo = (owner: string): SteeringRepository => ({
+    id: 1,
+    owner,
+    name: "oxagen-support",
+    full_name: `${owner}/oxagen-support`,
+    initial_branch: "main",
+  });
+  const state = (
+    provider: "github" | "gitlab",
+    owner: string | null,
+  ): SteeringRepoState => ({
+    ...initialSteeringRepoState(NOW),
+    provider,
+    repository: owner === null ? null : repo(owner),
+  });
+
+  it("finds a repository a setup made in the connected account", () => {
+    expect(
+      repositoryOnConnection(GITHUB_CONNECTION, [
+        null,
+        state("github", null),
+        state("github", "ACME"),
+      ]),
+    ).toMatchObject({ full_name: "ACME/oxagen-support" });
+    expect(
+      repositoryOnConnection(GITLAB_CONNECTION, [state("gitlab", `${ORG}/steering`)]),
+    ).toMatchObject({ owner: `${ORG}/steering` });
+  });
+
+  it("finds none in another account or on another host (negative)", () => {
+    expect(
+      repositoryOnConnection(GITHUB_CONNECTION, [
+        state("github", "acme-old"),
+        state("gitlab", ORG),
+      ]),
+    ).toBeNull();
+    expect(
+      repositoryOnConnection(GITLAB_CONNECTION, [state("gitlab", `${ORG}x`)]),
+    ).toBeNull();
   });
 });
