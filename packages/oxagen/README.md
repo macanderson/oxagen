@@ -91,12 +91,11 @@ handlers and installs no gate.
   `./mandates/schemas`, `./mandates/schemas.sample` (test data),
   `./approval-rules/schemas`, `./tacho/schemas`, `./tacho/command-limits`,
   `./skill-frontmatter`, `./skills`, `./configuration-clone`,
-  `./agent-version-config`, `./avatar`, and
+  `./agent-version-config`, `./avatar`, `./run-outcomes`, and
   `./lib/relationship-type-pattern`.
 - Credential and principal helpers: `./platform-operator`, `./agent-credential`,
   `./cli-session`, `./ledger-run-token`, and `./client-ip`.
-- Settings vocabularies: `./run-outcomes`, `./run-enrichment`, and
-  `./context-record-label`.
+- Settings vocabularies: `./run-enrichment` and `./context-record-label`.
 - `./interactive-agent` (`src/interactive-agent.ts`): the `qa-chat` agent
   definition shared by the MCP server and the in-app Q&A surface.
 

@@ -1006,15 +1006,6 @@ export function runSource(reads: RunReads) {
     },
     runs: {
       list: refuse,
-      outcomesSettings: () =>
-        Promise.resolve(
-          readOk({
-            customerEnabled: false,
-            platformDisabled: false,
-            platformDisabledReason: null,
-            effectiveEnabled: false,
-          }),
-        ),
       work: (_ctx, runId) =>
         typeof reads.work === "function"
           ? reads.work()
