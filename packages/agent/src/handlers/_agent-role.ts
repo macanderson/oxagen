@@ -128,6 +128,8 @@ export interface AgentRoleAgentRow {
   principalId: string | null;
   /** `draft`, `active`, or `archived` (the column is text with a check constraint). */
   status: string;
+  /** `agent.agents.agent_type`; `assign_agent_role` refuses a managed agent by it. */
+  agentType: string;
 }
 
 /**
@@ -158,6 +160,7 @@ export async function resolveAgentForRoles(
       slug: schema.agents.slug,
       principalId: schema.agents.principalId,
       status: schema.agents.status,
+      agentType: schema.agents.agentType,
     })
     .from(schema.agents)
     .where(

@@ -17,6 +17,7 @@ import {
   type ExternalRefusalCode,
   type KernelSecurityOutcome,
 } from "@oxagen/oxagen/kernel";
+import { isOxagenAssistantCall } from "@oxagen/oxagen/oxagen-assistant";
 import {
   type AgentRunIAMResolution,
   type EffectiveMcpScope,
@@ -55,6 +56,7 @@ import {
 } from "./plugin-type";
 import { getOxagenRegistry, type RegistryCapability } from "../registry-loader";
 import {
+  assistantOwnSwitches,
   createKillSwitchGate,
   KillSwitchDeniedError,
   readClassificationIndex,
@@ -224,9 +226,9 @@ export interface MaterializeOptions {
   capabilitiesOnly?: boolean;
   /**
    * False skips the `tool_invocations` row each call writes, which feeds the
-   * workspace's "calls 30d" count. The in-app assistant's turn passes false
-   * on every adapter, a turn an API key starts included, because the
-   * workspace does not monitor Stella (ADR-235). Absent or true keeps the row.
+   * workspace's "calls 30d" count. The in-app assistant's turn passes false,
+   * because the workspace does not monitor Stella (ADR-235). Absent or true
+   * keeps the row.
    */
   feedsWorkspaceToolCounts?: boolean;
   /**
@@ -705,7 +707,11 @@ export async function materializeTools(
   // read, because it lists no capability tools at all. This runs inside the
   // caller's tenant scope (every caller wraps materializeTools in
   // runInTenantScope).
-  const emergencyDenies = agentRunFailClosed
+  // A call of Oxagen's in-app assistant answers only to the assistant's own
+  // switch, which only Oxagen sets (ADR-235). Every other deny is the
+  // customer's configuration, so the belt drops it here, the same rows the
+  // per-call gate drops (`assistantOwnSwitches`).
+  const readDenies = agentRunFailClosed
     ? []
     : await withTenantDb((tx) =>
         readActiveEmergencyDenies(tx, {
@@ -713,6 +719,9 @@ export async function materializeTools(
           workspaceId: ctx.workspaceId || null,
         }),
       );
+  const emergencyDenies = isOxagenAssistantCall(ctx)
+    ? assistantOwnSwitches(readDenies, opts.actingAgent?.agentId ?? null)
+    : readDenies;
   // The facts a `resource_scope` deny matches on, built the way the per-call
   // gate builds them (#4218): the org, the workspace, the operator
   // (`ctx.userId`), and the agent (the run's, else the one the turn acts as).
@@ -882,6 +891,18 @@ export async function materializeTools(
               ) {
                 throw new ApprovalResumeError("input_invalid");
               }
+              // A parked row names the turn's run, and the run's in-app
+              // surface is what keeps the row off Fleet and lets only the
+              // person who asked answer it (ADR-235). A turn whose run is not
+              // open yet cannot park: the row would land on the workspace's
+              // queue.
+              if (
+                opts.approvalMode === "park" &&
+                opts.runIdRef !== undefined &&
+                opts.runIdRef.current === null
+              ) {
+                throw new ApprovalResumeError("run_not_open");
+              }
               const approval = await runInTenantScope(
                 { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
                 () =>
@@ -964,10 +985,10 @@ export async function materializeTools(
             // this call's ledger row by it (ADR-165): a retried tool call bills
             // once. Without an id the context goes through unchanged.
             const toolCallId = modelToolCallId(options);
-            // A workspace decision rule no longer parks a call here. The
-            // in-app turn is the one `park` caller, and its calls skip the
-            // rules (ADR-235). A turn an API key starts keeps them, and its
-            // calls cannot park, so a rule's refusal ends the call.
+            // A workspace decision rule never parks a call here. The in-app
+            // turn is the one `park` caller, and every call it makes skips
+            // the rules (ADR-235). A rule's refusal from any other caller
+            // ends the call.
             const result = await invoke(
               cap.name,
               input,

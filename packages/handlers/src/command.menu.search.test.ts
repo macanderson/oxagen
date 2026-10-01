@@ -21,11 +21,15 @@ vi.mock("@oxagen/database", () => {
         orgId: "orgId",
         workspaceId: "workspaceId",
         publicId: "publicId",
+        agentId: "agentId",
         status: "status",
         createdAt: "createdAt",
         deletedAt: "deletedAt",
       },
       agents: {
+        id: "id",
+        agentType: "agentType",
+        principalId: "principalId",
         orgId: "orgId",
         workspaceId: "workspaceId",
         publicId: "publicId",
@@ -35,6 +39,7 @@ vi.mock("@oxagen/database", () => {
         deletedAt: "deletedAt",
       },
       principals: {
+        id: "principalRowId",
         orgId: "orgId",
         publicId: "publicId",
         displayName: "displayName",
@@ -57,12 +62,18 @@ vi.mock("drizzle-orm", () => ({
   isNull: (a: unknown) => ({ isNull: a }),
   ne: (a: unknown, b: unknown) => ({ ne: [a, b] }),
   or: (...args: unknown[]) => ({ or: args }),
+  // The run arm's assistant exclusion is a raw fragment (ADR-235).
+  sql: (strings: TemplateStringsArray, ...values: unknown[]) => ({
+    sql: strings.join("?"),
+    values,
+  }),
 }));
 
 vi.mock("./logger", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
+import { createOxagenAssistantBinding } from "@oxagen/oxagen/oxagen-assistant";
 import { commandMenuSearchHandler } from "./command.menu.search";
 
 const ctx: CapabilityContext = {
@@ -325,5 +336,217 @@ describe("commandMenuSearchHandler", () => {
     );
     expect(result.rows.length).toBeGreaterThanOrEqual(1);
     expect(result.rows.length).toBeLessThanOrEqual(8);
+  });
+});
+
+// ADR-235: each turn of the in-app assistant records an execution under the
+// workspace's managed `interactive_chat` agent. That record is internal, so
+// only the assistant itself finds it.
+describe("commandMenuSearchHandler: the in-app assistant's executions", () => {
+  /** The NOT EXISTS fragment the run arm adds, as the `sql` mock records it. */
+  function isAssistantExclusion(cond: unknown): boolean {
+    if (typeof cond !== "object" || cond === null || !("sql" in cond))
+      return false;
+    const fragment = cond as { sql: string; values: unknown[] };
+    return (
+      fragment.sql.startsWith("not exists") &&
+      fragment.values.includes("interactive_chat")
+    );
+  }
+
+  /**
+   * A fake tx that records the run query's WHERE and applies the exclusion
+   * the way Postgres would: a row whose agent is `interactive_chat` drops out
+   * when the WHERE carries the fragment.
+   */
+  function setupRuns(
+    rows: Array<{ publicId: string; status: string; agentType: string }>,
+  ) {
+    const wheres: Array<{ and: unknown[] }> = [];
+    mockWithTenantDb.mockImplementation(
+      async (fn: (tx: unknown) => Promise<unknown>) => {
+        let where: { and: unknown[] } = { and: [] };
+        const tx = {
+          select: () => tx,
+          from: () => tx,
+          where: (cond: { and: unknown[] }) => {
+            where = cond;
+            wheres.push(cond);
+            return tx;
+          },
+          orderBy: () => tx,
+          limit: () => {
+            const hides = where.and.some(isAssistantExclusion);
+            return Promise.resolve(
+              rows
+                .filter((r) => !(hides && r.agentType === "interactive_chat"))
+                .map((r) => ({
+                  publicId: r.publicId,
+                  status: r.status,
+                  createdAt: new Date(),
+                })),
+            );
+          },
+        };
+        return fn(tx);
+      },
+    );
+    return wheres;
+  }
+
+  const runs = () => [
+    { publicId: "aex_custom", status: "completed", agentType: "custom" },
+    {
+      publicId: "aex_assistant",
+      status: "completed",
+      agentType: "interactive_chat",
+    },
+  ];
+  const input = {
+    kind: "run" as const,
+    query: "aex",
+    orgSlug: "acme",
+    workspaceSlug: "prod",
+  };
+
+  it("leaves the assistant's executions out for a caller without its binding", async () => {
+    const wheres = setupRuns(runs());
+    const result = await commandMenuSearchHandler(input, ctx);
+    expect(result.rows.map((r) => r.id)).toEqual(["aex_custom"]);
+    expect(wheres).toHaveLength(1);
+    expect(wheres[0]!.and.some(isAssistantExclusion)).toBe(true);
+  });
+
+  it("finds the assistant's own executions when the call carries its binding", async () => {
+    const wheres = setupRuns(runs());
+    const result = await commandMenuSearchHandler(input, {
+      ...ctx,
+      oxagenAssistant: createOxagenAssistantBinding({
+        requestId: ctx.requestId,
+      }),
+    });
+    expect(result.rows.map((r) => r.id)).toEqual([
+      "aex_custom",
+      "aex_assistant",
+    ]);
+    expect(wheres[0]!.and.some(isAssistantExclusion)).toBe(false);
+  });
+});
+
+// ADR-235: the workspace's managed assistant agent and the service principal
+// it acts as are Oxagen's, so the menu offers neither.
+describe("commandMenuSearchHandler: the assistant agent and its principal", () => {
+  /** The WHERE each query built, and a fake that applies it to `rows`. */
+  function setupRows<T extends Record<string, unknown>>(
+    rows: T[],
+    hidden: (where: { and: unknown[] }, row: T) => boolean,
+  ) {
+    const wheres: Array<{ and: unknown[] }> = [];
+    mockWithTenantDb.mockImplementation(
+      async (fn: (tx: unknown) => Promise<unknown>) => {
+        let where: { and: unknown[] } = { and: [] };
+        const tx = {
+          select: () => tx,
+          from: () => tx,
+          where: (cond: { and: unknown[] }) => {
+            where = cond;
+            wheres.push(cond);
+            return tx;
+          },
+          orderBy: () => tx,
+          limit: () =>
+            Promise.resolve(rows.filter((row) => !hidden(where, row))),
+        };
+        return fn(tx);
+      },
+    );
+    return wheres;
+  }
+
+  /** The NOT EXISTS fragment that ties a principal to an assistant agent. */
+  function isAssistantPrincipalExclusion(cond: unknown): boolean {
+    if (typeof cond !== "object" || cond === null || !("sql" in cond))
+      return false;
+    const fragment = cond as { sql: string; values: unknown[] };
+    return (
+      fragment.sql.startsWith("not exists") &&
+      fragment.values.includes("principalId") &&
+      fragment.values.includes("principalRowId") &&
+      fragment.values.includes("interactive_chat")
+    );
+  }
+
+  it("leaves the managed assistant agent out and keeps an ordinary agent", async () => {
+    const wheres = setupRows(
+      [
+        {
+          publicId: "agt_ops",
+          name: "Ops agent",
+          status: "active",
+          agentType: "custom",
+        },
+        {
+          publicId: "agt_assistant",
+          name: "QA Chat Agent",
+          status: "active",
+          agentType: "interactive_chat",
+        },
+      ],
+      (where, row) =>
+        where.and.some(
+          (c) =>
+            JSON.stringify(c) ===
+            JSON.stringify({ ne: ["agentType", "interactive_chat"] }),
+        ) && row.agentType === "interactive_chat",
+    );
+
+    const result = await commandMenuSearchHandler(
+      { kind: "agent", query: "a", orgSlug: "acme", workspaceSlug: "prod" },
+      ctx,
+    );
+
+    expect(result.rows.map((r) => r.id)).toEqual(["agt_ops"]);
+    expect(wheres).toHaveLength(1);
+    expect(wheres[0]!.and).toContainEqual({
+      ne: ["agentType", "interactive_chat"],
+    });
+  });
+
+  it("leaves the assistant's service principal out and keeps an ordinary principal", async () => {
+    const wheres = setupRows(
+      [
+        {
+          publicId: "prn_alice",
+          displayName: "Alice",
+          kind: "human",
+          status: "active",
+          linkedAgentType: null,
+        },
+        {
+          publicId: "prn_assistant",
+          displayName: "oxagen.assistant",
+          kind: "service",
+          status: "active",
+          linkedAgentType: "interactive_chat",
+        },
+      ],
+      (where, row) =>
+        where.and.some(isAssistantPrincipalExclusion) &&
+        row.linkedAgentType === "interactive_chat",
+    );
+
+    const result = await commandMenuSearchHandler(
+      {
+        kind: "principal",
+        query: "a",
+        orgSlug: "acme",
+        workspaceSlug: "prod",
+      },
+      ctx,
+    );
+
+    expect(result.rows.map((r) => r.id)).toEqual(["prn_alice"]);
+    expect(wheres).toHaveLength(1);
+    expect(wheres[0]!.and.some(isAssistantPrincipalExclusion)).toBe(true);
   });
 });

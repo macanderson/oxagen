@@ -7,7 +7,9 @@
 //
 // A signed-in member only: `requireSessionUser` refuses every API-key caller
 // (a worker holds API keys and must not learn which witness failed), and
-// `assertOrgRole` refuses anyone outside the org's members.
+// `assertOrgRole` refuses anyone outside the org's members. An in-app run
+// answers as an unknown id does, with no witness, to everyone but the person
+// who asked (ADR-235, item 5).
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import {
   runProofGet,
@@ -30,6 +32,7 @@ import {
   readRunProof,
   requireSessionUser,
 } from "./lib/proof";
+import { canReadRunId, type InAppRunReadDeps } from "./lib/run-read";
 import { cost, readRunTotalsByIds } from "./spend.shared";
 
 type Witness = RunProofGetOutput["witnesses"][number];
@@ -42,7 +45,7 @@ const attestationSchema = z
   .object({ key_id: z.string(), signature: z.string() })
   .strict();
 
-export type RunProofDeps = {
+export type RunProofDeps = InAppRunReadDeps & {
   readRunProof: (scope: ProofScope, runId: string) => Promise<ProofRecord>;
   readRunTotalsByIds: typeof readRunTotalsByIds;
 };
@@ -85,12 +88,22 @@ export function createRunProofHandler(
 ): CapabilityHandler<typeof runProofGet> {
   return async (input, ctx): Promise<RunProofGetOutput> => {
     requireSessionUser(ctx);
+    const actingUserId = await resolveActingUserId(ctx);
     await assertOrgRole(
-      { ...ctx, userId: await resolveActingUserId(ctx) },
+      { ...ctx, userId: actingUserId },
       { org: ["Owner", "Admin", "Member"], workspace: ["Owner", "Member"] },
     );
     const scope = { orgId: ctx.orgId, workspaceId: ctx.workspaceId };
-    const record = await deps.readRunProof(scope, input.runId);
+    const [read, readable] = await Promise.all([
+      deps.readRunProof(scope, input.runId),
+      canReadRunId(ctx, input.runId, {
+        readLedgerRun: deps.readLedgerRun,
+        actingUserId: async () => actingUserId,
+      }),
+    ]);
+    // A run the caller may not read answers as an unknown id does: no
+    // witness, and the workspace's grain.
+    const record = readable ? read : { ...read, attempts: [], witnesses: [] };
 
     const identities = new Map(record.witnesses.map((w) => [w.witnessId, w]));
     const byWitness = new Map<string, Witness>();

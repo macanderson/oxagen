@@ -20,6 +20,10 @@ Prefer `debug_execution` over reading raw logs or the full
 you need the fix site. Use `agent.trace.get` for a successful run's full tree and
 [`agent.execution.list`](agent.execution.list.md) to find runs.
 
+The read leaves out the in-app assistant's executions for every caller except
+the assistant itself, so asking for one answers `execution_not_found`
+([ADR-235](../adr/ADR-235-workspaces-do-not-govern-or-monitor-stella.md)).
+
 ## How it composes (deterministic-first)
 
 1. **Postgres span tree** — reuses `agent.trace.get` for the related spans and

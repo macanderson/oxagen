@@ -5,9 +5,11 @@
  * order the gates run in is decided once:
  *
  *   the assistant's kill switch → funding source → credit gate → model → the
- *   conversation and the person's message → tools, prompt, recalled memory,
- *   budget → the run admitted in the ledger → the engine drives the turn →
- *   the reply persisted.
+ *   conversation and the person's message → tools and prompt → the run
+ *   admitted in the ledger → the engine drives the turn → the reply persisted.
+ *
+ * The customer's workspace governs none of it (ADR-235): no decision rule,
+ * steering, recalled memory, or customer-configured budget reaches the turn.
  *
  * `prepareAssistantTurn` runs the role gate and the first four and refuses
  * before anything is written, which is what lets the SSE route answer the
@@ -33,18 +35,8 @@ import {
   type StreamAgentReplyArgs,
 } from "@oxagen/ai";
 import {
-  createTurnBudgetGuard,
   evaluateTurnCreditGate,
-  formatBudgetUsd,
-  governedBudgetFromRead,
-  resolveEffectiveTurnBudget,
-  resolveTurnBudgetPolicy,
-  turnBudgetPolicyFromSaved,
-  TURN_BUDGET_OFF,
   type CreditGateDenyCode,
-  type RequestTurnBudget,
-  type SavedWorkspaceGovernance,
-  type TurnBudgetPolicy,
 } from "@oxagen/billing";
 import { schema, withTenantDb } from "@oxagen/database";
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
@@ -58,22 +50,18 @@ import {
   type AssistantParkedCard,
   type AssistantToolCall,
 } from "@oxagen/oxagen/contracts/assistant.ask";
-import { budgetPolicyRead } from "@oxagen/oxagen/contracts/budget.policy.read";
 import {
   chatMessageExecution,
   type ChatMessageExecutionInput,
 } from "@oxagen/oxagen/contracts/chat.message.execution";
-import { workspaceBudgetPolicyRead } from "@oxagen/oxagen/contracts/workspace.budget_policy.read";
 import { INTERACTIVE_AGENT_CAPABILITIES } from "@oxagen/oxagen/interactive-agent";
 import { sessionSubject } from "@oxagen/oxagen/tacho/session-subject";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { and, eq, isNull } from "drizzle-orm";
 import pino from "pino";
 import { buildChatSystemPrompt } from "../system-prompt";
-import { createApprovalRequest, waitForApproval } from "./approval";
 import { ASSISTANT_MESSAGE_STOPPED } from "./assistant-message-status";
 import { projectRunContextWindows } from "../dispatch/context-projection";
-import { recallWorkspaceMemoryMessage } from "./assistant-recall";
 import { toolCallsFromReceipts } from "./assistant-tool-calls";
 import {
   assistantSystemPrompt,
@@ -123,10 +111,6 @@ const logger = pino({
  * turn as one summary (`history-summary.ts`).
  */
 const HISTORY_LIMIT = 50;
-/** How long a "prompt"-mode budget approval waits on a person. */
-const BUDGET_APPROVAL_TTL_MS = 5 * 60 * 1000;
-/** The capability name the budget-continue approval is filed under. */
-const BUDGET_CONTINUE_CAPABILITY = "budget.turn.continue";
 
 /** The roles `ask_assistant` grants, read from its contract (INV-29). */
 const ASSISTANT_ROLES = {
@@ -168,14 +152,6 @@ export interface AssistantTurnRequest {
   tier?: "fast" | "balanced" | "precise" | null;
   model?: string | null;
   effort?: "low" | "medium" | "high" | null;
-  budget?: RequestTurnBudget | null;
-}
-
-export interface BudgetNotice {
-  state: "within_grace" | "stopped";
-  costUsd: number;
-  limitUsd: number;
-  mode: string;
 }
 
 /** What a streaming surface listens to while the turn runs. */
@@ -183,7 +159,6 @@ export interface AssistantTurnHooks {
   /** Every AI-SDK-shaped part of the turn, as the translators read them. */
   onPart?: (part: unknown) => void;
   onApprovalRequired?: (event: ApprovalRequiredEvent) => void;
-  onBudgetNotice?: (notice: BudgetNotice) => void;
   /** The run the turn was admitted as, before the engine is asked anything. */
   onRun?: (run: { runId: string }) => void;
   /**
@@ -274,23 +249,21 @@ export interface PreparedAssistantTurn {
 }
 
 /**
- * The binding that marks every call of this turn as Stella's, so the kernel
- * skips the workspace's decision rules for it (ADR-235), or nothing.
+ * The binding that marks every call of this turn as Stella's (ADR-235).
+ *
+ * Every turn gets one, whichever door it came through: the app's session, an
+ * API key, or MCP. The customer does not govern Oxagen's in-app assistant
+ * from any entry point (Mac's ruling of 2026-10-01). The person's own IAM
+ * check still bounds what the turn may do for them.
  *
  * It is minted here and never taken from the request, so a context an
- * adapter hands in cannot bring its own. A turn a person starts from a
- * session gets one. A turn an API key starts does not: the key's holder may
- * be an automation, and a binding there would let it route an action a
- * workspace rule refuses on the API through Stella instead. Such a turn keeps
- * the rules, as its parked writes already fall back to a refusal
- * (`unsupported_requester_context`, materialize-tools.ts).
+ * adapter hands in cannot bring its own.
  *
  * Exported for its own test.
  */
 export function assistantBindingFor(
-  adapterCtx: Pick<CapabilityContext, "apiKeyId" | "requestId">,
-): Pick<CapabilityContext, "oxagenAssistant"> {
-  if (adapterCtx.apiKeyId) return {};
+  adapterCtx: Pick<CapabilityContext, "requestId">,
+): Required<Pick<CapabilityContext, "oxagenAssistant">> {
   return {
     oxagenAssistant: createOxagenAssistantBinding({
       requestId: adapterCtx.requestId,
@@ -528,18 +501,16 @@ async function runPreparedTurn(
 
   const parked: AssistantParkedCard[] = [];
   const onApprovalRequired = (event: ApprovalRequiredEvent): void => {
-    if (event.capability !== BUDGET_CONTINUE_CAPABILITY) {
-      parked.push({
-        // The contract promises the public id (`apr_…`): it is the id the
-        // flyout matches against `list_approvals` and
-        // `list_resolved_approvals`, and the one Fleet shows. Every writer
-        // that parks a call returns one. The event type leaves it optional,
-        // so the row uuid stands in rather than an empty id.
-        approvalId: event.approvalPublicId ?? event.approvalId,
-        capability: event.capability,
-        expiresAt: event.expiresAt,
-      });
-    }
+    parked.push({
+      // The contract promises the public id (`apr_…`): it is the id the
+      // flyout matches against `list_approvals` and
+      // `list_resolved_approvals`. Every writer that parks a call returns
+      // one. The event type leaves it optional, so the row uuid stands in
+      // rather than an empty id.
+      approvalId: event.approvalPublicId ?? event.approvalId,
+      capability: event.capability,
+      expiresAt: event.expiresAt,
+    });
     hooks.onApprovalRequired?.(event);
   };
 
@@ -557,11 +528,10 @@ async function runPreparedTurn(
   //
   // `runIdRef` is filled in once `openAssistantRun` opens the run below.
   // Every materialized tool's `execute` closure reads it at call time, so a
-  // parked approval attaches to this turn's run (finding 9). The budget
-  // pause's approval reads it the same way, when the pause fires.
+  // parked approval attaches to this turn's run (finding 9).
   const runIdRef: { current: string | null } = { current: null };
 
-  const [materialised, recalledMemory] = await inScope(() =>
+  const [materialised] = await inScope(() =>
     Promise.all([
       materializeTools(capCtx, {
         runIdRef,
@@ -580,9 +550,7 @@ async function runPreparedTurn(
         // agents, so none is connected, listed, or given a credential here.
         capabilitiesOnly: true,
         // The workspace does not monitor Stella (ADR-235), so its calls stay
-        // out of the tool registry's "calls 30d". This holds for a turn an API
-        // key starts too, which keeps the workspace's rules but not its
-        // monitoring.
+        // out of the tool registry's "calls 30d".
         feedsWorkspaceToolCounts: false,
         // `search_tools` and `load_tools` exist twice: as capability contracts
         // for the API and MCP surfaces, and as the belt's meta-tools. Both
@@ -597,11 +565,6 @@ async function runPreparedTurn(
         onApprovalRequired,
         approvalMode: "park",
       }),
-      recallWorkspaceMemoryMessage({
-        query: request.content,
-        executionRef: messageId,
-        ctx: capCtx,
-      }),
     ]),
   );
   hooks.onTools?.(materialised.nameMap);
@@ -611,59 +574,10 @@ async function runPreparedTurn(
   // reads neither, and the manifest the run records below names no item.
   const steering = noWorkspaceSteering(scope);
 
-  const budgetPolicy = await resolveBudgetPolicy(request, capCtx);
-  // What the turn spent before the engine's first step: the history summary,
-  // set once it resolves below (#4228). The guard reads it on every tick, so
-  // the per-turn budget covers the summary, priced on the summary's model.
-  const openingCost = { usd: 0 };
-  const budgetGuard = createTurnBudgetGuard(budgetPolicy, p.modelId, {
-    openingCostUsd: () => openingCost.usd,
-    onWithinGrace: (verdict) =>
-      hooks.onBudgetNotice?.({
-        state: "within_grace",
-        costUsd: verdict.costUsd,
-        limitUsd: verdict.limitUsd,
-        mode: verdict.mode,
-      }),
-    onStop: (verdict) =>
-      hooks.onBudgetNotice?.({
-        state: "stopped",
-        costUsd: verdict.costUsd,
-        limitUsd: verdict.limitUsd,
-        mode: verdict.mode,
-      }),
-    // "prompt" mode reuses the approval machinery: one pause protocol.
-    onPause: async (verdict) => {
-      const inputPreview = {
-        costUsd: verdict.costUsd,
-        limitUsd: verdict.limitUsd,
-        message: `Per-turn budget reached: ${formatBudgetUsd(verdict.costUsd)} of ${formatBudgetUsd(verdict.limitUsd)}. Approve to continue for another ${formatBudgetUsd(verdict.limitUsd)}.`,
-      };
-      const { approvalId } = await inScope(() =>
-        createApprovalRequest({
-          ...scope,
-          messageId,
-          // The run this turn opened, read when the pause fires: the engine
-          // runs only after `runIdRef` is set below, so the Run page's
-          // Policy tab lists the pause with the run's other approvals
-          // (#3370, the added finding 9).
-          runId: runIdRef.current,
-          capabilityName: BUDGET_CONTINUE_CAPABILITY,
-          inputPreview,
-          riskLevel: "low",
-        }),
-      );
-      onApprovalRequired({
-        approvalId,
-        capability: BUDGET_CONTINUE_CAPABILITY,
-        inputPreview,
-        riskLevel: "low",
-        expiresAt: new Date(Date.now() + BUDGET_APPROVAL_TTL_MS).toISOString(),
-      });
-      const resolution = await waitForApproval(approvalId);
-      return resolution.resolution === "approved";
-    },
-  });
+  // No customer-configured budget applies to the assistant: neither the
+  // person's own turn budget nor the workspace's (ADR-235). Oxagen's own
+  // limits still hold. The credit gate and the assistant spend cap refused
+  // the turn in `prepareAssistantTurn` if the organisation has run out.
 
   // The belt: the interactive agent's own capabilities are pinned, the rest
   // is reachable through search_tools and load_tools (#2611).
@@ -735,24 +649,6 @@ async function runPreparedTurn(
     // it (ADR-174 §4).
     const compacted = await compactedHistory;
     if (compacted.frame) await run.historySummary(compacted.frame);
-    // The summary is the turn's first spend (#4228). With no engine usage
-    // yet, the guard judges it alone, in the budget's own mode: enforce
-    // stops, prompt asks, grace allows the cushion. A stop refuses the turn
-    // as a budget stop mid-turn does, with `engine_aborted`, after the frame
-    // above recorded what the summary cost.
-    openingCost.usd = compacted.summaryCall?.costUsd ?? 0;
-    if (
-      budgetGuard !== undefined &&
-      openingCost.usd > 0 &&
-      (await budgetGuard({})) === "stop"
-    ) {
-      throw Object.assign(
-        new Error(
-          `the history summary cost ${formatBudgetUsd(openingCost.usd)}, which reached the per-turn budget before the engine started`,
-        ),
-        { code: "engine_aborted" },
-      );
-    }
     turn = await runGovernedTurn({
       telemetry: {
         ...scope,
@@ -780,10 +676,10 @@ async function runPreparedTurn(
         steering,
       ),
       history: compacted.history,
-      contextMessages: [
-        pageContextMessage(request.pageContext),
-        recalledMemory,
-      ],
+      // The page the person is on, and no recalled workspace memory: the
+      // workspace's memories steer its own agents (ADR-235). The model can
+      // still read a memory the person asks about through `recall_memory`.
+      contextMessages: [pageContextMessage(request.pageContext)],
       // What the model-call frames count apart from the conversation
       // (ADR-200): the steering the system prompt ends with, and the summary
       // at the head of the history when the turn carried one.
@@ -809,7 +705,6 @@ async function runPreparedTurn(
       // the evidence cannot be joined back to the authorization it ran under.
       toolNameMap: materialised.nameMap,
       ...(p.effort ? { effort: p.effort } : {}),
-      ...(budgetGuard !== undefined ? { budgetGuard } : {}),
       ...(request.goal ? { goal: request.goal } : {}),
       fundedBy: funding.fundedBy,
       ...(hooks.abortSignal ? { abortSignal: hooks.abortSignal } : {}),
@@ -1317,47 +1212,4 @@ async function resolveScopeNames(
   } catch {
     return { orgName: request.orgSlug, workspaceName: request.workspaceSlug };
   }
-}
-
-/**
- * The per-turn dollar budget: an explicit override on the request wins;
- * otherwise the person's saved default, with the workspace's governance
- * merged on top. Both reads fail open to no budget, never silently.
- */
-async function resolveBudgetPolicy(
-  request: AssistantTurnRequest,
-  capCtx: CapabilityContext,
-): Promise<TurnBudgetPolicy> {
-  const member = async (): Promise<TurnBudgetPolicy> => {
-    if (request.budget)
-      return resolveTurnBudgetPolicy(request.budget, TURN_BUDGET_OFF);
-    try {
-      const saved = await invoke(budgetPolicyRead.name, {}, capCtx, {
-        surface: "agent",
-      });
-      return turnBudgetPolicyFromSaved(budgetPolicyRead.output.parse(saved));
-    } catch (err) {
-      logger.warn(
-        { err },
-        "get_user_budget failed; the turn runs without a member budget",
-      );
-      return TURN_BUDGET_OFF;
-    }
-  };
-  const workspace = async () => {
-    try {
-      const raw = await invoke(workspaceBudgetPolicyRead.name, {}, capCtx, {
-        surface: "agent",
-      });
-      return governedBudgetFromRead(raw as SavedWorkspaceGovernance);
-    } catch (err) {
-      logger.warn(
-        { err },
-        "get_budget_policy failed; the turn runs on the member budget",
-      );
-      return null;
-    }
-  };
-  const [memberPolicy, governance] = await Promise.all([member(), workspace()]);
-  return resolveEffectiveTurnBudget(memberPolicy, null, governance);
 }

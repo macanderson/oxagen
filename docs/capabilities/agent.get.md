@@ -28,7 +28,7 @@ An agent is one operator on one runtime with one harness. The principal, the ope
 | `credentials[]` | object | `id` (`aky_…`), `name`, `prefix`, `createdAt`, `expiresAt`, `lastUsedAt`, `revokedAt` — revoked credentials stay listed with their date. Newest first. |
 | `roles[]` | object | `id` (`rol_…`), `name`, `scopeKind`, `isSystemDefault`, `assignedAt`, `expiresAt` — the live, unexpired assignments on the agent's principal. |
 | `hosts[]` | object | `hostEnrollmentId` (`tch_…`), `hostname`, `platform`, `status`, `mode`, `harnesses`, `deviceKeyFingerprint`, `collectorVersion`, `hooksOk`, `bundleVersionServed`, `lastSeenAt`, `expiresAt`, `revokedAt`. Newest first, revoked hosts included. |
-| `runtime` | object \| null | `id` (`rtm_…`), `name`, `slug`. Null for an agent that runs on no named runtime, such as stella's in-app assistant. |
+| `runtime` | object \| null | `id` (`rtm_…`), `name`, `slug`. Null for an agent that runs on no named runtime. |
 | `toolbelt` | object \| null | `id` (`tbt_…`), `name`, `slug`, `kind`. An agent that names no belt reads as the workspace's All tools belt; null only before any toolbelt path has touched the workspace. |
 | `versions[]` | object | `version`, `changeKind` (`registered`, `runtime_changed`, `toolbelt_changed`, `legacy`), `runtime`, `toolbelt`, `createdBy` (`usr_…`), `createdAt`. Newest first, at most 100. A `legacy` version, written before ADR-198, names no runtime or toolbelt. |
 | `limits` | object | What the host bundle signs for the agent. `perRun` and `perDay` (`{ micros, currency }`, null when unset) are the ceilings the active version's config sets. `containmentRequired` is the setting of the agent's current runtime (ADR-204), false when the agent runs on no named runtime. `invalid` is true when the budget in the config cannot be read and the host suspends governed actions; `containmentRequired` still reads the runtime then. |
@@ -52,5 +52,5 @@ None. Read-only; audit-exempt.
 
 | code | meaning |
 |---|---|
-| `not_found` | No live agent with that id or slug in the workspace (`reason: agent_not_found`). |
+| `not_found` | No live agent with that id or slug in the workspace (`reason: agent_not_found`). The workspace's managed assistant agent answers the same way, because Oxagen owns it (ADR-235). A write that names it is refused `agent_managed_read_only`. |
 | `authz_denied` | No authenticated principal, or no org or workspace scope. |

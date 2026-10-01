@@ -11,6 +11,7 @@
 import { agentCreatorUserJoin, schema, type Tx } from "@oxagen/database";
 import { AGENT_CREDENTIAL_SCOPE_PURPOSE } from "@oxagen/oxagen/agent-credential";
 import type { AgentIdentityStatus } from "@oxagen/oxagen/contracts/agent.list";
+import { INTERACTIVE_AGENT_TYPE } from "@oxagen/oxagen/interactive-agent";
 import { IN_APP_AGENT_SURFACES } from "@oxagen/oxagen/contracts/run.list";
 import { TAMPER_INCIDENT_KINDS } from "@oxagen/oxagen/contracts/tacho.incident.list";
 import {
@@ -144,6 +145,12 @@ export async function resolveAgentIdentity(
  * (`archived`) agent is left out unless `includeRetired` is set, because a
  * deregistered agent is a deleted record everywhere but the view that asks
  * for it.
+ *
+ * The workspace's managed assistant agent (`agent_type =
+ * 'interactive_chat'`) is never listed. It is Oxagen's, not the customer's
+ * (ADR-235, item 13), so neither the Agents page nor its tiles count it.
+ * `resolveAgentIdentity` still finds it, so an identity write can refuse it
+ * by name.
  */
 export async function listAgentIdentities(
   tx: Tx,
@@ -160,6 +167,7 @@ export async function listAgentIdentities(
         eq(schema.agents.orgId, scope.orgId),
         eq(schema.agents.workspaceId, scope.workspaceId),
         isNull(schema.agents.deletedAt),
+        ne(schema.agents.agentType, INTERACTIVE_AGENT_TYPE),
         page.includeRetired === true
           ? undefined
           : ne(schema.agents.status, "archived"),

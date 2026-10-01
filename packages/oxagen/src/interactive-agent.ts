@@ -65,9 +65,10 @@ export const MANAGED_AGENT_READONLY_CODE = "agent_managed_read_only";
  *
  * Every pin is a read the assistant may call without a person: it declares
  * `mutates: false`, low risk and no approval (interactive-agent.test.ts).
- * That rules out `recall_memory`, which raises the confidence score of every
- * memory it returns. Each turn already recalls workspace memory before the
- * model runs (packages/agent/src/runtime/assistant-recall.ts).
+ * That rules out `recall_memory`, whose contract mutates: for any caller but
+ * the assistant, a recall raises the confidence score of every memory it
+ * returns. It stays one `load_tools` call away. No turn recalls workspace
+ * memory before the model runs (ADR-235).
  * `list_executions` and `get_execution_trace` read the legacy
  * `agent_executions` store. `list_runs` and `get_run` read the fleet record
  * the rev1 pages show, so they replace those two here.

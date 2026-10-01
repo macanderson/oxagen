@@ -22,7 +22,6 @@ const mocks = vi.hoisted(() => ({
   runGovernedTurn: vi.fn(),
   openAssistantRun: vi.fn(),
   readAssistantAgentState: vi.fn(),
-  recall: vi.fn(),
   createApprovalRequest: vi.fn(),
   waitForApproval: vi.fn(),
   assertOrgRole: vi.fn(),
@@ -142,9 +141,6 @@ vi.mock("../system-prompt", () => ({
 vi.mock("./approval", () => ({
   createApprovalRequest: mocks.createApprovalRequest,
   waitForApproval: mocks.waitForApproval,
-}));
-vi.mock("./assistant-recall", () => ({
-  recallWorkspaceMemoryMessage: mocks.recall,
 }));
 // The registry read only. The assembly is the real one, so a test sees the
 // text and the manifest the turn would produce.
@@ -447,7 +443,6 @@ beforeEach(() => {
           graceOveragePct: 0.25,
         },
   );
-  mocks.recall.mockResolvedValue({ role: "user", content: "[memory]" });
   mocks.readAssistantAgentState.mockResolvedValue(ASSISTANT);
   mocks.materializeTools.mockImplementation(async () => {
     mocks.log.push("materialize");
@@ -665,57 +660,60 @@ describe("prepareAssistantTurn", () => {
     }
   });
 
-  // A key's holder may be an automation. A binding on its turn would let it
-  // route an action a workspace rule refuses on the API through Stella.
-  it("leaves the workspace's rules on a turn an API key starts (negative)", async () => {
+  // Mac's ruling of 2026-10-01: the customer does not govern the assistant
+  // from any entry point. A turn an API key starts carries the binding too,
+  // so the workspace's rules skip its calls as they skip a session turn's.
+  it("marks every call of a turn an API key starts as Stella's", async () => {
     setup({ apiKeyCreator: "creator-1" });
     await runTurn({
       ...request,
       ctx: { ...CTX, userId: null, apiKeyId: "aky-1" },
     });
-    const toolCtx = mocks.materializeTools.mock.calls[0]![0] as object;
-    expect(toolCtx).not.toHaveProperty("oxagenAssistant");
-    // It keeps the rules, not the monitoring: its calls still stay out of
-    // the tool registry's "calls 30d".
+    const toolCtx = mocks.materializeTools.mock.calls[0]![0] as {
+      oxagenAssistant?: unknown;
+    };
+    expect(isKernelIssuedOxagenAssistant(toolCtx.oxagenAssistant)).toBe(true);
     expect(mocks.materializeTools.mock.calls[0]![1]).toMatchObject({
       feedsWorkspaceToolCounts: false,
     });
+    for (const [, , ctx] of mocks.invoke.mock.calls) {
+      expect(
+        isKernelIssuedOxagenAssistant(
+          (ctx as { oxagenAssistant?: unknown }).oxagenAssistant,
+        ),
+      ).toBe(true);
+    }
   });
 
   it("never keeps a binding the adapter's context brings (negative)", async () => {
     const brought = createOxagenAssistantBinding({ requestId: "other" });
-    await runTurn({
-      ...request,
-      ctx: { ...CTX, oxagenAssistant: brought },
-    });
-    const sessionCtx = mocks.materializeTools.mock.calls[0]![0] as {
-      oxagenAssistant?: unknown;
-    };
-    expect(sessionCtx.oxagenAssistant).not.toBe(brought);
-    expect(isKernelIssuedOxagenAssistant(sessionCtx.oxagenAssistant)).toBe(
-      true,
-    );
-
-    setup({ apiKeyCreator: "creator-1" });
-    mocks.materializeTools.mockClear();
-    await runTurn({
-      ...request,
-      ctx: { ...CTX, userId: null, apiKeyId: "aky-1", oxagenAssistant: brought },
-    });
-    const keyCtx = mocks.materializeTools.mock.calls[0]![0] as object;
-    expect(keyCtx).not.toHaveProperty("oxagenAssistant");
+    for (const adapterCtx of [
+      { ...CTX, oxagenAssistant: brought },
+      { ...CTX, userId: null, apiKeyId: "aky-1", oxagenAssistant: brought },
+    ]) {
+      setup({ apiKeyCreator: "creator-1" });
+      mocks.materializeTools.mockClear();
+      await runTurn({ ...request, ctx: adapterCtx });
+      const toolCtx = mocks.materializeTools.mock.calls[0]![0] as {
+        oxagenAssistant?: unknown;
+      };
+      expect(toolCtx.oxagenAssistant).not.toBe(brought);
+      expect(isKernelIssuedOxagenAssistant(toolCtx.oxagenAssistant)).toBe(
+        true,
+      );
+    }
   });
 });
 
 describe("assistantBindingFor", () => {
-  it("mints a fresh binding for a session and none for an API key", () => {
-    const session = assistantBindingFor({ apiKeyId: null, requestId: "r1" });
-    expect(isKernelIssuedOxagenAssistant(session.oxagenAssistant)).toBe(true);
-    expect(session.oxagenAssistant?.requestId).toBe("r1");
-    expect(assistantBindingFor({ apiKeyId: "aky-1", requestId: "r1" })).toEqual(
-      {},
-    );
+  it("mints a fresh binding for every turn, a session's or an API key's", () => {
+    const first = assistantBindingFor({ requestId: "r1" });
+    const second = assistantBindingFor({ requestId: "r1" });
+    expect(isKernelIssuedOxagenAssistant(first.oxagenAssistant)).toBe(true);
+    expect(first.oxagenAssistant.requestId).toBe("r1");
+    expect(second.oxagenAssistant).not.toBe(first.oxagenAssistant);
   });
+});
 });
 
 describe("the prepared turn", () => {
@@ -837,10 +835,8 @@ describe("the prepared turn", () => {
       { role: "assistant", content: "before" },
     ]);
     expect(turnInput.contextMessages[0].content).toContain("run (arun_x)");
-    expect(turnInput.contextMessages[1]).toEqual({
-      role: "user",
-      content: "[memory]",
-    });
+    // ADR-235: no recalled workspace memory rides beside the page.
+    expect(turnInput.contextMessages).toHaveLength(1);
     // `userId` is the person who asked: every platform-paid debit of the turn
     // is written to credit_ledger.created_by_id under it, so a statement can
     // show assistant spend by operator. Before, the debits named nobody.
@@ -890,7 +886,7 @@ describe("the prepared turn", () => {
     expect(mocks.openAssistantRun).not.toHaveBeenCalled();
   });
 
-  it("returns a governed write the turn parked as the card, and never a budget pause", async () => {
+  it("returns a governed write the turn parked as the card", async () => {
     mocks.materializeTools.mockImplementationOnce(
       async (
         _ctx: unknown,
@@ -902,13 +898,6 @@ describe("the prepared turn", () => {
           inputPreview: {},
           riskLevel: "high",
           expiresAt: "2026-09-14T10:05:00.000Z",
-        });
-        opts.onApprovalRequired({
-          approvalId: "apr_2",
-          capability: "budget.turn.continue",
-          inputPreview: {},
-          riskLevel: "low",
-          expiresAt: "2026-09-14T10:06:00.000Z",
         });
         return {
           tools: GOVERNED_TOOLS,
@@ -929,45 +918,22 @@ describe("the prepared turn", () => {
         expiresAt: "2026-09-14T10:05:00.000Z",
       },
     ]);
-    expect(events).toHaveLength(2);
+    expect(events).toHaveLength(1);
   });
 
-  // #3370, the finding 9 added on 2026-09-19: the budget pause wrote its
-  // approval with no run, so `run_public_id` stayed null and the Run page's
-  // Policy tab never listed the approval the run was stopped on.
-  it("writes a budget pause's approval against the run the turn opened (negative)", async () => {
-    mocks.createApprovalRequest.mockResolvedValueOnce({
-      approvalId: "appr_budget",
-      approvalPublicId: "apr_budget",
-    });
-    mocks.waitForApproval.mockResolvedValueOnce({
-      approvalId: "appr_budget",
-      resolution: "approved",
-      note: null,
-    });
-    let continued: unknown;
-    // The guard pauses while the engine runs, which is after the run opened.
-    mocks.runGovernedTurn.mockImplementationOnce(async () => {
-      const [, , handlers] = mocks.createTurnBudgetGuard.mock.calls[0]!;
-      continued = await handlers.onPause({
-        costUsd: 1.2,
-        limitUsd: 1,
-        mode: "prompt",
-      });
-      return fakeTurn({});
-    });
+  // ADR-235, item 10 of Mac's ruling: no customer-configured budget applies
+  // to the assistant. The turn reads neither the person's budget nor the
+  // workspace's, builds no budget guard, and so never pauses for one.
+  it("applies no customer-configured budget to the turn", async () => {
     await runTurn(request);
-    expect(continued).toBe(true);
-    expect(mocks.createApprovalRequest).toHaveBeenCalledTimes(1);
-    // The internal `agent_runs` id, which `resolveRunPublicId` reads back to
-    // the public one. The public `arun_…` id would record null.
-    expect(mocks.createApprovalRequest).toHaveBeenCalledWith(
-      expect.objectContaining({
-        capabilityName: "budget.turn.continue",
-        messageId: "msg-user",
-        runId: "run-uuid",
-      }),
+    const read = mocks.invoke.mock.calls.map(([name]) => name);
+    expect(read).not.toContain("get_user_budget");
+    expect(read).not.toContain("get_budget_policy");
+    expect(mocks.createTurnBudgetGuard).not.toHaveBeenCalled();
+    expect(mocks.runGovernedTurn.mock.calls[0]![0]).not.toHaveProperty(
+      "budgetGuard",
     );
+    expect(mocks.createApprovalRequest).not.toHaveBeenCalled();
   });
 
   it("names a parked card by the approval's public id, not its row uuid", async () => {
@@ -1238,8 +1204,9 @@ describe("the prepared turn", () => {
       expect(mocks.log).not.toContain("history-summary");
     });
 
-    // #4228: the summary is paid for by the turn, so the per-turn budget
-    // counts it, priced on the summary's own model, and the run records it.
+    // The summary is the turn's first spend, priced on the summary's own
+    // model, and the run records what it cost (#4228). No customer budget
+    // judges it: none applies to the assistant (ADR-235).
     const summaryCost = () =>
       providerCostUsd({
         model: "model-for-fast",
@@ -1247,14 +1214,11 @@ describe("the prepared turn", () => {
         outputTokens: 12,
       });
 
-    it("hands the budget guard the summary's cost and records it on the frame (#4228)", async () => {
-      mocks.createTurnBudgetGuard.mockReturnValue(async () => "continue");
+    it("records the summary's cost on the frame and runs the turn under no customer budget", async () => {
       setup({ history: longThread() });
       await runTurn(request);
 
-      const [, , hooks] = mocks.createTurnBudgetGuard.mock.calls[0]!;
       expect(summaryCost()).toBeGreaterThan(0);
-      expect(hooks.openingCostUsd()).toBe(summaryCost());
       expect(summaryFrames[0]).toMatchObject({
         regenerated: true,
         summaryCall: {
@@ -1264,33 +1228,7 @@ describe("the prepared turn", () => {
           costUsd: summaryCost(),
         },
       });
-      expect(mocks.runGovernedTurn).toHaveBeenCalledTimes(1);
-    });
-
-    it("stops before the engine when the summary alone reaches the budget (#4228)", async () => {
-      const guard = vi.fn(async () => "stop" as const);
-      mocks.createTurnBudgetGuard.mockReturnValue(guard);
-      setup({ history: longThread() });
-
-      await expect(runTurn(request)).rejects.toMatchObject({
-        code: "engine_aborted",
-      });
-      // The guard judged the summary's cost with no engine usage yet.
-      expect(guard).toHaveBeenCalledWith({});
-      expect(mocks.runGovernedTurn).not.toHaveBeenCalled();
-      // The record still says what the turn carried and spent, and the run
-      // seals as a budget stop does mid-turn: cancelled, not failed.
-      expect(summaryFrames).toHaveLength(1);
-      expect(sealCalls).toEqual([
-        { status: "aborted", reason: expect.any(String) },
-      ]);
-    });
-
-    it("asks the guard nothing before the engine when no summary was written (negative)", async () => {
-      const guard = vi.fn(async () => "stop" as const);
-      mocks.createTurnBudgetGuard.mockReturnValue(guard);
-      await runTurn(request).catch(() => undefined);
-      expect(guard).not.toHaveBeenCalled();
+      expect(mocks.createTurnBudgetGuard).not.toHaveBeenCalled();
       expect(mocks.runGovernedTurn).toHaveBeenCalledTimes(1);
     });
   });

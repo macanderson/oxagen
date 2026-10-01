@@ -1,0 +1,68 @@
+{
+  "name": "set_assistant_switch",
+  "domain": "assistant",
+  "description": "Platform-operator only: stop or restart Oxagen's in-app assistant in one workspace. On writes an agent kill switch on the workspace's managed assistant agent, which refuses every later turn. Off clears it. The reason is recorded on the switch.",
+  "mode": "sync",
+  "surfaces": [],
+  "sensitivity": "high",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "orgId": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "workspaceId": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "on": {
+        "type": "boolean"
+      },
+      "reason": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 500
+      }
+    },
+    "required": [
+      "orgId",
+      "workspaceId",
+      "on",
+      "reason"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "switchId": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "changed": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "switchId",
+      "changed"
+    ],
+    "additionalProperties": false
+  }
+}

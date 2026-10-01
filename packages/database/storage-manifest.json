@@ -16566,6 +16566,12 @@
           "type": "uuid"
         },
         {
+          "name": "subject",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
           "name": "version",
           "nullable": false,
           "primaryKey": false,

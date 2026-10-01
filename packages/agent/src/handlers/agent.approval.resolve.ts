@@ -14,14 +14,19 @@
 //      the turn from the person. The run is what differs. The contract is off
 //      the agent surface, so no model reaches this handler today, and the
 //      check holds for any other caller that carries a run.
-//   4. On a row the mandate gate parked (ADR-059 decision 4), the mandate's
+//   4. An approval the in-app assistant parked (`inAppApproval` in
+//      @oxagen/rules) is answered only by the person who asked (ADR-235,
+//      ruled on 2026-10-01). Anyone else is refused `forbidden`
+//      `not_the_requester`, before the UPDATE. The requester is read with
+//      the row in step 2.
+//   5. On a row the mandate gate parked (ADR-059 decision 4), the mandate's
 //      approval rule decides who answers (MC spec §6.9): an agent principal
 //      is refused `agent_cannot_resolve_own_mandate`; the caller holds an
 //      org role the workspace names for every impact on the mandate
 //      (assertConsequenceRole, INV-29); and, when the rule names approvers,
 //      is one of them (assertApprover). Each refusal is `forbidden` and
 //      leaves before the ledger or the row is touched.
-//   5. One transaction: on a mandate row lock the mandate and, for `denied`,
+//   6. One transaction: on a mandate row lock the mandate and, for `denied`,
 //      release the reservation; then the UPDATE that sets the resolution,
 //      guarded by the WHERE of step 2. The lock order is the one the gate
 //      and the expiry job use: mandate row, then approval_requests. No row
@@ -29,11 +34,12 @@
 //      release back, and leaves through the kernel's catch, so the usage
 //      recorder never runs and the no-op is not a governed action (§3.9
 //      item 15).
-//   6. `approved` leaves the reservation held for the agent's retry, whose
+//   7. `approved` leaves the reservation held for the agent's retry, whose
 //      receipt settles it. The output reports the settlement.
-//   7. A matched row writes the approval.resolved feed row for the person
-//      whose message parked the call, in the same transaction.
-//   7. On a row that stores the parked call (ADR-118), the UPDATE queues it
+//   8. A matched row writes the approval.resolved feed row for the person
+//      whose message parked the call, in the same transaction. An in-app
+//      row writes none, because the person who asked is the one answering.
+//   9. On a row that stores the parked call (ADR-118), the UPDATE queues it
 //      when approved. This request then delivers it: the call runs now, as
 //      its requester, through `resumeApprovedCall`, and the answer reads back
 //      what became of it. The periodic worker (`approval/resume`) is the
@@ -55,7 +61,10 @@ import { lockMandate, parseMandateRow, release } from "@oxagen/rules";
 import { and, eq, sql } from "drizzle-orm";
 import pino from "pino";
 import { notifyResolution, raisedByCallingRun } from "../runtime/approval";
-import { APPROVAL_RESOLVER_ROLES } from "@oxagen/rules/approval-notify";
+import {
+  APPROVAL_RESOLVER_ROLES,
+  inAppApproval,
+} from "@oxagen/rules/approval-notify";
 import { approvalIdCondition } from "../runtime/approval-id";
 import type {
   AgentApprovalResolveInput,
@@ -101,13 +110,24 @@ export async function agentApprovalResolveHandler(
         mandateId: schema.approvalRequests.mandateId,
         toolCallId: schema.approvalRequests.toolCallId,
         runPublicId: schema.approvalRequests.runPublicId,
+        messageId: schema.approvalRequests.messageId,
+        inApp: inAppApproval(),
       })
       .from(schema.approvalRequests)
       .where(pending)
       .limit(1);
     if (!row) return null;
     const ownRun = await raisedByCallingRun(tx, ctx, row.runPublicId);
-    if (!row.mandateId || !row.toolCallId) return { ownRun, parked: null };
+    const inApp = row.inApp === true;
+    // MC spec §7.7: the person whose message parked the call. Read before
+    // the UPDATE, because an in-app row is answered by that person alone.
+    // approval_requests.message_id is nullable: an approval a run parked
+    // outside any conversation has no requester to look up.
+    const requesterUserId = row.messageId
+      ? await requesterOf(tx, ctx, row.messageId)
+      : null;
+    if (!row.mandateId || !row.toolCallId)
+      return { ownRun, inApp, requesterUserId, parked: null };
     const [mandateRow] = await tx
       .select()
       .from(schema.mandates)
@@ -116,6 +136,8 @@ export async function agentApprovalResolveHandler(
     if (!mandateRow) throw expired();
     return {
       ownRun,
+      inApp,
+      requesterUserId,
       parked: {
         mandateId: row.mandateId,
         toolCallId: row.toolCallId,
@@ -130,8 +152,25 @@ export async function agentApprovalResolveHandler(
     throw new HandlerError({
       code: "forbidden",
       reason: "run_cannot_resolve_own_approval",
+      // An in-app row is answered where it was asked, never on Fleet.
+      message: found.inApp
+        ? "The run that raised this approval cannot resolve it. The person who asked answers it in the assistant."
+        : "The run that raised this approval cannot resolve it. Approve or deny it on Fleet.",
+    });
+  }
+
+  // ADR-235, ruled on 2026-10-01: an in-app approval goes to the person who
+  // asked, and only that person answers it. A row whose requester cannot be
+  // read is refused to everyone, never opened to the workspace.
+  if (
+    found.inApp &&
+    (found.requesterUserId === null || found.requesterUserId !== actingUserId)
+  ) {
+    throw new HandlerError({
+      code: "forbidden",
+      reason: "not_the_requester",
       message:
-        "The run that raised this approval cannot resolve it. Approve or deny it on Fleet.",
+        "Only the person who asked the assistant can answer this approval.",
     });
   }
 
@@ -172,7 +211,6 @@ export async function agentApprovalResolveHandler(
       .where(pending)
       .returning({
         id: schema.approvalRequests.id,
-        messageId: schema.approvalRequests.messageId,
         capabilityName: schema.approvalRequests.capabilityName,
         // After the CASE above: `queued` or `denied` on a row that stores
         // the call, whatever it held before on any other row.
@@ -182,38 +220,25 @@ export async function agentApprovalResolveHandler(
 
     // MC spec §7.7 approval.resolved: the person whose message parked the
     // call hears the decision, written with the decision. A person who
-    // resolves their own approval already knows. approval_requests.message_id
-    // is nullable — an approval a run parked outside any conversation has no
-    // requester to tell, so there is nobody to look up.
-    const messageId = updated.messageId;
-    if (messageId) {
-      const [requester] = await tx
-        .select({ userId: schema.conversations.userId })
-        .from(schema.messages)
-        .innerJoin(
-          schema.conversations,
-          eq(schema.conversations.id, schema.messages.conversationId),
-        )
-        .where(
-          and(
-            eq(schema.messages.id, messageId),
-            eq(schema.messages.orgId, ctx.orgId),
-            eq(schema.messages.workspaceId, ctx.workspaceId),
-          ),
-        )
-        .limit(1);
-      if (requester && requester.userId !== actingUserId) {
-        await tx.insert(schema.notifications).values({
-          orgId: ctx.orgId,
-          workspaceId: ctx.workspaceId,
-          userId: requester.userId,
-          kind: "approval",
-          event: "approval.resolved",
-          title: `Approval ${input.decision}: ${updated.capabilityName}`,
-          body: input.note ?? null,
-          deepLink: null,
-        });
-      }
+    // resolves their own approval already knows. An in-app row is always
+    // answered by the person who asked (the check above), so it never
+    // writes one, and the guard says so rather than leaving it implied.
+    const requesterUserId = found.requesterUserId;
+    if (
+      requesterUserId !== null &&
+      requesterUserId !== actingUserId &&
+      !found.inApp
+    ) {
+      await tx.insert(schema.notifications).values({
+        orgId: ctx.orgId,
+        workspaceId: ctx.workspaceId,
+        userId: requesterUserId,
+        kind: "approval",
+        event: "approval.resolved",
+        title: `Approval ${input.decision}: ${updated.capabilityName}`,
+        body: input.note ?? null,
+        deepLink: null,
+      });
     }
     return {
       rowId: updated.id,
@@ -239,6 +264,34 @@ export async function agentApprovalResolveHandler(
     mandate,
     execution,
   };
+}
+
+/**
+ * The person whose conversation holds the message a call parked on, or null
+ * when no message in this workspace matches. The in-app agent's turn sets the
+ * row's message to the persisted user message (assistant-turn.ts).
+ */
+async function requesterOf(
+  tx: Tx,
+  ctx: { orgId: string; workspaceId: string },
+  messageId: string,
+): Promise<string | null> {
+  const [requester] = await tx
+    .select({ userId: schema.conversations.userId })
+    .from(schema.messages)
+    .innerJoin(
+      schema.conversations,
+      eq(schema.conversations.id, schema.messages.conversationId),
+    )
+    .where(
+      and(
+        eq(schema.messages.id, messageId),
+        eq(schema.messages.orgId, ctx.orgId),
+        eq(schema.messages.workspaceId, ctx.workspaceId),
+      ),
+    )
+    .limit(1);
+  return requester?.userId ?? null;
 }
 
 type Execution = NonNullable<AgentApprovalResolveOutput["execution"]>;

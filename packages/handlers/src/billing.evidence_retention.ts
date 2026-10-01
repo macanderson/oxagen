@@ -10,7 +10,9 @@
  *     opt-in, which is the field that decides whether anything can accrue at
  *     all. No row means never opted in, which is `false`.
  *   - `evidence.retention_policy_versions` — the longest window the
- *     organisation's own pinned policies declare.
+ *     organisation's own pinned policies declare. Only subject `workspace`
+ *     rows count. The in-app assistant's own policy (subject
+ *     `oxagen_assistant`, ADR-235) is not the organisation's choice.
  *
  * The stored-volume field is the one this capability cannot answer yet: no
  * accounting job measures evidence bytes per organisation. It returns null with
@@ -126,7 +128,9 @@ export const billingEvidenceRetentionHandler: CapabilityHandler<
 
       // Across every workspace of the organisation: the contract asks for the
       // longest window ANY pinned policy declares, and retention is billed to
-      // the org, not the workspace.
+      // the org, not the workspace. Only the workspaces' own policies count.
+      // An assistant row (subject `oxagen_assistant`, ADR-235) is Oxagen's
+      // policy for its own runs, and the organisation did not choose it.
       const policies = await tx
         .select({
           maxTtlDays: sql<
@@ -134,7 +138,12 @@ export const billingEvidenceRetentionHandler: CapabilityHandler<
           >`max(${schema.retentionPolicyVersions.ttlDays})`,
         })
         .from(schema.retentionPolicyVersions)
-        .where(eq(schema.retentionPolicyVersions.orgId, ctx.orgId));
+        .where(
+          and(
+            eq(schema.retentionPolicyVersions.orgId, ctx.orgId),
+            eq(schema.retentionPolicyVersions.subject, "workspace"),
+          ),
+        );
 
       const ledger = await tx
         .select({

@@ -882,6 +882,12 @@ export interface KernelSecurityEvent {
   errorCode: KernelFailureCode | null;
   /** Wall-clock milliseconds from invoke() entry to emit. */
   durationMs: number;
+  /**
+   * True when the call carries a kernel-minted Stella binding: Oxagen's
+   * in-app assistant made it for the person named by `actorUserId`
+   * (ADR-235). Absent on every other call.
+   */
+  oxagenAssistant?: true;
 }
 
 type SecurityEventEmitter = (event: KernelSecurityEvent) => void;
@@ -1160,6 +1166,15 @@ async function _invokeCoreInner(
   isTopLevelAction: boolean,
 ): Promise<unknown> {
   const startMs = Date.now();
+  // Every security event of a Stella call says so (ADR-235). The event stays,
+  // because it is the person's own action on the customer's data and the SOC 2
+  // record of it. A forged binding fails the registry check, so it is never
+  // tagged, and the forgery event below reads as an ordinary call's.
+  const assistantTag = isOxagenAssistantCall(ctx)
+    ? { oxagenAssistant: true as const }
+    : {};
+  const emit = (event: KernelSecurityEvent): void =>
+    emitSecurityEvent({ ...event, ...assistantTag });
   const cap = getCapability(name);
   // The identity for this invocation. getCapability performs an exact registry
   // lookup (ADR-025 removed alias resolution — see resolveHandler's own comment
@@ -1168,7 +1183,7 @@ async function _invokeCoreInner(
   // the "unknown capability" telemetry still records what was actually called.
   const canonical = cap?.name ?? name;
   if (!cap) {
-    emitSecurityEvent({
+    emit({
       capability: canonical,
       outcome: "deny",
       surface: ctx.surface,
@@ -1221,7 +1236,7 @@ async function _invokeCoreInner(
             ? "oxagenAssistant"
             : null;
   if (forgedBinding !== null) {
-    emitSecurityEvent({
+    emit({
       capability: canonical,
       outcome: "deny",
       surface: ctx.surface,
@@ -1247,7 +1262,7 @@ async function _invokeCoreInner(
   // `platformOnly` contract's `defaultRoles: {}` would decide nothing. The
   // binding above is already proven kernel-issued when it is present at all.
   if (cap.platformOnly === true && ctx.platformOperator === undefined) {
-    emitSecurityEvent({
+    emit({
       capability: canonical,
       outcome: "deny",
       surface: ctx.surface,
@@ -1309,7 +1324,7 @@ async function _invokeCoreInner(
   }
 
   if (opts.surface && !getSurfaces(cap).includes(opts.surface)) {
-    emitSecurityEvent({
+    emit({
       capability: canonical,
       outcome: "deny",
       surface: opts.surface,
@@ -1329,7 +1344,7 @@ async function _invokeCoreInner(
 
   const inputResult = cap.input.safeParse(rawInput);
   if (!inputResult.success) {
-    emitSecurityEvent({
+    emit({
       capability: canonical,
       outcome: "error",
       surface: ctx.surface,
@@ -1481,7 +1496,7 @@ async function _invokeCoreInner(
         // Fail closed on resolver error UNCONDITIONALLY — never gated on
         // _iamEnforced.
         if (iamCheckThrew) {
-          emitSecurityEvent({
+          emit({
             capability: canonical,
             outcome: "deny",
             surface: ctx.surface,
@@ -1519,7 +1534,7 @@ async function _invokeCoreInner(
         // work no audit can ever account for. Human/API traffic is unaffected:
         // it carries no agentRun and persists no decision row.
         if (isAgentRunInvocation && authorizationDecision === null) {
-          emitSecurityEvent({
+          emit({
             capability: canonical,
             outcome: "deny",
             surface: ctx.surface,
@@ -1565,7 +1580,7 @@ async function _invokeCoreInner(
                   return null;
                 });
               }
-              emitSecurityEvent({
+              emit({
                 capability: canonical,
                 outcome: "deny",
                 surface: ctx.surface,
@@ -1589,7 +1604,7 @@ async function _invokeCoreInner(
                 iamResult.decidedBy ?? undefined,
               );
             }
-            emitSecurityEvent({
+            emit({
               capability: canonical,
               outcome: "deny",
               surface: ctx.surface,
@@ -1662,7 +1677,18 @@ async function _invokeCoreInner(
       // including organization-only calls. Throws BudgetExceededError (code
       // "budget_exceeded") when a scope's period-to-date spend has reached its
       // ceiling — DENIED before this invocation's own provider cost is incurred.
-      if (_budgetGate !== null && ctx.orgId && !skipBilling && isScoped) {
+      //
+      // A Stella call skips it (ADR-235). The ceilings are the customer's own
+      // configuration, and no customer-configured budget applies to Oxagen's
+      // in-app assistant. The credit gate, the assistant spend cap, and the
+      // billing admission gate above are Oxagen's, and they still apply.
+      if (
+        _budgetGate !== null &&
+        ctx.orgId &&
+        !skipBilling &&
+        isScoped &&
+        !isOxagenAssistantCall(ctx)
+      ) {
         await _budgetGate({
           orgId: ctx.orgId,
           workspaceId:
@@ -1710,7 +1736,10 @@ async function _invokeCoreInner(
       // still bounds what Stella may do for the person who asked. The
       // binding that marks the call is kernel-minted, so no request can claim
       // it, and a context that names a customer's agent never counts.
-      const skipWorkspaceRules = isOxagenAssistantCall(ctx);
+      // The assistant's own contracts skip it too, on every surface: a
+      // rule against asking the assistant would be the customer governing it.
+      const skipWorkspaceRules =
+        isOxagenAssistantCall(ctx) || cap.inAppAssistant === true;
       if (
         opts.requireFreshRules &&
         !skipWorkspaceRules &&
@@ -1839,7 +1868,7 @@ async function _invokeCoreInner(
     const failureCode = isCapErr
       ? err.code
       : (duckCode ?? authorityCode ?? handlerCode);
-    emitSecurityEvent({
+    emit({
       capability: canonical,
       outcome: isDeny ? "deny" : "error",
       surface: ctx.surface,
@@ -1871,7 +1900,7 @@ async function _invokeCoreInner(
     await withScope(() =>
       applyDecisionSettlement(decisionSettlement, canonical, null),
     );
-    emitSecurityEvent({
+    emit({
       capability: canonical,
       outcome: "error",
       surface: ctx.surface,
@@ -1910,7 +1939,7 @@ async function _invokeCoreInner(
       output: outputResult.data,
     }),
   );
-  emitSecurityEvent({
+  emit({
     capability: canonical,
     outcome: "allow",
     surface: ctx.surface,

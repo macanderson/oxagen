@@ -64,6 +64,10 @@ Only public ids leave the handler.
   still-pending row never appears here. That is `list_approvals`.
 - **Workspace-bound:** rows are filtered on the context's org and workspace
   (RLS enforces the tenant boundary independently of the query).
+- **In-app approvals:** a row the in-app assistant parked (its run is an
+  `agent_runs` row on the `chat` or `api-chat` surface) belongs to the person
+  who asked (ADR-235). With no `runId` the history leaves it out, and under its
+  run's `runId` only the person who asked sees it.
 - **`runId` / `since` / `until`:** each narrows the same predicate; omitted,
   the full resolved history for the workspace is paged.
 - **Paging:** the cursor is the last row's `(resolved_at, public_id)`,

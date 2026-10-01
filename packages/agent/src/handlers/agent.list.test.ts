@@ -10,8 +10,15 @@
 //   DATABASE_URL=postgres://oxagen:oxagen@localhost:5433/oxagen \
 //     pnpm --filter @oxagen/agent exec vitest run src/handlers/agent.list.test.ts
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { drizzle } from "drizzle-orm/pg-proxy";
+import { schema, type Tx } from "@oxagen/database";
 import { agentList } from "@oxagen/oxagen/contracts/agent.list";
-import { identityStatus, wrappedTokenFigures } from "./_agent-identity";
+import {
+  identityStatus,
+  listAgentIdentities,
+  resolveAgentIdentity,
+  wrappedTokenFigures,
+} from "./_agent-identity";
 import { decodeCursor, encodeCursor, toAgentListItem } from "./agent.list";
 
 const row = {
@@ -111,9 +118,10 @@ describe("list_agents row", () => {
     expect(agentList.output.shape.items.element.parse(item)).toEqual(item);
   });
 
-  // #4350: the Agents page read no flag, offered Deregister on the built-in
-  // assistant, and deregistering it stopped stella in the workspace.
-  it("marks the built-in assistant managed", () => {
+  // #4350 put the flag on the row. ADR-235 (item 13) took the assistant off
+  // the list, so no page carries it now. The mapping still reads the type, so
+  // a managed row that reached a page would carry the flag.
+  it("maps the managed flag from the agent type", () => {
     const item = toAgentListItem(
       { ...row, slug: "qa-chat", agentType: "interactive_chat" },
       {
@@ -308,6 +316,53 @@ describe("wrapped-session tokens", () => {
   });
 });
 
+/**
+ * A `Tx` that renders every statement and answers no rows, through drizzle's
+ * own proxy driver, so what is asserted is the statement the handler sends.
+ */
+function renderingTx() {
+  const statements: Array<{ sql: string; params: unknown[] }> = [];
+  const db = drizzle(
+    async (sql, params) => {
+      statements.push({ sql, params });
+      return { rows: [] };
+    },
+    { schema },
+  );
+  return { tx: db as unknown as Tx, statements };
+}
+
+// ADR-235, item 13: the managed assistant is Oxagen's, not the customer's.
+// The page and its tiles both read `listAgentIdentities`, so the one filter
+// keeps it off both. The Postgres block below proves the rows.
+describe("the managed assistant agent", () => {
+  const scope = {
+    orgId: "0192d4a8-7c1e-7a00-8000-0000000000f1",
+    workspaceId: "0192d4a8-7c1e-7a00-8000-0000000000f2",
+  };
+
+  it("is left out of every list read, retired agents included", async () => {
+    for (const includeRetired of [false, true]) {
+      const { tx, statements } = renderingTx();
+      await listAgentIdentities(tx, scope, {
+        limit: 10,
+        afterSlug: undefined,
+        includeRetired,
+      });
+      const { sql, params } = statements[0]!;
+      const at = params.indexOf("interactive_chat");
+      expect(at).toBeGreaterThanOrEqual(0);
+      expect(sql).toContain(`"agent"."agents"."agent_type" <> $${at + 1}`);
+    }
+  });
+
+  it("still resolves by name, so a write can refuse it as managed (negative)", async () => {
+    const { tx, statements } = renderingTx();
+    await resolveAgentIdentity(tx, "qa-chat", scope);
+    expect(statements[0]!.params).not.toContain("interactive_chat");
+  });
+});
+
 describe("identity status", () => {
   it("retired wins over suspended, suspended over enrolled, and enrollment needs a credential or a host", () => {
     const held = { credentials: 1, hosts: 1 };
@@ -472,6 +527,14 @@ describe.skipIf(!process.env.DATABASE_URL)(
         workspaceId: crypto.randomUUID(),
       });
       await support.seedAgent(other, { slug: "alpha" });
+      // The managed assistant agent (ADR-235, item 13), live and holding a
+      // credential: neither the page nor any tile counts it.
+      const assistant = await support.seedAgent(tenant, {
+        slug: "qa-chat",
+        agentType: "interactive_chat",
+        status: "active",
+      });
+      await support.seedCredential(tenant, assistant);
     });
 
     afterAll(async () => {
@@ -638,6 +701,16 @@ describe.skipIf(!process.env.DATABASE_URL)(
       });
       expect(second.items.map((i) => i.slug)).toEqual(["echo"]);
       expect(second.nextCursor).toBeNull();
+    });
+
+    it("leaves the managed assistant off every page and every tile", async () => {
+      const shown = await list(tenant, { includeRetired: true });
+      expect(shown.items.map((i) => i.slug)).not.toContain("qa-chat");
+      // Four live agents and one retired, as before the assistant was seeded;
+      // the assistant's credential enrolls nothing the tiles count.
+      expect(shown.totals.identities).toBe(4);
+      expect(shown.totals.retired).toBe(1);
+      expect(shown.totals.enrolled).toBe(2);
     });
 
     it("another org sees only its own agents", async () => {

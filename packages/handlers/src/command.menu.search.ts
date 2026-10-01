@@ -17,6 +17,12 @@
  * org-scoped by design), by ctx.workspaceId as well. The ontology arm inherits
  * the same scope through the search_nodes capability. No cross-tenant leakage
  * is possible even if the input kind/query is manipulated.
+ *
+ * The run arm leaves out the in-app assistant's executions unless the
+ * assistant itself asks (`assistantExecutionsHidden`, ADR-235). The agent arm
+ * leaves out the workspace's managed assistant agent, and the principal arm
+ * leaves out the service principal that agent acts as. The assistant is
+ * Oxagen's own, and the workspace's lists do not show it (ADR-235).
  */
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { commandMenuSearch } from "@oxagen/oxagen/contracts/command.menu.search";
@@ -25,8 +31,10 @@ import type {
   SearchableKind,
 } from "@oxagen/oxagen/contracts/command.menu.search";
 import { schema, withTenantDb } from "@oxagen/database";
-import { and, eq, ilike, isNull, ne, or } from "drizzle-orm";
+import { and, eq, ilike, isNull, ne, or, sql } from "drizzle-orm";
 import { invoke } from "@oxagen/oxagen/kernel";
+import { INTERACTIVE_AGENT_TYPE } from "@oxagen/oxagen/interactive-agent";
+import { assistantExecutionsHidden } from "@oxagen/agent/handlers/agent.execution.list";
 import { logger } from "./logger";
 
 // ── Route helpers ─────────────────────────────────────────────────────────────
@@ -53,6 +61,7 @@ async function searchRuns(
   query: string,
   orgSlug: string,
   workspaceSlug: string,
+  ctx: Parameters<typeof commandMenuSearchHandler>[1],
 ): Promise<SearchResultRow[]> {
   const rows = await withTenantDb(async (tx) => {
     return tx
@@ -69,6 +78,7 @@ async function searchRuns(
           query.trim()
             ? ilike(schema.agentExecutions.publicId, `%${query}%`)
             : undefined,
+          assistantExecutionsHidden(ctx),
         ),
       )
       .orderBy(schema.agentExecutions.createdAt)
@@ -107,6 +117,9 @@ async function searchAgents(
           isNull(schema.agents.deletedAt),
           // Treat a retired agent as a deleted record, so the menu never offers it.
           ne(schema.agents.status, "archived"),
+          // The managed assistant agent is Oxagen's, not the workspace's
+          // (ADR-235). `agent_type` names it, never the slug.
+          ne(schema.agents.agentType, INTERACTIVE_AGENT_TYPE),
           query.trim()
             ? or(
                 ilike(schema.agents.name, `%${query}%`),
@@ -147,6 +160,10 @@ async function searchPrincipals(
       .where(
         and(
           eq(schema.principals.orgId, orgId),
+          // The assistant's service principal: the one a managed assistant
+          // agent links through `principal_id` (ADR-235). The link names it,
+          // never the display name.
+          sql`not exists (select 1 from ${schema.agents} where ${schema.agents.principalId} = ${schema.principals.id} and ${schema.agents.agentType} = ${INTERACTIVE_AGENT_TYPE})`,
           query.trim()
             ? or(
                 ilike(schema.principals.displayName, `%${query}%`),
@@ -233,7 +250,14 @@ export const commandMenuSearchHandler: CapabilityHandler<
       const wantKind = (k: SearchableKind) => !kind || kind === k;
       const results = await Promise.all([
         wantKind("run")
-          ? searchRuns(orgId, workspaceId, query, orgSlug, workspaceSlug)
+          ? searchRuns(
+              orgId,
+              workspaceId,
+              query,
+              orgSlug,
+              workspaceSlug,
+              ctx,
+            )
           : [],
         wantKind("agent")
           ? searchAgents(orgId, workspaceId, query, orgSlug, workspaceSlug)

@@ -4,7 +4,10 @@
 //   1. Role gate — the org roles the workspace names for every consequence
 //      tag on the mandate (assertConsequenceRole, INV-29); the satisfying
 //      role is recorded as role_at_grant.
-//   2. The agent's delegated principal is what the mandate binds to.
+//   2. The agent's delegated principal is what the mandate binds to. The
+//      workspace's managed assistant agent is refused
+//      `agent_managed_read_only`: it is Oxagen's, and no customer mandate
+//      binds to it (ADR-235, item 13).
 //   3. Denied by construction: every tool pattern matches a declared tool and
 //      every matched version declares each limited and targeted measure.
 //   4. With requestId the draft request_mandate created becomes active with
@@ -30,6 +33,7 @@ import {
   requireWorkspace,
   resolveAgent,
 } from "./_mandate";
+import { assertNotManaged } from "./lib/agent-identity";
 import { logger } from "./logger";
 
 export const mandateGrantHandler: CapabilityHandler<
@@ -50,6 +54,7 @@ export const mandateGrantHandler: CapabilityHandler<
     const agent = await resolveAgent(tx, workspaceId, input.agentId, {
       lock: true,
     });
+    assertNotManaged(agent);
     // Covers both a fresh grant and activating an existing draft: the draft
     // may have been requested before its agent retired (#3124).
     assertAgentActive(agent);

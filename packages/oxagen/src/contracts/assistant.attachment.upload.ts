@@ -136,6 +136,7 @@ export const assistantAttachmentUpload = registerCapability({
     "Store one image, PDF or text file a person attaches to a message for the in-app assistant, after checking its bytes match its type and size cap, and return the id the message sends in ask_assistant's attachments.",
   mode: "sync",
   surfaces: ["api", "mcp"],
+  inAppAssistant: true,
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   mutates: true,

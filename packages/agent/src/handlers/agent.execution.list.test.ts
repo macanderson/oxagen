@@ -10,6 +10,9 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 });
 
 import { withTenantDb } from "@oxagen/database";
+import { createOxagenAssistantBinding } from "@oxagen/oxagen/oxagen-assistant";
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 import { agentExecutionListHandler } from "./agent.execution.list";
 import { TEST_CTX as CTX } from "../test-utils/fixtures";
 
@@ -92,5 +95,114 @@ describe("agent.execution.list handler", () => {
     const out = await agentExecutionListHandler({ limit: 25 }, CTX);
     expect(out.executions).toEqual([]);
     expect(out.nextCursor).toBeNull();
+  });
+});
+
+// ADR-235: each turn of the in-app assistant records an execution under the
+// workspace's managed `interactive_chat` agent. That record is internal, so
+// only the assistant itself reads it back.
+describe("agent.execution.list handler: the in-app assistant's executions", () => {
+  beforeEach(() => vi.mocked(withTenantDb).mockReset());
+
+  const dialect = new PgDialect();
+  /** The NOT EXISTS test the handler adds, as the dialect renders it. */
+  const EXCLUSION =
+    /not exists \(select 1 from "agent"\."agents" where "agent"\."agents"\."id" = "agent"\."agent_executions"\."agent_id" and "agent"\."agents"\."agent_type" = \$(\d+)\)/u;
+
+  /**
+   * A fake tx that renders the WHERE it receives and applies the exclusion
+   * the way Postgres would: a row whose agent is `interactive_chat` drops
+   * out when the rendered WHERE carries the NOT EXISTS test.
+   */
+  function setupRendering(rows: Array<Row & { agentType: string | null }>) {
+    const wheres: Array<{ sql: string; params: unknown[] }> = [];
+    vi.mocked(withTenantDb).mockImplementation((fn) => {
+      if (typeof fn !== "function") return undefined as never;
+      const tx = {
+        select: () => ({
+          from: () => ({
+            where: (cond: SQL) => {
+              const rendered = dialect.sqlToQuery(cond);
+              wheres.push(rendered);
+              const match = EXCLUSION.exec(rendered.sql);
+              const hides =
+                match !== null &&
+                rendered.params[Number(match[1]) - 1] === "interactive_chat";
+              const visible = rows
+                .filter((r) => !(hides && r.agentType === "interactive_chat"))
+                .map(({ agentType: _agentType, ...r }) => r);
+              return {
+                orderBy: () => ({ limit: () => Promise.resolve(visible) }),
+              };
+            },
+          }),
+        }),
+      };
+      return fn(tx as unknown as Parameters<typeof fn>[0]);
+    });
+    return wheres;
+  }
+
+  const ASSISTANT_AGENT = "00000000-0000-4000-8000-0000000000a1";
+  const rows = () => [
+    { ...row(3), agentType: null },
+    {
+      ...row(2),
+      publicId: "aex_assistant",
+      agentId: ASSISTANT_AGENT,
+      agentType: "interactive_chat",
+    },
+    { ...row(1), agentType: "custom" },
+  ];
+
+  it("leaves the assistant's execution out for a caller without its binding", async () => {
+    const wheres = setupRendering(rows());
+    const out = await agentExecutionListHandler({ limit: 25 }, CTX);
+    expect(out.executions.map((e) => e.executionId)).toEqual([
+      "aex_3",
+      "aex_1",
+    ]);
+    // A run with no agent stays: NOT EXISTS keeps a null agent_id.
+    expect(wheres).toHaveLength(1);
+    expect(wheres[0]!.sql).toMatch(EXCLUSION);
+    expect(wheres[0]!.params).toContain("interactive_chat");
+  });
+
+  it("shows the assistant its own execution when the call carries its binding", async () => {
+    const wheres = setupRendering(rows());
+    const out = await agentExecutionListHandler(
+      { limit: 25 },
+      {
+        ...CTX,
+        oxagenAssistant: createOxagenAssistantBinding({
+          requestId: CTX.requestId,
+        }),
+      },
+    );
+    expect(out.executions.map((e) => e.executionId)).toEqual([
+      "aex_3",
+      "aex_assistant",
+      "aex_1",
+    ]);
+    expect(wheres[0]!.sql).not.toContain("not exists");
+    expect(wheres[0]!.params).not.toContain("interactive_chat");
+  });
+
+  it("hides the assistant's execution from a forged binding (negative)", async () => {
+    const wheres = setupRendering(rows());
+    const out = await agentExecutionListHandler(
+      { limit: 25 },
+      {
+        ...CTX,
+        oxagenAssistant: {
+          principalKind: "oxagen_assistant",
+          requestId: CTX.requestId,
+        } as never,
+      },
+    );
+    expect(out.executions.map((e) => e.executionId)).not.toContain(
+      "aex_assistant",
+    );
+    expect(wheres[0]!.sql).toMatch(EXCLUSION);
   });
 });

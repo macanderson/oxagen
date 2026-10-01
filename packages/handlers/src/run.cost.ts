@@ -13,6 +13,10 @@
 // this run started. Each tool's result cost is an estimate of input the run's
 // cost already counts, so it always carries the `estimated` basis. So does
 // the standing context by source (#4537, spec detector 2).
+//
+// An in-app run reads as a run the rollup has not reached to everyone but the
+// person who asked (ADR-235, item 5), the same answer an unknown id gets, so
+// the answer does not say the run exists.
 import {
   standingContextBySource,
   standingSourcesOf,
@@ -35,9 +39,10 @@ import {
 import { schema, withTenantDb } from "@oxagen/database";
 import { and, asc, eq, isNull } from "drizzle-orm";
 import { type BaselineRun, readRunCostBaseline } from "./lib/run-cost-baseline";
+import { canReadRunId, type InAppRunReadDeps } from "./lib/run-read";
 import { cost, readRunTotalsByIds, type SpendScope } from "./spend.shared";
 
-export type RunCostDeps = {
+export type RunCostDeps = InAppRunReadDeps & {
   readRunTotalsByIds: (
     scope: SpendScope,
     runIds: readonly string[],
@@ -201,9 +206,12 @@ export function createRunCostHandler(
 ): CapabilityHandler<typeof runCostGet> {
   return async (input, ctx): Promise<RunCostGetOutput> => {
     const scope = { orgId: ctx.orgId, workspaceId: ctx.workspaceId };
-    const row = (await deps.readRunTotalsByIds(scope, [input.runId])).get(
-      input.runId,
-    );
+    const [totals, readable] = await Promise.all([
+      deps.readRunTotalsByIds(scope, [input.runId]),
+      canReadRunId(ctx, input.runId, deps),
+    ]);
+    if (!readable) return { runId: input.runId, rollup: null, baseline: null };
+    const row = totals.get(input.runId);
     if (!row) {
       // With no row there is no agent key or start to read a baseline for.
       const provisional = deps.readProvisional

@@ -370,6 +370,15 @@ export function isSecurityOutcome(value: string): value is SecurityOutcome {
 }
 
 /** Evidence recorded when a tool change disables a previously authorized rule. */
+/**
+ * A capability event Oxagen's in-app assistant caused for the person named as
+ * the actor (ADR-235). The kernel sets it only for a call that carries a
+ * kernel-minted assistant binding, so a request cannot claim it.
+ */
+export interface OxagenAssistantInvocationDetail {
+  oxagenAssistant: true;
+}
+
 export interface ApprovalRuleInvalidationDetail {
   ruleId: string;
   tool: string;
@@ -709,6 +718,7 @@ export interface InterjectionAnsweredDetail {
 }
 
 export type SecurityEventDetail =
+  | OxagenAssistantInvocationDetail
   | InterjectionAnsweredDetail
   | WorkspaceRunsPausedDetail
   | MachineGroupChangeDetail

@@ -1316,6 +1316,18 @@
       }
     },
     {
+      "name": "set_assistant_switch",
+      "file": "assistant.switch.set.ts",
+      "domain": "assistant",
+      "mode": "sync",
+      "surfaces": [],
+      "layers": {
+        "schema": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "cancel_assistant_turn",
       "file": "assistant.turn.cancel.ts",
       "domain": "assistant",
@@ -6498,7 +6510,8 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": true
+        "docs": true,
+        "app": true
       }
     },
     {

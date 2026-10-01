@@ -9,7 +9,11 @@ import type { TraceExecutionNode } from "@oxagen/oxagen/contracts/agent.trace.ge
  * failure reason rather than from an error event).
  */
 const { txQueue } = vi.hoisted(() => ({
-  txQueue: { rows: [] as unknown[][] },
+  txQueue: {
+    rows: [] as unknown[][],
+    /** Every WHERE the handler built, in order. */
+    wheres: [] as unknown[],
+  },
 }));
 
 function nextRows(): unknown[] {
@@ -21,7 +25,10 @@ function makeTx() {
   Object.assign(b, {
     select: () => b,
     from: () => b,
-    where: () => b,
+    where: (cond: unknown) => {
+      txQueue.wheres.push(cond);
+      return b;
+    },
     limit: async () => nextRows(),
     then: (res: (v: unknown) => unknown, rej: (e: unknown) => unknown) =>
       Promise.resolve(nextRows()).then(res, rej),
@@ -74,6 +81,9 @@ import { agentTraceGetHandler } from "./agent.trace.get";
 import { agentDebugTraceHandler } from "./agent.debug.trace";
 import { ExecutionNotFoundError } from "./execution-errors";
 import { TEST_CTX as CTX } from "../test-utils/fixtures";
+import { createOxagenAssistantBinding } from "@oxagen/oxagen/oxagen-assistant";
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 
 const traceGet = vi.mocked(agentTraceGetHandler);
 const fetchErrors = vi.mocked(fetchErrorEventsForExecution);
@@ -106,6 +116,7 @@ function tree(over: Partial<TraceExecutionNode> = {}): TraceExecutionNode {
 beforeEach(() => {
   vi.clearAllMocks();
   txQueue.rows = [];
+  txQueue.wheres = [];
   traceGet.mockResolvedValue(tree());
   fetchErrors.mockResolvedValue([]);
   fetchLogs.mockResolvedValue([]);
@@ -253,5 +264,55 @@ describe("agentDebugTraceHandler — tenant-scoped queries", () => {
 
     expect(frame.errorClass).toBe("SyntaxError");
     expect(frame.message).toBe("newer same-severity error");
+  });
+});
+
+// ADR-235: each turn of the in-app assistant records an execution under the
+// workspace's managed `interactive_chat` agent. That record is internal, so
+// only the assistant itself reads it back.
+describe("agentDebugTraceHandler: the in-app assistant's executions", () => {
+  const dialect = new PgDialect();
+  /** The NOT EXISTS test the handler adds, as the dialect renders it. */
+  const EXCLUSION =
+    /not exists \(select 1 from "agent"\."agents" where "agent"\."agents"\."id" = "agent"\."agent_executions"\."agent_id" and "agent"\."agents"\."agent_type" = \$(\d+)\)/u;
+  const rootWhere = () => dialect.sqlToQuery(txQueue.wheres[0] as SQL);
+
+  it("answers as not found when a caller without the binding asks for the assistant's execution", async () => {
+    // The scoped root read carries the exclusion, so Postgres finds no row.
+    txQueue.rows = [[]];
+    await expect(
+      agentDebugTraceHandler({ executionId: "aex_assistant" }, CTX),
+    ).rejects.toBeInstanceOf(ExecutionNotFoundError);
+    const where = rootWhere();
+    const match = EXCLUSION.exec(where.sql);
+    expect(match).not.toBeNull();
+    expect(where.params[Number(match![1]) - 1]).toBe("interactive_chat");
+    expect(traceGet).not.toHaveBeenCalled();
+  });
+
+  it("diagnoses the assistant's own execution when the call carries its binding", async () => {
+    const ctx = {
+      ...CTX,
+      oxagenAssistant: createOxagenAssistantBinding({
+        requestId: CTX.requestId,
+      }),
+    };
+    txQueue.rows = [
+      [{ id: ROOT_UUID, publicId: "aex_assistant", status: "failed" }],
+      [],
+    ];
+    const frame = await agentDebugTraceHandler(
+      { executionId: "aex_assistant" },
+      ctx,
+    );
+    expect(frame.executionId).toBe("aex_assistant");
+    const where = rootWhere();
+    expect(where.sql).not.toContain("not exists");
+    expect(where.params).not.toContain("interactive_chat");
+    // The span tree is read with the same context, so it sees the row too.
+    expect(traceGet).toHaveBeenCalledWith(
+      { executionId: "aex_assistant" },
+      ctx,
+    );
   });
 });

@@ -1,4 +1,6 @@
 import { expect, it, vi } from "vitest";
+import { PgDialect } from "drizzle-orm/pg-core";
+import type { SQL } from "drizzle-orm";
 
 const { findMany } = vi.hoisted(() => ({ findMany: vi.fn() }));
 vi.mock("@oxagen/database", async (original) => ({
@@ -58,3 +60,51 @@ it.each(["succeeded", "failed", "indeterminate"])(
     });
   },
 );
+
+const CTX = {
+  orgId: "org",
+  workspaceId: "ws",
+  userId: "user",
+  apiKeyId: null,
+  requestId: "request",
+  surface: "app" as const,
+  messageId: null,
+};
+
+/** The WHERE the handler hands the relational read, rendered. */
+async function renderedWhere(input: { limit: number; runId?: string }) {
+  let where: SQL | undefined;
+  findMany.mockImplementation(async (config: { where: SQL }) => {
+    where = config.where;
+    return [];
+  });
+  await agentApprovalListResolvedHandler(input, CTX);
+  return new PgDialect().sqlToQuery(where!);
+}
+
+// ADR-235, ruled on 2026-10-01: an approval the in-app assistant parked
+// belongs to the person who asked. The rows are proven against Postgres in
+// agent.approval.list_resolved.test.ts. These pin the read on every run.
+it("leaves every in-app approval out of the workspace's history", async () => {
+  const { sql, params } = await renderedWhere({ limit: 10 });
+  expect(sql).toMatch(
+    /not exists \(select 1 from "agent"\."agent_runs" as "in_app_run"/,
+  );
+  expect(sql).not.toContain('"chat"."messages"');
+  expect(params).toEqual(expect.arrayContaining(["chat", "api-chat"]));
+});
+
+it("under a run, keeps an in-app approval only for the person who asked", async () => {
+  const { sql, params } = await renderedWhere({
+    limit: 10,
+    runId: "arun_0123456789abcdefghjkmn",
+  });
+  expect(sql).toMatch(/"run_public_id" = \$\d+/);
+  expect(sql).toMatch(
+    /\(not exists \(select 1 from "agent"\."agent_runs".* or exists \(select 1 from "chat"\."messages" as "asker_message"/,
+  );
+  expect(sql).toMatch(/"asker_conversation"\."user_id" = \$\d+/);
+  expect(params).toEqual(
+    expect.arrayContaining(["arun_0123456789abcdefghjkmn", "user"]),
+  );
+});

@@ -1,6 +1,10 @@
 // get_agent — one agent with its credentials, roles, hosts, the runtime and
 // toolbelt it is bound to, and its versions (ADR-198). Field semantics are on
 // the contract (packages/oxagen/src/contracts/agent.get.ts).
+//
+// The workspace's managed assistant agent is `agent_not_found`, the answer an
+// unknown id gets. It is Oxagen's, not the customer's (ADR-235, item 13). A
+// write that names it is still refused `agent_managed_read_only`.
 import { schema, withTenantDb, type Tx } from "@oxagen/database";
 import { HandlerError } from "@oxagen/oxagen";
 import { AGENT_CREDENTIAL_SCOPE_PURPOSE } from "@oxagen/oxagen/agent-credential";
@@ -310,7 +314,7 @@ export async function agentGetHandler(
   const scope = { orgId: ctx.orgId, workspaceId: ctx.workspaceId };
   return withTenantDb(async (tx) => {
     const row = await resolveAgentIdentity(tx, input.agentId, scope);
-    if (!row) {
+    if (!row || isManagedAgentType(row.agentType)) {
       throw new HandlerError({
         code: "not_found",
         reason: "agent_not_found",

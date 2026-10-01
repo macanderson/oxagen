@@ -58,6 +58,12 @@ type LedgerRunCore = GeneratedSummaryColumns & {
    * stamp: not recorded.
    */
   operatorRole?: string | null;
+  /**
+   * `agent_runs.surface`. `resolveRun` reads it to keep an in-app run to the
+   * person who asked (ADR-235). Absent where a reader did not select it,
+   * which reads as a run on no in-app surface.
+   */
+  surface?: string;
 };
 
 export type LedgerRunIdentity = {
@@ -68,6 +74,11 @@ export type LedgerRunIdentity = {
   operatorPublicId: string | null;
   /** `iam.principals.kind`; null when no principal was recorded. */
   operatorKind: string | null;
+  /**
+   * `auth.users.id` for a human principal; null for any other. Absent where
+   * a reader did not select it.
+   */
+  operatorUserId?: string | null;
   /** `auth.users.display_name` for a human principal; null for any other. */
   operatorUserName: string | null;
   /** `auth.users.avatar_url` from the same user row; null for any other. */

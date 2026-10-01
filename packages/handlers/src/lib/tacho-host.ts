@@ -273,13 +273,18 @@ type BundleRetention = PolicyBundle["retention"];
  * that has pinned no policy retains bodies of every class; `digest_only` is
  * the opt-down a policy row records, and every run in that workspace grades
  * `inspect`.
+ *
+ * Only subject `workspace` rows count. `readLatestRetentionPolicy` applies
+ * that filter, so the in-app assistant's own policy row (ADR-235) never
+ * becomes the workspace's setting.
  */
 export async function readWorkspaceRetention(
   tx: TachoTx,
   orgId: string,
   workspaceId: string,
 ): Promise<BundleRetention> {
-  // The same read the control plane's idle close grades a session with.
+  // The same read the control plane's idle close grades a session with. It
+  // filters on subject `workspace`.
   const row = await readLatestRetentionPolicy(tx, orgId, workspaceId);
   if (!row) {
     return { mode: "content_exact", classes: [...RETENTION_CONTENT_CLASSES] };

@@ -4,7 +4,9 @@
 // organization through the org-wide seam (ADR-086), still fenced to this org.
 //
 // - approvals: the predicate list_approvals pages on (unresolved, unexpired,
-//   this workspace), in agent.approval_requests.
+//   this workspace, not in-app), in agent.approval_requests. An approval the
+//   in-app assistant parked belongs to the person who asked, so it never
+//   counts toward the workspace's badge (ADR-235, ruled on 2026-10-01).
 // - interjections: the predicate list_interjections pages on with `open:
 //   true` (unanswered, unexpired, this workspace), in agent.interjections.
 // - proposals: open steering proposals in agent.context_proposals, the rows
@@ -18,6 +20,7 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { shellNavCountsGet } from "@oxagen/oxagen/contracts/shell.nav_counts.get";
 import { schema, withOrgDb, withTenantDb } from "@oxagen/database";
+import { notInAppApproval } from "@oxagen/rules/approval-notify";
 import { and, eq, isNull, notInArray, sql } from "drizzle-orm";
 
 const ar = schema.approvalRequests;
@@ -51,6 +54,7 @@ export const shellNavCountsGetHandler: CapabilityHandler<
             eq(ar.workspaceId, ctx.workspaceId),
             isNull(ar.resolution),
             sql`${ar.expiresAt} > now()`,
+            notInAppApproval(),
           ),
         ),
       interjections: await tx

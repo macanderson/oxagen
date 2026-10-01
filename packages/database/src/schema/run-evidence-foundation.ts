@@ -155,14 +155,28 @@ export const SHA256_DIGEST_PATTERN = "^sha256:[0-9a-f]{64}$";
 //
 // Immutable: append-only audit columns (no updated_at / deleted_at) and the
 // migration revokes UPDATE/DELETE from the application role.
+//
+// Each row belongs to one subject (ADR-235). A `workspace` row is the
+// workspace's own policy, and every workspace reader filters on it. An
+// `oxagen_assistant` row is the policy the in-app assistant pins on its own
+// runs. The assistant reads and writes only its own subject, so its row never
+// becomes the workspace's latest policy. The CHECK below admits these two.
+export type RetentionPolicySubject = "workspace" | "oxagen_assistant";
+
 export const retentionPolicyVersions = evidenceSchema.table(
   "retention_policy_versions",
   {
     ...hexIdMixin("rpv"),
     ...orgScopeMixin(),
     ...appendOnlyAuditMixin(),
-    // Monotonically increasing per (org, workspace). Version 1 is the first
-    // policy a workspace ever pins; a rename/mode change appends the next.
+    // Whose policy this row is: the workspace's, or the in-app assistant's.
+    subject: text("subject")
+      .$type<RetentionPolicySubject>()
+      .notNull()
+      .default("workspace"),
+    // Monotonically increasing per (org, workspace, subject). Version 1 is the
+    // first policy a subject ever pins. A rename or mode change appends the
+    // next.
     version: integer("version").notNull(),
     mode: text("mode").notNull(),
     // Content classes this policy authorizes retaining exact bytes for (e.g.
@@ -185,16 +199,21 @@ export const retentionPolicyVersions = evidenceSchema.table(
     policyDigest: text("policy_digest").notNull(),
   },
   (t) => ({
+    // The subject is part of both keys, so a workspace's version 1 and the
+    // assistant's version 1 can coexist.
     versionUniq: uniqueIndex("retention_policy_versions_version_uniq").on(
       t.orgId,
       t.workspaceId,
+      t.subject,
       t.version,
     ),
-    // One canonical row per policy body per tenant — re-declaring the same
-    // policy must resolve to the existing version rather than fork the digest.
+    // One canonical row per policy body per tenant and subject. Re-declaring
+    // the same policy resolves to the existing version and does not fork the
+    // digest.
     digestUniq: uniqueIndex("retention_policy_versions_digest_uniq").on(
       t.orgId,
       t.workspaceId,
+      t.subject,
       t.policyDigest,
     ),
     orgIdx: index("retention_policy_versions_org_idx").on(
@@ -204,6 +223,10 @@ export const retentionPolicyVersions = evidenceSchema.table(
     modeCheck: check(
       "retention_policy_versions_mode_check",
       sql`${t.mode} IN ('digest_only', 'content_exact', 'environment_restore')`,
+    ),
+    subjectCheck: check(
+      "retention_policy_versions_subject_check",
+      sql`${t.subject} IN ('workspace', 'oxagen_assistant')`,
     ),
     versionCheck: check(
       "retention_policy_versions_version_check",

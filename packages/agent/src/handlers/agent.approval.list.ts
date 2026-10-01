@@ -1,8 +1,17 @@
 // list_approvals — pending approvals in the caller's workspace, soonest expiry
 // first, cursor-paged. The row-level mapping and the reasons every null is
 // null are on the contract (packages/oxagen/src/contracts/agent.approval.list.ts).
+//
+// An approval the in-app assistant parked belongs to the person who asked
+// (ADR-235, ruled on 2026-10-01). The workspace's queue leaves it out. Under
+// the run that parked it, only the person who asked sees it.
 import { schema, withTenantDb } from "@oxagen/database";
+import { resolveActingUserId } from "@oxagen/iam/org-role";
 import { isFloorReason } from "@oxagen/rules";
+import {
+  inAppOnlyForAsker,
+  notInAppApproval,
+} from "@oxagen/rules/approval-notify";
 import { and, asc, eq, gt, isNull, or, sql } from "drizzle-orm";
 import type {
   AgentApprovalListInput,
@@ -103,6 +112,16 @@ export async function agentApprovalListHandler(
   ctx: CapabilityContext,
 ): Promise<AgentApprovalListOutput> {
   const after = decodeCursor(input.cursor);
+  // The person an in-app approval may show to. Read only when a run is
+  // named, because the workspace's queue shows no in-app row to anyone.
+  const actingUserId =
+    input.runId === undefined
+      ? null
+      : await resolveActingUserId({
+          orgId: ctx.orgId,
+          userId: ctx.userId,
+          apiKeyId: ctx.apiKeyId,
+        });
   const rows = await withTenantDb((tx) =>
     tx
       .select({
@@ -144,8 +163,16 @@ export async function agentApprovalListHandler(
           sql`${ar.expiresAt} > now()`,
           // One run's parked calls, when the caller names one. A run whose
           // writers recorded no reference answers an empty page, which is the
-          // truth about the record and not a filter that was ignored.
-          input.runId === undefined ? undefined : eq(ar.runPublicId, input.runId),
+          // truth about the record and not a filter that was ignored. Under
+          // an in-app run, only the person who asked sees its rows. With no
+          // run named, this is the workspace's queue, and no in-app row
+          // belongs on it.
+          input.runId === undefined
+            ? notInAppApproval()
+            : and(
+                eq(ar.runPublicId, input.runId),
+                inAppOnlyForAsker(actingUserId),
+              ),
           after ? afterCursor(after) : undefined,
         ),
       )

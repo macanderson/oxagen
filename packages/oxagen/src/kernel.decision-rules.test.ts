@@ -9,11 +9,13 @@ import { z } from "zod";
 import type { CapabilityContext } from "./types";
 import { clearRegistryForTests, registerCapability } from "./registry";
 import {
+  clearBudgetAdmissionGate,
   clearDecisionRulesGate,
   clearHandlersForTests,
   clearKernelIAMRuntime,
   clearSecurityEventEmitter,
   clearKernelTraceSink,
+  setBudgetAdmissionGate,
   setKernelIAMRuntime,
   setKernelTraceSink,
   setSecurityEventEmitter,
@@ -50,6 +52,7 @@ const registerRefund = () =>
   });
 
 afterEach(() => {
+  clearBudgetAdmissionGate();
   clearDecisionRulesGate();
   clearHandlersForTests();
   clearKernelIAMRuntime();
@@ -566,6 +569,126 @@ describe("kernel decision-rules gate: Stella's calls (ADR-235)", () => {
     expect(handler).toHaveBeenCalledOnce();
   });
 
+  // Mac's ruling of 2026-10-01: a customer cannot write a rule that decides
+  // who may use the assistant, from any surface. The call that starts a turn
+  // comes from an adapter, before the turn mints a binding, so the contract
+  // itself carries the exemption.
+  it.each(["api", "mcp"] as const)(
+    "never gates an in-app assistant contract on the %s surface",
+    async (surface) => {
+      registerCapability({
+        name: "test.ask_assistant",
+        domain: "test",
+        description: "One turn of the in-app assistant.",
+        mode: "sync" as const,
+        surfaces: ["api", "mcp"] as const,
+        inAppAssistant: true,
+        layers: ["unit"] as const,
+        sensitivity: "low" as const,
+        defaultEffect: "allow" as const,
+        defaultRoles: { org: {}, workspace: {} },
+        input: z.object({ content: z.string() }),
+        output: z.object({ ok: z.boolean() }),
+      });
+      const handler = vi.fn(async () => ({ ok: true }));
+      registerHandler("test.ask_assistant", async () => handler);
+      const denyEverything = vi.fn(async () => {
+        throw new Error('refused by decision rule "no-assistant"');
+      });
+      setDecisionRulesGate(denyEverything);
+
+      await expect(
+        invoke("test.ask_assistant", { content: "hi" }, ctx, { surface }),
+      ).resolves.toEqual({ ok: true });
+      expect(denyEverything).not.toHaveBeenCalled();
+      expect(handler).toHaveBeenCalledOnce();
+    },
+  );
+
+  it("keeps the person's IAM check on an in-app assistant contract", async () => {
+    registerCapability({
+      name: "test.ask_assistant",
+      domain: "test",
+      description: "One turn of the in-app assistant.",
+      mode: "sync" as const,
+      surfaces: ["api"] as const,
+      inAppAssistant: true,
+      layers: ["unit"] as const,
+      sensitivity: "low" as const,
+      defaultEffect: "allow" as const,
+      defaultRoles: { org: {}, workspace: {} },
+      input: z.object({ content: z.string() }),
+      output: z.object({ ok: z.boolean() }),
+    });
+    const handler = vi.fn(async () => ({ ok: true }));
+    registerHandler("test.ask_assistant", async () => handler);
+    setKernelIAMRuntime(
+      async () => ({ outcome: "deny", reason: "no role", principal: null }),
+      /* enforced */ true,
+    );
+
+    await expect(
+      invoke("test.ask_assistant", { content: "hi" }, ctx, { surface: "api" }),
+    ).rejects.toMatchObject({ code: "authz_denied" });
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  // Item 8 of Mac's ruling: the security event stays, because it is the
+  // person's own action on the customer's data, and it says Oxagen's
+  // assistant made the call.
+  it("tags every security event of a Stella call, and no other call's", async () => {
+    registerSharedRefund();
+    registerHandler("test.refund", async () => async () => ({ ok: true }));
+    const security = vi.fn();
+    setSecurityEventEmitter(security);
+
+    await invoke("test.refund", { amount_usd: 10 }, stellaCtx(), {
+      surface: "agent",
+    });
+    expect(security).toHaveBeenLastCalledWith(
+      expect.objectContaining({ outcome: "allow", oxagenAssistant: true }),
+    );
+
+    await invoke("test.refund", { amount_usd: 10 }, ctx, { surface: "api" });
+    expect(security.mock.lastCall?.[0]).not.toHaveProperty("oxagenAssistant");
+
+    await expect(
+      invoke("test.refund", { amount_usd: "ten" }, stellaCtx(), {
+        surface: "agent",
+      }),
+    ).rejects.toMatchObject({ code: "invalid_input" });
+    expect(security).toHaveBeenLastCalledWith(
+      expect.objectContaining({ outcome: "error", oxagenAssistant: true }),
+    );
+  });
+
+  // Item 10 of Mac's ruling: no customer-configured budget applies to the
+  // assistant. The spend ceilings the budget gate reads are the customer's
+  // own, so a Stella call skips it, and an API call meets it.
+  it("skips the customer's spend ceiling for a Stella call, and keeps it for an API call", async () => {
+    registerSharedRefund();
+    const handler = vi.fn(async () => ({ ok: true }));
+    registerHandler("test.refund", async () => handler);
+    const overCeiling = vi.fn(async () => {
+      throw Object.assign(new Error("over the workspace's spend ceiling"), {
+        code: "budget_exceeded",
+      });
+    });
+    setBudgetAdmissionGate(overCeiling);
+
+    await expect(
+      invoke("test.refund", { amount_usd: 10 }, stellaCtx(), {
+        surface: "agent",
+      }),
+    ).resolves.toEqual({ ok: true });
+    expect(overCeiling).not.toHaveBeenCalled();
+
+    await expect(
+      invoke("test.refund", { amount_usd: 10 }, ctx, { surface: "api" }),
+    ).rejects.toMatchObject({ code: "budget_exceeded" });
+    expect(overCeiling).toHaveBeenCalledOnce();
+  });
+
   const forgeries: { name: string; binding: () => unknown }[] = [
     { name: "a literal true", binding: () => true },
     {
@@ -611,6 +734,9 @@ describe("kernel decision-rules gate: Stella's calls (ADR-235)", () => {
           outcome: "deny",
           errorCode: "authz_denied",
         }),
+      );
+      expect(security.mock.lastCall?.[0]).not.toHaveProperty(
+        "oxagenAssistant",
       );
     },
   );

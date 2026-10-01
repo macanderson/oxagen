@@ -75,7 +75,7 @@ export function assertNotManaged(
     throw new HandlerError({
       code: "forbidden",
       reason: MANAGED_AGENT_READONLY_CODE,
-      message: `Agent "${row.slug}" is managed by Oxagen and cannot be changed. Use the kill switch to stop it.`,
+      message: `Agent "${row.slug}" is managed by Oxagen and cannot be changed.`,
     });
   }
 }

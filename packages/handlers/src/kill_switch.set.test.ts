@@ -183,7 +183,12 @@ const lookups: KillSwitchTargetLookups = {
     id === "tlv_pay" ? { capabilityId: `mcp.${SERVER}.create_payment` } : null,
   mcpServer: async (_s, id) => (id === "mcs_github" ? { id: SERVER } : null),
   connection: async (_s, id) => (id === "mcrd_gh" ? { id: CONNECTION } : null),
-  agent: async (_s, id) => (id === "agt_finops" ? { publicId: id } : null),
+  agent: async (_s, id) =>
+    id === "agt_finops"
+      ? { publicId: id }
+      : id === "agt_assistant"
+        ? { publicId: id, managed: true }
+        : null,
   resolveOperator: async (_o, idOrPublicId) =>
     idOrPublicId === USER || idOrPublicId === USER_PUBLIC_ID
       ? { userId: USER, publicId: USER_PUBLIC_ID }
@@ -707,6 +712,47 @@ describe("set_kill_switch", () => {
     ).rejects.toMatchObject({
       code: "not_found",
       reason: "connection_not_found",
+    });
+    expect(flip.ops).toEqual([]);
+  });
+
+  // Item 3 of Mac's ruling (2026-10-01, ADR-235): the customer's kill
+  // switches do not reach Oxagen's in-app assistant, so a customer cannot
+  // switch the managed assistant agent off. Oxagen does that through
+  // `set_assistant_switch`.
+  it("refuses to switch the managed assistant agent on, and writes nothing", async () => {
+    const flip = flipTx({ generation: 1, activeSwitches: [], liveGrants: 0 });
+    await expect(
+      handlerOver(flip)(
+        {
+          target: { kind: "agent", id: "agt_assistant" },
+          on: true,
+          reason: "stop the assistant",
+        },
+        ctx(),
+      ),
+    ).rejects.toMatchObject({
+      code: "forbidden",
+      reason: "agent_managed_read_only",
+    });
+    expect(flip.ops).toEqual([]);
+    expect(mocks.emitSecurityEvent).not.toHaveBeenCalled();
+  });
+
+  it("refuses to clear the switch Oxagen holds on the managed assistant agent", async () => {
+    const flip = flipTx({ generation: 3, activeSwitches: [], liveGrants: 0 });
+    await expect(
+      handlerOver(flip)(
+        {
+          target: { kind: "agent", id: "agt_assistant" },
+          on: false,
+          reason: "turn the assistant back on",
+        },
+        ctx(),
+      ),
+    ).rejects.toMatchObject({
+      code: "forbidden",
+      reason: "agent_managed_read_only",
     });
     expect(flip.ops).toEqual([]);
   });

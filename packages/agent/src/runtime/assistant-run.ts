@@ -85,22 +85,21 @@ export const ASSISTANT_PRINCIPAL_NAME = "oxagen.assistant";
 export type AssistantRunSurface = Extract<PlatformSurface, "chat" | "api-chat">;
 
 /**
- * ADR-058 decision 2 as a row: bodies of every content class, seven years
- * from the seal. `retention_policy_versions` is read workspace-latest
- * (`readWorkspaceRetention`), and a workspace with no row already behaves
- * exactly like this — so when the first assistant turn has to pin a policy
- * because the run spec needs one, this is the only row it can write without
- * changing what the workspace keeps.
+ * The retention policy the assistant pins on its own runs: ADR-058 decision 2
+ * as a row, with bodies of every content class kept seven years from the seal.
  *
- * It used to write `digest_only` with a thirty-day TTL, reasoning that the
- * assistant's own receipts are digests anyway. That reasoning was sound about
- * assistant runs and wrong about everything else: the row is the workspace's
- * latest, so one assistant turn in a workspace that had never configured
- * retention silently opted the whole workspace down — every subsequent Tacho
- * run had its bodies refused and its replay grade fall to `inspect`, and
- * nobody chose it. There is no run-scoped or agent-scoped retention in this
- * model, so "a policy that is not the workspace's latest" cannot be
- * expressed; preserving the default is the only correct move.
+ * The assistant keeps its own policy row (ADR-235). It reads and writes only
+ * `evidence.retention_policy_versions` rows with subject `oxagen_assistant`,
+ * and no longer writes the workspace's row. Every workspace reader
+ * (`readLatestRetentionPolicy`, `readWorkspaceRetention`,
+ * `get_evidence_retention`) filters on subject `workspace`, so an assistant
+ * turn does not change what the workspace keeps or what its Audit page shows.
+ *
+ * Before the subject column, the assistant's row was the workspace's latest
+ * policy. An early build wrote `digest_only` with a thirty-day TTL, and one
+ * assistant turn in a workspace with no policy opted every later Tacho run
+ * there down to `inspect`. Migration 20261001120000 moved each row the
+ * assistant wrote to its own subject.
  */
 export const ASSISTANT_RETENTION_POLICY = {
   mode: "content_exact",
@@ -529,9 +528,17 @@ async function provisionAssistantPrincipal(
 }
 
 /**
- * The workspace's newest retention policy version, or version 1 of
- * `ASSISTANT_RETENTION_POLICY` when it has none. The digest unique index
- * makes two first turns resolve to one row.
+ * The assistant's own subject in `evidence.retention_policy_versions`
+ * (ADR-235). Workspace readers filter on `workspace` and never see it.
+ */
+const ASSISTANT_RETENTION_SUBJECT = "oxagen_assistant" as const;
+
+/**
+ * The assistant's newest retention policy version in this workspace, or
+ * version 1 of `ASSISTANT_RETENTION_POLICY` when it has none. Both the read
+ * and the insert name the assistant's subject, so the workspace's own policy
+ * rows are neither read nor written here. The digest unique index makes two
+ * first turns resolve to one row.
  */
 async function resolveRetentionPolicy(
   tx: Tx,
@@ -544,7 +551,11 @@ async function resolveRetentionPolicy(
       .select({ id: rpv.id, publicId: rpv.publicId, digest: rpv.policyDigest })
       .from(rpv)
       .where(
-        and(eq(rpv.orgId, scope.orgId), eq(rpv.workspaceId, scope.workspaceId)),
+        and(
+          eq(rpv.orgId, scope.orgId),
+          eq(rpv.workspaceId, scope.workspaceId),
+          eq(rpv.subject, ASSISTANT_RETENTION_SUBJECT),
+        ),
       )
       .orderBy(desc(rpv.version))
       .limit(1);
@@ -560,6 +571,7 @@ async function resolveRetentionPolicy(
     .values({
       orgId: scope.orgId,
       workspaceId: scope.workspaceId,
+      subject: ASSISTANT_RETENTION_SUBJECT,
       version: 1,
       mode: ASSISTANT_RETENTION_POLICY.mode,
       retainedContentClasses: [
@@ -574,7 +586,7 @@ async function resolveRetentionPolicy(
   if (!created) {
     throw new AssistantRunNotRecordedError(
       "ledger_refused",
-      "the workspace retention policy could not be pinned",
+      "the assistant's retention policy could not be pinned",
     );
   }
   return created;

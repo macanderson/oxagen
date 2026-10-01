@@ -726,6 +726,34 @@ describe("dispatch_command — a direct target that cannot receive is refused, n
     ]);
   });
 
+  // ADR-235: another person's in-app assistant run answers as an unknown one,
+  // so a workspace member cannot pause or cancel someone else's assistant
+  // turn. The run is never touched.
+  it.each(["cancel", "pause"] as const)(
+    "answers another person's in-app run not_found for %s, and touches nothing",
+    async (command) => {
+      const ledger = "arun_assistant_turn";
+      const store = new MemoryStore([], [ledger]);
+      const cancel = vi.spyOn(store, "cancelLedgerRun");
+      const pause = vi.spyOn(store, "setLedgerPaused");
+      const canReachLedgerRun = vi.fn(async () => false);
+      const handler = createDispatchCommandHandler({
+        withStore: (fn) => fn(store),
+        now: () => NOW,
+        canReachLedgerRun,
+      });
+      await expect(
+        handler(
+          parse({ target: { kind: "run", id: ledger }, command }),
+          OPERATOR,
+        ),
+      ).rejects.toMatchObject({ code: "not_found", reason: "run_not_found" });
+      expect(canReachLedgerRun).toHaveBeenCalledWith(OPERATOR, ledger);
+      expect(cancel).not.toHaveBeenCalled();
+      expect(pause).not.toHaveBeenCalled();
+    },
+  );
+
   it("cancels a ledger run through its transactional cancellation seam", async () => {
     const ledger = "arun_cancel1";
     const store = new MemoryStore([], [ledger]);

@@ -78,6 +78,7 @@ import "./contracts/assistant.chart.render";
 import "./contracts/assistant.engine.get";
 import "./contracts/assistant.reply.get";
 import "./contracts/assistant.reply_feedback.record";
+import "./contracts/assistant.switch.set";
 import "./contracts/assistant.turn.cancel";
 import "./contracts/audit.events.export";
 import "./contracts/audit.log.query";

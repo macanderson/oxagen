@@ -166,6 +166,7 @@ import { assistantReplyGet } from "./assistant.reply.get";
 import { assistantReplyFeedbackRecord } from "./assistant.reply_feedback.record";
 import { assistantTurnCancel } from "./assistant.turn.cancel";
 import { assistantChartRender } from "./assistant.chart.render";
+import { assistantSwitchSet } from "./assistant.switch.set";
 import { toolsSearch } from "./tools.search";
 import { toolsLoad } from "./tools.load";
 import { shellNavCountsGet } from "./shell.nav_counts.get";
@@ -869,6 +870,7 @@ export {
   assistantReplyFeedbackRecord,
   assistantTurnCancel,
   assistantChartRender,
+  assistantSwitchSet,
   toolsSearch,
   toolsLoad,
   shellNavCountsGet,
@@ -1319,6 +1321,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   assistantReplyFeedbackRecord,
   assistantTurnCancel,
   assistantChartRender,
+  assistantSwitchSet,
   toolsSearch,
   toolsLoad,
   shellNavCountsGet,

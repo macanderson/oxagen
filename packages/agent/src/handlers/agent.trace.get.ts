@@ -6,6 +6,7 @@ import type {
   AgentTraceGetOutput,
   TraceExecutionNode,
 } from "@oxagen/oxagen/contracts/agent.trace.get";
+import { assistantExecutionsHidden } from "./agent.execution.list";
 import { ExecutionNotFoundError } from "./execution-errors";
 
 export type { AgentTraceGetInput, AgentTraceGetOutput };
@@ -88,12 +89,17 @@ const execColumns = {
  * via parent_execution_id (capped by MAX_NODES/MAX_DEPTH), then batch-load all
  * steps and tool calls for the collected executions in two queries and assemble
  * the tree in memory. Every query is tenant-scoped.
+ *
+ * An execution of the in-app assistant answers as not found, and none joins
+ * the tree as a child, unless the assistant itself asks
+ * (`assistantExecutionsHidden`, ADR-235).
  */
 export async function agentTraceGetHandler(
   input: AgentTraceGetInput,
   ctx: CapabilityContext,
 ): Promise<AgentTraceGetOutput> {
   const byUuid = UUID_RE.test(input.executionId);
+  const hidden = assistantExecutionsHidden(ctx);
 
   const { execs, order } = await withTenantDb(async (tx) => {
     // ── Root ──
@@ -107,6 +113,7 @@ export async function agentTraceGetHandler(
             : eq(schema.agentExecutions.publicId, input.executionId),
           eq(schema.agentExecutions.orgId, ctx.orgId),
           eq(schema.agentExecutions.workspaceId, ctx.workspaceId),
+          hidden,
         ),
       )
       .limit(1)) as ExecRow[];
@@ -131,6 +138,7 @@ export async function agentTraceGetHandler(
             inArray(schema.agentExecutions.parentExecutionId, frontier),
             eq(schema.agentExecutions.orgId, ctx.orgId),
             eq(schema.agentExecutions.workspaceId, ctx.workspaceId),
+            hidden,
           ),
         )
         .orderBy(asc(schema.agentExecutions.createdAt))) as ExecRow[];

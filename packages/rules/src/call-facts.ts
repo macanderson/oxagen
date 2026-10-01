@@ -21,6 +21,7 @@ import {
 } from "@oxagen/oxagen/contracts/tool.classification";
 import { and, desc, eq, isNotNull, isNull } from "drizzle-orm";
 import type { AutoApprovalRule } from "@oxagen/oxagen/approval-rules/schemas";
+import { notInAppApproval } from "./approval-in-app";
 import {
   selectAutoApprovalRule,
   type AutoApprovalSubject,
@@ -293,6 +294,11 @@ export function readDeclaredMeasures(
  *
  * Only a PERSON's approval counts (`resolved_by_user_id` is not null), so one
  * auto-approval can never open the window for the next.
+ *
+ * A person's answer to an approval the in-app assistant parked does not count
+ * either (`approval-in-app.ts`, ADR-235). That row belongs to the person who
+ * asked, and their answer covers their own call. It never opens a workspace
+ * rule's window for a customer agent's identical call.
  */
 export async function lastHumanApprovalOf(
   tx: Tx,
@@ -312,6 +318,7 @@ export async function lastHumanApprovalOf(
         eq(ar.resolution, "approved"),
         isNotNull(ar.resolvedByUserId),
         isNotNull(ar.resolvedAt),
+        notInAppApproval(),
       ),
     )
     .orderBy(desc(ar.resolvedAt))

@@ -201,7 +201,13 @@ describe("toReportItem", () => {
 
 function handlerOver(args: {
   tacho: string[];
-  ledger: Array<{ publicId: string; runId: string; inWorkspace: boolean }>;
+  ledger: Array<{
+    publicId: string;
+    runId: string;
+    inWorkspace: boolean;
+    /** An in-app assistant run, and the person who asked (ADR-235). */
+    askedBy?: string;
+  }>;
   rows: CommandRow[];
 }) {
   const commandsForRun = vi.fn(async () => args.rows);
@@ -210,10 +216,16 @@ function handlerOver(args: {
     queries: {
       tachoSession: async (_scope, id) =>
         args.tacho.includes(id) ? ({} as never) : null,
-      ledgerIdentity: async (_scope, runId) =>
-        args.ledger.some((r) => r.runId === runId && r.inWorkspace)
-          ? ({} as never)
-          : null,
+      ledgerIdentity: async (_scope, runId) => {
+        const run = args.ledger.find(
+          (r) => r.runId === runId && r.inWorkspace,
+        );
+        if (!run) return null;
+        return {
+          run: { surface: run.askedBy === undefined ? "external" : "chat" },
+          identity: { operatorUserId: run.askedBy ?? null },
+        } as never;
+      },
     },
     store: {
       getRunByPublicId: async (id) => {
@@ -282,6 +294,36 @@ describe("list_commands handler", () => {
       ),
     ).rejects.toSatisfy(notFound);
     expect(commandsForRun).not.toHaveBeenCalled();
+  });
+});
+
+// ADR-235: another person's in-app assistant run answers as an unknown one,
+// as every run read does. The person who asked still reads its commands.
+describe("list_commands on an in-app assistant run", () => {
+  it("answers another person's run not_found, and the asker's run its rows", async () => {
+    const other = handlerOver({
+      tacho: [],
+      ledger: [
+        { publicId: LEDGER, runId: "r1", inWorkspace: true, askedBy: "u_other" },
+      ],
+      rows: [row()],
+    });
+    await expect(
+      other.handler(tachoCommandList.input.parse({ runId: LEDGER }), CTX),
+    ).rejects.toMatchObject({ code: "not_found", reason: "run_not_found" });
+    expect(other.commandsForRun).not.toHaveBeenCalled();
+
+    const asker = handlerOver({
+      tacho: [],
+      ledger: [
+        { publicId: LEDGER, runId: "r1", inWorkspace: true, askedBy: CTX.userId! },
+      ],
+      rows: [],
+    });
+    expect(
+      (await asker.handler(tachoCommandList.input.parse({ runId: LEDGER }), CTX))
+        .commands,
+    ).toEqual([]);
   });
 });
 

@@ -40,6 +40,13 @@
  *     recorded through the kernel; a call with no run, a call from another
  *     run, and a row that records no run resolve, and the last two make no
  *     run lookup the answer does not need
+ *   - an approval the in-app assistant parked (ADR-235, ruled on
+ *     2026-10-01): the in-app fact is read with the row; the person who
+ *     asked answers it and nobody is notified; another Owner, and anyone
+ *     when the requester cannot be read → forbidden `not_the_requester`, no
+ *     UPDATE, no NOTIFY; the run that raised it is sent to the assistant,
+ *     not to Fleet; a row that is not in-app is answered by another Owner as
+ *     before
  */
 
 import {
@@ -164,6 +171,8 @@ type Tenant = {
   updateMatches?: boolean;
   /** The run the row records as having parked the call; null when none. */
   runPublicId?: string | null;
+  /** True when the row's run is the in-app assistant's (ADR-235). */
+  inApp?: boolean;
   /** `agent_runs` in this workspace: internal id → public id. */
   runs?: Record<string, string>;
   /**
@@ -193,6 +202,8 @@ type Captured = {
   releasedBeforeUpdate: boolean;
   /** How many times the `agent_runs` lookup ran. */
   runLookups: number;
+  /** The projection of the pending read, which carries the in-app fact. */
+  pendingProjection: Record<string, unknown> | null;
 };
 
 /**
@@ -215,6 +226,8 @@ function makeTx(tenant: Tenant, captured: Captured) {
             mandateId: tenant.mandate?.mandateId ?? null,
             toolCallId: tenant.mandate?.toolCallId ?? null,
             runPublicId: tenant.runPublicId ?? null,
+            messageId: tenant.messageId,
+            inApp: tenant.inApp ?? false,
           },
         ]
       : [];
@@ -265,6 +278,7 @@ function makeTx(tenant: Tenant, captured: Captured) {
                   tenant.resume ? [tenant.resume.readBack] : [],
                 );
               }
+              captured.pendingProjection = projection ?? null;
               return Promise.resolve(pendingRow());
             }
             if (table === schema.mandates) {
@@ -389,6 +403,7 @@ function setup(overrides: Partial<Tenant> = {}): Captured {
     updateTx: null,
     releasedBeforeUpdate: false,
     runLookups: 0,
+    pendingProjection: null,
   };
   mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => unknown) =>
     Promise.resolve(fn(makeTx(tenant, captured))),
@@ -1223,5 +1238,122 @@ describe("resolve_approval: a run and the approval it raised", () => {
       ),
     ).resolves.toMatchObject({ resolution: "approved" });
     expect(captured.runLookups).toBe(0);
+  });
+});
+
+describe("resolve_approval: an approval the in-app assistant parked", () => {
+  // ADR-235, ruled on 2026-10-01: the assistant's parked approvals go only to
+  // the person who asked, and only that person can answer them.
+  const inApp = (overrides: Partial<Tenant> = {}) =>
+    setup({ inApp: true, runPublicId: RUN_PUBLIC_ID, runs: RUNS, ...overrides });
+  const notTheRequester = (e: unknown) =>
+    forbidden(e) && isHandlerError(e) && e.reason === "not_the_requester";
+
+  it("reads whether the row is in-app with the row itself", async () => {
+    const captured = inApp({ requesterUserId: "u_1" });
+    await agentApprovalResolveHandler(
+      { approvalId: PUBLIC_ID, decision: "approved" },
+      CTX,
+    );
+    const q = render(captured.pendingProjection!.inApp as SQL);
+    expect(q.sql).toMatch(
+      /^exists \(select 1 from "agent"\."agent_runs" as "in_app_run" where "in_app_run"\."public_id" = "agent"\."approval_requests"\."run_public_id"::citext/,
+    );
+    expect(q.params).toEqual(["chat", "api-chat"]);
+  });
+
+  it("lets the person who asked answer it, and writes no approval.resolved row", async () => {
+    const captured = inApp({ requesterUserId: "u_1" });
+    await expect(
+      agentApprovalResolveHandler(
+        { approvalId: PUBLIC_ID, decision: "approved" },
+        CTX,
+      ),
+    ).resolves.toEqual({
+      approvalId: PUBLIC_ID,
+      resolution: "approved",
+      mandate: null,
+      execution: null,
+    });
+    expect(captured.set).toMatchObject({
+      resolution: "approved",
+      resolvedByUserId: "u_1",
+    });
+    expect(captured.notification).toBeNull();
+    expect(mocks.notifyResolution).toHaveBeenCalledTimes(1);
+  });
+
+  it("refuses another Owner: no UPDATE, no approval.resolved row, no NOTIFY", async () => {
+    const captured = inApp({ requesterUserId: "u_asker", orgRole: "Owner" });
+    const err = await agentApprovalResolveHandler(
+      { approvalId: PUBLIC_ID, decision: "approved" },
+      CTX,
+    ).catch((e: unknown) => e);
+    expect(err).toSatisfy(notTheRequester);
+    expect((err as Error).message).not.toMatch(/Fleet/);
+    expect(captured.set).toBeNull();
+    expect(captured.notification).toBeNull();
+    expect(mocks.notifyResolution).not.toHaveBeenCalled();
+  });
+
+  it("refuses an API key whose creator did not ask (negative)", async () => {
+    const captured = inApp({ requesterUserId: "u_asker" });
+    await expect(
+      agentApprovalResolveHandler(
+        { approvalId: PUBLIC_ID, decision: "denied" },
+        makeCTX({ userId: null, apiKeyId: "aky_1" }),
+      ),
+    ).rejects.toSatisfy(notTheRequester);
+    expect(captured.set).toBeNull();
+  });
+
+  it.each([
+    ["the row carries no message id", { messageId: null }],
+    ["no chat message backs the row", { requesterUserId: null }],
+  ])(
+    "refuses everyone when %s: the row is never opened to the workspace (negative)",
+    async (_why, overrides) => {
+      const captured = inApp(overrides);
+      await expect(
+        agentApprovalResolveHandler(
+          { approvalId: PUBLIC_ID, decision: "approved" },
+          CTX,
+        ),
+      ).rejects.toSatisfy(notTheRequester);
+      expect(captured.set).toBeNull();
+    },
+  );
+
+  it("sends the run that raised it to the assistant, not to Fleet", async () => {
+    const captured = inApp({ requesterUserId: "u_1" });
+    const err = await agentApprovalResolveHandler(
+      { approvalId: PUBLIC_ID, decision: "approved" },
+      { ...CTX, runId: RUN_UUID },
+    ).catch((e: unknown) => e);
+    expect(err).toSatisfy(ownRun);
+    expect((err as Error).message).toBe(
+      "The run that raised this approval cannot resolve it. The person who asked answers it in the assistant.",
+    );
+    expect(captured.set).toBeNull();
+  });
+
+  it("lets another Owner answer a row that is not in-app, and tells the person who asked (negative)", async () => {
+    const captured = setup({
+      inApp: false,
+      runPublicId: RUN_PUBLIC_ID,
+      runs: RUNS,
+      requesterUserId: "u_asker",
+    });
+    await expect(
+      agentApprovalResolveHandler(
+        { approvalId: PUBLIC_ID, decision: "denied" },
+        CTX,
+      ),
+    ).resolves.toMatchObject({ resolution: "denied" });
+    expect(captured.set).toMatchObject({ resolvedByUserId: "u_1" });
+    expect(captured.notification).toMatchObject({
+      userId: "u_asker",
+      event: "approval.resolved",
+    });
   });
 });
