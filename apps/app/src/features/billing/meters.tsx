@@ -14,7 +14,13 @@ import type { EvidenceRetention, GauBucket } from "@/data/contracts/billing";
 import { type ListRow, ListTable } from "@/ui/list-table";
 import { formatCount } from "@/ui/money-format";
 import { cell } from "@/ui/table";
-import { isoDate, NotRecordedValue, PanelNote, Section } from "./section";
+import {
+  isoDate,
+  NotRecordedValue,
+  PanelNote,
+  retentionDaysBelowPaid,
+  Section,
+} from "./section";
 
 export function Meters({
   bucket,
@@ -44,9 +50,11 @@ export function Meters({
         ? t("meters.grantEndedNote", { expires: isoDate(grant.expiresAt) })
         : t("meters.governedNote", { included: count(bucket.includedGau) });
   const retainedValue = notRecorded;
-  const retainedNote = t("meters.retainedNote", {
-    months: count(retention.includedMonths),
-  });
+  const retainedDays = retentionDaysBelowPaid(retention);
+  const retainedNote =
+    retainedDays === null
+      ? t("meters.retainedNote", { months: count(retention.includedMonths) })
+      : t("meters.retainedDaysNote", { days: count(retainedDays) });
   const row = (
     name: string,
     meter: string,

@@ -26,6 +26,7 @@ const mocks = vi.hoisted(() => ({
   realWithTenantDb: null as null | ((fn: (tx: unknown) => unknown) => unknown),
   readGauEntitlement: vi.fn(),
   resolveGauEntitlement: vi.fn(),
+  readPeriodSubscribed: vi.fn(),
   readOrgBillingSettings: vi.fn(),
   assertOrgCanConsume: vi.fn(),
   ensureStripeCustomer: vi.fn(),
@@ -65,9 +66,10 @@ vi.mock(
     ({
       readGauEntitlement: mocks.readGauEntitlement,
       resolveGauEntitlement: mocks.resolveGauEntitlement,
+      readPeriodSubscribed: mocks.readPeriodSubscribed,
     }) satisfies Pick<
       typeof import("./contract-terms"),
-      "readGauEntitlement" | "resolveGauEntitlement"
+      "readGauEntitlement" | "resolveGauEntitlement" | "readPeriodSubscribed"
     >,
 );
 
@@ -798,6 +800,7 @@ function inMotion() {
     );
     mocks.withTenantDb.mockImplementation(mocks.realWithTenantDb!);
     mocks.readGauEntitlement.mockResolvedValue(FREE_ENTITLEMENT);
+    mocks.readPeriodSubscribed.mockResolvedValue(false);
     mocks.readOrgBillingSettings.mockResolvedValue(settingsWith());
     mocks.ensureStripeCustomer.mockResolvedValue("cus_gau_001");
     mocks.provider.getCheckoutPaymentMethod.mockResolvedValue(null);
@@ -1480,6 +1483,7 @@ describe("closeEndedGauPeriods", () => {
         currentPeriodEnd: new Date("2026-10-01T00:00:00.000Z"),
       },
     });
+    mocks.readPeriodSubscribed.mockResolvedValue(true);
     const bucket = endedAugust({ usedGau: 5_000 + 700 });
 
     await closeEndedGauPeriods(null, NOW);
@@ -1493,6 +1497,52 @@ describe("closeEndedGauPeriods", () => {
     expect(mocks.provider.createGauInvoice).toHaveBeenCalledWith(
       expect.objectContaining({ kind: "gau_period_close", quantityGau: 700 }),
     );
+  });
+
+  // Codex review on #4936: the job runs after the bucket ends, when a
+  // subscription canceled at that end is no longer entitled. The stored
+  // subscription rows decide, not today's entitlement.
+  it("invoices the ended month of a subscription canceled at its period end", async () => {
+    // Today's entitlement has no subscription: it was canceled at AUGUST.end.
+    mocks.readGauEntitlement.mockResolvedValue(FREE_ENTITLEMENT);
+    mocks.readPeriodSubscribed.mockResolvedValue(true);
+    const bucket = endedAugust({ usedGau: 5_000 + 900 });
+
+    await closeEndedGauPeriods(null, NOW);
+
+    expect(mocks.readPeriodSubscribed).toHaveBeenCalledWith(
+      expect.anything(),
+      ORG,
+      { start: AUGUST.start, end: AUGUST.end },
+    );
+    expect(store.settlements).toHaveLength(1);
+    expect(store.settlements[0]).toMatchObject({
+      bucketId: bucket.id,
+      kind: "period_close",
+      quantityGau: 900,
+    });
+    expect(bucket.closedAt).toBeInstanceOf(Date);
+  });
+
+  it("closes an ended month no subscription covered with closed_at only, even when the org subscribes later (negative)", async () => {
+    // Subscribed now, but the stored rows say no subscription covered August.
+    mocks.readGauEntitlement.mockResolvedValue({
+      ...FREE_ENTITLEMENT,
+      subscription: {
+        billingInterval: "month",
+        currentPeriodStart: AUGUST.end,
+        currentPeriodEnd: new Date("2026-10-01T00:00:00.000Z"),
+      },
+    });
+    mocks.readPeriodSubscribed.mockResolvedValue(false);
+    const bucket = endedAugust({ usedGau: 5_000 + 900 });
+
+    await closeEndedGauPeriods(null, NOW);
+
+    expect(bucket.closedAt).toBeInstanceOf(Date);
+    expect(bucket.overageInvoicedGau).toBe(0);
+    expect(store.settlements).toHaveLength(0);
+    expect(providerCalls()).toEqual([]);
   });
 
   it("closes an ended invoice-billed month with nothing uninvoiced with closed_at only", async () => {

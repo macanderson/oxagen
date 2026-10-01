@@ -27,7 +27,7 @@ import { and, asc, eq, gt, gte, isNull, lt, lte, ne, sql } from "drizzle-orm";
 import { schema, type Tx, withSystemDb } from "@oxagen/database";
 import { readOrgBillingSettings } from "./billing-settings";
 import { billingProvider } from "./client";
-import { readGauEntitlement } from "./contract-terms";
+import { readGauEntitlement, readPeriodSubscribed } from "./contract-terms";
 import { ensureStripeCustomer } from "./customers";
 import {
   ensureCurrentBucket,
@@ -515,15 +515,21 @@ async function closeGauPeriod(bucket: GauBucketRow, now: Date): Promise<void> {
   // Overage is billed for an organisation approved for invoice billing and,
   // since the 2026-10-01 decision, for every subscriber (ADR-241, signup
   // grant). An organisation with no subscription is refused at its
-  // allowance, so it has no overage to bill.
+  // allowance, so it has no overage to bill. Whether the bucket was a
+  // subscriber's comes from the stored subscription rows, because a
+  // subscription canceled at the bucket's end is no longer entitled when
+  // this job runs.
+  // tenancy: the scheduled billing.gau-close job runs outside a tenant scope,
+  // and the subscription read is filtered by the bucket's orgId.
   const billsOverage =
     quantity > 0 &&
     (settings.approvedForInvoiceBilling ||
-      (
-        await withSystemDb((tx) =>
-          readGauEntitlement(tx, bucket.orgId, now),
-        )
-      ).subscription !== null);
+      (await withSystemDb((tx) =>
+        readPeriodSubscribed(tx, bucket.orgId, {
+          start: bucket.periodStart,
+          end: bucket.periodEnd,
+        }),
+      )));
   if (!billsOverage) {
     await withSystemDb((tx) =>
       tx
@@ -593,6 +599,8 @@ export async function closeInvoiceAccrual(
     await closeGauPeriod(bucket, now);
   }
 
+  // tenancy: set_org_billing_terms is a platform-operator call with no tenant
+  // scope, and every read and claim here is filtered by the orgId it names.
   const claimed = await withSystemDb(async (tx) => {
     const { terms, period } = bucketBasis(
       await readGauEntitlement(tx, orgId, now),
@@ -851,6 +859,9 @@ export async function grantGauPurchaseForCheckout(
   const purchase = parseGauPurchase(session);
   const now = new Date();
 
+  // tenancy: the signature-verified checkout.session.completed webhook runs
+  // with no tenant scope, and every read and write here is filtered by the
+  // orgId in its session metadata.
   const granted = await withSystemDb(async (tx) => {
     // Before anything is read. A concurrent charge.refunded for this same
     // PaymentIntent waits here, so the two transactions cannot each miss the

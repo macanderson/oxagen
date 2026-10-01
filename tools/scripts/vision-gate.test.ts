@@ -4,8 +4,11 @@ import {
   COMMENT_MARKER,
   DOC_DRIFT_QUESTION,
   docDriftAnnotation,
+  isDocPath,
   MAX_DIFF_CHARS,
+  MAX_DOC_DIFF_CHARS,
   parseDocDrift,
+  partitionDiff,
   parseVerdict,
   renderComment,
   shouldFail,
@@ -197,5 +200,61 @@ describe("the doc-drift question", () => {
       expect(shouldFail(v, true)).toBe(false);
       expect(shouldFail(v, false)).toBe(false);
     }
+  });
+});
+
+// Codex review on #4936: on a 505 KB patch the first docs/ hunk began near
+// byte 170,000, past MAX_DIFF_CHARS, so the doc-drift judge read no doc.
+describe("the doc and runbook budget", () => {
+  const fileDiff = (path: string, body: string) =>
+    `diff --git a/${path} b/${path}\n--- a/${path}\n+++ b/${path}\n@@ -1 +1 @@\n+${body}\n`;
+
+  it("puts each doc and runbook file in its own part and leaves code in the other", () => {
+    const code = fileDiff("packages/billing/src/gate.ts", "code");
+    const doc = fileDiff("docs/capabilities/gate.md", "doc");
+    const runbook = fileDiff("infra/tools/caddy/Caddyfile.alb", "runbook");
+    const readme = fileDiff("apps/cli/README.md", "readme");
+
+    const { product, docs } = partitionDiff(code + doc + runbook + readme);
+
+    expect(product).toBe(code);
+    expect(docs).toBe(doc + runbook + readme);
+  });
+
+  it("names Markdown anywhere, docs/, and infra/ as doc paths, and code as not (negative)", () => {
+    expect(isDocPath("apps/docs/content/docs/a.mdx")).toBe(true);
+    expect(isDocPath("docs/adr/ADR-241.md")).toBe(true);
+    expect(isDocPath("infra/terraform/main.tf")).toBe(true);
+    expect(isDocPath("packages/billing/src/gate.ts")).toBe(false);
+  });
+
+  it("shows the doc hunks after a product diff larger than its budget", () => {
+    const code = fileDiff(
+      "packages/billing/src/gate.ts",
+      "x".repeat(MAX_DIFF_CHARS + 10_000),
+    );
+    const doc = fileDiff(
+      "docs/capabilities/gate.md",
+      "THE SETTING TURNS THE GATE ON",
+    );
+
+    const p = buildPrompt("V", { title: "t", body: "b" }, "stat", code + doc);
+
+    expect(p.user).toContain("=== DOC AND RUNBOOK DIFF ===");
+    expect(p.user).toContain("THE SETTING TURNS THE GATE ON");
+    expect(p.user).toContain("diff truncated");
+    expect(p.user.length).toBeLessThan(
+      MAX_DIFF_CHARS + MAX_DOC_DIFF_CHARS + 1_000,
+    );
+  });
+
+  it("says no doc changed when the patch has none", () => {
+    const p = buildPrompt(
+      "V",
+      { title: "t", body: "b" },
+      "stat",
+      fileDiff("packages/billing/src/gate.ts", "code"),
+    );
+    expect(p.user).toContain("(no doc or runbook changed)");
   });
 });

@@ -26,6 +26,8 @@ import { pathToFileURL } from "node:url";
 
 export const COMMENT_MARKER = "<!-- oxagen:vision-gate v1 -->";
 export const MAX_DIFF_CHARS = 60_000;
+/** The doc and runbook files' own budget, apart from {@link MAX_DIFF_CHARS}. */
+export const MAX_DOC_DIFF_CHARS = 40_000;
 export const VERDICTS = ["advances", "neutral", "drifts"];
 
 const GATEWAY_ENDPOINT = "https://ai-gateway.vercel.sh/v1/chat/completions";
@@ -49,6 +51,8 @@ export const DOC_DRIFT_QUESTION = [
   "the claim, and says what the code does instead. Report only what the diff",
   "shows. When nothing qualifies, or the diff changes no doc, return",
   '"doc_drift": []. A doc-drift finding does not change the verdict.',
+  "The changed docs and runbooks are in the DOC AND RUNBOOK DIFF section,",
+  "and the code they describe is in the DIFF section.",
 ].join("\n");
 
 /** Paths whose churn says nothing about product direction. */
@@ -61,6 +65,35 @@ const DIFF_EXCLUDES = [
 
 function log(...a) {
   console.log("[vision-gate]", ...a);
+}
+
+/**
+ * Whether a changed path is a doc or runbook the doc-drift question reads:
+ * Markdown anywhere, everything under docs/, and operator guidance under
+ * infra/.
+ */
+export function isDocPath(path) {
+  return (
+    /\.mdx?$/i.test(path) ||
+    path.startsWith("docs/") ||
+    path.startsWith("infra/")
+  );
+}
+
+/**
+ * Split a patch into its doc and runbook files and everything else, so each
+ * part gets its own budget. On a large change the product files fill
+ * {@link MAX_DIFF_CHARS} first, and the doc-drift question would read no doc
+ * at all (Codex review on #4936).
+ */
+export function partitionDiff(patch) {
+  const docs = [];
+  const product = [];
+  for (const file of patch.split(/^(?=diff --git )/m)) {
+    const header = /^diff --git a\/(\S+) b\//.exec(file);
+    (header !== null && isDocPath(header[1]) ? docs : product).push(file);
+  }
+  return { product: product.join(""), docs: docs.join("") };
 }
 
 /** Truncate a patch to `limit` chars, noting how much was omitted. */
@@ -114,6 +147,7 @@ export function buildPrompt(vision, pr, stat, patch) {
     vision,
   ].join("\n");
 
+  const { product, docs } = partitionDiff(patch);
   const user = [
     `PR title: ${pr.title || "(none)"}`,
     `PR description: ${pr.body || "(none)"}`,
@@ -122,7 +156,12 @@ export function buildPrompt(vision, pr, stat, patch) {
     stat,
     "",
     "=== DIFF ===",
-    truncateDiff(patch),
+    truncateDiff(product),
+    "",
+    "=== DOC AND RUNBOOK DIFF ===",
+    docs
+      ? truncateDiff(docs, MAX_DOC_DIFF_CHARS)
+      : "(no doc or runbook changed)",
   ].join("\n");
 
   return { system, user };

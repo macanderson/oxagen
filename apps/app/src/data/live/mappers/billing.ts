@@ -187,6 +187,7 @@ export function toEvidenceRetention(
 ): z.input<typeof EvidenceRetention> {
   return {
     includedMonths: out.includedMonths,
+    includedDays: out.includedDays,
     perGbMonth: {
       micros: microsFromDecimal(String(out.usdPerGbMonth)) ?? "",
       currency: "USD",

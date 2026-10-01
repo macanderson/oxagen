@@ -4,6 +4,7 @@
  */
 export declare const COMMENT_MARKER: string;
 export declare const MAX_DIFF_CHARS: number;
+export declare const MAX_DOC_DIFF_CHARS: number;
 export declare const VERDICTS: readonly string[];
 export declare const DOC_DRIFT_QUESTION: string;
 
@@ -24,6 +25,11 @@ export interface VisionVerdict {
   doc_drift: DocDriftFinding[];
 }
 
+export declare function isDocPath(path: string): boolean;
+export declare function partitionDiff(patch: string): {
+  product: string;
+  docs: string;
+};
 export declare function truncateDiff(patch: string, limit?: number): string;
 export declare function buildPrompt(
   vision: string,

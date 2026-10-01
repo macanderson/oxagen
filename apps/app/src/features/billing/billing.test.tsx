@@ -787,6 +787,30 @@ describe("Price list", () => {
       "Freeevery governance feature and one signup grant of 33,000 governed actions for 30 days with 30 days of evidence",
     );
   });
+
+  // Codex review on #4936: the tile, the line, and the meter printed the
+  // paid tiers' 12 months to an organization on its grant, while this row
+  // printed 30 days. get_evidence_retention now reports the window.
+  it("prints the grant's 30 days of evidence on the tile, the line, and the meter, and keeps the paid months on the Price list", async () => {
+    await renderBilling({
+      ...LOADED,
+      plan: readOk({ subscription: null }),
+      bucket: readOk(grantBucket()),
+      retention: readOk(evidenceRetention({ includedDays: 30 })),
+    });
+    expect(tile("retained")).toHaveTextContent(
+      "Retained evidencenot recorded30 days included",
+    );
+    expect(row("data-line", "retention")).toHaveTextContent(
+      "30 days included · GB held not recorded",
+    );
+    expect(row("data-meter", "retained")).toHaveTextContent(
+      "not recorded30 days included",
+    );
+    expect(section("Price list")).toHaveTextContent(
+      "12 months included on paid plans",
+    );
+  });
 });
 
 describe("Billable units", () => {
@@ -968,6 +992,22 @@ describe("empty", () => {
         .getAllByRole("region")
         .map((region) => region.getAttribute("aria-labelledby")),
     ).toEqual(["billing-empty-title", "billing-buy"]);
+  });
+
+  // Codex review on #4936: a new organization has spent nothing, bought
+  // nothing and has no invoice, but it has a grant to read.
+  it("draws a new organization's unused signup grant on the loaded page (negative)", async () => {
+    await renderBilling({
+      ...EMPTY,
+      bucket: readOk(grantBucket({ remainingGau: 33_000 })),
+    });
+    expect(document.querySelector("[data-state=empty]")).toBeNull();
+    expect(document.querySelector("[data-page-state=loaded]")).not.toBeNull();
+    expect(
+      section("Meters").querySelector('[data-meter="governed"]'),
+    ).toHaveTextContent(
+      "33,000 of the 33,000 signup grant left until 2026-10-10",
+    );
   });
 
   it("is not the empty state once a governed action is used (negative)", async () => {

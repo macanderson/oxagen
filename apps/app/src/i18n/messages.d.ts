@@ -1822,6 +1822,7 @@ type Messages = {
       governedNote: string;
       retained: string;
       retainedNote: string;
+      retainedDaysNote: string;
       due: string;
       dueNote: string;
     };
@@ -1845,6 +1846,8 @@ type Messages = {
         tokens: string;
         retention: string;
         retentionExtended: string;
+        retentionDays: string;
+        retentionExtendedDays: string;
         heldNotRecorded: string;
         discount: string;
         total: string;
@@ -1865,6 +1868,7 @@ type Messages = {
       sealedNote: string;
       retained: string;
       retainedNote: string;
+      retainedDaysNote: string;
       halted: string;
       inApp: string;
       free: string;

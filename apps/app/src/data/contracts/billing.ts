@@ -141,6 +141,11 @@ export type UsageCredits = z.infer<typeof UsageCredits>;
  */
 export const EvidenceRetention = z.object({
   includedMonths: z.number().int().positive(),
+  /**
+   * Days of evidence this organization's billing basis includes today: the
+   * paid months for a subscriber, or 30 days with no subscription (ADR-241).
+   */
+  includedDays: z.number().int().positive(),
   perGbMonth: Money,
   extendedRetentionEnabled: z.boolean(),
 });

@@ -33,6 +33,7 @@
       "governedNote": "above the included allowance (<basis></basis>)",
       "retained": "Retained evidence",
       "retainedNote": "{months} months included",
+      "retainedDaysNote": "{days} days included",
       "due": "Due {date}",
       "dueNote": "{currency} after the onboarding discount"
     },
@@ -56,6 +57,8 @@
         "tokens": "reported at zero (your model spend is on Spend)",
         "retention": "{months} months included · {held}",
         "retentionExtended": "{months} months included · {held} · extended retention on",
+        "retentionDays": "{days} days included · {held}",
+        "retentionExtendedDays": "{days} days included · {held} · extended retention on",
         "heldNotRecorded": "GB held not recorded",
         "discount": "the onboarding offer is not recorded yet (spec §20, deferred)",
         "total": "rounded once to cents (half-even)"
@@ -76,6 +79,7 @@
       "sealedNote": "reported without a price",
       "retained": "Retained evidence",
       "retainedNote": "{months} months included",
+      "retainedDaysNote": "{days} days included",
       "halted": "Runs Oxagen halted before any model call",
       "inApp": "Runs of the in-app agent",
       "free": "free",

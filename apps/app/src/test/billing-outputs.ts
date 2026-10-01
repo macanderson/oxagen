@@ -135,6 +135,7 @@ export function evidenceRetentionOutput(
 ): EvidenceRetentionOutput {
   return {
     includedMonths: 12,
+    includedDays: 360,
     effectiveRetentionDays: null,
     extendedRetentionEnabled: false,
     usdPerGbMonth: 0.08,

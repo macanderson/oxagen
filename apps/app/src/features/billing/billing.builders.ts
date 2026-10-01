@@ -164,6 +164,7 @@ export function evidenceRetention(
 ): EvidenceRetention {
   return {
     includedMonths: 12,
+    includedDays: 360,
     perGbMonth: { micros: "80000", currency: "USD" },
     extendedRetentionEnabled: false,
     ...overrides,

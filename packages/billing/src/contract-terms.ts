@@ -20,7 +20,18 @@
  * of the same join would be one too many.
  */
 
-import { and, desc, eq, gt, inArray, isNull, lte, or } from "drizzle-orm";
+import {
+  and,
+  desc,
+  eq,
+  gt,
+  gte,
+  inArray,
+  isNull,
+  lt,
+  lte,
+  or,
+} from "drizzle-orm";
 import { schema, type Tx, withTenantDb } from "@oxagen/database";
 import type { PlanTier } from "@oxagen/oxagen/types";
 import type { GauTerms } from "./pricing";
@@ -255,6 +266,55 @@ export async function readGauEntitlement(
     grant,
     subscriptionRequiredAfterGrant,
   };
+}
+
+/**
+ * Statuses of a subscription that once entitled the organisation and has
+ * since lapsed. An `incomplete` or `incomplete_expired` row never took a
+ * first payment, so it entitled nobody.
+ */
+const LAPSED_SUBSCRIPTION_STATUSES = ["canceled", "unpaid"] as const;
+
+/**
+ * Whether a subscription covered the bucket over `period`, read from the
+ * stored subscription rows on the caller's executor (ADR-241, signup grant).
+ *
+ * The close job reads this after the bucket has ended. By then a
+ * subscription canceled at its period end reads `canceled`, and
+ * `readGauEntitlement` leaves it out, so today's entitlement would call the
+ * ended bucket a non-subscriber's and drop its overage. A row counts when it
+ * existed before the bucket ended and either is still entitled (a renewal
+ * moved its period past the bucket) or lapsed with a recorded period that
+ * overlaps the bucket and runs to its end.
+ */
+export async function readPeriodSubscribed(
+  tx: Tx,
+  orgId: string,
+  period: { start: Date; end: Date },
+): Promise<boolean> {
+  const rows = await tx
+    .select({ id: schema.subscriptions.id })
+    .from(schema.subscriptions)
+    .where(
+      and(
+        eq(schema.subscriptions.orgId, orgId),
+        lt(schema.subscriptions.createdAt, period.end),
+        or(
+          inArray(schema.subscriptions.status, [
+            ...ENTITLED_SUBSCRIPTION_STATUSES,
+          ]),
+          and(
+            inArray(schema.subscriptions.status, [
+              ...LAPSED_SUBSCRIPTION_STATUSES,
+            ]),
+            lt(schema.subscriptions.currentPeriodStart, period.end),
+            gte(schema.subscriptions.currentPeriodEnd, period.end),
+          ),
+        ),
+      ),
+    )
+    .limit(1);
+  return rows.length > 0;
 }
 
 /**

@@ -233,8 +233,12 @@ export async function Billing({
   const buys = buysFor(ctx);
   const banner = <CheckoutBanner outcome={checkoutOutcome(checkout)} />;
 
+  // An organization with a signup grant has a balance and an expiry to read
+  // before its first governed action, so it gets the loaded page and its
+  // grant meter (ADR-241, signup grant).
   const empty =
     plan.value.subscription === null &&
+    bucket.value.signupGrant === null &&
     bucket.value.usedGau === 0 &&
     bucket.value.purchasedGau === 0 &&
     cursor === null &&
