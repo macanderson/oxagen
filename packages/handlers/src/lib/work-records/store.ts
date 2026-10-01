@@ -705,8 +705,14 @@ export async function appendFacts(tx: Tx, scope: WorkScope, input: AppendFactsIn
       if (fact.kind === "accepted") {
         // Record the required checks the gate evaluated on this head, never a
         // list the caller sent: the acceptance is evidence of what was checked.
+        // Name the approved brief admitDecision matched the digest against, so
+        // the fact's brief foreign key binds the acceptance to that revision.
         const order = byOrder.get(fact.orderId as string);
-        fact = { ...fact, data: { ...fact.data, required_checks: [...(order?.requiredChecks ?? [])] } };
+        fact = {
+          ...fact,
+          briefId: loaded.projection.approvedBrief?.briefId ?? null,
+          data: { ...fact.data, required_checks: [...(order?.requiredChecks ?? [])] },
+        };
       }
       const occurredAt = await clock(tx);
       fact = {
