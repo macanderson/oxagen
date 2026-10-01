@@ -40,7 +40,7 @@ export const steeringMarkdownImportParse = registerCapability({
     "Read up to 25 Markdown files and propose steering records and Cedar policies from them. Each statement gets a kind with a reason, a force its kind allows with the words that justify it, an effect when it is a constraint, its source line, and any duplicate or conflict with a published record or another statement. Writes nothing.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent", "cli"],
-  layers: ["schema", "api", "mcp", "cli", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "cli", "unit", "docs", "app"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "governance" },
   sensitivity: "medium",

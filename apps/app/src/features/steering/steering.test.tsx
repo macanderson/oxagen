@@ -58,6 +58,11 @@ vi.mock("./actions", () => ({
   setSteeringGate: vi.fn(),
   setGovernanceMode: vi.fn(),
 }));
+// The Import Markdown dialog's own states are import/import-markdown.test.tsx.
+vi.mock("./import/actions", () => ({
+  parseMarkdownImport: vi.fn(),
+  commitMarkdownImport: vi.fn(),
+}));
 vi.mock("@/server/session", () => ({
   getSession: vi.fn(),
   getAuthUser: vi.fn(() =>
@@ -220,6 +225,22 @@ describe("the hub", () => {
     expect(
       within(header).getByRole("button", { name: "Write a context record" }),
     ).toHaveAttribute("data-create", "record");
+  });
+
+  it("carries Import Markdown between the governance chip and the gold action, never gold itself", async () => {
+    await renderSteering();
+    const header = screen.getByTestId("hub-header");
+    const buttons = within(header)
+      .getAllByRole("button")
+      .map((button) => button.textContent.trim());
+    expect(buttons).toEqual([
+      "Governance: team",
+      "Import Markdown",
+      "Write a context record",
+    ]);
+    expect(
+      within(header).getByRole("button", { name: "Import Markdown" }).className,
+    ).not.toMatch(/button-primary/);
   });
 
   it("gives the gold to Merge pull request on a selected Context PR whose checks passed", async () => {
