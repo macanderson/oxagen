@@ -2,7 +2,7 @@
    oxagen.sh — blog
    Consumes the semantic tokens from oxagen.css. No hex, no gradient, 2px
    corners, texture only under solid panels. Long-form reading is the job:
-   a 68ch measure, generous leading, references at the end.
+   generous leading, references at the end.
    ========================================================================== */
 
 /* ---- index hero ---- */
@@ -353,9 +353,11 @@
 .post-head .byline {
   margin: 18px 0 14px;
 }
+/* The prose column takes the space the TOC leaves, so the TOC's right edge
+   lines up with the nav's "Get a demo" button: both sit at the .wrap edge. */
 .post-body {
   display: grid;
-  grid-template-columns: minmax(0, 68ch) minmax(200px, 260px);
+  grid-template-columns: minmax(0, 1fr) minmax(200px, 260px);
   gap: 56px;
   align-items: start;
   padding: 56px 0 24px;
