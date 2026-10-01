@@ -59,9 +59,6 @@ vi.mock("next/navigation", () => ({
     throw new Error("NEXT_NOT_FOUND");
   },
 }));
-vi.mock("../run-outcomes/actions", () => ({
-  setRunOutcomesConsentAction: vi.fn(),
-}));
 vi.mock("../run-outcomes/provider-actions", () => ({
   loadRunIssueProviders: vi.fn(),
   authorizeRunIssues: vi.fn(),

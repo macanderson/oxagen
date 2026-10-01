@@ -21,8 +21,7 @@ import {
   MINUTE,
   mergeSteeringPr,
   newestRun,
-  OXAGEN_MERGES,
-  OXAGEN_MERGES_SETTING,
+  MERGE_COMMIT_SETTING,
   openSteeringPr,
   type Oxagen,
   poll,
@@ -165,7 +164,7 @@ test("a steering PR merged through Oxagen raises the published version", async (
   expect(after.publishedVersion).toBe(beforeVersion + 1);
 });
 
-test("a deleted Oxagen merges ruleset drifts health and fails the steering check until repair", async () => {
+test("allowing merge commits drifts health and fails the steering check until repair", async () => {
   const r = await rig();
   await waitForHealth(r.ox, r.settings, "healthy", 3 * MINUTE);
   const fullName = await steeringRepoName(r);
@@ -174,16 +173,12 @@ test("a deleted Oxagen merges ruleset drifts health and fails the steering check
     r.ox,
     r.settings,
     DRIFT_LINEAGE,
-    "Steering live test: this steering PR stays open while the ruleset is gone.",
+    "Steering live test: this steering PR stays open while merge settings differ.",
   );
   await openSteeringPr(r.ox, r.settings, proposed.proposalId);
   await waitForChecks(r.ox, r.settings, proposed.proposalId);
 
-  const ruleset = await r.gh.findRuleset(fullName, OXAGEN_MERGES);
-  if (ruleset === null) {
-    throw new Error(`${fullName} has no "${OXAGEN_MERGES}" ruleset to delete.`);
-  }
-  await r.gh.deleteRuleset(fullName, ruleset.id);
+  await r.gh.setMergeCommits(fullName, true);
   const brokeAt = Date.now();
 
   await poll(
@@ -192,8 +187,8 @@ test("a deleted Oxagen merges ruleset drifts health and fails the steering check
     async () => {
       const view = await readSteeringRepo(r.ox, r.settings);
       if (view.health !== "drifted") return waiting(describeRepo(view));
-      if (!view.differences.some((d) => d.setting === OXAGEN_MERGES_SETTING)) {
-        return waiting(`drifted without a ${OXAGEN_MERGES_SETTING} difference: ${describeRepo(view)}`);
+      if (!view.differences.some((d) => d.setting === MERGE_COMMIT_SETTING)) {
+        return waiting(`drifted without a ${MERGE_COMMIT_SETTING} difference: ${describeRepo(view)}`);
       }
       const pulls = await r.gh.openPulls(fullName);
       if (pulls.length === 0) return waiting("drifted, with no open pull request");
@@ -215,5 +210,5 @@ test("a deleted Oxagen merges ruleset drifts health and fails the steering check
   const repaired = await repairSteeringRepo(r.ox, r.settings);
   expect(repaired.health).toBe("healthy");
   await waitForHealth(r.ox, r.settings, "healthy", 60 * SECOND);
-  expect(await r.gh.findRuleset(fullName, OXAGEN_MERGES)).not.toBeNull();
+  expect(await r.gh.allowsMergeCommits(fullName)).toBe(false);
 });

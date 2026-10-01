@@ -1,10 +1,9 @@
 // settings.ts: the repository settings differ from the ones Oxagen
 // prescribes. Lane S2 reads the host and passes the differences in as the
 // repository's health, so this check reads no file.
-import { GITHUB_SETTINGS_BASELINE, REQUIRED_CHECK_NAME } from "@oxagen/oxagen/steering-repo";
+import { REQUIRED_CHECK_NAME } from "@oxagen/oxagen/steering-repo";
 import type { ChangeCheck } from "../finding";
 import { finder } from "../finding";
-import { isRecord } from "../repo";
 import type { Finding, SettingsDifferenceInput } from "../types";
 
 const find = finder("settings");
@@ -18,21 +17,6 @@ function shown(value: unknown): string {
   return text.length > 120 ? `${text.slice(0, 117)}...` : text;
 }
 
-/** Does this list of ruleset rules require Oxagen's check? */
-function requiresCheck(rules: unknown): boolean {
-  if (!Array.isArray(rules)) return false;
-  return rules.some((rule) => {
-    if (!isRecord(rule) || rule.type !== "required_status_checks" || !isRecord(rule.parameters)) return false;
-    const checks = rule.parameters.required_status_checks;
-    return Array.isArray(checks) && checks.some((check) => isRecord(check) && check.context === REQUIRED_CHECK_NAME);
-  });
-}
-
-/** The name a ruleset shows on the host, or its key when the baseline gives none. */
-function rulesetName(key: string): string {
-  return GITHUB_SETTINGS_BASELINE.rulesets[key]?.name ?? key;
-}
-
 interface Described {
   rule: string;
   message: string;
@@ -40,24 +24,8 @@ interface Described {
 }
 
 function describe(difference: SettingsDifferenceInput): Described {
-  const { setting, expected, actual } = difference;
+  const { setting, actual } = difference;
   const parts = setting.split(".");
-  if (parts[0] === "rulesets" && parts.length === 2 && (actual === null || actual === undefined)) {
-    const name = rulesetName(parts[1] as string);
-    return {
-      rule: "ruleset-deleted",
-      message: `The ruleset "${name}" was deleted`,
-      fix: `${REPAIR} Or restore the ruleset "${name}" by hand.`,
-    };
-  }
-  if (parts[0] === "rulesets" && parts[2] === "rules" && requiresCheck(expected) && !requiresCheck(actual)) {
-    const name = rulesetName(parts[1] as string);
-    return {
-      rule: "required-check-removed",
-      message: `The ruleset "${name}" no longer requires the check "${REQUIRED_CHECK_NAME}"`,
-      fix: `${REPAIR} Or add the check "${REQUIRED_CHECK_NAME}" back to the ruleset by hand.`,
-    };
-  }
   if (setting === "merge_requests.required_status") {
     return {
       rule: "required-check-removed",

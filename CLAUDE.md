@@ -149,9 +149,9 @@ Load `clear-prose` before you write any of these strings. `apps/app/src/test/arc
 
 Mac set this on 2026-09-29. The app uses Geist for every heading and every line of text. Space Grotesk sets the Oxagen and stella wordmarks and, on oxagen.sh, the first line of a hero. It sets nothing else.
 
-- `packages/ui/src/styles/globals.css` points `--font-display` at Geist (`--ox-font`), so `h1` to `h3` and the `text-m-h*` and `text-a-h*` utilities draw in Geist. Space Grotesk reaches the page only through `--font-wordmark` and the `.ox-wordmark` class.
+- The kit's `packages/ui/src/styles/house-tailwind.css` sets `--font-display` and `--font-sans` to Geist, so every heading and the `text-m-h*` and `text-a-h*` utilities draw in Geist. Space Grotesk reaches the page only through `--font-wordmark`, the `.ox-wordmark` class, and the kit's `hero-line-1` class on a marketing hero.
 - Do not write `--ox-font-display`, `--font-wordmark`, or "Space Grotesk" in app source outside a comment. `apps/app/src/test/arch/design-record.test.ts` fails on each of them.
-- The brand kit (`oxagenai/oxagen-brand`) still names Space Grotesk as its display face. The files it syncs into `packages/ui/src/styles/` stay byte-identical to the kit, so the override lives in `globals.css`, after the kit's import.
+- The brand kit (`macanderson/oxagen-brand`) has set every heading in Geist since 2.4.0 (#27), so `globals.css` carries no font override. The files the sync writes into `packages/ui/src/styles/` stay byte-identical to the kit.
 
 ## Runtime checks that matter
 

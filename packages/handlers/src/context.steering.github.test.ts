@@ -9,7 +9,12 @@ import {
   type GitHubRest,
 } from "@oxagen/github";
 
-const mocks = vi.hoisted(() => ({ withTenantDb: vi.fn() }));
+const mocks = vi.hoisted(() => ({ withTenantDb: vi.fn(), assertSteeringCommit: vi.fn() }));
+
+vi.mock("./steering-repo/diverged", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./steering-repo/diverged")>()),
+  assertGithubSteeringCommit: mocks.assertSteeringCommit,
+}));
 
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
@@ -45,6 +50,9 @@ function columnsIn(predicate: unknown, out = new Set<string>()): Set<string> {
 function fakeClient(over: Partial<GitHubClient> = {}): GitHubClient {
   return {
     getRepoInfo: async () => ({
+      id: "84",
+      owner: "a-intel",
+      name: "platform",
       fullName: "a-intel/platform",
       htmlUrl: "",
       defaultBranch: "main",
@@ -974,6 +982,79 @@ describe("the GitHub seam's token for a provisioned steering repository", () => 
     approvedDefaultRef: "main",
     steeringInstallationId: 4242,
   };
+
+  it("verifies provisioned repository commits from binding metadata", async () => {
+    vi.stubEnv("GITHUB_APP_ID", "71");
+    vi.stubEnv("GITHUB_APP_PRIVATE_KEY", "test-key");
+    vi.stubEnv("GITHUB_APP_SLUG", "oxagen-steering");
+    try {
+      mocks.assertSteeringCommit.mockResolvedValueOnce(undefined);
+      const client = fakeClient();
+      const request = vi.fn().mockResolvedValue({ status: 200, data: { verified: true } });
+      const gh = createSteeringGitHub({
+        readConnection: async () => PROVISIONED_BOUND,
+        resolveToken: async () => "workspace-token",
+        steeringToken: async () => "steering-token",
+        client: () => client,
+        rest: () => ({ request }),
+      });
+      const repo = await gh.resolveRepository(SCOPE);
+      expect(repo.requiresSteeringProvenance).toBe(true);
+      await gh.assertSteeringCommit?.(repo, "captured-sha");
+      expect(mocks.assertSteeringCommit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          repo: { owner: "a-intel", name: "platform", id: 84 },
+          defaultBranch: "main",
+          app: { id: 71, slug: "oxagen-steering", symbol: "oxagen-steering" },
+        }),
+        "captured-sha",
+      );
+      const target = mocks.assertSteeringCommit.mock.calls.at(-1)?.[0] as
+        import("./steering-repo/diverged").GithubHistoryTarget | undefined;
+      if (!target) throw new Error("The verifier received no target");
+      await expect(target.rest.request("GET", "/proof")).resolves.toEqual({
+        status: 200, data: { verified: true }, message: null,
+      });
+      request.mockRejectedValueOnce(new GitHubApiError(404, "missing"));
+      await expect(target.rest.request("GET", "/proof", undefined, [404])).resolves.toEqual({
+        status: 404, data: null, message: "GitHub API error 404: missing",
+      });
+      request.mockRejectedValueOnce(new Error("GitHub unavailable"));
+      await expect(target.rest.request("GET", "/proof")).rejects.toThrow("GitHub unavailable");
+      mocks.assertSteeringCommit.mockRejectedValueOnce(new Error("provenance unavailable"));
+      await expect(gh.assertSteeringCommit?.(repo, "other-sha")).rejects.toThrow("provenance unavailable");
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it("refuses provenance checks when the app configuration is missing", async () => {
+    vi.stubEnv("GITHUB_APP_ID", "");
+    vi.stubEnv("GITHUB_APP_PRIVATE_KEY", "");
+    vi.stubEnv("GITHUB_APP_SLUG", "");
+    try {
+      const gh = createSteeringGitHub({
+        readConnection: async () => PROVISIONED_BOUND,
+        resolveToken: async () => "workspace-token",
+        steeringToken: async () => "steering-token",
+        client: () => fakeClient(),
+      });
+      const repo = await gh.resolveRepository(SCOPE);
+      await expect(gh.assertSteeringCommit?.(repo, "captured-sha")).rejects.toMatchObject({
+        reason: "steering_app_unconfigured",
+      });
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it("leaves legacy repository commits outside the provisioned provenance gate", async () => {
+    const { gh } = seam(fakeClient());
+    const repo = await gh.resolveRepository(SCOPE);
+    const before = mocks.assertSteeringCommit.mock.calls.length;
+    await expect(gh.assertSteeringCommit?.(repo, "captured-sha")).resolves.toBeUndefined();
+    expect(mocks.assertSteeringCommit.mock.calls).toHaveLength(before);
+  });
 
   it("mints the Oxagen GitHub App token and never asks for the workspace's", async () => {
     const resolveToken = vi.fn(async () => "workspace-tok");

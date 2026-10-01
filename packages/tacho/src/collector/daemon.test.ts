@@ -1927,7 +1927,7 @@ describe("tachod", () => {
     return file;
   }
 
-  it("uploads a Claude Code memory file when memory capture is on", async () => {
+  it("uploads a Claude Code memory file at start", async () => {
     const plane = fakeControlPlane("etag-3");
     const recorded = recordingMemoryUploads(plane);
     const paths = scratchPaths();
@@ -1935,10 +1935,7 @@ describe("tachod", () => {
       paths,
       "---\nname: use-pnpm\n---\nUse pnpm, not npm.\n",
     );
-    const { host } = await boot(plane, paths, {
-      fetch: recorded.fetch,
-      memoryCapture: true,
-    });
+    const { host } = await boot(plane, paths, { fetch: recorded.fetch });
     await vi.waitFor(() => expect(recorded.uploads).toHaveLength(1), {
       timeout: 2_000,
     });
@@ -1957,30 +1954,60 @@ describe("tachod", () => {
     ]);
   });
 
-  it("reads memory files only when TACHO_MEMORY_CAPTURE is 1", async () => {
+  it("reads memory files whatever TACHO_MEMORY_CAPTURE holds", async () => {
+    // The scan used to wait for TACHO_MEMORY_CAPTURE=1, which nothing
+    // deployed, so no host ever sent a memory (#4903). An empty value and 0
+    // kept that gate shut. A value left in a shell from that time no longer
+    // decides anything.
     try {
-      const offPlane = fakeControlPlane("etag-3");
-      const off = recordingMemoryUploads(offPlane);
-      const offPaths = scratchPaths();
-      writeClaudeMemory(offPaths, "Use pnpm, not npm.\n");
+      const emptyPlane = fakeControlPlane("etag-3");
+      const empty = recordingMemoryUploads(emptyPlane);
+      const emptyPaths = scratchPaths();
+      writeClaudeMemory(emptyPaths, "Use pnpm, not npm.\n");
       vi.stubEnv("TACHO_MEMORY_CAPTURE", "");
-      await boot(offPlane, offPaths, { fetch: off.fetch });
+      await boot(emptyPlane, emptyPaths, { fetch: empty.fetch });
 
-      const onPlane = fakeControlPlane("etag-3");
-      const on = recordingMemoryUploads(onPlane);
-      const onPaths = scratchPaths();
-      writeClaudeMemory(onPaths, "Use pnpm, not npm.\n");
-      vi.stubEnv("TACHO_MEMORY_CAPTURE", "1");
-      await boot(onPlane, onPaths, { fetch: on.fetch });
+      const zeroPlane = fakeControlPlane("etag-3");
+      const zero = recordingMemoryUploads(zeroPlane);
+      const zeroPaths = scratchPaths();
+      writeClaudeMemory(zeroPaths, "Use pnpm, not npm.\n");
+      vi.stubEnv("TACHO_MEMORY_CAPTURE", "0");
+      await boot(zeroPlane, zeroPaths, { fetch: zero.fetch });
 
-      // The second daemon has scanned and uploaded. The first builds no
-      // reader, so it has nothing that could upload later.
-      await vi.waitFor(() => expect(on.uploads).toHaveLength(1), {
-        timeout: 2_000,
-      });
-      expect(off.uploads).toEqual([]);
+      await vi.waitFor(
+        () => {
+          expect(empty.uploads).toHaveLength(1);
+          expect(zero.uploads).toHaveLength(1);
+        },
+        { timeout: 2_000 },
+      );
     } finally {
       vi.unstubAllEnvs();
     }
+  });
+
+  it("reads no memory files in a daemon with no listener", async () => {
+    const quietPlane = fakeControlPlane("etag-3");
+    const quiet = recordingMemoryUploads(quietPlane);
+    const quietPaths = scratchPaths();
+    writeClaudeMemory(quietPaths, "Use pnpm, not npm.\n");
+    const { handle } = await boot(quietPlane, quietPaths, {
+      fetch: quiet.fetch,
+      listen: false,
+    });
+    await handle.tick();
+
+    const listeningPlane = fakeControlPlane("etag-3");
+    const listening = recordingMemoryUploads(listeningPlane);
+    const listeningPaths = scratchPaths();
+    writeClaudeMemory(listeningPaths, "Use pnpm, not npm.\n");
+    await boot(listeningPlane, listeningPaths, { fetch: listening.fetch });
+
+    // The listening daemon has scanned and uploaded. The other builds no
+    // reader, so a test that drives the API by hand sends nothing.
+    await vi.waitFor(() => expect(listening.uploads).toHaveLength(1), {
+      timeout: 2_000,
+    });
+    expect(quiet.uploads).toEqual([]);
   });
 });
