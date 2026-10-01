@@ -24,7 +24,9 @@
   --state-proven: #3FA2A2;
   --state-failed: #C0453C;
   --state-critical: #D6455E;
-  --font-display: "Space Grotesk", "Helvetica Neue", Arial, sans-serif;
+  --font-display: "Geist", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-wordmark: "Space Grotesk", "Helvetica Neue", Arial, sans-serif;
+  --font-hero: "Space Grotesk", "Helvetica Neue", Arial, sans-serif;
   --font: "Geist", system-ui, -apple-system, "Segoe UI", sans-serif;
   --mono: "Monaspace Neon", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   --mono-features: "calt", "liga";
