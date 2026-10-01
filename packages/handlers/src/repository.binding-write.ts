@@ -177,6 +177,40 @@ export async function assertGlobalClaimIsKnowable(
   }
 }
 
+/**
+ * Re-ask which plane the organisation is on, uncached, from inside the
+ * transaction that writes a head (#3340 finding 1).
+ *
+ * `assertGlobalClaimIsKnowable` asks before the transaction opens. When the
+ * organisation's Postgres plane moves between that answer and the write,
+ * `withTenantDb` writes the head on the new dedicated plane, where neither the
+ * shared trigger nor a cross-tenant read can see it, and another workspace
+ * can later claim the same repository. Asking again inside the transaction
+ * narrows that window to the transaction itself.
+ *
+ * `loadDataPlaneBinding`, not `resolveDataPlane`: the resolver caches per
+ * process, and `set_data_plane` invalidates only the process it ran in, so a
+ * cached re-ask would hand back the same stale `shared` answer the pre-check
+ * had and check nothing.
+ */
+export async function assertPlaneStillShared(scope: {
+  orgId: string;
+  workspaceId: string;
+}): Promise<void> {
+  // Loaded on first use, as `get_data_plane` loads it, so the many importers
+  // of this module do not load the plane resolver until a head is written.
+  const { loadDataPlaneBinding } = await import("@oxagen/database/data-plane");
+  const planeNow = await loadDataPlaneBinding(scope.orgId, "postgres");
+  assertDataPlaneUsable(planeNow);
+  if (planeNow.mode !== "shared") {
+    logger.warn(
+      { orgId: scope.orgId, workspaceId: scope.workspaceId },
+      "repository head write refused mid-transaction: the organization's Postgres plane moved after the pre-check",
+    );
+    throw planeUnsupported();
+  }
+}
+
 function planeUnsupported(): HandlerError {
   return new HandlerError({
     code: "conflict",
