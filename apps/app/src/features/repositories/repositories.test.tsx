@@ -393,6 +393,13 @@ describe("states", () => {
         "Configuration",
       ]);
     });
+    // The selected tab names the panel the tab's body draws in.
+    const open = within(tabs).getByRole("tab", { selected: true });
+    expect(open).toHaveTextContent(/^Repositories/);
+    expect(open).toHaveAttribute(
+      "aria-controls",
+      screen.getByRole("tabpanel", { name: /^Repositories/ }).id,
+    );
     const gold = screen.getByTestId("repositories-add-oxagen");
     expect(gold.className).toContain("bg-button-primary-bg");
     // Exactly one gold action on the screen: the panel's and the rows' Add
