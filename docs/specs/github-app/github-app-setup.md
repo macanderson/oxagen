@@ -1,8 +1,8 @@
 # GitHub App setup
 
 **Audience:** operators / platform engineers configuring the GitHub connector.
-**Last verified against code and the live apps:** 2026-10-01. Staging and local still lack the
-required permissions. See [Permissions](#permissions).
+**Last verified against code and the live apps:** 2026-10-01T01:02Z. Staging still lacks Workflows.
+See [Permissions](#permissions).
 
 This document is the setup reference for the GitHub App Oxagen uses (ADR-228). It lists every
 configuration value, the callback and webhook endpoints the code expects, the permissions and
@@ -163,8 +163,8 @@ repository variable is not `true` (#4868). Keep the app configured so staging wo
 | Setup URL | blank |
 | Redirect on update | off |
 | Webhook | `https://api.staging.oxagen.sh/webhooks/github/app`, active |
-| Permissions | The [required set](#permissions). Not applied yet on 2026-10-01. |
-| Events | The [15 required events](#webhook-config-on-the-app). Not applied yet on 2026-10-01. |
+| Permissions | The [required set](#permissions). On 2026-10-01T01:02Z it held all of it except Workflows, which Mac adds by hand. |
+| Events | The [15 required events](#webhook-config-on-the-app), applied 2026-10-01T01:00:50Z |
 | Credentials | Parameter Store SecureStrings under `/oxagen/staging/`, the same seven `GITHUB_APP_*` names as production |
 
 ### Oxagen Github Connect Local
@@ -188,9 +188,9 @@ credentials.
 | Enable Device Flow | off |
 | Setup URL | `http://localhost:3000/connections/github/setup`. GitHub greys it out and ignores it while OAuth during installation is on. |
 | Redirect on update | on. It does nothing while the Setup URL is ignored. |
-| Webhook | inactive, URL blank. Point it at a tunnel to test webhooks (see [Webhooks](#webhooks)). |
-| Permissions | The [required set](#permissions). Not applied yet on 2026-10-01. |
-| Events | The [15 required events](#webhook-config-on-the-app). Not applied yet on 2026-10-01. |
+| Webhook | inactive, URL blank |
+| Permissions | The [required set](#permissions), applied 2026-10-01T01:02:27Z |
+| Events | none. GitHub drops every event subscription while an app's webhook is inactive. To receive webhooks locally, follow the steps in [Webhooks](#webhooks). |
 | Credentials | `apps/api/.env.local` on the developer's machine. See [Environment variables](#environment-variables). |
 
 ### Oxagen Github Connect (retired)
@@ -309,9 +309,10 @@ turns the field off while **Request user authorization (OAuth) during installati
 Local, staging, and production each need exactly this set. Oxagen sends no OAuth `scope`, so these
 permissions, and the repositories an installation covers, are the whole grant.
 
-> **Staging and local do not match this set yet (2026-10-01).** Production has carried it since
-> 2026-10-01T00:34:16Z. Apply it on the staging and local apps' **Permissions & events** pages, and
-> remove this note once both match.
+> **Staging lacks Workflows (2026-10-01T01:02Z).** Production has carried this set since
+> 2026-10-01T00:34:16Z and local since 2026-10-01T01:02:27Z. Staging holds all of it except
+> Workflows. Add Workflows: Read and write on the staging app's **Permissions & events** page, and
+> remove this note once it matches.
 
 **Repository permissions:**
 
@@ -433,9 +434,14 @@ code reads yet costs the API a signature check and one connection lookup, and di
 `installation` and `installation_repositories` are delivered automatically (no subscription needed)
 and drive the pause-on-uninstall reconciliation.
 
-> **Local webhooks need a public tunnel.** GitHub cannot reach `localhost`. Use smee.io,
-> `cloudflared tunnel`, or `ngrok`, and set the local App's Webhook URL to the tunnel origin
-> forwarding to `http://localhost:4000`.
+> **Local webhooks need a public tunnel.** GitHub cannot reach `localhost`, and it drops the local
+> app's event subscriptions while its webhook is inactive. To receive webhooks locally:
+>
+> 1. Start a tunnel to `http://localhost:4000` with smee.io, `cloudflared tunnel`, or `ngrok`.
+> 2. On the local app's settings page, set the Webhook URL to `https://{your-tunnel}/webhooks/github/app`
+>    and the secret to your local `GITHUB_APP_WEBHOOK_SECRET`.
+> 3. Turn **Active** on and save.
+> 4. On **Permissions & events**, tick the 15 events above and save.
 
 ---
 
