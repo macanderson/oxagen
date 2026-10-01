@@ -341,6 +341,19 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: pnpm check:audit-coverage
 
+      # #4664 item 2, Mac's decision of 2026-09-30. Turbo hashes a test task
+      # over its own package's files. The tools/scripts tests that read
+      # outside the package (every package's source, the workflows, the docs)
+      # kept their cache key when those files changed, so main replayed a
+      # pass they had not earned: run 36790132956 replayed @oxagen/scripts
+      # from the cache. Those tests are `*.tree.test.ts` files, which the
+      # package's turbo tasks leave out. This step runs them with vitest
+      # directly, outside turbo, on every run, so each one reads the current
+      # tree.
+      - name: Guard tests that read the whole tree
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: pnpm check:tree-guards
+
       # UI Capability Parity is now a hard gate (web-app-2.0 Phase 0). --strict
       # fails only on NON-grandfathered forward gaps: every app-layer capability
       # shipped from here on must have a binding + existing page + runtime proof.

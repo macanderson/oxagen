@@ -4,8 +4,10 @@
  *
  * The witness is PR #3233's branch on 2026-09-18, rebuilt from the runs the
  * issue recorded: cancelled runs 35291373462, 35291647690 and 35292531366 in a
- * row with nothing finished between. The detector must fire on that and stay
- * silent on one cancel followed by a finished run.
+ * row with nothing finished between, under run 35296075650, still in
+ * progress. The detector must fire on that and stay silent on one cancel
+ * followed by a finished run. It must also stay silent on three cancelled runs
+ * with no run after them, since no push cancelled the newest (#4664 item 23).
  */
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -13,9 +15,11 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   MARKER,
+  REPORTER_LOGIN,
   RESOLVED_MARKER,
   classify,
   medianGapMinutes,
+  ownReport,
   parseThreshold,
   plan,
   readRuns,
@@ -58,23 +62,42 @@ const THREE_CANCELLED: Run[] = [
   run(35291373462, "fd57c16bc", "2026-09-18T00:26:15Z", "completed", "cancelled"),
 ];
 
+// The run the last push started, which cancelled the newest of the three.
+const STILL_GOING = run(35296075650, "332ed50a", "2026-09-18T01:36:00Z", "in_progress", null);
+
+// #3233's branch as the issue recorded it: three cancelled runs, each
+// followed by a newer one.
+const WITNESS: Run[] = [STILL_GOING, ...THREE_CANCELLED];
+
 const ONE_CANCEL_THEN_GREEN: Run[] = [
   run(35300000002, "bbbbbbbbb", "2026-09-18T02:10:00Z", "completed", "success"),
   run(35300000001, "aaaaaaaaa", "2026-09-18T02:00:00Z", "completed", "cancelled"),
 ];
 
 describe("classify", () => {
-  it("fires on three cancelled runs in a row with nothing finished", () => {
-    const verdict = classify(THREE_CANCELLED);
+  it("fires while a newer run is still going, as on #3233", () => {
+    // The issue's table ended in an in_progress run. It is no answer yet, so
+    // it neither extends nor ends the streak, but it is the newer run that
+    // makes the newest cancelled run count.
+    const verdict = classify(WITNESS);
     expect(verdict.state).toBe("superseded");
     expect(verdict.streak.map((r: Run) => r.id)).toEqual([35292531366, 35291647690, 35291373462]);
   });
 
-  it("fires while a newer run is still going, as on #3233", () => {
-    // The issue's table ended in an in_progress run. It is no answer yet, so
-    // it neither extends nor ends the streak.
-    const runs = [run(35296075650, "332ed50a", "2026-09-18T01:36:00Z", "in_progress", null), ...THREE_CANCELLED];
-    expect(classify(runs).state).toBe("superseded");
+  it("fires on three cancelled runs under a fourth that was cancelled too", () => {
+    const fourCancelled = [run(35296075650, "332ed50a", "2026-09-18T01:36:00Z", "completed", "cancelled"), ...THREE_CANCELLED];
+    const verdict = classify(fourCancelled);
+    expect(verdict.state).toBe("superseded");
+    expect(verdict.streak.map((r: Run) => r.id)).toEqual([35292531366, 35291647690, 35291373462]);
+  });
+
+  it("never reads three cancelled runs with no run after them as superseded (#4664 item 23)", () => {
+    // A person who cancels three runs by hand pushed nothing, so no push
+    // cancelled the newest. It does not count, which leaves a streak of two.
+    const verdict = classify(THREE_CANCELLED);
+    expect(verdict.state).not.toBe("superseded");
+    expect(verdict.state).toBe("pending");
+    expect(verdict.streak.map((r: Run) => r.id)).toEqual([35291647690, 35291373462]);
   });
 
   it("stays silent on one supersede followed by a finished run", () => {
@@ -90,8 +113,8 @@ describe("classify", () => {
   });
 
   it("stays silent on one or two cancels with no answer yet", () => {
-    expect(classify(THREE_CANCELLED.slice(0, 1)).state).toBe("pending");
-    expect(classify(THREE_CANCELLED.slice(0, 2)).state).toBe("pending");
+    expect(classify([STILL_GOING, ...THREE_CANCELLED.slice(0, 1)]).state).toBe("pending");
+    expect(classify([STILL_GOING, ...THREE_CANCELLED.slice(0, 2)]).state).toBe("pending");
   });
 
   it("reads a first run still in progress as not finished yet, not superseded", () => {
@@ -102,6 +125,7 @@ describe("classify", () => {
   it("counts only the streak since the last answer", () => {
     // Two cancels after a success: the success ended the older streak.
     const runs = [
+      STILL_GOING,
       ...THREE_CANCELLED.slice(0, 2),
       run(3, "c", "2026-09-18T00:10:00Z", "completed", "success"),
       run(2, "b", "2026-09-18T00:05:00Z", "completed", "cancelled"),
@@ -111,13 +135,13 @@ describe("classify", () => {
   });
 
   it("honours a different threshold", () => {
-    expect(classify(THREE_CANCELLED.slice(0, 2), { threshold: 2 }).state).toBe("superseded");
+    expect(classify([STILL_GOING, ...THREE_CANCELLED.slice(0, 2)], { threshold: 2 }).state).toBe("superseded");
   });
 
   it("decides across pages the same as on one page", () => {
     // readRuns concatenates pages before classifying. A streak that starts on
     // page 1 and ends on page 2 must read the same as the joined list.
-    const page1 = THREE_CANCELLED.slice(0, 2);
+    const page1 = [STILL_GOING, ...THREE_CANCELLED.slice(0, 2)];
     const page2 = [THREE_CANCELLED[2] as Run, run(1, "a", "2026-09-18T00:00:00Z", "completed", "success")];
     expect(classify(page1).state).toBe("pending");
     const joined = classify([...page1, ...page2]);
@@ -170,21 +194,21 @@ describe("medianGapMinutes", () => {
 
 describe("plan", () => {
   it("writes one failing status and one comment for a superseded branch", () => {
-    const actions = plan(classify(THREE_CANCELLED));
+    const actions = plan(classify(WITNESS));
     expect(actions.map((a: { kind: string }) => a.kind)).toEqual(["status", "comment-create"]);
     expect(actions[0]).toMatchObject({ state: "failure", targetUrl: THREE_CANCELLED[0]?.html_url });
     expect(actions[1]?.body?.startsWith(MARKER)).toBe(true);
   });
 
   it("edits the existing comment rather than posting a second", () => {
-    const actions = plan(classify(THREE_CANCELLED), { existingComment: { id: 42, body: `${MARKER}\nolder text` } });
+    const actions = plan(classify(WITNESS), { existingComment: { id: 42, body: `${MARKER}\nolder text` } });
     expect(actions.map((a: { kind: string }) => a.kind)).toEqual(["status", "comment-update"]);
     expect(actions[1]).toMatchObject({ id: 42 });
   });
 
   it("leaves an unchanged comment alone", () => {
-    const body = supersededBody({ streak: classify(THREE_CANCELLED).streak });
-    const actions = plan(classify(THREE_CANCELLED), { existingComment: { id: 42, body } });
+    const body = supersededBody({ streak: classify(WITNESS).streak });
+    const actions = plan(classify(WITNESS), { existingComment: { id: 42, body } });
     expect(actions.map((a: { kind: string }) => a.kind)).toEqual(["status"]);
   });
 
@@ -193,7 +217,11 @@ describe("plan", () => {
   });
 
   it("writes nothing while the branch is pending", () => {
-    expect(plan(classify(THREE_CANCELLED.slice(0, 2)), { existingStatus: "failure" })).toEqual([]);
+    expect(plan(classify([STILL_GOING, ...THREE_CANCELLED.slice(0, 2)]), { existingStatus: "failure" })).toEqual([]);
+  });
+
+  it("writes nothing for three cancelled runs with no run after them", () => {
+    expect(plan(classify(THREE_CANCELLED))).toEqual([]);
   });
 
   it("clears an earlier report once a run finishes", () => {
@@ -215,16 +243,51 @@ describe("plan", () => {
   });
 });
 
+describe("ownReport", () => {
+  const bot = { login: REPORTER_LOGIN, type: "Bot" };
+
+  it("adopts the report the workflow's own identity wrote", () => {
+    const report = { id: 42, body: `${MARKER}\nstreak text`, user: bot };
+    expect(ownReport([report])).toBe(report);
+  });
+
+  it("skips a marker comment from another author and finds the workflow's own after it (#4664 item 8)", () => {
+    // Anyone who can comment can post the marker first, a fork's author
+    // included. Adopting that comment would put the report in it.
+    const stranger = { id: 7, body: `${MARKER}\nnot the bot`, user: { login: "someone", type: "User" } };
+    const report = { id: 42, body: `${MARKER}\nstreak text`, user: bot };
+    expect(ownReport([stranger, report])).toBe(report);
+  });
+
+  it("adopts nothing when only another author posted the marker", () => {
+    const stranger = { id: 7, body: `${MARKER}\nnot the bot`, user: { login: "someone", type: "User" } };
+    expect(ownReport([stranger])).toBeNull();
+    // With no report found, plan posts a new comment and edits none.
+    const actions = plan(classify(WITNESS), { existingComment: ownReport([stranger]) });
+    expect(actions.map((a: { kind: string }) => a.kind)).toEqual(["status", "comment-create"]);
+  });
+
+  it("adopts nothing from another bot, or from a user whose login copies the bot's", () => {
+    const otherBot = { id: 8, body: `${MARKER}\n`, user: { login: "dependabot[bot]", type: "Bot" } };
+    const lookalike = { id: 9, body: `${MARKER}\n`, user: { login: REPORTER_LOGIN, type: "User" } };
+    expect(ownReport([otherBot, lookalike])).toBeNull();
+  });
+
+  it("skips the workflow's own comments that do not start with the marker", () => {
+    expect(ownReport([{ id: 3, body: `hello ${MARKER}`, user: bot }, { id: 4, body: null, user: bot }])).toBeNull();
+  });
+});
+
 describe("supersededBody", () => {
   it("names every cancelled run and says a cancelled check is not a pass", () => {
-    const body = supersededBody({ streak: classify(THREE_CANCELLED).streak });
+    const body = supersededBody({ streak: classify(WITNESS).streak });
     for (const r of THREE_CANCELLED) expect(body).toContain(String(r.id));
     expect(body).toContain("A cancelled required check is not a pass");
     expect(body).toContain("The last 3 CI runs");
   });
 
   it("says at least when the page cap cut the streak short", () => {
-    const body = supersededBody({ streak: classify(THREE_CANCELLED).streak, capped: true });
+    const body = supersededBody({ streak: classify(WITNESS).streak, capped: true });
     expect(body).toContain("At least the last 3 CI runs");
   });
 });
@@ -250,7 +313,8 @@ describe("readRuns", () => {
     expect(asked[1]).toContain("page=2");
     expect(capped).toBe(false);
     const verdict = classify(runs);
-    expect(verdict.streak).toHaveLength(100);
+    // The newest of the 100 has no newer run, so 99 count.
+    expect(verdict.streak).toHaveLength(99);
     expect(verdict.answered?.id).toBe(1);
   });
 

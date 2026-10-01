@@ -2,10 +2,9 @@
  * The guard for #2978: a third-party action referenced by a moving tag runs
  * whatever code its owner points that tag at, with this repository's secrets.
  */
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   findUnpinned,
@@ -96,17 +95,5 @@ describe("workflowFiles", () => {
       "/.github/actions/setup/inner/action.yml",
       "/.github/workflows/ci.yml",
     ]);
-  });
-});
-
-describe("this repository", () => {
-  it("pins every third-party action it runs", () => {
-    const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
-    const unpinned = workflowFiles(repoRoot).flatMap((file) =>
-      findUnpinned(readFileSync(file, "utf8")).map(
-        (hit) => `${file.slice(repoRoot.length + 1)}:${hit.line} ${hit.ref}`,
-      ),
-    );
-    expect(unpinned).toEqual([]);
   });
 });

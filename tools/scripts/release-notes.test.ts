@@ -11,12 +11,8 @@ import {
   releasesMeta,
   retryPrompt,
   sanitizeLine,
-  SKILL_FILES,
-  systemPrompt,
   userPrompt,
 } from "./lib/release-notes";
-
-const ROOT = new URL("../../", import.meta.url).pathname;
 
 const HISTORY = {
   fromRef: "v2.1.1",
@@ -30,18 +26,8 @@ const GOOD =
   "SUMMARY: The Spend page shows an agent's budget as entered, and the Agents page edits an agent's file as a form.\n\n## What changed\n\n- The Spend page kept a budget as a number and rounded it. It now keeps the string you typed.\n- The Configuration tab on an agent's page is a form over the agent file, with a coloured source view beside it.";
 
 describe("the model's instructions", () => {
-  it("are the two writing skills, read from the tree", () => {
-    const skills = loadSkills(ROOT);
-    for (const rel of SKILL_FILES)
-      expect(skills).toContain(`<skill path="${rel}">`);
-    expect(skills).toContain("No em dashes");
-    const system = systemPrompt(skills);
-    expect(system).toContain("workforce management for autonomous agents");
-    expect(system).toContain("SUMMARY:");
-    expect(system).toContain("## What changed");
-    expect(system).toContain("Do not list every commit");
-  });
-
+  // The test that reads the skills from the live tree lives in
+  // release-notes.tree.test.ts.
   it("refuse to run without a skill file rather than write unguided", () => {
     expect(() => loadSkills("/nonexistent")).toThrow(/clear-prose\/SKILL\.md/);
   });

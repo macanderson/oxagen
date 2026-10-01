@@ -69,6 +69,12 @@ manifest describing how it runs:
 | `health_path` | no (`/`) | Path polled for up to 60s after start. |
 | `env` | no | Non-secret environment. This file ships inside a public CI artifact. `package-for-node.sh` adds the registry's static values that Parameter Store does not hold (`build-env.ts --runtime-out`). If you later add one of those keys to Parameter Store, redeploy the service, because the container would otherwise start with both. |
 | `config_prefix` | no | Parameter Store prefix; every parameter under it becomes an environment variable named after its last path segment. |
+| `smoke` | no | A request down the service's real path: `method`, `path`, and optional string `headers`, `body`, and `expect`. It is sent once the health path answers. A status below 500 counts as served, the reply must contain `expect` when one is set, and the health path must still answer 10 seconds later. Otherwise the deploy rolls back. mcp sends an MCP `tools/list` and expects `"inputSchema"`, because an MCP error arrives inside a 200 (#4829). |
+
+A release that fails its health check or its smoke request is removed after the
+rollback. Otherwise it counts toward the three releases the node keeps. On
+2026-09-30, three failed mcp releases and one that deployed pruned the last mcp
+release that served.
 
 The manifest is what makes the deploy path generic. Passing the image, port and
 command as SSM parameters instead would mean an infrastructure change and a
