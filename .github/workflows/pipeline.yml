@@ -85,9 +85,24 @@ env:
   # send those jobs to Vercel's cache instead, which has answered 402 since
   # 2026-09-25 (#4233).
   # ATLAS_VERSION is no longer installed per-job — it is baked into the
-  # ghcr.io/macanderson/oxagen-ci-* images. This pin stays here as the single
-  # source ci-image.yml reads when building those images.
+  # oxagen-ci-* images. This pin stays here as the single source ci-image.yml
+  # reads when building those images.
   ATLAS_VERSION: "v1.2.2"
+  # Where jobs run (ADR-246). With the CI_RUNNERS repository variable set to
+  # `aws`, each job's runs-on picks one of our own pools: `oxagen-large-*`
+  # (16 vCPU, 64 GB or more) for checks, build, unit, e2e, rls-integration
+  # and rds-compatibility, `oxagen-small-*` (4 vCPU, 16 GB) for the light
+  # jobs, and `oxagen-deploy` for every job that touches production.
+  # CI_RUNNER_ARCH picks x64 (the default) or arm64 for the CI pools. Unset,
+  # or any other value, means GitHub-hosted runners, so setting CI_RUNNERS to
+  # `github` rolls every job back on its next run. CI_IMAGE_REGISTRY points
+  # the toolchain and service images at ECR Public (public.ecr.aws/<alias>)
+  # and falls back to the frozen GHCR images. docs/runbooks/ci-runners.md.
+  #
+  # The turbo steps below run this many tasks at once. GitHub's 2-core,
+  # 7 GB runner needs 3 to stay inside its memory. Our runners have 16 cores
+  # and at least 64 GB.
+  TURBO_CONCURRENCY: ${{ vars.CI_RUNNERS == 'aws' && '12' || '3' }}
   # Jobs run inside the toolchain container, so service containers are
   # reached by their service name on the shared docker network, not localhost.
   DATABASE_URL: postgres://oxagen:oxagen@postgres:5432/oxagen?sslmode=disable
@@ -131,7 +146,7 @@ jobs:
   # checks tips at the front rather than cancelling a run in flight.
   preflight:
     name: Preflight (skip the gate for a superseded commit)
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-small-{0}', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
     timeout-minutes: 2
     outputs:
       proceed: ${{ steps.preflight-tip.outputs.proceed }}
@@ -149,12 +164,11 @@ jobs:
 
   atlas-validate:
     if: github.event_name != 'workflow_dispatch'
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-small-{0}', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
     container:
-      image: ghcr.io/macanderson/oxagen-ci-base:latest
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
+      image: ${{ vars.CI_IMAGE_REGISTRY || 'ghcr.io/macanderson' }}/oxagen-ci-base:latest
+      volumes:
+        - /opt/pnpm-store:/opt/pnpm-store
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v5
@@ -167,12 +181,11 @@ jobs:
     if: >-
       github.event_name != 'workflow_dispatch' &&
       needs.preflight.outputs.proceed == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-large-{0}', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
     container:
-      image: ghcr.io/macanderson/oxagen-ci-base:latest
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
+      image: ${{ vars.CI_IMAGE_REGISTRY || 'ghcr.io/macanderson' }}/oxagen-ci-base:latest
+      volumes:
+        - /opt/pnpm-store:/opt/pnpm-store
     # 60m (was 20m): a PR that invalidates many turbo caches must run lint +
     # typecheck cold across the whole affected set, including apps/app's slow
     # `tsc --noEmit` + `eslint .`. Once a cold run completes and writes to the
@@ -250,10 +263,11 @@ jobs:
       - name: Lint and typecheck
         run: |
           set -f  # keep the unquoted ...[<base sha>] filter literal (no globbing)
-          # --concurrency=3: turbo's default (10) fans out parallel tsc/eslint
-          # processes far beyond the 2-core runner's memory; repeated exit-137
-          # runner kills ("shutdown signal" mid lint+typecheck) traced to this.
-          # Three concurrent tasks bounds peak RSS while keeping the cores busy.
+          # $TURBO_CONCURRENCY (see the workflow env): turbo's default (10)
+          # fans out parallel tsc/eslint processes far beyond the 2-core
+          # runner's memory, and repeated exit-137 runner kills ("shutdown
+          # signal" mid lint+typecheck) traced to that, so a GitHub-hosted
+          # runner gets 3. Our 16-core, 64 GB runners get 12.
           #
           # --continue (#3428): turbo otherwise stops at the first failing
           # task, so a lint error in one package hid a type error in another
@@ -261,7 +275,7 @@ jobs:
           # 2026-09-19. --continue runs every task and names every failure.
           # Turbo still exits non-zero if any task failed. The unit job's
           # coverage step does the same for the same reason.
-          pnpm turbo run lint typecheck --concurrency=3 --continue $TURBO_FILTER
+          pnpm turbo run lint typecheck --concurrency="$TURBO_CONCURRENCY" --continue $TURBO_FILTER
 
       # INV-16 (apps/app/ARCHITECTURE.md §4): every export under apps/app/src
       # is reachable from a production entry and every dependency is imported.
@@ -433,12 +447,11 @@ jobs:
     if: >-
       github.event_name != 'workflow_dispatch' &&
       needs.preflight.outputs.proceed == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-large-{0}', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
     container:
-      image: ghcr.io/macanderson/oxagen-ci-base:latest
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
+      image: ${{ vars.CI_IMAGE_REGISTRY || 'ghcr.io/macanderson' }}/oxagen-ci-base:latest
+      volumes:
+        - /opt/pnpm-store:/opt/pnpm-store
     timeout-minutes: 40
     # Job-level scopes replace the defaults: checkout, the ghcr.io pull, and
     # the OIDC token for the turbo cache role (see the checks job).
@@ -497,11 +510,12 @@ jobs:
           #
           # `rest` subtracts the two single-app lanes. Turbo subtracts an
           # exclusion from the include set, and with an empty TURBO_FILTER
-          # (push to main) it starts from every package. --concurrency=3:
+          # (push to main) it starts from every package. $TURBO_CONCURRENCY:
           # this lane has no 5GB Next heap and no service containers beside
-          # it, and at 2 apps/mcp's build could wait for a slot.
+          # it, and at 2 apps/mcp's build could wait for a slot. Our runners
+          # take 12.
           if [ "$LANE" = rest ]; then
-            pnpm turbo run build --concurrency=3 $TURBO_FILTER \
+            pnpm turbo run build --concurrency="$TURBO_CONCURRENCY" $TURBO_FILTER \
               --filter=!@oxagen/app --filter=!@oxagen/app-deprecated
             exit 0
           fi
@@ -526,12 +540,11 @@ jobs:
     if: >-
       github.event_name != 'workflow_dispatch' &&
       needs.preflight.outputs.proceed == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-large-{0}', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
     container:
-      image: ghcr.io/macanderson/oxagen-ci-base:latest
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
+      image: ${{ vars.CI_IMAGE_REGISTRY || 'ghcr.io/macanderson' }}/oxagen-ci-base:latest
+      volumes:
+        - /opt/pnpm-store:/opt/pnpm-store
     timeout-minutes: 45
     # Job-level scopes replace the defaults: checkout, the ghcr.io pull, and
     # the OIDC token for the turbo cache role (see the checks job).
@@ -545,7 +558,7 @@ jobs:
         lane: [app, handlers, app-deprecated, rest]
     services:
       postgres:
-        image: postgres:16-alpine
+        image: ${{ vars.CI_IMAGE_REGISTRY && format('{0}/mirror/postgres:16-alpine', vars.CI_IMAGE_REGISTRY) || 'postgres:16-alpine' }}
         env:
           POSTGRES_USER: oxagen
           POSTGRES_PASSWORD: oxagen
@@ -558,7 +571,7 @@ jobs:
           --health-timeout 5s
           --health-retries 10
       clickhouse:
-        image: clickhouse/clickhouse-server:24.8-alpine
+        image: ${{ vars.CI_IMAGE_REGISTRY && format('{0}/mirror/clickhouse-server:24.8-alpine', vars.CI_IMAGE_REGISTRY) || 'clickhouse/clickhouse-server:24.8-alpine' }}
         env:
           CLICKHOUSE_DB: oxagen
           CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
@@ -571,7 +584,7 @@ jobs:
           --health-timeout 5s
           --health-retries 10
       neo4j:
-        image: neo4j:5.24-community
+        image: ${{ vars.CI_IMAGE_REGISTRY && format('{0}/mirror/neo4j:5.24-community', vars.CI_IMAGE_REGISTRY) || 'neo4j:5.24-community' }}
         env:
           NEO4J_AUTH: neo4j/oxagen-dev
         ports:
@@ -684,11 +697,12 @@ jobs:
           # fails if any package fails. CLAUDE.md documents this form under
           # Gotchas ("Turbo halts on first failing coverage package").
           #
-          # --concurrency=3 in `rest`: several suites set a large
-          # --max-old-space-size, and the runner shares its RAM with the three
-          # service containers.
+          # $TURBO_CONCURRENCY in `rest`: several suites set a large
+          # --max-old-space-size, and a GitHub-hosted runner shares its 7 GB
+          # with the three service containers, so it gets 3. Our runners have
+          # at least 64 GB and get 12.
           if [ "$LANE" = rest ]; then
-            pnpm turbo run test:coverage --concurrency=3 --continue $TURBO_FILTER \
+            pnpm turbo run test:coverage --concurrency="$TURBO_CONCURRENCY" --continue $TURBO_FILTER \
               --filter=!@oxagen/app --filter=!@oxagen/handlers --filter=!@oxagen/app-deprecated
           else
             pnpm turbo run test:coverage --filter=@oxagen/$LANE
@@ -717,7 +731,7 @@ jobs:
       github.event_name != 'workflow_dispatch' &&
       needs.preflight.outputs.proceed == 'true' &&
       !cancelled()
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-small-{0}', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
     timeout-minutes: 5
     steps:
       - name: Every build and unit lane passed
@@ -737,12 +751,11 @@ jobs:
     if: >-
       github.event_name != 'workflow_dispatch' &&
       needs.preflight.outputs.proceed == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-large-{0}', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
     container:
-      image: ghcr.io/macanderson/oxagen-ci-e2e:latest
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
+      image: ${{ vars.CI_IMAGE_REGISTRY || 'ghcr.io/macanderson' }}/oxagen-ci-e2e:latest
+      volumes:
+        - /opt/pnpm-store:/opt/pnpm-store
     # next start hardcodes NODE_ENV=production regardless of this job's env,
     # which isProductionRuntime() (packages/config/src/env.ts) would otherwise
     # read as a real prod deployment and refuse to boot (TENANT_RLS_ENFORCEMENT_ENABLED
@@ -767,7 +780,7 @@ jobs:
       id-token: write
     services:
       postgres:
-        image: postgres:16-alpine
+        image: ${{ vars.CI_IMAGE_REGISTRY && format('{0}/mirror/postgres:16-alpine', vars.CI_IMAGE_REGISTRY) || 'postgres:16-alpine' }}
         env:
           POSTGRES_USER: oxagen
           POSTGRES_PASSWORD: oxagen
@@ -780,7 +793,7 @@ jobs:
           --health-timeout 5s
           --health-retries 10
       clickhouse:
-        image: clickhouse/clickhouse-server:24.8-alpine
+        image: ${{ vars.CI_IMAGE_REGISTRY && format('{0}/mirror/clickhouse-server:24.8-alpine', vars.CI_IMAGE_REGISTRY) || 'clickhouse/clickhouse-server:24.8-alpine' }}
         env:
           CLICKHOUSE_DB: oxagen
           CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
@@ -793,7 +806,7 @@ jobs:
           --health-timeout 5s
           --health-retries 10
       neo4j:
-        image: neo4j:5.24-community
+        image: ${{ vars.CI_IMAGE_REGISTRY && format('{0}/mirror/neo4j:5.24-community', vars.CI_IMAGE_REGISTRY) || 'neo4j:5.24-community' }}
         env:
           NEO4J_AUTH: neo4j/oxagen-dev
         ports:
@@ -979,16 +992,15 @@ jobs:
     if: >-
       (github.event_name == 'pull_request' || github.event_name == 'merge_group' || (github.event_name == 'push' && github.ref == 'refs/heads/main')) &&
       needs.preflight.outputs.proceed == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-large-{0}', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
     container:
-      image: ghcr.io/macanderson/oxagen-ci-base:latest
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
+      image: ${{ vars.CI_IMAGE_REGISTRY || 'ghcr.io/macanderson' }}/oxagen-ci-base:latest
+      volumes:
+        - /opt/pnpm-store:/opt/pnpm-store
     timeout-minutes: 15
     services:
       postgres:
-        image: postgres:16-alpine
+        image: ${{ vars.CI_IMAGE_REGISTRY && format('{0}/mirror/postgres:16-alpine', vars.CI_IMAGE_REGISTRY) || 'postgres:16-alpine' }}
         env:
           POSTGRES_USER: oxagen
           POSTGRES_PASSWORD: oxagen
@@ -1004,7 +1016,7 @@ jobs:
       # store" (spec §17): @oxagen/ontology's integration suite seeds three
       # tenants into the pooled database and reads across them.
       neo4j:
-        image: neo4j:5.24-community
+        image: ${{ vars.CI_IMAGE_REGISTRY && format('{0}/mirror/neo4j:5.24-community', vars.CI_IMAGE_REGISTRY) || 'neo4j:5.24-community' }}
         env:
           NEO4J_AUTH: neo4j/oxagen-dev
         ports:
@@ -1066,16 +1078,15 @@ jobs:
     if: >-
       (github.event_name == 'pull_request' || github.event_name == 'merge_group' || (github.event_name == 'push' && github.ref == 'refs/heads/main')) &&
       needs.preflight.outputs.proceed == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-large-{0}', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
     container:
-      image: ghcr.io/macanderson/oxagen-ci-base:latest
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
+      image: ${{ vars.CI_IMAGE_REGISTRY || 'ghcr.io/macanderson' }}/oxagen-ci-base:latest
+      volumes:
+        - /opt/pnpm-store:/opt/pnpm-store
     timeout-minutes: 20
     services:
       postgres:
-        image: postgres:16-alpine
+        image: ${{ vars.CI_IMAGE_REGISTRY && format('{0}/mirror/postgres:16-alpine', vars.CI_IMAGE_REGISTRY) || 'postgres:16-alpine' }}
         env:
           POSTGRES_USER: oxagen
           POSTGRES_PASSWORD: oxagen
@@ -1271,7 +1282,7 @@ jobs:
       needs.rds-compatibility.result == 'success' &&
       (needs.staging.result == 'success' ||
        (needs.staging.result == 'skipped' && vars.STAGING_ENABLED != 'true'))
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNERS == 'aws' && 'oxagen-deploy' || 'ubuntu-latest' }}
     # An apply adds the platform seed over SSM and a pnpm install for the
     # stores, on top of the ~2 minutes of tunnel setup a check alone needs.
     timeout-minutes: 30
@@ -1498,7 +1509,7 @@ jobs:
     # a red gate as noise.
     needs:
       [checks, test, e2e, atlas-validate, rls-integration, rds-compatibility, staging]
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNERS == 'aws' && 'oxagen-deploy' || 'ubuntu-latest' }}
     timeout-minutes: 10
     environment: production
     # One web deploy at a time, and never cancelled mid-flight. When several
@@ -1640,7 +1651,7 @@ jobs:
     # instance `oxagen-app`; an m7g.xlarge after #4866). An
     # x86 build passes every check here and fails to load a native module
     # there, at first request rather than at build.
-    runs-on: ubuntu-24.04-arm
+    runs-on: ${{ vars.CI_RUNNERS == 'aws' && 'oxagen-deploy' || 'ubuntu-24.04-arm' }}
     timeout-minutes: 45
     environment: production
     # One deploy of each service at a time, across runs, and never cancelled
@@ -1815,7 +1826,7 @@ jobs:
     # nothing, so the installers never run ahead of the platform they talk to.
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: [deploy-node]
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNERS == 'aws' && 'oxagen-deploy' || 'ubuntu-latest' }}
     timeout-minutes: 10
     environment: production
     # One installer publish at a time, and never cancelled mid-flight, like
