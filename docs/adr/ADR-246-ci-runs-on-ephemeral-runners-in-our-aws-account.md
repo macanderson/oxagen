@@ -1,7 +1,9 @@
 # ADR-246: CI runs on ephemeral runners in our AWS account
 
-- **Status:** Accepted. Mac set the direction on 2026-10-01. The scaler choice,
-  the runner sizes, and the network layout are the agent's, recorded here for
+- **Status:** Accepted. Mac set the direction on 2026-10-01: self-hosted,
+  ephemeral, autoscaling runners in our AWS account, no dependency on GitHub
+  billing wherever possible, and speed before cost. The scaler choice, the
+  runner sizes, and the network layout are the agent's, recorded here for
   review.
 - **Date:** 2026-10-01
 - **Owners:** infra, CI
@@ -56,7 +58,10 @@ account under a billing lock where GitHub-hosted jobs were rejected and
 self-hosted jobs kept running.
 
 Mac asked on 2026-10-01 for an architecture with no dependency on GitHub
-billing wherever that is possible, and approved the AWS spend that takes.
+billing wherever that is possible, and approved the AWS spend that takes. Mac
+then set speed as the first priority: "I want my CI to be lightning fast. I
+don't care about cost at the moment." So the sizes below favor the fastest
+machine and the shortest wait, and the cost section records what that costs.
 
 ### What the account had on 2026-10-01
 
@@ -87,49 +92,65 @@ Runners register to the `oxageninc` organization. Every runner is ephemeral.
 
 ### 2. Five runner configurations
 
-| Label | Arch | Size | Instance types | Capacity | Max | Network |
+| Label | Arch | Size | Instance types, in priority order | Capacity | Max | Network |
 |---|---|---|---|---|---|---|
-| `oxagen-large-arm64` | arm64 | 8 vCPU, 32 GB | m8g, m7g, m6g, r7g, r6g `.2xlarge` | spot, on-demand on failure | 250 | CI VPC |
-| `oxagen-large-x64` | x64 | 8 vCPU, 32 GB | m7i, m6i, m7a, m6a, m5 `.2xlarge` | spot, on-demand on failure | 100 | CI VPC |
-| `oxagen-small-arm64` | arm64 | 2 vCPU, 8 GB | m8g, m7g, m6g `.large` | spot, on-demand on failure | 150 | CI VPC |
-| `oxagen-small-x64` | x64 | 2 vCPU, 8 GB | m7i, m6i, m6a `.large` | spot, on-demand on failure | 50 | CI VPC |
-| `oxagen-deploy` | arm64 | 4 vCPU, 16 GB | m8g, m7g `.xlarge` | on-demand | 4 | production VPC |
+| `oxagen-large-arm64` | arm64 | 16 vCPU, 32 to 128 GB | m8gd, c8gd, m7gd, m8g, c8g, r8g, m7g `.4xlarge` | spot, on-demand on failure | 250 | CI VPC |
+| `oxagen-large-x64` | x64 | 16 vCPU, 32 to 64 GB | m7a, c7a, m6id, m7i, c7i, m6a `.4xlarge` | spot, on-demand on failure | 100 | CI VPC |
+| `oxagen-small-arm64` | arm64 | 4 vCPU, 8 to 16 GB | m8gd, m7gd, m8g, c8g, m7g `.xlarge` | spot, on-demand on failure | 150 | CI VPC |
+| `oxagen-small-x64` | x64 | 4 vCPU, 16 GB | m7a, m6id, m7i, m6a `.xlarge` | spot, on-demand on failure | 50 | CI VPC |
+| `oxagen-deploy` | arm64 | 4 vCPU, 16 GB | m8g, m7g, m8gd `.xlarge` | on-demand | 6 | production VPC |
 
+- **Speed.** The heavy jobs (`build`, `unit`, `e2e`, `checks`) get 16 vCPUs,
+  eight times a hosted runner's 2. The first types in each list have local
+  NVMe (the `d` types), and on those a boot service puts the job workspace and
+  Docker's volumes on it before Docker starts. Graviton4 (`m8g`, `c8g`) and
+  AMD Zen 4 (`m7a`, `c7a`) give one physical core per vCPU. The root volume is
+  gp3 at 16,000 IOPS and 1,000 MB/s on the large pools and 6,000 IOPS and
+  500 MB/s on the small ones.
 - **Labels.** Each configuration carries one label and no default labels, and
   matches a job only when the job's label set equals it
   (`bidirectionalLabelMatch`). A job that asks for
   `[self-hosted, linux, fleet-capacity]` starts nothing.
 - **Arch.** Graviton runs any job that works on arm64. The two x64 pools run
-  the rest. The pilot runs on `oxagen-large-x64`, because today's CI images
-  are amd64 only. Jobs move to arm64 once the images are multi-arch.
-- **Spot.** Every CI pool requests spot with the `price-capacity-optimized`
-  strategy across five instance types and five availability zones. When spot
-  capacity or the spot quota runs out, the same request falls back to
-  on-demand (`enable_on_demand_failover_for_errors`).
-- **Ceiling.** At their maximums the pools hold 554 runners. A realistic peak
-  of 300 jobs (200 large, 100 small) needs about 1,800 vCPUs.
+  the rest. The pilot runs on `oxagen-large-x64`, because the CI images on
+  2026-10-01 are amd64 only. Jobs move to arm64 once `ci-image.yml` has
+  published the multi-arch images.
+- **Spot.** Every CI pool requests spot with `capacity-optimized-prioritized`,
+  which asks for the fastest types first and moves down the list when capacity
+  is short. When spot capacity or the spot quota runs out, the same Lambda call
+  falls back to on-demand (`enable_on_demand_failover_for_errors`). Spot and
+  on-demand have separate quotas, so using both raises the number of runners
+  the account can hold at once.
+- **Ceiling.** At their maximums the pools hold 556 runners. A peak of 300
+  jobs (200 large, 100 small) needs about 3,600 vCPUs, and the warm pools add
+  about 740.
 - **Deploy.** `oxagen-deploy` runs every job that touches production:
   `migration-gate`, `deploy-node`, `deploy-web`, `manual-app-deploy`,
-  `db-migrate.yml`, and `store-migrate.yml`. It has its own instance role,
-  its own runner group, and its own registration path, so a pull request's job
-  cannot read a deploy runner's registration.
+  `db-migrate.yml`, `store-migrate.yml`, and the `infra.yml` apply. It has its
+  own instance role, its own runner group, and its own Parameter Store path,
+  so a pull request's job cannot read a deploy runner's registration.
 
 ### 3. Start time
 
-- **Warm pool.** Each pool keeps idle runners through `pool_config`, sized 0
-  until the GitHub App exists. The first sizes after cut-over are 8
-  `oxagen-large-x64` for the pilot, then 12 `oxagen-large-arm64` and 8
-  `oxagen-small-arm64` around the clock. The runbook records each change and
-  its reason.
-- **Webhook delay.** `delay_webhook_event` is 5 seconds on a pool with idle
-  runners and 0 on the rest. The module default of 30 seconds would spend half
-  of the 60-second queue target before scale-up even starts.
-- **Scale-up concurrency.** The scale-up Lambda may run 50 copies at once per
-  configuration, up from the module default of 1, so a burst of 300 jobs is
-  not served one Lambda call at a time. This needs the Lambda quota raised
-  first.
-- **Image.** The image carries the runner agent, Docker, and every container
-  image a job pulls, so a cold runner downloads nothing large before its job.
+- **Warm pool.** Each pool keeps idle runners through `pool_config`, topped up
+  every minute, and sized 0 until the GitHub App exists. The sizes after
+  cut-over are 30 `oxagen-large-arm64`, 10 `oxagen-large-x64`, 20
+  `oxagen-small-arm64`, 4 `oxagen-small-x64`, and 1 `oxagen-deploy`, around
+  the clock. A warm runner lives 30 minutes idle before scale-down replaces it.
+- **No webhook delay.** `delay_webhook_event` is 0. The module default of 30
+  seconds would spend half of the 60-second queue target before scale-up even
+  starts. When a warm runner takes the job first, the extra runner waits for
+  the next job.
+- **No EventBridge hop.** The webhook dispatches straight to the pool's SQS
+  queue.
+- **No concurrency cap.** The scale-up and pool Lambdas reserve no
+  concurrency, so a burst of 300 jobs is limited only by the account's Lambda
+  concurrency, which needs raising from 10 first.
+- **Retry.** If a job is still queued 2 minutes after its runner was started,
+  the job-retry Lambda queues it again, up to twice.
+- **Image.** The image carries the runner agent, Docker, Node, the pnpm store,
+  and every container image a job pulls, so a cold runner downloads nothing
+  large before its job.
 
 ### 4. Network
 
@@ -147,8 +168,10 @@ Runners register to the `oxageninc` organization. Every runner is ephemeral.
   sit outside the production VPC. A misconfigured rule there cannot expose
   Aurora, ClickHouse, or Neo4j to a pull request's job.
 - **Deploy pool.** `oxagen-deploy` runs in the `oxagen` VPC's public subnets
-  with its own security group. The `ci-runners` stack adds one ingress rule to
-  the Aurora security group for that group on port 5432. ClickHouse and Neo4j
+  with its own security group, which nothing admits yet. The Aurora security
+  group declares its rules inline, so the `oxagen` stack, not this one, adds
+  the rule that admits the deploy group on port 5432. A rule added from another
+  stack would be deleted by the next `oxagen` apply. ClickHouse and Neo4j
   listen on the app node's loopback today, so `migration-gate` keeps its SSM
   tunnels for those two until the change that moves it decides whether the
   node should listen on its private address for the deploy pool alone.
@@ -166,11 +189,19 @@ architecture every day. No GitHub workflow takes part. Each AMI carries:
   host-level jobs use.
 - the CI images and the three service images (Postgres, ClickHouse, Neo4j),
   pulled for that architecture.
+- Node at the `.node-version` pin in the runner's tool cache, and the pnpm
+  store `ci-image.yml` publishes to S3 for that architecture.
+- the boot service that moves the workspace and Docker's volumes to local NVMe.
 
-Image Builder writes each new AMI's id to `/oxagen/ci-runners/ami/<arch>` in
-Parameter Store. The scale-up Lambda reads that parameter on every launch,
-so a new image takes effect without a Terraform apply. Image Builder keeps the
-newest three AMIs per architecture and deletes the rest.
+Image Builder components and recipes are immutable, so one fixed component
+downloads `image/` from S3 and runs `provision.sh`. A change to the script
+reaches the next build without replacing a recipe.
+
+Image Builder writes each new AMI's id to `/imagebuilder/oxagen-ci-runner/<arch>`
+in Parameter Store. That is the only prefix its service-linked role may write.
+The scale-up Lambda reads the parameter on every launch, so a new image takes
+effect without a Terraform apply. Image Builder keeps the newest three AMIs
+per architecture and deletes the rest.
 
 ### 6. CI images live in ECR Public
 
@@ -195,20 +226,29 @@ shared AWS addresses. The images hold only the toolchain (Node, pnpm, Atlas,
 - **Job credentials.** A job assumes the OIDC roles it already uses
   (`gha-turbo-cache`, `gha-deploy-oxagen-platform`, `gha-infra-plan`,
   `gha-infra-apply`). Nothing on a runner holds a long-lived key.
-- **GitHub App secrets.** The App's id, private key, and webhook secret live
-  in Parameter Store under `/oxagen/ci-runners/github-app/`. Terraform creates
-  each parameter, generates the webhook secret, and ignores later value
-  changes, so Mac writes the id and the key once. This prefix sits outside
-  `/oxagen/ci` on purpose: ADR-240 gives workflow roles read access to
-  `/oxagen/ci`, and no workflow may read the App's key.
+- **GitHub App.** Mac creates the App once from a manifest
+  (`scripts/github-app-manifest.html`), which fixes its permissions: Self-hosted
+  runners read and write on the organization, and Actions, Checks, and
+  Metadata read on repositories, with the `workflow_job` event.
+  `scripts/store-github-app.sh` exchanges the manifest code and writes the id,
+  private key, and webhook secret to Parameter Store under
+  `/oxagen/ci-runners/github-app/` without the key touching a file. This prefix
+  sits outside `/oxagen/ci` on purpose: ADR-240 gives workflow roles read
+  access to `/oxagen/ci`, and no workflow may read the App's key.
+- **Webhook address.** The App posts to `https://ci-webhook.oxagen.sh/webhook`,
+  a custom domain on the module's API Gateway, so the App never needs editing
+  when the gateway is replaced.
 - **Private repositories only.** Mac installs the App on the private
   repositories alone, so a public repository's jobs never reach the webhook.
   The module's `repository_white_list` repeats that list. The `oxagen-ci`
-  runner group admits private repositories only, and refuses public ones.
+  runner group lists the private repositories by id and refuses public ones.
+  GitHub accepted the `private` visibility on 2026-10-01 and stored `all`, so
+  `scripts/runner-groups.sh` rebuilds the list from the organization's private
+  repositories each time it runs.
 - **Production group.** The `oxagen-production` runner group admits
   `oxageninc/product` alone, and only these workflows at `refs/heads/main`:
-  `pipeline.yml`, `db-migrate.yml`, and `store-migrate.yml`. A pull
-  request's run uses its merge ref, so it cannot land on a deploy runner.
+  `pipeline.yml`, `db-migrate.yml`, `store-migrate.yml`, and `infra.yml`. A
+  pull request's run uses its merge ref, so it cannot land on a deploy runner.
 
 ### 8. One variable rolls back
 
@@ -231,8 +271,12 @@ organization variable of the same name.
   messages that reach the build queue's dead-letter queue.
 - **Webhook.** An alarm fires on webhook Lambda errors or API Gateway 5xx
   responses.
-- **Budget.** An AWS Budget for the stack's `Stack` tag alerts Mac by email at
-  80% and 100% of the forecast monthly spend.
+- **Image build.** An EventBridge rule forwards a failed Image Builder build,
+  which Image Builder reports as an event, not a metric.
+- **Budget.** An AWS Budget of $20,000 a month on the `Stack` tag alerts Mac by
+  email at 80% and 100% of actual spend and 100% of forecast spend. The stack
+  activates `Stack` as a cost allocation tag, and the module puts it on every
+  runner instance and volume.
 - **Logs.** Lambda and runner logs keep 30 days.
 
 ### 10. What still bills through GitHub
@@ -259,6 +303,9 @@ downloads the v7.11.0 release zips and checks each one against a SHA-256
 committed beside it.
 
 The first apply runs on a GitHub-hosted runner, as every apply does today.
+The runner groups are not Terraform resources, because the stack has no GitHub
+credential at plan time. `scripts/runner-groups.sh` creates and updates them,
+and is their record.
 `infra.yml` moves to our runners after the pools are proven. The runbook
 keeps the laptop apply path for a day when GitHub itself is down.
 
@@ -302,16 +349,18 @@ in place.
 
 ## Cost estimate
 
-Prices for `us-east-1` on 2026-10-01. Spot prices are the range across zones
-that day. Each runner also pays for its disk ($0.08 per GB-month of gp3) and
-its public address ($0.005 an hour).
+Prices for `us-east-1` on 2026-10-01. Spot prices are the range across the
+zones and types in each pool that day. Each runner also pays for its root
+volume (gp3 storage plus the IOPS and throughput above the free baseline) and
+its public address ($0.005 an hour). The large pools' 16,000 IOPS and
+1,000 MB/s cost about $0.15 an hour per volume.
 
 | Runner | Our cost per 1,000 job-minutes | GitHub's price per 1,000 minutes |
 |---|---|---|
-| 8 vCPU, 32 GB, arm64, spot | $2.16 to $3.84 | $14.00 (8-core arm64) |
-| 8 vCPU, 32 GB, arm64, on-demand fallback | $5.40 to $6.25 | $14.00 |
-| 8 vCPU, 32 GB, x64, spot | $2.36 to $4.57 | $22.00 (8-core x64) |
-| 2 vCPU, 8 GB, arm64, spot | $0.61 to $1.18 | $5.00 (2-core arm64) |
+| 16 vCPU, arm64, spot | $6.60 to $17.80 | $26.00 (16-core arm64) |
+| 16 vCPU, arm64, on-demand fallback (`m8g.4xlarge`) | $14.60 | $26.00 |
+| 16 vCPU, x64, spot | $6.90 to $13.00 | $42.00 (16-core x64) |
+| 4 vCPU, arm64, spot | $1.90 to $3.70 | $8.00 (4-core arm64) |
 
 **Volume.** The baseline gives about 14,700 `CI` job-minutes a day on 2-core
 runners and at least 2,100 jobs a day from the small workflows. Each runner
@@ -322,19 +371,24 @@ a hosted runner does not bill.
 
 | Item | Estimate |
 |---|---|
-| Large runners: 75% of `CI` minutes plus boot time, about 14,400 instance-minutes a day | $1,200 |
-| Small runners: the rest of `CI` and the small workflows, about 8,000 instance-minutes a day | $180 |
-| Warm pool idle time, from fully used to never used | $0 to $1,700 |
-| Lambda, API Gateway, SQS, CloudWatch Logs, Image Builder, AMI snapshots | $120 |
-| Total | $1,500 to $3,200 |
+| Large runners: 75% of `CI` minutes plus boot time, about 14,400 instance-minutes a day | $3,700 |
+| Small runners: the rest of `CI` and the small workflows, about 8,000 instance-minutes a day | $600 |
+| Warm pools' idle time, from always busy to never used | $0 to $17,900 |
+| Lambda, API Gateway, SQS, CloudWatch Logs, Image Builder, AMI snapshots | $150 |
+| Total | $4,450 to $22,350 |
 
-This assumes jobs take as long on 8 vCPUs as on 2, which overstates the cost.
+The large-runner line assumes jobs take as long on 16 vCPUs as on 2, which
+overstates it. The warm-pool line is the widest: 65 idle runners cost about
+$24 an hour, and each job that lands on one turns idle time into work. The
+budget alert sits at $20,000 so that it flags a runaway, not the expected
+spend.
 
 **GitHub-hosted at the same volume:** about 504,000 billed minutes a month
 (GitHub rounds each job up to a whole minute). On 2-core runners that is
 $3,024, less the 50,000 minutes the Enterprise plan includes, or about $2,700,
-on machines that run out of memory. On 8-core x64 runners for the heavy
-three quarters, it is about $8,300.
+on machines that run out of memory. On 16-core runners for the heavy three
+quarters, it is about $9,600 (arm64) to $14,900 (x64), and the billing lock
+and the concurrency limit stay.
 
 The proof run in the final pull request replaces these estimates with
 measured cost per 1,000 job-minutes.
@@ -342,17 +396,22 @@ measured cost per 1,000 job-minutes.
 ## Consequences
 
 - **Spot interruptions.** AWS can reclaim a spot runner mid-job, and the job
-  fails. `price-capacity-optimized` picks the pools least likely to be
-  reclaimed, and the termination watcher records each interruption as a
-  metric. The PR watcher reruns a failed job as it does today.
+  fails. `capacity-optimized-prioritized` weighs capacity as well as priority,
+  and the termination watcher records each interruption as a metric. A
+  10-minute job on a pool that AWS reclaims less than 5% of the time in a month
+  meets an interruption about once in 40,000 jobs. The PR watcher reruns a
+  failed job as it does today.
 - **Image upkeep.** The daily image picks up OS patches and new CI images.
   Bumping the runner agent or the module is a pull request.
 - **New failure points.** If the webhook or the scale-up Lambda fails, jobs
   queue. The alarms name each case, and setting `CI_RUNNERS` to `github`
   restores service within one run.
 - **Quotas.** On 2026-10-01 the agent asked AWS for 2,400 spot vCPUs, 1,000
-  on-demand vCPUs, and 1,000 Lambda concurrent executions. The pools cannot
-  reach their maximums until AWS approves.
+  on-demand vCPUs, and 1,000 Lambda concurrent executions. AWS opened a support
+  case for each, and allows one open request per quota. The 16-vCPU pools need
+  about 5,000 spot and 3,000 on-demand vCPUs at their ceilings, which is the
+  next request. Until then the fleets stop at the quota and fall back to
+  on-demand, and the queue-age alarm names any wait.
 - **`fleet-capacity`.** Its label stays unserved, as before. Its 24-hour hold
   does not suit spot runners. Serving it is its own decision.
 - **Stella.** `macanderson/stella` sits on a personal account, which an
