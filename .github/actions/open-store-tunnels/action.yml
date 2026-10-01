@@ -53,9 +53,19 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
-        curl -fsSL -o /tmp/sm.deb \
-          "https://s3.amazonaws.com/session-manager-downloads/plugin/latest/ubuntu_64bit/session-manager-plugin.deb"
-        sudo dpkg -i /tmp/sm.deb
+        # Our runner image ships the plugin (ADR-246). A GitHub-hosted runner
+        # does not. The package is per architecture, and the deploy pool is
+        # arm64, so the download names the machine's own.
+        if ! command -v session-manager-plugin >/dev/null 2>&1; then
+          case "$(dpkg --print-architecture)" in
+            amd64) pkg=ubuntu_64bit ;;
+            arm64) pkg=ubuntu_arm64 ;;
+            *) echo "::error::No Session Manager plugin package for $(dpkg --print-architecture)."; exit 1 ;;
+          esac
+          curl -fsSL -o /tmp/sm.deb \
+            "https://s3.amazonaws.com/session-manager-downloads/plugin/latest/$pkg/session-manager-plugin.deb"
+          sudo dpkg -i /tmp/sm.deb
+        fi
         session-manager-plugin --version
 
     # The apt package tracks the latest Neo4j line, which needs Java 21; the
