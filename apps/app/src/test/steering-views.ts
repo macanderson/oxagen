@@ -385,7 +385,6 @@ export function steeringSource(overrides: Partial<SteeringReads> = {}) {
       commands: refuse,
       outputs: refuse,
       work: refuse,
-      outcomesSettings: refuse,
       issues: refuse,
       context: refuse,
       findings: refuse,

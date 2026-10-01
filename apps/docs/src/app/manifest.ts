@@ -1,9 +1,14 @@
+import { HOUSE_INK } from "@oxagen/ui/lib/house-grounds";
 import type { MetadataRoute } from "next";
 
 /**
  * Next-native web app manifest route — served at /manifest.webmanifest and
  * auto-linked into <head> by Next's metadata file-convention system (no
  * `metadata.manifest` string needed in layout.tsx once this file exists).
+ *
+ * The grounds come from the brand kit through the generated
+ * @oxagen/ui/lib/house-grounds, so a kit colour change reaches the installed
+ * app with the next sync (#4892).
  */
 export default function manifest(): MetadataRoute.Manifest {
   return {
@@ -19,8 +24,8 @@ export default function manifest(): MetadataRoute.Manifest {
     display: "standalone",
     display_override: ["standalone", "minimal-ui"],
     orientation: "any",
-    background_color: "#09090B",
-    theme_color: "#09090B",
+    background_color: HOUSE_INK,
+    theme_color: HOUSE_INK,
     categories: ["developer", "productivity", "education"],
     icons: [
       {

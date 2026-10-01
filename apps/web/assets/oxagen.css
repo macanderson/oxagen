@@ -732,16 +732,9 @@ h2 .gold,
   background: var(--line);
   flex: none;
 }
-/* the three lights are the window's, not the palette's: the docs terminal
-   draws them in macOS's own colours, so they are written here once */
-.app-bar .tl:nth-child(1) {
-  background: #ff5f57;
-}
-.app-bar .tl:nth-child(2) {
-  background: #febc2e;
-}
+/* The three window lights take the hairline grey above, a house token. The
+   macOS red, amber, and green were not house values (#4804). */
 .app-bar .tl:nth-child(3) {
-  background: #28c840;
   margin-right: 6px;
 }
 .app-bar .tl.live {

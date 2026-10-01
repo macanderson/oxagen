@@ -6,7 +6,7 @@
 // 20261001100000_work_records.sql) adds the Phase 1 work records from
 // agent-work-phase-1.html, Data contract: a revision and a version on each
 // work item, the acceptance brief (work.briefs), the work order
-// (work.orders), and the append-only history (work.item_facts). ADR-237 maps
+// (work.orders), and the append-only history (work.item_facts). ADR-244 maps
 // each Phase 1 object to these tables. Every table carries the org mixin and
 // the same row-level security as the rest of the database.
 //

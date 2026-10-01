@@ -1,4 +1,4 @@
--- The Phase 1 work records (P1-02, #4897; ADR-237).
+-- The Phase 1 work records (P1-02, #4897; ADR-244).
 --
 -- agent-work-phase-1.html, Data contract, names the objects: a work item with
 -- a revision, a triage decision bound to that revision, an acceptance brief, a

@@ -21,12 +21,13 @@ brand had retired.
 | What type scale and utilities exist? | `src/styles/house-tailwind.css` (the `text-m-*` marketing and `text-a-*` app scales) |
 | Which font files load, and how? | `src/styles/house-fonts.css` and `src/styles/fonts/` |
 | How do tokens map to semantic roles, per theme? | `src/styles/globals.css`, the `:root`, `.dark` and `prefers-color-scheme` blocks |
-| What may a surface say, and which line may it use? | `.claude/skills/oxagen-branding/`, whose `references/positioning.md` carries the live and retired lines |
+| What may a surface say, and which line may it use? | The `oxagen-branding` skill in `macanderson/oxagen-brand`, whose `references/positioning.md` carries the live and retired lines. `.claude/skills/oxagen-branding/SKILL.md` is the stub that reads it from `main` |
 | Which component token does a shell surface take? | The table in `AGENTS.md` under "Design Token Usage in Shell Components" |
 
 The first four are **generated**, not authored. `tools/scripts/sync-brand-assets.mjs`
-vendors them from the house kit (`oxagenai/oxagen-brand`), and `pnpm check:brand`
-fails when a vendored copy has drifted from the kit. Edit the kit, run the sync,
+copies them byte for byte from the house kit (`macanderson/oxagen-brand`), and its
+`--check`, run in CI by `brand-drift.yml` and the pipeline's checks job, fails when
+a copy has drifted from the kit's `main`. Edit the kit, run the sync,
 commit what it writes. Editing a vendored file by hand is reverted by the next
 sync and caught by the check before that.
 

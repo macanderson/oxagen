@@ -11,7 +11,7 @@
   "expect": [
     {
       "path": "steering/governance.toml",
-      "line": 20,
+      "line": 19,
       "field": "reviewers.0.group"
     }
   ]

@@ -4,7 +4,7 @@
 # GitHub test organization:
 #   1. Create a workspace and wait for its steering repo to read healthy.
 #   2. Merge a steering PR through Oxagen and read a published version one higher.
-#   3. Delete the "Oxagen merges" ruleset, see drifted health and a failed
+#   3. Allow merge commits, see drifted health and a failed
 #      "Oxagen steering" check within 60 seconds, repair, and see healthy.
 #
 # It calls production and creates real repositories, so it never runs on
@@ -76,7 +76,7 @@ jobs:
         uses: ./.github/actions/pnpm-install
 
       # A one-hour installation token from the rig app. It approves the
-      # steering PR, deletes the ruleset, reads check runs, and deletes the
+      # steering PR, changes the merge settings, reads check runs, and deletes the
       # test repository.
       - name: Mint the rig token
         id: rig-token

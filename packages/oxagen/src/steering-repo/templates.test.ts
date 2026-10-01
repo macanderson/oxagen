@@ -256,11 +256,8 @@ describe("readmeTemplate", () => {
   const settings: Record<(typeof PROVIDERS)[number], string[]> = {
     github: [
       "- The repository is private.",
-      `- The ruleset Oxagen steering on main requires a pull request and the ${REQUIRED_CHECK_NAME} check, and blocks force pushes and deletion.`,
-      "- The ruleset Oxagen merges on main lets only Oxagen update it.",
       "- Pull requests merge by squash only, and head branches are deleted after a merge.",
       "- GitHub Actions is off.",
-      "- The steering environment records each published version.",
     ],
     gitlab: [
       "- The project is private.",
@@ -290,9 +287,14 @@ describe("readmeTemplate", () => {
     const lines = blockLines(readmeTemplate(input));
     expect(lines[0]).toBe(`# ${input.repository}`);
     expect(lines).toContain(holds[name]);
+    expect(lines).toContain(
+      input.provider === "github"
+        ? "GitHub Free is supported. Oxagen does not configure branch protection or rulesets, so repository permissions govern direct pushes and merges in GitHub."
+        : "Only the Oxagen bot can merge into main.",
+    );
     expect(lines).not.toContain(holds[name === "workspace" ? "organization" : "workspace"]);
     expect(lines).toContain(
-      `Only Oxagen merges into main, and only after the ${REQUIRED_CHECK_NAME} check passes.`,
+      `Oxagen merges into main after the ${REQUIRED_CHECK_NAME} check passes.`,
     );
   });
 

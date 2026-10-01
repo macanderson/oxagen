@@ -1,4 +1,4 @@
-# ADR-237: Phase 1 work records are facts, and the state is reduced from them
+# ADR-244: Phase 1 work records are facts, and the state is reduced from them
 
 - **Status:** Accepted
 - **Date:** 2026-10-01

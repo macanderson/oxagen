@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 // Prose gate for the two customer-facing sites: oxagen.sh (apps/web) and
 // docs.oxagen.sh (apps/docs). The rules come from .claude/skills/clear-prose
-// and .claude/skills/oxagen-branding/references/words.md; this script holds
-// the subset a machine can check without reading for meaning.
+// and the branding skill's references/words.md in macanderson/oxagen-brand.
+// This script holds the subset a machine can check without reading for
+// meaning.
 //
 // It fails on:
 //   - an em dash, or an en dash used as a separator, in anything a customer
@@ -121,7 +122,8 @@ export const AVOID = [
   "we believe",
   "we're on a mission",
   // Retired lines from the positioning registry
-  // (.claude/skills/oxagen-branding/references/positioning.md, "Retired").
+  // (skills/oxagen-branding/references/positioning.md in
+  // macanderson/oxagen-brand, "Retired").
   // Each one came back once after it was retired, so the scanner holds it.
   "never re-explain",
   "fewer tokens, same answers",
