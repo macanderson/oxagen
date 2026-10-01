@@ -121,8 +121,6 @@
     "@biomejs/biome": "2.5.14",
     "@changesets/cli": "3.0.3",
     "@eslint/js": "9.39.5",
-    "@oxagen/config": "workspace:*",
-    "@oxagen/oxagen": "workspace:*",
     "@types/node": "25.9.8",
     "eslint": "9.39.5",
     "eslint-config-next": "16.3.6",
