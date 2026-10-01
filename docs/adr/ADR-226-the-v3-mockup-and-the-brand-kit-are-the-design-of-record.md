@@ -49,7 +49,7 @@ UI, and Monaspace Neon for code, and the app loads the kit's faces.
 The mockup is read at one commit:
 
 ```
-oxageninc/roadmap @ bfd267fc88679fa8a88bc6a185112850c81e6581, path mockups/
+macanderson/oxagen-roadmap @ bfd267fc88679fa8a88bc6a185112850c81e6581, path mockups/
 ```
 
 This is the last `main` commit that touched `mockups/` (roadmap #283,
@@ -68,20 +68,20 @@ page at `agents/<server>`. It also carries the Agent work phase pages of
 roadmap #269 and #270.
 
 Amended 2026-10-01: the pin moves from roadmap #273 (`41cb7205`) to roadmap
-#283 (`bfd267fc`), in the repository's new home, `oxageninc/roadmap`. Mac
-decided on 2026-09-30 that the mockup draws the app's agent pages (roadmap #276):
-the Agents tab is the app's four tiles and its agents table with the Composition
+#283 (`bfd267fc`). Mac decided on 2026-09-30 that the mockup draws the app's
+agent pages (roadmap #276): the Agents tab is the app's four tiles and its agents
+table with the Composition
 and Operations columns, an agent opens its own page at `agents/<key>/<tab>` with
 the app's seven tabs, and every agent avatar carries its harness mark in the
 lower-left corner, as `AgentAvatar` draws it. The new commit also carries the kit
 wordmark and installable pages (roadmap #274), the parity audit's page registry
 and prompts (#275), the organization steering repo named `oxagen-config` (#277),
 the Phase 1 Work lifecycle and its error states (#278), and the house brand
-synced from `oxageninc/brand` (#283).
+synced from `oxagen-brand` (#283).
 
 To read a file at the pin, run
 `git -C ../oxagen-roadmap show bfd267fc88679fa8a88bc6a185112850c81e6581:mockups/README.md`,
-or open `https://github.com/oxageninc/roadmap/tree/bfd267fc88679fa8a88bc6a185112850c81e6581/mockups`.
+or open `https://github.com/macanderson/oxagen-roadmap/tree/bfd267fc88679fa8a88bc6a185112850c81e6581/mockups`.
 
 Moving the pin is a permitted amendment to this ADR. A pull request changes the
 SHA and the date on the pin line, and names the mockup changes the new commit
