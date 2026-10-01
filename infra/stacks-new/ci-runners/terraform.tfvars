@@ -41,4 +41,4 @@ warm_pool = {
 }
 
 alarm_email        = "mac@oxagen.sh"
-monthly_budget_usd = 15000
+monthly_budget_usd = 20000

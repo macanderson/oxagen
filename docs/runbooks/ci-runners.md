@@ -11,9 +11,9 @@ A workflow picks a pool by its one label.
 
 | Label | Arch | Size | Warm runners | Max | Network |
 |---|---|---|---|---|---|
-| `oxagen-large-arm64` | arm64 | 16 vCPU, 32 to 128 GB | 30 | 250 | CI VPC |
-| `oxagen-large-x64` | x64 | 16 vCPU, 32 to 64 GB | 10 | 100 | CI VPC |
-| `oxagen-small-arm64` | arm64 | 4 vCPU, 8 to 16 GB | 20 | 150 | CI VPC |
+| `oxagen-large-arm64` | arm64 | 16 vCPU, 64 to 128 GB | 30 | 250 | CI VPC |
+| `oxagen-large-x64` | x64 | 16 vCPU, 64 to 128 GB | 10 | 100 | CI VPC |
+| `oxagen-small-arm64` | arm64 | 4 vCPU, 16 GB | 20 | 150 | CI VPC |
 | `oxagen-small-x64` | x64 | 4 vCPU, 16 GB | 4 | 50 | CI VPC |
 | `oxagen-deploy` | arm64 | 4 vCPU, 16 GB | 1 | 6 | production VPC |
 

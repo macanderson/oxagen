@@ -18,26 +18,27 @@ locals {
   # Instance types in priority order. capacity-optimized-prioritized asks for
   # the first ones first and moves down the list when spot capacity is short.
   # Local NVMe (the "d" types) first, then the newest cores, then the rest for
-  # capacity. Every type in one pool has the same vCPU count, so a job runs at
-  # the same width wherever it lands.
+  # capacity. Every type in one pool has the same vCPU count and at least the
+  # same memory (64 GB large, 16 GB small), so a job runs at the same width
+  # wherever it lands and the concurrency the workflows set never outgrows it.
   pools = {
     "oxagen-large-arm64" = {
       arch     = "arm64"
-      types    = ["m8gd.4xlarge", "c8gd.4xlarge", "m7gd.4xlarge", "m8g.4xlarge", "c8g.4xlarge", "r8g.4xlarge", "m7g.4xlarge"]
+      types    = ["m8gd.4xlarge", "m7gd.4xlarge", "m8g.4xlarge", "r8g.4xlarge", "m7g.4xlarge", "r7g.4xlarge"]
       max      = 250
       disk     = { size = 150, iops = 16000, throughput = 1000 }
       priority = 10
     }
     "oxagen-large-x64" = {
       arch     = "x64"
-      types    = ["m7a.4xlarge", "c7a.4xlarge", "m6id.4xlarge", "m7i.4xlarge", "c7i.4xlarge", "m6a.4xlarge"]
+      types    = ["m7a.4xlarge", "m6id.4xlarge", "m7i.4xlarge", "r7a.4xlarge", "m6a.4xlarge", "m6i.4xlarge"]
       max      = 100
       disk     = { size = 150, iops = 16000, throughput = 1000 }
       priority = 20
     }
     "oxagen-small-arm64" = {
       arch     = "arm64"
-      types    = ["m8gd.xlarge", "m7gd.xlarge", "m8g.xlarge", "c8g.xlarge", "m7g.xlarge"]
+      types    = ["m8gd.xlarge", "m7gd.xlarge", "m8g.xlarge", "m7g.xlarge", "m6g.xlarge"]
       max      = 150
       disk     = { size = 80, iops = 6000, throughput = 500 }
       priority = 30
