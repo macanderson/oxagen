@@ -24,6 +24,7 @@ import { and, desc, eq, gt, inArray, isNull, lte, or } from "drizzle-orm";
 import { schema, type Tx, withTenantDb } from "@oxagen/database";
 import type { PlanTier } from "@oxagen/oxagen/types";
 import type { GauTerms } from "./pricing";
+import type { SignupGrant } from "./signup-grant";
 import { ENTITLED_SUBSCRIPTION_STATUSES } from "./tier";
 
 /** The seeded Free plan (`packages/database/src/seed.ts`, `PLAN_SEEDS`). */
@@ -69,6 +70,19 @@ export interface GauEntitlement {
   terms: ContractTerms;
   /** The entitled subscription, or null for an organisation with none. */
   subscription: GauSubscriptionPeriod | null;
+  /**
+   * The organisation's one-time signup grant (signup-grant.ts), or null for
+   * an organisation that has none: one created before the grant existed and
+   * not yet given one by the migration that introduced it.
+   */
+  grant: SignupGrant | null;
+  /**
+   * The Free row's `subscription_required_after_grant`: whether an
+   * organisation with no subscription is refused once its grant is spent or
+   * expired. When an operator clears it, such an organisation falls back to
+   * the Free row's monthly allowance instead (ADR-NEW, signup grant).
+   */
+  subscriptionRequiredAfterGrant: boolean;
 }
 
 interface PlanTermsRow {
@@ -105,7 +119,7 @@ export async function readGauEntitlement(
   orgId: string,
   now: Date = new Date(),
 ): Promise<GauEntitlement> {
-  const [n, e, f] = await Promise.all([
+  const [n, e, f, g] = await Promise.all([
     // Effective: started, and not yet ended. The partial unique index on
     // (org_id) WHERE effective_to IS NULL keeps one open row per org; a row
     // with a future effective_to is still in force until that instant.
@@ -167,14 +181,32 @@ export async function readGauEntitlement(
         blockSizeGau: schema.plans.blockSizeGau,
         includedGauPerMonth: schema.plans.includedGauPerMonth,
         updatedAt: schema.plans.updatedAt,
+        subscriptionRequiredAfterGrant:
+          schema.plans.subscriptionRequiredAfterGrant,
       })
       .from(schema.plans)
       .where(eq(schema.plans.slug, FREE_PLAN_SLUG))
+      .limit(1),
+    tx
+      .select({
+        grantedGau: schema.gauSignupGrants.grantedGau,
+        grantedAt: schema.gauSignupGrants.grantedAt,
+        expiresAt: schema.gauSignupGrants.expiresAt,
+      })
+      .from(schema.gauSignupGrants)
+      .where(eq(schema.gauSignupGrants.orgId, orgId))
       .limit(1),
   ]);
   const negotiated = n[0];
   const entitled = e[0];
   const free = f[0];
+  const grantRow = g[0];
+  const grant: SignupGrant | null = grantRow
+    ? { ...grantRow, grantedGau: Number(grantRow.grantedGau) }
+    : null;
+  // The rule is the Free row's. A database without that row fails below.
+  const subscriptionRequiredAfterGrant =
+    free?.subscriptionRequiredAfterGrant ?? true;
 
   const subscription: GauSubscriptionPeriod | null = entitled
     ? {
@@ -207,6 +239,8 @@ export async function readGauEntitlement(
         ...termsOf(negotiated),
       },
       subscription,
+      grant,
+      subscriptionRequiredAfterGrant,
     };
   }
   return {
@@ -218,6 +252,8 @@ export async function readGauEntitlement(
       ...termsOf(published),
     },
     subscription,
+    grant,
+    subscriptionRequiredAfterGrant,
   };
 }
 

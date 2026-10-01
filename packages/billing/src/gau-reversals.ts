@@ -7,7 +7,7 @@ import { and, eq, isNull, sql } from "drizzle-orm";
 import { schema, type Tx, withSystemDb } from "@oxagen/database";
 import { billingProvider } from "./client";
 import { readGauEntitlement } from "./contract-terms";
-import { ensureCurrentBucket, periodFor } from "./gau-bucket";
+import { bucketBasis, ensureCurrentBucket } from "./gau-bucket";
 import { logger } from "./logger";
 import type { BillingDispute, BillingRefundedCharge } from "./provider";
 
@@ -168,13 +168,12 @@ async function debitCurrentBucket(
   tx: Tx,
   args: { orgId: string; units: number; now: Date },
 ): Promise<{ bucketId: string; reversedGau: number }> {
-  const { terms, subscription } = await readGauEntitlement(
-    tx,
-    args.orgId,
-    args.now,
-  );
+  const { terms, period } = bucketBasis(
+      await readGauEntitlement(tx, args.orgId, args.now),
+      args.now,
+    );
   const bucket = await ensureCurrentBucket(tx, args.orgId, {
-    period: periodFor(subscription, args.now),
+    period,
     terms,
     usedDelta: 0,
     purchasedDelta: 0,

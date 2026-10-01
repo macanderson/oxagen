@@ -508,22 +508,24 @@ describe("grantGauPurchaseForCheckout", () => {
     expect(store.paymentMethods[0]!.isDefault).toBe(true);
   });
 
-  it("a Free org's first purchase leaves it with a default card, so its next exhaustion is refused with no free_no_payment_method reason", async () => {
+  it("a purchase adds units the gate admits on, for an org on the Free row's monthly allowance", async () => {
     const bucket = seedBucket({ usedGau: 5_000 });
-    // Before the purchase: exhausted, no card — the add-a-card refusal.
+    // Before the purchase: the monthly allowance is spent.
     await expect(assertGauAvailable(ORG, NOW)).rejects.toMatchObject({
       code: "gau_exhausted",
-      reason: "free_no_payment_method",
+      reason: "monthly_allowance_used",
     });
 
     await grantGauPurchaseForCheckout(paidSession());
     await expect(assertGauAvailable(ORG, NOW)).resolves.toBeUndefined();
 
-    // The purchased units are spent: the prepaid path, as for Build.
+    // The purchased units are spent: refused again, card or not.
     bucket.usedGau = 15_000;
     const err = await assertGauAvailable(ORG, NOW).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(GauExhaustedError);
-    expect((err as InstanceType<typeof GauExhaustedError>).reason).toBeNull();
+    expect((err as InstanceType<typeof GauExhaustedError>).reason).toBe(
+      "monthly_allowance_used",
+    );
   });
 
   it("grants nothing for a session that completed unpaid", async () => {
@@ -1466,6 +1468,31 @@ describe("closeEndedGauPeriods", () => {
     expect(bucket.overageInvoicedGau).toBe(0);
     expect(store.settlements).toHaveLength(0);
     expect(providerCalls()).toEqual([]);
+  });
+
+  // ADR-NEW (signup grant): every subscriber is billed for its overage.
+  it("invoices an ended subscriber's month as one period_close settlement without invoice-billing approval", async () => {
+    mocks.readGauEntitlement.mockResolvedValue({
+      ...FREE_ENTITLEMENT,
+      subscription: {
+        billingInterval: "month",
+        currentPeriodStart: AUGUST.end,
+        currentPeriodEnd: new Date("2026-10-01T00:00:00.000Z"),
+      },
+    });
+    const bucket = endedAugust({ usedGau: 5_000 + 700 });
+
+    await closeEndedGauPeriods(null, NOW);
+
+    expect(store.settlements).toHaveLength(1);
+    expect(store.settlements[0]).toMatchObject({
+      bucketId: bucket.id,
+      kind: "period_close",
+      quantityGau: 700,
+    });
+    expect(mocks.provider.createGauInvoice).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: "gau_period_close", quantityGau: 700 }),
+    );
   });
 
   it("closes an ended invoice-billed month with nothing uninvoiced with closed_at only", async () => {

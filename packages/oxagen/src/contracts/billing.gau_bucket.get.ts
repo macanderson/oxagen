@@ -87,9 +87,38 @@ const gauAutoTopupSchema = z
   })
   .strict();
 
+/**
+ * What the current bucket is measured against (ADR-NEW, signup grant):
+ * a subscription's month, the signup grant's window, or the calendar month
+ * after the grant, whose allowance is zero while a subscription is required.
+ */
+const gauBasisSchema = z.enum([
+  "subscription",
+  "signup_grant",
+  "after_signup_grant",
+]);
+
+/**
+ * The organisation's one-time signup grant, whatever the current basis, so
+ * the page can print its size, its expiry, and what is left of it. Null for
+ * an organisation with no grant row. `remainingGau` is the grant bucket's
+ * remaining figure while the grant is active, and 0 once it has expired.
+ */
+const gauSignupGrantSchema = z
+  .object({
+    grantedGau: gauCount,
+    grantedAt: z.string().datetime(),
+    expiresAt: z.string().datetime(),
+    active: z.boolean(),
+    remainingGau: z.number().int(),
+  })
+  .strict();
+
 const gauBucketOutputSchema = z
   .object({
     mode: gauBillingModeSchema,
+    basis: gauBasisSchema,
+    signupGrant: gauSignupGrantSchema.nullable(),
     period: gauPeriodSchema,
     includedGau: gauCount,
     purchasedGau: gauCount,

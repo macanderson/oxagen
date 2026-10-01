@@ -71,11 +71,28 @@ export const plans = billingSchema.table(
     // org with no negotiated billing.contract_terms row, so nothing copies
     // them into the org and a plan change shows on the next read.
     ...gauTermsColumns(),
+    // ADR-NEW (signup grant): the one-time grant a new organisation receives,
+    // and whether it must subscribe once the grant is spent or expired. Only
+    // the Free row's values are read (readGauEntitlement), at signup for the
+    // size and the lifetime and on every gate check for the rule. The seed
+    // never writes these columns, so an operator's UPDATE on the Free row
+    // stands across deploys and reaches the next signup with no deploy.
+    signupGrantGau: integer("signup_grant_gau").notNull().default(33000),
+    signupGrantDays: integer("signup_grant_days").notNull().default(30),
+    subscriptionRequiredAfterGrant: boolean(
+      "subscription_required_after_grant",
+    )
+      .notNull()
+      .default(true),
     features: jsonb("features").notNull().default(sql`'{}'::jsonb`),
     isPublic: boolean("is_public").notNull().default(true),
   },
   (t) => ({
     slugIdx: uniqueIndex("plans_slug_idx").on(t.slug),
+    signupGrantCheck: check(
+      "plans_signup_grant_check",
+      sql`${t.signupGrantGau} >= 0 AND ${t.signupGrantDays} > 0`,
+    ),
     tierCheck: check(
       "plans_tier_check",
       sql`${t.tier} IN ('free','build','scale','enterprise')`,
@@ -954,6 +971,52 @@ export const gauBuckets = billingSchema.table(
     periodRangeCheck: check(
       "gau_buckets_period_range_check",
       sql`${t.periodEnd} > ${t.periodStart}`,
+    ),
+  }),
+);
+
+// ── gau_signup_grants ────────────────────────────────────────────────────────
+// ADR-NEW (signup grant): the one bucket of governed actions an organisation
+// receives when it is created, granted once and never renewed. The size and
+// the lifetime are copied from the Free plan row at the moment of the grant,
+// so a later change to that row reaches the next signup and leaves every
+// grant already made as it was. The unique index on org_id is what makes the
+// grant once-only: `issueSignupGrant` inserts ON CONFLICT DO NOTHING, and a
+// second grant to the same organisation inserts nothing.
+//
+// The units are spent in the gau_buckets row whose period is exactly
+// [granted_at, expires_at) (`bucketBasis`, gau-bucket.ts), so the recorder,
+// the ledger and the page read the grant through the one bucket writer.
+// No public_id (internal, addressed only by org_id).
+export const gauSignupGrants = billingSchema.table(
+  "gau_signup_grants",
+  {
+    id: uuid("id").primaryKey().default(uuidv7Default),
+    // FK → org.organizations.id — CASCADE so the grant vanishes with the org.
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    /** Governed actions granted: the Free row's signup_grant_gau at the time. */
+    grantedGau: integer("granted_gau").notNull(),
+    /** When the grant started: the organisation's creation, or the deploy for an older one. */
+    grantedAt: timestamp("granted_at", {
+      withTimezone: true,
+      mode: "date",
+    }).notNull(),
+    /** granted_at plus the Free row's signup_grant_days at the time. */
+    expiresAt: timestamp("expires_at", {
+      withTimezone: true,
+      mode: "date",
+    }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    orgIdx: uniqueIndex("gau_signup_grants_org_idx").on(t.orgId),
+    grantCheck: check(
+      "gau_signup_grants_check",
+      sql`${t.grantedGau} >= 0 AND ${t.expiresAt} > ${t.grantedAt}`,
     ),
   }),
 );

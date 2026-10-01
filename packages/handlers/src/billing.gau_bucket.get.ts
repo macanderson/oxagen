@@ -42,7 +42,7 @@ import {
   type BillingGauBucketGetOutput,
 } from "@oxagen/oxagen/contracts/billing.gau_bucket.get";
 import {
-  periodFor,
+  bucketBasis,
   readBucket,
   readDefaultPaymentMethod,
   readOrgBillingSettings,
@@ -180,14 +180,33 @@ export function createBillingGauBucketGetHandler(
     const now = new Date();
 
     // ── Terms, settings, month ────────────────────────────────────────────
-    const [{ terms, subscription }, settings] = await Promise.all([
+    const [entitlement, settings] = await Promise.all([
       queries.entitlement(orgId, now),
       queries.settings(orgId),
     ]);
-    const period = periodFor(subscription, now);
+    const basis = bucketBasis(entitlement, now);
+    const { period, terms } = basis;
     const bucket = await queries.bucket(orgId, { period, terms });
 
+    // The signup grant as the page prints it (ADR-NEW, signup grant). While
+    // it is active the current bucket is the grant's, so what is left of the
+    // grant is that bucket's remaining figure. An expired grant has none.
+    const grant = entitlement.grant ?? null;
+    const signupGrant =
+      grant === null
+        ? null
+        : {
+            grantedGau: grant.grantedGau,
+            grantedAt: grant.grantedAt.toISOString(),
+            expiresAt: grant.expiresAt.toISOString(),
+            active: basis.kind === "signup_grant",
+            remainingGau:
+              basis.kind === "signup_grant" ? bucket.remainingGau : 0,
+          };
+
     const counts = {
+      basis: basis.kind,
+      signupGrant,
       period: {
         start: period.start.toISOString(),
         end: period.end.toISOString(),

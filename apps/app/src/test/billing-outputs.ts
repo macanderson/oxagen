@@ -53,6 +53,8 @@ export function prepaidBucketOutput(
 ): GauBucketOutput {
   return {
     mode: "prepaid",
+    basis: "subscription",
+    signupGrant: null,
     period: SEPTEMBER,
     includedGau: 50000,
     purchasedGau: 5000,
@@ -73,6 +75,8 @@ export function prepaidBucketOutput(
 export function invoiceBucketOutput(): GauBucketOutput {
   return {
     mode: "invoice",
+    basis: "subscription",
+    signupGrant: null,
     period: SEPTEMBER,
     includedGau: 300000,
     purchasedGau: 1,

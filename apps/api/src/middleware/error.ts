@@ -14,11 +14,13 @@ import type { AppEnv } from "../app";
 //                            (metering.ts; the ADR-053 platform-funded path)
 //   - billing_suspended    — the org's subscription is suspended (dunning.ts)
 //   - budget_exceeded      — a spend ceiling was reached (spend-budget.ts)
-//   - gau_exhausted        — the org's month bucket of governed action units
-//                            is empty and auto top-up could not run
-//                            (gau-bucket.ts, ADR-055); carries an optional
-//                            `reason` ("free_no_payment_method") the client
-//                            prints as "add a payment method or wait"
+//   - gau_exhausted        — an org with no subscription has spent or
+//                            outlived its signup grant (gau-bucket.ts,
+//                            ADR-NEW signup grant); carries a `reason`
+//                            ("signup_grant_used", "signup_grant_expired",
+//                            "no_signup_grant", "monthly_allowance_used")
+//                            the client prints as "add a card and choose a
+//                            plan"
 //   - assistant_spend_cap  — the org spent its monthly cap of platform-paid
 //                            assistant tokens (metering.ts, ADR-053 §3)
 // The list is a hand-maintained mirror of the throwing classes in

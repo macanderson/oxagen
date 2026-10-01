@@ -23,8 +23,8 @@ import {
   type GauSubscriptionPeriod,
 } from "./contract-terms";
 import { assertOrgCanConsume } from "./dunning";
-import { readDefaultPaymentMethod } from "./payment-methods";
 import type { GauTerms } from "./pricing";
+import { signupGrantActive, type SignupGrant } from "./signup-grant";
 import { logger } from "./logger";
 
 // ── The period ──────────────────────────────────────────────────────────────
@@ -100,6 +100,82 @@ export function periodFor(
   while (addMonths(anchor, k) > now) k -= 1;
   while (addMonths(anchor, k + 1) <= now) k += 1;
   return { start: addMonths(anchor, k), end: addMonths(anchor, k + 1) };
+}
+
+// ── The basis ───────────────────────────────────────────────────────────────
+
+/**
+ * What the organisation's current bucket is measured against (ADR-NEW,
+ * signup grant, amending ADR-055 §4):
+ *
+ * - `subscription`: an entitled subscription's month (`periodFor`), with the
+ *   plan's or the negotiated row's monthly allowance.
+ * - `signup_grant`: no subscription, inside the grant's window. The bucket's
+ *   period is exactly `[granted_at, expires_at)` and its included units are
+ *   the grant.
+ * - `after_signup_grant`: no subscription, and the grant expired or never
+ *   existed. The UTC calendar month, starting no earlier than the grant's
+ *   expiry so the two buckets never overlap. Its allowance is zero while the
+ *   Free row requires a subscription, and the Free row's monthly allowance
+ *   when an operator has cleared that rule.
+ */
+export type GauBasisKind = "subscription" | "signup_grant" | "after_signup_grant";
+
+export interface GauBucketBasis<T extends GauTerms = GauTerms> {
+  kind: GauBasisKind;
+  period: GauPeriod;
+  /** The terms, with `includedGauPerMonth` set to this period's allowance. */
+  terms: T;
+}
+
+/** What `bucketBasis` reads from an entitlement. */
+export interface GauBasisInput<T extends GauTerms = GauTerms> {
+  terms: T;
+  subscription: GauSubscriptionPeriod | null;
+  grant?: SignupGrant | null;
+  subscriptionRequiredAfterGrant?: boolean;
+}
+
+/**
+ * The period and allowance of the bucket `now` falls in. Every reader and
+ * writer of the bucket takes its period from here, so the gate, the recorder,
+ * the page and the settlement paths always address the same row.
+ */
+export function bucketBasis<T extends GauTerms>(
+  entitlement: GauBasisInput<T>,
+  now: Date,
+): GauBucketBasis<T> {
+  const { terms, subscription } = entitlement;
+  if (subscription !== null) {
+    return {
+      kind: "subscription",
+      period: periodFor(subscription, now),
+      terms,
+    };
+  }
+  const grant = entitlement.grant ?? null;
+  if (grant !== null && signupGrantActive(grant, now)) {
+    return {
+      kind: "signup_grant",
+      period: { start: grant.grantedAt, end: grant.expiresAt },
+      terms: { ...terms, includedGauPerMonth: grant.grantedGau },
+    };
+  }
+  const month = periodFor(null, now);
+  const start =
+    grant !== null && grant.expiresAt > month.start
+      ? grant.expiresAt
+      : month.start;
+  return {
+    kind: "after_signup_grant",
+    period: { start, end: month.end },
+    terms: {
+      ...terms,
+      includedGauPerMonth: entitlement.subscriptionRequiredAfterGrant
+        ? 0
+        : terms.includedGauPerMonth,
+    },
+  };
 }
 
 // ── The block ───────────────────────────────────────────────────────────────
@@ -360,30 +436,48 @@ export async function readBucket(
 // ── The gate ────────────────────────────────────────────────────────────────
 
 /**
- * Why a prepaid organisation at `remaining ≤ 0` was refused, when the page
- * has something more useful to say than "buy more": a Free org that has not
- * saved a card is refused until the next month opens or it saves one
- * (ADR-055 §6, the 2026-09-14 rule). Null for every other prepaid org — its
- * auto top-up ran or could not, exactly as for Build.
+ * Why an organisation with no subscription was refused (ADR-NEW, signup
+ * grant). The first three ask the same thing of the customer: add a card
+ * and choose a plan. A saved card alone changes none of them.
+ *
+ * - `signup_grant_used`: inside the grant's window, with the grant spent.
+ * - `signup_grant_expired`: the grant's window has closed.
+ * - `no_signup_grant`: the organisation has no grant row.
+ * - `monthly_allowance_used`: an operator has cleared the subscription rule,
+ *   and the Free row's monthly allowance is spent.
  */
-export type GauExhaustedReason = "free_no_payment_method";
+export type GauExhaustedReason =
+  | "signup_grant_used"
+  | "signup_grant_expired"
+  | "no_signup_grant"
+  | "monthly_allowance_used";
+
+function exhaustedMessage(reason: GauExhaustedReason, periodEnd: Date): string {
+  switch (reason) {
+    case "signup_grant_used":
+      return "Signup grant used: add a card and choose a plan to keep governing.";
+    case "signup_grant_expired":
+      return "Signup grant expired: add a card and choose a plan to keep governing.";
+    case "no_signup_grant":
+      return "No plan: add a card and choose a plan to keep governing.";
+    case "monthly_allowance_used":
+      return `Monthly allowance used: choose a plan to keep governing, or wait until ${periodEnd.toISOString()}.`;
+  }
+}
 
 export class GauExhaustedError extends Error {
   readonly code = "gau_exhausted" as const;
-  readonly reason: GauExhaustedReason | null;
+  readonly reason: GauExhaustedReason;
   readonly remainingGau: number;
+  /** When the refused bucket ends: the grant's expiry, or the month's end. */
   readonly periodEnd: Date;
 
   constructor(args: {
-    reason: GauExhaustedReason | null;
+    reason: GauExhaustedReason;
     remainingGau: number;
     periodEnd: Date;
   }) {
-    super(
-      args.reason === "free_no_payment_method"
-        ? `Governed action units exhausted: add a payment method to keep governing this month, or the allowance renews on ${args.periodEnd.toISOString()}.`
-        : "Governed action units exhausted: the bucket is empty and auto top-up could not run.",
-    );
+    super(exhaustedMessage(args.reason, args.periodEnd));
     this.name = "GauExhaustedError";
     this.reason = args.reason;
     this.remainingGau = args.remainingGau;
@@ -392,20 +486,26 @@ export class GauExhaustedError extends Error {
 }
 
 /**
- * The admission gate (ARCHITECTURE.md §3.9 item 9). Runs inside the kernel's
- * tenant scope before every governed action:
+ * The admission gate (ARCHITECTURE.md §3.9 item 9; ADR-NEW, signup grant).
+ * Runs inside the kernel's tenant scope before every governed action:
  *
- *   1. `BillingSuspendedError` when dunning has suspended the org — in
- *      either mode (`assertOrgCanConsume`, unchanged).
- *   2. Returns for an org approved for invoice billing at any `remaining`.
- *   3. Returns for a prepaid org with `remaining > 0`.
- *   4. Otherwise `GauExhaustedError`, with `reason: "free_no_payment_method"`
- *      when the resolved terms are the published Free tier and the org has no
- *      default payment method.
+ *   1. `BillingSuspendedError` when dunning has suspended the org
+ *      (`assertOrgCanConsume`), whatever else is true.
+ *   2. Returns for an org approved for invoice billing.
+ *   3. Returns for an org with an entitled subscription. Actions past the
+ *      plan's allowance are billed as usage on the subscription invoice, so
+ *      a subscriber is never capped here.
+ *   4. Inside the signup grant's window, returns while the grant has units
+ *      left, and refuses with `signup_grant_used` once it has none.
+ *   5. After the grant, or with none, refuses with `signup_grant_expired` or
+ *      `no_signup_grant` while the Free row requires a subscription. When an
+ *      operator has cleared that rule, the Free row's monthly allowance
+ *      admits instead, and `monthly_allowance_used` refuses past it.
  *
- * Reads only: the settings through `readOrgBillingSettings`, the bucket
- * through `readBucket`. Never inserts, never calls the provider — a gate that
- * charges fails open when Stripe is down.
+ * A saved card plays no part: it unlocks nothing without a subscription.
+ * Reads only, through `readOrgBillingSettings`, `resolveGauEntitlement` and
+ * `readBucket`. Never inserts and never calls the provider, so a Stripe
+ * outage cannot make the gate fail open.
  */
 export async function assertGauAvailable(
   orgId: string,
@@ -416,32 +516,38 @@ export async function assertGauAvailable(
   const settings = await readOrgBillingSettings(orgId);
   if (settings.approvedForInvoiceBilling) return;
 
-  const { terms, subscription } = await resolveGauEntitlement(orgId, now);
-  const period = periodFor(subscription, now);
-  const bucket = await readBucket(orgId, { period, terms });
-  if (bucket.remainingGau > 0) return;
+  const entitlement = await resolveGauEntitlement(orgId, now);
+  const basis = bucketBasis(entitlement, now);
+  if (basis.kind === "subscription") return;
 
-  const reason: GauExhaustedReason | null =
-    terms.source === "published_tier" &&
-    terms.tier === "free" &&
-    (await readDefaultPaymentMethod(orgId)) === null
-      ? "free_no_payment_method"
-      : null;
+  const grant = entitlement.grant ?? null;
+  let reason: GauExhaustedReason;
+  let remaining = 0;
+  if (basis.kind === "signup_grant" || !entitlement.subscriptionRequiredAfterGrant) {
+    const bucket = await readBucket(orgId, basis);
+    if (bucket.remainingGau > 0) return;
+    remaining = bucket.remainingGau;
+    reason =
+      basis.kind === "signup_grant" ? "signup_grant_used" : "monthly_allowance_used";
+  } else {
+    reason = grant === null ? "no_signup_grant" : "signup_grant_expired";
+  }
 
   logger.warn(
     {
       orgId,
-      remainingGau: bucket.remainingGau,
-      periodEnd: period.end.toISOString(),
-      tier: terms.tier,
-      source: terms.source,
+      remainingGau: remaining,
+      periodEnd: basis.period.end.toISOString(),
+      basis: basis.kind,
+      tier: entitlement.terms.tier,
+      source: entitlement.terms.source,
       reason,
     },
-    "billing: assertGauAvailable — bucket exhausted, refusing governed action",
+    "billing: assertGauAvailable refused a governed action",
   );
   throw new GauExhaustedError({
     reason,
-    remainingGau: bucket.remainingGau,
-    periodEnd: period.end,
+    remainingGau: remaining,
+    periodEnd: basis.period.end,
   });
 }
