@@ -152,8 +152,11 @@ EOF
   # --- Container images ----------------------------------------------------
   # Every image a CI job starts, for this architecture. The runner still asks
   # the registry for the tag at job time, and finds the layers already here.
+  # A missing image is a warning, not a failed build: the first build can run
+  # before ci-image.yml has published, and the GHCR images are amd64 only, so
+  # the arm64 build cannot pull them. A job pulls what the image lacks.
   jq -r '.images[]' "$config" | while read -r image; do
-    retry docker pull "$image"
+    retry docker pull "$image" || echo "WARNING: could not pull $image for $deb_arch. Jobs will pull it."
   done
 
   # --- pnpm store ----------------------------------------------------------
@@ -193,7 +196,7 @@ validate() {
   fio --version
   id runner
   jq -r '.images[]' "$config" | while read -r image; do
-    docker image inspect "$image" >/dev/null
+    docker image inspect "$image" >/dev/null 2>&1 || echo "not baked: $image"
   done
 }
 

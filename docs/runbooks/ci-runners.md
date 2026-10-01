@@ -30,6 +30,21 @@ from another branch waits for a runner that never comes. Dispatch from `main`.
 roll back with `CI_RUNNERS` first, and the apply that repairs them runs on a
 GitHub-hosted runner.
 
+## While the EC2 quota is small
+
+Until AWS approves the quota cases below, the account holds 64 vCPUs of
+runners at once: four 16-vCPU runners or sixteen 4-vCPU ones. Run this way:
+
+- `CI_HEAVY_POOL=small` sends the heavy `pipeline.yml` jobs to the 4-vCPU,
+  16 GB pool, 16 at a time, with turbo at 4 tasks.
+- `github_app_ready` stays `false`, so no warm runner holds capacity a job
+  needs. Jobs start cold, in about a minute.
+- The housekeeping workflows stay on GitHub-hosted runners (#5000 waits), so
+  our capacity adds to GitHub's.
+
+When the quota lands, delete `CI_HEAVY_POOL`, set `github_app_ready = true`,
+and merge #5000.
+
 ## Roll back to GitHub-hosted runners
 
 Set the repository variable to `github`:

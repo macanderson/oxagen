@@ -47,6 +47,10 @@ locals {
     assets_bucket  = aws_s3_bucket.image_assets.id
     images = concat(
       [for name in keys(local.ci_images) : "${aws_ecrpublic_repository.ci[name].repository_uri}:latest"],
+      # What pipeline.yml pulls until CI_IMAGE_REGISTRY points at ECR Public.
+      # amd64 only, so the arm64 build skips them.
+      [for name in keys(local.ci_images) : "ghcr.io/macanderson/${name}:latest"],
+      [for name, source in local.service_images : source],
       [for name, source in local.service_images : "${aws_ecrpublic_repository.ci[name].repository_uri}:${split(":", source)[length(split(":", source)) - 1]}"],
     )
   }
