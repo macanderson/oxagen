@@ -16,7 +16,7 @@
     // `content/**`, `source.config.ts`, and the fumadocs-mdx version, and turbo
     // folds it into this task's hash.
     "typecheck": {
-      "dependsOn": ["gen:source"],
+      "dependsOn": ["^build", "gen:source"],
       "inputs": ["$TURBO_DEFAULT$", "src/**", "tsconfig.json", "package.json"],
       "outputs": []
     },

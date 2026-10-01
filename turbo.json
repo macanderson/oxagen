@@ -181,12 +181,22 @@
       ]
     },
 
+    // typecheck and lint read the types of every workspace package they
+    // import, so each hash must cover those packages (#4918). Without a
+    // dependency edge, a change to packages/database left the hash of
+    // apps/app#typecheck unchanged and the cache replayed a pass. `^build`
+    // adds that edge: a package's build task hashes its non-test files even
+    // where the package has no build script. Only apps have build scripts and
+    // nothing depends on an app, so the edge waits for no task. A package
+    // turbo.json that sets dependsOn for these tasks must list `^build` too.
     "typecheck": {
+      "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", "src/**", "tsconfig.json", "package.json"],
       "outputs": []
     },
 
     "lint": {
+      "dependsOn": ["^build"],
       "inputs": [
         "$TURBO_DEFAULT$",
         "src/**",
