@@ -314,7 +314,7 @@ describe("Operator ranking", () => {
     expect(action).toHaveBeenCalledWith(AT, true);
     expect(refresh).toHaveBeenCalledOnce();
     expect(
-      screen.getByRole("button", { name: "Turn off pseudonyms" }),
+      await screen.findByRole("button", { name: "Turn off pseudonyms" }),
     ).toBeInTheDocument();
   });
 
