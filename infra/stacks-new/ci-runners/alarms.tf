@@ -222,3 +222,53 @@ resource "aws_budgets_budget" "ci_runners" {
 
   depends_on = [aws_ce_cost_allocation_tag.stack]
 }
+
+# ---------------------------------------------------------------------------
+# vCPU use against the account's EC2 quota
+# ---------------------------------------------------------------------------
+
+# Fires when the account's running Standard-family vCPUs, spot or on-demand,
+# pass 80% of their quota for 5 minutes. Two things cause it: real demand,
+# which means the quota needs raising, or runners that boot and never
+# register, which the pool and job-retry Lambdas then launch again (2026-10-01:
+# 121 instances for 3 jobs). The runbook says how to tell them apart.
+resource "aws_cloudwatch_metric_alarm" "vcpu_quota" {
+  for_each = {
+    spot      = { class = "Standard/Spot", quota = "L-34B43A08" }
+    on-demand = { class = "Standard/OnDemand", quota = "L-1216C47A" }
+  }
+
+  alarm_name          = "ci-runners-${each.key}-vcpu-near-quota"
+  alarm_description   = "Running ${each.key} vCPUs passed 80% of the EC2 quota for 5 minutes. See docs/runbooks/ci-runners.md."
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 5
+  threshold           = 80
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = [aws_sns_topic.alarms.arn]
+  ok_actions          = [aws_sns_topic.alarms.arn]
+
+  metric_query {
+    id          = "pct"
+    expression  = "100 * usage / SERVICE_QUOTA(usage)"
+    label       = "Percent of the ${each.key} vCPU quota in use"
+    return_data = true
+  }
+
+  metric_query {
+    id = "usage"
+
+    metric {
+      namespace   = "AWS/Usage"
+      metric_name = "ResourceCount"
+      period      = 60
+      stat        = "Maximum"
+
+      dimensions = {
+        Service  = "EC2"
+        Type     = "Resource"
+        Resource = "vCPU"
+        Class    = each.value.class
+      }
+    }
+  }
+}
