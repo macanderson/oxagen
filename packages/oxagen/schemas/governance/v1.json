@@ -57,13 +57,6 @@
     "memory": {
       "type": "object",
       "properties": {
-        "recall_unreviewed": {
-          "type": "string",
-          "enum": [
-            "same-agent",
-            "off"
-          ]
-        },
         "batch_size": {
           "type": "integer",
           "exclusiveMinimum": 0,

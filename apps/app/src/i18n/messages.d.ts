@@ -8015,22 +8015,10 @@ type Messages = {
     };
   };
   runOutcomes: {
-    title: string;
-    description: string;
-    platformDisabled: string;
-    enabled: string;
-    disabled: string;
-    enable: string;
-    disable: string;
-    saving: string;
-    denied: string;
-    saveFailed: string;
-    ownerRequired: string;
     providersTitle: string;
     loadProviders: string;
     loadingProviders: string;
     providerFailed: string;
-    providerConsent: string;
     providerOwner: string;
     githubTitle: string;
     githubConnected: string;

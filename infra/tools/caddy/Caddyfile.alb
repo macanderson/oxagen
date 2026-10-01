@@ -180,9 +180,7 @@
 			reverse_proxy 127.0.0.1:3001
 		}
 
-		# The docs answer on both names (ADR-215, amendment of 2026-09-28), and
-		# neither name redirects to the other.
-		@docs host docs.oxagen.sh docs.oxagen.app
+		@docs host docs.oxagen.sh
 		handle @docs {
 			encode gzip zstd
 			reverse_proxy 127.0.0.1:3002
@@ -198,12 +196,9 @@
 		# the first of the two proxies to give up turns a finished answer into
 		# a 504. The handler bounds its own model call below this number.
 		#
-		# The app is moving from app.oxagen.sh to oxagen.app (ADR-215), so all
-		# three names reach the same process. The app, not this file, sends a
-		# page visit on a name that is not canonical to the one that is
-		# (canonicalHostRedirect in apps/app/src/shared/canonical-host.ts). Its API
-		# paths keep answering on every name, for the clients that call them.
-		@app host app.oxagen.sh oxagen.app www.oxagen.app
+		# oxagen.app and www.oxagen.app never get here: the ALB answers both with
+		# a redirect to app.oxagen.sh (stacks-new/oxagen/dns-oxagen-app.tf).
+		@app host app.oxagen.sh
 		handle @app {
 			encode gzip zstd
 			reverse_proxy 127.0.0.1:3000 {
@@ -219,10 +214,7 @@
 			}
 		}
 
-		# The API answers on both names (ADR-215, amendment of 2026-09-28).
-		# api.oxagen.sh stays for the CLIs, webhooks, and OAuth callbacks that
-		# call it, and neither name redirects to the other.
-		@api host api.oxagen.sh api.oxagen.app
+		@api host api.oxagen.sh
 		handle @api {
 			encode gzip zstd
 			reverse_proxy 127.0.0.1:4000 {
@@ -238,10 +230,7 @@
 			}
 		}
 
-		# MCP answers on both names (ADR-215, amendment of 2026-09-28).
-		# mcp.oxagen.sh stays for the clients configured with it, and neither
-		# name redirects to the other.
-		@mcp host mcp.oxagen.sh mcp.oxagen.app
+		@mcp host mcp.oxagen.sh
 		handle @mcp {
 			# Deliberately NOT encoded — see the old account's Caddyfile for why:
 			# MCP's streamable HTTP transport is `text/event-stream`, and a

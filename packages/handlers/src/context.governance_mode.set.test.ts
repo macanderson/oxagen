@@ -569,6 +569,11 @@ describe("set_governance_mode in a steering repository", () => {
     // The PR tells nobody to land it with Apply now: that is an override.
     expect(deps.github.pulls[0]?.body).toBe(STEERING_GOVERNANCE_PR_BODY);
     expect(STEERING_GOVERNANCE_PR_BODY).not.toMatch(/Apply now/);
+    expect(deps.github.pulls[0]?.body).toContain("Who merges through Oxagen");
+    expect(deps.github.pulls[0]?.body).toContain(
+      "GitHub repository permissions govern direct pushes and merges in GitHub.",
+    );
+    expect(deps.github.pulls[0]?.body).not.toContain("only Oxagen merges");
     // The required check is on the PR's head, compared with the production head.
     const head = await deps.github.branchHead(REPO, STEERING_BRANCH);
     expect(deps.github.checkRuns).toEqual([
@@ -932,6 +937,36 @@ describe("merge_context_pr on a governance proposal", () => {
         recordId: null,
       },
     });
+  });
+
+  it("refuses a claimed governance merge when the host cannot authenticate its commit", async () => {
+    const deps = steeringMode("team");
+    const proposalId = await proposeSolo(deps);
+    deps.store.proposals[0]!.mergeClaimedAt = new Date("2026-09-15T09:00:00.000Z");
+    const mergeSha = deps.github.mergeOnHost(deps.github.pulls[0]!.number);
+    const verify = vi.fn(async () => {
+      throw new Error("The governance merge has no authenticated provenance.");
+    });
+    Object.assign(deps.github, { assertSteeringCommit: verify });
+    const seams = doubles();
+
+    await expect(
+      createMergeContextPrHandler(deps, mergeSeams(seams))(
+        { proposalId },
+        ctx({ userId: REVIEWER }),
+      ),
+    ).rejects.toThrow("The governance merge has no authenticated provenance.");
+
+    expect(verify).toHaveBeenCalledWith(REPO, mergeSha);
+    expect(deps.store.proposals[0]).toMatchObject({
+      status: "checks_passed",
+      mergedByUserId: null,
+    });
+    expect(deps.github.deletedBranches).toEqual([]);
+    expect(deps.store.records).toEqual([]);
+    expect(deps.store.ledger).toEqual([]);
+    expect(seams.published).toEqual([]);
+    expect(deps.events).toEqual([]);
   });
 
   it("answers the version an earlier call published when it resumes a merged PR", async () => {

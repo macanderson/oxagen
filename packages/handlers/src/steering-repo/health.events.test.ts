@@ -19,7 +19,7 @@ const INSTALLATION = 61200044;
 const GITLAB_PROJECT = 15;
 
 describe("githubHealthSignal: repository rulesets", () => {
-  it("names the baseline ruleset a rename moved away from", () => {
+  it("reads repository settings after a ruleset rename", () => {
     expect(githubHealthSignal("repository_ruleset", fixture("github-ruleset-edited"))).toEqual({
       provider: "github",
       repository_ids: [STEERING_REPO],
@@ -28,17 +28,17 @@ describe("githubHealthSignal: repository rulesets", () => {
         reason: "repository_ruleset.edited",
         actor: "dana-ops",
         at: "2026-09-26T18:41:07.000Z",
-        settings: ["rulesets.oxagen_merges"],
+        settings: ["rulesets"],
         pull_request: null,
       },
     });
   });
 
-  it("names the baseline ruleset a delivery deletes", () => {
+  it("reads repository settings after a ruleset deletion", () => {
     const signal = githubHealthSignal("repository_ruleset", fixture("github-ruleset-deleted"));
     expect(signal?.trigger).toMatchObject({
       reason: "repository_ruleset.deleted",
-      settings: ["rulesets.oxagen_steering"],
+      settings: ["rulesets"],
       at: "2026-09-26T20:15:42.000Z",
     });
     expect(signal?.repository_ids).toEqual([STEERING_REPO]);
@@ -50,12 +50,12 @@ describe("githubHealthSignal: repository rulesets", () => {
     expect(signal?.trigger.settings).toEqual(["rulesets"]);
   });
 
-  it("names a baseline ruleset once when both names map to it", () => {
+  it("does not treat old baseline rulesets as managed settings", () => {
     const body = fixture("github-ruleset-edited");
     body.repository_ruleset = { name: "Oxagen merges", updated_at: "2026-09-26T18:41:07Z" };
     body.changes = { name: { from: "oxagen  merges" }, enforcement: { from: "evaluate" } };
     expect(githubHealthSignal("repository_ruleset", body)?.trigger.settings).toEqual([
-      "rulesets.oxagen_merges",
+      "rulesets",
     ]);
   });
 

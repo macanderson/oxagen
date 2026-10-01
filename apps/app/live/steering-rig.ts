@@ -30,10 +30,8 @@ export const MINUTE = 60 * SECOND;
 export const STEERING_CHECK = "Oxagen steering";
 /** The `external_id` of a check run a health read posted. */
 export const HEALTH_CHECK_ID = "oxagen-steering-health";
-/** The ruleset that lets only Oxagen update main. */
-export const OXAGEN_MERGES = "Oxagen merges";
-/** That ruleset's path in the settings baseline, as a health difference names it. */
-export const OXAGEN_MERGES_SETTING = "rulesets.oxagen_merges";
+/** The merge setting changed by the health drift exercise. */
+export const MERGE_COMMIT_SETTING = "merge.allow_merge_commit";
 
 // ── Settings ─────────────────────────────────────────────────────────────────
 
@@ -488,7 +486,6 @@ function archiveWorkspace(
 const githubRepo = z.object({ name: z.string(), full_name: z.string(), created_at: z.string() });
 export type GithubRepo = z.output<typeof githubRepo>;
 
-const githubRuleset = z.object({ id: z.number().int(), name: z.string() });
 
 const githubPull = z.object({
   number: z.number().int(),
@@ -510,8 +507,8 @@ const PAGE = 100;
 
 export interface GithubRig {
   orgRepos(org: string): Promise<GithubRepo[]>;
-  findRuleset(fullName: string, name: string): Promise<{ id: number; name: string } | null>;
-  deleteRuleset(fullName: string, id: number): Promise<void>;
+  allowsMergeCommits(fullName: string): Promise<boolean>;
+  setMergeCommits(fullName: string, allowed: boolean): Promise<void>;
   approvePr(fullName: string, number: number): Promise<void>;
   getPr(fullName: string, number: number): Promise<z.output<typeof githubPull>>;
   openPulls(fullName: string): Promise<Array<{ number: number; headSha: string }>>;
@@ -529,7 +526,7 @@ function repoPath(fullName: string): string {
 
 export function githubRig(token: string): GithubRig {
   async function send(
-    method: "GET" | "POST" | "DELETE",
+    method: "GET" | "POST" | "PATCH" | "DELETE",
     path: string,
     body?: unknown,
   ): Promise<{ status: number; text: string }> {
@@ -547,7 +544,7 @@ export function githubRig(token: string): GithubRig {
   }
 
   async function call<S extends z.ZodType>(
-    method: "GET" | "POST" | "DELETE",
+    method: "GET" | "POST" | "PATCH" | "DELETE",
     path: string,
     body: unknown,
     schema: S,
@@ -586,19 +583,23 @@ export function githubRig(token: string): GithubRig {
       }
     },
 
-    async findRuleset(fullName, name) {
-      const rulesets = await call(
+    async allowsMergeCommits(fullName) {
+      const repo = await call(
         "GET",
-        `${repoPath(fullName)}/rulesets?includes_parents=false&per_page=${String(PAGE)}`,
+        repoPath(fullName),
         undefined,
-        z.array(githubRuleset),
+        z.object({ allow_merge_commit: z.boolean() }),
       );
-      return rulesets.find((r) => r.name === name) ?? null;
+      return repo.allow_merge_commit;
     },
 
-    async deleteRuleset(fullName, id) {
-      const status = await noContent("DELETE", `${repoPath(fullName)}/rulesets/${String(id)}`);
-      if (status === 404) throw new Error(`Ruleset ${String(id)} on ${fullName} was not found.`);
+    async setMergeCommits(fullName, allowed) {
+      await call(
+        "PATCH",
+        repoPath(fullName),
+        { allow_merge_commit: allowed },
+        z.object({ allow_merge_commit: z.boolean() }),
+      );
     },
 
     async approvePr(fullName, number) {

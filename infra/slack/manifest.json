@@ -17,7 +17,6 @@
   },
   "oauth_config": {
     "redirect_urls": [
-      "https://oxagen.app/api/slack/oauth/callback",
       "https://app.oxagen.sh/api/slack/oauth/callback",
       "https://app.staging.oxagen.sh/api/slack/oauth/callback",
       "https://preview-app.oxagen.sh/api/slack/oauth/callback"

@@ -245,8 +245,6 @@ export interface CuratePlan {
 /** One request recall answers. */
 export interface RecallRequest {
   now: Date;
-  /** The requesting agent's lineage, or null when Oxagen could not tell. */
-  agent: string | null;
   /** True for Oxagen's in-app agent, which receives no workspace memories. */
   inApp: boolean;
   /**
@@ -262,30 +260,31 @@ export interface RecallRequest {
   paths: string[];
   /** The request's words, which relevance is measured against. */
   text: string;
-  recallUnreviewed: GovernanceSettings["recall_unreviewed"];
   /** Days for a candidate's weight to halve. 30 until governance/v1 carries the field. */
   halfLifeDays?: number;
 }
 
-/** A merged record or an unreviewed memory that recall may answer. */
+/**
+ * A merged memory record that recall may answer. Recall answers steering
+ * records only: a memory that waits for review is never a candidate (ADR-238).
+ */
 export interface RecallCandidate {
-  /** A record's lineage, or a memory's public id. */
+  /** The record's lineage. */
   id: string;
-  source: "record" | "memory";
-  /** A memory's agent. A record has none. */
-  agent: string | null;
   statement: string;
   repos: string[] | null;
   appliesTo: string[] | null;
   tools: string[] | null;
-  /** A record's merge time, or a memory's capture time. Age runs from it. */
+  /** The record's last review, such as its merge. Age runs from it. */
   since: Date;
 }
 
-/** One memory recall answers. */
+/** One record recall answers. */
 export interface RecallItem {
+  /** The record's lineage. */
   id: string;
-  source: "record" | "memory";
+  /** Always `record`. The contract's answer keeps the field (ADR-238). */
+  source: "record";
   statement: string;
   score: number;
   tokens: number;
@@ -316,6 +315,20 @@ export interface MemoryStore {
     drafts: MemoryDraft[],
     reflectionId?: string | null,
   ): Promise<number>;
+  /**
+   * Store a memory as the one waiting memory of its capture and source
+   * (ADR-238). Tacho's memory upload calls it for each `local_gateway`
+   * memory, whose source is `<harness>:<path>`, so a memory file has one
+   * waiting row and each edit replaces its text.
+   *
+   * A waiting row from the same capture and source takes the draft's
+   * statement, hash, dedupe key, and the rest of its content in place, and
+   * keeps its id and creation time. A row an open memory PR cites keeps its
+   * text, and the draft becomes a new waiting row. Returns true when it
+   * inserted or changed a row, and false when the workspace already holds the
+   * statement from that source.
+   */
+  replaceSourceMemory(scope: MemoryScope, draft: MemoryDraft): Promise<boolean>;
   countWaiting(scope: MemoryScope): Promise<number>;
   /** Waiting memories, oldest first. */
   listWaiting(scope: MemoryScope): Promise<StoredMemory[]>;

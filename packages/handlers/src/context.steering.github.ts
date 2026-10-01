@@ -28,7 +28,11 @@ import { resolveGitHubToken } from "./lib/github-token";
 import {
   GITHUB_STEERING_PROVIDER,
   mintSteeringInstallationToken,
+  steeringAppFromEnv,
+  STEERING_APP_UNCONFIGURED_MESSAGE,
 } from "./lib/steering-app";
+
+import { assertGithubSteeringCommit } from "./steering-repo/diverged";
 
 /**
  * The repository hosts steering can publish through. A Context PR on GitHub is
@@ -59,6 +63,8 @@ export type SteeringRepository = SteeringRepositoryFields &
   );
 
 interface SteeringRepositoryFields {
+  /** True when the trusted binding identifies a provisioned steering repository. */
+  requiresSteeringProvenance?: boolean;
   /**
    * The owner as the host names it. On GitLab this is the full namespace
    * path, so a project in a nested group has an owner such as
@@ -125,6 +131,8 @@ export interface SteeringTreeEntry {
  * the workspace's main repository binding.
  */
 export interface SteeringHost {
+  /** Refuse an unverified commit before syncing or publishing its files. */
+  assertSteeringCommit?(repo: SteeringRepository, commit: string): Promise<void>;
   resolveRepository(scope: {
     orgId: string;
     workspaceId: string;
@@ -949,6 +957,8 @@ export function createSteeringGitHub(
   // one workspace's token serves only the calls made with that workspace's
   // handle; two workspaces connected to one repository never share an entry.
   const clients = new WeakMap<SteeringRepository, GitHubClient>();
+  const provisioned = new WeakSet<SteeringRepository>();
+  const repositoryIds = new WeakMap<SteeringRepository, number>();
   // The plain REST calls, built with the same token and keyed the same way.
   const rests = new WeakMap<SteeringRepository, GitHubRest>();
   const makeRest = deps.rest ?? ((token: string) => githubRest({ token }));
@@ -1048,7 +1058,11 @@ export function createSteeringGitHub(
           "context.steering: the repository was renamed since it was bound; records stay stamped with the approved name",
         );
       }
+      const requiresSteeringProvenance =
+        connection.source === "binding" &&
+        connection.steeringInstallationId !== undefined;
       const repo: SteeringRepository = {
+        ...(requiresSteeringProvenance ? { requiresSteeringProvenance: true } : {}),
         provider: "github",
         owner: connection.owner,
         repo: connection.repo,
@@ -1056,9 +1070,56 @@ export function createSteeringGitHub(
         currentFullName: info.fullName,
         defaultBranch,
       };
+      if (requiresSteeringProvenance) provisioned.add(repo);
+      const repositoryId = Number(info.id);
+      if (Number.isSafeInteger(repositoryId) && repositoryId > 0)
+        repositoryIds.set(repo, repositoryId);
       clients.set(repo, gh);
       rests.set(repo, makeRest(token));
       return repo;
+    },
+    async assertSteeringCommit(repo, commit) {
+      const { rest } = restFor(repo);
+      if (!provisioned.has(repo)) return;
+      const config = steeringAppFromEnv();
+      if (config === null)
+        throw new HandlerError({
+          code: "conflict",
+          reason: "steering_app_unconfigured",
+          message: STEERING_APP_UNCONFIGURED_MESSAGE,
+        });
+      await assertGithubSteeringCommit(
+        {
+          repo: { owner: repo.owner, name: repo.repo, id: repositoryIds.get(repo) },
+          app: config.app,
+          defaultBranch: repo.defaultBranch,
+          rest: {
+            async request<T>(
+              method: string,
+              path: string,
+              body?: unknown,
+              accept: readonly number[] = [],
+            ) {
+              try {
+                const response = await rest.request<T>(method, path, body);
+                return { ...response, message: null };
+              } catch (error) {
+                if (
+                  error instanceof GitHubApiError &&
+                  accept.includes(error.status)
+                )
+                  return {
+                    status: error.status,
+                    data: null,
+                    message: error.message,
+                  };
+                throw error;
+              }
+            },
+          },
+        },
+        commit,
+      );
     },
     async readFile(repo, path, ref) {
       return clientFor(repo).getFileContent({

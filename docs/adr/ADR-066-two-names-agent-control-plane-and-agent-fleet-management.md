@@ -6,7 +6,7 @@
 - **Related:** `docs/VISION.md`, ADR-043 (Oxagen governs agents, it does not run
   them), ADR-052 (the governed action is the billable unit), PR #3018 (the
   September positioning), PR #3075 (this decision lands in the branding skill),
-  `oxagenai/oxagen-brand` `skills/oxagen-branding/` (the copy every agent reads),
+  `macanderson/oxagen-brand` `skills/oxagen-branding/` (the copy every agent reads),
   `packages/rules` (decision rules: allow, deny, require approval)
 
 ## Context
@@ -81,7 +81,7 @@ of the agents being managed, never a compliment paid to Oxagen.
   not distinguish us.
 - `CLAUDE.md` *Mission* carries the two names so every session writes the same
   words.
-- The branding skill is authored in `oxagenai/oxagen-brand`
+- The branding skill is authored in `macanderson/oxagen-brand`
   (`skills/oxagen-branding/`) and vendored into this repo by
   `tools/scripts/sync-brand-assets.mjs`. It carries the two names, the fleet
   and spend vocabulary, the access rule as rule six of the never-bend list,
