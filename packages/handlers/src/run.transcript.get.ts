@@ -2072,16 +2072,18 @@ export function createRunTranscriptGetHandler(
         response: TranscriptEntryBody | null;
         parts: { frame: RunFrame; body: TranscriptEntryBody | null }[];
       };
-      const parts = pair.parts.flatMap(({ frame, body }) => {
-        const part = withToolUseFacts(body, claimFrom(frame), results);
-        return part === null ? [] : [part];
-      });
-      // Each half is claimed from the frame that carried it, so a turn's
-      // reply claims its calls as the model step that made it does.
+      // Each half, and each further part of a reply, is claimed from the
+      // frame that carried it, so a turn's reply claims its calls as the
+      // model step that made it does. Declared before the parts read it: a
+      // const read earlier in the same scope throws (#4936 CI).
       const claimFrom =
         (carrier: RunFrame | null) =>
         (uses: { name: string; callKey: string | null }[]) =>
           claimer(carrier, uses);
+      const parts = pair.parts.flatMap(({ frame, body }) => {
+        const part = withToolUseFacts(body, claimFrom(frame), results);
+        return part === null ? [] : [part];
+      });
       return {
         seq: opening.seq,
         endSeq: fold.endSeq,
