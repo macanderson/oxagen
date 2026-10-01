@@ -79,7 +79,7 @@ describe("issue provider status", () => {
       hasNextPage: true,
       endCursor: "next",
     });
-    expect(mocks.graphql.mock.calls[0]?.[3]).toEqual({ after: "prev" });
+    expect(mocks.graphql.mock.calls[0]?.[2]).toEqual({ after: "prev" });
   });
   it("refuses unauthorized connection enumeration", async () => {
     mocks.role.mockRejectedValue(new Error("forbidden"));

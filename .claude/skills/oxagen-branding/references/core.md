@@ -79,9 +79,10 @@ A heading names the thing, a caption states one fact, and no label carries a com
 - [ ] Buyer quotes are labelled hypothetical unless an attributed customer approved them
 - [ ] No traction numbers, partner counts, or setup durations without dated evidence
 - [ ] Every claim is one the record can back
-- [ ] Space Grotesk for wordmarks and h1 to h3 only, Geist for h4 to h6, body, and UI, Monaspace Neon for code, data, digests, and commands
+- [ ] Geist for every heading, body, and UI, Space Grotesk for the wordmarks and line 1 of a marketing hero only, Monaspace Neon for code, data, digests, and commands
 - [ ] One type scale per surface: marketing (`text-m-*`) or app (`text-a-*`)
 - [ ] Card radius 12px on the website and 13px in the app, 1120px wrap, dark first on obsidian with the white light theme intact
 - [ ] Gold as text on white is the `gold-deep` token, never the gold itself
 - [ ] Every text role that carries meaning clears 4.5:1 on its ground
+- [ ] A word in a state's colour takes the state's text stop, and a badge or a dot takes the mark
 - [ ] Every colour and face comes from `tokens/`, imported, never retyped

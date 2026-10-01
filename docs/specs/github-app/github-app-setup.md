@@ -1,19 +1,20 @@
 # GitHub App setup
 
 **Audience:** operators / platform engineers configuring the GitHub connector.
-**Last verified against code:** 2026-09-29.
+**Last verified against code and the live apps:** 2026-10-01T01:02Z. Staging still lacks Workflows.
+See [Permissions](#permissions).
 
-This document is the setup reference for the one GitHub App Oxagen uses (ADR-228). It lists every
+This document is the setup reference for the GitHub App Oxagen uses (ADR-228). It lists every
 configuration value, the callback and webhook endpoints the code expects, the permissions and
-events to subscribe to, and the values that differ between **development** and **production**.
+events to subscribe to, and the values that differ between **local**, **staging**, and
+**production**.
 
 | What the app acts on | Sections |
 | --- | --- |
 | Your code repositories. It feeds the **provider-metadata connector** and opens governed pull requests. | [TL;DR](#tldr) through [Verification checklist](#verification-checklist) |
 | Steering repos. It creates each one and holds its settings. | [Steering repos](#steering-repos) |
 
-Register the app twice, once for development and once for production, for the reasons in
-[Why a dev app and a production app](#why-a-dev-app-and-a-production-app).
+The app is registered once per environment, for the reasons in [Apps](#apps).
 
 > **Launch boundary (2026-07-21):** the connector ingests repository, ref, commit,
 > pull-request, issue, release, and workflow metadata. It does not ingest repository
@@ -29,13 +30,15 @@ For the customer-facing "how do I connect my repo" walkthrough, see
 
 | Decision | Answer |
 | --- | --- |
-| How many GitHub Apps? | **One, registered twice (ADR-228).** A dev copy and a production copy. See [Why a dev app and a production app](#why-a-dev-app-and-a-production-app). |
+| How many GitHub Apps? | **One app, registered once per environment (ADR-228):** local, staging, and production. The `oxageninc` GitHub organization owns all of them. See [Apps](#apps). |
 | What kind of credential? | A **GitHub App** (not an OAuth App). The flow calls `/user/installations`, which only exists for GitHub Apps. |
 | What grants repo access today? | Ingestion runs on the **user-to-server OAuth token**, limited by the App's **permissions**. Governed pull requests use an installation token minted with `GITHUB_APP_ID` and `GITHUB_APP_PRIVATE_KEY`, and fall back to the user token (`packages/github/src/workspace-token.ts`). |
-| Steering repos | The same app, which adds Administration and Deployments write. See [Steering repos](#steering-repos). |
-| OAuth callback URL | `{NEXT_PUBLIC_API_URL}/oauth/github/callback`. It serves every connect, steering included. |
-| Webhook URL | App-level `{NEXT_PUBLIC_API_URL}/webhooks/github/app` — **live**. See [Webhooks](#webhooks). |
+| Permissions | Read and write on Actions, Administration, Checks, Commit statuses, Contents, Deployments, Issues, Pull requests, and Workflows. Read-only on Metadata. Nothing else. See [Permissions](#permissions). |
+| Steering repos | The same app. See [Steering repos](#steering-repos). |
+| OAuth callback URL | `{NEXT_PUBLIC_API_URL}/oauth/github/callback`, first in the list, with wildcard matching off. It serves every connect, steering included. |
+| Webhook URL | `{NEXT_PUBLIC_API_URL}/webhooks/github/app`. See [Webhooks](#webhooks). |
 | Setup URL | Blank. GitHub turns it off while OAuth during installation is on. See [Setup URL](#setup-url-post-install-redirect). |
+| Sign in with GitHub | A separate GitHub OAuth App (`GITHUB_LOGIN_CLIENT_ID` and `GITHUB_LOGIN_CLIENT_SECRET`, read in `packages/auth/src/auth.ts`). Changing this GitHub App does not touch sign-in. |
 
 ---
 
@@ -81,64 +84,223 @@ that stream subsequent changes ([Webhooks](#webhooks)). Both run on the user's O
    normalizes, deduplicates, and projects those governed records into Neo4j. No repository tree or
    source blob is parsed or embedded server-side.
 
-> **Note on `scope`.** The authorize URL passes `scope=repo,read:org`, but **GitHub Apps ignore the
-> `scope` parameter** — a user-to-server token's access is governed entirely by the App's configured
-> **permissions** and which installations/repos the user can reach. Set the permissions below;
-> the `scope` value has no effect.
+> **Note on `scope`.** Neither `packages/github/src/install-url.ts` nor
+> `apps/api/src/routes/v1/github-oauth.ts` sends a `scope`, and GitHub Apps ignore one. The App's
+> **permissions** and the installations and repositories the user can reach decide what a
+> user-to-server token can do.
 
 > **Note on tokens.** Ingestion runs on the **user's** OAuth token, not an installation access
 > token (ingestion never reads the App private key or App ID). This is simpler but means sync is tied to the
 > authorizing user's continued access. Migrating to installation tokens (JWT signed with the App
-> private key → installation access token) is a recommended future hardening — see
+> private key → installation access token) is a recommended future hardening. See
 > [Known gaps](#known-gaps--follow-ups).
 
 ---
 
-## Why a dev app and a production app
+## Apps
 
-Register the app twice, and keep each copy's credentials in its own environment:
+The `oxageninc` GitHub organization owns every copy of the app except the legacy `oxagen-sh`, which
+`oxageninc-old` still owns. Each environment keeps its own copy's credentials:
 
-| App | Used by | API origin (`NEXT_PUBLIC_API_URL`) | App origin (`NEXT_PUBLIC_APP_URL`) |
-| --- | --- | --- | --- |
-| **Oxagen (Dev)** | localhost + Vercel preview | `http://localhost:4000` | `http://localhost:3000` |
-| **Oxagen** | production | `https://api.oxagen.sh` | `https://app.oxagen.sh` |
+| App | Slug | App ID | Environment | API origin (`NEXT_PUBLIC_API_URL`) | App origin (`NEXT_PUBLIC_APP_URL`) |
+| --- | --- | --- | --- | --- | --- |
+| **Oxagen Connect** | `oxagen-connect` | 4168398 | production | `https://api.oxagen.sh` | `https://app.oxagen.sh` |
+| **Oxagen Github Connect Staging** | `oxagen-github-connect-staging` | 4993204 | staging | `https://api.staging.oxagen.sh` | `https://app.staging.oxagen.sh` |
+| **Oxagen Github Connect Local** | `oxagen-github-connect-local` | 4055401 | local | `http://localhost:4000` | `http://localhost:3000` |
+| **Oxagen Github Connect** | `oxagen-github-connect` | 5121606 | retired | none | none |
+| **oxagen.sh** | `oxagen-sh` | 4055615 | production (legacy, webhooks only) | `https://api.oxagen.sh` | none |
 
-Reasons:
+Each app's settings page sits at `https://github.com/organizations/oxageninc/settings/apps/<slug>`,
+except `oxagen-sh`, whose page sits under `oxageninc-old`.
+GitHub asks an organization owner to confirm access (sudo mode) before it shows one. The sections
+below record each app's settings as read from GitHub on 2026-10-01. No section holds a secret: the
+credentials live where each section's **Credentials** row says.
 
-1. **A GitHub App has a single global webhook URL.** Dev must point at a public tunnel
-   (smee.io / cloudflared) or a preview URL; prod points at the Vercel API. One App cannot serve both.
-2. **Secret isolation (SOC 2).** A leaked dev client secret / webhook secret / state secret must
-   never grant access to production data.
-3. **Blast-radius separation.** Re-generating the dev App's secret or rotating its private key must
-   not disrupt production ingestion.
+### Oxagen Connect
+
+The production app. Customers install it on their GitHub organizations so Oxagen can ingest their
+repository metadata, open governed pull requests, post its pull request check, and create and run
+their steering repos.
+
+| Setting | Value |
+| --- | --- |
+| Display name | Oxagen Connect |
+| Slug | `oxagen-connect` |
+| App ID | 4168398 |
+| Owner | `oxageninc` (GitHub organization) |
+| Environment | production |
+| Public page | `https://github.com/apps/oxagen-connect` |
+| Install page | `https://github.com/apps/oxagen-connect/installations/new` |
+| Settings page | `https://github.com/organizations/oxageninc/settings/apps/oxagen-connect` |
+| Homepage URL | `https://oxagen.sh` |
+| Redirect URIs | `https://api.oxagen.sh/oauth/github/callback`, wildcard matching off. The only entry. |
+| Request user authorization (OAuth) during installation | on |
+| Enable Device Flow | off |
+| Setup URL | blank. GitHub disables the field while OAuth during installation is on. |
+| Redirect on update | on. The [Setup URL](#setup-url-post-install-redirect) table requires off. On 2026-10-01 this setting sent a steering connect to the Homepage URL. |
+| Webhook | `https://api.oxagen.sh/webhooks/github/app`, active |
+| Permissions | The [required set](#permissions), applied 2026-10-01T00:34:16Z |
+| Events | The [15 required events](#webhook-config-on-the-app), applied the same time. App-level `installation_target` and `meta` on, `security_advisory` off. |
+| Credentials | Parameter Store SecureStrings under `/oxagen/production/`: `GITHUB_APP_ID`, `GITHUB_APP_SLUG`, `GITHUB_APP_CLIENT_ID`, `GITHUB_APP_CLIENT_SECRET`, `GITHUB_APP_PRIVATE_KEY`, `GITHUB_APP_WEBHOOK_SECRET`, and `GITHUB_APP_INSTALL_STATE_SECRET` |
+
+### Oxagen Github Connect Staging
+
+The staging app. It serves `api.staging.oxagen.sh` and `app.staging.oxagen.sh`, so a change can be
+connected end to end before it reaches production. Staging is dormant while the `STAGING_ENABLED`
+repository variable is not `true` (#4868). Keep the app configured so staging works when it wakes.
+
+| Setting | Value |
+| --- | --- |
+| Display name | Oxagen Github Connect Staging |
+| Slug | `oxagen-github-connect-staging` |
+| App ID | 4993204 |
+| Owner | `oxageninc` (GitHub organization) |
+| Environment | staging |
+| Public page | `https://github.com/apps/oxagen-github-connect-staging` |
+| Settings page | `https://github.com/organizations/oxageninc/settings/apps/oxagen-github-connect-staging` |
+| Homepage URL | `https://app.staging.oxagen.sh` |
+| Redirect URIs | `https://api.staging.oxagen.sh/oauth/github/callback`, wildcard matching off. The only entry. |
+| Request user authorization (OAuth) during installation | on |
+| Enable Device Flow | off |
+| Setup URL | blank |
+| Redirect on update | off |
+| Webhook | `https://api.staging.oxagen.sh/webhooks/github/app`, active |
+| Permissions | The [required set](#permissions). On 2026-10-01T01:02Z it held all of it except Workflows, which Mac adds by hand. |
+| Events | The [15 required events](#webhook-config-on-the-app), applied 2026-10-01T01:00:50Z |
+| Credentials | Parameter Store SecureStrings under `/oxagen/staging/`, the same seven `GITHUB_APP_*` names as production |
+
+### Oxagen Github Connect Local
+
+The local development app. It serves an API on `localhost:4000` and the web app on
+`localhost:3000`, so a developer can run a connect without touching staging or production
+credentials.
+
+| Setting | Value |
+| --- | --- |
+| Display name | Oxagen Github Connect Local |
+| Slug | `oxagen-github-connect-local` |
+| App ID | 4055401 |
+| Owner | `oxageninc` (GitHub organization) |
+| Environment | local |
+| Public page | `https://github.com/apps/oxagen-github-connect-local` |
+| Settings page | `https://github.com/organizations/oxageninc/settings/apps/oxagen-github-connect-local` |
+| Homepage URL | `http://localhost:3000` |
+| Redirect URIs | `http://localhost:4000/oauth/github/callback`, wildcard matching off. The only entry. |
+| Request user authorization (OAuth) during installation | on |
+| Enable Device Flow | off |
+| Setup URL | `http://localhost:3000/connections/github/setup`. GitHub greys it out and ignores it while OAuth during installation is on. |
+| Redirect on update | on. The [Setup URL](#setup-url-post-install-redirect) table requires off. With it on and the Setup URL ignored, GitHub sends a person to the Homepage URL. |
+| Webhook | inactive, URL blank |
+| Permissions | The [required set](#permissions), applied 2026-10-01T01:02:27Z |
+| Events | none. GitHub drops every event subscription while an app's webhook is inactive. To receive webhooks locally, follow the steps in [Webhooks](#webhooks). |
+| Credentials | `apps/api/.env.local` on the developer's machine. See [Environment variables](#environment-variables). |
+
+### Oxagen Github Connect (retired)
+
+The retired steering app. Until ADR-228 it created and ran steering repos as a second app, the
+Oxagen Steering app. ADR-228 folded steering into the one app per environment. Nothing reads its
+credentials, and its redirect URIs point at `/oauth/github/steering`, which answers 404. Uninstall
+it after [Moving from the Oxagen Steering app](#moving-from-the-oxagen-steering-app), then delete
+it. Do not bring its permissions or events in line with the required set.
+
+| Setting | Value |
+| --- | --- |
+| Display name | Oxagen Github Connect |
+| Slug | `oxagen-github-connect` |
+| App ID | 5121606 |
+| Owner | `oxageninc` (GitHub organization) |
+| Environment | none (retired) |
+| Public page | `https://github.com/apps/oxagen-github-connect` |
+| Settings page | `https://github.com/organizations/oxageninc/settings/apps/oxagen-github-connect` |
+| Homepage URL | `https://app.oxagen.sh` |
+| Redirect URIs | `https://api.oxagen.sh/oauth/github/steering` and `https://api.oxagen.app/oauth/github/steering`, wildcard matching off on both |
+| Request user authorization (OAuth) during installation | on |
+| Enable Device Flow | off |
+| Setup URL | blank |
+| Redirect on update | off |
+| Webhook | `https://api.oxagen.sh/webhooks/github/app`, active |
+| Permissions | 25 repository permissions, left as they were at retirement |
+| Events | 32 repository events, plus the app-level `security_advisory` event |
+| Credentials | Retired Parameter Store SecureStrings under `/oxagen/production/`: `OXAGEN_STEERING_APP_ID`, `OXAGEN_STEERING_APP_SLUG`, `OXAGEN_STEERING_APP_CLIENT_ID`, `OXAGEN_STEERING_APP_CLIENT_SECRET`, `OXAGEN_STEERING_APP_PRIVATE_KEY`, and `OXAGEN_STEERING_APP_WEBHOOK_SECRET`. Delete them once a production steering delivery returns 200 through Oxagen Connect. |
+
+### oxagen.sh (legacy)
+
+The first production app, registered on 2026-06-15 under the organization now named
+`oxageninc-old`. Oxagen Connect replaced it, but its installations still deliver webhooks to
+production: the last 50 deliveries on 2026-09-30 all returned success. The webhook route tells the
+two apps apart by the `X-GitHub-Hook-Installation-Target-ID` header. It verifies Oxagen Connect's
+deliveries with `GITHUB_APP_WEBHOOK_SECRET` and every other app's with `GITHUB_WEBHOOK_SECRET`
+(`apps/api/src/routes/v1/github-webhook.ts`). When `GITHUB_WEBHOOK_SECRET` is unset, the route
+answers this app's deliveries with 200 and drops them, so a fresh deployment or a secret rotation
+that leaves it out loses those events without an error. Parameter Store holds no private key for
+this app, so Oxagen mints no installation token from it.
+
+Its redirect URIs point at Better Auth's GitHub sign-in path, but sign-in does not use it. Sign-in
+uses a classic OAuth App (`GITHUB_LOGIN_CLIENT_ID`, client ID prefix `Ov23li`;
+`packages/auth/src/auth.ts`). A transfer of this app to `oxageninc` is pending (request 65054).
+Retire it once its installations move to Oxagen Connect: uninstall it, delete it, then delete
+`GITHUB_WEBHOOK_SECRET` and the second-app branch of the webhook route. Until then, keep its
+permissions and events as they are, because changing them asks every installation to accept.
+
+| Setting | Value |
+| --- | --- |
+| Display name | oxagen.sh |
+| Slug | `oxagen-sh` |
+| App ID | 4055615 |
+| Owner | `oxageninc-old` (GitHub organization) |
+| Environment | production, webhooks only |
+| Public page | `https://github.com/apps/oxagen-sh` |
+| Settings page | `https://github.com/organizations/oxageninc-old/settings/apps/oxagen-sh` |
+| Homepage URL | `https://www.oxagen.sh` |
+| Redirect URIs | `https://app.oxagen.sh/api/auth/callback/github` and `http://localhost:4000/api/auth/callback/github`, wildcard matching off on both |
+| Request user authorization (OAuth) during installation | on |
+| Enable Device Flow | off |
+| Setup URL | `https://oxagen-v2-app.vercel.app/connections/github/setup`. GitHub greys it out and ignores it while OAuth during installation is on. |
+| Redirect on update | on. With it on and the Setup URL ignored, GitHub sends a person to the Homepage URL. |
+| Webhook | `https://api.oxagen.sh/webhooks/github/app`, active |
+| Permissions | 65 permissions, left as registered, including organization administration and secrets write. Not the required set. |
+| Events | 53 events, left as registered |
+| Credentials | `/oxagen/production/GITHUB_WEBHOOK_SECRET` (SecureString). No other value. |
+
+### Reasons for one app per environment
+
+1. **A GitHub App has a single global webhook URL.** Local must point at a public tunnel
+   (smee.io or cloudflared), and staging and production each point at their own API. One App cannot
+   serve all three.
+2. **Secret isolation (SOC 2).** A leaked local or staging client secret, webhook secret, or state
+   secret must never grant access to production data.
+3. **Blast-radius separation.** Regenerating one copy's secret or rotating its private key must not
+   disrupt another environment's ingestion.
 
 A GitHub App allows up to 10 callback URLs, so callbacks alone could be shared. The single
-webhook URL and secret isolation still need two registrations. Code repositories and steering repos
-share each one (ADR-228).
+webhook URL and secret isolation still need one registration per environment. Code repositories and
+steering repos share each one (ADR-228).
 
 ---
 
 ## GitHub App configuration
 
-Create each App at **GitHub → Settings → Developer settings → GitHub Apps → New GitHub App**
-(or under an organization's settings to own it at the org level).
+Create a new copy under the `oxageninc` organization's settings, at **Developer settings → GitHub
+Apps → New GitHub App**, so the organization owns it.
 
 ### Identity
 
-| Field | Dev | Prod |
-| --- | --- | --- |
-| **GitHub App name** | `Oxagen (Dev)` | `Oxagen` |
-| **Homepage URL** | `http://localhost:3000` | `https://app.oxagen.sh` |
-| **Description** | Source-code & repo-activity ingestion for the Oxagen knowledge graph. | same |
+| Field | Local | Staging | Production |
+| --- | --- | --- | --- |
+| **GitHub App name** | `Oxagen Github Connect Local` | `Oxagen Github Connect Staging` | `Oxagen Connect` |
+| **Homepage URL** | `http://localhost:3000` | `https://app.staging.oxagen.sh` | `https://oxagen.sh` |
 
 ### Identifying and authorizing users (OAuth)
 
-| Field | Dev | Prod |
-| --- | --- | --- |
-| **Callback URL** | `http://localhost:4000/oauth/github/callback` | `https://api.oxagen.sh/oauth/github/callback` |
-| **Request user authorization (OAuth) during installation** | ✅ recommended | ✅ recommended |
-| **Enable Device Flow** | ❌ off | ❌ off |
-| **Expire user authorization tokens** | ❌ off (recommended) | ❌ off (recommended) |
+GitHub's settings page calls a callback URL a **Redirect URI**.
+
+| Field | Local | Staging | Production |
+| --- | --- | --- | --- |
+| **Callback URL** (first and only) | `http://localhost:4000/oauth/github/callback` | `https://api.staging.oxagen.sh/oauth/github/callback` | `https://api.oxagen.sh/oauth/github/callback` |
+| **Allow wildcard matching** | off | off | off |
+| **Request user authorization (OAuth) during installation** | on | on | on |
+| **Enable Device Flow** | off | off | off |
+| **Expire user authorization tokens** | off | off | off |
 
 - The **Callback URL** must exactly match `{NEXT_PUBLIC_API_URL}/oauth/github/callback`. Localhost
   is valid here because the *browser* performs the redirect (GitHub's servers don't call it).
@@ -150,7 +312,11 @@ Create each App at **GitHub → Settings → Developer settings → GitHub Apps 
 - **Every connect returns here.** The code repository connect and the steering connect both land on
   this callback. The signed state names what the connect is for, so no connect needs a URL of its
   own.
-- **Expire user authorization tokens — leave OFF for now.** The callback stores a `refresh_token`
+- **Keep wildcard matching off, and never put a bare origin first.** On 2026-09-30 production's
+  first entry was `https://oxagen.sh` with wildcard matching on. GitHub sent every install and
+  connect to the marketing site, which answered 200 and finished nothing. Wildcard matching also
+  lets an authorize link send a code to any subdomain or path under the entry.
+- **Leave Expire user authorization tokens off for now.** The callback stores a `refresh_token`
   when present, but there is **no token-refresh job wired yet**. Non-expiring user tokens avoid
   silent sync failures until refresh is implemented. (Revisit when installation tokens land.)
 - Enabling **OAuth during installation** lets a GitHub-initiated install run the OAuth handshake in
@@ -159,13 +325,14 @@ Create each App at **GitHub → Settings → Developer settings → GitHub Apps 
 ### Setup URL (post-install redirect)
 
 The **Setup URL** is where GitHub sends someone after an install from GitHub's own pages. GitHub
-turns the field off while **Request user authorization (OAuth) during installation** is on, and
-**Redirect on update** does nothing without a Setup URL.
+turns the field off while **Request user authorization (OAuth) during installation** is on. Keep
+**Redirect on update** off: with it on and no Setup URL, GitHub sends someone who updates an
+installation to the Homepage URL.
 
-| Field | Dev | Prod |
-| --- | --- | --- |
-| **Setup URL** | blank | blank |
-| **Redirect on update** | off | off |
+| Field | Local | Staging | Production |
+| --- | --- | --- | --- |
+| **Setup URL** | blank | blank | blank |
+| **Redirect on update** | off | off | off |
 
 - **A first install returns to the OAuth callback.** GitHub sends `code`, `installation_id`,
   `setup_action`, and the signed `state` to the first Callback URL, and the callback finishes the
@@ -188,28 +355,39 @@ turns the field off while **Request user authorization (OAuth) during installati
 
 ### Permissions
 
-These grant the connector access (the OAuth `scope` is ignored for GitHub Apps).
+Local, staging, and production each need exactly this set. Oxagen sends no OAuth `scope`, so these
+permissions, and the repositories an installation covers, are the whole grant.
+
+> **Staging lacks Workflows (2026-10-01T01:02Z).** Production has carried this set since
+> 2026-10-01T00:34:16Z and local since 2026-10-01T01:02:27Z. Staging holds all of it except
+> Workflows. Add Workflows: Read and write on the staging app's **Permissions & events** page, and
+> remove this note once it matches.
 
 **Repository permissions:**
 
-| Permission | Access | Why |
+| Permission | Access | What uses it |
 | --- | --- | --- |
-| **Contents** | Read **and write** | Read the repo tree + file blobs for source ingestion, and write the branch and the file every governed pull request carries. |
-| **Metadata** | Read-only | Mandatory (auto-selected); repo names, default branch, languages. |
-| **Pull requests** | Read **and write** | Ingest PRs (`pull_request` record type), and open, re-read and close the pull requests that carry a skill, an agent definition, a context record or a tool. |
-| **Checks** | Write | Report each governed-file check as a check run on the head commit, and run the CI tasks a governed pull request needs. |
-| **Issues** | Read-only | Ingest issues + issue comments. |
-| **Commit statuses** | Read-only *(optional)* | Useful if status/check context is ingested later. |
-| **Administration** | Read and write | Create each steering repo, apply its rulesets and merge settings, turn Actions off, and create the `steering` environment. See [Steering repos](#steering-repos). |
-| **Deployments** | Read and write | Record each published steering version as a deployment to the `steering` environment. |
+| **Actions** | Read and write | Steering settings read the `steering` environment and its branch policies (`packages/github/src/provision/settings.ts:160` and `:172`), and GitHub gates those reads on Actions. Write lets Oxagen re-run a pull request's CI. |
+| **Administration** | Read and write | Steering provisioning creates the repository (`POST /orgs/{org}/repos` in `packages/github/src/provision/repository.ts`), applies its settings and rulesets, turns Actions off, and creates the `steering` environment (`settings.ts`). See [Steering repos](#steering-repos). |
+| **Checks** | Read and write | Oxagen posts its own check run on a pull request's head commit: the `Oxagen steering` check (`packages/handlers/src/steering-repo/health.hosts.ts:243`) and each governed-file check (`packages/github/src/fetch-client.ts:1297`). A required Oxagen check turns a pull request red, the way Vercel's and Greptile's do, which PR verification needs. |
+| **Commit statuses** | Read and write | `listCiChecks` (`packages/github/src/fetch-client.ts:1095`) reads the combined status on every CI status read. Write lets Oxagen post a commit status where a repository requires one. |
+| **Contents** | Read and write | Branches, commits, file writes, and merges for governed pull requests and steering repos. The git push token Tacho mints (`packages/handlers/src/tacho.github_token.issue.ts`) narrows to Contents write. |
+| **Deployments** | Read and write | Each published steering version becomes a deployment to the `steering` environment (`packages/github/src/deployments.ts`). |
+| **Issues** | Read and write | Ingestion reads issues and comments. `packages/handlers/src/run-issue-provider.ts` creates issues with a token minted for `issues: "write"`, and GitHub refuses to mint a token above what the installation holds. |
+| **Metadata** | Read-only | Mandatory. Repository names, default branches, and an installation's repository list. |
+| **Pull requests** | Read and write | Opens, updates, merges, and reads the pull requests that carry a skill, an agent definition, a context record, or a tool, with their labels and comments. It also covers replies to review comments and resolving review threads, which PR verification needs. |
+| **Workflows** | Read and write | Contents write cannot change a file under `.github/workflows/`. An agent that writes code and opens a pull request needs Workflows to change CI files. Steering seed files and the Tacho push token never use it. |
 
-**Organization permissions:**
+Every other repository permission is **No access**. The app holds no organization or account
+permissions: no code reads organization members, teams, or the user's email.
 
-| Permission | Access | Why |
-| --- | --- | --- |
-| **Members** | Read-only *(optional)* | Resolve author/org membership; only needed if you map GitHub users to org members. |
+**Changing the set.** GitHub applies a removed permission to every installation at once. An added
+permission waits until each installation's owner accepts it, and until then that installation keeps
+its old set and Oxagen gets 403 on the calls that need the new one.
 
-**This App is read-write** (decided 2026-09-18, on #3242). Earlier revisions of this document said
+**This App is read-write** (decided 2026-09-18, on #3242). Mac widened it on 2026-09-30 to the set
+above, for an Oxagen check on every pull request, replies to and resolution of review comments, and
+agents that change code, CI files included. Earlier revisions of this document said
 to keep every permission read-only because "the connector never writes to GitHub". That was true of
 the ingestion connector and was never true of the product around it: `packages/github/src/workspace-token.ts`
 mints installation tokens, and `packages/handlers/src/context.pr.open.ts` has been creating branches,
@@ -231,9 +409,8 @@ it.
 
 ### Where can this App be installed?
 
-- **Dev:** "Only on this account" is fine.
-- **Prod:** "Any account" if customers will install it into their own orgs; "Only on this account"
-  if it is internal-only for now.
+- **Local and staging:** "Only on this account" is enough.
+- **Production:** "Any account", because customers install it in their own organizations.
 
 ---
 
@@ -267,38 +444,53 @@ How it works:
 
 > **Mapping still governs ingestion.** A webhook record is only persisted if the connection has an
 > `entity_type_mappings` row for that record type (created via `connection.mappings.set`). Unmapped
-> record types are received and skipped by design — map the types you want to ingest continuously.
+> record types are received and skipped by design. Map the types you want to ingest continuously.
 
 ### Webhook config on the App
 
-| Field | Dev | Prod |
-| --- | --- | --- |
-| **Active** | ✅ | ✅ |
-| **Webhook URL** | `https://{your-tunnel}/webhooks/github/app` | `https://api.oxagen.sh/webhooks/github/app` |
-| **Secret** | value of `GITHUB_APP_WEBHOOK_SECRET` (dev) | value of `GITHUB_APP_WEBHOOK_SECRET` (prod) |
-| **SSL verification** | Enable | Enable |
+| Field | Local | Staging | Production |
+| --- | --- | --- | --- |
+| **Active** | off, unless a tunnel runs | on | on |
+| **Webhook URL** | `https://{your-tunnel}/webhooks/github/app` | `https://api.staging.oxagen.sh/webhooks/github/app` | `https://api.oxagen.sh/webhooks/github/app` |
+| **Secret** | that environment's `GITHUB_APP_WEBHOOK_SECRET` | that environment's `GITHUB_APP_WEBHOOK_SECRET` | that environment's `GITHUB_APP_WEBHOOK_SECRET` |
+| **SSL verification** | Enable | Enable | Enable |
 
-**Subscribe to events** (each maps to a connector record type handled by `parseWebhookEvent`):
+Do not point a webhook at `api.oxagen.app`. #4882 removes that name, and the API stays on
+`oxagen.sh` (ADR-236). Production's webhook moved from `api.oxagen.app` to `api.oxagen.sh` on
+2026-10-01.
 
-| GitHub event | Feeds record type |
+**Subscribe to these 15 events.** The route verifies every delivery and answers 200. An event no
+code reads yet costs the API a signature check and one connection lookup, and dispatches nothing.
+
+| GitHub event | What reads it |
 | --- | --- |
-| `push` | `commit` (one per commit) |
-| `pull_request` | `pull_request` |
-| `pull_request_review` | `code_review` |
-| `pull_request_review_comment` | `comment` |
-| `issues` | `issue` |
-| `issue_comment` | `comment` |
-| `release` | `release` |
-| `repository` | `repository` |
-| `repository_ruleset` | none. It asks for a steering repo health read. |
-| `branch_protection_configuration` | none. It asks for a steering repo health read. |
+| `push` | Ingestion: `commit`, one per commit. Steering health: a push to `main`. |
+| `pull_request` | Ingestion: `pull_request`. Steering health: posts the steering check. |
+| `pull_request_review` | Ingestion: `code_review`. |
+| `pull_request_review_comment` | Ingestion: `comment`. |
+| `pull_request_review_thread` | Nothing yet. PR verification will read thread resolution. |
+| `issues` | Ingestion: `issue`. |
+| `issue_comment` | Ingestion: `comment`. |
+| `release` | Ingestion: `release`. |
+| `repository` | Ingestion: `repository`. Steering health read. |
+| `repository_ruleset` | Steering health read. |
+| `branch_protection_configuration` | Steering health read. |
+| `check_run` | Nothing yet. A re-run request on Oxagen's check arrives as this event. |
+| `check_suite` | Nothing yet. A re-run request on the whole suite arrives as this event. |
+| `status` | Nothing yet. PR verification will read other CI results. |
+| `workflow_run` | Nothing yet. PR verification will read other CI results. |
 
 `installation` and `installation_repositories` are delivered automatically (no subscription needed)
 and drive the pause-on-uninstall reconciliation.
 
-> **Dev webhooks need a public tunnel.** GitHub cannot reach `localhost`. Use smee.io,
-> `cloudflared tunnel`, or `ngrok` and set the dev App's Webhook URL to the tunnel origin
-> forwarding to `http://localhost:4000`.
+> **Local webhooks need a public tunnel.** GitHub cannot reach `localhost`, and it drops the local
+> app's event subscriptions while its webhook is inactive. To receive webhooks locally:
+>
+> 1. Start a tunnel to `http://localhost:4000` with smee.io, `cloudflared tunnel`, or `ngrok`.
+> 2. On the local app's settings page, set the Webhook URL to `https://{your-tunnel}/webhooks/github/app`
+>    and the secret to your local `GITHUB_APP_WEBHOOK_SECRET`.
+> 3. Turn **Active** on and save.
+> 4. On **Permissions & events**, tick the 15 events above and save.
 
 ---
 
@@ -308,23 +500,25 @@ Most GitHub connector variables live in the **`api`** service (read in `apps/api
 **Required where** column names the others. Schema: `packages/config/src/env.ts`. Registry:
 `packages/config/src/registry.ts`.
 
-> ⚠️ **Local dev: put these in `apps/api/.env.local`, not the repo-root `.env.local`.** `apps/api`
-> loads its env via `tsx --env-file`, which is CWD-relative — `GITHUB_APP_*` placed only in the root
-> `.env.local` silently no-op and the connector returns 503. (This gap has broken the connector before.)
+> **Local: put these in `apps/api/.env.local`, not the repo-root `.env.local`.** `apps/api` loads
+> its env through `tsx --env-file`, which resolves against the working directory. `GITHUB_APP_*`
+> placed only in the root `.env.local` does nothing, and the connector returns 503. This gap has
+> broken the connector before.
 
-| Variable | Secret | Required where | Dev value (`apps/api/.env.local`) | Prod value (`oxagen-v2-api` on Vercel) |
+| Variable | Secret | Required where | Local value (`apps/api/.env.local`) | Production value (Parameter Store) |
 | --- | --- | --- | --- | --- |
-| `GITHUB_APP_CLIENT_ID` | no | api | Dev App → Client ID | Prod App → Client ID |
-| `GITHUB_APP_CLIENT_SECRET` | yes | api | Dev App → generated client secret | Prod App → generated client secret |
-| `GITHUB_APP_WEBHOOK_SECRET` | yes | api (required for webhooks) | Dev App webhook secret | Prod App webhook secret |
-| `GITHUB_APP_INSTALL_STATE_SECRET` | yes | api | `openssl rand -hex 32` (dev value) | `openssl rand -hex 32` (distinct prod value) |
-| `GITHUB_APP_ID` | no | api, app, mcp (installation tokens, steering) | Dev App → App ID | Prod App → App ID |
-| `GITHUB_APP_PRIVATE_KEY` | yes | api, app, mcp (installation tokens, steering) | Dev App → generated private key (PEM) | Prod App → generated private key (PEM) |
-| `GITHUB_APP_SLUG` | no | api (required for the steering connect and provisioning); app, mcp (optional) | Dev App → public slug | Prod App → public slug |
+| `GITHUB_APP_CLIENT_ID` | no | api | Local App → Client ID | `/oxagen/production/GITHUB_APP_CLIENT_ID` |
+| `GITHUB_APP_CLIENT_SECRET` | yes | api | Local App → generated client secret | `/oxagen/production/GITHUB_APP_CLIENT_SECRET` |
+| `GITHUB_APP_WEBHOOK_SECRET` | yes | api (required for webhooks) | Local App webhook secret | `/oxagen/production/GITHUB_APP_WEBHOOK_SECRET` |
+| `GITHUB_WEBHOOK_SECRET` | yes | api (optional) | blank | `/oxagen/production/GITHUB_WEBHOOK_SECRET`: the legacy `oxagen-sh` app's webhook secret. Unset drops that app's deliveries with a 200. See [oxagen.sh (legacy)](#oxagensh-legacy). |
+| `GITHUB_APP_INSTALL_STATE_SECRET` | yes | api | `openssl rand -hex 32` (local value) | `/oxagen/production/GITHUB_APP_INSTALL_STATE_SECRET`, a distinct value |
+| `GITHUB_APP_ID` | no | api, app, mcp (installation tokens, steering) | Local App → App ID | `/oxagen/production/GITHUB_APP_ID`: Oxagen Connect's App ID, 4168398 |
+| `GITHUB_APP_PRIVATE_KEY` | yes | api, app, mcp (installation tokens, steering) | Local App → generated private key (PEM) | `/oxagen/production/GITHUB_APP_PRIVATE_KEY` (PEM) |
+| `GITHUB_APP_SLUG` | no | api (required for the steering connect and provisioning); app, mcp (optional) | `oxagen-github-connect-local` | `/oxagen/production/GITHUB_APP_SLUG`: `oxagen-connect` |
 | `NEXT_PUBLIC_API_URL` | no | all | `http://localhost:4000` | `https://api.oxagen.sh` |
 | `NEXT_PUBLIC_APP_URL` | no | all | `http://localhost:3000` | `https://app.oxagen.sh` |
 | `INGESTION_CRYPTO_PROVIDER` | no | optional | `env` | `env` (or `kms`) |
-| `INGESTION_ENCRYPTION_KEY` | yes | preview/prod | `openssl rand -base64 32` | required — wraps OAuth token encryption |
+| `INGESTION_ENCRYPTION_KEY` | yes | preview/prod | `openssl rand -base64 32` | required: it wraps OAuth token encryption |
 | `AUTH_TOKEN_ENCRYPTION_KEY` | yes | preview/prod | blank ok locally | required (auth startup guard) |
 
 Notes:
@@ -343,12 +537,14 @@ Notes:
   the slug from an existing installation. The steering connect and steering provisioning need it.
   See [Configuration](#configuration).
 
-### Setting prod values
+### Setting staging and production values
 
-Set the `GITHUB_APP_*` vars on the **`oxagen-v2-api`** Vercel project across the
-environments it serves (production + preview if the dev App also covers preview). Datastore/auth
-vars (`INGESTION_ENCRYPTION_KEY`, `AUTH_TOKEN_ENCRYPTION_KEY`) are team-shared — confirm they're
-present before first use.
+Put each `GITHUB_APP_*` value in Parameter Store as a SecureString under `/oxagen/production/`, or
+under `/oxagen/staging/` for the staging app. Each container reads its values when it starts
+(`infra/tools/node/README.md`), so a changed value takes effect on the next deploy of api, app, and
+mcp. Store `GITHUB_APP_PRIVATE_KEY` with its newlines. `NEXT_PUBLIC_API_URL` and
+`NEXT_PUBLIC_APP_URL` are static values in `packages/config/src/registry.ts`, not Parameter Store.
+Confirm `INGESTION_ENCRYPTION_KEY` and `AUTH_TOKEN_ENCRYPTION_KEY` are present before first use.
 
 ---
 
@@ -460,8 +656,8 @@ organization owner to authorize the Oxagen app again. A retry starts from that s
 ### Health webhooks
 
 The app's one webhook in [Webhooks](#webhooks) also tells Oxagen about a change to a steering
-repo's settings when it happens. Provisioning needs none of these events. The last three are in the
-ingestion list already. Add the first two:
+repo's settings when it happens. Provisioning needs none of these events. All five are among the 15 events in
+[Webhooks](#webhooks):
 
 | GitHub event | Why Oxagen reads it |
 | --- | --- |
@@ -511,17 +707,17 @@ On each copy of the app, from its settings page on GitHub:
    URL of its own.
 3. Leave **Expire user authorization tokens** off. Provisioning reuses the stored owner token, and
    no job refreshes it.
-4. Under **Permissions**, add **Administration: Read and write** and **Deployments: Read and
-   write**. GitHub asks the owner of each existing installation to accept them. Until an owner
-   does, that installation keeps its old permissions, and provisioning cannot create a repository
-   through it.
-5. Under **Subscribe to events**, add `repository_ruleset` and `branch_protection_configuration`.
+4. Under **Permissions**, set exactly the list in [Permissions](#permissions). GitHub asks the owner
+   of each existing installation to accept any permission you add. Until an owner does, that
+   installation keeps its old permissions, and provisioning cannot create a repository through it.
+5. Under **Subscribe to events**, check the 15 events in [Webhooks](#webhooks), and no others.
 6. Ask an organization owner to install the app on the GitHub organization, on all repositories or
    on selected repositories, or to accept the new permissions on an installation it already has.
 
 ### Moving from the Oxagen Steering app
 
-A steering connection made through the retired app holds a token that app issued. The Oxagen app's
+The retired app is Oxagen Github Connect (`oxagen-github-connect`, App ID 5121606). A steering
+connection made through it holds a token that app issued. The Oxagen app's
 installations are invisible to that token, so provisioning stops with `steering_reauthorize`, and an
 owner connects again from onboarding.
 
@@ -535,6 +731,8 @@ owner connects again from onboarding.
    that app in its rulesets, so its health read reports drift until an organization admin repairs
    it.
 4. Uninstall the retired app from the organization after the repair.
+5. Once no account has it installed, delete it from its **Advanced** settings page. Deletion cannot
+   be undone.
 
 ### GitLab
 
@@ -574,27 +772,27 @@ warning and finishes. The 10-minute sweep then finds drift until a later run reg
 
 Resolved in code (kept here for history):
 
-- ✅ **App-level webhook receiver** — `POST /webhooks/github/app` resolves connections from the
+- ✅ **App-level webhook receiver**: `POST /webhooks/github/app` resolves connections from the
   payload's `installation.id` + `repository.full_name`.
-- ✅ **`GITHUB_APP_WEBHOOK_SECRET` wired** — used for HMAC verification on the App-level route.
-- ✅ **Event-name → record-type mapping** — `github.parseWebhookEvent()` translates and unwraps each
+- ✅ **`GITHUB_APP_WEBHOOK_SECRET` wired**: used for HMAC verification on the App-level route.
+- ✅ **Event-name → record-type mapping**: `github.parseWebhookEvent()` translates and unwraps each
   event (incl. `push` → per-commit fan-out).
-- ✅ **`installation` / `installation_repositories` handling** — acked; uninstall/suspend pauses the
+- ✅ **`installation` / `installation_repositories` handling**: acked; uninstall/suspend pauses the
   installation's connections.
-- ✅ **Status-constraint bug** — activation now writes `connected` (was the invalid `active`, which
+- ✅ **Status-constraint bug**: activation now writes `connected` (was the invalid `active`, which
   violated `source_connections_status_check`).
-- ✅ **Setup URL landing route** — implemented at **`/github/setup`**
+- ✅ **Setup URL landing route**: implemented at **`/github/setup`**
   (`apps/app/src/app/github/setup/route.ts`), kept for older registrations (ADR-228); resolves the membership-gated workspace and the wizard
   recovers the in-progress connection via a sessionStorage handoff so it resumes Step 2 (not Step 1).
   `/installations` + `/repositories` fall back to (and link) the org's GitHub OAuth account when the
   Setup-URL "update" leg left the connection unlinked.
 
-Still open — worth tracking in Linear (`oxagen-v2`, labels `connectors`, `ingestion`):
+Still open:
 
-1. **Installation-token auth** — move unattended sync off the user token onto GitHub App installation
+1. **Installation-token auth**: move unattended sync off the user token onto GitHub App installation
    access tokens (JWT signed with the App private key), so sync survives the authorizing user leaving.
-2. **Webhook receipt bookkeeping** — optionally stamp `last_sync_at` / a `webhook_subscriptions`
+2. **Webhook receipt bookkeeping**: optionally stamp `last_sync_at` / a `webhook_subscriptions`
    row on delivery for observability (functional sync does not require it).
-3. **Canonical topology + evidence** — derive shared topology only from a configured
+3. **Canonical topology + evidence**: derive shared topology only from a configured
    protected/default ref, and add a typed evidence ledger for verified execution-to-commit,
    artifact, test, and changed-file claims. Do not restore source-blob ingestion to deliver this.

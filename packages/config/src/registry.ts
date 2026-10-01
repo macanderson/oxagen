@@ -1428,10 +1428,20 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   LINEAR_OAUTH_CLIENT_ID: {
     group: "Linear",
     description:
-      "Linear OAuth application client ID for customer-authorized Run follow-through. Uses PKCE with the app callback URL.",
+      "Linear OAuth application client ID. Connecting Linear uses PKCE with the app callback URL, so no client secret is needed.",
     secret: false,
     clientExposed: false,
     services: ["app", "api"],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  LINEAR_WEBHOOK_SECRET: {
+    group: "Linear",
+    description:
+      "Signing secret of the Linear OAuth app's webhook. POST /webhooks/linear verifies the Linear-Signature header with it.",
+    secret: true,
+    clientExposed: false,
+    services: ["api"],
     requiredIn: [],
     valueOrigin: "manual",
   },
