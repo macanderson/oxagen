@@ -7,9 +7,10 @@ import type { AppEnv } from "../../app";
 
 /**
  * Move the workspace's steering from `.oxagen/` to a steering repo
- * (`import_workspace_steering`). The body is `{}`, or the choices a
- * `needs_choices` answer asked for. Org Owners and Admins, and workspace
- * Owners. Mounted on the org-scoped router.
+ * (`import_workspace_steering`). The body is `{}`, the choices a
+ * `needs_choices` answer asked for, or the `connection` a setup that stopped
+ * with `choose_connection` asks for (#4875). Org Owners and Admins, and
+ * workspace Owners. Mounted on the org-scoped router.
  */
 export const steeringRepoImportRoute = new Hono<AppEnv>();
 

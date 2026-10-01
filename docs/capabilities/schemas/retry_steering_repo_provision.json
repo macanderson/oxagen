@@ -22,7 +22,30 @@
   "input": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
-    "properties": {},
+    "properties": {
+      "connection": {
+        "type": "object",
+        "properties": {
+          "provider": {
+            "type": "string",
+            "enum": [
+              "github",
+              "gitlab"
+            ]
+          },
+          "id": {
+            "type": "integer",
+            "exclusiveMinimum": 0
+          }
+        },
+        "required": [
+          "provider",
+          "id"
+        ],
+        "additionalProperties": false,
+        "description": "The GitHub organization or GitLab group to create steering repos in, when setup stopped with choose_connection. One of get_steering_repo's connectionChoices."
+      }
+    },
     "additionalProperties": false
   },
   "output": {

@@ -69,6 +69,8 @@ const OFF_AGENT: Readonly<Record<string, string>> = {
     "The app reads a Stella turn's reply with it, and Stella wrote that reply.",
   get_slack_connection:
     "It belongs to the Slack connection flow, which is on no surface.",
+  import_workspace_steering:
+    "It moves a workspace's steering into a new repository and opens PRs on two repositories, a one-time move an owner starts from the setup dialog.",
   list_slack_channels:
     "It belongs to the Slack connection flow, which is on no surface.",
   list_sso_providers:

@@ -115,6 +115,10 @@ engine_version() {
 # running process only through this manifest. Production's APP_URL is the one
 # that was missing: the registry set it, the build saw it, and the Slack and
 # Linear connect flows, which read it at request time, stayed off.
+# `WRITE_MANIFEST_SMOKE` is an optional JSON request (`method`, `path`,
+# `headers`, `body`, and `expect`, text the reply must contain) that
+# deploy-service.sh sends after the health route answers. A release that does
+# not answer it rolls back (#4829).
 write_manifest() {
   local port=$1 memory=$2 health=$3 config=$4
   shift 4
@@ -140,6 +144,19 @@ write_manifest() {
       || fail "RUNTIME_ENV_FILE must hold a JSON object of string values: $RUNTIME_ENV_FILE"
   fi
 
+  local smoke='null'
+  if [[ -n ${WRITE_MANIFEST_SMOKE:-} ]]; then
+    smoke=$(jq -ce '
+        if type == "object"
+           and (.method | type == "string")
+           and (.path | type == "string" and startswith("/"))
+           and ((.headers // {}) | type == "object" and all(.[]; type == "string"))
+           and ((.body // "") | type == "string")
+           and ((.expect // "") | type == "string")
+        then . else error("not a smoke request") end' <<<"$WRITE_MANIFEST_SMOKE") \
+      || fail "WRITE_MANIFEST_SMOKE must hold a method, a path that starts with /, string headers, and a string body and expect"
+  fi
+
   jq -n \
     --argjson port "$port" \
     --arg image "${WRITE_MANIFEST_IMAGE:-node:24.21.0-alpine}" \
@@ -149,6 +166,7 @@ write_manifest() {
     --arg config "$config" \
     --arg region "${OXAGEN_REGION:-us-east-1}" \
     --argjson runtime "$runtime_env" \
+    --argjson smoke "$smoke" \
     '{
        port: $port,
        image: $image,
@@ -157,11 +175,18 @@ write_manifest() {
        health_path: $health,
        env: ($runtime + { NEXT_TELEMETRY_DISABLED: "1", OXAGEN_REGION: $region })
      }
-     + (if $config == "" then {} else { config_prefix: $config } end)' \
+     + (if $config == "" then {} else { config_prefix: $config } end)
+     + (if $smoke == null then {} else { smoke: $smoke } end)' \
     > "$OUT/oxagen-run.json"
 
   log "manifest: $(jq -c . "$OUT/oxagen-run.json")"
 }
+
+# mcp's smoke request: a tools/list, which builds the server and converts every
+# tool's schema. The bearer token only has to pass the gate's shape check. The
+# served-tools lookup resolves no key for it, so the reply lists Oxagen's own
+# tools, each with an inputSchema.
+readonly MCP_SMOKE_REQUEST='{"method":"POST","path":"/mcp","headers":{"Content-Type":"application/json","Accept":"application/json, text/event-stream","Authorization":"Bearer deploy-smoke"},"body":"{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\",\"params\":{}}","expect":"\"inputSchema\""}'
 
 # Next's standalone output deliberately excludes the static assets and
 # everything under public/, expecting whatever serves it to supply them.
@@ -277,7 +302,11 @@ case $SERVICE in
     # manifest's `port` is what Caddy proxies to and what the health check
     # polls, so the two have to be the same number and the env var below is
     # how the application is told.
-    write_manifest "$(port_for mcp)" 1024m "/health" "$PARAMETER_PREFIX" node --max-old-space-size=640 dist/http.js
+    # The smoke request is an MCP tools/list. On 2026-09-30 that path first ran
+    # the heap out and then failed on every tool's schema, while /health still
+    # answered (#4829).
+    WRITE_MANIFEST_SMOKE="$MCP_SMOKE_REQUEST" \
+      write_manifest "$(port_for mcp)" 1024m "/health" "$PARAMETER_PREFIX" node --max-old-space-size=640 dist/http.js
     tmp=$(mktemp)
     jq --arg p "$(port_for mcp)" '.env.MCP_PORT = $p' "$OUT/oxagen-run.json" > "$tmp"
     mv "$tmp" "$OUT/oxagen-run.json"

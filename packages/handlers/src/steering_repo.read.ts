@@ -10,11 +10,13 @@
 //   version       the steering publication of that repository (S3), or
 //                 version 1 once provisioning recorded it
 //   health        the last health read and the settings it found different
+//   legacy source the code repository that still steers a workspace made
+//                 before steering repos existed (#4875)
 //
-// A workspace with no provisioning state answers `provisioning` with every
-// other field null. The health banner sits in the workspace layout and reads
-// this on every page, so an error here would break every page of a workspace
-// made before provisioning existed.
+// A workspace with no provisioning state answers `not_started` with every
+// other provisioning field null. The health banner sits in the workspace
+// layout and reads this on every page, so an error here would break every
+// page of a workspace made before provisioning existed.
 import { schema, withTenantDb } from "@oxagen/database";
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import type {
@@ -26,8 +28,14 @@ import { repoRef } from "@oxagen/oxagen/steering-repo/names";
 import { and, eq } from "drizzle-orm";
 import {
   readSteeringRepoState,
+  steeringConnectionId,
+  steeringConnectionName,
   type SteeringRepoState,
 } from "./steering_repo.provision";
+import {
+  readLegacySteeringSource,
+  type LegacySteeringSource,
+} from "./steering-repo/legacy-source";
 import {
   displaySettingValue,
   readRepoHealthDetail,
@@ -60,6 +68,10 @@ export interface SteeringRepoReadDeps {
   ): Promise<number | null>;
   /** The last health read, or null before the first. */
   readHealth(scope: SteeringRepoReadScope): Promise<RepoHealthDetail | null>;
+  /** The code repository that still steers the workspace, or null. */
+  readLegacySource(
+    scope: SteeringRepoReadScope,
+  ): Promise<LegacySteeringSource | null>;
 }
 
 /**
@@ -89,7 +101,7 @@ export function steeringRepoUrl(
 
 /** The answer for a workspace with no provisioning state. */
 export const NO_STEERING_REPO: SteeringRepoGetOutput = {
-  status: "provisioning",
+  status: "not_started",
   step: null,
   failedStep: null,
   error: null,
@@ -98,7 +110,21 @@ export const NO_STEERING_REPO: SteeringRepoGetOutput = {
   publishedVersion: null,
   health: null,
   differences: [],
+  legacySource: null,
+  connectionChoices: [],
 };
+
+function legacySourceView(
+  legacy: LegacySteeringSource | null,
+): SteeringRepoGetOutput["legacySource"] {
+  if (legacy === null) return null;
+  const provider = legacy.provider === "gitlab" ? "gitlab" : "github";
+  return {
+    fullName: legacy.full_name,
+    url: steeringRepoUrl(provider, legacy.full_name),
+    provider,
+  };
+}
 
 function workspaceScope(ctx: {
   orgId: string;
@@ -114,8 +140,12 @@ export function createGetSteeringRepoHandler(
 ): CapabilityHandler<typeof steeringRepoGet> {
   return async (_input, ctx): Promise<SteeringRepoGetOutput> => {
     const scope = workspaceScope(ctx);
-    const state = await deps.readState(scope);
-    if (state === null) return NO_STEERING_REPO;
+    const [state, legacy] = await Promise.all([
+      deps.readState(scope),
+      deps.readLegacySource(scope),
+    ]);
+    const legacySource = legacySourceView(legacy);
+    if (state === null) return { ...NO_STEERING_REPO, legacySource };
 
     const provider = state.provider;
     const repository =
@@ -157,6 +187,12 @@ export function createGetSteeringRepoHandler(
         published ?? (state.deployment_id !== null ? PROVISIONED_VERSION : null),
       health: detail?.health ?? null,
       differences,
+      legacySource,
+      connectionChoices: state.connection_choices.map((c) => ({
+        provider: c.provider,
+        id: steeringConnectionId(c),
+        name: steeringConnectionName(c),
+      })),
     };
   };
 }
@@ -192,6 +228,7 @@ export const productionSteeringRepoReadDeps: SteeringRepoReadDeps = {
     return row?.version ?? null;
   },
   readHealth: readRepoHealthDetail,
+  readLegacySource: readLegacySteeringSource,
 };
 
 export const getSteeringRepoHandler = createGetSteeringRepoHandler(

@@ -53,9 +53,14 @@ describe("xmcp config wiring", () => {
     expect(rules[0]).toEqual({ test: /\.ts$/ });
 
     const matches = (path: string): boolean => rule?.test?.test(path) ?? false;
+    // `xmcp build` copies the runtime into .xmcp/ and builds the entry from
+    // there. The first loader matched only node_modules and never ran (#4829).
+    expect(matches("/w/apps/mcp/.xmcp/http.js")).toBe(true);
+    expect(matches("/w/apps/mcp/.xmcp/adapter-express.js")).toBe(true);
     expect(matches("/n/.pnpm/xmcp@0.6.13_x/node_modules/xmcp/dist/runtime/http.js")).toBe(true);
     expect(matches("/n/node_modules/xmcp/dist/runtime/adapter-express.js")).toBe(true);
-    expect(matches("/n/node_modules/xmcp/dist/runtime/stdio.js")).toBe(false);
+    expect(matches("/w/apps/mcp/.xmcp/stdio.js")).toBe(false);
+    expect(matches("/w/apps/mcp/.xmcp/import-map.js")).toBe(false);
     expect(matches("/app/src/http.js")).toBe(false);
   });
 });

@@ -35,7 +35,7 @@ describe("fixed names", () => {
     expect(CODE_REPOSITORY_CHECK_NAME).toBe("Oxagen");
     expect(STEERING_ENVIRONMENT).toBe("steering");
     expect(STEERING_DEFAULT_BRANCH).toBe("main");
-    expect(ORGANIZATION_REPO_NAME).toBe("oxagen");
+    expect(ORGANIZATION_REPO_NAME).toBe("oxagen-config");
     expect(STEERING_REPO_NAME_PREFIX).toBe("oxagen-");
     expect(TOOL_SEPARATOR).toBe("__");
     expect(BUILTIN_SERVER).toBe("builtin");
@@ -54,6 +54,9 @@ describe("steeringRepoName", () => {
   it("adds the attempt number when the name is taken", () => {
     expect(steeringRepoName("core-platform", 2)).toBe("oxagen-core-platform-2");
     expect(steeringRepoName("billing7", 13)).toBe("oxagen-billing7-13");
+    // The config workspace's first name is the organization's repository,
+    // which is why provisioning starts it at attempt 2.
+    expect(steeringRepoName("config")).toBe(ORGANIZATION_REPO_NAME);
   });
 
   it.each(["Core", "core--platform", "-core", "core-", "core_platform", ""])(

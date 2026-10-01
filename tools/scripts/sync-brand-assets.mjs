@@ -1,39 +1,41 @@
 #!/usr/bin/env node
 /**
- * Pull the Oxagen house brand system into every frontend in this repo.
+ * Copy the Oxagen brand kit into this repo, or check that the copies still
+ * match it.
  *
- * The house kit (macanderson/oxagen-brand) generates every mark, icon,
- * social card and spinner from `build/`. Nothing in it is drawn by hand, so
- * nothing here is copied by hand either: this script is the one seam between
- * the kit and the apps, and re-running it after a kit rebuild re-flows the
- * whole product.
+ * The kit, macanderson/oxagen-brand, builds every mark, icon, social card,
+ * and spinner with the scripts in its `build/` folder. This script copies
+ * them, so nobody edits a brand file here by hand. Run it after the kit
+ * changes, and commit what it writes.
  *
  *   node tools/scripts/sync-brand-assets.mjs [--brand <dir>] [--check]
  *                                            [--rasters | --no-rasters]
  *
- * --brand   kit checkout. Defaults to $OXAGEN_BRAND_KIT, then the deprecated
- *           $OXAGEN_HOUSE_BRAND alias, then ../oxagen-brand.
- * --check   verify vendored files without writing. Exit non-zero on drift.
- *           That covers the marks, the icons, the tokens, the fonts, the
- *           branding skill, and the INK palette apps/web's art modules draw
- *           with (apps/web/scripts/lib/theme.mjs).
+ * --brand   the kit folder. Without it, the script reads $OXAGEN_BRAND_KIT,
+ *           then $OXAGEN_HOUSE_BRAND (the old name), then ../oxagen-brand.
+ * --check   compare this repo's copies with the kit and write nothing. The
+ *           script exits non-zero when any copy differs. It compares the
+ *           marks, the icons, the tokens, the fonts, the branding skill, and
+ *           the `INK_TOKENS` palette in apps/web/scripts/lib/theme.mjs.
  * --rasters, --no-rasters
  *           whether --check renders each PNG and ICO with rsvg-convert and
- *           compares the bytes. On by default, and off when CI is set. PNG
- *           bytes depend on the librsvg build: librsvg 2.54 in the CI image
- *           and 2.62 on a laptop render the same SVG to different bytes.
- *           With rasters off, the check reads each raster's size instead, and
- *           the SVGs they are rendered from are still compared byte for byte.
+ *           compares the bytes. It does by default, and it does not when the
+ *           CI environment variable is set. Two librsvg versions render the
+ *           same SVG to different bytes: 2.54 in the CI image and 2.62 on a
+ *           laptop. With rasters off, the check reads each PNG's width and
+ *           height and each ICO's list of sizes instead. It still compares
+ *           their source SVGs byte for byte.
  *
- * CI runs `--check` against the kit's main branch on every pull request, by
- * Mac's decision of 2026-09-29 (#3074). A kit change on main therefore fails
- * the check here until someone runs this script and commits the result.
+ * CI runs `--check` on every pull request against the kit's main branch, as
+ * Mac decided on 2026-09-29 (#3074). After a kit change lands on main, the
+ * check fails here until someone runs this script and commits the result.
  *
- * Each surface has an explicit mark allowlist. The product uses the wordmark
- * where a word fits and the hive for square icons. The kit also supplies a
- * lockup, but no current product surface selects it. Stella uses its wordmark
- * and asterisk. Raster icons use the opaque dark tile; SVG favicons adapt.
-
+ * SURFACE_MARKS lists the marks each app may carry. The product shows the
+ * wordmark where a word fits and the hive where the slot is square. The kit
+ * also ships a lockup, and no app selects it. Stella uses its wordmark and
+ * its asterisk. This script renders the PNG and ICO icons from the kit's
+ * opaque dark tile. The SVG favicon follows the browser's light or dark
+ * setting.
  */
 
 import { createHash } from "node:crypto";

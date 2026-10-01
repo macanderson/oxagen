@@ -1,6 +1,7 @@
 // The provisioning steps a person sees, and the state of each, derived from
 // the last step that finished (`view.step`) and the step that failed or
-// stopped (`view.failedStep`). The job skips three steps in three cases, so
+// stopped (`view.failedStep`). A setup that never started (`not_started`)
+// draws every step waiting, because no job runs any of them. The job skips three steps in three cases, so
 // the list leaves them out. `bind_repository` runs only for a workspace.
 // `add_to_installation` runs only on GitHub. `register_webhook` runs only on
 // GitLab.
@@ -34,17 +35,19 @@ export function provisioningSteps(
   const shown = STEERING_REPO_STEPS.filter((step) =>
     runs(step, view.provider, ws),
   );
-  if (view.status === "ready")
+  const status = view.status;
+  if (status === "not_started")
+    return shown.map((step) => ({ step, state: "waiting" }));
+  if (status === "ready")
     return shown.map((step) => ({ step, state: "done" }));
   const lastDone =
     view.step === null ? -1 : STEERING_REPO_STEPS.indexOf(view.step);
   const next =
     shown.find((step) => STEERING_REPO_STEPS.indexOf(step) > lastDone) ??
     null;
-  const current =
-    view.status === "provisioning" ? next : (view.failedStep ?? next);
+  const current = status === "provisioning" ? next : (view.failedStep ?? next);
   const currentState: StepState =
-    view.status === "provisioning" ? "running" : view.status;
+    status === "provisioning" ? "running" : status;
   return shown.map((step) => {
     if (step === current) return { step, state: currentState };
     return {

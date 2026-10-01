@@ -3,7 +3,7 @@
  *
  * Geometry comes from `./brand-marks.generated.ts`, extracted by
  * `tools/scripts/sync-brand-assets.mjs` from the house brand kit
- * (oxagenai/oxagen-brand). Nothing here is drawn: both wordmarks are
+ * (macanderson/oxagen-brand). Nothing here is drawn: both wordmarks are
  * Space Grotesk's own outlines at weight 600, and Stella's icon is the same
  * face's asterisk. Oxagen's icon is the hive, built from the kit's cell
  * geometry. To change a mark, change the kit and re-run the sync.

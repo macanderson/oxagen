@@ -36,8 +36,37 @@ export function steeringRepoView(
     publishedVersion: 3,
     health: "healthy",
     differences: [],
+    legacySource: null,
+    connectionChoices: [],
     ...overrides,
   };
+}
+
+/** A code repository that still steers a workspace made before steering repos. */
+export const LEGACY_SOURCE = {
+  fullName: "acme/agent-harness",
+  url: "https://github.com/acme/agent-harness",
+  provider: "github" as const,
+};
+
+/**
+ * A workspace that never recorded a setup (#4875): every provisioning field
+ * null. Pass `legacySource` for one whose old main repository still steers it.
+ */
+export function notStartedSteeringRepo(
+  overrides: Partial<SteeringRepoView> = {},
+): SteeringRepoView {
+  return steeringRepoView({
+    status: "not_started",
+    step: null,
+    failedStep: null,
+    error: null,
+    provider: null,
+    repository: null,
+    publishedVersion: null,
+    health: null,
+    ...overrides,
+  });
 }
 
 /**
@@ -174,13 +203,14 @@ export function steeringRepoSource(read: Read<SteeringRepoView>) {
     steeringRepo: {
       get: (...args) => {
         calls.push(args);
-        // The contract's record holds a mutable differences array, and the
-        // view's is read-only, so an answered read copies it across.
+        // The contract's record holds mutable arrays, and the view's are
+        // read-only, so an answered read copies them across.
         return Promise.resolve(
           read.ok
             ? readOk({
                 ...read.value,
                 differences: [...read.value.differences],
+                connectionChoices: [...read.value.connectionChoices],
               })
             : read,
         );
