@@ -77,10 +77,10 @@ const nextConfig = {
       },
     ];
   },
-  // Serve the static HTML sales decks under public/decks/* at clean, extensionless
+  // Serve the static HTML decks under public/decks/* at clean, extensionless
   // URLs. Next's static-file handler does not resolve a directory's index.html at
-  // the bare path, so without these rewrites /decks/first-call-enterprise would
-  // 404 under `next dev`, `next start`, and the standalone server alike.
+  // the bare path, so without these rewrites /decks/roadmap would 404 under
+  // `next dev`, `next start`, and the standalone server alike.
   //
   // One entry per deck: adding a deck under public/decks/ means adding its
   // rewrite here, or the clean URL will not resolve.
@@ -91,40 +91,8 @@ const nextConfig = {
         destination: "/decks/index.html",
       },
       {
-        source: "/decks/investor",
-        destination: "/decks/investor/index.html",
-      },
-      {
         source: "/decks/roadmap",
         destination: "/decks/roadmap/index.html",
-      },
-      {
-        source: "/decks/first-call-enterprise",
-        destination: "/decks/first-call-enterprise/index.html",
-      },
-      {
-        source: "/decks/first-call-enterprise/script",
-        destination: "/decks/first-call-enterprise/script.html",
-      },
-      {
-        source: "/decks/architecture-deep-dive",
-        destination: "/decks/architecture-deep-dive/index.html",
-      },
-      {
-        source: "/decks/unpoisonable-edits",
-        destination: "/decks/unpoisonable-edits/index.html",
-      },
-      {
-        source: "/decks/mutation-verifier",
-        destination: "/decks/mutation-verifier/index.html",
-      },
-      {
-        source: "/decks/verified-outcome-router",
-        destination: "/decks/verified-outcome-router/index.html",
-      },
-      {
-        source: "/decks/agentic-cli-roadmap",
-        destination: "/decks/agentic-cli-roadmap/index.html",
       },
     ];
   },

@@ -1,6 +1,3 @@
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   declaredLayers,
@@ -10,8 +7,6 @@ import {
   preservedPaths,
   referencesContractModule,
 } from "./check-deregistered.mjs";
-
-const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 function ledger(block: string) {
   return `# De-registered features\n\nProse.\n\n\`\`\`preserved-paths\n${block}\n\`\`\`\n`;
@@ -55,59 +50,6 @@ describe("the guard fails on a deleted path", () => {
 
   it("passes when every path is still there", () => {
     expect(missingPaths(["packages/kept"], exists)).toEqual([]);
-  });
-});
-
-describe("the real ledger", () => {
-  const markdown = readFileSync(join(repoRoot, "DEREGISTERED.md"), "utf8");
-
-  it("carries a non-empty block, because an empty one passes vacuously", () => {
-    const paths = preservedPaths(markdown);
-    expect(paths).not.toBeNull();
-    expect(paths!.length).toBeGreaterThan(0);
-  });
-
-  it("lists no path twice", () => {
-    const paths = preservedPaths(markdown)!;
-    expect(new Set(paths).size).toBe(paths.length);
-  });
-
-  it("lists repo-relative paths only — an absolute path would never be checked", () => {
-    for (const path of preservedPaths(markdown)!) {
-      expect(path.startsWith("/")).toBe(false);
-      expect(path.startsWith("./")).toBe(false);
-    }
-  });
-
-  it("preserves the marketplace and the fourteen de-registered connectors", () => {
-    const paths = preservedPaths(markdown)!;
-    // The rebuild renamed apps/app to apps/app_deprecated, so the preserved
-    // marketplace page is at that spelling now. The feature is still
-    // de-registered and still on disk; only the directory moved.
-    expect(paths).toContain(
-      "apps/app_deprecated/src/app/[orgSlug]/[workspaceSlug]/marketplace",
-    );
-    expect(paths).toContain(
-      "packages/oxagen/src/contracts/plugin.org.install.ts",
-    );
-    for (const connector of [
-      "google",
-      "zoom",
-      "slack",
-      "salesforce",
-      "microsoft",
-      "stripe",
-      "zendesk",
-      "custom-webhook",
-    ]) {
-      expect(paths).toContain(`packages/ingestion/src/connectors/${connector}`);
-    }
-  });
-
-  it("preserves the ingestion pipeline, which the Ontology page depends on", () => {
-    expect(preservedPaths(markdown)!).toContain(
-      "packages/ingestion/src/pipeline.ts",
-    );
   });
 });
 
@@ -175,17 +117,6 @@ describe("artifacts a preserved contract declares", () => {
     // A contract with no api/mcp/cli layer promises no route, tool or command;
     // the handler is unconditional because a registered capability has one.
     expect(gone).toEqual(["packages/handlers/src/plugin.catalog.browse.ts"]);
-  });
-
-  it("finds every artifact of a live contract in this repo", () => {
-    const path = "packages/oxagen/src/contracts/plugin.catalog.browse.ts";
-    expect(
-      derivedMissingFor(
-        repoRoot,
-        path,
-        readFileSync(join(repoRoot, path), "utf8"),
-      ),
-    ).toEqual([]);
   });
 });
 

@@ -9,11 +9,12 @@
 # branch had nine runs in 100 minutes, eight cancelled and none finished.
 #
 # After each CI run on a pull request completes, this reads the branch's run
-# history. When the last 3 concluded runs were all cancelled, it sets a
-# failing `ci-superseded` commit status on the PR's head and posts one
-# comment, edited in place. When a run finishes, it clears both. One cancel
-# followed by a finished run reports nothing. The status is not a required
-# check. tools/scripts/check-superseded-runs.mjs holds the rule and its test.
+# history. When the last 3 concluded runs were all cancelled by newer runs,
+# it sets a failing `ci-superseded` commit status on the PR's head and posts
+# one comment, edited in place. When a run finishes, it clears both. One
+# cancel followed by a finished run reports nothing, and so does a cancelled
+# run with no run after it. The status is not a required check.
+# tools/scripts/check-superseded-runs.mjs holds the rule and its test.
 #
 # ## Why it is its own workflow
 #
