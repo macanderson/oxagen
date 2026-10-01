@@ -99,8 +99,8 @@ that stream subsequent changes ([Webhooks](#webhooks)). Both run on the user's O
 
 ## Apps
 
-The `oxageninc` GitHub organization owns every copy of the app. Each environment keeps its own
-copy's credentials:
+The `oxageninc` GitHub organization owns every copy of the app except the legacy `oxagen-sh`, which
+`oxageninc-old` still owns. Each environment keeps its own copy's credentials:
 
 | App | Slug | App ID | Environment | API origin (`NEXT_PUBLIC_API_URL`) | App origin (`NEXT_PUBLIC_APP_URL`) |
 | --- | --- | --- | --- | --- | --- |
@@ -108,8 +108,10 @@ copy's credentials:
 | **Oxagen Github Connect Staging** | `oxagen-github-connect-staging` | 4993204 | staging | `https://api.staging.oxagen.sh` | `https://app.staging.oxagen.sh` |
 | **Oxagen Github Connect Local** | `oxagen-github-connect-local` | 4055401 | local | `http://localhost:4000` | `http://localhost:3000` |
 | **Oxagen Github Connect** | `oxagen-github-connect` | 5121606 | retired | none | none |
+| **oxagen.sh** | `oxagen-sh` | 4055615 | production (legacy, webhooks only) | `https://api.oxagen.sh` | none |
 
-Each app's settings page sits at `https://github.com/organizations/oxageninc/settings/apps/<slug>`.
+Each app's settings page sits at `https://github.com/organizations/oxageninc/settings/apps/<slug>`,
+except `oxagen-sh`, whose page sits under `oxageninc-old`.
 GitHub asks an organization owner to confirm access (sudo mode) before it shows one. The sections
 below record each app's settings as read from GitHub on 2026-10-01. No section holds a secret: the
 credentials live where each section's **Credentials** row says.
@@ -220,6 +222,45 @@ it. Do not bring its permissions or events in line with the required set.
 | Permissions | 25 repository permissions, left as they were at retirement |
 | Events | 32 repository events, plus the app-level `security_advisory` event |
 | Credentials | Retired Parameter Store SecureStrings under `/oxagen/production/`: `OXAGEN_STEERING_APP_ID`, `OXAGEN_STEERING_APP_SLUG`, `OXAGEN_STEERING_APP_CLIENT_ID`, `OXAGEN_STEERING_APP_CLIENT_SECRET`, `OXAGEN_STEERING_APP_PRIVATE_KEY`, and `OXAGEN_STEERING_APP_WEBHOOK_SECRET`. Delete them once a production steering delivery returns 200 through Oxagen Connect. |
+
+### oxagen.sh (legacy)
+
+The first production app, registered on 2026-06-15 under the organization now named
+`oxageninc-old`. Oxagen Connect replaced it, but its installations still deliver webhooks to
+production: the last 50 deliveries on 2026-09-30 all returned success. The webhook route tells the
+two apps apart by the `X-GitHub-Hook-Installation-Target-ID` header. It verifies Oxagen Connect's
+deliveries with `GITHUB_APP_WEBHOOK_SECRET` and every other app's with `GITHUB_WEBHOOK_SECRET`
+(`apps/api/src/routes/v1/github-webhook.ts`). When `GITHUB_WEBHOOK_SECRET` is unset, the route
+answers this app's deliveries with 200 and drops them, so a fresh deployment or a secret rotation
+that leaves it out loses those events without an error. Parameter Store holds no private key for
+this app, so Oxagen mints no installation token from it.
+
+Its redirect URIs point at Better Auth's GitHub sign-in path, but sign-in does not use it. Sign-in
+uses a classic OAuth App (`GITHUB_LOGIN_CLIENT_ID`, client ID prefix `Ov23li`;
+`packages/auth/src/auth.ts`). A transfer of this app to `oxageninc` is pending (request 65054).
+Retire it once its installations move to Oxagen Connect: uninstall it, delete it, then delete
+`GITHUB_WEBHOOK_SECRET` and the second-app branch of the webhook route. Until then, keep its
+permissions and events as they are, because changing them asks every installation to accept.
+
+| Setting | Value |
+| --- | --- |
+| Display name | oxagen.sh |
+| Slug | `oxagen-sh` |
+| App ID | 4055615 |
+| Owner | `oxageninc-old` (GitHub organization) |
+| Environment | production, webhooks only |
+| Public page | `https://github.com/apps/oxagen-sh` |
+| Settings page | `https://github.com/organizations/oxageninc-old/settings/apps/oxagen-sh` |
+| Homepage URL | `https://www.oxagen.sh` |
+| Redirect URIs | `https://app.oxagen.sh/api/auth/callback/github` and `http://localhost:4000/api/auth/callback/github`, wildcard matching off on both |
+| Request user authorization (OAuth) during installation | on |
+| Enable Device Flow | off |
+| Setup URL | `https://oxagen-v2-app.vercel.app/connections/github/setup`. GitHub greys it out and ignores it while OAuth during installation is on. |
+| Redirect on update | on. It does nothing while the Setup URL is ignored. |
+| Webhook | `https://api.oxagen.sh/webhooks/github/app`, active |
+| Permissions | 65 permissions, left as registered, including organization administration and secrets write. Not the required set. |
+| Events | 53 events, left as registered |
+| Credentials | `/oxagen/production/GITHUB_WEBHOOK_SECRET` (SecureString). No other value. |
 
 ### Reasons for one app per environment
 
@@ -461,6 +502,7 @@ Most GitHub connector variables live in the **`api`** service (read in `apps/api
 | `GITHUB_APP_CLIENT_ID` | no | api | Local App → Client ID | `/oxagen/production/GITHUB_APP_CLIENT_ID` |
 | `GITHUB_APP_CLIENT_SECRET` | yes | api | Local App → generated client secret | `/oxagen/production/GITHUB_APP_CLIENT_SECRET` |
 | `GITHUB_APP_WEBHOOK_SECRET` | yes | api (required for webhooks) | Local App webhook secret | `/oxagen/production/GITHUB_APP_WEBHOOK_SECRET` |
+| `GITHUB_WEBHOOK_SECRET` | yes | api (optional) | blank | `/oxagen/production/GITHUB_WEBHOOK_SECRET`: the legacy `oxagen-sh` app's webhook secret. Unset drops that app's deliveries with a 200. See [oxagen.sh (legacy)](#oxagensh-legacy). |
 | `GITHUB_APP_INSTALL_STATE_SECRET` | yes | api | `openssl rand -hex 32` (local value) | `/oxagen/production/GITHUB_APP_INSTALL_STATE_SECRET`, a distinct value |
 | `GITHUB_APP_ID` | no | api, app, mcp (installation tokens, steering) | Local App → App ID | `/oxagen/production/GITHUB_APP_ID`: Oxagen Connect's App ID, 4168398 |
 | `GITHUB_APP_PRIVATE_KEY` | yes | api, app, mcp (installation tokens, steering) | Local App → generated private key (PEM) | `/oxagen/production/GITHUB_APP_PRIVATE_KEY` (PEM) |
