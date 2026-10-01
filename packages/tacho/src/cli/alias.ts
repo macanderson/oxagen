@@ -70,6 +70,7 @@ export function aliasNotice(
   if (command === undefined || replacement === undefined)
     return "tacho is now the `oxagen` CLI. Run `oxagen agent --help` for the commands that replaced it.";
   if (MACHINE_COMMANDS.has(command) && !stdinIsTTY) return undefined;
+  // tacho-command-check: alias (this line names the old spelling on purpose)
   return `\`tacho ${command}\` is now \`${replacement}\`. The old name still works.`;
 }
 
