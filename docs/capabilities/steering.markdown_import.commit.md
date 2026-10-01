@@ -26,6 +26,10 @@ Nothing in the PR steers an agent until it merges.
 | `records` | record rows, default `[]` | the record rows from parse. The schema refuses a force the row's kind does not allow, a constraint with no effect, and an effect on any other kind |
 | `policies` | policy rows, default `[]` | the policy rows from parse |
 
+The schema also refuses rows that mark more than 299 records and policies add, because one
+steering PR holds at most 299 files. The issue's message, in the `details` of a `validation_error`,
+says how many to mark skip.
+
 ## Output
 
 | Field | Type | Description |
@@ -72,4 +76,4 @@ Nothing in the PR steers an agent until it merges.
 | 409 | `record_unreadable` | a row does not make a steering record the schema accepts |
 | 409 | `import_branches_exhausted` | the steering repo already has 50 import branches for the day |
 | 409 | `steering_repo_required` | the workspace's repository has no `steering/governance.toml` |
-| 409 | `too_many_files` | the PR would change more than 299 files. Commit the rows in smaller sets |
+| 400 | `validation_error` | the rows mark more than 299 records and policy files add. Mark some skip, or import the files in smaller sets |

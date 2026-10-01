@@ -780,7 +780,64 @@ describe("memory import", () => {
     expect(JSON.parse(captured.output())).toEqual({
       files: [parsedFile],
       records: [row()],
+      pullRequestFiles: { count: 1, max: 299, message: null },
     });
+  });
+
+  it("marks a duplicate between files sent in different calls, and skips it", async () => {
+    readFile.mockResolvedValue("Prefer rg over grep.\n");
+    const first = row({ file: "r0.md", lineage: "a-intel.r0.prefer-rg" });
+    const again = row({ file: "r25.md", lineage: "a-intel.r25.prefer-rg" });
+    apiPostOrThrow.mockImplementation(async (path, body) => {
+      if (path === "context/steering/import/commit") {
+        return {
+          pullRequest: { number: 8, url: "https://github.com/a-intel/steering/pull/8", branch: "steering/import-2026-10-01", headSha: "h" },
+          paths: [],
+          records: 1,
+          policies: 0,
+          skipped: 1,
+        };
+      }
+      const docs = (body as { documents: { filename: string }[] }).documents;
+      // Each call compares only its own files, so neither marks the other.
+      return { files: [], records: docs[0]?.filename === "r0.md" ? [first] : [again], policies: [] };
+    });
+    const paths = Array.from({ length: 26 }, (_, i) => `r${i}.md`);
+
+    const preview = captureWriter();
+    await handleMemoryImport(paths, {}, preview.writer);
+    expect(preview.output()).toContain("duplicate of a-intel.r0.prefer-rg");
+
+    apiPostOrThrow.mockClear();
+    const committed = captureWriter();
+    await handleMemoryImport(paths, { yes: true }, committed.writer);
+    const commit = apiPostOrThrow.mock.calls.find(([path]) => path === "context/steering/import/commit");
+    expect(commit?.[1]).toEqual({
+      records: [
+        first,
+        {
+          ...again,
+          action: "skip",
+          duplicate: { lineage: "a-intel.r0.prefer-rg", path: null, published: false },
+        },
+      ],
+      policies: [],
+    });
+  });
+
+  it("refuses --yes when the rows marked add are more than one steering PR holds (negative)", async () => {
+    readFile.mockResolvedValue("# rules\n");
+    const many = Array.from({ length: 300 }, (_, i) =>
+      row({ lineage: `a-intel.rules.tool-${i}`, statement: `Use tool ${i}.` }),
+    );
+    apiPostOrThrow.mockResolvedValue({ files: [parsedFile], records: many, policies: [] });
+    const captured = captureWriter();
+    await expect(
+      handleMemoryImport(["rules.md"], { yes: true }, captured.writer),
+    ).rejects.toThrow(
+      "The import marks 300 records and policy files add, and one steering PR holds at most 299 files. Mark 1 of them skip, or import the files in smaller sets.",
+    );
+    expect(apiPostOrThrow).toHaveBeenCalledTimes(1);
   });
 
   it("--yes with no record marked add fails instead of committing (negative)", async () => {

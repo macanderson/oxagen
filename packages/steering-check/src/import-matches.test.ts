@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { markMatches, type MatchedRow, type PublishedRecord } from "./matches";
+import {
+  markImportMatches as markMatches,
+  type ImportMatchRow as MatchedRow,
+  type ImportPublishedRecord as PublishedRecord,
+} from "./import-matches";
 
 function row(lineage: string, statement: string, over: Partial<MatchedRow> = {}): MatchedRow {
   return {
@@ -29,7 +33,7 @@ function published(
   };
 }
 
-describe("markMatches", () => {
+describe("markImportMatches", () => {
   it("names the published record a row says again", () => {
     const rows = [row("a-intel.claude.no-push", "Never push to main.")];
     markMatches(rows, [published("a-intel.platform.no-push-to-main", "never push to MAIN")]);

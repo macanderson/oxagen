@@ -11,6 +11,7 @@
 import { z } from "zod";
 import { CONTEXT_RECORD_LABEL_MAX } from "../context-record-label";
 import { lineageSchema } from "../steering-repo/common";
+import { STEERING_PR_MAX_FILES } from "../steering-repo/names";
 import { recordEffectSchema } from "../steering-repo/record-effect";
 import {
   forceAllowed,
@@ -28,6 +29,46 @@ export const MARKDOWN_IMPORT_STATEMENTS_MAX = 50;
 /** The most rows one commit takes: 25 files of 50 statements. */
 export const MARKDOWN_IMPORT_ROWS_MAX =
   MARKDOWN_IMPORT_FILES_MAX * MARKDOWN_IMPORT_STATEMENTS_MAX;
+
+/**
+ * The files a commit of these rows writes: one per record and one per policy
+ * marked add. One steering PR holds at most STEERING_PR_MAX_FILES of them.
+ */
+export function markdownImportFileCount(rows: {
+  records: readonly { action: "add" | "skip" | null }[];
+  policies: readonly { action: "add" | "skip" }[];
+}): number {
+  return (
+    rows.records.filter((row) => row.action === "add").length +
+    rows.policies.filter((policy) => policy.action === "add").length
+  );
+}
+
+/** Why rows that write `count` files cannot be one steering PR, or null when they can. */
+export function markdownImportTooManyFiles(count: number): string | null {
+  if (count <= STEERING_PR_MAX_FILES) return null;
+  return `The import marks ${count} records and policy files add, and one steering PR holds at most ${STEERING_PR_MAX_FILES} files. Mark ${count - STEERING_PR_MAX_FILES} of them skip, or import the files in smaller sets.`;
+}
+
+/** How many files the rows marked add would put in the steering PR, against the limit. */
+export const markdownImportPullRequestFilesSchema = z
+  .object({
+    count: z
+      .number()
+      .int()
+      .nonnegative()
+      .describe("Files the rows marked add would put in the steering PR"),
+    max: z
+      .number()
+      .int()
+      .positive()
+      .describe("The most files one steering PR holds"),
+    message: z
+      .string()
+      .nullable()
+      .describe("What to do when the count is over the limit, or null when it fits"),
+  })
+  .strict();
 
 /**
  * Where a file goes. `records` splits it into steering records, `policies`

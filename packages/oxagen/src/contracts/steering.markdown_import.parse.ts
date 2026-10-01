@@ -5,6 +5,7 @@ import {
   markdownImportDocumentSchema,
   markdownImportFileSchema,
   markdownImportPolicySchema,
+  markdownImportPullRequestFilesSchema,
   markdownImportRecordSchema,
 } from "./steering.markdown_import.shared";
 
@@ -27,6 +28,8 @@ import {
  *   other statements with the steering check's conflicts test. A duplicate
  *   defaults to skip and names the record it matches. A conflict waits for a
  *   person's choice.
+ * - `pullRequestFiles` counts the rows marked add against the 299 files one
+ *   steering PR holds, and says what to do when the import is over.
  *
  * It writes nothing. commit_markdown_import takes the rows back.
  */
@@ -67,6 +70,9 @@ export const steeringMarkdownImportParse = registerCapability({
       policies: z
         .array(markdownImportPolicySchema)
         .describe("The Cedar policy files proposed, one per file"),
+      pullRequestFiles: markdownImportPullRequestFilesSchema.describe(
+        "The files the rows marked add would put in one steering PR, and a message when that is more than one PR holds",
+      ),
     })
     .strict(),
 });

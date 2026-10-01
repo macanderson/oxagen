@@ -21,7 +21,13 @@
  */
 import { readFile } from "node:fs/promises";
 import { basename, isAbsolute, relative, sep } from "node:path";
-import type { MarkdownImportRecord } from "@oxagen/oxagen/contracts/steering.markdown_import.shared";
+import {
+  markdownImportFileCount,
+  markdownImportTooManyFiles,
+  type MarkdownImportRecord,
+} from "@oxagen/oxagen/contracts/steering.markdown_import.shared";
+import { STEERING_PR_MAX_FILES } from "@oxagen/oxagen/steering-repo/names";
+import { markImportMatches, type ImportMatchRow } from "@oxagen/steering-check";
 import { ApiError } from "../lib/api.js";
 import {
   listMemories,
@@ -527,6 +533,37 @@ export const MEMORY_IMPORT_CAPABILITIES = [
   "commit_markdown_import",
 ] as const;
 
+/**
+ * The rows of several parse calls, with the duplicates and conflicts between
+ * calls marked. A row keeps every mark its own call gave it. A row newly
+ * marked a duplicate is skipped, and one newly marked a conflict waits for a
+ * choice, as parse marks them.
+ */
+export function reconcileImportRows(
+  records: readonly MarkdownImportRecord[],
+): MarkdownImportRecord[] {
+  const rows: ImportMatchRow[] = records.map((row) => ({
+    lineage: row.lineage,
+    kind: row.kind,
+    effect: row.effect,
+    statement: row.statement,
+    path: null,
+    duplicate: row.duplicate,
+    conflict: row.conflict,
+  }));
+  markImportMatches(rows, []);
+  return records.map((row, index): MarkdownImportRecord => {
+    const marked = rows[index] as ImportMatchRow;
+    if (marked.duplicate === row.duplicate && marked.conflict === row.conflict) return row;
+    return {
+      ...row,
+      duplicate: marked.duplicate,
+      conflict: marked.conflict,
+      action: marked.conflict ? null : marked.duplicate ? "skip" : row.action,
+    };
+  });
+}
+
 /** The name a file is sent under: its path from here, or its base name when it lies outside. */
 function importFilename(path: string): string {
   const rel = relative(process.cwd(), path).split(sep).join("/");
@@ -544,7 +581,9 @@ function importFilename(path: string): string {
  * steering PR with every row marked add (commit_markdown_import). A row that
  * conflicts with a published record needs a person's choice, and the CLI has
  * no editor, so --yes leaves each one out and names it. Files go in calls of
- * 25.
+ * 25, and one pass over every call's rows marks the duplicates and conflicts
+ * between calls. An import that marks more than 299 records add does not fit
+ * one steering PR, so --yes refuses it.
  */
 export async function handleMemoryImport(
   files: string[],
@@ -581,26 +620,43 @@ export async function handleMemoryImport(
   }
 
   try {
-    const records: MarkdownImportRecord[] = [];
+    const parsedRows: MarkdownImportRecord[] = [];
     const read: { filename: string; error: string | null }[] = [];
     for (let i = 0; i < documents.length; i += MARKDOWN_IMPORT_FILES_PER_CALL) {
       const parsed = await parseMarkdownImport(
         documents.slice(i, i + MARKDOWN_IMPORT_FILES_PER_CALL),
       );
-      records.push(...parsed.records);
+      parsedRows.push(...parsed.records);
       read.push(...parsed.files);
     }
+    // Each call compared only its own files. One pass over every call's rows
+    // marks a duplicate or a conflict between files sent in different calls.
+    const records = reconcileImportRows(parsedRows);
+    const count = markdownImportFileCount({ records, policies: [] });
+    const tooMany = markdownImportTooManyFiles(count);
 
     if (!opts.yes) {
       if (opts.json) {
-        writer.write(JSON.stringify({ files: read, records }, null, 2));
+        writer.write(
+          JSON.stringify(
+            {
+              files: read,
+              records,
+              pullRequestFiles: { count, max: STEERING_PR_MAX_FILES, message: tooMany },
+            },
+            null,
+            2,
+          ),
+        );
         return;
       }
       writer.write(formatImportRows(records));
       for (const file of read) {
         if (file.error) writer.writeErr(`  ${file.filename}: ${file.error}`);
       }
-      if (records.length > 0) {
+      if (tooMany !== null) {
+        writer.writeErr(`  ${tooMany}`);
+      } else if (records.length > 0) {
         writer.write("\nRun again with --yes to open the steering PR.");
       }
       return;
@@ -618,6 +674,7 @@ export async function handleMemoryImport(
     if (!decided.some((row) => row.action === "add")) {
       fail("No record is marked add, so there is no steering PR to open.", writer);
     }
+    if (tooMany !== null) fail(tooMany, writer);
 
     const result = await commitMarkdownImport({ records: decided });
     if (opts.json) {

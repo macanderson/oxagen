@@ -111,7 +111,7 @@ oxagen memory import CLAUDE.md docs/conventions/*.md --yes   # open the steering
 
 The preview lists one row per statement: its kind, its force with the words that justify it, the file and line it came from, and any duplicate or conflict with a published record. A duplicate is marked skip.
 
-`--yes` opens one steering PR on `steering/import-<date>` with every row marked add. A row that conflicts with a published record is left out, and the command names it. Nothing steers an agent until the PR merges. The command calls `parse_markdown_import` and `commit_markdown_import`.
+The command sends files in calls of 25 and then compares the rows of every call, so a statement two calls both hold is marked a duplicate. `--yes` opens one steering PR on `steering/import-<date>` with every row marked add. A row that conflicts with a published record is left out, and the command names it. One steering PR holds at most 299 records, so `--yes` refuses an import that marks more add. Nothing steers an agent until the PR merges. The command calls `parse_markdown_import` and `commit_markdown_import`.
 
 ## How agents use memory
 
