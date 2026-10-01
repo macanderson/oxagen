@@ -666,6 +666,12 @@ function stripeLineToNeutral(
 export const MAX_INVOICE_LINES = 1000;
 
 /**
+ * The most pages of saved cards `listPaymentMethods` reads: 1,000 cards at
+ * 100 a page. A customer past that keeps the first 1,000.
+ */
+const MAX_PAYMENT_METHOD_PAGES = 10;
+
+/**
  * The prepaid order an invoice bills, from the metadata createPrepaidInvoice
  * wrote: `oxagen_kind: "prepaid_order"`, `prepaid_order_id`, and optionally
  * `assistant_spend_cap_cents` (`none` or digits). Null for any other invoice.
@@ -1168,11 +1174,25 @@ export class StripeProvider implements BillingProvider {
   async listPaymentMethods(
     customerId: string,
   ): Promise<BillingPaymentMethod[]> {
-    const res = await this.client().paymentMethods.list({
-      customer: customerId,
-      type: "card",
-    });
-    return res.data.map(stripePaymentMethodToNeutral);
+    // A list response is one page, and Stripe's default page is 10 cards
+    // (#4895). Ask for its maximum of 100 and follow `has_more` for at most
+    // MAX_PAYMENT_METHOD_PAGES pages.
+    const stripe = this.client();
+    const cards: Stripe.PaymentMethod[] = [];
+    let startingAfter: string | undefined;
+    for (let page = 0; page < MAX_PAYMENT_METHOD_PAGES; page += 1) {
+      const res = await stripe.paymentMethods.list({
+        customer: customerId,
+        type: "card",
+        limit: 100,
+        ...(startingAfter ? { starting_after: startingAfter } : {}),
+      });
+      cards.push(...res.data);
+      const last = res.data[res.data.length - 1];
+      if (!res.has_more || last === undefined) break;
+      startingAfter = last.id;
+    }
+    return cards.map(stripePaymentMethodToNeutral);
   }
 
   async getDefaultPaymentMethodId(customerId: string): Promise<string | null> {

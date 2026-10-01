@@ -849,6 +849,39 @@ describe("StripeProvider", () => {
       });
     });
 
+    // #4895: the list call took Stripe's default page of 10 cards and never
+    // read has_more, so an 11th saved card was missing.
+    it("follows has_more to read every saved card", async () => {
+      stripeMethods.paymentMethods.list.mockReset();
+      stripeMethods.paymentMethods.list
+        .mockResolvedValueOnce({
+          data: [
+            makeStripePaymentMethod({ id: "pm_a" }),
+            makeStripePaymentMethod({ id: "pm_b" }),
+          ],
+          has_more: true,
+        })
+        .mockResolvedValueOnce({
+          data: [makeStripePaymentMethod({ id: "pm_c" })],
+          has_more: false,
+        });
+
+      const methods = await provider.listPaymentMethods("cus_many");
+
+      expect(methods.map((m) => m.id)).toEqual(["pm_a", "pm_b", "pm_c"]);
+      expect(stripeMethods.paymentMethods.list).toHaveBeenNthCalledWith(1, {
+        customer: "cus_many",
+        type: "card",
+        limit: 100,
+      });
+      expect(stripeMethods.paymentMethods.list).toHaveBeenNthCalledWith(2, {
+        customer: "cus_many",
+        type: "card",
+        limit: 100,
+        starting_after: "pm_b",
+      });
+    });
+
     it("returns empty array when no payment methods", async () => {
       stripeMethods.paymentMethods.list.mockResolvedValue({ data: [] });
       const methods = await provider.listPaymentMethods("cus_test_002");
