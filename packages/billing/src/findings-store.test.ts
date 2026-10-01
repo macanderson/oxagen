@@ -20,35 +20,50 @@ vi.mock("@oxagen/telemetry", () => ({
 vi.mock("@oxagen/tenancy", () => ({
   runInTenantScope: vi.fn(),
 }));
+// The price book is read through the database, which this test never
+// reaches; a pass that prices frames gets an empty book.
+vi.mock("./price-book", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./price-book")>();
+  return { ...actual, loadPriceBookSlice: vi.fn(async () => []) };
+});
 // The real detectors run; the spy lets a test read the input a pass built.
 vi.mock("./findings", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./findings")>();
   return { ...actual, detectFindings: vi.fn(actual.detectFindings) };
 });
 
-import type { FrameRunRef } from "@oxagen/telemetry";
+import { readModelCallFrames, type FrameRunRef } from "@oxagen/telemetry";
 import { ZERO_TOKENS, type RunTotalsRecord } from "./cost-rollup";
 import {
   detectFindings,
+  findingFingerprint,
   type DetectInput,
+  type FindingClaim,
   type FindingDraft,
   type PricedRequestFrame,
   type RunCompaction,
   type RunFirstPrompt,
 } from "./findings";
 import {
+  claimBackfill,
+  CLAIMING_KINDS,
+  FILE_CHANGE_READ_MAX,
+  fileChangeTimesOf,
   frameReads,
   frameSources,
   planFrameReads,
   pricedFrames,
+  readFrameRows,
+  readPricedFrames,
   runFindingsPass,
   tachoRoots,
   TOOL_CALL_READ_MAX,
   toolWindowStart,
   toObservations,
   undecidedDrafts,
+  type FrameRead,
 } from "./findings-store";
-import type { PriceEntry } from "./price-book";
+import { loadPriceBookSlice, type PriceEntry } from "./price-book";
 import type { OutcomeRow } from "./run-pr-outcomes";
 
 const SCOPE = {
@@ -73,6 +88,8 @@ function row(
     outputDigest: "out",
     isMutating: true,
     resultTokens: 5_000,
+    status: "ok",
+    errorClass: null,
     ...over,
   };
 }
@@ -172,6 +189,21 @@ describe("toObservations", () => {
     expect(out!.atMicros).toBe(
       Date.parse("2026-09-10T10:00:00Z") * 1_000 + 500_500,
     );
+  });
+
+  it("carries each call's status and the error class of a failed call", () => {
+    const [ok, failed] = toObservations(
+      [
+        row({ seq: 1 }),
+        row({ seq: 2, status: "error", errorClass: "Exit code 1" }),
+      ],
+      new Map([[SESSION, RUN_ID]]),
+    );
+    expect([ok!.status, ok!.errorClass]).toEqual(["ok", null]);
+    expect([failed!.status, failed!.errorClass]).toEqual([
+      "error",
+      "Exit code 1",
+    ]);
   });
 
   it("names a subagent's chain and leaves the root's own chain unnamed (#4001)", () => {
@@ -764,7 +796,13 @@ describe("runFindingsPass", () => {
       async () => new Map([[RUN_ID, [compaction]]]),
     );
     const readOutcomes = vi.fn(async () => outcomes);
-    const readFrames = vi.fn(async () => new Map());
+    const readFrames = vi.fn(
+      async () =>
+        new Map<string, PricedRequestFrame[]>([
+          [LEDGER_RUN, []],
+          [RUN_ID, []],
+        ]),
+    );
     await runFindingsPass(SCOPE, {
       now: () => NOW,
       readRuns: async () => [pricedRun(), ledger],
@@ -824,5 +862,443 @@ describe("runFindingsPass", () => {
       }),
     ).rejects.toThrow("clickhouse down");
     expect(write).not.toHaveBeenCalled();
+  });
+});
+
+describe("fileChangeTimesOf", () => {
+  const OTHER = "00000000-0000-4000-8000-0000000000bb";
+  const change = (at: string, rootSessionUuid = SESSION) => ({
+    rootSessionUuid,
+    sessionUuid: rootSessionUuid,
+    at,
+    seq: 1,
+  });
+
+  it("gives each run of the window its change times in microseconds, ascending, read from the window's start", () => {
+    const out = fileChangeTimesOf(
+      [
+        change("2026-09-10T10:00:02.000500Z"),
+        change("2026-09-10T10:00:01.000000Z"),
+        change("2026-09-10T10:00:01.000000Z", OTHER),
+      ],
+      new Map([[SESSION, RUN_ID]]),
+      WINDOW_START,
+      10,
+    );
+    expect(out.from).toEqual(WINDOW_START);
+    expect(out.byRun).toEqual(
+      new Map([
+        [
+          RUN_ID,
+          [
+            Date.parse("2026-09-10T10:00:01Z") * 1_000,
+            Date.parse("2026-09-10T10:00:02Z") * 1_000 + 500,
+          ],
+        ],
+      ]),
+    );
+  });
+
+  it("starts the read at the oldest change read when the read hit its cap", () => {
+    const out = fileChangeTimesOf(
+      [change("2026-09-12T00:00:00.000Z"), change("2026-09-11T00:00:00.000Z")],
+      new Map([[SESSION, RUN_ID]]),
+      WINDOW_START,
+      2,
+    );
+    expect(out.from).toEqual(new Date("2026-09-11T00:00:00.000Z"));
+  });
+});
+
+/**
+ * The deps a pass over RUN_ID needs, with its tool calls and frames; null
+ * frames leave the run's frames unread.
+ */
+function passDeps(
+  calls: ToolCallObservationRow[],
+  frames: PricedRequestFrame[] | null,
+  write: (
+    s: unknown,
+    at: Date,
+    decided: ReadonlyMap<string, Date>,
+    drafts: readonly FindingDraft[],
+  ) => Promise<number>,
+) {
+  return {
+    now: () => NOW,
+    readRuns: async () => [pricedRun()],
+    readRootSessions: async () => new Map([[SESSION, RUN_ID]]),
+    readToolCalls: async () => calls,
+    readFrames: vi.fn(
+      async () =>
+        new Map<string, PricedRequestFrame[]>(
+          frames === null ? [] : [[RUN_ID, frames]],
+        ),
+    ),
+    readDecisions: async () => new Map<string, Date>(),
+    write,
+  };
+}
+
+describe("a call the hook recorded no input for (#4506)", () => {
+  const original = row({ seq: 1, at: "2026-09-10T10:00:01.000Z" });
+  const repeat = row({ seq: 2, at: "2026-09-10T10:00:02.000Z" });
+  const noInput = row({
+    seq: 3,
+    at: "2026-09-10T10:00:02.100Z",
+    inputDigest: "",
+    outputDigest: "other",
+  });
+  const frames = [
+    pricedFrame("2026-09-10T10:00:00.500Z", 15_000n),
+    pricedFrame("2026-09-10T10:00:01.500Z", 15_000n),
+  ];
+
+  it("keeps a request with a repeat and a call with no input digest out of every repeat finding, from the store's rows", async () => {
+    const write = vi.fn(
+      async (_s, _at, _decided, drafts: readonly FindingDraft[]) =>
+        drafts.length,
+    );
+    // Without the call, the second request only repeated, and it counts.
+    await runFindingsPass(SCOPE, passDeps([original, repeat], frames, write));
+    expect(write.mock.calls[0]?.[3].map((d) => d.kind)).toEqual([
+      "repeated_shell_commands",
+    ]);
+
+    await runFindingsPass(
+      SCOPE,
+      passDeps([original, repeat, noInput], frames, write),
+    );
+    const drafts = write.mock.calls[1]?.[3] ?? [];
+    expect(
+      drafts.filter(
+        (d) =>
+          d.kind === "duplicate_tool_calls" ||
+          d.kind === "repeated_shell_commands",
+      ),
+    ).toEqual([]);
+    expect(drafts.flatMap((d) => d.claims ?? [])).toEqual([]);
+  });
+
+  it("prices a large result from such a call as an unpaged result, since it is not a repeat", async () => {
+    const write = vi.fn(
+      async (_s, _at, _decided, drafts: readonly FindingDraft[]) =>
+        drafts.length,
+    );
+    const large = row({ inputDigest: "", resultTokens: 25_000 });
+    // The run's frames were not read, so the result is priced once at the
+    // run's input price, 3 micros a token, against a 4,000-token page.
+    await runFindingsPass(SCOPE, passDeps([large], null, write));
+    expect(write.mock.calls[0]?.[3]).toEqual([
+      expect.objectContaining({
+        kind: "unpaged_results",
+        subject: "Bash",
+        citedRuns: [RUN_ID],
+        savingMicros: 63_000n,
+      }),
+    ]);
+  });
+});
+
+describe("retry loops in a pass", () => {
+  const failing = (seq: number, at: string) =>
+    row({
+      seq,
+      at,
+      outputDigest: "",
+      resultTokens: null,
+      status: "error",
+      errorClass: "Exit code 1",
+    });
+  const calls = [
+    failing(1, "2026-09-10T10:00:01.000Z"),
+    failing(2, "2026-09-10T10:00:02.000Z"),
+    failing(3, "2026-09-10T10:00:03.000Z"),
+  ];
+  const frames = [
+    pricedFrame("2026-09-10T10:00:00.500Z", 15_000n),
+    pricedFrame("2026-09-10T10:00:01.500Z", 15_000n),
+    pricedFrame("2026-09-10T10:00:02.500Z", 15_000n),
+  ];
+
+  it("reads the window's file changes, reads the run's frames for its retries, and prices the requests that only retried", async () => {
+    const write = vi.fn(
+      async (_s, _at, _decided, drafts: readonly FindingDraft[]) =>
+        drafts.length,
+    );
+    const readFileChangeRows = vi.fn(async () => []);
+    const deps = { ...passDeps(calls, frames, write), readFileChangeRows };
+    await runFindingsPass(SCOPE, deps);
+    expect(readFileChangeRows).toHaveBeenCalledWith({
+      ...SCOPE,
+      from: WINDOW_START,
+      to: NOW,
+      limit: FILE_CHANGE_READ_MAX,
+    });
+    expect(deps.readFrames).toHaveBeenCalledWith(SCOPE, [
+      { runId: RUN_ID, ref: tachoRef(SESSION) },
+    ]);
+    const drafts = write.mock.calls[0]?.[3] ?? [];
+    expect(drafts).toEqual([
+      expect.objectContaining({
+        kind: "retry_loops",
+        level: "agent",
+        subject: "acme.core.cc",
+        savingMicros: 30_000n,
+      }),
+    ]);
+    expect(drafts[0]?.claims?.map((c) => [c.detector, c.frameKey])).toEqual([
+      [1, frames[1]!.key],
+      [1, frames[2]!.key],
+    ]);
+  });
+
+  it("finds no loop across a file change between two of the calls", async () => {
+    const write = vi.fn(
+      async (_s, _at, _decided, drafts: readonly FindingDraft[]) =>
+        drafts.length,
+    );
+    const readFileChangeRows = vi.fn(async () => [
+      {
+        rootSessionUuid: SESSION,
+        sessionUuid: SESSION,
+        at: "2026-09-10T10:00:02.500000Z",
+        seq: 9,
+      },
+    ]);
+    await runFindingsPass(SCOPE, {
+      ...passDeps(calls, frames, write),
+      readFileChangeRows,
+    });
+    expect(write.mock.calls[0]?.[3]).toEqual([]);
+  });
+});
+
+describe("readFrameRows", () => {
+  const runs: FrameRead[] = ["a", "b", "c", "d", "e"].map((runId) => ({
+    runId,
+    ref: tachoRef(SESSION),
+  }));
+  const sizes: Record<string, number> = { a: 3, b: 4, c: 5, d: 1, e: 1 };
+  const read = (r: FrameRead) =>
+    Promise.resolve(Array.from({ length: sizes[r.runId]! }, (_, i) => i));
+
+  it("holds at most the cap, and drops the first run that would pass it with every run after it", async () => {
+    const reader = vi.fn(read);
+    const { rows, peak } = await readFrameRows(runs, reader, 10, 2);
+    expect([...rows.keys()]).toEqual(["a", "b"]);
+    expect(peak).toBe(7);
+    expect(peak).toBeLessThanOrEqual(10);
+    // The batch that passed the cap was read, and no batch after it.
+    expect(reader.mock.calls.map(([r]) => r.runId)).toEqual([
+      "a",
+      "b",
+      "c",
+      "d",
+    ]);
+  });
+
+  it("reads every run while their frames fit", async () => {
+    const { rows, peak } = await readFrameRows(runs, read, 14, 2);
+    expect([...rows.keys()]).toEqual(["a", "b", "c", "d", "e"]);
+    expect(peak).toBe(14);
+  });
+});
+
+describe("a pass with more frames than it may hold", () => {
+  const OTHER = "00000000-0000-4000-8000-0000000000bb";
+  const OTHER_RUN = "tse_0000000000000000000002";
+
+  it("prices the runs that fit, counts the rest as capped, and still writes its findings", async () => {
+    vi.mocked(loadPriceBookSlice).mockClear();
+    vi.mocked(readModelCallFrames).mockImplementation(async ({ run }) =>
+      run.kind === "tacho" && run.rootSessionUuid === SESSION
+        ? [
+            frameRow({ at: "2026-09-10T10:00:00.500000Z" }),
+            frameRow({ at: "2026-09-10T10:00:01.500000Z" }),
+          ]
+        : Array.from({ length: 5 }, (_, i) =>
+            frameRow({
+              at: `2026-09-10T11:00:0${i}.000000Z`,
+              model: "claude-opus-5",
+            }),
+          ),
+    );
+    const write = vi.fn(
+      async (_s, _at, _decided, drafts: readonly FindingDraft[]) =>
+        drafts.length,
+    );
+    const read = (at: string, rootSessionUuid: string) =>
+      row({
+        at,
+        rootSessionUuid,
+        sessionUuid: rootSessionUuid,
+        tool: "Read",
+        isMutating: false,
+      });
+    await runFindingsPass(SCOPE, {
+      now: () => NOW,
+      readRuns: async () => [
+        pricedRun(),
+        { ...planRun(OTHER_RUN, 3_000n), agentKey: "acme.core.other" },
+      ],
+      readRootSessions: async () =>
+        new Map([
+          [SESSION, RUN_ID],
+          [OTHER, OTHER_RUN],
+        ]),
+      readToolCalls: async () => [
+        row({ seq: 1, at: "2026-09-10T10:00:01.000Z" }),
+        row({ seq: 2, at: "2026-09-10T10:00:02.000Z" }),
+        read("2026-09-10T11:00:01.500Z", OTHER),
+        read("2026-09-10T11:00:02.500Z", OTHER),
+      ],
+      // The first run's 2 frames fit a cap of 3, and the second's 5 do not.
+      readFrames: (scope, reads) => readPricedFrames(scope, reads, 3),
+      readDecisions: async () => new Map(),
+      write,
+    });
+    expect(readModelCallFrames).toHaveBeenCalledTimes(2);
+    // Only the frames the pass kept are priced.
+    expect(loadPriceBookSlice).toHaveBeenCalledWith({
+      orgId: SCOPE.orgId,
+      models: ["claude-sonnet-5"],
+      from: new Date("2026-09-10T10:00:00.500Z"),
+      to: new Date("2026-09-10T10:00:01.500Z"),
+    });
+    const seen: DetectInput | undefined =
+      vi.mocked(detectFindings).mock.calls.at(-1)?.[0];
+    expect([...(seen?.frames?.keys() ?? [])]).toEqual([RUN_ID]);
+    expect(seen?.frameCoverage).toEqual({
+      runs: 2,
+      read: 1,
+      capped: 1,
+      unmatched: 0,
+    });
+    // The run that fit has its repeat priced at its request's reported cost.
+    expect(write.mock.calls[0]?.[3]).toEqual([
+      expect.objectContaining({
+        kind: "repeated_shell_commands",
+        citedRuns: [RUN_ID],
+        savingMicros: 15_000n,
+      }),
+    ]);
+  });
+});
+
+describe("claims for applied findings with none (#4506)", () => {
+  const A = "tse_a";
+  const B = "tse_b";
+  const claim = (runId: string, frameKey: string): FindingClaim => ({
+    detector: 1,
+    runId,
+    frameKey,
+    frameAt: new Date("2026-09-10T10:00:01.500Z"),
+    operatorKey: null,
+    costMicros: 15_000n,
+  });
+
+  it("names the kinds whose findings claim frames", () => {
+    expect([...CLAIMING_KINDS]).toEqual([
+      "spin_loops",
+      "retry_loops",
+      "repeated_shell_commands",
+      "duplicate_tool_calls",
+      "recurring_runs",
+      "spend_with_no_outcome",
+    ]);
+  });
+
+  it("gives an applied finding the replayed claims in the runs it cited, and skips one the replay gives none", () => {
+    const out = claimBackfill(
+      [
+        {
+          id: "f1",
+          fingerprint: "spin_loops|agent|x",
+          citedRuns: [A],
+          currency: "USD",
+        },
+        {
+          id: "f2",
+          fingerprint: "spin_loops|agent|y",
+          citedRuns: [A],
+          currency: "USD",
+        },
+      ],
+      new Map([
+        ["spin_loops|agent|x", [claim(A, "k1"), claim(B, "k2")]],
+        ["spin_loops|agent|y", [claim(B, "k3")]],
+      ]),
+    );
+    expect(out).toEqual([
+      { findingId: "f1", currency: "USD", claims: [claim(A, "k1")] },
+    ]);
+  });
+
+  it("replays the pass for an applied finding with no claim rows, and stores the frames it priced in the runs it cited", async () => {
+    const fingerprint = findingFingerprint(
+      "repeated_shell_commands",
+      "tool",
+      "Bash",
+    );
+    const frames = [
+      pricedFrame("2026-09-10T10:00:00.500Z", 15_000n),
+      pricedFrame("2026-09-10T10:00:01.500Z", 15_000n),
+    ];
+    const write = vi.fn(
+      async (_s, _at, _decided, drafts: readonly FindingDraft[]) =>
+        drafts.length,
+    );
+    const readUnclaimedApplied = vi.fn(async () => [
+      { id: "fnd-applied", fingerprint, citedRuns: [RUN_ID], currency: "USD" },
+    ]);
+    const writeClaimBackfill = vi.fn(async () => undefined);
+    await runFindingsPass(SCOPE, {
+      ...passDeps(
+        [
+          row({ seq: 1, at: "2026-09-10T10:00:01.000Z" }),
+          row({ seq: 2, at: "2026-09-10T10:00:02.000Z" }),
+        ],
+        frames,
+        write,
+      ),
+      // Applied after the run started, so the pass cites the run no more.
+      readDecisions: async () =>
+        new Map([[fingerprint, new Date("2026-09-12T00:00:00.000Z")]]),
+      readUnclaimedApplied,
+      writeClaimBackfill,
+    });
+    expect(write.mock.calls[0]?.[3]).toEqual([]);
+    expect(readUnclaimedApplied).toHaveBeenCalledWith(
+      SCOPE,
+      CLAIMING_KINDS,
+      WINDOW_START,
+    );
+    expect(writeClaimBackfill).toHaveBeenCalledWith(SCOPE, [
+      {
+        findingId: "fnd-applied",
+        currency: "USD",
+        claims: [
+          {
+            detector: 1,
+            runId: RUN_ID,
+            frameKey: frames[1]!.key,
+            frameAt: frames[1]!.at,
+            operatorKey: null,
+            costMicros: 15_000n,
+          },
+        ],
+      },
+    ]);
+  });
+
+  it("writes no backfill when every applied finding holds its claims", async () => {
+    const writeClaimBackfill = vi.fn(async () => undefined);
+    await runFindingsPass(SCOPE, {
+      ...passDeps([], [], async () => 0),
+      readUnclaimedApplied: async () => [],
+      writeClaimBackfill,
+    });
+    expect(writeClaimBackfill).not.toHaveBeenCalled();
   });
 });

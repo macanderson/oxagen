@@ -52,7 +52,8 @@
         "model_class_fit": "Model class fit",
         "repeated_instructions": "Repeated instructions",
         "recurring_runs": "Recurring runs",
-        "spend_with_no_outcome": "Spend with no outcome"
+        "spend_with_no_outcome": "Spend with no outcome",
+        "retry_loops": "Retry loops"
       },
       "kindDefinition": {
         "cache_writes_never_read": "A run wrote a prompt cache that no later request read.",
@@ -66,7 +67,8 @@
         "model_class_fit": "A run that changed no file is repriced on a smaller model class as an estimate.",
         "repeated_instructions": "The same instruction reached 3 or more runs as prompt text instead of as a steering record.",
         "recurring_runs": "A run started with the same prompt as 4 or more other runs, made no mutating call, and changed no file.",
-        "spend_with_no_outcome": "A run ended with nothing kept because its PR closed unmerged, its change was reverted, or it stopped mid-step."
+        "spend_with_no_outcome": "A run ended with nothing kept because its PR closed unmerged, its change was reverted, or it stopped mid-step.",
+        "retry_loops": "Every tool call in the request retried a call that had already failed with the same error. The call failed 3 or more times in a row with no write or file change between the tries."
       },
       "level": {
         "tool": "tool",
@@ -229,7 +231,11 @@
         "idleWhileParked": "idle while parked",
         "haltedEarly": "halted early"
       },
-      "causesMissing": "The waste record reads one cause today. The six causes the design meters are not recorded yet.",
+      "causesMissing": "Retry loops come from the open findings, and the waste record reads one cause. The five other causes the design meters are not recorded yet.",
+      "retryLoopsWhy": "a call failed with the same error 3 or more times in a row (open findings, last 30 days)",
+      "retryLoopsNone": "No retry loop found",
+      "retryLoopsFindings": "{findings} findings",
+      "retryLoopsOpen": "Open the findings",
       "runs": "Runs with waste",
       "note": "Wasted spend is read from frames. Work a person accepted is excluded.",
       "runAmountMissing": "What each run wasted, its task and its steps are not on the waste record yet.",

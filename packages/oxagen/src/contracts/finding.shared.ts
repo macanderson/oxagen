@@ -26,6 +26,7 @@ const findingKindSchema = z.enum([
   "repeated_instructions",
   "recurring_runs",
   "spend_with_no_outcome",
+  "retry_loops",
 ]);
 
 const findingLevelSchema = z.enum(["tool", "agent", "operator", "workspace"]);
