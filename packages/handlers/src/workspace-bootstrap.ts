@@ -11,7 +11,7 @@
 //     steering repo and binds it with role `steering`. Code repositories are
 //     linked afterwards.
 //   - `create_org` does the same for its first workspace, and starts one more
-//     job for the organization repository `<org>/oxagen`.
+//     job for the organization repository `<org>/oxagen-config`.
 //
 // A caller that needs a binding writes it on its own transaction, after this
 // returns.

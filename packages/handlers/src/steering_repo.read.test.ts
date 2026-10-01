@@ -18,6 +18,7 @@ import {
   type SteeringRepoState,
 } from "./steering_repo.provision";
 import type { RepoHealthDetail } from "./steering-repo/health";
+import type { LegacySteeringSource } from "./steering-repo/legacy-source";
 import { steeringRepositoryKey } from "./steering-repo/publisher";
 import { makeCTX, TEST_CTX } from "./test-utils/fixtures";
 
@@ -64,6 +65,7 @@ function deps(over: Partial<SteeringRepoReadDeps> = {}) {
     readState: vi.fn(async () => READY as SteeringRepoState | null),
     readPublishedVersion: vi.fn(async () => 3 as number | null),
     readHealth: vi.fn(async () => detail() as RepoHealthDetail | null),
+    readLegacySource: vi.fn(async () => null as LegacySteeringSource | null),
     ...over,
   };
 }
@@ -111,6 +113,8 @@ describe("get_steering_repo", () => {
           changedAt: "2026-09-27T09:00:00.000Z",
         },
       ],
+      legacySource: null,
+      connectionChoices: [],
     });
     expect(steeringRepoGet.output.parse(out)).toEqual(out);
     expect(d.readState).toHaveBeenCalledWith({ orgId: "org_1", workspaceId: "ws_1" });
@@ -120,13 +124,65 @@ describe("get_steering_repo", () => {
     );
   });
 
-  it("answers provisioning with nulls when the workspace holds no state", async () => {
+  it("answers not_started with nulls when the workspace holds no state", async () => {
     const d = deps({ readState: vi.fn(async () => null) });
     const out = await read(d);
     expect(out).toEqual(NO_STEERING_REPO);
-    expect(out.status).toBe("provisioning");
+    expect(out.status).toBe("not_started");
     expect(steeringRepoGet.output.parse(out)).toEqual(out);
     expect(d.readHealth).not.toHaveBeenCalled();
+  });
+
+  it("names the code repository that still steers a workspace with no state", async () => {
+    const out = await read(
+      deps({
+        readState: vi.fn(async () => null),
+        readLegacySource: vi.fn(async () => ({
+          provider: "github",
+          full_name: "acme/agent-harness",
+        })),
+      }),
+    );
+    expect(out).toEqual({
+      ...NO_STEERING_REPO,
+      legacySource: {
+        fullName: "acme/agent-harness",
+        url: "https://github.com/acme/agent-harness",
+        provider: "github",
+      },
+    });
+    expect(steeringRepoGet.output.parse(out)).toEqual(out);
+  });
+
+  it("lists the connections a blocked setup chooses between", async () => {
+    const out = await read(
+      deps({
+        readState: vi.fn(async () => ({
+          ...initialSteeringRepoState(new Date(0)),
+          status: "blocked" as const,
+          failed_step: "pick_connection" as const,
+          error: { code: "choose_connection", message: "Choose one." },
+          connection_choices: [
+            {
+              provider: "github" as const,
+              installation_id: 11,
+              account_login: "acme",
+            },
+            {
+              provider: "gitlab" as const,
+              group_id: 22,
+              group_path: "acme/platform",
+            },
+          ],
+        })),
+        readHealth: vi.fn(async () => null),
+      }),
+    );
+    expect(out.connectionChoices).toEqual([
+      { provider: "github", id: 11, name: "acme" },
+      { provider: "gitlab", id: 22, name: "acme/platform" },
+    ]);
+    expect(steeringRepoGet.output.parse(out)).toEqual(out);
   });
 
   it("answers health null and no differences before the first health read", async () => {

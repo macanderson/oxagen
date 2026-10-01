@@ -23,7 +23,7 @@
 // selected pull request whose every check passed, where Merge pull request
 // does. A pull request that cannot merge never takes the gold.
 import { useTranslations } from "next-intl";
-import { useCallback, useEffect, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useState } from "react";
 import type {
   InstallationRepositories,
   RepositoryChanges,
@@ -80,6 +80,7 @@ export function Repositories({
   view,
   viewer,
   returning = false,
+  steering = null,
 }: {
   org: string;
   ws: string;
@@ -89,6 +90,13 @@ export function Repositories({
   viewer: RepositoriesViewer;
   /** The person is back from GitHub's install flow; the wizard reopens on its first step. */
   returning?: boolean;
+  /**
+   * The workspace's steering repo, which the page renders on the server
+   * (#4875). It sits under the header, and above the body while the list
+   * loads, fails, or is empty, since a workspace whose steering repo is being
+   * set up has no repository bound yet.
+   */
+  steering?: ReactNode;
 }) {
   const t = useTranslations("repositories.page");
   const navigate = useNavigate();
@@ -324,6 +332,7 @@ export function Repositories({
             </button>
           }
         />
+        {steering}
         <RouteTabs
           label={t("tabs.label")}
           tabs={[
@@ -428,6 +437,7 @@ export function Repositories({
       data-state={pageState(list)}
       className="flex flex-col gap-4"
     >
+      {list.kind === "ready" && bound.length > 0 ? null : steering}
       {body}
       <RepositoryDialog
         org={org}

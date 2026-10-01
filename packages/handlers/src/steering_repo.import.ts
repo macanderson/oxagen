@@ -28,12 +28,21 @@ export const importWorkspaceSteeringHandler: CapabilityHandler<
   const actorUserId = await resolveActingUserId(ctx);
   if (!actorUserId)
     throw new HandlerError({ code: "forbidden", reason: "no_principal" });
+  const scope = { orgId: ctx.orgId, workspaceId: ctx.workspaceId };
+  // A setup that stopped with choose_connection takes the person's pick
+  // before the run provisions (#4875).
+  if (input.connection) {
+    const { applyWorkspaceConnectionPick } = await import(
+      "./steering-repo/connection-pick"
+    );
+    await applyWorkspaceConnectionPick(scope, input.connection);
+  }
   const [{ runSteeringImport }, { steeringImportDeps }] = await Promise.all([
     import("./steering-repo/import-run"),
     import("./steering-repo/import-deps"),
   ]);
   return runSteeringImport(
-    { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+    scope,
     {
       ...(input.ruleKinds ? { ruleKinds: input.ruleKinds } : {}),
       ...(input.constraintEffects

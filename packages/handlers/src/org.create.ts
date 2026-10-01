@@ -210,7 +210,7 @@ export const organizationCreateHandler: CapabilityHandler<
       });
 
       // The first state of both steering repos (#4450): the organization's
-      // `<org>/oxagen` and the first workspace's own. The provision jobs start
+      // `<org>/oxagen-config` and the first workspace's own. The provision jobs start
       // after this commits and record their progress here. With no first
       // workspace, only the organization's repo starts. `create_workspace`
       // starts the workspace's own when it makes one.
