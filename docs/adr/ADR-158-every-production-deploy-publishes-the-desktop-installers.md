@@ -33,3 +33,12 @@ The downloads host serves `desktop/<version>/` immutably for a year, and `publis
 - A version published before this change has no `latest/` copies. `node apps/desktop/scripts/publish-downloads.mjs --page-only --version 2.1.1`, run with the deploy role, writes them. Otherwise the first deploy build after this change writes them.
 - A build's page links the release index instead of a notes page, and it offers no bare-binary release, because a build has neither.
 - The build number runs out at 65535 commits after a release. At the current rate that is years away, and `buildVersion` fails the plan with "cut a release" before an installer could carry a wrong number.
+
+## Amendment: a deploy builds the installers only when it changes them (#4918)
+
+Mac decided on 2026-10-01, when the repository went private and every hosted runner minute began to cost money, to build the installers once a day and when their sources change. In the week of 2026-09-23 decision 1 ran 105 desktop builds: 2,487 macOS, 1,092 Windows, and 1,919 Linux minutes.
+
+- `publish-installers` still runs after every deploy and keeps the forward-only rule, the lock, and the record. It dispatches `desktop.yml` only when the push changes `apps/desktop`, the sidecar sources (`packages/tacho` and `apps/cli`, from `apps/desktop/scripts/sidecars.mjs`), `tools/sea`, or `desktop.yml`. A push that dispatches nothing records nothing.
+- `desktop.yml` runs on a daily schedule. Its `plan` job takes the oldest commit recorded live for the five `deploy-node` services, and builds it unless the `deploy:desktop` record is that commit or a newer one. Its `publish` job records the commit it published. The daily build publishes the same way a deploy build does, under `desktop/<version>/`, and moves `latest/` only forward.
+- A change to a package the sidecars import (`packages/database`, `packages/config`, and the rest of their dependency closure), or a sidecar change that reached main in a push the pipeline superseded, reaches the downloads host within a day rather than with its deploy.
+- `latest/` trails production by up to a day, where it trailed by one build before.

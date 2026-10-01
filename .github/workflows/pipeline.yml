@@ -1838,8 +1838,18 @@ jobs:
 
   publish-installers:
     name: publish the desktop installers
-    # Every production deploy publishes the desktop app built from the same
-    # commit, for every platform, to https://downloads.oxagen.sh/ (ADR-158).
+    # Every production deploy used to publish the desktop app built from the
+    # same commit, for every platform, to https://downloads.oxagen.sh/
+    # (ADR-158). That was 105 builds in the week of 2026-09-23, 5,498 runner
+    # minutes, 2,487 of them on macOS (#4918). A deploy now dispatches the
+    # build only when its pushed range changes what the installers carry: the
+    # app (apps/desktop), the two sidecars it bundles (packages/tacho and
+    # apps/cli, per apps/desktop/scripts/sidecars.mjs), the single-executable
+    # compiler (tools/sea), or desktop.yml. desktop.yml's daily schedule
+    # builds the commit production runs whenever these installers are older,
+    # which covers a change that reached main in a superseded push, and a
+    # change to a package the sidecars import.
+    #
     # This job only dispatches desktop.yml: the four builds need macOS and
     # Windows runners and take most of an hour, and a separate run keeps that
     # hour out of this one and gives the builds their own concurrency group,
@@ -1851,7 +1861,8 @@ jobs:
     # nothing, so the installers never run ahead of the platform they talk to.
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: [deploy-node]
-    runs-on: ubuntu-latest
+    # ubuntu-slim: a sparse checkout, two API calls and a tree diff.
+    runs-on: ubuntu-slim
     timeout-minutes: 10
     environment: production
     # One installer publish at a time, and never cancelled mid-flight, like
@@ -1867,9 +1878,12 @@ jobs:
       # Reads and writes the record of what is live (check-deploy-tip.mjs).
       deployments: write
     steps:
+      # A partial clone (no file contents until asked for), so the fetch in
+      # the `desktop` step below can bring the earlier commit's trees alone.
       - uses: actions/checkout@v5
         with:
           sparse-checkout: tools/scripts
+          filter: blob:none
 
       # Publish unless a newer commit's installers were already asked for. The
       # deploy jobs above hold the same rule per service, so a run superseded
@@ -1883,8 +1897,45 @@ jobs:
           DEPLOY_SERVICE: desktop
         run: node tools/scripts/check-deploy-tip.mjs
 
-      - name: Dispatch the desktop build for this commit
+      # The pushed range is the commit main held before this push and this
+      # commit. A squash merge is one push, so the range is that merge's own
+      # diff. The tree diff needs no history and no file contents: the fetch
+      # brings the earlier commit's trees only, and --no-renames keeps git
+      # from asking for blobs. Any doubt (a new branch, a failed fetch, a
+      # failed diff) dispatches the build.
+      - name: Decide whether this push changes what the installers carry
+        id: desktop
         if: steps.order.outputs.ship == 'true'
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: |
+          set -uo pipefail
+          paths=(apps/desktop packages/tacho apps/cli tools/sea .github/workflows/desktop.yml)
+          build() {
+            echo "build=$1" >> "$GITHUB_OUTPUT"
+            echo "$2" >> "$GITHUB_STEP_SUMMARY"
+            echo "$2"
+          }
+          if ! [[ "$BEFORE" =~ ^[0-9a-f]{40}$ ]] || [ "$BEFORE" = 0000000000000000000000000000000000000000 ]; then
+            build true "This push names no earlier commit, so the desktop build runs."
+            exit 0
+          fi
+          if ! git fetch --no-tags --depth=1 --filter=blob:none origin "$BEFORE"; then
+            build true "Could not fetch ${BEFORE:0:9}, so the desktop build runs."
+            exit 0
+          fi
+          if ! changed=$(git diff --name-only --no-renames "$BEFORE" "$GITHUB_SHA" -- "${paths[@]}"); then
+            build true "Could not diff ${BEFORE:0:9} against ${GITHUB_SHA:0:9}, so the desktop build runs."
+            exit 0
+          fi
+          if [ -n "$changed" ]; then
+            build true "This push changes $(printf '%s\n' "$changed" | wc -l | tr -d ' ') installer source files, so the desktop build runs."
+          else
+            build false "This push changes no installer source (${paths[*]}). The daily build in desktop.yml publishes the commit production runs."
+          fi
+
+      - name: Dispatch the desktop build for this commit
+        if: steps.order.outputs.ship == 'true' && steps.desktop.outputs.build == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -1896,11 +1947,12 @@ jobs:
       # Record the commit whose installers were dispatched, so the next run can
       # tell whether it is newer. The build itself runs in desktop.yml and
       # finishes later; a build that fails publishes nothing and records
-      # nothing further, and the next commit still reads itself as ahead and
-      # dispatches, which is the same fail-open the deploy jobs take.
+      # nothing further, and the next daily build sees the installers behind
+      # production and builds again. A push that dispatched nothing records
+      # nothing, so the daily build still sees the installers as behind.
       - name: Record $desktop as live at this commit
         id: record
-        if: steps.order.outputs.ship == 'true'
+        if: steps.order.outputs.ship == 'true' && steps.desktop.outputs.build == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           DEPLOY_SERVICE: desktop
