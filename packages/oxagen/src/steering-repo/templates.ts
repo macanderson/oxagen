@@ -163,11 +163,8 @@ export function claudeMdTemplate(): string {
 const HELD_SETTINGS: Record<SteeringRepoTemplateInput["provider"], string[]> = {
   github: [
     "- The repository is private.",
-    `- The ruleset Oxagen steering on main requires a pull request and the ${REQUIRED_CHECK_NAME} check, and blocks force pushes and deletion.`,
-    "- The ruleset Oxagen merges on main lets only Oxagen update it.",
     "- Pull requests merge by squash only, and head branches are deleted after a merge.",
     "- GitHub Actions is off.",
-    "- The steering environment records each published version.",
   ],
   gitlab: [
     "- The project is private.",
@@ -195,7 +192,10 @@ export function readmeTemplate(input: SteeringRepoTemplateInput): string {
     "",
     "Every change arrives as a steering PR, opened from Oxagen, from an agent's MCP tool, or from a clone.",
     "steering/governance.toml sets who reviews each change.",
-    `Only Oxagen merges into main, and only after the ${REQUIRED_CHECK_NAME} check passes.`,
+    `Oxagen merges into main after the ${REQUIRED_CHECK_NAME} check passes.`,
+    ...(input.provider === "github"
+      ? ["GitHub Free is supported. Oxagen does not configure branch protection or rulesets, so repository permissions govern direct pushes and merges in GitHub."]
+      : ["Only the Oxagen bot can merge into main."]),
     "",
     "## Settings Oxagen holds",
     "",

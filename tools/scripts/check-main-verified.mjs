@@ -95,7 +95,10 @@ const WINDOW = Number(process.env.MAIN_VERIFIED_WINDOW ?? 10);
  */
 const GRACE_MS =
   Number(process.env.MAIN_VERIFIED_GRACE_MINUTES ?? 10) * 60 * 1000;
-const LABEL = "main-unverified";
+// Uppercase since 2026-09-30. GitHub matches a label name without regard to
+// case when it adds or filters one, so this finds an issue filed under the old
+// lowercase name too.
+const LABEL = "MAIN-UNVERIFIED";
 const WORKFLOW = "pipeline.yml";
 
 const announce = process.argv.includes("--announce");
@@ -360,7 +363,9 @@ async function main() {
       const made = await api(`/repos/${REPO}/issues`, {
         method: "POST",
         body: JSON.stringify({
-          title: "main has commits nothing verified",
+          // The title format in CLAUDE.md under Issue titles. The workflow
+          // owns this issue, so the triage pass leaves its title alone.
+          title: "P1 T2 S DevOps (CI): Main has commits that no pipeline run verified",
           body,
           labels: [LABEL],
         }),

@@ -86,11 +86,11 @@ describe("appOriginOf", () => {
       ),
     ).toBe("http://localhost:3000");
     expect(appOriginOf(read({ host: "evil.example" }))).toBe(APP);
-    // Another production host keeps its own origin, so the popup lands on the
-    // host that set the sign-in cookie.
+    // oxagen.app only redirects, at the load balancer (ADR-236), so it falls
+    // back like any other host.
     expect(
       appOriginOf(read({ host: "oxagen.app", "x-forwarded-proto": "http" })),
-    ).toBe("https://oxagen.app");
+    ).toBe(APP);
     expect(appOriginOf(read({}))).toBe(APP);
   });
 });

@@ -697,16 +697,6 @@ h2 .gold,
     overflow: auto;
     visibility: visible;
   }
-  .drawer h5 {
-    font-family: var(--font-mono);
-  font-feature-settings: "calt", "liga";
-    font-size: 10.5px;
-    letter-spacing: 0.2em;
-    text-transform: uppercase;
-    color: var(--faint);
-    margin: 14px 0 8px;
-    font-weight: 520;
-  }
   .drawer a {
     display: block;
     padding: 9px 0;
@@ -716,10 +706,6 @@ h2 .gold,
   }
   .drawer a:hover {
     color: var(--gold);
-  }
-  .drawer .btn {
-    margin-top: 16px;
-    width: 100%;
   }
 }
 
@@ -746,16 +732,9 @@ h2 .gold,
   background: var(--line);
   flex: none;
 }
-/* the three lights are the window's, not the palette's: the docs terminal
-   draws them in macOS's own colours, so they are written here once */
-.app-bar .tl:nth-child(1) {
-  background: #ff5f57;
-}
-.app-bar .tl:nth-child(2) {
-  background: #febc2e;
-}
+/* The three window lights take the hairline grey above, a house token. The
+   macOS red, amber, and green were not house values (#4804). */
 .app-bar .tl:nth-child(3) {
-  background: #28c840;
   margin-right: 6px;
 }
 .app-bar .tl.live {

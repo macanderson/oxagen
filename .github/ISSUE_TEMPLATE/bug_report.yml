@@ -1,13 +1,13 @@
 name: Bug report
-description: Something that exists behaves wrongly (the triage pass adds kind:defect)
-labels: ["triage"]
+description: Something that exists behaves wrongly (the triage pass adds KIND:BUG)
+labels: ["TRIAGE"]
 body:
   - type: markdown
     attributes:
       value: |
-        **Security vulnerabilities must NOT be reported here** — use [private vulnerability reporting](https://github.com/macanderson/oxagen/security/advisories/new) or `security@oxagen.sh` (see SECURITY.md).
+        **Security vulnerabilities must NOT be reported here.** Use [private vulnerability reporting](https://github.com/macanderson/oxagen/security/advisories/new) or `security@oxagen.sh` (see SECURITY.md).
 
-        Creators apply exactly one label, `triage` (SCR-005). The triage pass (`/triage-issues`) replaces it with one priority label and the descriptive dimensions: `kind:defect`, one `size/*`, one `area:*`, one `job:*`, and one or two `pillar:*`. Do not add those yourself. Title it `Queued Bug (<Area>): <what goes wrong>` in plain words.
+        Creators apply exactly one label, `TRIAGE` (SCR-005). The triage pass (`/triage-issues`) replaces it with one priority label, one `MODEL:` tier, one `SIZE:`, `KIND:BUG`, and one `AREA:`, then adds `JOB:` and one or two `PILLAR:` labels. Do not add those yourself. Title it `Queued Bug (<Area>): <what goes wrong>` in plain words.
 
         Before filing: if you can fix it in the branch you are on, fix it there (SCR-004). File only when the fix needs a maintainer decision, a rig, a credential or real spend, or is larger than one session.
   - type: dropdown
@@ -61,6 +61,6 @@ body:
         - [ ] Defect fixed at the named path; the repro no longer reproduces
         - [ ] Scoped tests added/updated and passing
         - [ ] Code comments and docs updated
-        - [ ] Residue fixed in the same PR, or filed with the `triage` label only
+        - [ ] Residue fixed in the same PR, or filed with the `TRIAGE` label only
     validations:
       required: true

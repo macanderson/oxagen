@@ -4,8 +4,9 @@
  * 2026-09-27 (#4629), sends its visitors to the docs, per `var.vanity_domains`.
  *
  * `oxagen.app` was bought the same day and began here as a redirect to the
- * app. It is now the app's own domain, and its zone, records, and certificate
- * moved to dns-oxagen-app.tf (ADR-215).
+ * app. Its zone, records, and certificate moved to dns-oxagen-app.tf for the
+ * app's move (ADR-215). The move stopped (ADR-236), and that file answers the
+ * name with the same kind of redirect, from the ALB.
  *
  * Each vanity domain gets three kinds of record:
  *

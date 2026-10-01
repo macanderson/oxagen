@@ -86,13 +86,10 @@ export function siteHeader({ wordmark, current }) {
 
 <div class="drawer" id="drawer" data-open="false">
   <div class="wrap">
-    <h5>Product</h5>
-    <a href="/products/oxagen">Oxagen, the agent control plane</a>
-    <h5>More</h5>
+    <a href="/products/oxagen">Overview</a>
     <a href="/blog">Research</a>
     <a href="/#field-manual">Field manual</a>
     <a href="https://docs.oxagen.sh">Docs</a>
-    <a class="btn btn-primary" href="/#demo">Get a demo</a>
   </div>
 </div>`;
 }
