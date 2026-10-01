@@ -199,7 +199,6 @@ describe("get_tacho_bundle skills", () => {
         counted.reads += 1;
         return readFixtureFile(source, bundle, file);
       },
-      recallUnreviewed: async () => "off",
     };
     return Object.assign(counted, overrides);
   }

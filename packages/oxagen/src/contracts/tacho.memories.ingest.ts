@@ -3,7 +3,8 @@
  * (ADR-206, "Outside a run"). The daemon's memory reader watches the folders
  * where each harness keeps its own memories and sends each new or changed
  * file here. The memory waits for the curator like any other, with capture
- * `local_gateway`, the host's agent as its agent, and no run.
+ * `local_gateway`, the host's agent as its agent, and no run. A file keeps
+ * one waiting memory, and each new statement replaces its text (ADR-238).
  *
  * Machine-to-machine, authenticated by the host's API key. The host names
  * itself so the handler can check the key's scope names the same host.
@@ -46,7 +47,11 @@ export const tachoMemoriesIngest = registerCapability({
     .strict(),
   output: z
     .object({
-      /** False when the workspace already holds this statement from this file. */
+      /**
+       * False when the workspace already holds this statement from this
+       * file. True when it stored a new waiting memory or replaced the text
+       * of the file's waiting memory (ADR-238).
+       */
       stored: z.boolean(),
     })
     .strict(),

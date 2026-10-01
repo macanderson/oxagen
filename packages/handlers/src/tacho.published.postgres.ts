@@ -21,13 +21,6 @@
 // use, so a handler can import this module lazily.
 import { createHash } from "node:crypto";
 import type { Bundle } from "@oxagen/oxagen/steering-repo/bundle";
-import { readTomlFile } from "@oxagen/oxagen/steering-repo/files";
-import {
-  governanceSchema,
-  resolveGovernance,
-  type RecallUnreviewed,
-} from "@oxagen/oxagen/steering-repo/governance";
-import { GOVERNANCE_TOML_PATH } from "@oxagen/oxagen/steering-repo/paths";
 import type { VersionStore } from "@oxagen/steering-bundle";
 import type { ReadAsset } from "@oxagen/steering-bundle/session";
 import { runInTenantScope } from "@oxagen/tenancy";
@@ -40,18 +33,12 @@ import {
   createSteeringHost,
   readSteeringConnection,
 } from "./context.steering.host";
-import { logger } from "./logger";
 import { steeringRepositoryKey } from "./steering-repo/publisher";
 import {
   postgresVersionStore,
   type VersionScope,
 } from "./steering-repo/version-store";
 import type { TachoPublished } from "./tacho.published";
-
-/** Where the binding logs a refusal or a fallback to off. */
-export interface PublishedLog {
-  warn(fields: Record<string, unknown>, message: string): void;
-}
 
 /** What the binding reads through. Production leaves each one unset. */
 export interface PostgresTachoPublishedDeps {
@@ -61,15 +48,9 @@ export interface PostgresTachoPublishedDeps {
   host?: Pick<SteeringHost, "resolveRepository" | "readFile">;
   /** The workspace's steering binding, read from the database alone. */
   readConnection?: typeof readSteeringConnection;
-  /** The handlers' logger when unset. */
-  log?: PublishedLog;
-  /** How many governance readings the process keeps. */
-  cacheEntries?: number;
   /** How many UTF-8 bytes of file bodies the process keeps. */
   cacheBytes?: number;
 }
-
-const CACHE_ENTRIES = 256;
 
 // Recall reads every memory record on each prompt. 16 MiB holds about 8,000
 // records of 2 KiB, across every workspace this process serves. Past that, the
@@ -86,30 +67,6 @@ interface Origin {
    * its own forge call.
    */
   repo?: Promise<SteeringRepository>;
-}
-
-/** A map that keeps only its most recently used entries. */
-function recentlyUsed<V>(limit: number) {
-  const bound = Math.max(1, Math.floor(limit));
-  const entries = new Map<string, V>();
-  return {
-    get(key: string): V | undefined {
-      const value = entries.get(key);
-      if (value !== undefined) {
-        entries.delete(key);
-        entries.set(key, value);
-      }
-      return value;
-    },
-    set(key: string, value: V): void {
-      entries.delete(key);
-      entries.set(key, value);
-      for (const oldest of entries.keys()) {
-        if (entries.size <= bound) break;
-        entries.delete(oldest);
-      }
-    },
-  };
 }
 
 /**
@@ -192,44 +149,12 @@ function bodyMatching(blob: string, text: string): string | null {
   return null;
 }
 
-/** The `recall_unreviewed` a governance file puts in force, or off and why. */
-function recallFrom(text: string | null): {
-  value: RecallUnreviewed;
-  problem: string | null;
-} {
-  if (text === null) {
-    return {
-      value: "off",
-      problem: `${GOVERNANCE_TOML_PATH} is not in the published version`,
-    };
-  }
-  const read = readTomlFile(text, "governance/v1", governanceSchema);
-  if (!read.ok) {
-    const first = read.issues[0];
-    return {
-      value: "off",
-      problem: `${GOVERNANCE_TOML_PATH}${first?.line ? ` line ${first.line}` : ""}: ${first?.message ?? "is not governance/v1"}`,
-    };
-  }
-  // resolveGovernance turns recall off in regulated mode, whatever the file sets.
-  return {
-    value: resolveGovernance(read.value).recall_unreviewed,
-    problem: null,
-  };
-}
-
-const messageOf = (error: unknown) =>
-  error instanceof Error ? error.message : String(error);
-
 /** The TachoPublished port over one version store per workspace. */
 export function createPostgresTachoPublished(
   deps: PostgresTachoPublishedDeps = {},
 ): TachoPublished {
   const storeOf = deps.store ?? postgresVersionStore;
   const readConnection = deps.readConnection ?? readSteeringConnection;
-  const log: PublishedLog = deps.log ?? {
-    warn: (fields, message) => logger.warn(fields, message),
-  };
   let host = deps.host;
   const hostOf = () => (host ??= createSteeringHost());
   // A version object maps to the workspace that read it. The store parses a
@@ -239,11 +164,6 @@ export function createPostgresTachoPublished(
   // File bodies by workspace and blob id. The workspace is in the key so one
   // tenant's read never answers another's, even for the same content.
   const bodies = recentlyUsedBytes(deps.cacheBytes ?? CACHE_BYTES);
-  // Readings of recall_unreviewed by workspace, repository, and commit. A
-  // commit's governance file never changes, so a reading holds until evicted.
-  const readings = recentlyUsed<RecallUnreviewed>(
-    deps.cacheEntries ?? CACHE_ENTRIES,
-  );
 
   // Each read opens the workspace's tenant scope, as the version store does,
   // because the binding and the host read tenant tables.
@@ -355,47 +275,6 @@ export function createPostgresTachoPublished(
     },
 
     readAsset,
-
-    // Off is the answer whenever the setting cannot be read: before the first
-    // publish, with no governance file, and on any failure. A workspace in
-    // regulated mode turns unreviewed recall off, so off is the safe guess.
-    async recallUnreviewed(scope) {
-      const where = { orgId: scope.orgId, workspaceId: scope.workspaceId };
-      try {
-        const current = await currentVersion(where);
-        if (current === null) return "off";
-        const { bundle, origin } = current;
-        const key = `${where.workspaceId}:${bundle.repository}@${bundle.commit}`;
-        const known = readings.get(key);
-        if (known !== undefined) return known;
-        const repo = await repoOf(origin, bundle);
-        const text = await inScope(where, () =>
-          hostOf().readFile(repo, GOVERNANCE_TOML_PATH, bundle.commit),
-        );
-        const reading = recallFrom(text);
-        if (reading.problem !== null) {
-          log.warn(
-            {
-              ...where,
-              repository: bundle.repository,
-              commit: bundle.commit,
-              problem: reading.problem,
-            },
-            "tacho.published: the published governance file cannot be read, so unreviewed memories stay off",
-          );
-        }
-        // A missing or unreadable file is a fact of the commit, so it is kept
-        // like a reading. A failed read is not kept, and the next call retries.
-        readings.set(key, reading.value);
-        return reading.value;
-      } catch (error) {
-        log.warn(
-          { ...where, err: messageOf(error) },
-          "tacho.published: the published governance could not be read, so unreviewed memories stay off",
-        );
-        return "off";
-      }
-    },
   };
 }
 

@@ -269,8 +269,9 @@ the draft, the branch, or the PR body.
   `packages/steering-bundle/src/cursor.ts` holds a Cursor dashboard rule that
   calls them. No contract registers them yet.
 - **Wrapped agents.** `get_tacho_bundle` and `recall_tacho_memories` read
-  through `TachoPublished`, which answers `NOTHING_PUBLISHED` on `main`. PR
-  #4606 binds it to the version store.
+  through `TachoPublished`, which `VERSION_STORE_PUBLISHED` binds to the
+  Postgres version store (#4550). Recall answers merged memory records only
+  (ADR-238).
 - **Stella.** A reader for this layout is pending in the Stella repository.
 
 ## Workspace migration
