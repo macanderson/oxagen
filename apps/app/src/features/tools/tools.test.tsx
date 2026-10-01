@@ -95,7 +95,8 @@ const { WsCtx } = await import("@/server/viewer");
 const { unsafeMint } = await import("@/server/viewer.testing");
 const { ToolsBody, ToolsHeaderActions, ToolsLoading, toolsTabCounts } =
   await import("./tools");
-const { ServerViews } = await import("./tabs");
+const { SERVER_VIEW_PANEL, ServerViews } = await import("./tabs");
+const { RouteTabPanel } = await import("@/ui/route-tabs");
 const {
   credentialGrantPage,
   killSwitchBoard,
@@ -371,7 +372,16 @@ describe("Tools › server views", () => {
 
   it("prints no versions count when it is handed none", () => {
     withIntl(
-      <ServerViews at={at} current="toolbelts" versions={null} providers={3} />,
+      // The row names the panel its page draws, so the panel is drawn too.
+      <>
+        <ServerViews
+          at={at}
+          current="toolbelts"
+          versions={null}
+          providers={3}
+        />
+        <RouteTabPanel panel={SERVER_VIEW_PANEL} />
+      </>,
     );
     expect(document.querySelector('[data-count="tools"]')).toBeNull();
     expect(
