@@ -4,6 +4,9 @@ import {
   compareSemverDesc,
   escapeMdx,
   fallbackNotes,
+  BRAND_KIT_REPO,
+  KIT_SKILL_FILES,
+  type KitSource,
   loadSkills,
   parseNotes,
   proseHits,
@@ -11,8 +14,8 @@ import {
   releasesMeta,
   retryPrompt,
   sanitizeLine,
-  SKILL_FILES,
   systemPrompt,
+  TREE_SKILL_FILES,
   userPrompt,
 } from "./lib/release-notes";
 
@@ -29,12 +32,41 @@ const HISTORY = {
 const GOOD =
   "SUMMARY: The Spend page shows an agent's budget as entered, and the Agents page edits an agent's file as a form.\n\n## What changed\n\n- The Spend page kept a budget as a number and rounded it. It now keeps the string you typed.\n- The Configuration tab on an agent's page is a form over the agent file, with a coloured source view beside it.";
 
+const KIT_SHA = "3ab3085aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+
+/**
+ * A kit whose `main` is KIT_SHA and which answers `status` for every file. It
+ * records each URL it was asked for, so a test can see that every reference
+ * came from the one resolved commit.
+ */
+function fakeKit(status = 200): KitSource & { urls: string[] } {
+  const urls: string[] = [];
+  return {
+    urls,
+    head: () => `${KIT_SHA}\n`,
+    fetch: async (url) => {
+      urls.push(url);
+      const file = url.split("/").pop();
+      return new Response(status === 200 ? `# ${file} from the kit\n` : "", {
+        status,
+      });
+    },
+  };
+}
+
 describe("the model's instructions", () => {
-  it("are the two writing skills, read from the tree", () => {
-    const skills = loadSkills(ROOT);
-    for (const rel of SKILL_FILES)
+  it("are clear-prose from the tree and the branding references from the kit", async () => {
+    const kit = fakeKit();
+    const skills = await loadSkills(ROOT, kit);
+    for (const rel of TREE_SKILL_FILES)
       expect(skills).toContain(`<skill path="${rel}">`);
+    for (const rel of KIT_SKILL_FILES)
+      expect(skills).toContain(
+        `<skill path="${BRAND_KIT_REPO}@${KIT_SHA}/${rel}">`,
+      );
     expect(skills).toContain("No em dashes");
+    expect(skills).toContain("# voice.md from the kit");
+    expect(skills).toContain("# words.md from the kit");
     const system = systemPrompt(skills);
     expect(system).toContain("workforce management for autonomous agents");
     expect(system).toContain("SUMMARY:");
@@ -42,8 +74,39 @@ describe("the model's instructions", () => {
     expect(system).toContain("Do not list every commit");
   });
 
-  it("refuse to run without a skill file rather than write unguided", () => {
-    expect(() => loadSkills("/nonexistent")).toThrow(/clear-prose\/SKILL\.md/);
+  it("read every kit file at the commit main resolved to", async () => {
+    const kit = fakeKit();
+    await loadSkills(ROOT, kit);
+    expect(kit.urls).toEqual(
+      KIT_SKILL_FILES.map(
+        (rel) =>
+          `https://raw.githubusercontent.com/${BRAND_KIT_REPO}/${KIT_SHA}/${rel}`,
+      ),
+    );
+  });
+
+  it("read nothing from the vendored skill this repo no longer carries", () => {
+    for (const rel of TREE_SKILL_FILES)
+      expect(rel).not.toContain("oxagen-branding");
+  });
+
+  it("refuse to run without a skill file rather than write unguided", async () => {
+    await expect(loadSkills("/nonexistent", fakeKit())).rejects.toThrow(
+      /clear-prose\/SKILL\.md/,
+    );
+  });
+
+  it("refuse to run when the kit does not serve a reference", async () => {
+    await expect(loadSkills(ROOT, fakeKit(404))).rejects.toThrow(
+      /references\/voice\.md from macanderson\/oxagen-brand@3ab3085, and the fetch returned 404/,
+    );
+  });
+
+  it("refuse to run when main does not resolve to a commit", async () => {
+    const kit = { ...fakeKit(), head: () => "" };
+    await expect(loadSkills(ROOT, kit)).rejects.toThrow(
+      /could not resolve macanderson\/oxagen-brand main/,
+    );
   });
 
   it("hand the model the log, the diffstat and the diff", () => {
