@@ -53,7 +53,7 @@ describe("the Markdown import contracts", () => {
 
   it("makes parse read-only and billed, and commit a write that waits for approval on the agent surface", () => {
     expect(steeringMarkdownImportParse.mutates).toBe(false);
-    expect(steeringMarkdownImportParse.noBillingGate).toBeUndefined();
+    expect("noBillingGate" in steeringMarkdownImportParse).toBe(false);
     expect(steeringMarkdownImportCommit.mutates).toBe(true);
     expect(steeringMarkdownImportCommit.noBillingGate).toBe(true);
     expect(steeringMarkdownImportCommit.agent?.requiresApproval).toBe(true);
