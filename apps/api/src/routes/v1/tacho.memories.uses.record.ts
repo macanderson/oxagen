@@ -14,9 +14,9 @@ import type { AppEnv } from "../../app";
  * this route lives on the static /v1/tacho router and refuses anything but an
  * API key before it reads the body.
  */
-// A report holds at most 200 uses and 8 scans of 4,000 paths. A Claude Code
-// memory path runs near 100 bytes, so a full scan of 4,000 files is about
-// 400 KiB and 1 MiB leaves room for the uses. A body past the limit answers
+// A report holds at most 200 uses, 200 harness counts, and 8 scans of 4,000
+// paths. A Claude Code memory path runs near 100 bytes, so a full scan of
+// 4,000 files is about 400 KiB and 1 MiB leaves room for the uses and counts. A body past the limit answers
 // 413, and the daemon logs it and drops that call. tacho.host-routes.ts
 // mounts routes by this limit.
 const MAX_BODY_BYTES = 1024 * 1024;

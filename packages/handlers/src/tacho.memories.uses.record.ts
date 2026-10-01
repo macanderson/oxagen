@@ -13,6 +13,10 @@
 // back in `pending`, and the daemon sends it again. The store keeps one use
 // per memory, run, and signal, and recomputes the memory's count from them.
 //
+// A count is a use the harness counted itself, such as the rise in Codex's
+// `usage_count`. It has no run, so it is stored as a `harness_count` use with
+// no run, and the store adds its count to the memory's.
+//
 // A scan retires each waiting or promoted memory of the host's agent from a
 // file under the scan's folder that the scan did not find.
 import type { CapabilityHandler } from "@oxagen/oxagen";
@@ -128,6 +132,17 @@ export function createTachoMemoryUsesRecordHandler(
         usedAt: usedAt > at ? at : usedAt,
       });
     });
+    for (const count of input.counts) {
+      const usedAt = new Date(count.used_at);
+      uses.push({
+        capture: "local_gateway",
+        source: `${count.harness}:${count.path}`,
+        runPublicId: null,
+        signal: "harness_count",
+        count: count.count,
+        usedAt: usedAt > at ? at : usedAt,
+      });
+    }
     const { recorded, unknown } =
       uses.length === 0
         ? { recorded: 0, unknown: 0 }

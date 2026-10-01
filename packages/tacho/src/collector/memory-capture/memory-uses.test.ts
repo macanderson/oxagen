@@ -6,10 +6,19 @@
 import { join, sep } from "node:path";
 import { describe, expect, it } from "vitest";
 import type { FetchLike } from "../../host/control-client";
-import type { HarnessMemoryLocation, MemoryScan } from "./memory-reader";
-import { HARNESS_MEMORY_LOCATIONS } from "./memory-reader";
+import { createUseCountLedger, type UseCountLedger } from "./memory-counts";
+import type {
+  HarnessMemoryLocation,
+  HarnessUseCounts,
+  MemoryScan,
+} from "./memory-reader";
+import {
+  claudeCodeMemoryLocations,
+  HARNESS_MEMORY_LOCATIONS,
+} from "./memory-reader";
 import {
   createMemoryUses,
+  MEMORY_COUNTS_PER_REPORT,
   MEMORY_SCAN_PATHS_MAX,
   MEMORY_USES_PATH,
   MEMORY_USES_PER_REPORT,
@@ -61,6 +70,29 @@ describe("a memory file", () => {
       expect(memoryFileOf(path, HARNESS_MEMORY_LOCATIONS, HOME), path).toBe(
         undefined,
       );
+  });
+
+  it("is a file in a subagent's folder, for the user or a project", () => {
+    const user = join(HOME, ".claude", "agent-memory", "reviewer", "a.md");
+    expect(memoryFileOf(user, HARNESS_MEMORY_LOCATIONS, HOME)).toEqual({
+      harness: "claude-code",
+      path: user,
+    });
+    const locations = claudeCodeMemoryLocations(join(HOME, ".claude"), [
+      "/work/app",
+    ]);
+    for (const path of [
+      "/work/app/.claude/agent-memory/planner/p.md",
+      "/work/app/.claude/agent-memory-local/planner/l.md",
+    ])
+      expect(memoryFileOf(path, locations, HOME)?.path, path).toBe(path);
+    for (const path of [
+      join(HOME, ".claude", "agent-memory", "reviewer", "MEMORY.md"),
+      join(HOME, ".claude", "agent-memory", "loose.md"),
+      join(HOME, ".claude", "agent-memory", "reviewer", "deep", "b.md"),
+      "/work/other/.claude/agent-memory/planner/p.md",
+    ])
+      expect(memoryFileOf(path, locations, HOME), path).toBeUndefined();
   });
 
   it("follows the projects folder its location names", () => {
@@ -139,6 +171,12 @@ interface Call {
       used_at: string;
     }>;
     scans?: MemoryScan[];
+    counts?: Array<{
+      harness: string;
+      path: string;
+      count: number;
+      used_at: string;
+    }>;
   };
 }
 
@@ -168,7 +206,7 @@ function plane(answers: Array<number | { pending: number[] } | Error> = []) {
   return { fetch, calls };
 }
 
-function uses(fetch: FetchLike, now = () => NOW) {
+function uses(fetch: FetchLike, now = () => NOW, counts?: UseCountLedger) {
   const lines: string[] = [];
   const memoryUses = createMemoryUses({
     host: () => ({
@@ -180,6 +218,7 @@ function uses(fetch: FetchLike, now = () => NOW) {
     log: (line) => lines.push(line),
     now,
     timeoutMs: 1_000,
+    ...(counts !== undefined ? { counts } : {}),
   });
   return { memoryUses, lines };
 }
@@ -394,5 +433,110 @@ describe("a report", () => {
     await first;
     expect(calls).toHaveLength(1);
     expect(memoryUses.size()).toBe(1);
+  });
+});
+
+/** A ledger that keeps its counts in memory. */
+function ledger() {
+  let saved: string | undefined;
+  return createUseCountLedger({
+    storage: {
+      load: () => (saved === undefined ? undefined : JSON.parse(saved)),
+      save: (json) => {
+        saved = json;
+      },
+    },
+    log: () => {},
+    now: () => NOW,
+  });
+}
+
+const CODEX_SCAN: MemoryScan = {
+  harness: "codex",
+  root: "thread/",
+  paths: ["thread/t1"],
+};
+
+/** A full read of the Codex store with these counts. */
+function codexCounts(counts: Record<string, number>): HarnessUseCounts[] {
+  return [
+    {
+      harness: "codex",
+      root: "thread/",
+      counts: Object.entries(counts).map(([thread, count]) => ({
+        path: `thread/${thread}`,
+        count,
+        lastUsedAt: at(NOW - 60_000),
+      })),
+    },
+  ];
+}
+
+describe("a report of harness counts", () => {
+  it("sends the rise in each count after the uses and before the scans, each in a call of its own", async () => {
+    const { fetch, calls } = plane();
+    const { memoryUses } = uses(fetch, undefined, ledger());
+    memoryUses.note({ harness: "claude-code", path: FILE, sessionUuid: RUN_A, at: at(NOW) });
+    await memoryUses.report([CODEX_SCAN], codexCounts({ t1: 4, t2: 0 }));
+    expect(calls.map((call) => Object.keys(call.body).sort())).toEqual([
+      ["host_enrollment_id", "uses"],
+      ["counts", "host_enrollment_id"],
+      ["host_enrollment_id", "scans"],
+    ]);
+    expect(calls[1]?.body.counts).toEqual([
+      { harness: "codex", path: "thread/t1", count: 4, used_at: at(NOW - 60_000) },
+    ]);
+  });
+
+  it("sends only the rise since the last report that landed", async () => {
+    const { fetch, calls } = plane();
+    const { memoryUses } = uses(fetch, undefined, ledger());
+    await memoryUses.report([], codexCounts({ t1: 4 }));
+    await memoryUses.report([], codexCounts({ t1: 4 }));
+    await memoryUses.report([], codexCounts({ t1: 6 }));
+    expect(calls.map((call) => call.body.counts?.[0]?.count)).toEqual([4, 2]);
+  });
+
+  it("sends a rise again when the control plane did not take it, and holds the scans back", async () => {
+    const { fetch, calls } = plane([503, 200, 200]);
+    const { memoryUses } = uses(fetch, undefined, ledger());
+    await memoryUses.report([CODEX_SCAN], codexCounts({ t1: 4 }));
+    expect(calls).toHaveLength(1);
+    await memoryUses.report([CODEX_SCAN], codexCounts({ t1: 5 }));
+    expect(calls.map((call) => call.body.counts?.[0]?.count)).toEqual([
+      4,
+      5,
+      undefined,
+    ]);
+  });
+
+  it("drops a rise the control plane refuses, and does not send it again", async () => {
+    const { fetch, calls } = plane([422, 200]);
+    const { memoryUses, lines } = uses(fetch, undefined, ledger());
+    await memoryUses.report([], codexCounts({ t1: 4 }));
+    await memoryUses.report([], codexCounts({ t1: 4 }));
+    expect(calls).toHaveLength(1);
+    expect(lines).toEqual([
+      "memory uses: the control plane refused 1 harness counts (422); they are dropped",
+    ]);
+  });
+
+  it("sends the rises in calls of at most 200", async () => {
+    const { fetch, calls } = plane();
+    const { memoryUses } = uses(fetch, undefined, ledger());
+    const counts: Record<string, number> = {};
+    for (let i = 0; i < MEMORY_COUNTS_PER_REPORT + 3; i += 1) counts[`t${i}`] = 1;
+    await memoryUses.report([], codexCounts(counts));
+    expect(calls.map((call) => call.body.counts?.length)).toEqual([
+      MEMORY_COUNTS_PER_REPORT,
+      3,
+    ]);
+  });
+
+  it("sends no count without a ledger", async () => {
+    const { fetch, calls } = plane();
+    const { memoryUses } = uses(fetch);
+    await memoryUses.report([], codexCounts({ t1: 4 }));
+    expect(calls).toEqual([]);
   });
 });

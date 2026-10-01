@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  MEMORY_COUNTS_PER_REPORT,
   MEMORY_SCAN_PATHS_MAX,
   MEMORY_SCANS_PER_REPORT,
   MEMORY_USES_PER_REPORT,
@@ -16,25 +17,61 @@ const use = {
   used_at: "2026-10-01T12:00:00.000Z",
 };
 const scan = { harness: "claude-code", root: ROOT, paths: [FILE] };
+const count = {
+  harness: "codex",
+  path: "thread/01a0e198-36ea-7e52-aedf-4b346877c10d",
+  count: 3,
+  used_at: "2026-10-01T12:00:00.000Z",
+};
 const input = {
   host_enrollment_id: "tch_0123456789abcdefghjkmn",
   uses: [use],
   scans: [scan],
+  counts: [count],
 };
 
 describe("host memory use contract", () => {
-  it("takes uses and scans from a named host", () => {
+  it("takes uses, scans, and harness counts from a named host", () => {
     expect(contract.input.safeParse(input).success).toBe(true);
   });
 
-  it("takes a report with no uses and no scans", () => {
+  it("takes a report with no uses, no scans, and no counts", () => {
     expect(
       contract.input.parse({ host_enrollment_id: input.host_enrollment_id }),
     ).toEqual({
       host_enrollment_id: input.host_enrollment_id,
       uses: [],
       scans: [],
+      counts: [],
     });
+  });
+
+  it("takes a Codex store's root and paths in a scan", () => {
+    expect(
+      contract.input.safeParse({
+        ...input,
+        scans: [{ harness: "codex", root: "thread/", paths: [count.path] }],
+      }).success,
+    ).toBe(true);
+  });
+
+  it("refuses a malformed harness count", () => {
+    for (const patch of [
+      { harness: "vim" },
+      { path: "" },
+      { path: "p".repeat(1025) },
+      { count: 0 },
+      { count: 10_001 },
+      { count: 2.5 },
+      { used_at: "yesterday" },
+      { session_uuid: use.session_uuid },
+    ]) {
+      expect(
+        contract.input.safeParse({ ...input, counts: [{ ...count, ...patch }] })
+          .success,
+        JSON.stringify(patch),
+      ).toBe(false);
+    }
   });
 
   it("takes a Windows root and an offset timestamp", () => {
@@ -83,12 +120,18 @@ describe("host memory use contract", () => {
     }
   });
 
-  it("bounds the uses, the scans, and the paths of one report", () => {
+  it("bounds the uses, the counts, the scans, and the paths of one report", () => {
     expect(MEMORY_USES_PER_REPORT).toBe(200);
     expect(MEMORY_SCANS_PER_REPORT).toBe(8);
     expect(MEMORY_SCAN_PATHS_MAX).toBe(4_000);
+    expect(MEMORY_COUNTS_PER_REPORT).toBe(200);
     const uses = Array.from({ length: MEMORY_USES_PER_REPORT + 1 }, () => use);
     expect(contract.input.safeParse({ ...input, uses }).success).toBe(false);
+    const counts = Array.from(
+      { length: MEMORY_COUNTS_PER_REPORT + 1 },
+      () => count,
+    );
+    expect(contract.input.safeParse({ ...input, counts }).success).toBe(false);
     const scans = Array.from(
       { length: MEMORY_SCANS_PER_REPORT + 1 },
       () => scan,

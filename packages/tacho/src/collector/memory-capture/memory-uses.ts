@@ -13,16 +13,25 @@
  * with a count of two, and the API keeps one use per memory, run, and signal.
  *
  * `report` runs after each memory scan. It sends the queue in calls of at
- * most `MEMORY_USES_PER_REPORT` uses, then the scan's file lists in a call of
- * their own, so a refused list never costs a use. A use whose run the API
- * has not recorded yet comes back `pending`, and waits for the next report,
- * for a day at most. Uses still queued when the daemon stops are lost: a use
- * is a count, and losing a few between reports skews no ranking.
+ * most `MEMORY_USES_PER_REPORT` uses, then the rise in each count a harness
+ * keeps itself (Codex's `usage_count`, `./memory-counts`) in calls of at most
+ * `MEMORY_COUNTS_PER_REPORT`, then the scan's lists in a call of their own,
+ * so a refused list never costs a use. A use whose run the API has not
+ * recorded yet comes back `pending`, and waits for the next report, for a
+ * day at most. Uses still queued when the daemon stops are lost: a use is a
+ * count, and losing a few between reports skews no ranking. A count's rise
+ * is not queued: each report works it out again from the store until the
+ * control plane takes it.
  */
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import type { FetchLike } from "../../host/control-client";
 import type { TachoHarness } from "../../wire";
-import type { HarnessMemoryLocation, MemoryScan } from "./memory-reader";
+import type { UseCountLedger } from "./memory-counts";
+import type {
+  HarnessMemoryLocation,
+  HarnessUseCounts,
+  MemoryScan,
+} from "./memory-reader";
 
 export const MEMORY_USES_PATH = "/v1/tacho/memories/uses";
 
@@ -31,6 +40,8 @@ export const MEMORY_USES_PATH = "/v1/tacho/memories/uses";
 // leaf package cannot import.
 /** The most uses one call carries. */
 export const MEMORY_USES_PER_REPORT = 200;
+/** The most harness counts one call carries. */
+export const MEMORY_COUNTS_PER_REPORT = 200;
 /** The most memory files one scan names. A larger scan is not sent. */
 export const MEMORY_SCAN_PATHS_MAX = 4_000;
 /** The most scans one call carries. */
@@ -61,9 +72,11 @@ export interface MemoryFile {
 
 /**
  * The memory file `path` names, or undefined when it is none. A memory file
- * is `<projectsDir(home)>/<project>/<memoryDir>/<name><extension>`, and its
- * name is not one the location skips, so `MEMORY.md` never is one. The path
- * is normalized first, so `..` and doubled separators compare equal.
+ * is `<projectsDir(home)>/<project>/<memoryDir>/<name><extension>`, or
+ * `<projectsDir(home)>/<subagent>/<name><extension>` where `memoryDir` is
+ * empty, and its name is not one the location skips, so `MEMORY.md` never is
+ * one. The path is normalized first, so `..` and doubled separators compare
+ * equal.
  */
 export function memoryFileOf(
   path: string,
@@ -73,12 +86,13 @@ export function memoryFileOf(
   if (!isAbsolute(path)) return undefined;
   const file = resolve(path);
   const name = basename(file);
-  const memoryDir = dirname(file);
-  const projectDir = dirname(memoryDir);
+  const folder = dirname(file);
   for (const location of locations) {
     if (!name.endsWith(location.extension)) continue;
     if (location.skip.includes(name)) continue;
-    if (basename(memoryDir) !== location.memoryDir) continue;
+    const projectDir = location.memoryDir === "" ? folder : dirname(folder);
+    if (location.memoryDir !== "" && basename(folder) !== location.memoryDir)
+      continue;
     if (dirname(projectDir) !== resolve(location.projectsDir(home))) continue;
     return { harness: location.harness, path: file };
   }
@@ -181,17 +195,26 @@ export interface MemoryUsesDeps {
   log: (line: string) => void;
   now: () => number;
   timeoutMs?: number;
+  /**
+   * The counts each harness that counts its own uses held at the last
+   * report. Without it, `report` sends no harness count.
+   */
+  counts?: UseCountLedger;
 }
 
 export interface MemoryUses {
   /** Queue one read. It never waits and never throws. */
   note: (read: MemoryRead) => void;
   /**
-   * Send the queued uses, then `scans` when given. A report that overlaps
-   * one still running joins it, and that report's own scans wait for the
-   * next scan to be listed again. It never throws.
+   * Send the queued uses, then the rise in each of `counts`, then `scans`.
+   * A report that overlaps one still running joins it, and that report's
+   * own scans and counts wait for the next scan to read them again. It
+   * never throws.
    */
-  report: (scans?: readonly MemoryScan[]) => Promise<void>;
+  report: (
+    scans?: readonly MemoryScan[],
+    counts?: readonly HarnessUseCounts[],
+  ) => Promise<void>;
   /** How many uses wait in the queue. */
   size: () => number;
 }
@@ -320,6 +343,7 @@ export function createMemoryUses(deps: MemoryUsesDeps): MemoryUses {
 
   async function reportOnce(
     scans: readonly MemoryScan[] | undefined,
+    counts: readonly HarnessUseCounts[] | undefined,
   ): Promise<void> {
     if (overflowed > 0) {
       deps.log(
@@ -362,6 +386,34 @@ export function createMemoryUses(deps: MemoryUsesDeps): MemoryUses {
         const use = batch[index];
         if (use !== undefined && Date.parse(use.usedAt) >= oldest) requeue(use);
       }
+    }
+    const rises =
+      deps.counts !== undefined && counts !== undefined && counts.length > 0
+        ? deps.counts.rises(counts)
+        : [];
+    for (let start = 0; start < rises.length; start += MEMORY_COUNTS_PER_REPORT) {
+      const batch = rises.slice(start, start + MEMORY_COUNTS_PER_REPORT);
+      const result = await call(
+        {
+          counts: batch.map((rise) => ({
+            harness: rise.harness,
+            path: rise.path,
+            count: rise.count,
+            used_at: rise.usedAt,
+          })),
+        },
+        0,
+      );
+      // The rises not settled are worked out again at the next report, and
+      // the scans wait with them.
+      if (result.kind === "kept") return;
+      // A refused call would be refused again, so its rises settle and are
+      // lost. The memories keep the counts reported before.
+      if (result.kind === "refused")
+        deps.log(
+          `memory uses: the control plane refused ${batch.length} harness counts (${result.status}); they are dropped`,
+        );
+      deps.counts?.settle(batch);
     }
     const lists = (scans ?? []).filter(
       (scan) => scan.paths.length <= MEMORY_SCAN_PATHS_MAX,
@@ -406,8 +458,8 @@ export function createMemoryUses(deps: MemoryUsesDeps): MemoryUses {
         usedAt: read.at,
       });
     },
-    report: (scans) => {
-      running ??= reportOnce(scans)
+    report: (scans, counts) => {
+      running ??= reportOnce(scans, counts)
         .catch((error: unknown) => {
           deps.log(
             `memory uses: the report failed (${error instanceof Error ? error.message : String(error)})`,
