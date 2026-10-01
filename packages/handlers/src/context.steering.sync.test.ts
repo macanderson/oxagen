@@ -136,7 +136,12 @@ describe("syncWorkspaceSteering", () => {
   );
 
   it("verifies the captured head even when it has no governance file", async () => {
-    const r = rig({ [`${RULES}/ctx.a.one.toml`]: recordText("ctx.a.one") });
+    const r = rig();
+    r.h.github.commit(
+      "main",
+      `${RULES}/ctx.a.one.toml`,
+      recordText("ctx.a.one"),
+    );
     const verify = vi.fn(async () => undefined);
     r.deps.github.assertSteeringCommit = verify;
     const head = await r.h.github.branchHead(REPO, "main");
@@ -144,6 +149,7 @@ describe("syncWorkspaceSteering", () => {
     const result = await r.run();
 
     expect(verify).toHaveBeenCalledWith(REPO, head);
+    expect(result.outcome).toBe("synced");
     expect(result.created).toBe(1);
   });
 
