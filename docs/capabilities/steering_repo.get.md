@@ -58,7 +58,7 @@ A workspace made before steering repos existed has no state, and its old main re
 
 ## Changing the connection
 
-Mac decided on 2026-10-01 that an owner may change the stored connection until Oxagen has created a steering repo in it (#4899). Send `resetConnection: true` to [retry_steering_repo_provision](steering_repo.provision.retry.md), or to `import_workspace_steering` for a workspace with a `legacySource`. The run lists the candidates again. The reset is refused (`connection_in_use`) once any setup of the organization recorded a repository in the stored account.
+Mac decided on 2026-10-01 that an owner may change the stored connection until Oxagen has created a steering repo in it (#4899). Send `resetConnection: true` to [retry_steering_repo_provision](steering_repo.provision.retry.md), or to `import_workspace_steering` for a workspace with a `legacySource`. The run lists the candidates again. The reset is refused (`connection_in_use`) once a setup of the organization has a repository in the stored account that published a version, was bound, or finished. A repository whose setup stopped before its first version does not count: the reset clears that setup's record of it, the next run creates one in the new place, and the old repository stays on the host for a person to delete. The reset also waits (`setup_running`) while any setup of the organization saved as `provisioning` in the last 10 minutes. On `import_workspace_steering` it takes an org Owner or Admin, because the connection belongs to the whole organization.
 
 ## Choosing a connection
 

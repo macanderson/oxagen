@@ -6328,6 +6328,8 @@ type Messages = {
           organization: string;
           user: string;
           change: string;
+          group: string;
+          changeGroup: string;
         };
       };
       reauthorize: {

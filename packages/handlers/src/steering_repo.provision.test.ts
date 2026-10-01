@@ -31,7 +31,10 @@ import {
   GITHUB_PLAN_REQUIRED,
   isSteeringRepoStep,
   pickSteeringConnection,
+  planConnectionReset,
+  releasedSteeringRepoState,
   REPOSITORY_CREATE_REFUSED,
+  RESET_RUNNING_MS,
   repositoryOnConnection,
   provisionSteeringRepo,
   readSteeringConnection,
@@ -1992,6 +1995,22 @@ describe("a refused create", () => {
     });
   });
 
+  it("leaves a rate limit to the job's retry", async () => {
+    const hub = githubFake();
+    const h = new Harness(hub, null);
+    h.connections.set("org_1", GITHUB_CONNECTION);
+    await runSteeringRepoStep(h.deps(), WS, "pick_connection");
+    hub.failNext({
+      method: "POST",
+      path: "/orgs/acme/repos",
+      status: 403,
+      message: "API rate limit exceeded for installation.",
+    });
+    const err = await stepError(h.deps(), WS, "create_repository");
+    expect(err).not.toBeInstanceOf(SteeringProvisionBlockedError);
+    expect(h.state(WS)).toMatchObject({ status: "failed" });
+  });
+
   it("still reads every name taken as repository_name_taken", async () => {
     const hub = githubFake();
     for (let n = 1; n <= 20; n++)
@@ -2073,3 +2092,81 @@ describe("repositoryOnConnection", () => {
     ).toBeNull();
   });
 });
+
+describe("planConnectionReset", () => {
+  const made = (owner: string): SteeringRepository => ({
+    id: 1,
+    owner,
+    name: "oxagen-support",
+    full_name: `${owner}/oxagen-support`,
+    initial_branch: "main",
+  });
+  const at = (overrides: Partial<SteeringRepoState>): SteeringRepoState => ({
+    ...initialSteeringRepoState(new Date(NOW.getTime() - RESET_RUNNING_MS - 1)),
+    provider: "github",
+    status: "blocked",
+    ...overrides,
+  });
+
+  it("waits for a setup that saved as provisioning within the window", () => {
+    expect(
+      planConnectionReset(
+        GITHUB_CONNECTION,
+        [{ key: "ws_1", state: at({ status: "provisioning", updated_at: NOW.toISOString() }) }],
+        NOW,
+      ),
+    ).toEqual({ kind: "refuse", reason: "setup_running" });
+  });
+
+  it("treats an old provisioning state that never saved again as stopped", () => {
+    expect(
+      planConnectionReset(
+        GITHUB_CONNECTION,
+        [{ key: "ws_1", state: at({ status: "provisioning" }) }],
+        NOW,
+      ),
+    ).toEqual({ kind: "clear", release: [] });
+  });
+
+  it("refuses once a repo in the stored account published, bound, or finished", () => {
+    for (const pinned of [
+      { deployment_id: 9 },
+      { binding_id: "rpb_1" },
+      { status: "ready" as const },
+    ])
+      expect(
+        planConnectionReset(
+          GITHUB_CONNECTION,
+          [{ key: "ws_1", state: at({ repository: made(ORG), ...pinned }) }],
+          NOW,
+        ),
+      ).toMatchObject({ kind: "refuse", reason: "connection_in_use" });
+  });
+
+  it("releases a setup that stopped before publishing its repo there", () => {
+    expect(
+      planConnectionReset(
+        GITHUB_CONNECTION,
+        [
+          { key: null, state: null },
+          { key: "ws_1", state: at({ repository: made(ORG), failed_step: "apply_settings" }) },
+          { key: "ws_2", state: at({ repository: made("elsewhere"), deployment_id: 3 }) },
+        ],
+        NOW,
+      ),
+    ).toEqual({ kind: "clear", release: ["ws_1"] });
+    const released = releasedSteeringRepoState(
+      at({ repository: made(ORG), step: "write_first_commit", commit_sha: "abc", attempt: 2 }),
+      NOW,
+    );
+    expect(released).toMatchObject({
+      status: "blocked",
+      step: null,
+      repository: null,
+      commit_sha: null,
+      attempt: 1,
+      candidate: null,
+    });
+  });
+});
+

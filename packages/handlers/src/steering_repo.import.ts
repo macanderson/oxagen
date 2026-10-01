@@ -9,7 +9,7 @@
 // ./steering-repo/import-run.ts; its database and host calls are in
 // ./steering-repo/import-deps.ts, which load the host clients, so the handler
 // imports both only when an import runs.
-import { resolveActingUserId } from "@oxagen/iam/org-role";
+import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { HandlerError, type CapabilityHandler } from "@oxagen/oxagen";
 import { steeringRepoImport } from "@oxagen/oxagen/contracts/steering_repo.import";
 import { assertContractRole } from "./lib/capability-role-guard";
@@ -32,6 +32,14 @@ export const importWorkspaceSteeringHandler: CapabilityHandler<
   // A reset clears the stored connection, and a setup that stopped with
   // choose_connection takes the person's pick, both before the run
   // provisions (#4875, #4899).
+  // The connection belongs to the whole organization, so clearing it takes an
+  // org Owner or Admin even though a workspace Owner may run the import
+  // (#4900).
+  if (input.resetConnection === true)
+    await assertOrgRole(
+      { ...ctx, userId: actorUserId },
+      { org: ["Owner", "Admin"] },
+    );
   if (input.resetConnection === true || input.connection) {
     const { applyWorkspaceConnectionPick, resetOrganizationConnection } =
       await import("./steering-repo/connection-pick");

@@ -43,6 +43,7 @@ import { schema, withSystemDb, withTenantDb } from "@oxagen/database";
 import {
   createAppInstallationToken,
   GitHubApiError,
+  GitHubRateLimitedError,
 } from "@oxagen/github";
 import * as gh from "@oxagen/github/provision";
 import * as gl from "@oxagen/gitlab/provision";
@@ -657,6 +658,8 @@ function createRefused(
       : err instanceof gl.GitLabApiError
         ? err.status
         : null;
+  // A rate limit is a 403 too, and the job retries it after the window.
+  if (err instanceof GitHubRateLimitedError) return err;
   if (status !== 422 && status !== 400 && status !== 403) return err;
   const message = err instanceof Error ? err.message : String(err);
   if (/Every name from /.test(message))
@@ -760,6 +763,7 @@ async function applySettingsStep(ctx: StepContext): Promise<void> {
 function planRequired(err: unknown, connection: SteeringConnection): unknown {
   if (
     !(err instanceof GitHubApiError) ||
+    err instanceof GitHubRateLimitedError ||
     err.status !== 403 ||
     !/upgrade to github pro|github pro\b/i.test(err.message)
   )
@@ -1276,21 +1280,95 @@ export function repositoryOnConnection(
   return null;
 }
 
+/** How long a `provisioning` setup that has not saved still counts as running. */
+export const RESET_RUNNING_MS = 10 * 60 * 1000;
+
+/** One setup of the organization: its own (`key` null) or a workspace's. */
+export interface ResetScope {
+  key: string | null;
+  state: SteeringRepoState | null;
+}
+
+/** What a reset of the organization's connection would do. */
+export type ConnectionResetPlan =
+  | {
+      kind: "refuse";
+      reason: "setup_running" | "connection_in_use";
+      repository?: SteeringRepository;
+    }
+  | { kind: "clear"; release: (string | null)[] };
+
+/**
+ * Decide a reset of the organization's steering connection (#4899, #4900).
+ *
+ * - A setup that saved as `provisioning` within `RESET_RUNNING_MS` may be
+ *   between reading the old connection and recording a repository there, so
+ *   the reset waits for it (`setup_running`).
+ * - A repository in the stored account pins the connection once its setup
+ *   published a version, bound it, or finished (`connection_in_use`).
+ * - A repository in the stored account whose setup stopped before any of
+ *   that, such as at prescribed settings on a plan that cannot protect its
+ *   branches, does not pin it. The reset releases that setup: its record of
+ *   the repository is cleared, so the next run creates one in the new place.
+ *   The repository stays on the host for a person to delete.
+ */
+export function planConnectionReset(
+  connection: SteeringConnection,
+  scopes: readonly ResetScope[],
+  now: Date,
+): ConnectionResetPlan {
+  const release: (string | null)[] = [];
+  for (const { key, state } of scopes) {
+    if (state === null) continue;
+    if (
+      state.status === "provisioning" &&
+      now.getTime() - Date.parse(state.updated_at) < RESET_RUNNING_MS
+    )
+      return { kind: "refuse", reason: "setup_running" };
+    const repository = repositoryOnConnection(connection, [state]);
+    if (repository === null) continue;
+    if (
+      state.status === "ready" ||
+      state.deployment_id !== null ||
+      state.binding_id !== null
+    )
+      return { kind: "refuse", reason: "connection_in_use", repository };
+    release.push(key);
+  }
+  return { kind: "clear", release };
+}
+
+/** A setup's state with its record of an unpublished repository cleared. */
+export function releasedSteeringRepoState(
+  state: SteeringRepoState,
+  now: Date,
+): SteeringRepoState {
+  return {
+    ...state,
+    step: null,
+    attempt: 1,
+    candidate: null,
+    repository: null,
+    commit_sha: null,
+    connection_choices: [],
+    updated_at: now.toISOString(),
+  };
+}
+
 /**
  * Clear the organization's steering connection so the next run lists the
  * candidates again and a person picks one (#4899). Mac decided on 2026-10-01
  * that an owner may change the organization until Oxagen has created a
- * steering repo in it, so the clear is refused (conflict `connection_in_use`)
- * once any setup of the organization, its own or a workspace's, recorded a
- * repository there. Answers the connection it cleared, or null when none was
- * stored.
+ * steering repo in it. `planConnectionReset` decides what that means for each
+ * setup. Answers the connection it cleared, or null when none was stored.
  */
 export async function resetSteeringConnection(
   orgId: string,
 ): Promise<SteeringConnection | null> {
+  const now = new Date();
   // tenancy: filtered by orgId, which the kernel's capability context names.
-  // The check reads every setup of the organization, and the update clears
-  // one key of its own settings.
+  // The check reads every setup of the organization, and the writes touch
+  // only that organization's own settings and its workspaces' settings.
   return withSystemDb(async (tx) => {
     const [org] = await tx
       .select({ settings: schema.organizations.settings })
@@ -1300,19 +1378,53 @@ export async function resetSteeringConnection(
     const stored = readSteeringConnection(org?.settings);
     if (stored === null) return null;
     const workspaces = await tx
-      .select({ settings: schema.workspaces.settings })
+      .select({ id: schema.workspaces.id, settings: schema.workspaces.settings })
       .from(schema.workspaces)
       .where(eq(schema.workspaces.orgId, orgId));
-    const made = repositoryOnConnection(stored, [
-      readSteeringRepoState(org?.settings),
-      ...workspaces.map((w) => readSteeringRepoState(w.settings)),
+    const states = new Map<string | null, SteeringRepoState | null>([
+      [null, readSteeringRepoState(org?.settings)],
+      ...workspaces.map(
+        (w): [string, SteeringRepoState | null] => [
+          w.id,
+          readSteeringRepoState(w.settings),
+        ],
+      ),
     ]);
-    if (made !== null)
+    const plan = planConnectionReset(
+      stored,
+      [...states].map(([key, state]) => ({ key, state })),
+      now,
+    );
+    if (plan.kind === "refuse")
       throw new HandlerError({
         code: "conflict",
-        reason: "connection_in_use",
-        message: `Oxagen already created ${made.full_name} in ${steeringConnectionName(stored)}, so this organization's steering repos stay there.`,
+        reason: plan.reason,
+        message:
+          plan.reason === "setup_running"
+            ? "A steering repo setup of this organization is running. Wait for it to stop, then change the organization."
+            : `Oxagen already created ${plan.repository?.full_name ?? "a steering repo"} in ${steeringConnectionName(stored)}, so this organization's steering repos stay there.`,
       });
+    for (const key of plan.release) {
+      const state = states.get(key) ?? null;
+      if (state === null) continue;
+      const released = releasedSteeringRepoState(state, now);
+      if (key === null)
+        await tx
+          .update(schema.organizations)
+          .set({
+            settings: settingsWithSteeringRepo(schema.organizations.settings, released),
+          })
+          .where(eq(schema.organizations.id, orgId));
+      else
+        await tx
+          .update(schema.workspaces)
+          .set({
+            settings: settingsWithSteeringRepo(schema.workspaces.settings, released),
+          })
+          .where(
+            and(eq(schema.workspaces.id, key), eq(schema.workspaces.orgId, orgId)),
+          );
+    }
     await tx
       .update(schema.organizations)
       .set({

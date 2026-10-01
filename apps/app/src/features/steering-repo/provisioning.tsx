@@ -353,13 +353,21 @@ export function SteeringRepoProvisioning({
   const choosing =
     code === STEERING_CHOOSE_CONNECTION && view.connectionChoices.length > 0;
   // An owner may switch organizations until Oxagen has created a repo in the
-  // stored one (Mac, 2026-10-01).
+  // stored one (Mac, 2026-10-01). A repo whose setup stopped before its first
+  // version, such as on a plan that cannot protect its branches, does not
+  // count (#4900).
   const changeable =
     canAct &&
     movable &&
     view.connection !== null &&
-    view.repository === null &&
+    view.publishedVersion === null &&
     (view.status === "failed" || view.status === "blocked");
+  const place =
+    view.connection === null
+      ? null
+      : view.connection.provider === "gitlab"
+        ? "group"
+        : view.connection.kind;
 
   return (
     <div
@@ -403,15 +411,12 @@ export function SteeringRepoProvisioning({
               <div className="ml-[22px] flex flex-wrap items-center gap-2">
                 <p
                   data-testid="steering-repo-connection"
-                  data-kind={view.connection.kind}
+                  data-kind={place ?? undefined}
                   className="text-[12.5px] text-muted-foreground"
                 >
-                  {t(
-                    view.connection.kind === "user"
-                      ? "connection.user"
-                      : "connection.organization",
-                    { name: view.connection.name },
-                  )}
+                  {t(`connection.${place ?? "organization"}`, {
+                    name: view.connection.name,
+                  })}
                 </p>
                 {changeable ? (
                   <button
@@ -424,7 +429,11 @@ export function SteeringRepoProvisioning({
                       void goOn({ resetConnection: true });
                     }}
                   >
-                    {t("connection.change")}
+                    {t(
+                      place === "group"
+                        ? "connection.changeGroup"
+                        : "connection.change",
+                    )}
                   </button>
                 ) : null}
               </div>

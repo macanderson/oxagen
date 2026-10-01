@@ -564,8 +564,41 @@ describe("the steering repo provisioning", () => {
       );
     });
 
-    it("offers no change once a repo exists there, or to a member (negative)", () => {
-      provisioning(REFUSED({ repository: GITHUB_REPOSITORY }));
+    it("still offers a change when the repo there stopped before its first version", () => {
+      provisioning(
+        REFUSED({
+          repository: GITHUB_REPOSITORY,
+          failedStep: "apply_settings",
+          error: { code: "github_plan_required", message: "Upgrade to GitHub Pro." },
+        }),
+      );
+      expect(
+        screen.getByTestId("steering-repo-change-connection"),
+      ).toHaveTextContent("Use a different organization");
+    });
+
+    it("calls a GitLab location a group", () => {
+      provisioning(
+        REFUSED({
+          provider: "gitlab",
+          connection: {
+            provider: "gitlab",
+            id: 42,
+            name: "acme/platform",
+            kind: "organization",
+          },
+        }),
+      );
+      expect(screen.getByTestId("steering-repo-connection")).toHaveTextContent(
+        "Steering repos go to the acme/platform group.",
+      );
+      expect(
+        screen.getByTestId("steering-repo-change-connection"),
+      ).toHaveTextContent("Use a different group");
+    });
+
+    it("offers no change once a repo there has a version, or to a member (negative)", () => {
+      provisioning(REFUSED({ repository: GITHUB_REPOSITORY, publishedVersion: 1 }));
       expect(screen.getByTestId("steering-repo-connection")).toBeInTheDocument();
       expect(screen.queryByTestId("steering-repo-change-connection")).toBeNull();
       cleanup();

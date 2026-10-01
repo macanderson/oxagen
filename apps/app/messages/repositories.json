@@ -698,7 +698,9 @@
         "connection": {
           "organization": "Steering repos go to the {name} organization.",
           "user": "Steering repos go to {name}'s personal account.",
-          "change": "Use a different organization"
+          "change": "Use a different organization",
+          "group": "Steering repos go to the {name} group.",
+          "changeGroup": "Use a different group"
         }
       },
       "reauthorize": {
