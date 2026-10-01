@@ -7,7 +7,7 @@
 // policy bundle: TACHO_BUNDLE_SIGNING_PRIVATE_KEY, a PKCS#8 PEM. No machine
 // needs a second key, and rotating the one key rotates both.
 import { createPrivateKey, createPublicKey, sign } from "node:crypto";
-import { keyIdForPublicKey } from "@oxagen/tacho/host";
+import { keyIdForPublicKey } from "@oxagen/recorder/host";
 import { TACHO_BUNDLE_SIGNING_KEY_ENV } from "../../lib/tacho-bundle-signing";
 
 export interface LocalCallSigner {

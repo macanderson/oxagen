@@ -109,6 +109,7 @@ const PROVISIONING: SteeringRepoRead = {
     health: null,
     differences: [],
     legacySource: null,
+    connection: null,
     connectionChoices: [],
   },
 };

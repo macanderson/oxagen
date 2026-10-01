@@ -1,5 +1,5 @@
 /**
- * `@oxagen/tacho` is a leaf package: the wire schema's runtime enum cannot
+ * `@oxagen/recorder` is a leaf package: the wire schema's runtime enum cannot
  * import the database's `TACHO_RUNTIMES`, so the two lists are written twice
  * and this package -- the first that depends on both -- is where they meet.
  * A value the wire admits but the CHECK constraint rejects passes every
@@ -11,7 +11,7 @@ import { agentHarnessSchema } from "@oxagen/oxagen/contracts/agent.list";
 import {
   TACHO_RUNTIMES as WIRE_RUNTIMES,
   WRAPPED_HARNESSES,
-} from "@oxagen/tacho";
+} from "@oxagen/recorder";
 import { describe, expect, it } from "vitest";
 
 const DB_RUNTIMES = schema.TACHO_RUNTIMES;

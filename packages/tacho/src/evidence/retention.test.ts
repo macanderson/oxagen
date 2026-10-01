@@ -81,7 +81,7 @@ describe("retainsBody", () => {
   });
 
   it("names only classes the run ledger's vocabulary defines", () => {
-    // `@oxagen/tacho` takes no `@oxagen/*` runtime dependency, so
+    // `@oxagen/recorder` takes no `@oxagen/*` runtime dependency, so
     // `RETENTION_CONTENT_CLASSES` cannot be imported here. The list is
     // mirrored instead, and this is where the two are held in step: a class
     // this package invents would be authorised by no mandate the control

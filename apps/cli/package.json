@@ -37,14 +37,15 @@
     "lint": "eslint src --max-warnings 0",
     "test:unit": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "compile": "pnpm run bundle && node ../../tools/sea/compile.mjs --entry dist-standalone/sea/oxagen.cjs --name oxagen --out dist-bin"
+    "compile": "pnpm run bundle && node ../../tools/sea/compile.mjs --entry dist-standalone/sea/oxagen.cjs --name oxagen --out dist-bin --asset cedar_wasm_bg.wasm=node_modules/@cedar-policy/cedar-wasm/nodejs/cedar_wasm_bg.wasm"
   },
   "dependencies": {
+    "@cedar-policy/cedar-wasm": "4.13.0",
     "@oxagen/billing": "workspace:*",
     "@oxagen/oxagen": "workspace:*",
+    "@oxagen/recorder": "workspace:*",
     "@oxagen/steering-check": "workspace:*",
     "@oxagen/steering-freshness": "workspace:*",
-    "@oxagen/tacho": "workspace:*",
     "commander": "12.1.0",
     "fflate": "0.8.3"
   },

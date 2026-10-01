@@ -887,7 +887,7 @@ describe("fail closed", () => {
 describe("the mandate, materialised for the host that serves it", () => {
   /**
    * `gatewayMayInvoke` is a rule over the registry, and the local MCP gateway
-   * cannot run it: `@oxagen/tacho` takes no `@oxagen/*` runtime dependency, so
+   * cannot run it: `@oxagen/recorder` takes no `@oxagen/*` runtime dependency, so
    * it cannot read a capability's surfaces, mutation or sensitivity. Before
    * the answer was signed into the policy bundle, the gateway forwarded
    * `tools/list` unchanged and advertised everything — the app was shown tools

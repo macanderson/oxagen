@@ -508,7 +508,7 @@ describe("Wal", () => {
 
   it("reads a cursor that does not parse as empty, and still compacts a session sealed before it was lost", () => {
     // W-05: a truncated cursor.json threw from the constructor, so neither
-    // the daemon nor `tacho status` could start.
+    // the daemon nor `oxagen agent status` could start.
     const paths = scratchPaths();
     const session = minimalSession();
     const uuid = session[0]!.session_uuid;

@@ -32,7 +32,7 @@ import { runFork, type RunForkOutput } from "@oxagen/oxagen/contracts/run.fork";
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import type { AttemptRecord, RunStore } from "@oxagen/run-ledger";
 import { isRunNotWritableError } from "@oxagen/run-ledger/run-errors";
-import { frameOwesBody, gradeAllows, isReplayGrade } from "@oxagen/tacho";
+import { frameOwesBody, gradeAllows, isReplayGrade } from "@oxagen/recorder";
 import {
   defaultRunReadDeps,
   ledgerStore,

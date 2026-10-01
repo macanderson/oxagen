@@ -4,7 +4,7 @@ import {
   requireCedarRuntime,
   type CedarDecision,
   type CedarRuntime,
-} from "@oxagen/tacho/policy";
+} from "@oxagen/recorder/policy";
 import { hostCedarBundle, type AgentDeclaration, type CompiledPolicySet } from "./compile";
 import { decideToolCall, type ToolCallInput } from "./evaluate";
 import {

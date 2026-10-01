@@ -1,10 +1,10 @@
 # @oxagen/desktop
 
-The Oxagen app: a Tauri 2 shell over the two compiled CLIs. It installs
-`oxagen` and `tacho`, signs the machine in to an organization, enrolls the
-host under Tacho for Claude Code, Codex, Cursor, and Stella, and lets the
-operator see the connection, pick or change the workspace the host reports
-to, add or drop a wrapper, and unenroll. Spec: `docs/specs/oxagen-desktop/spec.html`.
+The Oxagen app: a Tauri 2 shell over two compiled executables, the `oxagen`
+CLI and the recorder. It installs both, signs the machine in to an
+organization, enrolls the host with the recorder for Claude Code, Codex,
+Cursor, and Stella, and lets the operator see the connection, pick or change
+the workspace the host reports to, add or drop a wrapper, and unenroll. Spec: `docs/specs/oxagen-desktop/spec.html`.
 
 ## Boundary
 
@@ -13,14 +13,14 @@ to, add or drop a wrapper, and unenroll. Spec: `docs/specs/oxagen-desktop/spec.h
   the two CLIs on PATH (`src-tauri/src/cli_install.rs`), the two user-scoped
   API reads, the tray, and the in-app updater.
 - **Does not own:** enrollment, hook writing, or the collector
-  ([`@oxagen/tacho`](../../packages/tacho/README.md), run as the `tacho`
-  sidecar); sign-in and workspace defaults ([`apps/cli`](../cli/README.md),
+  ([`@oxagen/recorder`](../../packages/tacho/README.md), run as the bundled
+  recorder sidecar); sign-in and workspace defaults ([`apps/cli`](../cli/README.md),
   run as the `oxagen` sidecar); the organization and workspace lists
   ([`apps/api`](../api/README.md)); the house tokens and fonts
   ([`@oxagen/ui`](../../packages/ui/README.md)).
 - **Depends on:** `@oxagen/ui`, for `styles/house-tokens.css` and
-  `styles/house-fonts.css` (`src/styles.css`). The `tacho` and
-  `oxagen` binaries are staged into the bundle by `scripts/sidecars.mjs`, not
+  `styles/house-fonts.css` (`src/styles.css`). The recorder and `oxagen`
+  binaries are staged into the bundle by `scripts/sidecars.mjs`, not
   imported.
 - **Used by:** no workspace package imports it. It ships as a signed desktop
   installer.
@@ -71,9 +71,9 @@ collector's `/status` on loopback) and every action runs a sidecar:
 | Panel | Reads | Action |
 |---|---|---|
 | Account | `config.json` | `oxagen login` (browser PKCE), `oxagen logout` |
-| This machine | `host.json`, daemon `/status`, `tacho status --json` | `tacho enroll --harness …`, `tacho unenroll [--purge]` |
-| Workspace | `POST /v1/user/organizations`, `POST /v1/user/workspaces` | `tacho reassign --org … --workspace …`; `oxagen tacho reassign … --default` when the CLI default should follow |
-| Wrappers | `host.harnesses`, hook presence per harness | `tacho reassign --harness …` |
+| This machine | `host.json`, daemon `/status`, the recorder sidecar's `status --json` | the recorder sidecar's `enroll --harness …` and `unenroll [--purge]` |
+| Workspace | `POST /v1/user/organizations`, `POST /v1/user/workspaces` | the recorder sidecar's `reassign --org … --workspace …`, run through the `oxagen` sidecar with `--default` when the CLI default should follow |
+| Wrappers | `host.harnesses`, hook presence per harness | the recorder sidecar's `reassign --harness …` |
 | Command line | PATH, `cli_install` state | linked automatically on every launch; "Link into PATH" / "Remove links" for manual control |
 | Updates (macOS) | `autoUpdate` in `desktop.json`, `update_policy` | "Install updates automatically" writes `autoUpdate` through `set_auto_update` |
 | Uninstall | — | `remove_local_data` after unenroll; then the platform uninstaller |
@@ -93,7 +93,7 @@ once per launch, off the main thread:
   on Linux, `%LOCALAPPDATA%\oxagen\bin\<version>` on Windows. It happens on
   every launch, with PATH linking on or off, and a copy that is already
   current is left alone. Every sidecar the app runs gets `TACHO_BIN_DIR` set
-  to that directory, so `tacho enroll` writes it into every hook, the
+  to that directory, so enrolling writes it into every hook, the
   credential helper, the MCP entry and the service unit, never a path in the
   bundle. Moving the app to the Trash or removing the package leaves the
   copy, so the hooks keep running. A new version copies itself beside the
@@ -142,8 +142,8 @@ A release is one button: Actions, Release, Run workflow, pick `patch`,
 release PR pushes `desktop-v<version>`, and `.github/workflows/desktop.yml`
 does the rest: four builds, then the `publish` job copies the installers and
 `SHA256SUMS.txt` to https://downloads.oxagen.sh/desktop/<version>/, rewrites
-the listing page, opens the GitHub release with the bare `tacho` and `oxagen`
-binaries attached, and moves the updater feed. Nothing below is needed for
+the listing page, opens the GitHub release with the bare `oxagen` and
+recorder binaries attached, and moves the updater feed. Nothing below is needed for
 that path.
 
 Every production deploy publishes too (ADR-158). Once `deploy-node` has
@@ -201,15 +201,15 @@ but the installers on disk.
 `smoke:e2e` (`scripts/e2e-smoke.mjs`, no repo needed — copy it to the test
 machine) drives the installed app's sidecars with the wizard's own argv against
 the live control plane: sidecar versions, session, the org and workspace
-pickers, `tacho detect`, and with `--enroll` the enroll, `tacho status` and a
-recorded first run per agent. It writes `oxagen-e2e-smoke-<host>.json`.
+pickers, the recorder's agent scan, and with `--enroll` the enroll, the
+recorder's status read, and a recorded first run per agent. It writes `oxagen-e2e-smoke-<host>.json`.
 Without `--enroll` it changes nothing on the machine.
 
 `scripts/e2e-webdriver.mjs` clicks through the built app on Linux with
-tauri-driver: the scan, Sign out, the start of Sign in, and the poll's `tacho
-status`, each through the sidecar allowlist, in a scratch HOME with a stand-in
-control plane. It also checks that the page cannot start `tacho daemon` or
-spawn a process through the shell plugin. The `webdriver` job in
+tauri-driver: the scan, Sign out, the start of Sign in, and the poll's status
+read, each through the sidecar allowlist, in a scratch HOME with a stand-in
+control plane. It also checks that the page cannot start the recorder's
+daemon or spawn a process through the shell plugin. The `webdriver` job in
 `desktop-rig.yml` runs it and keeps each step, with the window's text at
 it, as an artifact.
 Run it under `xvfb-run -a` after `pnpm sidecars` and `pnpm tauri build --debug
@@ -368,7 +368,7 @@ TTY. Without the key, pass `--config src-tauri/tauri.unsigned.conf.json` after
 
 ```
 src/            React UI (app.tsx), the sidecar bridge (bridge.ts, tested with
-                the Tauri modules faked), the tacho status parser
+                the Tauri modules faked), the recorder status parser
                 (tacho-status.ts, pure), the argv mapping the panels hand to
                 the CLIs (commands.ts, tested), the updater flow (updater.ts,
                 tested), the automatic update check (update-watch.ts,

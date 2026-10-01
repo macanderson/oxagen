@@ -19,7 +19,7 @@
   - `@oxagen/billing`: subscriptions, credits, spend, and metering reads.
   - `@oxagen/plugins`: plugin registry, installs, credentials, and the run-outcomes policy.
   - `@oxagen/agent`: agent identity, definitions, and tool-registry facts.
-  - `@oxagen/tacho`: host enrollment, sessions, and the Tacho wire types.
+  - `@oxagen/recorder`: host enrollment, sessions, and the Tacho wire types.
   - `@oxagen/github`: GitHub App tokens and the REST client for repository handlers.
   - `@oxagen/ingestion`: connector registry, filters, and schema validation.
   - `@oxagen/run-ledger` and `@oxagen/run-evidence`: run records, the evidence store, and canonical digests.

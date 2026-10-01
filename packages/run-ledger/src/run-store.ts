@@ -67,7 +67,7 @@ import {
   readArchiveSegment,
   type AttesterKey,
   type Redaction,
-} from "@oxagen/tacho";
+} from "@oxagen/recorder";
 import type { PlatformSurface } from "./surface";
 import { writeAssembly } from "./assembly-write";
 import { signSealAttestation } from "./attester";

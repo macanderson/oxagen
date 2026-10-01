@@ -22,7 +22,7 @@ import {
   CONTEXT_WINDOW_ATTR,
   LLM_CALL_DUPLICATE_OF_ATTR,
   windowBytes,
-} from "@oxagen/tacho";
+} from "@oxagen/recorder";
 import { contextWindowPayloadSchema } from "./event-payload-registry";
 import type { AttemptEventReadRecord } from "./run-store";
 

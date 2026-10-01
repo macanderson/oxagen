@@ -566,7 +566,7 @@ export async function startDaemon(
   const loaded = options.host ?? readHostFile(options.paths.hostFile);
   if (loaded === undefined) {
     throw new Error(
-      `no enrollment at ${options.paths.hostFile}; run \`tacho enroll\` first`,
+      `no enrollment at ${options.paths.hostFile}; run \`oxagen agent enroll\` first`,
     );
   }
   ensureDir(options.paths.dir);
@@ -668,7 +668,7 @@ async function initializeDaemon(
   const loaded = options.host ?? readHostFile(paths.hostFile);
   if (loaded === undefined) {
     throw new Error(
-      `no enrollment at ${paths.hostFile}; run \`tacho enroll\` first`,
+      `no enrollment at ${paths.hostFile}; run \`oxagen agent enroll\` first`,
     );
   }
   let host: HostFile = loaded;
@@ -742,7 +742,7 @@ async function initializeDaemon(
     (movedTo) => logSetAside("WAL cursor", movedTo),
   );
   // Only the daemon repairs a torn tail, and only once, before anything else
-  // touches the WAL: a reader building its own `Wal` (`tacho status`, `tacho
+  // touches the WAL: a reader building its own `Wal` (`oxagen agent status`, `tacho
   // export`) must never rewrite a file this process might still be writing
   // to, and a live daemon's own writes only ever extend a file it already
   // holds open through `append`, never race a repair of its own past tail.
@@ -833,7 +833,7 @@ async function initializeDaemon(
    * The credential seam (ADR-143): the vendor credentials this gateway holds
    * in custody, and the key that signs the run tokens a brokered harness
    * presents instead. Both are re-read from disk on use rather than cached,
-   * so `tacho enroll` taking a key into custody, or `tacho unenroll` rotating
+   * so `oxagen agent enroll` taking a key into custody, or `oxagen agent unenroll` rotating
    * the signing key, is honoured on the next call without a restart.
    */
   const credentialStore: CredentialStore = openCredentialStore({
@@ -1910,7 +1910,7 @@ async function initializeDaemon(
     hostEnrollmentId: host.host_enrollment_id,
     // A revoked host fetches no control envelope, so the revoked status
     // arrives only as the refusal. Recorded here, the hooks and the model
-    // proxy refuse from it and `tacho status` shows it (#3944).
+    // proxy refuse from it and `oxagen agent status` shows it (#3944).
     //
     // Only for a revoke this machine did not start. `reassign`, `unenroll`
     // and a harness add revoke first and mark host.json `revoked_at` (or
@@ -2745,7 +2745,7 @@ async function initializeDaemon(
    * hash, so every retry fails the same way. The git lane used to requeue it
    * on every tick, and one host logged the same conflict over a thousand
    * times while the session's end never landed (#4093). The events go to
-   * `quarantine/` as evidence, where `tacho status` counts them and the
+   * `quarantine/` as evidence, where `oxagen agent status` counts them and the
    * retention sweep ages them out. Their bodies do not go with them: content
    * whose event can never reach the chain would outlive every sweep that
    * enforces the retention mandate.
@@ -4031,13 +4031,13 @@ async function initializeDaemon(
       registry.list().map((session) => ({
         session_id: session.harnessSessionId,
         session_uuid: session.recorder.sessionUuid,
-        // `tacho verify` matches a harness that reports no session id by
+        // `oxagen agent verify` matches a harness that reports no session id by
         // the newest chain carrying its label.
         runtime: registry.agentOf(session).runtime,
         harness: registry.agentOf(session).harness,
         sealed: session.sealed,
         // SessionEnd arrived and the chain seals once its final worktree
-        // read lands, so `tacho verify` waits longer instead of failing.
+        // read lands, so `oxagen agent verify` waits longer instead of failing.
         ending: pendingSessionEnds.has(session.recorder.sessionUuid),
         seq: session.recorder.chainCursor.seq,
       })),
@@ -4570,7 +4570,7 @@ async function initializeDaemon(
       () => {
         // A parked SessionEnd waits only for its final worktree read, and
         // the tick starts that read at its end. On a first start the tick
-        // spent minutes shipping the backlog, so `tacho verify` gave up at
+        // spent minutes shipping the backlog, so `oxagen agent verify` gave up at
         // fifteen seconds and said SessionEnd never arrived. Starting the
         // read here, whether or not a tick is running, stops it waiting on
         // the tick. It can still wait on a lane already running, and on the

@@ -19,6 +19,7 @@ import {
 } from "./steering_repo.provision";
 import type { RepoHealthDetail } from "./steering-repo/health";
 import type { LegacySteeringSource } from "./steering-repo/legacy-source";
+import type { SteeringConnection } from "./steering_repo.provision";
 import { steeringRepositoryKey } from "./steering-repo/publisher";
 import { makeCTX, TEST_CTX } from "./test-utils/fixtures";
 
@@ -66,6 +67,7 @@ function deps(over: Partial<SteeringRepoReadDeps> = {}) {
     readPublishedVersion: vi.fn(async () => 3 as number | null),
     readHealth: vi.fn(async () => detail() as RepoHealthDetail | null),
     readLegacySource: vi.fn(async () => null as LegacySteeringSource | null),
+    readConnection: vi.fn(async () => null as SteeringConnection | null),
     ...over,
   };
 }
@@ -114,6 +116,7 @@ describe("get_steering_repo", () => {
         },
       ],
       legacySource: null,
+      connection: null,
       connectionChoices: [],
     });
     expect(steeringRepoGet.output.parse(out)).toEqual(out);
@@ -179,9 +182,30 @@ describe("get_steering_repo", () => {
       }),
     );
     expect(out.connectionChoices).toEqual([
-      { provider: "github", id: 11, name: "acme" },
-      { provider: "gitlab", id: 22, name: "acme/platform" },
+      { provider: "github", id: 11, name: "acme", kind: "organization" },
+      { provider: "gitlab", id: 22, name: "acme/platform", kind: "organization" },
     ]);
+    expect(steeringRepoGet.output.parse(out)).toEqual(out);
+  });
+
+  it("names the stored connection, and a personal account as a user", async () => {
+    const out = await read(
+      deps({
+        readState: vi.fn(async () => null),
+        readConnection: vi.fn(async () => ({
+          provider: "github" as const,
+          installation_id: 78,
+          account_login: "octocat",
+          account_type: "User" as const,
+        })),
+      }),
+    );
+    expect(out.connection).toEqual({
+      provider: "github",
+      id: 78,
+      name: "octocat",
+      kind: "user",
+    });
     expect(steeringRepoGet.output.parse(out)).toEqual(out);
   });
 

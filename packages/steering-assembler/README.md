@@ -14,7 +14,7 @@ Oxagen's slice of its context (ADR-093, ADR-144).
   bundle ([`@oxagen/handlers`](../handlers/README.md),
   `packages/handlers/src/lib/tacho-steering.ts`); the in-app assistant's
   steering (`packages/agent/src/runtime/assistant-steering.ts`); sealing the
-  manifest into a run's chain ([`@oxagen/tacho`](../tacho/README.md) on the
+  manifest into a run's chain ([`@oxagen/recorder`](../tacho/README.md) on the
   host, [`@oxagen/run-ledger`](../run-ledger/README.md) for the frame kind and
   the in-app run's frame); counting delivered manifests
   ([`@oxagen/telemetry`](../telemetry/README.md),

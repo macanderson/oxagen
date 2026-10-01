@@ -216,7 +216,7 @@ describe("runSidecar", () => {
       spawned[0]?.emit("stdout", "{");
       vi.advanceTimersByTime(5_001);
       await expect(pending).rejects.toThrow(
-        "tacho detect --json did not finish within 5s",
+        "The recorder did not finish within 5s",
       );
       // The late process is stopped by the id the shell gave it.
       expect(invoked.at(-1)).toEqual({
@@ -264,7 +264,9 @@ describe("runSidecar", () => {
     const silent = tachoStatus();
     await Promise.resolve();
     spawned[3]?.emit("close", { code: 2 });
-    await expect(silent).rejects.toThrow("tacho status exited 2");
+    await expect(silent).rejects.toThrow(
+      "Reading this machine's status exited 2 without a document",
+    );
     // Not enrolled: the document is printed with exit 1 and is still read.
     const notEnrolled = tachoStatus();
     await Promise.resolve();
@@ -321,7 +323,7 @@ describe("detect and connect parsing", () => {
     expect(parseConnect({ code: null, stdout: "{broken", stderr: "" })).toEqual(
       {
         ok: false,
-        detail: "tacho verify exited ? without a result",
+        detail: "Verifying the agent exited ? without a result",
       },
     );
   });
@@ -348,7 +350,7 @@ describe("the machine scan", () => {
     await Promise.resolve();
     spawned[1]?.emit("close", { code: 3 });
     await expect(silent).rejects.toThrow(
-      "tacho detect exited 3 without a report",
+      "Scanning for agents exited 3 without a report",
     );
   });
 

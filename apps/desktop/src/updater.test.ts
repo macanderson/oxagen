@@ -377,7 +377,9 @@ describe("describeRestart", () => {
     );
     expect(
       describeRestart({ ok: false, error: "kickstart failed" }),
-    ).toContain("runs the old build until you sign out or run tacho enroll");
+    ).toContain(
+      "runs the old build until you sign out or run oxagen agent enroll",
+    );
   });
 
   it("says nothing when there was no collector to restart", () => {

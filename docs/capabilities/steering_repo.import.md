@@ -26,6 +26,7 @@ A workspace owner runs this once for each workspace that still reads `.oxagen/`.
 | `ruleKinds` | object, optional | the kind of each v0.1 rule, `business-rule` or `code-rule`, keyed by the old lineage a `needs_choices` answer listed |
 | `constraintEffects` | object, optional | the effect of each v0.1 constraint, `require` or `forbid`, keyed by its old lineage |
 | `startFresh` | boolean, optional | for a workspace on a legacy sources connection: create an empty steering repo and import nothing |
+| `resetConnection` | boolean, optional | clear the organization's stored steering connection before the run provisions, so it lists the candidates again (#4899). It takes an org Owner or Admin, and is refused once a steering repo in the stored account has a version |
 | `connection` | `{ provider, id }`, optional | the GitHub organization or GitLab group to create the steering repo in, when setup stopped with `choose_connection`. It must be one of [get_steering_repo](steering_repo.get.md)'s `connectionChoices`, and the run stores it as the organization's steering connection before it provisions (#4875) |
 
 Send `{}` on the first call. The choices count only until the run changes something. After that, a call runs with the choices it started with.
@@ -85,6 +86,8 @@ The first import steering PR lists what the import left and each dropped field. 
 | `forbidden` | `no_principal`, `org_role_required` | no signed-in user; not an org Owner or Admin or a workspace Owner |
 | `not_found` | `workspace_not_found` | the workspace is gone |
 | `conflict` | `unknown_connection` | `connection` is not one of the connections the workspace's setup found. Nothing changed |
+| `conflict` | `connection_in_use` | `resetConnection` was sent, and a setup of the organization has a repository in the stored account that published a version, was bound, or finished. Nothing changed |
+| `conflict` | `setup_running` | `resetConnection` was sent while a setup of the organization saved as `provisioning` in the last 10 minutes. Nothing changed |
 | `conflict` | `connection_already_chosen` | the organization already holds a different steering connection. Call again without `connection` to use it |
 | `conflict` | `steering_import_running` | another run of this workspace saved within the last 10 minutes |
 | `conflict` | `steering_import_provider_unsupported` | the workspace binds a repository on a host other than GitHub, such as GitLab |
@@ -94,6 +97,6 @@ The first import steering PR lists what the import left and each dropped field. 
 | `conflict` | `steering_import_branch_taken` | a branch the import writes, such as `oxagen/import-cleanup`, already exists, and Oxagen cannot confirm it holds only this import's commit. A branch that changes 300 or more files always refuses, and the message says so, because the host cannot list that many changes. Delete the branch, then call again |
 | `conflict` | `workspace_mismatch`, `governance_unreadable`, `workspace_toml_unreadable`, `too_many_files`, `branch_scope` | the converter cannot read the tree. Nothing changed |
 | `conflict` | `steering_repo_provisioning` | another request is creating the steering repo |
-| `conflict` | `steering_repo_provision_failed`, `steering_repo_already_bound`, `steering_app_unconfigured`, `repository_name_taken`, `no_connection`, `choose_connection` | the steering repo could not be created. The old repository steers the workspace again |
+| `conflict` | `steering_repo_provision_failed`, `steering_repo_already_bound`, `steering_app_unconfigured`, `repository_name_taken`, `repository_create_refused`, `github_plan_required`, `no_connection`, `choose_connection` | the steering repo could not be created. The old repository steers the workspace again |
 | `conflict` | `steering_repo_not_ready` | the steering repo has no default branch yet |
 | `conflict` | `github_refused` | GitHub refused a branch, commit, or PR. Call again to resume |

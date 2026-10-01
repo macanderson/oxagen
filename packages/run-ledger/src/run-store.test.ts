@@ -95,7 +95,7 @@ import {
   digestBytes,
   readArchiveSegment,
   verifyAttestation,
-} from "@oxagen/tacho";
+} from "@oxagen/recorder";
 import { sealAttestationPayload } from "./attester";
 import {
   EMPTY_EVENT_STREAM_DIGEST,

@@ -15,7 +15,7 @@ import {
   sealEvent,
   type UnsealedTachoEvent,
   wrappedFrameOf,
-} from "@oxagen/tacho";
+} from "@oxagen/recorder";
 import type { TachoEventRecord, TachoFrameRow } from "@oxagen/telemetry";
 import { drizzle } from "drizzle-orm/postgres-js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -52,12 +52,12 @@ vi.mock("@oxagen/run-ledger/evidence-store", () => ({
   evidenceStore: () => ({ getSegment: mocks.getSegment }),
 }));
 // The real function, wrapped so a test can read what the export passed it.
-vi.mock("@oxagen/tacho", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@oxagen/tacho")>()),
+vi.mock("@oxagen/recorder", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@oxagen/recorder")>()),
   unflattenEventReading: mocks.unflattenEventReading,
 }));
 const { unflattenEventReading: realUnflattenEventReading } =
-  await vi.importActual<typeof import("@oxagen/tacho")>("@oxagen/tacho");
+  await vi.importActual<typeof import("@oxagen/recorder")>("@oxagen/recorder");
 vi.mock("@oxagen/telemetry", () => ({
   selectTachoEvents: mocks.selectTachoEvents,
   selectTachoEventRecords: mocks.selectTachoEventRecords,

@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
-import type { CedarToolEntry } from "@oxagen/tacho";
-import { requireCedarRuntime, type CedarRuntime } from "@oxagen/tacho/policy";
+import type { CedarToolEntry } from "@oxagen/recorder";
+import { requireCedarRuntime, type CedarRuntime } from "@oxagen/recorder/policy";
 import {
   MAX_TOOL_ARGS,
   SCHEMA_PATH,

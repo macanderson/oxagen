@@ -15,7 +15,7 @@ import {
   PROOF_OBSERVED_KIND,
   proofObservedBodySchema,
 } from "@oxagen/run-evidence";
-import type { TachoEvent } from "@oxagen/tacho";
+import type { TachoEvent } from "@oxagen/recorder";
 import { and, asc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 
 export type ProofScope = { orgId: string; workspaceId: string };

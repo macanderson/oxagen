@@ -1,93 +1,50 @@
 #!/usr/bin/env tsx
 /**
- * oxagen — the governance-operations CLI for the Oxagen control plane.
+ * The `oxagen` executable's entry. It decides one thing, before anything
+ * else loads: whether this is a machine command or a command a person runs.
  *
- * Usage:
- *   oxagen login
- *   oxagen budget show
- *   oxagen graph search -q "…"
- *   oxagen trace --dispatch <id>
+ * The machine commands are the ones the recorder writes into a machine's
+ * configuration (#4879): a harness runs `oxagen hook` on every tool call, the
+ * user service runs `oxagen daemon`, a connected app runs `oxagen
+ * mcp-stdio`, Claude Code runs `oxagen credential issue` for its model
+ * token, and git runs `oxagen github credential`. `arp` rides along because
+ * it is the recorder's too. Each goes straight to the recorder, without the
+ * command tree, the usage telemetry, or the fatal-error handlers of
+ * `main.ts`, and none appears in `oxagen --help`. Their stdout belongs to
+ * the program that runs them.
  *
- * Oxagen governs, grounds, explains, meters and rates agents; it does not run
- * them (ADR-043). Agentic coding lives in the `stella` CLI, which talks to
- * Oxagen over MCP/API. The Commander command tree lives in ./program.ts; this
- * entry stays thin — fatal-error plumbing, then hand off to the tree.
+ * This file imports nothing statically, so `oxagen hook` loads this module,
+ * `machine/hook.ts`, and the recorder's hook, and nothing else
+ * (`src/__tests__/hook-entry.test.ts` pins that).
  */
-import { buildProgram } from "./program.js";
-import { debugLog, isDebugEnabled } from "./lib/debug-log.js";
-import { formatFatalError } from "./lib/fatal-error.js";
+const MACHINE_COMMANDS = ["daemon", "mcp-stdio", "credential", "github", "arp"];
 
-// Top-level safety net. Without this, a common failure (e.g. a missing file
-// passed to `oxagen secret import -f`) prints a raw Node stack trace. Instead, write a
-// single clean `Error: <message>` line to stderr — the full stack only under
-// OXAGEN_CLI_DEBUG — best-effort log it, and exit non-zero. Registered before
-// main() so it also covers failures during command construction.
-function reportFatal(err: unknown): void {
-  process.stderr.write(formatFatalError(err, isDebugEnabled()));
-  void debugLog("error", "cli.fatal", err);
-}
+const command = process.argv[2];
 
-process.on("unhandledRejection", (reason) => {
-  reportFatal(reason);
-  process.exitCode = 1;
-});
-
-process.on("uncaughtException", (err) => {
-  reportFatal(err);
-  // An uncaught exception leaves the process in an undefined state — exit now.
-  // The debugLog above is fire-and-forget and may not flush; that is acceptable.
-  process.exit(1);
-});
-
-async function main(): Promise<void> {
-  // When OXAGEN_CLI_DEBUG=1, record the invocation to ~/.oxagen/logs/cli.output
-  // before dispatching. Fire-and-forget: never blocks or breaks a command.
-  void debugLog("invoke", "cli.start", {
-    argv: process.argv.slice(2),
-    cwd: process.cwd(),
-  });
-
-  // Anonymous usage telemetry (TELEMETRY.md) — one event per invocation,
-  // emitted after the command finishes whether it succeeded or failed.
-  // `recordUsageEvent` can never throw or add meaningful latency (opt-out
-  // check is synchronous; the network send has its own bounded timeout and
-  // swallows every failure), so wrapping the whole program in try/finally
-  // here is safe and keeps every command instrumented from one place.
-  const program = buildProgram();
-  const knownCommands = program.commands.map((cmd) => cmd.name());
-  const {
-    classifyCommand,
-    classifyErrorType,
-    recordUsageEvent,
-    topLevelCommand,
-  } = await import("./telemetry/usage.js");
-  let command = classifyCommand(process.argv, knownCommands);
-  // Replace the argv guess with the command Commander dispatched, so an
-  // option before the command name cannot hide it (`oxagen -m x verify`).
-  program.hook("preAction", (_root, action) => {
-    command = topLevelCommand(action, program) ?? command;
-  });
-  const startedAt = Date.now();
-  let errorType = "";
-  let exitStatus = "success";
-  try {
-    await program.parseAsync(process.argv);
-    if (process.exitCode) exitStatus = "error";
-  } catch (err) {
-    exitStatus = "error";
-    errorType = classifyErrorType(err);
-    throw err;
-  } finally {
-    await recordUsageEvent({
-      command,
-      durationMs: Date.now() - startedAt,
-      exitStatus,
-      errorType,
+if (command === "hook") {
+  import("./machine/hook.js")
+    .then(({ runHook }) => runHook(process.argv))
+    .catch(() => {
+      // A hook always answers, so a harness never reads a crash as a verdict.
+      process.stdout.write("{}\n");
+      process.exitCode = 0;
     });
-  }
+} else if (command !== undefined && MACHINE_COMMANDS.includes(command)) {
+  import("./machine/recorder.js")
+    .then(({ runRecorderCommand }) => runRecorderCommand(process.argv))
+    .catch((error: unknown) => {
+      process.stderr.write(
+        `oxagen ${command}: ${error instanceof Error ? error.message : String(error)}\n`,
+      );
+      process.exitCode = 1;
+    });
+} else {
+  import("./main.js")
+    .then(({ runCli }) => runCli())
+    .catch((error: unknown) => {
+      process.stderr.write(
+        `Error: ${error instanceof Error ? error.message : String(error)}\n`,
+      );
+      process.exitCode = 1;
+    });
 }
-
-main().catch((err) => {
-  reportFatal(err);
-  process.exitCode = 1;
-});

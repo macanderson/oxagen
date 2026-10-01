@@ -5,10 +5,10 @@ description: "Every oxagen command and flag: budgets and cost, runs, the knowled
 
 Run `oxagen --help` for the live list, and append `--help` to any command for its flags.
 
-Most platform commands need an [authenticated CLI](/docs/cli/account-setup). `cost`, `logs`, and `telemetry` work offline. Agent enrollment uses a one-time token, and some wrapping commands inspect local state.
+Most platform commands need an [authenticated CLI](/docs/cli/account-setup). `cost`, `logs`, and `telemetry` work offline. `oxagen agent enroll` with a one-time token needs no login. The commands under `oxagen agent` that take no agent argument act on this machine's local state.
 
 <Callout type="warn">
-**Retired commands.** These commands belonged to the agent runtime and were removed: `sandbox`, `sandbox-template`, `code`, `eval`, `file-lock`, `a2a`, `models`, `skill`, `prompt`, `command`, `rules`, `settings`, `config`, `mcp`, `import`, `pr`, `recover`, and `lineage`. So were the interactive surfaces `view`, `agents`, `solve`, `daemon`, `replay`, and `fleet`, and a bare `oxagen "<prompt>"`. Each one is still registered, prints a retirement notice that points at the `stella` CLI, and exits non-zero.
+**Retired commands.** These commands belonged to the agent runtime and were removed: `sandbox`, `sandbox-template`, `code`, `eval`, `file-lock`, `a2a`, `models`, `skill`, `prompt`, `command`, `rules`, `settings`, `config`, `mcp`, `import`, `pr`, `recover`, and `lineage`. So were the interactive surfaces `view`, `agents`, `solve`, `replay`, and `fleet`, and a bare `oxagen "<prompt>"`. Each one is still registered, prints a retirement notice that points at the `stella` CLI, and exits non-zero. `oxagen daemon` now runs the collector. See [Machine commands](#machine-commands).
 </Callout>
 
 ## oxagen budget: spend ceilings
@@ -173,22 +173,99 @@ The command exits 0 when no finding is an error and 1 when at least one is. It e
 oxagen agent register --name <name> --harness <stella|claude-code|codex|cursor|claude-agent-sdk|custom> --runtime <rtm_id> [--slug <slug>] [--toolbelt <tbt_id>] [--description <text>] [--validity-days <n>] [--json]
 oxagen agent status <agent> [--json]
 oxagen agent unenroll <agent> [--host <tch_id>] [--reason <text>] [--json]
-oxagen agent unenroll [--harness <name>] [--all] [--token <apiKey>] [--purge] [--reason <text>]
 ```
 
-Without an agent, `unenroll` removes this machine's enrollment, the same as `tacho unenroll`. On a machine with more than one enrollment, name the one to remove with `--harness`, or remove them all with `--all`. Pass one of the two.
+Without an agent argument, `status` and `unenroll` act on this machine instead. See [oxagen agent on this machine](#oxagen-agent-on-this-machine).
 
 `register` mints the agent (`register_agent`): one operator on one runtime with one harness, carrying a toolbelt. It writes the agent row, its delegated principal, the default agent role, the first agent version and one long-lived credential, printed once and never recoverable. An agent carries no prompt and no definition file. `status` reads `get_agent`: the identity, the runtime it runs on, the toolbelt it carries, its versions, its credentials (prefix and dates, never the secret), the roles on its principal and the hosts enrolled under its key. `unenroll` revokes the agent's live host enrollments through `revoke_tacho_enrollment`, or one host with `--host`. `register` and `unenroll` are org Owner/Admin writes: the key `oxagen login` minted authenticates as the user who approved the login, and the handler checks that user's org role. The credential `register` prints is locked to its purpose and is not accepted as a bearer by the API or the MCP server; it is the credential the run-token exchange of the spec consumes.
 
-## oxagen agent enroll: put this machine under a registered agent's key
+## oxagen agent enroll: put this machine under Oxagen
 
 The Oxagen app puts this command on the machine's PATH. [Install the Oxagen app](/docs/cli/wrap-an-agent#install-the-oxagen-app) on the host first.
 
 ```bash
-oxagen agent enroll --token <oxe_1time_…> [--harness claude-code|codex|cursor|stella] [--port <n>] [--no-service] [--force]
+oxagen agent enroll --token <oxe_1time_…> [--harness <list>] [--api-url <url>] [--credentials brokered|passthrough] [--validity-days <n>] [--port <n>] [--no-service] [--force]
+oxagen agent enroll [--token <apiKey>] [--org <slug>] [--workspace <slug>] [--harness <list>] [--api-url <url>] [--credentials brokered|passthrough] [--validity-days <n>] [--port <n>] [--no-service] [--managed] [--print-managed] [--force] [--verify]
 ```
 
-The scripted path of the register flow. The one-time enrollment token (issued once from the Agents page or through `create_enrollment_token`, good for thirty minutes) is the credential, so no `oxagen login` is needed: the control plane resolves the organization, the workspace and the agent from it, and the host file records what it answered. The routine is the one `oxagen agent enroll` runs: the device key, the host credential, the `tachod` user service and the harness hooks. A token that was already used or has expired is refused (`token_used`, `token_expired`); issue a new one. A machine holds one enrollment per agent. Every agent keeps its files in its own directory, `~/.config/oxagen/tacho/agents/<id>/`. On a machine that is already enrolled, a token for a harness that no agent hooks enrolls another agent in a new directory and revokes nothing. A token for a harness that an agent on the machine already hooks is refused: the command exits non-zero, presents nothing, and names the agent and host already enrolled. Pass `--force` to replace that agent's enrollment with the agent the token names, which is the one case that flag is for. The other agents on the machine keep their enrollments. A token that names a harness an agent already hooks together with a new one is refused with a message to run `oxagen login`. Adding a harness to an enrollment revokes it first, and only the CLI's session can revoke. With `--force`, the same command replaces that agent's enrollment with the token's agent instead of extending it. See [Two agents on one machine](/docs/cli/wrap-an-agent#two-agents-on-one-machine). The command also reports the git remote of the directory it runs in. While onboarding is open, Oxagen records the GitHub repository that remote names.
+Enrollment writes the device key, the host credential, the collector's user service, and the harness hooks. The first form enrolls this machine as a registered agent's host. The second form enrolls it under your CLI login, or under a platform API token you pass with `--token`. After a successful enroll, both forms move every other agent on the machine whose hooks and service still run the older executable to the `oxagen` CLI. `--print-managed` moves nothing. See [Older enrollments](/docs/cli/wrap-an-agent#older-enrollments).
+
+| Flag | Description |
+|---|---|
+| `--token <token>` | A one-time enrollment token (`oxe_1time_…`) from agent registration, or a platform API token. Without it, the command uses your CLI login. |
+| `--org <slug>` | Organization slug. Defaults to the logged-in org. Refused with an enrollment token. |
+| `--workspace <slug>` | Workspace slug. Defaults to the logged-in workspace. Refused with an enrollment token. |
+| `--harness <list>` | `claude-code`, `codex`, `cursor`, `stella`, or a comma list such as `claude-code,cursor`. A fresh enrollment defaults to `claude-code`. A re-apply keeps the current list. |
+| `--api-url <url>` | The Oxagen API base URL, when it is not the one `oxagen login` chose. |
+| `--credentials <mode>` | `brokered`, the default: the gateway holds each model vendor key and the harness holds a run token. `passthrough`: the harness keeps its own key. |
+| `--validity-days <n>` | How many days the enrollment stays valid. Defaults to 180. |
+| `--port <n>` | The loopback port for the collector. |
+| `--no-service` | Install no user service. Run `oxagen daemon` yourself. |
+| `--managed` | Also print the managed settings document for MDM. Refused with an enrollment token. |
+| `--print-managed` | Only print the managed settings document, and write no user settings. Refused with an enrollment token. |
+| `--force` | Enroll again even if already enrolled. |
+| `--verify` | Run one headless turn afterwards, of the first harness `--harness` names, or Claude Code. Refused with an enrollment token. |
+
+The first form is the scripted path of the register flow. The one-time enrollment token (issued once from the Agents page or through `create_enrollment_token`, good for thirty minutes) is the credential, so no `oxagen login` is needed. The control plane resolves the organization, the workspace, and the agent from it, and the host file records what it answered. A token that was already used or has expired is refused (`token_used`, `token_expired`). Issue a new one. A machine holds one enrollment per agent. Every agent keeps its files in its own directory, `~/.config/oxagen/tacho/agents/<id>/`. On a machine that is already enrolled, a token for a harness that no agent hooks enrolls another agent in a new directory and revokes nothing. A token for a harness that an agent on the machine already hooks is refused: the command exits non-zero, presents nothing, and names the agent and host already enrolled. Pass `--force` to replace that agent's enrollment with the agent the token names, which is the one case that flag is for. The other agents on the machine keep their enrollments. A token that names a harness an agent already hooks together with a new one is refused with a message to run `oxagen login`. Adding a harness to an enrollment revokes it first, and only the CLI's session can revoke. With `--force`, the same command replaces that agent's enrollment with the token's agent instead of extending it. See [Two agents on one machine](/docs/cli/wrap-an-agent#two-agents-on-one-machine). The command also reports the git remote of the directory it runs in. While onboarding is open, Oxagen records the GitHub repository that remote names.
+
+## oxagen agent on this machine
+
+```bash
+oxagen agent status [--json]
+oxagen agent unenroll [--harness <name>] [--all] [--token <apiKey>] [--purge] [--reason <text>]
+oxagen agent reassign [--workspace <slug>] [--org <slug>] [--harness <list>] [--token <apiKey>] [--api-url <url>] [--reason <text>] [--default]
+oxagen agent export [--session <id>] [--format <format>] [--out <file>] [--list]
+oxagen agent verify [--harness claude-code|codex|cursor|stella] [--json]
+oxagen agent detect [--json]
+oxagen agent hosts [--status active|paused|suspended|revoked] [--limit <n>] [--json]
+```
+
+Each of these acts on the machine you run it on, except `hosts`, which reads the control plane. See [Wrap an agent](/docs/cli/wrap-an-agent) for the full behavior.
+
+| Subcommand | Description |
+|---|---|
+| `status` | This machine's enrollments, collector, hooks, policy bundle, and spool. It first moves an older enrollment's hooks and service to the `oxagen` CLI. It exits 1 when no agent is enrolled, or when any agent's events are not reaching Oxagen. |
+| `unenroll` | Removes an agent's hooks and service, revokes its enrollment, and deletes its host key. On a machine with more than one enrollment, name the one to remove with `--harness`, or remove them all with `--all`. Pass one of the two. `--purge` also deletes the local event log, spool, and quarantine. `--token` is the operator token for the server-side revoke. |
+| `reassign` | Points an agent at another workspace or org. It revokes the enrollment and enrolls again through your CLI login, keeping the device key. `--harness` with no `--workspace` replaces the harness list. `--default` also makes the new org and workspace the CLI default in `config.json`. |
+| `export` | Exports a session from the local event log. `--format trace` writes the `contextgraph-trace` journal, and `--format otlp` writes OTLP JSON. The default, `--format tacho`, writes the recorder's own NDJSON. `--list` lists the sessions in the log. `--out` writes a file in place of stdout. |
+| `verify` | Runs one headless turn of a harness, Claude Code by default, and confirms the collector chained it. `--json` prints the result as JSON. It exits 1 when the turn was not chained. |
+| `detect` | Lists the harnesses this machine has (Claude Code, Codex, Cursor, Stella, and Claude Desktop) and which of them are enrolled. |
+| `hosts` | Lists every machine enrolled in this workspace, with the tier each of its apps reaches. |
+
+## oxagen agent run: one agent session under Oxagen
+
+```bash
+oxagen agent run [--name <agent>] [--contained] [--image <ref>] [--workspace <dir>] [--github-repository <owner/name>] -- <command> [args...]
+```
+
+Runs one agent session under Oxagen control. Everything after `--` is the agent's command and its arguments. What the command names decides what happens:
+
+- **A custom agent.** Any other command is recorded as a custom agent under `--name`. Oxagen opens the session with a `SessionStart` hook call. The agent starts only when Oxagen accepts the session, and it runs with `OXAGEN_AGENT`, `OXAGEN_SESSION_ID`, and `OXAGEN_HOOK` in its environment, so it can report its own steps. The session closes with `SessionEnd` when the agent exits.
+- **A harness this machine wraps.** `claude`, `codex`, `cursor-agent`, or `stella` runs as it is, and that harness's own hooks record the session. A harness no agent on this machine wraps is refused.
+- **`--contained`.** Starts Claude Code or Codex in the contained launcher, on Linux with Docker. `oxagen run -- claude …` does the same.
+
+| Flag | Description |
+|---|---|
+| `--name <agent>` | The custom agent's name: lowercase letters, digits, `.`, `_`, and `-`. Defaults to the command's file name. With `--name`, any command is recorded as a custom agent. |
+| `--contained` | Start Claude Code or Codex in the contained launcher. |
+| `--image <ref>` | With `--contained`: the image. `OXAGEN_CONTAINED_IMAGE` also sets it. |
+| `--workspace <dir>` | With `--contained`: the repository root to mount at `/workspace`. Defaults to the current directory. This is a directory, not the workspace slug `enroll` takes. |
+| `--github-repository <owner/name>` | With `--contained`: the one repository the run may reach, with a token in `OXAGEN_CONTAINED_GITHUB_TOKEN`. |
+
+The command exits with the agent's own exit code. It exits 1 when the machine is not enrolled, when Oxagen refuses the session, or when the command cannot start. It exits 2 when no command follows `--`, when the custom agent's name is invalid, or when the harness is not wrapped on this machine. See [Wrap a custom agent](/docs/cli/wrap-an-agent#wrap-a-custom-agent).
+
+## Machine commands
+
+These commands are hidden from `oxagen --help`. Enrollment writes them into the machine's hooks, service, and app settings, and those programs run them. You run one yourself only to report a custom agent's steps with `oxagen hook --agent <name>`.
+
+| Command | What runs it |
+|---|---|
+| `oxagen hook` | Each wrapped harness's hooks, on every hooked event. A custom agent runs it with `--agent <name>`. It reads the payload on stdin, prints the answer on stdout, and exits 0. |
+| `oxagen daemon` | The user service. It runs the collector in the foreground. |
+| `oxagen mcp-stdio` | A connected app, to reach this machine's Oxagen toolbelt over stdio. |
+| `oxagen credential issue`, `oxagen credential status` | Claude Code runs `issue` as its `apiKeyHelper` for a fifteen-minute model token. `status` shows the model credentials the gateway holds. |
+| `oxagen github configure`, `oxagen github credential` | git, to route repository requests through this machine's credential custody. |
+| `oxagen arp` | Captures and prepares local Agent Run Protocol checkpoints. |
 
 ## oxagen agent env: bind agents to environments
 

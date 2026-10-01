@@ -13,7 +13,7 @@ import {
   TACHO_ENROLLMENT_CLAIMS_SCHEMA,
 } from "@oxagen/oxagen/tacho/schemas";
 import type { TachoEnrollmentCreateOutput } from "@oxagen/oxagen/contracts/tacho.enrollment.create";
-import { digestBytes } from "@oxagen/tacho";
+import { digestBytes } from "@oxagen/recorder";
 import { generateApiKey } from "./api-key-authz";
 import {
   TACHO_GATEWAY_SCOPE_PURPOSE,

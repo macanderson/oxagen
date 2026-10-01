@@ -69,7 +69,7 @@ describe("DesktopDownloads", () => {
       name: "Install the Oxagen app",
     });
     expect(section).toHaveTextContent(
-      "Install the app on the machine the agent runs on to put the oxagen and tacho commands that enrollment uses on PATH.",
+      "Install the app on the machine the agent runs on to put the oxagen command that enrollment uses on PATH.",
     );
     await expectNoAxe(document.body);
   });

@@ -18,7 +18,7 @@ export function addArpCommands(
       deps.out(JSON.stringify(await operation()));
     } catch (error) {
       deps.err(
-        `tacho arp: ${error instanceof Error ? error.message : String(error)}`,
+        `oxagen arp: ${error instanceof Error ? error.message : String(error)}`,
       );
       process.exitCode = 1;
     }

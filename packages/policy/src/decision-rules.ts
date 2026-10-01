@@ -21,13 +21,13 @@
  * nested argument, or follows an unconverted rule over the same tools.
  *
  * Two behaviors change. An argument of the wrong type, such as an amount sent
- * as a string, now denies the call (`typedArgs` in `@oxagen/tacho/policy`).
+ * as a string, now denies the call (`typedArgs` in `@oxagen/recorder/policy`).
  * The old evaluator only failed to match the condition. An argument sent as
  * null now reads as absent, so `exists`, `neq`, and `not_in` no longer match
  * it.
  */
-import type { CedarToolEntry } from "@oxagen/tacho";
-import { APPROVAL_ANNOTATION, APPROVAL_VALUE, type CedarArgType } from "@oxagen/tacho/policy";
+import type { CedarToolEntry } from "@oxagen/recorder";
+import { APPROVAL_ANNOTATION, APPROVAL_VALUE, type CedarArgType } from "@oxagen/recorder/policy";
 import { cedarString, isCedarIdentifier } from "./schema";
 
 /** A condition operator, as `@oxagen/rules` names it. */

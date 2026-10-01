@@ -9,7 +9,7 @@ import {
   digestBytes,
   foldedRemote,
   policyBundleSchema,
-} from "@oxagen/tacho";
+} from "@oxagen/recorder";
 import { SKILL_INTERJECTION_TIMEOUT_MS } from "@oxagen/oxagen/skills";
 import type { UnboundRepoReads as Reads } from "./tacho-unbound-repo";
 

@@ -24,14 +24,17 @@ Full reference: **https://docs.oxagen.sh/docs/cli**
   telemetry (`src/telemetry/usage.ts`).
 - **Does not own:** any capability logic. Every command that reads or changes
   platform state calls [`apps/api`](../api/README.md) over HTTP, and the
-  kernel runs there. It also does not own the Tacho host commands
-  ([`@oxagen/tacho`](../../packages/tacho/README.md), `@oxagen/tacho/cli`),
+  kernel runs there. It also does not own the work behind the machine
+  commands (`oxagen agent enroll`, `oxagen agent run`, `oxagen hook`,
+  `oxagen daemon`, and the rest), which lives in
+  [`@oxagen/recorder`](../../packages/tacho/README.md) (`@oxagen/recorder/cli`),
   the steering freshness check
   ([`@oxagen/steering-freshness`](../../packages/steering-freshness/README.md)),
   or the consent page it opens (`/cli/authorize` in
   [`apps/app`](../app/README.md)).
-- **Depends on:** `@oxagen/tacho` (the `oxagen tacho` commands and
-  `oxagen agent enroll`), `@oxagen/steering-freshness` (`oxagen steering`),
+- **Depends on:** `@oxagen/recorder` (the machine commands under
+  `oxagen agent`, and the hidden ones the hooks and the service run),
+  `@oxagen/steering-freshness` (`oxagen steering`),
   and `@oxagen/billing` (`formatUsd` and the rate card from
   `@oxagen/billing/rate-card`, for display).
 - **Used by:** no workspace package imports it. It is published as the
@@ -43,7 +46,8 @@ Full reference: **https://docs.oxagen.sh/docs/cli**
 |---|---|---|---|
 | Platform API client (`/v1/{org}/{workspace}/…`, `/v1/user/…`, bearer token) | boundary | `apps/cli/src/lib/api.ts` | Commands in `apps/cli/src/commands/`. Served by `apps/api/src/app.ts` |
 | Browser login (`/cli/authorize`, then `POST /v1/auth/cli/token`) | boundary | `apps/cli/src/auth/loopback-login.ts`, `pkce.ts` | `oxagen login` |
-| `CliDeps` from `defaultCliDeps` | adapter | `apps/cli/src/commands/tacho.ts` | `oxagen tacho …`. The work lives in `@oxagen/tacho/cli` |
+| `CliDeps` from `defaultCliDeps` | adapter | `apps/cli/src/commands/tacho.ts` | `oxagen agent enroll`, `status`, `reassign`, `unenroll`, `export`, `verify`, `hosts`, `run`, and `detect`, and the hidden alias group that keeps the older spelling. The work lives in `@oxagen/recorder/cli` |
+| Machine command dispatch | adapter | `apps/cli/src/index.ts`, `apps/cli/src/machine/` | `oxagen hook`, `daemon`, `mcp-stdio`, `credential`, `github`, and `arp`, which go straight to the recorder before the command tree loads. Hidden from `oxagen --help` |
 | `evaluateGate`, `renderGate`, `installHook` | adapter | `apps/cli/src/commands/steering.ts` | `oxagen steering …`, and each harness's prompt-submit hook |
 | Usage telemetry (`POST /v1/telemetry/usage`) | boundary | `apps/cli/src/telemetry/usage.ts` | Every command, unless `oxagen telemetry off` or `DO_NOT_TRACK=1` |
 | Retired command stubs | registry | `apps/cli/src/commands/retired.ts` | `apps/cli/src/program.ts` |
@@ -55,9 +59,11 @@ for the capability or a command file names it.
 
 ## Entry points
 
-- `bin.oxagen` → `dist/index.js`, built by `tsc` from `src/index.ts`, which
-  installs the fatal-error handlers and hands off to `buildProgram()` in
-  `src/program.ts`.
+- `bin.oxagen` → `dist/index.js`, built by `tsc` from `src/index.ts`. It
+  sends the machine commands (`hook`, `daemon`, `mcp-stdio`, `credential`,
+  `github`, `arp`) straight to the recorder through `src/machine/`, and every
+  other command to `src/main.ts`, which installs the fatal-error handlers and
+  hands off to `buildProgram()` in `src/program.ts`.
 - `pnpm bundle` → `scripts/bundle.mjs`: the standalone single-file bundle.
 - `pnpm compile` → a single executable, built by `tools/sea/compile.mjs` (see
   [`tools/sea`](../../tools/sea/README.md)).
@@ -145,7 +151,8 @@ command for its flags. The full command tree lives in
 https://docs.oxagen.sh/docs/cli/commands.
 
 Everything except `cost`, `logs` and `telemetry` talks to the platform API and
-needs `oxagen login` first.
+needs `oxagen login` first. `oxagen agent enroll` with a one-time enrollment
+token needs no login either.
 
 **Meter and bill**
 
@@ -184,6 +191,21 @@ oxagen conversation export <id>                   # export a conversation as md/
 oxagen asset upload <url>                         # ingest a binary asset
 ```
 
+**Wrap agents on this machine**
+
+```bash
+oxagen agent enroll --harness claude-code,codex   # hook these harnesses and install the collector service
+oxagen agent status                               # enrollments, collector, hooks, bundle, spool
+oxagen agent verify --harness codex               # one headless turn, confirmed chained
+oxagen agent run --name my-agent -- ./my-agent    # one custom agent session under Oxagen
+oxagen agent detect                               # which harnesses this machine has
+oxagen agent reassign|unenroll|export|hosts       # move, remove, export, list machines
+```
+
+`oxagen hook`, `oxagen daemon`, `oxagen mcp-stdio`, `oxagen credential`,
+`oxagen github`, and `oxagen arp` are hidden from help. The hooks, the user
+service, and the connected apps that enrollment installs run them.
+
 **Telemetry**
 
 ```bash
@@ -201,7 +223,7 @@ oxagen login / logout
 `sandbox`, `sandbox-template`, `code`, `eval`, `file-lock`, `a2a`, `models`,
 `skill`, `prompt`, `command`, `rules`, `settings`, `config`, `mcp`, `import`,
 `pr`, `recover`, `lineage`, plus the interactive surfaces (`view`, `agents`, `solve`,
-`daemon`, `replay`, `fleet`) and a bare `oxagen "<prompt>"`. Each prints a
+`replay`, `fleet`) and a bare `oxagen "<prompt>"`. Each prints a
 retirement notice and exits non-zero. Use the `stella` CLI instead.
 
 The CLI no longer reads `.oxagen/settings.json` — that file configured the

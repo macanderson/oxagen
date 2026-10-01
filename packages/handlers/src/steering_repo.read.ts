@@ -27,9 +27,12 @@ import type {
 import { repoRef } from "@oxagen/oxagen/steering-repo/names";
 import { and, eq } from "drizzle-orm";
 import {
+  isPersonalConnection,
+  readSteeringConnection,
   readSteeringRepoState,
   steeringConnectionId,
   steeringConnectionName,
+  type SteeringConnection,
   type SteeringRepoState,
 } from "./steering_repo.provision";
 import {
@@ -72,6 +75,8 @@ export interface SteeringRepoReadDeps {
   readLegacySource(
     scope: SteeringRepoReadScope,
   ): Promise<LegacySteeringSource | null>;
+  /** The organization's stored steering connection, or null. */
+  readConnection(scope: SteeringRepoReadScope): Promise<SteeringConnection | null>;
 }
 
 /**
@@ -111,8 +116,21 @@ export const NO_STEERING_REPO: SteeringRepoGetOutput = {
   health: null,
   differences: [],
   legacySource: null,
+  connection: null,
   connectionChoices: [],
 };
+
+/** A connection as the read names it. */
+function connectionView(
+  c: SteeringConnection,
+): SteeringRepoGetOutput["connectionChoices"][number] {
+  return {
+    provider: c.provider,
+    id: steeringConnectionId(c),
+    name: steeringConnectionName(c),
+    kind: isPersonalConnection(c) ? "user" : "organization",
+  };
+}
 
 function legacySourceView(
   legacy: LegacySteeringSource | null,
@@ -140,12 +158,15 @@ export function createGetSteeringRepoHandler(
 ): CapabilityHandler<typeof steeringRepoGet> {
   return async (_input, ctx): Promise<SteeringRepoGetOutput> => {
     const scope = workspaceScope(ctx);
-    const [state, legacy] = await Promise.all([
+    const [state, legacy, stored] = await Promise.all([
       deps.readState(scope),
       deps.readLegacySource(scope),
+      deps.readConnection(scope),
     ]);
     const legacySource = legacySourceView(legacy);
-    if (state === null) return { ...NO_STEERING_REPO, legacySource };
+    const connection = stored === null ? null : connectionView(stored);
+    if (state === null)
+      return { ...NO_STEERING_REPO, legacySource, connection };
 
     const provider = state.provider;
     const repository =
@@ -188,11 +209,8 @@ export function createGetSteeringRepoHandler(
       health: detail?.health ?? null,
       differences,
       legacySource,
-      connectionChoices: state.connection_choices.map((c) => ({
-        provider: c.provider,
-        id: steeringConnectionId(c),
-        name: steeringConnectionName(c),
-      })),
+      connection,
+      connectionChoices: state.connection_choices.map(connectionView),
     };
   };
 }
@@ -229,6 +247,19 @@ export const productionSteeringRepoReadDeps: SteeringRepoReadDeps = {
   },
   readHealth: readRepoHealthDetail,
   readLegacySource: readLegacySteeringSource,
+  async readConnection(scope) {
+    const o = schema.organizations;
+    // tenancy: filtered by the orgId the kernel scoped the read to. It reads
+    // one key of the organization's own settings.
+    const [row] = await withTenantDb((tx) =>
+      tx
+        .select({ settings: o.settings })
+        .from(o)
+        .where(eq(o.id, scope.orgId))
+        .limit(1),
+    );
+    return row === undefined ? null : readSteeringConnection(row.settings);
+  },
 };
 
 export const getSteeringRepoHandler = createGetSteeringRepoHandler(

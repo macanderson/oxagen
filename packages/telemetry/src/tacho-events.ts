@@ -14,7 +14,7 @@ import {
   TACHO_METERING_ATTR,
   TACHO_METERING_OBSERVED,
   type TachoEvent,
-} from "@oxagen/tacho";
+} from "@oxagen/recorder";
 import type { ClickHouseSettings } from "@clickhouse/client";
 import { TACHO_EVENTS_TABLE, tachoEventsColumns } from "./tacho-events-ddl";
 import { chInsert, chSelect } from "./tenant";
