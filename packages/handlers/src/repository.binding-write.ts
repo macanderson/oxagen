@@ -289,9 +289,19 @@ export interface WrittenRepositoryHead {
 }
 
 /**
- * Write a binding head for `repo` on `tx`, reusing or superseding a binding
- * version this connection already holds for it. The caller has already decided
- * the head may exist (role, duplicates, claims) and holds the workspace lock.
+ * Write a binding head for `repo` on `tx`, reusing the latest binding version
+ * when nothing it records has moved, and superseding it otherwise. The caller
+ * has already decided the head may exist (role, duplicates, claims) and holds
+ * the workspace lock.
+ *
+ * The latest version is the workspace's for this repository through ANY
+ * connection (#3340 finding 7). A binding version is the evidence an admitted
+ * run cites, and the versions of one repository in one workspace form one
+ * lineage. Looked up on the connection alone, a relink through the
+ * connection that replaced a retired one found nothing and wrote a second
+ * version 1 with no predecessor, splitting the chain. A version another
+ * connection holds is superseded, never reused, so the head and its binding
+ * name the same connection.
  */
 export async function writeRepositoryHead(
   tx: Tx,
@@ -304,6 +314,7 @@ export async function writeRepositoryHead(
     .select({
       id: schema.repositoryBindings.id,
       publicId: schema.repositoryBindings.publicId,
+      connectionId: schema.repositoryBindings.connectionId,
       version: schema.repositoryBindings.version,
       providerOwner: schema.repositoryBindings.providerOwner,
       providerName: schema.repositoryBindings.providerName,
@@ -315,17 +326,20 @@ export async function writeRepositoryHead(
       and(
         eq(schema.repositoryBindings.orgId, scope.orgId),
         eq(schema.repositoryBindings.workspaceId, scope.workspaceId),
-        eq(schema.repositoryBindings.connectionId, connectionId),
         eq(schema.repositoryBindings.provider, provider),
         eq(schema.repositoryBindings.providerRepositoryId, repo.id),
       ),
     )
-    .orderBy(desc(schema.repositoryBindings.version))
+    .orderBy(
+      desc(schema.repositoryBindings.version),
+      desc(schema.repositoryBindings.createdAt),
+    )
     .limit(1);
 
   let binding: { id: string; publicId: string };
   const unchanged =
     latest !== undefined &&
+    latest.connectionId === connectionId &&
     latest.providerOwner === repo.owner &&
     latest.providerName === repo.name &&
     latest.providerFullName === repo.fullName &&
