@@ -1,11 +1,18 @@
 // Memories, reflections, and memory PRs (steering-repo-spec, Memory and
-// reflection; ADR-206).
+// reflection; ADR-206, ADR-245).
 //
 // An agent's lessons wait here until the curator cites them in a memory PR.
-// When that PR merges or closes, Oxagen deletes every memory it cited. A
-// record that did not merge leaves a hash of each cited statement in
-// `memory_rejections`, so the curator does not propose the lesson again
-// without new evidence.
+// A memory keeps its row for life, and `state` says where it is: waiting,
+// in_pr while an open memory PR cites it, promoted once its record merged,
+// dismissed by a person, or retired when its file is gone or nothing used it
+// for `retire_after_days` (ADR-245). A record that did not merge leaves a
+// hash of each cited statement in `memory_rejections`, so the curator does
+// not propose the lesson again without new evidence.
+//
+// `memory_uses` counts the runs that used each memory: a Claude Code run
+// that read the memory's file, a harness's own count, or a citation. A
+// memory's `use_count` and `last_used_at` are computed from its uses in the
+// same transaction that writes them, and the curator ranks by them.
 //
 // A reflection is the memory an agent writes at the end of a run. Its tool
 // grades and tool feedback go to the tool server's owner and never steer. The
@@ -18,7 +25,8 @@
 // Oxagen could not tell.
 //
 // The migration that creates these tables and their tenant policies is
-// 20260927021500_steering_memories.sql.
+// 20260927021500_steering_memories.sql. 20261001200000_memory_uses.sql adds
+// the lifecycle columns and `memory_uses`.
 import {
   check,
   index,
@@ -26,6 +34,7 @@ import {
   jsonb,
   text,
   timestamp,
+  unique,
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
@@ -45,7 +54,7 @@ export const memoryReflections = agentSchema.table(
     summary: text("summary").notNull(),
     // { work: 1..5, tools: { "<server>__<tool>[@<version>]": 1..5 } }
     grades: jsonb("grades").notNull(),
-    // reflection/v1 lessons, kept after the memories they became are purged.
+    // reflection/v1 lessons, kept beside the memories they became.
     lessons: jsonb("lessons").notNull().default(sql`'[]'::jsonb`),
     toolFeedback: jsonb("tool_feedback").notNull().default(sql`'[]'::jsonb`),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
@@ -141,11 +150,30 @@ export const memories = agentSchema.table(
       () => memoryReflections.id,
       { onDelete: "set null" },
     ),
-    // Set when the curator cites the memory in a memory PR. Null means the
-    // memory is waiting.
+    // The memory PR that last cited the memory. It stays after the PR
+    // settles, so a promoted memory names the PR that promoted it.
     memoryPrId: uuid("memory_pr_id").references(() => memoryPullRequests.id, {
       onDelete: "set null",
     }),
+    // waiting, in_pr, promoted, dismissed, or retired (ADR-245).
+    state: text("state").notNull().default("waiting"),
+    // A Claude Code memory file's frontmatter `name`, `description`, and
+    // `metadata.type` (user, feedback, project, or reference).
+    label: text("label"),
+    summary: text("summary"),
+    memoryType: text("memory_type"),
+    // The distinct runs in `memory_uses`, plus the uses a harness counted
+    // with no run. Written with the uses, never on its own.
+    useCount: integer("use_count").notNull().default(0),
+    lastUsedAt: timestamp("last_used_at", { withTimezone: true, mode: "date" }),
+    retiredAt: timestamp("retired_at", { withTimezone: true, mode: "date" }),
+    // `deleted`: the file is gone or no longer holds the statement. `unused`:
+    // no run used the memory for `retire_after_days`. The memory comes back
+    // when its file holds the statement again, or when a run uses it.
+    retiredReason: text("retired_reason"),
+    // The lineage of the steering record that carries the memory: the record
+    // its memory PR merged, or an active record that already said it.
+    promotedLineage: text("promoted_lineage"),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
       .notNull()
       .defaultNow(),
@@ -157,11 +185,37 @@ export const memories = agentSchema.table(
     ),
     waitingIdx: index("memories_waiting_idx")
       .on(t.orgId, t.workspaceId, t.createdAt)
-      .where(sql`${t.memoryPrId} IS NULL`),
+      .where(sql`${t.state} = 'waiting'`),
     prIdx: index("memories_pr_idx").on(t.memoryPrId),
+    sourceIdx: index("memories_source_idx")
+      .on(t.workspaceId, t.source)
+      .where(sql`${t.source} IS NOT NULL`),
     captureCheck: check(
       "memories_capture_check",
-      sql`${t.capture} IN ('remember', 'pull_request', 'local_gateway')`,
+      sql`${t.capture} IN ('remember', 'pull_request', 'local_gateway', 'import')`,
+    ),
+    stateCheck: check(
+      "memories_state_check",
+      sql`${t.state} IN ('waiting', 'in_pr', 'promoted', 'dismissed', 'retired')`,
+    ),
+    // A retired memory says when and why. Any other state carries neither.
+    retiredCheck: check(
+      "memories_retired_check",
+      sql`(${t.state} = 'retired') = (${t.retiredAt} IS NOT NULL) AND (${t.state} = 'retired') = (${t.retiredReason} IS NOT NULL) AND (${t.retiredReason} IS NULL OR ${t.retiredReason} IN ('deleted', 'unused'))`,
+    ),
+    // A promoted memory names its record. A retired one keeps the lineage,
+    // so it comes back promoted.
+    promotedCheck: check(
+      "memories_promoted_check",
+      sql`${t.state} <> 'promoted' OR ${t.promotedLineage} IS NOT NULL`,
+    ),
+    useCountCheck: check(
+      "memories_use_count_check",
+      sql`${t.useCount} >= 0`,
+    ),
+    labelCheck: check(
+      "memories_label_check",
+      sql`(${t.label} IS NULL OR char_length(${t.label}) BETWEEN 1 AND 200) AND (${t.summary} IS NULL OR char_length(${t.summary}) BETWEEN 1 AND 1000) AND (${t.memoryType} IS NULL OR ${t.memoryType} ~ '^[a-z][a-z0-9_-]{0,31}$')`,
     ),
     // memory/v1 pairs agent and run with capture: remember sets both, a
     // local_gateway memory has no run, a pull_request memory has either.
@@ -177,6 +231,48 @@ export const memories = agentSchema.table(
       "memories_statement_check",
       sql`${t.statement} <> '' AND char_length(${t.statement}) <= 2000`,
     ),
+  }),
+);
+
+// One row per memory, run, and signal (ADR-245). `read` is a run that read
+// the memory's file, `harness_count` is a use the harness counted itself with
+// no run, and `citation` is a run that cited the memory. `count` is how many
+// times: reads in that run, or the harness's count. A memory's `use_count` is
+// its distinct runs plus the `count` of its uses with no run.
+export const memoryUses = agentSchema.table(
+  "memory_uses",
+  {
+    id: uuid("id").primaryKey().default(uuidv7Default),
+    ...orgScopeMixin(),
+    memoryId: uuid("memory_id")
+      .notNull()
+      .references(() => memories.id, { onDelete: "cascade" }),
+    runPublicId: text("run_public_id"),
+    signal: text("signal").notNull(),
+    count: integer("count").notNull().default(1),
+    usedAt: timestamp("used_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    useUniq: unique("memory_uses_uq")
+      .on(t.memoryId, t.runPublicId, t.signal)
+      .nullsNotDistinct(),
+    memoryIdx: index("memory_uses_memory_idx").on(t.memoryId, t.usedAt),
+    runCheck: check(
+      "memory_uses_run_public_id_check",
+      sql`${t.runPublicId} IS NULL OR ${t.runPublicId} ~ '^(arun|tse)_[0-9a-z]+$'`,
+    ),
+    signalCheck: check(
+      "memory_uses_signal_check",
+      sql`${t.signal} IN ('read', 'harness_count', 'citation')`,
+    ),
+    // Only a harness's own count can have no run.
+    pairingCheck: check(
+      "memory_uses_signal_run_check",
+      sql`${t.signal} = 'harness_count' OR ${t.runPublicId} IS NOT NULL`,
+    ),
+    countCheck: check("memory_uses_count_check", sql`${t.count} >= 1`),
   }),
 );
 

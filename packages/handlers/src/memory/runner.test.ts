@@ -1,11 +1,12 @@
-// The memory runner's reads and writes (ADR-206), end to end over fakes.
+// The memory runner's reads and writes (ADR-206, ADR-245), end to end over
+// fakes.
 //
 // Capture and the digest read a wrapped run through the in-memory run stores
 // the run handlers' tests share. The curator reads and writes the fixture
-// steering repo through FakeGitHub. FakeMemoryStore keeps the five memory
-// tables in memory and follows store.ts: a repeated dedupe key writes
-// nothing, a run holds one reflection, a source keeps one waiting memory, and
-// only an open memory PR settles.
+// steering repo through FakeGitHub. FakeMemoryStore keeps the memory tables
+// in memory and follows store.ts: a repeated dedupe key writes nothing, a run
+// holds one reflection, a source keeps one waiting memory, only an open
+// memory PR settles, and no memory is ever deleted.
 import { OXAGEN_PR_LABELS } from "@oxagen/github";
 import { fixtureRepo } from "@oxagen/oxagen/steering-repo/fixture-repo";
 import { digestBytes } from "@oxagen/recorder";
@@ -49,6 +50,7 @@ import type {
   RecentReflection,
   ReflectionDraft,
   Rejection,
+  RetiredReason,
   StoredMemory,
 } from "./types";
 
@@ -150,21 +152,76 @@ const FAILED_BUILD: TachoFrameRow[] = [
 
 type StoredReflection = ReflectionDraft & { id: string; createdAt: Date };
 type StoredPr = OpenMemoryPr & { status: "open" | "merged" | "closed" };
+/** A memory row, with the retirement columns StoredMemory leaves out. */
+type FakeMemory = StoredMemory & {
+  retiredAt: Date | null;
+  retiredReason: RetiredReason | null;
+};
 
-/** The five memory tables in memory, with store.ts's rules. */
+/** The memory tables in memory, with store.ts's rules. */
 class FakeMemoryStore implements MemoryStore {
   /** The time every insert is stamped with. */
   now = new Date("2026-09-27T05:00:00.000Z");
-  memories: StoredMemory[] = [];
+  memories: FakeMemory[] = [];
   reflections: StoredReflection[] = [];
   prs: StoredPr[] = [];
   rejections: Rejection[] = [];
   recalls = new Map<string, RecallStamp>();
+  /** `memory_uses`, keyed by memory, run, and signal. */
+  uses = new Map<string, { memoryId: string; run: string | null; count: number; usedAt: Date }>();
   private ids = { memory: 0, reflection: 0, pr: 0 };
+
+  /**
+   * Give every waiting memory one use by a run of its own at `at`, as if a
+   * run read its file. The curator cites only a memory a run used.
+   */
+  useWaiting(at: Date = this.now): void {
+    for (const memory of this.memories)
+      if (memory.state === "waiting")
+        this.use(memory.id, [`tse_use${memory.id.replace(/[^0-9a-z]/g, "")}`], at);
+  }
+
+  /** Record a read of one memory by each of `runs` at `at`. */
+  use(memoryId: string, runs: string[], at: Date = this.now): void {
+    const memory = this.memories.find((m) => m.id === memoryId);
+    if (memory === undefined) throw new Error(`no memory ${memoryId}`);
+    for (const run of runs)
+      this.uses.set(`${memoryId}\n${run}\nread`, {
+        memoryId,
+        run,
+        count: (this.uses.get(`${memoryId}\n${run}\nread`)?.count ?? 0) + 1,
+        usedAt: at,
+      });
+    this.recount(memory);
+  }
+
+  private recount(memory: FakeMemory): void {
+    const rows = [...this.uses.values()].filter((u) => u.memoryId === memory.id);
+    const runs = new Set(rows.flatMap((u) => (u.run === null ? [] : [u.run])));
+    memory.useCount =
+      runs.size +
+      rows.filter((u) => u.run === null).reduce((sum, u) => sum + u.count, 0);
+    memory.lastUsedAt = rows.reduce<Date | null>(
+      (latest, u) => (latest === null || u.usedAt > latest ? u.usedAt : latest),
+      null,
+    );
+  }
+
+  private retire(memory: FakeMemory, at: Date, reason: RetiredReason): void {
+    Object.assign(memory, { state: "retired", retiredAt: at, retiredReason: reason });
+  }
+
+  private back(memory: FakeMemory): void {
+    Object.assign(memory, {
+      state: memory.promotedLineage === null ? "waiting" : "promoted",
+      retiredAt: null,
+      retiredReason: null,
+    });
+  }
 
   async listCurateWorkspaces(): Promise<MemoryScope[]> {
     const busy =
-      this.memories.some((m) => m.memoryPrId === null) ||
+      this.memories.some((m) => m.state === "waiting") ||
       this.prs.some((pr) => pr.status === "open") ||
       this.recalls.size > 0;
     return busy ? [SCOPE] : [];
@@ -199,10 +256,19 @@ class FakeMemoryStore implements MemoryStore {
       this.ids.memory += 1;
       this.memories.push({
         ...draft,
+        label: draft.label ?? null,
+        summary: draft.summary ?? null,
+        memoryType: draft.memoryType ?? null,
         id: `mem-uuid-${this.ids.memory}`,
         publicId: `mem_${this.ids.memory}`,
         reflectionId: reflectionId ?? null,
         memoryPrId: null,
+        state: "waiting",
+        useCount: 0,
+        lastUsedAt: null,
+        promotedLineage: null,
+        retiredAt: null,
+        retiredReason: null,
         createdAt: this.now,
       });
       written += 1;
@@ -216,25 +282,29 @@ class FakeMemoryStore implements MemoryStore {
   ): Promise<boolean> {
     if (draft.source === null)
       return (await this.insertMemories(scope, [draft])) > 0;
-    const [kept, ...stale] = this.memories
-      .filter(
-        (m) =>
-          m.memoryPrId === null &&
-          m.capture === draft.capture &&
-          m.source === draft.source,
-      )
+    const rows = this.memories
+      .filter((m) => m.capture === draft.capture && m.source === draft.source)
       .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
-    await this.deleteMemories(
-      scope,
-      stale.map((m) => m.id),
-    );
+    const [kept, ...stale] = rows.filter((m) => m.state === "waiting");
+    for (const memory of stale) this.retire(memory, this.now, "deleted");
+    const frontmatter = {
+      label: draft.label ?? null,
+      summary: draft.summary ?? null,
+      memoryType: draft.memoryType ?? null,
+    };
+    const same = rows.find((m) => m.dedupeKey === draft.dedupeKey);
+    if (same !== undefined) {
+      Object.assign(same, frontmatter);
+      if (same === kept) return false;
+      if (kept !== undefined) this.retire(kept, this.now, "deleted");
+      const back =
+        same.state === "retired" &&
+        (same.retiredReason === "deleted" || kept !== undefined);
+      if (back) this.back(same);
+      return back;
+    }
     if (kept === undefined)
       return (await this.insertMemories(scope, [draft])) > 0;
-    if (kept.dedupeKey === draft.dedupeKey) return false;
-    if (this.memories.some((m) => m.dedupeKey === draft.dedupeKey)) {
-      await this.deleteMemories(scope, [kept.id]);
-      return false;
-    }
     Object.assign(kept, {
       agentLineage: draft.agentLineage,
       runPublicId: draft.runPublicId,
@@ -246,17 +316,18 @@ class FakeMemoryStore implements MemoryStore {
       tools: draft.tools,
       evidence: draft.evidence,
       dedupeKey: draft.dedupeKey,
+      ...frontmatter,
     });
     return true;
   }
 
   async countWaiting(_scope: MemoryScope): Promise<number> {
-    return this.memories.filter((m) => m.memoryPrId === null).length;
+    return this.memories.filter((m) => m.state === "waiting").length;
   }
 
   async listWaiting(_scope: MemoryScope): Promise<StoredMemory[]> {
     return this.memories
-      .filter((m) => m.memoryPrId === null)
+      .filter((m) => m.state === "waiting")
       .sort(
         (a, b) =>
           a.createdAt.getTime() - b.createdAt.getTime() ||
@@ -264,11 +335,92 @@ class FakeMemoryStore implements MemoryStore {
       );
   }
 
-  async deleteMemories(_scope: MemoryScope, ids: string[]): Promise<number> {
-    const gone = new Set(ids);
-    const before = this.memories.length;
-    this.memories = this.memories.filter((m) => !gone.has(m.id));
-    return before - this.memories.length;
+  async recordUses(
+    _scope: MemoryScope,
+    uses: Parameters<MemoryStore["recordUses"]>[1],
+  ): Promise<{ recorded: number; unknown: number }> {
+    let unknown = 0;
+    const touched = new Set<FakeMemory>();
+    for (const use of uses) {
+      const rows = this.memories
+        .filter((m) => m.capture === use.capture && m.source === use.source)
+        .sort(
+          (a, b) =>
+            Number(b.state === "waiting") - Number(a.state === "waiting") ||
+            Number(b.state !== "retired") - Number(a.state !== "retired") ||
+            b.createdAt.getTime() - a.createdAt.getTime(),
+        );
+      const target = rows[0];
+      if (target === undefined) {
+        unknown += 1;
+        continue;
+      }
+      const key = `${target.id}\n${use.runPublicId ?? ""}\n${use.signal}`;
+      const row = this.uses.get(key);
+      this.uses.set(key, {
+        memoryId: target.id,
+        run: use.runPublicId,
+        count: (row?.count ?? 0) + use.count,
+        usedAt:
+          row !== undefined && row.usedAt > use.usedAt ? row.usedAt : use.usedAt,
+      });
+      touched.add(target);
+    }
+    for (const memory of touched) {
+      this.recount(memory);
+      if (memory.state === "retired") this.back(memory);
+    }
+    return { recorded: uses.length - unknown, unknown };
+  }
+
+  async retireMissingSources(
+    _scope: MemoryScope,
+    scan: Parameters<MemoryStore["retireMissingSources"]>[1],
+    at: Date,
+  ): Promise<number> {
+    const seen = new Set(scan.seen);
+    let retired = 0;
+    for (const memory of this.memories) {
+      if (
+        memory.capture === scan.capture &&
+        (memory.state === "waiting" || memory.state === "promoted") &&
+        memory.agentLineage === scan.agentLineage &&
+        memory.source?.startsWith(scan.prefix) === true &&
+        !seen.has(memory.source)
+      ) {
+        this.retire(memory, at, "deleted");
+        retired += 1;
+      }
+    }
+    return retired;
+  }
+
+  async retireUnused(_scope: MemoryScope, before: Date, at: Date): Promise<number> {
+    let retired = 0;
+    for (const memory of this.memories) {
+      if (memory.state !== "waiting" && memory.state !== "promoted") continue;
+      if ((memory.lastUsedAt ?? memory.createdAt).getTime() >= before.getTime())
+        continue;
+      this.retire(memory, at, "unused");
+      retired += 1;
+    }
+    return retired;
+  }
+
+  async linkMemories(
+    _scope: MemoryScope,
+    links: Array<{ memoryId: string; lineage: string }>,
+  ): Promise<number> {
+    let linked = 0;
+    for (const link of links) {
+      const memory = this.memories.find(
+        (m) => m.id === link.memoryId && m.state === "waiting",
+      );
+      if (memory === undefined) continue;
+      Object.assign(memory, { state: "promoted", promotedLineage: link.lineage });
+      linked += 1;
+    }
+    return linked;
   }
 
   async listOpenPrs(_scope: MemoryScope): Promise<OpenMemoryPr[]> {
@@ -290,7 +442,7 @@ class FakeMemoryStore implements MemoryStore {
     this.prs.push({ ...pr, id, openedAt: this.now, status: "open" });
     const cited = new Set(pr.records.flatMap((record) => record.memoryIds));
     for (const memory of this.memories)
-      if (cited.has(memory.id)) memory.memoryPrId = id;
+      if (cited.has(memory.id)) Object.assign(memory, { memoryPrId: id, state: "in_pr" });
     return id;
   }
 
@@ -300,7 +452,31 @@ class FakeMemoryStore implements MemoryStore {
     );
     if (pr === undefined) return;
     pr.status = settlement.status;
-    await this.deleteMemories(SCOPE, settlement.purgeMemoryIds);
+    const held = (id: string) =>
+      this.memories.find(
+        (m) => m.id === id && m.memoryPrId === settlement.prId && m.state === "in_pr",
+      );
+    for (const { lineage, memoryIds } of settlement.promoted)
+      for (const id of memoryIds) {
+        const memory = held(id);
+        if (memory !== undefined)
+          Object.assign(memory, { state: "promoted", promotedLineage: lineage });
+      }
+    for (const id of settlement.returnedMemoryIds) {
+      const memory = held(id);
+      if (memory === undefined) continue;
+      const replaced =
+        memory.capture === "local_gateway" &&
+        this.memories.some(
+          (m) =>
+            m !== memory &&
+            m.state === "waiting" &&
+            m.capture === memory.capture &&
+            m.source === memory.source,
+        );
+      if (replaced) this.retire(memory, settlement.settledAt, "deleted");
+      else memory.state = "waiting";
+    }
     for (const hash of new Set(settlement.rejectedHashes)) {
       this.rejections = this.rejections.filter((r) => r.statementHash !== hash);
       this.rejections.push({ statementHash: hash, rejectedAt: settlement.settledAt });
@@ -888,6 +1064,7 @@ describe("digestRun", () => {
 async function openedMemoryPr() {
   const h = harness();
   await h.store.insertMemories(SCOPE, [draft(STATEMENT)]);
+  h.store.useWaiting();
   const out = await curateMemories(h.deps, SCOPE, DAY1);
   return { ...h, out, pull: first(h.gh.pulls) };
 }
@@ -994,6 +1171,7 @@ describe("curateMemories", () => {
       },
     ]);
     expect(memory.memoryPrId).toBe(opened.id);
+    expect(memory.state).toBe("in_pr");
   });
 
   it("opens one memory PR a day", async () => {
@@ -1007,7 +1185,7 @@ describe("curateMemories", () => {
     expect(gh.pulls).toHaveLength(1);
   });
 
-  it("drops a memory a record already says and a memory that waited too long", async () => {
+  it("links a memory a record already says, and retires a memory no run used within retire_after_days", async () => {
     const { deps, store, gh } = harness();
     await store.insertMemories(SCOPE, [draft(SAID)]);
     store.now = daysBefore(DAY1, 200);
@@ -1020,14 +1198,31 @@ describe("curateMemories", () => {
       dropped: 2,
       pullRequest: null,
     });
-    expect(store.memories).toEqual([]);
+    // Both rows stay (ADR-245).
+    expect(
+      store.memories.map((m) => [m.statement, m.state, m.promotedLineage]),
+    ).toEqual([
+      [SAID, "promoted", CACHE_LINEAGE],
+      [STATEMENT, "retired", null],
+    ]);
+    expect(store.memories[1]?.retiredReason).toBe("unused");
     expect(gh.stamps).toEqual([]);
   });
 
-  it("leaves out a record whose path already holds a file", async () => {
-    const { deps, store, gh } = harness({
-      gh: steeringRepo({ [`main:${PLANNED_PATH}`]: "not a record" }),
-    });
+  it("keeps a memory that a run used within retire_after_days, however old its capture", async () => {
+    const { deps, store, gh } = harness();
+    store.now = daysBefore(DAY1, 200);
+    await store.insertMemories(SCOPE, [draft(STATEMENT)]);
+    store.useWaiting(daysBefore(DAY1, 2));
+    const out = await curateMemories(deps, SCOPE, DAY1);
+    expect(out).toMatchObject({ outcome: "curated", dropped: 0 });
+    expect(out.pullRequest).not.toBeNull();
+    expect(first(store.memories).state).toBe("in_pr");
+    expect(first(first(gh.stamps).files).content).toContain(STATEMENT);
+  });
+
+  it("leaves a memory no run used waiting, and opens no PR for it", async () => {
+    const { deps, store, gh } = harness();
     await store.insertMemories(SCOPE, [draft(STATEMENT)]);
     expect(await curateMemories(deps, SCOPE, DAY1)).toEqual({
       outcome: "curated",
@@ -1036,13 +1231,57 @@ describe("curateMemories", () => {
       pullRequest: null,
     });
     expect(gh.pulls).toEqual([]);
+    expect(first(store.memories).state).toBe("waiting");
+  });
+
+  it("fills the batch from the most used memories", async () => {
+    const governance = (
+      fixtureRepo().get("steering/governance.toml") ?? ""
+    ).replace(/batch_size = \d+/, "batch_size = 1");
+    expect(governance).toContain("batch_size = 1");
+    const { deps, store, gh } = harness({
+      gh: steeringRepo({ "main:steering/governance.toml": governance }),
+    });
+    const OTHER = "Keep the release notes under one page.";
+    await store.insertMemories(SCOPE, [
+      draft(STATEMENT),
+      draft(OTHER, { dedupeKey: `${TACHO_ID}:${statementHash(OTHER)}` }),
+    ]);
+    store.useWaiting();
+    // Two more runs read the second memory, so it ranks first.
+    const second = store.memories[1];
+    if (second === undefined) throw new Error("expected two memories");
+    store.use(second.id, ["tse_more1", "tse_more2"]);
+    expect(second.useCount).toBe(3);
+    await curateMemories(deps, SCOPE, DAY1);
+    const files = first(gh.stamps).files;
+    expect(files).toHaveLength(1);
+    expect(first(files).content).toContain(OTHER);
+    expect(store.memories.map((m) => m.state)).toEqual(["waiting", "in_pr"]);
+  });
+
+  it("leaves out a record whose path already holds a file", async () => {
+    const { deps, store, gh } = harness({
+      gh: steeringRepo({ [`main:${PLANNED_PATH}`]: "not a record" }),
+    });
+    await store.insertMemories(SCOPE, [draft(STATEMENT)]);
+    store.useWaiting();
+    expect(await curateMemories(deps, SCOPE, DAY1)).toEqual({
+      outcome: "curated",
+      settled: 0,
+      dropped: 0,
+      pullRequest: null,
+    });
+    expect(gh.pulls).toEqual([]);
     expect(first(store.memories).memoryPrId).toBeNull();
+    expect(first(store.memories).state).toBe("waiting");
   });
 
   it("replaces a branch a failed pass left with no PR", async () => {
     const { deps, store, gh } = harness();
     gh.commit(BRANCH, "steering/memory/left-over.md", "left over");
     await store.insertMemories(SCOPE, [draft(STATEMENT)]);
+    store.useWaiting();
     const out = await curateMemories(deps, SCOPE, DAY1);
     expect(out.pullRequest).not.toBeNull();
     expect(gh.deletedBranches).toEqual([BRANCH]);
@@ -1059,6 +1298,7 @@ describe("curateMemories", () => {
       body: "",
     });
     await store.insertMemories(SCOPE, [draft(STATEMENT)]);
+    store.useWaiting();
     expect(await curateMemories(deps, SCOPE, DAY1)).toEqual({
       outcome: "opened_today",
       settled: 0,
@@ -1078,6 +1318,7 @@ describe("curateMemories", () => {
       return ensure(...args);
     });
     await store.insertMemories(SCOPE, [draft(STATEMENT)]);
+    store.useWaiting();
     const out = await curateMemories(deps, SCOPE, DAY1);
     expect(out.pullRequest).not.toBeNull();
     expect(gh.resets).toEqual([]);
@@ -1095,10 +1336,16 @@ describe("curateMemories", () => {
       pullRequest: null,
     });
     expect(first(store.prs).status).toBe("merged");
-    expect(store.memories).toEqual([]);
+    const lineage = memoryLineage(STATEMENT, new Set());
+    // The memory keeps its row, its count, and the PR that promoted it.
+    expect(first(store.memories)).toMatchObject({
+      state: "promoted",
+      promotedLineage: lineage,
+      memoryPrId: first(store.prs).id,
+      useCount: 1,
+    });
     expect(store.rejections).toEqual([]);
     expect(gh.deletedBranches).toEqual([BRANCH]);
-    const lineage = memoryLineage(STATEMENT, new Set());
     expect(store.recalls.get(lineage)).toEqual({
       lineage,
       recallCount: 0,
@@ -1120,7 +1367,11 @@ describe("curateMemories", () => {
       { statementHash: statementHash(STATEMENT), rejectedAt: MERGED_AT },
     ]);
     expect(store.recalls.has(memoryLineage(STATEMENT, new Set()))).toBe(false);
-    expect(store.memories).toEqual([]);
+    expect(first(store.memories)).toMatchObject({
+      state: "waiting",
+      promotedLineage: null,
+      useCount: 1,
+    });
   });
 
   it("proposes a rejected statement again only after memories from 2 more runs repeat it", async () => {
@@ -1135,7 +1386,8 @@ describe("curateMemories", () => {
     expect(store.rejections).toEqual([
       { statementHash: statementHash(STATEMENT), rejectedAt: DAY2 },
     ]);
-    expect(store.memories).toEqual([]);
+    // The memory waits again, held by the rejection.
+    expect(first(store.memories).state).toBe("waiting");
 
     // Two memories from one run are one run of evidence.
     const hash = statementHash(STATEMENT);
@@ -1156,6 +1408,7 @@ describe("curateMemories", () => {
         dedupeKey: `pull_request:https://github.com/a-intel/platform/pull/7:${hash}`,
       }),
     ]);
+    store.useWaiting();
     expect(await curateMemories(deps, SCOPE, DAY3)).toMatchObject({
       outcome: "curated",
       pullRequest: null,
@@ -1170,12 +1423,15 @@ describe("curateMemories", () => {
         dedupeKey: `${RUN_B}:${hash}`,
       }),
     ]);
+    store.useWaiting();
     const out = await curateMemories(deps, SCOPE, DAY4);
     expect(out.pullRequest).not.toBeNull();
     const again = gh.pulls[1];
     expect(again?.head).toBe("memory/2026-09-30");
+    // The first memory waited again after its PR closed, so the record cites
+    // it beside the three new ones (ADR-245).
     expect(again?.body).toContain(
-      `- \`${PLANNED_PATH}\`. It cites 3 memories from 2 runs.`,
+      `- \`${PLANNED_PATH}\`. It cites 4 memories from 3 runs.`,
     );
   });
 
@@ -1617,7 +1873,7 @@ describe("ingestMemories from a memory file", () => {
     ]);
   });
 
-  it("drops the waiting memory when the file goes back to the text a memory PR cites", async () => {
+  it("retires the waiting memory when the file goes back to the text a memory PR cites", async () => {
     const store = new FakeMemoryStore();
     await ingestMemories(store, SCOPE, [fromFile(STATEMENT)]);
     await cite(store);
@@ -1626,8 +1882,23 @@ describe("ingestMemories from a memory file", () => {
       written: 0,
       refused: 0,
     });
-    expect(store.memories.map((m) => m.statement)).toEqual([STATEMENT]);
+    expect(store.memories.map((m) => [m.statement, m.state])).toEqual([
+      [STATEMENT, "in_pr"],
+      [EDITED, "retired"],
+    ]);
     expect(await store.countWaiting(SCOPE)).toBe(0);
+  });
+
+  it("keeps a file's frontmatter on its memory", async () => {
+    const store = new FakeMemoryStore();
+    await ingestMemories(store, SCOPE, [
+      { ...fromFile(STATEMENT), label: "pnpm", memoryType: "feedback" },
+    ]);
+    expect(first(store.memories)).toMatchObject({
+      label: "pnpm",
+      summary: null,
+      memoryType: "feedback",
+    });
   });
 
   it("keeps a waiting memory for each file", async () => {

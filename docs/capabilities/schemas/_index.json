@@ -3553,6 +3553,16 @@
       "consumes": []
     },
     {
+      "name": "record_tacho_memory_uses",
+      "domain": "tacho",
+      "surfaces": [
+        "api"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "record_working_copy",
       "domain": "repository",
       "surfaces": [

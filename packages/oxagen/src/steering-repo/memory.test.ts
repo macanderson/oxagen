@@ -31,8 +31,8 @@ describe("memory", () => {
     ]);
   });
 
-  it("names the three ways a memory reaches Oxagen", () => {
-    expect(MEMORY_CAPTURES).toEqual(["remember", "pull_request", "local_gateway"]);
+  it("names the four ways a memory reaches Oxagen", () => {
+    expect(MEMORY_CAPTURES).toEqual(["remember", "pull_request", "local_gateway", "import"]);
     expect(memoryCaptureSchema.options).toEqual([...MEMORY_CAPTURES]);
   });
 

@@ -521,6 +521,7 @@ capability rewrites, so two such branches always conflicted on it (ADR-216).
 - list_tacho_hosts
 - list_tacho_sessions
 - recall_tacho_memories
+- record_tacho_memory_uses
 - register_contained_launch
 - remove_group_machine
 - revoke_tacho_enrollment

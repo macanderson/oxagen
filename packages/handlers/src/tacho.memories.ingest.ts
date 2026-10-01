@@ -65,6 +65,11 @@ export function createTachoMemoriesIngestHandler(
         statement: input.statement,
         agentLineage: host.agentKey,
         runPublicId: null,
+        ...(input.label !== undefined ? { label: input.label } : {}),
+        ...(input.summary !== undefined ? { summary: input.summary } : {}),
+        ...(input.memory_type !== undefined
+          ? { memoryType: input.memory_type }
+          : {}),
       },
     ]);
     if (refused > 0) {

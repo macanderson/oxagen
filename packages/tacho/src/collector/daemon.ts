@@ -123,6 +123,7 @@ import { removeCopiesOutside } from "./session-changes";
 import { exportSession, type ExportFormat } from "./exporters";
 import {
   handleHookEvent,
+  type HookHandlerDeps,
   hookLedgerKey,
   type HookReplay,
   type PolicyView,
@@ -152,6 +153,10 @@ import {
 } from "./memory-capture/memory-reader";
 import { createMemoryRecall } from "./memory-capture/memory-recall";
 import { createMemoryUpload } from "./memory-capture/memory-upload";
+import {
+  createMemoryUses,
+  memoryReadsOf,
+} from "./memory-capture/memory-uses";
 import { createMachineLoop } from "./local-servers/machine";
 import { pushCredentialBasis } from "./push-basis";
 import { forgetRecallHints } from "./recall-hints";
@@ -677,6 +682,41 @@ async function initializeDaemon(
           now,
         })
       : undefined;
+  // The harnesses' memory folders. Claude Code's follows `CLAUDE_CONFIG_DIR`,
+  // as the transcript tailer's does. The memory scan reads them, and the hook
+  // path checks each tool call's paths against them.
+  const memoryHome = options.home ?? homedir();
+  const memoryLocations = HARNESS_MEMORY_LOCATIONS.map((location) =>
+    location.harness === "claude-code"
+      ? { ...location, projectsDir: () => paths.claudeProjects }
+      : location,
+  );
+  // The memory files each Claude Code run reads, counted as uses of their
+  // memories and sent after each memory scan (`./memory-capture/memory-uses`,
+  // ADR-245). Only a daemon with a started listener scans, and only that one
+  // counts.
+  const memoryUses =
+    (options.listen ?? true)
+      ? createMemoryUses({
+          host: () => host,
+          fetch: options.fetch ?? globalThis.fetch,
+          log,
+          now,
+        })
+      : undefined;
+  const noteMemoryReads: HookHandlerDeps["noteMemoryReads"] =
+    memoryUses === undefined
+      ? undefined
+      : (call, run) => {
+          for (const file of memoryReadsOf(
+            call.toolName,
+            call.toolInput,
+            call.cwd,
+            memoryHome,
+            memoryLocations,
+          ))
+            memoryUses.note({ ...file, ...run });
+        };
   // Runs the tools a lock pins on this machine. It starts at the end of
   // start-up, and `syncLocalServers` starts or stops it after each change to
   // the host's status.
@@ -2616,6 +2656,7 @@ async function initializeDaemon(
           cedar: loadCedarRuntime,
           skills,
           ...(recallMemories !== undefined ? { recallMemories } : {}),
+          ...(noteMemoryReads !== undefined ? { noteMemoryReads } : {}),
         },
         envelope.replay,
         envelope.harness,
@@ -4604,11 +4645,13 @@ async function initializeDaemon(
   // changed file to the API as a `local_gateway` memory, with the host key
   // the GitHub broker uses. Nothing turns it off: Mac ruled on 2026-09-30
   // that a core capability carries no flag while Oxagen has no customers
-  // (ADR-238).
+  // (ADR-238). After each scan the daemon reports the memory files runs read
+  // since the last one, and the files a complete scan found, so a memory
+  // whose file is gone retires (ADR-245).
   let memoryTimer: NodeJS.Timeout | undefined;
   if (options.listen ?? true) {
     const memoryReader = createMemoryReader({
-      home: options.home ?? homedir(),
+      home: memoryHome,
       fs: {
         readdir: (path) => readdir(path),
         stat: (path) => stat(path),
@@ -4619,20 +4662,17 @@ async function initializeDaemon(
         fetch: options.fetch ?? globalThis.fetch,
         log,
       }),
-      // Claude Code's folder follows `CLAUDE_CONFIG_DIR`, as the transcript
-      // tailer's does.
-      harnesses: HARNESS_MEMORY_LOCATIONS.map((location) =>
-        location.harness === "claude-code"
-          ? { ...location, projectsDir: () => paths.claudeProjects }
-          : location,
-      ),
+      harnesses: memoryLocations,
     });
     const scanMemories = (): void => {
-      memoryReader.scan().catch((error: unknown) => {
-        log(
-          `memory scan failed: ${error instanceof Error ? error.message : String(error)}`,
-        );
-      });
+      memoryReader
+        .scan()
+        .then((result) => memoryUses?.report(result.scans))
+        .catch((error: unknown) => {
+          log(
+            `memory scan failed: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        });
     };
     scanMemories();
     memoryTimer = setInterval(scanMemories, MEMORY_SCAN_MS);
@@ -4675,6 +4715,9 @@ async function initializeDaemon(
       // it past `STOP_GRACE_MS` (#4366).
       stopping.abort();
       if (timer) clearInterval(timer);
+      // Memory reads noted since the last report are not sent. A report would
+      // add a network wait to the stop budget, and a few uncounted reads skew
+      // no memory's ranking.
       if (memoryTimer) clearInterval(memoryTimer);
       // Stopped first and waited on last, so its replies post while the
       // other waits run and it adds nothing to the stop budget.
