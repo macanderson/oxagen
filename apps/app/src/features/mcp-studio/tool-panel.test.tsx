@@ -1037,13 +1037,13 @@ describe("ToolPanel result cap", () => {
     });
     const section = within(region("Result cap"));
     expect(section.getByText(CAP.unread)).toBeInTheDocument();
-    const tokens = section.getByRole("spinbutton", { name: "Cap in tokens" });
+    const tokens = section.getByLabelText("Cap in tokens");
     expect(tokens).toHaveAttribute("placeholder", "16384");
     const stage = section.getByRole("button", { name: "Add to draft" });
     expect(stage).toBeDisabled();
 
     await user.type(tokens, "4000");
-    await user.selectOptions(section.getByRole("combobox", { name: "Paging" }), "on");
+    await user.selectOptions(section.getByLabelText("Paging"), "on");
     await user.click(stage);
     expect(panel.onStage.mock.calls).toEqual([
       [{ kind: "cap", tool: "list_invoices", maxResultBytes: 16_000, paging: true }],
@@ -1057,8 +1057,8 @@ describe("ToolPanel result cap", () => {
       pageable: true,
     });
     const section = within(region("Result cap"));
-    expect(section.getByRole("combobox", { name: "Paging" })).toHaveValue("keep");
-    await user.type(section.getByRole("spinbutton", { name: "Cap in tokens" }), "2500");
+    expect(section.getByLabelText("Paging")).toHaveValue("keep");
+    await user.type(section.getByLabelText("Cap in tokens"), "2500");
     await user.click(section.getByRole("button", { name: "Add to draft" }));
     expect(panel.onStage.mock.calls).toEqual([
       [{ kind: "cap", tool: "list_invoices", maxResultBytes: 10_000 }],
@@ -1071,7 +1071,7 @@ describe("ToolPanel result cap", () => {
     const section = within(region("Result cap"));
     expect(section.queryByRole("combobox")).toBeNull();
     expect(section.getByText(CAP.pagingNone)).toBeInTheDocument();
-    await user.type(section.getByRole("spinbutton", { name: "Cap in tokens" }), "1000");
+    await user.type(section.getByLabelText("Cap in tokens"), "1000");
     await user.click(section.getByRole("button", { name: "Add to draft" }));
     expect(panel.onStage.mock.calls).toEqual([
       [{ kind: "cap", tool: "create_payment", maxResultBytes: 4_000 }],
@@ -1084,7 +1084,7 @@ describe("ToolPanel result cap", () => {
       const user = userEvent.setup();
       const panel = renderPanel(toolOn(STRIPE, "create_payment"));
       const section = within(region("Result cap"));
-      await user.type(section.getByRole("spinbutton", { name: "Cap in tokens" }), value);
+      await user.type(section.getByLabelText("Cap in tokens"), value);
       expect(section.getByTestId("studio-panel-cap-invalid")).toHaveTextContent(
         CAP.invalid,
       );
@@ -1113,12 +1113,12 @@ describe("ToolPanel result cap", () => {
       "In the draft",
     );
     expect(section.queryByText(CAP.unread)).toBeNull();
-    const tokens = section.getByRole("spinbutton", { name: "Cap in tokens" });
+    const tokens = section.getByLabelText("Cap in tokens");
     expect(tokens).toHaveValue(4000);
     const stage = section.getByRole("button", { name: "Add to draft" });
     expect(stage).toBeDisabled();
 
-    await user.selectOptions(section.getByRole("combobox", { name: "Paging" }), "on");
+    await user.selectOptions(section.getByLabelText("Paging"), "on");
     expect(stage).toBeEnabled();
     await user.click(stage);
     expect(panel.onStage.mock.calls).toEqual([
