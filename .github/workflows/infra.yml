@@ -91,7 +91,9 @@ jobs:
             stacks=$(find infra/stacks-new -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort)
           else
             stacks=$(echo "$changed" | sed -n 's#^infra/stacks-new/\([^/]*\)/.*#\1#p' | sort -u)
-            if printf '%s\n' "$changed" | rg -q '^infra/tools/(node/|publish-node-tools\.sh$)'; then
+            # grep, not rg: ubuntu-latest has no ripgrep, and with rg this test
+            # read false on every run, so node tools never published.
+            if printf '%s\n' "$changed" | grep -qE '^infra/tools/(node/|publish-node-tools\.sh$)'; then
               stacks=$(printf '%s\nci-deploy\nstaging\n' "$stacks" | sed '/^$/d' | sort -u)
             fi
           fi
