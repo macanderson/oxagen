@@ -535,6 +535,20 @@ describe("the Repositories tab", () => {
     await loaded();
     const banner = await screen.findByTestId("repositories-ungoverned");
     expect(banner).toHaveTextContent("acme/docs-site");
+    // #3340: every record lives in the steering repository (ADR-212), so the
+    // panel promises a linked repository no records of its own and no
+    // Context PRs.
+    expect(banner).toHaveTextContent(
+      "Every record lives in the steering repository",
+    );
+    const panel = screen.getByTestId("repositories-panel");
+    expect(panel).toHaveTextContent(
+      "A linked repo is a code repository the workspace’s agents work in",
+    );
+    for (const promise of ["Context PR", "repository-scoped", "Scope is"]) {
+      expect(banner).not.toHaveTextContent(promise);
+      expect(panel).not.toHaveTextContent(promise);
+    }
   });
 
   it("opens a repository's dialog from its name by keyboard, the row taking no role of its own", async () => {
@@ -1587,6 +1601,20 @@ describe("repository refusal messages", () => {
     for (const reason of ["conflict", "not_found"] as const)
       expect(result.current({ ok: false, reason, code })).toContain(recovery);
   });
+
+  // #3340: a linked code repository never receives Context PRs (ADR-212), so
+  // no refusal gives that as its reason.
+  it.each(["main_repo_claimed", "repository_linked_elsewhere"])(
+    "gives %s a reason the code holds, with no Context PR claim",
+    (code) => {
+      const { result } = renderHook(useRepositoriesFailure, {
+        wrapper: IntlProvider,
+      });
+      const said = result.current({ ok: false, reason: "conflict", code });
+      expect(said).toContain("steering");
+      expect(said).not.toContain("Context PR");
+    },
+  );
 
   it("preserves unknown refusal codes and approval request identifiers", () => {
     const { result } = renderHook(useRepositoriesFailure, {

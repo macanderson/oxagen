@@ -28,10 +28,11 @@
  *   - `conflict: main_repo`: it is this workspace's steering repository.
  *   - `conflict: repository_already_linked`: it is linked already.
  *   - `conflict: main_repo_claimed`: it is another workspace's steering
- *     repository. A linked repository receives this workspace's Context PRs,
- *     and another workspace's steering repository holds that workspace's
- *     steering record. A repository that steers no workspace may be linked by
- *     any number of workspaces.
+ *     repository, which holds that workspace's steering records. A linked
+ *     code repository receives no Context PR, because every record lives in
+ *     the steering repository (ADR-212).
+ *     A repository that steers no workspace may be linked by any number of
+ *     workspaces.
  *   - `conflict: workspace_toml_unreadable`: the steering repository's
  *     `workspace.toml` is present but does not read as `workspace/v1`. When
  *     the file is missing, the steering PR creates it.

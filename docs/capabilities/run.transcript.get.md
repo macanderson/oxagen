@@ -73,7 +73,7 @@ Within one turn, frames are taken in order, and each frame no earlier step claim
 
 A tool step also takes the effect frames (`command`, `file_io`, `network`) right after it that name its call, or that name no call when the step names none either.
 
-A step's `request` is its first request frame and its `response` the first frame that came back, each preferring a copy whose body was kept over a digest-only one. A producer that appends a single terminal receipt for the whole exchange records it as the `response`, because its body is the result, and `request` is then null. A `turn_start` that kept the operator's words carries them as its `request`, and a `turn_end`, or a message a harness reported apart from it, carries its words as its `response`.
+A step's `request` is its first request frame and its `response` the first frame that came back, each preferring a copy whose body was kept over a digest-only one. A producer that appends a single terminal receipt for the whole exchange records it as the `response`, because its body is the result, and `request` is then null. A wrapped transcript writes one record per content block of a model reply. One reply is one step, so the step's `response` is the reply's first part and `parts` carries the rest, in order. A `turn_start` that kept the operator's words carries them as its `request`, and a `turn_end`, or a message a harness reported apart from it, carries its words as its `response`.
 
 Claude Code's own permission check (`tool_decision` and `tool.blocked_on_user` in its OTel log) is recorded as `harness_permission`, not `policy_decision`. It runs on every call and is not a decision a rule made, so it answers to no chip. A row stored before this kind existed, as a `policy_decision` from `otel_log` or `otel_span` with `policy_source: harness`, reads as `harness_permission` too.
 
@@ -115,6 +115,7 @@ The Run page's transcript mockup (`mockups/pages/run-transcript.md`) draws the s
 | `entries[].subagent` | object or absent | on an entry from a subagent chain: `{ sessionUuid, id, type }`, plus `spawnCallId`, the `tool_use_id` of the Task or Agent call that spawned it, and `parentSessionUuid`, the chain that spawned this one. A client nests the entry by `parentKey` |
 | `entries[].request` | object or null | what went out; null when the recording has only the terminal receipt |
 | `entries[].response` | object or null | what came back; null when only a write-ahead intention was recorded |
+| `entries[].parts` | object[] or absent | a model reply's further parts, after `response`, in the order recorded, each shaped like `response`; absent when the reply came in one part (#4351) |
 | `entries[].{request,response}.seq`, `.type` | string | the frame that carried the half |
 | `entries[].{request,response}.digest`, `.bytesRef` | string or null | the recorded digest, and where the bytes were retained |
 | `entries[].{request,response}.redactions` | object[] | what was removed before the body was written |

@@ -9,15 +9,18 @@
 //   2. The repository, read through that installation's token. One it cannot
 //      see is `not_found: repository_not_installed`.
 //   3. Is it another workspace's steering repository? Refused as
-//      `main_repo_claimed`. A linked repository receives this workspace's
-//      Context PRs, and another workspace's steering repository holds that
-//      workspace's steering record. The heads table is tenant-scoped, so the
+//      `main_repo_claimed`. Another workspace's steering repository holds
+//      that workspace's steering records, and linking it here would give
+//      this workspace a way into them. The heads table is tenant-scoped, so the
 //      read crosses through `withSystemDb`. When a dedicated data plane makes
 //      the answer unknowable, the write is refused rather than guessed.
 //   4. This workspace's heads decide `main_repo_unbound` (no steering
 //      repository to hold workspace.toml), `main_repo` (it is the steering
 //      repository here), and `repository_already_linked`.
-//   5. The head, written under the workspace's repository lock. The trigger
+//   5. The head, written under the workspace's repository lock, after an
+//      uncached re-read of the organization's data plane
+//      (`assertPlaneStillShared`): a plane that moved since step 3 would put
+//      the head where the trigger cannot see it. The trigger
 //      `repository_binding_heads_exclusive_main` serialises it against a
 //      concurrent steering claim elsewhere, and a lost race maps back to
 //      `main_repo_claimed`. A connection still at `pending_setup` moves to
@@ -33,6 +36,7 @@ import { and, eq, inArray, ne, or } from "drizzle-orm";
 import { logger } from "./logger";
 import {
   assertGlobalClaimIsKnowable,
+  assertPlaneStillShared,
   type MainRepositoryDeps,
   repositoryHeadConflict,
   type WrittenRepositoryHead,
@@ -231,6 +235,9 @@ export async function writeLinkedHead(
   try {
     return await withTenantDb(async (tx) => {
       await tx.execute(workspaceRepositoriesLock(scope.workspaceId));
+      // The plane the pre-check read may have moved since. Ask again,
+      // uncached, before the head is written (#3340 finding 1).
+      await assertPlaneStillShared(scope);
       await assertLinkAllowed(tx, scope, target.repo);
       const written = await writeRepositoryHead(tx, {
         scope,
