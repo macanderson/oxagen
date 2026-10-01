@@ -11,13 +11,6 @@ name: ci-image
 #   - weekly cron, so OS and security patches land
 #   - manual dispatch (also used to bootstrap the image from a branch before
 #     the first main merge)
-#
-# The images publish under the repository owner's namespace,
-# ghcr.io/<owner>/oxagen-ci-{base,e2e}, because GITHUB_TOKEN can write only to
-# the account that owns this repository. Every job that pulls them names the
-# same owner through github.repository_owner. The repository moved from
-# macanderson to oxageninc on 2026-10-01, and the ghcr.io/macanderson copies
-# stopped updating then.
 
 on:
   workflow_dispatch:
@@ -78,8 +71,8 @@ jobs:
           target: base
           push: true
           tags: |
-            ghcr.io/${{ github.repository_owner }}/oxagen-ci-base:latest
-            ghcr.io/${{ github.repository_owner }}/oxagen-ci-base:sha-${{ github.sha }}
+            ghcr.io/macanderson/oxagen-ci-base:latest
+            ghcr.io/macanderson/oxagen-ci-base:sha-${{ github.sha }}
           build-args: |
             NODE_VERSION=${{ steps.versions.outputs.node }}
             PNPM_VERSION=${{ steps.versions.outputs.pnpm }}
@@ -94,8 +87,8 @@ jobs:
           target: e2e
           push: true
           tags: |
-            ghcr.io/${{ github.repository_owner }}/oxagen-ci-e2e:latest
-            ghcr.io/${{ github.repository_owner }}/oxagen-ci-e2e:sha-${{ github.sha }}
+            ghcr.io/macanderson/oxagen-ci-e2e:latest
+            ghcr.io/macanderson/oxagen-ci-e2e:sha-${{ github.sha }}
           build-args: |
             NODE_VERSION=${{ steps.versions.outputs.node }}
             PNPM_VERSION=${{ steps.versions.outputs.pnpm }}
@@ -106,7 +99,7 @@ jobs:
 
       - name: Smoke-test published images
         run: |
-          docker run --rm ghcr.io/${{ github.repository_owner }}/oxagen-ci-base:sha-${{ github.sha }} \
+          docker run --rm ghcr.io/macanderson/oxagen-ci-base:sha-${{ github.sha }} \
             sh -c 'node --version && pnpm --version && atlas version && psql --version && git --version'
-          docker run --rm ghcr.io/${{ github.repository_owner }}/oxagen-ci-e2e:sha-${{ github.sha }} \
+          docker run --rm ghcr.io/macanderson/oxagen-ci-e2e:sha-${{ github.sha }} \
             sh -c 'ls "$PLAYWRIGHT_BROWSERS_PATH" | grep -q chromium'

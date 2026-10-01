@@ -1,7 +1,9 @@
 name: pnpm install (cached store)
 description: >-
   Restore the pnpm content-addressable store cache and install with a frozen
-  lockfile. Jobs inside the ghcr.io/oxageninc/oxagen-ci-* toolchain images
+  lockfile. On our own runners (ADR-246) the store is already on disk at
+  /opt/pnpm-store, baked into the runner image, and the cache is skipped. Jobs
+  inside the oxagen-ci-* toolchain images
   already ship Node and corepack-managed pnpm and use them as they are; a job on
   a bare runner (one that needs a toolchain the image does not carry, such as
   Rust or an arm64 build) gets Node and pnpm installed here, pinned to
@@ -40,11 +42,27 @@ runs:
         # key.
         package-manager-cache: false
 
+    # Our runners carry a pnpm store in the image at /opt/pnpm-store, fetched
+    # from the lockfile the morning the image was built, and container jobs
+    # mount it at the same path (ADR-246). When it holds packages, install from
+    # it and skip the Actions cache, whose download is the slow part of a cold
+    # install. On a GitHub-hosted runner the mount is an empty directory, and
+    # the cache below runs as before.
+    - name: Find the runner image's pnpm store
+      id: baked
+      shell: bash
+      run: |
+        if [ -d /opt/pnpm-store ] && [ -n "$(ls -A /opt/pnpm-store 2>/dev/null)" ]; then
+          echo "path=/opt/pnpm-store" >> "$GITHUB_OUTPUT"
+          echo "Installing from the runner image's pnpm store."
+        fi
+
     # Assigned to a variable rather than interpolated into the echo, so that a
     # failing `pnpm store path` fails this step: in `echo "path=$(...)"` the exit
     # status is echo's, so the step passed and handed actions/cache an empty
     # path.
     - name: Resolve pnpm store path
+      if: steps.baked.outputs.path == ''
       id: store
       shell: bash
       run: |
@@ -56,6 +74,7 @@ runs:
         echo "path=$store_path" >> "$GITHUB_OUTPUT"
 
     - name: Restore pnpm store
+      if: steps.baked.outputs.path == ''
       uses: actions/cache@v4
       with:
         path: ${{ steps.store.outputs.path }}
@@ -69,4 +88,11 @@ runs:
 
     - name: Install dependencies
       shell: bash
-      run: pnpm install --frozen-lockfile
+      env:
+        BAKED_STORE: ${{ steps.baked.outputs.path }}
+      run: |
+        if [ -n "$BAKED_STORE" ]; then
+          pnpm install --frozen-lockfile --prefer-offline --store-dir "$BAKED_STORE"
+        else
+          pnpm install --frozen-lockfile
+        fi
