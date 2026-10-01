@@ -1,11 +1,13 @@
 name: CI
 
 on:
-  # The default three types, plus `ready_for_review` (#4918). A draft runs
-  # `checks` and `atlas-validate` only (tools/scripts/ci-pr-scope.mjs), so
-  # marking it ready must start a run that has the heavy lanes.
+  # The default three types, plus `ready_for_review` and `converted_to_draft`
+  # (#4918). A draft runs `checks` and `atlas-validate` only
+  # (tools/scripts/ci-pr-scope.mjs), so marking it ready must start a run that
+  # has the heavy lanes, and turning it back into a draft starts a light run
+  # whose concurrency group cancels the heavy one still going.
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
   # The merge queue (ADR-147). A pull request's own run tests it against the
   # main it last saw, and only the packages it touches. Two PRs that are each
   # green that way can still break main together: on 2026-09-23 #3739 and
