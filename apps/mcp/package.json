@@ -10,7 +10,7 @@
     "start:stdio": "node dist/stdio.js",
     "test:coverage": "vitest run --coverage",
     "test:unit": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "NODE_OPTIONS=--max-old-space-size=4096 tsc --noEmit"
   },
   "dependencies": {
     "@cedar-policy/cedar-wasm": "4.13.0",

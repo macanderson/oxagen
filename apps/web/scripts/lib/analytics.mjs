@@ -5,8 +5,34 @@
 // Nothing here runs in the source tree: the build injects these into dist/,
 // so `pnpm dev` serves the same markup production does.
 
+/** Google Analytics 4 web stream for oxagen.sh (property 556924883). */
+export const GA_MEASUREMENT_ID = "G-XQMNMLVLGJ";
+
 /** LinkedIn ads account whose conversions the Insight Tag reports to. */
 export const LINKEDIN_PARTNER_ID = "10042132";
+
+/**
+ * The Google tag (gtag.js), verbatim from the web stream's install
+ * instructions: an async loader for googletagmanager.com/gtag/js, then a
+ * dataLayer queue that buffers gtag() calls made before it arrives.
+ *
+ * /read carries the ebook access code in `c`, and after a redeem it rewrites
+ * the URL to a fresh code, which the stream counts as a page view. The stream
+ * redacts the `c` and `code` query keys in the browser before a hit is sent
+ * (Admin, Data streams, Redact data), so keep that setting on.
+ * @param {string} measurementId
+ */
+export function googleTag(measurementId = GA_MEASUREMENT_ID) {
+  return `<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=${measurementId}"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', '${measurementId}');
+</script>`;
+}
 
 /**
  * The LinkedIn Insight Tag, verbatim from the campaign manager snippet:
@@ -44,20 +70,32 @@ export function linkedInNoscript(partnerId = LINKEDIN_PARTNER_ID) {
 }
 
 /**
- * Put the tags on one page: the loader last in <head>, the pixel last in
- * <body>. Idempotent — a page that already carries the partner id is
- * returned untouched, so re-running the build over dist/ cannot double it.
+ * Put the tags on one page: the Google tag and the LinkedIn loader last in
+ * <head>, the LinkedIn pixel last in <body>. Each tag is added only when the
+ * page lacks it, so re-running the build over dist/ cannot double either.
  * @param {string} html
- * @param {{ partnerId?: string }} [o]
+ * @param {{ partnerId?: string, measurementId?: string }} [o]
  */
-export function withAnalytics(html, { partnerId = LINKEDIN_PARTNER_ID } = {}) {
-  if (html.includes(`_linkedin_partner_id = "${partnerId}"`)) return html;
+export function withAnalytics(
+  html,
+  { partnerId = LINKEDIN_PARTNER_ID, measurementId = GA_MEASUREMENT_ID } = {},
+) {
+  const needsGoogle = !html.includes(`gtag/js?id=${measurementId}"`);
+  const needsLinkedIn = !html.includes(`_linkedin_partner_id = "${partnerId}"`);
+  if (!needsGoogle && !needsLinkedIn) return html;
   if (!html.includes("</head>") || !html.includes("</body>")) {
     throw new Error(
       "page has no </head> or </body> to hold the analytics tags",
     );
   }
-  return html
-    .replace("</head>", `${linkedInInsightTag(partnerId)}\n</head>`)
-    .replace("</body>", `${linkedInNoscript(partnerId)}\n</body>`);
+  let out = html;
+  if (needsGoogle) {
+    out = out.replace("</head>", `${googleTag(measurementId)}\n</head>`);
+  }
+  if (needsLinkedIn) {
+    out = out
+      .replace("</head>", `${linkedInInsightTag(partnerId)}\n</head>`)
+      .replace("</body>", `${linkedInNoscript(partnerId)}\n</body>`);
+  }
+  return out;
 }
