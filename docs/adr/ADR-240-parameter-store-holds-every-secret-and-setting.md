@@ -18,7 +18,7 @@ On 2026-09-30, Oxagen's secrets and settings sat in four places:
 |---|---|
 | SSM Parameter Store, `/oxagen/production` and `/oxagen/staging` | The app nodes at container start (`deploy-service.sh`), and the CI build through `build-env.ts` |
 | Vercel project env, Development target | `pnpm env:pull`, which wrote the four local `.env.local` files with `vercel env pull` |
-| GitHub Actions secrets and variables | 17 workflows. The repository held 43 secrets, and no workflow read 32 of them |
+| GitHub Actions secrets and variables | 17 workflows. The repository held 43 secrets, and no workflow read 33 of them |
 | Google Secret Manager, project `oxagen-490023` | The local `tools/env-manager` `/secrets` page, and nothing else |
 
 Production moved to AWS on 2026-08-27 and reads Parameter Store. Nothing has

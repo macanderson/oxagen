@@ -166,12 +166,14 @@ jobs:
               await github.rest.issues.update({ ...context.repo, issue_number: number, body })
               core.notice(`Updated existing drift issue #${number}`)
             } else {
-              // `triage` only — SCR-005: the filer never sets priority.
+              // `TRIAGE` only (SCR-005): the filer applies no priority label.
+              // The title is the queued form CLAUDE.md sets under Issue
+              // titles. The triage pass adds the priority, tier, and size.
               const created = await github.rest.issues.create({
                 ...context.repo,
-                title: 'SCR corpus has drifted between the org repos',
+                title: 'Queued Chore (Docs): An org repository still carries the retired SCR corpus',
                 body,
-                labels: ['triage'],
+                labels: ['TRIAGE'],
               })
               core.notice(`Filed drift issue #${created.data.number}`)
             }
