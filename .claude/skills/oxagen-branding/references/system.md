@@ -17,7 +17,7 @@ The greys are neutral zinc and carry no hue, so the gold is the only warm value 
 | secondary | `#A1A1AA` (7.8:1) | `#71717A` (4.8:1) |
 | quietest | `#71717A` (4.1:1) | `#A1A1AA` (2.6:1) |
 
-Every text role that carries meaning clears 4.5:1 on its ground, and the build checks it. The quietest shade is for placeholders and decoration, never for a word the reader needs. On obsidian, secondary text may also be the primary colour at reduced opacity (`text-white/60`), so it takes the tone of the ground; never a flat mid grey below 4.5:1.
+Every text role that carries meaning clears 4.5:1 on its ground, and the build checks it. On a lifted row in the light theme (`#F4F4F5`), secondary text is `#6E6E77` (`muted-text-ink`, 4.6:1), because `#71717A` is 4.4:1 there. The quietest shade is for placeholders and decoration, never for a word the reader needs. On obsidian, secondary text may also be the primary colour at reduced opacity (`text-white/60`), so it takes the tone of the ground; never a flat mid grey below 4.5:1.
 
 ## Gold
 
@@ -35,7 +35,9 @@ Verdicts and statuses are carried by border shape, not colour, so they survive g
 | pending, approval | dashed border |
 | broken, denied, failed | single border |
 
-The semantic colours (`--state-allowed`, `--state-approval`, `--state-denied`, `--state-proven`, `--state-failed`, `--state-critical`) exist for badges and dots inside tables where shape alone is too small to read. They are never the only signal. The destructive red (`#D5584D` on obsidian, `#992F28` on white) is the one state colour that is also text and a button fill, and it clears 4.5:1 both ways.
+The semantic colours (`--state-allowed`, `--state-approval`, `--state-denied`, `--state-proven`, `--state-failed`, `--state-critical`) exist for badges and dots inside tables where shape alone is too small to read. They are never the only signal. The destructive red (`#D5584D` on obsidian, `#992F28` on white) is the one state colour that is also a button fill, and it clears 4.5:1 on its ground both ways.
+
+A state colour is a mark, and a mark needs only 3:1. A word in a state's colour takes the state's text stop: `--state-failed-text` in `assets/tokens.css`, or `--ox-st-failed-text` on obsidian and `--ox-st-failed-text-ink` on white in the token files. Each text stop clears 4.5:1 on every surface of its theme: the ground, a panel, and a lifted row. On obsidian the text stops sit at one OKLCH lightness, so `#E7685C` is failed as words where `#C0453C` is failed as a dot. On white each text stop equals its mark today. Use the text stop anyway, so a word stays legible when a mark moves.
 
 ## Type
 

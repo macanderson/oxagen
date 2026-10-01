@@ -84,4 +84,5 @@ A heading names the thing, a caption states one fact, and no label carries a com
 - [ ] Card radius 12px on the website and 13px in the app, 1120px wrap, dark first on obsidian with the white light theme intact
 - [ ] Gold as text on white is the `gold-deep` token, never the gold itself
 - [ ] Every text role that carries meaning clears 4.5:1 on its ground
+- [ ] A word in a state's colour takes the state's text stop, and a badge or a dot takes the mark
 - [ ] Every colour and face comes from `tokens/`, imported, never retyped
