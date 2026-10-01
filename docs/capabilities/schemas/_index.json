@@ -320,13 +320,22 @@
       "consumes": []
     },
     {
-      "name": "commit_memory_import",
-      "domain": "agent",
+      "name": "commit_markdown_import",
+      "domain": "context",
       "surfaces": [
         "api",
         "mcp",
-        "agent"
+        "agent",
+        "cli"
       ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "commit_memory_import",
+      "domain": "agent",
+      "surfaces": [],
       "component": null,
       "produces": [],
       "consumes": []
@@ -3216,13 +3225,22 @@
       "consumes": []
     },
     {
-      "name": "parse_memory_import",
-      "domain": "agent",
+      "name": "parse_markdown_import",
+      "domain": "context",
       "surfaces": [
         "api",
         "mcp",
-        "agent"
+        "agent",
+        "cli"
       ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "parse_memory_import",
+      "domain": "agent",
+      "surfaces": [],
       "component": null,
       "produces": [],
       "consumes": []

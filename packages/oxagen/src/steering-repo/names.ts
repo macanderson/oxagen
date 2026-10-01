@@ -44,6 +44,13 @@ export function steeringRepoName(workspaceSlug: string, n = 1): string {
 // ── Branches ─────────────────────────────────────────────────────────────────
 
 /**
+ * The most files one steering PR may change. The host's compare lists at most
+ * 300 files and does not say when it cut the list, so Oxagen refuses a
+ * steering PR at 300.
+ */
+export const STEERING_PR_MAX_FILES = 299;
+
+/**
  * A steering PR's branch starts with the top-level folder it changes, with
  * two exceptions: a change to workspace.toml uses `workspace/`, and a memory
  * PR, which changes steering/memory/, uses `memory/`.

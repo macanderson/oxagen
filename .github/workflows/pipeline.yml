@@ -1,7 +1,13 @@
 name: CI
 
 on:
+  # The default three types, plus `ready_for_review` and `converted_to_draft`
+  # (#4918). A draft runs `checks` and `atlas-validate` only
+  # (tools/scripts/ci-pr-scope.mjs), so marking it ready must start a run that
+  # has the heavy lanes, and turning it back into a draft starts a light run
+  # whose concurrency group cancels the heavy one still going.
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
   # The merge queue (ADR-147). A pull request's own run tests it against the
   # main it last saw, and only the packages it touches. Two PRs that are each
   # green that way can still break main together: on 2026-09-23 #3739 and
@@ -107,6 +113,10 @@ env:
   # cores and at least 64 GB and take 12. Our small ones have 4 cores and
   # 16 GB and take 4.
   TURBO_CONCURRENCY: ${{ vars.CI_RUNNERS == 'aws' && (vars.CI_HEAVY_POOL == 'small' && '4' || '12') || '3' }}
+  # Lint and typecheck run fewer tasks at once. Their heaviest tsc and eslint
+  # scripts pin a 4 GB heap (#4990), so GitHub's 7 GB runner takes 1 and our
+  # 16 GB small runner takes 3.
+  LINT_TURBO_CONCURRENCY: ${{ vars.CI_RUNNERS == 'aws' && (vars.CI_HEAVY_POOL == 'small' && '3' || '12') || '1' }}
   # Jobs run inside the toolchain container, so service containers are
   # reached by their service name on the shared docker network, not localhost.
   DATABASE_URL: postgres://oxagen:oxagen@postgres:5432/oxagen?sslmode=disable
@@ -148,14 +158,24 @@ jobs:
   # (check-deploy-tip.mjs). This job asks once, cheaply, before the expensive jobs
   # start; see check-main-preflight.mjs for the full reasoning and why this
   # checks tips at the front rather than cancelling a run in flight.
+  #
+  # It also decides whether a pull request needs the heavy lanes (#4918): a
+  # draft, or a pull request that changes only documentation, skips `build`,
+  # `unit`, `e2e`, `rls-integration`, `rds-compatibility` and `test`. Each of
+  # those jobs runs unless `heavy` is the string `false`, so an empty output
+  # runs them.
+  #
+  # It runs on ubuntu-slim (one vCPU, $0.002 a minute), because its work is a
+  # sparse checkout and a few API calls.
   preflight:
     name: Preflight (skip the gate for a superseded commit)
-    runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-small-{0}', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
-    timeout-minutes: 2
+    runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-small-{0}', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-slim' }}
+    timeout-minutes: 5
     outputs:
       proceed: ${{ steps.preflight-tip.outputs.proceed }}
+      heavy: ${{ steps.scope.outputs.heavy }}
     steps:
-      # The script reads nothing but its own directory and the environment,
+      # The scripts read nothing but their own directory and the environment,
       # so the checkout carries tools/scripts and the root files only.
       - uses: actions/checkout@v5
         with:
@@ -165,6 +185,19 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: node tools/scripts/check-main-preflight.mjs
+      # Fails open: every event but a pull request, and any pull request whose
+      # files cannot be read in full, gets heavy=true. continue-on-error keeps
+      # this job green if the script itself breaks, and the lanes then read an
+      # empty output and run.
+      - name: Decide whether this pull request needs the heavy lanes
+        id: scope
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_DRAFT: ${{ github.event.pull_request.draft }}
+          PR_CHANGED_FILES: ${{ github.event.pull_request.changed_files }}
+        run: node tools/scripts/ci-pr-scope.mjs
 
   atlas-validate:
     if: github.event_name != 'workflow_dispatch'
@@ -267,11 +300,15 @@ jobs:
       - name: Lint and typecheck
         run: |
           set -f  # keep the unquoted ...[<base sha>] filter literal (no globbing)
-          # $TURBO_CONCURRENCY (see the workflow env): turbo's default (10)
+          # $LINT_TURBO_CONCURRENCY (see the workflow env): turbo's default (10)
           # fans out parallel tsc/eslint processes far beyond the 2-core
           # runner's memory, and repeated exit-137 runner kills ("shutdown
-          # signal" mid lint+typecheck) traced to that, so a GitHub-hosted
-          # runner gets 3. Our 16-core, 64 GB runners get 12.
+          # signal" mid lint+typecheck) traced to that. GitHub's private-repo
+          # runner has about 7 GB, Node's default heap there is about 2 GB, and
+          # the heaviest lint and typecheck scripts pin 4 GB (#4990). Two of
+          # them can exceed the runner, and at 3 #4872 and #4926 lost theirs to
+          # a shutdown signal, so a GitHub-hosted runner gets 1. Our 16-core,
+          # 64 GB runners get 12.
           #
           # --continue (#3428): turbo otherwise stops at the first failing
           # task, so a lint error in one package hid a type error in another
@@ -279,7 +316,7 @@ jobs:
           # 2026-09-19. --continue runs every task and names every failure.
           # Turbo still exits non-zero if any task failed. The unit job's
           # coverage step does the same for the same reason.
-          pnpm turbo run lint typecheck --concurrency="$TURBO_CONCURRENCY" --continue $TURBO_FILTER
+          pnpm turbo run lint typecheck --concurrency="$LINT_TURBO_CONCURRENCY" --continue $TURBO_FILTER
 
       # INV-16 (apps/app/ARCHITECTURE.md §4): every export under apps/app/src
       # is reachable from a production entry and every dependency is imported.
@@ -443,6 +480,11 @@ jobs:
   # same suites with the same thresholds, in parallel. `test` at the end keeps
   # the job name the ruleset requires and the deploy jobs need.
   #
+  # These lanes, `e2e`, `rls-integration` and `rds-compatibility` skip on a
+  # draft or a documentation-only pull request, when preflight's `heavy`
+  # output is `false` (#4918). Push to main and the merge queue always run
+  # them.
+  #
   # Build lanes carry no service containers. `next build` and `xmcp build`
   # validate the environment at import time and never connect to a store, which
   # is how deploy-node already builds with no database in reach.
@@ -450,7 +492,8 @@ jobs:
     needs: [preflight]
     if: >-
       github.event_name != 'workflow_dispatch' &&
-      needs.preflight.outputs.proceed == 'true'
+      needs.preflight.outputs.proceed == 'true' &&
+      needs.preflight.outputs.heavy != 'false'
     runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-{0}-{1}', vars.CI_HEAVY_POOL || 'large', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
     container:
       image: ${{ vars.CI_IMAGE_REGISTRY || 'ghcr.io/macanderson' }}/oxagen-ci-base:latest
@@ -543,7 +586,8 @@ jobs:
     needs: [preflight]
     if: >-
       github.event_name != 'workflow_dispatch' &&
-      needs.preflight.outputs.proceed == 'true'
+      needs.preflight.outputs.proceed == 'true' &&
+      needs.preflight.outputs.heavy != 'false'
     runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-{0}-{1}', vars.CI_HEAVY_POOL || 'large', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
     container:
       image: ${{ vars.CI_IMAGE_REGISTRY || 'ghcr.io/macanderson' }}/oxagen-ci-base:latest
@@ -729,13 +773,22 @@ jobs:
   # it report a failed lane as a failure, where the implicit success() would
   # skip it, and a skipped required check reads as passing. A run cancelled by
   # a newer push skips it.
+  #
+  # A draft or a documentation-only pull request skips it with the lanes
+  # (#4918), so it reports skipped rather than failing on lanes that did not
+  # run. After `gh pr ready`, the draft run's skipped `test` stays the latest
+  # one on the head commit until the ready run's lanes finish and this job
+  # starts. A pull request is not tested until that newer `test` reports.
+  #
+  # ubuntu-slim: the job reads two results and runs no code.
   test:
     needs: [preflight, build, unit]
     if: >-
       github.event_name != 'workflow_dispatch' &&
       needs.preflight.outputs.proceed == 'true' &&
+      needs.preflight.outputs.heavy != 'false' &&
       !cancelled()
-    runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-small-{0}', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
+    runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-small-{0}', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-slim' }}
     timeout-minutes: 5
     steps:
       - name: Every build and unit lane passed
@@ -754,7 +807,8 @@ jobs:
     needs: [preflight]
     if: >-
       github.event_name != 'workflow_dispatch' &&
-      needs.preflight.outputs.proceed == 'true'
+      needs.preflight.outputs.proceed == 'true' &&
+      needs.preflight.outputs.heavy != 'false'
     runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-{0}-{1}', vars.CI_HEAVY_POOL || 'large', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
     container:
       image: ${{ vars.CI_IMAGE_REGISTRY || 'ghcr.io/macanderson' }}/oxagen-ci-e2e:latest
@@ -995,7 +1049,8 @@ jobs:
     needs: [preflight]
     if: >-
       (github.event_name == 'pull_request' || github.event_name == 'merge_group' || (github.event_name == 'push' && github.ref == 'refs/heads/main')) &&
-      needs.preflight.outputs.proceed == 'true'
+      needs.preflight.outputs.proceed == 'true' &&
+      needs.preflight.outputs.heavy != 'false'
     runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-{0}-{1}', vars.CI_HEAVY_POOL || 'large', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
     container:
       image: ${{ vars.CI_IMAGE_REGISTRY || 'ghcr.io/macanderson' }}/oxagen-ci-base:latest
@@ -1081,7 +1136,8 @@ jobs:
     needs: [preflight]
     if: >-
       (github.event_name == 'pull_request' || github.event_name == 'merge_group' || (github.event_name == 'push' && github.ref == 'refs/heads/main')) &&
-      needs.preflight.outputs.proceed == 'true'
+      needs.preflight.outputs.proceed == 'true' &&
+      needs.preflight.outputs.heavy != 'false'
     runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-{0}-{1}', vars.CI_HEAVY_POOL || 'large', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
     container:
       image: ${{ vars.CI_IMAGE_REGISTRY || 'ghcr.io/macanderson' }}/oxagen-ci-base:latest
@@ -1817,8 +1873,18 @@ jobs:
 
   publish-installers:
     name: publish the desktop installers
-    # Every production deploy publishes the desktop app built from the same
-    # commit, for every platform, to https://downloads.oxagen.sh/ (ADR-158).
+    # Every production deploy used to publish the desktop app built from the
+    # same commit, for every platform, to https://downloads.oxagen.sh/
+    # (ADR-158). That was 105 builds in the week of 2026-09-23, 5,498 runner
+    # minutes, 2,487 of them on macOS (#4918). A deploy now dispatches the
+    # build only when its pushed range changes what the installers carry: the
+    # app (apps/desktop), the two sidecars it bundles (packages/tacho and
+    # apps/cli, per apps/desktop/scripts/sidecars.mjs), the single-executable
+    # compiler (tools/sea), or desktop.yml. desktop.yml's daily schedule
+    # builds the commit production runs whenever these installers are older,
+    # which covers a change that reached main in a superseded push, and a
+    # change to a package the sidecars import.
+    #
     # This job only dispatches desktop.yml: the four builds need macOS and
     # Windows runners and take most of an hour, and a separate run keeps that
     # hour out of this one and gives the builds their own concurrency group,
@@ -1830,7 +1896,8 @@ jobs:
     # nothing, so the installers never run ahead of the platform they talk to.
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: [deploy-node]
-    runs-on: ${{ vars.CI_RUNNERS == 'aws' && 'oxagen-deploy' || 'ubuntu-latest' }}
+    # ubuntu-slim: a sparse checkout, two API calls and a tree diff.
+    runs-on: ${{ vars.CI_RUNNERS == 'aws' && 'oxagen-deploy' || 'ubuntu-slim' }}
     timeout-minutes: 10
     environment: production
     # One installer publish at a time, and never cancelled mid-flight, like
@@ -1846,9 +1913,12 @@ jobs:
       # Reads and writes the record of what is live (check-deploy-tip.mjs).
       deployments: write
     steps:
+      # A partial clone (no file contents until asked for), so the fetch in
+      # the `desktop` step below can bring the earlier commit's trees alone.
       - uses: actions/checkout@v5
         with:
           sparse-checkout: tools/scripts
+          filter: blob:none
 
       # Publish unless a newer commit's installers were already asked for. The
       # deploy jobs above hold the same rule per service, so a run superseded
@@ -1862,8 +1932,45 @@ jobs:
           DEPLOY_SERVICE: desktop
         run: node tools/scripts/check-deploy-tip.mjs
 
-      - name: Dispatch the desktop build for this commit
+      # The pushed range is the commit main held before this push and this
+      # commit. A squash merge is one push, so the range is that merge's own
+      # diff. The tree diff needs no history and no file contents: the fetch
+      # brings the earlier commit's trees only, and --no-renames keeps git
+      # from asking for blobs. Any doubt (a new branch, a failed fetch, a
+      # failed diff) dispatches the build.
+      - name: Decide whether this push changes what the installers carry
+        id: desktop
         if: steps.order.outputs.ship == 'true'
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: |
+          set -uo pipefail
+          paths=(apps/desktop packages/tacho apps/cli tools/sea .github/workflows/desktop.yml)
+          build() {
+            echo "build=$1" >> "$GITHUB_OUTPUT"
+            echo "$2" >> "$GITHUB_STEP_SUMMARY"
+            echo "$2"
+          }
+          if ! [[ "$BEFORE" =~ ^[0-9a-f]{40}$ ]] || [ "$BEFORE" = 0000000000000000000000000000000000000000 ]; then
+            build true "This push names no earlier commit, so the desktop build runs."
+            exit 0
+          fi
+          if ! git fetch --no-tags --depth=1 --filter=blob:none origin "$BEFORE"; then
+            build true "Could not fetch ${BEFORE:0:9}, so the desktop build runs."
+            exit 0
+          fi
+          if ! changed=$(git diff --name-only --no-renames "$BEFORE" "$GITHUB_SHA" -- "${paths[@]}"); then
+            build true "Could not diff ${BEFORE:0:9} against ${GITHUB_SHA:0:9}, so the desktop build runs."
+            exit 0
+          fi
+          if [ -n "$changed" ]; then
+            build true "This push changes $(printf '%s\n' "$changed" | wc -l | tr -d ' ') installer source files, so the desktop build runs."
+          else
+            build false "This push changes no installer source (${paths[*]}). The daily build in desktop.yml publishes the commit production runs."
+          fi
+
+      - name: Dispatch the desktop build for this commit
+        if: steps.order.outputs.ship == 'true' && steps.desktop.outputs.build == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -1874,12 +1981,13 @@ jobs:
 
       # Record the commit whose installers were dispatched, so the next run can
       # tell whether it is newer. The build itself runs in desktop.yml and
-      # finishes later; a build that fails publishes nothing and records
-      # nothing further, and the next commit still reads itself as ahead and
-      # dispatches, which is the same fail-open the deploy jobs take.
+      # finishes later. A build that fails publishes nothing, and the record
+      # still names its commit, so the daily build skips that commit and
+      # builds the next one production runs. A push that dispatched nothing
+      # records nothing, so the daily build sees the installers as behind.
       - name: Record $desktop as live at this commit
         id: record
-        if: steps.order.outputs.ship == 'true'
+        if: steps.order.outputs.ship == 'true' && steps.desktop.outputs.build == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           DEPLOY_SERVICE: desktop

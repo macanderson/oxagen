@@ -33,10 +33,6 @@ vi.mock("./actions", () => ({
   suggestRationalesAction: vi.fn(),
   promotionCandidatesAction: vi.fn(),
 }));
-vi.mock("./bulk-import-actions", () => ({
-  parseImportAction: vi.fn(),
-  commitImportAction: vi.fn(),
-}));
 
 vi.mock("@/app/[orgSlug]/[workspaceSlug]/_shared/components", () => ({
   ErrorState: ({ title }: { title?: string }) => (

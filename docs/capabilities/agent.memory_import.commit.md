@@ -1,9 +1,11 @@
 # commit_memory_import
 
+> **Retired.** This capability is on no surface and has no handler (DEREGISTERED.md §8). Use [`commit_markdown_import`](steering.markdown_import.commit.md), which reads Markdown files into steering records and Cedar policies.
+
 **Domain:** agent
 **Mode:** sync (batch)
 **Scope:** organization + workspace
-**Surfaces:** api, mcp, agent
+**Surfaces:** none (`surfaces: []`; retired, see DEREGISTERED.md §8)
 **Risk level:** low
 
 ## Intent

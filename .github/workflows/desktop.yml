@@ -48,9 +48,14 @@ name: Desktop
 #   `release.yml` pushes the tag when a release PR merges; a person pushing
 #   one gets the same result.
 #
-#   A production deploy. `publish-installers` in pipeline.yml dispatches this
+#   A deploy build. `publish-installers` in pipeline.yml dispatches this
 #   workflow with `publish: true` and the deployed commit once every
-#   `deploy-node` leg has shipped. The `plan` job numbers it as a build of the
+#   `deploy-node` leg has shipped, when the push changed apps/desktop, the
+#   sidecar sources (packages/tacho, apps/cli), tools/sea or this file. Once a
+#   day the schedule below builds the commit production runs, when the
+#   installers are older than it (#4918). That picks up a change that reached
+#   main in a push the pipeline superseded, and a change to a package the
+#   sidecars import. The `plan` job numbers a deploy build as a build of the
 #   next patch, `X.Y.(Z+1)-N` for the Nth commit after release X.Y.Z
 #   (tools/scripts/desktop-build-version.ts), the build legs stamp that
 #   version into the checkout, and `publish` uploads the installers under
@@ -75,6 +80,12 @@ on:
       - "desktop-v*.*.*"
   release:
     types: [published]
+  # The daily deploy build (#4918). Before it, every production deploy
+  # dispatched a build: 105 in the week of 2026-09-23, 2,487 of them macOS
+  # minutes. `plan` builds the commit production runs, and skips when the
+  # installers already published are that commit or newer.
+  schedule:
+    - cron: "40 7 * * *"
   workflow_dispatch:
     inputs:
       publish:
@@ -98,6 +109,12 @@ permissions:
 # with the tip built rather than every commit or none (the #2730 lesson).
 # Every other run, a release tag above all, gets a group of its own and can
 # never be evicted by a deploy.
+#
+# The daily build keeps a group of its own too. In the deploy group it could
+# evict a waiting deploy build whose commit `publish-installers` had already
+# recorded, then skip that commit as built, and the commit would never be
+# built. Run beside a deploy build, it builds a different commit, because its
+# plan skips the one the record names.
 concurrency:
   group: >-
     desktop-${{
@@ -114,21 +131,86 @@ jobs:
     if: github.event_name != 'release'
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    # Job-level scopes replace the workflow's: the checkout, and the
+    # production deployment records the daily build reads.
+    permissions:
+      contents: read
+      deployments: read
     outputs:
       sha: ${{ steps.plan.outputs.sha }}
       version: ${{ steps.plan.outputs.version }}
       channel: ${{ steps.plan.outputs.channel }}
       publish: ${{ steps.plan.outputs.publish }}
     steps:
+      # The daily build's commit is the one production runs: the oldest commit
+      # recorded live for the five services `deploy-node` ships, because
+      # `publish-installers` waits for all five and the installers must never
+      # run ahead of the platform they talk to. check-deploy-tip.mjs writes
+      # those records. The build is skipped when the installers last asked for
+      # (`deploy:desktop`) are that commit or a newer one.
+      - name: Find the commit production runs
+        id: target
+        if: github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          live() {
+            gh api "repos/$GITHUB_REPOSITORY/deployments?environment=production&task=deploy:$1&per_page=1" \
+              --jq '.[0].sha // ""'
+          }
+          # The compare API's status for $1...$2, or `unknown` when it cannot
+          # answer. `ahead` means $2 descends from $1.
+          relation() {
+            gh api "repos/$GITHUB_REPOSITORY/compare/$1...$2" --jq '.status' || echo unknown
+          }
+          tip=""
+          for service in stella-serve docs app api mcp; do
+            sha=$(live "$service")
+            if [ -z "$sha" ]; then
+              echo "::error::No production deployment of $service is recorded, so the commit production runs is unknown."
+              exit 1
+            fi
+            if [ -z "$tip" ]; then
+              tip=$sha
+              continue
+            fi
+            # Keep the older of the two commits.
+            rel=$(relation "$tip" "$sha")
+            case "$rel" in
+              ahead | identical) ;;
+              behind) tip=$sha ;;
+              *)
+                echo "::error::$service runs ${sha:0:9}, and comparing it with ${tip:0:9} answered \"$rel\". Dispatch this workflow with publish and a sha to build by hand."
+                exit 1
+                ;;
+            esac
+          done
+          echo "sha=$tip" >> "$GITHUB_OUTPUT"
+          desktop=$(live desktop)
+          if [ -n "$desktop" ]; then
+            rel=$(relation "$tip" "$desktop")
+            if [ "$rel" = ahead ] || [ "$rel" = identical ]; then
+              echo "::notice::The installers of ${desktop:0:9} are published, and production runs ${tip:0:9}, which is not newer. Nothing to build."
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          fi
+          echo "Production runs ${tip:0:9}, and the installers were last asked for at ${desktop:-no recorded commit}. Building ${tip:0:9}."
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+
       - uses: actions/checkout@v5
+        if: steps.target.outputs.skip != 'true'
         with:
-          ref: ${{ inputs.sha || github.sha }}
+          ref: ${{ steps.target.outputs.sha || inputs.sha || github.sha }}
           fetch-depth: 0
 
       # A deploy build publishes to the host every customer downloads from,
       # so it builds only what main carries.
       - name: The commit is on main
-        if: github.event_name == 'workflow_dispatch' && inputs.publish
+        if: >-
+          (github.event_name == 'workflow_dispatch' && inputs.publish) ||
+          (github.event_name == 'schedule' && steps.target.outputs.skip != 'true')
         run: |
           git fetch --no-tags origin main
           if ! git merge-base --is-ancestor HEAD origin/main; then
@@ -137,7 +219,9 @@ jobs:
           fi
 
       - uses: ./.github/actions/pnpm-install
-        if: github.event_name == 'workflow_dispatch' && (inputs.publish || inputs.preview)
+        if: >-
+          (github.event_name == 'workflow_dispatch' && (inputs.publish || inputs.preview)) ||
+          (github.event_name == 'schedule' && steps.target.outputs.skip != 'true')
 
       # A deploy dispatches this workflow on main with the deployed commit as
       # `sha`, so the steps run from main's tip while the tree they build is
@@ -150,11 +234,17 @@ jobs:
       - name: Choose the version
         id: plan
         env:
-          PUBLISH: ${{ github.event_name == 'workflow_dispatch' && inputs.publish }}
+          PUBLISH: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.publish) }}
           PREVIEW: ${{ github.event_name == 'workflow_dispatch' && !inputs.publish && inputs.preview }}
+          SKIP: ${{ steps.target.outputs.skip }}
           WORKFLOW_SHA: ${{ github.workflow_sha }}
         run: |
           set -euo pipefail
+          if [ "$SKIP" = "true" ]; then
+            echo "channel=skip" >> "$GITHUB_OUTPUT"
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           if [ "$PUBLISH" = "true" ] && [ "$WORKFLOW_SHA" != "$(git rev-parse HEAD)" ]; then
             git cat-file -e "$WORKFLOW_SHA^{commit}" 2>/dev/null \
@@ -503,6 +593,8 @@ jobs:
     permissions:
       contents: write
       id-token: write
+      # The daily build records the commit it published (the last step).
+      deployments: write
     steps:
       - uses: actions/checkout@v5
         with:
@@ -587,6 +679,26 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ github.ref_name }}
         run: bash .github/scripts/desktop-update-feed.sh
+
+      # The daily build records its commit as the installers' commit, the
+      # record `publish-installers` in pipeline.yml writes when it dispatches.
+      # The next daily build then sees the installers as current and skips.
+      # check-deploy-tip.mjs reads the commit from GITHUB_SHA, which on a
+      # schedule is main's tip, so the built commit is passed in its place.
+      # It records only when no newer commit's installers were asked for in
+      # the hour this build took.
+      - name: Record the installers' commit
+        if: github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOY_SERVICE: desktop
+          SHA: ${{ needs.plan.outputs.sha }}
+        run: |
+          set -euo pipefail
+          GITHUB_OUTPUT="$RUNNER_TEMP/order" GITHUB_SHA="$SHA" node tools/scripts/check-deploy-tip.mjs
+          if grep -qx 'ship=true' "$RUNNER_TEMP/order"; then
+            GITHUB_SHA="$SHA" node tools/scripts/check-deploy-tip.mjs --record
+          fi
 
   # The update feed. tauri.conf.json's updater endpoint is
   # releases/download/desktop-latest/latest.json; this copies the just-

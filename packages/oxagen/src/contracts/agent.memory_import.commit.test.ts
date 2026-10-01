@@ -18,7 +18,12 @@ describe("agent.memory.import.commit capability", () => {
     expect(agentMemoryImportCommit.mode).toBe("sync");
     expect(agentMemoryImportCommit.scoped).toBe(true);
     expect(agentMemoryImportCommit.defaultEffect).toBe("deny");
-    expect(agentMemoryImportCommit.surfaces).toEqual(["api", "mcp", "agent"]);
+  });
+
+  it("is retired: on no surface, so no route, tool, or agent turn reaches it", () => {
+    expect(agentMemoryImportCommit.surfaces).toEqual([]);
+    expect(agentMemoryImportCommit.layers).not.toContain("api");
+    expect(agentMemoryImportCommit.layers).not.toContain("mcp");
   });
 
   it("allows org Owner/Admin and workspace Owner/Member", () => {
