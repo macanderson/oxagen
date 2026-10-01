@@ -93,16 +93,20 @@ env:
   # (16 vCPU, 64 GB or more) for checks, build, unit, e2e, rls-integration
   # and rds-compatibility, `oxagen-small-*` (4 vCPU, 16 GB) for the light
   # jobs, and `oxagen-deploy` for every job that touches production.
-  # CI_RUNNER_ARCH picks x64 (the default) or arm64 for the CI pools. Unset,
+  # CI_RUNNER_ARCH picks x64 (the default) or arm64 for the CI pools.
+  # CI_HEAVY_POOL picks the pool the heavy jobs use: `large` (the default) or
+  # `small`. While the account's EC2 quota holds 64 vCPUs, `small` runs 16
+  # heavy jobs at once instead of 4. Unset,
   # or any other value, means GitHub-hosted runners, so setting CI_RUNNERS to
   # `github` rolls every job back on its next run. CI_IMAGE_REGISTRY points
   # the toolchain and service images at ECR Public (public.ecr.aws/<alias>)
   # and falls back to the frozen GHCR images. docs/runbooks/ci-runners.md.
   #
   # The turbo steps below run this many tasks at once. GitHub's 2-core,
-  # 7 GB runner needs 3 to stay inside its memory. Our runners have 16 cores
-  # and at least 64 GB.
-  TURBO_CONCURRENCY: ${{ vars.CI_RUNNERS == 'aws' && '12' || '3' }}
+  # 7 GB runner needs 3 to stay inside its memory. Our large runners have 16
+  # cores and at least 64 GB and take 12. Our small ones have 4 cores and
+  # 16 GB and take 4.
+  TURBO_CONCURRENCY: ${{ vars.CI_RUNNERS == 'aws' && (vars.CI_HEAVY_POOL == 'small' && '4' || '12') || '3' }}
   # Jobs run inside the toolchain container, so service containers are
   # reached by their service name on the shared docker network, not localhost.
   DATABASE_URL: postgres://oxagen:oxagen@postgres:5432/oxagen?sslmode=disable
@@ -181,7 +185,7 @@ jobs:
     if: >-
       github.event_name != 'workflow_dispatch' &&
       needs.preflight.outputs.proceed == 'true'
-    runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-large-{0}', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
+    runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-{0}-{1}', vars.CI_HEAVY_POOL || 'large', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
     container:
       image: ${{ vars.CI_IMAGE_REGISTRY || 'ghcr.io/macanderson' }}/oxagen-ci-base:latest
       volumes:
@@ -447,7 +451,7 @@ jobs:
     if: >-
       github.event_name != 'workflow_dispatch' &&
       needs.preflight.outputs.proceed == 'true'
-    runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-large-{0}', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
+    runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-{0}-{1}', vars.CI_HEAVY_POOL || 'large', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
     container:
       image: ${{ vars.CI_IMAGE_REGISTRY || 'ghcr.io/macanderson' }}/oxagen-ci-base:latest
       volumes:
@@ -540,7 +544,7 @@ jobs:
     if: >-
       github.event_name != 'workflow_dispatch' &&
       needs.preflight.outputs.proceed == 'true'
-    runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-large-{0}', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
+    runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-{0}-{1}', vars.CI_HEAVY_POOL || 'large', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
     container:
       image: ${{ vars.CI_IMAGE_REGISTRY || 'ghcr.io/macanderson' }}/oxagen-ci-base:latest
       volumes:
@@ -751,7 +755,7 @@ jobs:
     if: >-
       github.event_name != 'workflow_dispatch' &&
       needs.preflight.outputs.proceed == 'true'
-    runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-large-{0}', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
+    runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-{0}-{1}', vars.CI_HEAVY_POOL || 'large', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
     container:
       image: ${{ vars.CI_IMAGE_REGISTRY || 'ghcr.io/macanderson' }}/oxagen-ci-e2e:latest
       volumes:
@@ -992,7 +996,7 @@ jobs:
     if: >-
       (github.event_name == 'pull_request' || github.event_name == 'merge_group' || (github.event_name == 'push' && github.ref == 'refs/heads/main')) &&
       needs.preflight.outputs.proceed == 'true'
-    runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-large-{0}', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
+    runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-{0}-{1}', vars.CI_HEAVY_POOL || 'large', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
     container:
       image: ${{ vars.CI_IMAGE_REGISTRY || 'ghcr.io/macanderson' }}/oxagen-ci-base:latest
       volumes:
@@ -1078,7 +1082,7 @@ jobs:
     if: >-
       (github.event_name == 'pull_request' || github.event_name == 'merge_group' || (github.event_name == 'push' && github.ref == 'refs/heads/main')) &&
       needs.preflight.outputs.proceed == 'true'
-    runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-large-{0}', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
+    runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-{0}-{1}', vars.CI_HEAVY_POOL || 'large', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
     container:
       image: ${{ vars.CI_IMAGE_REGISTRY || 'ghcr.io/macanderson' }}/oxagen-ci-base:latest
       volumes:
