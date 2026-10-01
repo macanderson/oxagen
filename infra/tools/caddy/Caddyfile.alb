@@ -93,7 +93,7 @@
 # `header_up` rather than appended to.
 #
 # The application reads `X-Oxagen-Client-Ip` (`extractTrustedClientIp`,
-# packages/oxagen/src/client-ip.ts) — but only once the deployment trusts that
+# packages/oxagen/src/client-ip.ts), but only once the deployment trusts that
 # header, which is step 2 of the rollout and comes AFTER this file is uploaded
 # and reloaded. This file names no value for that setting: its registry entry,
 # TRUST_EDGE_CLIENT_IP_HEADER in packages/config/src/registry.ts, is the one
