@@ -2399,6 +2399,26 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
   },
+  PR_DRAFT: {
+    group: "Operator scripts",
+    description:
+      "Whether the pull request a CI run tests is a draft (true or false). pipeline.yml sets it on the preflight job, and ci-pr-scope.mjs runs only the light lanes for a draft (#4918).",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  PR_CHANGED_FILES: {
+    group: "Operator scripts",
+    description:
+      "How many files the pull request a CI run tests changes, from the pull_request event. ci-pr-scope.mjs checks that it read every file before it calls a pull request docs-only (#4918).",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
   HEAD_REPO: {
     group: "Operator scripts",
     description:
