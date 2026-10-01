@@ -25,7 +25,7 @@
   },
   "scripts": {
     "lint": "eslint . --max-warnings 0",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "NODE_OPTIONS=--max-old-space-size=4096 tsc --noEmit",
     "test:unit": "vitest run",
     "test:coverage": "vitest run --coverage"
   },
