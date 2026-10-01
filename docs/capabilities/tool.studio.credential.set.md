@@ -56,4 +56,4 @@ A name equal to a credential the workspace connected through a plugin replaces t
 |---|---|
 | `forbidden` (403) | no signed-in user, or the caller is not an org Owner or Admin |
 | `invalid_input` (400) | `name` does not match the pattern, `kind` is neither value, a field the kind needs is missing, a field the kind refuses is present, a value is empty or too long, or the input carries another field |
-| `internal_error` (500) | the API has no credential vault key (`AUTH_TOKEN_ENCRYPTION_KEY`), so it cannot seal the secret |
+| `internal_error` (500) | the API has no credential vault key ([`AUTH_TOKEN_ENCRYPTION_KEY`](../../packages/config/src/registry.ts)), so it cannot seal the secret |
