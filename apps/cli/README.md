@@ -184,6 +184,7 @@ oxagen remember "<lesson>" --class RULE --enforcement 90
 ```bash
 oxagen init --org <org> --workspace <ws>          # link this project to an org + workspace
 oxagen pull                                       # write the workspace's published steering into .oxagen/
+oxagen steering import <paths...>                 # preview Markdown files as steering records and policies, then --yes opens the PR
 oxagen agent env bind|unbind|list                 # bind an agent to an environment
 oxagen env list|get|create|update|rm|set-default  # workspace environments
 oxagen secret list|set|rm|reveal|import|export    # encrypted credential vault
