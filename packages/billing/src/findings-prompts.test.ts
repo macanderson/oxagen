@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { readPolicy, chSelect, getBody, runInTenantScope, warn, error } =
   vi.hoisted(() => ({
@@ -33,12 +33,10 @@ vi.mock("./logger", () => ({ logger: { warn, error, info: vi.fn() } }));
 import { ZERO_TOKENS, type RunTotalsRecord } from "./cost-rollup";
 import {
   microsOf,
-  setInstructionProposalOpener,
-  type InstructionProposal,
   type PricedRequestFrame,
+  type SpendProposalInput,
 } from "./findings";
 import {
-  openInstructionProposals,
   PROMPT_BODIES_MAX,
   PROMPT_READ_MAX,
   promptTextMode,
@@ -160,8 +158,6 @@ beforeEach(() => {
   warn.mockReset();
   error.mockReset();
 });
-
-afterEach(() => setInstructionProposalOpener(null));
 
 describe("promptTextMode", () => {
   it("reads prompt text when the workspace pinned no policy", async () => {
@@ -361,53 +357,6 @@ describe("readRunPrompts", () => {
   });
 });
 
-describe("openInstructionProposals", () => {
-  const proposal: InstructionProposal = {
-    lineageId: "ctx.habits.instruction-0123456789ab",
-    statement: TESTS,
-    rationale: "Runs received it 3 times.",
-    runs: [RUN_A, RUN_B, RUN_C],
-    agents: [],
-    evidenceLinks: [],
-  };
-
-  it("opens nothing for an empty list", async () => {
-    const opener = vi.fn();
-    setInstructionProposalOpener(opener);
-    await openInstructionProposals(SCOPE, []);
-    expect(opener).not.toHaveBeenCalled();
-    expect(warn).not.toHaveBeenCalled();
-  });
-
-  it("logs when no opener is installed", async () => {
-    await openInstructionProposals(SCOPE, [proposal]);
-    expect(warn).toHaveBeenCalledWith(
-      { ...SCOPE, proposals: 1 },
-      expect.stringContaining("no steering record proposal opener"),
-    );
-  });
-
-  it("hands the proposals to the installed opener", async () => {
-    const opener = vi.fn(async () => undefined);
-    setInstructionProposalOpener(opener);
-    await openInstructionProposals(SCOPE, [proposal]);
-    expect(opener).toHaveBeenCalledWith(SCOPE, [proposal]);
-    expect(error).not.toHaveBeenCalled();
-  });
-
-  it("logs a failed open and resolves, so the pass keeps its findings", async () => {
-    const err = new Error("database unavailable");
-    setInstructionProposalOpener(async () => {
-      throw err;
-    });
-    await expect(openInstructionProposals(SCOPE, [proposal])).resolves.toBeUndefined();
-    expect(error).toHaveBeenCalledWith(
-      { ...SCOPE, proposals: 1, err },
-      expect.stringContaining("failed"),
-    );
-  });
-});
-
 describe("the findings pass with prompts", () => {
   const baseDeps = (runs: RunTotalsRecord[]) => ({
     now: () => WINDOW.end,
@@ -446,12 +395,34 @@ describe("the findings pass with prompts", () => {
       BY_SESSION,
       new Set([RUN_A, RUN_B, RUN_C]),
     );
-    const [, proposals] = openProposals.mock.calls[0]! as unknown as [
+    const [, input] = openProposals.mock.calls[0]! as unknown as [
       unknown,
-      InstructionProposal[],
+      SpendProposalInput,
     ];
-    expect(proposals).toHaveLength(1);
-    expect(proposals[0]!.statement).toBe(TESTS);
+    expect(input.instructions).toHaveLength(1);
+    expect(input.instructions[0]!.statement).toBe(TESTS);
+  });
+
+  it("hands the opener the drafts it wrote", async () => {
+    const deps = baseDeps([pricedRun(RUN_A)]);
+    const openProposals = vi.fn(async () => undefined);
+    await runFindingsPass(SCOPE, {
+      ...deps,
+      readPrompts: async () => undefined,
+      openProposals,
+    });
+    const [, , , written] = deps.write.mock.calls[0]! as unknown as [
+      unknown,
+      unknown,
+      unknown,
+      unknown,
+    ];
+    const [, input] = openProposals.mock.calls[0]! as unknown as [
+      unknown,
+      SpendProposalInput,
+    ];
+    expect(input.findings).toBe(written);
+    expect(input.instructions).toEqual([]);
   });
 
   it("reads no prompts for a workspace with no runs", async () => {
@@ -463,7 +434,10 @@ describe("the findings pass with prompts", () => {
       openProposals,
     });
     expect(readPrompts).not.toHaveBeenCalled();
-    expect(openProposals).toHaveBeenCalledWith(SCOPE, []);
+    expect(openProposals).toHaveBeenCalledWith(SCOPE, {
+      instructions: [],
+      findings: [],
+    });
   });
 
   it("writes nothing when the prompt read fails", async () => {
