@@ -103,7 +103,9 @@ async function ensureEnvFile(): Promise<void> {
       `[dev] Could not write every .env.local from Parameter Store. Still ` +
         `missing: ${missing.map((t) => t.dir).join(", ")}. Check that the ` +
         "AWS CLI is signed in with `aws sts get-caller-identity`, then run " +
-        "`pnpm env:pull`.",
+        "`pnpm env:pull`. Without access to Oxagen's AWS account, copy " +
+        "`.env.example` to `.env.local` in each of those directories and fill " +
+        "in your own values.",
     ),
   );
   process.exit(1);

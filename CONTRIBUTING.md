@@ -19,7 +19,9 @@ pnpm dev                     # starts Docker + migrations + all apps
 ```
 
 `pnpm env:pull` keeps everything below the override line at the end of each
-`.env.local`, so put machine-specific values there.
+`.env.local`, so put machine-specific values there. Without access to Oxagen's
+AWS account, copy `.env.example` to `.env.local` in the root, `apps/app`,
+`apps/api`, and `apps/mcp`, and fill in your own values.
 [`docs/runbooks/secrets-and-variables.md`](docs/runbooks/secrets-and-variables.md)
 covers pulling, saving a value with `pnpm env:push`, and rotating a secret.
 
