@@ -221,7 +221,7 @@ describe("adding a harness", () => {
     const errors = rig.errors.join("\n");
     expect(errors).toContain("this host is now unenrolled");
     expect(errors).toContain(
-      "tacho enroll --harness claude-code,codex --org acme --workspace core --api-url https://api.rig.test",
+      "oxagen agent enroll --harness claude-code,codex --org acme --workspace core --api-url https://api.rig.test",
     );
     const host = readHostFile(rig.deps.paths.hostFile);
     expect(host?.revoked_at).not.toBeNull();

@@ -1828,7 +1828,7 @@ describe("harnesses and reassign", () => {
     ]);
     expect(d.requests[0]?.body).toMatchObject({
       hostEnrollmentId: TEST_ENROLLMENT,
-      reason: "tacho enroll --harness claude-code,codex",
+      reason: "oxagen agent enroll --harness claude-code,codex",
     });
     expect(d.requests[1]?.body).toMatchObject({
       harnesses: ["claude-code", "codex"],
@@ -1977,7 +1977,7 @@ describe("harnesses and reassign", () => {
     ]);
     expect(d.requests[0]?.body).toMatchObject({
       hostEnrollmentId: TEST_ENROLLMENT,
-      reason: "tacho reassign to acme/edge",
+      reason: "oxagen agent reassign to acme/edge",
     });
     expect(d.requests[1]?.body).toMatchObject({
       harnesses: ["claude-code", "codex"],
@@ -2152,7 +2152,7 @@ describe("harnesses and reassign", () => {
       "Reassign failed after revoking the old enrollment",
     );
     expect(refusing.errors.at(-1)).toContain(
-      "tacho enroll --force --org acme --workspace edge --api-url https://api.test --harness claude-code`",
+      "oxagen agent enroll --force --org acme --workspace edge --api-url https://api.test --harness claude-code`",
     );
     const left = readHostFile(refusing.paths.hostFile);
     expect(left?.host_enrollment_id).toBe(TEST_ENROLLMENT);

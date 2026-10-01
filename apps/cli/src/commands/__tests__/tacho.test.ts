@@ -267,10 +267,8 @@ describe("oxagen tacho", () => {
       validityDays: 30,
       harnesses: ["codex"],
     });
-    expect(calls.at(-1)).toMatchObject({
-      name: "verify",
-      args: [{ harness: "codex" }],
-    });
+    expect(calls.at(-1)?.name).toBe("verify");
+    expect(lastCall("verify")?.args[0]).toEqual({ harness: "codex" });
     calls.length = 0;
     await expect(
       handleTachoEnroll({ credentials: "borrowed" }, writer),
