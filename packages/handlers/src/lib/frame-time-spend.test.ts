@@ -69,11 +69,8 @@ describe("readFrameTimeSpend", () => {
       ]),
     );
     expect(out.rows).toHaveLength(2);
-    expect(d.priceRunFrames).toHaveBeenCalledExactlyOnceWith(
-      SCOPE,
-      runId(2),
-      SEPTEMBER,
-    );
+    expect(d.priceRunFrames).toHaveBeenCalledOnce();
+    expect(d.priceRunFrames).toHaveBeenCalledWith(SCOPE, runId(2), SEPTEMBER);
     expect(d.readRuns).toHaveBeenCalledWith(SCOPE, SEPTEMBER, null);
   });
 
