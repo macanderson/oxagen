@@ -172,11 +172,13 @@ jobs:
             catch { detail = '(output unavailable)' }
 
             const behind = code === '1'
-            // The title format in CLAUDE.md under Issue titles. The workflow
-            // owns this issue, so the triage pass leaves its title alone.
-            const title = behind
-              ? 'P1 T3 S DevOps (Database): Production database schema is behind this repository'
-              : 'P1 T2 S DevOps (Deploy): The store drift check could not read the stores'
+            // The title format in CLAUDE.md under Issue titles. Both verdicts
+            // share one prefix, so moving the title from one statement to the
+            // other leaves the labels the triage pass applied from it correct.
+            const PREFIX = 'P1 T3 S DevOps (Database): '
+            const BEHIND = 'Production database schema is behind this repository'
+            const UNREADABLE = 'The store drift check could not read the stores'
+            const title = PREFIX + (behind ? BEHIND : UNREADABLE)
 
             let body = behind
               ? 'A committed migration has not reached production.\n\n'
@@ -192,12 +194,21 @@ jobs:
             body += `\nRun: ${runUrl}\n\n<details><summary>output</summary>\n\n\`\`\`\n${detail}\n\`\`\`\n\n</details>\n`
 
             if (existing) {
-              // Comment only, never retitle, as infra-drift.yml does. This
-              // used to retitle upward, from "could not read" to "behind",
-              // but it compared the whole title, so it also undid every
-              // retitle a person or the triage pass made. Each comment opens
-              // with what the run found, so the newest comment says whether
-              // the stores are behind or unreadable.
+              // Comment, and retitle only UPWARD, from "could not read" to
+              // "behind". A slow tunnel one morning must not turn an open "the
+              // schema is behind" report into "the check could not read the
+              // stores", because the body that follows would then send the
+              // responder to the SSM runbook for a migration that genuinely
+              // has not been applied. The retitle fires only on an unreadable
+              // title this workflow wrote, with the current prefix or the
+              // plain form it used before 2026-09-30. It used to fire on any
+              // title that differed, which undid every retitle a person made.
+              const ownUnreadable = [PREFIX + UNREADABLE, UNREADABLE]
+              if (behind && ownUnreadable.includes(existing.title)) {
+                await github.rest.issues.update({
+                  owner, repo, issue_number: existing.number, title,
+                })
+              }
               await github.rest.issues.createComment({
                 owner, repo, issue_number: existing.number, body,
               })

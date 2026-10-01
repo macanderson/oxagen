@@ -198,8 +198,8 @@ and put the kind before the size. That shape had replaced `P<n> · <area>/<surfa
 - **Residue issues** carry their PR in a trailing `(residue #<PR>)`. List every PR when a
   residue issue carries more than one.
 - **A workflow-owned issue** (`DEPLOYMENT-FAILURE`, `MAIN-UNVERIFIED`, `INFRA-DRIFT`,
-  `STORE-DRIFT`) gets its whole title from the workflow that files it, and the triage pass
-  leaves it alone.
+  `STORE-DRIFT`) gets its whole title from the workflow that files it. The triage pass
+  keeps that title and adds the labels it names.
 
 `.claude/commands/triage-issues.md` holds the full rules: the tier, size, kind, and area
 tables, how to choose each label, and the procedure. Run `/triage-issues` to work the

@@ -25,10 +25,14 @@ Mac set this scheme on 2026-09-30 for oxagen and stella. Every label name is upp
    each issue. If the login is wrong, stop.
 2. Prefix every `gh ... --json` call with `env -u CLICOLOR_FORCE -u FORCE_COLOR`. Forced
    colour corrupts the JSON.
-3. Skip workflow-owned issues. Their workflows write the title and labels. Leave an issue alone
-   if it carries `DEPLOYMENT-FAILURE`, `MAIN-UNVERIFIED`, `INFRA-DRIFT`, or `STORE-DRIFT`. For an
-   issue labelled `AGENT-ESCALATED`, retitle it but keep that label, because stella's
-   backlog loop owns it.
+3. Do not retitle a workflow-owned issue, one that carries `DEPLOYMENT-FAILURE`,
+   `MAIN-UNVERIFIED`, `INFRA-DRIFT`, or `STORE-DRIFT`. Its workflow writes the title, and the
+   title already names a priority, tier, size, kind, and area. Add whichever of those five
+   labels the issue lacks, so its labels agree with its title and `triage-guard.yml` takes it
+   out of the queue. If an older issue's title has no prefix, copy the title its workflow
+   writes today. `DEPLOYMENT-FAILURE` and `MAIN-UNVERIFIED` issues never enter the queue, so
+   only an `--all` sweep reaches them. For an issue labelled `AGENT-ESCALATED`, retitle it but
+   keep that label, because stella's backlog loop owns it.
 
 ```sh
 env -u CLICOLOR_FORCE -u FORCE_COLOR gh issue list --repo macanderson/oxagen --state open \
@@ -221,7 +225,7 @@ You cannot edit it.
 
 ## Procedure
 
-1. List the scope and skip the workflow-owned issues.
+1. List the scope. Handle each workflow-owned issue as step 3 of Before you start says.
 2. For each issue, read the full body and the labels it already has. Decide priority, tier,
    size, kind, area, job, pillars, `SECURITY`, `BLOCKED`, and the `NEEDS:` labels. Write the
    statement.
