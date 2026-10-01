@@ -107,6 +107,10 @@ env:
   # cores and at least 64 GB and take 12. Our small ones have 4 cores and
   # 16 GB and take 4.
   TURBO_CONCURRENCY: ${{ vars.CI_RUNNERS == 'aws' && (vars.CI_HEAVY_POOL == 'small' && '4' || '12') || '3' }}
+  # Lint and typecheck run fewer tasks at once. Their heaviest tsc and eslint
+  # scripts pin a 4 GB heap (#4990), so GitHub's 7 GB runner takes 1 and our
+  # 16 GB small runner takes 3.
+  LINT_TURBO_CONCURRENCY: ${{ vars.CI_RUNNERS == 'aws' && (vars.CI_HEAVY_POOL == 'small' && '3' || '12') || '1' }}
   # Jobs run inside the toolchain container, so service containers are
   # reached by their service name on the shared docker network, not localhost.
   DATABASE_URL: postgres://oxagen:oxagen@postgres:5432/oxagen?sslmode=disable
@@ -267,11 +271,15 @@ jobs:
       - name: Lint and typecheck
         run: |
           set -f  # keep the unquoted ...[<base sha>] filter literal (no globbing)
-          # $TURBO_CONCURRENCY (see the workflow env): turbo's default (10)
+          # $LINT_TURBO_CONCURRENCY (see the workflow env): turbo's default (10)
           # fans out parallel tsc/eslint processes far beyond the 2-core
           # runner's memory, and repeated exit-137 runner kills ("shutdown
-          # signal" mid lint+typecheck) traced to that, so a GitHub-hosted
-          # runner gets 3. Our 16-core, 64 GB runners get 12.
+          # signal" mid lint+typecheck) traced to that. GitHub's private-repo
+          # runner has about 7 GB, Node's default heap there is about 2 GB, and
+          # the heaviest lint and typecheck scripts pin 4 GB (#4990). Two of
+          # them can exceed the runner, and at 3 #4872 and #4926 lost theirs to
+          # a shutdown signal, so a GitHub-hosted runner gets 1. Our 16-core,
+          # 64 GB runners get 12.
           #
           # --continue (#3428): turbo otherwise stops at the first failing
           # task, so a lint error in one package hid a type error in another
@@ -279,7 +287,7 @@ jobs:
           # 2026-09-19. --continue runs every task and names every failure.
           # Turbo still exits non-zero if any task failed. The unit job's
           # coverage step does the same for the same reason.
-          pnpm turbo run lint typecheck --concurrency="$TURBO_CONCURRENCY" --continue $TURBO_FILTER
+          pnpm turbo run lint typecheck --concurrency="$LINT_TURBO_CONCURRENCY" --continue $TURBO_FILTER
 
       # INV-16 (apps/app/ARCHITECTURE.md §4): every export under apps/app/src
       # is reachable from a production entry and every dependency is imported.
