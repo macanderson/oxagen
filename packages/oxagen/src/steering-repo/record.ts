@@ -31,14 +31,12 @@ import { uniqueArray, withRules } from "./json-schema";
 import { DESCRIPTION_MAX, SKILL_DESCRIPTION_MAX } from "./tokens";
 
 import { recordEffectSchema } from "./record-effect";
+import { recordForceSchema } from "./record-force";
 import { recordKindSchema } from "./record-kind";
 
 export { recordEffectSchema, type RecordEffect } from "./record-effect";
+export { recordForceSchema, type RecordForce } from "./record-force";
 export { RECORD_KINDS, recordKindSchema, type RecordKind } from "./record-kind";
-
-/** `must` and `should` reach every request; `may` and `info` reach one they fit. */
-export const recordForceSchema = z.enum(["must", "should", "may", "info"]);
-export type RecordForce = z.output<typeof recordForceSchema>;
 
 export const recordScopeSchema = z.enum([
   "workspace",

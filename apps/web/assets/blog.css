@@ -948,10 +948,27 @@
   }
 }
 
-/* flow: numbered steps, a column when narrow and a row when there is room */
+/* flow: numbered steps, a column when narrow and rows when there is room.
+   The figure carries --n (steps), --cols (steps per row) and --last (the
+   column the last step sits in); a step carries --i (its index). A figure
+   that runs a unit (is-run) also animates --k, the fraction of one pass,
+   from 0 to 1 over --n plus one dwells. --p is that pass measured in steps,
+   and each token, bar, and the loop reads its own moment from --p against
+   its --i. No script: the stylesheet is the whole animation. */
+@property --k {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 0;
+}
 .fig-flow {
+  --gap: 22px;
+  --row-gap: 22px;
+  --dwell: 1.5s;
+}
+.fig-steps {
   display: grid;
-  gap: 22px;
+  column-gap: var(--gap);
+  row-gap: var(--row-gap);
 }
 .fig-step {
   position: relative;
@@ -965,6 +982,13 @@
 }
 .fig-step.is-emph {
   border-color: var(--ink-3);
+}
+.fig-step-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 4px 6px;
 }
 .fig-step-n {
   color: var(--ink-3);
@@ -983,6 +1007,7 @@
   font-size: 13px;
   line-height: 1.4;
 }
+/* the arrow into a step: from the step above when stacked */
 .fig-step + .fig-step::before {
   content: "";
   position: absolute;
@@ -994,6 +1019,46 @@
   border-bottom: 1.5px solid var(--ink-3);
   transform: translateX(-50%) rotate(45deg);
 }
+/* the unit: one piece of work, shown at the step it is at */
+.fig-token {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  padding: 4px 7px;
+  border-radius: 4px;
+  background: var(--ink);
+  color: var(--ground);
+  font-size: 11px;
+  line-height: 1.25;
+  opacity: 0;
+}
+.fig-token-id {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+.fig-token-mark {
+  white-space: nowrap;
+}
+/* the bar under a step: full once the unit has passed it */
+.fig-step-bar {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: -1px;
+  height: 2px;
+  overflow: hidden;
+  border-radius: 1px;
+}
+.fig-step-bar::before {
+  content: "";
+  display: block;
+  width: 0;
+  height: 100%;
+  background: var(--ink-2);
+}
 .fig-loop {
   margin-top: 12px;
   color: var(--ink-3);
@@ -1004,21 +1069,104 @@
 .fig-loop::before {
   content: "\21BA\00A0";
 }
+/* the run: one pass takes a dwell per step and one more for the return */
+.fig-flow.is-run {
+  animation: fig-run calc((var(--n) + 1) * var(--dwell)) linear infinite;
+}
+@keyframes fig-run {
+  from {
+    --k: 0;
+  }
+  to {
+    --k: 1;
+  }
+}
+.fig-flow.is-run .fig-step,
+.fig-flow.is-run .fig-loop {
+  --p: calc(var(--k) * (var(--n) + 1));
+  /* how far the pass is from this element's own moment, in steps */
+  --u: calc(var(--p) - var(--i) - 0.5);
+  /* 1 through the middle half of the moment, fading over a quarter each side */
+  --on: clamp(0, 1.5 - 2 * max(var(--u), -1 * var(--u)), 1);
+}
+.fig-flow.is-run .fig-loop {
+  --i: var(--n);
+  color: color-mix(in srgb, var(--ink) calc(var(--on) * 100%), var(--ink-3));
+}
+.fig-flow.is-run .fig-token {
+  opacity: var(--on);
+  /* arrives from below and leaves upward */
+  transform: translateY(
+    calc(-24px * (max(0, var(--u) - 0.25) + min(0, var(--u) + 0.25)))
+  );
+}
+.fig-flow.is-run .fig-step-bar::before {
+  width: calc(clamp(0, var(--p) - var(--i), 1) * 100%);
+}
+@media (prefers-reduced-motion: reduce) {
+  .fig-flow.is-run {
+    animation: none;
+    /* the unit rests on the first step */
+    --k: calc(0.5 / (var(--n) + 1));
+  }
+  .fig-flow.is-run .fig-step-bar {
+    display: none;
+  }
+}
 @container (min-width: 600px) {
   .fig-flow {
-    grid-template-columns: repeat(var(--n), minmax(0, 1fr));
-    gap: 28px;
+    --gap: 28px;
+    --row-gap: 40px;
   }
+  .fig-flow.is-dense {
+    --gap: 18px;
+  }
+  .fig-steps {
+    grid-template-columns: repeat(var(--cols), minmax(0, 1fr));
+  }
+  /* the arrow into a step: from the step before it on the row */
   .fig-step + .fig-step::before {
-    left: -19px;
+    left: calc(-1 * var(--gap) / 2 - 5px);
     top: 50%;
     transform: translateY(-50%) rotate(-45deg);
   }
-  /* the return: a rail from the last step's centre back to the first's */
+  /* the turn to a new row: a stem down from the row's last step, a rail
+     back along the gap, and a stem down into the next row's first step. The
+     2px is the step's two borders, which a percentage of the padding box
+     leaves out. */
+  .fig-step.is-row-end::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    bottom: calc(-1 * var(--row-gap) / 2);
+    height: calc(var(--row-gap) / 2);
+    border-left: 1.5px solid var(--rule);
+  }
+  .fig-step.is-row-start::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: calc(-1 * var(--row-gap) / 2);
+    width: calc((var(--cols) - 1) * (100% + var(--gap) + 2px));
+    height: calc(var(--row-gap) / 2);
+    border-top: 1.5px solid var(--rule);
+    border-left: 1.5px solid var(--rule);
+  }
+  .fig-step.is-row-start::before {
+    left: 50%;
+    top: -11px;
+    transform: translateX(-50%) rotate(45deg);
+  }
+  /* the loop: a rail from under the last step back to under the first */
   .fig-loop {
+    --w: calc((100% - (var(--cols) - 1) * var(--gap)) / var(--cols));
     position: relative;
     height: 24px;
-    margin: 8px calc((100% - (var(--n) - 1) * 28px) / var(--n) / 2) 10px;
+    margin: 8px
+      calc(
+        var(--w) / 2 + (var(--cols) - 1 - var(--last)) * (var(--w) + var(--gap))
+      )
+      10px calc(var(--w) / 2);
     border: 1.5px solid var(--rule);
     border-top: 0;
     border-radius: 0 0 var(--r) var(--r);
@@ -1034,6 +1182,14 @@
     border-top: 1.5px solid var(--rule);
     transform: rotate(45deg);
   }
+  .fig-flow.is-run .fig-loop,
+  .fig-flow.is-run .fig-loop::before {
+    border-color: color-mix(
+      in srgb,
+      var(--ink-2) calc(var(--on) * 100%),
+      var(--rule)
+    );
+  }
   .fig-loop span {
     position: absolute;
     left: 50%;
@@ -1044,7 +1200,6 @@
     transform: translate(-50%, 50%);
   }
 }
-
 /* ladder: rungs that rise, bottoms aligned whatever the labels wrap to */
 .fig-ladder {
   display: grid;
