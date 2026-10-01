@@ -1,0 +1,13 @@
+[Unit]
+Description=Put the CI workspace and Docker volumes on local NVMe
+DefaultDependencies=no
+After=local-fs.target systemd-udev-settle.service
+Before=docker.service containerd.service cloud-final.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/ci-local-disk
+
+[Install]
+WantedBy=multi-user.target

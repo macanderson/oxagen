@@ -1,0 +1,13 @@
+[Unit]
+Description=Read the root volume once so the snapshot's blocks are local before a job needs them
+After=local-fs.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/sbin/ci-volume-warm
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+
+[Install]
+WantedBy=multi-user.target
