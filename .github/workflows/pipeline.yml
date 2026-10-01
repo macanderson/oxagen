@@ -250,10 +250,13 @@ jobs:
       - name: Lint and typecheck
         run: |
           set -f  # keep the unquoted ...[<base sha>] filter literal (no globbing)
-          # --concurrency=3: turbo's default (10) fans out parallel tsc/eslint
+          # --concurrency=2: turbo's default (10) fans out parallel tsc/eslint
           # processes far beyond the 2-core runner's memory; repeated exit-137
           # runner kills ("shutdown signal" mid lint+typecheck) traced to this.
-          # Three concurrent tasks bounds peak RSS while keeping the cores busy.
+          # A private repository's runner has about half a public one's RAM, so
+          # Node's default heap is about 2 GB there, and the heaviest lint and
+          # typecheck scripts pin 4 GB or more (#4990). Two such processes fit
+          # the runner; three did not.
           #
           # --continue (#3428): turbo otherwise stops at the first failing
           # task, so a lint error in one package hid a type error in another
@@ -261,7 +264,7 @@ jobs:
           # 2026-09-19. --continue runs every task and names every failure.
           # Turbo still exits non-zero if any task failed. The unit job's
           # coverage step does the same for the same reason.
-          pnpm turbo run lint typecheck --concurrency=3 --continue $TURBO_FILTER
+          pnpm turbo run lint typecheck --concurrency=2 --continue $TURBO_FILTER
 
       # INV-16 (apps/app/ARCHITECTURE.md §4): every export under apps/app/src
       # is reachable from a production entry and every dependency is imported.
