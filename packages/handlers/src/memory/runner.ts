@@ -342,7 +342,8 @@ async function runSteps(
  * its lessons as memories. A retried capture writes nothing twice.
  *
  * A run whose agent Oxagen could not tell keeps its reflection and stores no
- * memories, because a memory is recalled by its agent.
+ * memories, because memory/v1 gives a `remember` memory its agent and run
+ * together.
  */
 export async function captureMemories(
   deps: MemoryRunnerDeps,
@@ -773,10 +774,11 @@ export async function curateMemories(
 // ── Recall ──────────────────────────────────────────────────────────────────
 
 /**
- * The memories one request receives: active memory records from the
- * caller's read of the steering repo, and waiting memories as governance
- * allows. Each record served counts as recalled, which keeps it from going
- * stale. Oxagen's in-app agent receives none.
+ * The memory records one request receives, from the caller's read of the
+ * steering repo. Recall reads no waiting memory: a memory steers other
+ * agents only once a person merges it into a steering record (ADR-238). Each
+ * record served counts as recalled, which keeps it from going stale. Oxagen's
+ * in-app agent receives none.
  */
 export async function recallMemories(
   store: MemoryStore,
@@ -785,12 +787,7 @@ export async function recallMemories(
   records: readonly ActiveRecord[],
 ): Promise<RecallItem[]> {
   if (request.inApp) return [];
-  const [recalls, waiting] = await Promise.all([
-    store.listRecalls(scope),
-    request.recallUnreviewed === "off"
-      ? Promise.resolve([])
-      : store.listWaiting(scope),
-  ]);
+  const recalls = await store.listRecalls(scope);
   const reviewedAt = new Map(recalls.map((row) => [row.lineage, row.reviewedAt]));
   const candidates: RecallCandidate[] = [];
   for (const record of records) {
@@ -798,8 +795,6 @@ export async function recallMemories(
       continue;
     candidates.push({
       id: record.lineage,
-      source: "record",
-      agent: null,
       statement: record.statement,
       repos: record.repos,
       appliesTo: record.appliesTo,
@@ -807,22 +802,8 @@ export async function recallMemories(
       since: reviewedAt.get(record.lineage) ?? request.now,
     });
   }
-  for (const memory of waiting) {
-    candidates.push({
-      id: memory.publicId,
-      source: "memory",
-      agent: memory.agentLineage,
-      statement: memory.statement,
-      repos: memory.repos,
-      appliesTo: memory.appliesTo,
-      tools: memory.tools,
-      since: memory.createdAt,
-    });
-  }
   const items = rankRecall(request, candidates);
-  const lineages = items
-    .filter((item) => item.source === "record")
-    .map((item) => item.id);
+  const lineages = items.map((item) => item.id);
   if (lineages.length > 0) await store.bumpRecalls(scope, lineages, request.now);
   return items;
 }
@@ -868,6 +849,11 @@ export const memoryIntakeSchema = lessonInputSchema
  * Store memories from outside a run. They wait for the curator like any
  * other. An input the schema refuses is logged and counted, and one whose
  * capture, source, and statement were stored before is skipped.
+ *
+ * A `local_gateway` memory is one file on a host, so its source keeps one
+ * waiting memory and a new statement replaces that memory's text
+ * (`replaceSourceMemory`, ADR-238). A `pull_request` memory is one lesson of
+ * many a pull request can hold, so each new statement adds a memory.
  */
 export async function ingestMemories(
   store: MemoryStore,
@@ -903,7 +889,12 @@ export async function ingestMemories(
       dedupeKey: `${input.capture}:${input.source}:${hash}`,
     });
   }
-  const written =
-    drafts.length === 0 ? 0 : await store.insertMemories(scope, drafts);
+  const added = drafts.filter((draft) => draft.capture !== "local_gateway");
+  let written =
+    added.length === 0 ? 0 : await store.insertMemories(scope, added);
+  for (const draft of drafts) {
+    if (draft.capture !== "local_gateway") continue;
+    if (await store.replaceSourceMemory(scope, draft)) written += 1;
+  }
   return { written, refused };
 }

@@ -161,7 +161,6 @@ const source: DataSource = {
     commands: vi.fn(),
     outputs: vi.fn(),
     work: vi.fn(),
-    outcomesSettings: vi.fn(),
     issues: vi.fn(),
     context: vi.fn(),
     findings: vi.fn(),

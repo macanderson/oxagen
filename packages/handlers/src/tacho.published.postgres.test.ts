@@ -1,12 +1,9 @@
 // The Tacho port bound to the version store (#4550): the key a workspace's
-// version is read by, the organization answer, file reads at the version's
-// commit with the blob check and the cache, and recall_unreviewed as the
-// published governance file puts it in force.
+// version is read by, the organization answer, and file reads at the
+// version's commit with the blob check and the cache.
 import { createHash } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import type { Bundle } from "@oxagen/oxagen/steering-repo/bundle";
-import { GOVERNANCE_TOML_PATH } from "@oxagen/oxagen/steering-repo/paths";
-import { schemaDirective } from "@oxagen/oxagen/steering-repo/schema-ids";
 import { gitBlobId } from "@oxagen/steering-bundle";
 import type { SteeringRepository } from "./context.steering.github";
 import type { readSteeringConnection } from "./context.steering.host";
@@ -61,15 +58,6 @@ function version(commit = COMMIT, repository = KEY): Bundle {
 
 const at = (commit: string, path: string) => `${commit}:${path}`;
 
-function governance(...lines: string[]): string {
-  return [
-    schemaDirective("governance/v1"),
-    'schema = "governance/v1"',
-    ...lines,
-    "",
-  ].join("\n");
-}
-
 interface Setup {
   /** The workspace's binding. BINDING when unset; null for none. */
   connection?: Connection;
@@ -79,7 +67,6 @@ interface Setup {
   files?: Record<string, string>;
   /** The handle the host resolves. REPO when unset. */
   repo?: SteeringRepository;
-  cacheEntries?: number;
   cacheBytes?: number;
 }
 
@@ -111,13 +98,10 @@ function setup(options: Setup = {}) {
       ref: string,
     ): Promise<string | null> => files.get(at(ref, path)) ?? null,
   );
-  const warn = vi.fn();
   const published = createPostgresTachoPublished({
     store,
     readConnection,
     host: { resolveRepository, readFile },
-    log: { warn },
-    cacheEntries: options.cacheEntries,
     cacheBytes: options.cacheBytes,
   });
   return {
@@ -127,7 +111,6 @@ function setup(options: Setup = {}) {
     readConnection,
     resolveRepository,
     readFile,
-    warn,
   };
 }
 
@@ -433,106 +416,5 @@ describe("readAsset", () => {
     );
     expect(t.readFile).toHaveBeenCalledTimes(2);
     expect(t.resolveRepository).toHaveBeenLastCalledWith(OTHER_WORKSPACE);
-  });
-});
-
-describe("recallUnreviewed", () => {
-  it.each<{ name: string; lines: string[]; expected: "same-agent" | "off" }>([
-    {
-      name: "the setting the file puts in force",
-      lines: ['mode = "team"', "", "[memory]", 'recall_unreviewed = "off"'],
-      expected: "off",
-    },
-    {
-      name: "the default when the file sets none",
-      lines: ['mode = "team"'],
-      expected: "same-agent",
-    },
-    {
-      name: "off in regulated mode whatever the file sets",
-      lines: [
-        'mode = "regulated"',
-        "",
-        "[memory]",
-        'recall_unreviewed = "same-agent"',
-      ],
-      expected: "off",
-    },
-  ])("answers $name, from the published commit", async ({ lines, expected }) => {
-    const t = setup({
-      files: { [at(COMMIT, GOVERNANCE_TOML_PATH)]: governance(...lines) },
-    });
-    await expect(t.published.recallUnreviewed(SCOPE)).resolves.toBe(expected);
-    expect(t.readFile).toHaveBeenCalledWith(REPO, GOVERNANCE_TOML_PATH, COMMIT);
-    expect(t.warn).not.toHaveBeenCalled();
-  });
-
-  it("reads the governance file once per published commit", async () => {
-    const t = setup({
-      files: { [at(COMMIT, GOVERNANCE_TOML_PATH)]: governance('mode = "team"') },
-    });
-    await t.published.recallUnreviewed(SCOPE);
-    await expect(t.published.recallUnreviewed(SCOPE)).resolves.toBe(
-      "same-agent",
-    );
-    expect(t.readFile).toHaveBeenCalledTimes(1);
-  });
-
-  it.each<{ name: string; connection?: Connection; versions?: Bundle[] }>([
-    { name: "before the first publish", versions: [] },
-    { name: "for a workspace with no steering binding", connection: null },
-  ])("is off $name, and logs nothing", async ({ connection, versions }) => {
-    const t = setup({ connection, versions });
-    await expect(t.published.recallUnreviewed(SCOPE)).resolves.toBe("off");
-    expect(t.readFile).not.toHaveBeenCalled();
-    expect(t.warn).not.toHaveBeenCalled();
-  });
-
-  it.each<{ name: string; files: Record<string, string> }>([
-    { name: "holds no governance file", files: {} },
-    {
-      name: "holds a governance file that does not parse",
-      files: { [at(COMMIT, GOVERNANCE_TOML_PATH)]: "mode = team\n" },
-    },
-  ])("is off when the version $name, and logs it once", async ({ files }) => {
-    const t = setup({ files });
-    await expect(t.published.recallUnreviewed(SCOPE)).resolves.toBe("off");
-    await expect(t.published.recallUnreviewed(SCOPE)).resolves.toBe("off");
-    expect(t.readFile).toHaveBeenCalledTimes(1);
-    expect(t.warn).toHaveBeenCalledTimes(1);
-    expect(t.warn).toHaveBeenCalledWith(
-      expect.objectContaining({
-        workspaceId: SCOPE.workspaceId,
-        repository: KEY,
-        commit: COMMIT,
-      }),
-      expect.stringContaining("stay off"),
-    );
-  });
-
-  it("is off when the read fails, and reads again on the next call", async () => {
-    const t = setup({
-      files: { [at(COMMIT, GOVERNANCE_TOML_PATH)]: governance('mode = "team"') },
-    });
-    t.readFile.mockRejectedValueOnce(new Error("GitHub answered 502"));
-    await expect(t.published.recallUnreviewed(SCOPE)).resolves.toBe("off");
-    expect(t.warn).toHaveBeenCalledWith(
-      expect.objectContaining({
-        workspaceId: SCOPE.workspaceId,
-        err: "GitHub answered 502",
-      }),
-      expect.stringContaining("stay off"),
-    );
-    await expect(t.published.recallUnreviewed(SCOPE)).resolves.toBe(
-      "same-agent",
-    );
-    expect(t.readFile).toHaveBeenCalledTimes(2);
-  });
-
-  it("is off when the version store fails", async () => {
-    const t = setup();
-    t.current.mockRejectedValueOnce(new Error("connection refused"));
-    await expect(t.published.recallUnreviewed(SCOPE)).resolves.toBe("off");
-    expect(t.warn).toHaveBeenCalledTimes(1);
   });
 });

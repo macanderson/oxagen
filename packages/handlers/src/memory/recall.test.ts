@@ -19,13 +19,11 @@ function daysAgo(days: number): Date {
 function request(overrides: Partial<RecallRequest> = {}): RecallRequest {
   return {
     now: NOW,
-    agent: "claude-code",
     inApp: false,
     repositoryDigests: remoteDigests("github.com/acme/api"),
     tools: ["billing__create_refund"],
     paths: ["src/billing/refund.ts"],
     text: "Fix the billing refund tests",
-    recallUnreviewed: "same-agent",
     ...overrides,
   };
 }
@@ -37,8 +35,6 @@ function record(
 ): RecallCandidate {
   return {
     id,
-    source: "record",
-    agent: null,
     statement,
     repos: null,
     appliesTo: null,
@@ -46,14 +42,6 @@ function record(
     since: NOW,
     ...overrides,
   };
-}
-
-function memory(
-  id: string,
-  agent: string | null,
-  overrides: Partial<RecallCandidate> = {},
-): RecallCandidate {
-  return { ...record(id), source: "memory", agent, ...overrides };
 }
 
 function ids(items: Array<{ id: string }>): string[] {
@@ -77,30 +65,17 @@ describe("rankRecall", () => {
     ]);
   });
 
-  describe("unreviewed memories", () => {
-    it("reach the agent that wrote them while recall_unreviewed is same-agent", () => {
-      expect(ids(rankRecall(request(), [memory("mem_1", "claude-code")]))).toEqual([
-        "mem_1",
-      ]);
-    });
-
-    it("never reach another agent", () => {
-      expect(rankRecall(request(), [memory("mem_1", "codex")])).toEqual([]);
-    });
-
-    it("never reach anyone when their agent is null", () => {
-      expect(rankRecall(request({ agent: null }), [memory("mem_1", null)])).toEqual(
-        [],
-      );
-      expect(rankRecall(request(), [memory("mem_1", null)])).toEqual([]);
-    });
-
-    it("reach no one while recall_unreviewed is off, and records still reach", () => {
-      const items = rankRecall(request({ recallUnreviewed: "off" }), [
-        memory("mem_1", "claude-code"),
+  describe("steering records only", () => {
+    // ADR-238: a memory that waits for review steers only the agent that
+    // recorded it, and its harness already does that, so recall answers none.
+    it("answers every item as a steering record", () => {
+      const items = rankRecall(request(), [
         record("r1"),
+        record("r2", "Billing refunds need an idempotency key"),
+        record("r3", undefined, { since: daysAgo(10) }),
       ]);
-      expect(ids(items)).toEqual(["r1"]);
+      expect(items).toHaveLength(3);
+      expect(items.every((item) => item.source === "record")).toBe(true);
     });
   });
 

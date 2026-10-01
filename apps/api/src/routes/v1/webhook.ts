@@ -148,7 +148,8 @@ webhookRoute.post("/:connectorId/:connectionId", async (c) => {
   // Determine source record type from the delivery payload (connector-specific header or body field)
   const sourceRecordType =
     headers["x-github-event"] ??
-    headers["x-linear-event"] ??
+    // Linear names its event header `Linear-Event`, with no `x-` prefix.
+    headers["linear-event"] ??
     headers["x-slack-event-type"] ??
     (typeof parsedPayload === "object" &&
     parsedPayload !== null &&

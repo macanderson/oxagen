@@ -199,6 +199,10 @@
   var burger = document.getElementById("burger");
   var drawer = document.getElementById("drawer");
   if (burger && drawer) {
+    var closeDrawer = function () {
+      drawer.setAttribute("data-open", "false");
+      burger.setAttribute("aria-expanded", "false");
+    };
     burger.addEventListener("click", function () {
       var next = drawer.getAttribute("data-open") !== "true";
       drawer.setAttribute("data-open", next ? "true" : "false");
@@ -206,9 +210,13 @@
     });
     drawer.addEventListener("click", function (e) {
       if (e.target.tagName === "A") {
-        drawer.setAttribute("data-open", "false");
-        burger.setAttribute("aria-expanded", "false");
+        closeDrawer();
       }
+    });
+    /* The header's Get a demo sits outside the drawer. Close the drawer
+       there too, or it stays open over the form the link scrolls to. */
+    document.querySelectorAll(".nav-cta a").forEach(function (a) {
+      a.addEventListener("click", closeDrawer);
     });
   }
 

@@ -4,9 +4,13 @@
  * `local_gateway` memory (memory/v1). Claude Code keeps one memory per file
  * in `~/.claude/projects/<project>/memory/`, with `MEMORY.md` as the index.
  *
- * The reader keeps the digest of every statement it sent in memory, so a
- * scan sends only what is new or changed. A daemon restart sends every
- * memory again, and the API's dedupe key makes the repeat a no-op.
+ * The reader keeps, for each file, the digest of the statement it last sent,
+ * so a scan sends only the files that are new or changed. A file edited back
+ * to text it held before is sent again, because the API keeps one waiting
+ * memory per file and replaces its text with each new send (ADR-238). Two
+ * files with the same text are two sources, and each is sent. A daemon
+ * restart sends every memory again, and the API's dedupe key makes the repeat
+ * a no-op.
  */
 import { join } from "node:path";
 import { digestBytes, type Sha256Digest } from "../../digest";
@@ -103,7 +107,8 @@ function statementOf(text: string): string {
 
 export function createMemoryReader(deps: MemoryReaderDeps): MemoryReader {
   const harnesses = deps.harnesses ?? HARNESS_MEMORY_LOCATIONS;
-  const sent = new Set<Sha256Digest>();
+  /** The digest of the statement last sent, by file path. */
+  const sent = new Map<string, Sha256Digest>();
   let running: Promise<{ sent: number }> | undefined;
 
   /** A directory's names in order, or none when it cannot be listed. */
@@ -150,7 +155,11 @@ export function createMemoryReader(deps: MemoryReaderDeps): MemoryReader {
           if (!name.endsWith(location.extension)) continue;
           if (location.skip.includes(name)) continue;
           const entry = await entryAt(location.harness, join(dir, name));
-          if (entry === undefined || sent.has(entry.contentDigest)) continue;
+          if (
+            entry === undefined ||
+            sent.get(entry.path) === entry.contentDigest
+          )
+            continue;
           try {
             await deps.send(entry);
           } catch {
@@ -159,7 +168,7 @@ export function createMemoryReader(deps: MemoryReaderDeps): MemoryReader {
             // entry and every one after it wait for the next scan.
             return { sent: count };
           }
-          sent.add(entry.contentDigest);
+          sent.set(entry.path, entry.contentDigest);
           count += 1;
         }
       }
