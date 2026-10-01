@@ -9,9 +9,9 @@
 //   2. The repository, read through that installation's token. One it cannot
 //      see is `not_found: repository_not_installed`.
 //   3. Is it another workspace's steering repository? Refused as
-//      `main_repo_claimed`. A linked repository receives this workspace's
-//      Context PRs, and another workspace's steering repository holds that
-//      workspace's steering record. The heads table is tenant-scoped, so the
+//      `main_repo_claimed`. Another workspace's steering repository holds
+//      that workspace's steering records, and linking it here would give
+//      this workspace a way into them. The heads table is tenant-scoped, so the
 //      read crosses through `withSystemDb`. When a dedicated data plane makes
 //      the answer unknowable, the write is refused rather than guessed.
 //   4. This workspace's heads decide `main_repo_unbound` (no steering
