@@ -11,7 +11,7 @@
  * target, add it here too, or the publish stops with the new asset unnamed.
  */
 
-export const GITHUB_REPO = "oxageninc/product";
+export const GITHUB_REPO = "macanderson/oxagen";
 export const DOWNLOADS_HOST = "downloads.oxagen.sh";
 export const NPM_CLI_PACKAGE = "@oxagen/cli";
 

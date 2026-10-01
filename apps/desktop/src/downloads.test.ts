@@ -469,7 +469,7 @@ describe("page helpers", () => {
       notes: "https://docs.oxagen.sh/docs/releases/v2.1.1",
       allReleases: "https://docs.oxagen.sh/docs/releases",
       githubRelease:
-        "https://github.com/oxageninc/product/releases/tag/desktop-v2.1.1",
+        "https://github.com/macanderson/oxagen/releases/tag/desktop-v2.1.1",
     });
     expect(releaseLinks("2 1").notes).toBe(
       "https://docs.oxagen.sh/docs/releases/v2%201",
@@ -483,7 +483,7 @@ describe("page helpers", () => {
       'href="https://docs.oxagen.sh/docs/releases/v2.1.1"',
     );
     expect(html).toContain(
-      'href="https://github.com/oxageninc/product/releases/tag/desktop-v2.1.1"',
+      'href="https://github.com/macanderson/oxagen/releases/tag/desktop-v2.1.1"',
     );
   });
 });

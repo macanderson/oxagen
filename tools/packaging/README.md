@@ -121,7 +121,7 @@ Once the release is published, a tap job (or a person) runs:
 
 ```
 mkdir -p /tmp/sums && cd /tmp/sums
-gh release download desktop-v2.1.1 --repo oxageninc/product --pattern '*.sha256'
+gh release download desktop-v2.1.1 --repo macanderson/oxagen --pattern '*.sha256'
 cd - && node tools/packaging/stamp.mjs --version 2.1.1 --sums /tmp/sums --out /tmp/stamped
 ```
 

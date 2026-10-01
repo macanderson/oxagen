@@ -60,7 +60,7 @@ describe("urls", () => {
       "https://downloads.oxagen.sh/desktop/2.2.0/Oxagen_2.2.0_aarch64.dmg",
     );
     expect(releaseAssetUrl("2.2.0", "tacho-x86_64-pc-windows-msvc.exe")).toBe(
-      "https://github.com/oxageninc/product/releases/download/desktop-v2.2.0/tacho-x86_64-pc-windows-msvc.exe",
+      "https://github.com/macanderson/oxagen/releases/download/desktop-v2.2.0/tacho-x86_64-pc-windows-msvc.exe",
     );
   });
 });

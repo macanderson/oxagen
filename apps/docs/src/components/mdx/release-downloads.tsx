@@ -24,7 +24,7 @@ function updatesItself(version: string): boolean {
 }
 
 const DOWNLOADS = "https://downloads.oxagen.sh";
-const REPO = "https://github.com/oxageninc/product";
+const REPO = "https://github.com/macanderson/oxagen";
 
 interface Installer {
   label: string;

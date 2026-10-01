@@ -338,7 +338,7 @@ export function releaseLinks(version: string): {
       ? "https://docs.oxagen.sh/docs/releases"
       : `https://docs.oxagen.sh/docs/releases/v${v}`,
     allReleases: "https://docs.oxagen.sh/docs/releases",
-    githubRelease: `https://github.com/oxageninc/product/releases/tag/desktop-v${v}`,
+    githubRelease: `https://github.com/macanderson/oxagen/releases/tag/desktop-v${v}`,
   };
 }
 

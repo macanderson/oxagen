@@ -1,7 +1,7 @@
 # The mockup parity capture (#4818): builds the app at a ref, seeds it with
 # the audit's personas, and screenshots every state the page registry names,
 # as each persona, in the dark and light themes and at phone width. The
-# /mockup-parity-audit skill in oxageninc/roadmap dispatches it twice:
+# /mockup-parity-audit skill in macanderson/oxagen-roadmap dispatches it twice:
 # label before at main, and label after at the audit's fix pull request.
 #
 # It runs only in CI. Nothing in this repository is built or served on the
@@ -284,7 +284,7 @@ jobs:
           if [ -n "$HEAD_REF" ]; then candidates+=("$HEAD_REF"); fi
           candidates+=("main")
           for ref in "${candidates[@]}"; do
-            url="https://raw.githubusercontent.com/oxageninc/roadmap/$ref/mockups/pages/pages.json"
+            url="https://raw.githubusercontent.com/macanderson/oxagen-roadmap/$ref/mockups/pages/pages.json"
             # curl prints 000 when it reaches nothing; `|| true` keeps that.
             code=$(curl -sS -o "$out" -w '%{http_code}' --max-time 30 --retry 2 "$url" || true)
             if [ "$code" = "200" ]; then

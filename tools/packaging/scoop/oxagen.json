@@ -14,13 +14,13 @@
   "homepage": "https://oxagen.sh/",
   "license": {
     "identifier": "Proprietary",
-    "url": "https://github.com/oxageninc/product/blob/main/LICENSE"
+    "url": "https://github.com/macanderson/oxagen/blob/main/LICENSE"
   },
   "architecture": {
     "64bit": {
       "url": [
-        "https://github.com/oxageninc/product/releases/download/desktop-v{{version}}/tacho-x86_64-pc-windows-msvc.exe",
-        "https://github.com/oxageninc/product/releases/download/desktop-v{{version}}/oxagen-x86_64-pc-windows-msvc.exe"
+        "https://github.com/macanderson/oxagen/releases/download/desktop-v{{version}}/tacho-x86_64-pc-windows-msvc.exe",
+        "https://github.com/macanderson/oxagen/releases/download/desktop-v{{version}}/oxagen-x86_64-pc-windows-msvc.exe"
       ],
       "hash": [
         "{{sha256:tacho-x86_64-pc-windows-msvc.exe}}",
@@ -36,15 +36,15 @@
     "if ($cmd -eq 'uninstall' -and (Test-Path \"$env:USERPROFILE\\.config\\oxagen\\tacho\")) { & \"$dir\\oxagen-x86_64-pc-windows-msvc.exe\" agent unenroll --all }"
   ],
   "checkver": {
-    "url": "https://github.com/oxageninc/product/releases.atom",
+    "url": "https://github.com/macanderson/oxagen/releases.atom",
     "regex": "desktop-v([\\d.]+)"
   },
   "autoupdate": {
     "architecture": {
       "64bit": {
         "url": [
-          "https://github.com/oxageninc/product/releases/download/desktop-v$version/tacho-x86_64-pc-windows-msvc.exe",
-          "https://github.com/oxageninc/product/releases/download/desktop-v$version/oxagen-x86_64-pc-windows-msvc.exe"
+          "https://github.com/macanderson/oxagen/releases/download/desktop-v$version/tacho-x86_64-pc-windows-msvc.exe",
+          "https://github.com/macanderson/oxagen/releases/download/desktop-v$version/oxagen-x86_64-pc-windows-msvc.exe"
         ]
       }
     },
