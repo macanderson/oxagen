@@ -23,8 +23,8 @@ import {
   type BundleSkill,
   bundleSkillChars,
   bundleSkillSchema,
-} from "@oxagen/tacho";
-import { encodeSkill } from "@oxagen/tacho/skills";
+} from "@oxagen/recorder";
+import { encodeSkill } from "@oxagen/recorder/skills";
 import { logger } from "../logger";
 import type { TachoPublished } from "../tacho.published";
 import type { TachoHostRow } from "./tacho-host";

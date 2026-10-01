@@ -566,7 +566,7 @@ describe("computeAgentRows: custom agents", () => {
     const custom = rows.find((r) => r.key === "my-script")!;
     expect(custom.kind).toBe("custom");
     expect(custom.wrapped).toBe(true);
-    expect(custom.details).toEqual(["reports through tacho hook"]);
+    expect(custom.details).toEqual(["reports its own steps"]);
     expect(custom.sessionsLive).toBe(1);
     expect(custom.health).toBe("healthy");
   });

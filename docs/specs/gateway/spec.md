@@ -176,7 +176,7 @@ What remains under G3:
   `tool_call` content class and nothing writes their bodies yet, so a
   workspace that authorised that class still receives digests for it.
 
-One rule decides at both ends. `retainsBody` in `@oxagen/tacho` reads the mode
+One rule decides at both ends. `retainsBody` in `@oxagen/recorder` reads the mode
 and the classes together, the collector calls it before it writes, and the
 ingest handler calls it before it accepts, answering `retention_class_excluded`
 for a body the mandate does not cover. Reading the mode alone would keep a

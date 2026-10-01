@@ -8,7 +8,7 @@
 // only an open memory PR settles.
 import { OXAGEN_PR_LABELS } from "@oxagen/github";
 import { fixtureRepo } from "@oxagen/oxagen/steering-repo/fixture-repo";
-import { digestBytes } from "@oxagen/tacho";
+import { digestBytes } from "@oxagen/recorder";
 import type { TachoFrameRow } from "@oxagen/telemetry";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { FakeGitHub, REPO } from "../context.steering.test-support";

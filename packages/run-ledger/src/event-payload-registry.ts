@@ -51,7 +51,7 @@ import {
   STEERING_MANIFEST_SCHEMA,
   steeringForceSchema,
   steeringItemKindSchema,
-} from "@oxagen/tacho";
+} from "@oxagen/recorder";
 import { z } from "zod";
 import {
   canonicalJson,
@@ -429,7 +429,7 @@ const toolCallCompletedSchema = z
  * The context window of one model request (ADR-200): each block the request
  * carried, in window order, with the UTF-8 bytes of its parts' JSON and how
  * many parts it held. The five block kinds are the leaf's
- * (`CONTEXT_WINDOW_BLOCKS` in `@oxagen/tacho`), which the model proxy writes
+ * (`CONTEXT_WINDOW_BLOCKS` in `@oxagen/recorder`), which the model proxy writes
  * into its `llm_call` frames as well.
  *
  * No token is counted here. A reader divides the prompt total the vendor

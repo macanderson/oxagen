@@ -1,7 +1,7 @@
 /**
- * The Policy line of `tacho status` (#4570). It named permission rules alone,
+ * The Policy line of `oxagen agent status` (#4570). It named permission rules alone,
  * while the mode also decides the contained-tier check and the stale-bundle
- * check. It now prints the sentence `tacho enroll` and the desktop app print.
+ * check. It now prints the sentence `oxagen agent enroll` and the desktop app print.
  */
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";

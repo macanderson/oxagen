@@ -1,7 +1,7 @@
 /**
  * Whether the workspace's model policy permits the model a request asks for.
  *
- * The rule is small on purpose. `@oxagen/tacho` is a leaf package with no
+ * The rule is small on purpose. `@oxagen/recorder` is a leaf package with no
  * `@oxagen/*` runtime dependency, so it has no glob library, and a policy a
  * person writes into a settings field has to behave the way they expect from
  * reading it. So: an exact id, or an id ending in `*` that matches by prefix.

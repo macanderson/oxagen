@@ -70,7 +70,7 @@ Each item:
 | `answeredBy` | `string \| null` | `auth.users.public_id` (`usr_…`) of the person who answered, through `answered_by_user_id`. Null while open, and on a `deny` the timeout wrote. |
 | `kind`       | `question \| repo_unknown` | `kind`. Every row written before #3941 is a `question`. |
 | `raisedSeq`  | `string \| null` | `raised_seq` as a decimal string: the `seq` of the `control.interject` frame on the run's own chain. Null on a `question`. |
-| `body`       | object or null   | `body`: the `control.interject` body as the host sealed it (`interjectBodySchema` in `@oxagen/tacho`), snake_case. Null on a `question`, and on a stored body that no longer parses, so one row cannot fail the page. |
+| `body`       | object or null   | `body`: the `control.interject` body as the host sealed it (`interjectBodySchema` in `@oxagen/recorder`), snake_case. Null on a `question`, and on a stored body that no longer parses, so one row cannot fail the page. |
 | `repository` | `string \| null` | `repository`: `owner/name`, matched from the body's remote digest against the repositories the workspace's GitHub installation reaches. Null until matched, when nothing matches, and on a `question`. |
 | `path`       | `link \| create \| deny \| null` | `path`: how a `repo_unknown` was settled. `deny` is the timeout's. Null while open and on a `question`. |
 | `receiptId`  | `string \| null` | `receipt_id` (`rcp_…`), shared with the `agent.interjection_answered` event and the host's `control.answer` frame. Null while open, on an answer recorded before receipts, and on a `deny` the host's own timeout recorded until the timeout function adds the receipt. |

@@ -5,7 +5,7 @@ import { randomBytes } from "node:crypto";
 import { afterAll, describe, expect, it, vi } from "vitest";
 import { createLocalKmsAdapter } from "@oxagen/crypto/kms";
 import { createFsAdapter, type StorageAdapter } from "@oxagen/storage";
-import { digestBytes } from "@oxagen/tacho";
+import { digestBytes } from "@oxagen/recorder";
 import {
   BodyKeyGoneError,
   BodyUnopenableError,

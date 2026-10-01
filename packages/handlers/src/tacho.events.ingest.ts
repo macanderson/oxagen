@@ -74,7 +74,7 @@ import {
   TACHO_METERING_OBSERVED,
   type TachoEvent,
   verifyChain,
-} from "@oxagen/tacho";
+} from "@oxagen/recorder";
 import {
   insertTachoEvents,
   selectTachoStoredFrames,
@@ -1298,7 +1298,7 @@ interface ChainLineage {
 /**
  * The refusal for frames that name a root or parent session other than the
  * ones their chain opened with (#3944, S-09). A recorder fixes both once per
- * session (`recorder.ts` in @oxagen/tacho), so such a frame is forged or comes
+ * session (`recorder.ts` in @oxagen/recorder), so such a frame is forged or comes
  * from a broken daemon. It cannot be recorded as sent: ClickHouse keeps the
  * root each frame names, and the run cost rollup reads model and tool calls
  * by that root (`cost-frames.ts` in @oxagen/telemetry), so an accepted frame
@@ -1315,7 +1315,7 @@ const LINEAGE_REFUSED =
 /**
  * The refusal for a frame whose agent key is not the one its host enrollment
  * was minted for (#3944, S-09). A daemon stamps its own enrollment's key on
- * every frame (`daemon.ts` in @oxagen/tacho), so such a frame is forged or
+ * every frame (`daemon.ts` in @oxagen/recorder), so such a frame is forged or
  * comes from a broken daemon. It carries the phrase the shipper matches, as
  * `LINEAGE_REFUSED` does, so the shipper sets the session aside and ships the
  * host's other sessions.

@@ -1,6 +1,7 @@
 {
   "##": [
-    "Scoop manifest for the two compiled CLIs on Windows: tacho and oxagen,",
+    "Scoop manifest for the two compiled CLIs on Windows: oxagen and the",
+    "recorder's legacy executable, kept for machines enrolled before #4879,",
     "each a Node single-executable the Desktop workflow builds on",
     "windows-latest and attaches to the desktop-v<version> release next to",
     "an <asset>.sha256 file. The desktop app itself is the .msi / -setup.exe",
@@ -9,7 +10,7 @@
     "release .sha256 files (tools/packaging/README.md)."
   ],
   "version": "{{version}}",
-  "description": "Tacho wrapper for Claude Code, Codex, Cursor, and Stella, with the oxagen CLI",
+  "description": "The oxagen CLI, which puts Claude Code, Codex, Cursor, and Stella under Oxagen control",
   "homepage": "https://oxagen.sh/",
   "license": {
     "identifier": "Proprietary",
@@ -32,7 +33,7 @@
     ["oxagen-x86_64-pc-windows-msvc.exe", "oxagen"]
   ],
   "pre_uninstall": [
-    "if ($cmd -eq 'uninstall' -and (Test-Path \"$env:USERPROFILE\\.config\\oxagen\\tacho\")) { & \"$dir\\tacho-x86_64-pc-windows-msvc.exe\" unenroll --all }"
+    "if ($cmd -eq 'uninstall' -and (Test-Path \"$env:USERPROFILE\\.config\\oxagen\\tacho\")) { & \"$dir\\oxagen-x86_64-pc-windows-msvc.exe\" agent unenroll --all }"
   ],
   "checkver": {
     "url": "https://github.com/macanderson/oxagen/releases.atom",
@@ -54,9 +55,9 @@
   "notes": [
     "Sign in, then enroll this machine (a per-user Task Scheduler service and the hooks for the harnesses you name):",
     "  oxagen login",
-    "  tacho enroll --harness claude-code,codex,cursor,stella",
+    "  oxagen agent enroll --harness claude-code,codex,cursor,stella",
     "Managed machines enroll without a browser:",
-    "  tacho enroll --token <apiKey> --org <org> --workspace <ws> --managed --harness claude-code,codex,cursor,stella",
+    "  oxagen agent enroll --token <apiKey> --org <org> --workspace <ws> --managed --harness claude-code,codex,cursor,stella",
     "SmartScreen warns while builds are unsigned; signing runs only when the Azure secrets exist in CI."
   ]
 }

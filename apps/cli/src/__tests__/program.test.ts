@@ -10,12 +10,13 @@ describe("buildProgram", () => {
   });
 });
 
-// ADR-112 phase 1, MC spec §2.1: the old word does not appear in the product,
-// and `--help` is the product. The commands themselves stay, because every
-// machine enrolled so far was enrolled with `oxagen tacho enroll` and that
-// string is in scripts, runbooks, and the managed settings documents MDM has
-// already pushed. Hiding is the whole change; removing would be an outage.
-describe("the deprecated tacho group", () => {
+// ADR-112 phase 1, MC spec §2.1, #4879: the old word does not appear in the
+// product, and `--help` is the product. The commands themselves stay, because
+// every machine enrolled before the rename was enrolled with this group's
+// `enroll`, and that string is in scripts, runbooks, and the managed settings
+// documents MDM has already pushed. Hiding is the whole change; removing
+// would be an outage.
+describe("the hidden tacho group", () => {
   const program = buildProgram();
 
   it("is absent from the top-level help", () => {
@@ -69,12 +70,14 @@ describe("the agent group after the wrapping commands moved onto it", () => {
   it("carries every wrapping command alongside the governance ones", () => {
     expect(agent, "the group must exist").toBeDefined();
     expect(agent?.commands.map((c) => c.name()).sort()).toEqual([
+      "detect",
       "enroll",
       "env",
       "export",
       "hosts",
       "reassign",
       "register",
+      "run",
       "status",
       "unenroll",
       "verify",
@@ -105,6 +108,39 @@ describe("the agent group after the wrapping commands moved onto it", () => {
 
   it("takes no argument on enroll, which names this machine and nothing else", () => {
     expect(sub("enroll")?.registeredArguments ?? []).toEqual([]);
+  });
+
+  // #4879: a person moving off the recorder's own executable finds the flags
+  // its enroll and verify took.
+  it("offers the recorder's enroll and verify flags", () => {
+    const flags = (name: string) =>
+      sub(name)?.options.map((option) => option.long) ?? [];
+    expect(flags("enroll")).toEqual(
+      expect.arrayContaining(["--api-url", "--credentials", "--validity-days"]),
+    );
+    expect(flags("verify")).toEqual(
+      expect.arrayContaining(["--harness", "--json"]),
+    );
+    expect(flags("reassign")).toContain("--api-url");
+  });
+});
+
+// #4879: the commands the recorder writes into a machine run under the
+// `oxagen` name, and no person types them, so `--help` does not list them.
+describe("the machine commands", () => {
+  const program = buildProgram();
+  const machine = ["hook", "daemon", "mcp-stdio", "credential", "github", "arp"];
+
+  it.each(machine)("registers `%s` and hides it from help", (name) => {
+    const command = program.commands.find((c) => c.name() === name);
+    expect(command, "the command must be registered").toBeDefined();
+    expect(program.helpInformation()).not.toMatch(
+      new RegExp(`^\\s+${name}\\b`, "m"),
+    );
+  });
+
+  it("names no tacho command in the top-level help", () => {
+    expect(program.helpInformation()).not.toMatch(/tacho/i);
   });
 });
 
@@ -144,7 +180,6 @@ describe("describeCliCommands", () => {
       "agents",
       "solve",
       "fleet",
-      "daemon",
       "view",
       "replay",
     ]) {

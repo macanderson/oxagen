@@ -30,7 +30,7 @@ import {
   answerBodySchema,
   interjectBodySchema,
   type TachoEvent,
-} from "@oxagen/tacho";
+} from "@oxagen/recorder";
 import { SKILL_INTERJECTION_TIMEOUT_MS } from "@oxagen/oxagen/skills";
 import {
   AGENT_INTERJECTION_RAISED_EVENT,

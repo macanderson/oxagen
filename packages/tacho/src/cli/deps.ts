@@ -151,17 +151,20 @@ export function resolveCredentials(
 }
 
 export interface RuntimeCommands {
-  /** Shell command line that runs `tacho-hook`. */
+  /**
+   * Shell command line that runs the command hook: `oxagen hook` when the
+   * `oxagen` CLI enrolls, or one of the recorder's own layouts below.
+   */
   hookCommand: string;
   /**
-   * Shell command line that runs `tacho credential issue --harness
+   * Shell command line that runs `oxagen credential issue --harness
    * claude-code`, which Claude Code runs as its `apiKeyHelper` on a brokered
    * host (ADR-143). Computed beside the hook command so it names the same
    * binary layout: a helper that outlives its executable leaves Claude Code
    * with no credential at all.
    */
   credentialHelperCommand: string;
-  /** argv that runs `tachod` in the foreground. */
+  /** argv that runs the collector daemon in the foreground. */
   daemonCommand: string[];
   /**
    * argv that runs the MCP stdio shim, for a connected app whose config file
@@ -186,6 +189,12 @@ export interface RuntimeCommands {
    * hooks and the service.
    */
   executableProblem?: string;
+  /**
+   * `"oxagen"` when the commands above name the `oxagen` CLI
+   * (`oxagenRuntimeCommands`), which is what `moveOffTachoNames` moves a
+   * machine to. Absent for the recorder's own layouts.
+   */
+  program?: "oxagen";
 }
 
 /**
@@ -361,6 +370,66 @@ export function runtimeCommands(
 }
 
 /**
+ * The commands the hooks and the service run when the `oxagen` CLI enrolls
+ * this machine (#4879): `oxagen hook`, `oxagen daemon`, `oxagen mcp-stdio`,
+ * and `oxagen credential issue` as Claude Code's credential helper. Each
+ * names the `oxagen` executable running now, so a hook never depends on
+ * PATH. Two layouts:
+ *
+ *   - native: the compiled single executable (the desktop app's copy, a
+ *     Homebrew install), named by its own path;
+ *   - bundle: `oxagen.mjs` or a package manager's link to it, run by the
+ *     current `node`.
+ *
+ * `TACHO_BIN_DIR` names the directory instead, as it does for the recorder's
+ * own layouts: the desktop app sets it on every sidecar it starts, to its
+ * versioned per-user copy (ADR-230), so no command names the app bundle. A
+ * `TACHO_BIN_DIR` with no `oxagen` in it is an `executableProblem`.
+ *
+ * Run from source (`tsx src/index.ts`), there is no file `node` can run
+ * without tsx's loader, so the recorder's own source layout applies, and
+ * nothing moves a machine to it (`program` is absent).
+ */
+export function oxagenRuntimeCommands(
+  entry: string | undefined = process.argv[1],
+  env: Record<string, string | undefined> = process.env,
+  nodePath: string = process.execPath,
+  platform: NodeJS.Platform = process.platform,
+  native: boolean = isNativeBuild(),
+  exists: (candidate: string) => boolean = existsSync,
+): RuntimeCommands {
+  const P = platform === "win32" ? win32 : posix;
+  const named = env["TACHO_BIN_DIR"];
+  let prefix: string[];
+  let executableProblem: string | undefined;
+  if (named !== undefined) {
+    const executable = P.join(named, exeName("oxagen", platform));
+    prefix = [executable];
+    if (!exists(executable))
+      executableProblem = `TACHO_BIN_DIR names ${named}, which holds no ${exeName("oxagen", platform)}`;
+  } else if (native) {
+    prefix = [stableExecutablePath(nodePath, platform, exists)];
+  } else if (entry !== undefined && !/\.[cm]?tsx?$/.test(entry)) {
+    prefix = [nodePath, P.resolve(entry)];
+  } else {
+    return runtimeCommands(undefined, env, nodePath, platform, false, exists);
+  }
+  const line = prefix.map((word) => shellQuote(word, platform)).join(" ");
+  const binDir = P.dirname(prefix[prefix.length - 1] as string);
+  const transient = transientBinDir(binDir, env);
+  return {
+    hookCommand: `${line} hook`,
+    credentialHelperCommand: helperCommandFor(line),
+    daemonCommand: [...prefix, "daemon"],
+    mcpStdioCommand: [...prefix, "mcp-stdio"],
+    binDir,
+    ...(transient !== undefined ? { transient } : {}),
+    ...(executableProblem !== undefined ? { executableProblem } : {}),
+    program: "oxagen",
+  };
+}
+
+/**
  * What `detect` knows about an installed connected app. There is no version:
  * a GUI bundle does not answer `--version`, and reading its Info.plist for a
  * number nothing uses would be a fact collected because it was available.
@@ -503,7 +572,7 @@ export interface CliDeps {
   credentialStore?: CredentialStore;
   /**
    * POST to the daemon over its socket (loopback TCP on Windows) with the
-   * local bearer, for `tacho credential issue`. Answers undefined when the
+   * local bearer, for `oxagen credential issue`. Answers undefined when the
    * host is not enrolled or the daemon does not answer.
    */
   daemonPost?: (
@@ -522,7 +591,7 @@ export interface CliDeps {
   cursor: () => CursorFacts;
   /**
    * The Cursor editor on disk alone, without the PATH lookup `cursor` runs.
-   * `tacho status` reads it, because a login-shell lookup there would cost up
+   * `oxagen agent status` reads it, because a login-shell lookup there would cost up
    * to ten seconds on every call. Defaults to `cursorAppFacts`.
    */
   cursorEditor?: () => AppFacts;

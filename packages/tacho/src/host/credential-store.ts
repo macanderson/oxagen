@@ -12,7 +12,7 @@
  * before it deletes the file, and the key file is the one seam an OS keystore
  * would replace. The store never logs a secret, never returns one from
  * `status`, and records for each provider only where the secret came from and
- * when it was taken, which is what `tacho credential status` shows.
+ * when it was taken, which is what `oxagen credential status` shows.
  *
  * The vendor credential still stays on the machine, which is the property
  * ADR-094 fixed. What changes is which process on the machine holds it: the
@@ -97,7 +97,7 @@ type StoredEntry = z.output<typeof entrySchema>;
 /**
  * What the store says about a provider without saying the secret. The digest
  * the file keeps is not here: a hash of a key is a verification oracle, and
- * `tacho status` and the daemon's `/status` route repeat this object.
+ * `oxagen agent status` and the daemon's `/status` route repeat this object.
  */
 export interface CredentialCustody {
   provider: RunTokenProvider;
@@ -245,7 +245,7 @@ function custodyOf(entry: StoredEntry): CredentialCustody {
 /**
  * Open the store at `paths`, creating the key on first use. Reads the file on
  * every call rather than caching: the CLI and the daemon both hold a store
- * over the same files, and the daemon must see a key `tacho enroll` took
+ * over the same files, and the daemon must see a key `oxagen agent enroll` took
  * into custody without a restart.
  */
 export function openCredentialStore(

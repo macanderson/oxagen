@@ -35,7 +35,7 @@ the capability registry it reads, and the contracts that fill the registry.
     `invoke()` enters for scoped capabilities.
   - `@oxagen/config`: the organization vocabularies (type, industry, size) and
     the public URL helpers that some contracts validate against.
-  - `@oxagen/tacho`: the wire vocabularies (harness list, transcript kinds,
+  - `@oxagen/recorder`: the wire vocabularies (harness list, transcript kinds,
     replay grades) that Tacho contracts reuse, so the two never drift.
   - `@oxagen/run-evidence`: the proof verdict and disclosure-grain
     vocabularies that run and evidence contracts reuse.

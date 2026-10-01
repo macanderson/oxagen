@@ -3,7 +3,7 @@ import { tachoHostList } from "@oxagen/oxagen/contracts/tacho.host.list";
 import type { TachoHostListOutput } from "@oxagen/oxagen/contracts/tacho.host.list";
 import { schema, withTenantDb } from "@oxagen/database";
 import { and, desc, eq, lt, or } from "drizzle-orm";
-import { TACHO_HARNESS_TIERS } from "@oxagen/tacho";
+import { TACHO_HARNESS_TIERS } from "@oxagen/recorder";
 import { hostReadColumns } from "./lib/tacho-gateway-columns";
 
 type HostRow = typeof schema.tachoHosts.$inferSelect;

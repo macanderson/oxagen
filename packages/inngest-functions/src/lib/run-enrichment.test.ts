@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { tachoFrame } from "@oxagen/run-ledger";
-import { digestBytes } from "@oxagen/tacho";
+import { digestBytes } from "@oxagen/recorder";
 vi.mock("@oxagen/agent", () => ({ runGovernedTurn: vi.fn() }));
 vi.mock("@oxagen/ai", () => ({
   resolveModelFundingSource: vi.fn(),

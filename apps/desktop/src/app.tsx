@@ -158,6 +158,36 @@ interface MachineRead {
 const labelOf = (h: string) => HARNESS_LABEL[h as Harness] ?? h;
 const joinLabels = (list: readonly string[]) => list.map(labelOf).join(" and ");
 
+/**
+ * What the Activity log and the error banner call each recorder action that
+ * `act` runs. The recorder still runs as the bundled `tacho` sidecar, but a
+ * person types `oxagen agent …` now (#4879), so its argv is not shown as a
+ * command line.
+ */
+const RECORDER_ACTIONS: Record<string, string> = {
+  enroll: "Enrolling this machine",
+  apply: "Reassigning this machine",
+  deregister: "Removing the agent",
+  add: "Wrapping the agent",
+  reapply: "Re-applying the hooks and the collector",
+};
+
+/**
+ * The log line `act` opens with and the subject of its failure message. An
+ * `oxagen` command reads as typed. A recorder run, including the legacy
+ * `oxagen tacho reassign` spelling, reads as what it does.
+ */
+function actionText(
+  name: string,
+  sidecar: "tacho" | "oxagen",
+  args: string[],
+): { log: string; subject: string } {
+  if (sidecar === "oxagen" && args[0] !== "tacho")
+    return { log: `$ oxagen ${args.join(" ")}`, subject: `oxagen ${args[0]}` };
+  const what = RECORDER_ACTIONS[name] ?? "The recorder";
+  return { log: what, subject: what };
+}
+
 /** Open a docs URL in the system browser instead of navigating the webview. */
 const openDocs = (url: string) => (e: MouseEvent) => {
   e.preventDefault();
@@ -394,7 +424,7 @@ export function App() {
               next,
               status: {
                 ok: false,
-                error: `tacho status failed: ${e instanceof Error ? e.message : String(e)}`,
+                error: `Reading this machine's status failed: ${e instanceof Error ? e.message : String(e)}`,
               },
             };
           }
@@ -640,7 +670,8 @@ export function App() {
     setError(null);
     setNotice(null);
     setConfirming(null);
-    setLog([{ text: `$ ${sidecar} ${args.join(" ")}`, err: false }]);
+    const shown = actionText(name, sidecar, args);
+    setLog([{ text: shown.log, err: false }]);
     try {
       const run = runSidecar(sidecar, args, (line, stream) =>
         setLog((prev) => [...prev, { text: line, err: stream === "stderr" }]),
@@ -664,7 +695,7 @@ export function App() {
       }
       if (result.code !== 0) {
         setError(
-          `${sidecar} ${args[0]} exited ${result.code ?? "?"}; see the output below.`,
+          `${shown.subject} exited ${result.code ?? "?"}. See the output below.`,
         );
         onFail?.(result);
       } else {
@@ -769,7 +800,7 @@ export function App() {
           ok: false,
           detail:
             lines.at(-1) ??
-            `tacho enroll exited ${result.code ?? "?"} without a message`,
+            `Enrolling this machine exited ${result.code ?? "?"} without a message`,
         });
       },
     );
@@ -799,7 +830,7 @@ export function App() {
       for (const h of picks) {
         setLog((prev) => [
           ...prev,
-          { text: `$ tacho verify --harness ${h}`, err: false },
+          { text: `Verifying ${labelOf(h)}`, err: false },
         ]);
         try {
           results[h] = await connectRun(h, (line, stream) =>
@@ -910,7 +941,7 @@ export function App() {
     setBusy("uninstall");
     setError(null);
     setNotice(null);
-    setLog([{ text: "$ tacho unenroll --all --purge", err: false }]);
+    setLog([{ text: "Removing Oxagen from this machine", err: false }]);
     try {
       // Always, enrolled or not: `unenroll` strips Tacho's hooks and the
       // service whether or not host.json is there, and finishes a revoke an
@@ -920,7 +951,7 @@ export function App() {
       );
       if (result.code !== 0)
         throw new Error(
-          `tacho unenroll could not finish (exit ${result.code ?? "?"}). Nothing else was removed. The output below says what is still in place.`,
+          `Unenrolling this machine could not finish (exit ${result.code ?? "?"}). Nothing else was removed. The output below says what is still in place.`,
         );
       const report = await removeLocalData();
       setLog((prev) => [
@@ -1489,7 +1520,7 @@ export function App() {
                   <a href="#" onClick={openDocs(WRAP_AGENT_URL)}>
                     Wrap your own agent
                   </a>{" "}
-                  with <code>tacho hook</code> once this machine is set up.
+                  with <code>oxagen agent run</code> once this machine is set up.
                 </p>
                 {outcome && !outcome.ok && (
                   <div className="result fail" role="alert">
@@ -1858,7 +1889,7 @@ export function App() {
                   <span className="records-no">{row.omits}</span>
                 </span>
                 {row.kind === "custom" ? (
-                  <span className="pill">reports through tacho hook</span>
+                  <span className="pill">reports its own steps</span>
                 ) : row.kind === "connected" && row.wrapped ? (
                   confirming === confirmKey ? (
                     <>
@@ -1957,7 +1988,7 @@ export function App() {
           <a href="#" onClick={openDocs(WRAP_AGENT_URL)}>
             Wrap your own agent
           </a>{" "}
-          with <code>tacho hook</code>. No new install is needed.
+          with <code>oxagen agent run</code>. No new install is needed.
         </p>
       </section>
 
@@ -2029,8 +2060,9 @@ export function App() {
           Command line
         </p>
         <p className="sub">
-          <code>oxagen</code> and <code>tacho</code> ship inside the app.
-          Linking puts them on your PATH.
+          <code>oxagen</code> ships inside the app. Linking puts it on your
+          PATH. The recorder's older name is linked too, for machines enrolled
+          before the rename.
         </p>
         {cliInstallNote && <p className="sub">{cliInstallNote}</p>}
         <dl className="kv">
@@ -2042,7 +2074,7 @@ export function App() {
               "not on PATH"
             )}
           </dd>
-          <dt>tacho</dt>
+          <dt>older recorder name</dt>
           <dd>
             {state?.tacho_on_path ? (
               <code>{state.tacho_on_path}</code>
@@ -2272,9 +2304,10 @@ export function App() {
             <p className="sub">
               {state.host_path}: {state.host_error}. The machine may still be
               enrolled, so setup is not offered here, because it would write
-              over that file. Run <code>tacho status</code> in a terminal to see
-              what is in place, or <code>tacho unenroll --all</code> to remove
-              it, then reopen Oxagen.
+              over that file. Run <code>oxagen agent status</code> in a terminal
+              to see what is in place, or{" "}
+              <code>oxagen agent unenroll --all</code> to remove it, then reopen
+              Oxagen.
             </p>
           </section>
         ) : firstRun ? (

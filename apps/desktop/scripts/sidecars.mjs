@@ -53,7 +53,7 @@ const outDir = join(app, "src-tauri", "binaries");
 mkdirSync(outDir, { recursive: true });
 
 const sidecars = [
-  { name: "tacho", filter: "@oxagen/tacho", dir: "packages/tacho" },
+  { name: "tacho", filter: "@oxagen/recorder", dir: "packages/tacho" },
   { name: "oxagen", filter: "@oxagen/cli", dir: "apps/cli" },
 ];
 

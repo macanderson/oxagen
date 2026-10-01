@@ -3,7 +3,7 @@ import {
   type UnsealedTachoEvent,
   sealEvent,
   sessionUuid,
-} from "@oxagen/tacho";
+} from "@oxagen/recorder";
 import { describe, expect, it } from "vitest";
 import { tachoEventsIngest } from "./tacho.events.ingest";
 

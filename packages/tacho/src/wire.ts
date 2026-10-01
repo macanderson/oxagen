@@ -375,7 +375,7 @@ export const CONNECTED_HARNESSES = ["claude-desktop"] as const;
 export type ConnectedHarness = (typeof CONNECTED_HARNESSES)[number];
 
 /**
- * The executable each wrapped harness is launched by: what `tacho verify`
+ * The executable each wrapped harness is launched by: what `oxagen agent verify`
  * runs for a headless turn, what an ARP transfer hands the next machine,
  * and the one name the dependency probe trusts. Cursor's is its
  * `cursor-agent` alias and never a bare `agent`, which any binary could be.
@@ -963,7 +963,7 @@ export const policyBundleSchema = z
      * both. The rule — an `mcp` capability that does not mutate and is not
      * high-sensitivity — is evaluated by `gatewayMayInvoke` in `@oxagen/iam`,
      * against the capability registry, and enforced in the kernel's IAM
-     * adapter at `invoke()` time. `@oxagen/tacho` is a leaf package with no
+     * adapter at `invoke()` time. `@oxagen/recorder` is a leaf package with no
      * `@oxagen/*` runtime dependency, so the host cannot evaluate that rule
      * and must not try; it is handed the rule's answer, signed, with the rest
      * of the mandate.
@@ -1130,7 +1130,7 @@ export const policyBundleSchema = z
      * The skills the workspace's and the organization's published steering
      * give a session on this host. Session start writes each one where the
      * harness reads user skills, and session end removes it
-     * (`@oxagen/tacho/skills`). A skill scoped to repositories is not here,
+     * (`@oxagen/recorder/skills`). A skill scoped to repositories is not here,
      * because the bundle is per host and a host runs sessions in many
      * repositories. Absent means no skills. Emitted only to a host that
      * advertised `BUNDLE_FEATURE_SKILLS`.

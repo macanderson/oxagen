@@ -29,7 +29,7 @@
  * the worktree with git, which is where `lines_added` and `lines_removed`
  * come from.
  */
-import type { ObservedChange } from "@oxagen/tacho";
+import type { ObservedChange } from "@oxagen/recorder";
 
 /**
  * The worktree root a batch's events agree on, or undefined.

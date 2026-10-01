@@ -54,13 +54,18 @@ export const STEERING_NO_CONNECTION = "no_connection";
  */
 export const STEERING_IMPORT_REQUIRED = "steering_import_required";
 
-/** A GitHub organization or GitLab group setup can create steering repos in. */
+/**
+ * A GitHub organization, the owner's own personal GitHub account, or a GitLab
+ * group that setup can create steering repos in.
+ */
 type SteeringConnectionChoice = {
   provider: "github" | "gitlab";
   /** The GitHub installation id or the GitLab group id. */
   id: number;
-  /** The organization's login or the group's path. */
+  /** The organization's or account's login, or the group's path. */
   name: string;
+  /** `user` for a personal GitHub account (#4899). */
+  kind: "organization" | "user";
 };
 
 /** The connection a person picks, by provider and id. */
@@ -120,6 +125,11 @@ export type SteeringRepoView = {
     url: string;
     provider: "github" | "gitlab";
   } | null;
+  /**
+   * Where the organization creates its steering repos, or null before one is
+   * chosen. An owner can reset it until Oxagen has created a repo there.
+   */
+  connection: SteeringConnectionChoice | null;
   /** The connections to pick from when setup stopped with `choose_connection`. */
   connectionChoices: readonly SteeringConnectionChoice[];
 };

@@ -13,7 +13,7 @@ import { HandlerError } from "@oxagen/oxagen/handler-error";
 import { agentInterjectionAnswer } from "@oxagen/oxagen/contracts/agent.interjection.answer";
 import type { RepositoryLinkOutput } from "@oxagen/oxagen/contracts/repository.link";
 import { schema } from "@oxagen/database";
-import { type InterjectBody, interjectBodySchema } from "@oxagen/tacho";
+import { type InterjectBody, interjectBodySchema } from "@oxagen/recorder";
 
 const mocks = vi.hoisted(() => ({ withTenantDb: vi.fn() }));
 

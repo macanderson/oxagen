@@ -45,7 +45,7 @@ import {
   TRANSCRIPT_KINDS,
   type Redaction,
   type TranscriptKind,
-} from "@oxagen/tacho";
+} from "@oxagen/recorder";
 
 /** What a frame did, as far as its receipt says. Null where it says nothing. */
 export interface FrameIdentity {
@@ -859,7 +859,7 @@ export function bisectFrames(
 // to, which chips it answers, and which turn it falls in. The fold that groups
 // frames into steps and turns is `transcript-steps.ts` (ADR-182).
 
-// The chip vocabulary is the leaf package's (`@oxagen/tacho`), so the contract
+// The chip vocabulary is the leaf package's (`@oxagen/recorder`), so the contract
 // that publishes it as an enum and this projection that derives it read one
 // list. Re-exported here so a caller over frames has one import site.
 export { isTranscriptKind, TRANSCRIPT_KINDS, type TranscriptKind };

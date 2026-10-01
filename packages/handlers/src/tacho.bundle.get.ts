@@ -92,7 +92,7 @@ export function createTachoBundleGetHandler(
       // `version` counts mandate changes, not fetches: the same etag keeps the
       // version it was served with, so a version sealed into a frame names one
       // mandate. That holds for the copy signed again when a host renews a quiet
-      // mandate by polling without its etag (`pollEtag` in `@oxagen/tacho`).
+      // mandate by polling without its etag (`pollEtag` in `@oxagen/recorder`).
       const unsigned = {
         ...built,
         etag,

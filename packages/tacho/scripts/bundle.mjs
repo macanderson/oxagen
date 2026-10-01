@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Build the three self-contained executables of @oxagen/tacho:
+ * Build the three self-contained executables of @oxagen/recorder:
  *   dist-standalone/tacho.mjs       the CLI (enroll, status, unenroll, export, verify, daemon)
  *   dist-standalone/tachod.mjs      the collector daemon the user service runs
  *   dist-standalone/tacho-hook.mjs  the command hook Claude Code spawns on enforcement events

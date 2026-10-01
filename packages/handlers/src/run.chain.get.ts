@@ -10,7 +10,7 @@
 //     so it answers none;
 //   - the Merkle root, the seal and the recorded grade, from the ledger's
 //     latest attempt seal or the wrapped session's sealed columns;
-//   - the ladder, from `explainReplayGrade` (@oxagen/tacho), the same function
+//   - the ladder, from `explainReplayGrade` (@oxagen/recorder), the same function
 //     the seal graded with and `fork_run` gates on.
 //
 // The ladder is computed from what this read can see, and the recorded grade is
@@ -45,7 +45,7 @@ import {
   frameOwesBody,
   isReplayGrade,
   RUN_ATTESTATION_FIELDS,
-} from "@oxagen/tacho";
+} from "@oxagen/recorder";
 import { TACHO_EVENTS_RETENTION_MONTHS } from "@oxagen/telemetry";
 import { and, asc, eq, inArray, ne, sql } from "drizzle-orm";
 import {

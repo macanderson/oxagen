@@ -7,7 +7,7 @@
 import { generateKeyPairSync } from "node:crypto";
 import type { CapabilityContext } from "@oxagen/oxagen";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { policyBundleSchema } from "@oxagen/tacho";
+import { policyBundleSchema } from "@oxagen/recorder";
 import { bundleSignerFromPem, verifyBundle } from "./lib/tacho-bundle-signing";
 import {
   fixtureDelivery,

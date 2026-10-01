@@ -17,7 +17,7 @@ import {
 } from "@oxagen/oxagen/contracts/run.frame_body.get";
 import type { EvidenceStore } from "@oxagen/run-ledger/evidence-store";
 import { evidenceStore } from "@oxagen/run-ledger/evidence-store";
-import { digestBytes } from "@oxagen/tacho";
+import { digestBytes } from "@oxagen/recorder";
 import { selectTachoSubagentEvents } from "@oxagen/telemetry";
 import { runScope } from "./run.list";
 import {

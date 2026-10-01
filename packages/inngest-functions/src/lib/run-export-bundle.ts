@@ -13,7 +13,7 @@
 //   verify.mjs        recomputes the RFC 6962 root over frames.ndjson and
 //                     checks every attestation with node:crypto alone
 //
-// `oxagen verify <bundle>` (@oxagen/tacho `verifyRunExport`) is the full
+// `oxagen verify <bundle>` (@oxagen/recorder `verifyRunExport`) is the full
 // check an auditor runs: it recomputes every frame's digest and chain link and
 // reports held or broken per frame.
 import { zipSync } from "fflate";
@@ -31,7 +31,7 @@ import {
   type RunExportManifest,
   signAttestation,
   summarizeRunExportRedactions,
-} from "@oxagen/tacho";
+} from "@oxagen/recorder";
 import type { SealedSegment } from "./run-record";
 
 export const BUNDLE_FORMAT = RUN_EXPORT_FORMAT;
@@ -175,7 +175,7 @@ export function buildRunExportBundle(input: {
  * RFC 8785 yields for these shapes); each ledger frame's payload and event
  * digest and dense attempt sequence; each wrapped frame's prev_hash link
  * and, where the frame carries its event, the event's hash and the members
- * shown beside it (the rule is `wrappedFrameOf` in @oxagen/tacho), with the
+ * shown beside it (the rule is `wrappedFrameOf` in @oxagen/recorder), with the
  * link and the sequence starting over at each attempt, since a subagent
  * chain is an attempt of its own from genesis at its seq 0;
  * each ledger attempt's stream fold; the RFC 6962 tree over the frame
@@ -205,7 +205,7 @@ const sha256 = (bytes) => createHash("sha256").update(bytes).digest();
 const hex = (buf) => "sha256:" + buf.toString("hex");
 const DIGEST = /^sha256:[0-9a-f]{64}$/;
 
-// RFC 8785 (JCS), the rule @oxagen/tacho's jcs follows: keys sorted at every
+// RFC 8785 (JCS), the rule @oxagen/recorder's jcs follows: keys sorted at every
 // depth, a member named toJSON included. canonicalize@1.0.8, which tacho used
 // before, wrote an object with a toJSON member by JSON.stringify, keys
 // unsorted. legacy keeps that rule, for an event an older host sealed.
