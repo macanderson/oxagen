@@ -1946,10 +1946,10 @@ jobs:
 
       # Record the commit whose installers were dispatched, so the next run can
       # tell whether it is newer. The build itself runs in desktop.yml and
-      # finishes later; a build that fails publishes nothing and records
-      # nothing further, and the next daily build sees the installers behind
-      # production and builds again. A push that dispatched nothing records
-      # nothing, so the daily build still sees the installers as behind.
+      # finishes later. A build that fails publishes nothing, and the record
+      # still names its commit, so the daily build skips that commit and
+      # builds the next one production runs. A push that dispatched nothing
+      # records nothing, so the daily build sees the installers as behind.
       - name: Record $desktop as live at this commit
         id: record
         if: steps.order.outputs.ship == 'true' && steps.desktop.outputs.build == 'true'
