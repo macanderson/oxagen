@@ -4,46 +4,68 @@
  * match it.
  *
  * The kit, macanderson/oxagen-brand, builds every mark, icon, social card,
- * and spinner with the scripts in its `build/` folder. This script copies
- * them, so nobody edits a brand file here by hand. Run it after the kit
- * changes, and commit what it writes.
+ * launch screen, and spinner with the scripts in its `build/` folder and
+ * commits the result. This script copies those committed files byte for byte,
+ * so nobody edits a brand file here by hand. It renders nothing: every PNG and
+ * ICO here is the kit's own file. It needs Node and nothing else, which is
+ * what the kit's fan-out workflow gives it (Ubuntu, Node 24, no network).
  *
  *   node tools/scripts/sync-brand-assets.mjs [--brand <dir>] [--check]
- *                                            [--rasters | --no-rasters]
  *
  * --brand   the kit folder. Without it, the script reads $OXAGEN_BRAND_KIT,
- *           then $OXAGEN_HOUSE_BRAND (the old name), then ../oxagen-brand.
- * --check   compare this repo's copies with the kit and write nothing. The
- *           script exits non-zero when any copy differs. It compares the
- *           marks, the icons, the tokens, the fonts, the branding skill, and
- *           the `INK_TOKENS` palette in apps/web/scripts/lib/theme.mjs.
- * --rasters, --no-rasters
- *           whether --check renders each PNG and ICO with rsvg-convert and
- *           compares the bytes. It does by default, and it does not when the
- *           CI environment variable is set. Two librsvg versions render the
- *           same SVG to different bytes: 2.54 in the CI image and 2.62 on a
- *           laptop. With rasters off, the check reads each PNG's width and
- *           height and each ICO's list of sizes instead. It still compares
- *           their source SVGs byte for byte.
+ *           then ../oxagen-brand beside this repo.
+ * --check   write nothing. List every file that differs from the kit, is
+ *           missing, or should not be there, and exit 1. Exit 0 when the repo
+ *           matches. A check right after a sync passes.
  *
- * CI runs `--check` on every pull request against the kit's main branch, as
- * Mac decided on 2026-09-29 (#3074). After a kit change lands on main, the
- * check fails here until someone runs this script and commits the result.
+ * With no kit at that path, both modes exit 2: a check that could not run
+ * must not pass (#4804).
+ *
+ * What the script writes, all from the kit:
+ *
+ * - the marks, favicons, app icons, maskable icons, launch screens, social
+ *   cards, spinner, and install prompt of apps/app, apps/docs,
+ *   apps/app_deprecated, and apps/web;
+ * - the tokens, the Tailwind layer, and the three faces in
+ *   packages/ui/src/styles/;
+ * - three generated modules: the marks as path data
+ *   (packages/ui/src/components/brand-marks.generated.ts), the launch screens
+ *   (packages/ui/src/lib/splash-screens.ts), and the two grounds as hex
+ *   (packages/ui/src/lib/house-grounds.ts);
+ * - apps/web's palette for generated images (`INK` in
+ *   apps/web/scripts/lib/theme.mjs), its web manifest, and the launch-screen
+ *   block in each hand-authored page's <head>;
+ * - the branding skill stub at .claude/skills/oxagen-branding/SKILL.md. Every
+ *   other file in that folder is removed: agents read the full skill from the
+ *   kit's main branch.
+ *
+ * The desktop app's icons are the one brand file this script cannot write.
+ * apps/desktop/scripts/icons.mjs cuts them from the synced avatar with
+ * rsvg-convert and the Tauri CLI, and records the avatar's sha256 in
+ * apps/desktop/src-tauri/icons/source.sha256. This script compares that
+ * stamp with the avatar it syncs, so a kit icon change fails the check until
+ * someone runs `pnpm --filter @oxagen/desktop icons` (#4892).
+ *
+ * CI runs `--check` against the kit's main branch in brand-drift.yml and in
+ * the pipeline's checks job, as Mac decided on 2026-09-29 (#3074). After a
+ * kit change lands on main, the check fails here until someone runs this
+ * script and commits the result. The kit's fan-out workflow opens that PR.
  *
  * SURFACE_MARKS lists the marks each app may carry. The product shows the
  * wordmark where a word fits and the hive where the slot is square. The kit
  * also ships a lockup, and no app selects it. Stella uses its wordmark and
- * its asterisk. This script renders the PNG and ICO icons from the kit's
- * opaque dark tile. The SVG favicon follows the browser's light or dark
- * setting.
+ * its asterisk.
  */
 
 import { createHash } from "node:crypto";
-import { mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { execFileSync } from "node:child_process";
-import { mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { INK_TOKENS } from "../../apps/web/scripts/lib/theme.mjs";
 import { isEntrypoint } from "./lib/is-entrypoint.mjs";
@@ -52,37 +74,20 @@ const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 
 const argv = process.argv.slice(2);
 const CHECK = argv.includes("--check");
+
+/**
+ * The kit folder: `--brand <dir>`, else $OXAGEN_BRAND_KIT, else
+ * ../oxagen-brand beside the repo.
+ */
 export function brandPath(args, env, repo = REPO) {
   const brandArg = args.indexOf("--brand");
   return resolve(
     brandArg >= 0 && args[brandArg + 1]
       ? args[brandArg + 1]
-      : env.OXAGEN_BRAND_KIT ||
-          env.OXAGEN_HOUSE_BRAND ||
-          join(repo, "../oxagen-brand"),
+      : env.OXAGEN_BRAND_KIT || join(repo, "../oxagen-brand"),
   );
 }
 const BRAND = brandPath(argv, process.env);
-
-/** Whether `env` says this runs in CI. GitHub Actions sets `CI=true`. */
-export function isCi(env) {
-  const value = (env.CI ?? "").trim().toLowerCase();
-  return value !== "" && value !== "false" && value !== "0";
-}
-
-/**
- * Whether this run renders rasters and compares their bytes. A write always
- * renders them. A `--check` renders them unless it runs in CI, where the
- * librsvg build differs from the one that rendered the committed files, and
- * `--rasters` or `--no-rasters` overrides either default.
- */
-export function comparesRasterBytes(args, env) {
-  if (!args.includes("--check")) return true;
-  if (args.includes("--rasters")) return true;
-  if (args.includes("--no-rasters")) return false;
-  return !isCi(env);
-}
-const RASTERS = comparesRasterBytes(argv, process.env);
 
 const NEXT_MARKS = ["oxagen", "stella"].flatMap((brand) =>
   [
@@ -125,7 +130,7 @@ export function assertSurfaceMark(relPath) {
 /**
  * One `apple-touch-startup-image` per screen and scheme. The kit's
  * `splash/splash-screens.json` names each screen's file and the media query
- * Safari matches it on; Safari shows a launch screen only when that query
+ * Safari matches it on. Safari shows a launch screen only when that query
  * matches the device exactly, and the scheme picks the ink or the paper one.
  *
  * @param {{ file: string, media: string }[]} screens
@@ -196,158 +201,45 @@ export function withPwaHead(html, block) {
   return `${html.slice(0, at)}${block}\n${html.slice(at)}`;
 }
 
-/* ── the sizes each surface asks for ─────────────────────────────────────── */
+/* ── the desktop icons ───────────────────────────────────────────────────── */
 
-const FAVICON_PNG = [16, 32, 48, 192, 512];
-const ICO_SIZES = [16, 32, 48];
-const PWA_ICONS = [72, 96, 128, 144, 152, 167, 180, 192, 256, 384, 512];
-const MASKABLE = [192, 512];
-
-/* ── rendering ───────────────────────────────────────────────────────────── */
-
-/** Rasterise an SVG at an exact square size. rsvg-convert ships with librsvg. */
-function raster(svgPath, size) {
-  return execFileSync(
-    "rsvg-convert",
-    ["-w", String(size), "-h", String(size), "-f", "png", svgPath],
-    { maxBuffer: 64 * 1024 * 1024 },
-  );
-}
+/** Where apps/desktop/scripts/icons.mjs records what it cut the icons from. */
+const DESKTOP_STAMP = "apps/desktop/src-tauri/icons/source.sha256";
 
 /**
- * A maskable icon is the source square with its corners let out and the mark
- * pulled in to the 80% safe circle a round mask keeps — otherwise the mask
- * clips the glyph.
+ * Whether the desktop icons were cut from the avatar this sync writes.
  *
- * Only the MARK moves. The ground — the background square and any wash over
- * it — is left at full size, so it still bleeds into the corners the circle
- * gives up. Shrinking the whole square and backing it with a flat fill looks
- * right until the art carries a wash: the hive avatar's radial warm-up then
- * stops at 80% and leaves a visible rounded seam. In every square the kit
- * emits, the mark is the first `<g transform=` — the hive's placement group in
- * an avatar, the glyph's in a tile. Rounded corners come off, because the
- * system mask draws its own.
+ * `stamp` is the text of DESKTOP_STAMP, or null when there is none: one line
+ * in `shasum -a 256` form, the hash and then the repo path of the SVG the
+ * icons were cut from. `synced` maps each path this run writes to its bytes.
+ * Returns null when the stamp matches, or the reason it does not.
  *
- * `scale` is how much of the square the mark may occupy. The default 0.72 is
- * what the `Ox` tile has always used; the hive sits wider in its own canvas
- * and passes its own value.
+ * @param {string | null} stamp
+ * @param {ReadonlyMap<string, Buffer>} synced
+ * @returns {string | null}
  */
-function maskableSvg(sourceSvgPath, scale = 0.72) {
-  const src = readFileSync(sourceSvgPath, "utf8");
-  const size = Number(src.match(/<svg\b[^>]*?\bwidth="([\d.]+)"/)?.[1]);
-  if (!Number.isFinite(size) || size <= 0) {
-    throw new Error(`no usable width on the <svg> in ${sourceSvgPath}`);
+export function desktopIconDrift(stamp, synced) {
+  if (stamp === null) return "no stamp, so no record of what the icons were cut from";
+  const line = stamp.trim().match(/^([0-9a-f]{64}) [ *]?(\S+)$/);
+  if (!line) return "the stamp is not one `<sha256>  <path>` line";
+  const [, hash, source] = line;
+  const bytes = synced.get(source);
+  if (!bytes) return `the stamp names ${source}, which this sync does not write`;
+  if (createHash("sha256").update(bytes).digest("hex") !== hash) {
+    return `the icons were cut from an older ${source}`;
   }
-  const inset = (size * (1 - scale)) / 2;
-  const out = src
-    .replace(
-      new RegExp(`(<rect width="${size}" height="${size}")\\s+rx="[\\d.]+"`),
-      "$1",
-    )
-    .replace(
-      /<g transform=/,
-      `<g transform="translate(${inset} ${inset}) scale(${scale})"><g transform=`,
-    )
-    .replace(/<\/g>(\s*)<\/svg>\s*$/, "</g></g>$1</svg>");
-  if (out === src) {
-    throw new Error(`no mark group to inset in ${sourceSvgPath}`);
-  }
-  return out;
-}
-
-/**
- * An .ico is a 6-byte header, a 16-byte directory entry per image, then the
- * payloads. Every modern target reads PNG payloads, so the PNGs the kit
- * already renders go in whole — no BMP re-encode, no extra dependency.
- */
-function ico(pngs) {
-  const head = Buffer.alloc(6);
-  head.writeUInt16LE(0, 0); // reserved
-  head.writeUInt16LE(1, 2); // type: icon
-  head.writeUInt16LE(pngs.length, 4);
-  let offset = 6 + 16 * pngs.length;
-  const dir = [];
-  for (const { size, data } of pngs) {
-    const e = Buffer.alloc(16);
-    e.writeUInt8(size >= 256 ? 0 : size, 0); // 0 means 256
-    e.writeUInt8(size >= 256 ? 0 : size, 1);
-    e.writeUInt8(0, 2); // palette
-    e.writeUInt8(0, 3); // reserved
-    e.writeUInt16LE(1, 4); // colour planes
-    e.writeUInt16LE(32, 6); // bpp
-    e.writeUInt32LE(data.length, 8);
-    e.writeUInt32LE(offset, 12);
-    offset += data.length;
-    dir.push(e);
-  }
-  return Buffer.concat([head, ...dir, ...pngs.map((p) => p.data)]);
-}
-
-const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
-
-/**
- * A PNG's width and height from its IHDR chunk, or null when `buf` is not a
- * PNG.
- *
- * @param {Buffer | null} buf
- * @returns {{ width: number, height: number } | null}
- */
-export function pngSize(buf) {
-  if (!buf || buf.length < 24) return null;
-  if (!buf.subarray(0, 8).equals(PNG_SIGNATURE)) return null;
-  if (buf.toString("latin1", 12, 16) !== "IHDR") return null;
-  return { width: buf.readUInt32BE(16), height: buf.readUInt32BE(20) };
-}
-
-/**
- * The size of each image an .ico's directory lists, in order, or null when
- * `buf` is not an icon file. A width byte of 0 means 256.
- *
- * @param {Buffer | null} buf
- * @returns {number[] | null}
- */
-export function icoSizes(buf) {
-  if (!buf || buf.length < 6) return null;
-  if (buf.readUInt16LE(0) !== 0 || buf.readUInt16LE(2) !== 1) return null;
-  const count = buf.readUInt16LE(4);
-  if (buf.length < 6 + 16 * count) return null;
-  const sizes = [];
-  for (let i = 0; i < count; i += 1) {
-    const width = buf.readUInt8(6 + 16 * i);
-    sizes.push(width === 0 ? 256 : width);
-  }
-  return sizes;
+  return null;
 }
 
 /* ── writing ─────────────────────────────────────────────────────────────── */
 
+/** Each path this run writes, with the bytes it holds when the repo matches. */
+const synced = new Map();
 const written = [];
+const removed = [];
+/** `{ kind, path, why? }` for each file a --check found out of step. */
 const drifted = [];
-/** Rasters a `--check` without rasters read the size of, not the bytes. */
-const sizedOnly = [];
 
-function emit(relPath, data) {
-  assertSurfaceMark(relPath);
-  const abs = join(REPO, relPath);
-  const buf = Buffer.isBuffer(data) ? data : Buffer.from(data, "utf8");
-  let current = null;
-  try {
-    current = readFileSync(abs);
-  } catch {
-    /* new file */
-  }
-  const same = current && current.equals(buf);
-  if (CHECK) {
-    if (!same) drifted.push(relPath);
-    return;
-  }
-  if (same) return;
-  mkdirSync(dirname(abs), { recursive: true });
-  writeFileSync(abs, buf);
-  written.push(relPath);
-}
-
-/** The committed file at `relPath`, or null when there is none. */
 function committed(relPath) {
   try {
     return readFileSync(join(REPO, relPath));
@@ -356,35 +248,20 @@ function committed(relPath) {
   }
 }
 
-/**
- * Render `svgPath` at `size` and emit it as `relPath`, returning the PNG. With
- * rasters off, check the committed PNG's size instead and return null.
- */
-function emitRaster(relPath, svgPath, size) {
-  if (RASTERS) {
-    const data = raster(svgPath, size);
-    emit(relPath, data);
-    return data;
-  }
-  const found = pngSize(committed(relPath));
-  if (found?.width !== size || found.height !== size) drifted.push(relPath);
-  sizedOnly.push(relPath);
-  return null;
-}
-
-/**
- * Emit an .ico built from `parts`, `{ size, data }` from `emitRaster`. With
- * rasters off, check the committed icon lists the same sizes instead.
- */
-function emitIco(relPath, parts) {
-  if (RASTERS) {
-    emit(relPath, ico(parts));
+function emit(relPath, data) {
+  assertSurfaceMark(relPath);
+  const buf = Buffer.isBuffer(data) ? data : Buffer.from(data, "utf8");
+  synced.set(relPath, buf);
+  const current = committed(relPath);
+  if (current?.equals(buf)) return;
+  if (CHECK) {
+    drifted.push({ kind: current ? "differs" : "missing", path: relPath });
     return;
   }
-  const sizes = icoSizes(committed(relPath));
-  const want = parts.map((p) => p.size);
-  if (sizes?.join(",") !== want.join(",")) drifted.push(relPath);
-  sizedOnly.push(relPath);
+  const abs = join(REPO, relPath);
+  mkdirSync(dirname(abs), { recursive: true });
+  writeFileSync(abs, buf);
+  written.push(relPath);
 }
 
 const svg = (name) => join(BRAND, "logo/svg", name);
@@ -393,88 +270,78 @@ const kitScreens = () =>
     .screens;
 const copy = (from, to) => emit(to, readFileSync(join(BRAND, from)));
 
+/**
+ * Every file under `relDir` except `keep`, as repo paths, deepest first.
+ * Finder's `.DS_Store` is skipped, since git never carries it.
+ */
+function filesUnder(relDir, keep) {
+  const out = [];
+  const walk = (rel) => {
+    let entries;
+    try {
+      entries = readdirSync(join(REPO, rel), { withFileTypes: true });
+    } catch (error) {
+      if (error.code === "ENOENT") return;
+      throw error;
+    }
+    for (const entry of entries) {
+      const child = `${rel}/${entry.name}`;
+      if (entry.isDirectory()) walk(child);
+      else if (entry.name !== ".DS_Store" && child !== keep) out.push(child);
+    }
+  };
+  walk(relDir);
+  return out;
+}
+
 /* ── the plan ────────────────────────────────────────────────────────────── */
+
+/** The sizes the kit ships each icon at, in icons/. */
+const FAVICON_PNG = [16, 32, 48, 192, 512];
+const PWA_ICONS = [180, 192, 512];
+const MASKABLE = [192, 512];
 
 /**
  * Everything a Next.js surface (apps/app, apps/docs) needs under public/.
- * `brand` is oxagen or stella — which mark this surface wears.
+ * `brand` is oxagen or stella, the mark this surface wears.
  */
 function nextSurface(publicDir, brand, { pwa = true } = {}) {
-  const tileDark = svg(`${brand}-icon-tile-dark.svg`);
-  const tileLight = svg(`${brand}-icon-tile-light.svg`);
-
-  // Marks. Adaptive first — one file that flips with the tab's colour scheme.
-  // The dark/light pair is for grounds the page controls itself.
+  // Marks. Adaptive first: one file that flips with the tab's colour scheme.
+  // The dark and light pair is for grounds the page controls itself.
   for (const b of ["oxagen", "stella"]) {
-    emit(
-      `${publicDir}/brand/${b}-wordmark.svg`,
-      readFileSync(svg(`${b}-wordmark-adaptive.svg`)),
-    );
-    emit(
-      `${publicDir}/brand/${b}-wordmark-on-dark.svg`,
-      readFileSync(svg(`${b}-wordmark-dark.svg`)),
-    );
-    emit(
-      `${publicDir}/brand/${b}-wordmark-on-light.svg`,
-      readFileSync(svg(`${b}-wordmark-light.svg`)),
-    );
-    emit(
-      `${publicDir}/brand/${b}-icon.svg`,
-      readFileSync(svg(`${b}-icon-adaptive.svg`)),
-    );
-    emit(
-      `${publicDir}/brand/${b}-icon-tile-dark.svg`,
-      readFileSync(svg(`${b}-icon-tile-dark.svg`)),
-    );
-    emit(
-      `${publicDir}/brand/${b}-icon-tile-light.svg`,
-      readFileSync(svg(`${b}-icon-tile-light.svg`)),
-    );
-    // The avatar — the hive full-bleed on its ground. This is the face the
-    // brand wears where the image IS the brand rather than a mark inside a
-    // page: social profiles, and the desktop app icon that
-    // apps/desktop/scripts/icons.mjs cuts from these.
-    emit(
-      `${publicDir}/brand/${b}-avatar-light.svg`,
-      readFileSync(join(BRAND, `social/${b}-avatar-light.svg`)),
-    );
-    emit(
-      `${publicDir}/brand/${b}-avatar-dark.svg`,
-      readFileSync(join(BRAND, `social/${b}-avatar-dark.svg`)),
-    );
+    copy(`logo/svg/${b}-wordmark-adaptive.svg`, `${publicDir}/brand/${b}-wordmark.svg`);
+    copy(`logo/svg/${b}-wordmark-dark.svg`, `${publicDir}/brand/${b}-wordmark-on-dark.svg`);
+    copy(`logo/svg/${b}-wordmark-light.svg`, `${publicDir}/brand/${b}-wordmark-on-light.svg`);
+    copy(`logo/svg/${b}-icon-adaptive.svg`, `${publicDir}/brand/${b}-icon.svg`);
+    copy(`logo/svg/${b}-icon-tile-dark.svg`, `${publicDir}/brand/${b}-icon-tile-dark.svg`);
+    copy(`logo/svg/${b}-icon-tile-light.svg`, `${publicDir}/brand/${b}-icon-tile-light.svg`);
+    // The avatar: the hive full-bleed on its ground. Social profiles wear it,
+    // and apps/desktop/scripts/icons.mjs cuts the desktop app icon from it.
+    copy(`social/${b}-avatar-light.svg`, `${publicDir}/brand/${b}-avatar-light.svg`);
+    copy(`social/${b}-avatar-dark.svg`, `${publicDir}/brand/${b}-avatar-dark.svg`);
   }
 
-  // Favicons — adaptive SVG, opaque PNG fallbacks off the dark tile.
-  emit(
-    `${publicDir}/favicon/favicon.svg`,
-    readFileSync(svg(`${brand}-favicon.svg`)),
-  );
-  const icoParts = [];
+  // Favicons: the adaptive SVG, then the kit's PNGs and .ico on the obsidian
+  // tile. The kit draws 16 to 48 from its favicon tile, whose outline is
+  // heavier so the hive holds at tab size.
+  copy(`logo/svg/${brand}-favicon.svg`, `${publicDir}/favicon/favicon.svg`);
   for (const size of FAVICON_PNG) {
-    const data = emitRaster(
-      `${publicDir}/favicon/favicon-${size}.png`,
-      tileDark,
-      size,
-    );
-    if (ICO_SIZES.includes(size)) icoParts.push({ size, data });
+    copy(`icons/${brand}-icon-${size}.png`, `${publicDir}/favicon/favicon-${size}.png`);
   }
-  emitIco(`${publicDir}/favicon/favicon.ico`, icoParts);
+  copy(`icons/${brand}-favicon.ico`, `${publicDir}/favicon/favicon.ico`);
 
-  // Home-screen / installed-PWA icons. A home-screen icon is a tile.
+  // Home-screen and installed-app icons. A home-screen icon is a tile.
   for (const size of PWA_ICONS) {
-    emitRaster(`${publicDir}/pwa/icon-${size}.png`, tileDark, size);
+    copy(`icons/${brand}-icon-${size}.png`, `${publicDir}/pwa/icon-${size}.png`);
   }
-  emitRaster(`${publicDir}/pwa/apple-touch-icon.png`, tileDark, 180);
-
-  // Maskable: full bleed, mark pulled into the safe circle, both schemes.
-  const scratch = mkdtempSync(join(tmpdir(), "oxagen-brand-"));
-  const maskDark = join(scratch, `maskable-${brand}-dark.svg`);
-  const maskLight = join(scratch, `maskable-${brand}-light.svg`);
-  writeFileSync(maskDark, maskableSvg(tileDark));
-  writeFileSync(maskLight, maskableSvg(tileLight));
+  copy(`icons/${brand}-icon-180.png`, `${publicDir}/pwa/apple-touch-icon.png`);
+  // Maskable: full bleed, the mark inside the safe circle, both schemes.
   for (const size of MASKABLE) {
-    emitRaster(`${publicDir}/pwa/maskable-${size}.png`, maskDark, size);
-    emitRaster(`${publicDir}/pwa/maskable-light-${size}.png`, maskLight, size);
+    copy(`icons/${brand}-icon-maskable-${size}.png`, `${publicDir}/pwa/maskable-${size}.png`);
+    copy(
+      `icons/${brand}-icon-maskable-light-${size}.png`,
+      `${publicDir}/pwa/maskable-light-${size}.png`,
+    );
   }
 
   // Launch screens for the installed app, and the install prompt. The root
@@ -487,18 +354,9 @@ function nextSurface(publicDir, brand, { pwa = true } = {}) {
   }
 
   // Social cards and the house spinner.
-  copy(
-    `social/${brand}-og-1200x630-dark.png`,
-    `${publicDir}/social/og-image-dark-1200x630.png`,
-  );
-  copy(
-    `social/${brand}-og-1200x630-light.png`,
-    `${publicDir}/social/og-image-light-1200x630.png`,
-  );
-  copy(
-    `spinners/${brand}-spinner.svg`,
-    `${publicDir}/spinner/${brand}-spinner.svg`,
-  );
+  copy(`social/${brand}-og-1200x630-dark.png`, `${publicDir}/social/og-image-dark-1200x630.png`);
+  copy(`social/${brand}-og-1200x630-light.png`, `${publicDir}/social/og-image-light-1200x630.png`);
+  copy(`spinners/${brand}-spinner.svg`, `${publicDir}/spinner/${brand}-spinner.svg`);
   copy(
     `spinners/${brand}-spinner-wordmark.svg`,
     `${publicDir}/spinner/${brand}-spinner-wordmark.svg`,
@@ -508,10 +366,10 @@ function nextSurface(publicDir, brand, { pwa = true } = {}) {
 /**
  * Next.js App Router file-convention favicon (`src/app/icon.svg`). When this
  * file exists it is served at /icon and can override layout metadata icons, so
- * it must be the same hive favicon the kit emits — never a retired mark.
+ * it must be the same hive favicon the kit emits.
  */
 function nextAppIcon(appDir, brand) {
-  emit(`${appDir}/src/app/icon.svg`, readFileSync(svg(`${brand}-favicon.svg`)));
+  copy(`logo/svg/${brand}-favicon.svg`, `${appDir}/src/app/icon.svg`);
 }
 
 /** The hand-authored pages of apps/web. The blog's pages import PWA_HEAD. */
@@ -553,30 +411,54 @@ export const APPLE_STARTUP_IMAGES: readonly StartupImage[] = ${JSON.stringify(
   );
 }
 
+/**
+ * The two grounds as hex, for the places that cannot read a CSS variable: a
+ * web app manifest's theme and background colours, and the theme-color metas
+ * a root layout declares (#4892).
+ *
+ * @param {Record<string, unknown>} kitTokens the kit's `tokens` map
+ */
+export function houseGroundsModule(kitTokens) {
+  const hex = (name) => {
+    const value = kitTokens[name];
+    if (typeof value !== "string" || !/^#[0-9A-Fa-f]{6}$/.test(value)) {
+      throw new Error(`house kit has no colour token "${name}"`);
+    }
+    return value;
+  };
+  return `/**
+ * GENERATED by tools/scripts/sync-brand-assets.mjs from the house kit's
+ * tokens/house-tokens.json. Do not edit; run the sync.
+ *
+ * The two grounds as hex, for the places that cannot read a CSS variable: a
+ * web app manifest's theme_color and background_color, and the theme-color
+ * metas a root layout declares.
+ */
+
+/** The dark ground, the kit's \`ink\` token. */
+export const HOUSE_INK = "${hex("ink")}";
+
+/** The light ground, the kit's \`paper\` token. */
+export const HOUSE_PAPER = "${hex("paper")}";
+`;
+}
+
 /** apps/web is a flat static site: assets sit beside index.html. */
 function staticSurface(root, brand) {
-  const tileDark = svg(`${brand}-icon-tile-dark.svg`);
-  emit(`${root}/favicon.svg`, readFileSync(svg(`${brand}-favicon.svg`)));
-  const icoParts = [];
+  copy(`logo/svg/${brand}-favicon.svg`, `${root}/favicon.svg`);
   for (const size of [16, 32]) {
-    const data = emitRaster(`${root}/favicon-${size}.png`, tileDark, size);
-    icoParts.push({ size, data });
+    copy(`icons/${brand}-icon-${size}.png`, `${root}/favicon-${size}.png`);
   }
-  // The 48px image goes only into the .ico, so it has no file to check.
-  icoParts.push({ size: 48, data: RASTERS ? raster(tileDark, 48) : null });
-  emitIco(`${root}/favicon.ico`, icoParts);
-  emitRaster(`${root}/apple-touch-icon.png`, tileDark, 180);
-  // Home-screen / installed-PWA icons — same tiles the Next surfaces wear.
+  copy(`icons/${brand}-favicon.ico`, `${root}/favicon.ico`);
+  copy(`icons/${brand}-icon-180.png`, `${root}/apple-touch-icon.png`);
+  // Home-screen and installed-app icons: the same tiles the Next surfaces wear.
   for (const size of [192, 512]) {
-    emitRaster(`${root}/icon-${size}.png`, tileDark, size);
+    copy(`icons/${brand}-icon-${size}.png`, `${root}/icon-${size}.png`);
   }
-  const scratch = mkdtempSync(join(tmpdir(), "oxagen-brand-web-"));
-  const maskDark = join(scratch, `maskable-${brand}-dark.svg`);
-  writeFileSync(maskDark, maskableSvg(tileDark));
   for (const size of MASKABLE) {
-    emitRaster(`${root}/maskable-${size}.png`, maskDark, size);
+    copy(`icons/${brand}-icon-maskable-${size}.png`, `${root}/maskable-${size}.png`);
   }
-  // Kit webmanifest with paths rewritten for the flat static layout.
+  // The kit's web manifest, with paths rewritten for the flat static layout.
   const kitManifest = JSON.parse(
     readFileSync(join(BRAND, `icons/${brand}.webmanifest`), "utf8"),
   );
@@ -586,30 +468,10 @@ function staticSurface(root, brand) {
       {
         ...kitManifest,
         icons: [
-          {
-            src: "/icon-192.png",
-            sizes: "192x192",
-            type: "image/png",
-            purpose: "any",
-          },
-          {
-            src: "/icon-512.png",
-            sizes: "512x512",
-            type: "image/png",
-            purpose: "any",
-          },
-          {
-            src: "/maskable-192.png",
-            sizes: "192x192",
-            type: "image/png",
-            purpose: "maskable",
-          },
-          {
-            src: "/maskable-512.png",
-            sizes: "512x512",
-            type: "image/png",
-            purpose: "maskable",
-          },
+          { src: "/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
+          { src: "/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
+          { src: "/maskable-192.png", sizes: "192x192", type: "image/png", purpose: "maskable" },
+          { src: "/maskable-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
         ],
       },
       null,
@@ -642,59 +504,48 @@ export const PWA_HEAD = ${JSON.stringify(block)};
 `,
   );
   copy(`social/${brand}-og-1200x630-dark.png`, `${root}/og.png`);
-  for (const b of [brand]) {
-    emit(
-      `${root}/assets/brand/${b}-wordmark.svg`,
-      readFileSync(svg(`${b}-wordmark-adaptive.svg`)),
-    );
-    emit(
-      `${root}/assets/brand/${b}-wordmark-on-dark.svg`,
-      readFileSync(svg(`${b}-wordmark-dark.svg`)),
-    );
-    emit(
-      `${root}/assets/brand/${b}-icon.svg`,
-      readFileSync(svg(`${b}-icon-adaptive.svg`)),
-    );
-    emit(
-      `${root}/assets/brand/${b}-icon-tile-dark.svg`,
-      readFileSync(svg(`${b}-icon-tile-dark.svg`)),
-    );
-  }
-  copy(
-    `spinners/${brand}-spinner.svg`,
-    `${root}/assets/brand/${brand}-spinner.svg`,
-  );
+  copy(`logo/svg/${brand}-wordmark-adaptive.svg`, `${root}/assets/brand/${brand}-wordmark.svg`);
+  copy(`logo/svg/${brand}-wordmark-dark.svg`, `${root}/assets/brand/${brand}-wordmark-on-dark.svg`);
+  copy(`logo/svg/${brand}-icon-adaptive.svg`, `${root}/assets/brand/${brand}-icon.svg`);
+  copy(`logo/svg/${brand}-icon-tile-dark.svg`, `${root}/assets/brand/${brand}-icon-tile-dark.svg`);
+  copy(`spinners/${brand}-spinner.svg`, `${root}/assets/brand/${brand}-spinner.svg`);
   // The palette itself, so the static site references the kit's tokens rather
   // than a hand-transcribed copy of them. Its own stylesheet imports this file
-  // and aliases onto it, which is what makes "byte-for-byte off the kit" true
-  // by construction instead of true until someone edits a hex.
+  // and aliases onto it.
   copy("tokens/house-tokens.css", `${root}/assets/house-tokens.css`);
   // The static site serves its faces from /fonts/: the kit's three, beside
   // whatever else the site ships there.
   for (const f of readdirSync(join(BRAND, "fonts"))) {
-    if (f.endsWith(".woff2") || f.startsWith("LICENSE"))
-      copy(`fonts/${f}`, `${root}/fonts/${f}`);
+    if (f.endsWith(".woff2") || f.startsWith("LICENSE")) copy(`fonts/${f}`, `${root}/fonts/${f}`);
   }
 }
 
 /**
- * The branding skill: positioning, voice, vocabulary, worked examples. It is
- * authored in the kit beside the marks it describes and vendored here so the
- * agents working this tree read the same words the ads and the site carry.
- * Edit it in the kit, run the sync, commit both; `--check` fails on drift.
+ * The branding skill stub. The skill itself lives in the kit, and the stub
+ * tells an agent to read it from the kit's main branch, so this repo carries
+ * one file and no copy that can drift (#4804). Every other file in the folder
+ * is a leftover of the vendored copy this repo used to carry: a sync removes
+ * it, and a check lists it.
  */
 function skill() {
-  const walk = (rel) => {
-    for (const entry of readdirSync(join(BRAND, rel), {
-      withFileTypes: true,
-    })) {
-      if (entry.name.startsWith(".")) continue;
-      const child = `${rel}/${entry.name}`;
-      if (entry.isDirectory()) walk(child);
-      else copy(child, `.claude/${child}`);
+  const dir = ".claude/skills/oxagen-branding";
+  copy("skills/stub/oxagen-branding/SKILL.md", `${dir}/SKILL.md`);
+  for (const rel of filesUnder(dir, `${dir}/SKILL.md`)) {
+    if (CHECK) {
+      drifted.push({ kind: "extra", path: rel });
+      continue;
     }
-  };
-  walk("skills/oxagen-branding");
+    rmSync(join(REPO, rel));
+    removed.push(rel);
+  }
+  if (!CHECK) {
+    // Drop the folders the removed files leave empty.
+    for (const sub of readdirSync(join(REPO, dir), { withFileTypes: true })) {
+      if (sub.isDirectory() && filesUnder(`${dir}/${sub.name}`).length === 0) {
+        rmSync(join(REPO, dir, sub.name), { recursive: true });
+      }
+    }
+  }
 }
 
 /**
@@ -705,8 +556,7 @@ function skill() {
 function fonts() {
   const dir = "packages/ui/src/styles/fonts";
   for (const f of readdirSync(join(BRAND, "fonts"))) {
-    if (f.endsWith(".woff2") || f.startsWith("LICENSE"))
-      copy(`fonts/${f}`, `${dir}/${f}`);
+    if (f.endsWith(".woff2") || f.startsWith("LICENSE")) copy(`fonts/${f}`, `${dir}/${f}`);
   }
   emit(
     "packages/ui/src/styles/house-fonts.css",
@@ -721,21 +571,17 @@ function fonts() {
  * The palette, verbatim from the kit, for anything that reads it as data.
  *
  * `house-tailwind.css` is the layer that turns the palette into something an
- * app can write: the `--color-ox-*` theme entries, the shadcn/Base UI
+ * app can write: the `--color-ox-*` theme entries, the shadcn and Base UI
  * semantic names, the tracking scale, and the twelve type utilities
  * (`text-m-*` for a page read once, `text-a-*` for a dashboard read all day).
- * It went unvendored until 2026-09-19, so the kit's TYPE SCALE did not exist
- * in this repo at all and every surface sized itself with Tailwind's defaults
- * and one-off `text-[11px]` literals. It imports `house-tokens.css` from
- * beside it, which is why `globals.css` imports this file rather than both.
+ * It imports `house-tokens.css` from beside it, which is why `globals.css`
+ * imports this file rather than both.
  */
-function tokens() {
+function tokens(kit) {
   copy("tokens/house-tokens.css", "packages/ui/src/styles/house-tokens.css");
   copy("tokens/house-tokens.json", "packages/ui/src/styles/house-tokens.json");
-  copy(
-    "tokens/house-tailwind.css",
-    "packages/ui/src/styles/house-tailwind.css",
-  );
+  copy("tokens/house-tailwind.css", "packages/ui/src/styles/house-tailwind.css");
+  emit("packages/ui/src/lib/house-grounds.ts", houseGroundsModule(kit.tokens));
 }
 
 /**
@@ -782,27 +628,24 @@ export function rewriteInk(src, ink) {
  * `INK` in `scripts/lib/theme.mjs`, so its values are written from the kit
  * tokens here, and `--check` reports the file when one has drifted (#3074).
  */
-function webTheme() {
-  const kit = JSON.parse(
-    readFileSync(join(BRAND, "tokens/house-tokens.json"), "utf8"),
-  ).tokens;
+function webTheme(kit) {
   const path = "apps/web/scripts/lib/theme.mjs";
-  emit(path, rewriteInk(readFileSync(join(REPO, path), "utf8"), expectedInk(kit)));
+  emit(path, rewriteInk(readFileSync(join(REPO, path), "utf8"), expectedInk(kit.tokens)));
 }
 
 /**
  * The marks, as data, for the React components in @oxagen/ui.
  *
  * <img src="…"> cannot follow the app theme, and hand-copying path data into a
- * .tsx is exactly the drift this script exists to prevent — so the geometry is
- * EXTRACTED from the kit's adaptive SVGs and written to a generated module the
- * components import. Every number in it came out of `build/marks.py`.
+ * .tsx is the drift this script exists to prevent, so the geometry is
+ * extracted from the kit's adaptive SVGs and written to a generated module the
+ * components import. Every number in it came out of the kit's `build/marks.py`.
  *
  * Each wordmark is two paths: `letters`, which takes currentColor and so flips
- * with the theme, and `accent` — the ONE gold glyph (the `x` of oxagen, the
+ * with the theme, and `accent`, the one gold glyph (the `x` of oxagen, the
  * asterisk of stella). The hive keeps each outline and gold cell from the kit.
  */
-function marks() {
+function marks(kit) {
   const read = (name) => readFileSync(svg(name), "utf8");
   const viewBox = (src) => src.match(/viewBox="([^"]+)"/)[1];
   const pathData = (src, cls) =>
@@ -827,8 +670,7 @@ function marks() {
   const icon = (brand) => {
     const src = read(`${brand}-icon-adaptive.svg`);
     const parts = [...src.matchAll(/<path\b([^>]*)\/>/g)].map(([, attrs]) => {
-      const attr = (name) =>
-        attrs.match(new RegExp(`\\b${name}="([^"]+)"`))?.[1];
+      const attr = (name) => attrs.match(new RegExp(`\\b${name}="([^"]+)"`))?.[1];
       const stroked = attr("stroke") === "currentColor";
       const part = {
         d: attr("d"),
@@ -838,8 +680,7 @@ function marks() {
       if (attr("opacity")) part.opacity = Number(attr("opacity"));
       return part;
     });
-    if (!parts.length)
-      throw new Error(`no paths in ${brand}-icon-adaptive.svg`);
+    if (!parts.length) throw new Error(`no paths in ${brand}-icon-adaptive.svg`);
     return {
       viewBox: viewBox(src),
       transform: src.match(/<g transform="([^"]+)"/)[1],
@@ -852,38 +693,34 @@ function marks() {
     stella: { wordmark: wordmark("stella"), icon: icon("stella") },
   };
 
-  const gold = JSON.parse(
-    readFileSync(join(BRAND, "tokens/house-tokens.json"), "utf8"),
-  ).gold.hex;
-
   emit(
     "packages/ui/src/components/brand-marks.generated.ts",
     `/**
  * GENERATED by tools/scripts/sync-brand-assets.mjs from the Oxagen house brand
- * kit. Do not edit — run the sync instead.
+ * kit. Do not edit; run the sync instead.
  *
  * The kit reproduces both wordmarks from Space Grotesk itself (weight 600, one
  * em, HarfBuzz spacing including kerning) and both icons from the same face, so
  * the marks and the product's running text are the same outlines. Editing a
- * path here would break that; changing a mark means changing the kit.
+ * path here would break that. Changing a mark means changing the kit.
  *
  * ONE GLYPH IS GOLD: the \`x\` in oxagen, the asterisk in stella. \`letters\`
- * renders in currentColor and flips with the theme; \`accent\` keeps the metal
- * in BOTH themes, which is what the kit's own light and dark files do — the
- * "gold becomes its deep shade on paper" rule governs WORDS, not the mark.
+ * renders in currentColor and flips with the theme. \`accent\` keeps the metal
+ * in both themes, as the kit's own light and dark files do. The rule that gold
+ * becomes its deep shade on paper governs words, not the mark.
  *
  * An icon is a list of parts. Stella's is the gold asterisk alone. Oxagen's is
  * the hive: cell outlines in currentColor (\`ink\`) and two cells in the gold
  * (\`accent\`), one at half strength. A mono tone paints every part one colour.
  */
 
-/** The kit's gold, pinned. Identity only — never a surface, never a state. */
-export const BRAND_GOLD = "${gold}";
+/** The kit's gold, pinned. It marks identity, and it is never a surface or a state. */
+export const BRAND_GOLD = "${kit.gold.hex}";
 
 export interface WordmarkGeometry {
-  /** The kit's own viewBox — never re-fit it. */
+  /** The kit's own viewBox. Do not re-fit it. */
   readonly viewBox: string;
-  /** Intrinsic width in viewBox units; width follows height when sized. */
+  /** Intrinsic width in viewBox units. Width follows height when sized. */
   readonly width: number;
   /** Intrinsic height in viewBox units. */
   readonly height: number;
@@ -895,7 +732,7 @@ export interface WordmarkGeometry {
 
 export interface IconPart {
   readonly d: string;
-  /** \`ink\` takes currentColor; \`accent\` takes the gold. */
+  /** \`ink\` takes currentColor, and \`accent\` takes the gold. */
   readonly role: "ink" | "accent";
   /** Set on an outlined part: it is stroked, not filled. */
   readonly strokeWidth?: number;
@@ -921,21 +758,26 @@ export const STELLA: BrandGeometry = ${JSON.stringify(data.stella, null, 2)};
   );
 }
 
+/**
+ * The desktop icons. This script cannot cut them, because the cut needs
+ * rsvg-convert and the Tauri CLI, and the fan-out has neither. It compares the
+ * stamp the cut left with the avatar it just synced instead. A write prints
+ * the reason and still exits 0, so the fan-out opens its PR. That PR's check
+ * then fails until someone cuts the icons on its branch.
+ */
+function desktopIcons() {
+  const reason = desktopIconDrift(committed(DESKTOP_STAMP)?.toString("utf8") ?? null, synced);
+  if (!reason) return null;
+  if (CHECK) drifted.push({ kind: "stale", path: DESKTOP_STAMP, why: reason });
+  return reason;
+}
+
 /* ── run ─────────────────────────────────────────────────────────────────── */
 
-/**
- * The kit is a separate repository, so it is not always present.
- *
- * A WRITE without it is an error: there is nothing to copy from.
- *
- * A `--check` without it fails in CI. CI checks the kit out into its workspace
- * before the check runs, so a missing kit there means the checkout step broke
- * or moved, and a pass would verify nothing (#3074). Off CI, a `--check`
- * without the kit says so and exits 0, because a local gate that fails on
- * every machine without a second clone gets ignored. The one line it prints
- * names what was not checked, so a green local run with that line in it cannot
- * be read as "the assets were verified".
- */
+const HOW_TO_FIX =
+  "Run node tools/scripts/sync-brand-assets.mjs --brand <kit> and commit the result. " +
+  "If the desktop icons are stale, also run pnpm --filter @oxagen/desktop icons.";
+
 if (isEntrypoint(import.meta.url)) {
   for (const surface of Object.keys(SURFACE_MARKS)) {
     try {
@@ -947,74 +789,56 @@ if (isEntrypoint(import.meta.url)) {
       if (error.code !== "ENOENT") throw error;
     }
   }
+
+  let kit;
   try {
-    readFileSync(join(BRAND, "tokens/house-tokens.json"));
+    kit = JSON.parse(readFileSync(join(BRAND, "tokens/house-tokens.json"), "utf8"));
   } catch {
-    const where =
-      "Clone macanderson/oxagen-brand beside this repo or set OXAGEN_BRAND_KIT.";
-    if (CHECK && isCi(process.env)) {
-      console.error(
-        `brand: FAILED. No house kit at ${BRAND}, so no asset was verified. CI must check out macanderson/oxagen-brand and set OXAGEN_BRAND_KIT to it.`,
-      );
-      process.exit(2);
-    }
-    if (CHECK) {
-      console.log(
-        `brand: SKIPPED. No house kit at ${BRAND}, so no asset was verified. ${where}`,
-      );
-      process.exit(0);
-    }
-    console.error(`brand kit not found at ${BRAND}\n${where}`);
+    console.error(
+      `brand: FAILED. No house kit at ${BRAND}, so nothing was ${CHECK ? "checked" : "synced"}. ` +
+        "Clone macanderson/oxagen-brand and pass --brand <dir>, or set OXAGEN_BRAND_KIT.",
+    );
     process.exit(2);
   }
 
   skill();
   fonts();
-  tokens();
-  webTheme();
-  marks();
+  tokens(kit);
+  webTheme(kit);
+  marks(kit);
   nextSurface("apps/app/public", "oxagen");
   nextSurface("apps/docs/public", "oxagen");
-  // Deprecated app still boots locally and in archive deploys; keep its public
-  // marks on the same kit tip as the live surfaces so a stray open does not
-  // show the retired Ox lettermark or cream paper.
-  // It is not offered for install, so it takes no launch screens or prompt.
+  // The deprecated app still boots locally and in archive deploys, so its
+  // public marks stay on the same kit as the live surfaces. It is not offered
+  // for install, so it takes no launch screens or prompt.
   nextSurface("apps/app_deprecated/public", "oxagen", { pwa: false });
   splashModule("oxagen");
   nextAppIcon("apps/docs", "oxagen");
   nextAppIcon("apps/app_deprecated", "oxagen");
   staticSurface("apps/web", "oxagen");
+  const desktop = desktopIcons();
 
-  const version = JSON.parse(
-    readFileSync(join(BRAND, "tokens/house-tokens.json"), "utf8"),
-  ).version;
-
+  const kitName = `oxagen-brand ${kit.version} at ${BRAND}`;
   if (CHECK) {
-    if (sizedOnly.length) {
-      console.log(
-        `brand: ${sizedOnly.length} raster file(s) checked for size only. PNG bytes depend on the librsvg build, so pass --rasters where rsvg-convert matches the one that rendered them.`,
-      );
-    }
     if (drifted.length) {
-      console.error(`brand assets are stale against house kit ${version}:`);
-      for (const f of drifted) console.error(`  ${f}`);
-      console.error(`\nrun: node tools/scripts/sync-brand-assets.mjs`);
+      console.error(`brand: ${drifted.length} file(s) out of step with ${kitName}:`);
+      for (const d of drifted) {
+        console.error(`  ${d.kind.padEnd(7)}  ${d.path}${d.why ? ` (${d.why})` : ""}`);
+      }
+      console.error(HOW_TO_FIX);
       process.exit(1);
     }
-    console.log(
-      sizedOnly.length
-        ? `brand: every vendored asset matches house kit ${version}, rasters by size`
-        : `brand: every vendored asset matches house kit ${version}`,
-    );
+    console.log(`brand: ${synced.size} files match ${kitName}`);
   } else {
-    const digest = createHash("sha256")
-      .update(written.sort().join("\n"))
-      .digest("hex")
-      .slice(0, 12);
     console.log(
-      written.length
-        ? `brand: synced ${written.length} file(s) from house kit ${version} (${digest})`
-        : `brand: already current with house kit ${version}`,
+      written.length || removed.length
+        ? `brand: wrote ${written.length} and removed ${removed.length} file(s) from ${kitName}`
+        : `brand: already matches ${kitName}`,
     );
+    if (desktop) {
+      console.warn(
+        `brand: the desktop icons are stale: ${desktop}. Run pnpm --filter @oxagen/desktop icons and commit the result.`,
+      );
+    }
   }
 }
