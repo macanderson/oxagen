@@ -16,12 +16,14 @@ export {
   createOrAdoptRepository,
   createRepository,
   getRepository,
+  getUserLogin,
   listSteeringInstallations,
   SteeringReauthorizeError,
   type CreateOrAdoptInput,
   type CreateOrAdoptResult,
   type CreateRepositoryResult,
   type FoundRepository,
+  type RepositoryOwnerKind,
   type SteeringInstallation,
 } from "./repository";
 export {

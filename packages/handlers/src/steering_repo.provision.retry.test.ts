@@ -54,6 +54,7 @@ interface Harness {
   saves: Array<{ scope: SteeringRepoScope; state: SteeringRepoState }>;
   sends: Array<{ data: SteeringRepoProvisionRequest; eventId: string }>;
   connections: Array<{ orgId: string; connection: SteeringConnection }>;
+  resets: string[];
   setSendImpl: (fn: SendImpl) => void;
 }
 
@@ -62,6 +63,7 @@ function harness(initial: SteeringRepoState | null): Harness {
   const saves: Harness["saves"] = [];
   const sends: Harness["sends"] = [];
   const connections: Harness["connections"] = [];
+  const resets: string[] = [];
   let sendImpl: SendImpl = async () => {};
   const deps: RetrySteeringRepoProvisionDeps = {
     loadState: async (scope) => {
@@ -76,6 +78,10 @@ function harness(initial: SteeringRepoState | null): Harness {
     saveConnection: async (orgId, connection) => {
       connections.push({ orgId, connection });
     },
+    resetConnection: async (orgId) => {
+      resets.push(orgId);
+      return null;
+    },
     send: async (data, eventId) => {
       sends.push({ data, eventId });
       await sendImpl(data, eventId);
@@ -88,6 +94,7 @@ function harness(initial: SteeringRepoState | null): Harness {
     saves,
     sends,
     connections,
+    resets,
     setSendImpl: (fn) => (sendImpl = fn),
   };
 }
@@ -291,6 +298,38 @@ describe("retry_steering_repo_provision handler", () => {
         connection_choices: [],
       });
       expect(h.sends).toHaveLength(1);
+    });
+
+    it("clears the stored connection first when asked, then re-sends", async () => {
+      const h = harness(
+        failedState({
+          status: "blocked",
+          failed_step: "create_repository",
+          error: { code: "repository_create_refused", message: "Due to policy." },
+          repository: null,
+        }),
+      );
+      await expect(retry(h, { resetConnection: true })).resolves.toEqual({
+        status: "provisioning",
+      });
+      expect(h.resets).toEqual(["org_1"]);
+      expect(h.sends).toHaveLength(1);
+    });
+
+    it("changes nothing when the reset is refused because a repo exists there", async () => {
+      const h = harness(failedState());
+      h.deps.resetConnection = async () => {
+        throw new HandlerError({
+          code: "conflict",
+          reason: "connection_in_use",
+          message: "Oxagen already created acme/oxagen-acme-2 in acme.",
+        });
+      };
+      await expect(retry(h, { resetConnection: true })).rejects.toMatchObject({
+        reason: "connection_in_use",
+      });
+      expect(h.saves).toEqual([]);
+      expect(h.sends).toEqual([]);
     });
 
     it("changes nothing when the organization already holds a different connection", async () => {

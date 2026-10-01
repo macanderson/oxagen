@@ -18,22 +18,22 @@ import type { RepoHealth, SteeringConnectionPick } from "./types";
  * Run the provisioning job again from the step that failed or stopped. Before
  * the organization has a workspace (`ws` null), the job belongs to the
  * organization, so the call runs as the organization viewer. `connection` is
- * the one a person picked after setup stopped with `choose_connection`.
+ * the one a person picked after setup stopped with `choose_connection`, and
+ * `resetConnection` clears the stored one first so the job asks again.
  */
 export async function retrySteeringRepoProvision(
   org: string,
   ws: string | null,
-  connection?: SteeringConnectionPick,
+  input: { connection?: SteeringConnectionPick; resetConnection?: true } = {},
 ): Promise<
   ActionResult<{ status: "provisioning" | "ready" | "failed" | "blocked" }>
 > {
   const ctx =
     ws === null ? await requireViewer(org) : await requireViewer(org, ws);
-  return kernelWrite(
-    ctx,
-    steeringRepoProvisionRetry,
-    connection === undefined ? {} : { connection },
-  );
+  return kernelWrite(ctx, steeringRepoProvisionRetry, {
+    ...(input.connection === undefined ? {} : { connection: input.connection }),
+    ...(input.resetConnection === true ? { resetConnection: true } : {}),
+  });
 }
 
 /**
@@ -47,12 +47,17 @@ export async function retrySteeringRepoProvision(
 export async function importWorkspaceSteering(
   org: string,
   ws: string,
-  input: { connection?: SteeringConnectionPick; startFresh?: true } = {},
+  input: {
+    connection?: SteeringConnectionPick;
+    startFresh?: true;
+    resetConnection?: true;
+  } = {},
 ): Promise<ActionResult<SteeringRepoImportOutput>> {
   const ctx = await requireViewer(org, ws);
   return kernelWrite(ctx, steeringRepoImport, {
     ...(input.connection === undefined ? {} : { connection: input.connection }),
     ...(input.startFresh === true ? { startFresh: true } : {}),
+    ...(input.resetConnection === true ? { resetConnection: true } : {}),
   });
 }
 
