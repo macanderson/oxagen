@@ -5,8 +5,8 @@
  * page, stats days 30 / limit 10, candidates limit 3, dismiss restore false),
  * the argument validation that rejects before any request leaves the process,
  * show's list-then-resolve lookup (full id, publicId, short-id prefix),
- * import's read → parse → preview/commit phases with per-file failure
- * collection, the human/JSON output written through the CommandWriter, and the
+ * import's read → parse_markdown_import → preview or commit_markdown_import
+ * phases with per-file failure collection, the human/JSON output written through the CommandWriter, and the
  * one-shot path's stderr + exit(1) contract.
  */
 import { describe, expect, it, vi } from "vitest";
@@ -672,23 +672,44 @@ describe("memory rm", () => {
   });
 });
 
-const draft = {
-  lesson: "Prefer rg over grep",
-  memoryClass: "RULE",
-  memoryKind: "gotcha",
-  enforcementScore: 60,
-  source: "import",
-  nodeRef: "app:web",
-  sourceDocument: "rules.md",
-  classified: true,
+/** One proposed record, as parse_markdown_import returns it. */
+function row(over: Record<string, unknown> = {}) {
+  return {
+    file: "docs/rules.md",
+    line: 2,
+    origin: "split",
+    lineage: "a-intel.docs.rules.prefer-rg",
+    label: "Prefer rg",
+    statement: "Prefer rg over grep.",
+    kind: "preference",
+    kindReason: "It states a tool preference.",
+    force: "may",
+    forceWords: "Prefer",
+    effect: null,
+    tokens: 6,
+    duplicate: null,
+    conflict: null,
+    action: "add",
+    frontmatter: null,
+    ...over,
+  };
+}
+
+const parsedFile = {
+  filename: "docs/rules.md",
+  target: "records",
+  detected: "records",
+  reason: "The file holds prose, so its statements become records.",
+  records: 1,
+  policies: 0,
+  error: null,
 };
-const draft2 = { ...draft, lesson: "Pin toolchain versions" };
 
 describe("memory import", () => {
   it("refuses an empty file list", async () => {
     const captured = captureWriter();
     await expect(handleMemoryImport([], {}, captured.writer)).rejects.toThrow(
-      "Nothing to import. Pass one or more markdown files, e.g. `oxagen memory import rules.md`.",
+      "Nothing to import. Pass one or more Markdown files, such as `oxagen memory import CLAUDE.md`.",
     );
     expect(readFile).not.toHaveBeenCalled();
   });
@@ -701,121 +722,118 @@ describe("memory import", () => {
     const captured = captureWriter();
     await expect(
       handleMemoryImport(["bad.md", "empty.md"], {}, captured.writer),
-    ).rejects.toThrow("No readable, non-empty documents to import.");
+    ).rejects.toThrow("No readable, non-empty files to import.");
     const out = captured.output();
-    expect(out).toContain("⚠ Skipped unreadable/empty files:");
+    expect(out).toContain("Skipped files that are empty or unreadable:");
     expect(out).toContain("bad.md");
     expect(out).toContain("empty.md (empty)");
     expect(apiPostOrThrow).not.toHaveBeenCalled();
   });
 
-  it("previews drafts without --yes — parse only, basename'd filenames, skipped files, rerun hint", async () => {
-    readFile.mockResolvedValue("# rules\n- do x\n");
+  it("previews records without --yes: parse only, as records, with the path from here", async () => {
+    readFile.mockResolvedValue("# rules\n- Prefer rg over grep.\n");
     apiPostOrThrow.mockResolvedValue({
-      drafts: [draft],
-      documentCount: 1,
-      skipped: [{ filename: "notes.md", reason: "no content" }],
+      files: [{ ...parsedFile, filename: "notes.md", error: "The model found no durable guidance in the file." }],
+      records: [row()],
+      policies: [],
     });
     const captured = captureWriter();
-    await handleMemoryImport(
-      ["docs/rules.md"],
-      { node: "app:web" },
-      captured.writer,
-    );
+    await handleMemoryImport(["docs/rules.md"], {}, captured.writer);
     expect(readFile).toHaveBeenCalledWith("docs/rules.md", "utf8");
     expect(apiPostOrThrow).toHaveBeenCalledTimes(1);
-    expect(apiPostOrThrow).toHaveBeenCalledWith("agent/memory/import/parse", {
-      documents: [{ filename: "rules.md", content: "# rules\n- do x\n" }],
-      defaultNodeRef: "app:web",
+    expect(apiPostOrThrow).toHaveBeenCalledWith("context/steering/import/parse", {
+      documents: [
+        {
+          filename: "docs/rules.md",
+          content: "# rules\n- Prefer rg over grep.\n",
+          target: "records",
+        },
+      ],
     });
     const out = captured.output();
-    expect(out).toContain("Prefer rg over grep");
-    expect(out).toContain("1 draft memory.");
-    expect(out).toContain("· skipped notes.md: no content");
-    expect(out).toContain("Re-run with --yes to import these memories.");
+    expect(out).toContain("Prefer rg over grep.");
+    expect(out).toContain("1 proposed record.");
+    expect(out).toContain("notes.md: The model found no durable guidance in the file.");
+    expect(out).toContain("Run again with --yes to open the steering PR.");
   });
 
-  it("preview of zero drafts prints the empty message and no rerun hint", async () => {
-    readFile.mockResolvedValue("# empty of rules\n");
-    apiPostOrThrow.mockResolvedValue({
-      drafts: [],
-      documentCount: 1,
-      skipped: [],
-    });
+  it("sends files in calls of 25", async () => {
+    readFile.mockResolvedValue("Use rg.\n");
+    apiPostOrThrow.mockResolvedValue({ files: [], records: [], policies: [] });
+    const paths = Array.from({ length: 26 }, (_, i) => `r${i}.md`);
     const captured = captureWriter();
-    await handleMemoryImport(["rules.md"], {}, captured.writer);
-    expect(captured.output()).toBe("No memories could be extracted.");
+    await handleMemoryImport(paths, {}, captured.writer);
+    expect(apiPostOrThrow).toHaveBeenCalledTimes(2);
+    const sizes = apiPostOrThrow.mock.calls.map(
+      ([, body]) => (body as { documents: unknown[] }).documents.length,
+    );
+    expect(sizes).toEqual([25, 1]);
+    expect(captured.output()).toBe("No records were proposed.");
   });
 
   it("--json preview emits the parse output and never commits", async () => {
     readFile.mockResolvedValue("# rules\n");
-    const parsed = { drafts: [draft], documentCount: 1, skipped: [] };
-    apiPostOrThrow.mockResolvedValue(parsed);
+    apiPostOrThrow.mockResolvedValue({ files: [parsedFile], records: [row()], policies: [] });
     const captured = captureWriter();
     await handleMemoryImport(["rules.md"], { json: true }, captured.writer);
     expect(apiPostOrThrow).toHaveBeenCalledTimes(1);
-    expect(JSON.parse(captured.output())).toEqual(parsed);
+    expect(JSON.parse(captured.output())).toEqual({
+      files: [parsedFile],
+      records: [row()],
+    });
   });
 
-  it("--yes with zero extractable drafts fails instead of committing", async () => {
+  it("--yes with no record marked add fails instead of committing (negative)", async () => {
     readFile.mockResolvedValue("# rules\n");
     apiPostOrThrow.mockResolvedValue({
-      drafts: [],
-      documentCount: 1,
-      skipped: [],
+      files: [parsedFile],
+      records: [row({ action: "skip", duplicate: { lineage: "a-intel.rg", path: null, published: true } })],
+      policies: [],
     });
     const captured = captureWriter();
     await expect(
       handleMemoryImport(["rules.md"], { yes: true }, captured.writer),
-    ).rejects.toThrow(
-      "No memories could be extracted from the supplied documents.",
-    );
+    ).rejects.toThrow("No record is marked add, so there is no steering PR to open.");
     expect(apiPostOrThrow).toHaveBeenCalledTimes(1);
   });
 
-  it("--yes commits the parsed drafts and prints the summary with per-row errors", async () => {
+  it("--yes leaves a conflicting row out, names it, and opens the steering PR", async () => {
     readFile.mockResolvedValue("# rules\n");
+    const conflict = row({
+      lineage: "a-intel.rules.friday-deploys",
+      kind: "constraint",
+      force: "must",
+      effect: "require",
+      action: null,
+      conflict: { lineage: "a-intel.no-friday-deploys", path: null, published: true },
+    });
     apiPostOrThrow.mockImplementation(async (path) =>
-      path === "agent/memory/import/parse"
-        ? { drafts: [draft, draft2], documentCount: 1, skipped: [] }
+      path === "context/steering/import/parse"
+        ? { files: [parsedFile], records: [row(), conflict], policies: [] }
         : {
-            results: [
-              {
-                lesson: draft.lesson,
-                ok: true,
-                memoryId: "mem_9",
-                error: null,
-              },
-              {
-                lesson: draft2.lesson,
-                ok: false,
-                memoryId: null,
-                error: "duplicate",
-              },
-            ],
-            imported: 1,
-            failed: 1,
+            pullRequest: {
+              number: 7,
+              url: "https://github.com/a-intel/steering/pull/7",
+              branch: "steering/import-2026-09-30",
+              headSha: "abc123",
+            },
+            paths: ["steering/preferences/a-intel.docs.rules.prefer-rg.md"],
+            records: 1,
+            policies: 0,
+            skipped: 1,
           },
     );
     const captured = captureWriter();
     await handleMemoryImport(["rules.md"], { yes: true }, captured.writer);
-    expect(apiPostOrThrow).toHaveBeenNthCalledWith(
-      1,
-      "agent/memory/import/parse",
-      {
-        documents: [{ filename: "rules.md", content: "# rules\n" }],
-      },
-    );
-    expect(apiPostOrThrow).toHaveBeenNthCalledWith(
-      2,
-      "agent/memory/import/commit",
-      {
-        drafts: [draft, draft2],
-      },
-    );
-    expect(captured.output()).toBe(
-      "✓ Imported 1 memory, 1 failed.\n  ✗ Pin toolchain versions: duplicate",
-    );
+    expect(apiPostOrThrow).toHaveBeenNthCalledWith(2, "context/steering/import/commit", {
+      records: [row(), { ...conflict, action: "skip" }],
+      policies: [],
+    });
+    const out = captured.output();
+    expect(out).toContain("Left out docs/rules.md:2 (a-intel.rules.friday-deploys)");
+    expect(out).toContain("Opened steering PR #7 on steering/import-2026-09-30 with 1 record.");
+    expect(out).toContain("https://github.com/a-intel/steering/pull/7");
+    expect(out).toContain("1 row was left out.");
   });
 });
 

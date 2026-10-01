@@ -267,13 +267,30 @@ candidate when this file is next pruned.
 
 ## 8. Memory import
 
-**De-registered by:** spec Appendix E, "records are appended, not imported".
-**Replaced by:** `append_record` / `propose_record` (`packages/oxagen/src/contracts/v2/`).
+**De-registered by:** spec Appendix E, "records are appended, not imported",
+and the memory collection spec's lane IMP1 (#4907), which took both off every
+surface on 2026-09-30.
+**Replaced by:** `parse_markdown_import` / `commit_markdown_import`
+(`packages/oxagen/src/contracts/steering.markdown_import.*.ts`, handlers in
+`packages/handlers/src/markdown-import/`), which read Markdown files into
+steering records and Cedar policies and open one steering PR. `oxagen memory
+import` calls the new pair.
 
 | Registered name | Stem | Parity |
 |---|---|---|
-| `parse_memory_import` | `agent.memory_import.parse` | C_AM |
-| `commit_memory_import` | `agent.memory_import.commit` | C_AM |
+| `parse_memory_import` | `agent.memory_import.parse` | C___ |
+| `commit_memory_import` | `agent.memory_import.commit` | C___ |
+
+Both contracts declare `surfaces: []`, and neither has a handler
+registration: the two loaders left `packages/agent/src/handlers/index.ts`, and
+`packages/handlers/src/capability-dispatch.probe.test.ts` names both in its
+`NO_HANDLER_OK` set. The handler files stay in `packages/agent/src/handlers/`
+(`agent.memory_import.parse.ts`, `agent.memory_import.commit.ts`) with the
+splitter in `packages/agent/src/memory/import.ts`, unloaded. The API route
+files and the MCP tool files were deleted, because a contract on no surface
+can hold neither: the MCP tool registry test requires a tool file for exactly
+the contracts on the `mcp` surface. `apps/app_deprecated`'s bulk import still
+names both, and fails `no_handler` if anything reaches it.
 
 ---
 

@@ -125,8 +125,6 @@ const RETIRED_KEPT: Readonly<Record<string, string>> = {
   get_pr: "#4178 merges pull requests through Stella",
   get_pr_diff: "#4178 merges pull requests through Stella",
   get_ci_status: "#4178 merges pull requests through Stella",
-  parse_memory_import: "#4179 imports memory from file attachments",
-  commit_memory_import: "#4179 imports memory from file attachments",
 };
 
 const DEREGISTERED_MD = fileURLToPath(
