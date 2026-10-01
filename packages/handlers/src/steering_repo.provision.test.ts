@@ -28,7 +28,6 @@ import { steeringHookTarget } from "./lib/steering-hook";
 import {
   FIRST_COMMIT_MESSAGE,
   initialSteeringRepoState,
-  GITHUB_PLAN_REQUIRED,
   isSteeringRepoStep,
   pickSteeringConnection,
   planConnectionReset,
@@ -155,16 +154,6 @@ function seedFilesOf(
         scope: { kind: "organization" },
       });
   return Object.fromEntries(files.map((f) => [f.path, f.content]));
-}
-
-/** The rulesets the fake should hold, in the fake's order. */
-function expectedRulesets(): unknown[] {
-  return Object.values(GITHUB_SETTINGS_BASELINE.rulesets)
-    .map(
-      (r) =>
-        JSON.parse(JSON.stringify(gh.rulesetBody(APP, r))) as { name: string },
-    )
-    .sort((a, b) => a.name.localeCompare(b.name));
 }
 
 interface GithubRepoSnapshot {
@@ -576,16 +565,8 @@ describe("a GitHub workspace", () => {
       default_branch: "main",
       merge: GITHUB_SETTINGS_BASELINE.merge,
       actions_enabled: false,
-      rulesets: expectedRulesets(),
-      environments: {
-        steering: {
-          deployment_branch_policy: {
-            protected_branches: false,
-            custom_branch_policies: true,
-          },
-          branch_policies: ["branch:main"],
-        },
-      },
+      rulesets: [],
+      environments: {},
     });
 
     await runSteeringRepoStep(deps, WS, "publish_version");
@@ -654,14 +635,11 @@ describe("a GitHub workspace", () => {
           files: { main: seedFilesOf("github", "acme/oxagen-support", true) },
           merge: GITHUB_SETTINGS_BASELINE.merge,
           actions_enabled: false,
-          rulesets: expectedRulesets(),
+          rulesets: [],
           environments: {
             steering: {
-              deployment_branch_policy: {
-                protected_branches: false,
-                custom_branch_policies: true,
-              },
-              branch_policies: ["branch:main"],
+              deployment_branch_policy: null,
+              branch_policies: [],
             },
           },
           deployments: [
@@ -1673,7 +1651,7 @@ describe("a rerun after one failure", () => {
     {
       step: "apply_settings",
       inject: (hub) =>
-        hub.failNext({ method: "POST", path: "/rulesets", status: 500 }),
+        hub.failNext({ method: "PUT", path: "/actions/permissions", status: 500 }),
     },
     {
       step: "publish_version",
@@ -2024,29 +2002,75 @@ describe("a refused create", () => {
   });
 });
 
-describe("prescribed settings on a GitHub plan that cannot protect branches", () => {
-  it("stops with github_plan_required", async () => {
+describe("GitHub Free steering repositories", () => {
+  it.each(["Organization", "User"] as const)(
+    "provisions a private repository for a free %s without paid settings",
+    async (accountType) => {
+      const account = accountType === "User" ? FAKE_USER_LOGIN : ORG;
+      const hub = new FakeGithub({
+        org: account,
+        app: APP,
+        user_installations: [
+          {
+            id: 77,
+            account_login: account,
+            account_type: accountType,
+            repository_selection: "selected",
+          },
+        ],
+      });
+      hub.failNext({
+        path: /\/(?:rulesets|environments)(?:[/?]|$)/,
+        status: 403,
+        message: "Upgrade your GitHub plan to use this feature.",
+      });
+      const h = new Harness(hub, null);
+      h.connections.set("org_1", {
+        provider: "github",
+        installation_id: 77,
+        account_login: account,
+        account_type: accountType,
+      });
+
+      expect(await provisionSteeringRepo(h.deps(), WS)).toBe("ready");
+      expect(githubRepo(hub, "oxagen-support")).toMatchObject({
+        private: true,
+        rulesets: [],
+        merge: GITHUB_SETTINGS_BASELINE.merge,
+        actions_enabled: false,
+        deployments: [
+          expect.objectContaining({
+            latest_status: "success",
+            payload: { version: 1 },
+          }),
+        ],
+      });
+      expect(
+        hub.calls.some((call) => /\/(?:rulesets|environments)(?:[/?]|$)/.test(call.path)),
+      ).toBe(false);
+      expect(h.binds).toHaveLength(1);
+    },
+  );
+
+  it("surfaces a refused ordinary settings write", async () => {
     const hub = githubFake();
-    const h = new Harness(hub, null);
-    h.connections.set("org_1", GITHUB_CONNECTION);
-    const deps = h.deps();
-    for (const step of [
-      "pick_connection",
-      "create_repository",
-      "add_to_installation",
-      "write_first_commit",
-    ] as const)
-      await runSteeringRepoStep(deps, WS, step);
     hub.failNext({
-      method: "POST",
-      path: "/rulesets",
+      method: "PUT",
+      path: "/actions/permissions",
       status: 403,
-      message:
-        "Upgrade to GitHub Pro or make this repository public to enable this feature.",
+      message: "Resource not accessible by integration",
     });
-    const err = await stepError(deps, WS, "apply_settings");
-    expect(err).toMatchObject({ code: GITHUB_PLAN_REQUIRED });
-    expect((err as Error).message).toContain("Upgrade the account to GitHub Pro");
+    const h = new Harness(hub, null);
+
+    const err = await runUntilStopped(h.deps(), WS);
+
+    expect(err).toMatchObject({ status: 403 });
+    expect(err).not.toBeInstanceOf(SteeringProvisionBlockedError);
+    expect(h.state(WS)).toMatchObject({
+      status: "failed",
+      failed_step: "apply_settings",
+    });
+    expect(h.binds).toEqual([]);
   });
 });
 

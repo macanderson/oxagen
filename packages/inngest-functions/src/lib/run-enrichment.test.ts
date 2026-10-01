@@ -481,6 +481,7 @@ describe("the stored failure reason", () => {
     [new Error("Run enrichment was disabled"), "disabled"],
     [new Error("Stella returned no run account"), "empty_account"],
     [new Error("the model provider answered 403"), "model_refused"],
+    [new Error("the model provider answered 402"), "provider_out_of_credits"],
     [new Error("the model provider answered 429"), "rate_limited"],
     [new Error("the model provider answered 503"), "provider_error"],
     [new Error("the model provider answered 400"), "request_rejected"],

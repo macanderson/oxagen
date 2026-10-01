@@ -217,44 +217,39 @@ describe("settings", () => {
     expect(settingsDifferences("gitlab", clone(GITLAB_SETTINGS_BASELINE))).toEqual([]);
   });
 
-  it("names a deleted ruleset by the name GitHub shows", () => {
-    const differences = settingsDifferences(
-      "github",
-      withSetting(GITHUB_SETTINGS_BASELINE, "rulesets.oxagen_merges", undefined),
-    );
-    expect(differences.map((difference) => [difference.setting, difference.actual])).toEqual([
-      ["rulesets.oxagen_merges", null],
-    ]);
-    const report = run(fixtureRepo(), "settings", { health: { differences } });
-    expect(findingsOf(report, "settings").map((finding) => [finding.rule, finding.path, finding.message])).toEqual([
-      ["ruleset-deleted", "rulesets.oxagen_merges", 'The ruleset "Oxagen merges" was deleted.'],
-    ]);
-    expect(resultOf(report, "settings")).toMatchObject({
-      status: "failed",
-      summary: "1 error. Repository settings changed. Oxagen will not merge or publish until they match.",
-    });
-  });
+  it.each([undefined, null, {}, { custom: { name: "A repository owner's setting" } }])(
+    "ignores unmanaged GitHub rulesets and environments reported as %j",
+    (unmanaged) => {
+      const actual = withSetting(
+        withSetting(GITHUB_SETTINGS_BASELINE, "rulesets", unmanaged),
+        "environments",
+        unmanaged,
+      );
+      const differences = settingsDifferences("github", actual);
+      expect(differences).toEqual([]);
+      expect(resultOf(run(fixtureRepo(), "settings", { health: { differences } }), "settings")).toMatchObject({
+        status: "passed",
+        findings: [],
+      });
+    },
+  );
 
-  it("describes each GitHub setting that turns off a protection", () => {
+  it("reports GitHub Actions and merge settings that differ from the baseline", () => {
     const actual = withSetting(
-      withSetting(GITHUB_SETTINGS_BASELINE, "rulesets.oxagen_steering.rules", []),
+      withSetting(GITHUB_SETTINGS_BASELINE, "merge.allow_merge_commit", true),
       "actions.enabled",
       true,
     );
-    const differences: SettingsDifferenceInput[] = [
-      ...settingsDifferences("github", actual),
-      { setting: "rulesets.custom", expected: { name: "custom" }, actual: null },
-    ];
-    const findings = findingsOf(run(fixtureRepo(), "settings", { health: { differences } }), "settings");
-    expect(findings.map((finding) => [finding.rule, finding.path, finding.message])).toEqual([
+    const differences = settingsDifferences("github", actual);
+    const report = run(fixtureRepo(), "settings", { health: { differences } });
+    expect(findingsOf(report, "settings").map((finding) => [finding.rule, finding.path, finding.message])).toEqual([
       ["actions-enabled", "actions.enabled", "GitHub Actions is on."],
-      ["ruleset-deleted", "rulesets.custom", 'The ruleset "custom" was deleted.'],
-      [
-        "required-check-removed",
-        "rulesets.oxagen_steering.rules",
-        'The ruleset "Oxagen steering" no longer requires the check "Oxagen steering".',
-      ],
+      ["setting-differs", "merge.allow_merge_commit", "merge.allow_merge_commit is true."],
     ]);
+    expect(resultOf(report, "settings")).toMatchObject({
+      status: "failed",
+      summary: "2 errors. Repository settings changed. Oxagen will not merge or publish until they match.",
+    });
   });
 
   it("describes each GitLab setting that turns off a protection", () => {

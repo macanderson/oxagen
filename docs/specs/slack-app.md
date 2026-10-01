@@ -36,16 +36,15 @@ To rotate the client secret or the signing secret, regenerate it on the settings
 
 ## Redirect URLs
 
-The app accepts four OAuth redirect URLs:
+The app accepts three OAuth redirect URLs:
 
 ```
-https://oxagen.app/api/slack/oauth/callback
 https://app.oxagen.sh/api/slack/oauth/callback
 https://app.staging.oxagen.sh/api/slack/oauth/callback
 https://preview-app.oxagen.sh/api/slack/oauth/callback
 ```
 
-`apps/app/src/app/api/slack/oauth/callback/route.ts` serves that path. The app builds the redirect from `APP_URL`, so the URL it sends Slack follows the app's origin. `oxagen.app` is listed ahead of the ADR-215 cutover, when `APP_URL` moves to it. To use a different path, change the manifest first.
+`apps/app/src/app/api/slack/oauth/callback/route.ts` serves that path. The app builds the redirect from `APP_URL`, so the URL it sends Slack follows the app's origin. To use a different path, change the manifest first.
 
 ## Scopes
 

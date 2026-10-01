@@ -1,6 +1,6 @@
 ---
 title: Connect GitHub
-description: Let Oxagen hold a read-only GitHub connection for your workspace and ingest repository and delivery metadata, without uploading your source-code graph.
+description: Connect GitHub to your workspace so Oxagen can ingest repository and delivery metadata and open governed pull requests, without uploading your source-code graph.
 ---
 
 ## Overview
@@ -11,7 +11,7 @@ Oxagen holds the connection through a **GitHub App**. You choose which repositor
 
 ## What Oxagen reads
 
-| Data | GitHub permission | Access |
+| Data | GitHub permission | Access ingestion uses |
 | --- | --- | --- |
 | Repository, ref, commit, and changed-file metadata | Contents + Metadata | Read-only |
 | Pull requests | Pull requests | Read-only |
@@ -19,6 +19,24 @@ Oxagen holds the connection through a **GitHub App**. You choose which repositor
 | Workflow and check metadata | Actions + Checks | Read-only |
 
 This ingestion flow reads provider metadata. Proposal capabilities separately write steering records and skills to the workspace's steering repo. It does not upload source text, symbols, chunks, code embeddings, imports, or uncommitted state into the workspace graph.
+
+## What the app can change
+
+The app asks for write access on nine repository permissions. GitHub lists them before you install, and asks you again whenever Oxagen adds one.
+
+| GitHub permission | Access | What Oxagen does with it |
+| --- | --- | --- |
+| Contents | Read and write | Writes the branch and files of each pull request Oxagen opens. |
+| Pull requests | Read and write | Opens, updates, and comments on those pull requests. |
+| Checks | Read and write | Posts Oxagen's own check on a pull request. |
+| Commit statuses | Read and write | Reads your CI results. |
+| Issues | Read and write | Reads issues, and files a run's outcome as an issue when your workspace sends outcomes to GitHub. |
+| Administration | Read and write | Creates your workspace's steering repo and applies its settings. |
+| Deployments | Read and write | Records each published steering version as a deployment. |
+| Actions | Read and write | Reads the steering repo's environment settings. |
+| Workflows | Read and write | Lets a pull request Oxagen opens change a file under `.github/workflows/`. |
+
+Metadata is read-only. The app holds no organization or account permissions.
 
 ## Before you start
 
@@ -31,7 +49,7 @@ Run `oxagen init` in your project and follow its repository connection prompts. 
 
 Workspace connection routes are under `/v1/{orgSlug}/{workspaceSlug}/`. `GET connections/github/status` returns the authorization status. The GitHub callback at `/oauth/github/callback` validates the signed state before storing the authorization. Use the installation and repository endpoints to choose a repository, then `create_connection` and `set_connection_mappings` to configure ingestion.
 
-Review the GitHub App permissions when authorizing. Repository ingestion and the proposal capabilities are different paths. Do not assume the entire GitHub App is read-only.
+Review the GitHub App permissions when authorizing. Repository ingestion reads, and the proposal capabilities write. [What the app can change](#what-the-app-can-change) lists the write access.
 
 ## What happens during the initial sync
 
@@ -60,7 +78,7 @@ After the initial sync, Oxagen keeps provider metadata current as the repository
 ## Security
 
 - A GitHub App holds the connection, with permissions you review before installing.
-- The same app creates your workspace's steering repo and holds its settings. For that it has Administration and Deployments write, and both reach every repository you select.
+- The same app creates your workspace's steering repo and holds its settings. Its write access reaches every repository you select.
 - Oxagen **encrypts the authorization token at rest** and scopes it to your organization and workspace. The token stays in Oxagen. No agent receives it.
 - Oxagen sees only the repositories you select.
 - Revoke the connection at any time by uninstalling the Oxagen app from GitHub, or by removing the source in Oxagen.

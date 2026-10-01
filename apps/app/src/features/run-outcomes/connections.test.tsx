@@ -35,13 +35,12 @@ beforeEach(() => {
   });
 });
 afterEach(cleanup);
-async function show(enabled = true, canManage = true) {
+async function show(canManage = true) {
   const view = render(
     <IntlProvider>
       <RunIssueConnections
         at={{ org: "acme", ws: "core" }}
         runId="run_one"
-        enabled={enabled}
         canManage={canManage}
       />
     </IntlProvider>,
@@ -69,16 +68,6 @@ describe("issue provider authorization", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Authorization could not start",
     );
-  });
-  it("does not offer authorization without explicit consent", async () => {
-    await show(false);
-    await userEvent.click(
-      screen.getByRole("button", { name: "Check issue connections" }),
-    );
-    expect(
-      await screen.findByRole("button", { name: "Authorize Linear" }),
-    ).toBeDisabled();
-    expect(screen.queryByRole("link")).not.toBeInTheDocument();
   });
   it("shows unavailable providers and an empty connection list honestly", async () => {
     mocks.load.mockResolvedValue({
@@ -121,7 +110,7 @@ describe("issue provider authorization", () => {
       "could not be read",
     );
     cleanup();
-    await show(true, false);
+    await show(false);
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });
 });

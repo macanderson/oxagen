@@ -1,0 +1,56 @@
+# Fail CI when this repo's copies of the brand kit fall behind the kit.
+#
+# macanderson/oxagen-brand is the one source for every colour, face, mark, and
+# icon Oxagen and Stella ship. tools/scripts/sync-brand-assets.mjs copies the
+# files this repo uses byte for byte, and its --check lists every file that
+# differs, is missing, or should not be here. This job runs that check
+# against the kit's main branch, never a pinned commit, so a kit change turns
+# this repo red until the sync lands (#4804). The kit's fan-out workflow opens
+# that sync PR after each kit merge.
+#
+# The same command runs in pipeline.yml's checks job, which the main ruleset
+# requires, so the two cannot disagree. This file is the one the kit's
+# conformance check looks for, and its daily run catches a kit change on a day
+# with no push here.
+#
+# The kit is a public repository, so the checkout needs no token. The check
+# needs Node alone: no pnpm install, no rsvg-convert.
+name: brand-drift
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "23 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  brand-drift:
+    name: Brand drift
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Check out the brand kit
+        uses: actions/checkout@v5
+        with:
+          repository: macanderson/oxagen-brand
+          ref: main
+          path: .brand-kit
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 24
+
+      - name: Brand files match the kit
+        run: |
+          node tools/scripts/sync-brand-assets.mjs --brand .brand-kit --check || {
+            echo "::error::Brand files differ from macanderson/oxagen-brand main. Run node tools/scripts/sync-brand-assets.mjs --brand <kit checkout> and commit the result."
+            exit 1
+          }

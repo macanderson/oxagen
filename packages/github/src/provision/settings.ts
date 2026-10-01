@@ -124,7 +124,7 @@ function mapRuleset(app: SteeringApp, r: GhRuleset): ObservedRuleset {
   };
 }
 
-async function readRulesets(
+async function readRepositoryRulesets(
   rest: GithubRest,
   repo: RepoAddress,
   app: SteeringApp,
@@ -189,12 +189,16 @@ async function readEnvironment(
   return { deployment_branches: branches, deployed_by: deployedBy };
 }
 
-/** Read every setting the baseline names. */
+/**
+ * Read repository settings and the requested environments. Set readRulesets
+ * false when the baseline leaves rulesets unmanaged, as private Free repos require.
+ */
 export async function readSettings(
   rest: GithubRest,
   repo: RepoAddress,
   app: SteeringApp,
   environments: readonly string[],
+  readRulesets = true,
 ): Promise<ObservedGithubSettings> {
   const root = base(repo);
   const r = await rest.request<GhRepo>("GET", root);
@@ -211,7 +215,7 @@ export async function readSettings(
   return {
     visibility: r.data.visibility ?? (r.data.private ? "private" : "public"),
     default_branch: r.data.default_branch,
-    rulesets: await readRulesets(rest, repo, app),
+    rulesets: readRulesets ? await readRepositoryRulesets(rest, repo, app) : {},
     merge: {
       allow_squash_merge: r.data.allow_squash_merge ?? true,
       allow_merge_commit: r.data.allow_merge_commit ?? true,
@@ -461,7 +465,8 @@ export async function applySettings(
   baseline: SteeringGithubSettings,
 ): Promise<ApplySettingsResult> {
   const environments = Object.keys(baseline.environments);
-  const before = await readSettings(rest, repo, app, environments);
+  const readRulesets = Object.keys(baseline.rulesets).length > 0;
+  const before = await readSettings(rest, repo, app, environments, readRulesets);
   const changed = compareSettings(baseline, before);
   const root = base(repo);
 
@@ -496,6 +501,6 @@ export async function applySettings(
   }
 
   if (changed.length === 0) return { changed, remaining: [], observed: before };
-  const after = await readSettings(rest, repo, app, environments);
+  const after = await readSettings(rest, repo, app, environments, readRulesets);
   return { changed, remaining: compareSettings(baseline, after), observed: after };
 }

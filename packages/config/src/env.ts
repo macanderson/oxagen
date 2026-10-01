@@ -140,8 +140,6 @@ export const baseEnvSchema = z.object({
   GITHUB_APP_CLIENT_ID: z.string().optional(),
   GITHUB_APP_CLIENT_SECRET: z.string().optional(),
   GITHUB_APP_WEBHOOK_SECRET: z.string().optional(),
-  // Second App (oxagen-sh) — same endpoint, different signer.
-  GITHUB_WEBHOOK_SECRET: z.string().optional(),
   GITHUB_APP_INSTALL_STATE_SECRET: z.string().optional(),
   GITHUB_APP_SLUG: z.string().optional(),
   // Per-workspace write credential resolution (docs/adr/ADR-020-per-workspace-github-write-credentials.md). When set, the
@@ -282,6 +280,8 @@ export const baseEnvSchema = z.object({
 
   LINEAR_API_KEY: z.string().optional(),
   LINEAR_OAUTH_CLIENT_ID: z.string().optional(),
+  // Signs every delivery from the Linear OAuth app's webhook (#4881).
+  LINEAR_WEBHOOK_SECRET: z.string().optional(),
 
   // ── CRM (Attio) ──────────────────────────────────────────────────────────
   // Optional: when set, every lead captured by /v1/cms/leads is also upserted

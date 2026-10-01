@@ -1,6 +1,7 @@
 # ADR-206: Memories wait in Oxagen and reach a repository by a memory PR
 
-- **Status:** Accepted
+- **Status:** Accepted. Superseded in part by ADR-238 (2026-09-30): decision
+  10's recall of unreviewed memories, and the last sentence of decision 11.
 - **Date:** 2026-09-26
 - **Owners:** steering, tacho
 - **Related:** issue #4458 (lane S6), issue #4434 (the steering repo),
@@ -107,12 +108,24 @@ record leaves them as they are.
     `same-agent`, and never when its agent is null. The in-app agent receives
     no workspace memories. Recall counts live in `memory_recalls`, never in a
     file.
+
+    *Superseded in part by
+    [ADR-238](./ADR-238-oxagen-collects-harness-memories-and-recalls-none-of-them.md)
+    on 2026-09-30.* Recall answers merged steering records only. No memory
+    that waits for review reaches any agent, and `recall_unreviewed` left
+    governance/v1.
 11. **Two more sources feed the same table.** A memory found by the code
     repository check is stored with capture `pull_request`, and a memory
     Tacho's local gateway reads from a harness's memory folder is stored with
     capture `local_gateway` and no run. Tacho reads Claude Code's
     `~/.claude/projects/<project>/memory/*.md`, skips `MEMORY.md`, and sends
     each file once per content digest.
+
+    *Superseded in part by
+    [ADR-238](./ADR-238-oxagen-collects-harness-memories-and-recalls-none-of-them.md)
+    on 2026-09-30.* Every enrolled host scans, with no flag. Tacho sends a file
+    each time its text changes, and the file keeps one waiting memory whose
+    text each send replaces.
 
 ## Consequences
 

@@ -221,3 +221,13 @@ down" and "Who receives it".
 - **Plain labels.** The mockup's wording is not the design of record. The rule
   in `CLAUDE.md` under Labels and headings governs every heading, button,
   caption, and hint, including one a slice ports from the mockup.
+
+## Amendment of 2026-10-01: the kit carries the type rule
+
+The brand kit adopted the one-face rule in 2.4.0 (macanderson/oxagen-brand#27,
+#43). Its `house-tailwind.css` now sets `--font-display` and `--font-sans` to
+Geist, keeps Space Grotesk under `--font-wordmark`, and admits it on line 1 of
+a marketing hero through the `hero-line-1` class. The `@theme` override in
+`packages/ui/src/styles/globals.css` that the amendment of 2026-09-29 added is
+removed, so the kit's tokens are the app's record. INV-32 now checks the kit's
+file for the Geist tokens and fails when `globals.css` re-points a font token.

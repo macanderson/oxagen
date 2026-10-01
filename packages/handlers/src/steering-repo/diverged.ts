@@ -1,13 +1,10 @@
 // diverged.ts: whether main holds commits Oxagen did not merge, and the pull
 // request that puts main back at the published commit.
 //
-// Oxagen merges every steering PR by squash with an `Oxagen-Version: N`
-// trailer (stamp.ts, `mergeTrailers`), and records each publish as a
-// deployment to the steering environment. A commit on main after the
-// published one that carries no such trailer came from somewhere else, such
-// as an admin who pushed past the branch rules. health.ts reports that as
-// `diverged`. The calls here open one revert pull request (a merge request on
-// GitLab) whose single commit holds the published files on top of main.
+// GitHub provenance comes from the host's merged pull request records. Commit
+// messages and authors cannot prove who merged a change. Equal tree hashes
+// prove restoration to published files. GitLab retains its protected-branch
+// trailer checks.
 //
 // This module imports only types from ./health, so health.ts reaches it
 // through ./health.hosts.ts without a runtime cycle. Every host error the
@@ -126,6 +123,8 @@ export interface HistoryCommit {
   sha: string;
   parents: readonly string[];
   message: string;
+  /** Host-authenticated merge provenance. Undefined keeps the GitLab trailer checks. */
+  authenticated?: boolean;
 }
 
 /** What a host says about main since the published commit. */
@@ -143,8 +142,9 @@ export interface HistoryRange {
   restored_at: number;
 }
 
-/** Whether Oxagen made `commit`: a squash merge, or a revert to `published`. */
+/** Prefer host-authenticated provenance. GitLab uses its protected history trailers. */
 function oxagenMade(published: PublishedCommit, commit: HistoryCommit): boolean {
+  if (commit.authenticated !== undefined) return commit.authenticated;
   if (commit.parents.length !== 1) return false;
   if (revertTrailer(commit.message) === published.sha) return true;
   const version = versionTrailer(commit.message);
@@ -167,7 +167,12 @@ function oxagenCommits(
     if (oxagenMade(published, commit)) made.add(commit.sha);
   for (const commit of commits) {
     const merged = commit.parents[1];
-    if (commit.parents.length === 2 && merged !== undefined && made.has(merged))
+    if (
+      commit.authenticated === undefined &&
+      commit.parents.length === 2 &&
+      merged !== undefined &&
+      made.has(merged)
+    )
       made.add(commit.sha);
   }
   return made;
@@ -238,15 +243,16 @@ function revertSummary(published: PublishedCommit): string {
 
 export interface GithubHistoryTarget {
   rest: GithubRest;
-  repo: RepoAddress;
+  repo: RepoAddress & { id?: number };
   app: SteeringApp;
+  defaultBranch?: string;
 }
 
 interface GithubDeployment {
   sha: string;
   description?: string | null;
   payload?: unknown;
-  performed_via_github_app?: { slug?: string } | null;
+  performed_via_github_app?: { id?: number; slug?: string } | null;
 }
 
 interface GithubCompare {
@@ -318,9 +324,10 @@ export async function githubPublished(
     "GET",
     `${githubRoot(t)}/deployments?environment=${seg(STEERING_ENVIRONMENT)}&per_page=${GITHUB_DEPLOYMENT_PAGE}`,
   );
-  const hit = (res.data ?? []).find(
-    (d) => d.performed_via_github_app?.slug === t.app.slug,
-  );
+  const hit = (res.data ?? []).find((d) => {
+    const app = d.performed_via_github_app;
+    return app?.slug === t.app.slug && (app.id === undefined || app.id === t.app.id);
+  });
   if (hit === undefined) return null;
   return { sha: hit.sha, version: deploymentVersion(hit) };
 }
@@ -328,7 +335,7 @@ export async function githubPublished(
 async function githubMainSha(t: GithubHistoryTarget): Promise<string> {
   const res = await t.rest.request<{ commit: { sha: string } }>(
     "GET",
-    `${githubRoot(t)}/branches/${seg(STEERING_DEFAULT_BRANCH)}`,
+    `${githubRoot(t)}/branches/${seg(t.defaultBranch ?? STEERING_DEFAULT_BRANCH)}`,
   );
   return need(res.data, "GitHub branch").commit.sha;
 }
@@ -344,14 +351,60 @@ async function githubCommit(
   return need(res.data, "GitHub commit");
 }
 
-/** Whether main holds commits Oxagen did not merge since `published`. */
+interface GithubMergedPull {
+  merged?: boolean;
+  merge_commit_sha?: string | null;
+  base?: { ref?: string; repo?: { id?: number; full_name?: string } | null };
+  merged_by?: { type?: string; login?: string } | null;
+}
+
+/** Authenticate the merge against the full pull request returned by GitHub. */
+async function githubAuthenticatedMerge(
+  t: GithubHistoryTarget,
+  sha: string,
+): Promise<boolean> {
+  const root = githubRoot(t);
+  const listed = await t.rest.request<{ number: number }[]>(
+    "GET",
+    `${root}/commits/${seg(sha)}/pulls?per_page=100`,
+  );
+  for (const summary of need(listed.data, "GitHub commit pull requests")) {
+    const response = await t.rest.request<GithubMergedPull>(
+      "GET",
+      `${root}/pulls/${seg(summary.number)}`,
+    );
+    const pull = need(response.data, "GitHub pull request");
+    const repo = pull.base?.repo;
+    const sameRepo =
+      t.repo.id !== undefined
+        ? repo?.id === t.repo.id
+        : repo?.full_name?.toLowerCase() ===
+          `${t.repo.owner}/${t.repo.name}`.toLowerCase();
+    if (
+      pull.merged === true &&
+      pull.merge_commit_sha === sha &&
+      pull.base?.ref === (t.defaultBranch ?? STEERING_DEFAULT_BRANCH) &&
+      sameRepo &&
+      pull.merged_by?.type === "Bot" &&
+      pull.merged_by.login === `${t.app.slug}[bot]`
+    )
+      return true;
+  }
+  return false;
+}
+
+/** Judge the exact candidate, or the default branch, since `published`. */
 export async function githubDiverged(
   t: GithubHistoryTarget,
   published: PublishedCommit,
+  candidateSha?: string,
 ): Promise<Divergence | null> {
+  if (candidateSha !== undefined && !/^[0-9a-f]{40}$/.test(candidateSha))
+    throw new Error("Steering provenance requires a full commit SHA.");
+  const candidate = candidateSha ?? t.defaultBranch ?? STEERING_DEFAULT_BRANCH;
   const res = await t.rest.request<GithubCompare>(
     "GET",
-    `${githubRoot(t)}/compare/${seg(published.sha)}...${seg(STEERING_DEFAULT_BRANCH)}?per_page=${COMPARE_PAGE}`,
+    `${githubRoot(t)}/compare/${seg(published.sha)}...${seg(candidate)}?per_page=${COMPARE_PAGE}`,
     undefined,
     [404],
   );
@@ -361,7 +414,7 @@ export async function githubDiverged(
       status: "diverged",
       commits: [],
       truncated: false,
-      main_sha: await githubMainSha(t),
+      main_sha: candidateSha ?? (await githubMainSha(t)),
       restored_at: -1,
     });
   const compare = need(res.data, "GitHub compare");
@@ -382,22 +435,49 @@ export async function githubDiverged(
   )
     return null;
   const main_sha =
-    compare.status === "identical"
+    candidateSha ??
+    (compare.status === "identical"
       ? published.sha
       : !truncated && last !== undefined
         ? last.sha
-        : await githubMainSha(t);
-  return judgeHistory(published, {
-    status: compare.status,
-    commits: compare.commits.map((commit) => ({
+        : await githubMainSha(t));
+  const commits: HistoryCommit[] = [];
+  for (const [index, commit] of compare.commits.entries()) {
+    commits.push({
       sha: commit.sha,
       parents: commit.parents.map((parent) => parent.sha),
       message: commit.commit.message,
-    })),
+      // A restored tree discards earlier changes. Every later commit needs proof.
+      authenticated:
+        compare.status === "ahead" && !truncated && index > restored_at
+          ? await githubAuthenticatedMerge(t, commit.sha)
+          : false,
+    });
+  }
+  return judgeHistory(published, {
+    status: compare.status,
+    commits,
     truncated,
     main_sha,
     restored_at,
   });
+}
+
+/** Refuse an exact commit unless it descends safely from an app deployment. */
+export async function assertGithubSteeringCommit(
+  t: GithubHistoryTarget,
+  commit: string,
+): Promise<void> {
+  const published = await githubPublished(t);
+  if (published === null)
+    throw new Error(
+      "No authenticated Oxagen steering deployment anchors this repository.",
+    );
+  const divergence = await githubDiverged(t, published, commit);
+  if (divergence !== null)
+    throw new Error(
+      `Oxagen cannot accept steering commit ${short(commit)}: ${divergence.reason}.`,
+    );
 }
 
 /**

@@ -12,17 +12,14 @@
 // publish() writes (#4550), and every route uses it by default. It loads that
 // binding on first use, so importing a handler opens no database client.
 //
-// `NOTHING_PUBLISHED` answers as if nothing had published: no version, no
-// asset readable, and unreviewed memories off. Off is the safe reading of a
-// governance file Oxagen cannot see, because a workspace in `regulated` mode
-// turns unreviewed recall off whatever else it sets.
+// `NOTHING_PUBLISHED` answers as if nothing had published: no version and no
+// asset readable.
 //
 // The port reads the version published now. A run has to read the versions
 // its request manifest names instead, and nothing reads those pins back yet.
 // So the port takes a `HostScope`, whose run id is always null, and a
 // run-scoped reader such as steering_search or steering_read cannot bind to
 // it (#4447). tacho.published.test.ts proves that binding fails to compile.
-import type { GovernanceSettings } from "@oxagen/oxagen/steering-repo/governance";
 import type { Delivery } from "@oxagen/steering-bundle";
 import type { ReadAsset } from "@oxagen/steering-bundle/session";
 import type { SteeringScope } from "./steering.search";
@@ -42,11 +39,6 @@ export interface TachoPublished {
   published: (scope: HostScope) => Promise<Delivery>;
   /** Reads one file of a published version by its blob. A skill asset may be binary. */
   readAsset: ReadAsset;
-  /** The workspace's `recall_unreviewed`, as its governance file puts it in force. */
-  recallUnreviewed(scope: {
-    orgId: string;
-    workspaceId: string;
-  }): Promise<GovernanceSettings["recall_unreviewed"]>;
 }
 
 /** The port before a version store is bound: nothing has published. */
@@ -57,7 +49,6 @@ export const NOTHING_PUBLISHED: TachoPublished = {
       `No steering version store is bound, so ${file.path} cannot be read.`,
     );
   },
-  recallUnreviewed: async () => "off",
 };
 
 const bound = () =>
@@ -68,5 +59,4 @@ export const VERSION_STORE_PUBLISHED: TachoPublished = {
   published: async (scope) => (await bound()).published(scope),
   readAsset: async (source, bundle, file) =>
     (await bound()).readAsset(source, bundle, file),
-  recallUnreviewed: async (scope) => (await bound()).recallUnreviewed(scope),
 };

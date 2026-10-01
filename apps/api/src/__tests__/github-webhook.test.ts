@@ -2,8 +2,10 @@
  * Unit tests for src/routes/v1/github-webhook.ts — the App-level GitHub webhook.
  *
  * Covers:
- * - Missing GITHUB_APP_WEBHOOK_SECRET → 503
+ * - Missing GITHUB_APP_WEBHOOK_SECRET → 200 ack, logged at error
  * - Invalid HMAC signature → 401
+ * - A delivery from another App → 200 ack, nothing dispatched, whatever
+ *   secret signed it (#4937)
  * - `ping` event → 200 { pong: true }, no DB/inngest
  * - `installation` deleted → pauses connections, 200
  * - No installation id → 200 { dispatched: 0 }
@@ -159,7 +161,11 @@ import { logger } from "../middleware/logger";
 import { upsertGithubInstallation } from "../routes/v1/github-installations";
 
 const SECRET = "test-webhook-secret";
-const SECOND_SECRET = "second-app-webhook-secret-for-tests";
+const PRIMARY_APP_ID = "4168398";
+// Any App other than the primary one, with a secret of its own. The route
+// holds no secret for it (#4937).
+const OTHER_APP_ID = "4230117";
+const OTHER_APP_SECRET = "other-app-webhook-secret-for-tests";
 const PATH = "/webhooks/github/app";
 
 /** Build a signed POST with the correct x-hub-signature-256 header. */
@@ -238,7 +244,6 @@ beforeEach(() => {
 
 afterEach(() => {
   delete process.env.GITHUB_APP_WEBHOOK_SECRET;
-  delete process.env.GITHUB_WEBHOOK_SECRET;
   delete process.env.GITHUB_APP_ID;
 });
 
@@ -316,15 +321,14 @@ describe("github app webhook – configuration & signature", () => {
     expect(mocks.inngestSend).not.toHaveBeenCalled();
   });
 
-  // ── Second App ────────────────────────────────────────────────────────────
-  // Two GitHub Apps deliver to this one endpoint. oxagen-sh (4055615) signs
-  // with GITHUB_WEBHOOK_SECRET, confirmed by HMAC-verifying a captured
-  // delivery; the route must know both Apps' secrets so neither App's
-  // deliveries are rejected 401.
+  // ── Other Apps (#4937) ────────────────────────────────────────────────────
+  // Only the Oxagen GitHub App (GITHUB_APP_ID) delivers here on purpose. A
+  // delivery whose target ID names any other App is acked with 200 and
+  // dropped, because GitHub retries every non-2xx answer. The route holds no
+  // other App's secret, so no other secret can verify a delivery.
 
-  it("accepts the second App's delivery, signed with its own secret", async () => {
-    process.env.GITHUB_APP_ID = "4168398";
-    process.env.GITHUB_WEBHOOK_SECRET = SECOND_SECRET;
+  it("acks a delivery from another App with 200 and dispatches nothing", async () => {
+    process.env.GITHUB_APP_ID = PRIMARY_APP_ID;
 
     const res = await app.fetch(
       signedPost(
@@ -335,73 +339,93 @@ describe("github app webhook – configuration & signature", () => {
           repository: { full_name: "acme/widgets" },
           pull_request: { number: 7 },
         },
-        { secret: SECOND_SECRET, targetId: "4055615" },
+        { secret: OTHER_APP_SECRET, targetId: OTHER_APP_ID },
       ),
     );
 
     expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      received: true,
+      dispatched: 0,
+      reason: "not the primary app",
+    });
+    // Nothing downstream runs for it.
+    expect(mocks.withSystemDb).not.toHaveBeenCalled();
+    expect(mocks.inngestSend).not.toHaveBeenCalled();
+    expect(mocks.githubSyncTargets).not.toHaveBeenCalled();
+    expect(mocks.recordGithubPullRequestState).not.toHaveBeenCalled();
+    expect(mocks.findHealthScopes).not.toHaveBeenCalled();
+    // One log line names the sender.
+    expect(logger.warn).toHaveBeenCalledTimes(1);
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        reason: "webhook_from_other_app",
+        targetId: OTHER_APP_ID,
+      }),
+      expect.stringContaining("GITHUB_APP_ID"),
+    );
   });
 
-  it("does not let the second App's secret authorise a delivery claiming to be the primary App", async () => {
-    // The whole point of keying on the sender: accepting whichever secret
-    // happens to match would mean either secret authorises either App.
-    process.env.GITHUB_APP_ID = "4168398";
-    process.env.GITHUB_WEBHOOK_SECRET = SECOND_SECRET;
+  it("does not let another App's secret authorise a delivery claiming to be the primary App", async () => {
+    // Accepting whichever secret happens to match would let any App's secret
+    // authorise a payload that claims to come from the primary App.
+    process.env.GITHUB_APP_ID = PRIMARY_APP_ID;
 
     const res = await app.fetch(
       signedPost(
         "pull_request",
         { installation: { id: 555 } },
-        {
-          secret: SECOND_SECRET,
-          targetId: "4168398",
-        },
+        { secret: OTHER_APP_SECRET, targetId: PRIMARY_APP_ID },
       ),
     );
 
     expect(res.status).toBe(401);
+    expect(mocks.inngestSend).not.toHaveBeenCalled();
   });
 
-  it("acks a second-App delivery when no secret is configured for it", async () => {
-    process.env.GITHUB_APP_ID = "4168398";
-    delete process.env.GITHUB_WEBHOOK_SECRET;
+  it("verifies a delivery with no target ID as the primary App's", async () => {
+    // GitHub sends the target ID header, but a delivery without it is read as
+    // the primary App's and verified, not dropped.
+    process.env.GITHUB_APP_ID = PRIMARY_APP_ID;
 
-    const res = await app.fetch(
+    const signedByPrimary = await app.fetch(
+      signedPost("pull_request", { installation: { id: 555 } }),
+    );
+    expect(signedByPrimary.status).toBe(200);
+    expect(await signedByPrimary.json()).toEqual({
+      received: true,
+      dispatched: 1,
+    });
+
+    const signedByOther = await app.fetch(
       signedPost(
         "pull_request",
         { installation: { id: 555 } },
-        {
-          secret: SECOND_SECRET,
-          targetId: "4055615",
-        },
+        { secret: OTHER_APP_SECRET },
       ),
     );
-
-    // 200, not 401 — an unknown signer must not become a retry flood.
-    expect(res.status).toBe(200);
+    expect(signedByOther.status).toBe(401);
+    expect(logger.warn).not.toHaveBeenCalled();
   });
 
   it("treats a delivery as the primary App's when GITHUB_APP_ID is not configured", async () => {
-    // GITHUB_APP_ID is what tells the two Apps apart and it is optional, so a
-    // deployment that never set it has only the primary App. GitHub still
-    // sends the target-id header, and reading that as "not the primary App"
-    // routed real primary deliveries to the second App's secret: 401 here,
-    // or an acked-and-dropped 200 with no second secret configured.
+    // GITHUB_APP_ID is what tells the primary App from the others, and it is
+    // optional. A deployment that never set it has only the primary App.
+    // GitHub still sends the target ID header, and reading that as "another
+    // App" would drop every real primary delivery.
     delete process.env.GITHUB_APP_ID;
-    process.env.GITHUB_WEBHOOK_SECRET = SECOND_SECRET;
 
     const res = await app.fetch(
       signedPost(
         "pull_request",
         { installation: { id: 555 } },
-        {
-          secret: SECRET,
-          targetId: "4168398",
-        },
+        { secret: SECRET, targetId: PRIMARY_APP_ID },
       ),
     );
 
     expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ received: true, dispatched: 1 });
+    expect(logger.warn).not.toHaveBeenCalled();
   });
 
   it("returns 401 when signed with the wrong secret", async () => {
@@ -929,9 +953,8 @@ describe("github app webhook – pull request state (ADR-192)", () => {
 });
 
 describe("github app webhook – steering repo health read (S2, #4560, ADR-228)", () => {
-  const PRIMARY_APP_ID = "4168398";
-  const SECOND_APP_ID = "4230117";
-  // The app that carried steering before ADR-228. Nothing reads its env now.
+  // The app that carried steering before ADR-228. Nothing reads its env now,
+  // and it still delivers to this route (#4937).
   const RETIRED_STEERING_APP_ID = "5121606";
   const RETIRED_STEERING_SECRET = "retired-steering-app-secret-for-tests";
   const STEERING_REPO_ID = 904211873;
@@ -960,7 +983,6 @@ describe("github app webhook – steering repo health read (S2, #4560, ADR-228)"
 
   beforeEach(() => {
     process.env.GITHUB_APP_ID = PRIMARY_APP_ID;
-    process.env.GITHUB_WEBHOOK_SECRET = SECOND_SECRET;
     mocks.findHealthScopes.mockResolvedValue(SCOPES);
   });
 
@@ -1097,27 +1119,60 @@ describe("github app webhook – steering repo health read (S2, #4560, ADR-228)"
     expect(mocks.inngestSend).toHaveBeenCalledTimes(2);
   });
 
-  it("asks for no health read on a delivery from the second App", async () => {
+  it("asks for no health read on a delivery from another App", async () => {
     const res = await app.fetch(
       signedPost("repository_ruleset", RULESET_DELETED, {
-        secret: SECOND_SECRET,
-        targetId: SECOND_APP_ID,
+        secret: OTHER_APP_SECRET,
+        targetId: OTHER_APP_ID,
       }),
     );
     expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      received: true,
+      dispatched: 0,
+      reason: "not the primary app",
+    });
     expect(mocks.findHealthScopes).not.toHaveBeenCalled();
     expect(mocks.inngestSend).not.toHaveBeenCalled();
   });
 
-  it("refuses a delivery signed with the retired steering app's secret", async () => {
-    // Even with the old env still set, the route reads none of it: a delivery
-    // from that app is verified as the second App's and fails.
+  it("acks and drops a delivery from the retired steering app", async () => {
+    // The retired steering app still delivers here. With its old env still
+    // set, the route reads none of it: the delivery gets 200 so GitHub stops
+    // retrying it, and nothing runs (#4937).
     process.env.OXAGEN_STEERING_APP_ID = RETIRED_STEERING_APP_ID;
     process.env.OXAGEN_STEERING_APP_WEBHOOK_SECRET = RETIRED_STEERING_SECRET;
     const res = await app.fetch(
       signedPost("repository_ruleset", RULESET_DELETED, {
         secret: RETIRED_STEERING_SECRET,
         targetId: RETIRED_STEERING_APP_ID,
+      }),
+    );
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      received: true,
+      dispatched: 0,
+      reason: "not the primary app",
+    });
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        reason: "webhook_from_other_app",
+        targetId: RETIRED_STEERING_APP_ID,
+      }),
+      expect.any(String),
+    );
+    expect(mocks.findHealthScopes).not.toHaveBeenCalled();
+    expect(mocks.inngestSend).not.toHaveBeenCalled();
+  });
+
+  it("refuses the retired steering app's secret on a delivery claiming the primary App", async () => {
+    // Its old env is still set, and the route reads none of it.
+    process.env.OXAGEN_STEERING_APP_ID = RETIRED_STEERING_APP_ID;
+    process.env.OXAGEN_STEERING_APP_WEBHOOK_SECRET = RETIRED_STEERING_SECRET;
+    const res = await app.fetch(
+      signedPost("repository_ruleset", RULESET_DELETED, {
+        secret: RETIRED_STEERING_SECRET,
+        targetId: PRIMARY_APP_ID,
       }),
     );
     expect(res.status).toBe(401);
