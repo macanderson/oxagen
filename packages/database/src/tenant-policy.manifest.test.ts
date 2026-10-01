@@ -284,7 +284,9 @@ describe("tenant policy manifest", () => {
     // done_verdicts, autonomy_events and training_exports (C0, #4735,
     // 2026-09-29).
     // 163 adds mcp.studio_listings (ADR-233, #4756, 2026-09-30).
-    expect(POLICY_MANIFEST.length).toBe(163);
+    // 164 adds cost.run_pr_receipt_walks, where the outcome refresh stands in
+    // each ledger run's receipts (F25, #4511, 2026-10-01).
+    expect(POLICY_MANIFEST.length).toBe(164);
   });
 
   it("covers the ADR-055 GAU tables as org_only (WL-24)", () => {

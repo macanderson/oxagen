@@ -4,10 +4,13 @@
 //
 //   1. names the pull requests the run opened: the links a wrapped run's
 //      record holds (`tacho.run_pull_requests`), and the
-//      `provider_publish.pull_request_opened` receipts a ledger run recorded,
+//      `provider_publish.pull_request_opened` receipts a ledger run recorded.
+//      A pass walks the receipts of at most 100 ledger runs, each from where
+//      its last pass stopped (`cost.run_pr_receipt_walks`). A run it cannot
+//      resolve waits six hours before the next try, so it holds no slot,
 //   2. reads from GitHub the state, head commit CI, and head branch of each
-//      pull request whose row is not settled, at most 60 per pass, least
-//      recently asked first,
+//      pull request whose row is not settled (`needsForgeRead`), at most 60
+//      per pass, least recently asked first,
 //   3. keeps the reverts a merged pull request's body names
 //      (`Reverts owner/repo#N`) in `cost.run_pr_reverts`,
 //   4. marks each row with the kept reverts that name it: the ones found in
@@ -26,7 +29,7 @@
 // GitHub.
 import {
   blankOutcome,
-  ciStateOf,
+  ciStateOfRead,
   type CiRead,
   listOutcomeRuns,
   needsForgeRead,
@@ -63,17 +66,43 @@ import {
 } from "@oxagen/github";
 import { resolveGitHubToken } from "@oxagen/github/workspace-token";
 import type { RunPrOutcomesResult } from "@oxagen/inngest-functions/run-pr-outcomes-runner";
-import type { RunStore } from "@oxagen/run-ledger";
+import type { AttemptEventReadRecord, RunStore } from "@oxagen/run-ledger";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { logger } from "../logger";
 import { buildCiSummary } from "./ci-status";
 import { githubConnectionOf } from "./run-pull-request-backfill";
 import { ledgerStore } from "./run-read";
-import { connectedRunRepositories } from "./run-work";
-import { readLedgerPrReceipts } from "./run-work-prs";
+import {
+  type LedgerReceipt,
+  type ReceiptWalk,
+  readReceiptWalks,
+  saveReceiptWalks,
+  type UnresolvedReason,
+} from "./run-pr-receipt-walks";
+import {
+  type ConnectedRunRepository,
+  connectedRunRepositories,
+} from "./run-work";
 
-/** Ledger runs whose receipts one pass reads. A run's receipts are read once, when it has no row yet. */
+/** Ledger runs whose receipts one pass walks or names. */
 export const OUTCOME_LEDGER_READS_PER_PASS = 100;
+
+/** How long a ledger run the refresh could not resolve waits before the next try. */
+export const OUTCOME_UNRESOLVED_RETRY_MS = 6 * 60 * 60 * 1000;
+
+/**
+ * Events one page of a receipt walk reads, and pages one pass reads per run:
+ * at most 10,000 events a run a pass, as `readLedgerPrReceipts` reads them.
+ */
+export const RECEIPT_WALK_PAGE = 500;
+export const RECEIPT_WALK_PAGES = 20;
+
+/**
+ * Run ids one read binds. A workspace can have tens of thousands of sealed
+ * runs in the window, and PostgreSQL takes at most 65,535 bind parameters in
+ * one statement.
+ */
+export const OUTCOME_RUN_ID_BATCH = 1_000;
 
 /** GitHub reads one pass runs at a time. */
 const FORGE_READ_CONCURRENCY = 6;
@@ -83,6 +112,24 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 /** A pull request a ledger run's receipt names, with the head commit it recorded. */
 export interface LedgerRunPr extends RunPr {
   headSha: string | null;
+}
+
+/** A ledger run the pass reads, with its stored walk, or null when it has none yet. */
+export interface LedgerWalkRequest {
+  runId: string;
+  walk: ReceiptWalk | null;
+}
+
+/** What one pass learned about a ledger run's receipts. */
+export interface LedgerRunRead {
+  /** The walk as the pass leaves it, to be stored. */
+  walk: ReceiptWalk;
+  /**
+   * The run's pull requests, once its walk is complete and every receipt
+   * names a connected repository. Null until then: rows for part of a run
+   * would read as the whole of it.
+   */
+  prs: LedgerRunPr[] | null;
 }
 
 /** What one GitHub read found about a pull request. */
@@ -109,18 +156,26 @@ export interface OutcomeRefreshDeps {
     scope: OutcomeScope,
     runIds: readonly string[],
   ): Promise<TachoPrLink[]>;
+  /** The stored receipt walks of the given ledger runs. */
+  receiptWalks(
+    scope: OutcomeScope,
+    runIds: readonly string[],
+  ): Promise<ReceiptWalk[]>;
   /**
-   * Per ledger run, the pull requests its receipts name. A run is absent when
-   * a receipt names a repository the workspace no longer connects, since a
-   * reconnect can name it on a later pass. A run whose walk stopped at its
-   * bound keeps the pull requests the walk named: a sealed run's receipts do
-   * not change, so a second walk stops at the same place. It is absent only
-   * when that walk named none.
+   * Each ledger run's walk taken one pass further, from where its stored walk
+   * stopped, and the pull requests of each walk that is complete. A run the
+   * pass cannot resolve comes back with `unresolved` and a retry time.
    */
   ledgerPrs(
     scope: OutcomeScope,
-    runIds: readonly string[],
-  ): Promise<Map<string, LedgerRunPr[]>>;
+    runs: readonly LedgerWalkRequest[],
+    now: Date,
+  ): Promise<LedgerRunRead[]>;
+  /** Store the walks the pass moved. */
+  saveReceiptWalks(
+    scope: OutcomeScope,
+    walks: readonly ReceiptWalk[],
+  ): Promise<void>;
   readForge(scope: OutcomeScope, pr: RunPr): Promise<ForgeOutcome>;
   /** The reverts kept for the workspace that Oxagen saw since the given time. */
   readReverts(scope: OutcomeScope, since: Date): Promise<RevertEvidence[]>;
@@ -191,6 +246,70 @@ function lastAskedAt(row: OutcomeRow): number {
   );
 }
 
+/** One read per batch of `OUTCOME_RUN_ID_BATCH` items, one batch at a time. */
+async function inBatches<T, R>(
+  items: readonly T[],
+  read: (batch: readonly T[]) => Promise<readonly R[]>,
+): Promise<R[]> {
+  const out: R[] = [];
+  for (let at = 0; at < items.length; at += OUTCOME_RUN_ID_BATCH)
+    out.push(...(await read(items.slice(at, at + OUTCOME_RUN_ID_BATCH))));
+  return out;
+}
+
+/** A ledger run due a read this pass, with its stored walk. */
+interface DueLedgerRun {
+  run: OutcomeRun;
+  walk: ReceiptWalk | null;
+}
+
+/**
+ * Whether a stored walk is due a read: one stopped at the page bound, or one
+ * the refresh could not resolve whose retry time has come. A complete,
+ * resolved walk is never read again, since a sealed run gains no events.
+ */
+function walkDue(walk: ReceiptWalk, now: Date): boolean {
+  if (walk.unresolved !== null)
+    return walk.retryAfter === null || walk.retryAfter.getTime() <= now.getTime();
+  return !walk.complete;
+}
+
+/** A walk under way: it stopped at the page bound on its last pass and nothing stands in its way. */
+function walkUnderWay(walk: ReceiptWalk | null): boolean {
+  return walk !== null && walk.unresolved === null && !walk.complete;
+}
+
+/**
+ * The ledger runs due a read, in the order the pass reads them. A run with no
+ * stored walk is due, rows or not: a run the refresh named before walks were
+ * kept may have stopped at the old bound. Walks under way go first, so a run
+ * of E events has every row within ceil(E / 10,000) passes while fewer than
+ * 100 walks are under way. Then the runs least recently tried, never-tried
+ * first, newest first among equals. A run waiting on its retry time is not
+ * due and takes no slot.
+ */
+function dueLedgerRuns(
+  runs: readonly OutcomeRun[],
+  walks: ReadonlyMap<string, ReceiptWalk>,
+  now: Date,
+): DueLedgerRun[] {
+  const due: DueLedgerRun[] = [];
+  for (const run of runs) {
+    if (run.runSource !== "ledger") continue;
+    const walk = walks.get(run.runId) ?? null;
+    if (walk === null || walkDue(walk, now)) due.push({ run, walk });
+  }
+  return due.sort((a, b) => {
+    const underWay =
+      Number(walkUnderWay(b.walk)) - Number(walkUnderWay(a.walk));
+    if (underWay !== 0) return underWay;
+    const tried =
+      (a.walk?.attemptedAt.getTime() ?? 0) - (b.walk?.attemptedAt.getTime() ?? 0);
+    if (tried !== 0) return tried;
+    return b.run.startedAt.getTime() - a.run.startedAt.getTime();
+  });
+}
+
 /** One refresh pass over a workspace. */
 export async function refreshRunPrOutcomes(
   deps: OutcomeRefreshDeps,
@@ -202,30 +321,45 @@ export async function refreshRunPrOutcomes(
     return { runs: 0, forgeReads: 0, deferred: 0, rows: 0, reverted: 0 };
   const runIds = runs.map((r) => r.runId);
   const runById = new Map(runs.map((r) => [r.runId, r]));
-  // A revert of a run's pull request lands after the run started, so the
+  const idsOf = (source: OutcomeRun["runSource"]) =>
+    runs.filter((r) => r.runSource === source).map((r) => r.runId);
+  // Every read that names runs binds at most OUTCOME_RUN_ID_BATCH of them. A
+  // revert of a run's pull request lands after the run started, so the
   // reverts Oxagen saw inside the window cover every run in it.
-  const [reasons, stored, links, keptReverts] = await Promise.all([
-    deps.terminalReasons(scope, runs),
-    deps.readRows(scope, runIds),
-    deps.tachoLinks(
-      scope,
-      runs.filter((r) => r.runSource === "tacho").map((r) => r.runId),
-    ),
+  const [reasonEntries, stored, links, keptReverts, walks] = await Promise.all([
+    inBatches(runs, async (batch) => [
+      ...(await deps.terminalReasons(scope, batch)),
+    ]),
+    inBatches(runIds, (batch) => deps.readRows(scope, batch)),
+    inBatches(idsOf("tacho"), (batch) => deps.tachoLinks(scope, batch)),
     deps.readReverts(
       scope,
       new Date(now.getTime() - OUTCOME_WINDOW_DAYS * DAY_MS),
     ),
+    inBatches(idsOf("ledger"), (batch) => deps.receiptWalks(scope, batch)),
   ]);
+  const reasons = new Map(reasonEntries);
   const storedByKey = new Map(stored.map((r) => [keyOf(r.runId, r.prKey), r]));
-  const runsWithRows = new Set(stored.map((r) => r.runId));
 
-  // A sealed ledger run's receipts do not change, so they are read once:
-  // while the run has no row.
-  const unseenLedger = runs
-    .filter((r) => r.runSource === "ledger" && !runsWithRows.has(r.runId))
-    .map((r) => r.runId);
-  const ledgerRead = unseenLedger.slice(0, OUTCOME_LEDGER_READS_PER_PASS);
-  const ledger = await deps.ledgerPrs(scope, ledgerRead);
+  // A run the pass cannot resolve gets a retry time and leaves the queue
+  // until then, so it cannot hold a slot pass after pass.
+  const dueLedger = dueLedgerRuns(
+    runs,
+    new Map(walks.map((w) => [w.runId, w])),
+    now,
+  );
+  const ledgerAsked = dueLedger.slice(0, OUTCOME_LEDGER_READS_PER_PASS);
+  const ledgerReads =
+    ledgerAsked.length === 0
+      ? []
+      : await deps.ledgerPrs(
+          scope,
+          ledgerAsked.map(({ run, walk }) => ({ runId: run.runId, walk })),
+          now,
+        );
+  const ledger = new Map<string, LedgerRunPr[]>();
+  for (const read of ledgerReads)
+    if (read.prs !== null) ledger.set(read.walk.runId, read.prs);
 
   const candidates = new Map<string, Candidate>();
   const add = (run: OutcomeRun, pr: RunPr): Candidate => {
@@ -276,7 +410,7 @@ export async function refreshRunPrOutcomes(
   // count against the cap.
   const due = new Map<string, DueRead>();
   for (const c of candidates.values()) {
-    if (c.pr.provider !== "github" || !needsForgeRead(c.row)) continue;
+    if (c.pr.provider !== "github" || !needsForgeRead(c.row, now)) continue;
     const readAt = lastAskedAt(c.row);
     const found = due.get(c.row.prKey);
     if (found) {
@@ -380,8 +514,9 @@ export async function refreshRunPrOutcomes(
     if (!before || JSON.stringify(before) !== JSON.stringify(row)) rows.push(row);
   }
   // A run with no pull request gets its `none` row: a wrapped run with no
-  // link, or a ledger run whose receipts name none. A ledger run whose
-  // receipts were not read, or not all named, gets nothing yet.
+  // link, or a ledger run whose complete walk names none. A ledger run whose
+  // walk is not complete, or whose receipts are not all named, gets nothing
+  // yet.
   for (const run of runs) {
     if (runsWithPr.has(run.runId)) continue;
     const knownEmpty =
@@ -396,11 +531,17 @@ export async function refreshRunPrOutcomes(
   }
 
   const written = await deps.saveRows(scope, rows);
+  // The walks are stored last. A pass that fails before here leaves them as
+  // they were, and the next pass reads the same pages again. A run's rows are
+  // written only from a complete walk, so the rows already written stand.
+  await deps.saveReceiptWalks(
+    scope,
+    ledgerReads.map((r) => r.walk),
+  );
   return {
     runs: runs.length,
     forgeReads,
-    deferred:
-      order.length - next + (unseenLedger.length - ledgerRead.length),
+    deferred: order.length - next + (dueLedger.length - ledgerAsked.length),
     rows: written,
     reverted,
   };
@@ -467,10 +608,16 @@ export async function readGithubOutcome(
       sourceUpdatedAt: dateOrNull(pull.updatedAt),
     },
     body: pull.body,
+    // A commit with more checks than the client's ten-page bound comes back
+    // `complete: false`. The checks it left out may be pending or failing, so
+    // a partial read is not a verdict.
     ci:
       checks && headSha
         ? {
-            state: ciStateOf(buildCiSummary(checks.value).overall),
+            state: ciStateOfRead(
+              buildCiSummary(checks.value).overall,
+              checks.value.complete !== false,
+            ),
             headSha,
             readAt: now(),
           }
@@ -504,46 +651,168 @@ async function githubConnections(scope: OutcomeScope) {
   );
 }
 
-/** The named pull requests of each ledger run, from its receipts and the workspace's repositories. */
+/** The receipt an event records, or null when it is not a well-formed `provider_publish.pull_request_opened`. */
+function receiptOf(event: AttemptEventReadRecord): LedgerReceipt | null {
+  // The same reading as `readLedgerPrReceipts` (run-work-prs.ts), which
+  // always walks from a run's first event.
+  if (
+    event.eventType !== "provider_publish.pull_request_opened" ||
+    typeof event.payload !== "object" ||
+    event.payload === null
+  )
+    return null;
+  const payload = event.payload as Record<string, unknown>;
+  if (
+    typeof payload.provider_repository_id !== "string" ||
+    typeof payload.pull_request_number !== "number"
+  )
+    return null;
+  return {
+    repositoryId: payload.provider_repository_id,
+    number: payload.pull_request_number,
+    headSha:
+      typeof payload.head_commit_sha === "string"
+        ? payload.head_commit_sha
+        : null,
+  };
+}
+
+/**
+ * One pass of a run's receipt walk: the events after `afterSeq` (from the
+ * first event when null), `RECEIPT_WALK_PAGE` at a time, for at most
+ * `RECEIPT_WALK_PAGES` pages. `afterSeq` comes back as the `run_seq` of the
+ * last event read, so the next pass resumes there. `complete` is true once a
+ * page came back short, which means the walk read the run's last event.
+ */
+export async function walkLedgerReceipts(
+  store: Pick<RunStore, "readAttemptEventsSince">,
+  runId: string,
+  afterSeq: string | null,
+): Promise<{
+  receipts: LedgerReceipt[];
+  afterSeq: string | null;
+  complete: boolean;
+}> {
+  const receipts: LedgerReceipt[] = [];
+  let cursor = afterSeq;
+  for (let page = 0; page < RECEIPT_WALK_PAGES; page++) {
+    const events = await store.readAttemptEventsSince(
+      runId,
+      cursor ?? "0",
+      RECEIPT_WALK_PAGE,
+    );
+    for (const event of events) {
+      const receipt = receiptOf(event);
+      if (receipt) receipts.push(receipt);
+    }
+    const last = events.at(-1);
+    if (last !== undefined) cursor = last.runSeq;
+    if (events.length < RECEIPT_WALK_PAGE)
+      return { receipts, afterSeq: cursor, complete: true };
+  }
+  return { receipts, afterSeq: cursor, complete: false };
+}
+
+/** The walk's receipts with a new page's added, one per pull request, the first kept. */
+function withReceipts(
+  kept: readonly LedgerReceipt[],
+  found: readonly LedgerReceipt[],
+): LedgerReceipt[] {
+  const out = new Map(kept.map((r) => [`${r.repositoryId}#${r.number}`, r]));
+  for (const r of found) {
+    const key = `${r.repositoryId}#${r.number}`;
+    if (!out.has(key)) out.set(key, r);
+  }
+  return [...out.values()];
+}
+
+/** One ledger run's walk taken one pass further, and its pull requests once all are named. */
+async function readLedgerRun(
+  store: Pick<RunStore, "getRunByPublicId" | "readAttemptEventsSince">,
+  repositories: ReadonlyMap<string, ConnectedRunRepository>,
+  request: LedgerWalkRequest,
+  now: Date,
+): Promise<LedgerRunRead> {
+  const tried: ReceiptWalk = {
+    ...(request.walk ?? {
+      runId: request.runId,
+      afterSeq: null,
+      complete: false,
+      receipts: [],
+    }),
+    attemptedAt: now,
+    unresolved: null,
+    retryAfter: null,
+  };
+  const waitOn = (walk: ReceiptWalk, unresolved: UnresolvedReason) => ({
+    walk: {
+      ...walk,
+      unresolved,
+      retryAfter: new Date(now.getTime() + OUTCOME_UNRESOLVED_RETRY_MS),
+    },
+    prs: null,
+  });
+  let walk = tried;
+  if (!walk.complete) {
+    try {
+      const run = await store.getRunByPublicId(request.runId);
+      if (!run) return waitOn(tried, "run_not_found");
+      const page = await walkLedgerReceipts(store, run.runId, walk.afterSeq);
+      walk = {
+        ...walk,
+        afterSeq: page.afterSeq,
+        complete: page.complete,
+        receipts: withReceipts(walk.receipts, page.receipts),
+      };
+    } catch (err) {
+      // The walk keeps the position it had, and the run waits its retry
+      // time, so one run's failing read cannot fail every pass.
+      logger.warn(
+        { runId: request.runId, err },
+        "run-pr-outcomes: ledger receipt read failed",
+      );
+      return waitOn(tried, "read_failed");
+    }
+    if (!walk.complete) return { walk, prs: null };
+  }
+  const prs: LedgerRunPr[] = [];
+  for (const receipt of walk.receipts) {
+    const repository = repositories.get(receipt.repositoryId);
+    // One receipt the workspace cannot name holds back the whole run, since
+    // rows for the named part would read as all of it. A reconnect names it
+    // on a later try.
+    if (!repository) return waitOn(walk, "repository_not_connected");
+    prs.push({
+      provider: "github",
+      repository: `${repository.owner}/${repository.name}`.toLowerCase(),
+      number: receipt.number,
+      url: `${repository.url}/pull/${receipt.number}`,
+      headSha: receipt.headSha,
+    });
+  }
+  return { walk, prs };
+}
+
+/**
+ * Each ledger run's receipt walk taken one pass further, and the pull
+ * requests of every walk that is complete and fully named.
+ */
 export async function readLedgerRunPrs(
   store: Pick<RunStore, "getRunByPublicId" | "readAttemptEventsSince">,
   scope: OutcomeScope,
-  runIds: readonly string[],
-): Promise<Map<string, LedgerRunPr[]>> {
-  const out = new Map<string, LedgerRunPr[]>();
-  if (runIds.length === 0) return out;
+  runs: readonly LedgerWalkRequest[],
+  now: Date,
+): Promise<LedgerRunRead[]> {
+  if (runs.length === 0) return [];
   const repositories = new Map(
     (await connectedRunRepositories(scope)).map((r) => [
       r.providerRepositoryId,
       r,
     ]),
   );
-  for (const publicId of runIds) {
-    const run = await store.getRunByPublicId(publicId);
-    if (!run) continue;
-    const { receipts, complete } = await readLedgerPrReceipts(store, run.runId);
-    const prs: LedgerRunPr[] = [];
-    let unnamed = false;
-    for (const receipt of receipts) {
-      const repository = repositories.get(receipt.repositoryId);
-      if (!repository) {
-        unnamed = true;
-        continue;
-      }
-      prs.push({
-        provider: "github",
-        repository: `${repository.owner}/${repository.name}`.toLowerCase(),
-        number: receipt.number,
-        url: `${repository.url}/pull/${receipt.number}`,
-        headSha: receipt.headSha,
-      });
-    }
-    // A run with a receipt the workspace cannot name gets no rows yet: rows
-    // for the named part would read as the whole run, and the pass reads a
-    // run's receipts only while it has no row.
-    if (unnamed || (prs.length === 0 && !complete)) continue;
-    out.set(publicId, prs);
-  }
+  const out: LedgerRunRead[] = [];
+  for (const request of runs)
+    out.push(await readLedgerRun(store, repositories, request, now));
   return out;
 }
 
@@ -577,7 +846,9 @@ export function defaultOutcomeRefreshDeps(): OutcomeRefreshDeps {
     terminalReasons: readRunTerminalReasons,
     readRows: readOutcomeRows,
     tachoLinks: readTachoRunPrLinks,
-    ledgerPrs: (scope, runIds) => readLedgerRunPrs(ledger, scope, runIds),
+    receiptWalks: readReceiptWalks,
+    ledgerPrs: (scope, runs, now) => readLedgerRunPrs(ledger, scope, runs, now),
+    saveReceiptWalks,
     readForge: async (scope, pr) => {
       const owner = pr.repository.toLowerCase().split("/")[0] ?? "";
       const client = await clientFor(scope, owner);
