@@ -370,9 +370,9 @@ const INDEXED_ROWS: Row[] = [
 /**
  * A run whose one reply was written as two transcript blocks, the second
  * between an unkeyed tool request and its receipt, with no proxy sighting.
- * The fold keeps the further block as a model step of its own and a frame
- * that parts the request from its receipt. The query leaves it out of both.
- * ADR-191 names the case, and #4351 carries the decision it needs.
+ * The fold gathers the further block into its reply's model step, and it no
+ * longer parts the request from its receipt. The query leaves it out of
+ * both. ADR-NEW (one model reply is one step, #4351) records the decision.
  */
 const SPLIT_ROWS: Row[] = [
   row(SPLIT, 0, 0, "turn_start", { root: SPLIT }),
@@ -563,14 +563,13 @@ describe.skipIf(!chUp)("get_run_turns against ClickHouse", () => {
     READS_TIMEOUT_MS,
   );
 
-  // Where the query does not yet answer as the fold does. A reply's further
-  // transcript block is its own model step in the fold, and it parts an
-  // unkeyed request from its receipt, so the fold draws two model steps and
-  // two tool calls. The query leaves the block out and answers one of each.
-  // ADR-191 names the case and #4351 carries the decision. When #4351 lands,
-  // this becomes an equality like the tests above.
+  // A reply in two parts around an unkeyed tool call (#4351). One reply is
+  // one model step, so the fold gathers the further part into the step of
+  // the first, and the part no longer parts the request from its receipt.
+  // The query leaves the part out of both counts. The two now agree: one
+  // model step and one tool call.
   it(
-    "differs from the fold on a reply split into blocks around an unkeyed tool call (#4351)",
+    "answers as the fold does for a reply split into parts around an unkeyed tool call (#4351)",
     async () => {
       const { turns } = await harness();
       const { ctx } = await import("./run.test-support");
@@ -578,10 +577,11 @@ describe.skipIf(!chUp)("get_run_turns against ClickHouse", () => {
         turns(runTurnsGet.input.parse({ runId: SPLIT_ID }), ctx(SCOPE)),
       );
       const expected = await runInTenantScope(SCOPE, () => reference(SPLIT_ID));
+      expect(out.turns).toEqual(expected.turns);
       const counts = (list: typeof out.turns) =>
         list.map((t) => [t.frames, t.modelSteps, t.toolSteps]);
-      expect(counts(expected.turns)).toEqual([[5, 2, 2]]);
       expect(counts(out.turns)).toEqual([[5, 1, 1]]);
+      expect(counts(expected.turns)).toEqual([[5, 1, 1]]);
     },
     READS_TIMEOUT_MS,
   );
