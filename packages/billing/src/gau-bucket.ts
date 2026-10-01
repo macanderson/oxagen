@@ -1,9 +1,12 @@
 /**
- * gau-bucket.ts — the organisation's month of governed action units
- * (ADR-055 §4, apps/app/ARCHITECTURE.md §3.9 items 4, 5 and 9).
+ * gau-bucket.ts — the organisation's bucket of governed action units
+ * (ADR-055 §4, amended by ADR-NEW signup grant; apps/app/ARCHITECTURE.md §3.9
+ * items 4, 5 and 9).
  *
- * Every `billing.gau_buckets` row covers one month. `periodFor` picks the
- * month; `ensureCurrentBucket(tx, …)` is the one writer — the lazy create and
+ * A `billing.gau_buckets` row covers a subscriber's month, a new
+ * organisation's signup grant window, or a calendar month after the grant.
+ * `bucketBasis` picks which, with `periodFor` slicing a subscription's month;
+ * `ensureCurrentBucket(tx, …)` is the one writer — the lazy create and
  * the debit as one upsert on the caller's executor; `readBucket` is the read,
  * which answers with a virtual bucket (and its carry) when no row exists and
  * never inserts; `assertGauAvailable` is the admission gate the kernel runs
