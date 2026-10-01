@@ -13,10 +13,6 @@ import { DEFAULT_ALWAYS_ON_TOKENS } from "./tokens";
 
 export const ledgerRotationSchema = z.enum(["day", "week", "month", "year"]);
 
-/** Whether an unreviewed memory steers the agent that wrote it, at force `info`. */
-export const recallUnreviewedSchema = z.enum(["same-agent", "off"]);
-export type RecallUnreviewed = z.output<typeof recallUnreviewedSchema>;
-
 export const governanceSchema = withRules(
   z
     .object({
@@ -45,9 +41,10 @@ export const governanceSchema = withRules(
         })
         .strict()
         .optional(),
+      // `recall_unreviewed` left the memory table on 2026-09-30, because
+      // Oxagen no longer recalls a memory that waits for review (ADR-238).
       memory: z
         .object({
-          recall_unreviewed: recallUnreviewedSchema.optional(),
           batch_size: z
             .number()
             .int()
@@ -95,7 +92,6 @@ export interface GovernanceSettings {
   always_on_tokens_set: boolean;
   rotate: LedgerRotation;
   max_lines: number;
-  recall_unreviewed: RecallUnreviewed;
   batch_size: number;
   retire_after_days: number;
   auto_merge: boolean;
@@ -104,16 +100,12 @@ export interface GovernanceSettings {
 export const GOVERNANCE_DEFAULTS = {
   rotate: "month",
   max_lines: 10000,
-  recall_unreviewed: "same-agent",
   batch_size: 20,
   retire_after_days: 180,
   auto_merge: false,
 } as const satisfies Partial<GovernanceSettings>;
 
-/**
- * The settings a governance file puts in force. `regulated` mode turns
- * `recall_unreviewed` off whatever the file says.
- */
+/** The settings a governance file puts in force. */
 export function resolveGovernance(file: GovernanceFile): GovernanceSettings {
   const budget = file.steering?.always_on_tokens;
   const memory: NonNullable<GovernanceFile["memory"]> = file.memory ?? {};
@@ -124,10 +116,6 @@ export function resolveGovernance(file: GovernanceFile): GovernanceSettings {
     always_on_tokens_set: budget !== undefined,
     rotate: file.ledger?.rotate ?? GOVERNANCE_DEFAULTS.rotate,
     max_lines: file.ledger?.max_lines ?? GOVERNANCE_DEFAULTS.max_lines,
-    recall_unreviewed:
-      file.mode === "regulated"
-        ? "off"
-        : (memory.recall_unreviewed ?? GOVERNANCE_DEFAULTS.recall_unreviewed),
     batch_size: memory.batch_size ?? GOVERNANCE_DEFAULTS.batch_size,
     retire_after_days:
       memory.retire_after_days ?? GOVERNANCE_DEFAULTS.retire_after_days,

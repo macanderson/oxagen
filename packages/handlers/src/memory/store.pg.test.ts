@@ -1,6 +1,7 @@
 // The Postgres memory store against a real migrated database (ADR-206): the
-// one-reflection-per-run index, the dedupe key, the waiting queue, a memory
-// PR's life from open to settled, the recall counters, the curator's
+// one-reflection-per-run index, the dedupe key, the waiting queue, one
+// waiting memory per memory file (ADR-238), a memory PR's life from open to
+// settled, the recall counters, the curator's
 // cross-tenant listing, and the tenant policy on agent.memories. It runs
 // wherever DATABASE_URL points at a migrated database. CI's `test` job
 // migrates Postgres with Atlas and carries DATABASE_URL in turbo's globalEnv.
@@ -80,6 +81,19 @@ function proposal(
     memoryIds: cited.map((m) => m.id),
     statementHashes: cited.map((m) => m.statementHash),
   };
+}
+
+const FILE = "claude-code:/home/dev/.claude/projects/-proj/memory/use-pnpm.md";
+
+/** A memory file's statement, as ingest_tacho_memories stores it. */
+function fileMemory(statement: string, source = FILE): MemoryDraft {
+  return draft(statement, {
+    runPublicId: null,
+    capture: "local_gateway",
+    evidence: [],
+    source,
+    dedupeKey: `local_gateway:${source}:${statementHash(statement)}`,
+  });
 }
 
 const pullRequest = (number: number, records: MemoryPrRecord[]) => ({
@@ -292,6 +306,126 @@ describe.skipIf(!enabled)("memory store against Postgres", () => {
     expect(await store.listOpenPrs(scope)).toEqual([
       { id: prId, ...pullRequest(7, records), openedAt: expect.any(Date) },
     ]);
+  });
+
+  describe("one waiting memory per memory file", () => {
+    /** Each row of the workspace's: its statement, and whether a PR cites it. */
+    const rowsOf = (scope: MemoryScope) =>
+      withSystemDb((tx) =>
+        tx
+          .select({
+            statement: schema.memories.statement,
+            memoryPrId: schema.memories.memoryPrId,
+          })
+          .from(schema.memories)
+          .where(eq(schema.memories.workspaceId, scope.workspaceId))
+          .orderBy(schema.memories.createdAt),
+      );
+
+    /** Cite every waiting memory in a new open memory PR. */
+    async function citeWaiting(scope: MemoryScope, number: number) {
+      const waiting = await store.listWaiting(scope);
+      await store.insertMemoryPr(
+        scope,
+        pullRequest(number, [proposal("mem.use-pnpm", waiting)]),
+      );
+    }
+
+    it("replaces the waiting memory's text in place when the file changes", async () => {
+      const scope = newScope();
+      expect(
+        await store.replaceSourceMemory(scope, fileMemory("Use pnpm.")),
+      ).toBe(true);
+      const [before] = await store.listWaiting(scope);
+      const edited = fileMemory("Use pnpm, never npm.");
+      expect(await store.replaceSourceMemory(scope, edited)).toBe(true);
+      const waiting = await store.listWaiting(scope);
+      expect(waiting).toHaveLength(1);
+      expect(waiting[0]).toEqual({
+        ...edited,
+        id: before?.id,
+        publicId: before?.publicId,
+        reflectionId: null,
+        memoryPrId: null,
+        createdAt: before?.createdAt,
+      });
+    });
+
+    it("stores nothing for the text the waiting memory already holds", async () => {
+      const scope = newScope();
+      await store.replaceSourceMemory(scope, fileMemory("Use pnpm."));
+      expect(
+        await store.replaceSourceMemory(scope, fileMemory("Use pnpm.")),
+      ).toBe(false);
+      expect(await store.countWaiting(scope)).toBe(1);
+    });
+
+    it("keeps the text an open memory PR cites and adds the new text as a waiting memory", async () => {
+      const scope = newScope();
+      await store.replaceSourceMemory(scope, fileMemory("Use pnpm."));
+      await citeWaiting(scope, 21);
+      expect(
+        await store.replaceSourceMemory(scope, fileMemory("Use pnpm, never npm.")),
+      ).toBe(true);
+      const rows = await rowsOf(scope);
+      expect(rows.map((row) => [row.statement, row.memoryPrId !== null])).toEqual([
+        ["Use pnpm.", true],
+        ["Use pnpm, never npm.", false],
+      ]);
+    });
+
+    it("drops the waiting memory when the file goes back to the text a memory PR cites", async () => {
+      const scope = newScope();
+      await store.replaceSourceMemory(scope, fileMemory("Use pnpm."));
+      await citeWaiting(scope, 22);
+      await store.replaceSourceMemory(scope, fileMemory("Use pnpm, never npm."));
+      // An update to the cited row's dedupe key would break memories_dedupe_uq.
+      expect(
+        await store.replaceSourceMemory(scope, fileMemory("Use pnpm.")),
+      ).toBe(false);
+      expect(await store.countWaiting(scope)).toBe(0);
+      expect((await rowsOf(scope)).map((row) => row.statement)).toEqual([
+        "Use pnpm.",
+      ]);
+    });
+
+    it("keeps the oldest of the waiting rows a file held before and drops the rest", async () => {
+      const scope = newScope();
+      // Two rows from one file, as ingest wrote them before ADR-238.
+      await store.insertMemories(scope, [fileMemory("Use pnpm.")]);
+      await store.insertMemories(scope, [fileMemory("Use pnpm 9.")]);
+      const [oldest] = await store.listWaiting(scope);
+      expect(
+        await store.replaceSourceMemory(scope, fileMemory("Use pnpm 10.")),
+      ).toBe(true);
+      const waiting = await store.listWaiting(scope);
+      expect(waiting.map((m) => [m.id, m.statement])).toEqual([
+        [oldest?.id, "Use pnpm 10."],
+      ]);
+    });
+
+    it("keeps one waiting memory when two sends from one file land at once", async () => {
+      const scope = newScope();
+      const answers = await Promise.all([
+        store.replaceSourceMemory(scope, fileMemory("Use pnpm.")),
+        store.replaceSourceMemory(scope, fileMemory("Use pnpm, never npm.")),
+      ]);
+      expect(answers).toEqual([true, true]);
+      expect(await store.countWaiting(scope)).toBe(1);
+    });
+
+    it("keeps a waiting memory for each file", async () => {
+      const scope = newScope();
+      const other = "claude-code:/home/dev/.claude/projects/-proj/memory/deploy.md";
+      await store.replaceSourceMemory(scope, fileMemory("Use pnpm."));
+      await store.replaceSourceMemory(scope, fileMemory("Use pnpm.", other));
+      await store.replaceSourceMemory(scope, fileMemory("Use pnpm 10."));
+      const waiting = await store.listWaiting(scope);
+      expect(waiting.map((m) => [m.source, m.statement])).toEqual([
+        [FILE, "Use pnpm 10."],
+        [other, "Use pnpm."],
+      ]);
+    });
   });
 
   it("knows the branches a workspace opened a memory PR from, settled or not", async () => {

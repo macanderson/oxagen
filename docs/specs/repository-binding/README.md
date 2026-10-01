@@ -89,8 +89,7 @@ provider `gitlab_steering`, and step 1 offers the group.
 The steering repo's credential stays with Oxagen. Oxagen reads and writes a
 provisioned steering repo server-side through an installation token of the
 Oxagen GitHub App (`mintSteeringInstallationToken`), and no agent receives
-that token. Every token the app mints carries the merge ruleset's bypass, so
-`create_github_token` refuses the steering repo with
+that token. `create_github_token` refuses the steering repo with
 `steering_repo_propose_only`, and the agent changes the steering repo through
 a steering PR (ADR-228).
 

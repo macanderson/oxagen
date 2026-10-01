@@ -447,21 +447,6 @@ export interface SystemProposalDetail {
   proposalId: string | null;
 }
 
-/**
- * Everything `security_events.detail` may carry.
- *
- * The column is jsonb with no CHECK, so this union is the only thing keeping
- * it a small set of known shapes rather than a scratch pad. Widen it by
- * adding a named interface, never by reaching for `Record<string, unknown>`:
- * an audit reader has to be able to know what a row means.
- */
-export interface RunOutcomesPolicyChangeDetail {
-  feature: "run_outcomes";
-  change: "customer_consent" | "platform_access";
-  enabled: boolean;
-  reason: string | null;
-}
-
 /** A workspace's operator pseudonyms turned on or off (spend spec, Operator ranking). */
 export interface OperatorPseudonymsChangeDetail {
   feature: "operator_ranking";
@@ -708,6 +693,14 @@ export interface InterjectionAnsweredDetail {
   commandIds: readonly string[];
 }
 
+/**
+ * Everything `security_events.detail` may carry.
+ *
+ * The column is jsonb with no CHECK, so this union is the only thing keeping
+ * it a small set of known shapes rather than a scratch pad. Widen it by
+ * adding a named interface, never by reaching for `Record<string, unknown>`:
+ * an audit reader has to be able to know what a row means.
+ */
 export type SecurityEventDetail =
   | InterjectionAnsweredDetail
   | WorkspaceRunsPausedDetail
@@ -722,7 +715,6 @@ export type SecurityEventDetail =
   | RunIssueAuthorizationDetail
   | SlackNoticesConnectDetail
   | SlackNoticesDisconnectDetail
-  | RunOutcomesPolicyChangeDetail
   | OperatorPseudonymsChangeDetail
   | RuntimeContainmentChangeDetail
   | ApprovalRuleInvalidationDetail

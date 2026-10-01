@@ -1,4 +1,5 @@
 import "./global.css";
+import { HOUSE_INK, HOUSE_PAPER } from "@oxagen/ui/lib/house-grounds";
 import { APPLE_STARTUP_IMAGES } from "@oxagen/ui/lib/splash-screens";
 import type { Metadata, Viewport } from "next";
 import Script from "next/script";
@@ -65,8 +66,8 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   themeColor: [
-    { media: "(prefers-color-scheme: dark)", color: "#09090B" },
-    { media: "(prefers-color-scheme: light)", color: "#FFFFFF" },
+    { media: "(prefers-color-scheme: dark)", color: HOUSE_INK },
+    { media: "(prefers-color-scheme: light)", color: HOUSE_PAPER },
   ],
 };
 

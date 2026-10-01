@@ -9,10 +9,11 @@ import {
 import { HandlerError } from "@oxagen/oxagen/handler-error";
 import { and, eq, gt, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
-import {
-  assertRunOutcomesAllowed,
-  type RunOutcomesScope,
-} from "./run-outcomes-policy";
+
+export interface RunOutcomesScope {
+  orgId: string;
+  workspaceId: string;
+}
 
 const STATE_PREFIX = "run_linear_oauth:";
 const stateSchema = z.object({
@@ -58,11 +59,9 @@ function scopesOf(value: string | string[]): string[] {
     ? value.split(/[ ,]+/).filter(Boolean)
     : value;
 }
+/** Oxagen reads issues and writes their status back, so a token needs `read` and `write`. */
 function requireIssueScope(scopes: string[]) {
-  if (
-    !scopes.includes("read") ||
-    !(scopes.includes("issues:create") || scopes.includes("write"))
-  ) {
+  if (!scopes.includes("read") || !scopes.includes("write")) {
     throw new HandlerError({
       code: "forbidden",
       reason: "linear_issue_scope_required",
@@ -83,7 +82,6 @@ export async function beginLinearAuthorization(
   scope: RunOutcomesScope,
   userId: string,
 ): Promise<{ authorizeUrl: string }> {
-  await assertRunOutcomesAllowed(scope);
   const oauthClientId = clientId();
   const appUrl = process.env["APP_URL"];
   if (!appUrl)
@@ -109,7 +107,7 @@ export async function beginLinearAuthorization(
     client_id: oauthClientId,
     redirect_uri: redirectUri,
     response_type: "code",
-    scope: "read,issues:create",
+    scope: "read,write",
     actor: "app",
     state,
     code_challenge: createHash("sha256")
@@ -128,7 +126,6 @@ export async function completeLinearAuthorization(
   state: string,
   code: string,
 ): Promise<{ connectionId: string }> {
-  await assertRunOutcomesAllowed(scope);
   const stateId = STATE_PREFIX + state;
   // tenancy: global state lookup is filtered by nonce and verified against orgId, workspaceId and userId before consumption.
   const stored = await withSystemDb(async (tx) => {
@@ -177,7 +174,6 @@ export async function completeLinearAuthorization(
       .where(eq(schema.verifications.id, stateId));
     return data;
   });
-  await assertRunOutcomesAllowed(scope);
   const response = await fetch("https://api.linear.app/oauth/token", {
     method: "POST",
     redirect: "error",
@@ -200,7 +196,6 @@ export async function completeLinearAuthorization(
   const scopes = scopesOf(token.scope);
   requireIssueScope(scopes);
   const identity = await linearGraphql(
-    scope,
     token.access_token,
     "query { organization { id name } viewer { id } }",
     {},
@@ -211,7 +206,6 @@ export async function completeLinearAuthorization(
   );
   const accessTokenEnc = await wrapToken(token.access_token);
   const refreshTokenEnc = await wrapToken(token.refresh_token);
-  await assertRunOutcomesAllowed(scope);
   return withTenantDb(async (tx) => {
     const [connection] = await tx
       .insert(schema.sourceConnections)
@@ -250,15 +244,12 @@ export async function completeLinearAuthorization(
   });
 }
 
-/** Guard every request, including reads that carry a provider credential. */
 export async function linearGraphql<T>(
-  scope: RunOutcomesScope,
   token: string,
   query: string,
   variables: Record<string, unknown>,
   output: z.ZodType<T>,
 ): Promise<T> {
-  await assertRunOutcomesAllowed(scope);
   const response = await fetch("https://api.linear.app/graphql", {
     method: "POST",
     redirect: "error",
@@ -294,7 +285,6 @@ export async function resolveLinearIssueToken(
   scope: RunOutcomesScope,
   connectionPublicId: string,
 ): Promise<string> {
-  await assertRunOutcomesAllowed(scope);
   return withTenantDb(async (tx) => {
     const [connection] = await tx
       .select({ id: schema.sourceConnections.id })
@@ -334,7 +324,6 @@ export async function resolveLinearIssueToken(
         code: "conflict",
         reason: "linear_reauthorization_required",
       });
-    await assertRunOutcomesAllowed(scope);
     const response = await fetch("https://api.linear.app/oauth/token", {
       method: "POST",
       redirect: "error",

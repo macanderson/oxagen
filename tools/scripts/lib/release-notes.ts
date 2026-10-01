@@ -5,10 +5,11 @@
  * A release's notes are written by a model that reads the commit log, the
  * diffstat and the diff since the previous tag, under the two writing skills
  * this repository requires of every person: `clear-prose` (the sentences) and
- * `oxagen-branding` (the voice and the words). The skill files are read from
- * the tree at run time and handed to the model as its instructions, so the
- * rules the model follows are the rules the repository holds, not a copy that
- * drifts. What comes back is checked by the same scanner `pnpm check:prose`
+ * `oxagen-branding` (the voice and the words). The skill files are read at run
+ * time and handed to the model as its instructions: `clear-prose` from this
+ * tree, and the branding references from the brand kit's `main` branch at one
+ * resolved commit. The rules the model follows are the rules their owners
+ * hold, not a copy that drifts (#4804). What comes back is checked by the same scanner `pnpm check:prose`
  * runs on the docs, because the notes become a docs page and that page must
  * pass the gate in CI.
  *
@@ -17,15 +18,24 @@
  * leaves the rest to the commit log. Honesty over completeness: nothing the
  * diff does not support, no claim stronger than the change.
  */
+import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { findHits } from "../check-prose.mjs";
 
-/** The skill files the model reads before it writes. */
-export const SKILL_FILES = [
-  ".claude/skills/clear-prose/SKILL.md",
-  ".claude/skills/oxagen-branding/references/voice.md",
-  ".claude/skills/oxagen-branding/references/words.md",
+/** The skill files the model reads from this tree before it writes. */
+export const TREE_SKILL_FILES = [".claude/skills/clear-prose/SKILL.md"] as const;
+
+/**
+ * The brand kit. This repo carries only the branding skill's stub, so the
+ * references the model reads come from here.
+ */
+export const BRAND_KIT_REPO = "macanderson/oxagen-brand";
+
+/** The branding references the model reads from the kit before it writes. */
+export const KIT_SKILL_FILES = [
+  "skills/oxagen-branding/references/voice.md",
+  "skills/oxagen-branding/references/words.md",
 ] as const;
 
 export interface NotesHistory {
@@ -50,16 +60,62 @@ export interface ReleaseNotes {
   source: "model" | "commit-log";
 }
 
-/** Read the skill files under `root`; a missing one is an error, not a blank. */
-export function loadSkills(root: string): string {
-  return SKILL_FILES.map((rel) => {
+/** How `loadSkills` reaches the kit. A release uses the network, and a test passes fakes. */
+export interface KitSource {
+  /** The commit the kit's `main` points at. */
+  head(): string | Promise<string>;
+  fetch(url: string): Promise<Response>;
+}
+
+/** The kit's `main` commit, from `git ls-remote`, which needs no API token. */
+function kitHeadFromGit(): string {
+  return execFileSync(
+    "git",
+    ["ls-remote", `https://github.com/${BRAND_KIT_REPO}`, "refs/heads/main"],
+    { encoding: "utf8", timeout: 30_000 },
+  ).split("\t")[0]?.trim() ?? "";
+}
+
+const NETWORK: KitSource = {
+  head: kitHeadFromGit,
+  fetch: (url) => fetch(url),
+};
+
+/**
+ * Read the skill files: `clear-prose` under `root`, and the branding
+ * references from the kit at the commit its `main` points at, so both come
+ * from one tree. A missing file is an error, not a blank.
+ */
+export async function loadSkills(
+  root: string,
+  kit: KitSource = NETWORK,
+): Promise<string> {
+  const tree = TREE_SKILL_FILES.map((rel) => {
     const path = join(root, rel);
     if (!existsSync(path))
       throw new Error(
-        `release notes need ${rel} and it is not in the tree; the skills are the model's instructions`,
+        `release notes need ${rel} and it is not in the tree. The skills are the model's instructions.`,
       );
     return `<skill path="${rel}">\n${readFileSync(path, "utf8").trim()}\n</skill>`;
-  }).join("\n\n");
+  });
+  const sha = (await kit.head()).trim();
+  if (!/^[0-9a-f]{40}$/.test(sha))
+    throw new Error(
+      `release notes could not resolve ${BRAND_KIT_REPO} main to a commit (got "${sha}")`,
+    );
+  const fromKit = await Promise.all(
+    KIT_SKILL_FILES.map(async (rel) => {
+      const url = `https://raw.githubusercontent.com/${BRAND_KIT_REPO}/${sha}/${rel}`;
+      const res = await kit.fetch(url);
+      if (!res.ok)
+        throw new Error(
+          `release notes need ${rel} from ${BRAND_KIT_REPO}@${sha.slice(0, 7)}, and the fetch returned ${res.status}`,
+        );
+      const text = (await res.text()).trim();
+      return `<skill path="${BRAND_KIT_REPO}@${sha}/${rel}">\n${text}\n</skill>`;
+    }),
+  );
+  return [...tree, ...fromKit].join("\n\n");
 }
 
 /** The instructions the model works under: the skills, then the job. */

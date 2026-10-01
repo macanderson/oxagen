@@ -1,3 +1,4 @@
+import { HOUSE_INK, HOUSE_PAPER } from "@oxagen/ui/lib/house-grounds";
 import { APPLE_STARTUP_IMAGES } from "@oxagen/ui/lib/splash-screens";
 import type { Metadata, Viewport } from "next";
 import { NextIntlClientProvider } from "next-intl";
@@ -77,8 +78,8 @@ export const viewport: Viewport = {
   // take effect; without it every inset resolves to 0.
   viewportFit: "cover",
   themeColor: [
-    { media: "(prefers-color-scheme: dark)", color: "#09090B" },
-    { media: "(prefers-color-scheme: light)", color: "#FFFFFF" },
+    { media: "(prefers-color-scheme: dark)", color: HOUSE_INK },
+    { media: "(prefers-color-scheme: light)", color: HOUSE_PAPER },
   ],
 };
 

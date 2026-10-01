@@ -25,7 +25,17 @@
  *
  * Rasterises with rsvg-convert (`brew install librsvg`) at 1024px, then lets
  * `tauri icon` emit the .icns, .ico and PNG sizes into src-tauri/icons. The
- * generated icons are committed so a CI runner needs no librsvg.
+ * generated icons are committed so a CI runner needs no librsvg. The Tauri CLI
+ * runs from this app's node_modules, so run `pnpm install` once first.
+ *
+ * Every run ends by writing src-tauri/icons/source.sha256 in `shasum -a 256`
+ * form: the first line is the SVG the icons were cut from, and each line
+ * after it is a file in src-tauri/icons. The brand check
+ * (tools/scripts/sync-brand-assets.mjs --check) compares the first line with
+ * the avatar it syncs from the kit and the rest with the committed icons, so
+ * a kit icon change, or an icon edited by hand, fails CI until someone cuts
+ * the icons again (#4892). A `--maskable-only` run does not cut the app
+ * icons, so it keeps the stamp's source line and refreshes only the files.
  *
  * Maskable icons are emitted alongside: full bleed, the hive pulled into the
  * 80% safe circle a round mask keeps. Tauri does not consume them — they are
@@ -34,15 +44,18 @@
  * drifting onto a different mark.
  */
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -86,6 +99,15 @@ if (!variant) {
 
 const source = join(brand, variant.file);
 const work = join(app, "src-tauri", "icons");
+/** What the brand check reads to tell whether these icons are current. */
+const stamp = join(work, "source.sha256");
+/** The Tauri CLI this app pins, run directly so no pnpm command runs. */
+const tauri = join(
+  app,
+  "node_modules",
+  ".bin",
+  process.platform === "win32" ? "tauri.cmd" : "tauri",
+);
 mkdirSync(work, { recursive: true });
 
 function run(command, args) {
@@ -137,9 +159,13 @@ const scratch = mkdtempSync(join(tmpdir(), "oxagen-icons-"));
 process.on("exit", () => rmSync(scratch, { recursive: true, force: true }));
 
 if (!maskableOnly) {
+  if (!existsSync(tauri)) {
+    console.error(`✖ no Tauri CLI at ${tauri}; run pnpm install first`);
+    process.exit(1);
+  }
   const png = join(scratch, "source-1024.png");
   run("rsvg-convert", ["-w", "1024", "-h", "1024", "-o", png, source]);
-  run("pnpm", ["exec", "tauri", "icon", png, "--output", work]);
+  run(tauri, ["icon", png, "--output", work]);
   // `tauri icon` always writes the mobile sets too. This app is desktop only
   // (there is no src-tauri/gen/apple or /android), so they would be committed
   // bytes no build ever reads — drop them rather than gitignore them, so a
@@ -163,5 +189,24 @@ for (const size of MASKABLE_SIZES) {
     join(work, `maskable-${size}.png`),
     maskSvg,
   ]);
+}
+
+// Last, so a cut that failed part way leaves the old stamp and the brand
+// check keeps failing. Paths are relative to the repo root, where the check
+// reads them, with forward slashes on every platform.
+const sha256 = (path) => createHash("sha256").update(readFileSync(path)).digest("hex");
+const repoPath = (path) => relative(repo, path).split("\\").join("/");
+const sourceLine = maskableOnly
+  ? existsSync(stamp)
+    ? readFileSync(stamp, "utf8").split("\n")[0]
+    : null
+  : `${sha256(source)}  ${repoPath(source)}`;
+if (sourceLine) {
+  const outputs = readdirSync(work, { withFileTypes: true })
+    .filter((e) => e.isFile() && e.name !== "source.sha256" && e.name !== ".DS_Store")
+    .map((e) => join(work, e.name))
+    .sort()
+    .map((path) => `${sha256(path)}  ${repoPath(path)}`);
+  writeFileSync(stamp, `${[sourceLine, ...outputs].join("\n")}\n`);
 }
 console.log(`✔ ${requested} icons in ${work}`);
