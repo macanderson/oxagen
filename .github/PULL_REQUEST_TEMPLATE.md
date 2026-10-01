@@ -10,7 +10,7 @@
                      or the `dod` check fails and the merge is blocked.
        Refs #N     — this PR advances the issue without finishing it. `Refs`
                      never closes anything, so no DoD is demanded.
-       a label     — `no-issue` for a trivial change, `closes-nothing` for a
+       a label     — `NO-ISSUE` for a trivial change, `CLOSES-NOTHING` for a
                      substantial one that deliberately closes nothing.
 
      Write it as plain text, NOT inside backticks. GitHub ignores a closing

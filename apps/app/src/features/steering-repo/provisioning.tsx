@@ -13,6 +13,10 @@
 //                       authorize it where it is installed, then retry
 //   anything else       Retry
 //
+// The Host connection step names where steering repos go. Until Oxagen has
+// created a repo there, an owner can switch to a different organization, which
+// clears the stored one so setup asks again (#4899).
+//
 // A workspace still steered by a code repository (`legacySource`) goes on
 // through `import_workspace_steering`, never through a retry of the job: the
 // job stops with steering_import_required while that repository holds the
@@ -117,7 +121,9 @@ function ConnectionChooser({
         options={view.connectionChoices.map((c) => ({
           value: choiceValue(c),
           label: c.name,
-          sub: t(`choose.provider.${c.provider}`),
+          sub: t(
+            `choose.provider.${c.provider === "github" && c.kind === "user" ? "githubUser" : c.provider}`,
+          ),
         }))}
       />
       <button
@@ -295,19 +301,23 @@ export function SteeringRepoProvisioning({
     view.legacySource === null || view.legacySource.provider === "github";
 
   async function goOn(
-    options: { connection?: SteeringConnectionPick; startFresh?: true } = {},
+    options: {
+      connection?: SteeringConnectionPick;
+      startFresh?: true;
+      resetConnection?: true;
+    } = {},
   ) {
     if (pending) return;
     setPending(true);
     setFailure(null);
-    const { connection } = options;
+    const { connection, resetConnection } = options;
     const capability = importing ? IMPORT_CAPABILITY : RETRY_CAPABILITY;
+    const bare = Object.keys(options).length === 0;
     try {
       if (importing) {
-        const result =
-          connection === undefined && options.startFresh === undefined
-            ? await importWorkspaceSteering(org, ws)
-            : await importWorkspaceSteering(org, ws, options);
+        const result = bare
+          ? await importWorkspaceSteering(org, ws)
+          : await importWorkspaceSteering(org, ws, options);
         if (result.ok) {
           setOutcome(result.value);
           setFresh(false);
@@ -322,9 +332,12 @@ export function SteeringRepoProvisioning({
         navigate.refresh();
       } else {
         const result =
-          connection === undefined
+          connection === undefined && resetConnection === undefined
             ? await retrySteeringRepoProvision(org, ws)
-            : await retrySteeringRepoProvision(org, ws, connection);
+            : await retrySteeringRepoProvision(org, ws, {
+                ...(connection === undefined ? {} : { connection }),
+                ...(resetConnection === undefined ? {} : { resetConnection }),
+              });
         if (result.ok) navigate.refresh();
         else setFailure(failureText(result, capability));
       }
@@ -339,6 +352,22 @@ export function SteeringRepoProvisioning({
   const code = view.error?.code ?? null;
   const choosing =
     code === STEERING_CHOOSE_CONNECTION && view.connectionChoices.length > 0;
+  // An owner may switch organizations until Oxagen has created a repo in the
+  // stored one (Mac, 2026-10-01). A repo whose setup stopped before its first
+  // version, such as on a plan that cannot protect its branches, does not
+  // count (#4900).
+  const changeable =
+    canAct &&
+    movable &&
+    view.connection !== null &&
+    view.publishedVersion === null &&
+    (view.status === "failed" || view.status === "blocked");
+  const place =
+    view.connection === null
+      ? null
+      : view.connection.provider === "gitlab"
+        ? "group"
+        : view.connection.kind;
 
   return (
     <div
@@ -378,6 +407,37 @@ export function SteeringRepoProvisioning({
                 {t(`state.${state}`)}
               </span>
             </span>
+            {step === "pick_connection" && view.connection !== null ? (
+              <div className="ml-[22px] flex flex-wrap items-center gap-2">
+                <p
+                  data-testid="steering-repo-connection"
+                  data-kind={place ?? undefined}
+                  className="text-[12.5px] text-muted-foreground"
+                >
+                  {t(`connection.${place ?? "organization"}`, {
+                    name: view.connection.name,
+                  })}
+                </p>
+                {changeable ? (
+                  <button
+                    type="button"
+                    data-testid="steering-repo-change-connection"
+                    data-touch-target=""
+                    disabled={pending}
+                    className={buttonSecondary}
+                    onClick={() => {
+                      void goOn({ resetConnection: true });
+                    }}
+                  >
+                    {t(
+                      place === "group"
+                        ? "connection.changeGroup"
+                        : "connection.change",
+                    )}
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
             {(state === "failed" || state === "blocked") &&
             view.error !== null ? (
               <div className="ml-[22px] flex flex-col items-start gap-2">

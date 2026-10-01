@@ -140,6 +140,20 @@ describe("chrome", () => {
     expect(footer).toContain(`© ${new Date().getUTCFullYear()} Oxagen`);
   });
 
+  it("gives the phone menu one list with no headings and no demo button", () => {
+    const header = siteHeader({ wordmark });
+    const drawer = header.slice(header.indexOf('<div class="drawer"'));
+    const links = [...drawer.matchAll(/<a [^>]*>([^<]+)<\/a>/g)].map(
+      (m) => m[1],
+    );
+    expect(links).toEqual(["Overview", "Research", "Field manual", "Docs"]);
+    expect(drawer).toContain('<a href="/products/oxagen">Overview</a>');
+    expect(drawer).not.toContain("<h5>");
+    expect(drawer).not.toContain("btn");
+    // The header keeps the one Get a demo button.
+    expect(header.match(/Get a demo/g)).toHaveLength(1);
+  });
+
   it("puts the System / Light / Dark control in the footer, System first", () => {
     const footer = siteFooter({ wordmark, pillars });
     expect(footer).toContain(THEME_SWITCH);

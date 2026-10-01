@@ -145,8 +145,8 @@ Create each App at **GitHub → Settings → Developer settings → GitHub Apps 
 - **The first Callback URL is the one GitHub uses.** `buildInstallAuthUrl` and
   `buildIdentityAuthUrl` (`packages/github/src/install-url.ts`) pass no `redirect_uri`, so GitHub
   returns every connect to the first URL in the list. A second or wildcard entry never receives a
-  connect. Keep `https://api.oxagen.sh/oauth/github/callback` first until ADR-215 step A3 puts
-  `https://api.oxagen.app/oauth/github/callback` there.
+  connect. Keep `https://api.oxagen.sh/oauth/github/callback` first. The API stays on `oxagen.sh`
+  (ADR-236), so no `api.oxagen.app` URL belongs in the list.
 - **Every connect returns here.** The code repository connect and the steering connect both land on
   this callback. The signed state names what the connect is for, so no connect needs a URL of its
   own.
@@ -178,6 +178,13 @@ turns the field off while **Request user authorization (OAuth) during installati
   to `{NEXT_PUBLIC_APP_URL}/?github_installed=1`. The `installation` webhook enriches the record.
 - `apps/app/src/app/github/setup/route.ts` (`handleGithubSetup`) still answers a Setup URL leg from
   an older registration. A current registration never sends one.
+- **A return to the Homepage URL with `?code=…&state=…` means a field above drifted.** GitHub
+  falls back to the Homepage URL when **Redirect on update** is on and the Setup URL is blank, so
+  a person lands on the marketing site holding an unused code. On 2026-10-01 the production app
+  (`oxagen-connect`, 4168398) had **Redirect on update** on and its **Homepage URL** set to
+  `https://oxagen.sh`, and a steering connect from the Repositories page ended on
+  `https://oxagen.sh/?code=…`. Set the two values in the tables above, and check them again after
+  anyone edits the app.
 
 ### Permissions
 

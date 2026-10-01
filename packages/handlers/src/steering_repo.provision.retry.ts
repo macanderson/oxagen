@@ -19,6 +19,10 @@
 // connection first, so the job's pick_connection finds it and goes on
 // (#4875). A pick the state did not record is refused before anything
 // changes.
+//
+// `resetConnection` clears the organization's stored connection first, so the
+// job lists the candidates again (#4899). The reset is refused once Oxagen has
+// created a steering repo in the stored organization.
 import { schema, withSystemDb } from "@oxagen/database";
 import { resolveActingUserId } from "@oxagen/iam/org-role";
 import { HandlerError, type CapabilityContext, type CapabilityHandler } from "@oxagen/oxagen";
@@ -32,6 +36,7 @@ import {
   STEERING_REPO_PROVISION_EVENT,
   pickSteeringConnection,
   readSteeringRepoState,
+  resetSteeringConnection,
   saveSteeringRepoState,
   storeChosenSteeringConnection,
   type SteeringConnection,
@@ -48,6 +53,11 @@ export interface RetrySteeringRepoProvisionDeps {
    * or refuse it when the organization already holds a different one.
    */
   saveConnection(orgId: string, connection: SteeringConnection): Promise<void>;
+  /**
+   * Clear the organization's stored connection, or refuse while a setup of
+   * the organization recorded a repository in it.
+   */
+  resetConnection(orgId: string): Promise<SteeringConnection | null>;
   send(data: SteeringRepoProvisionRequest, eventId: string): Promise<void>;
   now(): Date;
 }
@@ -96,6 +106,8 @@ export function createRetrySteeringRepoProvisionHandler(
         message: "retry_steering_repo_provision: no signed-in user or API key creator behind this call",
       });
     }
+
+    if (input.resetConnection === true) await deps.resetConnection(ctx.orgId);
 
     let chosen: SteeringConnection | null = null;
     if (input.connection !== undefined) {
@@ -187,6 +199,7 @@ export const retrySteeringRepoProvisionHandler = createRetrySteeringRepoProvisio
   loadState: loadSteeringRepoState,
   saveState: saveSteeringRepoState,
   saveConnection: storeChosenSteeringConnection,
+  resetConnection: resetSteeringConnection,
   send: async (data, eventId) => {
     await eventClient.send({ name: STEERING_REPO_PROVISION_EVENT, data, id: eventId });
   },
