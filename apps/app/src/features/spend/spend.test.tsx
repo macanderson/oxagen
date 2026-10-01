@@ -793,14 +793,23 @@ describe("Spend › Month", () => {
     expect(review.querySelector("[data-harness-badge]")).toBeNull();
   });
 
-  it("still lists the groups, every avatar unbadged, when the agents do not answer (negative)", async () => {
+  it("still lists the groups, every agent's avatar unbadged, when the agents do not answer (negative)", async () => {
     loadedMonth();
     agentsList.mockResolvedValue(readError("agents_down", 503));
     await renderSpend();
     const triageRow = rowOf("acme.core.triage");
     expect(triageRow).toHaveTextContent("$9.00");
-    expect(triageRow.querySelector("[data-agent-avatar]")).not.toBeNull();
-    expect(document.querySelector("[data-harness-badge]")).toBeNull();
+    // Each group's avatar sits in its row's header cell. A top run, in the
+    // hidden row under it, keeps the harness its session recorded, which needs
+    // no agents read.
+    const avatars = [
+      ...document.querySelectorAll<HTMLElement>(
+        "tr[data-key] > th [data-agent-avatar]",
+      ),
+    ];
+    expect(avatars.length).toBeGreaterThan(0);
+    for (const avatar of avatars)
+      expect(avatar.querySelector("[data-harness-badge]")).toBeNull();
   });
 
   it("groups by the query's choice, with the chip in force pressed and Agent on the bare path", async () => {
