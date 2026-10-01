@@ -4,6 +4,10 @@
 // the Changes tab can show the tool surface diff and the files the PR would
 // touch before anything leaves the page.
 //
+// Every edit but one changes one tool: its import, classification,
+// description, result cap and paging, or a saved test. The exposure mode
+// changes the whole server, and Review writes it to server.toml.
+//
 // A draft never holds a credential. An environment is named, a credential is
 // a vault reference the record already holds, and a saved test keeps the
 // request as built before the gateway adds the credential (spec, Try it and
@@ -16,13 +20,52 @@ import {
 } from "@/data/contracts/tools";
 import { type StudioSourceType, type StudioTool, sumTokens } from "./model";
 
-/** The part of a server view the draft reads: its tools, as the table lists them. */
+/** server.toml's `[exposure] mode`: every definition on every request, or the three search tools. */
+export type ExposureMode = "direct" | "search";
+
+/**
+ * The part of a server view the draft reads: its tools, as the table lists
+ * them, and the exposure mode server.toml sets. A view with no mode (no
+ * record, or a caller that does not read it) counts any staged mode as a
+ * change.
+ */
 type DraftView = {
   tools: readonly Pick<StudioTool, "name" | "imported" | "tokens">[];
+  exposure?: ExposureMode | null;
 };
 
 /** tools.toml's limit on a description, in characters. */
 export const DESCRIPTION_MAX = 1024;
+
+/**
+ * tools.toml's largest result cap, in bytes: MAX_RESULT_BYTES_LIMIT in
+ * @oxagen/mcp-studio and STUDIO_MAX_RESULT_BYTES in save_studio_draft's
+ * contract. The app imports neither, and draft.test.ts holds them together.
+ */
+export const MAX_RESULT_BYTES = 1_048_576;
+
+/** The result cap a tool takes when tools.toml names none, in bytes (DEFAULT_MAX_RESULT_BYTES). */
+export const DEFAULT_MAX_RESULT_BYTES = 65_536;
+
+/**
+ * Bytes per token, the estimate the collector uses when a harness reports no
+ * token count. tools.toml caps a result in bytes, and the panel asks for
+ * tokens, the unit spend prices a result in.
+ */
+export const BYTES_PER_TOKEN = 4;
+
+/** The cap in bytes for a cap in tokens. */
+export function capBytes(tokens: number): number {
+  return tokens * BYTES_PER_TOKEN;
+}
+
+/** The cap in tokens for a cap in bytes, rounded down. */
+export function capTokens(bytes: number): number {
+  return Math.floor(bytes / BYTES_PER_TOKEN);
+}
+
+/** The largest cap the panel takes, in tokens. */
+export const MAX_RESULT_TOKENS = capTokens(MAX_RESULT_BYTES);
 
 const Tool = z.string().min(1).max(128);
 /** An impact tag: snake_case, the registry's rule. */
@@ -64,9 +107,30 @@ const DraftOpShape = z.discriminatedUnion("kind", [
       shaped: z.string().max(262_144),
     })
     .strict(),
+  z
+    .object({
+      kind: z.literal("cap"),
+      tool: Tool,
+      /** tools.toml's `max_result_bytes`. */
+      maxResultBytes: z.number().int().min(1).max(MAX_RESULT_BYTES),
+      /** True turns auto paging on, false turns it off. Absent leaves it as it is. */
+      paging: z.boolean().optional(),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("expose"),
+      mode: z.enum(["direct", "search"]),
+    })
+    .strict(),
 ]);
 
 export type DraftOp = z.infer<typeof DraftOpShape>;
+
+/** The tool an edit changes, or null for an edit to the whole server. */
+export function opTool(op: DraftOp): string | null {
+  return op.kind === "expose" ? null : op.tool;
+}
 
 /**
  * The most a draft's edits may weigh, as UTF-8 JSON: save_studio_draft's
@@ -142,7 +206,8 @@ const OPPOSITE: Readonly<Record<"import" | "remove", "import" | "remove">> = {
  * - An import and a remove of one tool cancel each other. Cancelling an
  *   import also drops the tool's other staged edits, which only an imported
  *   tool can carry.
- * - A second classification or description of one tool replaces the first.
+ * - A second classification, description, or cap of one tool replaces the
+ *   first, and a second exposure mode replaces the first.
  * - Each saved test is its own edit.
  */
 function stage(
@@ -151,16 +216,19 @@ function stage(
 ): readonly DraftOp[] {
   if (op.kind === "import" || op.kind === "remove") {
     const opposite = OPPOSITE[op.kind];
-    if (ops.some((o) => o.kind === opposite && o.tool === op.tool)) {
+    if (ops.some((o) => o.kind === opposite && opTool(o) === op.tool)) {
       return op.kind === "remove"
-        ? ops.filter((o) => o.tool !== op.tool)
+        ? ops.filter((o) => opTool(o) !== op.tool)
         : ops.filter((o) => !(o.kind === "remove" && o.tool === op.tool));
     }
-    if (ops.some((o) => o.kind === op.kind && o.tool === op.tool)) return ops;
+    if (ops.some((o) => o.kind === op.kind && opTool(o) === op.tool)) {
+      return ops;
+    }
     return [...ops, op];
   }
   if (op.kind === "test") return [...ops, op];
-  const at = ops.findIndex((o) => o.kind === op.kind && o.tool === op.tool);
+  const tool = opTool(op);
+  const at = ops.findIndex((o) => o.kind === op.kind && opTool(o) === tool);
   if (at === -1) return [...ops, op];
   return ops.map((o, index) => (index === at ? op : o));
 }
@@ -223,6 +291,38 @@ export function stagedDescription(
   return op?.description;
 }
 
+/** The staged result cap of a tool, if the draft holds one. */
+export function stagedCap(
+  tool: string,
+  ops: readonly DraftOp[],
+): Extract<DraftOp, { kind: "cap" }> | undefined {
+  return ops.find(
+    (o): o is Extract<DraftOp, { kind: "cap" }> =>
+      o.kind === "cap" && o.tool === tool,
+  );
+}
+
+/** The staged exposure mode, if the draft holds one. */
+export function stagedExposure(ops: readonly DraftOp[]): ExposureMode | undefined {
+  const op = ops.find(
+    (o): o is Extract<DraftOp, { kind: "expose" }> => o.kind === "expose",
+  );
+  return op?.mode;
+}
+
+/**
+ * The exposure mode the draft changes server.toml to, or null when it leaves
+ * the mode as it is: no mode staged, or the mode already in force.
+ */
+export function draftExposure(
+  view: DraftView,
+  ops: readonly DraftOp[],
+): ExposureMode | null {
+  const staged = stagedExposure(ops);
+  if (staged === undefined) return null;
+  return staged === view.exposure ? null : staged;
+}
+
 /** One line of the draft's tool surface diff (the contract's `change` words). */
 export type DraftLine =
   | { change: "added"; tool: string; tokens: number | null }
@@ -230,7 +330,7 @@ export type DraftLine =
   | {
       change: "changed";
       tool: string;
-      fields: readonly ("classification" | "description")[];
+      fields: readonly ("classification" | "description" | "cap")[];
     };
 
 /** The draft's tool surface diff, in tool order. */
@@ -250,13 +350,14 @@ export function draftLines(
       continue;
     }
     if (!after) continue;
-    const fields: ("classification" | "description")[] = [];
+    const fields: ("classification" | "description" | "cap")[] = [];
     if (stagedClassification(tool.name, ops) !== undefined) {
       fields.push("classification");
     }
     if (stagedDescription(tool.name, ops) !== undefined) {
       fields.push("description");
     }
+    if (stagedCap(tool.name, ops) !== undefined) fields.push("cap");
     if (fields.length > 0) {
       lines.push({ change: "changed", tool: tool.name, fields });
     }
@@ -274,7 +375,11 @@ function draftTests(
 }
 
 /** The files in the server's folder the steering PR would change. */
-type DraftFile = "tools.toml" | "tools.lock.json" | "tests/calls.jsonl";
+type DraftFile =
+  | "server.toml"
+  | "tools.toml"
+  | "tools.lock.json"
+  | "tests/calls.jsonl";
 
 export function draftFiles(
   view: DraftView,
@@ -282,6 +387,7 @@ export function draftFiles(
 ): readonly DraftFile[] {
   const lines = draftLines(view, ops);
   const files: DraftFile[] = [];
+  if (draftExposure(view, ops) !== null) files.push("server.toml");
   if (lines.length > 0) files.push("tools.toml");
   if (lines.some((line) => line.change !== "changed")) {
     files.push("tools.lock.json");
@@ -290,12 +396,16 @@ export function draftFiles(
   return files;
 }
 
-/** How many edits the Changes tab counts: the diff's lines and the saved tests. */
+/**
+ * How many edits the Changes tab counts: the diff's lines, the saved tests,
+ * and a change of exposure mode.
+ */
 export function draftCount(
   view: DraftView,
   ops: readonly DraftOp[],
 ): number {
-  return draftLines(view, ops).length + draftTests(ops).length;
+  const exposure = draftExposure(view, ops) === null ? 0 : 1;
+  return draftLines(view, ops).length + draftTests(ops).length + exposure;
 }
 
 /**

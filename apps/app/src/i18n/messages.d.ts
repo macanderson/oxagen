@@ -3203,6 +3203,25 @@ type Messages = {
         search: string;
         compileError: string;
       };
+      exposure: {
+        title: string;
+        staged: string;
+        modes: {
+          direct: string;
+          search: string;
+        };
+        bodies: {
+          direct: string;
+          search: string;
+        };
+      };
+      calls: {
+        title: string;
+        counts: string;
+        unrecorded: string;
+        missing: string;
+        uncalled: string;
+      };
     };
     panel: {
       classification: string;
@@ -3232,6 +3251,20 @@ type Messages = {
       draftNotBuilt: string;
       draftFailed: string;
       draftError: string;
+      cap: string;
+      capTokens: string;
+      capUnread: string;
+      capHint: string;
+      capInvalid: string;
+      capImportFirst: string;
+      paging: string;
+      pagingChoice: {
+        keep: string;
+        on: string;
+        off: string;
+      };
+      pagingHint: string;
+      pagingNone: string;
       shaping: string;
       shapingMissing: string;
       hidden: string;
@@ -3397,6 +3430,7 @@ type Messages = {
         title: string;
         unstage: string;
         unstageNamed: string;
+        unstageExposure: string;
       };
       ops: {
         import: string;
@@ -3404,6 +3438,8 @@ type Messages = {
         classify: string;
         describe: string;
         test: string;
+        cap: string;
+        expose: string;
       };
       files: {
         title: string;
@@ -3417,6 +3453,7 @@ type Messages = {
         tokensUnmeasured: string;
         tokensAdded: string;
         tokensRemoved: string;
+        exposure: string;
         columns: {
           change: string;
           tool: string;
@@ -3430,6 +3467,7 @@ type Messages = {
         fields: {
           classification: string;
           description: string;
+          cap: string;
         };
       };
       findings: {
@@ -3496,6 +3534,7 @@ type Messages = {
           tool_key_collision: string;
           test_invalid: string;
           test_holds_credential: string;
+          tool_paging_missing: string;
         };
       };
       review: {
