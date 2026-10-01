@@ -380,11 +380,11 @@ describe("states", () => {
       "Repositories",
     );
     expect(screen.getByText("Core platform")).toBeTruthy();
-    const tabs = screen.getByRole("navigation", { name: "Repository views" });
+    const tabs = screen.getByRole("tablist", { name: "Repository views" });
     await waitFor(() => {
       expect(
         within(tabs)
-          .getAllByRole("link")
+          .getAllByRole("tab")
           .map((l) => l.textContent),
       ).toEqual([
         "Repositories2",
@@ -393,6 +393,13 @@ describe("states", () => {
         "Configuration",
       ]);
     });
+    // The selected tab names the panel the tab's body draws in.
+    const open = within(tabs).getByRole("tab", { selected: true });
+    expect(open).toHaveTextContent(/^Repositories/);
+    expect(open).toHaveAttribute(
+      "aria-controls",
+      screen.getByRole("tabpanel", { name: /^Repositories/ }).id,
+    );
     const gold = screen.getByTestId("repositories-add-oxagen");
     expect(gold.className).toContain("bg-button-primary-bg");
     // Exactly one gold action on the screen: the panel's and the rows' Add
@@ -417,7 +424,7 @@ describe("states", () => {
     expect(empty).toHaveTextContent("This workspace has no repository yet");
     expect(screen.queryByTestId("repositories-add-oxagen")).toBeNull();
     expect(
-      screen.queryByRole("navigation", { name: "Repository views" }),
+      screen.queryByRole("tablist", { name: "Repository views" }),
     ).toBeNull();
     await expectNoAxe(empty);
     await user.click(within(empty).getByTestId("repositories-empty-add"));
@@ -1523,7 +1530,7 @@ describe("the other tabs", () => {
     });
     await loaded("changes");
     expect(await screen.findByTestId("changes-empty")).toBeTruthy();
-    const tabs = screen.getByRole("navigation", { name: "Repository views" });
+    const tabs = screen.getByRole("tablist", { name: "Repository views" });
     expect(within(tabs).getByText("Changes")).toBeTruthy();
     cleanup();
     actions.readRepositoryChanges.mockResolvedValue({

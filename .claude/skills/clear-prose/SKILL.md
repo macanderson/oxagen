@@ -62,6 +62,16 @@ Second person, imperative, one step per sentence. Working command first, the
 reason in one line after. Code, commands, paths, ids, and verdict words in
 monospace. No marketing language in a doc.
 
+## Settings in docs
+
+A capability doc or an operator runbook never says which setting, or which
+value, turns a control on. It says the control depends on a deployment
+setting and links the setting's `ENV_REGISTRY` entry
+(`packages/config/src/registry.ts`). The entry's description is the one place
+that claims what the setting does. Four docs on #3169 said a control was on
+while the code had it off, and the fix was one place to be wrong instead of
+four. `AGENTS.md` has the full rule (#3202).
+
 ## UI strings and errors
 
 Terse, present tense, a fragment where a fragment reads faster. An error says

@@ -50,11 +50,17 @@ import {
 } from "@/ui/control-styles";
 import { SafeLink } from "@/ui/navigation";
 import { PageHeader } from "@/ui/page-header";
+import { RouteTabPanel } from "@/ui/route-tabs";
 import { StateWrap } from "@/ui/state-wrap";
 import { ChangesTab } from "./changes-tab";
 import { ConnectionTab } from "./connection-tab";
 import { buildStudioView, type StudioServerView } from "./model";
-import { type StudioAt, type StudioRoute, studioHref } from "./route";
+import {
+  STUDIO_PANEL,
+  type StudioAt,
+  type StudioRoute,
+  studioHref,
+} from "./route";
 import { readStudioRecord } from "./record-read";
 import type { RecordReader, StudioFinding } from "./seams";
 import {
@@ -417,10 +423,8 @@ export async function StudioServer({
         tools={view.tools}
         complete={versions.value.complete}
       />
-      <div
-        role="tabpanel"
-        id={`studio-panel-${route.tab}`}
-        aria-labelledby={`studio-tab-${route.tab}`}
+      <RouteTabPanel
+        panel={STUDIO_PANEL}
         className="flex min-w-0 flex-col gap-4"
       >
         {route.tab === "tools" ? (
@@ -469,7 +473,7 @@ export async function StudioServer({
             canEdit={canEdit}
           />
         ) : null}
-      </div>
+      </RouteTabPanel>
     </div>
   );
 }
