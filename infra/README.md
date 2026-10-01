@@ -230,9 +230,9 @@ change that caused it.
 
 ## `oxagen.app`
 
-Every service stays on `oxagen.sh` (ADR-236, which supersedes ADR-215), and
-`oxagen.app` only redirects to `https://app.oxagen.sh`. The domain is
-registered at Vercel, in the team with slug `oxagen-inc`, and its nameservers
+Every service stays on `oxagen.sh` (ADR-236, which supersedes ADR-215). Once
+#4882 lands, `oxagen.app` only redirects to `https://app.oxagen.sh`. The
+domain is registered at Vercel, in the team with slug `oxagen-inc`, and its nameservers
 point at the Route 53 zone in `stacks-new/oxagen/dns-oxagen-app.tf`. It came
 into Route 53 as a vanity redirect (`dns-vanity-domains.tf`), and `moved`
 blocks carried its zone, records, and certificate out of that set for the
@@ -240,10 +240,11 @@ withdrawn move.
 
 Until #4882 lands, the ALB serves `oxagen.app` and `www.oxagen.app` with that
 certificate and forwards them to the node, where `tools/caddy/Caddyfile.alb`
-routes them to the app. The app sends a page visit on a host that is not
-canonical to `app.oxagen.sh` (`apps/app/src/shared/canonical-host.ts`).
-`api.oxagen.app`, `mcp.oxagen.app`, and `docs.oxagen.app` still answer with
-their own certificates, and #4882 removes them. Keep the zone's mail and CAA
+routes them to the app. The app sends a GET or HEAD for a page on a host that
+is not canonical to `app.oxagen.sh` (`apps/app/src/shared/canonical-host.ts`),
+but `/api/*`, `/.well-known/*`, and every other method still answer on
+`oxagen.app`. `api.oxagen.app`, `mcp.oxagen.app`, and `docs.oxagen.app` still
+answer with their own certificates, and #4882 removes them. Keep the zone's mail and CAA
 records, so nobody can send mail as the domain.
 
 ## The certificate ordering trap
