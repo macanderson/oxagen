@@ -254,7 +254,8 @@ describe.skipIf(!enabled)("the work record store against Postgres", () => {
       orderId,
       headSha,
       briefDigest: digest,
-      data: { criteria: ["c1", "c2"], required_checks: ["test"] },
+      // The caller's list is ignored: the store records the checks the gate evaluated.
+      data: { criteria: ["c1", "c2"], required_checks: [] },
     } as FactInput<FactKind>;
   }
 
@@ -399,8 +400,10 @@ describe.skipIf(!enabled)("the work record store against Postgres", () => {
       const ok = await inScope((tx) =>
         appendFacts(tx, scope, { itemId, expectedVersion: moved.version, actorUserId: MARCUS, facts: [accepted(sent.orderId, SHA2, digest)] }),
       );
-      expect(ok.projection.activeOrder?.acceptance?.headSha).toBe(SHA2);
+      expect(ok.projection.activeOrder?.acceptance).toMatchObject({ headSha: SHA2, requiredChecks: ["test"], criteria: ["c1", "c2"] });
       expect(ok.projection.state).toBe("review");
+      const reread = await inScope((tx) => readWorkItem(tx, scope, itemId));
+      expect(reread.projection.activeOrder?.acceptance?.requiredChecks).toEqual(["test"]);
       await expectConsistent(itemId);
     });
   });
