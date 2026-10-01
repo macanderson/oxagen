@@ -288,8 +288,11 @@ resource "aws_imagebuilder_image_recipe" "runner" {
   }
 }
 
+# Image Builder writes pipeline logs outside /aws/imagebuilder/ only through an
+# execution role. The first apply on 2026-10-01 failed on that, so the group
+# lives under the prefix Image Builder writes to by itself.
 resource "aws_cloudwatch_log_group" "image_builds" {
-  name              = "/oxagen/ci-runners/image-builds"
+  name              = "/aws/imagebuilder/oxagen-ci-runner"
   retention_in_days = 30
 }
 
