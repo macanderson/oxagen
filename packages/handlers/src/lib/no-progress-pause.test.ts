@@ -263,18 +263,11 @@ describe("the Postgres store", () => {
     ).resolves.toBe("tcm_9");
     expect(seen[0]?.sql).toMatch(/"target_kind" = \$\d/);
     expect(seen[0]?.sql).toMatch(/"command" = \$\d/);
-    expect(seen[0]?.sql).toMatch(/"payload"->>\$\d+ in \(\$\d+, \$\d+\)/);
+    expect(seen[0]?.sql).toMatch(
+      /"payload"->>'no_progress_loop' in \(\$\d+, \$\d+\)/,
+    );
     expect(seen[0]?.params).toEqual(
-      expect.arrayContaining([
-        ORG,
-        WORKSPACE,
-        "run",
-        RUN,
-        "pause",
-        NO_PROGRESS_LOOP_PAYLOAD_KEY,
-        "k1",
-        "k2",
-      ]),
+      expect.arrayContaining([ORG, WORKSPACE, "run", RUN, "pause", "k1", "k2"]),
     );
   });
 

@@ -160,6 +160,9 @@ export async function pauseForNoProgress(
 
 const commands = schema.tachoControlCommands;
 
+/** The payload field as a SQL literal, as every other payload read writes it. */
+const loopKeyField = sql.raw(`'${NO_PROGRESS_LOOP_PAYLOAD_KEY}'`);
+
 export function postgresNoProgressPauseStore(tx: Tx): NoProgressPauseStore {
   const store = postgresCommandStore(tx);
   return {
@@ -176,10 +179,9 @@ export function postgresNoProgressPauseStore(tx: Tx): NoProgressPauseStore {
             eq(commands.targetKind, "run"),
             eq(commands.targetId, runPublicId),
             eq(commands.command, "pause"),
-            inArray(
-              sql<string>`${commands.payload}->>${NO_PROGRESS_LOOP_PAYLOAD_KEY}`,
-              [...keys],
-            ),
+            inArray(sql<string>`${commands.payload}->>${loopKeyField}`, [
+              ...keys,
+            ]),
           ),
         )
         .orderBy(asc(commands.issuedAt))
