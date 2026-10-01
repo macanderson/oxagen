@@ -1157,6 +1157,14 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./steering_repo.import"))
         .importWorkspaceSteeringHandler as CapabilityHandlerFn,
   );
+  // The move of a workspace's MCP servers into its steering repo (ADR-245,
+  // #4948). Provisioning starts the same run when the repo is ready.
+  registerHandler(
+    "migrate_tools_to_steering",
+    async () =>
+      (await import("./tool.steering.migrate"))
+        .migrateToolsToSteeringHandler as CapabilityHandlerFn,
+  );
   registerHandler(
     "get_steering_freshness",
     async () =>
