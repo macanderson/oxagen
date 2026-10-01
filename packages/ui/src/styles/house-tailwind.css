@@ -56,6 +56,7 @@
   --color-ox-text-ink: var(--ox-text-ink); /* primary text on paper */
   --color-ox-text-ink-body: var(--ox-text-ink-body); /* body text on paper */
   --color-ox-muted-ink: var(--ox-muted-ink); /* secondary text on paper */
+  --color-ox-muted-text-ink: var(--ox-muted-text-ink); /* secondary text on paper and on a lifted row there */
   --color-ox-dim-ink: var(--ox-dim-ink); /* the quietest text on paper */
   --color-ox-st-allowed: var(--ox-st-allowed);
   --color-ox-st-allowed-ink: var(--ox-st-allowed-ink);
@@ -71,6 +72,20 @@
   --color-ox-st-critical-ink: var(--ox-st-critical-ink);
   --color-ox-destructive: var(--ox-destructive);
   --color-ox-destructive-ink: var(--ox-destructive-ink);
+  --color-ox-st-allowed-text: var(--ox-st-allowed-text);
+  --color-ox-st-allowed-text-ink: var(--ox-st-allowed-text-ink);
+  --color-ox-st-approval-text: var(--ox-st-approval-text);
+  --color-ox-st-approval-text-ink: var(--ox-st-approval-text-ink);
+  --color-ox-st-denied-text: var(--ox-st-denied-text);
+  --color-ox-st-denied-text-ink: var(--ox-st-denied-text-ink);
+  --color-ox-st-proven-text: var(--ox-st-proven-text);
+  --color-ox-st-proven-text-ink: var(--ox-st-proven-text-ink);
+  --color-ox-st-failed-text: var(--ox-st-failed-text);
+  --color-ox-st-failed-text-ink: var(--ox-st-failed-text-ink);
+  --color-ox-st-critical-text: var(--ox-st-critical-text);
+  --color-ox-st-critical-text-ink: var(--ox-st-critical-text-ink);
+  --color-ox-destructive-text: var(--ox-destructive-text);
+  --color-ox-destructive-text-ink: var(--ox-destructive-text-ink);
 
   --font-sans: var(--font-geist, "Geist"), system-ui, -apple-system, "Segoe UI", sans-serif; /* body, labels, buttons, tables, navigation */
   --font-display: var(--font-geist, "Geist"), system-ui, -apple-system, "Segoe UI", sans-serif; /* every heading, h1 to h6 */
@@ -100,7 +115,7 @@
     --secondary: var(--ox-paper-hl);
     --secondary-foreground: var(--ox-text-ink);
     --muted: var(--ox-paper-hl);
-    --muted-foreground: var(--ox-muted-ink);
+    --muted-foreground: var(--ox-muted-text-ink);
     --accent: var(--ox-paper-hl);
     --accent-foreground: var(--ox-text-ink);
     --destructive: var(--ox-destructive-ink);
