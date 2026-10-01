@@ -58,14 +58,14 @@ locals {
   })
 
   image_files = {
-    "provision.sh"          = file("${path.module}/image/provision.sh")
-    "ci-local-disk.sh"      = file("${path.module}/image/ci-local-disk.sh")
-    "ci-local-disk.service" = file("${path.module}/image/ci-local-disk.service")
+    "provision.sh"           = file("${path.module}/image/provision.sh")
+    "ci-local-disk.sh"       = file("${path.module}/image/ci-local-disk.sh")
+    "ci-local-disk.service"  = file("${path.module}/image/ci-local-disk.service")
     "ci-volume-warm.sh"      = file("${path.module}/image/ci-volume-warm.sh")
     "ci-volume-warm.service" = file("${path.module}/image/ci-volume-warm.service")
-    "daemon.json"           = file("${path.module}/image/daemon.json")
-    "start-runner.sh"       = local.start_runner
-    "config.json"           = jsonencode(local.image_config)
+    "daemon.json"            = file("${path.module}/image/daemon.json")
+    "start-runner.sh"        = local.start_runner
+    "config.json"            = jsonencode(local.image_config)
   }
 }
 

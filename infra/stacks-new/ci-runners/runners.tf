@@ -87,11 +87,11 @@ locals {
     # A pool runner takes a job within a second or two. With no delay the
     # scale-up Lambda may start one runner the pool already covered, and that
     # runner waits for the next job. Speed is worth the spare runner.
-    delay_webhook_event                    = 0
+    delay_webhook_event                     = 0
     scale_up_reserved_concurrent_executions = -1
-    runner_boot_time_in_minutes            = 5
-    minimum_running_time_in_minutes        = 30
-    job_queue_retention_in_seconds         = 3600
+    runner_boot_time_in_minutes             = 5
+    minimum_running_time_in_minutes         = 30
+    job_queue_retention_in_seconds          = 3600
     job_retry = {
       enable           = true
       delay_in_seconds = 120
@@ -246,13 +246,13 @@ module "runners" {
     namespace = "oxagen/ci-runners"
   }
 
-  lambda_architecture         = "arm64"
-  webhook_lambda_memory_size  = 512
-  scale_up_lambda_memory_size = 1024
-  runners_scale_up_lambda_timeout = 60
+  lambda_architecture                        = "arm64"
+  webhook_lambda_memory_size                 = 512
+  scale_up_lambda_memory_size                = 1024
+  runners_scale_up_lambda_timeout            = 60
   pool_lambda_reserved_concurrent_executions = -1
-  pool_lambda_timeout         = 120
-  logging_retention_in_days   = 30
+  pool_lambda_timeout                        = 120
+  logging_retention_in_days                  = 30
 
   multi_runner_config = merge(
     {
@@ -264,11 +264,11 @@ module "runners" {
         }
         redrive_build_queue = { enabled = true, maxReceiveCount = 3 }
         runner_config = merge(local.runner_defaults, {
-          runner_architecture = p.arch
-          runner_extra_labels = [name]
-          runner_name_prefix  = "${name}-"
-          runner_group_name   = var.ci_runner_group
-          instance_types      = p.types
+          runner_architecture   = p.arch
+          runner_extra_labels   = [name]
+          runner_name_prefix    = "${name}-"
+          runner_group_name     = var.ci_runner_group
+          instance_types        = p.types
           runners_maximum_count = p.max
           ami = {
             owners               = ["099720109477"]
@@ -302,17 +302,17 @@ module "runners" {
         }
         redrive_build_queue = { enabled = true, maxReceiveCount = 3 }
         runner_config = merge(local.runner_defaults, {
-          runner_architecture           = "arm64"
-          runner_extra_labels           = ["oxagen-deploy"]
-          runner_name_prefix            = "oxagen-deploy-"
-          runner_group_name             = var.deploy_runner_group
-          instance_types                = ["m8gd.4xlarge", "m8g.4xlarge", "m7g.4xlarge"]
-          instance_target_capacity_type = "on-demand"
-          instance_allocation_strategy  = "prioritized"
+          runner_architecture                  = "arm64"
+          runner_extra_labels                  = ["oxagen-deploy"]
+          runner_name_prefix                   = "oxagen-deploy-"
+          runner_group_name                    = var.deploy_runner_group
+          instance_types                       = ["m8gd.4xlarge", "m8g.4xlarge", "m7g.4xlarge"]
+          instance_target_capacity_type        = "on-demand"
+          instance_allocation_strategy         = "prioritized"
           enable_on_demand_failover_for_errors = []
-          runners_maximum_count         = 6
-          vpc_id                        = data.aws_vpc.production.id
-          subnet_ids                    = data.aws_subnets.production_public.ids
+          runners_maximum_count                = 6
+          vpc_id                               = data.aws_vpc.production.id
+          subnet_ids                           = data.aws_subnets.production_public.ids
           runner_additional_security_group_ids = [aws_security_group.deploy_runner.id]
           ami = {
             owners               = ["099720109477"]
