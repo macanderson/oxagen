@@ -131,6 +131,11 @@ EOF
   tar -xJf "$tmp/node.tar.xz" -C "$node_dir" --strip-components=1
   touch "$node_dir.complete"
   chown -R runner:runner /opt/hostedtoolcache
+  # Also on the PATH, as on GitHub's image: host-level steps call node, npm,
+  # npx, and corepack without actions/setup-node.
+  for bin in node npm npx corepack; do
+    ln -sf "$node_dir/bin/$bin" "/usr/local/bin/$bin"
+  done
 
   # The module's start script reads its settings from the instance's tags and
   # Parameter Store, registers, and runs one job. A systemd unit starts it as
@@ -190,6 +195,7 @@ validate() {
   test -x /usr/local/sbin/ci-start-runner
   systemctl is-enabled ci-start-runner.service
   "/opt/hostedtoolcache/node/$node_version/$runner_arch/bin/node" --version
+  [ "$(command -v node)" = /usr/local/bin/node ] && node --version && npx --version
   systemctl is-enabled ci-local-disk.service
   id runner
   jq -r '.images[]' "$config" | while read -r image; do
