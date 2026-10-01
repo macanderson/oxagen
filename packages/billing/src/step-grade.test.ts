@@ -9,6 +9,7 @@ import {
   repeatKindOf,
   SHELL_TOOL,
   stepClassOf,
+  stepRequestsOf,
   type StepRequest,
 } from "./step-grade";
 
@@ -305,5 +306,81 @@ describe("classifySteps", () => {
       readOnly: 0,
       edit: 0,
     });
+  });
+});
+
+describe("stepRequestsOf", () => {
+  const read = (atMs: number | null, chain?: string | null) =>
+    chain === undefined
+      ? { atMs, isMutating: false }
+      : { atMs, chain, isMutating: false };
+  const write = (atMs: number | null, chain?: string | null) =>
+    chain === undefined
+      ? { atMs, isMutating: true }
+      : { atMs, chain, isMutating: true };
+
+  it("places each call under the latest model call at or before it", () => {
+    const models = [{ atMs: 10 }, { atMs: 30 }, { atMs: 50 }];
+    const r20 = read(20);
+    const w30 = write(30);
+    const requests = stepRequestsOf(models, [r20, w30]);
+    expect(requests).toEqual([
+      { modelCall: true, calls: [r20] },
+      { modelCall: true, calls: [w30] },
+      { modelCall: true, calls: [] },
+    ]);
+  });
+
+  it("puts the calls before every model call, and those with no time, in a request no model call made", () => {
+    const early = write(5);
+    const untimed = read(null);
+    const requests = stepRequestsOf([{ atMs: 10 }], [early, untimed]);
+    expect(requests).toEqual([
+      { modelCall: false, calls: [early, untimed] },
+      { modelCall: true, calls: [] },
+    ]);
+  });
+
+  it("prefers the model call on the call's own chain, then the run's latest", () => {
+    const models = [
+      { atMs: 10, chain: "root" },
+      { atMs: 20, chain: "child" },
+      { atMs: 25 },
+    ];
+    const onRoot = write(30, "root");
+    const onOther = write(30, "other");
+    const requests = stepRequestsOf(models, [onRoot, onOther]);
+    expect(requests).toEqual([
+      { modelCall: true, calls: [onRoot] },
+      { modelCall: true, calls: [] },
+      // A model call that names no chain counts toward the run's latest.
+      { modelCall: true, calls: [onOther] },
+    ]);
+  });
+
+  it("reads a null chain as the run's own", () => {
+    const models = [{ atMs: 10, chain: null }, { atMs: 20, chain: "child" }];
+    const call = read(30, null);
+    expect(stepRequestsOf(models, [call])[0]).toEqual({
+      modelCall: true,
+      calls: [call],
+    });
+  });
+
+  it("orders model calls by time whatever order they arrive in", () => {
+    const models = [{ atMs: 50 }, { atMs: 10 }];
+    const call = write(20);
+    expect(stepRequestsOf(models, [call])).toEqual([
+      { modelCall: true, calls: [] },
+      { modelCall: true, calls: [call] },
+    ]);
+  });
+
+  it("gives a model call with no readable time no call", () => {
+    const call = read(20);
+    expect(stepRequestsOf([{ atMs: Number.NaN }], [call])).toEqual([
+      { modelCall: false, calls: [call] },
+      { modelCall: true, calls: [] },
+    ]);
   });
 });

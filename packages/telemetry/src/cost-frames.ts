@@ -181,6 +181,14 @@ interface ToolCallFrameRow {
   isMutating: boolean | null;
   /** The tool-result tokens the OTel span of the same tool use recorded. */
   resultTokens: number | null;
+  /**
+   * When the hook recorded the call (RFC 3339), and the chain it ran on
+   * (`session_uuid`, the root session on the root's own chain). The rollup
+   * places each call under the model call that made it (F17). Absent when
+   * the read returned neither.
+   */
+  at?: string;
+  sessionUuid?: string;
 }
 
 /** The `tool_status` values a rollup grades on; `cancelled` is left out on purpose. */
@@ -718,10 +726,12 @@ export async function readTachoToolCallFrames(args: {
         h.tool_input_digest                                            AS input_digest,
         h.tool_output_digest                                           AS output_digest,
         h.tool_is_mutating                                             AS is_mutating,
+        formatDateTime(h.ts, '%Y-%m-%dT%H:%i:%S.%fZ', 'UTC')           AS at,
+        toString(h.session_uuid)                                       AS session_uuid,
         r.result_tokens                                                AS result_tokens
         ${consume === undefined ? "" : ", h.repeated AS repeated"}
       FROM (
-        SELECT ts, seq, tool_name, tool_status, tool_input_digest,
+        SELECT ts, seq, session_uuid, tool_name, tool_status, tool_input_digest,
                tool_output_digest, tool_is_mutating, tool_use_id
                ${consume === undefined ? "" : `,
                  tool_name != '' AND tool_input_digest != '' AND tool_output_digest != '' AND
@@ -771,6 +781,8 @@ export async function readTachoToolCallFrames(args: {
     output_digest: string;
     is_mutating: boolean | null;
     result_tokens: string | number | null;
+    at?: string;
+    session_uuid?: string;
   };
   return consumeFrames<Row, ToolCallFrameRow>(result, (r) => ({
     name: r.name === "" ? null : r.name,
@@ -780,6 +792,8 @@ export async function readTachoToolCallFrames(args: {
     outputDigest: r.output_digest === "" ? null : r.output_digest,
     isMutating: r.is_mutating,
     resultTokens: r.result_tokens === null ? null : Number(r.result_tokens),
+    ...(r.at === undefined ? {} : { at: r.at }),
+    ...(r.session_uuid === undefined ? {} : { sessionUuid: r.session_uuid }),
   }), consume);
 }
 

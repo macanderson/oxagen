@@ -115,6 +115,90 @@ export interface StepRequest {
 }
 
 /**
+ * A model call's place in a run: its time in milliseconds and the chain it
+ * was recorded on. `chain` is undefined when the store names no chain, and a
+ * null chain is the run's own.
+ */
+export interface StepModelCall {
+  atMs: number;
+  chain?: string | null;
+}
+
+/** A tool call's place in a run, as {@link StepModelCall}, and the classifier's flag. */
+export interface StepToolCall {
+  /** Null when the store recorded no time for the call. */
+  atMs: number | null;
+  chain?: string | null;
+  isMutating: boolean | null;
+}
+
+/** The last position in ascending `times` at or before `t`; -1 when none is. */
+function lastAtOrBefore(times: readonly number[], t: number): number {
+  let lo = 0;
+  let hi = times.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    if (times[mid]! <= t) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo - 1;
+}
+
+/**
+ * Each model call of a run with the tool calls it made, by the rule the
+ * findings job uses (./findings/requests.ts): a tool call belongs to the
+ * latest model call on its own chain at or before it, or to the run's latest
+ * model call at or before it when its chain has none. A model call that names
+ * no chain counts only toward the run's latest. A tool call with no time, or
+ * one before every model call, goes in a request no model call made. The
+ * requests come back with that one first, then one per model call in the
+ * order given.
+ */
+export function stepRequestsOf(
+  models: readonly StepModelCall[],
+  tools: readonly StepToolCall[],
+): StepRequest[] {
+  // A model call with no readable time makes its own step and holds no call.
+  const order = models
+    .map((_, i) => i)
+    .filter((i) => Number.isFinite(models[i]!.atMs))
+    .sort((a, b) => models[a]!.atMs - models[b]!.atMs || a - b);
+  const times = order.map((i) => models[i]!.atMs);
+  const byChain = new Map<string, { times: number[]; index: number[] }>();
+  for (const i of order) {
+    const { chain, atMs } = models[i]!;
+    if (chain === undefined) continue;
+    const key = chain ?? "";
+    const list = byChain.get(key) ?? { times: [], index: [] };
+    list.times.push(atMs);
+    list.index.push(i);
+    byChain.set(key, list);
+  }
+  const made: StepToolCall[][] = models.map(() => []);
+  const unmade: StepToolCall[] = [];
+  for (const tool of tools) {
+    let owner = -1;
+    if (tool.atMs !== null && Number.isFinite(tool.atMs)) {
+      const list =
+        tool.chain === undefined ? undefined : byChain.get(tool.chain ?? "");
+      if (list !== undefined) {
+        const p = lastAtOrBefore(list.times, tool.atMs);
+        if (p >= 0) owner = list.index[p]!;
+      }
+      if (owner < 0) {
+        const p = lastAtOrBefore(times, tool.atMs);
+        if (p >= 0) owner = order[p]!;
+      }
+    }
+    (owner < 0 ? unmade : made[owner]!).push(tool);
+  }
+  const requests: StepRequest[] =
+    unmade.length > 0 ? [{ modelCall: false, calls: unmade }] : [];
+  for (const calls of made) requests.push({ modelCall: true, calls });
+  return requests;
+}
+
+/**
  * Class every step of a run (ADR-199: one model call or one tool call). A
  * tool call is the only call of its own step. A model call's calls are the
  * tool calls it made.

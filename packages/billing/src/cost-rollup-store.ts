@@ -53,6 +53,7 @@ import {
   type ToolCallFrame,
   ZERO_TOKENS,
 } from "./cost-rollup";
+import { readFileChanges } from "./findings-run-facts";
 import {
   loadPriceBookSlice,
   withPriceBookSnapshot,
@@ -376,6 +377,15 @@ export function ledgerToolStatus(
 }
 
 /**
+ * When a ledger call ran, as RFC 3339 text in UTC: the producer's observed
+ * time, else the time Postgres accepted the event. The step classes place
+ * each call under the model call before it (F17).
+ */
+function ledgerCallAt() {
+  return sql<string | null>`to_char(coalesce(${events.observedAt}, ${events.createdAt}) AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`;
+}
+
+/**
  * A ledger run's tool calls in the order they ran, under either spelling,
  * with the outcome and digests the step grader reads. An encrypted payload
  * names no tool and carries none of them. The ledger records no mutating
@@ -397,6 +407,7 @@ async function readLedgerToolCalls(args: {
         outcome: sql<string | null>`${payload}->>'outcome'`,
         inputDigest: sql<string | null>`${payload}->>'input_digest'`,
         outputDigest: sql<string | null>`${payload}->>'output_digest'`,
+        at: ledgerCallAt(),
       })
       .from(events)
       .where(
@@ -417,6 +428,7 @@ async function readLedgerToolCalls(args: {
     outputDigest: r.outputDigest,
     isMutating: null,
     resultTokens: null,
+    at: r.at,
   }));
 }
 
@@ -439,6 +451,7 @@ export async function streamLedgerToolCalls(
         ${payload}->>'outcome' AS outcome,
         ${payload}->>'input_digest' AS "inputDigest",
         ${payload}->>'output_digest' AS "outputDigest",
+        ${ledgerCallAt()} AS "at",
         coalesce(${payload}->>'output_digest', '') != '' AND
         ${payload}->>'input_digest' IS NOT NULL AND
         ${toolCallName(payload)} IS NOT NULL AND
@@ -464,6 +477,7 @@ export async function streamLedgerToolCalls(
         outcome: string | null;
         inputDigest: string | null;
         outputDigest: string | null;
+        at: string | null;
         repeated: boolean;
       }[];
       if (rows.length === 0) break;
@@ -475,6 +489,7 @@ export async function streamLedgerToolCalls(
         isMutating: null,
         resultTokens: null,
         repeated: row.repeated,
+        at: row.at,
       })));
     }
     await tx.execute(sql`CLOSE rollup_tools`);
@@ -551,6 +566,8 @@ function toFrame(row: ModelCallFrameRow): PricedModelCall {
     reportedCostMicros:
       row.reportedCostMicros === null ? null : BigInt(row.reportedCostMicros),
     basis: row.basis,
+    // The chain places the tool calls the frame made (F17).
+    ...(row.sessionUuid === undefined ? {} : { sessionUuid: row.sessionUuid }),
     sources: {
       toolDefinitionTokens: row.toolDefinitionTokens,
       contextFrameTokens: row.contextFrameTokens,
@@ -607,6 +624,11 @@ export interface RunRollupDeps {
     sources?: RunTokenSources,
   ) => Promise<void>;
   now: () => Date;
+  /**
+   * Whether a session of the run recorded a file change, which the step
+   * classes read (F17). A run read without it counts no change.
+   */
+  readFileChanged?: (source: RunSource) => Promise<boolean>;
 }
 
 type Row = typeof totals.$inferSelect;
@@ -709,6 +731,8 @@ export function reviveBreakdown(value: unknown): RunTotalsRecord["breakdown"] {
     tools: ToolBreakdownJson[];
     /** Absent on a row rolled up before the steps were graded (#3984). */
     steps?: RunTotalsRecord["breakdown"]["steps"];
+    /** Absent on a row rolled up before steps had a class (F17). */
+    stepClasses?: RunTotalsRecord["breakdown"]["stepClasses"];
   };
   return {
     models: raw.models.map((m) => ({
@@ -750,6 +774,9 @@ export function reviveBreakdown(value: unknown): RunTotalsRecord["breakdown"] {
     })),
     // Likewise a row rolled up before its steps were graded.
     steps: raw.steps ?? null,
+    // A row rolled up before steps had a class keeps no key, and a reader
+    // takes the absent key as not recorded until the run's next rollup.
+    ...(raw.stepClasses === undefined ? {} : { stepClasses: raw.stepClasses }),
   };
 }
 
@@ -774,6 +801,9 @@ export function serializeBreakdown(breakdown: RunTotalsRecord["breakdown"]) {
       }),
     ),
     steps: breakdown.steps,
+    ...(breakdown.stepClasses === undefined
+      ? {}
+      : { stepClasses: breakdown.stepClasses }),
   };
 }
 
@@ -991,6 +1021,20 @@ export function readRunToolCalls(source: RunSource): Promise<ToolCallFrame[]> {
       });
 }
 
+/**
+ * Whether a wrapped run's sessions recorded a file change, by the rule the
+ * findings job reads (`readFileChanges`). A ledger run records no file rows,
+ * so it reads false.
+ */
+export async function readRunFileChanged(source: RunSource): Promise<boolean> {
+  if (source.frames.kind !== "tacho") return false;
+  const changes = await readFileChanges(
+    { orgId: source.meta.orgId, workspaceId: source.meta.workspaceId },
+    new Map([[source.meta.runId, source.frames.rootSessionUuid]]),
+  );
+  return changes.get(source.meta.runId) === true;
+}
+
 const productionRunRollupDeps: RunRollupDeps = {
   loadRunSource,
   readModelCalls: async (args) =>
@@ -1017,6 +1061,7 @@ const productionRunRollupDeps: RunRollupDeps = {
     withSystemDb((tx) => readWitnessedRunId(tx, scope, runId)),
   write: upsertRunTotals,
   now: () => new Date(),
+  readFileChanged: readRunFileChanged,
 };
 
 /**
@@ -1059,10 +1104,11 @@ export async function rebuildRunTotals(
     orgId: source.meta.orgId,
     workspaceId: source.meta.workspaceId,
   };
-  const [carried, verdict, workerId] = await Promise.all([
+  const [carried, verdict, workerId, changedFile] = await Promise.all([
     deps.readCarried(publicId),
     deps.readVerdict(scope, publicId),
     deps.readWitnessedRun(scope, publicId),
+    deps.readFileChanged?.(source) ?? false,
   ]);
   const sources: RunTokenSources = { ...NO_RUN_TOKEN_SOURCES };
   // A witness run is a run of its own whose cost belongs to the worker's
@@ -1080,6 +1126,7 @@ export async function rebuildRunTotals(
   const accumulator = createRunRollup({
     meta,
     carried: { verdict, accepted: carried?.accepted ?? null },
+    changedFile,
   });
   const readModels = async (load: RunRollupDeps["loadPriceBook"]) => {
     const consumeModels = async (calls: PricedModelCall[]) => {

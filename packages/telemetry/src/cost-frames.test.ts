@@ -797,6 +797,8 @@ describe("readTachoToolCallFrames", () => {
       "input_digest",
       "output_digest",
       "is_mutating",
+      "at",
+      "session_uuid",
       "result_tokens",
     ]);
     expect(frames).toEqual([
@@ -843,6 +845,25 @@ describe("readTachoToolCallFrames", () => {
     ).toHaveLength(2);
     expect(query).toContain("ORDER BY h.ts, h.seq");
     expect(frame?.resultTokens).toBeNull();
+  });
+
+  it("reads each call's time and chain, which place it under the model call that made it (F17)", async () => {
+    answer([
+      hookRow({ at: "2026-09-15T10:00:01.250000Z", session_uuid: CHILD }),
+    ]);
+    const [frame] = await readTachoToolCallFrames({
+      orgId: ORG,
+      workspaceId: WS,
+      rootSessionUuid: RUN,
+      sessionUuids: [RUN, CHILD],
+    });
+    const { query } = lastQuery();
+    expect(query).toContain("formatDateTime(h.ts, '%Y-%m-%dT%H:%i:%S.%fZ', 'UTC')");
+    expect(query).toContain("toString(h.session_uuid)");
+    expect(frame).toMatchObject({
+      at: "2026-09-15T10:00:01.250000Z",
+      sessionUuid: CHILD,
+    });
   });
 
   it("reads an empty name, empty digests and an ungraded status as null", async () => {
