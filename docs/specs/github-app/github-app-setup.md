@@ -137,7 +137,7 @@ their steering repos.
 | Request user authorization (OAuth) during installation | on |
 | Enable Device Flow | off |
 | Setup URL | blank. GitHub disables the field while OAuth during installation is on. |
-| Redirect on update | off. It was on until 2026-10-01, which sent a steering connect to the Homepage URL (see [Setup URL](#setup-url-post-install-redirect)). |
+| Redirect on update | on. The [Setup URL](#setup-url-post-install-redirect) table requires off. On 2026-10-01 this setting sent a steering connect to the Homepage URL. |
 | Webhook | `https://api.oxagen.sh/webhooks/github/app`, active |
 | Permissions | The [required set](#permissions), applied 2026-10-01T00:34:16Z |
 | Events | The [15 required events](#webhook-config-on-the-app), applied the same time. App-level `installation_target` and `meta` on, `security_advisory` off. |
@@ -189,7 +189,7 @@ credentials.
 | Request user authorization (OAuth) during installation | on |
 | Enable Device Flow | off |
 | Setup URL | `http://localhost:3000/connections/github/setup`. GitHub greys it out and ignores it while OAuth during installation is on. |
-| Redirect on update | off. With it on and the Setup URL ignored, GitHub sends a person to the Homepage URL. |
+| Redirect on update | on. The [Setup URL](#setup-url-post-install-redirect) table requires off. With it on and the Setup URL ignored, GitHub sends a person to the Homepage URL. |
 | Webhook | inactive, URL blank |
 | Permissions | The [required set](#permissions), applied 2026-10-01T01:02:27Z |
 | Events | none. GitHub drops every event subscription while an app's webhook is inactive. To receive webhooks locally, follow the steps in [Webhooks](#webhooks). |
@@ -256,7 +256,7 @@ permissions and events as they are, because changing them asks every installatio
 | Request user authorization (OAuth) during installation | on |
 | Enable Device Flow | off |
 | Setup URL | `https://oxagen-v2-app.vercel.app/connections/github/setup`. GitHub greys it out and ignores it while OAuth during installation is on. |
-| Redirect on update | on. It does nothing while the Setup URL is ignored. |
+| Redirect on update | on. With it on and the Setup URL ignored, GitHub sends a person to the Homepage URL. |
 | Webhook | `https://api.oxagen.sh/webhooks/github/app`, active |
 | Permissions | 65 permissions, left as registered, including organization administration and secrets write. Not the required set. |
 | Events | 53 events, left as registered |
@@ -325,8 +325,9 @@ GitHub's settings page calls a callback URL a **Redirect URI**.
 ### Setup URL (post-install redirect)
 
 The **Setup URL** is where GitHub sends someone after an install from GitHub's own pages. GitHub
-turns the field off while **Request user authorization (OAuth) during installation** is on, and
-**Redirect on update** does nothing without a Setup URL.
+turns the field off while **Request user authorization (OAuth) during installation** is on. Keep
+**Redirect on update** off: with it on and no Setup URL, GitHub sends someone who updates an
+installation to the Homepage URL.
 
 | Field | Local | Staging | Production |
 | --- | --- | --- | --- |
