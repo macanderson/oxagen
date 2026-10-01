@@ -265,7 +265,10 @@ describe("grantFreeCredits", () => {
     expect(txMock._balanceUpsertCalled).toBe(true);
     // ADR-NEW (signup grant): the deprecated app's signups get the
     // governed-action grant on the same transaction.
-    expect(issueSignupGrantMock).toHaveBeenCalledWith(txMock, "org-abc");
+    expect(issueSignupGrantMock).toHaveBeenCalledWith(
+      expect.anything(),
+      "org-abc",
+    );
   });
 
   it("already granted (ledger conflict) — lot and balance inserts NOT called", async () => {

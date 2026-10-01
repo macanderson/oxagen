@@ -35,11 +35,12 @@ function fakeTx(policy: { grantGau: number; grantDays: number } | null) {
       return {
         values: (row: Record<string, unknown>) => ({
           onConflictDoNothing: () => ({
+            // RETURNING names three columns, so the org id is not among them.
             returning: () => {
-              const orgId = row.orgId as string;
-              if (grants.has(orgId)) return Promise.resolve([]);
-              grants.set(orgId, row);
-              return Promise.resolve([row]);
+              const { orgId, ...returned } = row;
+              if (grants.has(orgId as string)) return Promise.resolve([]);
+              grants.set(orgId as string, row);
+              return Promise.resolve([returned]);
             },
           }),
         }),
