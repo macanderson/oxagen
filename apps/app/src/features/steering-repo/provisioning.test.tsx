@@ -349,8 +349,9 @@ describe("the steering repo provisioning", () => {
 
   describe("the way on when setup stopped (#4875)", () => {
     const CHOICES = [
-      { provider: "github" as const, id: 11, name: "acme" },
-      { provider: "github" as const, id: 12, name: "acme-old" },
+      { provider: "github" as const, id: 11, name: "acme", kind: "organization" as const },
+      { provider: "github" as const, id: 12, name: "acme-old", kind: "organization" as const },
+      { provider: "github" as const, id: 13, name: "mac", kind: "user" as const },
     ];
     const choosing = (overrides: Partial<SteeringRepoView> = {}) =>
       failedSteeringRepo(
@@ -399,7 +400,7 @@ describe("the steering repo provisioning", () => {
       expect(actions.retrySteeringRepoProvision).toHaveBeenCalledWith(
         "acme",
         "core-platform",
-        { provider: "github", id: 12 },
+        { connection: { provider: "github", id: 12 } },
       );
       await waitFor(() => {
         expect(nav.refresh).toHaveBeenCalledTimes(1);
@@ -495,6 +496,81 @@ describe("the steering repo provisioning", () => {
       ).toHaveTextContent("This was refused: no_connection.");
       // A refused import records where setup stopped, so the page reads it.
       expect(nav.refresh).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("the organization steering repos go to (#4899)", () => {
+    const REFUSED = (overrides: Partial<SteeringRepoView> = {}) =>
+      failedSteeringRepo(
+        "create_repository",
+        {
+          code: "repository_create_refused",
+          message:
+            "GitHub refused to create a repository in acme-old: Due to policy, you are not permitted to perform that operation on this repository.",
+        },
+        {
+          status: "blocked",
+          connection: {
+            provider: "github",
+            id: 12,
+            name: "acme-old",
+            kind: "organization",
+          },
+          ...overrides,
+        },
+      );
+
+    it("names it at the Host connection step and offers a different one", async () => {
+      actions.retrySteeringRepoProvision.mockResolvedValue({
+        ok: true,
+        value: { status: "provisioning" },
+      });
+      provisioning(REFUSED());
+      expect(screen.getByTestId("steering-repo-connection")).toHaveTextContent(
+        "Steering repos go to the acme-old organization.",
+      );
+      await userEvent.click(screen.getByTestId("steering-repo-change-connection"));
+      expect(actions.retrySteeringRepoProvision).toHaveBeenCalledWith(
+        "acme",
+        "core-platform",
+        { resetConnection: true },
+      );
+    });
+
+    it("resets through the import for a workspace still steered by a code repository", async () => {
+      actions.importWorkspaceSteering.mockResolvedValue({
+        ok: false,
+        reason: "conflict",
+        code: "choose_connection",
+      });
+      provisioning(REFUSED({ legacySource: LEGACY_SOURCE }));
+      await userEvent.click(screen.getByTestId("steering-repo-change-connection"));
+      expect(actions.importWorkspaceSteering).toHaveBeenCalledWith(
+        "acme",
+        "core-platform",
+        { resetConnection: true },
+      );
+      expect(actions.retrySteeringRepoProvision).not.toHaveBeenCalled();
+    });
+
+    it("names a personal account as one", () => {
+      provisioning(
+        REFUSED({
+          connection: { provider: "github", id: 13, name: "mac", kind: "user" },
+        }),
+      );
+      expect(screen.getByTestId("steering-repo-connection")).toHaveTextContent(
+        "Steering repos go to mac's personal account.",
+      );
+    });
+
+    it("offers no change once a repo exists there, or to a member (negative)", () => {
+      provisioning(REFUSED({ repository: GITHUB_REPOSITORY }));
+      expect(screen.getByTestId("steering-repo-connection")).toBeInTheDocument();
+      expect(screen.queryByTestId("steering-repo-change-connection")).toBeNull();
+      cleanup();
+      provisioning(REFUSED(), { canAct: false });
+      expect(screen.queryByTestId("steering-repo-change-connection")).toBeNull();
     });
   });
 
