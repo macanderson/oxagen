@@ -49,7 +49,9 @@ permissions:
 jobs:
   record:
     if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.event == 'push'
-    runs-on: ubuntu-latest
+    # ubuntu-slim (one vCPU, $0.002 a minute): a two-file checkout and a
+    # script that makes a few API calls (#4918).
+    runs-on: ubuntu-slim
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5

@@ -257,7 +257,8 @@ describe("recurring runs", () => {
   it("never groups a prompt a person typed", () => {
     const runs = job(5);
     const input = withPrompt(reads({ [DIGEST]: runs }), runs, {
-      source: "user",
+      source: "typed",
+      origin: '{"kind":"human"}',
     });
     expect(detectFindings(input)).toEqual([]);
   });

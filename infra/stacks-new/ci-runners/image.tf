@@ -62,14 +62,15 @@ locals {
   })
 
   image_files = {
-    "provision.sh"           = file("${path.module}/image/provision.sh")
-    "ci-local-disk.sh"       = file("${path.module}/image/ci-local-disk.sh")
-    "ci-local-disk.service"  = file("${path.module}/image/ci-local-disk.service")
-    "ci-volume-warm.sh"      = file("${path.module}/image/ci-volume-warm.sh")
-    "ci-volume-warm.service" = file("${path.module}/image/ci-volume-warm.service")
-    "daemon.json"            = file("${path.module}/image/daemon.json")
-    "start-runner.sh"        = local.start_runner
-    "config.json"            = jsonencode(local.image_config)
+    "provision.sh"            = file("${path.module}/image/provision.sh")
+    "ci-local-disk.sh"        = file("${path.module}/image/ci-local-disk.sh")
+    "ci-local-disk.service"   = file("${path.module}/image/ci-local-disk.service")
+    "ci-volume-warm.sh"       = file("${path.module}/image/ci-volume-warm.sh")
+    "ci-volume-warm.service"  = file("${path.module}/image/ci-volume-warm.service")
+    "daemon.json"             = file("${path.module}/image/daemon.json")
+    "start-runner.sh"         = local.start_runner
+    "ci-start-runner.service" = file("${path.module}/image/ci-start-runner.service")
+    "config.json"             = jsonencode(local.image_config)
   }
 }
 
@@ -288,8 +289,11 @@ resource "aws_imagebuilder_image_recipe" "runner" {
   }
 }
 
+# Image Builder writes pipeline logs outside /aws/imagebuilder/ only through an
+# execution role. The first apply on 2026-10-01 failed on that, so the group
+# lives under the prefix Image Builder writes to by itself.
 resource "aws_cloudwatch_log_group" "image_builds" {
-  name              = "/oxagen/ci-runners/image-builds"
+  name              = "/aws/imagebuilder/oxagen-ci-runner"
   retention_in_days = 30
 }
 

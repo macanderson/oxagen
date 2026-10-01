@@ -38,7 +38,9 @@ permissions:
 
 jobs:
   guard:
-    runs-on: ubuntu-latest
+    # ubuntu-slim (one vCPU, $0.002 a minute): a sparse checkout and a few
+    # API calls, done in seconds (#4918).
+    runs-on: ubuntu-slim
     timeout-minutes: 5
     # Reopening an issue fires `issues: reopened`, not `closed`, so this cannot
     # loop. The state_reason filter is applied inside the script, where the
@@ -51,7 +53,7 @@ jobs:
         uses: actions/checkout@v5
         with:
           repository: macanderson/oxagen
-          ref: ${{ github.repository == 'macanderson/oxagen' && github.sha || 'main' }}
+          ref: ${{ github.repository == 'oxageninc/product' && github.sha || 'main' }}
           path: .scr-tools
           sparse-checkout: tools/scripts
           sparse-checkout-cone-mode: false

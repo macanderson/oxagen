@@ -46,7 +46,7 @@ locals {
     "oxagen-small-x64" = {
       arch     = "x64"
       types    = ["m7a.xlarge", "m6id.xlarge", "m7i.xlarge", "m6a.xlarge"]
-      max      = 50
+      max      = 150
       disk     = { size = 80, iops = 6000, throughput = 500 }
       priority = 40
     }
