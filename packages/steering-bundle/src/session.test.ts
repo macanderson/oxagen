@@ -1,5 +1,5 @@
 // session.test.ts: which skills reach a run, and the folder name each one
-// gets. Placing and removing them is `@oxagen/tacho/skills`, tested there.
+// gets. Placing and removing them is `@oxagen/recorder/skills`, tested there.
 //
 // The runSkills tests build real published versions from the fixture repos,
 // with a compiler that throws NotBuiltError, so no MCP Studio code runs.
@@ -17,7 +17,7 @@ import {
   SKILL_NAME_PATTERN,
   skillDigest,
   skillMarkdown,
-} from "@oxagen/tacho/skills";
+} from "@oxagen/recorder/skills";
 import { buildBundle, type BundleIdentity } from "./build";
 import { RecordFileError } from "./read";
 import type { BundleSource } from "./render";

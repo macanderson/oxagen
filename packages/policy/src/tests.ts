@@ -15,7 +15,7 @@
  * clock is `now`.
  */
 import { z } from "zod";
-import type { CedarDecision, CedarRuntime } from "@oxagen/tacho/policy";
+import type { CedarDecision, CedarRuntime } from "@oxagen/recorder/policy";
 import type { CompiledPolicySet } from "./compile";
 import { decideToolCall, type ToolCallInput } from "./evaluate";
 

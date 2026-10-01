@@ -1,5 +1,5 @@
 /**
- * `tacho reassign --workspace <slug>`: point an enrolled host at another
+ * `oxagen agent reassign --workspace <slug>`: point an enrolled host at another
  * workspace (or org) in one step. The host API key is minted for the
  * workspace at enrollment, so a move is a revoke plus a fresh enrollment;
  * what carries over is the device key, the loopback port, and the local
@@ -73,7 +73,7 @@ export async function reassign(
   const lock = acquireInstallLock(deps.paths.tachoDir, deps.now);
   if ("heldBy" in lock) {
     deps.err(
-      `Another tacho enroll, unenroll or reassign is running on this machine (pid ${lock.heldBy}); wait for it to finish and run this again.`,
+      `Another enroll, unenroll, or reassign is running on this machine (pid ${lock.heldBy}); wait for it to finish and run this again.`,
     );
     return { ok: false, warnings: [] };
   }
@@ -148,7 +148,7 @@ function tokenAgentRefusal(
 ): string {
   const home = `${host.org_slug}/${host.workspace_slug}`;
   const there = `${target.org}/${target.workspace}`;
-  const unenroll = `\`tacho unenroll --harness ${host.harnesses[0] ?? ""}\``;
+  const unenroll = `\`oxagen agent unenroll --harness ${host.harnesses[0] ?? ""}\``;
   if (there !== home)
     return `Cannot reassign ${host.agent_key}, so nothing was changed. A one-time token from the Agents page enrolled it as an agent registered in ${home}. An agent stays in the workspace it is registered in. To report ${host.harnesses.join(", ")} to ${there}, register an agent in ${there} on the Agents page, run ${unenroll}, and then run the enroll command the page shows.`;
   return `Cannot change the harnesses of ${host.agent_key}, so nothing was changed. A one-time token from the Agents page enrolled it as a registered agent. A reassign enrolls it again through your CLI session, which links no agent. To hook another harness, register an agent for it on the Agents page and run the enroll command the page shows. To take ${host.agent_key} off this machine, run ${unenroll}.`;
@@ -162,7 +162,7 @@ async function reassignLocked(
   const host = readHostFile(deps.paths.hostFile);
   if (host === undefined) {
     deps.err(
-      `Not enrolled (no ${deps.paths.hostFile}); run \`tacho enroll --workspace <slug>\` instead.`,
+      `Not enrolled (no ${deps.paths.hostFile}); run \`oxagen agent enroll --workspace <slug>\` instead.`,
     );
     return { ok: false, warnings };
   }
@@ -247,7 +247,7 @@ async function reassignLocked(
     );
   if (deps.runtime.transient !== undefined)
     refusals.push(
-      `tacho is running from ${deps.runtime.transient} (${deps.runtime.binDir}), which is gone once it is closed`,
+      `This executable is running from ${deps.runtime.transient} (${deps.runtime.binDir}), which is gone once it is closed`,
     );
   if (deps.runtime.executableProblem !== undefined)
     refusals.push(deps.runtime.executableProblem);
@@ -272,7 +272,7 @@ async function reassignLocked(
     host,
     {
       ...(options.token !== undefined ? { token: options.token } : {}),
-      reason: options.reason ?? `tacho reassign to ${org}/${workspace}`,
+      reason: options.reason ?? `oxagen agent reassign to ${org}/${workspace}`,
     },
     deps,
     warnings,
@@ -313,7 +313,7 @@ async function reassignLocked(
   ) {
     // Enrolled in the new workspace, but a harness could not be hooked or
     // the new daemon is not reporting; `enroll` has already said which and
-    // why. `tacho enroll` exits 1 on both (`main.ts`), and so does this.
+    // why. `oxagen agent enroll` exits 1 on both (`main.ts`), and so does this.
     return {
       ok: false,
       from,
@@ -340,7 +340,7 @@ async function reassignLocked(
     // session too.
     const apiUrl = options.apiUrl ?? host.api_url;
     deps.err(
-      `Reassign failed after revoking the old enrollment; this host is now unenrolled (host.json kept, marked retired). Run \`tacho enroll --force --org ${org} --workspace ${workspace} --api-url ${apiUrl} --harness ${harnesses.join(",")}\` once the cause is fixed.`,
+      `Reassign failed after revoking the old enrollment; this host is now unenrolled (host.json kept, marked retired). Run \`oxagen agent enroll --force --org ${org} --workspace ${workspace} --api-url ${apiUrl} --harness ${harnesses.join(",")}\` once the cause is fixed.`,
     );
     return { ok: false, from, warnings };
   }

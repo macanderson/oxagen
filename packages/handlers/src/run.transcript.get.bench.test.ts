@@ -42,7 +42,7 @@ import {
   setDataPlaneResolver,
   clearDataPlaneResolver,
 } from "@oxagen/tenancy";
-import { digestBytes } from "@oxagen/tacho";
+import { digestBytes } from "@oxagen/recorder";
 import {
   closeClickhouse,
   type TachoFrameRow,

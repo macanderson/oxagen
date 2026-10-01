@@ -7,7 +7,7 @@
  * than that gets its oldest cut items dropped from the list.
  */
 import { describe, expect, it } from "vitest";
-import { steeringManifestSchema } from "@oxagen/tacho";
+import { steeringManifestSchema } from "@oxagen/recorder";
 import {
   assembleSteering,
   PREFIX_BUDGET_TOKENS,

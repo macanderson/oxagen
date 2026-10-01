@@ -16,7 +16,7 @@
 import { schema, withTenantDb } from "@oxagen/database";
 import { ATTESTER_KEY_ENV } from "@oxagen/run-ledger/attester-key";
 import { evidenceStore } from "@oxagen/run-ledger/evidence-store";
-import { attesterKeyFromPem } from "@oxagen/tacho";
+import { attesterKeyFromPem } from "@oxagen/recorder";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { NonRetriableError } from "@oxagen/functions";
 import { and, eq } from "drizzle-orm";

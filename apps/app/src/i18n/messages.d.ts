@@ -6303,6 +6303,7 @@ type Messages = {
           provider: {
             github: string;
             gitlab: string;
+            githubUser: string;
           };
         };
         connect: {
@@ -6322,6 +6323,13 @@ type Messages = {
         fresh: {
           body: string;
           action: string;
+        };
+        connection: {
+          organization: string;
+          user: string;
+          change: string;
+          group: string;
+          changeGroup: string;
         };
       };
       reauthorize: {

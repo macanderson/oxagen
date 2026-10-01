@@ -5,7 +5,7 @@
 // The operator already sees this title in their terminal, so the Run page
 // shows it ahead of any name Oxagen wrote.
 import { RUN_LABEL_MAX } from "@oxagen/oxagen/contracts/run.list";
-import { cutLabel } from "@oxagen/tacho";
+import { cutLabel } from "@oxagen/recorder";
 
 type TitledEvent = { ts: string; body?: unknown };
 

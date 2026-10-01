@@ -257,6 +257,28 @@ describe("the window", () => {
     expect(sidecarCalls).toContainEqual({ sidecar, args });
   });
 
+  // #4879: the Activity log opened with the recorder's argv as a `tacho`
+  // command line, and a failure named it too. A person types `oxagen agent`
+  // now, so both say what the action does.
+  it("names a failed recorder action by what it does, not by its argv", async () => {
+    bridge.runSidecar.mockResolvedValue({ code: 1, stdout: "", stderr: "" });
+    bridge.readState.mockResolvedValue(olderSetup);
+    render(<App />);
+    const button = await screen.findByRole("button", { name: "Re-apply" });
+    await act(async () => {
+      button.click();
+    });
+    expect(
+      await screen.findByText(
+        "Re-applying the hooks and the collector exited 1. See the output below.",
+      ),
+    ).toBeTruthy();
+    const log =
+      document.querySelector("pre.log[aria-live]")?.textContent ?? "";
+    expect(log.split("\n")[0]).toBe("Re-applying the hooks and the collector");
+    expect(log).not.toContain("tacho");
+  });
+
   // #4318 item 5: "connected" is the Connected tier's word (ADR-078).
   it("says the collector is running in the masthead, not connected", async () => {
     await renderEnrolled();

@@ -1,5 +1,5 @@
 import { schema, type withTenantDb } from "@oxagen/database";
-import type { TachoEvent } from "@oxagen/tacho";
+import type { TachoEvent } from "@oxagen/recorder";
 import { and, eq, inArray, or, type SQL, sql } from "drizzle-orm";
 import {
   fileIdentityOf,

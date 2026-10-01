@@ -10,7 +10,7 @@
  * a test to update.
  */
 import { describe, it, expect } from "vitest";
-import { isContentBearingFrame } from "@oxagen/tacho";
+import { isContentBearingFrame } from "@oxagen/recorder";
 import {
   advanceEventStreamDigest,
   assertInlinePayloadWithinCap,
@@ -1024,10 +1024,10 @@ describe("the step a completed event marks", () => {
     expect(stepKindOfEventType("llm_call")).toBeNull();
   });
 
-  it("is the set @oxagen/tacho calls content-bearing", () => {
+  it("is the set @oxagen/recorder calls content-bearing", () => {
     // `isContentBearingFrame` is what both seals derive `body_missing` from,
     // and a frame absent from it can never carry a run to `view`. It lives in
-    // @oxagen/tacho, the package this one depends on, so the names are
+    // @oxagen/recorder, the package this one depends on, so the names are
     // spelled there rather than imported — and drift between the two lists
     // would silently cost a grade. This is the test that refuses the drift.
     for (const type of [...MODEL_CALL_EVENT_TYPES, ...TOOL_CALL_EVENT_TYPES]) {

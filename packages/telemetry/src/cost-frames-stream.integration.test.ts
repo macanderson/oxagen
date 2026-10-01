@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { GENESIS_CURSOR, sealEvent, type UnsealedTachoEvent } from "@oxagen/tacho";
+import { GENESIS_CURSOR, sealEvent, type UnsealedTachoEvent } from "@oxagen/recorder";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { describe, expect, it } from "vitest";
 import { readModelCallFrames, readTachoToolCallFrames, type ModelCallFrameRow } from "./cost-frames";

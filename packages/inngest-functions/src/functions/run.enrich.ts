@@ -6,7 +6,7 @@ import {
 } from "@oxagen/database";
 import { runEnrichmentEnabled } from "@oxagen/oxagen/run-enrichment";
 import { evidenceStore } from "@oxagen/run-ledger/evidence-store";
-import { SESSION_SUBJECT_MAX, SUMMARY_MAX_CHARS } from "@oxagen/tacho";
+import { SESSION_SUBJECT_MAX, SUMMARY_MAX_CHARS } from "@oxagen/recorder";
 import { runInTenantScope } from "@oxagen/tenancy";
 import {
   and,

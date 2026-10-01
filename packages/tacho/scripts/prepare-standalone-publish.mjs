@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Stage dist-standalone/ as the publishable @oxagen/tacho package: the three
+ * Stage dist-standalone/ as the publishable @oxagen/recorder package: the three
  * bundled executables plus a manifest with no workspace dependencies.
  * Run order: scripts/bundle.mjs → this script → `npm publish dist-standalone`.
  *
@@ -19,7 +19,7 @@ const distDir = resolve(root, "dist-standalone");
 for (const name of ["tacho", "tachod", "tacho-hook"]) {
   if (!existsSync(resolve(distDir, `${name}.mjs`))) {
     throw new Error(
-      `missing ${name}.mjs; run \`pnpm --filter @oxagen/tacho bundle\` first`,
+      `missing ${name}.mjs; run \`pnpm --filter @oxagen/recorder bundle\` first`,
     );
   }
 }
@@ -65,5 +65,5 @@ console.log(
   `✔ standalone manifest written to ${resolve(distDir, "package.json")}`,
 );
 console.log(
-  `  install with:  npm i -g ${distDir}   (or npx @oxagen/tacho enroll once published)`,
+  `  install with:  npm i -g ${distDir}   (or npx @oxagen/recorder enroll once published)`,
 );

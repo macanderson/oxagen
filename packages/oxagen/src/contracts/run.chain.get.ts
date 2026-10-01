@@ -38,7 +38,7 @@ import {
   COMPLETENESS_GAP_KINDS,
   REPLAY_GRADES,
   RUN_ATTESTATION_FIELDS,
-} from "@oxagen/tacho";
+} from "@oxagen/recorder";
 import { z } from "zod";
 import { registerCapability } from "../registry";
 import { runPublicIdSchema } from "./run.list";

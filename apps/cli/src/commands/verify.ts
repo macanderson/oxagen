@@ -3,14 +3,14 @@
  * Control spec §13.4, App. E; ADR-058).
  *
  * `<bundle>` is the zip `oxagen run download` wrote, or the directory it was
- * extracted to. The check is `verifyRunExport` from @oxagen/tacho: every
+ * extracted to. The check is `verifyRunExport` from @oxagen/recorder: every
  * frame's digest and chain link, the Merkle root, each attempt's signed root
  * and Ed25519 signature, each ledger attempt's stream fold, and the redaction
  * summary against the frames.
  *
  * This module makes no network call and reads no CLI config. An auditor on a
  * clean machine runs it against a file and nothing else, so keep imports to
- * node:fs, fflate, @oxagen/tacho and the output seam.
+ * node:fs, fflate, @oxagen/recorder and the output seam.
  *
  * Output discipline (ADR-023 §4): `--json` prints the verification object as
  * one line; pretty mode prints one line per frame, then each bundle check,
@@ -26,7 +26,7 @@ import {
   type RunExportFiles,
   type RunExportVerification,
   verifyRunExport,
-} from "@oxagen/tacho";
+} from "@oxagen/recorder";
 import { stdoutWriter, type CommandWriter } from "../lib/capture-writer.js";
 import { createOutput } from "../lib/output.js";
 

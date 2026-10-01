@@ -9,11 +9,11 @@
  * the network down (fail-closed enforcement).
  */
 import { createPrivateKey, createPublicKey, sign } from "node:crypto";
-import { jcs, type JsonValue } from "@oxagen/tacho";
+import { jcs, type JsonValue } from "@oxagen/recorder";
 import {
   keyIdForPublicKey,
   verifyBundle as verifyBundleOffline,
-} from "@oxagen/tacho/host";
+} from "@oxagen/recorder/host";
 import type { PolicyBundle } from "@oxagen/oxagen/tacho/schemas";
 
 export const TACHO_BUNDLE_SIGNING_KEY_ENV = "TACHO_BUNDLE_SIGNING_PRIVATE_KEY";

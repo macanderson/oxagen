@@ -95,6 +95,12 @@ export const steeringRepoImport = registerCapability({
           "The GitHub organization or GitLab group to create the steering repo in, when setup stopped with choose_connection. One of get_steering_repo's connectionChoices.",
         )
         .optional(),
+      resetConnection: z
+        .boolean()
+        .describe(
+          "Set true to clear the organization's stored steering connection first, so the run lists the GitHub organizations and GitLab groups again. Refused (conflict connection_in_use) once Oxagen has created a steering repo in the stored one.",
+        )
+        .optional(),
     })
     .strict(),
   output: z.object({

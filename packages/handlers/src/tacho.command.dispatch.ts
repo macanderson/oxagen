@@ -58,7 +58,7 @@ import {
   type RunCommand,
   tachoCommandDispatch,
 } from "@oxagen/oxagen/contracts/tacho.command.dispatch";
-import type { TachoDeliveryMode } from "@oxagen/tacho";
+import type { TachoDeliveryMode } from "@oxagen/recorder";
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { schema, withTenantDb, type Tx } from "@oxagen/database";
 import { revokeRunTokens } from "./lib/run-token";
@@ -84,7 +84,7 @@ import { ledgerIdentityQuery, type RunScope, runScope } from "./run.list";
 /**
  * The bundle feature a host advertises when it can put steering text in
  * front of the agent before its next step, rather than at the next prompt.
- * The host side (#4027) declares the same word in `@oxagen/tacho`'s
+ * The host side (#4027) declares the same word in `@oxagen/recorder`'s
  * `wire.ts`; this copy goes when that lands.
  */
 export const BUNDLE_FEATURE_STEER_NEXT_STEP = "steer_next_step";

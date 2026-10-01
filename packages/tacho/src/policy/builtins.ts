@@ -11,9 +11,9 @@
  * strictest built-in, so a tool a harness adds tomorrow is never looser than
  * the shell.
  *
- * This module lives in `@oxagen/tacho` because the hook decides built-in
+ * This module lives in `@oxagen/recorder` because the hook decides built-in
  * calls from the cached bundle and tacho has no `@oxagen/*` dependency.
- * `@oxagen/policy` reads it through `@oxagen/tacho/policy`, so the publish
+ * `@oxagen/policy` reads it through `@oxagen/recorder/policy`, so the publish
  * side and the hook share one map.
  */
 

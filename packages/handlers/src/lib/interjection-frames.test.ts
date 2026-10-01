@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 import { schema, type Tx } from "@oxagen/database";
-import type { TachoEvent } from "@oxagen/tacho";
+import type { TachoEvent } from "@oxagen/recorder";
 import { SKILL_INTERJECTION_TIMEOUT_MS } from "@oxagen/oxagen/skills";
 
 const { warn, error } = vi.hoisted(() => ({ warn: vi.fn(), error: vi.fn() }));

@@ -145,7 +145,7 @@ describe("git effect classification", () => {
       "gh pr list",
       "gh pr view 12",
       "ls",
-      "pnpm --filter @oxagen/tacho test:unit",
+      "pnpm --filter @oxagen/recorder test:unit",
     ]) {
       expect(classifyTool("Bash", { command })).toMatchObject({
         effect_kind: "command",

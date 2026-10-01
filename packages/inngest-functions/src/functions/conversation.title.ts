@@ -13,7 +13,7 @@ import {
 import { evaluateTurnCreditGate } from "@oxagen/billing";
 import { schema, withTenantDb } from "@oxagen/database";
 import { NonRetriableError } from "@oxagen/functions";
-import { capSubject } from "@oxagen/tacho/session-subject";
+import { capSubject } from "@oxagen/recorder/session-subject";
 import { runInTenantScope, type TenantScope } from "@oxagen/tenancy";
 import { createFunction } from "../create-function";
 import { CONVERSATION_OPENED_EVENT } from "../events";

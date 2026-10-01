@@ -1,7 +1,7 @@
 /**
- * What `tacho status` says about a Claude Code hook written in an older
+ * What `oxagen agent status` says about a Claude Code hook written in an older
  * shape (#3989). An enrollment before #3989 wrote `SessionEnd` as an http
- * hook, which is lost while the daemon is down, and only `tacho enroll`
+ * hook, which is lost while the daemon is down, and only `oxagen agent enroll`
  * rewrites it. The hook still counts as present, so status has to name it.
  */
 import { join } from "node:path";
@@ -99,7 +99,7 @@ describe("tacho status on an older Claude Code hook", () => {
       stale: ["SessionEnd"],
     });
     expect(lines).toContain(
-      "            outdated: SessionEnd. Run tacho enroll again to rewrite it.",
+      "            outdated: SessionEnd. Run oxagen agent enroll again to rewrite it.",
     );
   });
 

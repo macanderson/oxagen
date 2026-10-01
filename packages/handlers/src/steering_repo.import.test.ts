@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   role: vi.fn(async (_contract: unknown, _ctx: unknown) => "Owner"),
   actor: vi.fn(async (_ctx: unknown): Promise<string | null> => "u_1"),
+  orgRole: vi.fn(async (_ctx: unknown, _required: unknown): Promise<string> => "Owner"),
   run: vi.fn(
     async (_scope: unknown, _input: unknown, _deps: unknown): Promise<unknown> => ({
       outcome: "imported",
@@ -12,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   ),
   deps: vi.fn((options: unknown) => ({ deps: options })),
   pick: vi.fn(async (_scope: unknown, _pick: unknown): Promise<void> => {}),
+  reset: vi.fn(async (_orgId: unknown): Promise<void> => {}),
 }));
 
 vi.mock("./lib/capability-role-guard", () => ({
@@ -19,6 +21,7 @@ vi.mock("./lib/capability-role-guard", () => ({
 }));
 vi.mock("@oxagen/iam/org-role", () => ({
   resolveActingUserId: mocks.actor,
+  assertOrgRole: mocks.orgRole,
 }));
 vi.mock("./steering-repo/import-run", () => ({
   runSteeringImport: mocks.run,
@@ -28,6 +31,7 @@ vi.mock("./steering-repo/import-deps", () => ({
 }));
 vi.mock("./steering-repo/connection-pick", () => ({
   applyWorkspaceConnectionPick: mocks.pick,
+  resetOrganizationConnection: mocks.reset,
 }));
 
 import { importWorkspaceSteeringHandler } from "./steering_repo.import";
@@ -45,6 +49,10 @@ beforeEach(() => {
   mocks.run.mockResolvedValue({ outcome: "imported" });
   mocks.pick.mockReset();
   mocks.pick.mockResolvedValue(undefined);
+  mocks.reset.mockReset();
+  mocks.reset.mockResolvedValue(undefined);
+  mocks.orgRole.mockReset();
+  mocks.orgRole.mockResolvedValue("Owner");
 });
 
 describe("import_workspace_steering handler", () => {
@@ -79,6 +87,33 @@ describe("import_workspace_steering handler", () => {
     mocks.pick.mockClear();
     await run();
     expect(mocks.pick).not.toHaveBeenCalled();
+  });
+
+  it("clears the stored connection before the run when asked", async () => {
+    await run({ resetConnection: true });
+    expect(mocks.reset).toHaveBeenCalledWith("org_1");
+    expect(mocks.reset.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.run.mock.invocationCallOrder[0] as number,
+    );
+    expect(mocks.pick).not.toHaveBeenCalled();
+  });
+
+  it("lets only an org Owner or Admin clear the organization's connection", async () => {
+    mocks.orgRole.mockRejectedValue(
+      new HandlerError({ code: "forbidden", reason: "org_role_required" }),
+    );
+    await expect(run({ resetConnection: true })).rejects.toMatchObject({
+      reason: "org_role_required",
+    });
+    expect(mocks.orgRole).toHaveBeenCalledWith(
+      expect.objectContaining({ orgId: "org_1", userId: "u_1" }),
+      { org: ["Owner", "Admin"] },
+    );
+    expect(mocks.reset).not.toHaveBeenCalled();
+    expect(mocks.run).not.toHaveBeenCalled();
+    mocks.orgRole.mockClear();
+    await run();
+    expect(mocks.orgRole).not.toHaveBeenCalled();
   });
 
   it("runs nothing when the picked connection is refused", async () => {

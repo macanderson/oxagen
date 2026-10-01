@@ -47,7 +47,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 
 // Partial mock: only randomUUID is pinned. A total mock of node:crypto
 // breaks any transitive import that needs another export — @oxagen/telemetry
-// reaches @oxagen/tacho, whose chain.ts computes GENESIS_PREV_HASH with
+// reaches @oxagen/recorder, whose chain.ts computes GENESIS_PREV_HASH with
 // createHash at module load.
 vi.mock("node:crypto", async (importOriginal) => ({
   ...(await importOriginal<typeof import("node:crypto")>()),

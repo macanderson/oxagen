@@ -9,7 +9,7 @@
  * Machine-to-machine, authenticated by the host's API key. The host names
  * itself so the handler can check the key's scope names the same host.
  */
-import { SHA256_DIGEST_PATTERN } from "@oxagen/tacho";
+import { SHA256_DIGEST_PATTERN } from "@oxagen/recorder";
 import { z } from "zod";
 import { registerCapability } from "../registry";
 import { MEMORY_RECALL_MAX } from "../steering-repo/tokens";

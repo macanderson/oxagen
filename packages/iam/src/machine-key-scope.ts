@@ -163,7 +163,7 @@ export function gatewayMayInvoke(capabilityName: string): boolean {
  * it: a list, sorted, of what `gatewayMayInvoke` answers yes to.
  *
  * The rule stays here and is evaluated here. The host cannot run it —
- * `@oxagen/tacho` takes no `@oxagen/*` runtime dependency (ADR-078 §4), so it
+ * `@oxagen/recorder` takes no `@oxagen/*` runtime dependency (ADR-078 §4), so it
  * has no way to read a capability's surfaces, mutation or sensitivity, and a
  * second copy of the rule living in the collector is precisely the drift that
  * constraint exists to prevent. The control plane signs the answer into the

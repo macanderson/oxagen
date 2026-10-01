@@ -3,7 +3,7 @@
  * enrollment and unenrollment steps that move a vendor key between a harness
  * file and the gateway's custody.
  *
- *   - `tacho credential issue --harness claude-code` is what Claude Code runs
+ *   - `oxagen credential issue --harness claude-code` is what Claude Code runs
  *     as its `apiKeyHelper`. It prints one run token and nothing else. It
  *     asks the daemon, which mints and records the issue. When the daemon
  *     does not answer it prints no token and says why on stderr: the proxy
@@ -11,15 +11,15 @@
  *     cannot happen anyway. It refuses when the gateway holds nothing for
  *     the provider: a token nobody can spend is a harness that finds out at
  *     its first call.
- *   - `tacho credential status` says which providers are in custody, where
+ *   - `oxagen credential status` says which providers are in custody, where
  *     each key came from and when, and whether each harness file points at
  *     the gateway. It never prints a secret.
  *
- * `brokerCredentials` runs at the end of `tacho enroll`, once the proxy is
+ * `brokerCredentials` runs at the end of `oxagen agent enroll`, once the proxy is
  * confirmed listening: it takes each routed harness's key out of its file
  * (or from `TACHO_BROKER_ANTHROPIC_API_KEY` / `TACHO_BROKER_OPENAI_API_KEY`
  * in the enrolling shell), seals it, and points the harness at run tokens.
- * `restoreCredentials` runs first in `tacho unenroll`, before the base URL
+ * `restoreCredentials` runs first in `oxagen agent unenroll`, before the base URL
  * comes out and long before the daemon stops, so no harness is left with a
  * run token and no gateway to spend it at.
  */
@@ -153,8 +153,8 @@ export async function credentialIssue(
       ok: false,
       detail:
         host === undefined
-          ? "this machine is not enrolled; run `tacho enroll`"
-          : "tachod is not answering, so no run token is issued: the gateway it would be spent at is down. Run `tacho status`",
+          ? "this machine is not enrolled; run `oxagen agent enroll`"
+          : "tachod is not answering, so no run token is issued: the gateway it would be spent at is down. Run `oxagen agent status`",
     };
   }
   const issued = parseIssueAnswer(answer);
@@ -260,7 +260,7 @@ export async function credentialStatus(
   return report;
 }
 
-/** One line per harness for `tacho status` and `tacho credential status`. */
+/** One line per harness for `oxagen agent status` and `oxagen credential status`. */
 export function describeHarness(entry: ModelCredentialHarnessState): string {
   const label = TACHO_HARNESS_LABELS[entry.harness];
   if (entry.brokered) {
@@ -276,9 +276,9 @@ export function describeHarness(entry: ModelCredentialHarnessState): string {
     case "no_file":
       return `${label}: no ${entry.file} yet; its own credential crosses the proxy`;
     case "two_credentials":
-      return `${label}: ${entry.file} sets both ANTHROPIC_API_KEY and ANTHROPIC_AUTH_TOKEN in env, and the gateway holds one ${HARNESS_PROVIDER[entry.harness]} credential; remove one and run \`tacho enroll\` again. Its own credential crosses the proxy`;
+      return `${label}: ${entry.file} sets both ANTHROPIC_API_KEY and ANTHROPIC_AUTH_TOKEN in env, and the gateway holds one ${HARNESS_PROVIDER[entry.harness]} credential; remove one and run \`oxagen agent enroll\` again. Its own credential crosses the proxy`;
     default:
-      return `${label}: holds its own credential, which crosses the proxy (run \`tacho enroll\` to broker it)`;
+      return `${label}: holds its own credential, which crosses the proxy (run \`oxagen agent enroll\` to broker it)`;
   }
 }
 
@@ -461,7 +461,7 @@ async function issueStatic(
   if (answer === undefined)
     return {
       detail:
-        "tachod did not answer, so no run token was issued; run `tacho enroll` again once tachod is up",
+        "tachod did not answer, so no run token was issued; run `oxagen agent enroll` again once tachod is up",
     };
   return parseIssueAnswer(answer);
 }
@@ -569,7 +569,7 @@ export async function restoreCredentials(
           );
         } else {
           warnings.push(
-            `${entry.file} already holds a ${provider} credential of its own, so the one the gateway holds stays in custody; run \`tacho credential status\` to see it`,
+            `${entry.file} already holds a ${provider} credential of its own, so the one the gateway holds stays in custody; run \`oxagen credential status\` to see it`,
           );
         }
       }

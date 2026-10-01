@@ -37,6 +37,7 @@ export function steeringRepoView(
     health: "healthy",
     differences: [],
     legacySource: null,
+    connection: null,
     connectionChoices: [],
     ...overrides,
   };

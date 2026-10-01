@@ -1,7 +1,14 @@
 /**
- * `tacho` entry: enroll, status, unenroll, export, verify, run, daemon.
- * `oxagen tacho <command>` in the platform CLI delegates here with its own
- * credentials.
+ * The recorder's command tree: enroll, status, unenroll, export, verify,
+ * run, daemon, hook, and the commands a harness or a connected app runs.
+ *
+ * Two programs build it. The `oxagen` CLI runs the machine commands through
+ * it as `oxagen daemon`, `oxagen mcp-stdio`, `oxagen credential`, `oxagen
+ * github`, and `oxagen arp` (#4879), and runs the person-facing ones as
+ * `oxagen agent <verb>` with its own credentials. The `tacho` executable is a
+ * hidden alias of those for machines enrolled before the fold: it builds this
+ * tree under its old name and prints, once, which `oxagen` command replaced
+ * the one typed (`alias.ts`).
  */
 import { readFileSync } from "node:fs";
 import { Command, InvalidArgumentError } from "commander";
@@ -19,6 +26,7 @@ import {
   githubCredential,
   readCredentialInput,
 } from "./github";
+import { printAliasNotice } from "./alias";
 import { addArpCommands } from "./arp";
 import {
   credentialIssue,
@@ -99,17 +107,31 @@ export function tokenOption(
  * from an environment that differed from the enrolling one, the strip went
  * to files that never held a hook and left the real ones behind.
  */
-export function recordedCliDeps(): CliDeps {
+export function recordedCliDeps(overrides: Partial<CliDeps> = {}): CliDeps {
   const base = defaultAgentPaths(tachoHome());
   const read = readHostFileLenient(base.hostFile);
   return defaultCliDeps({
+    ...overrides,
     paths: withRecordedHarnessFiles(base, read.host ?? read.salvaged),
   });
 }
 
-export function buildTachoProgram(): Command {
+export interface RecorderProgramOptions {
+  /** The program name help and errors print: `tacho`, or `oxagen` when the CLI runs it. */
+  name?: string;
+  /**
+   * Overrides for the deps every command runs with. The `oxagen` CLI passes
+   * its own `runtime`, so what `github configure` writes names `oxagen`.
+   */
+  deps?: Partial<CliDeps>;
+}
+
+export function buildTachoProgram(
+  options: RecorderProgramOptions = {},
+): Command {
   const program = new Command();
-  const deps = defaultCliDeps();
+  const name = options.name ?? "tacho";
+  const deps = defaultCliDeps(options.deps);
   // Only the real CLI knows who it runs as; `enroll` and `reassign` refuse
   // root without --allow-root.
   const asUser: CliDeps & { getuid: () => number | undefined } = {
@@ -117,16 +139,16 @@ export function buildTachoProgram(): Command {
     getuid: () => process.getuid?.(),
   };
   program
-    .name("tacho")
+    .name(name)
     .description(
-      "Tacho: put this machine's agent sessions (Claude Code, Codex, Stella, custom agents) under Oxagen control",
+      "The Oxagen recorder: put this machine's agent sessions (Claude Code, Codex, Cursor, Stella, custom agents) under Oxagen control",
     )
     .version(deps.wrapperVersion);
 
   program
     .command("mcp-stdio")
     .description(
-      "Serve this machine's Oxagen toolbelt to a connected app over stdio (written into the app's MCP config by `tacho enroll`; not meant to be run by hand)",
+      "Serve this machine's Oxagen toolbelt to a connected app over stdio (written into the app's MCP config by `oxagen agent enroll`; not meant to be run by hand)",
     )
     .option(
       "--enrollment <id>",
@@ -146,14 +168,14 @@ export function buildTachoProgram(): Command {
   program
     .command("enroll")
     .description(
-      "Enroll this machine: device key, host API key, tachod service, harness hooks",
+      "Enroll this machine: device key, host API key, collector service, harness hooks",
     )
     .option("--token <apiKey>", "Oxagen API token (or run `oxagen login`)")
     .option("--token-stdin", "Read the Oxagen API token from stdin")
     .option("--org <slug>", "Organization slug")
     .option("--workspace <slug>", "Workspace slug")
     .option("--api-url <url>", "Oxagen API base URL")
-    .option("--port <n>", "Loopback port for tachod (1024 to 65535)", parsePort)
+    .option("--port <n>", "Loopback port for the collector daemon (1024 to 65535)", parsePort)
     .option("--no-service", "Do not install the user service")
     .option("--managed", "Also print the managed settings document for MDM")
     .option(
@@ -165,7 +187,7 @@ export function buildTachoProgram(): Command {
     // No commander default: `enroll()` hooks claude-code on a fresh
     // enrollment by itself, and on an enrolled host an absent flag must mean
     // "keep the current list", not "add claude-code" (a Codex-only host
-    // running a bare `tacho enroll` would otherwise gain Claude Code hooks).
+    // running a bare `oxagen agent enroll` would otherwise gain Claude Code hooks).
     .option(
       "--harness <list>",
       "Harnesses to hook: claude-code (default on a fresh enrollment), codex, cursor, stella, or a comma list such as claude-code,stella",
@@ -289,10 +311,10 @@ export function buildTachoProgram(): Command {
       if (result.ok && result.token !== undefined) {
         process.stdout.write(`${result.token}\n`);
         if (!result.detail.startsWith("issued by"))
-          deps.err(`tacho credential: ${result.detail}`);
+          deps.err(`${name} credential: ${result.detail}`);
         return;
       }
-      deps.err(`tacho credential: ${result.detail}`);
+      deps.err(`${name} credential: ${result.detail}`);
       process.exitCode = 1;
     });
   credential
@@ -357,7 +379,7 @@ export function buildTachoProgram(): Command {
           ...(harness !== undefined ? { harness } : {}),
           ...(opts["all"] === true ? { all: true } : {}),
         },
-        recordedCliDeps(),
+        recordedCliDeps(options.deps),
       );
       if (!result.ok) process.exitCode = 1;
     });
@@ -392,7 +414,7 @@ export function buildTachoProgram(): Command {
             ? { harnesses: parseHarnesses(harness) }
             : {}),
         },
-        { ...recordedCliDeps(), getuid: asUser.getuid },
+        { ...recordedCliDeps(options.deps), getuid: asUser.getuid },
       );
       if (!result.ok) process.exitCode = 1;
     });
@@ -445,7 +467,7 @@ export function buildTachoProgram(): Command {
   program
     .command("run")
     .description(
-      "Start one agent run under the contained launcher: `tacho run --contained -- claude -p <task>` (Linux and Docker; ADR-152)",
+      "Start one agent run under the contained launcher: `oxagen agent run --contained -- claude -p <task>` (Linux and Docker; ADR-152)",
     )
     .requiredOption(
       "--contained",
@@ -512,7 +534,9 @@ export function buildTachoProgram(): Command {
 
   program
     .command("daemon")
-    .description("Run tachod in the foreground (what the service runs)")
+    .description(
+      "Run the collector daemon in the foreground (what the service runs)",
+    )
     .action(async () => {
       await runDaemonProcess();
     });
@@ -541,12 +565,14 @@ export async function main(argv: string[] = process.argv): Promise<void> {
 }
 
 // The native (SEA) build has its own entry that calls `main()`; this guard is
-// for `bin/tacho.mjs` and `tsx src/cli/main.ts`.
+// for `bin/tacho.mjs` and `tsx src/cli/main.ts`. The `oxagen` CLI imports
+// this module under its own name, which the pattern does not match.
 if (
   !isNativeBuild() &&
   process.argv[1] !== undefined &&
   /tacho(\.mjs|\/main\.ts)?$/.test(process.argv[1])
 ) {
+  printAliasNotice("tacho");
   main().catch((error) => {
     process.stderr.write(
       `tacho: ${error instanceof Error ? error.message : String(error)}\n`,

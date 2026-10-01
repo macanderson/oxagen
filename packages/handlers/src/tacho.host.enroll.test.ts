@@ -6,7 +6,7 @@
 // workspace's steering records (#2592).
 import { createHash, generateKeyPairSync } from "node:crypto";
 import type { CapabilityContext } from "@oxagen/oxagen";
-import { BUNDLE_FEATURE_STEERING_MANIFEST } from "@oxagen/tacho";
+import { BUNDLE_FEATURE_STEERING_MANIFEST } from "@oxagen/recorder";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({

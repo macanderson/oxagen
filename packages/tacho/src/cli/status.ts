@@ -1,5 +1,5 @@
 /**
- * `tacho status`: enrollment identity, daemon health, hook presence per
+ * `oxagen agent status`: enrollment identity, daemon health, hook presence per
  * event, bundle version and age, last ingest, spool depth, unobserved
  * sessions since boot (spec section 5.1).
  */
@@ -113,7 +113,7 @@ export interface StatusReport {
   cursorHooks?: Array<{ path: string } & ReturnType<typeof cursorHookPresence>>;
   /**
    * Present when the host enrolled Cursor: which Cursor this machine has, by
-   * the rule `tacho detect` applies (ADR-141). `cli` is the `cursor-agent`
+   * the rule `oxagen agent detect` applies (ADR-141). `cli` is the `cursor-agent`
    * alias enrollment recorded, still on disk; `app` is the editor on disk;
    * `null` is neither, and enrollment covers that machine all the same.
    */
@@ -130,7 +130,7 @@ export interface StatusReport {
   wal?: { sessions: number; unshipped: number; oldest_unshipped_at?: string };
   /**
    * Whether recorded events are reaching Oxagen. Absent for a host that is
-   * not enrolled here. `tacho status` exits 1 when `healthy` is false.
+   * not enrolled here. `oxagen agent status` exits 1 when `healthy` is false.
    */
   shipping?: ShippingHealth;
   /**
@@ -164,7 +164,7 @@ export interface ShippingHealth {
 /**
  * The verdict on shipping, from the daemon's own report and the WAL. Before
  * this, a host could queue events for a day behind a failing ingest while
- * `tacho status` exited 0 and printed the error only as a trailing clause.
+ * `oxagen agent status` exited 0 and printed the error only as a trailing clause.
  */
 export function shippingHealth(
   daemon: Record<string, unknown> | null,
@@ -175,7 +175,7 @@ export function shippingHealth(
     return {
       healthy: false,
       detail:
-        "the daemon is not answering, so nothing is recorded or shipped (restart the service, or run `tacho enroll` again)",
+        "the daemon is not answering, so nothing is recorded or shipped (restart the service, or run `oxagen agent enroll` again)",
     };
   // A revoked host ships nothing again, so an empty WAL is no comfort
   // (#3944, S-04).
@@ -183,7 +183,7 @@ export function shippingHealth(
     return {
       healthy: false,
       detail:
-        "an operator revoked this host, so nothing more ships (run `tacho unenroll` to remove the hooks and the service)",
+        "an operator revoked this host, so nothing more ships (run `oxagen agent unenroll` to remove the hooks and the service)",
     };
   if (wal.unshipped === 0)
     return { healthy: true, detail: "every recorded event has shipped" };
@@ -218,7 +218,7 @@ export function shippingHealth(
 
 /**
  * Which Cursor this machine has, without the login-shell PATH lookup
- * `tacho detect` runs: the `cursor-agent` path enrollment recorded, when it
+ * `oxagen agent detect` runs: the `cursor-agent` path enrollment recorded, when it
  * is still on disk, and the editor at the locations its platform documents.
  * The verdict comes from `wrappedCursor`, so status and detect apply one rule.
  */
@@ -444,7 +444,7 @@ async function agentStatus(deps: CliDeps): Promise<StatusReport> {
   const tiers = observedTiers(daemon);
   // `revoked_at` means unenrolled on this machine: the hooks and the service
   // are gone and only the server-side revoke is pending. Reporting that as
-  // enrolled (exit 0) disagreed with `tacho detect` about the same file and
+  // enrolled (exit 0) disagreed with `oxagen agent detect` about the same file and
   // kept the desktop app on its "enrolled" screens for a host that was not.
   const retired = host.revoked_at !== null;
   const shipping = retired
@@ -518,8 +518,8 @@ function printStatus(report: StatusReport, deps: CliDeps): void {
     const error = report.problems?.[0];
     deps.out(
       error !== undefined
-        ? `Not enrolled: ${error}. Run \`tacho unenroll\` to clear it, then \`tacho enroll\`.`
-        : `Not enrolled (no ${deps.paths.hostFile}). Run \`tacho enroll\`.`,
+        ? `Not enrolled: ${error}. Run \`oxagen agent unenroll\` to clear it, then \`oxagen agent enroll\`.`
+        : `Not enrolled (no ${deps.paths.hostFile}). Run \`oxagen agent enroll\`.`,
     );
     return;
   }
@@ -543,7 +543,7 @@ function printStatus(report: StatusReport, deps: CliDeps): void {
   } = report;
   if (report.retired === true)
     deps.out(
-      `Not enrolled. ${h.host_enrollment_id} was unenrolled here on ${h.revoked_at ?? ""}. The server-side revoke is still pending: run \`tacho unenroll\` again while signed in, or revoke it from the fleet page.`,
+      `Not enrolled. ${h.host_enrollment_id} was unenrolled here on ${h.revoked_at ?? ""}. The server-side revoke is still pending: run \`oxagen agent unenroll\` again while signed in, or revoke it from the fleet page.`,
     );
   for (const problem of report.problems ?? [])
     deps.out(`Unreadable  ${problem}`);
@@ -553,14 +553,14 @@ function printStatus(report: StatusReport, deps: CliDeps): void {
     );
   for (const entry of modelBaseUrls ?? []) {
     deps.out(
-      `            ${entry.harness}: ${entry.ours ? (entry.shadowedBy !== undefined ? `base URL set, but ${entry.shadowedBy.file} overrides it, so calls are not routed` : "model calls are pointed at the proxy") : (entry.leftAlone ?? "model calls are not pointed at the proxy (run `tacho enroll` to set the base URL)")}`,
+      `            ${entry.harness}: ${entry.ours ? (entry.shadowedBy !== undefined ? `base URL set, but ${entry.shadowedBy.file} overrides it, so calls are not routed` : "model calls are pointed at the proxy") : (entry.leftAlone ?? "model calls are not pointed at the proxy (run `oxagen agent enroll` to set the base URL)")}`,
     );
     // Behind a non-Anthropic base URL Claude Code inlines its whole MCP tool
     // catalog unless this key keeps tool search on; a big catalog then
     // overflows the context before the first prompt.
     if (entry.ours && entry.toolSearch?.enabled === false)
       deps.out(
-        `            ${entry.harness}: env.ENABLE_TOOL_SEARCH is ${entry.toolSearch.current === null ? "not set" : JSON.stringify(entry.toolSearch.current)}, so every request carries the whole MCP tool catalog and a large one overflows the context (run \`tacho enroll\` to set it)`,
+        `            ${entry.harness}: env.ENABLE_TOOL_SEARCH is ${entry.toolSearch.current === null ? "not set" : JSON.stringify(entry.toolSearch.current)}, so every request carries the whole MCP tool catalog and a large one overflows the context (run \`oxagen agent enroll\` to set it)`,
       );
   }
   for (const entry of modelCredentials ?? [])
@@ -578,7 +578,7 @@ function printStatus(report: StatusReport, deps: CliDeps): void {
     `Status      ${h.host_status}${h.revoked_at !== null ? ` (revoked ${h.revoked_at})` : ""}${h.managed ? ", managed" : ""}, expires ${h.expires_at}`,
   );
   // Its own line: the policy mode is not the tier above it (ADR-095). The
-  // mode decides the whole evaluation of a governed call, and `tacho enroll`
+  // mode decides the whole evaluation of a governed call, and `oxagen agent enroll`
   // and the desktop app say it in the same words (policy-mode.ts). `h.mode`
   // passed the bundle schema, so an unknown mode never reaches this line: a
   // host.json carrying one reads as not enrolled, with the reason.
@@ -616,10 +616,10 @@ function printStatus(report: StatusReport, deps: CliDeps): void {
     if (hooks.missing.length > 0)
       deps.out(`            missing: ${hooks.missing.join(", ")}`);
     // An enrollment before #3989 wrote `SessionEnd` as an http hook, which is
-    // lost while the daemon is down. Only `tacho enroll` rewrites it.
+    // lost while the daemon is down. Only `oxagen agent enroll` rewrites it.
     if (hooks.stale.length > 0)
       deps.out(
-        `            outdated: ${hooks.stale.join(", ")}. Run tacho enroll again to rewrite ${hooks.stale.length === 1 ? "it" : "them"}.`,
+        `            outdated: ${hooks.stale.join(", ")}. Run oxagen agent enroll again to rewrite ${hooks.stale.length === 1 ? "it" : "them"}.`,
       );
   }
   if (claudeDesktop !== undefined) {

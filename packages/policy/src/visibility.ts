@@ -22,7 +22,7 @@ import {
   type CallTier,
   type CedarRuntime,
   type CedarToolClass,
-} from "@oxagen/tacho/policy";
+} from "@oxagen/recorder/policy";
 import type { CompiledPolicySet } from "./compile";
 
 export interface VisibilityInput {

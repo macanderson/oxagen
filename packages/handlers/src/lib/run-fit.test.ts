@@ -4,7 +4,7 @@
 // in-memory fakes the run handlers' tests share, so the reading reads the same
 // row and frames `get_run` and `get_run_transcript` would.
 import type { RunFit } from "@oxagen/oxagen/run-fit";
-import { digestBytes } from "@oxagen/tacho";
+import { digestBytes } from "@oxagen/recorder";
 import type { TachoFrameRow } from "@oxagen/telemetry";
 import { describe, expect, it, vi } from "vitest";
 import {

@@ -22,7 +22,7 @@ import {
   digestBytes,
   merkleRoot,
   verifyAttestation,
-} from "@oxagen/tacho";
+} from "@oxagen/recorder";
 import { describe, expect, it } from "vitest";
 import {
   type SealAttestationFigures,

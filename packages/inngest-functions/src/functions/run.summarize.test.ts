@@ -1,6 +1,6 @@
 import { NO_BODY, tachoFrame } from "@oxagen/run-ledger";
 import { NonRetriableError } from "@oxagen/functions";
-import { digestBytes } from "@oxagen/tacho";
+import { digestBytes } from "@oxagen/recorder";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
