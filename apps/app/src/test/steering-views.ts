@@ -14,6 +14,7 @@ import type { KillSwitchBoard } from "@/data/contracts/tools";
 import type { DataSource } from "@/data/ports";
 import type {
   ContextPr,
+  ContextPrDiff,
   MemoryPage,
   OxagenTree,
   Proposal,
@@ -113,6 +114,8 @@ export function proposal(overrides: Partial<Proposal> = {}): Proposal {
     status: "checks_passed",
     pr: {
       number: 519,
+      url: PR_URL,
+      provider: "github",
       repository: "acme/core-platform",
       branch: `steering/${LINEAGE}`,
     },
@@ -240,6 +243,29 @@ export function contextPr(
   };
 }
 
+/** The diff of the Context PR `contextPr()` opens: the one record file it adds. */
+export function contextPrDiff(
+  overrides: Partial<ContextPrDiff> = {},
+): ContextPrDiff {
+  return {
+    state: "diff",
+    baseRef: "main",
+    headSha: "9f8e7d6c5b4a",
+    files: [
+      {
+        path: RECORD_PATH,
+        status: "added",
+        before: null,
+        after:
+          'lineage_id = "ctx.release.no-reread-changelog"\nstatement = "Do not re-read CHANGELOG.md after the first read in a run."\n',
+        truncated: false,
+      },
+    ],
+    moreFiles: false,
+    ...overrides,
+  };
+}
+
 export type SteeringReads = {
   /**
    * One read for every records call, or an answer per query: the Steering hub
@@ -251,6 +277,8 @@ export type SteeringReads = {
   record: Read<RecordDetail>;
   proposals: Read<ProposalPage>;
   contextPr: Read<ContextPr>;
+  /** The Context PR page's diff; not recorded in `calls`, so the hub's call tables stay as they were. */
+  contextPrDiff: Read<ContextPrDiff>;
   freshness: Read<SteeringFreshness>;
   /** The main repository's layout; legacy unless a test sets it, so a record without a path keeps its `.oxagen/rules/` file. */
   layout: Read<SteeringLayout>;
@@ -360,6 +388,7 @@ export function steeringSource(overrides: Partial<SteeringReads> = {}) {
     record: readOk(recordDetail()),
     proposals: readOk({ proposals: [proposal()], total: 1 }),
     contextPr: readOk(contextPr("checks_passed")),
+    contextPrDiff: readOk(contextPrDiff()),
     freshness: readOk(steeringFreshness()),
     layout: readOk({ layout: "legacy" }),
     hub: readOk(steeringHub()),
@@ -381,7 +410,7 @@ export function steeringSource(overrides: Partial<SteeringReads> = {}) {
     ...overrides,
   };
   const calls: Record<
-    Exclude<keyof SteeringReads, "agents" | "killSwitches">,
+    Exclude<keyof SteeringReads, "agents" | "killSwitches" | "contextPrDiff">,
     unknown[][]
   > = {
     records: [],
@@ -498,6 +527,7 @@ export function steeringSource(overrides: Partial<SteeringReads> = {}) {
         calls.contextPr.push(args);
         return Promise.resolve(reads.contextPr);
       },
+      contextPrDiff: () => Promise.resolve(reads.contextPrDiff),
       freshness: (...args) => {
         calls.freshness.push(args);
         return Promise.resolve(reads.freshness);

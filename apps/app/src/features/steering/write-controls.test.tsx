@@ -56,7 +56,7 @@ const {
 const { useActionFailure } = await import("./action-failure");
 
 const TARGET = { org: "acme", ws: "core-platform", proposalId: "prp_01k5ru4a" };
-const PRS = "/acme/core-platform/steering/proposals/prs?proposal=prp_01k5ru4a";
+const PRS = "/acme/core-platform/steering/proposals/prs/prp_01k5ru4a";
 
 const intl = ({ children }: { children: ReactNode }) => (
   <IntlProvider>{children}</IntlProvider>
@@ -189,34 +189,36 @@ describe("Open a Context PR", () => {
     expect(
       screen.queryByRole("button", { name: "Run the checks again" }),
     ).toBeNull();
-    expect(screen.queryByRole("button", { name: "Dismiss" })).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "Close without merging" }),
+    ).toBeNull();
   });
 });
 
-describe("Dismiss", () => {
+describe("Close without merging", () => {
   function submitReason(reason: string) {
     render(<ProposalWrites {...TARGET} status="checks_failed" />, {
       wrapper: intl,
     });
-    fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
-    fireEvent.change(screen.getByRole("textbox", { name: "Reason" }), {
+    fireEvent.click(
+      screen.getByRole("button", { name: "Close without merging" }),
+    );
+    fireEvent.change(screen.getByRole("textbox", { name: "Optional reason" }), {
       target: { value: reason },
     });
     fireEvent.click(
-      screen.getByRole("button", { name: "Dismiss the proposal" }),
+      screen.getByRole("button", { name: "Close the pull request" }),
     );
   }
 
-  it("dismisses this proposal with the reason written and reloads Proposals", async () => {
+  it("closes this proposal with the reason written and reloads its page", async () => {
     dismissProposal.mockResolvedValue({
       ok: true,
       value: { status: "rejected" },
     });
     submitReason("Duplicate of ctx.release.notes-format");
     await waitFor(() => {
-      expect(router.replace).toHaveBeenCalledWith(
-        "/acme/core-platform/steering/proposals",
-      );
+      expect(router.replace).toHaveBeenCalledWith(PRS);
     });
     expect(dismissProposal).toHaveBeenCalledWith(
       "acme",
@@ -240,20 +242,66 @@ describe("Dismiss", () => {
     );
     expect(router.replace).not.toHaveBeenCalled();
   });
+
+  it("closes with no reason when none is written", async () => {
+    dismissProposal.mockResolvedValue({
+      ok: true,
+      value: { status: "rejected" },
+    });
+    submitReason("");
+    await waitFor(() => {
+      expect(router.replace).toHaveBeenCalledWith(PRS);
+    });
+    expect(dismissProposal).toHaveBeenCalledWith(
+      "acme",
+      "core-platform",
+      "prp_01k5ru4a",
+      "",
+    );
+  });
+
+  it("names GitHub's refusal and leaves the proposal open (negative)", async () => {
+    dismissProposal.mockResolvedValue({
+      ok: false,
+      reason: "conflict",
+      code: "github_refused",
+    });
+    submitReason("");
+    expect(
+      await screen.findByTestId("dismiss-proposal-failure"),
+    ).toHaveTextContent("GitHub refused the change.");
+    expect(router.replace).not.toHaveBeenCalled();
+  });
 });
 
 describe("Merge pull request", () => {
-  it("cannot be sent while the checks have not passed (negative)", () => {
+  /** Opens the confirming dialog and confirms the merge. */
+  function confirmMerge() {
+    fireEvent.click(screen.getByRole("button", { name: "Merge pull request" }));
+    fireEvent.click(screen.getByRole("button", { name: "Merge and publish" }));
+  }
+
+  it("cannot be opened while the checks have not passed (negative)", () => {
     render(<MergeContextPr {...TARGET} blocked />, { wrapper: intl });
     const button = screen.getByRole("button", { name: "Merge pull request" });
     expect(button).toBeDisabled();
-    const form = button.closest("form");
-    if (form === null) throw new Error("the merge button sits in no form");
-    fireEvent.submit(form);
+    fireEvent.click(button);
+    expect(screen.queryByTestId("merge-context-pr")).toBeNull();
     expect(mergeContextPr).not.toHaveBeenCalled();
     expect(
       screen.getByText("Merge is blocked until every check passes."),
     ).toBeInTheDocument();
+  });
+
+  it("asks first, and merges nothing until the person confirms", () => {
+    render(<MergeContextPr {...TARGET} blocked={false} />, { wrapper: intl });
+    const button = screen.getByRole("button", { name: "Merge pull request" });
+    expect(button.className).toMatch(/button-primary/);
+    fireEvent.click(button);
+    expect(screen.getByTestId("merge-context-pr")).toHaveTextContent(
+      "Merging publishes the record",
+    );
+    expect(mergeContextPr).not.toHaveBeenCalled();
   });
 
   it("merges this proposal's pull request and reloads its Context PR", async () => {
@@ -262,7 +310,7 @@ describe("Merge pull request", () => {
       value: { commit: "4d5e6f7" },
     });
     render(<MergeContextPr {...TARGET} blocked={false} />, { wrapper: intl });
-    fireEvent.click(screen.getByRole("button", { name: "Merge pull request" }));
+    confirmMerge();
     await waitFor(() => {
       expect(router.replace).toHaveBeenCalledWith(PRS);
     });
@@ -280,7 +328,7 @@ describe("Merge pull request", () => {
       code: "separation_of_duties",
     });
     render(<MergeContextPr {...TARGET} blocked={false} />, { wrapper: intl });
-    fireEvent.click(screen.getByRole("button", { name: "Merge pull request" }));
+    confirmMerge();
     expect(
       await screen.findByTestId("merge-context-pr-failure"),
     ).toHaveTextContent(

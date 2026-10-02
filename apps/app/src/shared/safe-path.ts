@@ -151,7 +151,9 @@ const STEERING_SEGMENTS: Readonly<Record<string, readonly string[]>> = {
   settings: ["gates"],
   freshness: ["gates"],
   proposals: ["proposals"],
-  prs: ["proposals", "prs"],
+  // The Context PRs list was a segment of Proposals; it is the one list now
+  // (#5077), and one Context PR is its own page (`routes.steeringProposal`).
+  prs: ["proposals"],
   compiler: ["compiler"],
   preview: ["compiler"],
 };
@@ -582,13 +584,12 @@ export const routes = {
     withQuery(pathOf(org, ws, "agents"), { tab: "runtimes", runtime }),
   /**
    * Steering (roadmap pages/steering.md): the five tabs and the Library
-   * shelves are path segments, `/steering/<tab>` or `/steering/<shelf>`, and
-   * the Context PRs segment of Proposals is `/steering/proposals/prs`. A tab
-   * id written before the rename still maps to where it lives now: `policy`,
-   * `settings` and `freshness` are Gates, `deliveries` is Assignments,
-   * `preview` is the Compiler and `prs` is the Context PRs segment. Filters, a
-   * page offset, the rows a page of proposals holds, a selected proposal and a
-   * Skills cursor stay query values.
+   * shelves are path segments, `/steering/<tab>` or `/steering/<shelf>`. A
+   * tab id written before the rename still maps to where it lives now:
+   * `policy`, `settings` and `freshness` are Gates, `deliveries` is
+   * Assignments, `preview` is the Compiler, and `prs`, once the Context PRs
+   * segment, is the Proposals list (#5077). Filters, the Proposals state, a
+   * page offset, the rows a page holds and a Skills cursor stay query values.
    */
   steering: (
     org: string,
@@ -600,6 +601,8 @@ export const routes = {
       /** A skill whose source `/steering/skills/<skill>/source` opens; only with `tab: "skills"`. */
       skill?: string;
       kind?: string;
+      /** open, merged or closed; only on Proposals, and left off at open (#5077). */
+      state?: string;
       /** How many rows a page holds; on Proposals and the Skills shelf (#4693). */
       rows?: string;
       offset?: string;
@@ -620,6 +623,7 @@ export const routes = {
     }
     return withQuery(pathOf(org, ws, "steering", ...segments), {
       kind: q.kind,
+      state: q.state,
       rows: q.rows,
       offset: q.offset,
       proposal: q.proposal,
@@ -627,6 +631,23 @@ export const routes = {
       view: q.view,
     });
   },
+  /**
+   * One Context PR, by its proposal id (#5077):
+   * `/steering/proposals/prs/<prp_…>`. The list's state, size and offset ride
+   * along as query values, so the page's way back lands on the list as it
+   * was left.
+   */
+  steeringProposal: (
+    org: string,
+    ws: string,
+    proposalId: string,
+    from: { state?: string; rows?: string; offset?: string } = {},
+  ): SafePath =>
+    withQuery(pathOf(org, ws, "steering", "proposals", "prs", proposalId), {
+      state: from.state,
+      rows: from.rows,
+      offset: from.offset,
+    }),
   /**
    * One published record, by its lineage (#3395). The lineage is a file stem
    * under `.oxagen/rules/`, so it reaches here from the repository rather

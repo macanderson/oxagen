@@ -122,6 +122,9 @@ export const Proposal = z.object({
   pr: z
     .object({
       number: z.number().int().positive(),
+      /** The pull request on the host; the list's link out to it. */
+      url: z.string().min(1),
+      provider: z.enum(["github", "gitlab"]),
       repository: z.string().min(1),
       branch: z.string().min(1),
     })
@@ -239,6 +242,28 @@ export const ContextPr = z.object({
     .nullable(),
 });
 export type ContextPr = z.infer<typeof ContextPr>;
+
+/**
+ * The files a Context PR's branch changes, each read from the host as it is
+ * on the production branch and on the head (#5077). `settled` once the pull
+ * request merged or closed, because its branch is deleted.
+ */
+export const ContextPrDiff = z.object({
+  state: z.enum(["diff", "no_pr", "settled"]),
+  baseRef: z.string().nullable(),
+  headSha: z.string().nullable(),
+  files: z.array(
+    z.object({
+      path: z.string().min(1),
+      status: z.enum(["added", "modified", "removed"]),
+      before: z.string().nullable(),
+      after: z.string().nullable(),
+      truncated: z.boolean(),
+    }),
+  ),
+  moreFiles: z.boolean(),
+});
+export type ContextPrDiff = z.infer<typeof ContextPrDiff>;
 
 /**
  * The freshness panel on the Steering page: what the workspace has published,

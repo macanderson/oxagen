@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // The steering PR panel in every state of its machine: where the state sits,
 // which checks ran and how they came out, what merge will do, the merge that
-// stays disabled until every check passed, the merged record, a dismissed
+// stays disabled until every check passed, the merged record, a closed
 // proposal, and a failed read. It also covers the review each governance mode
 // asks for, a drifted managed block, and a memory PR whose records no read
 // returns yet. Every state gets an axe check.
@@ -13,7 +13,7 @@ import type { ContextPr } from "@/data/contracts/steering";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import { readOk } from "@/data/read";
-import { AT, contextPr, PR_URL } from "@/test/steering-views";
+import { AT, contextPr } from "@/test/steering-views";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
@@ -75,15 +75,15 @@ describe("the state machine", () => {
     expect(current.map((step) => step.textContent)).toEqual([label]);
   });
 
-  it("marks no step for a dismissed proposal and says what dismissal did", () => {
+  it("marks no step for a closed proposal and says what closing did", () => {
     const panel = renderState("rejected");
     const machine = screen.getByRole("list", { name: "Context PR state" });
     expect(machine.querySelector('[aria-current="step"]')).toBeNull();
     expect(panel).toHaveTextContent(
-      "This proposal was dismissed. Its pull request is closed and its branch deleted.",
+      "This proposal is closed. Its pull request is closed and its branch deleted.",
     );
     expect(merge()).toBeNull();
-    expect(screen.queryByRole("button", { name: "Dismiss" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Close without merging" })).toBeNull();
   });
 });
 
@@ -152,13 +152,12 @@ describe("the checks", () => {
 });
 
 describe("once every check passed", () => {
-  it("enables merge, links the pull request and says what merge will do", () => {
+  it("enables merge and says what merge will do", () => {
     const panel = renderState("checks_passed");
     expect(merge()).toBeEnabled();
     expect(panel).not.toHaveTextContent("Merge is blocked");
-    const link = screen.getByRole("link", { name: "Go to pull request #519" });
-    expect(link).toHaveAttribute("href", PR_URL);
-    expect(link).toHaveAttribute("target", "_blank");
+    // The page header carries the link to the pull request (#5077).
+    expect(screen.queryByRole("link")).toBeNull();
     expect(panel.querySelector('[data-fact="branch"] dd')).toHaveTextContent(
       "steering/ctx.release.no-reread-changelog into main",
     );
@@ -180,18 +179,6 @@ describe("once every check passed", () => {
     expect(
       screen.getByRole("button", { name: "Run the checks again" }),
     ).toBeEnabled();
-  });
-
-  it("does not link a pull request URL that is not a GitHub pull request page (negative)", () => {
-    const base = contextPr("checks_passed");
-    if (base.pr === null) throw new Error("fixture has a pull request");
-    renderPanel(
-      readOk({
-        ...base,
-        pr: { ...base.pr, url: "https://github.com.evil/acme/core/pull/519" },
-      }),
-    );
-    expect(screen.queryByRole("link")).toBeNull();
   });
 
   it("prints a pull request with no checked commit yet as not committed", () => {
@@ -217,7 +204,7 @@ describe("after merge", () => {
     );
     expect(panel.querySelector("[data-on-merge]")).toBeNull();
     expect(merge()).toBeNull();
-    expect(screen.queryByRole("button", { name: "Dismiss" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Close without merging" })).toBeNull();
   });
 });
 
@@ -296,7 +283,7 @@ describe("the review each governance mode asks for", () => {
     expect(approve()).toBeEnabled();
   });
 
-  it("offers a governance change only Approve, Merge, and Dismiss, which its server paths accept (#4795)", () => {
+  it("offers a governance change only Approve, Merge, and Close, which its server paths accept (#4795)", () => {
     renderPanel(readOk(contextPr("checks_passed", { kind: "governance" })), {
       approvals: 0,
       canMergeWithoutReview: true,
@@ -306,7 +293,7 @@ describe("the review each governance mode asks for", () => {
     expect(screen.queryByTestId("open-context-pr")).toBeNull();
     expect(approve()).toBeEnabled();
     expect(merge()).toBeEnabled();
-    expect(screen.getByRole("button", { name: "Dismiss" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Close without merging" })).toBeEnabled();
   });
 
   it("lists what merging a governance change does, and no record or promotion event (#4795)", () => {

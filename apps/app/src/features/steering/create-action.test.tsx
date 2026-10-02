@@ -61,7 +61,7 @@ describe("SteeringCreate", () => {
       viewAt([]),
       viewAt(["records"]),
       viewAt(["proposals"]),
-      viewAt(["proposals", "prs"]),
+      viewAt(["proposals"], { state: "merged" }),
     ];
     const heard = vi.fn();
     window.addEventListener(CREATE_EVENT, heard);
@@ -99,24 +99,20 @@ describe("SteeringCreate", () => {
 });
 
 describe("tabHoldsPrimary", () => {
-  it("gives the gold to a selected Context PR whose checks passed", () => {
-    const selected = viewAt(["proposals", "prs"], {
-      proposal: "prp_01k5ru4a",
-    });
-    expect(tabHoldsPrimary(selected, true)).toBe(true);
-    // Merge is secondary until the checks pass, so the header keeps the gold.
-    expect(tabHoldsPrimary(selected, false)).toBe(false);
-    expect(tabHoldsPrimary(viewAt(["proposals", "prs"]), true)).toBe(false);
-  });
-
   it("gives the gold to the Skills shelf's Search and Versions views", () => {
-    expect(tabHoldsPrimary(viewAt(["skills", "search"]), false)).toBe(true);
-    expect(tabHoldsPrimary(viewAt(["skills", "versions"]), false)).toBe(true);
-    expect(tabHoldsPrimary(viewAt(["skills"]), false)).toBe(false);
+    expect(tabHoldsPrimary(viewAt(["skills", "search"]))).toBe(true);
+    expect(tabHoldsPrimary(viewAt(["skills", "versions"]))).toBe(true);
+    expect(tabHoldsPrimary(viewAt(["skills"]))).toBe(false);
   });
 
   it("keeps the gold in the header on every other view (negative)", () => {
-    for (const segments of [[], ["records"], ["gates"], ["compiler"]])
-      expect(tabHoldsPrimary(viewAt(segments), true)).toBe(false);
+    for (const segments of [
+      [],
+      ["records"],
+      ["gates"],
+      ["compiler"],
+      ["proposals"],
+    ])
+      expect(tabHoldsPrimary(viewAt(segments))).toBe(false);
   });
 });

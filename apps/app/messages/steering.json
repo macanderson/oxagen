@@ -6,10 +6,7 @@
       "assignments": "Assignments",
       "gates": "Gates",
       "proposals": "Proposals",
-      "compiler": "Compiler",
-      "candidates": "Candidates",
-      "prs": "Context PRs",
-      "segments": "Proposals or pull requests"
+      "compiler": "Compiler"
     },
     "hub": {
       "description": "One assembler ranks every item that steers an agent in this workspace."
@@ -399,7 +396,7 @@
       "checks_passed": "checks passed",
       "checks_failed": "checks failed",
       "merged": "merged",
-      "rejected": "dismissed"
+      "rejected": "closed"
     },
     "records": {
       "title": "Published records",
@@ -477,36 +474,49 @@
     "proposals": {
       "title": "Proposals",
       "lead": "A proposal publishes when its Context PR passes every check and merges.",
-      "emptyTitle": "No proposals in this workspace",
-      "empty": "Agents propose records through context/append, and a person proposes one with oxagen context propose. Each proposal waits here for a person to open its Context PR or dismiss it.",
-      "checks": "{passed} of {total} checks pass",
-      "source": "Raised by {source}",
-      "support": "Support: {runs} runs, {agents} agents, {records} records, {evidence} evidence links",
-      "runs": "Supporting runs",
-      "agents": "Distinct agents",
-      "records": "Supporting records",
-      "evidence": "Evidence links",
-      "none": "None cited",
-      "viewPr": "Context PR #{number}"
-    },
-    "prs": {
-      "title": "Context PRs",
-      "lead": "Each Context PR runs the six checks that stella context validate runs.",
-      "empty": "No proposal on this page has a Context PR.",
-      "number": "#{number} on {repository}",
-      "columns": {
-        "pr": "Pull request",
-        "branch": "Branch",
-        "kind": "Kind",
-        "state": "State"
+      "states": {
+        "label": "State",
+        "open": "Open",
+        "merged": "Merged",
+        "closed": "Closed"
+      },
+      "list": {
+        "columns": {
+          "proposal": "Proposal",
+          "kind": "Kind",
+          "pr": "Pull request",
+          "checks": "Checks",
+          "state": "State",
+          "updated": "Updated"
+        },
+        "open": "Open the Context PR for {lineage}",
+        "noPr": "No pull request yet",
+        "number": "#{number} on {repository}",
+        "openOnGitHub": "Open {pr} on GitHub",
+        "openOnGitLab": "Open {pr} on GitLab",
+        "checks": "{passed} of {total} pass",
+        "checksNotRun": "not run"
+      },
+      "empty": {
+        "open": {
+          "title": "No open proposals",
+          "body": "Agents propose records through context/append, and a person proposes one with oxagen context propose."
+        },
+        "merged": {
+          "title": "No merged proposals",
+          "body": "A proposal lists here once its Context PR merges."
+        },
+        "closed": {
+          "title": "No closed proposals",
+          "body": "A proposal lists here once it is closed in Oxagen or its pull request is closed on the host."
+        }
       }
     },
     "pr": {
       "heading": "Context PR",
-      "title": "Context PR for {lineage}",
+      "title": "Pull request",
       "machine": "Context PR state",
-      "goToPr": "Go to pull request #{number}",
-      "rejected": "This proposal was dismissed. Its pull request is closed and its branch deleted.",
+      "rejected": "This proposal is closed. Its pull request is closed and its branch deleted.",
       "notOpened": "No pull request is open for this proposal yet.",
       "modeUnread": "read from the governance file when the pull request opens",
       "modes": {
@@ -566,6 +576,91 @@
         "memories": "Cited memories",
         "unknownAgent": "Unknown agent",
         "evidence": "Evidence"
+      },
+      "page": {
+        "eyebrow": "Context PR",
+        "crumbs": "Proposals list",
+        "back": {
+          "open": "Back to open proposals",
+          "merged": "Back to merged proposals",
+          "closed": "Back to closed proposals"
+        },
+        "loading": "Loading the Context PR",
+        "number": "#{number} on {repository}"
+      },
+      "record": {
+        "title": "Record",
+        "kind": "Kind",
+        "force": "Force",
+        "effect": "Constraint effect",
+        "raisedBy": "Raised by",
+        "raisedAt": "Raised",
+        "rationale": "Rationale"
+      },
+      "support": {
+        "title": "Support",
+        "runs": "Supporting runs",
+        "agents": "Distinct agents",
+        "records": "Supporting records",
+        "evidence": "Evidence links",
+        "none": "None cited"
+      },
+      "activity": {
+        "title": "Activity",
+        "raised": "Proposal raised",
+        "opened": "Pull request #{number} opened",
+        "checksStarted": "Checks started",
+        "checksPassed": "Every check passed",
+        "checksFailed": "A check failed",
+        "merged": "Merged",
+        "closed": "Closed without merging",
+        "closedBecause": "Closed without merging: {reason}",
+        "inOxagen": "in Oxagen",
+        "onHost": "on {host}",
+        "github": "GitHub",
+        "gitlab": "GitLab",
+        "by": "by {who}",
+        "timeNotRecorded": "time not recorded"
+      },
+      "diff": {
+        "title": "Changes",
+        "fileLabel": "Changes to {path}",
+        "statuses": {
+          "added": "added",
+          "modified": "modified",
+          "removed": "removed"
+        },
+        "lines": {
+          "same": "unchanged",
+          "removed": "removed",
+          "added": "added"
+        },
+        "truncated": "This file is longer than the page shows.",
+        "noPr": "No pull request is open yet, so there is no branch to compare.",
+        "settled": "The branch was deleted when the pull request merged or closed.",
+        "openFiles": "Open the files on the host",
+        "empty": "The branch changes no file.",
+        "against": "{head} against {base}",
+        "moreFiles": "The pull request changes more files than this page shows.",
+        "loading": "Loading the changes"
+      },
+      "refresh": {
+        "github": "Refresh from GitHub",
+        "gitlab": "Refresh from GitLab",
+        "pending": "Refreshing",
+        "mergedOnHost": "The host merged this pull request. Oxagen publishes it when the repository sync runs.",
+        "moved": "Updated to match the host.",
+        "current": "Matches the host."
+      },
+      "clone": {
+        "open": "Clone the branch",
+        "title": "Check out this branch",
+        "lead": "Run these commands in a terminal to check out the branch.",
+        "ghLead": "Or check it out with the GitHub CLI.",
+        "copy": "Copy the commands",
+        "copied": "Copied",
+        "copyGh": "Copy the gh command",
+        "copyFailed": "The browser refused the copy. Select the commands and copy them."
       }
     },
     "actions": {
@@ -579,15 +674,18 @@
         "pending": "Working"
       },
       "dismiss": {
-        "open": "Dismiss",
-        "title": "Dismiss this proposal",
-        "body": "A dismissed proposal steers nothing. An open Context PR for it is closed and its branch deleted.",
-        "reason": "Reason",
-        "confirm": "Dismiss the proposal",
-        "pending": "Dismissing"
+        "open": "Close without merging",
+        "title": "Close this pull request",
+        "body": "A closed proposal steers nothing. The host closes the pull request and deletes its branch first, and Oxagen records the close only when the host agrees.",
+        "reason": "Optional reason",
+        "confirm": "Close the pull request",
+        "pending": "Closing"
       },
       "merge": {
         "confirm": "Merge pull request",
+        "title": "Merge this pull request",
+        "body": "Merging publishes the record for every agent this workspace steers. The host merges first, and Oxagen publishes only when the host agrees.",
+        "dialogConfirm": "Merge and publish",
         "pending": "Merging",
         "blocked": "Merge is blocked until every check passes."
       },
@@ -608,7 +706,7 @@
         "githubRefused": "GitHub refused the change. Nothing was published.",
         "gitlabRefused": "GitLab refused the write. Nothing was published. Check that the project access token still has the api scope and the Developer role, then try again.",
         "gitlabCredentialRejected": "GitLab no longer accepts the access token stored for this project. Nothing was changed. Connect the project again with a new token. If Oxagen created this steering project, an organization owner or admin must connect its group again with a new group access token.",
-        "repositoryHostChanged": "This pull request was opened on another host than the one the workspace's main repository is on now. Dismiss the proposal and propose it again.",
+        "repositoryHostChanged": "This pull request was opened on another host than the one the workspace's main repository is on now. Close the proposal and propose it again.",
         "mergeTimeUnknown": "The pull request merged and GitHub has not said when, so nothing was published. Merge again to publish it.",
         "mergedOutsideOxagen": "Someone merged this pull request on the repository host after the checks ran. Oxagen publishes what the production branch holds, and this proposal shows the result once the sync finishes. The Steering freshness panel lists anything in the file it could not publish.",
         "refused": "The change was refused: {code}. Nothing was changed.",

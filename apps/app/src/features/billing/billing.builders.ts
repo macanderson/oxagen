@@ -334,6 +334,7 @@ export function billingSource(overrides: Partial<BillingReads> = {}) {
       record: refuse,
       proposals: refuse,
       contextPr: refuse,
+      contextPrDiff: refuse,
       freshness: refuse,
       layout: refuse,
       hub: refuse,

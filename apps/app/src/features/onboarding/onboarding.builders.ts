@@ -333,6 +333,7 @@ export function onboardingSource(reads: Reads): {
       record: refuse("steering.record"),
       proposals: refuse("steering.proposals"),
       contextPr: refuse("steering.contextPr"),
+      contextPrDiff: refuse("steering.contextPrDiff"),
       freshness: refuse("steering.freshness"),
       layout: refuse("steering.layout"),
       hub: refuse("steering.hub"),

@@ -7,17 +7,14 @@
 //   gold, and the header holds none, so the screen has no gold at all.
 // - The Compiler with no published record: "Nothing to compile yet" carries
 //   Write a context record as the gold.
-// - Proposals with no proposal: "No proposals yet" carries it.
-// - A proposal under review, or a selected Context PR, with no pull request
-//   yet: Open a Context PR is the gold. With every check passed: Merge pull
-//   request is.
+// - Proposals with no proposal in the state shown: the empty state carries
+//   no gold, so the header holds none either. A Context PR's own actions sit
+//   on its page (#5077), outside this hub.
 //
 // Each read here is the one the body makes next, with the same input, so the
 // kernel's per-request read table answers the body without a second invoke
 // (server/kernel.ts, readsThisRequest).
-import type { ContextPr } from "@/data/contracts/steering";
 import type { DataSource } from "@/data/ports";
-import type { Read } from "@/data/read";
 import type { WsCtx } from "@/server/viewer";
 import type { SteeringView } from "./view";
 
@@ -33,15 +30,12 @@ export async function bodyTakesHeaderGold({
   source,
   view,
   published,
-  pr,
 }: {
   ctx: WsCtx;
   source: DataSource;
   view: SteeringView;
   /** Records in force, from the hub's own read. */
   published: number;
-  /** get_context_pr for the proposal the URL names, when it names one. */
-  pr: Read<ContextPr> | null;
 }): Promise<BodyGold> {
   switch (view.tab) {
     case "compiler":
@@ -51,22 +45,14 @@ export async function bodyTakesHeaderGold({
       return agents.ok && agents.value.totals.enrolled === 0 ? "empty" : null;
     }
     case "proposals": {
-      if (view.proposal !== null) {
-        if (pr === null || !pr.ok) return null;
-        // The review's Context PR box links to an open pull request rather
-        // than merging it; only the Context PRs view carries Merge.
-        return pr.value.status === "proposed" ||
-          (view.segment === "prs" && pr.value.status === "checks_passed")
-          ? "primary"
-          : null;
-      }
       if (view.offset !== 0) return null;
-      // The same input the tab body reads with, size included, so the
-      // kernel's per-request read table answers the body without a second
-      // invoke (#4693).
+      // The same input the tab body reads with, size and state included, so
+      // the kernel's per-request read table answers the body without a
+      // second invoke (#4693).
       const page = await source.steering.proposals(ctx, {
         offset: 0,
         limit: view.rows,
+        state: view.state ?? "open",
       });
       return page.ok && page.value.total === 0 ? "empty" : null;
     }

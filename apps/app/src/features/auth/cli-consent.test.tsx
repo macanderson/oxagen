@@ -108,6 +108,7 @@ const source = {
     record: vi.fn(),
     proposals: vi.fn(),
     contextPr: vi.fn(),
+    contextPrDiff: vi.fn(),
     freshness: vi.fn(),
     layout: vi.fn(),
     hub: vi.fn(),

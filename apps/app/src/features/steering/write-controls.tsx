@@ -1,12 +1,13 @@
 "use client";
-// The steering PR writes on the page: open a proposal's steering PR (or run
-// its checks again), dismiss a proposal with a reason, approve, merge, merge
-// without review, restore a drifted managed block, and drop one record from a
-// memory PR. Open and dismiss sit behind a confirming dialog. Merge is the
-// panel's one primary action and stays disabled until every check has
-// passed. A refusal is named where the person acted and changes nothing. A
-// completed write reloads the view it leads to, except a drop, which marks
-// its card in place.
+// The Context PR writes on its page (#5077): open a proposal's Context PR
+// (or run its checks again), close it without merging with an optional
+// reason, approve, merge, merge without review, restore a drifted managed
+// block, and drop one record from a memory PR. Open, close and merge sit
+// behind a confirming dialog. Merge is the page's one primary action and
+// stays disabled until every check has passed. Each write calls the host
+// first and moves the proposal only when the host agreed, so a refusal is
+// named where the person acted and changes nothing. A completed write reloads
+// the Context PR page, except a drop, which marks its card in place.
 import { useTranslations } from "next-intl";
 import { type ReactNode, type SyntheticEvent, useState } from "react";
 import type { ProposalStatus } from "@/data/contracts/steering";
@@ -75,12 +76,18 @@ function WriteDialog({
   fields,
   write,
   after,
+  primary = false,
+  blocked = false,
 }: {
   copy: Copy;
   testId: string;
   fields?: ReactNode;
   write: (form: FormData) => Promise<ActionResult<unknown>>;
   after: SafePath;
+  /** The trigger is the page's gold action. */
+  primary?: boolean;
+  /** The trigger is disabled: the write cannot run in this state. */
+  blocked?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const { pending, failure, setFailure, run } = useWrite();
@@ -95,7 +102,9 @@ function WriteDialog({
     <>
       <button
         type="button"
-        className={buttonSecondary}
+        data-testid={`${testId}-open`}
+        disabled={blocked}
+        className={primary && !blocked ? buttonPrimary : buttonSecondary}
         onClick={() => {
           setOpen(true);
         }}
@@ -155,7 +164,7 @@ export function ProposalWrites({
   // stays gated on `checks_passed` on its own, below.
   const settled = status === "merged" || status === "rejected";
   const rerun = status !== "proposed";
-  const prs = routes.steering(org, ws, { tab: "prs", proposal: proposalId });
+  const page = routes.steeringProposal(org, ws, proposalId);
   return (
     <>
       {settled || governance ? null : (
@@ -169,10 +178,10 @@ export function ProposalWrites({
             pending: t("open.pending"),
           }}
           write={() => openContextPr(org, ws, proposalId)}
-          after={prs}
+          after={page}
         />
       )}
-      {status === "merged" || status === "rejected" ? null : (
+      {settled ? null : (
         <WriteDialog
           testId="dismiss-proposal"
           copy={{
@@ -187,7 +196,6 @@ export function ProposalWrites({
               <span>{t("dismiss.reason")}</span>
               <textarea
                 name="reason"
-                required
                 maxLength={2000}
                 rows={3}
                 className={textareaBase}
@@ -203,14 +211,17 @@ export function ProposalWrites({
               typeof reason === "string" ? reason : "",
             );
           }}
-          after={routes.steering(org, ws, { tab: "proposals" })}
+          after={page}
         />
       )}
     </>
   );
 }
 
-/** Merge pull request: disabled with its reason until the checks passed. */
+/**
+ * Merge pull request: the page's gold action once every check passed, behind
+ * a dialog that says what merging does. Disabled with its reason until then.
+ */
 export function MergeContextPr({
   org,
   ws,
@@ -218,33 +229,26 @@ export function MergeContextPr({
   blocked,
 }: Target & { blocked: boolean }) {
   const t = useTranslations("steering.actions.merge");
-  const { pending, failure, run } = useWrite();
-
-  function submit(event: SyntheticEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (blocked) return;
-    void run(
-      () => mergeContextPr(org, ws, proposalId),
-      routes.steering(org, ws, { tab: "prs", proposal: proposalId }),
-    );
-  }
-
   return (
-    <form onSubmit={submit} className="flex flex-col gap-2">
-      {failure === null ? null : (
-        <FormAlert testId="merge-context-pr-failure">{failure}</FormAlert>
-      )}
-      <button
-        type="submit"
-        disabled={blocked || pending}
-        className={blocked ? buttonSecondary : buttonPrimary}
-      >
-        {pending ? t("pending") : t("confirm")}
-      </button>
+    <div className="flex flex-col gap-2">
+      <WriteDialog
+        testId="merge-context-pr"
+        primary
+        blocked={blocked}
+        copy={{
+          open: t("confirm"),
+          title: t("title"),
+          body: t("body"),
+          confirm: t("dialogConfirm"),
+          pending: t("pending"),
+        }}
+        write={() => mergeContextPr(org, ws, proposalId)}
+        after={routes.steeringProposal(org, ws, proposalId)}
+      />
       {blocked ? (
         <p className="text-xs text-muted-foreground">{t("blocked")}</p>
       ) : null}
-    </form>
+    </div>
   );
 }
 
@@ -298,7 +302,7 @@ export function ApproveContextPr({ org, ws, proposalId }: Target) {
       label={t("confirm")}
       pendingLabel={t("pending")}
       write={() => approveContextPr(org, ws, proposalId)}
-      after={routes.steering(org, ws, { tab: "prs", proposal: proposalId })}
+      after={routes.steeringProposal(org, ws, proposalId)}
     />
   );
 }
@@ -318,7 +322,7 @@ export function MergeWithoutReview({
       pendingLabel={t("pending")}
       blocked={blocked}
       write={() => mergePrWithoutReview(org, ws, proposalId)}
-      after={routes.steering(org, ws, { tab: "prs", proposal: proposalId })}
+      after={routes.steeringProposal(org, ws, proposalId)}
     />
   );
 }
@@ -337,7 +341,7 @@ export function RestoreManagedBlock({
       label={t("confirm")}
       pendingLabel={t("pending")}
       write={() => restoreManagedBlock(org, ws, proposalId, path)}
-      after={routes.steering(org, ws, { tab: "prs", proposal: proposalId })}
+      after={routes.steeringProposal(org, ws, proposalId)}
     />
   );
 }

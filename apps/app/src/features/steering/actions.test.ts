@@ -38,6 +38,7 @@ const {
   mergeContextPr,
   mergePrWithoutReview,
   openContextPr,
+  refreshContextPr,
   restoreManagedBlock,
   setGovernanceMode,
 } = await import("./actions");
@@ -218,14 +219,28 @@ describe("dismissProposal", () => {
     );
   });
 
-  it("refuses a blank reason before the kernel runs (negative)", async () => {
+  // Close without merging takes an optional reason (#5077): a blank one is
+  // sent as none, never as an empty string the contract refuses.
+  it("closes with no reason when the reason is blank", async () => {
+    invoke.mockResolvedValue({ proposalId: ID, status: "rejected" });
     expect(await dismissProposal("acme", "core-platform", ID, "   ")).toEqual({
-      ok: false,
-      reason: "invalid",
-      code: "invalid_input",
-      field: "reason",
+      ok: true,
+      value: { status: "rejected" },
     });
-    expect(invoke).not.toHaveBeenCalled();
+    expect(invoke).toHaveBeenCalledWith(
+      "dismiss_proposal",
+      { proposalId: ID },
+      expect.objectContaining(TENANT),
+    );
+  });
+
+  it("carries the host's refusal to close and changes nothing (negative)", async () => {
+    invoke.mockRejectedValue(refused("conflict", "github_refused"));
+    expect(await dismissProposal("acme", "core-platform", ID, "")).toEqual({
+      ok: false,
+      reason: "conflict",
+      code: "github_refused",
+    });
   });
 
   it("returns a merged proposal as a conflict (negative)", async () => {
@@ -238,11 +253,46 @@ describe("dismissProposal", () => {
   });
 });
 
+describe("refreshContextPr", () => {
+  it("reads the pull request from the host and answers what moved", async () => {
+    invoke.mockResolvedValue({
+      proposalId: ID,
+      status: "rejected",
+      host: { state: "closed", headSha: "abc", baseRef: "main" },
+      changed: true,
+      syncRequested: false,
+    });
+    expect(await refreshContextPr("acme", "core-platform", ID)).toEqual({
+      ok: true,
+      value: {
+        changed: true,
+        syncRequested: false,
+        host: { state: "closed", headSha: "abc", baseRef: "main" },
+      },
+    });
+    expect(invoke).toHaveBeenCalledWith(
+      "refresh_context_pr",
+      { proposalId: ID },
+      expect.objectContaining(TENANT),
+    );
+  });
+
+  it("carries the host's refusal (negative)", async () => {
+    invoke.mockRejectedValue(refused("conflict", "github_refused"));
+    expect(await refreshContextPr("acme", "core-platform", ID)).toEqual({
+      ok: false,
+      reason: "conflict",
+      code: "github_refused",
+    });
+  });
+});
+
 describe("a person the workspace refuses", () => {
   it.each([
     ["openContextPr", () => openContextPr("acme", "x", ID)],
     ["mergeContextPr", () => mergeContextPr("acme", "x", ID)],
     ["dismissProposal", () => dismissProposal("acme", "x", ID, "why")],
+    ["refreshContextPr", () => refreshContextPr("acme", "x", ID)],
     ["approveContextPr", () => approveContextPr("acme", "x", ID)],
     ["mergePrWithoutReview", () => mergePrWithoutReview("acme", "x", ID)],
     [

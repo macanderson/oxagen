@@ -506,7 +506,7 @@ describe("the Steering page", () => {
         ),
       ),
     ).rejects.toThrow(
-      "REDIRECT /acme/core-platform/steering/proposals/prs?proposal=prp_1",
+      "REDIRECT /acme/core-platform/steering/proposals/prs/prp_1",
     );
   });
 

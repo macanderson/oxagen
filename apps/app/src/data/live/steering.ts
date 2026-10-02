@@ -4,6 +4,7 @@
 // the boundary.
 import "server-only";
 import { agentMemoryList } from "@oxagen/oxagen/contracts/agent.memory.list";
+import { contextPrDiffGet } from "@oxagen/oxagen/contracts/context.pr.diff.get";
 import { contextPrGet } from "@oxagen/oxagen/contracts/context.pr.get";
 import { contextProposalList } from "@oxagen/oxagen/contracts/context.proposal.list";
 import { contextRecordsGet } from "@oxagen/oxagen/contracts/context.records.get";
@@ -17,6 +18,7 @@ import { captureError } from "@oxagen/telemetry";
 import type { z } from "zod";
 import {
   ContextPr,
+  ContextPrDiff,
   MemoryPage,
   OxagenTree,
   ProposalPage,
@@ -34,6 +36,7 @@ import { type Read, readError, readOk } from "@/data/read";
 import { kernelRead } from "@/server/kernel";
 import {
   toContextPr,
+  toContextPrDiff,
   toMemoryPage,
   toOxagenTree,
   toProposalPage,
@@ -212,6 +215,21 @@ export const steering: DataSource["steering"] = {
     });
     return read.ok
       ? parsed(ContextPr, toContextPr(read.value), ctx.orgId, "contextPr")
+      : read;
+  },
+  async contextPrDiff(ctx, proposalId) {
+    const read = await kernelRead(ctx, {
+      contract: contextPrDiffGet,
+      input: { proposalId },
+      page: "steering",
+    });
+    return read.ok
+      ? parsed(
+          ContextPrDiff,
+          toContextPrDiff(read.value),
+          ctx.orgId,
+          "contextPrDiff",
+        )
       : read;
   },
   async freshness(ctx) {

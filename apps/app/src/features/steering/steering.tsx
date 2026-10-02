@@ -13,13 +13,8 @@
 // tab and shelf owns its empty copy in its own body. Each body makes only the
 // reads it shows.
 import { Suspense, type ReactNode } from "react";
-import {
-  type ContextPr,
-  type MemoryPage,
-  STEERING_READ_MAX,
-} from "@/data/contracts/steering";
+import { type MemoryPage, STEERING_READ_MAX } from "@/data/contracts/steering";
 import type { DataSource } from "@/data/ports";
-import type { Read } from "@/data/read";
 import { getAuthUser } from "@/server/session";
 import { PageRecord } from "@/features/shell";
 import { Skills, SkillsLoading } from "@/features/skills";
@@ -39,7 +34,7 @@ import { GatesTab } from "./tabs/gates";
 import { InstructionsShelf } from "./tabs/instructions";
 import { MemoryShelf } from "./tabs/memory";
 import { OntologyShelf } from "./tabs/ontology";
-import { ProposalsTab } from "./tabs/proposals";
+import { type ProposalStateCounts, ProposalsTab } from "./tabs/proposals";
 import { RecordsShelf } from "./tabs/records";
 import { SkillSourceShelf } from "./tabs/skill-source";
 import { type SteeringAt, type SteeringView, TAB_PANEL_ID } from "./view";
@@ -54,23 +49,23 @@ async function Body({
   source,
   view,
   at,
-  pr,
   published,
   memories,
   repository,
+  states,
 }: {
   ctx: WsCtx;
   source: DataSource;
   view: SteeringView;
   at: SteeringAt;
-  /** The selected Context PR, when the hub read it. */
-  pr: Read<ContextPr> | null;
   /** Records in force, from the hub's own read. */
   published: number;
   /** The Memory shelf's read, made by the hub; null off that shelf. */
   memories: MemoryPage | null;
   /** The main repository the governance read named, or null. */
   repository: string | null;
+  /** The Proposals filter counts, from the hub's own read; null when a count failed. */
+  states: ProposalStateCounts | null;
 }) {
   // The async bodies are awaited here rather than rendered as elements, so
   // each read runs before the hub returns and a test renders the result.
@@ -92,11 +87,10 @@ async function Body({
         ctx,
         source,
         at,
-        segment: view.segment ?? "candidates",
+        state: view.state ?? "open",
         offset: view.offset,
         rows: view.rows,
-        proposal: view.proposal,
-        pr,
+        counts: states,
       });
     case "library":
       switch (view.shelf) {
@@ -198,12 +192,12 @@ function retryLink(ctx: WsCtx, view: SteeringView) {
       ? view.shelf === "all" || view.shelf === null
         ? "library"
         : view.shelf
-      : view.tab === "proposals" && view.segment === "prs"
-        ? "prs"
-        : view.tab;
+      : view.tab;
   return routes.steering(ctx.orgSlug, ctx.wsSlug, {
     tab,
     agent: view.agent ?? undefined,
+    state:
+      view.state === null || view.state === "open" ? undefined : view.state,
   });
 }
 
@@ -223,19 +217,15 @@ export async function Steering({
   const onAll = view.tab === "library" && view.shelf === "all";
   const onMemory = view.tab === "library" && view.shelf === "memory";
   // The All shelf reads the whole list, in the assembler's order; every other
-  // view needs only the count. The selected Context PR is read here, beside
-  // them, because its state decides whether the header keeps the gold.
+  // view needs only the count.
   //
   // The Memory shelf's read is made here too, because a workspace with no
   // memory is that shelf's empty state, which takes the gold from the header.
-  const [library, hub, pr, agents, memories] = await Promise.all([
+  const [library, hub, agents, memories] = await Promise.all([
     onAll
       ? readLibrary(ctx, source)
       : source.steering.records(ctx, { kind: null, offset: 0 }),
     source.steering.hub(ctx),
-    view.tab === "proposals" && view.proposal !== null
-      ? source.steering.contextPr(ctx, view.proposal)
-      : null,
     // The Assignments count: the agents set up for steering (./agents-read.ts).
     source.agents.list(ctx, { cursor: null }),
     onMemory
@@ -263,7 +253,6 @@ export async function Steering({
   };
   if (!library.ok) return await failure(library);
   if (memories !== null && !memories.ok) return await failure(memories);
-  const mergeable = pr?.ok === true && pr.value.status === "checks_passed";
   const governance = hub.ok ? hub.value.governance : null;
   const repository =
     governance?.state === "read" ? governance.repository : null;
@@ -280,7 +269,6 @@ export async function Steering({
           source,
           view,
           published: records,
-          pr,
         });
   // Records is the one shelf a read counts today; the rest print "not
   // recorded" until the steering registry reads them (./library-all.tsx).
@@ -298,9 +286,7 @@ export async function Steering({
     (view.shelf === "all" || view.shelf === "records");
   return (
     <div className="flex flex-col gap-4" data-testid="steering">
-      {/* `proposal` selects nothing off the Context PRs segment, so the
-          parse decides this, not the query string. */}
-      <PageRecord route="steering" id={view.proposal} />
+      <PageRecord route="steering" id={null} />
       {header(
         <>
           <GovernanceChip
@@ -315,9 +301,7 @@ export async function Steering({
           {empty || bodyGold === "empty" ? null : (
             <SteeringCreate
               view={view}
-              primary={
-                !tabHoldsPrimary(view, mergeable) && bodyGold !== "primary"
-              }
+              primary={!tabHoldsPrimary(view) && bodyGold !== "primary"}
             />
           )}
         </>,
@@ -345,10 +329,10 @@ export async function Steering({
             source,
             view,
             at,
-            pr,
             published: records,
             memories: memoryPage,
             repository,
+            states: hub.ok ? hub.value.states : null,
           })
         )}
       </RouteTabPanel>

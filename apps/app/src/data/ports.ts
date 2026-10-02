@@ -112,6 +112,7 @@ import type {
 } from "./contracts/spend";
 import type {
   ContextPr,
+  ContextPrDiff,
   ProposalPage,
   ProposalState,
   RecordDetail,
@@ -687,6 +688,8 @@ export interface DataSource {
     ): Promise<Read<ProposalPage>>;
     /** get_context_pr: one proposal's state machine, checks and what merge will do */
     contextPr(ctx: WsCtx, proposalId: string): Promise<Read<ContextPr>>;
+    /** get_context_pr_diff: the files the Context PR's branch changes, read from the host now (#5077) */
+    contextPrDiff(ctx: WsCtx, proposalId: string): Promise<Read<ContextPrDiff>>;
     /** get_steering_freshness: what is published, where, and the two gates */
     freshness(ctx: WsCtx): Promise<Read<SteeringFreshness>>;
     /** get_steering_layout: whether the main repository uses the steering or the legacy layout, null while none is bound or the read failed */

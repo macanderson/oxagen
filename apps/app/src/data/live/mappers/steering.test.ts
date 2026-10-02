@@ -82,6 +82,8 @@ describe("toProposalPage", () => {
       },
       pr: {
         number: 519,
+        url: PR_URL,
+        provider: "github",
         repository: "acme/core-platform",
         branch: `steering/${LINEAGE}`,
       },

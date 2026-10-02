@@ -10,6 +10,7 @@ import { contextGovernanceModeSet } from "@oxagen/oxagen/contracts/context.gover
 import { contextPrMerge } from "@oxagen/oxagen/contracts/context.pr.merge";
 import { contextPrMergeWithoutReview } from "@oxagen/oxagen/contracts/context.pr.merge_without_review";
 import { contextPrOpen } from "@oxagen/oxagen/contracts/context.pr.open";
+import { contextPrRefresh } from "@oxagen/oxagen/contracts/context.pr.refresh";
 import { contextProposalDismiss } from "@oxagen/oxagen/contracts/context.proposal.dismiss";
 import { governanceModeSchema } from "@oxagen/oxagen/contracts/context.steering.shared";
 import { workspaceSettingsWrite } from "@oxagen/oxagen/contracts/workspace.settings.write";
@@ -46,7 +47,11 @@ export async function mergeContextPr(
     : result;
 }
 
-/** Dismisses the proposal with a reason; an open pull request for it is closed and its branch deleted. */
+/**
+ * Closes the proposal without merging, with a reason when one is given; an
+ * open pull request for it is closed on the host and its branch deleted
+ * before the proposal moves. A blank reason records none.
+ */
 export async function dismissProposal(
   org: string,
   ws: string,
@@ -54,12 +59,43 @@ export async function dismissProposal(
   reason: string,
 ): Promise<ActionResult<{ status: "rejected" }>> {
   const ctx = await requireViewer(org, ws);
+  const trimmed = reason.trim();
   const result = await kernelWrite(ctx, contextProposalDismiss, {
     proposalId,
-    reason: reason.trim(),
+    ...(trimmed === "" ? {} : { reason: trimmed }),
   });
   return result.ok
     ? { ok: true, value: { status: result.value.status } }
+    : result;
+}
+
+/**
+ * Reads the Context PR from the host now and moves the proposal to the host's
+ * state (#5077; ADR-184). Answers the host's state and whether anything
+ * moved, so the page knows to draw again.
+ */
+export async function refreshContextPr(
+  org: string,
+  ws: string,
+  proposalId: string,
+): Promise<
+  ActionResult<{
+    changed: boolean;
+    syncRequested: boolean;
+    host: ContractOutput<typeof contextPrRefresh>["host"];
+  }>
+> {
+  const ctx = await requireViewer(org, ws);
+  const result = await kernelWrite(ctx, contextPrRefresh, { proposalId });
+  return result.ok
+    ? {
+        ok: true,
+        value: {
+          changed: result.value.changed,
+          syncRequested: result.value.syncRequested,
+          host: result.value.host,
+        },
+      }
     : result;
 }
 

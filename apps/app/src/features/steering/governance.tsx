@@ -31,6 +31,7 @@ import { PullRequestLink, SafeLink, useNavigate } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";
 import { type GovernanceChanged, setGovernanceMode } from "./actions";
 import { STEERING_GAPS } from "./gaps";
+import { routes } from "@/shared/safe-path";
 import { type SteeringAt, steeringLink } from "./view";
 
 const MODES = ["solo", "team", "regulated"] as const;
@@ -276,7 +277,7 @@ function GovernanceResult({
           panel, through merge_context_pr (ADR-232). */}
       {value.outcome !== "proposed" || value.proposalId === null ? null : (
         <SafeLink
-          to={steeringLink(at, { tab: "prs", proposal: value.proposalId })}
+          to={routes.steeringProposal(at.org, at.ws, value.proposalId)}
           className={linkText}
           data-testid="governance-review"
         >

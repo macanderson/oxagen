@@ -1,9 +1,9 @@
 // list_records, list_proposals and get_context_pr outputs to the Steering
 // page's view models (ARCHITECTURE.md §3.4; #2961). Typed from the contracts'
-// `_output`. A proposal's pull request drops its URL (the list links to the
-// Context PR panel, which carries it), and the Context PR's review sentence is
-// not carried: the page words each governance mode from its own catalog.
+// `_output`. The Context PR's review sentence is not carried: the page words
+// each governance mode from its own catalog.
 import type { agentMemoryList } from "@oxagen/oxagen/contracts/agent.memory.list";
+import type { contextPrDiffGet } from "@oxagen/oxagen/contracts/context.pr.diff.get";
 import type { contextPrGet } from "@oxagen/oxagen/contracts/context.pr.get";
 import type { contextProposalList } from "@oxagen/oxagen/contracts/context.proposal.list";
 import type { contextRecordsGet } from "@oxagen/oxagen/contracts/context.records.get";
@@ -18,6 +18,7 @@ import {
 import type { z } from "zod";
 import type {
   ContextPr,
+  ContextPrDiff,
   MemoryPage,
   OxagenTree,
   ProposalPage,
@@ -134,6 +135,8 @@ export function toProposalPage(
           ? null
           : {
               number: proposal.pr.number,
+              url: proposal.pr.url,
+              provider: proposal.pr.provider,
               repository: proposal.pr.repository,
               branch: proposal.pr.branch,
             },
@@ -220,6 +223,25 @@ export function toContextPr(
             byName: out.closed.byName,
             onHost: out.closed.onHost,
           },
+  };
+}
+
+/** `get_context_pr_diff` → the Context PR page's diff (#5077). */
+export function toContextPrDiff(
+  out: ContractOutput<typeof contextPrDiffGet>,
+): z.input<typeof ContextPrDiff> {
+  return {
+    state: out.state,
+    baseRef: out.baseRef,
+    headSha: out.headSha,
+    files: out.files.map((file) => ({
+      path: file.path,
+      status: file.status,
+      before: file.before,
+      after: file.after,
+      truncated: file.truncated,
+    })),
+    moreFiles: out.moreFiles,
   };
 }
 
