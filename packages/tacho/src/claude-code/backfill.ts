@@ -823,6 +823,9 @@ export class TranscriptBackfill {
       const prompt = isTypedPrompt(record);
       if (prompt !== undefined) {
         events.push(...this.closeTurn());
+        // A reply from a turn an interrupt already closed is not this
+        // turn's last reply.
+        this.lastReply = undefined;
         events.push(
           ...this.hook(
             record,
