@@ -71,6 +71,15 @@ describe("run.pull-request-backfill", () => {
     expect(steps).toEqual(["backfill"]);
   });
 
+  it("hands the runner a link the run opened, flag and all (ADR-252)", async () => {
+    const runner = vi.fn(() =>
+      Promise.resolve({ outcome: "recorded", rows: 1 }),
+    );
+    setPullRequestBackfillRunner(runner);
+    await handler({ event: { data: { ...DATA, opened: true } }, step });
+    expect(runner).toHaveBeenCalledWith({ ...DATA, opened: true });
+  });
+
   it("refuses a malformed event without a retry (negative)", async () => {
     const runner = vi.fn();
     setPullRequestBackfillRunner(runner);

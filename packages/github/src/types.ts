@@ -70,6 +70,8 @@ export interface GitHubPullRequest {
   commentCount: number;
   /** True total of inline review comments. */
   reviewCommentCount: number;
+  /** The names of the labels on the pull request, as GitHub spells them. */
+  labels: string[];
 }
 
 /** A single PR comment, normalised across issue and review comment endpoints. */
@@ -319,14 +321,44 @@ export interface GitHubClient {
     labelError?: string;
   }>;
 
-  /** Refresh submission metadata without changing the pull request identity or branches. */
+  /**
+   * Refresh submission metadata without changing the pull request identity or
+   * branches. Leave `title` out to write the body alone, so a title someone
+   * changed since the last read stays as they left it.
+   */
   updatePullRequest(args: {
     owner: string;
     repo: string;
     number: number;
-    title: string;
+    title?: string;
     body: string;
   }): Promise<{ number: number; htmlUrl: string }>;
+
+  /**
+   * Create a repository label. Answers `exists` when GitHub answers 422,
+   * which it does when the repository already has a label of that name in
+   * any case. Every other refusal throws.
+   */
+  createLabel(args: {
+    owner: string;
+    repo: string;
+    name: string;
+    /** Six hex digits with no `#`. */
+    color: string;
+    description: string;
+  }): Promise<"created" | "exists">;
+
+  /**
+   * Add labels to an issue or a pull request (`POST .../issues/{n}/labels`).
+   * A label the item already carries stays once. Answers every label name the
+   * item carries afterwards.
+   */
+  addLabels(args: {
+    owner: string;
+    repo: string;
+    number: number;
+    labels: readonly string[];
+  }): Promise<string[]>;
 
   /**
    * List pull requests, narrowed by head branch and state. `head` is

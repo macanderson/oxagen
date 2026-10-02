@@ -203,6 +203,11 @@ interface GHPullDetail {
   commits?: number;
   comments?: number;
   review_comments?: number;
+  labels?: GHLabel[];
+}
+
+interface GHLabel {
+  name: string;
 }
 
 interface GHIssueComment {
@@ -773,15 +778,55 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
     owner: string;
     repo: string;
     number: number;
-    title: string;
+    title?: string;
     body: string;
   }): Promise<{ number: number; htmlUrl: string }> {
     const data = await request<GHPull>(
       "PATCH",
       `/repos/${seg(args.owner)}/${seg(args.repo)}/pulls/${args.number}`,
-      { title: args.title, body: args.body },
+      {
+        ...(args.title !== undefined ? { title: args.title } : {}),
+        body: args.body,
+      },
     );
     return { number: data.number, htmlUrl: data.html_url };
+  }
+
+  async function createLabel(args: {
+    owner: string;
+    repo: string;
+    name: string;
+    color: string;
+    description: string;
+  }): Promise<"created" | "exists"> {
+    try {
+      await request<unknown>(
+        "POST",
+        `/repos/${seg(args.owner)}/${seg(args.repo)}/labels`,
+        { name: args.name, color: args.color, description: args.description },
+      );
+      return "created";
+    } catch (err) {
+      // GitHub answers 422 when the repository already has a label of this
+      // name, in any case. The color and description here are fixed and
+      // valid, so a 422 means the name is taken.
+      if (err instanceof GitHubApiError && err.status === 422) return "exists";
+      throw err;
+    }
+  }
+
+  async function addLabels(args: {
+    owner: string;
+    repo: string;
+    number: number;
+    labels: readonly string[];
+  }): Promise<string[]> {
+    const data = await request<GHLabel[]>(
+      "POST",
+      `/repos/${seg(args.owner)}/${seg(args.repo)}/issues/${seg(args.number)}/labels`,
+      { labels: [...args.labels] },
+    );
+    return data.map((label) => label.name);
   }
 
   async function listPullRequests(args: {
@@ -1008,6 +1053,7 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
       commits: data.commits ?? 0,
       commentCount: data.comments ?? 0,
       reviewCommentCount: data.review_comments ?? 0,
+      labels: (data.labels ?? []).map((label) => label.name),
     };
   }
 
@@ -1451,6 +1497,8 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
     createBranch,
     openPullRequest,
     updatePullRequest,
+    createLabel,
+    addLabels,
     listPullRequests,
     getFileContent,
     listPathCommits,
