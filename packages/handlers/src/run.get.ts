@@ -85,7 +85,7 @@ import {
   type RunReadDeps,
   startCursorSeq,
 } from "./lib/run-read";
-import { runLabel } from "./lib/run-item";
+import { recordBasisOf, runLabel } from "./lib/run-item";
 
 /** How often the long poll re-reads the store. */
 export const POLL_INTERVAL_MS = 500;
@@ -666,6 +666,10 @@ export function createRunGetHandler(
           run.source === "tacho"
             ? (run.row.session.repositoryUnlinked ?? false)
             : false,
+        // As ingest recorded it (ADR-161). The ledger records a run's
+        // evidence as the run makes it, so a ledger run is live.
+        recordBasis:
+          run.source === "tacho" ? recordBasisOf(run.row.session) : "live",
         ...(paused === undefined ? {} : { pause: paused }),
       },
       frames: {
