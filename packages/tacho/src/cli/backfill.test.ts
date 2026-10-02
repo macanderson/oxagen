@@ -198,12 +198,15 @@ describe("oxagen agent backfill", () => {
   });
 
   it("exits 1 when the daemon stops before its report", async () => {
-    const { deps, err } = harness(async (_path, _body, onLine) => {
+    const { deps, out, err } = harness(async (_path, _body, onLine) => {
       onLine(JSON.stringify({ progress: {} }));
       return { status: 200 };
     });
     expect(await backfillCommand({}, deps)).toBe(BACKFILL_EXIT.stopped);
     expect(err.join("\n")).toMatch(/resume/);
+    // A progress line without counts, as a daemon of another build may send,
+    // reads as zeros.
+    expect(out).toContain("Progress: 0 sessions read, 0 backfilled, 0 frames");
   });
 
   it("exits 1 when the pass stopped partway", async () => {
