@@ -1,9 +1,10 @@
 // A recorded call holds no credential: the header checks on a recorded HTTP
-// request and response, in zod and in the JSON Schema that states them.
+// request and response, in zod and in the JSON Schema that states them. A
+// selection test names the tool that fits its task, or null when none does.
 import { describe, expect, it } from "vitest";
 import type { z } from "zod";
 import { toJsonSchema } from "@oxagen/oxagen/steering-repo/json-schema";
-import { recordedHttpRequestSchema, recordedHttpResponseSchema } from "./tests-files";
+import { recordedHttpRequestSchema, recordedHttpResponseSchema, selectionTestSchema } from "./tests-files";
 
 const request = { method: "POST", path: "/refunds", body: { charge: "ch_1" } };
 const response = { status: 200, body: { id: "re_1" } };
@@ -75,5 +76,35 @@ describe("recordedHttpResponseSchema", () => {
     expect(pattern.test("set-cookie")).toBe(true);
     expect(pattern.test("cookie")).toBe(false);
     expect(pattern.test("set-cookie2")).toBe(false);
+  });
+});
+
+describe("selectionTestSchema", () => {
+  const task = "Give the customer back $40 of charge ch_3P9 because it was billed twice.";
+
+  it("takes the full name of the tool that fits the task", () => {
+    const test = { task, expect: "billing__create_refund" };
+    expect(selectionTestSchema.parse(test)).toStrictEqual(test);
+  });
+
+  it("takes null for a task that no tool fits", () => {
+    const test = { task: "Write a haiku about invoices.", expect: null };
+    expect(selectionTestSchema.parse(test)).toStrictEqual(test);
+  });
+
+  it.each([
+    ["a missing expect", { task }],
+    ["an empty tool name", { task, expect: "" }],
+    ["a tool named without its server", { task, expect: "create_refund" }],
+    ["an empty task", { task: "", expect: null }],
+    ["an extra field", { task, expect: null, note: "none fits" }],
+  ])("refuses %s", (_label, test) => {
+    expect(selectionTestSchema.safeParse(test).success).toBe(false);
+  });
+
+  it("says in its description that null means no tool fits", () => {
+    expect(selectionTestSchema.shape.expect.description).toBe(
+      "The tool that fits the task, such as billing__create_refund, or null when no tool fits.",
+    );
   });
 });

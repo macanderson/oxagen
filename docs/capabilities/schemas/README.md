@@ -171,6 +171,7 @@ capability rewrites, so two such branches always conflicted on it (ADR-216).
 - dismiss_memories
 - dismiss_proposal
 - get_context_pr
+- get_context_pr_diff
 - get_published_steering
 - get_record
 - get_steering_deliveries
@@ -191,6 +192,7 @@ capability rewrites, so two such branches always conflicted on it (ADR-216).
 - promote_memories
 - propose_record
 - publish_context_record
+- refresh_context_pr
 - revert_steering_pr
 - revise_context_record
 
@@ -563,6 +565,7 @@ capability rewrites, so two such branches always conflicted on it (ADR-216).
 - open_studio_review
 - publish_tool_declaration
 - revoke_relay
+- run_studio_selection
 - save_studio_draft
 - set_mcp_credential
 - set_tool_classification

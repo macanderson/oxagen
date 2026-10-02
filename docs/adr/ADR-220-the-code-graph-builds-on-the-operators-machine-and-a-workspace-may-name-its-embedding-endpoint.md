@@ -124,8 +124,10 @@ into the shared store. A local graph has to avoid that path.
    two workspaces that name the same endpoint and model share another. In the
    Oxagen mode and with a stored endpoint, builds send cards through the code
    graph's embedding route, and a local build reaches it through tachod. That
-   route runs in the code graph's query service until ADR-187 is accepted,
-   then moves to the cloud gateway. Before it calls a provider, it looks up
+   route runs in the code graph's query service until ADR-187's model calls
+   through the cloud gateway are accepted, then moves to the cloud gateway.
+   ADR-187's MCP parts, accepted on 2026-10-02, do not move it. Before it
+   calls a provider, it looks up
    each card hash in the organization's `embeddings` table for that space.
    Every card passes ADR-214 decision 5's secret scanner before it leaves the
    machine.

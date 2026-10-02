@@ -20,7 +20,9 @@ One proposal's Context PR ([ADR-061](../adr/ADR-061-steering-governance-mode-thr
 
 ## Output
 
-`contextPrSchema` — see [context.pr.open](context.pr.open.md). On a `proposed` row `governanceMode` and `onMerge.review` are null: governance.toml is read when the PR opens, and the view carries what was read or nothing. `onMerge.bundleVersion.current` is the number of entries in the promotions ledger (`agent.context_promotions`), one per merged record, and `afterMerge` is one more until the proposal is merged. It is not the steering version, which `merge_context_pr` answers as `publishedVersion` (#4732). `merged` carries the merge commit, the time, the merger, the promotion event (`ctp_…`) and the published record (`ctr_…`).
+`contextPrSchema` — see [context.pr.open](context.pr.open.md). On a `proposed` row `governanceMode` and `onMerge.review` are null: governance.toml is read when the PR opens, and the view carries what was read or nothing. `onMerge.bundleVersion.current` is the number of entries in the promotions ledger (`agent.context_promotions`), one per merged record, and `afterMerge` is one more until the proposal is merged. It is not the steering version, which `merge_context_pr` answers as `publishedVersion` (#4732). `merged` carries the merge commit, the time, the merger and their display name, whether the host merged it (`onHost`: the repository sync recorded it with no merger, ADR-184), the promotion event (`ctp_…`) and the published record (`ctr_…`).
+
+`raised` is the proposal as raised: its statement, rationale, source (with `sourceName` when the source is a user with a display name), force, constraint effect, sharing scope, support and the instant it was raised. `closed` is set on a rejected proposal: the instant, the reason (null when none was given), the closer and their display name, and `onHost` when the host closed it and the repository sync or `refresh_context_pr` recorded the close. A close on the host records no closer. A display name comes from `auth.users.display_name`; a user without one is named by nothing, never by email.
 
 ## Errors
 

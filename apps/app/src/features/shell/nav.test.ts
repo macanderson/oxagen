@@ -333,6 +333,27 @@ describe("breadcrumbs", () => {
     ).toEqual([{ kind: "nav", key: "steering", href: null }]);
   });
 
+  it("one Context PR ends on its declared lineage under Steering's Proposals list (#5077)", () => {
+    const at = "/acme/core-platform/steering/proposals/prs/prp_01k5ru4a";
+    expect(breadcrumbs(at, names).slice(2)).toEqual([
+      {
+        kind: "nav",
+        key: "steering",
+        href: "/acme/core-platform/steering/proposals",
+      },
+      { kind: "id", text: "prp_01k5ru4a", href: null },
+    ]);
+    expect(
+      breadcrumbs(at, {
+        ...names,
+        record: { id: "prp_01k5ru4a", label: "ctx.release.no-reread" },
+      }).at(-1),
+    ).toEqual({ kind: "id", text: "ctx.release.no-reread", href: null });
+    expect(
+      breadcrumbs("/acme/core-platform/steering/proposals", names).slice(2),
+    ).toEqual([{ kind: "nav", key: "steering", href: null }]);
+  });
+
   it("mandate, on its flat route (not nested under the agent)", () => {
     expect(
       breadcrumbs("/acme/core-platform/mandates/mnd_1", names).slice(2),

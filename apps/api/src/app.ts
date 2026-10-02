@@ -210,6 +210,7 @@ import { toolStudioCredentialSetRoute } from "./routes/v1/tool.studio.credential
 import { toolStudioFindingsListRoute } from "./routes/v1/tool.studio.findings.list";
 import { toolStudioDescriptionDraftRoute } from "./routes/v1/tool.studio.description.draft";
 import { toolStudioTryRoute } from "./routes/v1/tool.studio.try";
+import { toolStudioSelectionRunRoute } from "./routes/v1/tool.studio.selection.run";
 import { toolStudioDiscoveryStartRoute } from "./routes/v1/tool.studio.discovery.start";
 import { toolSteeringMigrateRoute } from "./routes/v1/tool.steering.migrate";
 import { toolStudioListingGetRoute } from "./routes/v1/tool.studio.listing.get";
@@ -257,6 +258,8 @@ import { contextProposalListRoute } from "./routes/v1/context.proposal.list";
 import { contextProposalDismissRoute } from "./routes/v1/context.proposal.dismiss";
 import { contextPrOpenRoute } from "./routes/v1/context.pr.open";
 import { contextPrGetRoute } from "./routes/v1/context.pr.get";
+import { contextPrRefreshRoute } from "./routes/v1/context.pr.refresh";
+import { contextPrDiffGetRoute } from "./routes/v1/context.pr.diff.get";
 import { contextPrMergeRoute } from "./routes/v1/context.pr.merge";
 import { contextPrMergeWithoutReviewRoute } from "./routes/v1/context.pr.merge_without_review";
 import { contextPrRevertRoute } from "./routes/v1/context.pr.revert";
@@ -1296,6 +1299,8 @@ orgScoped.route("/tools/studio/credential", toolStudioCredentialSetRoute);
 orgScoped.route("/tools/studio/findings", toolStudioFindingsListRoute);
 orgScoped.route("/tools/studio/description", toolStudioDescriptionDraftRoute);
 orgScoped.route("/tools/studio/try", toolStudioTryRoute);
+// Selection tests (lane M16): run a folder's tests/selection.jsonl when a person asks.
+orgScoped.route("/tools/studio/selection", toolStudioSelectionRunRoute);
 // Discovery (lane M10, #4682): start a discovery, read its state, and list a server's tools.
 orgScoped.route("/tools/studio/discovery/start", toolStudioDiscoveryStartRoute);
 orgScoped.route("/tools/studio/discovery/get", toolStudioDiscoveryGetRoute);
@@ -1371,6 +1376,8 @@ orgScoped.route("/context/proposals/create", contextProposalCreateRoute);
 orgScoped.route("/context/proposals/dismiss", contextProposalDismissRoute);
 orgScoped.route("/context/prs/open", contextPrOpenRoute);
 orgScoped.route("/context/prs/get", contextPrGetRoute);
+orgScoped.route("/context/prs/refresh", contextPrRefreshRoute);
+orgScoped.route("/context/prs/diff", contextPrDiffGetRoute);
 orgScoped.route("/context/prs/merge", contextPrMergeRoute);
 orgScoped.route(
   "/context/prs/merge-without-review",

@@ -2141,6 +2141,25 @@
       }
     },
     {
+      "name": "get_context_pr_diff",
+      "file": "context.pr.diff.get.ts",
+      "domain": "context",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
       "name": "get_context_pr",
       "file": "context.pr.get.ts",
       "domain": "context",
@@ -2196,6 +2215,23 @@
     {
       "name": "open_context_pr",
       "file": "context.pr.open.ts",
+      "domain": "context",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
+      "name": "refresh_context_pr",
+      "file": "context.pr.refresh.ts",
       "domain": "context",
       "mode": "sync",
       "surfaces": [
@@ -7472,6 +7508,23 @@
     {
       "name": "open_studio_review",
       "file": "tool.studio.review.open.ts",
+      "domain": "tool",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "run_studio_selection",
+      "file": "tool.studio.selection.run.ts",
       "domain": "tool",
       "mode": "sync",
       "surfaces": [

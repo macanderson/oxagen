@@ -308,6 +308,7 @@ import { toolStudioCredentialSet } from "./tool.studio.credential.set";
 import { toolStudioFindingsList } from "./tool.studio.findings.list";
 import { toolStudioDescriptionDraft } from "./tool.studio.description.draft";
 import { toolStudioTry } from "./tool.studio.try";
+import { toolStudioSelectionRun } from "./tool.studio.selection.run";
 import { toolSteeringMigrate } from "./tool.steering.migrate";
 import { toolRelayCreate } from "./tool.relay.create";
 import { toolRelayRevoke } from "./tool.relay.revoke";
@@ -364,6 +365,8 @@ export {
 export type { TriageViewOutput, WorkCollectorView } from "./work.intake.shared";
 import { contextPrOpen } from "./context.pr.open";
 import { contextPrGet } from "./context.pr.get";
+import { contextPrRefresh } from "./context.pr.refresh";
+import { contextPrDiffGet } from "./context.pr.diff.get";
 import { contextPrMerge } from "./context.pr.merge";
 import { contextPrMergeWithoutReview } from "./context.pr.merge_without_review";
 import { contextPrRevert } from "./context.pr.revert";
@@ -1147,6 +1150,7 @@ export {
   toolStudioFindingsList,
   toolStudioDescriptionDraft,
   toolStudioTry,
+  toolStudioSelectionRun,
   toolSteeringMigrate,
   toolRelayCreate,
   toolRelayRevoke,
@@ -1199,6 +1203,8 @@ export {
   workPrioritiesGet,
   contextPrOpen,
   contextPrGet,
+  contextPrRefresh,
+  contextPrDiffGet,
   contextPrMerge,
   contextPrMergeWithoutReview,
   contextPrRevert,
@@ -1628,6 +1634,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   toolStudioFindingsList,
   toolStudioDescriptionDraft,
   toolStudioTry,
+  toolStudioSelectionRun,
   toolSteeringMigrate,
   toolRelayCreate,
   toolRelayRevoke,
@@ -1679,6 +1686,8 @@ export const contracts: readonly CapabilityDeclaration[] = [
   workPrioritiesGet,
   contextPrOpen,
   contextPrGet,
+  contextPrRefresh,
+  contextPrDiffGet,
   contextPrMerge,
   contextPrMergeWithoutReview,
   contextPrRevert,
