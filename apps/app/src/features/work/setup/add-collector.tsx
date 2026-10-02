@@ -1,16 +1,17 @@
 "use client";
 // Add collector (roadmap mockups/src/work-setup.js `DIALOGS.addcollector`):
-// a GitHub collector's name, the GitHub connection it reads through, and the
-// repositories whose issues become work items. Saving a name the workspace
-// already has changes what that collector reads (set_work_collector). A new
-// or widened collector reads its repositories right away.
+// a GitHub collector's name and the repositories whose issues become work
+// items. Saving a name the workspace already has changes what that collector
+// reads (set_work_collector). A new or widened collector reads its
+// repositories right away, and the page says so once the dialog closes.
 //
-// A new collector needs a connection, so the dialog offers the workspace's
-// connected GitHub accounts. An existing collector may keep its own. With no
-// connected GitHub account the dialog says where to connect one and saves
-// nothing. When the connections could not be read, the picker is disabled
-// with the reason, and an existing collector can still change its
-// repositories.
+// The repositories are a checklist of the ones linked to the workspace, the
+// only ones a collector may read; nobody types an owner/name. The collector
+// reads through the GitHub connection they were linked through, so the
+// dialog asks for no connection. Typing an existing collector's name ticks
+// the linked repositories it reads. With no linked repository the dialog
+// says where to link one and saves nothing, and when the linked repositories
+// could not be read it says so and saves nothing.
 //
 // The button stays on the page for a person whose role cannot change
 // collectors. It is disabled and says why, and the server refuses the write
@@ -30,7 +31,7 @@ import {
   fieldLabel,
   inputBase,
   linkText,
-  textareaBase,
+  mono,
 } from "@/ui/control-styles";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { SafeLink, useNavigate } from "@/ui/navigation";
@@ -38,13 +39,13 @@ import { SheetDialog } from "@/ui/sheet-dialog";
 import { setCollector } from "../actions";
 import { UNANSWERED, useListActionFailure } from "../list-action-failure";
 
-/** A connected GitHub account the collector can read through. */
-type ConnectionChoice = { readonly id: string; readonly name: string };
+/** A collector already in the workspace: its name and what it reads. */
+type ExistingCollector = { readonly name: string; readonly repos: readonly string[] };
 
 /** set_work_collector's name rule: lowercase words joined by single hyphens. */
 const NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-/** A repository as owner/name. */
-const REPOSITORY = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
+/** The name the dialog suggests when the workspace has no collector by it. */
+const SUGGESTED_NAME = "issues";
 
 function FieldRow({
   id,
@@ -72,74 +73,94 @@ function FieldRow({
   );
 }
 
+/** The linked repositories an existing collector reads, matched without regard to case. */
+function readsOf(
+  collectors: readonly ExistingCollector[],
+  name: string,
+  linked: readonly string[],
+): Set<string> {
+  const found = collectors.find((collector) => collector.name === name);
+  if (found === undefined) return new Set();
+  const wanted = new Set(found.repos.map((repo) => repo.toLowerCase()));
+  return new Set(linked.filter((repo) => wanted.has(repo.toLowerCase())));
+}
+
 export function AddCollector({
   org,
   ws,
   canControl,
   collectors,
-  connections,
+  linked,
 }: {
   org: string;
   ws: string;
   /** Whether the viewer may change collectors; unknown reads as allowed and the server decides. */
   canControl: boolean;
-  /** The names the workspace's collectors already carry. */
-  collectors: readonly string[];
-  /** The connected GitHub accounts, or null when they could not be read. */
-  connections: readonly ConnectionChoice[] | null;
+  /** The workspace's collectors, by name, with the repositories each reads. */
+  collectors: readonly ExistingCollector[];
+  /** The GitHub repositories linked to the workspace, or null when they could not be read. */
+  linked: readonly string[] | null;
 }) {
   const t = useTranslations("work.setup.addCollector");
   const c = useTranslations("work.setup.collectors");
   const failureText = useListActionFailure();
   const navigate = useNavigate();
   const reasonId = useId();
+  const suggested = collectors.some((collector) => collector.name === SUGGESTED_NAME)
+    ? ""
+    : SUGGESTED_NAME;
   const [open, setOpen] = useState(false);
-  const [name, setName] = useState("");
-  const [connection, setConnection] = useState("");
+  const [name, setName] = useState(suggested);
+  const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set());
   const [pending, setPending] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
-  const existing = collectors.includes(name.trim());
-  const noConnection = connections !== null && connections.length === 0;
+  const repos = linked ?? [];
+  const existing = collectors.some((collector) => collector.name === name.trim());
+  const cannotSave = linked === null || repos.length === 0;
+
+  function rename(next: string) {
+    setName(next);
+    // An existing collector's name ticks what it reads, so a save changes it in place.
+    if (collectors.some((collector) => collector.name === next.trim())) {
+      setSelected(readsOf(collectors, next.trim(), repos));
+    }
+  }
+
+  function toggle(repo: string, on: boolean) {
+    setSelected((current) => {
+      const next = new Set(current);
+      if (on) next.add(repo);
+      else next.delete(repo);
+      return next;
+    });
+  }
 
   async function submit(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (pending || noConnection) return;
-    const form = new FormData(event.currentTarget);
-    const raw = form.get("repos");
-    const repos = (typeof raw === "string" ? raw : "")
-      .split(/\r?\n/)
-      .map((repo) => repo.trim())
-      .filter((repo) => repo !== "");
+    if (pending || cannotSave) return;
     const trimmed = name.trim();
     if (!NAME.test(trimmed)) {
       setFailure(t("nameInvalid"));
       return;
     }
-    if (repos.length === 0) {
+    const chosen = repos.filter((repo) => selected.has(repo));
+    if (chosen.length === 0) {
       setFailure(t("reposRequired"));
-      return;
-    }
-    if (repos.some((repo) => !REPOSITORY.test(repo))) {
-      setFailure(t("reposInvalid"));
-      return;
-    }
-    if (!existing && connection === "") {
-      setFailure(t("connectionRequired"));
       return;
     }
     setPending(true);
     setFailure(null);
     try {
-      const result = await setCollector(org, ws, {
-        name: trimmed,
-        repos,
-        connectionId: connection === "" ? null : connection,
-      });
+      const result = await setCollector(org, ws, { name: trimmed, repos: chosen });
       if (result.ok) {
         setOpen(false);
-        setName("");
-        setConnection("");
+        setNotice(
+          result.value.reconcileQueued
+            ? t("reading", { name: trimmed, count: chosen.length })
+            : t("saved", { name: trimmed }),
+        );
         navigate.refresh();
       } else {
         setFailure(failureText(result));
@@ -151,15 +172,8 @@ export function AddCollector({
     }
   }
 
-  const connectionHint =
-    connections === null
-      ? t("connectionsFailed")
-      : noConnection
-        ? undefined
-        : t("connectionHint");
-
   return (
-    <>
+    <div className="flex flex-col items-end gap-2">
       <button
         type="button"
         data-testid="work-add-collector"
@@ -168,6 +182,9 @@ export function AddCollector({
         title={canControl ? undefined : c("noRole")}
         className={buttonPrimary}
         onClick={() => {
+          setName(suggested);
+          setSelected(new Set());
+          setNotice(null);
           setOpen(true);
         }}
       >
@@ -179,6 +196,13 @@ export function AddCollector({
           {c("noRole")}
         </span>
       )}
+      <p
+        role="status"
+        data-testid="work-add-collector-status"
+        className="max-w-[48ch] text-right text-sm text-muted-foreground"
+      >
+        {notice}
+      </p>
       <SheetDialog
         open={open}
         onOpenChange={(next) => {
@@ -200,7 +224,7 @@ export function AddCollector({
               name="name"
               value={name}
               onChange={(event) => {
-                setName(event.currentTarget.value);
+                rename(event.currentTarget.value);
               }}
               autoComplete="off"
               spellCheck={false}
@@ -209,71 +233,53 @@ export function AddCollector({
               className={`${inputBase} font-mono`}
             />
           </FieldRow>
-          <FieldRow
-            id="work-collector-connection"
-            label={t("connection")}
-            hint={connectionHint}
+          <fieldset
+            data-testid="work-collector-repos"
+            aria-describedby="work-collector-repos-hint"
+            className="flex min-w-0 flex-col gap-1"
           >
-            <select
-              id="work-collector-connection"
-              name="connection"
-              value={connection}
-              onChange={(event) => {
-                setConnection(event.currentTarget.value);
-              }}
-              disabled={connections === null || noConnection}
-              aria-describedby={
-                connectionHint === undefined
-                  ? undefined
-                  : "work-collector-connection-hint"
-              }
-              className={inputBase}
-            >
-              <option value="">
-                {existing ? t("connectionKeep") : t("connectionChoose")}
-              </option>
-              {(connections ?? []).map((choice) => (
-                <option key={choice.id} value={choice.id}>
-                  {choice.name}
-                </option>
-              ))}
-            </select>
-          </FieldRow>
-          {noConnection ? (
-            <p
-              data-testid="work-add-collector-no-connection"
-              className="text-sm text-foreground"
-            >
-              {t.rich("noConnection", {
-                link: (chunks) => (
-                  <SafeLink
-                    to={routes.repositories(org, ws)}
-                    className={linkText}
-                  >
-                    {chunks}
-                  </SafeLink>
-                ),
-              })}
+            <legend className={fieldLabel}>{t("repos")}</legend>
+            {repos.map((repo) => (
+              <label
+                key={repo}
+                className="flex min-h-11 items-center gap-2.5 text-sm"
+              >
+                <input
+                  type="checkbox"
+                  name="repos"
+                  value={repo}
+                  checked={selected.has(repo)}
+                  onChange={(event) => {
+                    toggle(repo, event.currentTarget.checked);
+                  }}
+                />
+                <span className={`${mono} [overflow-wrap:anywhere]`}>{repo}</span>
+              </label>
+            ))}
+            <p id="work-collector-repos-hint" className={fieldHint}>
+              {linked === null
+                ? t("linkedFailed")
+                : repos.length === 0
+                  ? t.rich("noLinked", {
+                      link: (chunks) => (
+                        <SafeLink to={routes.repositories(org, ws)} className={linkText}>
+                          {chunks}
+                        </SafeLink>
+                      ),
+                    })
+                  : t.rich("reposHint", {
+                      link: (chunks) => (
+                        <SafeLink to={routes.repositories(org, ws)} className={linkText}>
+                          {chunks}
+                        </SafeLink>
+                      ),
+                    })}
             </p>
+          </fieldset>
+          {existing ? (
+            <p className="text-sm text-muted-foreground">{t("existing")}</p>
           ) : null}
-          <FieldRow
-            id="work-collector-repos"
-            label={t("repos")}
-            hint={t("reposHint")}
-          >
-            <textarea
-              id="work-collector-repos"
-              name="repos"
-              rows={4}
-              spellCheck={false}
-              aria-required="true"
-              aria-describedby="work-collector-repos-hint"
-              className={`${textareaBase} font-mono`}
-            />
-          </FieldRow>
-          <p className="text-[12.5px] text-muted-foreground">
-            {t("writeBack")}
-          </p>
+          <p className="text-sm text-muted-foreground">{t("writeBack")}</p>
           {failure === null ? null : (
             <FormAlert testId="work-action-failure">{failure}</FormAlert>
           )}
@@ -281,11 +287,11 @@ export function AddCollector({
             pending={pending}
             label={t("submit")}
             pendingLabel={t("pending")}
-            disabled={noConnection}
+            disabled={cannotSave}
             testId="work-add-collector-submit"
           />
         </form>
       </SheetDialog>
-    </>
+    </div>
   );
 }

@@ -751,7 +751,7 @@ describe("closeItem and reopenItem", () => {
 });
 
 describe("setCollector and syncCollector", () => {
-  it("sets a collector with its connection and the trimmed, non-empty repositories", async () => {
+  it("sets a collector with the trimmed, non-empty repositories and names no connection", async () => {
     kernelWrite.mockResolvedValue({
       ok: true,
       value: { collector: {}, created: true, reconcile_queued: true },
@@ -760,29 +760,23 @@ describe("setCollector and syncCollector", () => {
       await actions.setCollector("acme", "core-platform", {
         name: " acme-github ",
         repos: [" acme/platform ", "", "acme/billing"],
-        connectionId: "con_github",
       }),
     ).toEqual({ ok: true, value: { created: true, reconcileQueued: true } });
     expect(kernelWrite).toHaveBeenCalledWith(CTX, workCollectorSet, {
       name: "acme-github",
-      connection_id: "con_github",
       repos: ["acme/platform", "acme/billing"],
     });
   });
 
-  it("leaves the connection out when a change keeps the one the collector has", async () => {
+  it("pauses a collector without naming its repositories", async () => {
     kernelWrite.mockResolvedValue({
       ok: true,
       value: { collector: {}, created: false, reconcile_queued: false },
     });
-    await actions.setCollector("acme", "core-platform", {
-      name: "acme-github",
-      repos: ["acme/platform"],
-      connectionId: null,
-    });
+    await actions.setCollector("acme", "core-platform", { name: "acme-github", paused: true });
     expect(kernelWrite).toHaveBeenCalledWith(CTX, workCollectorSet, {
       name: "acme-github",
-      repos: ["acme/platform"],
+      paused: true,
     });
   });
 
@@ -801,7 +795,6 @@ describe("setCollector and syncCollector", () => {
       await actions.setCollector("acme", "core-platform", {
         name: "x",
         repos: [],
-        connectionId: null,
       }),
     ).toEqual(DENIED);
     expect(await actions.syncCollector("acme", "core-platform", { name: "x" })).toEqual(INVALID);
