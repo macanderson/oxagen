@@ -38,6 +38,11 @@ import {
   type SteeringRepository,
 } from "./context.steering.github";
 import { createSteeringHost } from "./context.steering.host";
+import { postgresSteeringStore } from "./context.steering.store";
+import {
+  authorOf,
+  type SteeringPrProposalStore,
+} from "./steering-repo/pr-proposal";
 import { logger } from "./logger";
 import {
   githubMainRepositoryDeps,
@@ -68,6 +73,8 @@ export type RepositorySteeringHost = Pick<
 export interface RepositoryLinkDeps {
   repository: MainRepositoryDeps["repository"];
   steering: RepositorySteeringHost;
+  /** Where the workspace.toml PR's proposal row is written (#5122). */
+  proposals?: SteeringPrProposalStore;
   /** The organization and workspace slugs a new workspace.toml names. */
   workspaceNames(
     scope: Scope,
@@ -203,17 +210,30 @@ export function createRepositoryLinkHandler(
       }
     }
 
-    const pullRequest = await openSteeringPullRequest(deps.steering, repo, {
-      branch: workspaceTomlBranch("link", target.repo.owner, target.repo.name),
-      content,
-      message: `Link ${target.repo.fullName} to the workspace`,
-      title: `Link ${target.repo.fullName}`,
-      body: [
-        `This steering PR adds \`${ref}\` to \`${WORKSPACE_TOML_PATH}\`.`,
-        "",
-        `When it merges, the steering sync links ${target.repo.fullName} to the workspace. Until then the repository is not linked.`,
-      ].join("\n"),
-    });
+    const pullRequest = await openSteeringPullRequest(
+      deps.steering,
+      repo,
+      {
+        branch: workspaceTomlBranch("link", target.repo.owner, target.repo.name),
+        content,
+        message: `Link ${target.repo.fullName} to the workspace`,
+        title: `Link ${target.repo.fullName}`,
+        body: [
+          `This steering PR adds \`${ref}\` to \`${WORKSPACE_TOML_PATH}\`.`,
+          "",
+          `When it merges, the steering sync links ${target.repo.fullName} to the workspace. Until then the repository is not linked.`,
+        ].join("\n"),
+      },
+      // The PR's workspace proposal row, so Oxagen can merge it (#5122).
+      deps.proposals === undefined
+        ? undefined
+        : {
+            store: deps.proposals,
+            scope,
+            author: authorOf(ctx),
+            now: new Date(),
+          },
+    );
 
     logger.info(
       {
@@ -231,5 +251,6 @@ export function createRepositoryLinkHandler(
 export const repositoryLinkHandler = createRepositoryLinkHandler({
   repository: githubMainRepositoryDeps.repository,
   steering: createSteeringHost(),
+  proposals: postgresSteeringStore,
   workspaceNames: readWorkspaceNames,
 });

@@ -2,7 +2,7 @@
 
 Propose linking a GitHub repository to the workspace. The link follows the merge of a steering PR (ADR-212, ADR-099).
 
-A workspace has one steering repository, the one whose `.oxagen/` holds its steering record. It can link any number of code repositories: the ones its agents work on. The steering record's `.oxagen/workspace.toml` lists them, so this write writes no binding head. It opens a steering PR on the steering repository that adds the repository to `workspace.toml`. When that PR merges, the steering sync reads the new file and writes the `role = 'linked'` binding head. Until then the repository is not linked.
+A workspace has one steering repository, the one whose `.oxagen/` holds its steering record. It can link any number of code repositories: the ones its agents work on. The steering record's `.oxagen/workspace.toml` lists them, so this write writes no binding head. It opens a steering PR on the steering repository that adds the repository to `workspace.toml`. When that PR merges, the steering sync reads the new file and writes the `role = 'linked'` binding head. Until then the repository is not linked. In a steering repository the PR carries a `workspace` proposal ([ADR-264](../adr/ADR-264-every-steering-pr-oxagen-opens-carries-a-proposal-row.md), #5122), so a person merges it from Oxagen with [`merge_context_pr`](context.pr.merge.md).
 
 The repository is named by `owner/name` and nothing else. The installation is the one attached to the workspace's GitHub connection, never the caller's choice. An installation id a caller could choose would let one tenant mint tokens for another account's installation.
 

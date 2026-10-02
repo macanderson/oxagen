@@ -88,7 +88,7 @@ const governanceMergeSchema = z
 
 /**
  * A steering PR proposal's merge (#5122, ADR-264): a revert, tools, import,
- * memory, agent file, or agent proposal PR. It publishes no single record, so
+ * memory, agent file, agent proposal, or workspace settings PR. It publishes no single record, so
  * it names the pull request and the records a revert retired.
  */
 const steeringPrMergeSchema = z
@@ -122,7 +122,7 @@ export const contextPrMerge = registerCapability({
   name: "merge_context_pr",
   domain: "context",
   description:
-    "Merge a proposal's steering PR (a GitHub pull request or a GitLab merge request) through the merge queue: refused until every check passed and unless the caller is a reviewer the governance mode allows. A record proposal publishes its record and writes the promotion event to the ledger. A revert, tools, import, memory, or agent PR lands its files, and a revert retires each record whose file it deleted. Bumps the steering version and emits steering.published",
+    "Merge a proposal's steering PR (a GitHub pull request or a GitLab merge request) through the merge queue: refused until every check passed and unless the caller is a reviewer the governance mode allows. A record proposal publishes its record and writes the promotion event to the ledger. A revert, tools, import, memory, agent, or workspace settings PR lands its files, and a revert retires each record whose file it deleted. Bumps the steering version and emits steering.published",
   mode: "sync",
   surfaces: ["api", "agent"],
   layers: ["schema", "api", "unit", "docs", "app"],

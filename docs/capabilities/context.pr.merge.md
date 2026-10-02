@@ -53,10 +53,11 @@ Every steering PR Oxagen opens carries a proposal row ([ADR-264](../adr/ADR-264-
 | --- | --- |
 | `revert` | the PR [`revert_steering_pr`](context.pr.revert.md) opens |
 | `tools` | a `tools/` PR from Studio's Review, the server sync, or the server folder writer |
-| `import` | the Markdown import's `steering/import-<date>` PR |
+| `import` | the Markdown import's `steering/import-<date>` PR, and each steering PR [`import_workspace_steering`](steering_repo.import.md) opens from `.oxagen/` |
 | `memory_pr` | a `memory/<date>` PR from the curator or [`promote_memories`](steering.memories.promote.md) |
 | `agent_file` | the PR that adds `agents/<name>.toml` when a host enrolls |
 | `agent_proposal` | the PR an agent opens with `propose_steering` |
+| `workspace` | the `workspace.toml` PR [`link_repository`](repository.link.md) and [`unlink_repository`](repository.unlink.md) open |
 
 The row's lineage is the PR's branch, and its path is the folder every changed file sits under. A revert of a record PR takes the record's lineage and path instead. This capability lands the PR through the same queue, reviewer rule, claim, approvals, stamp, and trailers as a record, with these differences:
 
@@ -105,7 +106,7 @@ A steering PR proposal answers the steering PR arm:
 | --- | --- | --- |
 | `proposalId` | `string` | |
 | `status` | `"merged"` | |
-| `kind` | `revert`, `tools`, `import`, `memory_pr`, `agent_file`, or `agent_proposal` | |
+| `kind` | `revert`, `tools`, `import`, `memory_pr`, `agent_file`, `agent_proposal`, or `workspace` | |
 | `pullRequest` | `{ number, branch }` | The PR that merged |
 | `retired` | `string[]` | The lineages of the records a revert retired. Empty for every other merge |
 | `mergedCommit` | `string` | |

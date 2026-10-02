@@ -25,8 +25,10 @@
 // unless the call sets `startFresh`. It then only creates the steering repo,
 // and nothing from the legacy repository is imported.
 //
-// The run merges nothing. A person merges the import steering PRs in order,
-// then the cleanup PR last. Everything that touches the database or a host is
+// The run merges nothing. Each import steering PR carries an `import`
+// proposal row (#5122, ADR-264), so a person merges them in order from
+// Oxagen, through the merge queue, and then the cleanup PR on the old
+// repository last. A merge on the host leaves the steering repo diverged. Everything that touches the database or a host is
 // a dependency, so the tests run the whole flow against fakes.
 import { OXAGEN_PR_LABELS } from "@oxagen/github";
 import { HandlerError, isHandlerError } from "@oxagen/oxagen";
@@ -276,6 +278,24 @@ export interface SteeringImportDeps {
   agents(scope: ImportScope): Promise<ImportAgent[]>;
   /** The organization and workspace slugs, which make the set id. */
   names(scope: ImportScope): Promise<{ organization: string; workspace: string }>;
+  /**
+   * Record an import steering PR's proposal row, so merge_context_pr can land
+   * it (#5122, ADR-264). Production writes an `import` row naming the person
+   * who ran the import, and logs a row that fails to write, so the run never
+   * stops on it.
+   */
+  recordPullRequest?(
+    scope: ImportScope,
+    pr: {
+      repo: SteeringRepository;
+      number: number;
+      url: string;
+      branch: string;
+      headSha: string;
+      title: string;
+      paths: string[];
+    },
+  ): Promise<void>;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -753,10 +773,30 @@ async function advance(
       conversion = await convert(state.source, { workspaceToml, governanceToml });
       for (const branch of conversion.branches) {
         if (state.pull_requests.some((pr) => pr.branch === branch.branch)) continue;
-        state.pull_requests.push(
-          await openImportPullRequest(steering, base, conversion, branch, state.source.relinked),
+        const opened = await openImportPullRequest(
+          steering,
+          base,
+          conversion,
+          branch,
+          state.source.relinked,
         );
+        state.pull_requests.push(opened);
         await save();
+        const headSha =
+          deps.recordPullRequest === undefined
+            ? null
+            : await steering.host.branchHead(steering.repo, branch.branch);
+        if (deps.recordPullRequest !== undefined && headSha !== null) {
+          await deps.recordPullRequest(scope, {
+            repo: steering.repo,
+            number: opened.number,
+            url: opened.url,
+            branch: branch.branch,
+            headSha,
+            title: importPullRequestTitle(conversion, branch),
+            paths: branch.files.map((file) => file.path),
+          });
+        }
       }
       state.left_for_a_person = leftForAPerson(conversion);
     }

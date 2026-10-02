@@ -1,7 +1,7 @@
 {
   "name": "merge_context_pr",
   "domain": "context",
-  "description": "Merge a proposal's steering PR (a GitHub pull request or a GitLab merge request) through the merge queue: refused until every check passed and unless the caller is a reviewer the governance mode allows. A record proposal publishes its record and writes the promotion event to the ledger. A revert, tools, import, memory, or agent PR lands its files, and a revert retires each record whose file it deleted. Bumps the steering version and emits steering.published",
+  "description": "Merge a proposal's steering PR (a GitHub pull request or a GitLab merge request) through the merge queue: refused until every check passed and unless the caller is a reviewer the governance mode allows. A record proposal publishes its record and writes the promotion event to the ledger. A revert, tools, import, memory, agent, or workspace settings PR lands its files, and a revert retires each record whose file it deleted. Bumps the steering version and emits steering.published",
   "mode": "sync",
   "surfaces": [
     "api",
@@ -236,7 +236,8 @@
               "import",
               "memory_pr",
               "agent_file",
-              "agent_proposal"
+              "agent_proposal",
+              "workspace"
             ]
           },
           "pullRequest": {

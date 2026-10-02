@@ -1835,7 +1835,7 @@ export const contextProposals = agentSchema.table(
     // PRs that change files rather than one record (#5122, ADR-264).
     kindCheck: check(
       "context_proposals_kind_check",
-      sql`${t.kind} IN ('rule', 'constraint', 'procedure', 'fact', 'memory', 'preference', 'governance', 'revert', 'tools', 'import', 'memory_pr', 'agent_file', 'agent_proposal')`,
+      sql`${t.kind} IN ('rule', 'constraint', 'procedure', 'fact', 'memory', 'preference', 'governance', 'revert', 'tools', 'import', 'memory_pr', 'agent_file', 'agent_proposal', 'workspace')`,
     ),
     forceCheck: check(
       "context_proposals_force_check",

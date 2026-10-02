@@ -26,11 +26,16 @@ export type RecordKind = z.infer<typeof recordKindSchema>;
  * - `revert`: the PR revert_steering_pr opens to undo a merged steering PR.
  * - `tools`: a tools/ PR from Studio's Review, the server sync (M10), or the
  *   server folder writer (M13).
- * - `import`: the Markdown import's steering/import-<date> PR.
+ * - `import`: an import's PR (see below).
  * - `memory_pr`: the memory PR on memory/<date>, from the curator or from a
  *   person promoting memories. `memory` alone is the record kind.
  * - `agent_file`: the PR that adds agents/<name>.toml when a host enrolls (#5149).
  * - `agent_proposal`: the PR an agent opens with propose_steering (#5134).
+ * - `workspace`: the PR link_repository or unlink_repository opens to change
+ *   which code repositories workspace.toml lists.
+ *
+ * `import` covers both imports: the Markdown import's PR, and each PR
+ * import_workspace_steering opens when it moves `.oxagen/` to a steering repo.
  */
 export const steeringPrKindSchema = z.enum([
   "revert",
@@ -39,6 +44,7 @@ export const steeringPrKindSchema = z.enum([
   "memory_pr",
   "agent_file",
   "agent_proposal",
+  "workspace",
 ]);
 export type SteeringPrKind = z.infer<typeof steeringPrKindSchema>;
 

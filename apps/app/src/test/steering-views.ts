@@ -265,6 +265,7 @@ const STEERING_PR: Record<SteeringPrKind, { branch: string; folder: string }> =
       branch: "steering/proposal-release-bot",
       folder: "steering/rules",
     },
+    workspace: { branch: "workspace/link-acme-docs-1a2b3c4d", folder: "." },
   };
 
 /**

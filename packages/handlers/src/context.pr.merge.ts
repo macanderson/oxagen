@@ -64,8 +64,8 @@
 // merge_pr_without_review lands one without review: Apply now is the recorded
 // override. The output is the governance arm of the union on `kind`.
 //
-// A steering PR proposal (#5122, ADR-264) is a revert, tools, Markdown import,
-// memory, agent file, or agent proposal PR that its opener recorded. It lands
+// A steering PR proposal (#5122, ADR-264) is a revert, tools, import, memory,
+// agent file, agent proposal, or workspace.toml PR that its opener recorded. It lands
 // through the same queue, reviewer rule, claim, stamp, trailers, and
 // approvals, with three differences. The merge runs the steering checks on
 // the PR's head itself, so it starts from any open status. It reads no record
@@ -893,6 +893,7 @@ const STEERING_PR_NOUN: Record<SteeringPrKind, string> = {
   memory_pr: "memory PR",
   agent_file: "agent file steering PR",
   agent_proposal: "agent's steering PR",
+  workspace: "workspace settings steering PR",
 };
 
 /**

@@ -12249,6 +12249,7 @@ type Messages = {
         memory_pr: string;
         agent_file: string;
         agent_proposal: string;
+        workspace: string;
       };
       unclassified: string;
       force: string;

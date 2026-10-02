@@ -27,8 +27,14 @@ merge it:
   folder writer (M13)
 - the Markdown import PR
 - the memory PRs the curator and `promote_memories` open
+- the PRs `import_workspace_steering` opens when it moves `.oxagen/` to a new
+  steering repo
+- the `workspace.toml` PR `link_repository` and `unlink_repository` open
 
 The MCP Studio live test (#5139) stops at its first merge for this reason.
+On 2026-10-02 the app told Mac to merge his gtm workspace's two import PRs on
+GitHub. He did, and the repository read `diverged`, with a Repair that would
+revert the import.
 
 Two designs were open: give each of these PRs a proposal row, or add a merge
 capability keyed by PR number. Mac chose the first on 2026-10-02 and rejected
@@ -38,13 +44,16 @@ the second.
 
 ### 1. Each opener writes a proposal row of its PR's kind
 
-`context_proposals.kind` gains six values for PRs that change files rather
-than one record: `revert`, `tools`, `import`, `memory_pr`, `agent_file`, and
-`agent_proposal`. `memory_pr` is the memory PR on `memory/<date>`. It is
-spelled apart from `memory`, which stays the record kind. `agent_file` is the
-PR enrollment opens for a host's agent file (#5149). `agent_proposal` is the
-PR `propose_steering` opens (#5134). Both are in the enum now, so neither
-needs a migration of its own.
+`context_proposals.kind` gains seven values for PRs that change files rather
+than one record: `revert`, `tools`, `import`, `memory_pr`, `agent_file`,
+`agent_proposal`, and `workspace`. `import` covers both imports: the Markdown
+import's PR and each steering PR the `.oxagen/` import opens. `memory_pr` is
+the memory PR on `memory/<date>`. It is spelled apart from `memory`, which
+stays the record kind. `workspace` is the `workspace.toml` PR that links or
+unlinks a code repository. `agent_file` is the PR enrollment opens for a
+host's agent file (#5149). `agent_proposal` is the PR `propose_steering`
+opens (#5134). Both are in the enum now, so neither needs a migration of its
+own.
 
 The opener writes the row once the host has opened the PR and the opener has
 reported its "Oxagen steering" check, in `recordSteeringPrQuietly`
@@ -149,9 +158,11 @@ caller can merge it.
   `diverged`.
 - The app lists these PRs with the record and governance PRs and offers Merge
   on each.
-- Two openers still write no row: the workspace.toml PR
-  (`repository.steering-pr.ts`, ADR-212) and the conversion import's PRs
-  (`steering-repo/import-run.ts`). A follow-up gives each one a kind.
+- A steering PR someone already merged on GitHub stays outside Oxagen.
+  `diverged.ts` trusts on GitHub only a merge the steering app's bot made, so
+  the gtm workspace's import PRs, merged by hand before this decision, keep
+  the repository `diverged`, and its Repair would revert them. Nothing here
+  adopts such a merge. #5195 gives a person a recorded way to adopt it.
 - A revert that restores an earlier version of a record leaves the registry on
   the reverted version. The steering version, which runs read, holds the
   restored file. Making the registry follow means promoting the earlier

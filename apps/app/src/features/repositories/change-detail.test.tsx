@@ -388,6 +388,8 @@ describe("a steering PR (#5122)", () => {
         at: "2026-09-19T10:00:00.000Z",
         promotionEventId: null,
         recordId: null,
+        byName: null,
+        onHost: false,
       },
     });
     expect(screen.queryByTestId("change-merge")).toBeNull();

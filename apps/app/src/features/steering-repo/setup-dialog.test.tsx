@@ -201,7 +201,7 @@ describe("the steering repo setup", () => {
     expect(
       await within(dialog).findByTestId("steering-repo-import-outcome"),
     ).toHaveTextContent(
-      "Oxagen created acme/oxagen-core-platform and opened 1 steering PR. Merge them in order, then the cleanup PR.",
+      "Oxagen created acme/oxagen-core-platform and opened 1 steering PR. Merge them in order from the Steering page, then merge the cleanup PR on the old repository.",
     );
     expect(within(dialog).queryByTestId("steering-repo-finish-move")).toBeNull();
   });
