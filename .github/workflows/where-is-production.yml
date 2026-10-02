@@ -35,7 +35,7 @@ permissions:
 
 jobs:
   describe:
-    runs-on: ${{ vars.CI_RUNNERS == 'aws' && 'oxagen-deploy' || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     # The role's trust policy keys on the OIDC `sub` claim, and that claim only
     # carries `environment:production` when the JOB declares one. Without this

@@ -1423,6 +1423,13 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./steering.memory_pr_records.list"))
         .steeringMemoryPrRecordsListHandler as CapabilityHandlerFn,
   );
+  // Take one proposed record out of an open memory PR (#4518).
+  registerHandler(
+    "drop_memory_record",
+    async () =>
+      (await import("./steering.memory_pr_records.drop"))
+        .steeringMemoryPrRecordDropHandler as CapabilityHandlerFn,
+  );
   registerHandler(
     "open_steering_pr",
     async () =>
@@ -1466,6 +1473,13 @@ registerHandlersOnce("@oxagen/handlers", () => {
     async () =>
       (await import("./steering.pr.merge_without_review"))
         .mergePrWithoutReviewHandler as CapabilityHandlerFn,
+  );
+  // A person's approval of a steering PR, stored in Oxagen (#4518, ADR-267).
+  registerHandler(
+    "approve_steering_pr",
+    async () =>
+      (await import("./steering.pr.approve"))
+        .approveSteeringPrHandler as CapabilityHandlerFn,
   );
   // Open a steering PR that undoes a merged one (#4449).
   registerHandler(

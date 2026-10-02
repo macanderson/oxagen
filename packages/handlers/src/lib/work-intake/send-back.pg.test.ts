@@ -121,6 +121,33 @@ describe.skipIf(!enabled)("send-back ports against Postgres", () => {
           })
           .returning({ id: schema.sourceConnections.id, publicId: schema.sourceConnections.publicId });
         connectionId = connection!.id;
+        // A collector reads only repositories the workspace links.
+        const providerRepositoryId = `sb-${crypto.randomUUID()}`;
+        const [binding] = await tx
+          .insert(schema.repositoryBindings)
+          .values({
+            orgId: scope.orgId,
+            workspaceId: scope.workspaceId,
+            connectionId,
+            provider: "github",
+            providerRepositoryId,
+            providerOwner: "acme",
+            providerName: "app",
+            providerFullName: "acme/app",
+            configuredDefaultRef: "main",
+            observedAt: new Date(),
+            version: 1,
+          })
+          .returning({ id: schema.repositoryBindings.id });
+        await tx.insert(schema.repositoryBindingHeads).values({
+          orgId: scope.orgId,
+          workspaceId: scope.workspaceId,
+          connectionId,
+          provider: "github",
+          providerRepositoryId,
+          currentBindingId: binding!.id,
+          role: "linked",
+        });
         const set = await setCollector(tx, scope, {
           name: "github",
           connectionId: connection!.publicId,
@@ -205,6 +232,8 @@ describe.skipIf(!enabled)("send-back ports against Postgres", () => {
       await tx.delete(s.workItems).where(eq(s.workItems.orgId, scope.orgId));
       await tx.delete(s.workInboundEvents).where(eq(s.workInboundEvents.orgId, scope.orgId));
       await tx.delete(s.workCollectors).where(eq(s.workCollectors.orgId, scope.orgId));
+      await tx.delete(s.repositoryBindingHeads).where(eq(s.repositoryBindingHeads.orgId, scope.orgId));
+      await tx.delete(s.repositoryBindings).where(eq(s.repositoryBindings.orgId, scope.orgId));
       await tx.delete(s.sourceConnections).where(eq(s.sourceConnections.orgId, scope.orgId));
     });
     await closeDatabase();

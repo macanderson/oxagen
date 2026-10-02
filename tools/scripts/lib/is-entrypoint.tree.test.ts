@@ -52,16 +52,6 @@ const CASES: Case[] = [
     ran: { status: 2, output: "usage: node tools/scripts/hook-preflight.mjs" },
   },
   {
-    file: "check-closing-keywords.mjs",
-    args: [],
-    ran: { status: 2, output: "usage: check-closing-keywords.mjs" },
-  },
-  {
-    file: "scr-dod-check.mjs",
-    args: [],
-    ran: { status: 2, output: "usage: scr-dod-check.mjs" },
-  },
-  {
     file: "check-superseded-runs.mjs",
     args: [],
     env: { PR_NUMBER: "", HEAD_REPO: "", HEAD_BRANCH: "" },
@@ -146,10 +136,16 @@ describe.each(CASES)("$file $args", ({ file, args, env, emptyCwd, ran }) => {
   );
 });
 
+// These scripts use the helper too, but a direct start reads the network, so
+// they have no case above.
+const NETWORK_SCRIPTS = ["check-dod-stub-parity.mjs"];
+
 // Every script above finds its entrypoint through the shared helper, so the
 // symlink fix cannot drift between copies again.
 describe("the scripts use the shared helper", () => {
-  const files = [...new Set(CASES.map((c) => c.file))];
+  const files = [
+    ...new Set([...CASES.map((c) => c.file), ...NETWORK_SCRIPTS]),
+  ];
 
   it.each(files)("%s", (file) => {
     const src = readFileSync(join(SCRIPTS_DIR, file), "utf8");

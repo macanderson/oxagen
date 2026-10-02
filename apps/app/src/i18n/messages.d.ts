@@ -5845,6 +5845,7 @@ type Messages = {
         role: string;
         productionBranch: string;
         oxagen: string;
+        issues: string;
         events: string;
         symbols: string;
         action: string;
@@ -5883,6 +5884,16 @@ type Messages = {
       reachableUnread: string;
       truncated: string;
       note: string;
+      issues: {
+        label: string;
+        stateOn: string;
+        stateOff: string;
+        unknown: string;
+        saving: string;
+        on: string;
+        onReading: string;
+        off: string;
+      };
     };
     dialog: {
       subtitle: {
@@ -5932,6 +5943,7 @@ type Messages = {
         submit: string;
         pending: string;
       };
+      issuesAfterLink: string;
     };
     unlink: {
       title: string;
@@ -7701,6 +7713,7 @@ type Messages = {
       noPullRequest: string;
       pullState: {
         open: string;
+        draft: string;
         closed: string;
         merged: string;
         unknown: string;
@@ -10698,6 +10711,15 @@ type Messages = {
         prNotRecorded: string;
         repositoryChanged: string;
         mergeCommitUnknown: string;
+        authorCannotApprove: string;
+        prClosed: string;
+        memoryPrNotFound: string;
+        memoryPrSettled: string;
+        recordNotInPr: string;
+        recordNotProposed: string;
+        memoryPrElsewhere: string;
+        branchMissing: string;
+        lastRecord: string;
         nothingToRevert: string;
         revertBranchExists: string;
         toolNotRegistered: string;
@@ -12678,6 +12700,7 @@ type Messages = {
     page: {
       description: string;
       descriptionNoRecord: string;
+      descriptionNoRecordLink: string;
       setup: string;
       outcomes: string;
       send: string;
@@ -12804,7 +12827,8 @@ type Messages = {
           collector: string;
           reads: string;
           health: string;
-          lastEvent: string;
+          lastRead: string;
+          actions: string;
         };
         github: string;
         health: {
@@ -12827,27 +12851,29 @@ type Messages = {
         none: string;
         writeBack: string;
         empty: string;
+        reconnectLabel: string;
+        notLinked: string;
+        notReadYet: string;
+        readOk: string;
+        readFailed: string;
       };
       addCollector: {
         title: string;
         body: string;
         name: string;
         nameHint: string;
-        connection: string;
-        connectionHint: string;
-        connectionKeep: string;
-        connectionChoose: string;
-        connectionsFailed: string;
-        noConnection: string;
         repos: string;
         reposHint: string;
+        noLinked: string;
+        linkedFailed: string;
+        existing: string;
         writeBack: string;
         submit: string;
         pending: string;
+        reading: string;
+        saved: string;
         nameInvalid: string;
         reposRequired: string;
-        reposInvalid: string;
-        connectionRequired: string;
       };
       priorities: {
         record: string;
@@ -12864,6 +12890,40 @@ type Messages = {
         failures: string;
         corrections: string;
         noneTitle: string;
+        editor: {
+          title: string;
+          body: string;
+          instruction: string;
+          instructionHint: string;
+          starterInstruction: string;
+          starterRules: {
+            "1": string;
+            "2": string;
+            "3": string;
+            "4": string;
+            "5": string;
+            "6": string;
+          };
+          rules: string;
+          rulesHint: string;
+          ruleLabel: string;
+          moveUp: string;
+          moveDown: string;
+          remove: string;
+          addRule: string;
+          preview: string;
+          length: string;
+          submit: string;
+          pending: string;
+          instructionRequired: string;
+          rulesRequired: string;
+          tooLong: string;
+          openedTitle: string;
+          openedPr: string;
+          openedNoPr: string;
+          openedRetry: string;
+          review: string;
+        };
       };
       runtimes: {
         title: string;

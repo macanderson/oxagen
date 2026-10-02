@@ -53,7 +53,7 @@ jobs:
   live:
     name: MCP Studio live test
     if: github.event_name == 'workflow_dispatch' || vars.STEERING_LIVE_ENABLED == 'true'
-    runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-small-{0}', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
     environment: steering-live
     timeout-minutes: 90
     steps:

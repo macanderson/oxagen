@@ -721,6 +721,7 @@ export interface GitHubClientOptions {
  * tree itself. None closes an issue, and the SCR-003 `dod` check fails a
  * pull request that neither closes one nor says so. `no-issue` is the waiver
  * for a change too small to need an issue (`tools/scripts/scr-dod-check.mjs`
- * in the oxagen repository). A repository without that check ignores it.
+ * in the oxageninc/.github repository). A repository without that check
+ * ignores it.
  */
 export const OXAGEN_PR_LABELS: readonly string[] = ["no-issue"];

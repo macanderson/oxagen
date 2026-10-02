@@ -61,6 +61,9 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   // Steering proposals and the steering PR state machine, and the records
   // agents append through append_record (ADR-061); org_id + workspace_id NOT NULL.
   { table: "agent.steering_proposals", policyClass: "standard" },
+  // Approvals of a steering PR given in Oxagen (ADR-267); org_id +
+  // workspace_id NOT NULL.
+  { table: "agent.steering_pr_approvals", policyClass: "standard" },
   { table: "agent.context_appends", policyClass: "standard" },
   // The repository sync's per-workspace state (ADR-184).
   { table: "agent.context_sync_state", policyClass: "standard" },

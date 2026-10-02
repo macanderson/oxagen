@@ -1,6 +1,6 @@
 # ADR-039: Centralize SCR enforcement in oxagen rather than replicating it
 
-- Status: accepted. ADR-137 retired the replicated corpus, so #1320 now checks that `docs/scr/` is absent. The DoD workflows in this record stay centralized here.
+- Status: accepted. ADR-137 retired the replicated corpus, so #1320 now checks that `docs/scr/` is absent. The DoD workflows in this record stay centralized. Since 2026-10-02 they live in `oxageninc/.github`, as the last amendment records.
 - Date: 2026-08-26
 
 ## Context
@@ -154,3 +154,39 @@ before its stub called `dod-check.yml` can retire that script in its own pull
 request. `check-closing-keywords.test.ts` runs #3533's body verbatim, and it
 reads `dod-check.yml` to confirm the `pull_request` trigger has no `paths`
 filter and fires on `edited`.
+
+## Amendment: the implementation moves to oxageninc/.github (2026-10-02)
+
+oxageninc/product, which this repository became, went private on 2026-10-01.
+GitHub does not let a public repository, or one with another owner, call a
+reusable workflow in a private repository. A caller's `GITHUB_TOKEN` also
+cannot check out a private repository's scripts. So stella, arenabench,
+cgp-website and context-graph-protocol lost the DoD gate.
+
+Mac decided on #5183 to move the implementation to the public repository
+`oxageninc/.github`. The three workflows, `dod-check.yml`,
+`dod-close-guard.yml` and `dod-recheck.yml`, moved there. So did the scripts
+they import, `scr-dod-check.mjs`, `check-closing-keywords.mjs` and
+`scr-drift-issue.mjs`, with their tests and fixtures. This repository deleted
+its copies. The decision above still holds: one implementation, called from
+every repository. Only its home changed.
+
+- **Product is a caller like the other four.** Its three files under
+  `.github/workflows/` are the same stubs the others carry, pinned to an
+  `oxageninc/.github` commit.
+- **Point 4 moved with the implementation.** `oxageninc/.github` runs
+  `dod-check.yml` on its own pull requests through the file it exports, and
+  its `test` workflow runs the scripts' tests.
+- **`scr-corpus-check.yml` imports `scr-drift-issue.mjs` from there.** A sparse
+  checkout of `oxageninc/.github` fetches it, pinned to the same commit as the
+  stubs. Re-pin the stubs and that step together.
+- **`check-dod-stub-parity.mjs` compares five callers.** It reads the
+  implementation from `oxageninc/.github`, and product is one of the callers.
+  Product reads its own stubs with its own token.
+- **The ADR-045 caveat is unchanged.** A called workflow fetches its scripts
+  from `main` of `oxageninc/.github`, even while the caller pins the workflow.
+
+This adopts the shared `.github` repository rejected under Alternatives
+considered, for a different reason. That alternative was GitHub's org-wide
+defaults. This one is a public home inside the org. stella and arenabench
+still sit on `macanderson`, and they reach it because it is public.

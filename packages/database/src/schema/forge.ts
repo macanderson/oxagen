@@ -23,7 +23,7 @@
 // foreign key across the schema boundary (see _schemas.ts).
 //
 // The migration that creates these tables and their tenant policies is
-// 20261003040000_forge_pull_requests.sql.
+// 20261003120000_forge_pull_requests.sql.
 import { sql } from "drizzle-orm";
 import {
   bigint,

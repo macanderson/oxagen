@@ -1,7 +1,7 @@
 {
   "name": "get_steering_pr",
   "domain": "context",
-  "description": "Get a proposal's steering PR: state, branch, checks with their outcomes, what merge will do, and the promotion event once merged",
+  "description": "Get a proposal's steering PR: state, branch, checks with their outcomes, the managed blocks the latest check run found drifted, the approvals given in Oxagen at the checked head, what merge will do, and the promotion event once merged",
   "mode": "sync",
   "surfaces": [
     "api",
@@ -584,6 +584,48 @@
             "type": "null"
           }
         ]
+      },
+      "findings": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "rule": {
+              "type": "string",
+              "enum": [
+                "managed-block"
+              ]
+            },
+            "path": {
+              "type": "string"
+            },
+            "line": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "exclusiveMinimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "message": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "rule",
+            "path",
+            "line",
+            "message"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "approvals": {
+        "type": "integer",
+        "minimum": 0
       }
     },
     "required": [
@@ -599,7 +641,9 @@
       "checks",
       "onMerge",
       "merged",
-      "closed"
+      "closed",
+      "findings",
+      "approvals"
     ],
     "additionalProperties": false
   }

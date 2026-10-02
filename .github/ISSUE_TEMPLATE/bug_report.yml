@@ -1,7 +1,7 @@
 name: Bug report
 description: Something that exists behaves wrongly (KIND:BUG)
 # The form sets the kind twice over, as the issue type and as its label. The creator still
-# applies the priority, tier, size, and area labels and fills the filing fields.
+# applies the priority, tier, size, and domain labels and fills the filing fields.
 type: Bug
 labels: ["KIND:BUG"]
 body:
@@ -10,7 +10,7 @@ body:
       value: |
         **Security vulnerabilities must NOT be reported here.** Use [private vulnerability reporting](https://github.com/oxageninc/product/security/advisories/new) or `security@oxagen.sh` (see SECURITY.md).
 
-        File the issue complete. Title it `<Priority> <Tier> <Size> Bug (<Area>): <what goes wrong>` in plain words. Apply one priority label, one `MODEL:` tier, one `SIZE:`, `KIND:BUG`, and one `AREA:`, then `JOB:` and one or two `PILLAR:` labels where they apply. Set the issue type to Bug, and set the Priority, Model Tier, Minutes Estimated, and Area(s) fields. Apply `MIGRATION-REQUIRED` once you know the work changes a schema. CLAUDE.md has the rules under Issue titles and Oxagen issue fields.
+        File the issue complete. Title it `<Priority> <Tier> <Size> Bug (<Domain>): <what goes wrong>` in plain words. Apply one priority label, one `MODEL:` tier, one `SIZE:`, `KIND:BUG`, and one `DOMAIN:`, then `JOB:` and one or two `PILLAR:` labels where they apply. Set the issue type to Bug, and set the Priority, Model Tier, Minutes Estimated, and Area(s) fields. Apply `MIGRATION-REQUIRED` once you know the work changes a schema. CLAUDE.md has the rules under Issue titles and Oxagen issue fields.
 
         Before filing: if you can fix it in the branch you are on, fix it there (SCR-004). File only when the fix needs a maintainer decision, a rig, a credential or real spend, or is larger than one session.
   - type: dropdown
@@ -58,8 +58,8 @@ body:
       description: Checklist the closer must verify line-by-line (SCR-003). One issue carries the whole fix; add items rather than filing sub-issues.
       # No "CI green" item (#4200). Branch protection already blocks a merge
       # while CI is red. The `dod` check is part of CI, so a box about CI can
-      # never be ticked while `dod` reads it. `scr-dod-check.mjs` skips one if
-      # an issue still carries it.
+      # never be ticked while `dod` reads it. `scr-dod-check.mjs` in
+      # oxageninc/.github skips one if an issue still carries it.
       value: |
         - [ ] Defect fixed at the named path; the repro no longer reproduces
         - [ ] Scoped tests added/updated and passing

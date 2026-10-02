@@ -175,10 +175,14 @@ local clone and skips `settings`, which needs the host.
 ### Approval
 
 `steering/governance.toml` sets the mode, and a new repository starts in
-`solo`. In `solo` mode the merger is the approver. In `team` and `regulated` mode the PR needs an approval on the host
-at the checked head, from a workspace member other than the author. Without
-one, an owner, or a member who holds `merge_pr_without_review`, can still
-merge, and the ledger records `without_review: true`.
+`solo`. In `solo` mode the merger is the approver. In `team` and `regulated`
+mode the PR needs an approval at the checked head, from a workspace member
+other than the author. The approval is a review on the host by a linked
+account, or one given in Oxagen with Approve (`approve_steering_pr`), which
+Oxagen stores because GitHub refuses the Oxagen App's review of a pull request
+it opened ([ADR-267](../../adr/ADR-267-a-steering-pr-approval-is-stored-in-oxagen.md)).
+Without one, an owner, or a member who holds `merge_pr_without_review`, can
+still merge, and the ledger records `without_review: true`.
 
 ### Merge
 

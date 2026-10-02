@@ -16,6 +16,7 @@ import {
   decide,
   deployJobSteps,
   guardProblems,
+  orderOutputs,
   readLive,
   readMainTip,
   readOrder,
@@ -317,6 +318,29 @@ const pipeline = readFileSync(
   ),
   "utf8",
 );
+
+describe("orderOutputs", () => {
+  it("writes the live commit next to the verdict", () => {
+    expect(orderOutputs(NEWER, true)).toBe(`ship=true\nlive=${NEWER}\n`);
+  });
+
+  it("writes an empty live when nothing is recorded", () => {
+    expect(orderOutputs(null, true)).toBe("ship=true\nlive=\n");
+  });
+
+  it("drops a live value that is not a full commit id", () => {
+    // A value with a newline would add an output line of its own.
+    expect(orderOutputs("abc\nship=false", true)).toBe("ship=true\nlive=\n");
+  });
+
+  it("is what the installer step diffs from (ADR-287)", () => {
+    // One main run covers every merge since the run before it, so the
+    // push's own `before` would miss an installer change in an earlier one.
+    expect(pipeline).toContain(
+      "BEFORE: ${{ steps.order.outputs.live || github.event.before }}",
+    );
+  });
+});
 
 describe("guardProblems", () => {
   it("passes the real pipeline", () => {

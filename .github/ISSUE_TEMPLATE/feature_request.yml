@@ -4,9 +4,9 @@ body:
   - type: markdown
     attributes:
       value: |
-        File the issue complete. Title it `<Priority> <Tier> <Size> Feature (<Area>): <what a person will be able to do>`. Apply one priority label, one `MODEL:` tier, one `SIZE:`, `KIND:FEATURE`, and one `AREA:`, then `JOB:` and one or two `PILLAR:` labels where they apply. Set the issue type to Feature, and set the Priority, Model Tier, Minutes Estimated, and Area(s) fields. Apply `MIGRATION-REQUIRED` once you know the work changes a schema. CLAUDE.md has the rules under Issue titles and Oxagen issue fields.
+        File the issue complete. Title it `<Priority> <Tier> <Size> Feature (<Domain>): <what a person will be able to do>`. Apply one priority label, one `MODEL:` tier, one `SIZE:`, `KIND:FEATURE`, and one `DOMAIN:`, then `JOB:` and one or two `PILLAR:` labels where they apply. Set the issue type to Feature, and set the Priority, Model Tier, Minutes Estimated, and Area(s) fields. Apply `MIGRATION-REQUIRED` once you know the work changes a schema. CLAUDE.md has the rules under Issue titles and Oxagen issue fields.
 
-        `KIND:FEATURE` is for a capability that does not exist in any form. If the spec or the mockup already shows it and the built app has part of it, that is an improvement (`KIND:IMPROVEMENT`). Use the Task template, title it `<Priority> <Tier> <Size> Improvement (<Area>): <what a person will be able to do>`, and describe the whole page or slice, backend included, so one issue carries the full weight of the change.
+        `KIND:FEATURE` is for a capability that does not exist in any form. If the spec or the mockup already shows it and the built app has part of it, that is an improvement (`KIND:IMPROVEMENT`). Use the Task template, title it `<Priority> <Tier> <Size> Improvement (<Domain>): <what a person will be able to do>`, and describe the whole page or slice, backend included, so one issue carries the full weight of the change.
   - type: textarea
     id: problem
     attributes:
@@ -35,8 +35,8 @@ body:
       description: Checklist the closer must verify line-by-line (SCR-003). One issue carries the whole feature; add items rather than filing sub-issues.
       # No "CI green" item (#4200). Branch protection already blocks a merge
       # while CI is red. The `dod` check is part of CI, so a box about CI can
-      # never be ticked while `dod` reads it. `scr-dod-check.mjs` skips one if
-      # an issue still carries it.
+      # never be ticked while `dod` reads it. `scr-dod-check.mjs` in
+      # oxageninc/.github skips one if an issue still carries it.
       value: |
         - [ ] Contract registered with API, MCP, CLI and UI parity (`pnpm check:manifest` clean)
         - [ ] Scoped tests added and passing; user-facing changes have E2E coverage

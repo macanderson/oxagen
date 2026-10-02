@@ -2677,6 +2677,17 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     valueOrigin: "manual",
     placeholder: "12",
   },
+  MAIN_VERIFIED_COVER_MINUTES: {
+    group: "Operator scripts",
+    description:
+      "How long check-main-verified.mjs treats a commit whose run a newer push replaced as pending while a later run is still going. Pushes to main share one concurrency group, so a commit can wait about two run lengths. Defaults to 180.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "180",
+  },
   DEPLOYMENT_FAILURE_RUN_ID: {
     group: "Operator scripts",
     description:

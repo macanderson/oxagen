@@ -1,10 +1,10 @@
 // The sentence a refused steering PR write shows. The kernel classified the
 // refusal and put the handler's HandlerError reason in `code` (§3.2). Each
 // reason open_steering_pr, merge_steering_pr, dismiss_proposal,
-// revert_steering_pr and the merge queue throw has its own sentence, the
-// steering PR proposal refusals (#5122) among them. A write
-// the platform has not registered yet answers `tool_not_registered` and says
-// so. Any other code is printed as recorded.
+// revert_steering_pr, approve_steering_pr, drop_memory_record and the merge
+// queue throw has its own sentence, the steering PR proposal refusals (#5122)
+// among them. A write the platform has not registered yet answers
+// `tool_not_registered` and says so. Any other code is printed as recorded.
 import { useTranslations } from "next-intl";
 import type { ActionResult } from "@/server/kernel";
 
@@ -86,6 +86,25 @@ export function useActionFailure(): (failure: ActionFailure) => string {
             return t("repositoryChanged");
           case "merge_commit_unknown":
             return t("mergeCommitUnknown");
+          // approve_steering_pr and drop_memory_record (#4518).
+          case "author_cannot_approve":
+            return t("authorCannotApprove");
+          case "pr_closed":
+            return t("prClosed");
+          case "memory_pr_not_found":
+            return t("memoryPrNotFound");
+          case "memory_pr_settled":
+            return t("memoryPrSettled");
+          case "record_not_in_pr":
+            return t("recordNotInPr");
+          case "record_not_proposed":
+            return t("recordNotProposed");
+          case "memory_pr_elsewhere":
+            return t("memoryPrElsewhere");
+          case "branch_missing":
+            return t("branchMissing");
+          case "last_record":
+            return t("lastRecord");
           case "nothing_to_revert":
             return t("nothingToRevert");
           case "revert_branch_exists":

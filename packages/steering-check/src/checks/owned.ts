@@ -1,6 +1,13 @@
 // owned.ts: the files and blocks only Oxagen writes. A steering PR may not
-// change the Cedar schema, a server's lock, or the ledger, and may not change
-// the managed block in AGENTS.md, CLAUDE.md, or README.md.
+// change the Cedar schema or the ledger, and may not change the managed block
+// in AGENTS.md, CLAUDE.md, or README.md.
+//
+// A steering PR may add or change a server's lock only as Oxagen writes it:
+// Studio's Review and a sync each write the new lock into the steering PR
+// they open (mcp-studio-spec, Lock file; ADR-278). The caller's lock reader
+// (ServerReaders.lock) says whether the head's lock is one Oxagen writes for
+// its folder. Without that reader, the check refuses every change to a lock,
+// and it always refuses a removed lock.
 import {
   AGENTS_MD_PATH,
   CLAUDE_MD_PATH,
@@ -12,7 +19,7 @@ import {
 } from "@oxagen/oxagen/steering-repo";
 import { finder, sentence, type ChangeCheck, type ChangeEnv } from "../finding";
 import { firstDifferingLine } from "../repo";
-import type { Finding } from "../types";
+import type { Finding, SteeringTree } from "../types";
 
 const find = finder("owned");
 
@@ -28,15 +35,42 @@ export const MANAGED_FILES: readonly string[] = [AGENTS_MD_PATH, CLAUDE_MD_PATH,
 
 const BEGIN_MARKER = "<!-- oxagen:begin managed sha256:... -->";
 
-function writesFindings(env: ChangeEnv): Finding[] {
+/** The server a lock path names: tools/servers/<name>/tools.lock.json. */
+function lockServer(path: string): string {
+  return path.split("/")[2] as string;
+}
+
+/** The finding for a lock the head holds that Oxagen did not write. */
+function lockFinding(path: string, line: number | null, verb: string, problems: readonly string[]): Finding {
+  const shown = problems.slice(0, 3).join(" ");
+  const more = problems.length > 3 ? ` ${problems.length - 3} more problems follow.` : "";
+  return find({
+    rule: "oxagen-writes",
+    path,
+    line,
+    field: null,
+    message: `This steering PR ${verb} ${path}, and the lock it holds is not one Oxagen writes. ${shown}${more}`,
+    expected: `${path} as Studio's Review or a sync writes it.`,
+    fix: `Restore ${path} from the production branch. Change the server's tools in Studio and open its Review, or sync the server, and Oxagen writes the lock.`,
+  });
+}
+
+function writesFindings(env: ChangeEnv, base: SteeringTree): Finding[] {
   const findings: Finding[] = [];
+  const readLock = env.servers?.lock;
   for (const path of [...env.changed, ...env.removed].sort()) {
-    const what = OXAGEN_WRITES[classifySteeringRepoPath(path)];
+    const kind = classifySteeringRepoPath(path);
+    const what = OXAGEN_WRITES[kind];
     if (what === undefined) continue;
-    const before = env.base?.get(path);
+    const before = base.get(path);
     const after = env.head.get(path);
     const line = after === undefined ? null : before === undefined ? 1 : firstDifferingLine(before, after);
     const verb = after === undefined ? "removes" : before === undefined ? "adds" : "changes";
+    if (kind === "server-lock" && after !== undefined && readLock !== undefined) {
+      const outcome = readLock(lockServer(path), env.head, base);
+      if (!outcome.ok) findings.push(lockFinding(path, line, verb, outcome.problems));
+      continue;
+    }
     findings.push(
       find({
         rule: "oxagen-writes",
@@ -96,7 +130,7 @@ function managedFinding(env: ChangeEnv, path: string): Finding | null {
 }
 
 export const ownedCheck: ChangeCheck = (env) => {
-  const findings = env.base === null ? [] : writesFindings(env);
+  const findings = env.base === null ? [] : writesFindings(env, env.base);
   for (const path of MANAGED_FILES) {
     // With a base, only a changed or removed file can break its block.
     if (env.base !== null && !env.changed.has(path) && !env.removed.has(path)) continue;
