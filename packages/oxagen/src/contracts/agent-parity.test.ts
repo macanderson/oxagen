@@ -61,6 +61,8 @@ const OFF_AGENT: Readonly<Record<string, string>> = {
     "Stella never changes how people sign in, and SSO settings decide that.",
   dismiss_finding:
     "A finding grades agents' runs, and the agent surface also serves registered agents, so an agent must not dismiss one.",
+  dismiss_memories:
+    "Mac ruled on 2026-09-25 that the in-app agent never receives workspace memories, so it neither reads nor dismisses them.",
   export_audit_events:
     "It returns a signed file of up to 50,000 events for a person to download and verify. Stella reads the same events through query_audit_log.",
   get_assistant_engine:
@@ -69,14 +71,22 @@ const OFF_AGENT: Readonly<Record<string, string>> = {
     "The app reads a Stella turn's reply with it, and Stella wrote that reply.",
   get_slack_connection:
     "It belongs to the Slack connection flow, which is on no surface.",
+  get_workspace_memory:
+    "Mac ruled on 2026-09-25 that the in-app agent never receives workspace memories.",
   import_workspace_steering:
     "It moves a workspace's steering into a new repository and opens PRs on two repositories, a one-time move an owner starts from the setup dialog.",
+  list_memory_pr_records:
+    "It reads the memories a memory PR cites, and Mac ruled on 2026-09-25 that the in-app agent never receives workspace memories.",
   list_slack_channels:
     "It belongs to the Slack connection flow, which is on no surface.",
   list_sso_providers:
     "Stella never reads or changes how people sign in, and SSO settings decide that.",
+  list_workspace_memories:
+    "Mac ruled on 2026-09-25 that the in-app agent never receives workspace memories.",
   preview_skill_search:
     "It shows a person the skill names withheld from agents, and keeping them from an agent is what withholding is for.",
+  promote_memories:
+    "A person promotes a memory into a steering record, and Mac ruled on 2026-09-25 that the in-app agent never receives workspace memories.",
   record_reply_feedback:
     "It records the person's verdict on Stella's reply, so Stella must not write it.",
   register_agent:
