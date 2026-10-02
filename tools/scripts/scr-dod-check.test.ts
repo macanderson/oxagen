@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import {
   closeExemptFromDod,
   CLOSES_NOTHING_LABEL,
+  composeSummary,
   dodStatus,
   ESCAPE_HATCH_LABEL,
   formatVerdict,
@@ -664,6 +665,45 @@ describe("formatVerdict", () => {
     });
     expect(text).toContain("passed");
     expect(text).not.toContain(ESCAPE_HATCH_LABEL);
+  });
+});
+
+// oxagen#5061: #5047's `dod` failed on a commit that closed an issue its
+// description only referenced, and the job's error opened with "DoD check passed".
+describe("composeSummary", () => {
+  const refsOnlyPass = { ok: true, waived: false, refsOnly: true, reasons: [] };
+  const uncheckedFail = {
+    ok: false,
+    waived: false,
+    refsOnly: false,
+    reasons: ["#1321 has 1 unchecked DoD item(s)"],
+  };
+  const closingFail = "### Refs in the description, close in a commit";
+
+  it("fails with the closing-keyword section alone when the DoD verdict passed", () => {
+    const { failure, comment } = composeSummary(refsOnlyPass, closingFail);
+    expect(failure).toBe(closingFail);
+    expect(failure).not.toContain("DoD check passed");
+    expect(comment.startsWith(closingFail)).toBe(true);
+    expect(comment).toContain("DoD check passed");
+  });
+
+  it("fails with the DoD verdict alone when only the DoD check failed", () => {
+    const { failure, comment } = composeSummary(uncheckedFail, "");
+    expect(failure).toBe(formatVerdict(uncheckedFail));
+    expect(comment).toBe(failure);
+  });
+
+  it("fails with both sections, DoD first, when both checks failed", () => {
+    const { failure, comment } = composeSummary(uncheckedFail, closingFail);
+    expect(failure).toBe(`${formatVerdict(uncheckedFail)}\n\n${closingFail}`);
+    expect(comment).toBe(failure);
+  });
+
+  it("has no failure text when both checks passed", () => {
+    const { failure, comment } = composeSummary(refsOnlyPass, "");
+    expect(failure).toBe("");
+    expect(comment).toBe(formatVerdict(refsOnlyPass));
   });
 });
 
