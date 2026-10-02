@@ -5,7 +5,7 @@ to every change that touches words or visuals:
 
 - **`oxagen-branding`** owns positioning, the approved lines, vocabulary,
   and the visual system. `.claude/skills/oxagen-branding/SKILL.md` is a stub
-  that reads the skill from `macanderson/oxagen-brand` on `main`. Read the
+  that reads the skill from `oxageninc/brand` on `main`. Read the
   skill's `SKILL.md` first, then `references/positioning.md` before any headline, hero, or
   opening sentence, and `references/examples.md` for the website hero and
   product page patterns.

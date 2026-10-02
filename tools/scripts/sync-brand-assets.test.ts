@@ -258,7 +258,7 @@ describe("a run without a kit", () => {
   });
 });
 
-// The contract every consumer repo meets (macanderson/oxagen-brand
+// The contract every consumer repo meets (oxageninc/brand
 // CHANGING.md): a sync copies the kit byte for byte, a check right after it
 // passes, and a check writes nothing and lists every file out of step.
 describe("a sync and a check against a kit", () => {
@@ -595,7 +595,7 @@ describe("brand-drift.yml", () => {
 
   it("checks out the kit at main into .brand-kit, with no pin", () => {
     const checkout = stepIn(workflow, "Check out the brand kit");
-    expect(checkout).toContain("repository: macanderson/oxagen-brand");
+    expect(checkout).toContain("repository: oxageninc/brand");
     expect(checkout).toMatch(/\n\s+ref: main\n/);
     expect(checkout).toContain("path: .brand-kit");
     expect(checkout).not.toContain("token:");
@@ -630,7 +630,7 @@ describe("the checks job runs the brand check", () => {
   it("checks out the kit at main into .brand-kit", () => {
     const checkout = stepIn(checks, "Check out the brand kit");
     expect(checkout).toContain("uses: actions/checkout@");
-    expect(checkout).toContain("repository: macanderson/oxagen-brand");
+    expect(checkout).toContain("repository: oxageninc/brand");
     expect(checkout).toContain("path: .brand-kit");
     expect(checkout).toMatch(/\n\s+ref: main\n/);
   });

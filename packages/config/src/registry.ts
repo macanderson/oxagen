@@ -2465,7 +2465,7 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   OXAGEN_BRAND_KIT: {
     group: "Operator scripts",
     description:
-      "Path to a checkout of the brand kit, macanderson/oxagen-brand. " +
+      "Path to a checkout of the brand kit, oxageninc/brand. " +
       "sync-brand-assets.mjs copies the marks, icons, tokens, fonts, and the branding skill stub from it. " +
       "A --brand argument wins over this variable, and when both are unset the script reads ../oxagen-brand. " +
       "CI checks out the kit's main branch at .brand-kit and passes it with --brand.",
