@@ -46,19 +46,21 @@ describe("SignOutButton", () => {
     renderButton();
     await userEvent.click(screen.getByRole("button", { name: "Sign out" }));
     expect(liveSignOut).toHaveBeenCalledTimes(1);
-    await waitFor(() => expect(nav.replace).toHaveBeenCalledWith("/login"));
-    expect(screen.getByRole("alert")).toHaveTextContent("");
+    await waitFor(() => {
+      expect(nav.replace).toHaveBeenCalledWith("/login");
+    });
+    expect(screen.getByRole("alert")).toBeEmptyDOMElement();
   });
 
   it("stays and says so when the server refuses the sign-out (negative)", async () => {
     liveSignOut.mockResolvedValueOnce(false);
     renderButton();
     await userEvent.click(screen.getByRole("button", { name: "Sign out" }));
-    await waitFor(() =>
+    await waitFor(() => {
       expect(screen.getByRole("alert")).toHaveTextContent(
         "Sign-out did not go through, so this session is still open.",
-      ),
-    );
+      );
+    });
     expect(nav.replace).not.toHaveBeenCalled();
   });
 
@@ -66,11 +68,11 @@ describe("SignOutButton", () => {
     liveSignOut.mockRejectedValueOnce(new Error("offline"));
     renderButton();
     await userEvent.click(screen.getByRole("button", { name: "Sign out" }));
-    await waitFor(() =>
+    await waitFor(() => {
       expect(screen.getByRole("alert")).toHaveTextContent(
         "this session is still open",
-      ),
-    );
+      );
+    });
     expect(nav.replace).not.toHaveBeenCalled();
   });
 });
