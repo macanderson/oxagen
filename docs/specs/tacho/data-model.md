@@ -333,7 +333,7 @@ File identity uses each frame's recorded worktree root. A relative path with a k
 `session_id`, `seq`, `tool_use_id`, `command_digest`, `command_head` (512), `bash_command` (OTel `tool_parameters.bash_command`, the first word), `exit_status`, `duration_ms`, `status`, `cwd`, `decision`, `decision_source`, `policy_rule`.
 
 ### 3.6 `tacho_control_commands` (`tcmd_`)
-`host_enrollment_id`, `session_id` (nullable), `command` (`pause`/`resume`/`cancel`/`message`/`revoke`/`refresh_bundle`/`kill`), `payload` jsonb, `issued_by_principal_id`, `issued_at`, `expires_at`, `delivered_at`, `acknowledged_at`, `applied_at`, `applied_at_seq`, `outcome` (`pending`/`delivered`/`applied`/`expired`/`failed`), `outcome_detail`.
+`host_enrollment_id`, `session_id` (nullable), `command` (`pause`/`resume`/`cancel`/`steer`/`message`/`revoke`/`refresh_bundle`/`kill`/`work_order`), `payload` jsonb, `issued_by_principal_id`, `issued_at`, `expires_at`, `delivered_at`, `acknowledged_at`, `applied_at`, `applied_at_seq`, `outcome` (`pending`/`delivered`/`applied`/`expired`/`failed`), `outcome_detail`.
 
 ### 3.7 `tacho_incidents` (`tinc_`)
 `host_enrollment_id`, `session_id` (nullable), `kind` (`unobserved_session`, `hooks_removed`, `config_change`, `telemetry_gap`, `chain_break`, `checkpoint_lapse`, `token_replay`, `policy_violation`, `spoofed_event`, `daemon_down`, `otel_missing`, `unknown_model_cost`), `severity` (1/3/10), `detected_at`, `detected_by` (`collector`/`control_plane`/`human`), `evidence` jsonb, `event_seq`, `resolved_at`, `resolved_by_principal_id`, `resolution_note`, `trust_weight`.
