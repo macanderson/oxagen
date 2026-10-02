@@ -372,6 +372,11 @@ import { steeringPrDiffGet } from "./steering.pr.diff.get";
 import { steeringPrMerge } from "./steering.pr.merge";
 import { steeringPrMergeWithoutReview } from "./steering.pr.merge_without_review";
 import { steeringPrRevert } from "./steering.pr.revert";
+// Instruction files in linked code repositories, and the managed blocks of a
+// steering PR (#4518, ADR-263).
+import { codeRepositoryFindingsList } from "./repository.findings.list";
+import { instructionPromote } from "./repository.instruction.promote";
+import { steeringPrRestoreManagedBlock } from "./steering.pr.restore_managed_block";
 import { contextSteeringDeliveries } from "./context.steering.deliveries";
 import { steeringRepoGet } from "./steering_repo.get";
 import { steeringRepoRepair } from "./steering_repo.repair";
@@ -1215,6 +1220,9 @@ export {
   steeringPrMerge,
   steeringPrMergeWithoutReview,
   steeringPrRevert,
+  codeRepositoryFindingsList,
+  instructionPromote,
+  steeringPrRestoreManagedBlock,
   contextGovernanceModeSet,
   connectionList,
   connectionCreate,
@@ -1701,6 +1709,9 @@ export const contracts: readonly CapabilityDeclaration[] = [
   steeringPrMerge,
   steeringPrMergeWithoutReview,
   steeringPrRevert,
+  codeRepositoryFindingsList,
+  instructionPromote,
+  steeringPrRestoreManagedBlock,
   contextGovernanceModeSet,
   agentExecutionList,
   agentExecutionRecord,

@@ -7,6 +7,7 @@ export * from "./mcp-stdio";
 export * from "./reassign";
 export * from "./status";
 export * from "./unenroll";
+export * from "./uninstall";
 export * from "./verify";
 export * from "./run";
 export * from "./agent-run";

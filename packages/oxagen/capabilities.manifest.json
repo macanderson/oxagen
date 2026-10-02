@@ -4569,6 +4569,27 @@
       }
     },
     {
+      "name": "list_code_repository_findings",
+      "file": "repository.findings.list.ts",
+      "domain": "repository",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "cli": true,
+        "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
       "name": "attach_gitlab_project",
       "file": "repository.gitlab.attach.ts",
       "domain": "repository",
@@ -4652,6 +4673,27 @@
         "schema": true,
         "api": true,
         "mcp": true,
+        "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
+      "name": "promote_instruction_to_steering",
+      "file": "repository.instruction.promote.ts",
+      "domain": "repository",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "cli": true,
         "unit": true,
         "docs": true,
         "app": true
@@ -6483,6 +6525,27 @@
       "layers": {
         "schema": true,
         "api": true,
+        "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
+      "name": "restore_managed_block",
+      "file": "steering.pr.restore_managed_block.ts",
+      "domain": "context",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "cli": true,
         "unit": true,
         "docs": true,
         "app": true

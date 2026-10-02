@@ -97,7 +97,7 @@ export async function contextPropose(
 
   let result: ProposalResult;
   try {
-    result = await apiPostOrThrow<ProposalResult>("context/proposals/create", {
+    result = await apiPostOrThrow<ProposalResult>("steering/proposals/create", {
       record: {
         lineageId: opts.lineage,
         kind: opts.kind,
@@ -164,7 +164,7 @@ export async function contextRevert(
   }
   let result: RevertResult;
   try {
-    result = await apiPostOrThrow<RevertResult>("context/prs/revert", {
+    result = await apiPostOrThrow<RevertResult>("steering/prs/revert", {
       proposalId,
     });
   } catch (err) {

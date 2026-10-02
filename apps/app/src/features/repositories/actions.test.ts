@@ -33,6 +33,7 @@ const { unsafeMint } = await import("@/server/viewer.testing");
 const {
   attachGithubInstallation,
   linkWorkspaceRepository,
+  listCodeRepositoryFindings,
   listGithubInstallations,
   closeRepositoryChange,
   listInstallationRepositories,
@@ -954,22 +955,108 @@ describe("readRepositoryChanges", () => {
   });
 });
 
-describe("promoteInstructionToSteering", () => {
-  // The platform has not registered the capability yet (#4518), so the kernel
-  // refuses the call before invoke(). When it registers, this case fails and
-  // moves to the ok path.
-  it("answers tool_not_registered and never reaches the kernel (negative)", async () => {
-    expect(
-      await promoteInstructionToSteering("acme", "core-platform", {
-        repositoryId: "rpb_0d1e2f",
-        path: "AGENTS.md",
-      }),
-    ).toEqual({
-      ok: false,
-      reason: "unavailable",
-      code: "tool_not_registered",
+describe("listCodeRepositoryFindings", () => {
+  const FINDINGS = {
+    repositories: [
+      {
+        repository_id: "rpb_0d1e2f",
+        provider: "github",
+        full_name: "acme/docs-site",
+        findings: [
+          {
+            id: "crf_0a1b2c",
+            path: "AGENTS.md",
+            line: 12,
+            statement: "Always push to main.",
+            kind: "contradiction",
+            record: {
+              lineage: "acme.git.no-push-main",
+              label: "Never push to main",
+              path: "steering/constraints/acme.git.no-push-main.md",
+            },
+            pull_request: {
+              number: 318,
+              url: "https://github.com/acme/docs-site/pull/318",
+              state: "open",
+              head_sha: "9b1f6c0d",
+            },
+            file_url: "https://github.com/acme/docs-site/blob/9b1f6c0d/AGENTS.md#L12",
+            checked_at: "2026-10-02T14:12:10.000Z",
+            proposal: null,
+          },
+        ],
+      },
+    ],
+  };
+
+  it("reads list_code_repository_findings with no input for the workspace viewer", async () => {
+    invoke.mockResolvedValue(FINDINGS);
+    expect(await listCodeRepositoryFindings("acme", "core-platform")).toEqual({
+      ok: true,
+      value: FINDINGS,
     });
     expect(requireViewer).toHaveBeenCalledWith("acme", "core-platform");
+    expect(invoke).toHaveBeenCalledWith(
+      "list_code_repository_findings",
+      {},
+      expect.anything(),
+    );
+  });
+
+  it("carries the handler's role refusal as denied (negative)", async () => {
+    invoke.mockRejectedValue({ code: "forbidden", reason: "role_not_held" });
+    // A denial names the catalog permission it lacked, as every read's does.
+    expect(await listCodeRepositoryFindings("acme", "core-platform")).toEqual({
+      ok: false,
+      reason: "denied",
+      code: "repository.read",
+    });
+  });
+});
+
+describe("promoteInstructionToSteering", () => {
+  it("promotes the finding through promote_instruction_to_steering and names the proposal and its PR", async () => {
+    invoke.mockResolvedValue({
+      proposal_id: "prp_7a8b9c",
+      lineage: "acme.git.no-push-main",
+      status: "checks_passed",
+      pull_request: {
+        number: 7,
+        url: "https://github.com/acme/oxagen-core/pull/7",
+      },
+    });
+    expect(
+      await promoteInstructionToSteering("acme", "core-platform", "crf_0a1b2c"),
+    ).toEqual({
+      ok: true,
+      value: {
+        proposalId: "prp_7a8b9c",
+        pullRequestUrl: "https://github.com/acme/oxagen-core/pull/7",
+      },
+    });
+    expect(invoke).toHaveBeenCalledWith(
+      "promote_instruction_to_steering",
+      { finding_id: "crf_0a1b2c" },
+      expect.anything(),
+    );
+  });
+
+  it("returns a repeat as a conflict with the handler's reason (negative)", async () => {
+    invoke.mockRejectedValue({ code: "conflict", reason: "already_in_steering" });
+    expect(
+      await promoteInstructionToSteering("acme", "core-platform", "crf_0a1b2c"),
+    ).toEqual({ ok: false, reason: "conflict", code: "already_in_steering" });
+  });
+
+  it("refuses a repository id where a finding id belongs, before the kernel runs (negative)", async () => {
+    expect(
+      await promoteInstructionToSteering("acme", "core-platform", "rpb_0d1e2f"),
+    ).toEqual({
+      ok: false,
+      reason: "invalid",
+      code: "invalid_input",
+      field: "finding_id",
+    });
     expect(invoke).not.toHaveBeenCalled();
   });
 });

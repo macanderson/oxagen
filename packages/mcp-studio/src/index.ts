@@ -31,7 +31,8 @@ export * from "./model/import-result";
 export * from "./model/from-mcp";
 export * from "./model/registry-launch";
 
-// The modules. Each body throws NotBuiltError until its lane builds it.
+// The modules: the importers, the compiler, the lock, the diff, the
+// suggestions, the lint, and the executor.
 export * from "./openapi";
 export * from "./graphql";
 export * from "./grpc";
