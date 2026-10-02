@@ -35,7 +35,12 @@ vi.mock("next/link", () => ({
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
 }));
-vi.mock("./actions", () => ({ createFirstWorkspace: vi.fn() }));
+// The form reads the steering repo's places on mount (#5196). The read stays
+// pending here, so these tests see the form with its places still loading.
+vi.mock("./actions", () => ({
+  createFirstWorkspace: vi.fn(),
+  readFirstWorkspaceDestinations: vi.fn(() => new Promise(() => {})),
+}));
 vi.mock("@/features/steering-repo", () => ({
   readSteeringRepo: mocks.readSteeringRepo,
   SteeringRepoProvisioning: ({
