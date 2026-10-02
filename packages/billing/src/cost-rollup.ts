@@ -135,6 +135,14 @@ export interface RunMeta {
   retries: number | null;
   enforcementTier: "contained" | "gateway" | "harness" | "observe" | null;
   replayGrade: "inspect" | "view" | "fork" | "retry" | null;
+  /**
+   * The run's parent work order (F13, #4638): a send's `work.orders` id or a
+   * direct work order's `work.direct_orders` id, as `workOrderKind` says.
+   * The store resolves it (./run-work-order.ts). Absent or null when the
+   * rollup resolved none.
+   */
+  workOrderId?: string | null;
+  workOrderKind?: "send" | "direct" | null;
 }
 
 export interface ModelBreakdown {
