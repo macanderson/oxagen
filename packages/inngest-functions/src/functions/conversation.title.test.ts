@@ -22,6 +22,28 @@ const state = vi.hoisted(() => ({
   scopeDepth: 0,
   /** Whether each funding resolution ran inside a tenant scope. */
   fundingInScope: [] as boolean[],
+  /**
+   * The workspace prompt settings, as `loadWorkspacePromptConfigSafe` would
+   * return them. The titler must not read them (ADR-235).
+   */
+  loadPromptConfig: vi.fn(async () => ({
+    overrides: { "conversation.title": "Name it like a pirate." },
+    additionalInstructions: "Always end with an exclamation point.",
+  })),
+  /** `resolvePrompt` as the registry writes it: override, then instructions. */
+  resolvePrompt: vi.fn(
+    ({
+      baseline,
+      config,
+    }: {
+      baseline: string;
+      config?: {
+        overrides?: Record<string, string>;
+        additionalInstructions?: string;
+      } | null;
+    }) =>
+      `${config?.overrides?.["conversation.title"] ?? baseline}\n\n${config?.additionalInstructions ?? ""}`,
+  ),
 }));
 
 vi.mock("../logger", () => ({
@@ -34,12 +56,12 @@ vi.mock("@oxagen/ai", () => ({
   CREDIT_REASONS: { CONSUME_ASSISTANT_TOKENS: "consume_assistant_tokens" },
   conversationTitlePrompt: () => "Name the conversation.",
   generateObjectFor: state.generate,
-  loadWorkspacePromptConfigSafe: async () => null,
+  loadWorkspacePromptConfigSafe: state.loadPromptConfig,
   resolveModelFundingSource: async () => {
     state.fundingInScope.push(state.scopeDepth > 0);
     return { kind: "platform" };
   },
-  resolvePrompt: ({ baseline }: { baseline: string }) => baseline,
+  resolvePrompt: state.resolvePrompt,
   selectModelFromFunding: () => ({ model: "fast-model", fundedBy: "platform" }),
 }));
 vi.mock("@oxagen/billing", () => ({ evaluateTurnCreditGate: state.gate }));
@@ -172,6 +194,21 @@ describe("conversation.title", () => {
       }),
     );
     expect(steps).toEqual(["read-question", "name-conversation", "write-title"]);
+  });
+
+  // ADR-235: the conversation is the in-app assistant's, which the workspace
+  // does not configure. A workspace override or added instructions for
+  // `conversation.title` must not reach the titler's prompt.
+  it("sends Oxagen's own title prompt and reads no workspace prompt settings", async () => {
+    state.generate.mockResolvedValue({ object: { title: "Fix conflicts" } });
+    await run(EVENT);
+    expect(state.generate).toHaveBeenCalledTimes(1);
+    const [call] = state.generate.mock.calls[0] as [{ system: string }];
+    expect(call.system).toBe("Name the conversation.");
+    expect(call.system).not.toContain("pirate");
+    expect(call.system).not.toContain("exclamation");
+    expect(state.loadPromptConfig).not.toHaveBeenCalled();
+    expect(state.resolvePrompt).not.toHaveBeenCalled();
   });
 
   it("resolves funding and admits the call inside the tenant scope", async () => {

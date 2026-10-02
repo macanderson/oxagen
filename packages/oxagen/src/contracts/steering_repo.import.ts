@@ -42,7 +42,10 @@ export const STEERING_IMPORT_OUTCOMES = [
  * a repository the workspace reads through a legacy sources connection with
  * no binding (conflict `steering_import_legacy_connection`), and a branch it writes that already
  * holds changes it did not make (conflict `steering_import_branch_taken`).
- * When provisioning fails, the old repository steers the workspace again.
+ * When provisioning fails, the old repository steers the workspace again,
+ * unless the bind already made the new steering head. Then the old repository
+ * stays linked, and `get_steering_repo` reports the move in `importRun` until a
+ * call finishes it (#5082).
  *
  * Legacy sources connections retire (#4684). A call with `startFresh` gives
  * such a workspace an empty steering repo and imports nothing from the legacy

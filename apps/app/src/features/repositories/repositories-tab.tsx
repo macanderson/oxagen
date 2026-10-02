@@ -378,9 +378,14 @@ function Row({
         {row.role === "available" ? t("none") : t("notRecorded")}
       </td>
       <td className={cell}>
+        {/* The main repository holds the workspace's steering. A steering
+            repo keeps its records at its root, and an older main moves to one
+            through the steering repo setup, so neither takes Add Oxagen
+            (#5082). */}
         {state === "governed" ? (
           <span className="text-[11.5px] text-dim">{t("nothingWaiting")}</span>
-        ) : state !== "absent" && state !== "unknown" ? null : (
+        ) : row.role === "main" ||
+          (state !== "absent" && state !== "unknown") ? null : (
           <button
             type="button"
             data-testid={`repository-add-${row.fullName}`}

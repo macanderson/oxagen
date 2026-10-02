@@ -29,7 +29,8 @@ import {
 //
 // This is the ingress contract the surface has always published; every 400 a
 // caller depends on — malformed JSON, a missing/empty message, an oversized
-// body, a nonsense budget override — is defined here.
+// body, a nonsense budget override — is defined here. The budget is still
+// validated, so an old client's malformed one still answers 400.
 const BodySchema = z.object({
   // Bound the message body — the shared per-message ingress cap (see
   // CHAT_CONTENT_MAX_CHARS in the chat.message.send contract) so every chat
@@ -63,8 +64,9 @@ const BodySchema = z.object({
   tier: z.enum(["fast", "balanced", "precise"]).nullable().default(null),
   model: z.string().min(1).nullable().default(null),
   effort: z.enum(["low", "medium", "high"]).nullable().default(null),
-  // Per-turn dollar-budget override. `null`/omitted means "no override for
-  // this turn" — the saved default applies (@oxagen/billing).
+  // Accepted and ignored (ADR-235). No customer-configured budget applies to
+  // the assistant, so a per-turn budget sent here changes nothing. The field
+  // stays so a client that still sends it is not refused.
   budget: requestTurnBudgetSchema.nullable().default(null),
 });
 
@@ -86,7 +88,7 @@ export const CHAT_STREAM_HEARTBEAT_MS = 15_000;
 // ADR-176): the streaming adapter of `ask_assistant`, and the transport the
 // app's assistant flyout reads, same-origin through the app's `/api/v1/*`
 // rewrite. Body: this route's BodySchema, the contract's input plus the
-// surface's model and budget overrides. Each SSE line: `data: <JSON
+// surface's model overrides. Each SSE line: `data: <JSON
 // ApiStreamEvent>\n\n`, with a `: keep-alive` comment while the turn is quiet.
 // Terminal: `event: done\ndata: <JSON ask_assistant output>\n\n`.
 //
@@ -159,7 +161,6 @@ chatStreamRoute.post("/", async (c) => {
         tier: body.tier,
         model: body.model,
         effort: body.effort,
-        budget: body.budget,
       },
       hooks: {
         onTools: (toolNameMap) => {
@@ -175,7 +176,6 @@ chatStreamRoute.post("/", async (c) => {
             riskLevel: approval.riskLevel,
             expiresAt: approval.expiresAt,
           }),
-        onBudgetNotice: (notice) => emit({ type: "budget-notice", ...notice }),
         onPart: (part) => translator.onPart(part),
         // ONE aggregated usage event for the turn, last before the terminal.
         onUsage: (usage) =>

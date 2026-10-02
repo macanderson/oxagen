@@ -348,6 +348,25 @@ describe("agent.role.assign handler", () => {
     expect(mocks.emitAudit).not.toHaveBeenCalled();
   });
 
+  // ADR-235, item 13: the managed assistant is Oxagen's, so no customer role
+  // binds to it. The refusal is the identity writes' own.
+  it("refuses the managed assistant agent before any role read or write (negative)", async () => {
+    fake.enqueue(
+      [{ ...AGENT_ROW, slug: "qa-chat", agentType: "interactive_chat" }],
+      [SYSTEM_ROLE],
+      [],
+    );
+    await expect(
+      agentRoleAssignHandler(INPUT, CTX_BUILD),
+    ).rejects.toMatchObject({
+      code: "forbidden",
+      reason: "agent_managed_read_only",
+      message: 'Agent "qa-chat" is managed by Oxagen and cannot be changed.',
+    });
+    expect(fake.mutations).toEqual({ insert: 0, update: 0, delete: 0 });
+    expect(mocks.emitAudit).not.toHaveBeenCalled();
+  });
+
   it("throws when the agent does not exist in this workspace", async () => {
     fake.enqueue([]); // agent select empty
     await expect(agentRoleAssignHandler(INPUT, CTX_BUILD)).rejects.toThrow(

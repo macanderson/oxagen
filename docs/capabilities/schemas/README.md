@@ -96,6 +96,7 @@ capability rewrites, so two such branches always conflicted on it (ADR-216).
 - get_assistant_reply
 - record_reply_feedback
 - render_chart
+- set_assistant_switch
 - upload_assistant_attachment
 
 ## audit

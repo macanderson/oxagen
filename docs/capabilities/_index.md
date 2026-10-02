@@ -126,6 +126,7 @@ after the registered name separately when their contract uses a dotted stem.
 | [record_reply_feedback](assistant.reply_feedback.record.md) | [assistant.reply_feedback.record.ts](../../packages/oxagen/src/contracts/assistant.reply_feedback.record.ts) | api, mcp |
 | [cancel_assistant_turn](assistant.turn.cancel.md) | [assistant.turn.cancel.ts](../../packages/oxagen/src/contracts/assistant.turn.cancel.ts) | api |
 | [upload_assistant_attachment](assistant.attachment.upload.md) | [assistant.attachment.upload.ts](../../packages/oxagen/src/contracts/assistant.attachment.upload.ts) | api, mcp |
+| [set_assistant_switch](assistant.switch.set.md) | [assistant.switch.set.ts](../../packages/oxagen/src/contracts/assistant.switch.set.ts) | none |
 
 ## Audit
 

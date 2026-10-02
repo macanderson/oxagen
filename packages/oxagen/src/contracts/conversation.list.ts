@@ -32,6 +32,7 @@ export const conversationList = registerCapability({
     "List a user's conversations in a workspace, filtered by active or archived state, newest first, keyset-paginated",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
+  inAppAssistant: true,
   layers: ["schema", "api", "mcp", "unit", "e2e", "docs", "app"],
   scoped: true,
   // Conversation listing does not consume AI tokens — billing gate must not

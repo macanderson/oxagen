@@ -1164,7 +1164,12 @@ describe("list_runs queries name the tenant", () => {
     expect(ledger.sql).toMatch(/"surface" not in \(\$\d+, \$\d+\)/);
     expect(ledger.params).toEqual(expect.arrayContaining(["chat", "api-chat"]));
     const identity = ledgerIdentityQuery(db, SCOPE, RUN).toSQL();
-    expect(identity.sql).not.toMatch(/"surface"/);
+    // The read selects the surface, so `resolveRun` can decide who may open
+    // an in-app run (ADR-235). It never filters on it.
+    const [, where = ""] = identity.sql.split(" where ");
+    expect(where).toContain('"spec_version"');
+    expect(where).not.toMatch(/"surface"/);
+    expect(identity.params).not.toContain("chat");
   });
 
   it("applies the cursor at millisecond precision with byte-order ties, reading one row past the page", () => {

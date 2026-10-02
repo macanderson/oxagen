@@ -102,7 +102,7 @@ jobs:
     # are copied from pipeline.yml's e2e job, which is their source. Keep them
     # in step with it.
     container:
-      image: ${{ vars.CI_IMAGE_REGISTRY || 'ghcr.io/macanderson' }}/oxagen-ci-e2e:latest
+      image: ${{ vars.CI_IMAGE_REGISTRY || 'public.ecr.aws/z5z6u7g2' }}/oxagen-ci-e2e:latest
     env:
       # next start sets NODE_ENV=production; VERCEL_ENV marks the process as
       # not a real production runtime (the e2e job says why).

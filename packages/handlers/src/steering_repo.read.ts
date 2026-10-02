@@ -12,6 +12,9 @@
 //   health        the last health read and the settings it found different
 //   legacy source the code repository that still steers a workspace made
 //                 before steering repos existed (#4875)
+//   import run    the `steering_import` key of the same settings: the run
+//                 that moves that repository's .oxagen/ tree, which can stop
+//                 after the repository stopped steering (#5082)
 //
 // A workspace with no provisioning state answers `not_started` with every
 // other provisioning field null. The health banner sits in the workspace
@@ -20,6 +23,7 @@
 import { schema, withTenantDb } from "@oxagen/database";
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import type {
+  SteeringImportRunView,
   SteeringRepoDifference,
   SteeringRepoGetOutput,
   steeringRepoGet,
@@ -35,6 +39,10 @@ import {
   type SteeringConnection,
   type SteeringRepoState,
 } from "./steering_repo.provision";
+import {
+  readImportState,
+  type SteeringImportState,
+} from "./steering-repo/import-run";
 import {
   readLegacySteeringSource,
   type LegacySteeringSource,
@@ -77,6 +85,8 @@ export interface SteeringRepoReadDeps {
   ): Promise<LegacySteeringSource | null>;
   /** The organization's stored steering connection, or null. */
   readConnection(scope: SteeringRepoReadScope): Promise<SteeringConnection | null>;
+  /** The `steering_import` state in the workspace's settings, or null. */
+  readImport(scope: SteeringRepoReadScope): Promise<SteeringImportState | null>;
 }
 
 /**
@@ -118,6 +128,7 @@ export const NO_STEERING_REPO: SteeringRepoGetOutput = {
   legacySource: null,
   connection: null,
   connectionChoices: [],
+  importRun: null,
 };
 
 /** A connection as the read names it. */
@@ -144,6 +155,34 @@ function legacySourceView(
   };
 }
 
+/**
+ * The import run as the read names it. The source is a GitHub repository,
+ * because the import reads `.oxagen/` only from GitHub.
+ */
+function importRunView(
+  state: SteeringImportState | null,
+): SteeringImportRunView | null {
+  if (state === null) return null;
+  return {
+    status: state.status,
+    step: state.step,
+    source:
+      state.source === null
+        ? null
+        : {
+            fullName: state.source.full_name,
+            url: steeringRepoUrl("github", state.source.full_name),
+          },
+    pullRequests: state.pull_requests.map((pr) => ({
+      number: pr.number,
+      url: pr.url,
+      branch: pr.branch,
+    })),
+    cleanup: state.cleanup,
+    error: state.error,
+  };
+}
+
 function workspaceScope(ctx: {
   orgId: string;
   workspaceId: string | null;
@@ -158,15 +197,17 @@ export function createGetSteeringRepoHandler(
 ): CapabilityHandler<typeof steeringRepoGet> {
   return async (_input, ctx): Promise<SteeringRepoGetOutput> => {
     const scope = workspaceScope(ctx);
-    const [state, legacy, stored] = await Promise.all([
+    const [state, legacy, stored, imported] = await Promise.all([
       deps.readState(scope),
       deps.readLegacySource(scope),
       deps.readConnection(scope),
+      deps.readImport(scope),
     ]);
     const legacySource = legacySourceView(legacy);
     const connection = stored === null ? null : connectionView(stored);
+    const importRun = importRunView(imported);
     if (state === null)
-      return { ...NO_STEERING_REPO, legacySource, connection };
+      return { ...NO_STEERING_REPO, legacySource, connection, importRun };
 
     const provider = state.provider;
     const repository =
@@ -211,22 +252,42 @@ export function createGetSteeringRepoHandler(
       legacySource,
       connection,
       connectionChoices: state.connection_choices.map(connectionView),
+      importRun,
     };
   };
 }
 
-/** The production reads, inside the tenant scope the kernel entered. */
-export const productionSteeringRepoReadDeps: SteeringRepoReadDeps = {
-  async readState(scope) {
+/**
+ * The workspace's settings, read once per call. The handler passes one scope
+ * object to `readState` and `readImport`, and the health banner runs this read
+ * on every workspace page, so the two share one query.
+ */
+const settingsReads = new WeakMap<SteeringRepoReadScope, Promise<unknown>>();
+
+function workspaceSettings(scope: SteeringRepoReadScope): Promise<unknown> {
+  let read = settingsReads.get(scope);
+  if (read === undefined) {
     const w = schema.workspaces;
-    const [row] = await withTenantDb((tx) =>
+    read = withTenantDb((tx) =>
       tx
         .select({ settings: w.settings })
         .from(w)
         .where(and(eq(w.id, scope.workspaceId), eq(w.orgId, scope.orgId)))
         .limit(1),
-    );
-    return row === undefined ? null : readSteeringRepoState(row.settings);
+    ).then(([row]) => (row === undefined ? null : row.settings));
+    settingsReads.set(scope, read);
+  }
+  return read;
+}
+
+/** The production reads, inside the tenant scope the kernel entered. */
+export const productionSteeringRepoReadDeps: SteeringRepoReadDeps = {
+  async readState(scope) {
+    const settings = await workspaceSettings(scope);
+    return settings === null ? null : readSteeringRepoState(settings);
+  },
+  async readImport(scope) {
+    return readImportState(await workspaceSettings(scope));
   },
   async readPublishedVersion(scope, repository) {
     const p = schema.steeringPublications;

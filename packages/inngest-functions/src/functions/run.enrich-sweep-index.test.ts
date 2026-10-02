@@ -89,6 +89,32 @@ describe("the sweep's candidate predicate", () => {
     expect(readable.params).toEqual([]);
   });
 
+  // ADR-235: the in-app assistant's runs feed no workspace surface, so the
+  // sweep pays for no summary of one.
+  it("leaves ledger runs on the in-app assistant's surfaces out of the sweep", () => {
+    const query = sweepCandidates(db as never, schema.agentRuns, NOW).toSQL();
+    const exclusion =
+      /"agent"\."agent_runs"\."surface" not in \(\$(\d+), \$(\d+)\)/u.exec(
+        query.sql,
+      );
+    expect(exclusion).not.toBeNull();
+    expect([
+      query.params[Number(exclusion![1]) - 1],
+      query.params[Number(exclusion![2]) - 1],
+    ]).toEqual(["chat", "api-chat"]);
+  });
+
+  it("puts no surface exclusion on wrapped sessions (negative)", () => {
+    const query = sweepCandidates(
+      db as never,
+      schema.tachoSessions,
+      NOW,
+    ).toSQL();
+    expect(query.sql).not.toContain('"surface"');
+    expect(query.params).not.toContain("chat");
+    expect(query.params).not.toContain("api-chat");
+  });
+
   it("leaves the time-dependent due rule bound as before (negative)", () => {
     // The due rule compares against the clock, so it stays out of the index
     // and keeps its bind parameters.

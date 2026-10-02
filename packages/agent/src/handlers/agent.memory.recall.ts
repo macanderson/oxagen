@@ -13,6 +13,7 @@ import type {
   AgentMemoryRecallOutput,
 } from "@oxagen/oxagen/contracts/agent.memory.recall";
 import { deriveCompliance } from "@oxagen/oxagen/contracts/agent.memory.model";
+import { isOxagenAssistantCall } from "@oxagen/oxagen/oxagen-assistant";
 import { insertMemoryChange } from "@oxagen/telemetry";
 
 export type { AgentMemoryRecallInput, AgentMemoryRecallOutput };
@@ -48,6 +49,11 @@ export async function agentMemoryRecallHandler(
     memoryClass: input.memoryClass,
     minEnforcement: input.minEnforcement,
   });
+
+  // A recall Oxagen's in-app assistant makes reads and changes nothing
+  // (ADR-235). Reinforcement and citations shape which memories the workspace
+  // promotes into steering, and the assistant does not steer the workspace.
+  if (isOxagenAssistantCall(ctx)) return { memories: rows.map(toRecalled) };
 
   // Fire-and-forget: reinforce each recalled memory and emit a telemetry event.
   // These are not awaited — they must not block the critical recall path.
@@ -127,18 +133,23 @@ export async function agentMemoryRecallHandler(
     })();
   }
 
+  return { memories: rows.map(toRecalled) };
+}
+
+/** One recalled row as the contract returns it. */
+function toRecalled(
+  m: Awaited<ReturnType<typeof recallMemories>>[number],
+): AgentMemoryRecallOutput["memories"][number] {
   return {
-    memories: rows.map((m) => ({
-      id: m.id,
-      nodeRef: m.nodeRef,
-      memoryClass: m.memoryClass,
-      memoryKind: m.memoryKind,
-      lesson: m.lesson,
-      source: m.source,
-      confidenceScore: m.confidenceScore,
-      enforcementScore: m.enforcementScore,
-      score: m.score,
-      createdAt: m.createdAt,
-    })),
+    id: m.id,
+    nodeRef: m.nodeRef,
+    memoryClass: m.memoryClass,
+    memoryKind: m.memoryKind,
+    lesson: m.lesson,
+    source: m.source,
+    confidenceScore: m.confidenceScore,
+    enforcementScore: m.enforcementScore,
+    score: m.score,
+    createdAt: m.createdAt,
   };
 }

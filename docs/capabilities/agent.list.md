@@ -18,6 +18,8 @@ Every figure is counted from a store that exists or is `null` with the reason on
 
 A retired agent is a deleted record. The read leaves it out of `items` unless `includeRetired` is true, and leaves it out of every total except `totals.retired` either way. A caller choosing an agent for new work therefore never sees one. The Agents page passes `includeRetired` only when a person chooses Show deregistered agents (#4332).
 
+The workspace's managed assistant agent (`agent_type = 'interactive_chat'`, slug `qa-chat`) belongs to Oxagen. The read leaves it out of `items` and out of every total, whatever `includeRetired` says (ADR-235).
+
 ## Input
 
 | Field | Type | Notes |
@@ -38,7 +40,7 @@ A retired agent is a deleted record. The read leaves it out of `items` unless `i
 | `items[].harness` | `"stella" \| "claude-code" \| "codex" \| "cursor" \| "claude-agent-sdk" \| "custom"` | |
 | `items[].runtime` | `object \| null` | `{ id, name, slug }` of the runtime the agent runs on now (ADR-198). Null for an agent that runs on no named runtime, and for one registered before runtimes existed that the backfill could not place. |
 | `items[].toolbelt` | `object \| null` | `{ id, name, slug, kind }` of the toolbelt the agent carries. An agent that names no belt reads as the workspace's All tools belt. |
-| `items[].managed` | `boolean` | True for the built-in assistant stella acts as (`qa-chat`). Oxagen manages it, so no identity write accepts it, and its kill switch is how a person stops it (#4350). |
+| `items[].managed` | `boolean` | True for an agent Oxagen manages, which no identity write accepts (#4350). The list never carries the managed assistant (ADR-235), so every row it answers today reads false. |
 | `items[].principalId` | `string \| null` | `prn_…`; null on a row that predates Agent RBAC. |
 | `items[].operatorId` | `string \| null` | `usr_…` of the person the agent acts for. |
 | `items[].operatorName` | `string \| null` | That person's display name (`auth.users.display_name`); null when there is no operator or they set none. |

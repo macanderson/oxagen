@@ -124,11 +124,23 @@ describe.skipIf(!process.env.DATABASE_URL)(
     const NOW = Date.now();
     const inMinutes = (n: number) => new Date(NOW + n * 60_000);
     const ids: Record<string, string> = {};
+    // The in-app assistant's turn (ADR-235): the person who asked, another
+    // member, the conversation the turn wrote to, and its `chat` run.
+    const askerId = crypto.randomUUID();
+    const otherMemberId = crypto.randomUUID();
+    const conversationId = crypto.randomUUID();
+    const messageId = crypto.randomUUID();
+    const inAppRunId = crypto.randomUUID();
+    let inAppRunPublicId = "";
 
-    const ctx = (orgId: string, workspaceId: string) => ({
+    const ctx = (
+      orgId: string,
+      workspaceId: string,
+      userId: string | null = null,
+    ) => ({
       orgId,
       workspaceId,
-      userId: null,
+      userId,
       apiKeyId: null,
       requestId: `req_${tag}`,
       surface: "api" as const,
@@ -139,19 +151,74 @@ describe.skipIf(!process.env.DATABASE_URL)(
       orgId: string,
       workspaceId: string,
       input: Parameters<typeof agentApprovalListResolved.input.parse>[0] = {},
+      userId: string | null = null,
     ) =>
       runInTenantScope({ orgId, workspaceId }, () =>
         agentApprovalListResolvedHandler(
           agentApprovalListResolved.input.parse(input),
-          ctx(orgId, workspaceId),
+          ctx(orgId, workspaceId, userId),
         ),
       );
 
     beforeAll(async () => {
       await withSystemDb(async (tx) => {
+        await tx.insert(schema.users).values([
+          {
+            id: askerId,
+            email: `resolved-asker-${tag}@list.test`,
+            status: "active",
+          },
+          {
+            id: otherMemberId,
+            email: `resolved-other-${tag}@list.test`,
+            status: "active",
+          },
+        ]);
+        await tx.insert(schema.conversations).values({
+          id: conversationId,
+          orgId: orgA,
+          workspaceId: wsA1,
+          userId: askerId,
+          status: "active",
+        });
+        await tx.insert(schema.messages).values({
+          id: messageId,
+          orgId: orgA,
+          workspaceId: wsA1,
+          conversationId,
+          role: "user",
+          content: "",
+          contentBlocks: [],
+        });
+        const [inAppRun] = await tx
+          .insert(schema.agentRuns)
+          .values({
+            id: inAppRunId,
+            orgId: orgA,
+            workspaceId: wsA1,
+            surface: "chat",
+            spec: {},
+          })
+          .returning({ publicId: schema.agentRuns.publicId });
+        inAppRunPublicId = inAppRun!.publicId;
         const rows = await tx
           .insert(schema.approvalRequests)
           .values([
+            // Answered by the person who asked, from the assistant: it
+            // belongs to them alone (ADR-235).
+            {
+              orgId: orgA,
+              workspaceId: wsA1,
+              messageId,
+              capabilityName: "in_app_call",
+              inputPreview: {},
+              riskLevel: "high",
+              runPublicId: inAppRunPublicId,
+              resolution: "approved",
+              resolvedAt: inMinutes(-3),
+              resolvedByUserId: askerId,
+              expiresAt: inMinutes(5),
+            },
             // Auto-approved: no person looked. This is the row #3153 exists
             // for: `autoApprovePath`'s own write shape.
             {
@@ -229,6 +296,18 @@ describe.skipIf(!process.env.DATABASE_URL)(
         await tx
           .delete(schema.approvalRequests)
           .where(inArray(schema.approvalRequests.orgId, [orgA, orgB]));
+        await tx
+          .delete(schema.agentRuns)
+          .where(eq(schema.agentRuns.id, inAppRunId));
+        await tx
+          .delete(schema.messages)
+          .where(eq(schema.messages.id, messageId));
+        await tx
+          .delete(schema.conversations)
+          .where(eq(schema.conversations.id, conversationId));
+        await tx
+          .delete(schema.users)
+          .where(inArray(schema.users.id, [askerId, otherMemberId]));
       });
     });
 
@@ -283,6 +362,36 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(own.items.map((i) => i.tool)).not.toContain("other_org");
       const foreign = await list(orgB, wsB1);
       expect(foreign.items.map((i) => i.tool)).toEqual(["other_org"]);
+    });
+
+    // ADR-235, ruled on 2026-10-01: an approval the in-app assistant parked
+    // goes only to the person who asked.
+    it("leaves the in-app assistant's approval out of the workspace's history, for everyone", async () => {
+      for (const userId of [null, askerId, otherMemberId]) {
+        const out = await list(orgA, wsA1, {}, userId);
+        expect(out.items.map((i) => i.tool)).not.toContain("in_app_call");
+        // The workspace's own rows are still there.
+        expect(out.items.map((i) => i.tool)).toContain("ordinary_timeout");
+      }
+    });
+
+    it("shows the person who asked their in-app approval under its run", async () => {
+      const out = await list(orgA, wsA1, { runId: inAppRunPublicId }, askerId);
+      expect(out.items.map((i) => i.id)).toEqual([ids["in_app_call"]]);
+      expect(out.items[0]).toMatchObject({
+        runId: inAppRunPublicId,
+        resolution: "approved",
+      });
+    });
+
+    it("shows another member nothing under that run (negative)", async () => {
+      const out = await list(
+        orgA,
+        wsA1,
+        { runId: inAppRunPublicId },
+        otherMemberId,
+      );
+      expect(out).toEqual({ items: [], nextCursor: null });
     });
 
     it("hands back an id get_auto_eligibility can resolve, with the rule attribution intact (#3153)", async () => {

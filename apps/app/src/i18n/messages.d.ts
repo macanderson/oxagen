@@ -6353,6 +6353,10 @@ type Messages = {
         ready: string;
         moveSteering: string;
         moving: string;
+        finishMove: {
+          body: string;
+          action: string;
+        };
         create: string;
         starting: string;
         startNote: string;
@@ -6432,6 +6436,7 @@ type Messages = {
           provisioning: string;
           failed: string;
           blocked: string;
+          movePending: string;
         };
         lead: {
           notStarted: string;
@@ -6439,10 +6444,12 @@ type Messages = {
           provisioning: string;
           failed: string;
           blocked: string;
+          movePending: string;
         };
         open: {
           act: string;
           view: string;
+          finish: string;
         };
         intro: {
           create: string;

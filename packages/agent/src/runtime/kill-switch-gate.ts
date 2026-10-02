@@ -60,10 +60,12 @@ import {
   readActiveEmergencyDenies,
   readActiveKillSwitches,
   readDenyGenerationVector,
+  resourceScopeDigestOf,
   type ActiveEmergencyDeny,
   type KillSwitchCallFacts,
   type KillSwitchRow,
 } from "@oxagen/iam";
+import { isOxagenAssistantCall } from "@oxagen/oxagen/oxagen-assistant";
 import type { DenyGenerationVector } from "@oxagen/oxagen/iam";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { and, eq, isNull } from "drizzle-orm";
@@ -264,6 +266,34 @@ function matchPlainDeny(
       };
 }
 
+/**
+ * The switches that can reach a call Oxagen's in-app assistant makes: only
+ * one on the assistant's own agent, which only Oxagen sets
+ * (`set_assistant_switch`, ADR-235). Every other switch is the customer's
+ * configuration (an organisation, a workspace, an operator, a class, a tool
+ * version, a capability), and the customer does not govern the assistant.
+ * With no assistant agent, nothing reaches the call.
+ *
+ * Exported for the belt (materialize-tools.ts), so the listing and the gate
+ * cut the same rows.
+ */
+export function assistantOwnSwitches<
+  T extends {
+    capabilityId: string | null;
+    resourceScopeDigest: string | null;
+    principalId: string | null;
+  },
+>(rows: readonly T[], assistantAgentId: string | null): T[] {
+  if (assistantAgentId === null) return [];
+  const own = resourceScopeDigestOf({ kind: "agent", id: assistantAgentId });
+  return rows.filter(
+    (row) =>
+      row.capabilityId === null &&
+      row.principalId === null &&
+      row.resourceScopeDigest === own,
+  );
+}
+
 function sameGeneration(a: DenyGenerationVector, b: DenyGenerationVector) {
   return a.org === b.org && a.workspace === b.workspace;
 }
@@ -281,6 +311,9 @@ export function createKillSwitchGate(
   actingAgent: ActingAgent | null = null,
 ): KillSwitchGate {
   const scope = { orgId: ctx.orgId, workspaceId: ctx.workspaceId };
+  // A call of Oxagen's in-app assistant answers only to the assistant's own
+  // switch (ADR-235). See `assistantOwnSwitches`.
+  const fromAssistant = isOxagenAssistantCall(ctx);
   let snapshot: KillSwitchSnapshot | null = null;
   let loading: Promise<KillSwitchSnapshot> | null = null;
 
@@ -310,6 +343,16 @@ export function createKillSwitchGate(
         if (!sameGeneration(generation, current.generation)) {
           current = await load();
         }
+      }
+      if (fromAssistant) {
+        const agentId = actingAgent?.agentId ?? null;
+        current = {
+          ...current,
+          switches: assistantOwnSwitches(current.switches, agentId),
+          ...(current.denies
+            ? { denies: assistantOwnSwitches(current.denies, agentId) }
+            : {}),
+        };
       }
       if (current.switches.length === 0 && !current.denies?.length) {
         return null;

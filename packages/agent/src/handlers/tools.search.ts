@@ -6,6 +6,9 @@
 // tenant scope the kernel entered and pinned to the org and workspace so a
 // local stack with the RLS bypass on still answers for one workspace only.
 // The in-app agent's own turns stay out of the run rows, as in list_runs.
+// Its managed agent stays out of the agent rows, and the approvals it parked
+// stay out of the approval rows, because both belong to Oxagen and the person
+// who asked, not to the workspace (ADR-235, ruled on 2026-10-01).
 // The eight slots are dealt across the kinds asked for, so no kind crowds
 // the others out: the belt alone holds hundreds of tools.
 import {
@@ -15,6 +18,8 @@ import {
   withTenantDb,
 } from "@oxagen/database";
 import { IN_APP_AGENT_SURFACES } from "@oxagen/oxagen/contracts/run.list";
+import { INTERACTIVE_AGENT_TYPE } from "@oxagen/oxagen/interactive-agent";
+import { notInAppApproval } from "@oxagen/rules/approval-notify";
 import {
   SEARCH_KINDS,
   SEARCH_ROW_LIMIT,
@@ -268,6 +273,9 @@ async function searchAgents(
         isNull(agents.deletedAt),
         // Treat a retired agent as a deleted record, so the menu never offers it.
         ne(agents.status, "archived"),
+        // The workspace's managed assistant agent is Oxagen's, not one the
+        // workspace runs, so the menu never offers it.
+        ne(agents.agentType, INTERACTIVE_AGENT_TYPE),
         query
           ? or(ilike(agents.slug, pattern), ilike(agents.name, pattern))
           : undefined,
@@ -303,6 +311,8 @@ async function searchApprovals(
         eq(ar.workspaceId, scope.workspaceId),
         isNull(ar.resolution),
         sql`${ar.expiresAt} > now()`,
+        // The same queue list_approvals shows: no in-app approval.
+        notInAppApproval(),
         query
           ? or(ilike(ar.publicId, pattern), ilike(ar.capabilityName, pattern))
           : undefined,

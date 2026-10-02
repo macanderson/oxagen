@@ -261,6 +261,9 @@ const ledgerColumns = {
     // read takes the stamp and never joins `workspace_users`, so a role
     // changed after the run opened does not change what the run says.
     operatorRole: runs.operatorRole,
+    // `resolveRun` reads the surface to keep an in-app run to the person who
+    // asked (ADR-235). The list predicates filter on the column itself.
+    surface: runs.surface,
   },
   identity: {
     orgNamespace: schema.organizations.namespace,
@@ -268,6 +271,9 @@ const ledgerColumns = {
     agentSlug: schema.agents.slug,
     operatorPublicId: schema.principals.publicId,
     operatorKind: schema.principals.kind,
+    // The person behind a human initiating principal, from the same user row
+    // as the name. `resolveRun` compares it with the caller on an in-app run.
+    operatorUserId: schema.users.id,
     operatorUserName: schema.users.displayName,
     operatorUserAvatarUrl: schema.users.avatarUrl,
     // One character past the label cap is enough for `runLabel` to cut the

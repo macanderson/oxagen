@@ -36,6 +36,10 @@ import {
   type KillSwitchTarget,
 } from "@oxagen/oxagen/contracts/kill_switch.set";
 import type { DenyGenerationVector } from "@oxagen/oxagen/iam";
+import {
+  isManagedAgentType,
+  MANAGED_AGENT_READONLY_CODE,
+} from "@oxagen/oxagen/interactive-agent";
 import { schema, type Tx, withTenantDb, withOrgDb } from "@oxagen/database";
 import { emitSecurityEvent } from "@oxagen/database/security";
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
@@ -94,7 +98,7 @@ export interface KillSwitchTargetLookups {
   agent(
     scope: { orgId: string; workspaceId: string },
     publicId: string,
-  ): Promise<{ publicId: string } | null>;
+  ): Promise<{ publicId: string; managed?: boolean } | null>;
   /**
    * Resolves the operator's `usr_…` public id, or (backward compatibility)
    * their raw user uuid, to the user within the org: the raw uuid for the
@@ -171,7 +175,10 @@ const postgresKillSwitchTargetLookups: KillSwitchTargetLookups = {
   agent: async (scope, publicId) => {
     const [row] = await withTenantDb((tx) =>
       tx
-        .select({ publicId: schema.agents.publicId })
+        .select({
+          publicId: schema.agents.publicId,
+          agentType: schema.agents.agentType,
+        })
         .from(schema.agents)
         .where(
           and(
@@ -183,7 +190,9 @@ const postgresKillSwitchTargetLookups: KillSwitchTargetLookups = {
         )
         .limit(1),
     );
-    return row ?? null;
+    return row
+      ? { publicId: row.publicId, managed: isManagedAgentType(row.agentType) }
+      : null;
   },
   resolveOperator: async (orgId, idOrPublicId) => {
     const isPublicId = USER_PUBLIC_ID.test(idOrPublicId);
@@ -220,6 +229,20 @@ const postgresKillSwitchTargetLookups: KillSwitchTargetLookups = {
     return row !== undefined;
   },
 };
+
+/**
+ * The workspace's managed assistant agent is Oxagen's in-app assistant, and
+ * the customer does not govern it (ADR-235). Oxagen alone switches it on and
+ * off, with `set_assistant_switch`, so a customer can do neither here.
+ */
+function managedAssistantRefusal(): HandlerError {
+  return new HandlerError({
+    code: "forbidden",
+    reason: MANAGED_AGENT_READONLY_CODE,
+    message:
+      "This agent is Oxagen's in-app assistant. Your kill switches do not reach it.",
+  });
+}
 
 function notFound(target: KillSwitchTarget): HandlerError {
   return new HandlerError({
@@ -280,6 +303,7 @@ export async function resolveKillSwitchTarget(
     case "agent": {
       const agent = await lookups.agent(scope, target.id);
       if (!agent) throw notFound(target);
+      if (agent.managed === true) throw managedAssistantRefusal();
       return {
         deny: scopeDeny("agent", agent.publicId),
         connectionId: null,
@@ -426,6 +450,16 @@ export function createKillSwitchSetHandler(
       input.target.kind,
       ctx.workspaceId,
     );
+    // Off reads no target, so a switch whose target was deleted still clears.
+    // The one exception is an agent switch: a customer may not clear the
+    // switch Oxagen holds on the managed assistant agent (ADR-235).
+    if (!input.on && input.target.kind === "agent") {
+      const agent = await deps.lookups.agent(
+        { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+        input.target.id,
+      );
+      if (agent?.managed === true) throw managedAssistantRefusal();
+    }
     const flip: Flip = input.on
       ? {
           on: true,

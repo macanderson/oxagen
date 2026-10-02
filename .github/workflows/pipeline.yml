@@ -235,7 +235,7 @@ jobs:
     if: github.event_name != 'workflow_dispatch'
     runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-small-{0}', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
     container:
-      image: ${{ vars.CI_IMAGE_REGISTRY || 'ghcr.io/macanderson' }}/oxagen-ci-base:latest
+      image: ${{ vars.CI_IMAGE_REGISTRY || 'public.ecr.aws/z5z6u7g2' }}/oxagen-ci-base:latest
       volumes:
         - /opt/pnpm-store:/opt/pnpm-store
     timeout-minutes: 5
@@ -253,7 +253,7 @@ jobs:
       needs.preflight.outputs.proceed != 'false'
     runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-{0}-{1}', vars.CI_HEAVY_POOL || 'large', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
     container:
-      image: ${{ vars.CI_IMAGE_REGISTRY || 'ghcr.io/macanderson' }}/oxagen-ci-base:latest
+      image: ${{ vars.CI_IMAGE_REGISTRY || 'public.ecr.aws/z5z6u7g2' }}/oxagen-ci-base:latest
       volumes:
         - /opt/pnpm-store:/opt/pnpm-store
     # 60m (was 20m): a PR that invalidates many turbo caches must run lint +
@@ -540,7 +540,7 @@ jobs:
     env:
       TURBO_CONCURRENCY: ${{ vars.CI_RUNNERS == 'aws' && '4' || '3' }}
     container:
-      image: ${{ vars.CI_IMAGE_REGISTRY || 'ghcr.io/macanderson' }}/oxagen-ci-base:latest
+      image: ${{ vars.CI_IMAGE_REGISTRY || 'public.ecr.aws/z5z6u7g2' }}/oxagen-ci-base:latest
       volumes:
         - /opt/pnpm-store:/opt/pnpm-store
     timeout-minutes: 40
@@ -635,7 +635,7 @@ jobs:
       needs.preflight.outputs.heavy != 'false'
     runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-{0}-{1}', vars.CI_HEAVY_POOL || 'large', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
     container:
-      image: ${{ vars.CI_IMAGE_REGISTRY || 'ghcr.io/macanderson' }}/oxagen-ci-base:latest
+      image: ${{ vars.CI_IMAGE_REGISTRY || 'public.ecr.aws/z5z6u7g2' }}/oxagen-ci-base:latest
       volumes:
         - /opt/pnpm-store:/opt/pnpm-store
     timeout-minutes: 45
@@ -864,7 +864,7 @@ jobs:
       needs.preflight.outputs.heavy != 'false'
     runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-{0}-{1}', vars.CI_HEAVY_POOL || 'large', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
     container:
-      image: ${{ vars.CI_IMAGE_REGISTRY || 'ghcr.io/macanderson' }}/oxagen-ci-e2e:latest
+      image: ${{ vars.CI_IMAGE_REGISTRY || 'public.ecr.aws/z5z6u7g2' }}/oxagen-ci-e2e:latest
       volumes:
         - /opt/pnpm-store:/opt/pnpm-store
     # next start hardcodes NODE_ENV=production regardless of this job's env,
@@ -1112,7 +1112,7 @@ jobs:
     # leaves the large one to the jobs that use the cores.
     runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-small-{0}', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
     container:
-      image: ${{ vars.CI_IMAGE_REGISTRY || 'ghcr.io/macanderson' }}/oxagen-ci-base:latest
+      image: ${{ vars.CI_IMAGE_REGISTRY || 'public.ecr.aws/z5z6u7g2' }}/oxagen-ci-base:latest
       volumes:
         - /opt/pnpm-store:/opt/pnpm-store
     timeout-minutes: 15
@@ -1203,7 +1203,7 @@ jobs:
     # (run 36942279871).
     runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-small-{0}', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
     container:
-      image: ${{ vars.CI_IMAGE_REGISTRY || 'ghcr.io/macanderson' }}/oxagen-ci-base:latest
+      image: ${{ vars.CI_IMAGE_REGISTRY || 'public.ecr.aws/z5z6u7g2' }}/oxagen-ci-base:latest
       volumes:
         - /opt/pnpm-store:/opt/pnpm-store
     timeout-minutes: 20

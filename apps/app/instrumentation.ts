@@ -133,6 +133,10 @@ export async function register(): Promise<void> {
         ip: null, // not available at kernel level — enrich at surface layer
         userAgent: null,
         requestId: kernelEvent.requestId,
+        // Oxagen's in-app assistant made this call for the actor (ADR-235).
+        ...(kernelEvent.oxagenAssistant
+          ? { detail: { oxagenAssistant: true as const } }
+          : {}),
       });
     });
   }

@@ -192,6 +192,25 @@ export function ledgerRun(
   };
 }
 
+/**
+ * One of the in-app assistant's turns (ADR-235): a ledger run on an in-app
+ * surface, `chat` unless `over.surface` names another, initiated by the human
+ * principal of `askerUserId`. Null is a run whose initiator is no person.
+ */
+export function inAppLedgerRun(
+  over: Partial<LedgerFixture> & { publicId: string; runId: string },
+  askerUserId: string | null,
+): LedgerFixture {
+  const base = ledgerRun(over);
+  const surface = over.surface ?? "chat";
+  return {
+    ...base,
+    surface,
+    run: { ...base.run, surface },
+    identity: { ...base.identity, operatorUserId: askerUserId },
+  };
+}
+
 export function tachoSession(
   over: Omit<Partial<TachoFixture>, "session"> & {
     publicId: string;
@@ -326,8 +345,15 @@ export function memoryStores(
         const row = inScope(scope).ledger.find(
           (r) => r.run.runId === runId && r.specVersion === 2,
         );
+        // The identity select reads `agent_runs.surface` onto the run, which
+        // `resolveRun` checks for an in-app run (ADR-235).
         return Promise.resolve(
-          row ? { run: row.run, identity: row.identity } : null,
+          row
+            ? {
+                run: { ...row.run, surface: row.run.surface ?? row.surface },
+                identity: row.identity,
+              }
+            : null,
         );
       },
       ledgerRollups: (scope, runIds) =>

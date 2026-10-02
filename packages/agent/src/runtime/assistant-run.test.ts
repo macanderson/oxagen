@@ -125,14 +125,21 @@ interface World {
   operatorPrincipalId: string | null;
   /** The linked `oxagen.assistant` principal's status; null: no such row. */
   assistantPrincipalStatus: string | null;
+  /** The assistant's own policy row (subject `oxagen_assistant`). */
   retention: { id: string; publicId: string; digest: string } | null;
+  /**
+   * The workspace's own policy row (subject `workspace`). A read that pins the
+   * assistant's subject never sees it. A read that pins no subject sees it
+   * first, as the newest row would have been before ADR-235.
+   */
+  workspaceRetention?: { id: string; publicId: string; digest: string } | null;
   /** Whether the principal link UPDATE matches (false: another turn won). */
   linkWins: boolean;
   linkedByOther: string | null;
 }
 
 interface Captured {
-  selects: Array<{ table: unknown; where: string }>;
+  selects: Array<{ table: unknown; where: string; params: unknown[] }>;
   inserts: Array<{ table: unknown; values: Record<string, unknown> }>;
   updates: Array<{ table: unknown; set: Record<string, unknown> }>;
   deletes: Array<{ table: unknown; where: string }>;
@@ -163,8 +170,15 @@ function makeTx(world: World, captured: Captured) {
         ? [{ id: world.operatorPrincipalId }]
         : [];
     }
-    if (table === schema.retentionPolicyVersions)
-      return world.retention ? [world.retention] : [];
+    if (table === schema.retentionPolicyVersions) {
+      const params = where ? render(where).params : [];
+      const assistantOnly =
+        /"subject" = \$/.test(sql) && params.includes("oxagen_assistant");
+      const row = assistantOnly
+        ? world.retention
+        : (world.workspaceRetention ?? world.retention);
+      return row ? [row] : [];
+    }
     throw new Error("unexpected table");
   };
   return {
@@ -174,7 +188,12 @@ function makeTx(world: World, captured: Captured) {
         const chain = {
           where: (cond: SQL) => {
             lastWhere = cond;
-            captured.selects.push({ table, where: render(cond).sql });
+            const rendered = render(cond);
+            captured.selects.push({
+              table,
+              where: rendered.sql,
+              params: rendered.params,
+            });
             return chain;
           },
           orderBy: () => chain,
@@ -499,15 +518,10 @@ describe("resolveAssistantRunIdentity", () => {
     ]);
   });
 
-  it("pins the workspace's documented retain-all default when it has none", async () => {
-    // `retention_policy_versions` is read workspace-latest, so the row the
-    // first assistant turn writes becomes the whole workspace's policy. It
-    // used to write `digest_only`/30d, which silently opted every subsequent
-    // Tacho run down to `inspect` with its bodies refused. The literal values
-    // are asserted rather than echoed from ASSISTANT_RETENTION_POLICY: the
-    // previous version of this test read `mode` and `ttl_days` off the
-    // constant, so it would have passed just as green with the unsafe values
-    // in place and proved nothing about what the workspace keeps.
+  it("pins the assistant's own retain-all policy under its own subject when it has none", async () => {
+    // The assistant keeps its own policy row (ADR-235). The literal values
+    // are asserted rather than echoed from ASSISTANT_RETENTION_POLICY, so a
+    // change to the constant fails here and is a decision someone makes.
     const { captured } = setup({ retention: null });
     const identity = await mocks.withTenantDb((tx: never) =>
       resolveAssistantRunIdentity(tx, SCOPE, USER),
@@ -516,18 +530,101 @@ describe("resolveAssistantRunIdentity", () => {
       (i) => i.table === schema.retentionPolicyVersions,
     )!;
     expect(insert.values).toMatchObject({
+      subject: "oxagen_assistant",
       version: 1,
       mode: "content_exact",
       ttlDays: 2555,
       createdById: USER,
     });
-    // Every content class, so `readWorkspaceRetention` answers exactly what a
-    // workspace with no row answers.
     expect(insert.values.retainedContentClasses).toEqual([
       ...RETENTION_CONTENT_CLASSES,
     ]);
     expect(ASSISTANT_RETENTION_POLICY.mode).not.toBe("digest_only");
+    // Migration 20261002030000 moved each existing assistant row to the
+    // assistant's subject by this digest. A new policy body leaves old rows
+    // behind under the old digest, so change this literal only with a review
+    // of that backfill.
+    expect(insert.values.policyDigest).toBe(
+      "sha256:bd1d48b3dc0b6d124d2af405ee5abef94f1f72d68ef385935b212f63d36a08e6",
+    );
+    expect(insert.values.policyDigest).toBe(
+      digestJcs(ASSISTANT_RETENTION_POLICY),
+    );
     expect(identity.retention.digest).toBe(insert.values.policyDigest);
+    // The read before and after the insert both pin the assistant's subject.
+    const reads = captured.selects.filter(
+      (s) => s.table === schema.retentionPolicyVersions,
+    );
+    expect(reads).toHaveLength(2);
+    for (const read of reads) {
+      expect(read.where).toMatch(/"subject" = \$/);
+      expect(read.params).toContain("oxagen_assistant");
+      expect(read.params).not.toContain("workspace");
+    }
+  });
+
+  it("reads only the assistant's own subject and writes nothing when it has a row", async () => {
+    const { captured } = setup();
+    const identity = await mocks.withTenantDb((tx: never) =>
+      resolveAssistantRunIdentity(tx, SCOPE, USER),
+    );
+    const [read] = captured.selects.filter(
+      (s) => s.table === schema.retentionPolicyVersions,
+    );
+    expect(read!.where).toMatch(/"org_id" = \$/);
+    expect(read!.where).toMatch(/"workspace_id" = \$/);
+    expect(read!.where).toMatch(/"subject" = \$/);
+    expect(read!.params).toContain("oxagen_assistant");
+    expect(identity.retention).toEqual({
+      rowId: "rpv-row",
+      publicId: "rpv_0123456789abcdef0123",
+      digest: "sha256:" + "a".repeat(64),
+    });
+    expect(
+      captured.inserts.filter(
+        (i) => i.table === schema.retentionPolicyVersions,
+      ),
+    ).toHaveLength(0);
+  });
+
+  it("does not pin the workspace's own policy, and writes its own version 1 beside it", async () => {
+    // Before ADR-235 the assistant read the workspace's newest row of any
+    // kind. A workspace policy then decided what the assistant's runs kept,
+    // and the assistant's first row became the workspace's policy. The fake
+    // returns the workspace row to any read that does not pin the assistant's
+    // subject, so the old read would pin `rpv-ws` here and insert nothing.
+    const { captured } = setup({
+      retention: null,
+      workspaceRetention: {
+        id: "rpv-ws",
+        publicId: "rpv_fedcba9876543210fedc",
+        digest: "sha256:" + "b".repeat(64),
+      },
+    });
+    const identity = await mocks.withTenantDb((tx: never) =>
+      resolveAssistantRunIdentity(tx, SCOPE, USER),
+    );
+    expect(identity.retention.rowId).toBe("rpv-row");
+    expect(identity.retention.rowId).not.toBe("rpv-ws");
+    const inserts = captured.inserts.filter(
+      (i) => i.table === schema.retentionPolicyVersions,
+    );
+    expect(inserts).toHaveLength(1);
+    expect(inserts[0]!.values).toMatchObject({
+      subject: "oxagen_assistant",
+      version: 1,
+    });
+    // The workspace's row is neither changed nor removed.
+    expect(
+      captured.updates.filter(
+        (u) => u.table === schema.retentionPolicyVersions,
+      ),
+    ).toHaveLength(0);
+    expect(
+      captured.deletes.filter(
+        (d) => d.table === schema.retentionPolicyVersions,
+      ),
+    ).toHaveLength(0);
   });
 
   it("refuses when the workspace has no published assistant agent", async () => {

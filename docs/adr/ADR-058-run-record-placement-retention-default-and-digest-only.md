@@ -79,7 +79,7 @@ this revision, and erasure is crypto-shredding of the organisation's key
 
 `digest_only` is not a new column on workspace settings. The workspace's
 fidelity is the `mode` of the latest `evidence.retention_policy_versions`
-row it pinned (`readWorkspaceRetention`,
+row it pinned with `subject = 'workspace'` (`readWorkspaceRetention`,
 `packages/handlers/src/lib/tacho-host.ts`); a workspace that has pinned no
 policy retains every content class. A `digest_only` workspace records the
 gap `digest_only` on every seal, which grades the run `inspect`; the tacho

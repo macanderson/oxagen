@@ -13,6 +13,8 @@ const mocks = vi.hoisted(() => ({
   runPrincipals: vi.fn(),
   /** The caller's active `iam.principals` rows in the org. */
   ownPrincipals: vi.fn(),
+  /** The locked run as the identity select reads it, surface and asker included. */
+  ledgerRow: vi.fn(),
 }));
 vi.mock("@oxagen/database", async (original) => ({
   ...(await original<typeof import("@oxagen/database")>()),
@@ -23,6 +25,10 @@ vi.mock("@oxagen/run-ledger", async (original) => ({
   ...(await original<typeof import("@oxagen/run-ledger")>()),
   lockRunForControl: mocks.lock,
 }));
+vi.mock("./run.list", async (original) => ({
+  ...(await original<typeof import("./run.list")>()),
+  ledgerIdentityQuery: mocks.ledgerRow,
+}));
 vi.mock("@oxagen/iam/org-role", () => ({
   assertOrgRole: mocks.role,
   resolveActingUserId: mocks.actor,
@@ -30,6 +36,7 @@ vi.mock("@oxagen/iam/org-role", () => ({
 }));
 import { schema } from "@oxagen/database";
 import { runTokenIssueHandler } from "./run.token.issue";
+import { inAppLedgerRun, ledgerRun } from "./run.test-support";
 import { clearDataPlaneResolver, setDataPlaneResolver } from "@oxagen/tenancy";
 import { afterEach } from "vitest";
 import { createHash } from "node:crypto";
@@ -69,6 +76,10 @@ beforeEach(() => {
   mocks.runPrincipals.mockResolvedValue([{ initiating: null, agent: null }]);
   mocks.ownPrincipals.mockResolvedValue([{ id: "caller-principal" }]);
   mocks.orgRoles.mockResolvedValue([]);
+  // A run on no in-app surface: the party and role rules below decide it.
+  mocks.ledgerRow.mockResolvedValue([
+    ledgerRun({ publicId: input.runId, runId: "run-uuid" }),
+  ]);
 });
 afterEach(clearDataPlaneResolver);
 describe("run credential issuance", () => {
@@ -205,6 +216,47 @@ describe("run credential issuance — the run's principals", () => {
       code: "forbidden",
       reason: "not_run_principal",
     });
+    expect(mocks.attempt).not.toHaveBeenCalled();
+    expect(mocks.insert).not.toHaveBeenCalled();
+  });
+});
+
+// ADR-235, item 5: an in-app run is the asking person's own record, so a
+// credential for it goes to that person alone. Every other caller, an org
+// Owner included, reads it as a run that does not exist.
+describe("run credential issuance: an in-app run", () => {
+  const OTHER = "00000000-0000-4000-8000-0000000000e2";
+  const turn = (asker: string | null) =>
+    inAppLedgerRun({ publicId: input.runId, runId: "run-uuid" }, asker);
+
+  it("issues to the person who asked", async () => {
+    mocks.ledgerRow.mockResolvedValue([turn(ctx.userId)]);
+    mocks.runPrincipals.mockResolvedValue([
+      { initiating: INITIATOR, agent: AGENT },
+    ]);
+    mocks.ownPrincipals.mockResolvedValue([{ id: INITIATOR }]);
+    await runTokenIssueHandler(input, ctx);
+    expect(mocks.ledgerRow).toHaveBeenCalledWith(
+      tx,
+      { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+      "run-uuid",
+    );
+    expect(mocks.insert).toHaveBeenCalledTimes(1);
+  });
+
+  it("answers an org Owner who did not ask not_found, before the run's status or parties (negative)", async () => {
+    mocks.ledgerRow.mockResolvedValue([turn(OTHER)]);
+    mocks.orgRoles.mockResolvedValue(["Owner"]);
+    mocks.lock.mockResolvedValue({
+      id: "run-uuid",
+      status: "completed",
+      cancelled: false,
+    });
+    await expect(runTokenIssueHandler(input, ctx)).rejects.toMatchObject({
+      code: "not_found",
+      reason: "run_not_found",
+    });
+    expect(mocks.runPrincipals).not.toHaveBeenCalled();
     expect(mocks.attempt).not.toHaveBeenCalled();
     expect(mocks.insert).not.toHaveBeenCalled();
   });

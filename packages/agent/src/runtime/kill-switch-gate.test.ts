@@ -15,6 +15,7 @@ import {
   type KillSwitchRow,
 } from "@oxagen/iam";
 import type { CapabilityContext } from "../types";
+import { createOxagenAssistantBinding } from "@oxagen/oxagen/oxagen-assistant";
 
 const tenancy = vi.hoisted(() => ({
   scopes: [] as Array<{ orgId: string; workspaceId: string }>,
@@ -30,6 +31,7 @@ vi.mock("@oxagen/tenancy", () => ({
 }));
 
 import {
+  assistantOwnSwitches,
   createKillSwitchGate,
   KillSwitchDeniedError,
   type KillSwitchGateReads,
@@ -522,5 +524,109 @@ describe("a class kill switch and a tool whose tags were declared, not classifie
     expect(
       await gate.check({ capabilityId: "reads_only", readOnly: false }),
     ).toBeNull();
+  });
+});
+
+// Item 3 of Mac's ruling (2026-10-01, ADR-235): the customer's kill switches
+// do not reach Oxagen's in-app assistant. A call carrying the assistant
+// binding answers only to a switch on the assistant's own agent, which only
+// Oxagen sets (`set_assistant_switch`). The same switches still stop any
+// other caller.
+describe("a call of Oxagen's in-app assistant", () => {
+  const ASSISTANT = { agentId: "agt_assistant", principalId: "prn_assistant" };
+  const stella: CapabilityContext = {
+    ...ctx,
+    oxagenAssistant: createOxagenAssistantBinding({ requestId: "req_turn" }),
+  };
+  const scopeSwitch = (
+    kind: "org" | "workspace" | "operator" | "agent",
+    id: string,
+  ): KillSwitchRow => ({
+    ...classSwitch("unused"),
+    targetKind: kind,
+    targetId: id,
+    scopeKind: kind === "org" || kind === "operator" ? "org" : "workspace",
+    workspaceId: kind === "org" || kind === "operator" ? null : WS,
+    resourceScopeDigest: resourceScopeDigestOf({ kind, id }),
+  });
+  const toolVersionSwitch = (): KillSwitchRow => ({
+    ...classSwitch("unused"),
+    targetKind: "tool_version",
+    targetId: "tvr_set_budget",
+    capabilityId: "set_budget",
+    resourceScopeDigest: null,
+  });
+  const customerSwitches = (): KillSwitchRow[] => [
+    scopeSwitch("org", ORG),
+    scopeSwitch("workspace", WS),
+    scopeSwitch("operator", USER),
+    classSwitch("money.move"),
+    toolVersionSwitch(),
+  ];
+
+  it("passes every switch the customer sets", async () => {
+    const s = store({
+      generation: 1,
+      snapshot: {
+        ...open,
+        switches: customerSwitches(),
+        tags: new Map([["set_budget", ["money.move"]]]),
+      },
+    });
+    const gate = createKillSwitchGate(stella, s.reads, ASSISTANT);
+    expect(
+      await gate.check({ capabilityId: "set_budget", readOnly: false }),
+    ).toBeNull();
+    expect(
+      await gate.check({ capabilityId: "list_runs", readOnly: true }),
+    ).toBeNull();
+  });
+
+  it("stops at the switch on the assistant's own agent", async () => {
+    const s = store({
+      generation: 1,
+      snapshot: {
+        ...open,
+        switches: [...customerSwitches(), scopeSwitch("agent", ASSISTANT.agentId)],
+      },
+    });
+    const gate = createKillSwitchGate(stella, s.reads, ASSISTANT);
+    const hit = await gate.check({ capabilityId: "set_budget", readOnly: false });
+    expect(hit?.targetKind).toBe("agent");
+    expect(hit?.targetId).toBe(ASSISTANT.agentId);
+  });
+
+  it("still stops the same call from any other caller (negative)", async () => {
+    const s = store({
+      generation: 1,
+      snapshot: {
+        ...open,
+        switches: customerSwitches(),
+        tags: new Map([["set_budget", ["money.move"]]]),
+      },
+    });
+    const gate = createKillSwitchGate(ctx, s.reads, ASSISTANT);
+    expect(
+      await gate.check({ capabilityId: "set_budget", readOnly: false }),
+    ).not.toBeNull();
+  });
+
+  it("drops a plain deny the customer's writers leave, and keeps the assistant's own", () => {
+    const deny = (digest: string | null, capabilityId: string | null): ActiveEmergencyDeny => ({
+      publicId: `emd_${digest ?? capabilityId}`,
+      denyKind: capabilityId === null ? "resource_scope" : "capability",
+      capabilityId,
+      resourceScopeDigest: digest,
+      principalId: null,
+      reason: "incident",
+    });
+    const own = deny(resourceScopeDigestOf({ kind: "agent", id: ASSISTANT.agentId }), null);
+    const rows = [
+      deny(resourceScopeDigestOf({ kind: "workspace", id: WS }), null),
+      deny(null, "set_budget"),
+      own,
+    ];
+    expect(assistantOwnSwitches(rows, ASSISTANT.agentId)).toEqual([own]);
+    expect(assistantOwnSwitches(rows, null)).toEqual([]);
   });
 });

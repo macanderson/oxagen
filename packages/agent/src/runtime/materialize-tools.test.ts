@@ -609,6 +609,42 @@ describe("materializeTools", () => {
     expect(call?.inputPreview).toEqual({ y: "1" });
   });
 
+  // ADR-235: a parked row names the turn's run, and the run's in-app surface
+  // keeps it off the workspace's queue. A turn whose run is not open yet
+  // refuses the park instead of writing a row anyone could answer.
+  it("refuses to park a write before the turn's run is open", async () => {
+    mocks.createApprovalRequest.mockClear();
+    vi.mocked(invoke).mockClear();
+    const fixtureGated = [
+      {
+        ...FIXTURE[2],
+        agent: { riskLevel: "high" as const, requiresApproval: true },
+      },
+    ];
+    vi.doMock("@oxagen/oxagen", () => ({
+      listCapabilities: () => fixtureGated,
+      getSurfaces: (c: { surfaces?: readonly string[] }) =>
+        c.surfaces ?? ["api", "mcp"],
+      getCapability: () => undefined,
+    }));
+    vi.resetModules();
+    const { materializeTools: mt } = await import("./materialize-tools");
+    const { tools, nameMap } = await mt(
+      { ...CTX, messageId: "msg_42" },
+      { approvalMode: "park", runIdRef: { current: null } },
+    );
+    const alias = Object.keys(nameMap).find(
+      (a) => nameMap[a] === FIXTURE[2]!.name,
+    )!;
+    await expect(
+      (
+        tools[alias] as unknown as { execute: (i: unknown) => Promise<unknown> }
+      ).execute({ y: 1 }),
+    ).rejects.toMatchObject({ reason: "run_not_open" });
+    expect(mocks.createApprovalRequest).not.toHaveBeenCalled();
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
   it("parks the call under approvalMode park: the request is created, the event fires, nothing waits and the handler never runs", async () => {
     mocks.insertToolInvocation.mockClear();
     mocks.createApprovalRequest.mockClear();
@@ -2725,6 +2761,48 @@ describe("materializeTools — agent RBAC tool filter (spec §3.5)", () => {
     expect(Object.keys(tools)).toEqual([]);
   });
 
+  // Item 3 of Mac's ruling (2026-10-01, ADR-235): the customer's switches
+  // do not reach Oxagen's in-app assistant. Its belt drops every deny but
+  // the one on its own agent, which only Oxagen sets.
+  it.each([
+    ["workspace", { kind: "workspace", id: CTX.workspaceId }],
+    ["org", { kind: "org", id: CTX.orgId }],
+    ["operator", { kind: "operator", id: CTX.userId }],
+    ["class", { kind: "class", id: "moves_money" }],
+  ])("a %s switch leaves the in-app assistant's belt whole", async (_kind, target) => {
+    iamMocks.readActiveEmergencyDenies.mockResolvedValue([
+      scopeSwitch(target),
+      {
+        publicId: "edn_capability",
+        denyKind: "capability",
+        capabilityId: "capA",
+        resourceScopeDigest: null,
+        principalId: null,
+        reason: "incident",
+      },
+    ]);
+    const stellaCtx = {
+      ...CTX,
+      oxagenAssistant: createOxagenAssistantBinding({ requestId: "req_turn" }),
+    };
+    const { tools } = await materializeTools(stellaCtx, {
+      actingAgent: ASSISTANT,
+    });
+    expect(Object.keys(tools).sort()).toEqual(["capA", "capB", "fill_form"]);
+  });
+
+  it("the switch on the assistant's own agent still empties its belt", async () => {
+    iamMocks.readActiveEmergencyDenies.mockResolvedValue([assistantSwitch()]);
+    const stellaCtx = {
+      ...CTX,
+      oxagenAssistant: createOxagenAssistantBinding({ requestId: "req_turn" }),
+    };
+    const { tools } = await materializeTools(stellaCtx, {
+      actingAgent: ASSISTANT,
+    });
+    expect(Object.keys(tools)).toEqual([]);
+  });
+
   it("a switch on another workspace or operator leaves the belt whole (negative)", async () => {
     iamMocks.readActiveEmergencyDenies.mockResolvedValue([
       scopeSwitch({ kind: "workspace", id: "ws_other" }),
@@ -3423,10 +3501,10 @@ describe("materializeTools role rule", () => {
 // has an approval channel, so under park mode the call waits for a person
 // with the rule named, where it used to fail with the rule's error.
 // ADR-235: the workspace's decision rules do not govern Stella, so no rule
-// parks a Stella call. A turn an API key starts keeps the rules, and its
-// calls cannot park, so a rule's answer ends the call as a refusal. Before,
-// a rule that asked for a person parked the call with the rule's digest
-// (#4226).
+// parks a Stella call. If a rule's answer reaches the belt anyway, from a
+// call that carries no binding, it ends the call as a refusal and parks
+// nothing. Before, a rule that asked for a person parked the call with the
+// rule's digest (#4226).
 describe("materializeTools — a call a decision rule sends to a person", () => {
   const RULE_DIGEST = "a".repeat(64);
   /** What the rules gate throws: `DecisionRuleApprovalRequiredError`. */

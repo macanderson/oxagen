@@ -434,22 +434,15 @@ describe("approved call resumption", () => {
     expect(h.row.resumeError).toBe("requester_access_revoked");
     expect(h.invoke).not.toHaveBeenCalled();
   });
-  it.each(["tool", "budget", "kill"])(
+  it.each(["tool", "kill"])(
     "rechecks fresh %s admission",
     async (kind) => {
       if (kind === "tool") h.tools.mockResolvedValue({ nameMap: {} });
-      if (kind === "budget")
-        h.budgets.mockResolvedValue([
-          { budget: { enabled: true }, overLimit: true },
-        ]);
       if (kind === "kill") h.kill.mockResolvedValue({ reason: "workspace" });
       expect(await resumeApprovedCall(ref)).toBe("failed");
       expect(h.invoke).not.toHaveBeenCalled();
     },
   );
-  // The budget read is scoped to the org the call resumes in. It takes the
-  // scope as an argument (#4159), so a read with none would type-fail and,
-  // loosely typed, read no org at all.
   // A resume runs one built-in capability. The listing used to pass an empty
   // server allowlist, which reads as "every server", so each approved resume
   // connected every workspace MCP server and resolved its credential for
@@ -494,9 +487,16 @@ describe("approved call resumption", () => {
       expect(h.open).not.toHaveBeenCalled();
     });
   });
-  it("reads the budgets of the org the call resumes in", async () => {
-    await resumeApprovedCall(ref);
-    expect(h.budgets).toHaveBeenCalledWith({ orgId: ref.orgId });
+  // ADR-235, item 10 of Mac's ruling: no customer-configured budget applies
+  // to the assistant. An org over its own spend ceiling still gets the call
+  // it approved. The kernel's credit and billing gates still judge it.
+  it("resumes the approved call past a customer spend ceiling", async () => {
+    h.budgets.mockResolvedValue([
+      { budget: { enabled: true }, overLimit: true },
+    ]);
+    expect(await resumeApprovedCall(ref)).toBe("succeeded");
+    expect(h.budgets).not.toHaveBeenCalled();
+    expect(h.invoke).toHaveBeenCalledTimes(1);
   });
   // R4: the listing now leaves out a tool a kill switch names, so the tool
   // can be missing because of a switch. The refusal names the switch then,

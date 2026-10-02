@@ -169,6 +169,7 @@ import { assistantReplyGet } from "./assistant.reply.get";
 import { assistantReplyFeedbackRecord } from "./assistant.reply_feedback.record";
 import { assistantTurnCancel } from "./assistant.turn.cancel";
 import { assistantChartRender } from "./assistant.chart.render";
+import { assistantSwitchSet } from "./assistant.switch.set";
 import { toolsSearch } from "./tools.search";
 import { toolsLoad } from "./tools.load";
 import { shellNavCountsGet } from "./shell.nav_counts.get";
@@ -525,6 +526,9 @@ export {
   toolbeltSlugSchema,
 } from "./toolbelt.shared";
 export type { ToolbeltKind, ToolbeltRef } from "./toolbelt.shared";
+// The surfaces an in-app agent turn runs on (ADR-235). Not a capability, so
+// exported here to satisfy the file-coverage guard.
+export { IN_APP_AGENT_SURFACES } from "./run.shared";
 // Who an operator is, shared by the rows that name one (get_spend). Not a
 // capability, so exported here to satisfy the file-coverage guard.
 export { operatorFactsSchema } from "./operator.shared";
@@ -942,6 +946,7 @@ export {
   assistantReplyFeedbackRecord,
   assistantTurnCancel,
   assistantChartRender,
+  assistantSwitchSet,
   toolsSearch,
   toolsLoad,
   shellNavCountsGet,
@@ -1402,6 +1407,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   assistantReplyFeedbackRecord,
   assistantTurnCancel,
   assistantChartRender,
+  assistantSwitchSet,
   toolsSearch,
   toolsLoad,
   shellNavCountsGet,
