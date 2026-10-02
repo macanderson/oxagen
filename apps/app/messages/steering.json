@@ -417,6 +417,8 @@
       "effectTitle": "Constraint effect",
       "tokensTitle": "Tokens this record's line spends in the signed bundle",
       "tokens": "{count} tok",
+      "weeklyPriceTitle": "An estimate of what this record's tokens cost the workspace over the last 7 days. It assumes every model call sent them, priced at the rate in force at each call. Tool providers use the same price.",
+      "weeklyPrice": "<price></price> a week (estimate)",
       "compilesTitle": "Whether this record also compiles to a gate is not recorded yet. Tracked in #{issue}.",
       "compilesNotRecorded": "compilation not recorded",
       "newTitle": "The last merge published this record",

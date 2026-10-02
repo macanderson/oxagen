@@ -10244,6 +10244,8 @@ type Messages = {
       effectTitle: string;
       tokensTitle: string;
       tokens: string;
+      weeklyPriceTitle: string;
+      weeklyPrice: string;
       compilesTitle: string;
       compilesNotRecorded: string;
       newTitle: string;

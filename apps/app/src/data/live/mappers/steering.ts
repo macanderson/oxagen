@@ -46,6 +46,8 @@ export function toRecordPage(
       commit: record.commit,
       path: record.path,
       publishedAt: record.publishedAt,
+      contextTokens: record.contextTokens,
+      weeklyPrice: record.weeklyPrice,
     })),
     total: out.total,
   };

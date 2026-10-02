@@ -1039,6 +1039,41 @@ describe("Records", () => {
     }
   });
 
+  // #4572 item 1: the card showed the record's tokens and no price. The
+  // server prices them at the weekly price the tool providers use, so 5,200
+  // tokens at 48,000 micros per 1,000 read $0.2496 here and on the
+  // providers table (providers.test.tsx).
+  it("prints the weekly price list_records priced, labelled estimate, and none for a record it did not price", async () => {
+    await renderSteering("/records", {
+      records: readOk({
+        records: [
+          publishedRecord({
+            contextTokens: 5_200,
+            weeklyPrice: {
+              micros: "249600",
+              currency: "USD",
+              basis: "estimated",
+            },
+          }),
+          publishedRecord({
+            id: "ctr_unpriced",
+            lineage: "ctx.a.unpriced",
+            contextTokens: 20,
+            weeklyPrice: null,
+          }),
+        ],
+        total: 2,
+      }),
+    });
+    const [priced, unpriced] = within(
+      section("Published records"),
+    ).getAllByRole("article");
+    const price = priced!.querySelector('[data-term="weekly-price"]');
+    expect(price).toHaveTextContent("$0.2496 a week (estimate)");
+    expect(unpriced!.querySelector('[data-term="weekly-price"]')).toBeNull();
+    expect(unpriced).not.toHaveTextContent("a week");
+  });
+
   it("leads a card with the record's label and prints its statement under it (ADR-178)", async () => {
     await renderSteering("/records", {
       records: readOk({
