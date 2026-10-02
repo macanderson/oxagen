@@ -34,6 +34,18 @@ export const REPOS = [
   "stella",
 ];
 
+// Where each of the five lives on GitHub. Owners differ since 2026-10-01:
+// oxagen became `oxageninc/product`, the two CGP repositories moved to
+// `oxageninc`, and stella and arenabench stayed on `macanderson`. The report
+// keeps printing the short names above.
+const FULL_NAMES = {
+  oxagen: "oxageninc/product",
+  "context-graph-protocol": "oxageninc/context-graph-protocol",
+  "cgp-website": "oxageninc/cgp-website",
+  arenabench: "macanderson/arenabench",
+  stella: "macanderson/stella",
+};
+
 /** Raised when the check itself cannot run (exit 2), as opposed to finding a leftover corpus (exit 1). */
 export class CheckUnavailableError extends Error {}
 
@@ -92,7 +104,7 @@ export function buildReport(trees) {
   return { drifted, summary };
 }
 
-async function fetchCorpusTree(owner, repo, token) {
+async function fetchCorpusTree(repo, fullName, token) {
   const headers = {
     authorization: `Bearer ${token}`,
     accept: "application/vnd.github+json",
@@ -100,18 +112,18 @@ async function fetchCorpusTree(owner, repo, token) {
     "user-agent": "scr-corpus-check",
   };
 
-  const repoRes = await fetch(`https://api.github.com/repos/${owner}/${repo}`, {
+  const repoRes = await fetch(`https://api.github.com/repos/${fullName}`, {
     headers,
   });
   if (!repoRes.ok) {
     throw new CheckUnavailableError(
-      `GET /repos/${owner}/${repo} -> ${repoRes.status} ${repoRes.statusText}`,
+      `GET /repos/${fullName} -> ${repoRes.status} ${repoRes.statusText}`,
     );
   }
   const { default_branch: defaultBranch } = await repoRes.json();
 
   const treeRes = await fetch(
-    `https://api.github.com/repos/${owner}/${repo}/git/trees/${defaultBranch}?recursive=1`,
+    `https://api.github.com/repos/${fullName}/git/trees/${defaultBranch}?recursive=1`,
     { headers },
   );
   if (!treeRes.ok) {
@@ -134,13 +146,16 @@ async function main() {
     );
     process.exit(2);
   }
-  const owner = process.env.SCR_OWNER ?? "macanderson";
+  // SCR_OWNER reads all five under one owner instead, for a fork or a test
+  // organization that mirrors them.
+  const owner = process.env.SCR_OWNER;
 
   let result;
   try {
     const trees = [];
     for (const repo of REPOS) {
-      trees.push(await fetchCorpusTree(owner, repo, token));
+      const fullName = owner ? `${owner}/${repo}` : FULL_NAMES[repo];
+      trees.push(await fetchCorpusTree(repo, fullName, token));
     }
     result = buildReport(trees);
   } catch (error) {

@@ -52,7 +52,7 @@ jobs:
       - name: Fetch the SCR tooling
         uses: actions/checkout@v5
         with:
-          repository: macanderson/oxagen
+          repository: oxageninc/product
           ref: ${{ github.repository == 'oxageninc/product' && github.sha || 'main' }}
           path: .scr-tools
           sparse-checkout: tools/scripts

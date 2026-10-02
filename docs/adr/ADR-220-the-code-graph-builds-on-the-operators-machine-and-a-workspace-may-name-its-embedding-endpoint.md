@@ -11,7 +11,7 @@
   (organization model keys), ADR-101 (four harnesses), ADR-187 (the gateways),
   ADR-211 (no HTTP+SSE), and the code graph spec version 1.2
   (`codegraph-spec.html` and `codegraph-build-plan.md` in
-  `macanderson/oxagen-roadmap`, branch `docs/codegraph-local-mcp`).
+  `oxageninc/roadmap`, branch `docs/codegraph-local-mcp`).
 
 ## Context
 
