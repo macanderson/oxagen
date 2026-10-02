@@ -11,6 +11,7 @@ const OUTPUT = {
   touches: { per_item: 2.5, brief_approvals: 4, acceptances: 4, returns: 1, triage_overrides: 0, triage_corrections: 1 },
   cost: { runs: 5, known_runs: 4, total: { micros: "12000000", currency: "USD" } },
   reopens: { cohort: 3, reopened: 1, waiting: 4 },
+  truncated: false,
   weeks: [{ week: "2026-09-28", accepted_merged: 2, returned: 0, median_lead_hours: 5 }],
 };
 

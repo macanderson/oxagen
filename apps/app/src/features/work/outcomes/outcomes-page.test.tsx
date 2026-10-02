@@ -67,6 +67,7 @@ const NOTHING: Partial<WorkOutcomes> = {
   },
   cost: { runs: 0, knownRuns: 0, total: null },
   reopens: { cohort: 0, reopened: 0, waiting: 0 },
+  truncated: false,
   weeks: [],
 };
 

@@ -127,6 +127,29 @@ describe("revise_work_triage records the person, not the role", () => {
     });
     expect(deps.revise).not.toHaveBeenCalled();
   });
+  it("lets an API key's creator correct a field", async () => {
+    const deps = reviseDeps();
+    await createWorkTriageReviseHandler(deps)(input, apiKey);
+    expect(deps.revise).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ actorUserId: KEY_CREATOR }));
+  });
+
+  it("refuses an API key that changes triage's outcome, before it writes", async () => {
+    const deps = reviseDeps();
+    await expect(
+      createWorkTriageReviseHandler(deps)({ item_id: "wi_01", expected_version: 4, reason: "Not ours", outcome: "out_of_scope" }, apiKey),
+    ).rejects.toMatchObject({ code: "forbidden", reason: "person_required" });
+    expect(deps.revise).not.toHaveBeenCalled();
+  });
+
+  it("refuses an agent run, before it writes", async () => {
+    const deps = reviseDeps();
+    const agentRun = { ...person, agentRun: { runId: "arun_01" } } as unknown as CapabilityContext;
+    await expect(createWorkTriageReviseHandler(deps)(input, agentRun)).rejects.toMatchObject({
+      code: "forbidden",
+      reason: "agent_run",
+    });
+    expect(deps.revise).not.toHaveBeenCalled();
+  });
 });
 
 describe("set_work_collector records the person, not the role", () => {

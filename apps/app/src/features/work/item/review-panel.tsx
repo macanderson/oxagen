@@ -43,7 +43,16 @@ const CHECK_TONE: Record<CheckConclusion | "not_reported", BadgeTone> = {
   not_reported: "failed",
 };
 
-function CheckRow({ check, head }: { check: RequiredCheck; head: string | null }) {
+function CheckRow({
+  check,
+  head,
+  required = false,
+}: {
+  check: RequiredCheck;
+  head: string | null;
+  /** The check gates Accept, so a neutral result reads as failing. */
+  required?: boolean;
+}) {
   const t = useTranslations("workItem.review");
   return (
     <li
@@ -51,7 +60,10 @@ function CheckRow({ check, head }: { check: RequiredCheck; head: string | null }
       data-conclusion={check.conclusion}
       className="flex flex-wrap items-baseline gap-2 text-[13px]"
     >
-      <Badge tone={CHECK_TONE[check.conclusion]}>{t(`conclusions.${check.conclusion}`)}</Badge>
+      {/* A required check that ended neutral blocks Accept as a failure does. */}
+      <Badge tone={check.conclusion === "neutral" && required ? "failed" : CHECK_TONE[check.conclusion]}>
+        {t(`conclusions.${check.conclusion}`)}
+      </Badge>
       <span className="font-mono text-[0.92em] text-foreground">{check.name}</span>
       {head === null ? null : (
         <span className="text-muted-foreground">{t("onHead", { head: shortSha(head) })}</span>
@@ -121,8 +133,12 @@ export function ReviewPanel({
   const merged = pr?.merged ?? null;
   const closedUnmerged = pr !== null && merged === null && pr.closedAt !== null;
   const acceptedHere = send.acceptance !== null && send.acceptance.head === head;
+  // Earlier results show only when there are some: a head that moved with no
+  // checks read on the old one is not stale evidence.
   const earlier =
-    send.earlierChecks !== null && send.earlierChecks.head !== head ? send.earlierChecks : null;
+    send.earlierChecks !== null && send.earlierChecks.head !== head && send.earlierChecks.checks.length > 0
+      ? send.earlierChecks
+      : null;
   const staleFrom = send.staleAcceptance?.head ?? earlier?.head ?? null;
   const person = (name: string | null) => name ?? t("aPerson");
   const prUrl = pr === null ? null : parsePullRequestUrl(pr.url);
@@ -195,7 +211,7 @@ export function ReviewPanel({
               ) : (
                 <ul className="flex flex-col gap-1.5">
                   {required.map((check) => (
-                    <CheckRow key={check.name} check={check} head={head} />
+                    <CheckRow key={check.name} check={check} head={head} required />
                   ))}
                 </ul>
               )}

@@ -69,9 +69,15 @@ export function briefOfSend(
   );
 }
 
-/** The newest send. `sends` is newest first. */
-export function latestSend(detail: Pick<ItemData, "sends">): WorkSend | null {
-  return detail.sends[0] ?? null;
+/**
+ * The send the item's state reads: the latest since the last reopen, which
+ * the server names as the item's send. A reopened item's earlier sends stay
+ * in the delivery history and are not this one. `sends` is newest first.
+ */
+export function latestSend(detail: Pick<ItemData, "sends" | "item">): WorkSend | null {
+  const current = detail.item.send;
+  if (current === null) return null;
+  return detail.sends.find((send) => send.id === current.id) ?? null;
 }
 
 /**
@@ -319,7 +325,7 @@ export function canOpenSend(detail: ItemData, targetsRead: boolean): boolean {
 }
 
 /** The send the Review panel reads: the newest, once its run ended or it has a pull request. */
-export function reviewSend(detail: Pick<ItemData, "sends">): WorkSend | null {
+export function reviewSend(detail: Pick<ItemData, "sends" | "item">): WorkSend | null {
   const send = latestSend(detail);
   if (send === null) return null;
   return send.runEndedAt !== null || send.pullRequest !== null ? send : null;

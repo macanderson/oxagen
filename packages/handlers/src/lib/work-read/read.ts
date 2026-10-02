@@ -93,13 +93,19 @@ function rowToFact(row: typeof facts.$inferSelect): WorkFact {
 }
 
 /** Every fact of the items, grouped by item, in one query. */
-async function factsByItem(tx: Tx, scope: WorkScope, itemIds: readonly string[]): Promise<Map<string, WorkFact[]>> {
+async function factsByItem(
+  tx: Tx,
+  scope: WorkScope,
+  itemIds: readonly string[],
+  skipKinds: readonly FactKind[] = [],
+): Promise<Map<string, WorkFact[]>> {
   const out = new Map<string, WorkFact[]>();
   if (itemIds.length === 0) return out;
+  const fence = and(eq(facts.orgId, scope.orgId), eq(facts.workspaceId, scope.workspaceId), inArray(facts.itemId, [...itemIds]));
   const rows = await tx
     .select()
     .from(facts)
-    .where(and(eq(facts.orgId, scope.orgId), eq(facts.workspaceId, scope.workspaceId), inArray(facts.itemId, [...itemIds])))
+    .where(skipKinds.length === 0 ? fence : and(fence, sql`${facts.kind} NOT IN (${sql.join(skipKinds.map((kind) => sql`${kind}`), sql`, `)})`))
     .orderBy(asc(facts.itemId), asc(facts.itemRevision), asc(facts.occurredAt), asc(facts.dedupeKey));
   for (const row of rows) {
     const list = out.get(row.itemId);
@@ -319,7 +325,13 @@ async function lookupsFor(
       : await tx
           .select({ id: schema.mandates.id, publicId: schema.mandates.publicId })
           .from(schema.mandates)
-          .where(and(eq(schema.mandates.orgId, scope.orgId), inArray(schema.mandates.id, mandateIds)));
+          .where(
+            and(
+              eq(schema.mandates.orgId, scope.orgId),
+              eq(schema.mandates.workspaceId, scope.workspaceId),
+              inArray(schema.mandates.id, mandateIds),
+            ),
+          );
   const mandateOf = new Map(mandateRows.map((row) => [row.id, String(row.publicId)]));
 
   const orderRefs = new Map<string, OrderRowRef>();
@@ -690,16 +702,23 @@ export async function readWorkTargets(scope: WorkScope, userId: string | null, n
 // get_work_outcomes
 // ---------------------------------------------------------------------------
 
+/** The most items one outcomes read counts. */
+const OUTCOMES_ITEMS_MAX = 2000;
+
 /**
  * What the workspace's work finished in the last `days` days, counted from
  * the records (outcomes.ts). Reads the items with an acceptance or a merge
  * since the start of the reopen cohort, or a return or close in the window,
- * with all their facts and their triage correction counts. The caller runs
- * inside the tenant scope.
+ * newest first and at most OUTCOMES_ITEMS_MAX of them (`truncated` says when
+ * there were more), with their facts and their triage correction counts. The
+ * check facts are left out: the figures read acceptances, merges, returns,
+ * closes, and reopens, never a check, and a pull request's checks are most of
+ * its facts. The caller runs inside the tenant scope.
  */
 export async function readWorkOutcomes(scope: WorkScope, days: number, now: Date): Promise<WorkOutcomesGetOutput> {
   const windowStart = new Date(now.getTime() - days * DAY_MS);
   const cohortStart = new Date(now.getTime() - (REOPEN_WAIT_DAYS + days) * DAY_MS);
+  let truncated = false;
   const loaded = await withTenantDb(async (tx) => {
     const candidates = await tx
       .selectDistinct({ itemId: facts.itemId })
@@ -715,9 +734,13 @@ export async function readWorkOutcomes(scope: WorkScope, days: number, now: Date
             and(inArray(facts.kind, ["returned", "closed"]), gte(facts.occurredAt, windowStart)),
           ),
         ),
-      );
-    const ids = candidates.map((row) => row.itemId);
-    const factMap = await factsByItem(tx, scope, ids);
+      )
+      // Item ids are UUIDv7, so the newest items sort first.
+      .orderBy(desc(facts.itemId))
+      .limit(OUTCOMES_ITEMS_MAX + 1);
+    const ids = candidates.slice(0, OUTCOMES_ITEMS_MAX).map((row) => row.itemId);
+    truncated = candidates.length > OUTCOMES_ITEMS_MAX;
+    const factMap = await factsByItem(tx, scope, ids, ["checks_required", "check_observed"]);
     const correctionCounts =
       ids.length === 0
         ? []
@@ -745,5 +768,5 @@ export async function readWorkOutcomes(scope: WorkScope, days: number, now: Date
     scope,
     doneInWindow.flatMap((item) => itemRunIds(item.projection)),
   );
-  return computeOutcomes({ now, days, items: loaded, runs });
+  return { ...computeOutcomes({ now, days, items: loaded, runs }), truncated };
 }

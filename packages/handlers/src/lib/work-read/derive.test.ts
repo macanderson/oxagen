@@ -315,6 +315,23 @@ const CASES: Case[] = [
     wait: { kind: "accepted_waiting_merge", by: "Marcus", head: SHA1 },
   },
   {
+    name: "a send a person accepted whose pull request then closed unmerged",
+    facts: [...IN_REVIEW, f.accepted(O1, SHA1, 12), f.prClosed(O1, 13)],
+    status: "in_review",
+    wait: { kind: "pr_closed", at: at(13) },
+  },
+  {
+    name: "a still-running required check listed before one that failed",
+    facts: [
+      ...RUN_WITH_HEAD,
+      f.required(O1, SHA1, ["lint", "test"], 10),
+      f.check(O1, SHA1, "lint", "pending", 11),
+      f.check(O1, SHA1, "test", "failure", 11),
+    ],
+    status: "in_review",
+    wait: { kind: "check_failed", check: "test", conclusion: "failure", head: SHA1 },
+  },
+  {
     name: "a done item",
     facts: [...IN_REVIEW, f.accepted(O1, SHA1, 12), f.merged(O1, SHA1, 15)],
     status: "done",

@@ -95,6 +95,8 @@ export const workOutcomesGet = registerCapability({
           waiting: z.number().int().nonnegative(),
         })
         .strict(),
+      /** More items finished than one read counts. The figures cover the newest of them. */
+      truncated: z.boolean(),
       weeks: z.array(
         z
           .object({

@@ -260,6 +260,7 @@ export function toWorkOutcomes(
       reopened: out.reopens.reopened,
       waiting: out.reopens.waiting,
     },
+    truncated: out.truncated,
     weeks: out.weeks.map((week) => ({
       week: week.week,
       acceptedMerged: week.accepted_merged,

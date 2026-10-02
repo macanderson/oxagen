@@ -122,7 +122,8 @@ interface Accepted {
 }
 
 /** Count what the work finished in the window. Pure. */
-export function computeOutcomes(input: OutcomesInput): WorkOutcomesGetOutput {
+/** The figures from the items read. read.ts adds whether the read stopped at its cap. Pure. */
+export function computeOutcomes(input: OutcomesInput): Omit<WorkOutcomesGetOutput, "truncated"> {
   const end = input.now.getTime();
   const start = end - input.days * DAY_MS;
 

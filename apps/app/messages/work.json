@@ -367,7 +367,8 @@
         "title": "No finished work",
         "body": "Once people accept work here and its pull requests merge, this page counts it.",
         "action": "Open Work setup"
-      }
+      },
+      "truncated": "More work finished than one read counts. These figures cover the newest 2,000 items."
     }
   }
 }

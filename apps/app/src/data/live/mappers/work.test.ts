@@ -302,6 +302,7 @@ describe("toWorkTargetList and toWorkOutcomes", () => {
       touches: { per_item: null, brief_approvals: 0, acceptances: 0, returns: 1, triage_overrides: 0, triage_corrections: 0 },
       cost: { runs: 1, known_runs: 0, total: null },
       reopens: { cohort: 0, reopened: 0, waiting: 0 },
+      truncated: false,
       weeks: [{ week: "2026-09-28", accepted_merged: 0, returned: 1, median_lead_hours: null }],
     });
     const view = WorkOutcomes.parse(toWorkOutcomes(out));

@@ -25,6 +25,7 @@ import {
   kvTerm,
   kvValue,
   linkText,
+  note,
   panel,
   panelBody,
   panelHeader,
@@ -394,6 +395,11 @@ function OutcomesView({
         </StateWrap>
       ) : (
         <>
+          {read.value.truncated ? (
+            <p data-testid="work-outcomes-truncated" className={note}>
+              {t("truncated")}
+            </p>
+          ) : null}
           <Tiles outcomes={read.value} />
           <div className="grid gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
             <WeeklyTrend weeks={read.value.weeks} />

@@ -26,7 +26,7 @@ import { SafeLink } from "@/ui/navigation";
 import { cell, numericCell, Table } from "@/ui/table";
 import { CopyValue } from "./copy-value";
 import { useWhen } from "./phrases";
-import { budgetHeld, type DeliveryWord, deliveryWord, latestSend, sendLive } from "./view";
+import { budgetHeld, type DeliveryWord, deliveryWord, sendLive } from "./view";
 
 const DELIVERY_TONE: Record<DeliveryWord, BadgeTone> = {
   waiting_for_claim: "quiet",
@@ -115,7 +115,9 @@ function SendRow({ send, at }: { send: WorkSend; at: At }) {
 
 export function DeliveryPanel({ detail, at }: { detail: WorkItemDetail; at: At }) {
   const t = useTranslations("workItem.delivery");
-  const send = latestSend(detail);
+  // The delivery history keeps every send, a reopened item's earlier ones
+  // too, so the panel reads the newest send of all, not only this cycle's.
+  const send = detail.sends[0] ?? null;
   return (
     <section
       aria-labelledby="work-delivery-heading"

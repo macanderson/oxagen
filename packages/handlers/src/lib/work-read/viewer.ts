@@ -7,10 +7,13 @@
 // Each flag asks assertOrgRole for the roles the action takes
 // (workActionRoles in @oxagen/work/records), as the acting user.
 //
-// Every one of those actions refuses an API key and an agent run
-// (lib/work-records/actor.ts), so both flags are false for those callers
-// without a role read. The flags decide nothing: each action checks again on
-// the server.
+// The Work pages are read by a signed-in person. A read made with an API key
+// or from an agent run answers both flags false without a role read: the
+// work order actions refuse those callers (lib/work-records/actor.ts), and so
+// does a change to triage's outcome (work.triage.revise.ts). Entering an item,
+// a triage field correction, and a collector change accept an API key's
+// creator on the MCP surface, as P1-03 built them, but the page never acts
+// that way. The flags decide nothing: each action checks again on the server.
 import type { CapabilityContext } from "@oxagen/oxagen";
 import { isHandlerError } from "@oxagen/oxagen/handler-error";
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";

@@ -219,8 +219,45 @@ export function historyEntry(overrides: Partial<WorkHistoryEntry> = {}): WorkHis
   };
 }
 
-/** A ready item: brief revision 1 approved for item revision 1, not sent yet. */
+/** A send as the item's own row names it: the summary list_work_items gives. */
+function summaryOf(send: WorkSend): NonNullable<Item["send"]> {
+  return {
+    id: send.id,
+    send: send.send,
+    key: send.key,
+    delivery: send.delivery,
+    noAnswer: send.noAnswer,
+    agent: send.agent,
+    runtime: send.runtime,
+    requestedAt: send.requestedAt,
+    pullRequest:
+      send.pullRequest === null
+        ? null
+        : {
+            repository: send.pullRequest.repository,
+            number: send.pullRequest.number,
+            url: send.pullRequest.url,
+            head: send.pullRequest.head,
+          },
+    checks: send.checksWord,
+    gate: send.gate,
+    accepted: send.acceptance !== null,
+  };
+}
+
+/**
+ * A ready item: brief revision 1 approved for item revision 1, not sent yet.
+ * When the overrides give sends and leave the item's own send unset, the item
+ * names its newest send as the server does for the current cycle.
+ */
 export function workItemDetail(overrides: Partial<WorkItemDetail> = {}): WorkItemDetail {
+  const built = workItemDetailOf(overrides);
+  const newest = built.sends[0];
+  if (built.item.send !== null || newest === undefined) return built;
+  return { ...built, item: { ...built.item, send: summaryOf(newest) } };
+}
+
+function workItemDetailOf(overrides: Partial<WorkItemDetail>): WorkItemDetail {
   return {
     item: workItem(),
     triage: workTriage(),

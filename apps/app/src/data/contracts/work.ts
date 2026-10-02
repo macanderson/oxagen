@@ -599,6 +599,8 @@ export const WorkOutcomes = z.object({
   }),
   cost: CostCoverage,
   reopens: z.object({ cohort: Count, reopened: Count, waiting: Count }),
+  /** More items finished than one read counts. The figures cover the newest of them. */
+  truncated: z.boolean(),
   weeks: z.array(
     z.object({
       week: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),

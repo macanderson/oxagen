@@ -209,7 +209,9 @@ export function statusOf(projection: WorkItemProjection, noAnswer: boolean): Wor
     case "running":
       return active?.delivery === "stopping" ? "stopping" : "running";
     case "review":
-      return active?.acceptance ? "accepted" : "in_review";
+      // An accepted send whose pull request then closed unmerged is back in
+      // review: the acceptance stands on its head, but nothing will merge.
+      return active?.acceptance && !active.prClosed ? "accepted" : "in_review";
   }
 }
 
@@ -343,9 +345,11 @@ function lastAt(orderFacts: readonly WorkFact[], kind: FactKind): string | null 
 }
 
 /**
- * What a send in review waits for. An acceptance on the head and a merge are
- * read first, then the pull request, its head, and an acceptance a newer head
- * voided, and last the review gate on the required checks.
+ * What a send in review waits for. A pull request closed without merging is
+ * read first, because nothing after it can make the item done, even an
+ * acceptance already on its head. Then an acceptance on the head and a merge,
+ * the pull request and its head, an acceptance a newer head voided, and last
+ * the review gate on the required checks.
  */
 function reviewWaitOf(
   projection: WorkItemProjection,
@@ -353,11 +357,11 @@ function reviewWaitOf(
   orderFacts: readonly WorkFact[],
   lookups: Pick<Lookups, "names">,
 ): WorkWaitOutput {
+  if (order.prClosed) return { kind: "pr_closed", at: lastAt(orderFacts, "pr_closed") };
   if (order.acceptance !== null && order.merge === null) {
     return { kind: "accepted_waiting_merge", by: nameOf(lookups, order.acceptance.actor), head: order.acceptance.headSha };
   }
   if (order.merge !== null && order.acceptance === null) return { kind: "merged_before_review", at: order.merge.at };
-  if (order.prClosed) return { kind: "pr_closed", at: lastAt(orderFacts, "pr_closed") };
   if (order.pullRequest === null) return { kind: "no_pull_request" };
   const head = order.head;
   if (head === null) return { kind: "no_head" };
@@ -377,12 +381,14 @@ function reviewWaitOf(
     case "check_missing":
       return { kind: "check_missing", check: gate.detail ?? "", head };
     case "check_failed": {
-      // The gate stops at the first required check that has not passed, in
-      // the order the base branch lists them. Find the same one.
-      const failing = (order.requiredChecks ?? [])
+      // Name a required check that finished without passing before one still
+      // running, so the line agrees with the checks word, which ranks a
+      // failure above a check that is running.
+      const required = (order.requiredChecks ?? [])
         .map((name) => order.checks.find((check) => check.name === name))
-        .find((check) => check !== undefined && check.conclusion !== "success");
-      if (failing === undefined || failing.conclusion === "pending") return { kind: "checks_running", head };
+        .filter((check) => check !== undefined && check.conclusion !== "success");
+      const failing = required.find((check) => check?.conclusion !== "pending");
+      if (failing === undefined) return { kind: "checks_running", head };
       return { kind: "check_failed", check: failing.name, conclusion: failing.conclusion, head };
     }
     case "pr_closed":

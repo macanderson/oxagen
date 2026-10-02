@@ -218,6 +218,9 @@
         ],
         "additionalProperties": false
       },
+      "truncated": {
+        "type": "boolean"
+      },
       "weeks": {
         "type": "array",
         "items": {
@@ -266,6 +269,7 @@
       "touches",
       "cost",
       "reopens",
+      "truncated",
       "weeks"
     ],
     "additionalProperties": false

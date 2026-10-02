@@ -475,6 +475,19 @@ describe("WorkItemPage › states", () => {
   });
 });
 
+describe("WorkItemPage › a reopened item", () => {
+  it("draws no review from the cycle before the reopen", async () => {
+    // A done item reopened: its finished send stays in the delivery history,
+    // and the item names no send of its own until the next one goes out.
+    const done = doneItem();
+    const draft = draftBriefItem();
+    await renderDetail({ ...draft, sends: done.sends, item: { ...draft.item, send: null } });
+    expect(screen.queryByTestId("work-panel-review")).toBeNull();
+    expect(screen.queryByTestId("work-action-accept")).toBeNull();
+    expect(statusWord()).toBe("brief_to_approve");
+  });
+});
+
 describe("WorkItemPage › a viewer whose roles read work", () => {
   it("disables every action with its reason and shows one note", async () => {
     await renderDetail(viewerOnlyItem());

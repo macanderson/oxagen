@@ -49,6 +49,26 @@ export function triageViewOutput(view: TriageView): WorkTriageReviseOutput["tria
 export function createWorkTriageReviseHandler(deps: WorkTriageReviseDeps): CapabilityHandler<typeof workTriageRevise> {
   return async (input, ctx): Promise<WorkTriageReviseOutput> => {
     await assertContractRole(workTriageRevise, ctx);
+    // An agent run never decides its own work. Overriding triage's outcome is
+    // a person's decision fact (triage_overridden, ADR-244), and an API key
+    // could be read by an agent on its operator's machine (ADR-251), so the
+    // outcome needs a signed-in person. A field correction (priority,
+    // estimate, labels, paths, criteria) stays open to the key's creator on
+    // the MCP surface, as P1-03 built it.
+    if (ctx.agentRun) {
+      throw new HandlerError({
+        code: "forbidden",
+        reason: "agent_run",
+        message: "An agent run cannot correct triage. A person corrects it in Oxagen.",
+      });
+    }
+    if (input.outcome !== undefined && (ctx.apiKeyId || !ctx.userId)) {
+      throw new HandlerError({
+        code: "forbidden",
+        reason: "person_required",
+        message: "Sign in to Oxagen to change triage's outcome. An API key can correct fields but cannot decide the outcome.",
+      });
+    }
     // assertContractRole answers the role that passed, not who acted. The
     // actor is the person the call acts as, which the record stores as a
     // user id.

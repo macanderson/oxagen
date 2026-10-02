@@ -12880,6 +12880,7 @@ type Messages = {
         body: string;
         action: string;
       };
+      truncated: string;
     };
   };
   workItem: {
