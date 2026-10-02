@@ -5395,6 +5395,7 @@
         "postgres:work.item_links",
         "postgres:work.items",
         "postgres:work.orders",
+        "postgres:work.send_backs",
         "postgres:work.training_exports",
         "postgres:work.triage_corrections",
         "postgres:work.triage_decisions"
@@ -28359,6 +28360,59 @@
       "domain": "work",
       "id": "postgres:work.orders",
       "name": "orders",
+      "rls": "standard",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "created_by_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "order_id",
+          "nullable": false,
+          "primaryKey": false,
+          "references": "postgres:work.orders",
+          "type": "uuid"
+        },
+        {
+          "name": "last_run_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        }
+      ],
+      "domain": "work",
+      "id": "postgres:work.send_backs",
+      "name": "send_backs",
       "rls": "standard",
       "store": "postgres",
       "tenantScoped": true
