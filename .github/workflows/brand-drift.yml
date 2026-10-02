@@ -11,9 +11,9 @@
 # The check also runs the literal guard (tools/scripts/lib/brand-literals.mjs):
 # each stylesheet it lists takes its corners, shadows, font sizes, and page wrap
 # from the kit's tokens, so a theme change in the kit reaches every site with no
-# hand edit (oxageninc/brand#63). A literal is reported under the stylesheet's
-# path, so the pull request rule below fails only the pull request that touches
-# that stylesheet.
+# hand edit (oxageninc/brand#63). It reads the classes in the docs chrome's
+# markup the same way. A literal is reported under its file's path, so the pull
+# request rule below fails only the pull request that touches that file.
 #
 # The main ruleset requires this job, `Brand drift`, on every pull request
 # (Mac, 2026-10-02, #5131). So the workflow takes no `paths` filter and the job

@@ -162,13 +162,17 @@ function requestOf(options: BackfillCommandOptions): BackfillRequest {
 
 const number = (value: number): string => value.toLocaleString("en-US");
 
-function sum(values: Record<string, number>): number {
-  return Object.values(values).reduce((total, value) => total + value, 0);
+function sum(values: Record<string, number> | undefined): number {
+  return Object.values(values ?? {}).reduce((total, value) => total + value, 0);
 }
 
-function progressLine(report: BackfillReport): string {
+/**
+ * A progress line from the daemon. The daemon can be a different build from
+ * this CLI, so a count it does not send reads as zero rather than throwing.
+ */
+function progressLine(report: Partial<BackfillReport>): string {
   const sessions = sum(report.sessions);
-  return `Progress: ${number(sessions)} sessions read, ${number(report.sessions.backfilled)} backfilled, ${number(sum(report.frames))} frames`;
+  return `Progress: ${number(sessions)} sessions read, ${number(report.sessions?.backfilled ?? 0)} backfilled, ${number(sum(report.frames))} frames`;
 }
 
 /** The report as the lines a person reads. Counts only. */

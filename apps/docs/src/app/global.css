@@ -106,19 +106,90 @@
   line-height: var(--ox-a-h4-leading);
 }
 
-/* The description under the title. The app scale has no 18px step, so the
-   description takes h4, the first step above the body. */
-#nd-page > p {
-  font-size: var(--ox-a-h4);
-  line-height: var(--ox-a-h4-leading);
-}
-
 /* The sidebar, the phone drawer, and the table of contents title. Fumadocs
    sets the drawer at 15px, a size the scale does not have. The sidebar's own
    items set no size, so they follow their aside. */
 #nd-sidebar,
 #nd-sidebar-mobile,
 #toc-title {
+  font-size: var(--ox-a-body);
+  line-height: var(--ox-a-body-leading);
+}
+
+/* Fumadocs sizes the rest of its docs chrome with Tailwind's text-xs,
+   text-sm, and text-lg, which read --text-xs, --text-sm, and --text-lg at a
+   fixed 12px, 14px, and 18px. Inside the chrome they read the app scale's
+   micro, body, and h4 steps instead, each with its line height. That covers
+   the breadcrumb, callouts, the previous and next links, the page actions,
+   and the search dialog, and any entry a Fumadocs upgrade adds with one of
+   these sizes.
+
+   The app scale has no 18px step. text-lg sets two things: the description
+   under the title, and the search field. h4 keeps the description reading
+   as a lead above the 14px body. It also keeps the search field at 16px, the
+   size under which a phone's browser zooms the page when the field takes
+   focus.
+
+   The hooks are Fumadocs' stable ids: #nd-page is the article, and the
+   sidebar, drawer, and table of contents keep the ids its own themes style.
+   The search dialog renders outside the layout, so it is found by its role. */
+:is(#nd-sidebar, #nd-sidebar-mobile, #nd-toc, [data-toc-popover], #nd-page, [role="dialog"]) {
+  --text-xs: var(--ox-a-micro);
+  --text-xs--line-height: var(--ox-a-micro-leading);
+  --text-sm: var(--ox-a-body);
+  --text-sm--line-height: var(--ox-a-body-leading);
+  --text-lg: var(--ox-a-h4);
+  --text-lg--line-height: var(--ox-a-h4-leading);
+}
+
+/* Inline code sizes to the line it sits in, so code in a heading, a table,
+   a callout, or a table of contents entry keeps the same share of its text.
+   Fumadocs fixes it at 13px with a 5px corner. The corner takes the kit's
+   small step, the nearest one to 5px. Code inside a code block, and anything
+   Fumadocs marks not-prose, is left alone. */
+.prose :where(code):not(:where(pre *, .not-prose *)) {
+  font-size: 0.9em;
+  border-radius: var(--ox-radius-sm);
+}
+
+/* ───────────────────────────────────────────────────────────────────────────
+ * Docs corners and shadows: the kit's theme tokens.
+ *
+ * Fumadocs draws its corners and shadows with Tailwind's rounded-* and
+ * shadow-* classes. @oxagen/ui maps those for the app: rounded-xl is the
+ * kit's xl step (10.08px), and every shadow step is the control hairline
+ * (--ui-shadow). On the docs, a card, a callout, a code block, and the search
+ * dialog take the website card corner (--ox-radius, 12px). A card or panel at
+ * rest takes no shadow, and a floating surface takes the pop shadow
+ * (--ui-shadow-pop, the kit's --ox-shadow-pop on ink and its -ink twin on
+ * paper). Fumadocs' controls keep their rounded-lg and rounded-md steps.
+ *
+ * Callouts and the previous and next links carry a class this app sets:
+ * ox-callout in src/mdx-components.tsx and ox-page-nav in the page route.
+ * ─────────────────────────────────────────────────────────────────────────── */
+.ox-callout,
+figure.shiki {
+  border-radius: var(--ox-radius);
+  box-shadow: none;
+}
+
+.ox-page-nav a {
+  border-radius: var(--ox-radius);
+}
+
+[role="dialog"] {
+  border-radius: var(--ox-radius);
+  box-shadow: var(--ui-shadow-pop);
+}
+
+#nd-sidebar-mobile {
+  box-shadow: var(--ui-shadow-pop);
+}
+
+/* Code reads the app body step. Fumadocs sets the code at a fixed 13px
+   (text-[0.8125rem] on the scroll area), halfway between the micro and body
+   steps, and the body step matches the prose around it. */
+figure.shiki pre {
   font-size: var(--ox-a-body);
   line-height: var(--ox-a-body-leading);
 }

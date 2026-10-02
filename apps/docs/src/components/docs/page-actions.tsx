@@ -27,8 +27,12 @@ type CopyState = "idle" | "copied" | "error";
  *   (sidebar / subnav / TOC / this menu) so only the article prints.
  * - Open llms.txt — the site-wide LLM index.
  *
- * Styling uses Fumadocs' own `fd-*` design tokens so it matches the theme in
- * light and dark without any new dependency.
+ * Colors use Fumadocs' own `fd-*` design tokens so they match the theme in
+ * light and dark without any new dependency. Type, corners, and shadows read
+ * the kit's tokens: `text-a-body` for the text, `rounded-card` and
+ * `shadow-pop` for the menu, which floats over the page. The brand check
+ * reads this file's classes (GUARDED_MARKUP in
+ * tools/scripts/lib/brand-literals.mjs).
  */
 export function PageActions({ markdownUrl, fileStem }: PageActionsProps) {
   const [open, setOpen] = useState(false);
@@ -100,7 +104,7 @@ export function PageActions({ markdownUrl, fileStem }: PageActionsProps) {
   }
 
   const itemClass =
-    "flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-sm text-fd-popover-foreground transition-colors hover:bg-fd-accent hover:text-fd-accent-foreground focus-visible:bg-fd-accent focus-visible:outline-none";
+    "flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-a-body text-fd-popover-foreground transition-colors hover:bg-fd-accent hover:text-fd-accent-foreground focus-visible:bg-fd-accent focus-visible:outline-none";
 
   return (
     <div
@@ -113,7 +117,7 @@ export function PageActions({ markdownUrl, fileStem }: PageActionsProps) {
         onClick={() => setOpen((v) => !v)}
         aria-haspopup="menu"
         aria-expanded={open}
-        className="inline-flex items-center gap-1.5 rounded-lg border border-fd-border bg-fd-card px-2.5 py-1.5 text-sm font-medium text-fd-muted-foreground transition-colors hover:bg-fd-accent hover:text-fd-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring"
+        className="inline-flex items-center gap-1.5 rounded-lg border border-fd-border bg-fd-card px-2.5 py-1.5 text-a-body font-medium text-fd-muted-foreground transition-colors hover:bg-fd-accent hover:text-fd-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring"
       >
         {copyState === "copied" ? (
           <>
@@ -132,7 +136,7 @@ export function PageActions({ markdownUrl, fileStem }: PageActionsProps) {
       {open ? (
         <div
           role="menu"
-          className="absolute end-0 z-40 mt-1.5 w-56 origin-top-end rounded-lg border border-fd-border bg-fd-popover p-1 shadow-lg"
+          className="absolute end-0 z-40 mt-1.5 w-56 origin-top-end rounded-card border border-fd-border bg-fd-popover p-1 shadow-pop"
         >
           <button
             type="button"
