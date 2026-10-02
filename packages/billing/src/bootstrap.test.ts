@@ -11,7 +11,7 @@
  * reset between tests. vi.resetModules() is called in beforeEach to ensure
  * the module cache is cleared and the mock factories run again.
  */
-import { describe, it, expect, vi, beforeAll, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // Each test imports ./bootstrap fresh. On a busy CI runner with coverage on,
 // that import can pass the 5-second default. The timed-out import then
@@ -112,16 +112,6 @@ vi.mock("./logger", () => ({
 }));
 
 describe("bootstrapBillingRuntime", () => {
-  // The first import transforms `./bootstrap` and the real modules it still
-  // pulls in, such as `./gau-ledger`. On a loaded CI runner that took longer
-  // than the 5 s test timeout, so the first test timed out, its import then
-  // finished during the second test, and the second test counted two calls.
-  // Warm the transform cache once, with room to spare, so each test's own
-  // import after `vi.resetModules()` is quick.
-  beforeAll(async () => {
-    await import("./bootstrap");
-  }, 60_000);
-
   beforeEach(() => {
     vi.resetModules();
   });
