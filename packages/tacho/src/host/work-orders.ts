@@ -4,7 +4,8 @@
  * The control plane sends a work order to the agent's host as a `work_order`
  * command. The daemon keeps each one here, one file per order, until the
  * person at the machine runs `oxagen work start <wo>`. That command claims
- * the order and removes its file. Nothing here starts a run.
+ * the order and removes its file once the agent's harness has started. A
+ * start that fails before then leaves the file. Nothing here starts a run.
  *
  * Each file is `<agent dir>/work-orders/<wo>.json`, written atomically at
  * mode 0600. A file that does not read as an order is skipped, because the

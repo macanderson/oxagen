@@ -8,11 +8,17 @@
  *
  * `start` claims the order before anything runs. The claim is the handshake:
  * it binds the order to this host and answers with the run's first prompt.
- * When the server refuses the claim, nothing starts. When the claim holds,
- * the agent's harness starts in the current directory with that prompt and
- * with `OXAGEN_WORK_ORDER_ID` in its environment. The hook process inherits
- * the variable, and the daemon names the order on the session's
- * `agent_start`, which is how ingest links the run to the order.
+ * Every refusal means do not start: the order ended, it went to another
+ * host, or a run already started for it. `start` prints the server's
+ * message, starts nothing, exits non-zero, and never claims again on its
+ * own. When the claim holds, the agent's harness starts in the current
+ * directory with that prompt and with `OXAGEN_WORK_ORDER_ID` in its
+ * environment. The hook process inherits the variable, and the daemon names
+ * the order on the session's `agent_start`, which is how ingest links the
+ * run to the order.
+ *
+ * The order keeps waiting in `oxagen work list` until the harness has
+ * started. Any failure before that leaves it there.
  *
  * A harness this host does not wrap, or one whose command is not installed,
  * cannot start the order. `start` refuses it on the server with the reason,
@@ -30,7 +36,6 @@ import {
 import type { HostFile } from "../host/host-file";
 import { homeOf } from "../host/paths";
 import {
-  keepWorkOrder,
   listWorkOrders,
   type PendingWorkOrder,
   readWorkOrder,
@@ -116,16 +121,14 @@ function promptArgs(harness: WrappedHarness, prompt: string): string[] {
 function claimingAgent(
   agents: readonly (Agent & { host: HostFile })[],
   id: string,
-): { agent: Agent & { host: HostFile }; pending?: PendingWorkOrder } | undefined {
-  for (const agent of agents) {
-    const pending = readWorkOrder(agent.paths, id);
-    if (pending !== undefined) return { agent, pending };
-  }
+): (Agent & { host: HostFile }) | undefined {
+  for (const agent of agents)
+    if (readWorkOrder(agent.paths, id) !== undefined) return agent;
   // The daemon may not have polled yet. One live agent is the only host
   // here that could hold the order, and a claim from the wrong host is
   // refused without recording anything.
   const [only] = agents;
-  return only !== undefined && agents.length === 1 ? { agent: only } : undefined;
+  return only !== undefined && agents.length === 1 ? only : undefined;
 }
 
 function defaultClient(deps: WorkCommandDeps) {
@@ -139,11 +142,6 @@ function defaultClient(deps: WorkCommandDeps) {
     });
 }
 
-/** A client error about the order itself, not about the request's timing. */
-function refusesTheOrder(status: number): boolean {
-  return status >= 400 && status < 500 && status !== 408 && status !== 429;
-}
-
 /** What went wrong, for the person at the machine. */
 function messageOf(error: unknown): string {
   if (error instanceof ControlError) return controlErrorMessage(error);
@@ -153,7 +151,7 @@ function messageOf(error: unknown): string {
 /**
  * Tell the control plane this host cannot start the order. A failure here
  * is reported and does not change the exit code: the order stays claimed,
- * and the person can refuse it from the app.
+ * and a person can withdraw it in the app.
  */
 async function refuse(
   client: WorkOrderClient,
@@ -190,31 +188,27 @@ export async function workStart(
     deps.err(NOT_ENROLLED);
     return 1;
   }
-  const found = claimingAgent(agents, id);
-  if (found === undefined) {
+  const agent = claimingAgent(agents, id);
+  if (agent === undefined) {
     deps.err(
       `Work order ${id} is not waiting on this machine. Run \`oxagen work list\` to see the ones that are.`,
     );
     return 1;
   }
-  const { agent, pending } = found;
   const client = (deps.workOrderClient ?? defaultClient(deps))(agent.host);
 
   let claim: WorkOrderClaimResponse;
   try {
     claim = await client.claimWorkOrder(id);
   } catch (error) {
-    if (error instanceof ControlError) {
+    // Every refusal means do not start, and the message says why: the send
+    // ended, the order went to another host (403), or a run already started
+    // for it. The person decides what to do next, so nothing claims again.
+    if (error instanceof ControlError)
       deps.err(
         `Oxagen refused the claim on ${id}, so nothing started. ${controlErrorMessage(error)}`,
       );
-      // A refusal is the server's answer about this order: the send ended,
-      // or it went to another host. Nothing tells a host when a send it
-      // keeps is withdrawn, so this is where a stale order stops waiting.
-      // A rate limit or a timeout says nothing about the order, and the
-      // order keeps waiting.
-      if (refusesTheOrder(error.status)) removeWorkOrder(agent.paths, id);
-    } else if (error instanceof ControlUnreachable)
+    else if (error instanceof ControlUnreachable)
       deps.err(
         `Could not reach Oxagen to claim ${id}, so nothing started. Run this command again once this machine is online. (${error.message})`,
       );
@@ -224,10 +218,6 @@ export async function workStart(
       );
     return 1;
   }
-  // The claim holds. Only the first run that starts for it is linked to it,
-  // so the order no longer waits here.
-  removeWorkOrder(agent.paths, id);
-
   const harness = claim.work_order.harness;
   if (!isWrappedHarness(harness) || !agent.host.harnesses.includes(harness)) {
     const labels: Readonly<Record<string, string | undefined>> =
@@ -251,27 +241,44 @@ export async function workStart(
   deps.err(
     `Claimed ${id} for ${claim.work_order.item_number} in ${claim.work_order.repository}. Starting ${label} in ${deps.cwd}.`,
   );
+  // The order stops waiting once the harness has started, and not before:
+  // a start that fails leaves it in `oxagen work list`.
+  const started = () => {
+    try {
+      removeWorkOrder(agent.paths, id);
+    } catch {
+      // The harness runs either way. An entry left behind stays listed, and
+      // the server refuses a second start once the run links.
+    }
+  };
   const exit = await (deps.spawnAgent ?? spawnAgent)(
     binary,
     promptArgs(harness, claim.prompt),
-    { env: { ...deps.env, [WORK_ORDER_ENV]: id }, cwd: deps.cwd },
+    {
+      env: { ...deps.env, [WORK_ORDER_ENV]: id },
+      cwd: deps.cwd,
+      onSpawn: started,
+    },
   );
-  if (exit.error !== undefined) {
-    if ((exit.error as NodeJS.ErrnoException).code === "ENOENT") {
-      await refuse(
-        client,
-        id,
-        `The ${binary} command is not installed on this machine.`,
-        deps,
-      );
-      return 1;
-    }
-    // Something else stopped the start. The claim stands and repeats, so the
-    // person can try again once the cause is fixed.
-    if (pending !== undefined) keepWorkOrder(agent.paths, pending);
-    deps.err(
-      `Could not start ${binary}: ${exit.error.message}. The claim on ${id} stands. Fix the cause, then run \`oxagen work start ${id}\` again.`,
-    );
+  if (exit.error === undefined) {
+    // A process that exited without an error started, whether or not the
+    // spawn reported it first.
+    started();
+    return exitCodeOf(exit);
   }
+  if ((exit.error as NodeJS.ErrnoException).code === "ENOENT") {
+    await refuse(
+      client,
+      id,
+      `The ${binary} command is not installed on this machine.`,
+      deps,
+    );
+    return 1;
+  }
+  // Something else stopped the start. The claim stands and repeats until a
+  // run links, so the person can try again once the cause is fixed.
+  deps.err(
+    `Could not start ${binary}: ${exit.error.message}. The claim on ${id} stands. Fix the cause, then run \`oxagen work start ${id}\` again.`,
+  );
   return exitCodeOf(exit);
 }

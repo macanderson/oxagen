@@ -58,6 +58,13 @@ export interface AgentExit {
   error?: Error;
 }
 
+export interface SpawnAgentOptions {
+  env: Record<string, string | undefined>;
+  cwd: string;
+  /** Called once the process has started, before it exits. */
+  onSpawn?: () => void;
+}
+
 export interface AgentRunDeps
   extends ContainedRunDeps,
     Pick<CliDeps, "runtime"> {
@@ -70,7 +77,7 @@ export interface AgentRunDeps
   spawnAgent?: (
     command: string,
     args: string[],
-    options: { env: Record<string, string | undefined>; cwd: string },
+    options: SpawnAgentOptions,
   ) => Promise<AgentExit>;
   /** The contained launcher; `runContained` unless a test passes one. */
   contained?: typeof runContained;
@@ -147,7 +154,7 @@ export function exitCodeOf(exit: AgentExit): number {
 export function spawnAgent(
   command: string,
   args: string[],
-  options: { env: Record<string, string | undefined>; cwd: string },
+  options: SpawnAgentOptions,
 ): Promise<AgentExit> {
   const invocation = spawnInvocation(
     command,
@@ -175,6 +182,7 @@ export function spawnAgent(
       process.off("SIGHUP", forward);
       resolve(exit);
     };
+    if (options.onSpawn !== undefined) child.once("spawn", options.onSpawn);
     child.once("error", (error) => done({ code: null, signal: null, error }));
     child.once("exit", (code, signal) => done({ code, signal }));
   });

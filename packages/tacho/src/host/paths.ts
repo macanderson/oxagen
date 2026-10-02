@@ -138,7 +138,7 @@ export interface TachoPaths extends TachoHome {
    * The work orders the control plane sent this agent and no one has
    * started yet, one JSON file each (0600; `host/work-orders.ts`).
    * `oxagen work list` reads them and `oxagen work start` removes one once
-   * its claim succeeds.
+   * the agent's harness has started.
    */
   workOrders: string;
 }

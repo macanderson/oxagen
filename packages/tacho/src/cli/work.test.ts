@@ -70,6 +70,8 @@ function machine(
     env: Record<string, string | undefined>;
     cwd: string;
   }> = [];
+  /** Whether the order still waited while each harness ran. */
+  const waitingWhileRunning: boolean[] = [];
   let claim: () => Promise<WorkOrderClaimResponse> = async () =>
     claimFor("claude-code");
   let exit: AgentExit = { code: 0, signal: null };
@@ -84,6 +86,11 @@ function machine(
     cwd: "/work/platform",
     spawnAgent: async (command, args, opts) => {
       spawned.push({ command, args, env: opts.env, cwd: opts.cwd });
+      // A process that starts reports it before it exits.
+      if (exit.error === undefined) {
+        opts.onSpawn?.();
+        waitingWhileRunning.push(readWorkOrder(paths, WO) !== undefined);
+      }
       return exit;
     },
     workOrderClient: () => ({
@@ -105,6 +112,7 @@ function machine(
     claims,
     rejects,
     spawned,
+    waitingWhileRunning,
     answer: (next: () => Promise<WorkOrderClaimResponse>) => {
       claim = next;
     },
@@ -163,7 +171,8 @@ describe("oxagen work start", () => {
       },
     ]);
     expect(m.rejects).toEqual([]);
-    // The claim holds, so the order no longer waits here.
+    // The harness started, so the order stopped waiting before it exited.
+    expect(m.waitingWhileRunning).toEqual([false]);
     expect(readWorkOrder(m.paths, WO)).toBeUndefined();
     expect(m.errors.at(-1)).toBe(
       `Claimed ${WO} for acme/platform#612 in acme/platform. Starting Claude Code in /work/platform.`,
@@ -203,40 +212,47 @@ describe("oxagen work start", () => {
     );
   });
 
-  it("prints the server's refusal, starts nothing, and drops the order (negative)", async () => {
-    const m = machine();
-    m.keep();
-    m.answer(async () => {
-      throw new ControlError(
-        409,
-        JSON.stringify({
-          error: {
-            code: "conflict",
-            message:
-              "This send was withdrawn. Ask the person who sent it to send it again.",
-          },
-        }),
-      );
-    });
-    expect(await workStart(WO, m.deps)).toBe(1);
-    expect(m.spawned).toEqual([]);
-    expect(m.rejects).toEqual([]);
-    expect(m.errors).toEqual([
-      `Oxagen refused the claim on ${WO}, so nothing started. This send was withdrawn. Ask the person who sent it to send it again.`,
-    ]);
-    expect(listWorkOrders(m.paths)).toEqual([]);
-  });
-
-  it("keeps the order when the server is busy (negative)", async () => {
-    const m = machine();
-    m.keep();
-    m.answer(async () => {
-      throw new ControlError(429, "{}");
-    });
-    expect(await workStart(WO, m.deps)).toBe(1);
-    expect(m.spawned).toEqual([]);
-    expect(readWorkOrder(m.paths, WO)).toBeDefined();
-  });
+  it.each([
+    [
+      "a withdrawn send",
+      409,
+      "conflict",
+      "This send was withdrawn. Ask the person who sent it to send it again.",
+    ],
+    [
+      "a run that already started",
+      409,
+      "not_allowed",
+      "Run tse_01j9 already started for send 1. This host must not start another.",
+    ],
+    [
+      "another host's order",
+      403,
+      "forbidden",
+      "This work order was sent to another host.",
+    ],
+    ["a busy server", 429, "rate_limited", "Too many requests."],
+  ])(
+    "prints the server's refusal for %s, starts nothing, claims once, and keeps the order (negative)",
+    async (_, status, code, message) => {
+      const m = machine();
+      m.keep();
+      m.answer(async () => {
+        throw new ControlError(
+          status,
+          JSON.stringify({ error: { code, message } }),
+        );
+      });
+      expect(await workStart(WO, m.deps)).toBe(1);
+      expect(m.claims).toEqual([WO]);
+      expect(m.spawned).toEqual([]);
+      expect(m.rejects).toEqual([]);
+      expect(m.errors).toEqual([
+        `Oxagen refused the claim on ${WO}, so nothing started. ${message}`,
+      ]);
+      expect(readWorkOrder(m.paths, WO)).toBeDefined();
+    },
+  );
 
   it("keeps the order and starts nothing when Oxagen cannot be reached (negative)", async () => {
     const m = machine();
@@ -263,6 +279,8 @@ describe("oxagen work start", () => {
           "This machine does not wrap Codex, so it cannot start this work order.",
       },
     ]);
+    // Nothing started, so the order still shows in `oxagen work list`.
+    expect(readWorkOrder(m.paths, WO)).toBeDefined();
   });
 
   it("refuses an order for a harness no host wraps (negative)", async () => {
@@ -305,7 +323,7 @@ describe("oxagen work start", () => {
     expect(m.errors.at(-1)).toBe(
       "The claude command is not installed on this machine. Oxagen has ended this send, and the work item can be sent again.",
     );
-    expect(readWorkOrder(m.paths, WO)).toBeUndefined();
+    expect(readWorkOrder(m.paths, WO)).toBeDefined();
   });
 
   it("keeps the claim and the order when the harness fails to start for another reason (negative)", async () => {
