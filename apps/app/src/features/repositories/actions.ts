@@ -38,6 +38,8 @@ import {
   type CodeRepositoryFindingsListOutput,
 } from "@oxagen/oxagen/contracts/repository.findings.list";
 import { instructionPromote } from "@oxagen/oxagen/contracts/repository.instruction.promote";
+import { workCollectorSet } from "@oxagen/oxagen/contracts/work.collector.set";
+import { workCollectorsList } from "@oxagen/oxagen/contracts/work.collectors.list";
 import { type ContextPr, isSteeringPrKind } from "@/data/contracts/steering";
 import type {
   AttachedInstallation,
@@ -576,4 +578,121 @@ export async function promoteInstructionToSteering(
         },
       }
     : result;
+}
+
+// ── Issue collection (Work intake, #5103) ───────────────────────────────────
+
+/** A linked GitHub repository's own collector name: `acme/web.app` reads as `acme-web-app`. */
+function collectorNameFor(repository: string): string {
+  return repository
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 64)
+    .replace(/-+$/, "");
+}
+
+/**
+ * The linked GitHub repositories whose issues a collector that is not paused
+ * reads, lowercased. A repository is on when one does, whichever collector
+ * that is.
+ */
+export async function readIssueCollection(
+  org: string,
+  ws: string,
+): Promise<ActionResult<{ collected: string[] }>> {
+  const ctx = await requireViewer(org, ws);
+  const read = await kernelRead(ctx, {
+    contract: workCollectorsList,
+    input: {},
+    page: "repositories",
+  });
+  const failed = readToActionResult(read);
+  if (!failed.ok) return failed;
+  const collected = new Set<string>();
+  for (const collector of failed.value.collectors) {
+    if (collector.health === "paused") continue;
+    for (const repo of collector.repos) collected.add(repo.toLowerCase());
+  }
+  return { ok: true, value: { collected: [...collected] } };
+}
+
+/**
+ * Turn issue collection on or off for one linked GitHub repository, through
+ * set_work_collector. On adds the repository to its own collector, named
+ * after it, and creates or resumes that collector, unless a collector that is
+ * not paused reads it already. Off takes the repository out of every
+ * collector that reads it, and pauses a collector it leaves with nothing to
+ * read. Either way a collector keeps only repositories the workspace still
+ * links, because set_work_collector refuses any other.
+ */
+export async function setIssueCollection(
+  org: string,
+  ws: string,
+  input: { repository: string; collect: boolean },
+): Promise<ActionResult<{ collecting: boolean; reconcileQueued: boolean }>> {
+  const ctx = await requireViewer(org, ws);
+  const [listed, bound] = await Promise.all([
+    kernelRead(ctx, { contract: workCollectorsList, input: {}, page: "repositories" }),
+    kernelRead(ctx, { contract: repositoryList, input: {}, page: "repositories" }),
+  ]);
+  const collectors = readToActionResult(listed);
+  if (!collectors.ok) return collectors;
+  const repositories = readToActionResult(bound);
+  if (!repositories.ok) return repositories;
+  const linked = new Map(
+    repositories.value.repositories
+      .filter((repo) => repo.provider === "github")
+      .map((repo) => [repo.fullName.toLowerCase(), repo.fullName]),
+  );
+  const key = input.repository.toLowerCase();
+  const repository = linked.get(key);
+  if (repository === undefined) {
+    return { ok: false, reason: "conflict", code: "repository_not_linked" };
+  }
+  const stillLinked = (repos: readonly string[]) =>
+    repos.filter((repo) => linked.has(repo.toLowerCase()));
+  const reads = (repos: readonly string[]) =>
+    repos.some((repo) => repo.toLowerCase() === key);
+  const active = collectors.value.collectors.filter(
+    (collector) => collector.health !== "paused" && reads(collector.repos),
+  );
+
+  if (input.collect) {
+    if (active.length > 0) {
+      return { ok: true, value: { collecting: true, reconcileQueued: false } };
+    }
+    const name = collectorNameFor(repository);
+    const own = collectors.value.collectors.find(
+      (collector) => collector.name === name,
+    );
+    const repos = stillLinked(own?.repos ?? []).filter(
+      (repo) => repo.toLowerCase() !== key,
+    );
+    const result = await kernelWrite(ctx, workCollectorSet, {
+      name,
+      repos: [...repos, repository],
+      paused: false,
+    });
+    if (!result.ok) return result;
+    return {
+      ok: true,
+      value: { collecting: true, reconcileQueued: result.value.reconcile_queued },
+    };
+  }
+
+  for (const collector of active) {
+    const rest = stillLinked(collector.repos).filter(
+      (repo) => repo.toLowerCase() !== key,
+    );
+    const result = await kernelWrite(
+      ctx,
+      workCollectorSet,
+      rest.length === 0
+        ? { name: collector.name, paused: true }
+        : { name: collector.name, repos: rest },
+    );
+    if (!result.ok) return result;
+  }
+  return { ok: true, value: { collecting: false, reconcileQueued: false } };
 }

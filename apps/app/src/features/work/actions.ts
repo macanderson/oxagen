@@ -14,6 +14,8 @@
 //
 // A refusal comes back as the kernel seam classified it (`ActionResult`), and
 // the dialog names the code in its own words (./action-failure.ts).
+import { contextPrOpen } from "@oxagen/oxagen/contracts/context.pr.open";
+import { contextProposalCreate } from "@oxagen/oxagen/contracts/context.proposal.create";
 import { workBriefApprove } from "@oxagen/oxagen/contracts/work.brief.approve";
 import { workBriefSave } from "@oxagen/oxagen/contracts/work.brief.save";
 import { workCollectorSet } from "@oxagen/oxagen/contracts/work.collector.set";
@@ -386,27 +388,29 @@ export async function reopenItem(
 }
 
 /**
- * Add or change a GitHub collector: its name, the GitHub connection it reads
- * through, and the repositories it reads. A new collector needs the
- * connection; a change may leave it out and keep the one it has. A new or
- * widened collector reads those repositories once now.
+ * Add or change a GitHub collector: its name and the repositories it reads,
+ * each linked to the workspace. It reads through the GitHub connection they
+ * were linked through, so none is named here. A new or widened collector
+ * reads those repositories once now. Pass paused to pause or resume it.
  */
 export async function setCollector(
   org: string,
   ws: string,
-  input: { name: string; repos: string[]; connectionId: string | null },
+  input: { name: string; repos?: string[]; paused?: boolean },
 ): Promise<ActionResult<{ created: boolean; reconcileQueued: boolean }>> {
   const ctx = await requireViewer(org, ws);
   const result = await kernelWrite(ctx, workCollectorSet, {
     name: input.name.trim(),
-    ...(input.connectionId === null ? {} : { connection_id: input.connectionId }),
-    repos: input.repos.map((repo) => repo.trim()).filter((repo) => repo !== ""),
+    ...(input.repos === undefined
+      ? {}
+      : { repos: input.repos.map((repo) => repo.trim()).filter((repo) => repo !== "") }),
+    ...(input.paused === undefined ? {} : { paused: input.paused }),
   });
   if (!result.ok) return result;
   return { ok: true, value: { created: result.value.created, reconcileQueued: result.value.reconcile_queued } };
 }
 
-/** Read a collector's repositories again now, after a failure. The collector is named by its name. */
+/** Read a collector's repositories again now. The collector is named by its name. */
 export async function syncCollector(
   org: string,
   ws: string,
@@ -416,4 +420,64 @@ export async function syncCollector(
   const result = await kernelWrite(ctx, workCollectorSync, { name: input.name });
   if (!result.ok) return result;
   return { ok: true, value: { queued: result.value.queued } };
+}
+
+/** The lineage triage reads priorities from (get_work_priorities matches it, or one ending in it). */
+const PRIORITIES_LINEAGE = "work.priorities";
+
+/**
+ * Propose the workspace's priorities record (propose_record): a steering
+ * rule whose statement is the instruction line and the numbered rules, with
+ * their line breaks kept, because triage reads one rule per numbered line.
+ * Its force is info, so it reaches the requests it fits rather than every
+ * agent request. A proposal steers nothing: triage reads the record once the
+ * pull request openPrioritiesPr opens has merged.
+ */
+export async function proposePriorities(
+  org: string,
+  ws: string,
+  input: { statement: string },
+): Promise<ActionResult<{ proposalId: string; lineageId: string }>> {
+  const ctx = await requireViewer(org, ws);
+  const result = await kernelWrite(ctx, contextProposalCreate, {
+    record: {
+      lineageId: PRIORITIES_LINEAGE,
+      label: "Work priorities",
+      kind: "rule",
+      force: "info",
+      sharingScope: "workspace",
+      statement: input.statement.trim(),
+    },
+    rationale: "Triage ranks each new work item by these rules and cites the rule it used.",
+    support: {},
+    createOnly: true,
+  });
+  if (!result.ok) return result;
+  return {
+    ok: true,
+    value: { proposalId: result.value.proposalId, lineageId: result.value.lineageId },
+  };
+}
+
+/**
+ * Open the steering pull request for a proposed priorities record
+ * (open_context_pr). It answers with the pull request, or null when the
+ * workspace's steering repository could not take one.
+ */
+export async function openPrioritiesPr(
+  org: string,
+  ws: string,
+  input: { proposalId: string },
+): Promise<ActionResult<{ proposalId: string; pr: { number: number; url: string; repository: string } | null }>> {
+  const ctx = await requireViewer(org, ws);
+  const result = await kernelWrite(ctx, contextPrOpen, { proposalId: input.proposalId });
+  if (!result.ok) return result;
+  const pr = result.value.pr;
+  return {
+    ok: true,
+    value: {
+      proposalId: result.value.proposalId,
+      pr: pr === null ? null : { number: pr.number, url: pr.url, repository: pr.repository },
+    },
+  };
 }

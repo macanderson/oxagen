@@ -225,12 +225,19 @@ function Body({
         <FormAlert testId="repository-dialog-failure">{failure}</FormAlert>
       )}
       {linked === null ? null : (
-        <SteeringProposal
-          action="link"
-          fullName={linked.fullName}
-          steeringPullRequest={linked.steeringPullRequest}
-          testId="repository-dialog-linked"
-        />
+        <>
+          <SteeringProposal
+            action="link"
+            fullName={linked.fullName}
+            steeringPullRequest={linked.steeringPullRequest}
+            testId="repository-dialog-linked"
+          />
+          {/* A collector reads only linked repositories, so issue collection
+              is turned on in the row once the link merges. */}
+          <p data-testid="repository-dialog-issues" className="text-sm text-muted-foreground">
+            {t("issuesAfterLink")}
+          </p>
+        </>
       )}
       {row.tree?.kind === "failed" ? (
         <FormAlert testId="repository-dialog-tree-failure">

@@ -40,6 +40,7 @@ import { PageHeader } from "@/ui/page-header";
 import { RouteTabPanel, RouteTabs } from "@/ui/route-tabs";
 import {
   listInstallationRepositories,
+  readIssueCollection,
   readRepositoryChanges,
   readRepositoryTree,
   readWorkingCopies,
@@ -115,6 +116,9 @@ export function Repositories({
   const [changes, setChanges] = useState<Load<RepositoryChanges>>({
     kind: "loading",
   });
+  const [issues, setIssues] = useState<Load<{ collected: string[] }>>({
+    kind: "loading",
+  });
   const [trees, setTrees] = useState<Trees>({});
   const [selected, setSelected] = useState<string | null>(null);
   const [unlinking, setUnlinking] = useState<RepositoryRow | null>(null);
@@ -173,6 +177,7 @@ export function Repositories({
         current.kind === "ready" ? current : { kind: "loading" },
       );
       void settle(() => readRepositoryChanges(org, ws), setChanges);
+      void settle(() => readIssueCollection(org, ws), setIssues);
       void settle(() => listInstallationRepositories(org, ws), setReachable);
       let read;
       try {
@@ -380,7 +385,14 @@ export function Repositories({
           )}
           {view.tab === "repositories" ? (
             <RepositoriesTab
+              org={org}
+              ws={ws}
               rows={rows}
+              issues={issues}
+              onIssuesChanged={(message) => {
+                setNotice(message);
+                reread();
+              }}
               reachableUnread={reachable.kind === "failed" && !connectNeeded}
               truncated={reached?.truncated ?? false}
               onOpen={setSelected}

@@ -1,10 +1,9 @@
 // Typed Work values for the Work page, Work setup and Outcomes component tests
-// (ARCHITECTURE.md §5), and a DataSource that answers the work reads and the
-// GitHub connections read with what a test hands it. Every other port
+// (ARCHITECTURE.md §5), and a DataSource that answers the work reads with
+// what a test hands it. Every other port
 // refuses, so a test that reaches for a read the page does not make fails
 // rather than passing on a stub. A read the test did not hand in refuses too.
 // Importable from tests only (`testOnlyTarget` in src/test/arch/layers.ts).
-import type { Connection, ConnectionList } from "@/data/contracts/tools";
 import type {
   SendSummary,
   WorkCollector,
@@ -111,10 +110,18 @@ export function collector(
   };
 }
 
+/** The repositories the workspace links, which Add collector offers. */
+export const LINKED_REPOS = [
+  "a-intel/platform",
+  "a-intel/billing-service",
+  "a-intel/web",
+];
+
 export function collectorList(
   collectors: WorkCollector[],
+  linked: string[] | null = LINKED_REPOS,
 ): Read<WorkCollectorList> {
-  return readOk({ collectors });
+  return readOk({ collectors, linked });
 }
 
 /** The priorities record a-intel.work.priorities v7, with three rules. */
@@ -199,33 +206,6 @@ export function outcomes(
   });
 }
 
-/** A connected GitHub account the Add collector dialog offers. */
-export function githubConnection(
-  overrides: Partial<Connection> = {},
-): Connection {
-  return {
-    id: "con_github01",
-    connector: "github",
-    displayName: "a-intel on GitHub",
-    authScheme: "oauth2",
-    deliveryMethod: "webhook",
-    status: "connected",
-    entityCount: 0,
-    lastSyncAt: null,
-    healthStatus: "healthy",
-    lastPollAt: null,
-    nextPollAt: null,
-    createdAt: "2026-09-01T10:00:00Z",
-    ...overrides,
-  };
-}
-
-export function connectionList(
-  connections: Connection[],
-): Read<ConnectionList> {
-  return readOk({ connections });
-}
-
 /** What each Work read answers. A read left out refuses. */
 export type WorkReads = {
   list?: Read<WorkItemList>;
@@ -233,7 +213,6 @@ export type WorkReads = {
   priorities?: Read<WorkPriorities>;
   targets?: Read<WorkTargetList>;
   outcomes?: Read<WorkOutcomes>;
-  connections?: Read<ConnectionList>;
 };
 
 export function workSource(reads: WorkReads) {
@@ -354,7 +333,7 @@ export function workSource(reads: WorkReads) {
       grants: refuse,
       killSwitches: refuse,
       approvalRules: refuse,
-      connections: answer("tools.connections", reads.connections),
+      connections: refuse,
       mcpServers: refuse,
       toolbelts: refuse,
       toolbelt: refuse,

@@ -35,6 +35,7 @@ const { readWorkItem } = await import("../work-records/store");
 const { enterWorkItem, prioritiesSummary, readTriageStanding, reviseTriage } = await import("./actions");
 const { upsertProviderItem } = await import("./items");
 const { listCollectorViews, setCollector } = await import("./collectors");
+const { postgresCollectorStore } = await import("./collector-store");
 const { routeGithubWorkDelivery, defaultWorkDeliveryDeps } = await import("./delivery");
 const { createWorkIntakeRunner, githubFileTrees } = await import("./runner");
 const { runTriage, recordTriageFailure } = await import("./triage-run");
@@ -71,6 +72,8 @@ describe.skipIf(!enabled)("work intake and triage against Postgres", () => {
   let secondCollectorId = "";
   let itemPublicId = "";
   let manualPublicId = "";
+  /** The GitHub repository id of each repository the test links, by owner/name. */
+  const linkedIds = new Map<string, string>();
 
   const inScope = <T>(fn: (tx: Tx) => Promise<T>, s = scope): Promise<T> => runInTenantScope(s, () => withTenantDb(fn));
 
@@ -171,6 +174,38 @@ describe.skipIf(!enabled)("work intake and triage against Postgres", () => {
       connectionId = connection!.id;
       connectionPublicId = connection!.publicId;
     });
+    // A collector reads only repositories the workspace links, through the
+    // connection they were linked through.
+    await withSystemDb(async (tx) => {
+      for (const fullName of [recorded.RECORDED_REPO, "aintel-test/second"]) {
+        const [owner, name] = fullName.split("/") as [string, string];
+        const providerRepositoryId = `wi-${crypto.randomUUID()}`;
+        linkedIds.set(fullName, providerRepositoryId);
+        const [binding] = await tx
+          .insert(schema.repositoryBindings)
+          .values({
+            ...scope,
+            connectionId,
+            provider: "github",
+            providerRepositoryId,
+            providerOwner: owner,
+            providerName: name,
+            providerFullName: fullName,
+            configuredDefaultRef: "main",
+            observedAt: new Date(),
+            version: 1,
+          })
+          .returning({ id: schema.repositoryBindings.id });
+        await tx.insert(schema.repositoryBindingHeads).values({
+          ...scope,
+          connectionId,
+          provider: "github",
+          providerRepositoryId,
+          currentBindingId: binding!.id,
+          role: "linked",
+        });
+      }
+    });
   });
 
   afterAll(async () => {
@@ -187,6 +222,8 @@ describe.skipIf(!enabled)("work intake and triage against Postgres", () => {
       // A record names its active version, so the record goes first.
       await tx.delete(s.contextRecords).where(eq(s.contextRecords.orgId, scope.orgId));
       await tx.delete(s.contextRecordVersions).where(eq(s.contextRecordVersions.orgId, scope.orgId));
+      await tx.delete(s.repositoryBindingHeads).where(eq(s.repositoryBindingHeads.orgId, scope.orgId));
+      await tx.delete(s.repositoryBindings).where(eq(s.repositoryBindings.orgId, scope.orgId));
       await tx.delete(s.sourceConnections).where(eq(s.sourceConnections.orgId, scope.orgId));
     });
     await closeDatabase();
@@ -513,6 +550,29 @@ describe.skipIf(!enabled)("work intake and triage against Postgres", () => {
     expect(narrowed.reconcile).toBe(true);
     const [kept] = await inScope((tx) => tx.select().from(schema.workCollectors).where(eq(schema.workCollectors.id, collectorId)));
     expect(kept!.cursor).toBe("2026-10-02T00:00:00Z");
+  });
+
+  it("refuses a repository the workspace does not link, and stops reading one it unlinks", async () => {
+    await expect(
+      inScope((tx) => setCollector(tx, scope, { name: "github-stray", repos: ["aintel-test/not-linked"], actorUserId: AMARA })),
+    ).rejects.toMatchObject({ code: "invalid_input", message: expect.stringContaining("aintel-test/not-linked") });
+    // With no connection_id, a collector reads through the connection its repositories were linked through.
+    await inScope((tx) => setCollector(tx, scope, { name: "github", repos: [recorded.RECORDED_REPO, "aintel-test/second"], actorUserId: AMARA }));
+    const [widened] = await inScope((tx) => tx.select().from(schema.workCollectors).where(eq(schema.workCollectors.id, collectorId)));
+    expect(widened!.connectionId).toBe(connectionId);
+    await withSystemDb((tx) =>
+      tx
+        .delete(schema.repositoryBindingHeads)
+        .where(
+          and(
+            eq(schema.repositoryBindingHeads.orgId, scope.orgId),
+            eq(schema.repositoryBindingHeads.providerRepositoryId, linkedIds.get("aintel-test/second")!),
+          ),
+        ),
+    );
+    const read = await runInTenantScope(scope, () => postgresCollectorStore(scope).getCollector(collectorId));
+    expect(read?.scope.repos).toEqual([recorded.RECORDED_REPO]);
+    await inScope((tx) => setCollector(tx, scope, { name: "github", repos: [recorded.RECORDED_REPO], actorUserId: AMARA }));
   });
 
   it("shows another workspace none of this workspace's collectors or items", async () => {

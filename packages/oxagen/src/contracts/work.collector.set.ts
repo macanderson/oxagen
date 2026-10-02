@@ -2,8 +2,10 @@
  * set_work_collector: create or change a GitHub work collector, or pause and
  * resume one (P1-03, #5103; agent-work-phase-1.html, Screens: Work setup).
  *
- * A collector names one of the workspace's GitHub connections and the
- * repositories whose issues become work items. The row stores the collector
+ * A collector names repositories linked to the workspace, whose issues become
+ * work items, and reads through the GitHub connection they were linked
+ * through. A repository the workspace does not link is refused, and one it
+ * unlinks later is no longer read. The row stores the collector
  * as a `collector/v1` document's fields and that document's SHA-256, so the
  * steering file that will carry it later reads the same (ADR-250).
  *
@@ -23,7 +25,7 @@ export const workCollectorSet = registerCapability({
   name: "set_work_collector",
   domain: "work",
   description:
-    "Create or change a GitHub work collector by name: the GitHub connection and the repositories whose issues become work items. Pause or resume it with paused.",
+    "Create or change a GitHub work collector by name: the linked repositories whose issues become work items. It reads through the GitHub connection they were linked through. Pause or resume it with paused.",
   mode: "sync",
   surfaces: ["api", "mcp"],
   layers: ["schema", "api", "mcp", "unit", "docs"],
@@ -42,7 +44,7 @@ export const workCollectorSet = registerCapability({
         .string()
         .max(64)
         .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "Use lowercase words joined by single hyphens."),
-      /** The GitHub connection's public id (`con_…`). Required to create a collector. */
+      /** The GitHub connection's public id (`con_…`). Optional: the repositories' own connection is used, and a different one is refused. */
       connection_id: z.string().min(1).optional(),
       repos: z.array(repositoryNameSchema).min(1).max(WORK_COLLECTOR_REPOS_MAX).optional(),
       paused: z.boolean().optional(),

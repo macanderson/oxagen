@@ -8,6 +8,7 @@
 // GitHub on a page load: the checks are what Oxagen last recorded. A record
 // the view refuses is `record_unmappable`, reported once, never a partial page.
 import "server-only";
+import { repositoryList } from "@oxagen/oxagen/contracts/repository.list";
 import { workCollectorsList } from "@oxagen/oxagen/contracts/work.collectors.list";
 import { workItemGet } from "@oxagen/oxagen/contracts/work.item.get";
 import { workItemsList } from "@oxagen/oxagen/contracts/work.items.list";
@@ -91,17 +92,19 @@ export const work: DataSource["work"] = {
     if (!read.ok) return read;
     return view(ctx.orgId, WorkOutcomes, toWorkOutcomes(read.value), "work.outcomes");
   },
+  // The linked repositories ride along because a collector reads only them:
+  // Add collector offers them, and a row names any repository it skips. A
+  // failed repositories read leaves them null and the collectors still draw.
   async collectors(ctx) {
-    const read = await kernelRead(ctx, {
-      contract: workCollectorsList,
-      input: {},
-      page: "work",
-    });
+    const [read, repositories] = await Promise.all([
+      kernelRead(ctx, { contract: workCollectorsList, input: {}, page: "work" }),
+      kernelRead(ctx, { contract: repositoryList, input: {}, page: "work" }),
+    ]);
     if (!read.ok) return read;
     return view(
       ctx.orgId,
       WorkCollectorList,
-      toWorkCollectorList(read.value),
+      toWorkCollectorList(read.value, repositories.ok ? repositories.value : null),
       "work.collectors",
     );
   },
