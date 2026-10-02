@@ -1000,8 +1000,13 @@ describe("Spend › Findings", () => {
     expect(first).toHaveTextContent("high confidence");
     expect(first).toHaveTextContent("aws_billing__get_cost_and_usage");
     expect(first).toHaveTextContent("evidence 88 runs · 3,106 calls");
-    expect(first).toHaveTextContent("$984.60");
-    expect(first).toHaveTextContent("at stake (58.9% of identified)");
+    // The amount and its share of the window's $18,402.66 spend, side by side.
+    expect(first.querySelector('[data-figure="amount"]')).toHaveTextContent(
+      "$984.60",
+    );
+    expect(first.querySelector('[data-figure="share"]')).toHaveTextContent(
+      "5.4%",
+    );
     expect(
       within(first).getByRole("link", { name: "Evidence" }),
     ).toHaveAttribute(
