@@ -6,9 +6,16 @@ import type { SteeringStore } from "../../context.steering.store";
 import { openSpendProposalsFor } from "./index";
 import { buildSpendProposals, openProposals } from "./open";
 import { repeatedInstructionProposals } from "./repeated-instructions";
-import { agentLineage } from "./shared";
+import { agentLineage, subjectLineage } from "./shared";
 import { spinLoopProposals } from "./spin-loops";
-import { instruction, SCOPE, spinDraft } from "./test-support";
+import {
+  classDraft,
+  instruction,
+  recurringDraft,
+  SCOPE,
+  spinDraft,
+  unpagedDraft,
+} from "./test-support";
 import type { SpendProposal } from "./types";
 
 const AGENT = "acme.core.triage";
@@ -318,6 +325,104 @@ describe("openSpendProposalsFor", () => {
     expect(rows.map((r) => r.supportAgents)).toEqual([
       [AGENT],
       ["acme.core.review"],
+    ]);
+  });
+});
+
+describe("openSpendProposalsFor with detectors 4, 5, and 7", () => {
+  const TOOL = "mcp__docs__search";
+  const NIGHTLY = "acme.core.nightly";
+
+  function open(
+    store: Pick<SteeringStore, "insertProposal">,
+    input: SpendProposalInput,
+  ) {
+    return openSpendProposalsFor(SCOPE, input, {
+      store,
+      create: createProposal,
+      audit: vi.fn(),
+    });
+  }
+
+  function pass(over: { classRuns?: string[] } = {}): SpendProposalInput {
+    return {
+      instructions: [],
+      findings: [
+        classDraft(AGENT, over.classRuns ? { citedRuns: over.classRuns } : {}),
+        unpagedDraft(TOOL),
+        recurringDraft(NIGHTLY),
+      ],
+    };
+  }
+
+  it("opens one proposal for each kind, with its runs and figures", async () => {
+    const { rows, store } = memoryStore();
+    await expect(open(store, pass())).resolves.toEqual({
+      opened: 3,
+      taken: 0,
+    });
+    expect(rows).toHaveLength(3);
+    const [route, carry, schedule] = rows;
+    expect(route).toMatchObject({
+      lineageId: agentLineage("model_class_fit", AGENT),
+      title: `Model route for ${AGENT}`,
+      source: "finding:model_class_fit",
+      supportRuns: ["tse_r1", "tse_r2", "tse_r3"],
+      supportAgents: [AGENT],
+      evidenceLinks: [],
+    });
+    expect(route!.rationale).toContain("The estimated saving is $2.79.");
+    expect(carry).toMatchObject({
+      lineageId: subjectLineage("unpaged_results", TOOL),
+      title: `Context rule for ${TOOL}`,
+      source: "finding:unpaged_results",
+      supportRuns: ["tse_c", "tse_d"],
+      supportAgents: [],
+      evidenceLinks: ["frame:tse_c/7"],
+    });
+    expect(carry!.rationale).toContain("Later requests read them 60 times.");
+    expect(carry!.rationale).toContain("Those reads cost $1.08");
+    expect(schedule).toMatchObject({
+      lineageId: agentLineage("recurring_runs", NIGHTLY),
+      title: `Schedule rule for ${NIGHTLY}`,
+      source: "finding:recurring_runs",
+      supportRuns: ["tse_j1", "tse_j2", "tse_j3"],
+      supportAgents: [NIGHTLY],
+      evidenceLinks: [],
+    });
+    expect(schedule!.rationale).toContain("3 of them changed nothing.");
+    expect(schedule!.rationale).toContain(
+      "The runs that changed nothing cost $3.20.",
+    );
+  });
+
+  it("opens no duplicate on a second detector run", async () => {
+    const { rows, store } = memoryStore();
+    await expect(open(store, pass())).resolves.toEqual({
+      opened: 3,
+      taken: 0,
+    });
+    // The next night's pass cites one more run for the same agent.
+    const next = pass({ classRuns: ["tse_r1", "tse_r2", "tse_r3", "tse_r4"] });
+    await expect(open(store, next)).resolves.toEqual({ opened: 0, taken: 3 });
+    expect(rows).toHaveLength(3);
+  });
+
+  it("opens beside the spin loop and prompt habit proposals of the same pass", async () => {
+    const { rows, store } = memoryStore();
+    const input = pass();
+    await expect(
+      open(store, {
+        instructions: [instruction(1)],
+        findings: [spinDraft(AGENT), ...input.findings],
+      }),
+    ).resolves.toEqual({ opened: 5, taken: 0 });
+    expect(rows.map((r) => r.source)).toEqual([
+      "finding:repeated_instructions",
+      "finding:spin_loops",
+      "finding:model_class_fit",
+      "finding:unpaged_results",
+      "finding:recurring_runs",
     ]);
   });
 });

@@ -4,8 +4,11 @@
  * figure reads in a rationale.
  */
 import { createHash } from "node:crypto";
-import type { FindingDraft } from "@oxagen/billing/proposal-opener";
-import type { FindingKind } from "@oxagen/database/schema";
+import type {
+  FindingDraft,
+  SpendProposalInput,
+} from "@oxagen/billing/proposal-opener";
+import type { FindingKind, FindingLevel } from "@oxagen/database/schema";
 
 /** The proposal contract's caps (`proposalSupportSchema`). */
 export const PROPOSAL_RUNS_MAX = 500;
@@ -24,8 +27,41 @@ export function proposalSource(kind: FindingKind): string {
  * its digest. Every pass names the same lineage for the same agent and kind.
  */
 export function agentLineage(kind: FindingKind, agentKey: string): string {
-  const digest = createHash("sha256").update(agentKey).digest("hex");
+  return subjectLineage(kind, agentKey);
+}
+
+/**
+ * The lineage of one proposal for one finding kind and one finding subject,
+ * such as a tool name: `ctx.spend.<kind>-<12 hex>`, where the hex is a digest
+ * of the subject. {@link agentLineage} is this lineage for an agent key.
+ */
+export function subjectLineage(kind: FindingKind, subject: string): string {
+  const digest = createHash("sha256").update(subject).digest("hex");
   return `ctx.spend.${kind.replaceAll("_", "-")}-${digest.slice(0, 12)}`;
+}
+
+/**
+ * The drafts of one finding kind at one level, one per subject, in the order
+ * the pass ranks them. The pass writes one finding per kind, level, and
+ * subject, so a second draft for a subject is never expected. If one comes,
+ * the first is kept.
+ */
+export function draftsBySubject(
+  input: SpendProposalInput,
+  kind: FindingKind,
+  level: FindingLevel,
+): FindingDraft[] {
+  const bySubject = new Map<string, FindingDraft>();
+  for (const draft of input.findings) {
+    if (draft.kind !== kind || draft.level !== level) continue;
+    if (!bySubject.has(draft.subject)) bySubject.set(draft.subject, draft);
+  }
+  return [...bySubject.values()];
+}
+
+/** A date as the rationale prints it: `2026-09-01`. */
+export function isoDay(at: Date): string {
+  return at.toISOString().slice(0, 10);
 }
 
 /**
