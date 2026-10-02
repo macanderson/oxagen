@@ -1890,6 +1890,14 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./mcp-studio/import/tool.try.ports"))
         .tryStudioToolHandler as CapabilityHandlerFn,
   );
+  // Lane M16: a selection run starts only from this capability, when a person
+  // asks. Nothing schedules it, because every task is a billed model call.
+  registerHandler(
+    "run_studio_selection",
+    async () =>
+      (await import("./mcp-studio/selection/run"))
+        .runStudioSelectionHandler as CapabilityHandlerFn,
+  );
   registerHandler(
     "fetch_commands",
     async () =>

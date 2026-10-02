@@ -1,10 +1,12 @@
 // http.ts: the Sender for an OpenAPI operation (mcp-studio-spec, Call path,
 // step 5; Retry).
 //
-// The request comes from the operation's template. Path parameters are
-// percent-encoded, query, header, and cookie parameters follow OpenAPI's
-// styles, and the body is the spread properties or the one body property. The
-// request is recorded before the credential is added. GET, HEAD, OPTIONS,
+// The request comes from the operation's template. It goes to the
+// operation's base_url when the template has one, and to the environment's url
+// otherwise. Path parameters are percent-encoded, query, header, and cookie
+// parameters follow OpenAPI's styles, and the body is the spread properties or
+// the one body property. The request is recorded before the credential is
+// added. GET, HEAD, OPTIONS,
 // PUT, DELETE, and a POST that carries an idempotency key retry on 429, 502,
 // 503, and 504, after Retry-After. A transport failure is never retried,
 // because the upstream may have acted on the request.
@@ -17,6 +19,7 @@ import {
   httpTarget,
   parseEndpoint,
   queryPair,
+  queryValue,
   runHttp,
   sendFailure,
   upstreamError,
@@ -145,16 +148,19 @@ function headerText(parameter: HttpParameter, value: unknown): string {
 }
 
 /**
- * A cookie parameter's cookies, as [name, value], by the form style and sent
- * as written. Explode defaults to true, as for a form query parameter.
- * Exploded, a list sends one cookie per item under the parameter's name, and
- * an object sends one cookie per property under the property's name.
- * Unexploded, the parameter sends one cookie that joins the items, or the
- * keys and values, with commas.
+ * A cookie parameter's cookies, as [name, value], by the form or cookie style
+ * and sent as written. Explode defaults to true for both. Exploded, a list
+ * sends one cookie per item under the parameter's name, and an object sends
+ * one cookie per property under the property's name: one Cookie header entry
+ * each, joined by "; " as OpenAPI 3.2's cookie style writes them. The
+ * 2026-10-02 decision on #4613 keeps this form for the form style. Unexploded,
+ * the parameter sends one cookie that joins the items, or the keys and values,
+ * with commas.
  */
 function cookiePairs(parameter: HttpParameter, value: unknown): Array<[string, string]> {
   const name = checkedName(parameter);
-  const explode = parameter.explode ?? (parameter.style ?? "form") === "form";
+  const style = parameter.style ?? "form";
+  const explode = parameter.explode ?? (style === "form" || style === "cookie");
   const shape = shapeOf(value, parameter.name);
   const pairs: Array<[string, string]> =
     shape.kind === "scalar"
@@ -183,37 +189,43 @@ interface QueryEntry {
   encoded: string;
 }
 
-function entry(name: string, value: string, encoded = queryPair(name, value)): QueryEntry {
+function entry(name: string, value: string, encoded: string): QueryEntry {
   return { name, value, encoded };
 }
 
-/** A query parameter's pairs, by its style. */
+/**
+ * A query parameter's pairs, by its style. With allow_reserved, each value
+ * keeps the reserved characters a query can hold, such as / and :.
+ */
 function queryEntries(parameter: HttpParameter, value: unknown): QueryEntry[] {
   const style = parameter.style ?? "form";
   const explode = parameter.explode ?? style === "form";
   const shape = shapeOf(value, parameter.name);
   const name = parameter.name;
   const enc = encodeURIComponent;
-  if (shape.kind === "scalar") return [entry(name, shape.text)];
+  const reserved = parameter.allow_reserved === true;
+  const val = (text: string): string => queryValue(text, reserved);
+  const pair = (key: string, text: string): QueryEntry => entry(key, text, queryPair(key, text, reserved));
+  if (shape.kind === "scalar") return [pair(name, shape.text)];
   switch (style) {
     case "form":
     case "spaceDelimited":
     case "pipeDelimited": {
       if (shape.kind === "object") {
-        if (explode) return shape.entries.map(([k, v]) => entry(k, v));
+        if (explode) return shape.entries.map(([k, v]) => pair(k, v));
         const raw = shape.entries.flat().join(",");
-        return [entry(name, raw, `${enc(name)}=${shape.entries.flat().map(enc).join(",")}`)];
+        return [entry(name, raw, `${enc(name)}=${shape.entries.flat().map(val).join(",")}`)];
       }
       if (shape.items.length === 0) return [];
-      if (explode) return shape.items.map((item) => entry(name, item));
+      if (explode) return shape.items.map((item) => pair(name, item));
       const [raw, delimiter] = style === "form" ? [",", ","] : style === "spaceDelimited" ? [" ", "%20"] : ["|", "|"];
-      return [entry(name, shape.items.join(raw), `${enc(name)}=${shape.items.map(enc).join(delimiter)}`)];
+      return [entry(name, shape.items.join(raw), `${enc(name)}=${shape.items.map(val).join(delimiter)}`)];
     }
     case "deepObject": {
       if (shape.kind !== "object") {
         throw invalidArguments(`The query parameter ${name} uses the deepObject style, so it takes an object.`);
       }
-      return shape.entries.map(([k, v]) => entry(`${name}[${k}]`, v, `${enc(name)}[${enc(k)}]=${enc(v)}`));
+      return shape.entries.map(([k, v]) => entry(`${name}[${k}]`, v, `${enc(name)}[${enc(k)}]=${val(v)}`));
     }
     default:
       throw new BuildError("Invalid request", `The query parameter ${name} cannot use the ${style} style.`);
@@ -319,7 +331,8 @@ export function buildHttpExchange(
   context: SendContext,
   backoff_ms: (retry: number) => number,
 ): HttpExchange {
-  const endpoint = parseEndpoint(context.environment.url, "base");
+  // An operation with its own server sends to it in every environment.
+  const endpoint = parseEndpoint(template.base_url ?? context.environment.url, "base");
   const path = expandTemplate(template, args);
   const idempotencyHeader = context.shaping.idempotency_header;
   const key = context.idempotency_key;

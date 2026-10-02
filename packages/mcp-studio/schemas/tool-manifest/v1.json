@@ -2383,7 +2383,13 @@
                         "path": {
                           "type": "string",
                           "pattern": "^\\/[^\\s?#]*$",
-                          "description": "The path template, relative to the environment's url."
+                          "description": "The path template, relative to the environment's url, or to base_url when the operation has one."
+                        },
+                        "base_url": {
+                          "type": "string",
+                          "format": "uri",
+                          "pattern": "^https?:\\/\\/[^/?#@]*(?:[/?#]|$)",
+                          "description": "The operation's own server, from the servers list on the operation or its path item, when that list differs from the document's. A call sends to it in every environment."
                         },
                         "parameters": {
                           "type": "array",
@@ -2423,12 +2429,18 @@
                                   "form",
                                   "spaceDelimited",
                                   "pipeDelimited",
-                                  "deepObject"
+                                  "deepObject",
+                                  "cookie"
                                 ],
                                 "description": "OpenAPI's serialization style, when it differs from the default for `in`."
                               },
                               "explode": {
-                                "type": "boolean"
+                                "type": "boolean",
+                                "description": "OpenAPI's explode. Import writes it on every cookie parameter, so the executor never guesses its default."
+                              },
+                              "allow_reserved": {
+                                "type": "boolean",
+                                "description": "A query parameter only: true sends reserved characters such as / and : in the value without percent-encoding (OpenAPI's allowReserved)."
                               }
                             },
                             "required": [
@@ -2439,7 +2451,7 @@
                             ],
                             "additionalProperties": false
                           },
-                          "description": "Parameters a security scheme names are never here."
+                          "description": "Every parameter the operation declares. Compile drops one that the server's API key scheme supplies."
                         },
                         "body": {
                           "anyOf": [

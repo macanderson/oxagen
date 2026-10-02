@@ -35,6 +35,7 @@ import {
 import { type WorkItemState, reduceWorkItem } from "@oxagen/work/records";
 import { and, desc, eq, isNull, ne, notInArray } from "drizzle-orm";
 import { z } from "zod";
+import { isOutputParseError } from "../model-output-errors";
 import { appendFacts, readWorkItem, type WorkScope } from "../work-records/store";
 import { type PrioritiesRecord, prioritiesProblem, readPriorities } from "./priorities";
 import { screenValue } from "./screen";
@@ -68,14 +69,6 @@ export const triageOutputSchema = z.object({
   questions: z.array(z.string()),
   conflicts: z.array(z.string()),
 });
-
-/** AI SDK errors that mean the model's answer did not parse as the schema asked. */
-const OUTPUT_ERRORS = new Set(["AI_NoObjectGeneratedError", "AI_TypeValidationError", "AI_JSONParseError"]);
-
-/** True when the error says the answer did not parse, so triageItem counts it as an invalid output. */
-export function isOutputParseError(error: unknown): boolean {
-  return error instanceof Error && OUTPUT_ERRORS.has(error.name);
-}
 
 /** The model client triage runs with: the workspace's fast model through @oxagen/ai, charged as in-app assistant spend. */
 export function aiTriageModelClient(scope: WorkScope): TriageModelClient {
