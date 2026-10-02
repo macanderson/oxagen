@@ -116,6 +116,15 @@ function withLineage(bundle: Bundle, lineage: string): Bundle {
   return { ...bundle, records: bundle.records.map((entry) => ({ ...entry, lineage })) };
 }
 
+/** The bundle with its block for one repository replaced by a block that holds only these lineages. */
+function withBlock(bundle: Bundle, repository: string, held: string[]): Bundle {
+  const others = bundle.always_on.filter((block) => block.repository !== repository);
+  return {
+    ...bundle,
+    always_on: [...others, { repository, text: "", tokens: 0, lineages: held }],
+  };
+}
+
 /** A record for the score tests. Only its label, description, and lineage matter. */
 const BASE_RECORD: BundleRecord = {
   lineage: "a-intel.gamma",
@@ -323,10 +332,11 @@ describe("searchSteering", () => {
     expect(migrations.total).toBe(0);
   });
 
-  it("marks a must or should record that loads always and targets no skill as always on", () => {
+  it("marks a record always on when the block for any other repository holds it", () => {
     const output = searchSteering(both, { limit: STEERING_SEARCH_MAX_LIMIT });
     expect(Object.fromEntries(output.hits.map((hit) => [hit.lineage, hit.always_on]))).toEqual({
-      "a-intel.billing.refunds-over-100": true,
+      // force must, but it names one repository, so only that repository's block holds it
+      "a-intel.billing.refunds-over-100": false,
       "a-intel.brand.plain-words": true,
       // force may
       "a-intel.brand.voice": false,
@@ -385,7 +395,7 @@ describe("searchSteering", () => {
     expect(hit.line).toBe("- Never push to main (a-intel.platform.no-push-to-main)");
   });
 
-  it("lists the organization's record before the workspace's when both share a lineage", () => {
+  it("returns the workspace's record alone when both versions share a lineage", () => {
     const delivery: Delivery = {
       workspace,
       organization: withLineage(organization, "a-intel.platform.no-push-to-main"),
@@ -393,10 +403,54 @@ describe("searchSteering", () => {
     const output = searchSteering(delivery, { limit: STEERING_SEARCH_MAX_LIMIT });
     const shared = output.hits.filter((hit) => hit.lineage === "a-intel.platform.no-push-to-main");
     expect(shared.map((hit) => [hit.source, hit.label])).toEqual([
-      ["organization", "No secrets in code"],
       ["workspace", "Never push to main"],
     ]);
-    expect(output.total).toBe(14);
+    expect(output.total).toBe(13);
+  });
+
+  it("finds nothing by words only a shadowed organization record holds", () => {
+    const delivery: Delivery = {
+      workspace,
+      organization: withLineage(organization, "a-intel.platform.no-push-to-main"),
+    };
+    expect(searchSteering(delivery, { query: "secrets" }).total).toBe(0);
+  });
+
+  it("marks a record always on for the repository it names when its tool is imported", () => {
+    // The billing server's tools.toml imports create_refund, so publish puts the
+    // record in the billing-service block even though no server compiles here.
+    const output = searchSteering(both, { repository: BILLING_SERVICE, limit: STEERING_SEARCH_MAX_LIMIT });
+    expect(hitFor(output, "a-intel.billing.refunds-over-100").always_on).toBe(true);
+    expect(hitFor(output, "a-intel.platform.no-push-to-main").always_on).toBe(true);
+  });
+
+  it("leaves a record out of always on when the repository's block does not hold it", () => {
+    // Publish leaves a record out of every block when its tool target is not
+    // imported. The block decides, not the record's force and load.
+    const delivery: Delivery = {
+      workspace: withBlock(workspace, BILLING_SERVICE, ["a-intel.platform.no-push-to-main"]),
+      organization,
+    };
+    const output = searchSteering(delivery, { repository: BILLING_SERVICE, limit: STEERING_SEARCH_MAX_LIMIT });
+    expect(hitFor(output, "a-intel.billing.refunds-over-100").always_on).toBe(false);
+    expect(hitFor(output, "a-intel.platform.no-push-to-main").always_on).toBe(true);
+  });
+
+  it("marks a record always on only on a repository whose block holds it", () => {
+    const delivery: Delivery = {
+      workspace: withBlock(workspace, BILLING_SERVICE, ["a-intel.billing.refunds-over-100"]),
+      organization,
+    };
+    const billing = searchSteering(delivery, { repository: BILLING_SERVICE, limit: STEERING_SEARCH_MAX_LIMIT });
+    expect(hitFor(billing, "a-intel.billing.refunds-over-100").always_on).toBe(true);
+    expect(hitFor(billing, "a-intel.platform.no-push-to-main").always_on).toBe(false);
+    const platform = searchSteering(delivery, { repository: PLATFORM, limit: STEERING_SEARCH_MAX_LIMIT });
+    expect(hitFor(platform, "a-intel.platform.no-push-to-main").always_on).toBe(true);
+  });
+
+  it("reads an organization record against the organization's own blocks", () => {
+    const output = searchSteering(both, { repository: PLATFORM, limit: STEERING_SEARCH_MAX_LIMIT });
+    expect(hitFor(output, ORGANIZATION_LINEAGE).always_on).toBe(true);
   });
 
   it("reads a side with no published version as null and searches the other", () => {

@@ -1,5 +1,5 @@
 // steering.test-support.ts: published versions of S0's fixture repos, for the
-// steering_search and steering_read handler tests.
+// search_steering and read_steering handler tests.
 import type { CheckedContext } from "@oxagen/oxagen";
 import type { Bundle } from "@oxagen/oxagen/steering-repo/bundle";
 import {

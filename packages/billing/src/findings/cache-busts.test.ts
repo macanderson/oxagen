@@ -143,6 +143,11 @@ describe("cache busts", () => {
     expect(finding!.why).toMatch(
       /No request recorded a system context digest, so the part that changed is unknown\./,
     );
+    expect(finding!.evidence.values).toMatchObject({
+      firstChange: null,
+      firstChangeBusts: null,
+      unknownBusts: 1,
+    });
     expect(finding!.fix).toMatch(/Move what changes below the cached prefix/);
   });
 
@@ -198,6 +203,14 @@ describe("cache busts", () => {
     expect(finding!.why).toContain(
       "The first change was in tool Bash (2 times), system block 0 (1 time), tool Grep (1 time), and 1 other part. 1 bust recorded no system context digest.",
     );
+    // #5023: the card names the part most busts began in, and the rest as counts.
+    expect(finding!.evidence.values).toEqual({
+      kind: "cache_busts",
+      firstChange: "tool Bash",
+      firstChangeBusts: 2,
+      pricedBusts: finding!.evidence.coveredCalls,
+      unknownBusts: 1,
+    });
   });
 
   it("cites an unpriced bust uncovered", () => {
@@ -241,6 +254,10 @@ describe("cache busts", () => {
       calls: 2,
       coveredCalls: 1,
       measuredMicros: "144900",
+    });
+    expect(finding!.evidence.values).toMatchObject({
+      kind: "cache_busts",
+      pricedBusts: 1,
     });
     expect(finding!.why).toBe(
       `${CACHE_AGENT} rewrote its cache 2 times because the start of the prompt changed. The first change was in the messages after the system context (2 times). The 1 of 2 rewrites with a price cost $0.14 more than reading the cache back.`,

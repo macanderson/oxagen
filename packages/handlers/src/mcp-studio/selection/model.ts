@@ -114,8 +114,12 @@ export interface StudioSelectionModel extends SelectionModel {
  *
  * choose() throws TooManyToolsForProviderError before it sends a request with
  * more tools than the provider takes. An answer that does not parse comes
- * back as null, which runSelection counts as malformed. Any other error,
- * including an abort from the signal, passes through and stops the run.
+ * back as null, which runSelection counts as malformed. Any other error
+ * passes through and stops the run. An abort from the signal passes through
+ * too, and runSelection marks that task not_run.
+ *
+ * runSelection calls choose() for several tasks at once. The first call
+ * resolves the route, and every call after it waits on that same promise.
  */
 export function createStudioSelectionModel(deps: StudioSelectionModelDeps): StudioSelectionModel {
   let route: Promise<SelectionRoute> | null = null;

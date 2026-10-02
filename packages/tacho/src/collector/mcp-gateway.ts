@@ -193,7 +193,9 @@ export interface McpGatewayDeps {
 /**
  * The `_meta` key Claude Code puts a tool call's `tool_use_id` under in every
  * MCP `tools/call` request it sends. Read from the 2.1.283 binary, which
- * spreads `{"claudecode/toolUseId": <id>}` into the request's `_meta`.
+ * spreads `{"claudecode/toolUseId": <id>}` into the request's `_meta`. A
+ * request 2.1.287 sent over stdio carries it too:
+ * `fixtures/claude-code/mcp/tools-call-2.1.287.json` (#4355).
  */
 export const CLAUDE_CODE_TOOL_USE_ID_META = "claudecode/toolUseId";
 

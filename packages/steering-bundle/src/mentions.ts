@@ -6,7 +6,7 @@
 // as the agent can call it: the tool's name in direct mode, and the server's
 // call tool in search mode. A mode change then needs no edit to any record.
 // @record: and @skill: mentions stay as written: the agent reads them with
-// steering_read.
+// read_steering.
 import type { Bundle } from "@oxagen/oxagen/steering-repo/bundle";
 import { parseToolRef, TOOL_SEPARATOR } from "@oxagen/oxagen/steering-repo/names";
 

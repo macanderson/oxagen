@@ -7,7 +7,7 @@
 // anything that varies per request, so the provider's prompt cache bills the
 // block at the cache-read price after the first request. Every other record
 // and skill reaches the model as one index line, which the agent follows with
-// steering_read.
+// read_steering.
 import { createHash } from "node:crypto";
 import { matchesGlob } from "@oxagen/glob";
 import type { Bundle, BundleRecord } from "@oxagen/oxagen/steering-repo/bundle";
@@ -20,7 +20,7 @@ import { compareText } from "./tree";
 export const WORKSPACE_BLOCK_HEADING = "## Workspace rules";
 export const ORGANIZATION_BLOCK_HEADING = "## Organization rules";
 export const INDEX_HEADING = "## More steering";
-export const INDEX_LEAD = "Read any of these with steering_read when it fits the task.";
+export const INDEX_LEAD = "Read any of these with read_steering when it fits the task.";
 export const REQUEST_HEADING = "## Request rules";
 
 /** Which published version a record came from. */

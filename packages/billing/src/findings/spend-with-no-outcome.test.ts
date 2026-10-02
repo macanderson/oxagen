@@ -329,6 +329,34 @@ describe("spend with no outcome", () => {
     expect(detectOne(completed, [noPr(completed, "completed")])).toEqual([]);
   });
 
+  // #5023: the card names why each cited run's work did not land.
+  it("stores the cited runs by why their work did not land", () => {
+    const [closed, reverted, abandoned, alsoClosed] = [
+      run(),
+      run(),
+      run(),
+      run(),
+    ];
+    const runs = [closed!, reverted!, abandoned!, alsoClosed!];
+    const [finding, ...rest] = detect({
+      runs,
+      outcomes: byRun([
+        closedUnmerged(closed!),
+        revertedAfter(reverted!, 3),
+        noPr(abandoned!, "abandoned"),
+        closedUnmerged(alsoClosed!),
+      ]),
+      frames: new Map(runs.map((r) => [r.runId, framesOf(r)])),
+    });
+    expect(rest).toEqual([]);
+    expect(finding!.evidence.values).toEqual({
+      kind: "spend_with_no_outcome",
+      closedUnmerged: 2,
+      reverted: 1,
+      abandoned: 1,
+    });
+  });
+
   it(`does not count again a frame spin loops claimed as detector 1`, () => {
     const r = run();
     const toolCalls: ToolCallObservation[] = Array.from(

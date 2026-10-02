@@ -120,6 +120,17 @@ describe("idle cache rewrites", () => {
     expect(finding!.why).toBe(
       `${CACHE_AGENT} waited 10 minutes 1 time, and each wait rewrote a 42,000-token cache on average. A keep-alive would have cost $0.03 against $0.14 in rewrites.`,
     );
+    // #5023: the card fills the same sentence from these figures.
+    expect(finding!.evidence.values).toEqual({
+      kind: "idle_cache_rewrites",
+      minWaitMinutes: 10,
+      maxWaitMinutes: 10,
+      averageTokens: 42_000,
+      keepAlive: { micros: "25200", currency: "USD" },
+      rewrites: { micros: "144900", currency: "USD" },
+      pricedRewrites: 1,
+      unknownRewrites: 0,
+    });
   });
 
   it("recommends the 1-hour TTL when it avoids more than it costs", () => {
@@ -567,6 +578,10 @@ describe("idle cache rewrites", () => {
     expect(finding!.why).toBe(
       `${CACHE_AGENT} waited 10 minutes 2 times, and each wait rewrote a 55,000-token cache on average. For the 1 of 2 rewrites this finding prices, a keep-alive would have cost $0.01 against $0.03.`,
     );
+    expect(finding!.evidence.values).toMatchObject({
+      averageTokens: 55_000,
+      pricedRewrites: 1,
+    });
   });
 
   it("prices a keep-alive per 4.5 minutes on the 5-minute TTL", () => {

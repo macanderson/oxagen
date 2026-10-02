@@ -6,6 +6,7 @@
 // Studio for one. The caller passes the model, built on @oxagen/ai.
 export {
   runSelection,
+  SELECTION_CONCURRENCY,
   SELECTION_INSTRUCTIONS,
   SELECTION_RUN_ERROR_CODES,
   SELECTION_TASKS_MAX,
@@ -22,4 +23,5 @@ export {
   type SelectionReport,
   type SelectionRequest,
   type SelectionRunErrorCode,
+  type SelectionStop,
 } from "./selection";

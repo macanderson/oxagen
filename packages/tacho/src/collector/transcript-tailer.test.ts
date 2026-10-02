@@ -678,6 +678,63 @@ describe("TranscriptTailer", () => {
     expect(instance.state().cursors[cursorId("s1")]?.subagents).toEqual(["a1"]);
   });
 
+  it("keeps the lines read before a read fails partway through a subagent transcript, and reads the rest on a later tick", async () => {
+    // #3824: the transcript used to be read once, whole, at SubagentStop, and
+    // a failure partway through lost everything after it. The read at
+    // SubagentStop is unbounded, so it takes the file one budget at a time,
+    // and here the second of those reads fails.
+    const dir = scratch();
+    const path = join(dir, "s.jsonl");
+    writeFileSync(path, "");
+    const agentPath = subagentPath(path, "a1");
+    writeFileSync(agentPath, "aaaa\nbbbb\ncccc\ndddd\n");
+    const session = fakeSession("s1", path);
+    const { instance, log } = tailer([session], { budgetBytes: 12 });
+
+    const open = fs.open.bind(fs);
+    let opens = 0;
+    const fault = vi.spyOn(fs, "open").mockImplementation((file, ...rest) => {
+      if (String(file) === agentPath && ++opens === 2)
+        return Promise.reject(
+          Object.assign(new Error("EIO: i/o error, read"), { code: "EIO" }),
+        );
+      return open(file, ...rest);
+    });
+    try {
+      expect(
+        await instance.ingestSubagentTranscript("s1", "a1", agentPath),
+      ).toBe(2);
+    } finally {
+      fault.mockRestore();
+    }
+    // The first read held two whole lines and the start of a third. The two
+    // are fed, the cursor stands after them, and the subagent stays open.
+    expect(session.lines).toEqual([
+      { line: "aaaa", subagentId: "a1" },
+      { line: "bbbb", subagentId: "a1" },
+    ]);
+    const cursor = instance.state().cursors[cursorId("s1")];
+    expect(cursor?.agents?.["a1"]?.offset).toBe(
+      Buffer.byteLength("aaaa\nbbbb\n"),
+    );
+    expect(cursor?.subagents).toEqual([]);
+    expect(log.some((line) => line.includes("stays open"))).toBe(true);
+
+    // The next tick reads on from the cursor, and nothing twice.
+    await instance.tick();
+    expect(session.lines.map((l) => l.line)).toEqual([
+      "aaaa",
+      "bbbb",
+      "cccc",
+      "dddd",
+    ]);
+    expect(await instance.ingestSubagentTranscript("s1", "a1", agentPath)).toBe(
+      0,
+    );
+    expect(instance.state().cursors[cursorId("s1")]?.subagents).toEqual(["a1"]);
+    expect(session.lines).toHaveLength(4);
+  });
+
   it("reads a running subagent one budget at a Stop, and to its end at SessionEnd", async () => {
     // The harness waits on Stop, which fires once a turn. The drain reads
     // the parent's transcript to its end there and leaves a subagent's to

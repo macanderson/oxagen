@@ -18,8 +18,10 @@
 // The port reads the version published now. A run has to read the versions
 // its request manifest names instead, and nothing reads those pins back yet.
 // So the port takes a `HostScope`, whose run id is always null, and a
-// run-scoped reader such as steering_search or steering_read cannot bind to
+// run-scoped reader such as search_steering or read_steering cannot bind to
 // it (#4447). tacho.published.test.ts proves that binding fails to compile.
+// steering.published.ts adapts the port for those two tools, and refuses a
+// call that names a run (#5137).
 import type { Delivery } from "@oxagen/steering-bundle";
 import type { ReadAsset } from "@oxagen/steering-bundle/session";
 import type { SteeringScope } from "./steering.search";
