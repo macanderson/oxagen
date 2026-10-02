@@ -302,8 +302,14 @@ describe.each(cases)(
 
 it("does not let a workspace Owner set the organization routing default", async () => {
   state.workspaceRole = "Owner";
-  await expect(routerPolicySetHandler({ scope: "org" }, ctx)).rejects.toThrow(
-    /requires/i,
-  );
+  // Stamped as the kernel stamps it, so the workspace rule would apply if
+  // the org scope did not ask for its named roles only (#5228).
+  const checked: CheckedContext = {
+    ...ctx,
+    invokedCapability: "set_routing_policy",
+  };
+  await expect(
+    routerPolicySetHandler({ scope: "org" }, checked),
+  ).rejects.toThrow(/requires/i);
   expect(state.business).not.toHaveBeenCalled();
 });
