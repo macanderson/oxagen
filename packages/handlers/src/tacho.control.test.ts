@@ -29,6 +29,11 @@ vi.mock("./logger", () => ({
 
 import { verifyBundle } from "./lib/tacho-bundle-signing";
 import {
+  CEDAR_RUNTIME,
+  cedarPort,
+  cedarVersion,
+} from "./lib/tacho-host-cedar.test-support";
+import {
   clearSteeringCacheForTests,
   type SteeringRow,
 } from "./lib/tacho-steering";
@@ -175,6 +180,8 @@ interface Fake {
    * promotions ledger as one row per record: a merge appends one.
    */
   records?: SteeringRow[];
+  /** The slug of the runtime the host binds. No runtime is found when unset. */
+  runtimeSlug?: string;
 }
 
 function tableName(table: unknown): string {
@@ -273,7 +280,13 @@ function wire(db: Fake, apiKey: Record<string, unknown> = HOST_KEY): void {
           // empty.
           agents: { findFirst: async () => undefined },
           agentVersions: { findFirst: async () => undefined },
-          runtimes: { findFirst: async () => undefined },
+          // The containment read and the Cedar read (`resolveHostCedar`).
+          runtimes: {
+            findFirst: async () =>
+              db.runtimeSlug === undefined
+                ? undefined
+                : { slug: db.runtimeSlug, containmentRequired: false },
+          },
           workspaces: { findFirst: async () => undefined },
         },
         // The steering read: the ledger count over `context_promotions`
@@ -804,6 +817,50 @@ describe("control envelope etag", () => {
     // the etag away from the policy's in this fixture at all.
     const policyOnly = (await poll(NOTHING_PUBLISHED)).control;
     expect(policyOnly.bundle_etag).not.toBe(served.etag);
+  });
+
+  it("names the etag get_tacho_bundle served to a host that parses Cedar, and moves it with a new version", async () => {
+    const db: Fake = {
+      hosts: [
+        host({
+          bundleFeatures: ["cedar"],
+          runtimeId: "22222222-2222-4222-8222-222222222222",
+        }),
+      ],
+      sessions: [],
+      commands: [],
+      updates: [],
+      inserts: [],
+      runtimeSlug: CEDAR_RUNTIME,
+    };
+    wire(db);
+    const port = cedarPort();
+    const poll = (published: TachoPublished) =>
+      createTachoCommandFetchHandler({ published })(
+        { ...FETCH, daemon: { bundle_features: ["cedar"] } },
+        MACHINE,
+      );
+    const fetchBundle = () =>
+      createTachoBundleGetHandler({ published: port })(
+        { host_enrollment_id: HOST_PUBLIC },
+        MACHINE,
+      );
+
+    const served = await fetchBundle();
+    expect(served.bundle?.cedar).toBeDefined();
+    expect((await poll(port)).control.bundle_etag).toBe(served.etag);
+    // Keeps the line above from holding vacuously: the Cedar part has to
+    // move the etag away from the policy's in this fixture at all.
+    expect((await poll(NOTHING_PUBLISHED)).control.bundle_etag).not.toBe(
+      served.etag,
+    );
+
+    // A newly published version moves the etag the envelope names, so the
+    // host's daemon fetches the bundle, which carries the same new etag.
+    port.version = cedarVersion({ version: 2 });
+    const moved = (await poll(port)).control.bundle_etag;
+    expect(moved).not.toBe(served.etag);
+    expect((await fetchBundle()).etag).toBe(moved);
   });
 });
 

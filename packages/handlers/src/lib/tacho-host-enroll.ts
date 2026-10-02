@@ -440,7 +440,15 @@ export async function mintHostEnrollment(
   };
 }
 
-/** The document the collector keeps: the shown-once key, the signed claims, the signed initial bundle. */
+/**
+ * The document the collector keeps: the shown-once key, the signed claims, the
+ * signed initial bundle.
+ *
+ * The initial bundle carries no skills and no Cedar policies. Both are read
+ * from the published steering outside any tenant transaction, and enrollment
+ * runs inside one. The host's first poll names the etag that covers them, so
+ * the host fetches them within a minute of enrolling.
+ */
 export function enrollmentDocument(
   minted: MintedHostEnrollment,
   signing: EnrollmentSigning,

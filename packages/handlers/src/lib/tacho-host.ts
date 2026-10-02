@@ -19,8 +19,10 @@ import { fetchAgentRunAuthzIn } from "@oxagen/iam/fetch-agent-authz";
 import { collectResourceScope } from "@oxagen/oxagen/iam";
 import { loadRuleSetIn } from "@oxagen/rules";
 import { PROVIDER_RATE_CARD, usdPerMillionToMicros } from "@oxagen/billing";
+import { type CompiledPolicySet, hostCedarBundle } from "@oxagen/policy";
 import {
   type AgentDaySpend,
+  BUNDLE_FEATURE_CEDAR,
   BUNDLE_FEATURE_CONTAINMENT,
   BUNDLE_FEATURE_DAILY_BUDGET,
   BUNDLE_FEATURE_GATEWAY_TOOLS,
@@ -30,6 +32,8 @@ import {
   BUNDLE_FEATURE_STEERING_MANIFEST,
   BUNDLE_FEATURE_UNBOUND_REPO,
   type BundleSkill,
+  type CedarBundle,
+  cedarBundleSchema,
   digestJcs,
   type JsonValue,
   type SteeringManifest,
@@ -92,7 +96,8 @@ interface TachoTx {
     retentionPolicyVersions: { findFirst: (args: unknown) => Promise<unknown> };
     // The mandate read (`resolveHostMandate`): the host's agent identity and
     // its active version's config, for the budget half of the mandate, and
-    // the host's runtime, for containment (ADR-204).
+    // the host's runtime, for containment (ADR-204) and for the slug the
+    // Cedar part is cut by (`resolveHostCedar`).
     agents: { findFirst: (args: unknown) => Promise<unknown> };
     agentVersions: { findFirst: (args: unknown) => Promise<unknown> };
     runtimes: { findFirst: (args: unknown) => Promise<unknown> };
@@ -433,6 +438,12 @@ export interface HostMandate {
    * for a host that advertised `BUNDLE_FEATURE_CACHE_KEEP_ALIVE`.
    */
   cacheKeepAlive?: NonNullable<PolicyBundle["cache_keep_alive"]>;
+  /**
+   * The steering repo's Cedar policies for the agents on the host's runtime
+   * (lane S12). `resolveHostCedar` resolves it, only for a host that
+   * advertised `BUNDLE_FEATURE_CEDAR`.
+   */
+  cedar?: CedarBundle;
 }
 
 /**
@@ -669,6 +680,70 @@ async function workspaceModels(
     : {};
 }
 
+/** Whether this host named `cedar` among the fields it can parse. */
+function parsesCedar(host: TachoHostRow): boolean {
+  const advertised: unknown = host.bundleFeatures;
+  return (
+    Array.isArray(advertised) && advertised.includes(BUNDLE_FEATURE_CEDAR)
+  );
+}
+
+/**
+ * The Cedar part of a host's mandate (lane S12): the workspace's compiled
+ * policy set (`hostCedarReader` in ./tacho-host-cedar), cut down to the
+ * agents whose `runtime` is the host's runtime (`hostCedarBundle`).
+ *
+ * Empty, so the bundle carries no Cedar and the permission rules decide
+ * alone, when the host did not advertise `cedar`, nothing published compiled,
+ * the host binds no runtime, or no agent runs on it. A host that did not
+ * advertise the field costs no read.
+ *
+ * The runtime is the one the host enrollment binds, matched by its slug, the
+ * way the cloud gateway picks the agent for a call (apps/mcp/src/servers/run.ts).
+ * Unlike the gateway's read, a deleted runtime still counts. The gateway
+ * serves nothing to a host whose runtime is gone, but a host with no Cedar
+ * decides with its permission rules alone, which is looser. So a host still
+ * bound to a deleted runtime keeps its policies, as it keeps its containment
+ * (`readRuntimeContainment`).
+ *
+ * The host's bundle schema is strict, and a field it cannot parse makes it
+ * refuse the whole bundle and keep a stale mandate. So the part is checked
+ * against that schema first, and a part that fails, such as one with more
+ * agents on a runtime than the schema allows, is logged and left out.
+ */
+export async function resolveHostCedar(
+  tx: TachoTx,
+  host: TachoHostRow,
+  policy: CompiledPolicySet | undefined,
+): Promise<Pick<HostMandate, "cedar">> {
+  const runtimeId = host.runtimeId ?? null;
+  if (policy === undefined || !parsesCedar(host) || runtimeId === null) {
+    return {};
+  }
+  const runtime = (await tx.query.runtimes.findFirst({
+    where: eq(schema.runtimes.id, runtimeId),
+    columns: { slug: true },
+  })) as { slug: string } | undefined;
+  if (runtime === undefined) return {};
+  const part = hostCedarBundle(policy, runtime.slug);
+  if (part === undefined) return {};
+  const checked = cedarBundleSchema.safeParse(part);
+  if (!checked.success) {
+    logger.warn(
+      {
+        host: host.publicId,
+        runtime: runtime.slug,
+        issues: checked.error.issues
+          .slice(0, 5)
+          .map((issue) => `${issue.path.join(".")}: ${issue.message}`),
+      },
+      "The host's Cedar policies do not fit the bundle's schema, so the host receives none",
+    );
+    return {};
+  }
+  return { cedar: checked.data };
+}
+
 /**
  * The unsigned bundle for a host at this moment (spec section 7.1).
  *
@@ -680,7 +755,8 @@ async function workspaceModels(
  *
  * `mandate` is the tool-RBAC-and-budget half (`resolveHostMandate`), likewise
  * required: a caller building a bundle without resolving it would silently
- * reproduce the empty mandate this replaces.
+ * reproduce the empty mandate this replaces. Its `cedar` part comes from
+ * `resolveHostCedar`, which every route that builds a bundle calls.
  */
 export function unsignedBundle(
   host: TachoHostRow,
@@ -734,6 +810,12 @@ export function unsignedBundle(
     // The same: signed only to a host that can parse it.
     ...(mandate.cacheKeepAlive !== undefined && parsesCacheKeepAlive(host)
       ? { cache_keep_alive: mandate.cacheKeepAlive }
+      : {}),
+    // The same again. It sits in `content`, so the etag covers it: a newly
+    // published version changes the etag, and the host fetches the new
+    // policies on its next poll.
+    ...(mandate.cedar !== undefined && parsesCedar(host)
+      ? { cedar: mandate.cedar }
       : {}),
   };
   const etag = digestJcs(content as unknown as JsonValue).slice(
@@ -973,6 +1055,12 @@ export async function drainCommands(
  * caller can publish the policy etag to a host that holds the etag over its
  * skills (`servedBundleEtag`). The read stays outside `tx` because the version
  * store's port opens tenant transactions of its own.
+ *
+ * `policy` is the workspace's compiled Cedar set as `hostCedarReader` in
+ * ./tacho-host-cedar reads it, also before `tx`, and required for the same
+ * reason: the bundle's etag covers its Cedar part, so an envelope built
+ * without it would name an etag the host never holds, and the host would
+ * fetch its bundle on every batch and poll.
  */
 export async function controlEnvelope(
   tx: TachoTx,
@@ -980,19 +1068,22 @@ export async function controlEnvelope(
   host: TachoHostRow,
   now: Date,
   skills: BundleSkill[] | undefined,
+  policy: CompiledPolicySet | undefined,
 ): Promise<ControlEnvelope> {
-  const [denyGeneration, retention, steering, mandate] = await Promise.all([
-    readDenyGeneration(tx, ctx.orgId, ctx.workspaceId),
-    readWorkspaceRetention(tx, ctx.orgId, ctx.workspaceId),
-    readWorkspaceSteering(tx, ctx.orgId, ctx.workspaceId),
-    resolveHostMandate(tx, ctx, host),
-  ]);
+  const [denyGeneration, retention, steering, mandate, cedar] =
+    await Promise.all([
+      readDenyGeneration(tx, ctx.orgId, ctx.workspaceId),
+      readWorkspaceRetention(tx, ctx.orgId, ctx.workspaceId),
+      readWorkspaceSteering(tx, ctx.orgId, ctx.workspaceId),
+      resolveHostMandate(tx, ctx, host),
+      resolveHostCedar(tx, host, policy),
+    ]);
   const bundle = unsignedBundle(
     host,
     denyGeneration,
     retention,
     steering,
-    mandate,
+    { ...mandate, ...cedar },
     now,
   );
   const commands = await drainCommands(tx, host, now);

@@ -6,9 +6,28 @@
  */
 import { generateKeyPairSync } from "node:crypto";
 import type { CapabilityContext } from "@oxagen/oxagen";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { policyBundleSchema } from "@oxagen/recorder";
+import { requireCedarRuntime } from "@oxagen/policy";
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
+import { BUNDLE_FEATURE_CEDAR, policyBundleSchema } from "@oxagen/recorder";
 import { bundleSignerFromPem, verifyBundle } from "./lib/tacho-bundle-signing";
+import {
+  BROKEN_POLICY,
+  CEDAR_RUNTIME,
+  cedarPort,
+  cedarVersion,
+  NO_SHELL_ID,
+  RELEASE_BOT,
+  REVIEWER,
+  REVIEWER_NO_SHELL_ID,
+} from "./lib/tacho-host-cedar.test-support";
 import {
   fixtureDelivery,
   readFixtureFile,
@@ -30,7 +49,11 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@oxagen/database", async (importOriginal) => {
   const original = await importOriginal<typeof import("@oxagen/database")>();
-  return { ...original, withTenantDb: mocks.withTenantDb };
+  // The org-wide seam is mocked as the SAME function as the tenant
+  // seam (ADR-086): a handler's role gate reads through withOrgDb, and
+  // a suite that counts seam calls must see one identity, not two.
+  const dbMock = { ...original, withTenantDb: mocks.withTenantDb };
+  return { ...dbMock, withOrgDb: dbMock.withTenantDb };
 });
 
 vi.mock("./lib/tacho-host", async (importOriginal) => {
@@ -99,6 +122,10 @@ beforeEach(() => {
   mocks.withTenantDb.mockImplementation(
     async (fn: (tx: unknown) => Promise<unknown>) =>
       fn({
+        // The runtime a host that parses Cedar binds (`resolveHostCedar`).
+        query: {
+          runtimes: { findFirst: async () => ({ slug: CEDAR_RUNTIME }) },
+        },
         update: () => ({
           set: (values: Record<string, unknown>) => ({
             where: async () => {
@@ -235,6 +262,7 @@ describe("get_tacho_bundle skills", () => {
     );
     expect(answer.bundle).not.toBeNull();
     expect(answer.bundle).not.toHaveProperty("skills");
+    expect(answer.bundle).not.toHaveProperty("cedar");
   });
 
   it("sends no skills and keeps the etag when nothing has published", async () => {
@@ -395,5 +423,91 @@ describe("get_tacho_bundle skills", () => {
     );
     expect(second).toEqual({ not_modified: true, etag: first.etag, bundle: null });
     expect(published.reads).toBe(reads);
+  });
+});
+
+describe("get_tacho_bundle Cedar", () => {
+  /** A host that parses Cedar and binds the runtime two of the fixture's agents run on. */
+  const CEDAR_HOST = {
+    bundleFeatures: [BUNDLE_FEATURE_CEDAR],
+    runtimeId: "22222222-2222-4222-8222-222222222222",
+  };
+
+  beforeAll(async () => {
+    // Loaded once per process, before the fake timers start.
+    await requireCedarRuntime();
+  });
+
+  it("sends a host that parses Cedar the published policies, and a newly published version on its next fetch", async () => {
+    const port = cedarPort();
+    const handler = createTachoBundleGetHandler({ published: port });
+    mocks.host.mockReturnValue(hostRow(CEDAR_HOST));
+    const first = await handler({ host_enrollment_id: HOST_PUBLIC }, MACHINE);
+    expect(first.bundle?.cedar?.policies).toHaveProperty(NO_SHELL_ID);
+    expect(
+      first.bundle?.cedar?.principals.map((agent) => agent.name).sort(),
+    ).toEqual([RELEASE_BOT, REVIEWER].sort());
+    expect(first.bundle && policyBundleSchema.parse(first.bundle).cedar).toEqual(
+      first.bundle?.cedar,
+    );
+    expect(
+      first.bundle &&
+        verifyBundle(first.bundle, bundleSignerFromPem(PEM).publicKeyPem),
+    ).toBe(true);
+
+    // While the version stands, a poll with its etag is not_modified.
+    mocks.host.mockReturnValue(
+      hostRow({ ...CEDAR_HOST, bundleEtagServed: first.etag }),
+    );
+    const same = await handler(
+      { host_enrollment_id: HOST_PUBLIC, etag: first.etag },
+      MACHINE,
+    );
+    expect(same).toEqual({ not_modified: true, etag: first.etag, bundle: null });
+
+    // A newly published version moves the etag, so the host's next fetch
+    // with the etag it holds gets the new policies.
+    port.version = cedarVersion({ version: 2 });
+    mocks.host.mockReturnValue(
+      hostRow({
+        ...CEDAR_HOST,
+        bundleEtagServed: first.etag,
+        bundleVersionServed: 5,
+      }),
+    );
+    const next = await handler(
+      { host_enrollment_id: HOST_PUBLIC, etag: first.etag },
+      MACHINE,
+    );
+    expect(next.not_modified).toBe(false);
+    expect(next.etag).not.toBe(first.etag);
+    expect(next.bundle?.cedar?.policies).toHaveProperty(REVIEWER_NO_SHELL_ID);
+    expect(next.bundle?.version).toBe(6);
+    expect(writes.at(-1)).toMatchObject({
+      bundleEtagServed: next.etag,
+      bundleVersionServed: 6,
+    });
+  });
+
+  it("sends no Cedar and keeps the etag when nothing has published", async () => {
+    const base = await currentEtag();
+    mocks.host.mockReturnValue(hostRow(CEDAR_HOST));
+    const answer = await createTachoBundleGetHandler({
+      published: NOTHING_PUBLISHED,
+    })({ host_enrollment_id: HOST_PUBLIC }, MACHINE);
+    expect(answer.bundle).not.toHaveProperty("cedar");
+    expect(answer.etag).toBe(base);
+  });
+
+  it("still sends the mandate, without Cedar, when the published policies do not compile", async () => {
+    const base = await currentEtag();
+    mocks.host.mockReturnValue(hostRow(CEDAR_HOST));
+    const answer = await createTachoBundleGetHandler({
+      published: cedarPort(cedarVersion({ policies: [BROKEN_POLICY] })),
+    })({ host_enrollment_id: HOST_PUBLIC }, MACHINE);
+    expect(answer.not_modified).toBe(false);
+    expect(answer.bundle).not.toHaveProperty("cedar");
+    expect(answer.bundle?.permissions).toEqual({ allow: [], deny: [], ask: [] });
+    expect(answer.etag).toBe(base);
   });
 });

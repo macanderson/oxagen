@@ -21,7 +21,7 @@
 // use, so a handler can import this module lazily.
 import { createHash } from "node:crypto";
 import type { Bundle } from "@oxagen/oxagen/steering-repo/bundle";
-import type { VersionStore } from "@oxagen/steering-bundle";
+import type { Delivery, VersionStore } from "@oxagen/steering-bundle";
 import type { ReadAsset } from "@oxagen/steering-bundle/session";
 import { runInTenantScope } from "@oxagen/tenancy";
 import type {
@@ -262,16 +262,36 @@ export function createPostgresTachoPublished(
     return body;
   };
 
+  // The reads in flight, by workspace. A host route reads the skills and the
+  // Cedar policies at once, and each asks for the published version, so the
+  // second ask joins the first read instead of making its own. A legacy
+  // connection costs a forge call per read, which this halves. The entry
+  // goes when the read settles, so a later ask reads the store again. The
+  // read sets its own tenant scope with no principal, so whichever request
+  // started it, the answer is the same.
+  const reading = new Map<string, Promise<Delivery>>();
+
   return {
     // The version published now. A run's request manifest names the
     // versions it received, but nothing reads those pins back yet, so the
     // port's scope has a null run id and no run can read through it (#4447).
-    published: async (scope) => {
-      const current = await currentVersion({
+    published: (scope) => {
+      const key = `${scope.orgId}:${scope.workspaceId}`;
+      const pending = reading.get(key);
+      if (pending !== undefined) return pending;
+      const read = currentVersion({
         orgId: scope.orgId,
         workspaceId: scope.workspaceId,
-      });
-      return { workspace: current?.bundle ?? null, organization: null };
+      })
+        .then(
+          (current): Delivery => ({
+            workspace: current?.bundle ?? null,
+            organization: null,
+          }),
+        )
+        .finally(() => reading.delete(key));
+      reading.set(key, read);
+      return read;
     },
 
     readAsset,
