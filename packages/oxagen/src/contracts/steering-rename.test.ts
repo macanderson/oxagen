@@ -1,6 +1,6 @@
-// The steering record rename (#4325). A context record became a steering
-// record and a Context PR became a steering PR in one change (decision 1),
-// with no old name kept as an alias (decision 3).
+// The steering record rename (#4325). The record and its pull request took
+// their steering names in one change (decision 1), and no old name stays as
+// an alias (decision 3).
 //
 // The retired names are read from the migration that recorded them in
 // iam.capability_renames, so this file spells only the current ones and a

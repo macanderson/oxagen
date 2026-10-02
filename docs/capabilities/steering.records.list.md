@@ -17,7 +17,7 @@ List the workspace's published steering records: what is in force on the product
 
 | Field | Type | Notes |
 | --- | --- | --- |
-| `kind` | `rule \| constraint \| procedure \| fact \| memory \| preference`? | The six kinds of context-record/v0.1 |
+| `kind` | `rule \| constraint \| procedure \| fact \| memory \| preference`? | The six kinds of a v0.1 record file |
 | `sharingScope` | `repository \| workspace`? | Where the record applies (spec §10.2) |
 | `status` | `active \| retired \| superseded`? | Lifecycle status |
 | `lineageId` | `string`? | One lineage (the file stem) |

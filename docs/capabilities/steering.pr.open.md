@@ -22,7 +22,7 @@ The pull request that publishes a proposal ([ADR-061](../adr/ADR-061-steering-go
 
    | Layout | New record | Branch |
    | --- | --- | --- |
-   | Legacy | `.oxagen/rules/<lineage>.toml`, in context-record/v0.1 (Stella's layout), with `record_id` and `record_hash` stamped from the content the way Stella stamps them | `steering/<lineage>` |
+   | Legacy | `.oxagen/rules/<lineage>.toml`, in Stella's v0.1 record format, with `record_id` and `record_hash` stamped from the content the way Stella stamps them | `steering/<lineage>` |
    | Steering, any kind but memory | `steering/<kind folder>/<lineage>.md`, a steering record in steering-record/v1: `business-rules`, `constraints`, `procedures`, `facts`, or `preferences` | `steering/<lineage>` |
    | Steering, memory | `steering/memory/workspace/general/<lineage>.md`, where the memory curator puts a memory with no repository, path, or tool | `memory/<lineage>` |
 
