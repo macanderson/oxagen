@@ -378,6 +378,7 @@ import "./contracts/spend.drill";
 import "./contracts/spend.get";
 import "./contracts/spend.operator_pseudonyms.set";
 import "./contracts/spend.operator_ranking";
+import "./contracts/spend.per_merged_pr";
 import "./contracts/spend.shared";
 import "./contracts/spend.statement.export";
 import "./contracts/spend.unproductive";

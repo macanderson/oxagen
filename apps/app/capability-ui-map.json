@@ -647,6 +647,14 @@
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
     },
+    "get_spend_per_merged_pr": {
+      "route": "/[org]/[ws]/spend",
+      "page": "apps/app/src/app/[org]/[ws]/spend/[[...tab]]/page.tsx",
+      "entry": "Spend › Month, grouped by agent › Per merged PR: each agent's spend on runs that opened a PR, divided by its PRs that merged and were not reverted within 14 days, with the runs behind it in the agent's open row (features/spend/month.tsx, data/live/spend.ts, data/live/mappers/spend.ts)",
+      "proof": "apps/app/src/features/spend/month.test.tsx",
+      "verifiedAt": "2026-10-02",
+      "verifiedBy": "session-3867219c-spend-f26"
+    },
     "get_subscription": {
       "route": "/[org]/billing",
       "page": "apps/app/src/app/[org]/billing/page.tsx",

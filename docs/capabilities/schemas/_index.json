@@ -1950,6 +1950,17 @@
       "consumes": []
     },
     {
+      "name": "get_spend_per_merged_pr",
+      "domain": "spend",
+      "surfaces": [
+        "api",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "get_steering_deliveries",
       "domain": "context",
       "surfaces": [
