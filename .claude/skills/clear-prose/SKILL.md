@@ -75,6 +75,16 @@ how to read it from `main`.
 - Do not use metaphors or clever labels for actions or instructions. Prefer
   direct labels: "Activity history," not "Your work’s memory."
 
+## Settings in docs
+
+A capability doc or an operator runbook never says which setting, or which
+value, turns a control on. It says the control depends on a deployment
+setting and links the setting's `ENV_REGISTRY` entry
+(`packages/config/src/registry.ts`). The entry's description is the one place
+that claims what the setting does. Four docs on #3169 said a control was on
+while the code had it off, and the fix was one place to be wrong instead of
+four. `AGENTS.md` has the full rule (#3202).
+
 ## Words and punctuation to avoid
 
 - Avoid industry jargon or brand terms unless required and accurate.

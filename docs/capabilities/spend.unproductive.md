@@ -13,7 +13,7 @@ The unproductive spend of the active workspace over a day range: the one total S
 - API: `POST /v1/:org_slug/:workspace_slug/spend/unproductive`
 - Authentication: session (org Owner, Admin, Billing, or Member; workspace Owner or Member), the people who read [`list_findings`](finding.list.md)
 - Capability name: `get_unproductive_spend`
-- Not billed (`noBillingGate: true`). IAM default-deny; medium sensitivity. In an Enterprise org, migration `20261001210000_backfill_spend_ranking_grants.sql` grants the capability to the system roles of every org that existed before it did.
+- Not billed (`noBillingGate: true`). IAM default-deny; medium sensitivity. In an Enterprise org, migration `20261002020000_backfill_spend_ranking_grants.sql` grants the capability to the system roles of every org that existed before it did.
 - Agent: Stella finds it with `search_tools` and loads it with `load_tools`. It runs with no approval step (`riskLevel: low`).
 
 ## Input

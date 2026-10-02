@@ -112,6 +112,8 @@ vi.mock("@oxagen/database", async (importOriginal) => {
     if (table === real.schema.subscriptions && joined)
       return w.entitled ? [w.entitled] : [];
     if (table === real.schema.plans) return [FREE_PLAN];
+    // readGauEntitlement reads the org's signup grant in the same round trip.
+    if (table === real.schema.gauSignupGrants) return [];
     if (table === real.schema.gauBuckets) return [w.bucket];
     throw new Error(`unexpected table ${nameOf(table)}`);
   };

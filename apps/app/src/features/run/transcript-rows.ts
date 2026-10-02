@@ -610,7 +610,15 @@ function modelRows(entry: TranscriptEntry): FeedRow[] {
       : entry.request !== null
         ? halfRef(entry.request)
         : openingOf(entry);
-  const blocks = reply?.blocks;
+  // The reply and its further parts, each with the prefix its rows are keyed
+  // by. One reply is one step however many parts it arrives in (#4351), so
+  // the parts draw after the reply, in order, inside this one step.
+  const replies = [reply, ...(entry.parts ?? [])].flatMap((body, n) =>
+    body === null
+      ? []
+      : [{ body, prefix: n === 0 ? entry.key : `${entry.key}:p${String(n)}` }],
+  );
+  const blocks = replies.flatMap(({ body }) => body.blocks ?? []);
   const rows: FeedRow[] = [];
   const said = (key: string, kind: "text" | "thinking", text: string) => {
     const at = base(key, entry, kind === "text" ? "responses" : "thinking");
@@ -620,19 +628,21 @@ function modelRows(entry: TranscriptEntry): FeedRow[] {
         : { ...at, kind, text, tokens: null },
     );
   };
-  if (blocks === undefined) {
-    // A reply kept as plain words is drawn as them. One kept as JSON the
-    // recorder did not assemble is drawn by its cost alone, never as JSON to
-    // open.
-    const text = reply?.text ?? null;
-    if (text !== null && text.trim() !== "" && parseBody(text) === null)
-      said(`${entry.key}:text`, "text", text);
-  } else {
-    blocks.forEach((block, index) => {
-      if (block.kind !== "text" && block.kind !== "thinking") return;
-      if (block.text.trim() === "") return;
-      said(`${entry.key}:${String(index)}`, block.kind, block.text);
-    });
+  for (const { body, prefix } of replies) {
+    if (body.blocks === undefined) {
+      // A reply kept as plain words is drawn as them. One kept as JSON the
+      // recorder did not assemble is drawn by its cost alone, never as JSON
+      // to open.
+      const text = body.text ?? null;
+      if (text !== null && text.trim() !== "" && parseBody(text) === null)
+        said(`${prefix}:text`, "text", text);
+    } else {
+      body.blocks.forEach((block, index) => {
+        if (block.kind !== "text" && block.kind !== "thinking") return;
+        if (block.text.trim() === "") return;
+        said(`${prefix}:${String(index)}`, block.kind, block.text);
+      });
+    }
   }
   // A harness that reports reasoning tokens and keeps none of the thought
   // (Claude Code over OTel) still says the model thought, and how much.
@@ -653,7 +663,7 @@ function modelRows(entry: TranscriptEntry): FeedRow[] {
     rows.push({
       ...base(`${entry.key}:calls`, entry, "responses"),
       kind: "calls",
-      tools: (blocks ?? []).flatMap((block) =>
+      tools: blocks.flatMap((block) =>
         block.kind === "tool_use" && block.stepKey !== null
           ? [block.tool ?? block.name]
           : [],
@@ -675,12 +685,14 @@ function modelRows(entry: TranscriptEntry): FeedRow[] {
       frame,
     });
   }
-  blocks?.forEach((block, index) => {
-    if (block.kind !== "tool_use" || block.stepKey !== null) return;
-    rows.push(
-      blockToolRow(block, `${entry.key}:u${String(index)}`, entry, frame),
-    );
-  });
+  for (const { body, prefix } of replies) {
+    body.blocks?.forEach((block, index) => {
+      if (block.kind !== "tool_use" || block.stepKey !== null) return;
+      rows.push(
+        blockToolRow(block, `${prefix}:u${String(index)}`, entry, frame),
+      );
+    });
+  }
   // A call that failed with no reply kept and no figures still shows: the
   // server counts it under errors, so it draws one failed row naming the
   // model, under no chip.

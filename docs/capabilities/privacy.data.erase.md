@@ -9,7 +9,7 @@
 
 ## Intent
 
-Request erasure of personal or organizational data under GDPR Article 17 (right to erasure). All active sessions are revoked immediately. A hard-delete is scheduled after a configurable grace period (default: 30 days, set via `PRIVACY_ERASURE_GRACE_DAYS`).
+Request erasure of personal or organizational data under GDPR Article 17 (right to erasure). All active sessions are revoked immediately. A hard-delete is scheduled after a grace period the deployment sets ([`PRIVACY_ERASURE_GRACE_DAYS`](../../packages/config/src/registry.ts)).
 
 A `privacy/erasure.execute` Inngest event is emitted — subscribe to this via webhook to trigger downstream cleanup in CRM, analytics, and internal systems.
 
@@ -31,7 +31,7 @@ A `privacy/erasure.execute` Inngest event is emitted — subscribe to this via w
 
 ## Grace period
 
-Default: 30 days (`PRIVACY_ERASURE_GRACE_DAYS=30`). Set to `0` in test environments for immediate erasure. Contact `privacy@oxagen.sh` within the grace period to cancel.
+The deployment sets the grace period. Its registry entry, [`PRIVACY_ERASURE_GRACE_DAYS`](../../packages/config/src/registry.ts), gives the default and the value for immediate erasure. Contact `privacy@oxagen.sh` within the grace period to cancel.
 
 ## Roles
 

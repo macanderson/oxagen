@@ -12,6 +12,7 @@ import { billingEvidenceRetention } from "./billing.evidence_retention";
 
 const unmeasured = {
   includedMonths: 12,
+  includedDays: 360,
   effectiveRetentionDays: 365,
   extendedRetentionEnabled: false,
   usdPerGbMonth: 0.08,

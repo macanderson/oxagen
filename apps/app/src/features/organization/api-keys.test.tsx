@@ -553,7 +553,11 @@ describe("the workspace a key names", () => {
       "/acme/api-keys?workspace=core-platform",
     );
     expect(here).toHaveAttribute("aria-selected", "true");
-    expect(here).toHaveAttribute("aria-current", "page");
+    expect(here).toHaveAttribute("tabindex", "0");
+    // The selected workspace names the keys under the picker as its panel.
+    const panel = screen.getByRole("tabpanel", { name: "Core platform" });
+    expect(here).toHaveAttribute("aria-controls", panel.id);
+    expect(other).not.toHaveAttribute("aria-controls");
     expect(other).toHaveAttribute("href", "/acme/api-keys?workspace=growth");
     expect(other).toHaveAttribute("aria-selected", "false");
   });

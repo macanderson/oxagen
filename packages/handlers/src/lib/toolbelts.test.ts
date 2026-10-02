@@ -1,12 +1,19 @@
 // The belt rule every toolbelt reader goes through (ADR-198): which tools a
 // belt holds and which it shows, and how a server named by public id is
 // resolved. Pure functions over rows; the handlers' Postgres suites prove the
-// reads that feed them.
+// reads that feed them. The last block reads the WHERE clause the workspace
+// tool reader sends, to show it keeps the servers a steering version
+// published while the in-app agent's reader leaves them out (M13, #4478).
 import { describe, expect, it } from "vitest";
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
+import { selectMaterializableMcpServers } from "@oxagen/agent/runtime/mcp-servers";
+import type { Tx } from "@oxagen/database";
 import { isHandlerError } from "@oxagen/oxagen";
 import {
   beltDenyPatterns,
   beltToolStates,
+  readWorkspaceTools,
   resolveServerKey,
   serverKeyOf,
   type ToolServer,
@@ -142,5 +149,91 @@ describe("server keys", () => {
           err.reason === "tool_server_not_found",
       ).toBe(true);
     }
+  });
+});
+
+describe("steering rows", () => {
+  const scope = {
+    orgId: "00000000-0000-4000-8000-000000000001",
+    workspaceId: "00000000-0000-4000-8000-000000000002",
+  };
+
+  /**
+   * A transaction that answers each select with the next queued row set and
+   * keeps every WHERE clause, rendered with Postgres's dialect so the test
+   * reads the SQL a real database would get.
+   */
+  function recordingTx(results: unknown[][]) {
+    const wheres: { sql: string; params: unknown[] }[] = [];
+    const tx = {
+      select: () => {
+        const rows = results.shift() ?? [];
+        const chain = {
+          from: () => chain,
+          leftJoin: () => chain,
+          where: (condition: SQL) => {
+            wheres.push(new PgDialect().sqlToQuery(condition));
+            return chain;
+          },
+          orderBy: () => Promise.resolve(rows),
+        };
+        return chain;
+      },
+    } as unknown as Tx;
+    return { tx, wheres };
+  }
+
+  // A server a steering version published, origin `steering`, and its tool.
+  const steeringServer = {
+    id: "srv-stripe",
+    publicId: "mcs_stripe",
+    name: "stripe",
+  };
+  const steeringTool = {
+    id: "tool-refund",
+    publicId: "tol_refund",
+    slug: "stripe__create_refund",
+    name: "create_refund",
+    description: null,
+    source: "mcp",
+    enabled: true,
+    defaultActive: true,
+    mcpServerId: "srv-stripe",
+  };
+
+  it("the toolbelt reader keeps a steering server and its tools", async () => {
+    const { tx, wheres } = recordingTx([[steeringServer], [steeringTool]]);
+
+    const { tools, servers } = await readWorkspaceTools(tx, scope);
+
+    // The server query filters on scope and soft delete, never on origin, so
+    // the database returns steering rows to every toolbelt reader.
+    const serverWhere = wheres[0];
+    expect(serverWhere?.sql).toContain('"mcp_servers"."deleted_at" is null');
+    expect(serverWhere?.sql).not.toContain('"origin"');
+    expect(serverWhere?.params).not.toContain("steering");
+    expect(servers.get("srv-stripe")).toEqual(steeringServer);
+    expect(tools.map((t) => [t.slug, t.mcpServerId, t.available])).toEqual([
+      ["stripe__create_refund", "srv-stripe", true],
+    ]);
+
+    // The wrapped agent's host bundle denies the tool by name when a belt
+    // hides it, which it can only do because the reader kept the row.
+    const hidden = beltToolStates({ kind: "custom" }, tools, new Map());
+    expect(beltDenyPatterns(hidden, servers)).toEqual(["stripe:create_refund"]);
+  });
+
+  it("the in-app reader leaves out the same steering server", () => {
+    const { tx, wheres } = recordingTx([[]]);
+
+    selectMaterializableMcpServers(tx, scope);
+
+    const where = wheres[0];
+    const at = where?.sql.indexOf('"mcp_servers"."origin" <> $') ?? -1;
+    expect(at).toBeGreaterThanOrEqual(0);
+    const param = Number(
+      where?.sql.slice(at).match(/<> \$(\d+)/)?.[1] ?? Number.NaN,
+    );
+    expect(where?.params[param - 1]).toBe("steering");
   });
 });

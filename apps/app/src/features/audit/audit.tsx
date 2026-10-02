@@ -40,7 +40,7 @@ import { getAuthUser } from "@/server/session";
 import type { OrgCtx } from "@/server/viewer";
 import { firstParam, routes, type SafePath } from "@/shared/safe-path";
 import { panel, statStrip, statTile } from "@/ui/control-styles";
-import { RouteTabs } from "@/ui/route-tabs";
+import { RouteTabPanel, RouteTabs } from "@/ui/route-tabs";
 import { formatCount } from "@/ui/money-format";
 import {
   type AuditActor,
@@ -63,6 +63,9 @@ import {
 } from "./sections";
 import { AuditEmpty, AuditFailure } from "./states";
 import { AUDIT_TABS, type AuditTab } from "./tabs";
+
+/** The id of the panel the page draws under its tabs. */
+const AUDIT_PANEL = "audit-panel";
 
 type Params = Readonly<Record<string, string | string[] | undefined>>;
 
@@ -300,39 +303,42 @@ function AuditBody({
       });
   return (
     <div className="flex flex-col gap-3.5">
-      {/* The design's tab semantics, as the Organization rows carry them
-          (#3995): a tablist of tabs, each still a link to its own segment. */}
+      {/* A tablist of tabs, each still a link to its own segment
+          (ADR-243, #3995). */}
       <RouteTabs
         label={t("label")}
-        tablist
+        panel={AUDIT_PANEL}
         tabs={AUDIT_TABS.map((each) => ({
           to: tabPath(org, each),
           label: t(each),
           current: each === tab,
+          name: each,
           ...(each === "events" ? { count: events } : {}),
         }))}
       />
-      {tab === "events" && loaded.page !== null ? (
-        <>
-          <EventTiles query={query} window={loaded.window} />
-          <EventsPanel
-            org={org}
-            query={query}
-            page={loaded.page}
-            window={loaded.window}
-            actors={loaded.actors}
-          />
-        </>
-      ) : null}
-      {tab === "incidents" ? <IncidentsTab /> : null}
-      {tab === "receipts" ? <ReceiptsTab /> : null}
-      {tab === "exports" ? (
-        <ExportsTab org={org} bundle={loaded.bundle} />
-      ) : null}
-      {tab === "keys" ? <KeysTab /> : null}
-      {tab === "retention" && loaded.retention !== null ? (
-        <RetentionTab retention={loaded.retention} />
-      ) : null}
+      <RouteTabPanel panel={AUDIT_PANEL} className="flex flex-col gap-3.5">
+        {tab === "events" && loaded.page !== null ? (
+          <>
+            <EventTiles query={query} window={loaded.window} />
+            <EventsPanel
+              org={org}
+              query={query}
+              page={loaded.page}
+              window={loaded.window}
+              actors={loaded.actors}
+            />
+          </>
+        ) : null}
+        {tab === "incidents" ? <IncidentsTab /> : null}
+        {tab === "receipts" ? <ReceiptsTab /> : null}
+        {tab === "exports" ? (
+          <ExportsTab org={org} bundle={loaded.bundle} />
+        ) : null}
+        {tab === "keys" ? <KeysTab /> : null}
+        {tab === "retention" && loaded.retention !== null ? (
+          <RetentionTab retention={loaded.retention} />
+        ) : null}
+      </RouteTabPanel>
     </div>
   );
 }

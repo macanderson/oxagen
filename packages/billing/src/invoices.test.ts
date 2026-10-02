@@ -112,6 +112,7 @@ function makeInvoice(overrides: Partial<BillingInvoice> = {}): BillingInvoice {
     orgId: "org-abc",
     billingReason: "subscription_create",
     gauSettlementId: null,
+    lineItemsComplete: true,
     lineItems: [
       {
         description: "Pro plan",
@@ -137,9 +138,11 @@ describe("syncInvoiceFromStripe", () => {
 
   it("happy path — upserts the invoice header row inside withSystemDb", async () => {
     dbState.instance = makeDb();
-    getInvoiceMock.mockResolvedValue(makeInvoice());
+    const read = makeInvoice();
+    getInvoiceMock.mockResolvedValue(read);
 
-    await syncInvoiceFromStripe("in_test_001");
+    // The webhook takes its full set of lines from this read (#4895).
+    expect(await syncInvoiceFromStripe("in_test_001")).toBe(read);
 
     // Exactly one insert (the header upsert); nothing is deleted.
     expect(dbState.instance!._txInsert).toHaveBeenCalledTimes(1);

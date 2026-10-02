@@ -34,6 +34,7 @@ replaces the former `set_org_plugin_enabled` and `set_workspace_plugin_enabled`.
 |---|---|---|
 | `ok` | `boolean` | `true` on success. |
 | `workspaceServerId` | `string \| null` | Public ID of the upserted `agent.mcp_servers` row for `scope="workspace"` enables; `null` on workspace disable and always `null` for `scope="org"`. |
+| `steeringPr` | `{ number, url }?` | The steering PR that adds the server. Set only for a workspace enable in a workspace whose tools live in its steering repo. |
 
 ## Roles
 
@@ -46,6 +47,12 @@ Org Owner, Org Admin, Workspace Owner, Workspace Admin.
 - `scope="workspace"`: upserts `agent.mcp_servers` (on enable) or sets
   `enabled=false` (on disable). A background health probe is triggered on enable
   to populate `health_status`. Emits a `plugin.enabled_changed` security event.
+- `scope="workspace"` enable, in a workspace whose tools live in its steering
+  repo (ADR-209): a streamable-http server the repo does not hold yet becomes a
+  disabled row with origin `proposed`, and a steering PR adds its folder. The
+  server turns on when that PR merges and the next publish runs. A server the
+  repo already holds is toggled directly. A server whose steering PR is open is
+  refused with `steering_pr_open`.
 
 ## Surfaces
 
