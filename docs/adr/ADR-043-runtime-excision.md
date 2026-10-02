@@ -2,7 +2,9 @@
 
 - **Status:** Accepted; amended 2026-09-18 by ADR-096 (one sentence, see the
   amendment at the end); amended 2026-09-19 by ADR-154 (cms marketing lead
-  gate restored, see the second amendment)
+  gate restored, see the second amendment); amended 2026-10-02 by ADR-289
+  (one more sentence: Oxagen may host the contained process on compute it
+  operates, and it still runs no turn)
 - **Date:** 2026-09-07
 - **Owners:** platform
 - **Related:** ADR-040 (governance-plane refocus — this ADR executes its

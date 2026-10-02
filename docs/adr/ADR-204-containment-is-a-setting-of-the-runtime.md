@@ -1,6 +1,6 @@
 # ADR-204: Containment is a setting of the runtime
 
-- **Status:** Accepted
+- **Status:** Accepted. Amended in part by ADR-289, accepted 2026-10-02: a cloud runtime always requires containment, and no update turns it off
 - **Date:** 2026-09-26
 - **Owners:** agents, tacho
 - **Amended:** 2026-09-30, §4 (issue #4474)
