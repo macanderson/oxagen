@@ -660,10 +660,9 @@ describe("pricedFrames", () => {
     const EARLY = "00000000-0000-4000-8000-000000000003";
     const keyByCost = (rows: ModelCallFrameRow[]) =>
       new Map(
-        pricedFrames([], SCOPE.orgId, rows, SESSION).map((f) => [
-          f.costMicros,
-          f.key,
-        ]),
+        pricedFrames([], SCOPE.orgId, rows, SESSION).map(
+          (f): [bigint | null, string] => [f.costMicros, f.key],
+        ),
       );
     const read = [
       frameRow({ sessionUuid: SESSION, seq: 9 }),
