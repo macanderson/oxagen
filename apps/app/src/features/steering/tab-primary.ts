@@ -8,6 +8,8 @@
 // - The Compiler with no published record: "Nothing to compile yet" carries
 //   Write a context record as the gold.
 // - Proposals with no proposal: "No proposals yet" carries it.
+// - Memories with no memory in any state: "No memories yet" has no action,
+//   and the header holds none.
 // - A proposal under review, or a selected Context PR, with no pull request
 //   yet: Open a Context PR is the gold. With every check passed: Merge pull
 //   request is.
@@ -19,6 +21,7 @@ import type { ContextPr } from "@/data/contracts/steering";
 import type { DataSource } from "@/data/ports";
 import type { Read } from "@/data/read";
 import type { WsCtx } from "@/server/viewer";
+import { EVERY_MEMORY } from "./memories/query";
 import type { SteeringView } from "./view";
 
 /**
@@ -69,6 +72,12 @@ export async function bodyTakesHeaderGold({
         limit: view.rows,
       });
       return page.ok && page.value.total === 0 ? "empty" : null;
+    }
+    case "memories": {
+      // The tab's own read of every state, so the body's ask is the same
+      // input and the kernel answers it once.
+      const every = await source.steering.workspaceMemories(ctx, EVERY_MEMORY);
+      return every.ok && every.value.totalMemories === 0 ? "empty" : null;
     }
     case "gates":
     case "library":

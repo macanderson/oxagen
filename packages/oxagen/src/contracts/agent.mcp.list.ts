@@ -88,13 +88,15 @@ export const agentMcpList = registerCapability({
         contextTokens: z.number().int().nonnegative().nullable().default(null),
         /**
          * What `contextTokens` cost the workspace over the last 7 days, an
-         * estimate (#4537). Each of the workspace's model calls of the week is
-         * priced at the book's cache read rate in force when it ran, or its
-         * input rate when it read nothing from the cache. The estimate
-         * assumes every call sent the server's definitions. A call the book
-         * has no rate for adds nothing. Null when `contextTokens` is null,
-         * when the book priced none of the week's calls, or when the price
-         * read failed.
+         * estimate (#4537, #4572): the tokens at the week's price per 1,000
+         * (`weeklyCostOf` in @oxagen/billing). That price counts every model
+         * call of the week at the book's cache read rate in force when it
+         * ran, or its input rate when it read nothing from the cache. The
+         * estimate assumes every call sent the server's definitions. Null
+         * when `contextTokens` is null, when any call of the week has no
+         * rate in the book (the price would read low), when the week had no
+         * call or its rates name two currencies, or when the price read
+         * failed.
          */
         weeklyPrice: costSchema.nullable().default(null),
         /**

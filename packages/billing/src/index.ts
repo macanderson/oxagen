@@ -50,6 +50,7 @@ export {
 export * from "./run-pr-outcomes";
 export * from "./spend-per-merged-pr";
 export * from "./work-order-metrics";
+export * from "./work-order-send-back";
 export {
   applyOutcomeDelivery,
   listOutcomeRuns,

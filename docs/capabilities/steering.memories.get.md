@@ -9,6 +9,7 @@ Read one workspace memory in full: its text, where it came from, the runs that u
 - API: `POST /v1/:org_slug/:workspace_slug/context/steering/memories/get`, returns 200
 - MCP: `get_workspace_memory`
 - CLI: `oxagen memory show <id>`
+- App: Steering › Memories, the drawer a memory's name opens (`?memory=<id>`)
 - Authentication: org Owner or Admin, or workspace Owner, Member, or Viewer, checked by the handler
 - Billing: `noBillingGate: true`
 - Not on the agent surface.

@@ -600,6 +600,8 @@ function toFrame(row: ModelCallFrameRow): PricedModelCall {
     basis: row.basis,
     // The chain places the tool calls the frame made (F17).
     ...(row.sessionUuid === undefined ? {} : { sessionUuid: row.sessionUuid }),
+    // A cache keep-alive is spend and no step (lane F32).
+    ...(row.cacheKeepAlive === true ? { cacheKeepAlive: true } : {}),
     sources: {
       toolDefinitionTokens: row.toolDefinitionTokens,
       contextFrameTokens: row.contextFrameTokens,
@@ -753,7 +755,11 @@ const ZERO_COST_BY_CLASS = Object.fromEntries(
 
 type ModelBreakdownJson = Omit<
   ModelBreakdown,
-  "costMicros" | "costByClass" | "cacheSavingMicros" | "hasUnpriced"
+  | "costMicros"
+  | "costByClass"
+  | "cacheSavingMicros"
+  | "hasUnpriced"
+  | "keepAlive"
 > & {
   costMicros: string | null;
   costByClass: Record<keyof ModelBreakdown["costByClass"], string>;
@@ -761,6 +767,12 @@ type ModelBreakdownJson = Omit<
   cacheSavingMicros?: string | null;
   /** Absent on a row rolled up before #3271 residue G2. */
   hasUnpriced?: boolean;
+  /** Absent when the run sent no cache keep-alive on the model (lane F32). */
+  keepAlive?: {
+    calls: number;
+    tokens: ModelBreakdown["tokens"];
+    costMicros: string | null;
+  };
 };
 
 type ToolBreakdown = RunTotalsRecord["breakdown"]["tools"][number];
@@ -786,7 +798,7 @@ export function reviveBreakdown(value: unknown): RunTotalsRecord["breakdown"] {
     standing?: RunTotalsRecord["breakdown"]["standing"];
   };
   return {
-    models: raw.models.map((m) => ({
+    models: raw.models.map(({ keepAlive, ...m }) => ({
       ...m,
       // A row rolled up before `server_tool_request` existed has no key for
       // it in either record. The rollup counted and priced none then, so both
@@ -816,6 +828,20 @@ export function reviveBreakdown(value: unknown): RunTotalsRecord["breakdown"] {
       ...(m.pricedTokens === undefined
         ? {}
         : { pricedTokens: { ...ZERO_TOKENS, ...m.pricedTokens } }),
+      // A row rolled up before keep-alives were kept apart counts them as
+      // calls, and carries no key (lane F32).
+      ...(keepAlive === undefined
+        ? {}
+        : {
+            keepAlive: {
+              calls: keepAlive.calls,
+              tokens: { ...ZERO_TOKENS, ...keepAlive.tokens },
+              costMicros:
+                keepAlive.costMicros === null
+                  ? null
+                  : BigInt(keepAlive.costMicros),
+            },
+          }),
     })),
     // A row rolled up before result tokens were recorded carries neither
     // figure, so both read as not recorded until the run's next rollup.
@@ -842,7 +868,7 @@ export function reviveBreakdown(value: unknown): RunTotalsRecord["breakdown"] {
 /** The breakdown as jsonb stores it: every bigint as a decimal string. */
 export function serializeBreakdown(breakdown: RunTotalsRecord["breakdown"]) {
   return {
-    models: breakdown.models.map((m) => ({
+    models: breakdown.models.map(({ keepAlive, ...m }) => ({
       ...m,
       costMicros: m.costMicros === null ? null : m.costMicros.toString(),
       costByClass: Object.fromEntries(
@@ -850,6 +876,18 @@ export function serializeBreakdown(breakdown: RunTotalsRecord["breakdown"]) {
       ),
       cacheSavingMicros:
         m.cacheSavingMicros === null ? null : m.cacheSavingMicros.toString(),
+      ...(keepAlive === undefined
+        ? {}
+        : {
+            keepAlive: {
+              calls: keepAlive.calls,
+              tokens: keepAlive.tokens,
+              costMicros:
+                keepAlive.costMicros === null
+                  ? null
+                  : keepAlive.costMicros.toString(),
+            },
+          }),
     })),
     tools: breakdown.tools.map(
       (t): ToolBreakdownJson => ({

@@ -622,7 +622,7 @@ describe("the Memories target", () => {
     );
     expect(
       within(done).getByRole("link", { name: "Open the Memories tab" }),
-    ).toHaveAttribute("href", "/acme/core-platform/steering?tab=memories");
+    ).toHaveAttribute("href", "/acme/core-platform/steering/memories");
   });
 
   it("leaves out a memory a person unticks, and opens the PR and stores the rest in one commit", async () => {

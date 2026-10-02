@@ -18,8 +18,8 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 // One Steering tab or Library shelf (roadmap pages/steering.md): Library,
-// Assignments, Gates, Proposals and Compiler, and the shelves Records,
-// Instructions, Skills, Memory and Ontology, each a path segment. An address
+// Memories, Assignments, Gates, Proposals and Compiler, and the shelves
+// Records, Instructions, Skills, Memory and Ontology, each a path segment. An address
 // written before the five tabs (policy, preview, prs, settings, deliveries,
 // library/<shelf>) moves to where it lives now; a segment that names nothing
 // is a 404. `/steering/records/<lineage>` is the record page, its own route.

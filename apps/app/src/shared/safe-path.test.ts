@@ -196,8 +196,22 @@ describe("routes", () => {
     );
     // The Memories tab's address, which the Markdown import links to (#4914).
     expect(routes.steeringMemories("acme", "core")).toBe(
-      "/acme/core/steering?tab=memories",
+      "/acme/core/steering/memories",
     );
+    // Its filters are query values, and the agent filter is one only there.
+    expect(
+      routes.steering("acme", "core", {
+        tab: "memories",
+        state: "all",
+        agent: "acme.core.release-manager",
+        memory: "mem_1",
+      }),
+    ).toBe(
+      "/acme/core/steering/memories?state=all&agent=acme.core.release-manager&memory=mem_1",
+    );
+    expect(
+      routes.steering("acme", "core", { tab: "gates", agent: "release" }),
+    ).toBe("/acme/core/steering/gates");
     expect(routes.repositories("acme", "core")).toBe("/acme/core/repositories");
     expect(routes.repositories("acme", "core", "changes")).toBe(
       "/acme/core/repositories/changes",

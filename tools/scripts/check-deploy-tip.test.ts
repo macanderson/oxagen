@@ -347,6 +347,21 @@ describe("guardProblems", () => {
     expect(pipeline).toMatch(/DEPLOY_SERVICE: desktop/);
   });
 
+  it("publishes the installers past a dormant staging job", () => {
+    // Without a status function a job's condition is `success()`, which a
+    // skipped job anywhere upstream fails. `staging` is skipped while it is
+    // dormant, so from 2026-09-30 no deploy published an installer (#5089).
+    const start = pipeline.indexOf("\n  publish-installers:\n");
+    expect(start).toBeGreaterThan(-1);
+    const header = pipeline.slice(
+      start,
+      pipeline.indexOf("\n    needs:", start),
+    );
+    const condition = header.slice(header.indexOf("\n    if:"));
+    expect(condition).toContain("!cancelled()");
+    expect(condition).toContain("needs.deploy-node.result == 'success'");
+  });
+
   it("fails when one step after the order step loses its gate", () => {
     const gate = `        if: ${SHIP_GATE}`;
     const at = pipeline.lastIndexOf(gate);

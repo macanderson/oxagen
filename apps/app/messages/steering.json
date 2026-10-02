@@ -3,6 +3,7 @@
     "tabs": {
       "label": "Steering",
       "library": "Library",
+      "memories": "Memories",
       "assignments": "Assignments",
       "gates": "Gates",
       "proposals": "Proposals",
@@ -20,7 +21,7 @@
       "records": "Records",
       "instructions": "Instructions",
       "skills": "Skills",
-      "memory": "Memory",
+      "memory": "Assistant memory",
       "ontology": "Ontology",
       "notRecorded": "not recorded"
     },
@@ -104,7 +105,7 @@
       },
       "compilesNotRecorded": "not recorded",
       "compilesTitle": "list_records carries no enforcement grant, so whether this record also compiles to a gate is not recorded. Tracked in #{issue}.",
-      "tokensTitle": "list_records carries no token cost for a record. Tracked in #{issue}.",
+      "tokensTitle": "This list does not show token costs yet. The Records shelf shows each record's tokens and weekly price. Tracked in #{issue}.",
       "scopeTargetTitle": "list_records carries no repository for a record, so the repository this record names is not recorded. Tracked in #{issue}.",
       "sourceNone": "not recorded",
       "gap": "Only records are read into this list today. Instructions, skills, memory, and ontology notes join it when the steering registry (Phase 1) reads every source into one item type, tracked in #{issue}.",
@@ -268,6 +269,7 @@
           "title": "Nothing has been recalled yet",
           "body": "Memory is what an agent's own runs leave behind. No run in this workspace has written one, so nothing competes from here."
         },
+        "hint": "This shelf holds what Oxagen's own assistant saved. Workspace memories are on the Memories tab.",
         "gapTitle": "Not recorded yet. Tracked in #{issue}.",
         "notRecorded": "not recorded",
         "tiles": {
@@ -564,7 +566,7 @@
       },
       "memory": {
         "title": "Memory records",
-        "notBacked": "the records on this memory branch and the memories each one cites. It needs list_memory_pr_records.",
+        "empty": "This memory PR proposes no record.",
         "memories": "Cited memories",
         "unknownAgent": "Unknown agent",
         "evidence": "Evidence"
@@ -853,6 +855,187 @@
         "tier": "Delivery tier",
         "superseded": "Newer version",
         "unknown": "Not recorded"
+      }
+    },
+    "memories": {
+      "title": "Memories",
+      "lead": "Ranked by the runs that used each one.",
+      "retry": "Try again",
+      "count": "{count, plural, one {# memory} other {# memories}}",
+      "empty": {
+        "title": "No memories yet",
+        "body": "Oxagen collects them from enrolled hosts every five minutes."
+      },
+      "noMatch": "No memory matches these filters.",
+      "clearFilters": "Clear filters",
+      "filters": {
+        "label": "Memory filters",
+        "state": "State",
+        "harness": "Harness",
+        "agent": "Agent",
+        "repo": "Repository",
+        "type": "Type",
+        "everyHarness": "Every harness",
+        "everyAgent": "Every agent",
+        "everyRepo": "Every repository",
+        "everyType": "Every type"
+      },
+      "states": {
+        "open": "Waiting and In PR",
+        "waiting": "Waiting",
+        "in_pr": "In PR",
+        "promoted": "Promoted",
+        "dismissed": "Dismissed",
+        "retired": "Retired",
+        "all": "Every state"
+      },
+      "types": {
+        "user": "User",
+        "feedback": "Feedback",
+        "project": "Project",
+        "reference": "Reference"
+      },
+      "harness": {
+        "claude-code": "Claude Code",
+        "codex": "Codex",
+        "cursor": "Cursor",
+        "stella": "stella",
+        "claude-desktop": "Claude Desktop"
+      },
+      "captures": {
+        "remember": "Agent lesson",
+        "pull_request": "Code repository check",
+        "local_gateway": "Local gateway",
+        "import": "Markdown import"
+      },
+      "columns": {
+        "select": "Select",
+        "memory": "Memory",
+        "uses": "Uses",
+        "lastUsed": "Last used",
+        "harness": "Harness",
+        "agent": "Agent",
+        "repo": "Repository",
+        "state": "State"
+      },
+      "selectAll": "Select every waiting memory on this page",
+      "selectRow": "Select {name}",
+      "noSignal": "No signal",
+      "never": "Never",
+      "none": "None",
+      "noAgent": "No known agent",
+      "prLink": "Memory PR #{number}",
+      "sameCount": "{count, plural, one {# more memory says this} other {# more memories say this}}",
+      "selection": {
+        "label": "Selected memories",
+        "count": "{count, plural, one {# memory selected} other {# memories selected}}",
+        "clear": "Clear selection",
+        "dismiss": "Dismiss memories",
+        "promote": "Promote memories"
+      },
+      "drawer": {
+        "subtitle": "Workspace memory",
+        "section": "Memory",
+        "notFoundTitle": "Memory not found",
+        "notFound": "This workspace has no such memory.",
+        "facts": {
+          "state": "State",
+          "uses": "Uses",
+          "lastUsed": "Last used",
+          "harness": "Harness",
+          "agent": "Agent",
+          "repo": "Repository",
+          "type": "Type",
+          "captured": "Captured",
+          "source": "Source"
+        },
+        "usesValue": "{count, plural, one {# use} other {# uses}}",
+        "noSource": "None",
+        "statement": "Statement",
+        "runs": "Runs",
+        "noRuns": "No run has used it yet.",
+        "moreUses": "And {count, plural, one {# more use} other {# more uses}}.",
+        "reported": "{harness} counted {count, plural, one {# use} other {# uses}} in its own store and names no run for them.",
+        "why": {
+          "remember": "Its agent wrote it through remember_lesson. Nothing reports its uses.",
+          "pullRequest": "The code repository check found it in a pull request. No harness reads it back.",
+          "import": "It came from a Markdown import. No harness reads it back.",
+          "other": "Nothing reports a use for this source."
+        },
+        "memoryPr": "Memory PR",
+        "record": "Record",
+        "prNumber": "Memory PR #{number}",
+        "prStatus": {
+          "open": "open",
+          "merged": "merged",
+          "closed": "closed"
+        },
+        "noPr": "In no memory PR yet. Promote adds a draft record to the open memory PR.",
+        "promotedMerged": "Its memory PR merged.",
+        "dismissed": "Dismissed. The curator does not propose it again.",
+        "retiredDeleted": "Retired on {date}, when its file was deleted.",
+        "retiredUnused": "Retired after 180 days with no use.",
+        "sameStatement": "Same statement",
+        "dismiss": "Dismiss memory",
+        "promote": "Promote memory",
+        "openPr": "Open memory PR #{number}",
+        "restore": "Restore memory",
+        "restorePending": "Restoring",
+        "restored": "Restored. The memory waits for promotion again."
+      },
+      "promote": {
+        "title": "Promote memories",
+        "sub": "Each draft joins memory PR #{number} and steers nothing until it merges.",
+        "subNew": "Each draft goes into a new memory PR and steers nothing until it merges.",
+        "draft": "Draft {number}",
+        "from": "From {count, plural, one {# memory} other {# memories}} by {agents}",
+        "statement": "Statement",
+        "kind": "Kind",
+        "kindSuggested": "The memory's own kind.",
+        "kindChosen": "Your choice.",
+        "force": "Force",
+        "forceOnly": "The only force this kind allows.",
+        "forceDefault": "The default force for this kind.",
+        "forceChosen": "Your choice.",
+        "scope": "Scope",
+        "workspace": "Workspace",
+        "scopeHint": "The record takes the first memory's repositories.",
+        "effect": "Effect",
+        "effectHint": "A constraint requires an action or forbids one.",
+        "summary": "{drafts, plural, one {# draft record} other {# draft records}} from {memories, plural, one {# memory} other {# memories}}.",
+        "submitJoin": "Add to memory PR #{number}",
+        "submitOpen": "Open memory PR",
+        "pending": "Adding the drafts",
+        "cancel": "Cancel",
+        "noneWaiting": "No waiting memory is selected. Only a waiting memory can be promoted.",
+        "tooMany": "Promote takes at most {max} drafts at once. Clear some rows, then promote again.",
+        "emptyStatement": "Each draft needs a statement.",
+        "done": "Added {count, plural, one {# record} other {# records}} to memory PR #{number}. Nothing steers until it merges.",
+        "doneNone": "No record was added. Each memory had moved on or was already proposed.",
+        "skipped": "{count, plural, one {# memory was} other {# memories were}} left out because it had moved on or was already proposed."
+      },
+      "dismiss": {
+        "title": "{count, plural, one {Dismiss memory} other {Dismiss memories}}",
+        "sub": "The curator does not propose a dismissed memory again.",
+        "confirm": "{count, plural, one {Dismiss memory} other {Dismiss # memories}}",
+        "pending": "Dismissing",
+        "cancel": "Cancel",
+        "noneWaiting": "No waiting memory is selected. Only a waiting memory can be dismissed.",
+        "done": "Dismissed {count, plural, one {# memory} other {# memories}}."
+      },
+      "failure": {
+        "denied": "Your role in this workspace does not allow this change. Nothing was changed.",
+        "steeringRepoRequired": "This workspace has no steering repo yet. Set one up on the Repositories page, then try again.",
+        "memoryPrFull": "The memory PR already holds as many records as one PR can. Merge or close it, then try again.",
+        "memoryPrSettled": "The memory PR merged or closed while the drafts were added. Promote the memories again.",
+        "memoryBranchTaken": "Every memory branch for today already has a PR. Merge or close one, then try again.",
+        "forceNotAllowed": "A draft's kind does not allow its force. Pick another force.",
+        "effect": "Only a constraint names an effect. Check each draft's kind.",
+        "recordUnreadable": "A draft would not read as a steering record. Edit its statement, then try again.",
+        "refused": "The change was refused ({code}). Nothing was changed.",
+        "invalid": "A draft is not complete. Check each statement, kind and force.",
+        "pendingApproval": "The change waits for approval as request {accessRequestId}.",
+        "unavailable": "The change could not be made ({code}). Nothing was changed. Try again."
       }
     }
   }

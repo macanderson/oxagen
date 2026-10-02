@@ -736,6 +736,74 @@ describe("model class fit on step classes", () => {
   });
 });
 
+// Lane F32: the model proxy sends cache keep-alives while a parent waits on
+// a subagent. A keep-alive held one model's prompt cache, and a cache belongs
+// to one model, so no lighter model could have read it. It is no step the
+// agent took.
+describe("model class fit and cache keep-alives", () => {
+  it("finds no saving for a run whose only read-only frame is a keep-alive", () => {
+    const r = run([opus()], { toolCalls: 1 });
+    r.sealedAt = new Date(r.startedAt.getTime() + 10 * 60_000);
+    const request = frame(r, 2);
+    // A keep-alive reads the cache. The test book prices input and output
+    // only, so this one carries input: 60k at $4 is $0.24 measured, and $0.12
+    // on Sonnet 5 would read as a saving.
+    const keepAlive = frame(r, 272, {
+      cacheKeepAlive: true,
+      costMicros: 240_000n,
+      tokens: 60_000,
+      classTokens: tokens({ input_uncached: 60_000 }),
+    });
+    const calls = [call(r, 3, { tool: "Edit", isMutating: true })];
+    const i = withFrames([r], calls, { [r.runId]: [request, keepAlive] });
+    const [view] = buildRunViews(i, new Map([[r.runId, r]]));
+    expect(readOnlyFrames(view!, [request, keepAlive])).toEqual([]);
+    expect(detect(i)).toEqual([]);
+  });
+
+  it("prices a run with no edit without its keep-alives' tokens or cost", () => {
+    // Opus with 500k more input on two keep-alives, at $2: $8 measured in
+    // all. Without them the run is the plain Opus run: $6 measured and $3 on
+    // Sonnet 5.
+    const withKeepAlives = model(
+      OPUS,
+      { input_uncached: 1_500_000, output: 100_000 },
+      { input: 4, output: 20 },
+      {
+        keepAlive: {
+          calls: 2,
+          tokens: tokens({ input_uncached: 500_000 }),
+          costMicros: 2_000_000n,
+        },
+      },
+    );
+    expect(withKeepAlives.costMicros).toBe(8_000_000n);
+    const r = run([withKeepAlives]);
+    const [f, ...rest] = detect(input([r], readOnly([r])));
+    expect(rest).toEqual([]);
+    expect(f!.savingMicros).toBe(3_000_000n);
+    expect(f!.evidence).toMatchObject({
+      measuredMicros: "6000000",
+      counterfactualMicros: "3000000",
+      measuredTokens: 1_100_000,
+    });
+  });
+
+  it("cites but does not cover a run whose keep-alive went unpriced", () => {
+    const r = run([
+      opus({
+        hasUnpriced: true,
+        keepAlive: {
+          calls: 1,
+          tokens: tokens({ input_uncached: 10 }),
+          costMicros: null,
+        },
+      }),
+    ]);
+    expect(detect(input([r], readOnly([r])))).toEqual([]);
+  });
+});
+
 describe("the registered detector", () => {
   it("reads the in-code list book, which prices each smaller model", () => {
     const book = inCodeListBook();

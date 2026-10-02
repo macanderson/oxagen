@@ -833,21 +833,36 @@ jobs:
   # starts. A pull request is not tested until that newer `test` reports.
   #
   # ubuntu-slim: the job reads two results and runs no code.
+  # `test` runs even when preflight skips the heavy lanes. GitHub counts a
+  # skipped required check as passed, so a skipped `test` on a draft let the
+  # draft merge in the seconds after `gh pr ready`, before the ready run
+  # registered, with no build or unit lane run (#5094). On a draft it fails
+  # instead, and the ready run replaces it. A documentation-only pull request
+  # passes with no lane run.
   test:
     needs: [preflight, build, unit]
     if: >-
       !cancelled() &&
       github.event_name != 'workflow_dispatch' &&
-      needs.preflight.outputs.proceed != 'false' &&
-      needs.preflight.outputs.heavy != 'false'
+      needs.preflight.outputs.proceed != 'false'
     runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-small-{0}', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-slim' }}
     timeout-minutes: 5
     steps:
       - name: Every build and unit lane passed
         env:
+          DRAFT: ${{ github.event.pull_request.draft }}
+          HEAVY: ${{ needs.preflight.outputs.heavy }}
           BUILD_RESULT: ${{ needs.build.result }}
           UNIT_RESULT: ${{ needs.unit.result }}
         run: |
+          if [ "$DRAFT" = true ]; then
+            echo "::error::This pull request is a draft, so no build or unit lane ran. Mark it ready with gh pr ready, and the ready run replaces this result."
+            exit 1
+          fi
+          if [ "$HEAVY" = false ]; then
+            echo "Every changed file is documentation, so no build or unit lane runs."
+            exit 0
+          fi
           echo "build: $BUILD_RESULT"
           echo "unit: $UNIT_RESULT"
           if [ "$BUILD_RESULT" != success ] || [ "$UNIT_RESULT" != success ]; then
@@ -1959,7 +1974,17 @@ jobs:
     #
     # `needs: deploy-node` means every service shipped: a failed leg publishes
     # nothing, so the installers never run ahead of the platform they talk to.
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    #
+    # The condition reads that result itself, after `!cancelled()`. Without a
+    # status function GitHub applies `success()`, which fails when any job
+    # upstream was skipped, and `staging` is skipped while it is dormant. From
+    # #4869 on 2026-09-30 every run skipped this job, so no recorder fix
+    # reached an installer (#5089). `deploy-node` runs past `staging` the
+    # same way.
+    if: >-
+      !cancelled() &&
+      github.event_name == 'push' && github.ref == 'refs/heads/main' &&
+      needs.deploy-node.result == 'success'
     needs: [deploy-node]
     # ubuntu-slim: a sparse checkout, two API calls and a tree diff.
     runs-on: ${{ vars.CI_RUNNERS == 'aws' && 'oxagen-deploy' || 'ubuntu-slim' }}
