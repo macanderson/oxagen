@@ -614,6 +614,7 @@ after the registered name separately when their contract uses a dotted stem.
 | [list_tacho_hosts](tacho.host.list.md) | [tacho.host.list.ts](../../packages/oxagen/src/contracts/tacho.host.list.ts) | api, mcp, agent |
 | [list_tacho_sessions](tacho.session.list.md) | [tacho.session.list.ts](../../packages/oxagen/src/contracts/tacho.session.list.ts) | api |
 | [recall_tacho_memories](tacho.memories.recall.md) | [tacho.memories.recall.ts](../../packages/oxagen/src/contracts/tacho.memories.recall.ts) | api |
+| [record_tacho_memory_uses](tacho.memories.uses.record.md) | [tacho.memories.uses.record.ts](../../packages/oxagen/src/contracts/tacho.memories.uses.record.ts) | api |
 | [remove_group_machine](tacho.machine_group.remove.md) | [tacho.machine_group.remove.ts](../../packages/oxagen/src/contracts/tacho.machine_group.remove.ts) | none |
 | [revoke_tacho_enrollment](tacho.enrollment.revoke.md) | [tacho.enrollment.revoke.ts](../../packages/oxagen/src/contracts/tacho.enrollment.revoke.ts) | api, agent |
 

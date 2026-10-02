@@ -6,6 +6,7 @@ import {
   memoryPrBody,
   memoryPrTitle,
   planCuration,
+  rankMemories,
 } from "./curate";
 import { statementHash } from "./statement";
 import type {
@@ -38,8 +39,14 @@ const CHANGELOG = "Keep the changelog short";
 
 const BASE_LINEAGE = "run-migration-generator-after-schema-edit";
 
+/**
+ * A waiting memory. Unless a test sets its uses, an older memory has more:
+ * one per minute of age. The ranking then reads oldest first, so a test
+ * about grouping or the batch can state its order by `createdAt` alone.
+ */
 function memory(id: string, overrides: Partial<StoredMemory> = {}): StoredMemory {
   const statement = overrides.statement ?? MIGRATE;
+  const createdAt = overrides.createdAt ?? daysAgo(1);
   return {
     id,
     publicId: `mem_${id}`,
@@ -57,7 +64,11 @@ function memory(id: string, overrides: Partial<StoredMemory> = {}): StoredMemory
     evidence: [`frame:arun_${id}/1`],
     source: null,
     dedupeKey: `arun_${id}:${statementHash(statement)}`,
-    createdAt: daysAgo(1),
+    state: "waiting",
+    useCount: Math.max(1, Math.round((NOW.getTime() - createdAt.getTime()) / 60_000)),
+    lastUsedAt: null,
+    promotedLineage: null,
+    createdAt,
     ...overrides,
   };
 }
@@ -125,8 +136,9 @@ function cited(plan: CuratePlan): string[][] {
 describe("planCuration", () => {
   it("plans nothing for an empty workspace", () => {
     expect(planCuration(input())).toEqual({
-      drops: [],
+      said: [],
       held: [],
+      unused: [],
       deferred: [],
       records: [],
       retirements: [],
@@ -213,15 +225,14 @@ describe("planCuration", () => {
     });
   });
 
-  describe("drops", () => {
-    it("drops a memory that waited past retire_after_days, or that an active record says", () => {
+  describe("links", () => {
+    it("links a memory an active record already says to that record, whatever the record's kind", () => {
       const plan = planCuration(
         input({
           waiting: [
-            memory("expired", { statement: REFUND, createdAt: daysAgo(181) }),
-            memory("boundary", { statement: KEYS, createdAt: daysAgo(180) }),
             memory("said", { statement: MIGRATE_AGAIN }),
             memory("archived-says", { statement: CHANGELOG }),
+            memory("new", { statement: KEYS }),
           ],
           records: [
             activeRecord("rule", {
@@ -233,12 +244,101 @@ describe("planCuration", () => {
           ],
         }),
       );
-      expect(plan.drops).toEqual([
-        { memoryId: "expired", reason: "expired" },
-        { memoryId: "said", reason: "said" },
-      ]);
-      expect(cited(plan)).toEqual([["boundary"], ["archived-says"]]);
+      expect(plan.said).toEqual([{ memoryId: "said", lineage: "rule" }]);
+      expect(cited(plan)).toEqual([["archived-says"], ["new"]]);
       expect(plan.stampRecalls).toEqual([]);
+    });
+
+    it("leaves age to the store: a memory past retire_after_days is still planned", () => {
+      // The runner retires a memory no run used for retire_after_days before
+      // it plans (ADR-248), so a memory the plan reads is one to keep.
+      const plan = planCuration(
+        input({
+          waiting: [
+            memory("old", {
+              statement: REFUND,
+              createdAt: daysAgo(400),
+              useCount: 3,
+              lastUsedAt: daysAgo(2),
+            }),
+          ],
+        }),
+      );
+      expect(plan.said).toEqual([]);
+      expect(cited(plan)).toEqual([["old"]]);
+    });
+  });
+
+  describe("ranking", () => {
+    it("ranks by uses, then the newest use, then the newest capture", () => {
+      const ranked = rankMemories([
+        memory("few", { useCount: 1, lastUsedAt: daysAgo(1), createdAt: daysAgo(1) }),
+        memory("many-old-use", { useCount: 5, lastUsedAt: daysAgo(9), createdAt: daysAgo(10) }),
+        memory("many-new-use", { useCount: 5, lastUsedAt: daysAgo(2), createdAt: daysAgo(20) }),
+        memory("tie-older", { useCount: 2, lastUsedAt: daysAgo(3), createdAt: daysAgo(8) }),
+        memory("tie-newer", { useCount: 2, lastUsedAt: daysAgo(3), createdAt: daysAgo(4) }),
+        memory("tie-b", { useCount: 2, lastUsedAt: daysAgo(3), createdAt: daysAgo(4) }),
+      ]);
+      expect(ranked.map((m) => m.id)).toEqual([
+        "many-new-use",
+        "many-old-use",
+        "tie-b",
+        "tie-newer",
+        "tie-older",
+        "few",
+      ]);
+    });
+
+    it("fills the batch from the top of the ranking, and leaves every memory no run used waiting", () => {
+      const plan = planCuration(
+        input({
+          governance: { batch_size: 2, retire_after_days: 180 },
+          waiting: [
+            memory("unused-a", { statement: PNPM, useCount: 0, createdAt: daysAgo(30) }),
+            memory("low", { statement: KEYS, useCount: 1, lastUsedAt: daysAgo(1) }),
+            memory("top", { statement: REFUND, useCount: 9, lastUsedAt: daysAgo(5) }),
+            memory("middle", { statement: MIGRATE, useCount: 4, lastUsedAt: daysAgo(1) }),
+            memory("unused-b", { statement: CHANGELOG, useCount: 0 }),
+          ],
+        }),
+      );
+      expect(cited(plan)).toEqual([["top"], ["middle"]]);
+      expect(plan.deferred).toEqual(["low"]);
+      expect(plan.unused).toEqual(["unused-a", "unused-b"]);
+      for (const record of plan.records)
+        for (const id of record.memoryIds)
+          expect(["unused-a", "unused-b"]).not.toContain(id);
+    });
+
+    it("lets the highest ranked memory of a group speak for it, and orders the group by rank", () => {
+      const plan = planCuration(
+        input({
+          waiting: [
+            memory("older", { useCount: 1, createdAt: daysAgo(9) }),
+            memory("used-most", {
+              statement: MIGRATE_AGAIN,
+              useCount: 7,
+              createdAt: daysAgo(2),
+            }),
+          ],
+        }),
+      );
+      expect(cited(plan)).toEqual([["used-most", "older"]]);
+      expect(plan.records[0]?.draft.statement).toBe(MIGRATE_AGAIN);
+    });
+
+    it("holds a used memory a rejection still holds, and does not count it as unused", () => {
+      const plan = planCuration(
+        input({
+          waiting: [memory("rejected", { useCount: 4, createdAt: daysAgo(9) })],
+          rejections: [
+            { statementHash: statementHash(MIGRATE), rejectedAt: daysAgo(5) },
+          ],
+        }),
+      );
+      expect(plan.held).toEqual(["rejected"]);
+      expect(plan.unused).toEqual([]);
+      expect(plan.records).toEqual([]);
     });
   });
 
@@ -345,7 +445,7 @@ describe("planCuration", () => {
   });
 
   describe("grouping", () => {
-    it("groups memories that say the same thing inside one shard, oldest first", () => {
+    it("groups memories that say the same thing inside one shard, in ranking order", () => {
       const plan = planCuration(
         input({
           waiting: [
@@ -486,7 +586,7 @@ describe("planCuration", () => {
       expect(plan.deferred).toEqual(["d297", "d298", "d299"]);
       expect(plan.queuedRetirements).toEqual(["s1", "s2", "s3"]);
       expect(plan.deferred.length + plan.queuedRetirements.length).toBe(6);
-      expect(plan.drops).toEqual([]);
+      expect(plan.said).toEqual([]);
       expect(memoryPrBody(plan)).toContain(
         "One memory PR changes at most 299 files, so 3 more records wait for a later memory PR to archive.",
       );
@@ -524,7 +624,7 @@ describe("planCuration", () => {
   });
 
   describe("records", () => {
-    it("writes each record from its group's oldest memory and copies every cited memory", () => {
+    it("writes each record from its group's highest ranked memory and copies every cited memory", () => {
       const repos = ["github.com/acme/api"];
       const plan = planCuration(
         input({
@@ -693,8 +793,9 @@ function plannedRecord(
 }
 
 const EMPTY_PLAN: CuratePlan = {
-  drops: [],
+  said: [],
   held: [],
+  unused: [],
   deferred: [],
   records: [],
   retirements: [],

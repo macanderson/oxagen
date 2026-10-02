@@ -5,6 +5,8 @@
  * file here. The memory waits for the curator like any other, with capture
  * `local_gateway`, the host's agent as its agent, and no run. A file keeps
  * one waiting memory, and each new statement replaces its text (ADR-238).
+ * A Claude Code memory file's frontmatter `name`, `description`, and
+ * `metadata.type` arrive as `label`, `summary`, and `memory_type` (ADR-248).
  *
  * Machine-to-machine, authenticated by the host's API key. The host names
  * itself so the handler can check the key's scope names the same host.
@@ -43,6 +45,15 @@ export const tachoMemoriesIngest = registerCapability({
       statement: lessonInputSchema.shape.statement.describe(
         "The memory file's body without its frontmatter, trimmed.",
       ),
+      /** The file's frontmatter `name`. */
+      label: z.string().trim().min(1).max(200).optional(),
+      /** The file's frontmatter `description`. */
+      summary: z.string().trim().min(1).max(1000).optional(),
+      /** The file's frontmatter `metadata.type`, such as `feedback`. */
+      memory_type: z
+        .string()
+        .regex(/^[a-z][a-z0-9_-]{0,31}$/)
+        .optional(),
     })
     .strict(),
   output: z

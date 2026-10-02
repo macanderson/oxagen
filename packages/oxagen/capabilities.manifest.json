@@ -6859,6 +6859,21 @@
       }
     },
     {
+      "name": "record_tacho_memory_uses",
+      "file": "tacho.memories.uses.record.ts",
+      "domain": "tacho",
+      "mode": "sync",
+      "surfaces": [
+        "api"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "get_tacho_session",
       "file": "tacho.session.get.ts",
       "domain": "tacho",

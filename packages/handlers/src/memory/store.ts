@@ -1,20 +1,37 @@
-// memory/store.ts: the Postgres side of the memory pipeline (ADR-206).
+// memory/store.ts: the Postgres side of the memory pipeline (ADR-206,
+// ADR-248).
 //
 // Each method but listCurateWorkspaces opens the scope's tenant transaction
 // and filters by the scope as well, so one missing policy still leaks no row.
-// A method given an empty id or lineage list returns before any query.
+// A method given an empty id, lineage, or use list returns before any query.
+//
+// A memory keeps its row for life (ADR-248). `state` moves it through
+// waiting, in_pr, promoted, dismissed, and retired, and nothing here deletes
+// a memory.
 import { schema, type Tx, withSystemDb, withTenantDb } from "@oxagen/database";
 import type { RecordKind } from "@oxagen/oxagen/steering-repo/record";
 import { runInTenantScope } from "@oxagen/tenancy";
-import { and, asc, count, eq, gte, inArray, isNull, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  count,
+  eq,
+  gte,
+  inArray,
+  notInArray,
+  sql,
+} from "drizzle-orm";
 import type { PgColumn } from "drizzle-orm/pg-core";
 import type {
   MemoryCapture,
   MemoryDraft,
   MemoryPrRecord,
   MemoryScope,
+  MemoryState,
   MemoryStore,
+  MemoryUseDraft,
   RecentReflection,
+  RetiredReason,
   StoredMemory,
 } from "./types";
 
@@ -59,12 +76,47 @@ async function insertMemoryRows(
         evidence: draft.evidence,
         source: draft.source,
         dedupeKey: draft.dedupeKey,
+        label: draft.label ?? null,
+        summary: draft.summary ?? null,
+        memoryType: draft.memoryType ?? null,
         reflectionId,
       })),
     )
     .onConflictDoNothing({ target: [m.workspaceId, m.dedupeKey] })
     .returning({ id: m.id });
   return written.length;
+}
+
+/** The columns that retire a memory now, for `reason`. */
+const retiredNow = (at: Date, reason: RetiredReason) => ({
+  state: "retired" as const,
+  retiredAt: at,
+  retiredReason: reason,
+});
+
+/**
+ * Bring a retired memory back: promoted when a record carries it, else
+ * waiting. The SQL reads the row's own `promoted_lineage`.
+ */
+const backFromRetired = () => ({
+  state: sql<MemoryState>`CASE WHEN ${schema.memories.promotedLineage} IS NULL THEN 'waiting' ELSE 'promoted' END`,
+  retiredAt: null,
+  retiredReason: null,
+});
+
+/** Retire one memory row inside the caller's transaction. */
+async function retireRow(
+  tx: Tx,
+  scope: MemoryScope,
+  id: string,
+  at: Date,
+  reason: RetiredReason,
+): Promise<void> {
+  const m = schema.memories;
+  await tx
+    .update(m)
+    .set(retiredNow(at, reason))
+    .where(and(scoped(m, scope), eq(m.id, id)));
 }
 
 /**
@@ -133,7 +185,7 @@ export const postgresMemoryStore: MemoryStore = {
       ...(await tx
         .selectDistinct({ orgId: m.orgId, workspaceId: m.workspaceId })
         .from(m)
-        .where(isNull(m.memoryPrId))),
+        .where(eq(m.state, "waiting"))),
       ...(await tx
         .selectDistinct({ orgId: pr.orgId, workspaceId: pr.workspaceId })
         .from(pr)
@@ -195,6 +247,7 @@ export const postgresMemoryStore: MemoryStore = {
   async replaceSourceMemory(scope, draft) {
     const m = schema.memories;
     const source = draft.source;
+    const now = new Date();
     return inScope(scope, async (tx) => {
       if (source === null)
         return (await insertMemoryRows(tx, scope, [draft], null)) > 0;
@@ -203,46 +256,60 @@ export const postgresMemoryStore: MemoryStore = {
       await tx.execute(
         sql`select pg_advisory_xact_lock(hashtextextended(${`agent.memories:${scope.workspaceId}:${draft.capture}:${source}`}::text, 0))`,
       );
-      const waiting = await tx
-        .select({ id: m.id, dedupeKey: m.dedupeKey })
+      const rows = await tx
+        .select({
+          id: m.id,
+          dedupeKey: m.dedupeKey,
+          state: m.state,
+          retiredReason: m.retiredReason,
+        })
         .from(m)
         .where(
-          and(
-            scoped(m, scope),
-            eq(m.capture, draft.capture),
-            eq(m.source, source),
-            isNull(m.memoryPrId),
-          ),
+          and(scoped(m, scope), eq(m.capture, draft.capture), eq(m.source, source)),
         )
         .orderBy(asc(m.createdAt), asc(m.id));
+      const waiting = rows.filter((row) => row.state === "waiting");
       // A source written before ADR-238 can hold several waiting rows. The
       // oldest stays and takes the new text. The others hold text the file
-      // no longer says, so they go.
+      // no longer says, so they retire.
       const [kept, ...stale] = waiting;
-      if (stale.length > 0)
-        await tx.delete(m).where(
-          and(
-            scoped(m, scope),
-            inArray(
-              m.id,
-              stale.map((row) => row.id),
-            ),
-          ),
-        );
+      for (const row of stale) await retireRow(tx, scope, row.id, now, "deleted");
+      const frontmatter = {
+        label: draft.label ?? null,
+        summary: draft.summary ?? null,
+        memoryType: draft.memoryType ?? null,
+      };
+
+      const same = rows.find((row) => row.dedupeKey === draft.dedupeKey);
+      if (same !== undefined) {
+        // The source holds this statement already. Its frontmatter can still
+        // have changed.
+        await tx
+          .update(m)
+          .set(frontmatter)
+          .where(and(scoped(m, scope), eq(m.id, same.id)));
+        if (same.id === kept?.id) return false;
+        // The file went back to a statement another row holds, so that row
+        // holds the file's text again and the waiting row's text is gone.
+        if (kept !== undefined)
+          await retireRow(tx, scope, kept.id, now, "deleted");
+        // A row retired because its file was gone comes back. A row retired
+        // for no use comes back only when the file changed and changed back:
+        // a daemon restart sends every file again, and that send alone does
+        // not undo the retirement.
+        const back =
+          same.state === "retired" &&
+          (same.retiredReason === "deleted" || kept !== undefined);
+        if (back)
+          await tx
+            .update(m)
+            .set(backFromRetired())
+            .where(and(scoped(m, scope), eq(m.id, same.id)));
+        return back;
+      }
+
       if (kept === undefined)
         return (await insertMemoryRows(tx, scope, [draft], null)) > 0;
-      if (kept.dedupeKey === draft.dedupeKey) return false;
-      const [held] = await tx
-        .select({ id: m.id })
-        .from(m)
-        .where(and(scoped(m, scope), eq(m.dedupeKey, draft.dedupeKey)))
-        .limit(1);
-      if (held !== undefined) {
-        // The file went back to a statement an open memory PR already cites.
-        // That row holds the file's text now, so the waiting row is stale.
-        await tx.delete(m).where(and(scoped(m, scope), eq(m.id, kept.id)));
-        return false;
-      }
       await tx
         .update(m)
         .set({
@@ -256,6 +323,7 @@ export const postgresMemoryStore: MemoryStore = {
           tools: draft.tools,
           evidence: draft.evidence,
           dedupeKey: draft.dedupeKey,
+          ...frontmatter,
         })
         .where(and(scoped(m, scope), eq(m.id, kept.id)));
       return true;
@@ -268,7 +336,7 @@ export const postgresMemoryStore: MemoryStore = {
       tx
         .select({ total: count() })
         .from(m)
-        .where(and(scoped(m, scope), isNull(m.memoryPrId))),
+        .where(and(scoped(m, scope), eq(m.state, "waiting"))),
     );
     return row?.total ?? 0;
   },
@@ -292,12 +360,19 @@ export const postgresMemoryStore: MemoryStore = {
           evidence: m.evidence,
           source: m.source,
           dedupeKey: m.dedupeKey,
+          label: m.label,
+          summary: m.summary,
+          memoryType: m.memoryType,
           reflectionId: m.reflectionId,
           memoryPrId: m.memoryPrId,
+          state: m.state,
+          useCount: m.useCount,
+          lastUsedAt: m.lastUsedAt,
+          promotedLineage: m.promotedLineage,
           createdAt: m.createdAt,
         })
         .from(m)
-        .where(and(scoped(m, scope), isNull(m.memoryPrId)))
+        .where(and(scoped(m, scope), eq(m.state, "waiting")))
         .orderBy(asc(m.createdAt), asc(m.id)),
     );
     return rows.map(
@@ -316,24 +391,189 @@ export const postgresMemoryStore: MemoryStore = {
         evidence: stringsOrNull(row.evidence) ?? [],
         source: row.source,
         dedupeKey: row.dedupeKey,
+        label: row.label,
+        summary: row.summary,
+        memoryType: row.memoryType,
         reflectionId: row.reflectionId,
         memoryPrId: row.memoryPrId,
+        state: row.state as MemoryState,
+        useCount: row.useCount,
+        lastUsedAt: row.lastUsedAt,
+        promotedLineage: row.promotedLineage,
         createdAt: row.createdAt,
       }),
     );
   },
 
-  async deleteMemories(scope, ids) {
-    const targets = distinct(ids);
-    if (targets.length === 0) return 0;
+  async recordUses(scope, uses) {
+    if (uses.length === 0) return { recorded: 0, unknown: 0 };
     const m = schema.memories;
-    const deleted = await inScope(scope, (tx) =>
+    const u = schema.memoryUses;
+    return inScope(scope, async (tx) => {
+      // The memory each source holds now: its waiting memory, else its
+      // newest memory that has not retired, else its newest memory.
+      const targets = new Map<string, string>();
+      for (const capture of distinct(uses.map((use) => use.capture))) {
+        const sources = distinct(
+          uses.filter((use) => use.capture === capture).map((use) => use.source),
+        );
+        const found = await tx
+          .selectDistinctOn([m.source], { id: m.id, source: m.source })
+          .from(m)
+          .where(
+            and(
+              scoped(m, scope),
+              eq(m.capture, capture),
+              inArray(m.source, sources),
+            ),
+          )
+          .orderBy(
+            m.source,
+            sql`(${m.state} = 'waiting') DESC`,
+            sql`(${m.state} <> 'retired') DESC`,
+            sql`${m.createdAt} DESC`,
+            sql`${m.id} DESC`,
+          );
+        for (const row of found)
+          if (row.source !== null) targets.set(`${capture}\n${row.source}`, row.id);
+      }
+      const memoryIds = distinct([...targets.values()]);
+      if (memoryIds.length === 0) return { recorded: 0, unknown: uses.length };
+      // Lock the memories first, so two reports for one memory recompute its
+      // count one after the other and neither misses the other's uses.
+      await tx
+        .select({ id: m.id })
+        .from(m)
+        .where(and(scoped(m, scope), inArray(m.id, memoryIds)))
+        .orderBy(asc(m.id))
+        .for("update");
+
+      // One row per memory, run, and signal. Uses that share one are merged
+      // first, because one insert cannot update a row twice.
+      const merged = new Map<
+        string,
+        { memoryId: string; use: MemoryUseDraft; count: number; usedAt: Date }
+      >();
+      let unknown = 0;
+      for (const use of uses) {
+        const memoryId = targets.get(`${use.capture}\n${use.source}`);
+        if (memoryId === undefined) {
+          unknown += 1;
+          continue;
+        }
+        const key = `${memoryId}\n${use.runPublicId ?? ""}\n${use.signal}`;
+        const prior = merged.get(key);
+        if (prior === undefined) {
+          merged.set(key, { memoryId, use, count: use.count, usedAt: use.usedAt });
+          continue;
+        }
+        prior.count += use.count;
+        if (use.usedAt > prior.usedAt) prior.usedAt = use.usedAt;
+      }
+      await tx
+        .insert(u)
+        .values(
+          [...merged.values()].map((row) => ({
+            orgId: scope.orgId,
+            workspaceId: scope.workspaceId,
+            memoryId: row.memoryId,
+            runPublicId: row.use.runPublicId,
+            signal: row.use.signal,
+            count: row.count,
+            usedAt: row.usedAt,
+          })),
+        )
+        .onConflictDoUpdate({
+          target: [u.memoryId, u.runPublicId, u.signal],
+          set: {
+            count: sql`${u.count} + excluded.count`,
+            usedAt: sql`greatest(${u.usedAt}, excluded.used_at)`,
+          },
+        });
+
+      // Recompute from the uses table, so the two always agree. A retired
+      // memory that a run used comes back.
+      await tx
+        .update(m)
+        .set({
+          useCount: sql`(SELECT count(DISTINCT ${u.runPublicId}) + coalesce(sum(${u.count}) FILTER (WHERE ${u.runPublicId} IS NULL), 0) FROM ${u} WHERE ${u.memoryId} = ${m.id})::integer`,
+          lastUsedAt: sql`(SELECT max(${u.usedAt}) FROM ${u} WHERE ${u.memoryId} = ${m.id})`,
+          state: sql`CASE WHEN ${m.state} <> 'retired' THEN ${m.state} WHEN ${m.promotedLineage} IS NULL THEN 'waiting' ELSE 'promoted' END`,
+          retiredAt: sql`CASE WHEN ${m.state} = 'retired' THEN NULL ELSE ${m.retiredAt} END`,
+          retiredReason: sql`CASE WHEN ${m.state} = 'retired' THEN NULL ELSE ${m.retiredReason} END`,
+        })
+        .where(and(scoped(m, scope), inArray(m.id, memoryIds)));
+      return { recorded: uses.length - unknown, unknown };
+    });
+  },
+
+  async retireMissingSources(scope, scan, at) {
+    const m = schema.memories;
+    const seen = distinct(scan.seen);
+    const retired = await inScope(scope, (tx) =>
       tx
-        .delete(m)
-        .where(and(scoped(m, scope), inArray(m.id, targets)))
+        .update(m)
+        .set(retiredNow(at, "deleted"))
+        .where(
+          and(
+            scoped(m, scope),
+            eq(m.capture, scan.capture),
+            inArray(m.state, ["waiting", "promoted"]),
+            sql`${m.agentLineage} IS NOT DISTINCT FROM ${scan.agentLineage}::text`,
+            sql`starts_with(${m.source}, ${scan.prefix})`,
+            ...(seen.length > 0 ? [notInArray(m.source, seen)] : []),
+          ),
+        )
         .returning({ id: m.id }),
     );
-    return deleted.length;
+    return retired.length;
+  },
+
+  async retireUnused(scope, before, at) {
+    const m = schema.memories;
+    const retired = await inScope(scope, (tx) =>
+      tx
+        .update(m)
+        .set(retiredNow(at, "unused"))
+        .where(
+          and(
+            scoped(m, scope),
+            inArray(m.state, ["waiting", "promoted"]),
+            sql`coalesce(${m.lastUsedAt}, ${m.createdAt}) < ${before.toISOString()}::timestamptz`,
+          ),
+        )
+        .returning({ id: m.id }),
+    );
+    return retired.length;
+  },
+
+  async linkMemories(scope, links) {
+    if (links.length === 0) return 0;
+    const m = schema.memories;
+    const byLineage = new Map<string, string[]>();
+    for (const link of links)
+      byLineage.set(link.lineage, [
+        ...(byLineage.get(link.lineage) ?? []),
+        link.memoryId,
+      ]);
+    return inScope(scope, async (tx) => {
+      let linked = 0;
+      for (const [lineage, ids] of byLineage) {
+        const rows = await tx
+          .update(m)
+          .set({ state: "promoted", promotedLineage: lineage })
+          .where(
+            and(
+              scoped(m, scope),
+              inArray(m.id, distinct(ids)),
+              eq(m.state, "waiting"),
+            ),
+          )
+          .returning({ id: m.id });
+        linked += rows.length;
+      }
+      return linked;
+    });
   },
 
   async listOpenPrs(scope) {
@@ -396,7 +636,7 @@ export const postgresMemoryStore: MemoryStore = {
       if (cited.length > 0)
         await tx
           .update(m)
-          .set({ memoryPrId: row.id })
+          .set({ memoryPrId: row.id, state: "in_pr" })
           .where(and(scoped(m, scope), inArray(m.id, cited)));
       return row.id;
     });
@@ -423,9 +663,36 @@ export const postgresMemoryStore: MemoryStore = {
         .returning({ id: pr.id });
       if (settled.length === 0) return;
 
-      const purge = distinct(settlement.purgeMemoryIds);
-      if (purge.length > 0)
-        await tx.delete(m).where(and(scoped(m, scope), inArray(m.id, purge)));
+      // Only memories this PR still holds move. A memory a person dismissed
+      // while the PR was open stays dismissed.
+      const heldByPr = and(
+        scoped(m, scope),
+        eq(m.memoryPrId, settlement.prId),
+        eq(m.state, "in_pr"),
+      );
+      for (const { lineage, memoryIds } of settlement.promoted) {
+        const ids = distinct(memoryIds);
+        if (ids.length === 0) continue;
+        await tx
+          .update(m)
+          .set({ state: "promoted", promotedLineage: lineage })
+          .where(and(heldByPr, inArray(m.id, ids)));
+      }
+      const returned = distinct(settlement.returnedMemoryIds);
+      if (returned.length > 0) {
+        // A memory file edited while its memory sat in the PR has a newer
+        // waiting memory with the file's text, so the returned memory's text
+        // is gone from the file and it retires. Every other memory waits.
+        const replaced = sql`${m.capture} = 'local_gateway' AND EXISTS (SELECT 1 FROM ${m} AS w WHERE w.workspace_id = ${m.workspaceId} AND w.capture = ${m.capture} AND w.source = ${m.source} AND w.state = 'waiting' AND w.id <> ${m.id})`;
+        await tx
+          .update(m)
+          .set({
+            state: sql`CASE WHEN ${replaced} THEN 'retired' ELSE 'waiting' END`,
+            retiredAt: sql`CASE WHEN ${replaced} THEN ${at.toISOString()}::timestamptz END`,
+            retiredReason: sql`CASE WHEN ${replaced} THEN 'deleted' END`,
+          })
+          .where(and(heldByPr, inArray(m.id, returned)));
+      }
 
       const hashes = distinct(settlement.rejectedHashes);
       if (hashes.length > 0)

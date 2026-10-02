@@ -41,6 +41,19 @@
         "minLength": 1,
         "maxLength": 2000,
         "description": "The memory file's body without its frontmatter, trimmed."
+      },
+      "label": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "summary": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 1000
+      },
+      "memory_type": {
+        "type": "string"
       }
     },
     "required": [
