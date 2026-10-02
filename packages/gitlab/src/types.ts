@@ -72,6 +72,36 @@ export interface GitLabMergeRequest {
   draft?: boolean;
   /** GitLab's `updated_at`; absent when the answer carried none. */
   updatedAt?: string;
+  /** GitLab's `closed_at`; absent while open or when the answer carried none. */
+  closedAt?: string;
+  /** The author's username; absent when the answer carried none. */
+  authorLogin?: string;
+  /** The merge base the diff starts from (`diff_refs.base_sha`). */
+  baseSha?: string;
+  /** The target branch's tip the diff was computed against (`diff_refs.start_sha`). */
+  targetSha?: string;
+}
+
+/** One file a compare changed, with its line counts when GitLab sent hunks. */
+export interface GitLabCompareFile {
+  path: string;
+  previousPath?: string;
+  status: "added" | "modified" | "removed" | "renamed";
+  additions: number | null;
+  deletions: number | null;
+}
+
+/**
+ * A compare's change as one unified diff, the files it changed, and whether
+ * the text holds every file in full. `limitations` names each reason it does
+ * not: `file_too_large`, `diff_collapsed`, `compare_timeout`, or
+ * `file_without_hunks`.
+ */
+export interface GitLabCompareDiff {
+  text: string;
+  files: GitLabCompareFile[];
+  complete: boolean;
+  limitations: string[];
 }
 
 export interface GitLabChangedPath {
@@ -144,6 +174,15 @@ export interface GitLabClient {
     message: string;
     actions: GitLabCommitAction[];
   }): Promise<{ sha: string }>;
+  /**
+   * The same compare as `compare`, as one unified diff with each file's
+   * `diff --git` header, and the files it changed.
+   */
+  compareDiff(a: {
+    project: GitLabProjectRef;
+    from: string;
+    to: string;
+  }): Promise<GitLabCompareDiff>;
   /** Compares from the merge base (straight=false), like GitHub's three-dot compare. */
   compare(a: {
     project: GitLabProjectRef;

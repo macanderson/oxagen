@@ -68,6 +68,14 @@ export interface GitHubPullRequest {
   mergeCommitSha: string | null;
   /** When GitHub merged it (ISO 8601), once `merged` is true; null before. */
   mergedAt: string | null;
+  /** When GitHub closed it (ISO 8601); null while open. Absent when the response did not say. */
+  closedAt?: string | null;
+  /** The base branch's tip when GitHub answered. Absent when the response did not say. */
+  baseSha?: string | null;
+  /** GitHub's id of the repository the pull request merges into; it survives a rename. */
+  baseRepositoryId?: string;
+  /** That repository as `owner/name`. */
+  baseRepository?: string;
   additions: number;
   deletions: number;
   changedFiles: number;
@@ -162,6 +170,23 @@ export interface GitHubPrFile {
   changes: number;
   patch: string | null;
 }
+
+/** A three-dot compare's merge base and the files it changed. */
+export interface GitHubCompareRefs {
+  /** The commit the diff starts from; null when GitHub named none. */
+  mergeBaseSha: string | null;
+  files: GitHubPrFile[];
+  /** True when GitHub's 300-file limit cut the list short. */
+  filesTruncated: boolean;
+}
+
+/**
+ * A three-dot compare's unified diff as GitHub rendered it, byte for byte, or
+ * why there is none: GitHub refused to render it, or it was over the cap.
+ */
+export type GitHubCompareDiff =
+  | { status: "ok"; bytes: Uint8Array }
+  | { status: "too_large"; reason: "forge_refused" | "over_cap" };
 
 /** A single branch entry from the branch listing endpoint. */
 export interface GitHubBranch {
@@ -563,6 +588,27 @@ export interface GitHubClient {
     base: string;
     head: string;
   }): Promise<GitHubPrFile[]>;
+
+  /** The merge base and the files of GitHub's three-dot compare. */
+  compareRefs(args: {
+    owner: string;
+    repo: string;
+    base: string;
+    head: string;
+  }): Promise<GitHubCompareRefs>;
+
+  /**
+   * The unified diff of GitHub's three-dot compare, from the merge base to
+   * `head`, as raw bytes. A diff over `maxBytes`, or one GitHub refuses to
+   * render, answers `too_large`. The read stops at the cap.
+   */
+  getCompareDiff(args: {
+    owner: string;
+    repo: string;
+    base: string;
+    head: string;
+    maxBytes: number;
+  }): Promise<GitHubCompareDiff>;
 
   /**
    * The open pull request from `head` (a branch in this repository) into
