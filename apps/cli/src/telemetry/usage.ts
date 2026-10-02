@@ -90,11 +90,17 @@ const SEND_TIMEOUT_MS = 2_000;
 /**
  * True unless explicitly disabled. Checks, in order: `DO_NOT_TRACK=1` (the
  * cross-tool convention: https://consoledonottrack.com/), `OXAGEN_TELEMETRY=0`,
- * then the persisted `telemetry.enabled` config flag (`oxagen telemetry off`).
+ * `OXAGEN_DESKTOP_SIDECAR=1`, then the persisted `telemetry.enabled` config
+ * flag (`oxagen telemetry off`).
+ *
+ * The desktop app sets `OXAGEN_DESKTOP_SIDECAR=1` on every `oxagen` it
+ * starts. It polls `oxagen agent status` every few seconds, and a person did
+ * not type any of those commands, so none of them is a usage event (#4891).
  */
 export function isTelemetryEnabled(): boolean {
   if (process.env["DO_NOT_TRACK"] === "1") return false;
   if (process.env["OXAGEN_TELEMETRY"] === "0") return false;
+  if (process.env["OXAGEN_DESKTOP_SIDECAR"] === "1") return false;
   if (readConfig().telemetry?.enabled === false) return false;
   return true;
 }

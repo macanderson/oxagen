@@ -7,6 +7,7 @@ import {
   drivable,
   withoutCommandLine,
   collectorText,
+  commandName,
   deregisterNeedsSession,
   HARNESS_TIER,
   isConnected,
@@ -76,17 +77,18 @@ describe("sidecar argv", () => {
 
   it("enrolls with the picked org, workspace, and harness list", () => {
     expect(enrollArgs({ ...NONE, harnesses: ["cursor", "stella"] })).toEqual([
+      "agent",
       "enroll",
       "--harness",
       "cursor,stella",
     ]);
     // No agent is registered on the operator's behalf (ADR-101), and an
-    // empty pick never reaches tacho as `--harness ""`.
+    // empty pick never reaches the CLI as `--harness ""`.
     expect(() => enrollArgs(NONE)).toThrow(/pick at least one agent/);
     expect(() => enrollArgs({ ...NONE, harnesses: [] })).toThrow(
       /pick at least one agent/,
     );
-    // An org without a workspace never reaches tacho: it would fill the
+    // An org without a workspace never reaches the CLI: it would fill the
     // workspace from config.json, the previous org's.
     expect(() =>
       enrollArgs({ org: "other", workspace: null, harnesses: null }),
@@ -98,6 +100,7 @@ describe("sidecar argv", () => {
         harnesses: ["claude-code", "codex"],
       }),
     ).toEqual([
+      "agent",
       "enroll",
       "--org",
       "acme",
@@ -114,21 +117,21 @@ describe("sidecar argv", () => {
       harness: false,
     });
     expect(reassignArgs(HOST, { ...NONE, workspace: "edge" })).toEqual({
-      sidecar: "tacho",
-      args: ["reassign", "--workspace", "edge"],
+      sidecar: "oxagen",
+      args: ["agent", "reassign", "--workspace", "edge"],
     });
     expect(
       reassignArgs(HOST, { org: "other", workspace: "main", harnesses: null }),
     ).toEqual({
-      sidecar: "tacho",
-      args: ["reassign", "--org", "other", "--workspace", "main"],
+      sidecar: "oxagen",
+      args: ["agent", "reassign", "--org", "other", "--workspace", "main"],
     });
-    // Harness-only change: no --workspace, so tacho re-enrolls in place.
+    // Harness-only change: no --workspace, so the CLI re-enrolls in place.
     expect(
       reassignArgs(HOST, { ...NONE, harnesses: ["claude-code", "codex"] }),
     ).toEqual({
-      sidecar: "tacho",
-      args: ["reassign", "--harness", "claude-code,codex"],
+      sidecar: "oxagen",
+      args: ["agent", "reassign", "--harness", "claude-code,codex"],
     });
     // Picking the current values is not a change.
     expect(
@@ -200,9 +203,8 @@ describe("sidecar argv", () => {
     expect(sessionLanded(inAcme, out)).toBe(false);
   });
 
-  it("reassigns through the oxagen sidecar with --default when the CLI default should follow", () => {
-    // config.json is the CLI's file, so making the new pair the CLI default
-    // means running the same reassign as `oxagen tacho reassign … --default`.
+  it("adds --default when the CLI default should follow", () => {
+    // `--default` also writes the new pair into the CLI's config.json.
     expect(
       reassignArgs(
         HOST,
@@ -212,7 +214,7 @@ describe("sidecar argv", () => {
     ).toEqual({
       sidecar: "oxagen",
       args: [
-        "tacho",
+        "agent",
         "reassign",
         "--org",
         "other",
@@ -221,24 +223,29 @@ describe("sidecar argv", () => {
         "--default",
       ],
     });
-    // A harness-only apply still goes through oxagen when asked: the pair
-    // written is the host's current one, so config.json lands in step.
+    // A harness-only apply carries it too when asked: the pair written is
+    // the host's current one, so config.json lands in step.
     expect(reassignArgs(HOST, { ...NONE, harnesses: ["codex"] }, true)).toEqual(
       {
         sidecar: "oxagen",
-        args: ["tacho", "reassign", "--harness", "codex", "--default"],
+        args: ["agent", "reassign", "--harness", "codex", "--default"],
       },
     );
-    // Explicit false is the plain tacho form.
+    // Explicit false leaves it off.
     expect(reassignArgs(HOST, { ...NONE, workspace: "edge" }, false)).toEqual({
-      sidecar: "tacho",
-      args: ["reassign", "--workspace", "edge"],
+      sidecar: "oxagen",
+      args: ["agent", "reassign", "--workspace", "edge"],
     });
   });
 
   it("unenroll takes every agent, and carries --purge only on request", () => {
-    expect(unenrollArgs(false)).toEqual(["unenroll", "--all"]);
-    expect(unenrollArgs(true)).toEqual(["unenroll", "--all", "--purge"]);
+    expect(unenrollArgs(false)).toEqual(["agent", "unenroll", "--all"]);
+    expect(unenrollArgs(true)).toEqual([
+      "agent",
+      "unenroll",
+      "--all",
+      "--purge",
+    ]);
   });
 
   it("never empties the harness list", () => {
@@ -320,13 +327,13 @@ describe("wizard and de-register", () => {
 
   it("de-registers one agent by re-enrolling with the rest, or unenrolls the last", () => {
     expect(deregisterArgs(["claude-code", "codex"], "codex")).toEqual({
-      sidecar: "tacho",
-      args: ["reassign", "--harness", "claude-code"],
+      sidecar: "oxagen",
+      args: ["agent", "reassign", "--harness", "claude-code"],
     });
     // Named, so another agent enrolled on the machine keeps its enrollment.
     expect(deregisterArgs(["claude-code"], "claude-code")).toEqual({
-      sidecar: "tacho",
-      args: ["unenroll", "--harness", "claude-code"],
+      sidecar: "oxagen",
+      args: ["agent", "unenroll", "--harness", "claude-code"],
     });
   });
 
@@ -390,7 +397,7 @@ describe("wizard and de-register", () => {
     expect(HARNESS_TIER["claude-desktop"]).toBe("gateway");
   });
 
-  it("keeps connected apps out of the list tacho verify is run on", () => {
+  it("keeps connected apps out of the list oxagen agent verify is run on", () => {
     // `verify` drives a headless turn and waits for the sealed hook chain, so
     // it returns ok:false for a connected app by design. The wizard used to
     // hand it every registered app, which on a Claude-Desktop-only machine made
@@ -532,24 +539,23 @@ describe("describeCliInstall", () => {
  * new argv fails one of the two until the allowlist takes it (#4318, D-12).
  */
 function everyCall(): SidecarCall[] {
-  const tacho = (args: string[]): SidecarCall => ({ sidecar: "tacho", args });
   const oxagen = (args: string[]): SidecarCall => ({ sidecar: "oxagen", args });
   return [
     oxagen(loginArgs()),
     oxagen(loginArgs({ signup: true })),
     oxagen(logoutArgs()),
-    tacho(statusArgs()),
-    tacho(detectArgs()),
-    ...verifiable(HARNESSES).map((h) => tacho(verifyArgs(h))),
-    tacho(
+    oxagen(statusArgs()),
+    oxagen(detectArgs()),
+    ...verifiable(HARNESSES).map((h) => oxagen(verifyArgs(h))),
+    oxagen(
       enrollArgs({
         org: "acme",
         workspace: "core",
         harnesses: ["claude-code", "codex"],
       }),
     ),
-    tacho(enrollArgs({ org: null, workspace: "core", harnesses: HARNESSES })),
-    tacho(enrollArgs({ org: null, workspace: null, harnesses: ["cursor"] })),
+    oxagen(enrollArgs({ org: null, workspace: "core", harnesses: HARNESSES })),
+    oxagen(enrollArgs({ org: null, workspace: null, harnesses: ["cursor"] })),
     reassignArgs(HOST, { org: "globex", workspace: "ops", harnesses: null }),
     reassignArgs(HOST, { org: null, workspace: "ops", harnesses: null }),
     reassignArgs(
@@ -566,9 +572,9 @@ function everyCall(): SidecarCall[] {
     deregisterArgs(["claude-code", "codex"], "codex"),
     deregisterArgs(["claude-code"], "claude-code"),
     addHarnessArgs(["claude-code"], "claude-desktop"),
-    tacho(reapplyArgs()),
-    tacho(unenrollArgs(false)),
-    tacho(unenrollArgs(true)),
+    oxagen(reapplyArgs()),
+    oxagen(unenrollArgs(false)),
+    oxagen(unenrollArgs(true)),
   ];
 }
 
@@ -599,14 +605,29 @@ describe("the sidecar allowlist's fixture", () => {
     }
   });
 
-  it("re-applies with a bare enroll, which keeps the enrolled list", () => {
-    expect(reapplyArgs()).toEqual(["enroll"]);
+  // #4891: Re-apply ran `tacho enroll`, whose re-apply wrote the hooks
+  // back to `tacho hook` each time the CLI had moved them to `oxagen hook`.
+  // A bare `oxagen agent enroll` re-applies them under the oxagen name.
+  it("re-applies with a bare `oxagen agent enroll`, which keeps the enrolled list", () => {
+    expect(reapplyArgs()).toEqual(["agent", "enroll"]);
+  });
+
+  // #4891: every recorder command runs as the command a person types.
+  it("runs every recorder command as `oxagen agent <verb>`", () => {
+    const calls = everyCall();
+    const signIn = new Set(["login", "logout"]);
+    const recorder = calls.filter((call) => !signIn.has(call.args[0] ?? ""));
+    expect(recorder.length).toBeGreaterThan(0);
+    for (const call of calls) expect(call.sidecar).toBe("oxagen");
+    for (const call of recorder) expect(call.args[0]).toBe("agent");
+    expect(calls.some((call) => call.args.includes("tacho"))).toBe(false);
   });
 
   it("builds the argv the Rust allowlist names", () => {
-    expect(statusArgs()).toEqual(["status", "--json"]);
-    expect(detectArgs()).toEqual(["detect", "--json"]);
+    expect(statusArgs()).toEqual(["agent", "status", "--json"]);
+    expect(detectArgs()).toEqual(["agent", "detect", "--json"]);
     expect(verifyArgs("codex")).toEqual([
+      "agent",
       "verify",
       "--harness",
       "codex",
@@ -614,9 +635,19 @@ describe("the sidecar allowlist's fixture", () => {
     ]);
     expect(logoutArgs()).toEqual(["logout"]);
     expect(addHarnessArgs(["claude-code", "codex"], "cursor")).toEqual({
-      sidecar: "tacho",
-      args: ["reassign", "--harness", "claude-code,codex,cursor"],
+      sidecar: "oxagen",
+      args: ["agent", "reassign", "--harness", "claude-code,codex,cursor"],
     });
+  });
+
+  // #4891: the Activity log and the error banner name the command the app
+  // ran, not a description that hid it.
+  it("names the command an argv runs, without its flags", () => {
+    expect(commandName(reapplyArgs())).toBe("oxagen agent enroll");
+    expect(commandName(statusArgs())).toBe("oxagen agent status");
+    expect(commandName(unenrollArgs(true))).toBe("oxagen agent unenroll");
+    expect(commandName(loginArgs())).toBe("oxagen login");
+    expect(commandName(logoutArgs())).toBe("oxagen logout");
   });
 });
 

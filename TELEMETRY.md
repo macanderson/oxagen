@@ -90,7 +90,10 @@ Any one of the following fully disables telemetry — checked in this order:
 1. **`DO_NOT_TRACK=1`** — the cross-tool convention
    ([consoledonottrack.com](https://consoledonottrack.com/)).
 2. **`OXAGEN_TELEMETRY=0`** — an Oxagen-specific environment variable.
-3. **`oxagen telemetry off`** — persists the choice to
+3. **`OXAGEN_DESKTOP_SIDECAR=1`** — set by the Oxagen desktop app on every
+   `oxagen` command it runs. The app checks the machine's status every few
+   seconds, and nobody typed those commands, so they send nothing.
+4. **`oxagen telemetry off`** — persists the choice to
    `~/.config/oxagen/config.json`, so it survives across shells and sessions.
 
 ```bash

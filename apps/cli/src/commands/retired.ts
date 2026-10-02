@@ -25,10 +25,10 @@ export function printRetiredNotice(what: string): void {
  * takes away the operator's other way of finding the new one, so this line is
  * the migration guidance rather than a courtesy. One line, on stderr, so it
  * never lands in the output of a `--json` subcommand a script is parsing.
- * The desktop app still sends `oxagen tacho reassign --default` and streams
- * the sidecar's stderr into its log, so a sidecar it starts
+ * A desktop app built before #4891 sends `oxagen tacho reassign --default`
+ * and streams the sidecar's stderr into its log, so a sidecar it starts
  * (`OXAGEN_DESKTOP_SIDECAR=1`) prints nothing: the person reading that log
- * did not type the command.
+ * did not type the command. The current app sends `oxagen agent reassign`.
  */
 export function printTachoAliasNotice(
   subcommand: string,
