@@ -67,11 +67,12 @@ export {
 } from "./result-use";
 export { CARRY_RESULT_TOKENS, resultsToCheck } from "./unpaged-results";
 export {
-  instructionProposalOpener,
-  setInstructionProposalOpener,
+  setSpendProposalOpener,
+  spendProposalOpener,
   type InstructionProposal,
-  type InstructionProposalOpener,
-  type InstructionProposalScope,
+  type SpendProposalInput,
+  type SpendProposalOpener,
+  type SpendProposalScope,
 } from "./proposal-opener";
 
 /** Every detector a pass runs, in the order it runs them. */

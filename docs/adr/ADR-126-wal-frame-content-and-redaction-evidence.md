@@ -2,7 +2,7 @@
 
 - **Status:** Accepted; the fifth guarantee, open below, is closed by [ADR-185](ADR-185-a-failed-wal-body-write-rolls-back-the-seal.md) (2026-09-25)
 - **Date:** 2026-09-19
-- **Related:** [ADR-100](ADR-100-frame-bodies-are-captured-by-default-redacted-at-the-host-capped-and-governed-by-retention.md), [#3365](https://github.com/macanderson/oxagen/issues/3365), [#3332](https://github.com/macanderson/oxagen/pull/3332), [#3342](https://github.com/macanderson/oxagen/pull/3342)
+- **Related:** [ADR-100](ADR-100-frame-bodies-are-captured-by-default-redacted-at-the-host-capped-and-governed-by-retention.md), [#3365](https://github.com/oxageninc/product/issues/3365), [#3332](https://github.com/oxageninc/product/pull/3332), [#3342](https://github.com/oxageninc/product/pull/3342)
 
 ## Decision
 
@@ -30,7 +30,7 @@ No guarantee is deliberately dropped. The failed-body-write row is an implementa
 
 GitHub records #3342 as merged at `2026-09-18T22:27:26Z`, with head `ec9b3a607` and squash `b9beb0e5c`. That squash retains the 1 MiB route ceiling, a 4 MiB raw body budget, and retryable 413 handling.
 
-The [reply accepting the request-size finding](https://github.com/macanderson/oxagen/pull/3342#discussion_r4051234403) names `6382cbaec`. That commit was created at `2026-09-18T22:43:39Z`, after the merge. The reply followed at `22:45:26Z`. The repair therefore could not have been part of the already completed squash. The current tree has the later request-size fixes, but the reply alone was not evidence for the merged tree.
+The [reply accepting the request-size finding](https://github.com/oxageninc/product/pull/3342#discussion_r4051234403) names `6382cbaec`. That commit was created at `2026-09-18T22:43:39Z`, after the merge. The reply followed at `22:45:26Z`. The repair therefore could not have been part of the already completed squash. The current tree has the later request-size fixes, but the reply alone was not evidence for the merged tree.
 
 Verify a review repair against the actual merge commit before treating its resolution as shipped. A commit named after a merge is evidence of follow-up work, not evidence that the earlier merge contained it.
 

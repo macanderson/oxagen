@@ -22,7 +22,7 @@ export function StubDialog({
   title: string;
   /** What the control would do, and that nothing was sent. */
   body: string;
-  /** The macanderson/oxagen issue that would back it. */
+  /** The oxageninc/product issue that would back it. */
   issue: number;
   testId: string;
   /** The screen's one gold action. */

@@ -1,6 +1,11 @@
 /**
  * proposal-opener.ts — the seam between the findings pass and the code that
- * opens a steering record proposal (detector 6, prompt habits).
+ * opens steering record proposals from its findings.
+ *
+ * The pass hands the opener what one pass found: the instructions operators
+ * repeat (detector 6) and every finding draft it wrote. The handlers turn
+ * that into proposals, with one builder per finding kind
+ * (`packages/handlers/src/lib/spend-proposals/`), and open each one.
  *
  * The proposal path (`createProposal` and the steering store) lives in
  * `@oxagen/handlers`, which depends on this package, so this package cannot
@@ -9,6 +14,9 @@
  * imports nothing at run time, so the register module loads it at boot
  * without loading the rest of billing.
  */
+import type { FindingDraft } from "./shared";
+
+export type { FindingDraft };
 
 /** One steering record proposal for an instruction operators keep repeating. */
 export interface InstructionProposal {
@@ -26,31 +34,42 @@ export interface InstructionProposal {
   evidenceLinks: string[];
 }
 
-export interface InstructionProposalScope {
+/** What one findings pass hands the opener. */
+export interface SpendProposalInput {
+  /**
+   * The instructions repeated across runs, most repeated first. Empty on a
+   * `digest_only` workspace, because the text is not stored.
+   */
+  instructions: readonly InstructionProposal[];
+  /** The finding drafts the pass wrote, of every kind, largest saving first. */
+  findings: readonly FindingDraft[];
+}
+
+export interface SpendProposalScope {
   orgId: string;
   workspaceId: string;
 }
 
 /**
- * Open one proposal per entry. An entry whose lineage already has a record
- * or a proposal is left alone, so a later pass never opens it twice and a
- * dismissed proposal stays dismissed.
+ * Build the proposals one pass supports and open each one. A proposal whose
+ * lineage already has a record or a proposal is left alone, so a later pass
+ * never opens it twice and a dismissed proposal stays dismissed.
  */
-export type InstructionProposalOpener = (
-  scope: InstructionProposalScope,
-  proposals: readonly InstructionProposal[],
+export type SpendProposalOpener = (
+  scope: SpendProposalScope,
+  input: SpendProposalInput,
 ) => Promise<void>;
 
-let installed: InstructionProposalOpener | null = null;
+let installed: SpendProposalOpener | null = null;
 
 /** Install the opener. The handlers' register module calls this at boot. */
-export function setInstructionProposalOpener(
-  opener: InstructionProposalOpener | null,
+export function setSpendProposalOpener(
+  opener: SpendProposalOpener | null,
 ): void {
   installed = opener;
 }
 
 /** The installed opener; null in a process that did not load the handlers. */
-export function instructionProposalOpener(): InstructionProposalOpener | null {
+export function spendProposalOpener(): SpendProposalOpener | null {
   return installed;
 }

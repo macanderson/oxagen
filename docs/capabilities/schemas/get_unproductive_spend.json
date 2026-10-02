@@ -1,0 +1,215 @@
+{
+  "name": "get_unproductive_spend",
+  "domain": "spend",
+  "description": "Answer this workspace's unproductive spend over a day range: the frames that spin loops, recurring runs, and spend with no outcome claim, each counted once, and its share of the priced spend of the frames that ran in the period. Beside it and out of its sum: what standing context, cache rewrites, and context carry price, and what model class fit estimates. Equals the operator ranking's total for the same period.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "agent"
+  ],
+  "sensitivity": "medium",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "billing"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "period": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "string",
+            "x-server-validated": true,
+            "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
+          },
+          "to": {
+            "type": "string",
+            "x-server-validated": true,
+            "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
+          }
+        },
+        "required": [
+          "from",
+          "to"
+        ],
+        "additionalProperties": false,
+        "x-server-validated": true,
+        "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
+      }
+    },
+    "required": [
+      "period"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "period": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "from",
+          "to"
+        ],
+        "additionalProperties": false
+      },
+      "unproductive": {
+        "type": "object",
+        "properties": {
+          "micros": {
+            "type": "string"
+          },
+          "currency": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "micros",
+          "currency"
+        ],
+        "additionalProperties": false
+      },
+      "spend": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "micros": {
+                "type": "string"
+              },
+              "currency": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "micros",
+              "currency"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "share": {
+        "anyOf": [
+          {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "parts": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "saving": {
+              "type": "object",
+              "properties": {
+                "micros": {
+                  "type": "string"
+                },
+                "currency": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "micros",
+                "currency"
+              ],
+              "additionalProperties": false
+            },
+            "findings": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "detector": {
+              "anyOf": [
+                {
+                  "const": 2
+                },
+                {
+                  "const": 3
+                },
+                {
+                  "const": 5
+                }
+              ]
+            }
+          },
+          "required": [
+            "saving",
+            "findings",
+            "detector"
+          ],
+          "additionalProperties": false
+        },
+        "minItems": 3,
+        "maxItems": 3
+      },
+      "estimate": {
+        "type": "object",
+        "properties": {
+          "saving": {
+            "type": "object",
+            "properties": {
+              "micros": {
+                "type": "string"
+              },
+              "currency": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "micros",
+              "currency"
+            ],
+            "additionalProperties": false
+          },
+          "findings": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "saving",
+          "findings"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "required": [
+      "period",
+      "unproductive",
+      "spend",
+      "share",
+      "parts",
+      "estimate"
+    ],
+    "additionalProperties": false
+  }
+}

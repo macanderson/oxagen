@@ -1,7 +1,7 @@
 {
   "name": "get_operator_ranking",
   "domain": "spend",
-  "description": "Rank this workspace's operators by unproductive spend over a day range, highest first: each operator's unproductive spend, its share of the headline, its share of the operator's priced spend, its run count, and the runs behind it. Managers only. The operator totals and the unattributed total sum to the headline.",
+  "description": "Rank this workspace's operators by unproductive spend over a day range, highest first: each operator's unproductive spend, its share of the headline, its share of the priced spend of the frames the operator's runs ran in the period, its run count, and the runs behind it. Org Owner or Admin only. The operator totals and the unattributed total sum to the headline get_unproductive_spend answers.",
   "mode": "sync",
   "surfaces": [
     "api",

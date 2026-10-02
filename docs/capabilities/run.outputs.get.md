@@ -2,7 +2,7 @@
 
 **Surfaces:** api, agent
 
-What one run produced, in the order it produced it (macanderson/oxagen#3609). This is the Run page's spine: it sits between the run header and the tabs, not behind one of them, because the first question anyone brings to a run is what came of it.
+What one run produced, in the order it produced it (oxageninc/product#3609). This is the Run page's spine: it sits between the run header and the tabs, not behind one of them, because the first question anyone brings to a run is what came of it.
 
 One node per thing the run produced. A node carries a kind, a name, where it landed, the disposition the store recorded, a one-line note, a diff stat where the recorder counted lines, and the frame sequence the `fr N` chip opens. A path the run only read comes back as a `read` node, so the surface can draw it as a mark and never as a change.
 

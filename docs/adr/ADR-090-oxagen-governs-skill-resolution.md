@@ -13,7 +13,7 @@
   App. E, App. F,
   `docs/w13-in-the-loop-scenario.md` and `mockups/pages/skills.md`,
   `skills-off.md`, `skill-source.md`, `run-interjection.md` in
-  `macanderson/tmp-oxagen-mockups`
+  `oxageninc/roadmap`
 
 ## Context
 

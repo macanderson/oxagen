@@ -39,7 +39,7 @@ type Run = {
   head_repository: { full_name: string };
 };
 
-const REPO = "macanderson/oxagen";
+const REPO = "oxageninc/product";
 
 function run(id: number, sha: string, created: string, status: string, conclusion: string | null): Run {
   return {

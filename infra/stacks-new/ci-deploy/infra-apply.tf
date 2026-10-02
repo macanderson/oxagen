@@ -45,7 +45,11 @@ locals {
   # roles, because publishing an artifact and administering the account are not
   # the same permission and should not be the same trust.
   infra_repository = local.deployers["oxagen-platform"].repository
-  infra_owner_id   = local.deployers["oxagen-platform"].owner_id
+
+  # The repository's current name and the names it moved from
+  # (`local.moved_from` in main.tf), so a move never locks CI out of the
+  # account before this stack is applied again.
+  infra_names = local.deploy_names["oxagen-platform"]
 
   # Spelled out rather than read from the backend block: OpenTofu does not
   # expose backend settings as values, so these would have to be duplicated
@@ -67,14 +71,16 @@ locals {
   # `local.deploy_subjects`. Apply names one exact environment subject; plan
   # ends in a wildcard so it works from any branch, which is safe because that
   # role cannot write.
-  infra_subjects = { for mode in ["plan", "apply"] : mode => [
-    for shape in [
-      local.infra_repository,
-      "${split("/", local.infra_repository)[0]}@${local.infra_owner_id}/${split("/", local.infra_repository)[1]}@${local.infra_repo_id}",
-    ] : mode == "apply"
-    ? "repo:${shape}:environment:${local.deploy_environment}"
-    : "repo:${shape}:*"
-  ] }
+  infra_subjects = { for mode in ["plan", "apply"] : mode => flatten([
+    for n in local.infra_names : [
+      for shape in [
+        n.repository,
+        "${split("/", n.repository)[0]}@${n.owner_id}/${split("/", n.repository)[1]}@${local.infra_repo_id}",
+      ] : mode == "apply"
+      ? "repo:${shape}:environment:${local.deploy_environment}"
+      : "repo:${shape}:*"
+    ]
+  ]) }
 }
 
 data "aws_iam_policy_document" "infra_assume" {
@@ -114,7 +120,7 @@ data "aws_iam_policy_document" "infra_assume" {
       content {
         test     = "StringEquals"
         variable = "token.actions.githubusercontent.com:job_workflow_ref"
-        values   = ["${local.infra_repository}/.github/workflows/${local.infra_apply_workflow}@refs/heads/main"]
+        values   = [for n in local.infra_names : "${n.repository}/.github/workflows/${local.infra_apply_workflow}@refs/heads/main"]
       }
     }
   }

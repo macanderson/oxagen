@@ -12,7 +12,7 @@ export function NotBacked({
 }: {
   /** What the element would show, already translated. */
   what: string;
-  /** The tracking issue on macanderson/oxagen; 0 while none is filed. */
+  /** The tracking issue on oxageninc/product; 0 while none is filed. */
   issue: number;
   testId: string;
 }) {

@@ -3,9 +3,11 @@
  * spend over a day range, highest first (spend spec, Operator ranking; D15).
  * Every figure comes from the frames that open and applied findings claim
  * (ADR-208), counted once each, so the operator totals and the unattributed
- * total sum to the headline. Managers read it: an org Owner or Admin, or the
- * workspace's Owner. The ranking reports the record and gives no verdict on
- * the person.
+ * total sum to the headline that `get_unproductive_spend` answers. Managers
+ * read it: an org Owner or Admin. No person holds a workspace IAM role yet
+ * (#3198), so in an Enterprise org the kernel could not admit a workspace
+ * Owner, and the ranking names no workspace role on any tier. The ranking
+ * reports the record and gives no verdict on the person.
  *
  * With the workspace's pseudonym setting on, a stable pseudonym replaces each
  * name and the answer carries no key, no facts, and no run ids, since a run
@@ -59,9 +61,11 @@ export const operatorRankingRowSchema = z
     /** `unproductive` over the headline. */
     shareOfTotal: ratioSchema,
     /**
-     * `unproductive` over this operator's priced spend in the period. Null
-     * when nothing was priced, when that spend holds another currency, or
-     * under pseudonyms.
+     * `unproductive` over the priced spend of the frames this operator's runs
+     * ran in the period, counted by frame time as the claims are. Null when
+     * nothing was priced, when that spend holds another currency, when a run
+     * that crosses the period's edge could not be priced, or under
+     * pseudonyms.
      */
     unproductiveShare: ratioSchema.nullable(),
     /** Distinct runs with a claimed frame; null under pseudonyms. */
@@ -81,7 +85,7 @@ export const spendOperatorRanking = registerCapability({
   name: "get_operator_ranking",
   domain: "spend",
   description:
-    "Rank this workspace's operators by unproductive spend over a day range, highest first: each operator's unproductive spend, its share of the headline, its share of the operator's priced spend, its run count, and the runs behind it. Managers only. The operator totals and the unattributed total sum to the headline.",
+    "Rank this workspace's operators by unproductive spend over a day range, highest first: each operator's unproductive spend, its share of the headline, its share of the priced spend of the frames the operator's runs ran in the period, its run count, and the runs behind it. Org Owner or Admin only. The operator totals and the unattributed total sum to the headline get_unproductive_spend answers.",
   mode: "sync",
   surfaces: ["api", "agent"],
   layers: ["schema", "api", "unit", "docs", "app"],
@@ -92,7 +96,7 @@ export const spendOperatorRanking = registerCapability({
   defaultEffect: "deny",
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow" },
-    workspace: { Owner: "allow" },
+    workspace: {},
   },
   agent: { requiresApproval: false, riskLevel: "low", category: "billing" },
   input: z.object({ period: dayRangeSchema }).strict(),

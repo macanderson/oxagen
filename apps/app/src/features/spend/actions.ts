@@ -8,14 +8,18 @@
 // decide a finding — record its fix as applied or dismiss it (#2963, ADR-062
 // §2; org Owner or Admin in the handler), state one negotiated rate
 // (set_price_entry) and end one (remove_price_entry), both org Owner, Admin or
-// Billing in their handlers. Each runs through kernelWrite, the seam's one path
-// for a call a person starts from a page; each is noBillingGate (INV-28).
+// Billing in their handlers, and turn the workspace's operator pseudonyms on or
+// off (set_operator_pseudonyms, org Owner or Admin in the handler, which
+// writes a security event for each change). Each runs through kernelWrite, the
+// seam's one path for a call a person starts from a page; each is
+// noBillingGate (INV-28).
 import { billingBudgetSet } from "@oxagen/oxagen/contracts/billing.budget.set";
 import { costPriceEntryRemove } from "@oxagen/oxagen/contracts/cost.price_entry.remove";
 import { costPriceEntrySet } from "@oxagen/oxagen/contracts/cost.price_entry.set";
 import { findingDismiss } from "@oxagen/oxagen/contracts/finding.dismiss";
 import { findingFixRecord } from "@oxagen/oxagen/contracts/finding.fix.record";
 import { spendCostCenterStatementExport } from "@oxagen/oxagen/contracts/spend.cost_center_statement.export";
+import { spendOperatorPseudonymsSet } from "@oxagen/oxagen/contracts/spend.operator_pseudonyms.set";
 import { spendStatementExport } from "@oxagen/oxagen/contracts/spend.statement.export";
 import { tachoSessionPolicyWrite } from "@oxagen/oxagen/contracts/tacho.session_policy.write";
 import type { ActionResult } from "@/server/kernel";
@@ -265,5 +269,27 @@ export async function removePriceEntryAction(
   const result = await kernelWrite(ctx, costPriceEntryRemove, parsed.data);
   return result.ok
     ? { ok: true, value: { fallbackPriced: result.value.fallbackPriced } }
+    : result;
+}
+
+/** Turn the workspace's operator pseudonyms on or off; the answer is the setting now in force. */
+export async function setOperatorPseudonymsAction(
+  at: SpendAt,
+  enabled: boolean,
+): Promise<ActionResult<{ pseudonyms: boolean }>> {
+  const ctx = await requireViewer(at.org, at.ws);
+  if (typeof enabled !== "boolean") {
+    return {
+      ok: false,
+      reason: "invalid",
+      code: "invalid_input",
+      field: "enabled",
+    };
+  }
+  const result = await kernelWrite(ctx, spendOperatorPseudonymsSet, {
+    enabled,
+  });
+  return result.ok
+    ? { ok: true, value: { pseudonyms: result.value.pseudonyms } }
     : result;
 }
