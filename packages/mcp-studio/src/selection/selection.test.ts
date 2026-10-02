@@ -90,6 +90,15 @@ describe("selectionTools", () => {
     expect(TOOLS[0]).toBe(BILLING.tools["create_refund"]?.definition);
     expect(TOOLS[1]).toBe(BILLING.tools["list_charges"]?.definition);
   });
+
+  it("keeps the server's order rather than sorting by name", () => {
+    const [refund, charges] = TOOLS;
+    if (refund === undefined || charges === undefined) throw new Error("The billing fixture has two tools.");
+
+    const tools = selectionTools({ tools: { list_charges: { definition: charges }, create_refund: { definition: refund } } });
+
+    expect(tools.map((tool) => tool.name)).toStrictEqual([CHARGES, REFUND]);
+  });
 });
 
 describe("runSelection", () => {
@@ -324,6 +333,19 @@ describe("runSelection", () => {
 
     expect(error).toBe(controller.signal.reason);
     expect(fake.requests).toHaveLength(0);
+  });
+
+  it("asks no more tasks when the signal aborts between tasks", async () => {
+    const controller = new AbortController();
+    const fake = fakeModel(() => {
+      controller.abort();
+      return { tool: REFUND };
+    });
+
+    const error = await rejection(runSelection(TOOLS, fixtureTests("billing"), fake.model, controller.signal));
+
+    expect(error).toBe(controller.signal.reason);
+    expect(fake.requests).toHaveLength(1);
   });
 
   it("throws the signal's reason when a model call ends because the signal aborted", async () => {
