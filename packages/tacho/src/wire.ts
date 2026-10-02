@@ -270,6 +270,17 @@ export const BUNDLE_FEATURE_SKILLS = "skills" as const;
 export const BUNDLE_FEATURE_CACHE_KEEP_ALIVE = "cache_keep_alive" as const;
 
 /**
+ * The host can take a `work_order` command: it keeps the send for the person
+ * at the host and claims it with `claim_work_order` before any run starts
+ * (P1-04, ADR-250). The control plane drains `work_order` rows only to a host
+ * that advertises this, because `tachoCommandSchema` is an enum and a host
+ * built before the value fails its whole poll, and every later command with
+ * it, over one row it cannot name. The host side adds it to
+ * `TACHO_BUNDLE_FEATURES` in the change that handles the command.
+ */
+export const BUNDLE_FEATURE_WORK_ORDERS = "work_orders" as const;
+
+/**
  * Every bundle feature the host in *this* tree can parse, which is what it
  * advertises. One list, read by the daemon's health report and by enrollment,
  * so a field added to `policyBundleSchema` is advertised from the one place
@@ -566,6 +577,11 @@ export const tachoCommandSchema = z.enum([
   "revoke",
   "refresh_bundle",
   "kill",
+  // A send of an approved work brief to this host (P1-04, ADR-250). The
+  // control plane hands it only to a host that advertises
+  // `BUNDLE_FEATURE_WORK_ORDERS`, because a host built before this value
+  // fails its whole poll on a command name it does not know.
+  "work_order",
 ]);
 /**
  * The closed status vocabulary of Mission Control spec §7.4, shared by

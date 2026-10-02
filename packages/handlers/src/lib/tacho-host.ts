@@ -29,6 +29,7 @@ import {
   BUNDLE_FEATURE_MODEL_PRICES,
   BUNDLE_FEATURE_STEERING_MANIFEST,
   BUNDLE_FEATURE_UNBOUND_REPO,
+  BUNDLE_FEATURE_WORK_ORDERS,
   type BundleSkill,
   digestJcs,
   type JsonValue,
@@ -902,6 +903,18 @@ function deliverable(now: Date) {
 }
 
 /**
+ * Whether this host can take a `work_order` command (ADR-250). A host built
+ * before the command parses `command` as an enum that lacks it, and one row it
+ * cannot name fails its whole poll and ingest response. So a `work_order` row
+ * waits, queued, until its host advertises the feature: the person at the host
+ * updates oxagen, and the next poll delivers it.
+ */
+export function takesWorkOrders(host: Pick<TachoHostRow, "bundleFeatures">): boolean {
+  const advertised: unknown = host.bundleFeatures;
+  return Array.isArray(advertised) && advertised.includes(BUNDLE_FEATURE_WORK_ORDERS);
+}
+
+/**
  * Queued commands for a host, marked `sent` as they leave, and `sent` ones
  * offered again once their lease runs out unacknowledged.
  *
@@ -934,6 +947,10 @@ export async function drainCommands(
         isNull(schema.tachoControlCommands.expiresAt),
         gt(schema.tachoControlCommands.expiresAt, now),
       ),
+      // A host that cannot name `work_order` never sees one (takesWorkOrders).
+      takesWorkOrders(host)
+        ? undefined
+        : sql`${schema.tachoControlCommands.command} <> 'work_order'`,
     ),
     // `issued_at` alone is a partial order: `defaultNow()` is the transaction
     // timestamp, so two commands dispatched in the same instant tie and the
