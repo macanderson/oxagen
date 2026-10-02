@@ -74,6 +74,7 @@ import {
 import {
   forgetRecallHints,
   noteRecallHints,
+  type RecallHintsHolder,
   readRepository,
   recallScope,
 } from "./recall-hints";
@@ -400,7 +401,10 @@ async function askAboutRepository(
   // The read is shared with the memory recall, so a session that started one
   // at an earlier hook reuses it. A failed read answers undefined, because
   // it proves nothing about the repository and the prompt must go through.
-  const remote = await readRepository(record, deps.repositoryRemote);
+  const remote = await readRepository(
+    recallView(record),
+    deps.repositoryRemote,
+  );
   if (remote === undefined || isBound(clause, remote)) return [];
   return raiseInterjection(record, clause, remote, deps.now(), fields) ?? [];
 }
@@ -1009,8 +1013,7 @@ async function routeHook(
   if (inferredCwd && record.cwd === undefined && input.cwd !== undefined) {
     record.cwd = input.cwd;
   }
-  const wrote = writtenDir(input);
-  if (wrote !== undefined) record.workDir = wrote;
+  noteWrittenDir(record, input);
   // This hook reopened a session the sweep closed for quiet, so the chain
   // starts again, and says so first. The control plane reopens a run whose
   // host sealed it only on an `agent_start` (ADR-172). A `SessionStart`
@@ -1068,7 +1071,7 @@ async function routeHook(
     deps.repositoryRemote !== undefined &&
     deliversMessages(record.harness, "UserPromptSubmit")
   )
-    void readRepository(record, deps.repositoryRemote);
+    void readRepository(recallView(record), deps.repositoryRemote);
   // Stella's tool-use ids are derived from the call, so the daemon numbers
   // each invocation before anything reads the payload.
   const payload = invocationToolUseId(raw, input, record);
@@ -1277,7 +1280,7 @@ async function routeHook(
         deliversMessages(record.harness, input.hook_event_name)
           ? recallContext(
               await deps.recallMemories({
-                ...recallScope(record),
+                ...recallScope(recallView(record)),
                 text: promptText(input) ?? "",
               }),
               delivered.join(CONTEXT_JOINER).length,
@@ -1758,7 +1761,9 @@ const FILE_WRITING_TOOLS = new Set([
 /**
  * The directory of the file a write tool call names, when it names one by
  * absolute path. The daemon reads git from here, because the file an agent
- * writes shows which checkout it is working in, and its `cwd` may not.
+ * writes shows which checkout it is working in, and its `cwd` may not. It
+ * answers at `PreToolUse`, before the write runs, so memory recall takes it
+ * only from a `PostToolUse` (`noteWrittenDir`).
  */
 export function writtenDir(input: {
   hook_event_name?: string;
@@ -1775,4 +1780,63 @@ export function writtenDir(input: {
     input.tool_input?.["file_path"] ?? input.tool_input?.["notebook_path"];
   if (typeof path !== "string" || !isAbsolute(path)) return undefined;
   return dirname(path);
+}
+
+/**
+ * The directory each session's memory recall reads its repository from
+ * (#4458). Recall needs a directory the agent wrote in. `workDir` is the
+ * directory it is about to write in.
+ *
+ * The git lane reads `workDir`, and it moves at `PreToolUse` on purpose
+ * (#4003). The lane takes a new checkout's baseline before the write lands,
+ * so the write counts as the session's own edit. A denied write never runs
+ * and a failed one leaves nothing, so recall's directory moves only at a
+ * `PostToolUse`. Claude Code sends that hook only for a call that succeeded,
+ * and sends `PostToolUseFailure` for one that failed.
+ *
+ * The map lives here rather than on `SessionRecord`, so the daemon's state
+ * file does not keep it. A restart restores `workDir` alone, and the first
+ * hook this process sees for a record takes recall's directory from it. A
+ * `workDir` a denied write moved just before a restart therefore carries over
+ * to recall once.
+ */
+const recallDirs = new WeakMap<SessionRecord, string | undefined>();
+
+/**
+ * Note the directory of a file a write tool names: in `workDir` at both
+ * tool hooks, and in recall's directory only once the write succeeded.
+ */
+function noteWrittenDir(
+  record: SessionRecord,
+  input: Parameters<typeof writtenDir>[0],
+): void {
+  // Taken before this hook moves `workDir`, or a denied first write would
+  // seed recall with the directory it never wrote in.
+  if (!recallDirs.has(record)) recallDirs.set(record, record.workDir);
+  const wrote = writtenDir(input);
+  if (wrote === undefined) return;
+  record.workDir = wrote;
+  if (input.hook_event_name === "PostToolUse") recallDirs.set(record, wrote);
+}
+
+/**
+ * The session as memory recall reads it: its own `cwd` and recall hints,
+ * with recall's directory (`recallDirs`) in place of `workDir`. The hints
+ * pass through to the record, because `readRepository` keeps its read there.
+ */
+function recallView(record: SessionRecord): RecallHintsHolder {
+  return {
+    get cwd() {
+      return record.cwd;
+    },
+    get workDir() {
+      return recallDirs.has(record) ? recallDirs.get(record) : record.workDir;
+    },
+    get recallHints() {
+      return record.recallHints;
+    },
+    set recallHints(hints) {
+      record.recallHints = hints;
+    },
+  };
 }
