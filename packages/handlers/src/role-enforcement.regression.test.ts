@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { CapabilityContext } from "@oxagen/oxagen";
+import type { CapabilityContext, CheckedContext } from "@oxagen/oxagen";
 
 const state = vi.hoisted(() => ({
   orgRole: "Member",
@@ -91,6 +91,9 @@ vi.mock("@oxagen/iam/live-agent-run-authorization", () => ({
 vi.mock("@oxagen/telemetry", () => ({ captureError: vi.fn() }));
 
 import { checkIAM } from "@oxagen/iam/check-iam";
+// Registers every contract, so the role gate can look up the capability the
+// context names (#5228).
+import "@oxagen/oxagen";
 import { connectionPreviewHandler } from "./connection.preview";
 import { steeringRecordPublishHandler } from "./steering.record.publish";
 import { steeringRecordPromoteHandler } from "./steering.record.promote";
@@ -239,18 +242,32 @@ describe.each(cases)(
       },
     );
 
-    it.each(["Owner", "Admin", "Viewer"])(
-      "matches the contract for workspace %s",
+    it("matches the contract for a workspace Viewer", async () => {
+      state.workspaceRole = "Viewer";
+      const granted = (entry.workspace as readonly string[]).includes("Viewer");
+      await expect(entry.handler(entry.input as never, ctx)).rejects.toThrow(
+        granted ? "authorized business operation" : /requires/i,
+      );
+      expect(state.business).toHaveBeenCalledTimes(granted ? 1 : 0);
+    });
+
+    // Mac decided on 2026-10-02 that a workspace's Owner and Admin do
+    // everything in that workspace (#5228). Every operation here reads or
+    // writes one workspace's rows: the connection, the plugin credential and
+    // the vault keys are each filtered on the call's workspace id. So the
+    // workspace Owner and Admin pass the gate whatever the contract names.
+    // The kernel stamps the context with the capability it checked, and
+    // assertOrgRole reads it; assertCallerRole reads the contract the handler
+    // hands it.
+    it.each(["Owner", "Admin"])(
+      "admits the workspace %s, as the workspace rule does",
       async (role) => {
         state.workspaceRole = role;
-        await expect(entry.handler(entry.input as never, ctx)).rejects.toThrow(
-          (entry.workspace as readonly string[]).includes(role)
-            ? "authorized business operation"
-            : /requires/i,
-        );
-        expect(state.business).toHaveBeenCalledTimes(
-          (entry.workspace as readonly string[]).includes(role) ? 1 : 0,
-        );
+        const checked: CheckedContext = { ...ctx, invokedCapability: entry.name };
+        await expect(
+          entry.handler(entry.input as never, checked),
+        ).rejects.toThrow("authorized business operation");
+        expect(state.business).toHaveBeenCalledOnce();
       },
     );
 

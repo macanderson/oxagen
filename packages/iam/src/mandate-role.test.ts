@@ -167,7 +167,12 @@ describe("assertApprover", () => {
     await expect(
       assertApprover(CTX, ["user:usr_01abc", "role:Billing"]),
     ).resolves.toBeUndefined();
-    expect(mocks.assertOrgRole).toHaveBeenCalledWith(CTX, { org: ["Billing"] });
+    // Only the named roles answer: the workspace Owner and Admin rule does
+    // not reach a list of approvers a customer chose (#5228).
+    expect(mocks.assertOrgRole).toHaveBeenCalledWith(CTX, {
+      org: ["Billing"],
+      namedRolesOnly: true,
+    });
   });
 
   it("refuses a caller matching no entry", async () => {

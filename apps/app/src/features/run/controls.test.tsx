@@ -474,8 +474,9 @@ describe("run controls", () => {
       expect(screen.getByTestId(`run-${command}`)).toBeDisabled();
     }
     expect(screen.queryByTestId("run-resume")).toBeNull();
+    // A workspace's Admin can command a run too (#5228).
     expect(screen.getByTestId("role-no-control")).toHaveTextContent(
-      "workspace Owner or Member role",
+      "workspace Owner, Admin or Member role",
     );
     await user.click(screen.getByTestId("run-pause"));
     expect(screen.queryByTestId("run-pause-dialog")).toBeNull();

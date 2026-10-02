@@ -74,17 +74,18 @@ function buildMockDb(opts: {
   const makeSelectResult = (): unknown[] => {
     const idx = selectCount++;
     // bootstrapOrgIAM query order:
-    // Queries 0..6: role existence checks (7 human roles, one per role spec)
-    // Query 7: user display name lookup
-    // Query 8: principal existence check
-    // Query 9: PRA existence check
-    // Queries 10..12: agent role existence checks (3 agent roles, one per
+    // Queries 0..7: role existence checks (8 human roles, one per role spec;
+    // the workspace Admin role joined them with #5228)
+    // Query 8: user display name lookup
+    // Query 9: principal existence check
+    // Query 10: PRA existence check
+    // Queries 11..13: agent role existence checks (3 agent roles, one per
     // AGENT_ROLE_SPECS entry, in AGENT_ROLE_SPECS order — Observer/
     // Contributor/Operator)
-    if (idx < 7) {
+    if (idx < 8) {
       return opts.existingRoles ? [{ id: `role_existing_${idx}` }] : [];
     }
-    if (idx === 7) {
+    if (idx === 8) {
       return [
         {
           displayName: opts.userDisplayName ?? "Test User",
@@ -92,15 +93,15 @@ function buildMockDb(opts: {
         },
       ];
     }
-    if (idx === 8) {
+    if (idx === 9) {
       return opts.existingPrincipal ? [{ id: "prn_existing" }] : [];
     }
-    if (idx === 9) {
+    if (idx === 10) {
       return opts.existingPra ? [{ id: "pra_existing" }] : [];
     }
-    if (idx >= 10 && idx < 13) {
+    if (idx >= 11 && idx < 14) {
       return opts.existingAgentRoles
-        ? [{ id: `agent_role_existing_${idx - 10}` }]
+        ? [{ id: `agent_role_existing_${idx - 11}` }]
         : [];
     }
     return [];
