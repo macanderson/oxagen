@@ -21,6 +21,7 @@ vi.mock("@oxagen/iam/org-role", () => ({
 }));
 
 import { createApproveSteeringPrHandler } from "./steering.pr.approve";
+import { createGetSteeringPrHandler } from "./steering.pr.get";
 import { createMergeSteeringPrHandler } from "./steering.pr.merge";
 import { createOpenSteeringPrHandler } from "./steering.pr.open";
 import { createDismissProposalHandler } from "./steering.proposal.dismiss";
@@ -137,6 +138,22 @@ describe("approve_steering_pr", () => {
       handler(input, ctx({ userId: REVIEWER })),
     ).resolves.toMatchObject({ approvals: 2 });
     expect(h.store.approvals).toHaveLength(2);
+  });
+
+  it("shows in get_steering_pr as the count of people who approved the checked head", async () => {
+    const h = teamRepo();
+    const proposalId = await opened(h);
+    const get = createGetSteeringPrHandler(h);
+    expect((await get({ proposalId }, ctx())).approvals).toBe(0);
+    await approve(h).handler({ proposalId }, ctx({ userId: MEMBER }));
+    expect((await get({ proposalId }, ctx())).approvals).toBe(1);
+    // An approval of another head does not count at this one.
+    h.store.approvals.push({
+      ...h.store.approvals[0]!,
+      userId: REVIEWER,
+      commitSha: "an-older-head",
+    });
+    expect((await get({ proposalId }, ctx())).approvals).toBe(1);
   });
 
   it("refuses a call with no signed-in person, before reading anything (negative)", async () => {

@@ -1,6 +1,6 @@
 # restore_managed_block
 
-Put Oxagen's managed block back in `AGENTS.md`, `CLAUDE.md`, or `README.md` on an open steering PR's branch, as one commit (#4518). The steering PR panel offers it as Restore block when the `owned` check finds a changed block. The six checks then run again on the new commit.
+Put Oxagen's managed block back in `AGENTS.md`, `CLAUDE.md`, or `README.md` on an open steering PR's branch, as one commit (#4518). The steering PR panel offers it as Restore block for each drifted managed block that the latest check run stored, which [`get_steering_pr`](steering.pr.get.md) answers as `findings`. The six checks then run again on the new commit.
 
 **Surfaces:** api, mcp, cli, agent
 

@@ -154,6 +154,34 @@ describe("toSteeringPr", () => {
     ]);
   });
 
+  it("carries the drifted managed blocks and the approvals given in Oxagen (#4518)", () => {
+    const view = SteeringPr.parse(
+      toSteeringPr(
+        steeringPrOutput({
+          status: "checks_failed",
+          findings: [
+            {
+              rule: "managed-block",
+              path: "AGENTS.md",
+              line: 3,
+              message: "The managed block in AGENTS.md was edited.",
+            },
+          ],
+          approvals: 2,
+        }),
+      ),
+    );
+    expect(view.findings).toEqual([
+      {
+        rule: "managed-block",
+        path: "AGENTS.md",
+        line: 3,
+        message: "The managed block in AGENTS.md was edited.",
+      },
+    ]);
+    expect(view.approvals).toBe(2);
+  });
+
   it("carries the promotion event and the published record once merged", () => {
     const view = SteeringPr.parse(
       toSteeringPr(

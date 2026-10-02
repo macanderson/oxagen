@@ -27,6 +27,7 @@ vi.mock("@oxagen/iam/org-role", () => ({
   },
 }));
 
+import { createGetSteeringPrHandler } from "./steering.pr.get";
 import { createOpenSteeringPrHandler } from "./steering.pr.open";
 import { createRestoreManagedBlockHandler } from "./steering.pr.restore_managed_block";
 import { createProposeRecordHandler } from "./steering.proposal.create";
@@ -183,5 +184,58 @@ describe("restore_managed_block", () => {
       reason: "role_not_held",
     });
     expect(h.github.stamps).toHaveLength(stamps);
+  });
+});
+
+describe("the managed-block findings a check run stores (#4518 item 7)", () => {
+  it("stores the drifted block when the checks run, answers it from get_steering_pr, and clears it once Restore block runs", async () => {
+    const h = steeringRepo();
+    const { proposalId, branch } = await opened(h);
+    const get = createGetSteeringPrHandler(h);
+    expect((await get({ proposalId }, ctx())).findings).toEqual([]);
+
+    const edited = `${AGENTS.replace("Run `oxagen check` before you push.", "Push to main.")}- A note from the team.\n`;
+    h.github.commit(branch, "AGENTS.md", edited, "edit AGENTS.md");
+    await createOpenSteeringPrHandler(h)({ proposalId }, ctx());
+
+    const drifted = await get({ proposalId }, ctx());
+    expect(drifted.findings).toEqual([
+      {
+        rule: "managed-block",
+        path: "AGENTS.md",
+        line: expect.any(Number),
+        message: "The managed block in AGENTS.md was edited.",
+      },
+    ]);
+
+    await restore(h).handler({ proposalId, path: "AGENTS.md" }, ctx());
+    // AGENTS.md still differs from main by the team's note, but its block
+    // matches main again, so the run that checked the restore stores none.
+    expect((await get({ proposalId }, ctx())).findings).toEqual([]);
+  });
+
+  it("stores nothing for a file the PR changes outside the block (negative)", async () => {
+    const h = steeringRepo();
+    const { proposalId, branch } = await opened(h);
+    h.github.commit(branch, "AGENTS.md", `${AGENTS}- A note from the team.\n`);
+    await createOpenSteeringPrHandler(h)({ proposalId }, ctx());
+    expect(
+      (await createGetSteeringPrHandler(h)({ proposalId }, ctx())).findings,
+    ).toEqual([]);
+  });
+
+  it("stores no findings when the host refuses the read, and the checks still finish (negative)", async () => {
+    const h = steeringRepo();
+    const { proposalId, branch } = await opened(h);
+    h.github.commit(branch, "AGENTS.md", "edited\n");
+    const read = h.github.readFile.bind(h.github);
+    h.github.readFile = async (repo, path, ref) => {
+      if (path === "AGENTS.md") throw new Error("502 from the host");
+      return read(repo, path, ref);
+    };
+    await createOpenSteeringPrHandler(h)({ proposalId }, ctx());
+    const row = h.store.proposals[0];
+    expect(["checks_passed", "checks_failed"]).toContain(row?.status);
+    expect(row?.checkFindings).toEqual([]);
   });
 });

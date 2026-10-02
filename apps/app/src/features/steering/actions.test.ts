@@ -4,7 +4,7 @@
 // before the kernel), and denied and conflict with the handler's reason
 // (INV-19).
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { steeringPrOutput } from "@/test/steering-outputs";
+import { steeringPrOpenOutput } from "@/test/steering-outputs";
 
 const { invoke, requireViewer } = vi.hoisted(() => ({
   invoke: vi.fn<typeof import("@oxagen/oxagen").invoke>(),
@@ -74,7 +74,7 @@ beforeEach(() => {
 
 describe("openSteeringPr", () => {
   it("opens the pull request for the workspace viewer and returns where the machine stopped", async () => {
-    invoke.mockResolvedValue(steeringPrOutput({ status: "checks_failed" }));
+    invoke.mockResolvedValue(steeringPrOpenOutput({ status: "checks_failed" }));
     expect(await openSteeringPr("acme", "core-platform", ID)).toEqual({
       ok: true,
       value: { status: "checks_failed" },

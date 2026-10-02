@@ -213,6 +213,38 @@ describe("the steering PR page", () => {
     ).toHaveLength(1);
   });
 
+  it("passes the read's drifted managed blocks and approvals to the panel (#4518)", async () => {
+    await renderPage({
+      steeringPr: readOk({
+        ...steeringPr("checks_failed"),
+        findings: [
+          {
+            rule: "managed-block",
+            path: "AGENTS.md",
+            line: 3,
+            message: "The managed block in AGENTS.md was edited.",
+          },
+        ],
+        approvals: 1,
+      }),
+    });
+    const pr = section("Pull request");
+    const drift = pr.querySelector('[data-drift="AGENTS.md"]');
+    if (!(drift instanceof HTMLElement)) throw new Error("no drift block");
+    expect(drift).toHaveTextContent("The managed block in AGENTS.md was edited.");
+    expect(
+      screen.getByRole("button", { name: "Restore block" }),
+    ).toBeInTheDocument();
+    expect(pr.querySelector('[data-fact="approvals"] dd')).toHaveTextContent("1");
+  });
+
+  it("draws no Restore block when the read carries no finding (negative)", async () => {
+    await renderPage({
+      steeringPr: readOk({ ...steeringPr("checks_failed"), findings: [] }),
+    });
+    expect(screen.queryByRole("button", { name: "Restore block" })).toBeNull();
+  });
+
   it("offers no merge or close once merged, and no Clone (negative)", async () => {
     await renderPage({ steeringPr: readOk(steeringPr("merged")) });
     expect(

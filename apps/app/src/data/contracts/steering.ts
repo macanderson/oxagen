@@ -257,6 +257,26 @@ export const SteeringPr = z.object({
       onHost: z.boolean(),
     })
     .nullable(),
+  /**
+   * What the latest check run found on the head: each drifted managed block,
+   * which the panel offers Restore block for (#4518). Absent when the read
+   * did not carry it.
+   */
+  findings: z
+    .array(
+      z.object({
+        rule: z.string().min(1),
+        path: z.string().min(1),
+        line: z.number().int().positive().nullable(),
+        message: z.string(),
+      }),
+    )
+    .optional(),
+  /**
+   * How many people approved the checked head in Oxagen (ADR-267). A review
+   * on the host is not counted here. Absent when the read did not carry it.
+   */
+  approvals: Count.optional(),
 });
 export type SteeringPr = z.infer<typeof SteeringPr>;
 
