@@ -26,7 +26,7 @@ import {
   gte,
   lt,
   sql,
-  type Column,
+  type AnyColumn,
   type SQL,
 } from "drizzle-orm";
 
@@ -61,7 +61,7 @@ const renames = schema.capabilityRenames;
  * rename retired it, and the name itself otherwise.
  */
 export function currentCapabilityName(
-  name: Column | string,
+  name: AnyColumn | string,
 ): SQL<string | null> {
   return sql<string | null>`coalesce((select ${renames.currentName} from ${renames} where ${renames.retiredName} = ${name}), ${name})`;
 }
