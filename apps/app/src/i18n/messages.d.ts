@@ -1020,6 +1020,7 @@ type Messages = {
             repeated_instructions: string;
             recurring_runs: string;
             spend_with_no_outcome: string;
+            retry_loops: string;
           };
         };
       };
@@ -9028,6 +9029,7 @@ type Messages = {
         repeated_instructions: string;
         recurring_runs: string;
         spend_with_no_outcome: string;
+        retry_loops: string;
       };
       kindDefinition: {
         cache_writes_never_read: string;
@@ -9042,6 +9044,7 @@ type Messages = {
         repeated_instructions: string;
         recurring_runs: string;
         spend_with_no_outcome: string;
+        retry_loops: string;
       };
       level: {
         tool: string;
@@ -9205,6 +9208,10 @@ type Messages = {
         haltedEarly: string;
       };
       causesMissing: string;
+      retryLoopsWhy: string;
+      retryLoopsNone: string;
+      retryLoopsFindings: string;
+      retryLoopsOpen: string;
       runs: string;
       note: string;
       runAmountMissing: string;

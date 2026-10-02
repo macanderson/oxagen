@@ -261,9 +261,10 @@ describe("microsOf", () => {
 });
 
 describe("the detector registry", () => {
-  it("runs spin loops first, then repeats, then recurring runs, then spend with no outcome, then the detectors that claim no frame", () => {
+  it("runs spin loops first, then retry loops, then repeats, then recurring runs, then spend with no outcome, then the detectors that claim no frame", () => {
     expect(DETECTORS.map((d) => [d.kinds, d.counting])).toEqual([
       [["spin_loops"], 1],
+      [["retry_loops"], 1],
       [["repeated_shell_commands", "duplicate_tool_calls"], 1],
       [["recurring_runs"], 7],
       [["spend_with_no_outcome"], 8],
