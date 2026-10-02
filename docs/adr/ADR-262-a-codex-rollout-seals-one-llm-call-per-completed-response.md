@@ -76,8 +76,11 @@ one host, read on 2026-10-02:
    compaction call's usage record, then a `compacted` line whose summary is
    encrypted, and no item between them. A body longer than
    `TACHO_MAX_BODY_BYTES` is not held, and the frame carries
-   `body_omitted: too_large`. A response whose text was dropped (decision
-   4) gets no body, so the frame shows the gap.
+   `body_omitted: too_large`. A response whose items named another turn
+   than its usage record gets no body, so the frame shows the gap. Text
+   dropped at an event (decision 4) is on no frame. The usage record that
+   comes next closes a later response, and that frame holds only the later
+   response's own items.
 4. **What drops a response's text.** The reader drops the text it holds, and
    counts it in `orphaned`, when one of these comes before a usage record: a
    `token_count` event, `task_started`, `task_complete`, `turn_aborted`, a
