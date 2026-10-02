@@ -110,7 +110,10 @@ export async function acceptWork(deps: ReviewDeps, scope: WorkScope, actor: Work
       `You read version ${input.version} of the work item, and it is now at version ${before}. Read it again.`,
     );
   }
-  if (!repeatOfThis && summary.requiredChecks === null) {
+  // With no pull request or no head yet, the store's own gate refuses below
+  // with the reason (no_pull_request, no_head). With one, an unread required
+  // list refuses here, whatever an older read of the head recorded.
+  if (!repeatOfThis && summary.head !== null && summary.requiredChecks === null) {
     const why = summary.unreadReason ?? "the read failed";
     throw new WorkRecordError(
       "not_allowed",

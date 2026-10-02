@@ -192,7 +192,17 @@ export function evidenceFacts(
   return { facts, summary: { head, requiredChecks, unreadReason } };
 }
 
-/** Read one send's pull request evidence from GitHub. Pure apart from the reader. */
+function failure(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+/**
+ * Read one send's pull request evidence from GitHub. A read that throws (no
+ * token, a network failure) counts as unread, never as an empty answer: the
+ * pull request reads as unreadable, the required checks as `ok: false` with
+ * the reason, and the checks as unknown. So a failed read blocks Accept with a
+ * reason a person can act on. Pure apart from the reader.
+ */
 export async function readEvidence(
   reader: EvidenceReader,
   scope: WorkScope,
@@ -200,11 +210,13 @@ export async function readEvidence(
 ): Promise<EvidenceRead> {
   const pr = order.pullRequest;
   if (pr === null) return { pull: null, required: null, checks: null };
-  const pull = await reader.readPullRequest(scope, pr.repository, pr.number);
+  const pull = await reader.readPullRequest(scope, pr.repository, pr.number).catch(() => null);
   if (pull === null || pull.headSha === null) return { pull, required: null, checks: null };
   const [required, checks] = await Promise.all([
-    reader.readRequiredChecks(scope, pr.repository, pull.baseRef),
-    reader.readChecks(scope, pr.repository, pull.headSha),
+    reader
+      .readRequiredChecks(scope, pr.repository, pull.baseRef)
+      .catch((error: unknown): RequiredChecksRead => ({ ok: false, reason: `required checks read failed: ${failure(error)}` })),
+    reader.readChecks(scope, pr.repository, pull.headSha).catch(() => null),
   ]);
   return { pull, required, checks };
 }
