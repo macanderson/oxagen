@@ -3616,6 +3616,7 @@ describe("the wire and the host file", () => {
       "cedar",
       "skills",
       "cache_keep_alive",
+      "work_orders",
     ]);
   });
 

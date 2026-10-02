@@ -19,10 +19,12 @@
 import { digestText } from "../claude-code/context";
 import type { SessionRecorder } from "../claude-code/recorder";
 import type { TachoEvent } from "../envelope";
+import type { PendingWorkOrder } from "../host/work-orders";
 import {
   type CommandAcknowledgement,
   commandAcknowledgementSchema,
   type DeliveredCommand,
+  workOrderCommandPayloadSchema,
 } from "../wire";
 import { applyInterjectionAnswer, interjectionAnswerOf } from "./interjection";
 import {
@@ -51,6 +53,14 @@ export interface InboxDeps {
    * applied as it comes.
    */
   handled?: HandledCommands;
+  /**
+   * Keep a work order the control plane sent this host until the person at
+   * the machine starts it (ADR-250). Synchronous, because every seal after
+   * the bundle refresh runs in one stretch. It throws when the order cannot
+   * be written. Absent, a `work_order` command fails: this host has nowhere
+   * to keep it.
+   */
+  keepWorkOrder?: (order: PendingWorkOrder) => void;
 }
 
 /** The most command ids `HandledCommands` remembers; the oldest goes first. */
@@ -376,6 +386,7 @@ function applyToSession(
     }
     case "refresh_bundle":
     case "revoke":
+    case "work_order":
       return {
         events,
         status: "failed",
@@ -407,6 +418,53 @@ function changedSession(result: {
   status: CommandAcknowledgement["status"];
 }): boolean {
   return result.status !== "failed" || result.events.length > 0;
+}
+
+/**
+ * A `work_order` command (ADR-250): keep the order for the person at the
+ * machine and acknowledge `received`. Nothing starts here, and nothing is
+ * sealed. The run starts when the person runs `oxagen work start`, which
+ * claims the order first. A payload that does not name an order, a key, and
+ * a work item fails with the reason.
+ */
+function keepWorkOrderCommand(
+  command: DeliveredCommand,
+  deps: InboxDeps,
+  now: number,
+): CommandAcknowledgement {
+  const payload = workOrderCommandPayloadSchema.safeParse(command.payload);
+  if (!payload.success)
+    return {
+      command_id: command.id,
+      status: "failed",
+      detail:
+        "work_order payload must name work_order (wo_...), key, and item (wi_...)",
+    };
+  if (deps.keepWorkOrder === undefined)
+    return {
+      command_id: command.id,
+      status: "failed",
+      detail: "this host has nowhere to keep a work order",
+    };
+  try {
+    deps.keepWorkOrder({
+      command_id: command.id,
+      work_order: payload.data.work_order,
+      key: payload.data.key,
+      item: payload.data.item,
+      received_at: new Date(now).toISOString(),
+    });
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    // The acknowledgement's detail is bounded at 512 characters.
+    const detail = `could not keep the work order: ${reason}`;
+    return {
+      command_id: command.id,
+      status: "failed",
+      detail: detail.slice(0, 512),
+    };
+  }
+  return { command_id: command.id, status: "received" };
 }
 
 function expiredAt(command: DeliveredCommand, now: number): boolean {
@@ -547,6 +605,9 @@ function sealCommands(
         });
         break;
       }
+      case "work_order":
+        acknowledgements.push(keepWorkOrderCommand(command, deps, now));
+        break;
       case "pause":
       case "resume":
       case "cancel":

@@ -98,6 +98,7 @@ import {
   type RetentionMandate,
 } from "../evidence/retention";
 import { Wal, WalRecoveryConflict } from "../host/wal";
+import { keepWorkOrder as keepPendingWorkOrder } from "../host/work-orders";
 import { ulid } from "../ids";
 import { toProtocolTimestamp } from "../timestamp";
 import {
@@ -1931,6 +1932,15 @@ async function initializeDaemon(
               });
               syncLocalServers();
               log(`host suspended by operator: ${reason}`);
+            },
+            // A work order waits in the agent's `work-orders` directory for
+            // the person at the machine (ADR-250). A redelivery of the same
+            // command writes nothing and logs nothing.
+            keepWorkOrder: (order) => {
+              if (!keepPendingWorkOrder(paths, order)) return;
+              log(
+                `work order ${order.work_order} for ${order.item} is waiting (command ${order.command_id}). Run \`oxagen work start ${order.work_order}\` to claim it and start the agent.`,
+              );
             },
             now,
           }),
