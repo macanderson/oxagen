@@ -255,8 +255,31 @@
   font-display: swap;
 }
 @font-face {
-  font-family: "Geist";
-  src: url("/fonts/geist-latin-wght.woff2") format("woff2");
+  font-family: "Aeonik";
+  src: url("/fonts/aeonik-wght.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Aeonik";
+  src: url("/fonts/aeonik-italic-wght.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: italic;
+  font-display: swap;
+}
+/* Aeonik Mono and Aeonik Fono load for a page that names them. No rule on
+   this site does yet; Monaspace Neon stays the code face. */
+@font-face {
+  font-family: "Aeonik Mono";
+  src: url("/fonts/aeonik-mono-wght.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Aeonik Fono";
+  src: url("/fonts/aeonik-fono-wght.woff2") format("woff2");
   font-weight: 100 900;
   font-style: normal;
   font-display: swap;
@@ -269,7 +292,7 @@
   font-display: swap;
 }
 :root {
-  --font-sans: "Geist", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-sans: var(--ox-font);
   /* Headings use the body face. The two Space Grotesk roles each get their
      own name, so a new rule cannot reach the face by asking for "display". */
   --font-display: var(--font-sans);

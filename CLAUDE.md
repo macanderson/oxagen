@@ -148,7 +148,7 @@ Load `clear-prose` before you write any of these strings. `apps/app/src/test/arc
 
 ## Type
 
-Mac set this on 2026-10-02, replacing the rule of 2026-09-29. Aeonik is the house sans. It sets every heading and every line of text in the app and the docs site, and all running text on oxagen.sh. Space Grotesk sets the Oxagen and stella wordmarks and, on oxagen.sh only, every h1, h2, and h3 and every hero line. The gold accent in an oxagen.sh headline shimmers with the kit's sheen. Monaspace Neon sets code. Aeonik Mono and Aeonik Fono load as faces, and no role uses them yet. Geist is retired: no file outside history names it.
+Mac set this on 2026-10-02, replacing the rule of 2026-09-29. Aeonik is the house sans. It sets every heading and every line of text in the app and the docs site, and all running text on oxagen.sh. Space Grotesk sets the Oxagen and stella wordmarks and, on oxagen.sh only, every h1, h2, and h3 and every hero line. The gold accent in an oxagen.sh headline shimmers with the kit's sheen. Monaspace Neon sets code. Aeonik Mono and Aeonik Fono load as faces, and no role uses them yet. Geist is retired.
 
 - The brand kit (`oxageninc/brand`) owns the faces. Its `house-tailwind.css`, synced into `packages/ui/src/styles/`, sets `--font-display` and `--font-sans` to Aeonik, so every app heading and the `text-m-h*` and `text-a-h*` utilities draw in Aeonik. The files the sync writes there stay byte-identical to the kit.
 - In the app, Space Grotesk reaches the page only through `--font-wordmark` and the `.ox-wordmark` class. Do not write `--ox-font-display`, `--font-wordmark`, or "Space Grotesk" in app source outside a comment. `apps/app/src/test/arch/design-record.test.ts` fails on each of them.

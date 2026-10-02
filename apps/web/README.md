@@ -141,20 +141,17 @@ Never put `--` before the filename. Each build module has a co-located
   `/research/deterministic-systems-optimizations-for-ai-agents` path to
   `/read?e=page-flip-reader` (`prefix_redirects` in
   `infra/stacks-new/oxagen/main.tf`). There is no `index.html` at that path.
-- `fonts/`: the house faces (Geist, Monaspace Neon, and Space Grotesk at
-  400/500/600/700), vendored from the brand kit by
-  `node tools/scripts/sync-brand-assets.mjs`, plus Literata variable serif
-  (normal and italic, latin subset), which only the book reader offers as a
-  long-form reading option. All of them are cached immutable for a year. The
-  Aeonik binaries they replaced were removed with the house system.
-  Geist sets every heading and all running text. Monaspace Neon sets code.
-  Space Grotesk sets two things only: the wordmark when it is text rather
-  than an SVG, and the first line of a hero headline. Mac set that rule on
-  2026-09-29. Mark hero line 1 with the `hero-line-1` class. In a two-line
-  hero it goes on a span before the `<br>`, so line 2 stays in Geist. In a
-  one-line hero it goes on the `<h1>`. A page preloads only the Space Grotesk
-  weight its hero line or text wordmark uses, and a page with neither
-  preloads none.
+- `fonts/`: the house faces, vendored from the brand kit by
+  `node tools/scripts/sync-brand-assets.mjs`: Aeonik (upright and italic),
+  Aeonik Mono, Aeonik Fono, Monaspace Neon, and Space Grotesk at
+  400/500/600/700. Literata variable serif (normal and italic, latin subset)
+  sits beside them, and only the book reader offers it as a long-form reading
+  option. All of them are cached immutable for a year. Mac set the rule on
+  2026-10-02: Space Grotesk sets every h1, h2, and h3, and so every hero
+  line, and the wordmark when it is text rather than an SVG. Aeonik sets h4
+  and all running text. Monaspace Neon sets code. Aeonik Mono and Aeonik
+  Fono load, and no rule names them yet. A page preloads only the faces its
+  first screen draws.
 - `favicon.svg`: the hive, the kit's Oxagen icon: six hexagonal cells, four
   drawn as an outline in the tab's ink and two filled with the gold, one of
   them at half strength. The outline adapts to the tab's colour scheme. The
@@ -179,9 +176,9 @@ Never put `--` before the filename. Each build module has a co-located
 - `assets/blog.css`: the blog's own rules (index, pillar and post layouts,
   the reading measure, references, callouts). Semantic tokens only, same four
   rules as `oxagen.css`.
-- `scripts/fonts/`: Geist, the variable file Google Fonts ships
-  (OFL), used only at build time to set the text on generated images as
-  outlines. Not published.
+- Generated images set their text as outlines from `fonts/aeonik-wght.woff2`
+  at build time (`scripts/lib/text.mjs`), so a render never depends on the
+  fonts a machine has installed.
 
 ## The palette, and the four rules
 
