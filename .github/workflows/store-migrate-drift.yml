@@ -128,7 +128,7 @@ jobs:
           #
           # The issue body must never carry a credential. `::add-mask::` hides
           # a value in the log only, and `tee` saved the raw line, so the
-          # production DATABASE_URL reached issues #4264, #4525 and #4858.
+          # production DATABASE_URL reached three drift issues (since deleted).
           # Drop every workflow command line, then blank the user and
           # password in any URL that still carries them.
           cat /tmp/pg-drift.txt /tmp/drift.txt 2>/dev/null \
