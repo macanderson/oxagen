@@ -48,7 +48,7 @@ Every figure is counted from the work records ([ADR-244](../adr/ADR-244-phase-1-
 - A week's median lead time covers the items done in that week.
 - Delivery puts each send a person made in the window in one bucket. A send the runtime or Oxagen rejected is `rejected`. Otherwise, a send a runtime claimed is `claimed`, even when a person withdrew it later, because the runtime received it. Otherwise, a send a person withdrew is `withdrawn`, and the rest are `waiting`. The four buckets add up to `sends`.
 - `claim_minutes` runs from each claimed send to the runtime's first claim. The median and the 90th percentile use the nearest rank, as lead time does, and both are null with no sample. A claim time that would run backwards is left out of the sample.
-- A week's `entered` counts the items whose first source reading, collected or entered, fell in that week. Its `sent` counts the sends a person made that week. The database counts both, so neither stops at a cap.
+- A week's `entered` counts the items Oxagen created that week, collected from a provider or entered by a person. It reads when the item's row was created, not the provider's last update, so a backlog imported this week counts this week. Its `sent` counts the sends a person made that week. The database counts both, so neither stops at a cap.
 - A week's `full_flow` is true when at least one item was accepted and merged in that week.
 - One read counts at most 2,000 items and 2,000 sends, newest first. `truncated` is true when more items could count, and `delivery.truncated` when more sends were made. The figures then cover the newest ones.
 

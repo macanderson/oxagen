@@ -146,7 +146,7 @@ export const workOutcomesGet = registerCapability({
             accepted_merged: z.number().int().nonnegative(),
             returned: z.number().int().nonnegative(),
             median_lead_hours: z.number().nonnegative().nullable(),
-            /** Items whose first source reading, collected or entered, fell in the week. */
+            /** Items Oxagen created in the week, collected from a provider or entered by a person. */
             entered: z.number().int().nonnegative(),
             /** Sends a person made in the week. */
             sent: z.number().int().nonnegative(),

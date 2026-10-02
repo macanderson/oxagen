@@ -788,18 +788,34 @@ async function sendsInWindow(
 
 /**
  * The items that entered Work and the sends a person made in each UTC week of
- * the window, counted in the database with no cap. An item enters Work with
- * its first source reading, a collected or entered fact. Deleted items are
- * left out.
+ * the window, counted in the database with no cap. An item enters Work when
+ * Oxagen creates its row, collected from a provider or entered by a person.
+ * The row's creation time counts, not its collected fact: that fact carries
+ * the provider's last update time, so a backlog imported this week would count
+ * in the weeks its issues were last edited. Deleted items are left out.
  */
 async function intakeByWeek(tx: Tx, scope: WorkScope, windowStart: Date, now: Date): Promise<WeekIntake[]> {
-  // occurred_at is timestamptz, so `at time zone 'UTC'` gives the UTC wall
+  // Both columns are timestamptz, so `at time zone 'UTC'` gives the UTC wall
   // time, and date_trunc('week') gives its Monday, as weekStartOf does. The
   // literals stay in the SQL text: a bound value would differ between SELECT
   // and GROUP BY, and Postgres would refuse the grouping.
-  const week = sql<string>`to_char(date_trunc('week', ${facts.occurredAt} at time zone 'UTC'), 'YYYY-MM-DD')`;
-  const rows = await tx
-    .select({ week, kind: facts.kind, n: count() })
+  const itemWeek = sql<string>`to_char(date_trunc('week', ${items.createdAt} at time zone 'UTC'), 'YYYY-MM-DD')`;
+  const enteredRows = await tx
+    .select({ week: itemWeek, n: count() })
+    .from(items)
+    .where(
+      and(
+        eq(items.orgId, scope.orgId),
+        eq(items.workspaceId, scope.workspaceId),
+        isNull(items.deletedAt),
+        gte(items.createdAt, windowStart),
+        lte(items.createdAt, now),
+      ),
+    )
+    .groupBy(itemWeek);
+  const sendWeek = sql<string>`to_char(date_trunc('week', ${facts.occurredAt} at time zone 'UTC'), 'YYYY-MM-DD')`;
+  const sentRows = await tx
+    .select({ week: sendWeek, n: count() })
     .from(facts)
     .innerJoin(items, eq(items.id, facts.itemId))
     .where(
@@ -807,19 +823,20 @@ async function intakeByWeek(tx: Tx, scope: WorkScope, windowStart: Date, now: Da
         eq(facts.orgId, scope.orgId),
         eq(facts.workspaceId, scope.workspaceId),
         isNull(items.deletedAt),
-        inArray(facts.kind, ["collected", "entered", "send_requested"]),
+        eq(facts.kind, "send_requested"),
         gte(facts.occurredAt, windowStart),
         lte(facts.occurredAt, now),
       ),
     )
-    .groupBy(week, facts.kind);
+    .groupBy(sendWeek);
   const byWeek = new Map<string, WeekIntake>();
-  for (const row of rows) {
-    const entry = byWeek.get(row.week) ?? { week: row.week, entered: 0, sent: 0 };
-    if (row.kind === "send_requested") entry.sent += Number(row.n);
-    else entry.entered += Number(row.n);
-    byWeek.set(row.week, entry);
-  }
+  const entry = (week: string) => {
+    const found = byWeek.get(week) ?? { week, entered: 0, sent: 0 };
+    byWeek.set(week, found);
+    return found;
+  };
+  for (const row of enteredRows) entry(row.week).entered += Number(row.n);
+  for (const row of sentRows) entry(row.week).sent += Number(row.n);
   return [...byWeek.values()];
 }
 

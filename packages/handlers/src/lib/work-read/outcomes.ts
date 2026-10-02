@@ -83,7 +83,7 @@ export interface SendOutcome {
 export interface WeekIntake {
   /** The Monday the week starts, as YYYY-MM-DD in UTC. */
   week: string;
-  /** Items whose collected or entered fact fell in the week. */
+  /** Items Oxagen created in the week, collected from a provider or entered by a person. */
   entered: number;
   /** Sends a person made in the week. */
   sent: number;

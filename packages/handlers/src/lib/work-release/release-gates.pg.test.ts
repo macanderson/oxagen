@@ -1,7 +1,7 @@
 // The Phase 1 release gates against a real Postgres, with recorded GitHub
 // responses and a recorded triage answer (P1-06, #5241; agent-work-phase-1.html,
-// Release gates). docs/specs/work/phase-1-release.md maps each gate item to
-// the test that proves it.
+// Release gates). docs/specs/work/release-gates.md maps each gate item to the
+// test that proves it.
 //
 // Technical release. One work item goes the whole way, in the order a team
 // meets it. Each step is one case, and the cases share the item:
@@ -35,8 +35,14 @@
 // one linked run per send, and no done state without an acceptance of the
 // merged head.
 //
-// Every provider time comes from one clock that only moves forward, because
-// the reducer orders a work item's facts by time.
+// Every provider time comes from one clock that only moves forward and stays
+// in the past. The reducer orders a work item's facts by time, and Outcomes
+// reads a window that ends now, so a provider time after now would drop the
+// item from it.
+//
+// The GitHub App installation here is not the one work-intake.pg.test.ts
+// uses. A delivery reaches every collector on its installation in every
+// workspace, and the two files can run at the same time.
 //
 // Runs wherever DATABASE_URL points at a migrated database: CI's unit
 // (handlers) lane migrates Postgres with Atlas first. On CI a missing
@@ -87,6 +93,8 @@ const enabled = Boolean(process.env.DATABASE_URL);
 if (process.env.CI && !enabled) throw new Error("The release gate test needs DATABASE_URL on CI.");
 
 const SECRET = "whsec-p106-recorded";
+/** This file's own GitHub App installation, apart from the intake test's. */
+const INSTALLATION = "90310606";
 const REPOSITORY = recorded.RECORDED_REPO;
 const SHA1 = "1".repeat(40);
 const SHA2 = "2".repeat(40);
@@ -97,13 +105,17 @@ function githubTime(ms: number): string {
   return new Date(ms).toISOString().replace(/\.\d{3}Z$/, "Z");
 }
 
-/** When the issue was opened: ten minutes before the test starts. */
-const OPENED_AT = githubTime(Date.now() - 10 * 60_000);
-let lastTick = Date.now();
+/** When the issue was opened: thirty minutes before the test starts. */
+const OPENED_AT = githubTime(Date.now() - 30 * 60_000);
+/** The last provider time handed out. It starts twenty minutes back. */
+let lastTick = Date.now() - 20 * 60_000;
 
-/** The next provider time: at least a second after the last one, and never before now. */
+/**
+ * The next provider time: one second after the last. The file asks for well
+ * under a thousand, so every one stays before the test's own reads of now.
+ */
 function tick(): string {
-  lastTick = Math.max(lastTick + 1000, Date.now());
+  lastTick += 1000;
   return githubTime(lastTick);
 }
 
@@ -196,7 +208,7 @@ describe.skipIf(!enabled)("Phase 1 release gates against Postgres", { timeout: 3
   const recovery: WorkScope = { orgId, workspaceId: crypto.randomUUID() };
   const NAMESPACE = new Map([
     [gate.workspaceId, "gate"],
-    [recovery.workspaceId, "recovery"],
+    [recovery.workspaceId, "recov"],
   ]);
   /** The operator: he runs the agents and sends the work. */
   const MARCUS = crypto.randomUUID();
@@ -246,7 +258,7 @@ describe.skipIf(!enabled)("Phase 1 release gates against Postgres", { timeout: 3
       });
       await tx.insert(schema.workspaces).values([
         { id: gate.workspaceId, orgId, name: "Gate", slug: "gate", namespace: "gate" },
-        { id: recovery.workspaceId, orgId, name: "Recovery", slug: "recovery", namespace: "recovery" },
+        { id: recovery.workspaceId, orgId, name: "Recovery", slug: "recovery", namespace: "recov" },
       ]);
     });
     await db(gate)(async (tx) => {
@@ -260,7 +272,7 @@ describe.skipIf(!enabled)("Phase 1 release gates against Postgres", { timeout: 3
           authScheme: "github_app",
           deliveryMethod: "webhook",
           status: "connected",
-          deliveryConfig: { installationId: recorded.RECORDED_INSTALLATION, owner: "aintel-test", repo: "work-intake" },
+          deliveryConfig: { installationId: INSTALLATION, owner: "aintel-test", repo: "work-intake" },
         })
         .returning({ publicId: schema.sourceConnections.publicId });
       connectionPublicId = connection!.publicId;
@@ -268,11 +280,11 @@ describe.skipIf(!enabled)("Phase 1 release gates against Postgres", { timeout: 3
       // The workspace's priorities record, as a merged steering record publishes it.
       const statement = "Rank each item P0 to P3.\n1. A security hole is P0.\n2. A defect a customer can hit ranks P2.";
       const [record] = await tx
-        .insert(schema.contextRecords)
+        .insert(schema.steeringRecords)
         .values({ orgId, workspaceId: gate.workspaceId, slug: "p106.work.priorities", title: "Work priorities", status: "active" })
-        .returning({ id: schema.contextRecords.id });
+        .returning({ id: schema.steeringRecords.id });
       const [version] = await tx
-        .insert(schema.contextRecordVersions)
+        .insert(schema.steeringRecordVersions)
         .values({
           orgId,
           workspaceId: gate.workspaceId,
@@ -283,8 +295,8 @@ describe.skipIf(!enabled)("Phase 1 release gates against Postgres", { timeout: 3
           versionNumber: 1,
           isLatest: true,
         })
-        .returning({ id: schema.contextRecordVersions.id });
-      await tx.update(schema.contextRecords).set({ activeVersionId: version!.id }).where(eq(schema.contextRecords.id, record!.id));
+        .returning({ id: schema.steeringRecordVersions.id });
+      await tx.update(schema.steeringRecords).set({ activeVersionId: version!.id }).where(eq(schema.steeringRecords.id, record!.id));
     });
   });
 
@@ -302,8 +314,8 @@ describe.skipIf(!enabled)("Phase 1 release gates against Postgres", { timeout: 3
       await tx.delete(s.workInboundEvents).where(eq(s.workInboundEvents.orgId, orgId));
       await tx.delete(s.workCollectors).where(eq(s.workCollectors.orgId, orgId));
       // A record names its active version, so the record goes first.
-      await tx.delete(s.contextRecords).where(eq(s.contextRecords.orgId, orgId));
-      await tx.delete(s.contextRecordVersions).where(eq(s.contextRecordVersions.orgId, orgId));
+      await tx.delete(s.steeringRecords).where(eq(s.steeringRecords.orgId, orgId));
+      await tx.delete(s.steeringRecordVersions).where(eq(s.steeringRecordVersions.orgId, orgId));
       await tx.delete(s.sourceConnections).where(eq(s.sourceConnections.orgId, orgId));
       await tx.delete(s.tachoControlCommands).where(eq(s.tachoControlCommands.orgId, orgId));
       await tx.delete(s.tachoSessions).where(eq(s.tachoSessions.orgId, orgId));
@@ -636,7 +648,7 @@ describe.skipIf(!enabled)("Phase 1 release gates against Postgres", { timeout: 3
       sentEvents.length = 0;
       const routing = await routeGithubWorkDelivery(
         {
-          installationId: recorded.RECORDED_INSTALLATION,
+          installationId: INSTALLATION,
           repository: REPOSITORY,
           request: recorded.signedDelivery(SECRET, deliveryId, "issues", recorded.issueWebhookBody(action, github.state.issue)),
           secret: SECRET,

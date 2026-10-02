@@ -47,7 +47,7 @@ oxagen work start <work order>
 
 - **Cancel the send** ends a send that no runtime has claimed. It ends at once.
 - **Stop the run** asks the runtime to stop the run at its next safe point. The send reads **Stopping** until the runtime confirms, then **Stopped**. If the host stays offline, Oxagen closes the run after twelve hours with no report, and the item moves to **Review**.
-- **Withdraw the send** ends a send that a runtime claimed but never started a run for, once a stop has waited with no answer. A run that starts for it later is stopped.
+- **Withdraw the send** ends a send that a runtime claimed but never started a run for, after a stop that no run confirmed. A run that starts for it later is stopped.
 - A second start of the same send is refused, and a second run that names the send is stopped. One send has one run.
 
 ## What blocks Accept
