@@ -592,12 +592,10 @@ capability rewrites, so two such branches always conflicted on it (ADR-216).
 
 ## user
 
-- get_user_budget
 - get_user_preferences
 - get_workspace_user_preferences
 - set_preferences
 - update_profile
-- update_user_budget
 - update_workspace_user_preferences
 
 ## work
@@ -626,14 +624,12 @@ capability rewrites, so two such branches always conflicted on it (ADR-216).
 
 - archive_workspace
 - create_workspace
-- get_budget_policy
 - get_model_settings
 - get_prompt_settings
 - get_workspace_settings
 - list_workspaces
 - send_workspace_invite
 - set_governance_mode
-- update_budget_policy
 - update_model_settings
 - update_prompt_settings
 - update_workspace_settings
