@@ -1,6 +1,15 @@
 import { lineageIdSchema } from "@oxagen/oxagen/contracts/context.steering.shared";
 import { describe, expect, it } from "vitest";
-import { agentLineage, formatMicros, plural, proposalSource } from "./shared";
+import {
+  agentLineage,
+  draftsBySubject,
+  formatMicros,
+  isoDay,
+  plural,
+  proposalSource,
+  subjectLineage,
+} from "./shared";
+import { spinDraft, unpagedDraft } from "./test-support";
 
 describe("agentLineage", () => {
   it("names a lineage the contract accepts for any agent key", () => {
@@ -34,5 +43,50 @@ describe("plural and proposalSource", () => {
     expect(plural(1, "run", "runs")).toBe("1 run");
     expect(plural(1200, "run", "runs")).toBe("1,200 runs");
     expect(proposalSource("spin_loops")).toBe("finding:spin_loops");
+  });
+});
+
+describe("subjectLineage", () => {
+  it("names the agent lineage for an agent key", () => {
+    expect(subjectLineage("spin_loops", "acme.core.triage")).toBe(
+      agentLineage("spin_loops", "acme.core.triage"),
+    );
+  });
+
+  it("names a lineage the contract accepts for a tool name", () => {
+    const lineage = subjectLineage("unpaged_results", "mcp__Docs__search");
+    expect(lineage).toMatch(/^ctx\.spend\.unpaged-results-[0-9a-f]{12}$/);
+    expect(lineageIdSchema.safeParse(lineage).success).toBe(true);
+  });
+});
+
+describe("draftsBySubject", () => {
+  it("keeps the first draft of a kind and level for each subject", () => {
+    const first = spinDraft("acme.core.triage");
+    const drafts = draftsBySubject(
+      {
+        instructions: [],
+        findings: [
+          first,
+          spinDraft("acme.core.triage", { citedRuns: ["tse_z"] }),
+          spinDraft("prn_0123456789abcdefghjkmn", { level: "operator" }),
+          unpagedDraft("mcp__docs__search"),
+          spinDraft("acme.core.review"),
+        ],
+      },
+      "spin_loops",
+      "agent",
+    );
+    expect(drafts.map((d) => d.subject)).toEqual([
+      "acme.core.triage",
+      "acme.core.review",
+    ]);
+    expect(drafts[0]).toBe(first);
+  });
+});
+
+describe("isoDay", () => {
+  it("prints the UTC date", () => {
+    expect(isoDay(new Date("2026-09-30T23:59:59.999Z"))).toBe("2026-09-30");
   });
 });

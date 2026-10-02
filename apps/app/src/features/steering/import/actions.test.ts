@@ -6,7 +6,7 @@
 // model calls (INV-19). The match across parse calls runs on the server with
 // no capability, so it resolves the viewer and never reaches invoke().
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { importRecord, parseOutput } from "./import.builders";
+import { importMemory, importRecord, parseOutput } from "./import.builders";
 
 const { invoke, requireViewer } = vi.hoisted(() => ({
   invoke: vi.fn<typeof import("@oxagen/oxagen").invoke>(),
@@ -141,21 +141,57 @@ describe("commitMarkdownImport", () => {
       records: 1,
       policies: 0,
       skipped: 0,
+      memories: { stored: 0, skipped: [] },
     });
     expect(await commitMarkdownImport("acme", "core-platform", rows)).toEqual({
       ok: true,
       value: {
-        number: 41,
-        url: "https://github.com/acme/oxagen-core-platform/pull/41",
-        branch: "steering/import-2026-10-01",
+        pullRequest: {
+          number: 41,
+          url: "https://github.com/acme/oxagen-core-platform/pull/41",
+          branch: "steering/import-2026-10-01",
+        },
         records: 1,
         policies: 0,
         skipped: 0,
+        memories: { stored: 0, skipped: [] },
       },
     });
     expect(invoke).toHaveBeenCalledWith(
       "commit_markdown_import",
       expect.objectContaining({ records: rows.records }),
+      expect.objectContaining(TENANT),
+    );
+  });
+
+  it("stores memories with no PR, and returns the memories it left out", async () => {
+    const skipped = [
+      { file: "notes.md", line: 3, reason: "waiting", memory: "mem_01waiting" },
+    ] as const;
+    invoke.mockResolvedValue({
+      pullRequest: null,
+      paths: [],
+      records: 0,
+      policies: 0,
+      skipped: 0,
+      memories: { stored: 1, skipped: [...skipped] },
+    });
+    const memories = [importMemory(), importMemory({ line: 3, statement: "Use pnpm, not npm." })];
+    expect(
+      await commitMarkdownImport("acme", "core-platform", { records: [], policies: [], memories }),
+    ).toEqual({
+      ok: true,
+      value: {
+        pullRequest: null,
+        records: 0,
+        policies: 0,
+        skipped: 0,
+        memories: { stored: 1, skipped: [...skipped] },
+      },
+    });
+    expect(invoke).toHaveBeenCalledWith(
+      "commit_markdown_import",
+      expect.objectContaining({ memories }),
       expect.objectContaining(TENANT),
     );
   });

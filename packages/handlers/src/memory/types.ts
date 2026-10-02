@@ -8,6 +8,7 @@ import type { z } from "zod";
 import type { GovernanceSettings } from "@oxagen/oxagen/steering-repo/governance";
 import type {
   ProvenanceMemory,
+  RecordForce,
   RecordKind,
 } from "@oxagen/oxagen/steering-repo/record";
 import type { reflectionOutcomeSchema } from "@oxagen/oxagen/steering-repo/reflection";
@@ -170,6 +171,11 @@ export interface ActiveRecord {
   lineage: string;
   kind: RecordKind;
   status: "active" | "archived";
+  /**
+   * When the record reaches a request. `must` and `should` load on every
+   * request, never through recall, so the curator never archives one.
+   */
+  force: RecordForce;
   /** The record's body, as `recordStatement` gives it. */
   statement: string;
   /** The record's `repos`, `applies_to`, and `tools`, which recall scopes by. */
@@ -391,6 +397,12 @@ export interface MemoryStore {
     drafts: MemoryDraft[],
     reflectionId?: string | null,
   ): Promise<number>;
+  /**
+   * Store memories, skipping any whose dedupe key exists, and return the
+   * dedupe key of each one written. The Markdown import names the rows it
+   * left out from what this leaves off.
+   */
+  insertMemoriesKeyed(scope: MemoryScope, drafts: MemoryDraft[]): Promise<string[]>;
   /**
    * Store a memory as the one waiting memory of its capture and source
    * (ADR-238, ADR-248). Tacho's memory upload calls it for each

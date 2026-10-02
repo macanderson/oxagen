@@ -16,14 +16,20 @@ import {
   openProposals,
   type SpendProposalDeps,
 } from "./open";
+import { modelClassFitProposals } from "./model-class-fit";
+import { recurringRunProposals } from "./recurring-runs";
 import { repeatedInstructionProposals } from "./repeated-instructions";
 import { spinLoopProposals } from "./spin-loops";
 import type { SpendProposalBuilder } from "./types";
+import { unpagedResultProposals } from "./unpaged-results";
 
 /** Every builder a pass runs, in the order its proposals open. */
 export const SPEND_PROPOSAL_BUILDERS: readonly SpendProposalBuilder[] = [
   repeatedInstructionProposals,
   spinLoopProposals,
+  modelClassFitProposals,
+  unpagedResultProposals,
+  recurringRunProposals,
 ];
 
 /** Build every proposal one pass supports and open each one. */

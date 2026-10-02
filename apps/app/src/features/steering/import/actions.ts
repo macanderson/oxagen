@@ -10,7 +10,8 @@
 // gates the role with the contract's own defaultRoles (an org Owner or Admin,
 // or a workspace Owner or Member).
 //
-// commit_markdown_import opens one steering PR on steering/import-<date>. It
+// commit_markdown_import opens one steering PR on steering/import-<date> for
+// the records and policies, and stores the memories as waiting memories. It
 // refuses a conflict nobody chose for, a policy the early checks failed, and
 // two rows with one lineage or one path, each with its reason as the code.
 //
@@ -56,14 +57,16 @@ const matchRowsSchema = z
 type ParseInput = (typeof steeringMarkdownImportParse)["input"]["_input"];
 type CommitInput = (typeof steeringMarkdownImportCommit)["input"]["_input"];
 
-/** What the dialog shows once the steering PR opened. */
+type CommitOutput = ContractOutput<typeof steeringMarkdownImportCommit>;
+
+/** What the dialog shows once the commit ran: the steering PR, and the memories stored. */
 export type ImportCommitted = {
-  number: number;
-  url: string;
-  branch: string;
+  /** The steering PR, or null when no record or policy was marked add. */
+  pullRequest: { number: number; url: string; branch: string } | null;
   records: number;
   policies: number;
   skipped: number;
+  memories: CommitOutput["memories"];
 };
 
 /** Split, classify, and check up to 25 files. Nothing is written. */
@@ -76,7 +79,7 @@ export async function parseMarkdownImport(
   return kernelWrite(ctx, steeringMarkdownImportParse, { documents });
 }
 
-/** Open the one steering PR that holds every row marked add. */
+/** Open the one steering PR for the records and policies marked add, and store the memories marked add. */
 export async function commitMarkdownImport(
   org: string,
   ws: string,
@@ -85,16 +88,22 @@ export async function commitMarkdownImport(
   const ctx = await requireViewer(org, ws);
   const result = await kernelWrite(ctx, steeringMarkdownImportCommit, rows);
   if (!result.ok) return result;
-  const { pullRequest, records, policies, skipped } = result.value;
+  const { pullRequest, records, policies, skipped, memories } = result.value;
   return {
     ok: true,
     value: {
-      number: pullRequest.number,
-      url: pullRequest.url,
-      branch: pullRequest.branch,
+      pullRequest:
+        pullRequest === null
+          ? null
+          : {
+              number: pullRequest.number,
+              url: pullRequest.url,
+              branch: pullRequest.branch,
+            },
       records,
       policies,
       skipped,
+      memories,
     },
   };
 }

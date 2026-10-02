@@ -32,6 +32,9 @@ export const MEMORY_CAPTURES = [
 export const memoryCaptureSchema = z.enum(MEMORY_CAPTURES);
 export type MemoryCapture = z.output<typeof memoryCaptureSchema>;
 
+/** The most characters a memory's statement holds. */
+export const MEMORY_STATEMENT_MAX = 2000;
+
 /** `mem_<id>`, as Oxagen assigns it. */
 export const memoryIdSchema = z.string().regex(/^mem_[0-9A-Za-z]+$/);
 
@@ -52,7 +55,7 @@ export const memorySchema = z
     capture: memoryCaptureSchema.describe(
       "remember during a run, pull_request from the code repository check, local_gateway from a harness's memory folder, or import from a Markdown file a person imported.",
     ),
-    statement: z.string().min(1).max(2000),
+    statement: z.string().min(1).max(MEMORY_STATEMENT_MAX),
     kind: recordKindSchema.describe(
       "What the memory would be as a record. Most are memory.",
     ),

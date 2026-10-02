@@ -105,7 +105,7 @@
     "commit_markdown_import": {
       "route": "/[org]/[ws]/steering",
       "page": "apps/app/src/app/[org]/[ws]/steering/page.tsx",
-      "entry": "Steering \u203a Import Markdown \u203a Review statements \u203a Open steering PR: the statement grid's commit, which opens one steering PR on steering/import-<date> and links to it (features/steering/import/import-markdown.tsx, features/steering/import/actions.ts)",
+      "entry": "Steering \u203a Import Markdown \u203a Review statements \u203a Open steering PR or Store memories: the statement grid's commit, which opens one steering PR on steering/import-<date> and links to it, and stores the memories as waiting memories and links to the Memories tab (features/steering/import/import-markdown.tsx, features/steering/import/actions.ts)",
       "testid": "import-commit",
       "proof": "apps/app/src/features/steering/import/import-markdown.test.tsx",
       "verifiedAt": "2026-10-01",

@@ -48,6 +48,7 @@ import {
   instructionProposals,
   microsOf,
   replayClaims,
+  resultsToCheck,
   runsWithRepeats,
   runsWithRetries,
   type DetectInput,
@@ -60,6 +61,7 @@ import {
   type FrameCoverage,
   type PricedRequestFrame,
   type PromptRead,
+  type ResultUseRead,
   type RunCompaction,
   type RunFirstPrompt,
   type ToolCallObservation,
@@ -68,6 +70,7 @@ import {
 import { openSpendProposals } from "./findings/open-proposals";
 import type { SpendProposalInput } from "./findings/proposal-opener";
 import { readRunPrompts } from "./findings-prompts";
+import { readResultUse } from "./findings-result-use";
 import {
   readCompactions,
   readFileChanges,
@@ -208,6 +211,16 @@ interface FindingsPassDeps {
     scope: FindingsScope,
     runIds: readonly string[],
   ) => Promise<Map<string, OutcomeRow[]>>;
+  /**
+   * Whether a later step quoted each large tool result detector 5 can price
+   * (decision 7); absent, the pass reads none, and detector 5 counts every
+   * re-read, an upper bound.
+   */
+  readResultUse?: (
+    scope: FindingsScope,
+    results: readonly ToolCallObservation[],
+    rootByRun: ReadonlyMap<string, string>,
+  ) => Promise<ResultUseRead>;
   write: (
     scope: FindingsScope,
     passStartedAt: Date,
@@ -1128,6 +1141,7 @@ const productionDeps: FindingsPassDeps = {
   readFileChanges,
   readCompactions,
   readOutcomes,
+  readResultUse,
   write: writeFindings,
   readUnclaimedApplied,
   writeClaimBackfill,
@@ -1224,6 +1238,13 @@ export async function runFindingsPass(
           read: coverage.read - unread,
           capped: coverage.capped + unread,
         };
+  // Detector 5 splits each large result's re-reads by whether a later step
+  // quoted the result.
+  const toCheck = resultsToCheck(toolCalls, frames);
+  const resultUse =
+    toCheck.length === 0
+      ? undefined
+      : await deps.readResultUse?.(scope, toCheck, rootByRun);
   // A workspace with no runs in the window has no prompt to read.
   const prompts =
     runIds.size === 0
@@ -1243,6 +1264,7 @@ export async function runFindingsPass(
     frameCoverage,
     ...(fileChangeTimes ? { fileChangeTimes } : {}),
     ...(prompts ? { prompts } : {}),
+    ...(resultUse ? { resultUse } : {}),
   };
   const drafts = detectFindings(input);
   const written = await deps.write(scope, end, decidedSince, drafts);

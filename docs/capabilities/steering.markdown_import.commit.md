@@ -1,8 +1,10 @@
 # commit_markdown_import
 
-Open one steering PR with the Markdown import's rows (#4907). Pass the rows
+Open one steering PR with the Markdown import's records and policies, and store its memories as
+waiting memories (#4907). Pass the rows
 [parse_markdown_import](steering.markdown_import.parse.md) returned, as you edited them.
-Nothing in the PR steers an agent until it merges.
+Nothing in the PR steers an agent until it merges, and a memory steers no agent until a person
+promotes it into a steering record.
 
 **Surfaces:** api, mcp, agent, cli
 
@@ -25,19 +27,22 @@ Nothing in the PR steers an agent until it merges.
 |---|---|---|
 | `records` | record rows, default `[]` | the record rows from parse. The schema refuses a force the row's kind does not allow, a constraint with no effect, and an effect on any other kind |
 | `policies` | policy rows, default `[]` | the policy rows from parse |
+| `memories` | memory rows, default `[]` | the memory rows from parse. The schema refuses a row marked `add` whose statement is over 2,000 characters |
 
 The schema also refuses rows that mark more than 299 records and policies add, because one
-steering PR holds at most 299 files. The issue's message, in the `details` of a `validation_error`,
+steering PR holds at most 299 files. Memories count against no PR. The issue's message, in the `details` of a `validation_error`,
 says how many to mark skip.
 
 ## Output
 
 | Field | Type | Description |
 |---|---|---|
-| `pullRequest` | `{ number, url, branch, headSha }` | the steering PR, and the commit the "Oxagen steering" check ran on |
+| `pullRequest` | `{ number, url, branch, headSha }` or null | the steering PR, and the commit the "Oxagen steering" check ran on. Null when no record or policy is marked `add` |
 | `paths` | string array | every path the PR adds or replaces, in path order |
 | `records`, `policies` | number | the records and policy files the PR holds |
 | `skipped` | number | rows marked `skip`, left out |
+| `memories.stored` | number | the waiting memories stored |
+| `memories.skipped` | `{ file, line, reason, memory }` array | each memory row marked `add` that was left out. `reason` is `waiting` (`memory` names the waiting memory), `rejected`, `import` for a row that repeats an earlier row of the same commit, or `stored` for a statement an earlier import stored from the same line whose memory has left the waiting state |
 
 ## What commit does
 
@@ -60,9 +65,21 @@ says how many to mark skip.
 4. Takes the first free branch of the day: `steering/import-<YYYY-MM-DD>`, then `-2`, `-3`, and
    so on. That branch may change steering records, skills, and Cedar policy files in one PR,
    and nothing else.
-5. Opens the PR through the steering PR opener the tools PRs use, which commits every file at
+5. Stores each memory row marked `add` as a waiting memory: capture `import`, no agent, no
+   run, kind `memory`, the row's label, and `import:<file>#L<line>` as its source. A memory
+   with capture `import` and no agent is one a person wrote. Before it stores a row, commit
+   checks its statement hash again against the waiting memories, the rejected statements,
+   and the rows before it, and a row that matches is left out and named in
+   `memories.skipped`. So is a row whose file, line, and statement an earlier import already
+   stored. The memory waits for review like any other, and recall never answers a waiting
+   memory.
+6. Opens the PR through the steering PR opener the tools PRs use, which commits every file at
    once, runs the steering checks on the new head, and reports them as the "Oxagen steering"
-   check.
+   check. A commit with no record or policy marked `add` opens no PR and reads nothing from the
+   steering repo.
+
+Every refusal comes before the first write. The memories are stored before the PR opens, so a
+retry after a PR that failed to open names each memory as `waiting` and stores none twice.
 
 ## Errors
 
@@ -71,7 +88,7 @@ says how many to mark skip.
 | 403 | `forbidden` | the caller holds none of the roles above |
 | 409 | `conflict_unresolved` | a row's `action` is null: it conflicts, and nobody chose add or skip |
 | 409 | `policy_invalid` | a policy row marked `add` has issues |
-| 409 | `nothing_to_import` | every row is marked `skip` |
+| 409 | `nothing_to_import` | every record, policy, and memory row is marked `skip` |
 | 409 | `duplicate_lineage`, `duplicate_path` | two rows share a lineage, or two files share a path |
 | 409 | `record_unreadable` | a row does not make a steering record the schema accepts |
 | 409 | `import_branches_exhausted` | the steering repo already has 50 import branches for the day |

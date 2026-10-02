@@ -752,15 +752,15 @@ export function buildProgram(): Command {
       "Markdown files, or folders to search for .md, .markdown, and .mdx files",
     )
     .description(
-      "Read Markdown files into steering records and Cedar policies. Previews unless --yes.",
+      "Read Markdown files into steering records, Cedar policies, or memories. Previews unless --yes.",
     )
     .option(
       "--as <target>",
-      "records or policies for every file. Without it, each file takes the target its text implies, such as policies for a file with a cedar block.",
+      "records, policies, or memories for every file. Without it, each file takes the target its text implies, such as policies for a file with a cedar block.",
     )
     .option(
       "-y, --yes",
-      "Open one steering PR with every row marked add. Records that conflict with a published record are left out.",
+      "Open one steering PR with every record and policy marked add, and store every memory marked add as a waiting memory. Records that conflict with a published record are left out.",
     )
     .option("--json", "Output JSON")
     .action(
@@ -1112,50 +1112,45 @@ export function buildProgram(): Command {
       },
     );
 
-  // ── memory: manage the workspace's agent memories ───────────────────────────
+  // ── memory: the workspace's memories, collected from enrolled hosts ─────────
 
   const memory = program
     .command("memory")
     .description(
-      "Manage the workspace's agent memories (list, show, edit, salience, promote, candidates, rm)",
+      "Review the memories agents wrote in their harnesses: list, show, promote into steering records, or dismiss",
     );
   memory
     .command("list")
     .description(
-      "List the workspace's memories, sorted by recency or citation count",
+      "List the workspace's memories ranked by uses, one row per group of memories that say the same thing",
     )
     .option(
-      "--class <memoryClass>",
-      "Filter by epistemic class (OBSERVATION|RULE|FACT)",
+      "--state <states>",
+      "States to list, comma-separated: waiting, in_pr, promoted, dismissed, retired (default waiting,in_pr)",
     )
     .option(
-      "--kind <kind>",
-      "Filter by content-domain kind (e.g. FEEDBACK, PERFORMANCE, constraint, gotcha)",
+      "--harness <harness>",
+      "Only memories this harness keeps: claude-code, codex, cursor, stella, or claude-desktop",
+    )
+    .option("--agent <lineage>", "Only memories this agent wrote")
+    .option(
+      "--repository <repo>",
+      "Only memories scoped to this repository, such as github.com/acme/api",
     )
     .option(
-      "--min-enforcement <n>",
-      "Only rules at or above this enforcement score (1-100)",
+      "--type <type>",
+      "Only memories of this Claude Code type: user, feedback, project, or reference",
     )
-    .option(
-      "--min-citations <n>",
-      "Only memories cited at least this many times",
-    )
-    .option(
-      "--sort <axis>",
-      "Sort by 'createdAt' (recency, default) or 'citations'",
-    )
-    .option("--node <ref>", "Scope to memories anchored on a graph node ref")
-    .option("--limit <n>", "Max rows (default 100)")
-    .option("--offset <n>", "Skip N rows (paging)")
+    .option("--limit <n>", "Groups per page (default 50)")
+    .option("--offset <n>", "Groups to skip")
     .option("--json", "Output JSON")
     .action(
       async (opts: {
-        class?: string;
-        kind?: string;
-        minEnforcement?: string;
-        minCitations?: string;
-        sort?: string;
-        node?: string;
+        state?: string;
+        harness?: string;
+        agent?: string;
+        repository?: string;
+        type?: string;
         limit?: string;
         offset?: string;
         json?: boolean;
@@ -1166,152 +1161,74 @@ export function buildProgram(): Command {
     );
   memory
     .command("show <id>")
-    .description("Show one memory in full detail (by id or publicId)")
+    .description(
+      "Show one memory with its full text, its source, the runs that used it, and its memory PR",
+    )
     .option("--json", "Output JSON")
     .action(async (id: string, opts: { json?: boolean }) => {
       const { handleMemoryShow } = await import("./commands/memory.js");
       await handleMemoryShow(id, opts);
     });
   memory
-    .command("edit <id>")
-    .description("Edit a memory's lesson, kind, or source")
-    .option("--lesson <text>", "Replacement lesson text (re-embeds for recall)")
-    .option("--kind <kind>", "New content-domain kind")
-    .option("--source <source>", "New provenance label")
+    .command("promote <ids...>")
+    .description(
+      "Promote waiting memories into draft steering records on the open memory PR, or open one. One record per id",
+    )
+    .option("--one-record", "Cite every id in one record")
+    .option(
+      "--statement <text>",
+      "The record's body. Defaults to the first memory's statement",
+    )
+    .option(
+      "--kind <kind>",
+      "business-rule, code-rule, constraint, procedure, fact, preference, or memory",
+    )
+    .option(
+      "--force <force>",
+      "must, should, may, or info. Defaults to should for a rule kind, may for a preference, and info for a fact or a memory",
+    )
+    .option("--effect <effect>", "require or forbid. Required for a constraint")
+    .option(
+      "--repo <repo>",
+      "Scope the record to a repository, such as github.com/acme/api. Repeat or comma-separate for more",
+      (value: string, previous: string[] = []) => [...previous, value],
+    )
+    .option(
+      "--no-same-text",
+      "Cite only the ids given, not the waiting memories that say the same thing",
+    )
     .option("--json", "Output JSON")
     .action(
       async (
-        id: string,
+        ids: string[],
         opts: {
-          lesson?: string;
+          oneRecord?: boolean;
+          statement?: string;
           kind?: string;
-          source?: string;
-          json?: boolean;
-        },
-      ) => {
-        const { handleMemoryEdit } = await import("./commands/memory.js");
-        await handleMemoryEdit(id, opts);
-      },
-    );
-  memory
-    .command("salience <id>")
-    .description(
-      "Adjust a memory's confidence/enforcement scores or lifecycle status (class changes go through `memory promote`)",
-    )
-    .option("--confidence <n>", "Numeric confidence 0–100")
-    .option("--enforcement <n>", "Numeric enforcement 1–100 (for a RULE)")
-    .option(
-      "--status <status>",
-      "Lifecycle status (ACTIVE|SUPERSEDED|RETRACTED|ARCHIVED)",
-    )
-    .option("--json", "Output JSON")
-    .action(
-      async (
-        id: string,
-        opts: {
-          confidence?: string;
-          enforcement?: string;
-          status?: string;
-          json?: boolean;
-        },
-      ) => {
-        const { handleMemorySalience } = await import("./commands/memory.js");
-        await handleMemorySalience(id, opts);
-      },
-    );
-  memory
-    .command("promote <id>")
-    .description(
-      "Promote a memory to RULE or FACT, recording an auditable promotion event (FACT requires human confirmation)",
-    )
-    .requiredOption("--to <class>", "Target class: rule|fact")
-    .option(
-      "--enforcement <n>",
-      "Enforcement 1–100 to set for a RULE (ignored for FACT, forced 100)",
-    )
-    .option("--rationale <text>", "Optional: why this memory is being promoted")
-    .option("--json", "Output JSON")
-    .action(
-      async (
-        id: string,
-        opts: {
-          to?: string;
-          enforcement?: string;
-          rationale?: string;
+          force?: string;
+          effect?: string;
+          repo?: string[];
+          sameText?: boolean;
           json?: boolean;
         },
       ) => {
         const { handleMemoryPromote } = await import("./commands/memory.js");
-        await handleMemoryPromote(id, opts);
+        await handleMemoryPromote(ids, opts);
       },
     );
   memory
-    .command("demote <id>")
+    .command("dismiss <ids...>")
     .description(
-      "Demote a memory to RULE or OBSERVATION, recording an auditable demotion event (target must be below the current class)",
+      "Dismiss memories so the curator does not propose them again, or restore them with --restore",
     )
-    .requiredOption("--to <class>", "Target class: rule|observation")
-    .option(
-      "--enforcement <n>",
-      "Enforcement 1–100 to set when demoting to RULE (ignored for OBSERVATION, forced null)",
-    )
-    .option("--rationale <text>", "Optional: why this memory is being demoted")
+    .option("--restore", "Bring dismissed memories back to waiting")
     .option("--json", "Output JSON")
     .action(
-      async (
-        id: string,
-        opts: {
-          to?: string;
-          enforcement?: string;
-          rationale?: string;
-          json?: boolean;
-        },
-      ) => {
-        const { handleMemoryDemote } = await import("./commands/memory.js");
-        await handleMemoryDemote(id, opts);
+      async (ids: string[], opts: { restore?: boolean; json?: boolean }) => {
+        const { handleMemoryDismiss } = await import("./commands/memory.js");
+        await handleMemoryDismiss(ids, opts);
       },
     );
-  memory
-    .command("dismiss <id>")
-    .description(
-      "Dismiss a memory from the promotion candidate queue (or restore it with --restore)",
-    )
-    .option("--restore", "Restore a previously dismissed memory to the queue")
-    .option("--json", "Output JSON")
-    .action(async (id: string, opts: { restore?: boolean; json?: boolean }) => {
-      const { handleMemoryDismiss } = await import("./commands/memory.js");
-      await handleMemoryDismiss(id, opts);
-    });
-  memory
-    .command("candidates")
-    .description(
-      "List the top OBSERVATION memories by citation pressure ripe for promotion",
-    )
-    .option("--limit <n>", "Max candidates (default 3)")
-    .option("--json", "Output JSON")
-    .action(async (opts: { limit?: string; json?: boolean }) => {
-      const { handleMemoryCandidates } = await import("./commands/memory.js");
-      await handleMemoryCandidates(opts);
-    });
-  memory
-    .command("citations")
-    .description(
-      "Workspace citation analytics: totals, influence/compliance, most-cited / least-useful / most-violated memories and nodes",
-    )
-    .option("--days <n>", "Window in days (default 30)")
-    .option("--limit <n>", "Max entries per top-N list (default 10)")
-    .option("--json", "Output JSON")
-    .action(async (opts: { days?: string; limit?: string; json?: boolean }) => {
-      const { handleMemoryCitations } = await import("./commands/memory.js");
-      await handleMemoryCitations(opts);
-    });
-  memory
-    .command("rm <id>")
-    .description("Permanently delete a memory by id")
-    .action(async (id: string) => {
-      const { handleMemoryRemove } = await import("./commands/memory.js");
-      await handleMemoryRemove(id);
-    });
   memory
     .command("import <files...>")
     .description(
@@ -1326,40 +1243,6 @@ export function buildProgram(): Command {
       async (files: string[], opts: { yes?: boolean; json?: boolean }) => {
         const { handleMemoryImport } = await import("./commands/memory.js");
         await handleMemoryImport(files, opts);
-      },
-    );
-
-  // ── remember: capture a memory (infers class + kind) ────────────────────────
-
-  program
-    .command("remember <text...>")
-    .description(
-      "Capture a memory — infers its class + kind and saves it to the workspace graph",
-    )
-    .option(
-      "--class <memoryClass>",
-      "Pin the epistemic class (OBSERVATION|RULE|FACT) instead of inferring it",
-    )
-    .option(
-      "--kind <kind>",
-      "Pin the content-domain kind instead of inferring it",
-    )
-    .option("--enforcement <n>", "Enforcement 1–100 when --class is RULE")
-    .option("--node <ref>", "Anchor the memory on a graph node ref")
-    .option("--json", "Output JSON")
-    .action(
-      async (
-        text: string[],
-        opts: {
-          class?: string;
-          kind?: string;
-          enforcement?: string;
-          node?: string;
-          json?: boolean;
-        },
-      ) => {
-        const { handleRemember } = await import("./commands/memory.js");
-        await handleRemember(text.join(" "), opts);
       },
     );
 
