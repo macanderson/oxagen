@@ -547,9 +547,13 @@ export async function runBackfill(
   });
   let projects: BackfillProject[] = [];
   let checkedAt = 0;
+  // A function, not a property read: TypeScript keeps a narrowed
+  // `deps.signal?.aborted` across an await, so a second inline check after
+  // one would type as never true, though the signal can fire in between.
+  const aborted = (): boolean => deps.signal?.aborted === true;
   /** Between slices: stop, report progress, and wait out a WAL backlog. */
   const between = async (): Promise<void> => {
-    if (deps.signal?.aborted === true) throw new Stopped();
+    if (aborted()) throw new Stopped();
     await new Promise<void>((resolve) => setImmediate(resolve));
     if (deps.now() - checkedAt < CHECK_EVERY_MS) return;
     checkedAt = deps.now();
@@ -557,7 +561,7 @@ export async function runBackfill(
     deps.ledger.flush();
     if (dryRun) return;
     while (deps.unshippedEvents() > BACKLOG_PAUSE_EVENTS) {
-      if (deps.signal?.aborted === true) throw new Stopped();
+      if (aborted()) throw new Stopped();
       await deps.sleep(CHECK_EVERY_MS);
     }
   };
@@ -570,7 +574,7 @@ export async function runBackfill(
       const local = localAction(candidate, deps);
       if (local !== undefined) sessions[local] += 1;
       else pending.push(candidate);
-      if (deps.signal?.aborted === true) throw new Stopped();
+      if (aborted()) throw new Stopped();
       // Each check reads the registry and stats the WAL on the daemon's one
       // thread, so a long history yields to the hooks now and then (ADR-231).
       if (index % LOCAL_CHECKS_PER_TURN === LOCAL_CHECKS_PER_TURN - 1)

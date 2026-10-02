@@ -7445,7 +7445,7 @@ describe("a backfilled session", () => {
     const last = events.at(-1) as TachoEvent;
     const resumed = sealEvent(
       unsealed("agent_start", { session_start_source: "resume" }),
-      { seq: last.seq + 1, prevHash: last.hash },
+      { seq: last.seq + 1, prevHash: last.hash as ChainCursor["prevHash"] },
     ).event;
     await tachoEventsIngestHandler(batch([resumed]), CONTEXT);
     expect(db.sessions.get(SESSION)).toMatchObject({ recordBasis: "mixed" });
