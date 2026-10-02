@@ -43,6 +43,7 @@ export default defineConfig({
     "tools",
     "skills",
     "work",
+    "forge",
   ],
   verbose: true,
   strict: true,

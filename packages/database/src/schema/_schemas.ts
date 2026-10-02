@@ -62,3 +62,8 @@ export const skillsSchema = pgSchema("skills");
 // work: work items, the collectors that bring them in, triage, done records,
 // and autonomy (agent-work-spec.html, Storage). See schema/work.ts.
 export const workSchema = pgSchema("work");
+// forge: the pull requests a workspace's forges deliver, the diff of each head
+// commit, and the runs and work orders each belongs to (ADR-288). Its own
+// schema because a pull request is shared by runs, work, and cost, and none of
+// those domains owns it. See schema/forge.ts.
+export const forgeSchema = pgSchema("forge");
