@@ -2886,6 +2886,17 @@
       "writes": []
     },
     {
+      "domain": "tool",
+      "name": "migrate_tools_to_steering",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "cli",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "agent",
       "name": "move_agent",
       "reads": [],
