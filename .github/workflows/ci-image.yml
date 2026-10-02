@@ -147,7 +147,9 @@ jobs:
         env:
           REGISTRY: ${{ steps.registry.outputs.registry }}
           ARCH: ${{ matrix.arch }}
-          RUNNER_ARCH: ${{ matrix.runner_arch }}
+          # Not RUNNER_ARCH: GitHub sets that one itself (X64, ARM64), and it
+          # wins over a step's env, so the store landed under the wrong key.
+          STORE_ARCH: ${{ matrix.runner_arch }}
         run: |
           set -euo pipefail
           store="$RUNNER_TEMP/pnpm-store"
@@ -157,7 +159,7 @@ jobs:
             pnpm fetch --store-dir /store
           tar -C "$store" -I 'zstd -T0 -3' -cf "$RUNNER_TEMP/store.tar.zst" .
           du -sh "$store" "$RUNNER_TEMP/store.tar.zst"
-          aws s3 cp "$RUNNER_TEMP/store.tar.zst" "s3://$ASSETS_BUCKET/pnpm-store/$RUNNER_ARCH.tar.zst" --only-show-errors
+          aws s3 cp "$RUNNER_TEMP/store.tar.zst" "s3://$ASSETS_BUCKET/pnpm-store/$STORE_ARCH.tar.zst" --only-show-errors
 
   publish:
     needs: build

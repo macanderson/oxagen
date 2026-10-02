@@ -1,6 +1,7 @@
 import { useLocale, useTranslations } from "next-intl";
 import type { SteeringDeliveries } from "@/data/contracts/steering";
 import type { Read } from "@/data/read";
+import { AgentAvatar } from "@/ui/agent-avatar";
 import { formatCount } from "@/ui/money-format";
 import { Table, cell, numericCell } from "@/ui/table";
 import { SteeringReadFailure } from "./read-failure";
@@ -45,9 +46,20 @@ export function Deliveries({ read }: { read: Read<SteeringDeliveries> }) {
             {report.runs.map((run) => (
               <tr key={run.sessionUuid}>
                 <td className={cell}>
-                  <div className="md:truncate">{run.agentKey}</div>
-                  <div className="text-xs text-muted-foreground md:truncate">
-                    {run.harness} · {date(run.ts.replace(" ", "T") + "Z")}
+                  <div className="flex min-w-0 items-center gap-2.5">
+                    <AgentAvatar
+                      value={null}
+                      initials={(run.agentKey.split(".").at(-1) ?? "")
+                        .slice(0, 2)
+                        .toUpperCase()}
+                      harness={run.harness}
+                    />
+                    <div className="min-w-0">
+                      <div className="md:truncate">{run.agentKey}</div>
+                      <div className="text-xs text-muted-foreground md:truncate">
+                        {run.harness} · {date(run.ts.replace(" ", "T") + "Z")}
+                      </div>
+                    </div>
                   </div>
                   <details>
                     <summary className="cursor-pointer">{t("run")}</summary>

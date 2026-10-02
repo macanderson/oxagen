@@ -25,3 +25,16 @@ export { settingsDifferences } from "./settings-diff";
 export { alwaysOnBlocks, type AlwaysOnBlock, type AlwaysOnEntry } from "./always-on";
 export { alwaysOnBudget, definitionBudget, directDefinitions, type ServerDefinitions } from "./checks/budget";
 export { closest } from "./checks/references";
+export {
+  NEAR_DUPLICATE_MIN_WORDS,
+  NEAR_DUPLICATE_SIMILARITY,
+  similarStatements,
+  type ComparedStatement,
+  type StatementMatch,
+} from "./checks/conflicts";
+export {
+  markImportMatches,
+  type ImportMatch,
+  type ImportMatchRow,
+  type ImportPublishedRecord,
+} from "./import-matches";
