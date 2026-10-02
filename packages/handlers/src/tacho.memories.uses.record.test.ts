@@ -138,7 +138,7 @@ describe("record_tacho_memory_uses", () => {
       uses: [use({ used_at: "2026-10-01T13:00:00.000Z" })],
     });
     await handler(input, ctx);
-    const [, stored] = deps.recordUses.mock.calls[0] as unknown as [
+    const [, stored] = vi.mocked(deps.recordUses).mock.calls[0] as unknown as [
       unknown,
       Array<{ usedAt: Date }>,
     ];
