@@ -144,6 +144,7 @@ const STEERING_SEGMENTS: Readonly<Record<string, readonly string[]>> = {
   skills: ["skills"],
   memory: ["memory"],
   ontology: ["ontology"],
+  memories: ["memories"],
   assignments: ["assignments"],
   deliveries: ["assignments"],
   gates: ["gates"],
@@ -581,21 +582,24 @@ export const routes = {
   runtime: (org: string, ws: string, runtime: string): SafePath =>
     withQuery(pathOf(org, ws, "agents"), { tab: "runtimes", runtime }),
   /**
-   * Steering (roadmap pages/steering.md): the five tabs and the Library
+   * Steering (roadmap pages/steering.md): the six tabs and the Library
    * shelves are path segments, `/steering/<tab>` or `/steering/<shelf>`, and
    * the Context PRs segment of Proposals is `/steering/proposals/prs`. A tab
    * id written before the rename still maps to where it lives now: `policy`,
    * `settings` and `freshness` are Gates, `deliveries` is Assignments,
    * `preview` is the Compiler and `prs` is the Context PRs segment. Filters, a
-   * page offset, the rows a page of proposals holds, a selected proposal and a
-   * Skills cursor stay query values.
+   * page offset, the rows a page of proposals holds, a selected proposal, the
+   * memory the Memories drawer opens and a Skills cursor stay query values.
    */
   steering: (
     org: string,
     ws: string,
     q: {
       tab?: string;
-      /** The agent the Compiler assembles for; only with `tab: "compiler"`. */
+      /**
+       * The agent the Compiler assembles for, a path segment with `tab:
+       * "compiler"`; the agent filter, a query value, with `tab: "memories"`.
+       */
       agent?: string;
       /** A skill whose source `/steering/skills/<skill>/source` opens; only with `tab: "skills"`. */
       skill?: string;
@@ -606,6 +610,12 @@ export const routes = {
       proposal?: string;
       cursor?: string;
       view?: string;
+      /** The Memories filters and the memory its drawer opens (#4914). */
+      state?: string;
+      harness?: string;
+      repo?: string;
+      type?: string;
+      memory?: string;
     } = {},
   ): SafePath => {
     const segments =
@@ -625,6 +635,12 @@ export const routes = {
       proposal: q.proposal,
       cursor: q.cursor,
       view: q.view,
+      state: q.state,
+      harness: q.harness,
+      agent: segments[0] === "memories" ? q.agent : undefined,
+      repo: q.repo,
+      type: q.type,
+      memory: q.memory,
     });
   },
   /**
