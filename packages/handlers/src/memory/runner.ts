@@ -48,6 +48,7 @@ import type {
   SteeringRepository,
 } from "../context.steering.github";
 import { createSteeringHost } from "../context.steering.host";
+import { postgresSteeringStore } from "../context.steering.store";
 import { mapConcurrent } from "../lib/map-concurrent";
 import { readRunEnrichmentEnabled } from "../lib/run-enrichment";
 import {
@@ -59,6 +60,11 @@ import {
 } from "../lib/run-read";
 import { logger } from "../logger";
 import { readSteeringLayout } from "../steering-repo/merge-queue";
+import {
+  jobAuthor,
+  recordSteeringPrQuietly,
+  type SteeringPrProposalStore,
+} from "../steering-repo/pr-proposal";
 import {
   captureRun,
   lessonMemories,
@@ -105,6 +111,8 @@ export interface MemoryRunnerDeps {
   bodies: Pick<EvidenceStore, "getBody">;
   store: MemoryStore;
   host: SteeringHost;
+  /** Where the memory PR's proposal row is written, so Oxagen can merge it (#5122). */
+  proposals: SteeringPrProposalStore;
   /** Ask the fast tier for a run's reflection. */
   generate: (
     scope: MemoryScope,
@@ -121,6 +129,7 @@ export function defaultMemoryRunnerDeps(): MemoryRunnerDeps {
     bodies: evidenceStore(),
     store: postgresMemoryStore,
     host: createSteeringHost(),
+    proposals: postgresSteeringStore,
     async generate(scope, { system, prompt }) {
       const { object } = await generateObjectFor({
         ...(await selectModelForOrg(scope.orgId, { tier: "fast" })),
@@ -750,7 +759,7 @@ export async function curateMemories(
   const title = memoryPrTitle(now.toISOString().slice(0, 10), opened);
   if (!(await prepareBranch(deps.host, repo, branch, head)))
     return { outcome: "opened_today", settled, dropped, pullRequest: null };
-  await deps.host.commitFiles(repo, {
+  const { sha } = await deps.host.commitFiles(repo, {
     branch,
     parent: head,
     message: title,
@@ -771,6 +780,23 @@ export async function curateMemories(
     url: pr.htmlUrl,
     records: [...proposed.map(proposeRecord), ...retired.map(retireRecord)],
   });
+  // The memory PR's proposal row, so a person merges it through Oxagen
+  // (#5122). No check ran on it: the merge runs the steering checks itself.
+  await recordSteeringPrQuietly(
+    deps.proposals,
+    {
+      scope,
+      repo,
+      kind: "memory_pr",
+      pullRequest: { number: pr.number, url: pr.htmlUrl, branch, headSha: sha },
+      title,
+      paths: files.map((file) => file.path),
+      check: null,
+      author: jobAuthor("memory-curator"),
+      mode: settings.mode,
+    },
+    now,
+  );
   return {
     outcome: "curated",
     settled,

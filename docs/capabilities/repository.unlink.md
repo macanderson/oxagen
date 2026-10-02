@@ -4,7 +4,7 @@ Remove a linked repository from the workspace. A repository that the steering re
 
 The repository is addressed by the `rpb_…` binding id `list_repositories` answers. What happens next depends on the steering record:
 
-- When `.oxagen/workspace.toml` on the steering repository's production branch lists the repository, the handler opens a steering PR that removes the entry. It answers `status: proposed`. The head goes away when that PR merges and the steering sync reads the new `workspace.toml`. Until then the repository stays linked.
+- When `.oxagen/workspace.toml` on the steering repository's production branch lists the repository, the handler opens a steering PR that removes the entry. It answers `status: proposed`. The head goes away when that PR merges and the steering sync reads the new `workspace.toml`. Until then the repository stays linked. The PR carries a `workspace` proposal ([ADR-265](../adr/ADR-265-every-steering-pr-oxagen-opens-carries-a-proposal-row.md), #5122), so a person merges it from Oxagen with [`merge_context_pr`](context.pr.merge.md).
 - When `workspace.toml` does not list it, the link predates the steering record, and no edit to the file would remove it. The handler deletes the head at once under the workspace's repository lock and answers `status: unlinked`.
 
 Either way, every binding version stays: `ingestion.repository_bindings` is immutable evidence that runs admitted against it still cite. Linking the repository again writes a successor version, not a second version 1.

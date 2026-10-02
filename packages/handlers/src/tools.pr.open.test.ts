@@ -35,9 +35,11 @@ import {
   createToolsPullRequestOpener,
   toolsPullRequestRefusal,
   type ToolsPullRequestArgs,
+  type ToolsPullRequestDeps,
   type ToolsPullRequestHost,
   type ToolsPullRequestOpener,
 } from "./tools.pr.open";
+import { MemoryStore as ProposalStore } from "./context.steering.test-support";
 
 const SCOPE = {
   orgId: "0192d4a8-7c1e-7a00-8000-00000000ac3e",
@@ -172,7 +174,10 @@ function fakeHost(options: FakeHostOptions = {}) {
   return { host, calls, branches };
 }
 
-function opener(host: ToolsPullRequestHost): ToolsPullRequestOpener {
+function opener(
+  host: ToolsPullRequestHost,
+  proposals: ToolsPullRequestDeps["proposals"] = new ProposalStore(),
+): ToolsPullRequestOpener {
   return createToolsPullRequestOpener({
     host: () => host,
     readIndex: async () => null,
@@ -183,6 +188,7 @@ function opener(host: ToolsPullRequestHost): ToolsPullRequestOpener {
       groups: [],
       credentials: [],
     }),
+    proposals,
     now: () => NOW,
   });
 }
@@ -819,6 +825,11 @@ describe("createSteeringPrOpener", () => {
       body: "Moves one server.",
       commitMessage: "Move billing to a server folder",
       files: [{ path: "tools/servers/billing/server.toml", content: "x\n" }],
+      // The PR's proposal row names the person the writer opened it for (#5122).
+      author: {
+        userId: "0192d4a8-7c1e-7a00-8000-00000000ac40",
+        source: "user:0192d4a8-7c1e-7a00-8000-00000000ac40",
+      },
     });
   });
 
@@ -832,6 +843,89 @@ describe("createSteeringPrOpener", () => {
       GITLAB_REPO,
       GOVERNANCE_TOML_PATH,
       "production",
+    );
+  });
+});
+
+describe("the proposal row a tools PR carries (#5122)", () => {
+  it("writes a tools proposal on the branch once the check is reported", async () => {
+    const { host } = fakeHost();
+    const store = new ProposalStore();
+    await opener(host, store).open(
+      SCOPE,
+      args({ author: { userId: null, source: "mcp-studio-sync" } }),
+    );
+
+    expect(store.proposals).toHaveLength(1);
+    expect(store.proposals[0]).toMatchObject({
+      orgId: SCOPE.orgId,
+      workspaceId: SCOPE.workspaceId,
+      kind: "tools",
+      lineageId: "tools/billing",
+      status: "checks_passed",
+      provider: "github",
+      repository: GITHUB_REPO.fullName,
+      baseRef: "main",
+      branch: "tools/billing",
+      path: "tools/servers/billing",
+      prNumber: 17,
+      prUrl: "https://example.test/acme/steering/pull/17",
+      headSha: NEW_SHA,
+      statement: "Import the billing server",
+      source: "mcp-studio-sync",
+      createdById: null,
+      checks: [],
+    });
+  });
+
+  it("names Oxagen as the author when the caller names none", async () => {
+    const { host } = fakeHost();
+    const store = new ProposalStore();
+    await opener(host, store).open(SCOPE, args());
+    expect(store.proposals[0]).toMatchObject({ source: "oxagen", createdById: null });
+  });
+
+  it("records a check that found an error as checks_failed", async () => {
+    mocks.checkSteeringChange.mockResolvedValueOnce({
+      passed: false,
+      results: [],
+      findings: [finding()],
+    } satisfies CheckReport);
+    const { host } = fakeHost();
+    const store = new ProposalStore();
+    await opener(host, store).open(SCOPE, args());
+    expect(store.proposals[0]?.status).toBe("checks_failed");
+  });
+
+  it("moves the row to the commit added to an open PR", async () => {
+    const store = new ProposalStore();
+    const first = fakeHost();
+    await opener(first.host, store).open(SCOPE, args());
+    const { host } = fakeHost({
+      branches: { main: PRODUCTION_HEAD, "tools/billing": BRANCH_HEAD },
+      openPr: { number: 17, htmlUrl: "https://example.test/acme/steering/pull/17", body: "" },
+    });
+    const later = "5555555555555555555555555555555555555555";
+    vi.mocked(host.commitFiles).mockResolvedValueOnce({ sha: later });
+
+    await opener(host, store).open(SCOPE, args({ existing: { number: 17 } }));
+
+    expect(store.proposals).toHaveLength(1);
+    expect(store.proposals[0]).toMatchObject({ prNumber: 17, headSha: later });
+  });
+
+  it("answers the open PR and logs when the row cannot be written", async () => {
+    const { host } = fakeHost();
+    const store = new ProposalStore();
+    vi.spyOn(store, "insertProposal").mockRejectedValueOnce(new Error("the database is down"));
+
+    const result = await opener(host, store).open(SCOPE, args());
+
+    expect(result.number).toBe(17);
+    expect(store.proposals).toHaveLength(0);
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: "tools" }),
+      expect.stringContaining("proposal row was not written"),
     );
   });
 });

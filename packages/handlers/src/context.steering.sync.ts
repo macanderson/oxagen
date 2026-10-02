@@ -28,8 +28,9 @@
 //   6. The Context PRs: a merged one points at its published record, a closed
 //      one is rejected, and one whose head moved has its checks reset. A
 //      proposal a merge from Oxagen has claimed is left to that merge. A
-//      merged governance PR publishes no record, so its row reads merged with
-//      its merge commit and nothing else (#4795).
+//      merged governance or steering PR publishes no single record, so its
+//      row reads merged with its merge commit and nothing else (#4795,
+//      #5122).
 //   7. The sync state, and a check on the head commit naming every problem.
 //      Then the governance change, when the head moved: a governance mode in
 //      steering/governance.toml that differs from the last synced head's, on
@@ -48,7 +49,10 @@
 //      branch, and the next sync tries again.
 import { emitSecurityEvent } from "@oxagen/database/security";
 import { HandlerError } from "@oxagen/oxagen";
-import type { GovernanceMode } from "@oxagen/oxagen/contracts/context.steering.shared";
+import {
+  isRecordKind,
+  type GovernanceMode,
+} from "@oxagen/oxagen/contracts/context.steering.shared";
 import {
   type FileIssue,
   readTomlFile,
@@ -86,11 +90,11 @@ import {
   type SyncStore,
 } from "./context.steering.sync.store";
 import {
+  checksAfterMove,
   closedOnHostReason,
   hostName,
   OPEN_PR,
-  pendingChecks,
-  STALE_FROM,
+  resetsOnMove,
 } from "./context.steering.pr-state";
 import { logger } from "./logger";
 import {
@@ -637,22 +641,23 @@ export async function syncWorkspaceSteering(
         pr.headSha !== null &&
         row.headSha !== null &&
         pr.headSha !== row.headSha &&
-        (STALE_FROM as readonly string[]).includes(row.status)
+        resetsOnMove(row)
       ) {
         // The branch moved on the host after the checks ran. The checks no
         // longer describe what would merge, so they go back to pending and
-        // the page asks for a new run.
+        // the page asks for a new run. Only a record proposal runs the six
+        // record checks. A governance or steering PR proposal runs the
+        // steering checks: setting the mode again, or the merge, runs them
+        // (#4795, #5122).
         try {
           await deps.steering.updateProposal(
             row.id,
             {
               status: "pr_open",
               headSha: pr.headSha,
-              // A governance proposal runs the steering checks, not the six
-              // record checks. Setting the mode again runs them (#4795).
-              checks: row.kind === "governance" ? [] : pendingChecks(),
+              checks: checksAfterMove(row.kind),
             },
-            [row.status as (typeof STALE_FROM)[number]],
+            [row.status],
             { headSha: row.headSha, noClaimSince },
           );
           outcome.proposals.stale += 1;
@@ -663,11 +668,11 @@ export async function syncWorkspaceSteering(
       }
     }
     for (const { row, pr } of merged) {
-      // A governance PR publishes no record, so there is none to link. The
-      // row reads merged with its commit, and no approver, because nobody
-      // approved it in Oxagen (#4795).
-      if (row.kind === "governance") {
-        const linked = await deps.store.linkMergedGovernance(scope, row.id, {
+      // A governance or steering PR publishes no single record, so there is
+      // none to link. The row reads merged with its commit, and no approver,
+      // because nobody approved it in Oxagen (#4795, #5122).
+      if (!isRecordKind(row.kind)) {
+        const linked = await deps.store.linkMergedWithoutRecord(scope, row.id, {
           mergedCommit: pr.mergeCommitSha ?? head,
           mergedAt: pr.mergedAt ?? now,
           noClaimSince,

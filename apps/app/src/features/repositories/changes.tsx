@@ -182,7 +182,10 @@ function ChangeTable({
     {
       key: "kind",
       label: t("filters.kind"),
-      options: [{ value: "context_record", label: t("kinds.context_record") }],
+      options: [
+        { value: "context_record", label: t("kinds.context_record") },
+        { value: "steering_pr", label: t("kinds.steering_pr") },
+      ],
       get: (row) => row.kind,
     },
     {

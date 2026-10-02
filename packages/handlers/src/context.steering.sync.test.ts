@@ -45,6 +45,7 @@ import {
   syncWorkspaceSteering,
   type SyncDeps,
 } from "./context.steering.sync";
+import { recordSteeringPrQuietly } from "./steering-repo/pr-proposal";
 import { steeringSyncPublish } from "./steering-repo/publisher";
 import type { SyncFinding } from "./context.steering.sync.plan";
 import {
@@ -1341,5 +1342,83 @@ describe("workspace.toml repositories (ADR-212)", () => {
     expect(publish).toHaveBeenCalledTimes(2);
     expect(seen).toEqual([1, 1]);
     expect(r.reconcileLinks).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("steering PR proposals on the host (#5122)", () => {
+  /** A steering PR with one file on `branch`, open on the host, with its row. */
+  async function openedSteeringPr(
+    r: Rig,
+    kind: "tools" | "memory_pr",
+    branch: string,
+    path: string,
+  ) {
+    await r.h.github.ensureBranch(REPO, branch, REPO.defaultBranch);
+    const head = r.h.github.commit(branch, path, "a steering file\n");
+    const pr = await r.h.github.openPullRequest(REPO, {
+      title: `Change ${path}`,
+      head: branch,
+      base: REPO.defaultBranch,
+      body: "",
+    });
+    const row = await recordSteeringPrQuietly(r.h.store, {
+      scope: SCOPE,
+      repo: REPO,
+      kind,
+      pullRequest: { number: pr.number, url: pr.htmlUrl, branch, headSha: head },
+      title: `Change ${path}`,
+      paths: [path],
+      check: null,
+      author: { userId: null, source: "memory-curator" },
+    });
+    if (!row) throw new Error("the row was not written");
+    return { pr, row, head };
+  }
+
+  it("reads a steering PR merged on the host as merged, with its commit and no record", async () => {
+    const r = rig();
+    const { pr, row } = await openedSteeringPr(
+      r,
+      "tools",
+      "tools/billing",
+      "tools/servers/billing/tools.toml",
+    );
+    const mergeSha = r.h.github.mergeOnHost(pr.number);
+
+    const out = await r.run();
+
+    expect(out.proposals.merged).toBe(1);
+    expect(r.h.store.proposals.find((p) => p.id === row.id)).toMatchObject({
+      status: "merged",
+      mergedCommit: mergeSha,
+      mergedByUserId: null,
+      publishedRecordId: null,
+      promotionEventId: null,
+    });
+    expect(r.h.github.deletedBranches).toContain("tools/billing");
+  });
+
+  it("moves a memory PR's row at pr_open to the head someone pushed", async () => {
+    const r = rig();
+    const { row } = await openedSteeringPr(
+      r,
+      "memory_pr",
+      "memory/2026-09-27",
+      "steering/memory/workspace/general/ci-cache-key.md",
+    );
+    const pushed = r.h.github.commit(
+      "memory/2026-09-27",
+      "steering/memory/workspace/general/ci-cache-key.md",
+      "edited on the host\n",
+    );
+
+    const out = await r.run();
+
+    expect(out.proposals.stale).toBe(1);
+    expect(r.h.store.proposals.find((p) => p.id === row.id)).toMatchObject({
+      status: "pr_open",
+      headSha: pushed,
+      checks: [],
+    });
   });
 });

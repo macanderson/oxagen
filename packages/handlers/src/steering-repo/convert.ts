@@ -1111,6 +1111,8 @@ export function importPullRequestBody(
     `- ${batches === 1 ? "one import batch" : `${batches} import batches`} of at most ${STEERING_PR_MAX_FILES} files each, on \`${IMPORT_BRANCH}\`${batches > 1 ? ` through \`${importBranch(batches)}\`` : ""}, for records, skills, and \`${GOVERNANCE_TOML_PATH}\`;`,
     `- \`${IMPORT_WORKSPACE_BRANCH}\` for \`${WORKSPACE_TOML_PATH}\`;`,
     "- one `agents/` PR for each agent Oxagen can write.",
+    "",
+    "Merge each of them from Oxagen, on the workspace's Steering page, in the order above. Oxagen lands each one through its merge queue with the stamp and the ledger line. A merge on GitHub leaves the steering repo diverged.",
   ];
   if (isImportBranch(branch.branch)) {
     if (branch.records.length > 0) {

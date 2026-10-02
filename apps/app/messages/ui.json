@@ -15,7 +15,14 @@
         "fact": "fact",
         "memory": "memory",
         "preference": "preference",
-        "governance": "governance"
+        "governance": "governance",
+        "revert": "revert",
+        "tools": "tools",
+        "import": "import",
+        "memory_pr": "memory PR",
+        "agent_file": "agent file",
+        "agent_proposal": "agent proposal",
+        "workspace": "workspace settings"
       },
       "unclassified": "unclassified",
       "force": "force {force}",

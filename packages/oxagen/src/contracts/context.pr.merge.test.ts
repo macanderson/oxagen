@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { contextPrMerge, type ContextPrMergeOutput } from "./context.pr.merge";
 
-/** The record arm of the output, or a failure naming the other arm. */
+/** The record arm of the output, or a failure naming the other arms. */
 function recordArm(out: ContextPrMergeOutput) {
-  if (out.kind === "governance") throw new Error("expected a record merge");
+  if (!("record" in out)) throw new Error("expected a record merge");
   return out;
 }
 
@@ -121,6 +121,55 @@ describe("merge_context_pr contract", () => {
         bundleVersion: { before: 0, after: 1 },
         publishedVersion: null,
       }).success,
+    ).toBe(false);
+  });
+
+  it("answers a steering PR merge with the pull request and the records it retired (#5122)", () => {
+    for (const kind of [
+      "revert",
+      "tools",
+      "import",
+      "memory_pr",
+      "agent_file",
+      "agent_proposal",
+      "workspace",
+    ] as const) {
+      const out = contextPrMerge.output.parse({
+        proposalId: "prp_7",
+        status: "merged",
+        kind,
+        pullRequest: { number: 520, branch: "steering/revert-519" },
+        retired: kind === "revert" ? ["ctx.release.no-reread-changelog"] : [],
+        mergedCommit: "d4e5f6",
+        bundleVersion: { before: 3, after: kind === "revert" ? 4 : 3 },
+        publishedVersion: 12,
+      });
+      expect(out).toMatchObject({ kind, pullRequest: { number: 520 } });
+      expect(out).not.toHaveProperty("record");
+    }
+  });
+
+  it("refuses a steering PR merge that carries a record or names no pull request", () => {
+    const base = {
+      proposalId: "prp_8",
+      status: "merged",
+      kind: "tools",
+      pullRequest: { number: 7, branch: "tools/billing" },
+      retired: [],
+      mergedCommit: "e5",
+      bundleVersion: { before: 0, after: 0 },
+      publishedVersion: 2,
+    };
+    expect(contextPrMerge.output.safeParse(base).success).toBe(true);
+    expect(
+      contextPrMerge.output.safeParse({
+        ...base,
+        record: { id: "ctr_8", lineageId: "l", version: 1, path: "p" },
+      }).success,
+    ).toBe(false);
+    expect(
+      contextPrMerge.output.safeParse({ ...base, pullRequest: undefined })
+        .success,
     ).toBe(false);
   });
 });
