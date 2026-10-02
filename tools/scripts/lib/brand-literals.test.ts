@@ -4,13 +4,16 @@
 import { describe, expect, it } from "vitest";
 import {
   GUARDED,
+  GUARDED_MARKUP,
   KEEP,
   declarations,
   groupOf,
   isLiteral,
   layers,
   literalDrift,
+  markupDrift,
   stripComments,
+  stripMarkupComments,
   suggestion,
   tokenSizes,
   withoutVars,
@@ -105,11 +108,22 @@ describe("the property groups", () => {
     ["--ui-shadow", "box-shadow"],
     ["--shadow-pop", "box-shadow"],
     ["--page-wrap", "width"],
+    ["--text-sm", "font-size"],
+    ["--text-2xl", "font-size"],
   ])("reads %s as %s", (prop, group) => {
     expect(groupOf(prop)).toBe(group);
   });
 
-  it.each(["color", "font-family", "font-weight", "line-height", "--side-w", "--rule", "--tex-hex"])(
+  it.each([
+    "color",
+    "font-family",
+    "font-weight",
+    "line-height",
+    "--side-w",
+    "--rule",
+    "--tex-hex",
+    "--text-sm--line-height",
+  ])(
     "leaves %s alone",
     (prop) => {
       expect(groupOf(prop)).toBeNull();
@@ -317,6 +331,71 @@ describe("the guard", () => {
         expect(entry.why.length, `${path} ${entry.prop}`).toBeGreaterThan(10);
         expect(entry.values.length).toBeGreaterThan(0);
       }
+    }
+  });
+});
+
+describe("the docs markup", () => {
+  const guarded = [{ path: "page.tsx", scale: "a" as const }];
+  const drift = (src: string) =>
+    markupDrift(new Map([["page.tsx", src]]), { tokens: TOKENS, guarded });
+
+  it("lists a fixed Tailwind size with the nearest class on the file's scale", () => {
+    const src = [
+      'export const a = "flex text-sm font-medium";',
+      'export const b = "md:text-xl text-xs";',
+    ].join("\n");
+    expect(drift(src)).toEqual([
+      { path: "page.tsx", line: 1, prop: "class", value: "text-sm", use: "text-a-body (14px)" },
+      { path: "page.tsx", line: 2, prop: "class", value: "text-xl", use: "text-a-h3 (20px)" },
+      { path: "page.tsx", line: 2, prop: "class", value: "text-xs", use: "text-a-micro (12px)" },
+    ]);
+  });
+
+  it("lists a class on the other scale", () => {
+    expect(drift('const a = "text-m-body";').map((h) => h.use)).toEqual([
+      "text-a-body, on this surface's own scale",
+    ]);
+  });
+
+  it("passes the kit's classes, a token, and a colour", () => {
+    expect(
+      drift('const a = "text-a-body text-fd-muted-foreground text-[var(--ox-a-body)] text-[color:var(--x)]";'),
+    ).toEqual([]);
+  });
+
+  it("lists a length in square brackets and passes what a stylesheet may keep", () => {
+    const src =
+      `const a = "text-[13.5px] rounded-[8px] rounded-tl-[0.5rem] shadow-[0_1px_2px_red] text-[0.9em] rounded-[999px] shadow-[0_0_0_1px_red]";`;
+    expect(drift(src).map((h) => [h.value, h.use])).toEqual([
+      ["text-[13.5px]", "var(--ox-a-body) (14px)"],
+      ["rounded-[8px]", "var(--ox-radius-lg) (7.2px)"],
+      ["rounded-tl-[0.5rem]", "var(--ox-radius-lg) (7.2px)"],
+      ["shadow-[0_1px_2px_red]", expect.stringContaining("var(--ox-shadow-pop)")],
+    ]);
+  });
+
+  it("reads no class out of a comment, and keeps the line count", () => {
+    const src = '// text-sm\n/* text-lg\n rounded-[8px] */\nconst url = "https://x.dev"; const a = "text-xs";';
+    expect(stripMarkupComments(src).split("\n")).toHaveLength(4);
+    expect(drift(src)).toEqual([
+      { path: "page.tsx", line: 4, prop: "class", value: "text-xs", use: "text-a-micro (12px)" },
+    ]);
+  });
+
+  it("skips a file it was not given, and needs no kit to run", () => {
+    expect(markupDrift(new Map<string, string | null>([["page.tsx", null]]), { guarded })).toEqual(
+      [],
+    );
+    const hits = markupDrift(new Map([["page.tsx", 'const a = "text-sm";']]), { guarded });
+    expect(hits[0]?.use).toBe("a text-a-* class");
+  });
+
+  it("guards the docs chrome on the app scale", () => {
+    expect(GUARDED_MARKUP.length).toBeGreaterThan(0);
+    for (const { path, scale } of GUARDED_MARKUP) {
+      expect(path.startsWith("apps/docs/"), path).toBe(true);
+      expect(scale).toBe("a");
     }
   });
 });

@@ -8,7 +8,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { GUARDED, literalDrift } from "./lib/brand-literals.mjs";
+import { GUARDED, GUARDED_MARKUP, literalDrift, markupDrift } from "./lib/brand-literals.mjs";
 import { desktopIconDrift } from "./sync-brand-assets.mjs";
 
 const REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));
@@ -55,5 +55,26 @@ describe("the guarded stylesheets", () => {
       "utf8",
     );
     expect(literalDrift(files, { tokens })).toEqual({ hits: [], stale: [] });
+  });
+});
+
+// The docs chrome sizes its text with the kit's text-a-* classes and takes
+// its corners and shadows from named classes the kit maps.
+describe("the guarded docs markup", () => {
+  it("is all in the tree, so a rename cannot drop a file from the guard", () => {
+    const missing = GUARDED_MARKUP.map((g) => g.path).filter(
+      (path) => !existsSync(join(REPO_ROOT, path)),
+    );
+    expect(missing).toEqual([]);
+  });
+
+  it("writes no fixed Tailwind size and no length in square brackets", () => {
+    const files = new Map(
+      GUARDED_MARKUP.map(({ path }): [string, string] => [
+        path,
+        readFileSync(join(REPO_ROOT, path), "utf8"),
+      ]),
+    );
+    expect(markupDrift(files)).toEqual([]);
   });
 });
