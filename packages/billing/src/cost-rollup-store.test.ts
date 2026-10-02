@@ -6,6 +6,7 @@
  * Postgres in packages/handlers/src/lib/proof.pg.test.ts.
  */
 import { schema } from "@oxagen/database";
+import { IN_APP_AGENT_SURFACES } from "@oxagen/oxagen/contracts/run.shared";
 import { PgDialect } from "drizzle-orm/pg-core";
 import { describe, expect, it, vi } from "vitest";
 import {
@@ -16,6 +17,7 @@ import {
 } from "./cost-rollup";
 import { PriceBookSliceLimitError } from "./price-book";
 import {
+  inAppRunTotal,
   ledgerToolStatus,
   modelCallHidesTurn,
   rebuildRunTotals,
@@ -506,6 +508,27 @@ describe("what a ledger run's events are read for (#3372)", () => {
     expect(
       render(modelCallHidesTurn(schema.agentRunEvents.payloadInline)),
     ).toBe(`(${PAYLOAD} is null or ${PAYLOAD}->>'turn_index' is null)`);
+  });
+});
+
+// ADR-235, 2026-10-02 amendment. The run rows of the in-app assistant stay
+// in every total and out of every read that names a run. Every such read
+// takes this one predicate. `findings-store.pg.test.ts` proves the rows.
+describe("which run rows are the in-app assistant's", () => {
+  it("reads the row's run in the row's workspace on an in-app surface", () => {
+    const { sql, params } = new PgDialect().sqlToQuery(inAppRunTotal());
+    expect(sql).toMatch(
+      /^exists \(select 1 from "agent"\."agent_runs" as "in_app_run" where "in_app_run"\."public_id" = (?:"cost"\.)?"run_totals"\."run_id"::citext/,
+    );
+    expect(sql).toMatch(
+      /"in_app_run"\."org_id" = (?:"cost"\.)?"run_totals"\."org_id"/,
+    );
+    expect(sql).toMatch(
+      /"in_app_run"\."workspace_id" = (?:"cost"\.)?"run_totals"\."workspace_id"/,
+    );
+    expect(sql).toMatch(/"in_app_run"\."surface" in \(\$\d+, \$\d+\)\)$/);
+    // The surfaces come from the one constant the run lists also read.
+    expect(params).toEqual([...IN_APP_AGENT_SURFACES]);
   });
 });
 

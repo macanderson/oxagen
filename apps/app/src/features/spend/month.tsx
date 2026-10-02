@@ -18,6 +18,7 @@ import {
 } from "@/data/contracts/money";
 import {
   type AgentPerMergedPr,
+  ASSISTANT_SPEND_KEY,
   OTHER_SPEND_KEY,
   type SpendBudgets,
   type SpendPerMergedPr,
@@ -275,6 +276,18 @@ function GroupLabel({
       <span className="flex min-w-0 flex-col">
         <span className="font-semibold">{t("other.label")}</span>
         <span className="text-xs text-muted-foreground">{t("other.note")}</span>
+      </span>
+    );
+  }
+  // The in-app assistant's spend: Oxagen runs it and the workspace does not
+  // monitor it, so its row links to no drill and lists no runs (ADR-235).
+  if (row.key === ASSISTANT_SPEND_KEY) {
+    return (
+      <span className="flex min-w-0 flex-col">
+        <span className="font-semibold">{t("assistant.label")}</span>
+        <span className="text-xs text-muted-foreground">
+          {t("assistant.note")}
+        </span>
       </span>
     );
   }
@@ -603,9 +616,11 @@ export function MonthSection({
   const total = report.total.cost;
   // The caret's label names the group: an operator by name, any other by key.
   const nameOf = (row: Row) =>
-    by === "operator" && row.key !== OTHER_SPEND_KEY
-      ? (row.operator?.name ?? t("unnamedOperator"))
-      : row.key;
+    row.key === ASSISTANT_SPEND_KEY
+      ? t("assistant.label")
+      : by === "operator" && row.key !== OTHER_SPEND_KEY
+        ? (row.operator?.name ?? t("unnamedOperator"))
+        : row.key;
   const largest = maxMoney(
     report.rows.flatMap((row) =>
       row.key === OTHER_SPEND_KEY || row.cost === null ? [] : [row.cost],
@@ -618,12 +633,14 @@ export function MonthSection({
   // The rest of the spend on the MCP server grouping, and the ungrouped
   // remainder, draw no bar and count no runs: neither is one group.
   const rows: MonthTableRow[] = report.rows.map((row) => {
+    // The in-app assistant's row, like Other spend, is no group the
+    // workspace manages: it opens no runs and no per-PR figure (ADR-235).
+    const ownGroup =
+      row.key !== OTHER_SPEND_KEY && row.key !== ASSISTANT_SPEND_KEY;
     const agent =
-      merged === null || row.key === OTHER_SPEND_KEY
-        ? null
-        : (merged.get(row.key) ?? null);
+      merged === null || !ownGroup ? null : (merged.get(row.key) ?? null);
     const costliest =
-      row.key === OTHER_SPEND_KEY || (row.topRuns ?? []).length === 0 ? null : (
+      !ownGroup || (row.topRuns ?? []).length === 0 ? null : (
         <RunList row={row} at={at} harnesses={harnesses} />
       );
     const behind =
@@ -650,7 +667,7 @@ export function MonthSection({
             {behind}
           </div>
         ),
-      ...(merged === null || row.key === OTHER_SPEND_KEY
+      ...(merged === null || !ownGroup
         ? {}
         : {
             extra: {

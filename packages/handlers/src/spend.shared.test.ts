@@ -1,4 +1,5 @@
 import { schema } from "@oxagen/database";
+import { IN_APP_AGENT_SURFACES } from "@oxagen/oxagen/contracts/run.shared";
 import { drizzle } from "drizzle-orm/postgres-js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -36,6 +37,50 @@ function captureQuery(rows: unknown[] = []) {
   return captured;
 }
 
+/** A `cost.run_totals` row as Postgres answers it, with no frame priced. */
+function storedRow(runId: string) {
+  return {
+    id: "0192d4a8-7c1e-7a00-8000-0000000000d1",
+    orgId: SCOPE.orgId,
+    workspaceId: SCOPE.workspaceId,
+    runId,
+    runSource: runId.startsWith("tse_") ? "tacho" : "ledger",
+    operatorPrincipalId: null,
+    operatorKey: null,
+    agentPrincipalId: null,
+    agentKey: null,
+    taskRef: null,
+    costCenter: null,
+    startedAt: new Date("2026-09-01T10:00:00.000Z"),
+    sealedAt: null,
+    turns: null,
+    steps: 1,
+    modelCalls: 1,
+    toolCalls: 0,
+    tokens: {},
+    costMicros: null,
+    currency: "USD",
+    costBasis: null,
+    priceEntryIds: [],
+    cacheHitRate: null,
+    toolDefinitionTokens: null,
+    contextFrameTokens: null,
+    steeringTokens: null,
+    retries: null,
+    verdict: null,
+    accepted: null,
+    productiveRatio: null,
+    advancedSteps: null,
+    unproductiveSteps: null,
+    enforcementTier: null,
+    replayGrade: null,
+    governedActions: null,
+    billedAt: null,
+    breakdown: { models: [], tools: [], steps: null },
+    rolledUpAt: new Date("2026-09-01T11:00:00.000Z"),
+  };
+}
+
 describe("readRunTotals", () => {
   beforeEach(() => {
     mocks.withTenantDb.mockReset();
@@ -53,12 +98,66 @@ describe("readRunTotals", () => {
     expect(q!.sql).toMatch(/"run_totals"\."workspace_id" = \$\d+/);
     expect(q!.sql).toMatch(/"run_totals"\."started_at" >= \$\d+/);
     expect(q!.sql).toMatch(/"run_totals"\."started_at" < \$\d+/);
-    // The timestamp column's driver encoding is the ISO string.
+    // The in-app surfaces come first, bound by the `inApp` column in the
+    // select list. The timestamp column's driver encoding is the ISO string.
     expect(q!.params).toEqual([
+      ...IN_APP_AGENT_SURFACES,
       SCOPE.orgId,
       SCOPE.workspaceId,
       "2026-09-01T00:00:00.000Z",
       "2026-09-03T00:00:00.000Z",
+    ]);
+  });
+
+  // ADR-235, 2026-10-02 amendment. Every total counts the in-app assistant's
+  // runs, and no list names one. The read keeps every row and marks the
+  // assistant's. `spend.shared.pg.test.ts` proves the rows against Postgres.
+  it("marks each row whose run is the in-app assistant's and filters out none", async () => {
+    const captured = captureQuery();
+    await readRunTotals(SCOPE, {
+      from: "2026-09-01",
+      to: "2026-09-01",
+      filter: { kind: "all" },
+    });
+    // The subquery sits in the select list, so the outer FROM and WHERE are
+    // the last ones in the statement.
+    const { sql } = captured[0]!;
+    const select = sql.slice(0, sql.lastIndexOf(" from "));
+    const where = sql.slice(sql.lastIndexOf(" where "));
+    expect(select).toContain(
+      'exists (select 1 from "agent"."agent_runs" as "in_app_run" where "in_app_run"."public_id" = ',
+    );
+    // The row's id is cast to citext, so the unique index on the run's
+    // public id serves the lookup.
+    expect(select).toMatch(
+      /"in_app_run"\."public_id" = (?:"cost"\.)?"run_totals"\."run_id"::citext/,
+    );
+    expect(select).toMatch(
+      /"in_app_run"\."org_id" = (?:"cost"\.)?"run_totals"\."org_id"/,
+    );
+    expect(select).toMatch(
+      /"in_app_run"\."workspace_id" = (?:"cost"\.)?"run_totals"\."workspace_id"/,
+    );
+    expect(select).toMatch(/"in_app_run"\."surface" in \(\$\d+, \$\d+\)/);
+    // No row is filtered on its surface.
+    expect(where).not.toContain("agent_runs");
+  });
+
+  it("answers inApp from the column, true only when Postgres said true", async () => {
+    captureQuery([
+      { ...storedRow("arun_assistant"), inApp: true },
+      { ...storedRow("arun_external"), inApp: false },
+      { ...storedRow("tse_session"), inApp: null },
+    ]);
+    const rows = await readRunTotals(SCOPE, {
+      from: "2026-09-01",
+      to: "2026-09-01",
+      filter: { kind: "all" },
+    });
+    expect(rows.map((r) => [r.runId, r.inApp])).toEqual([
+      ["arun_assistant", true],
+      ["arun_external", false],
+      ["tse_session", false],
     ]);
   });
 
@@ -70,7 +169,8 @@ describe("readRunTotals", () => {
       filter: { kind: "operator", key: OPERATOR },
     });
     const [q] = captured;
-    const where = q!.sql.slice(q!.sql.indexOf(" where "));
+    // The last WHERE is the outer one. The `inApp` subquery has its own.
+    const where = q!.sql.slice(q!.sql.lastIndexOf(" where "));
     expect(where).toMatch(/"run_totals"\."operator_key" = \$\d+/);
     expect(where).not.toContain("operator_principal_id");
     expect(q!.params).toContain(OPERATOR);

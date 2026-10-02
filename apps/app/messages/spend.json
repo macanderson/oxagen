@@ -739,6 +739,10 @@
         "label": "Other spend",
         "note": "Spend outside MCP server calls"
       },
+      "assistant": {
+        "label": "Oxagen assistant",
+        "note": "Spend on the assistant Oxagen runs"
+      },
       "moreRuns": "{count, plural, one {# more run} other {# more runs}}",
       "showRuns": "Costliest runs of {name}",
       "reported": "The harness reported {amount} of this total. The gateway metered or estimated the rest.",

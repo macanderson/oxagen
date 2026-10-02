@@ -9804,6 +9804,10 @@ type Messages = {
         label: string;
         note: string;
       };
+      assistant: {
+        label: string;
+        note: string;
+      };
       moreRuns: string;
       showRuns: string;
       reported: string;

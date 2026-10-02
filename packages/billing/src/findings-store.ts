@@ -38,7 +38,7 @@ import {
   type ModelCallFrame,
   type RunTotalsRecord,
 } from "./cost-rollup";
-import { runTotalsRowToRecord } from "./cost-rollup-store";
+import { inAppRunTotal, runTotalsRowToRecord } from "./cost-rollup-store";
 import {
   type ClaimRow,
   countClaims,
@@ -753,10 +753,17 @@ export function undecidedDrafts(
   });
 }
 
+/**
+ * The workspace's run rows that started in the window. The in-app assistant's
+ * runs are left out (ADR-235, 2026-10-02 amendment): a finding names its runs
+ * as evidence, and the workspace does not monitor the assistant.
+ */
 async function readRuns(
   scope: FindingsScope,
   window: { start: Date; end: Date },
 ): Promise<RunTotalsRecord[]> {
+  // tenancy: the scheduled findings job runs outside a tenant scope, and the
+  // query is filtered by the scope's orgId and workspaceId.
   const rows = await withSystemDb((tx) =>
     tx
       .select()
@@ -767,6 +774,7 @@ async function readRuns(
           eq(totals.workspaceId, scope.workspaceId),
           gte(totals.startedAt, window.start),
           lt(totals.startedAt, window.end),
+          sql`not ${inAppRunTotal()}`,
         ),
       ),
   );

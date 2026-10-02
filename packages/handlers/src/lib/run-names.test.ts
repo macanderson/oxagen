@@ -1,4 +1,5 @@
 import { schema } from "@oxagen/database";
+import { IN_APP_AGENT_SURFACES } from "@oxagen/oxagen/contracts/run.shared";
 import { drizzle } from "drizzle-orm/postgres-js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -19,8 +20,20 @@ const SCOPE = {
 const TSE = "tse_0000000000000000000001";
 const TSE_BARE = "tse_0000000000000000000002";
 const ARUN = "arun_000000000000000000001";
+const ASSISTANT_RUN = "arun_000000000000000000002";
 
 type Rows = { settings: unknown; sessions: unknown[]; runs: unknown[] };
+
+/**
+ * The ledger rows Postgres would answer. When the read leaves surfaces out, a
+ * row that carries one of them is dropped. A row with no surface is kept.
+ */
+function ledgerRows(q: { sql: string; params: unknown[] }, runs: unknown[]) {
+  if (!/"surface" not in/.test(q.sql)) return runs;
+  return runs.filter(
+    (r) => !q.params.includes((r as { surface?: string }).surface),
+  );
+}
 
 /**
  * Hands each read a mock database, keeps the query it built, and answers it
@@ -35,7 +48,8 @@ function answer(rows: Rows) {
     captured.push(q);
     if (q.sql.includes('"workspaces"'))
       return Promise.resolve([{ settings: rows.settings }]);
-    if (q.sql.includes('"agent_runs"')) return Promise.resolve(rows.runs);
+    if (q.sql.includes('"agent_runs"'))
+      return Promise.resolve(ledgerRows(q, rows.runs));
     return Promise.resolve(rows.sessions);
   });
   return captured;
@@ -114,6 +128,38 @@ describe("readRunNames", () => {
     expect(session!.params).toContain(TSE);
     expect(session!.params).not.toContain(ARUN);
     expect(ledger!.params).toContain(ARUN);
+  });
+
+  // ADR-235, 2026-10-02 amendment. An in-app assistant run's name may
+  // summarize the person's question, and the workspace does not monitor the
+  // assistant, so the ledger read leaves the in-app surfaces out.
+  it("names no in-app assistant run and still names a run on another surface", async () => {
+    const captured = answer({
+      settings: {},
+      sessions: [],
+      runs: [
+        {
+          publicId: ARUN,
+          name: "Rotate the webhook secret",
+          surface: "external",
+        },
+        {
+          publicId: ASSISTANT_RUN,
+          name: "What did we spend on retries last week",
+          surface: "chat",
+        },
+      ],
+    });
+    const names = await readRunNames(SCOPE, [ARUN, ASSISTANT_RUN]);
+    expect(names.get(ARUN)).toBe("Rotate the webhook secret");
+    expect(names.get(ASSISTANT_RUN)).toBeNull();
+    const ledger = captured.find((q) => q.sql.includes('"agent_runs"'));
+    expect(ledger!.sql).toMatch(
+      /"agent_runs"\."surface" not in \(\$\d+, \$\d+\)/,
+    );
+    expect(ledger!.params).toEqual(
+      expect.arrayContaining([...IN_APP_AGENT_SURFACES]),
+    );
   });
 
   it("reads nothing for an empty list", async () => {

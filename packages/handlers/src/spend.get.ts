@@ -8,8 +8,15 @@
 //
 // The run rows also give the spend by day, each row's costliest runs, and
 // the `mcp_server` grouping, which the daily rollup does not store.
+//
+// The in-app assistant's spend is one row of its own, keyed
+// `ASSISTANT_SPEND_KEY`, in every grouping (ADR-235, 2026-10-02 amendment).
+// The other rows leave its share out, and the total, the days, and the
+// reported spend still count it, so the rows sum to the total. The row lists
+// no runs, because the workspace does not monitor the assistant.
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import {
+  ASSISTANT_SPEND_KEY,
   OTHER_SPEND_KEY,
   SPEND_TOP_RUNS_MAX,
   spendGet,
@@ -47,6 +54,7 @@ import {
   readRunTotals,
   readUnmeteredRuns,
   runFigure,
+  type SpendRunRecord,
   type SpendScope,
   sumFigures,
   ZERO_TOKENS,
@@ -60,7 +68,7 @@ export type SpendGetDeps = {
   readRunTotals: (
     scope: SpendScope,
     q: { from: string; to: string },
-  ) => Promise<RunTotalsRecord[]>;
+  ) => Promise<SpendRunRecord[]>;
   /** Who each operator key names; a harness that has no store leaves it out. */
   readOperatorFacts?: ReadOperatorFacts;
   /** The period's wrapped runs that recorded no usage, by harness (#3304). */
@@ -244,7 +252,7 @@ export function runShares(
   }
 }
 
-type Attributed = { run: RunTotalsRecord; share: RunShare };
+type Attributed = { run: SpendRunRecord; share: RunShare };
 
 /** Costliest first, then most calls, then newest; nothing priced sorts last. */
 function compareShares(a: Attributed, b: Attributed): number {
@@ -261,7 +269,7 @@ function compareShares(a: Attributed, b: Attributed): number {
 
 /** Every row's runs, keyed by the row's key. */
 function attribute(
-  runs: readonly RunTotalsRecord[],
+  runs: readonly SpendRunRecord[],
   groupBy: SpendGroupBy,
 ): Map<string, Attributed[]> {
   const byKey = new Map<string, Attributed[]>();
@@ -303,6 +311,127 @@ export function mcpServerRows(byKey: Map<string, Attributed[]>): SpendRow[] {
   return rest === undefined
     ? servers
     : [...servers, rowOf(OTHER_SPEND_KEY, rest)];
+}
+
+/** The period's in-app runs and every other run, apart. */
+function splitInApp(runs: readonly SpendRunRecord[]): {
+  inApp: SpendRunRecord[];
+  rest: SpendRunRecord[];
+} {
+  const inApp: SpendRunRecord[] = [];
+  const rest: SpendRunRecord[] = [];
+  for (const run of runs) (run.inApp === true ? inApp : rest).push(run);
+  return { inApp, rest };
+}
+
+/** Each token class less the other's, never below zero. */
+function subtractTokens(from: TokenCounts, less: TokenCounts): TokenCounts {
+  const out = { ...from };
+  for (const k of Object.keys(ZERO_TOKENS) as (keyof TokenCounts)[])
+    out[k] = Math.max(0, from[k] - less[k]);
+  return out;
+}
+
+/**
+ * A daily row with the in-app assistant's part taken out (ADR-235). The daily
+ * rollup folds an assistant run into every operator, agent, model, tool, task,
+ * and cost-center key it names, and the {@link ASSISTANT_SPEND_KEY} row
+ * carries that spend instead. `inApp` is the key's in-app shares, as
+ * `runShares` attributes them, and `rest` the key's other shares. Each figure
+ * is handled on its own terms:
+ *
+ * - Cost, calls, runs, and tokens lose the in-app shares. None falls below
+ *   zero.
+ * - The basis is folded again from the remaining shares, since a folded basis
+ *   cannot be unfolded. A key with no remaining priced share keeps its own.
+ * - The productive ratio loses each graded in-app run's advanced steps over
+ *   its steps, the weight the daily rollup gave it.
+ * - Proven and accepted spend stay as they are. An assistant run carries
+ *   neither, since no witness or reviewer grades it.
+ *
+ * Null when nothing is left: no run and no cost.
+ */
+function withoutInAppShares(
+  row: SpendRow,
+  days: readonly DailyTotalsRecord[],
+  inApp: readonly Attributed[],
+  rest: readonly Attributed[],
+): SpendRow | null {
+  if (inApp.length === 0) return row;
+  let micros = row.cost === null ? null : BigInt(row.cost.micros);
+  let calls = row.calls;
+  let tokens = row.tokens;
+  for (const { share } of inApp) {
+    if (micros !== null && share.micros !== null) micros -= share.micros;
+    calls -= share.calls;
+    tokens = subtractTokens(tokens, share.tokens);
+  }
+  if (micros !== null && micros < 0n) micros = 0n;
+  const runs = Math.max(0, row.runs - inApp.length);
+  const restBasis = rest
+    .flatMap(({ share }) =>
+      share.micros === null || share.basis === null ? [] : [share.basis],
+    )
+    .reduce<CostBasis | null>(foldBasis, null);
+  const left =
+    micros === null || row.cost === null
+      ? null
+      : restBasis === null && micros === 0n
+        ? null
+        : cost(micros, row.cost.currency, restBasis ?? row.cost.basis);
+  if (runs === 0 && left === null) return null;
+  // The ratio's sum and weight as `sumFigures` builds them from the days,
+  // less each graded in-app run.
+  let advanced = 0;
+  let weight = 0;
+  for (const day of days) {
+    if (day.productiveRatio === null) continue;
+    const w = day.gradedSteps ?? Math.max(1, day.runs);
+    advanced += day.productiveRatio * w;
+    weight += w;
+  }
+  for (const { run } of inApp) {
+    if (run.advancedSteps === null) continue;
+    advanced -= run.advancedSteps;
+    weight -= run.steps;
+  }
+  return {
+    ...row,
+    cost: left,
+    calls: Math.max(0, calls),
+    runs,
+    tokens,
+    productiveRatio:
+      weight <= 0 ? null : Math.min(1, Math.max(0, advanced / weight)),
+  };
+}
+
+/**
+ * The {@link ASSISTANT_SPEND_KEY} row: the in-app runs' shares in this
+ * grouping, summed. `runs` counts each run once, however many shares it has.
+ * The row lists no runs and names no operator or provider. Its proven and
+ * accepted spend and its productive ratio are null, since the workspace does
+ * not grade the assistant. Null when no in-app run has a share.
+ */
+function assistantRow(byKey: Map<string, Attributed[]>): SpendRow | null {
+  const shares = [...byKey.values()].flat();
+  if (shares.length === 0) return null;
+  const figure = sumFigures(shares.map(shareFigure));
+  return {
+    key: ASSISTANT_SPEND_KEY,
+    provider: null,
+    operator: null,
+    topRuns: [],
+    tokens: shares.reduce<TokenCounts>(
+      (sum, a) => addTokens(sum, a.share.tokens),
+      { ...ZERO_TOKENS },
+    ),
+    ...figure,
+    runs: new Set(shares.map((a) => a.run.runId)).size,
+    proven: null,
+    accepted: null,
+    productiveRatio: null,
+  };
 }
 
 /** The period's spend by day, every day included. */
@@ -363,9 +492,24 @@ export function createSpendGetHandler(
       deps.readRunTotals(scope, { from, to }),
       deps.readUnmeteredRuns(scope, { from, to }),
     ]);
-    const byKey = attribute(runs, groupBy);
+    // The workspace's own rows hold every run but the in-app ones, which
+    // the assistant row holds (ADR-235).
+    const { inApp, rest } = splitInApp(runs);
+    const byKey = attribute(rest, groupBy);
+    const inAppByKey = attribute(inApp, groupBy);
     const grouped =
-      groupBy === "mcp_server" ? mcpServerRows(byKey) : groupRows(dailyRows);
+      groupBy === "mcp_server"
+        ? mcpServerRows(byKey)
+        : groupRows(dailyRows).flatMap((row) => {
+            const left = withoutInAppShares(
+              row,
+              dailyRows.filter((day) => day.groupKey === row.key),
+              inAppByKey.get(row.key) ?? [],
+              byKey.get(row.key) ?? [],
+            );
+            return left === null ? [] : [left];
+          });
+    const assistant = assistantRow(inAppByKey);
     const top = new Map<string, Attributed[]>(
       grouped
         .filter((row) => row.key !== OTHER_SPEND_KEY)
@@ -428,11 +572,17 @@ export function createSpendGetHandler(
       // reported what they spent. The page says how many, and on which
       // harness, wherever it prints the total.
       unmeteredRuns,
-      rows: grouped.map((row) => ({
-        ...row,
-        operator: facts.get(row.key) ?? null,
-        topRuns: topRuns(row.key),
-      })),
+      rows: [
+        ...grouped.map((row) => ({
+          ...row,
+          operator: facts.get(row.key) ?? null,
+          topRuns: topRuns(row.key),
+        })),
+        // Last, after the workspace's own ranked rows and the rest, so the
+        // assistant never ranks among the people and agents the workspace
+        // manages, and the page finds it in one place.
+        ...(assistant === null ? [] : [assistant]),
+      ],
     };
   };
 }
