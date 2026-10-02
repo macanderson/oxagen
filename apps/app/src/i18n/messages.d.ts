@@ -9837,6 +9837,29 @@ type Messages = {
         cost: string;
         total: string;
       };
+      perMergedPr: {
+        column: string;
+        figure: string;
+        absent: string;
+        absence: {
+          no_merged_pr: string;
+          mixed_currency: string;
+          not_priced: string;
+          no_bounded_run: string;
+        };
+        unpriced: string;
+        show: string;
+        runsTitle: string;
+        runsNote: string;
+        moreRuns: string;
+        state: {
+          merged: string;
+          reverted: string;
+          closed: string;
+          open: string;
+          unread: string;
+        };
+      };
     };
   };
   steering: {

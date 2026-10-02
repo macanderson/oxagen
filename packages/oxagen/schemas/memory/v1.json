@@ -41,9 +41,10 @@
       "enum": [
         "remember",
         "pull_request",
-        "local_gateway"
+        "local_gateway",
+        "import"
       ],
-      "description": "remember during a run, pull_request from the code repository check, or local_gateway from a harness's memory folder."
+      "description": "remember during a run, pull_request from the code repository check, local_gateway from a harness's memory folder, or import from a Markdown file a person imported."
     },
     "statement": {
       "type": "string",

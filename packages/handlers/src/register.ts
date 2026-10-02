@@ -1560,6 +1560,12 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .tachoMemoriesRecallHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "record_tacho_memory_uses",
+    async () =>
+      (await import("./tacho.memories.uses.record"))
+        .tachoMemoryUsesRecordHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "dispatch_command",
     async () =>
       (await import("./tacho.command.dispatch"))
@@ -1994,6 +2000,12 @@ registerHandlersOnce("@oxagen/handlers", () => {
     async () =>
       (await import("./spend.operator_ranking"))
         .spendOperatorRankingHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "get_spend_per_merged_pr",
+    async () =>
+      (await import("./spend.per_merged_pr"))
+        .spendPerMergedPrHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "set_operator_pseudonyms",

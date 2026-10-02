@@ -101,6 +101,7 @@ const CONSOLE_CONTRACTS = [
   "list_waste",
   "get_operator_ranking",
   "set_operator_pseudonyms",
+  "get_spend_per_merged_pr",
   "get_unproductive_spend",
   "get_spend_budget",
   "set_spend_budget",

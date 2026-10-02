@@ -209,6 +209,7 @@ export function runtimesSource(reads: {
       findingEvidence: refuse,
       priceBook: refuse,
       operatorRanking: refuse,
+      perMergedPr: refuse,
       unpricedModels: refuse,
       unproductive: refuse,
     },

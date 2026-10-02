@@ -290,7 +290,7 @@ describe("the /v1/tacho rate-limit buckets", () => {
     expect([...counts.keys()].some((k) => k.startsWith("tacho-host:"))).toBe(
       false,
     );
-    // The pre-auth credential ceiling (360) sat above every one of these, so
+    // The pre-auth credential ceiling (390) sat above every one of these, so
     // the 429 came from the ingest bucket and not from the shared one.
     const credential = [...counts.entries()].find(([k]) =>
       k.startsWith("tacho-preauth-credential:"),
@@ -327,6 +327,38 @@ describe("the /v1/tacho rate-limit buckets", () => {
     // Recall runs once a prompt, so it must not spend the memory upload's
     // bucket or the control paths' one.
     expect(counts.has("tacho-memories:machine:key_tacho")).toBe(false);
+    expect(counts.has("tacho-host:machine:key_tacho")).toBe(false);
+  });
+
+  it("counts the memory use report in its own per-host `tacho-memory-uses` bucket, 30 a minute", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(Date.UTC(2026, 9, 1, 12, 13, 1));
+    mocks.invoke.mockResolvedValue({
+      recorded: 0,
+      unknown: 0,
+      pending: [],
+      retired: 0,
+    });
+    const report = () =>
+      app.fetch(
+        new Request("http://localhost/v1/tacho/memories/uses", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-vercel-forwarded-for": "203.0.113.9",
+            authorization: "Bearer ox_test_key",
+          },
+          body: JSON.stringify({ host_enrollment_id: HOST }),
+        }),
+      );
+    const statuses: number[] = [];
+    for (let i = 0; i < 31; i++) statuses.push((await report()).status);
+    expect(statuses.slice(0, 30).every((s) => s === 200)).toBe(true);
+    expect(statuses[30]).toBe(429);
+    expect(counts.get("tacho-memory-uses:machine:key_tacho")).toBe(31);
+    // The report must not spend the memory upload's bucket, recall's, or
+    // the control paths' one.
+    expect(counts.has("tacho-memories:machine:key_tacho")).toBe(false);
+    expect(counts.has("tacho-recall:machine:key_tacho")).toBe(false);
     expect(counts.has("tacho-host:machine:key_tacho")).toBe(false);
   });
 

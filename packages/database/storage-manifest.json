@@ -1766,6 +1766,16 @@
       "writes": []
     },
     {
+      "domain": "spend",
+      "name": "get_spend_per_merged_pr",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api"
+      ],
+      "writes": []
+    },
+    {
       "domain": "context",
       "name": "get_steering_deliveries",
       "reads": [],
@@ -3276,6 +3286,15 @@
       "writes": []
     },
     {
+      "domain": "tacho",
+      "name": "record_tacho_memory_uses",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
       "domain": "repository",
       "name": "record_working_copy",
       "reads": [],
@@ -4673,6 +4692,7 @@
         "postgres:agent.memory_recalls",
         "postgres:agent.memory_reflections",
         "postgres:agent.memory_rejections",
+        "postgres:agent.memory_uses",
         "postgres:agent.runtimes",
         "postgres:agent.steering_publications",
         "postgres:agent.steering_repo_health",
@@ -10206,6 +10226,60 @@
           "type": "uuid"
         },
         {
+          "name": "state",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "label",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "summary",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "memory_type",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "use_count",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "last_used_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "retired_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "retired_reason",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "promoted_lineage",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
           "name": "created_at",
           "nullable": false,
           "primaryKey": false,
@@ -10489,6 +10563,65 @@
       "domain": "agent",
       "id": "postgres:agent.memory_rejections",
       "name": "memory_rejections",
+      "rls": "standard",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "memory_id",
+          "nullable": false,
+          "primaryKey": false,
+          "references": "postgres:agent.memories",
+          "type": "uuid"
+        },
+        {
+          "name": "run_public_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "signal",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "count",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "used_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        }
+      ],
+      "domain": "agent",
+      "id": "postgres:agent.memory_uses",
+      "name": "memory_uses",
       "rls": "standard",
       "store": "postgres",
       "tenantScoped": true

@@ -1,0 +1,156 @@
+{
+  "name": "record_tacho_memory_uses",
+  "domain": "tacho",
+  "description": "Count the memory files runs read on an enrolled Tacho host, and retire the memories whose files a full scan no longer finds.",
+  "mode": "sync",
+  "surfaces": [
+    "api"
+  ],
+  "sensitivity": "high",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "host_enrollment_id": {
+        "type": "string"
+      },
+      "uses": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "harness": {
+              "type": "string",
+              "enum": [
+                "claude-code",
+                "codex",
+                "cursor",
+                "stella",
+                "claude-desktop"
+              ]
+            },
+            "path": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024
+            },
+            "signal": {
+              "type": "string",
+              "enum": [
+                "read",
+                "citation"
+              ]
+            },
+            "session_uuid": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "count": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10000
+            },
+            "used_at": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "harness",
+            "path",
+            "session_uuid",
+            "count",
+            "used_at"
+          ],
+          "additionalProperties": false
+        },
+        "maxItems": 200,
+        "default": []
+      },
+      "scans": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "harness": {
+              "type": "string",
+              "enum": [
+                "claude-code",
+                "codex",
+                "cursor",
+                "stella",
+                "claude-desktop"
+              ]
+            },
+            "root": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024
+            },
+            "paths": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1024
+              },
+              "maxItems": 4000
+            }
+          },
+          "required": [
+            "harness",
+            "root",
+            "paths"
+          ],
+          "additionalProperties": false,
+          "x-server-validated": true,
+          "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
+        },
+        "maxItems": 8,
+        "default": []
+      }
+    },
+    "required": [
+      "host_enrollment_id"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "recorded": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "unknown": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "pending": {
+        "type": "array",
+        "items": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "retired": {
+        "type": "integer",
+        "minimum": 0
+      }
+    },
+    "required": [
+      "recorded",
+      "unknown",
+      "pending",
+      "retired"
+    ],
+    "additionalProperties": false
+  }
+}

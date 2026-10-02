@@ -422,6 +422,7 @@ export function toolsSource(reads: ToolsReads) {
       findingEvidence: refuse,
       priceBook: refuse,
       operatorRanking: refuse,
+      perMergedPr: refuse,
       unpricedModels: refuse,
       unproductive: refuse,
     },
