@@ -11,10 +11,14 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   PLATFORM_ALLOWLIST,
+  type CiRead,
   type EnvCheckReport,
   type ReconcileInput,
   failureCount,
+  readCiFiles,
   reconcile,
+  reconcileCi,
+  scanCiReads,
   scanSourceReferences,
 } from "./env-check";
 
@@ -532,5 +536,210 @@ describe("scanSourceReferences", () => {
   it("returns empty for a non-existent root (no throw)", () => {
     const result = scanSourceReferences(["/tmp/does-not-exist-env-check-test"]);
     expect(result.referenced.size).toBe(0);
+  });
+});
+
+// ── CI inventory ─────────────────────────────────────────────────────────────
+
+describe("scanCiReads", () => {
+  it("collects each secret and variable with the files that read it", () => {
+    const reads = scanCiReads([
+      {
+        file: ".github/workflows/release.yml",
+        text: [
+          "env:",
+          "  NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}",
+          "  MODEL: ${{ vars.OXAGEN_LLM_BALANCED }}",
+          "",
+        ].join("\n"),
+      },
+      {
+        file: ".github/workflows/nightly.yml",
+        text: [
+          "jobs:",
+          "  e2e:",
+          "    if: vars.STAGING_ENABLED == 'true'",
+          "    steps:",
+          "      - run: echo ${{ secrets.NPM_TOKEN }} ${{ secrets.NPM_TOKEN }}",
+          "",
+        ].join("\n"),
+      },
+    ]);
+    expect([...reads.keys()]).toEqual([
+      "NPM_TOKEN",
+      "OXAGEN_LLM_BALANCED",
+      "STAGING_ENABLED",
+    ]);
+    // Two reads in one file count that file once, and files come back sorted.
+    expect(reads.get("NPM_TOKEN")).toEqual<CiRead>({
+      kinds: ["secret"],
+      files: [".github/workflows/nightly.yml", ".github/workflows/release.yml"],
+    });
+    // A bare `vars.X` in an `if:` is a read, with no `${{ }}` around it.
+    expect(reads.get("STAGING_ENABLED")).toEqual<CiRead>({
+      kinds: ["variable"],
+      files: [".github/workflows/nightly.yml"],
+    });
+  });
+
+  it("leaves out GITHUB_TOKEN and names in whole-line comments", () => {
+    const reads = scanCiReads([
+      {
+        file: ".github/workflows/a.yml",
+        text: [
+          "# Needs secrets.COMMENTED_ONLY in the repository settings.",
+          "    # vars.ALSO_COMMENTED",
+          "      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}",
+          "      KEY: ${{ secrets.REAL_SECRET }} # trailing secrets.TRAILING",
+          "",
+        ].join("\n"),
+      },
+    ]);
+    // A trailing comment sits on a line that also holds a real read, so the
+    // scan reads the whole line. Only a line that is nothing but a comment is
+    // skipped.
+    expect([...reads.keys()]).toEqual(["REAL_SECRET", "TRAILING"]);
+  });
+
+  it("records both kinds when one file reads secrets.NAME and another vars.NAME", () => {
+    const reads = scanCiReads([
+      { file: "b.yml", text: "x: ${{ vars.SHARED_NAME }}\n" },
+      { file: "a.yml", text: "y: ${{ secrets.SHARED_NAME }}\n" },
+    ]);
+    expect(reads.get("SHARED_NAME")).toEqual<CiRead>({
+      kinds: ["secret", "variable"],
+      files: ["a.yml", "b.yml"],
+    });
+  });
+});
+
+describe("readCiFiles", () => {
+  it("reads every workflow and every composite action, and nothing else under .github", () => {
+    const dir = mkdtempSync(join(tmpdir(), "env-check-ci-"));
+    try {
+      const put = (rel: string, text: string): void => {
+        mkdirSync(join(dir, rel, ".."), { recursive: true });
+        writeFileSync(join(dir, rel), text);
+      };
+      put(".github/workflows/pipeline.yml", "a: ${{ secrets.ONE }}\n");
+      put(".github/workflows/release.yaml", "b: ${{ vars.TWO }}\n");
+      put(".github/workflows/README.md", "secrets.NOT_A_WORKFLOW\n");
+      put(".github/actions/ship/action.yml", "c: ${{ vars.THREE }}\n");
+      put(".github/actions/deep/inner/action.yaml", "d: ${{ vars.FOUR }}\n");
+      put(".github/actions/ship/helper.yml", "e: ${{ vars.NOT_AN_ACTION }}\n");
+      put(".github/ISSUE_TEMPLATE/bug.yml", "f: ${{ vars.TEMPLATE }}\n");
+      const files = readCiFiles(dir);
+      expect(files.map((f) => f.file)).toEqual([
+        ".github/actions/deep/inner/action.yaml",
+        ".github/actions/ship/action.yml",
+        ".github/workflows/pipeline.yml",
+        ".github/workflows/release.yaml",
+      ]);
+      expect(files[2]!.text).toBe("a: ${{ secrets.ONE }}\n");
+      expect([...scanCiReads(files).keys()]).toEqual([
+        "FOUR",
+        "ONE",
+        "THREE",
+        "TWO",
+      ]);
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
+  it("returns nothing for a tree with no .github directory (no throw)", () => {
+    const dir = mkdtempSync(join(tmpdir(), "env-check-ci-"));
+    try {
+      expect(readCiFiles(dir)).toEqual([]);
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+});
+
+describe("reconcileCi", () => {
+  const registry: Record<string, { kind: "secret" | "variable" }> = {
+    NPM_TOKEN: { kind: "secret" },
+    STAGING_ENABLED: { kind: "variable" },
+    LINEAR_PROJECT_ID: { kind: "variable" },
+    UNREAD_SECRET: { kind: "secret" },
+  };
+  const read = (kinds: CiRead["kinds"], files: string[]): CiRead => ({
+    kinds,
+    files,
+  });
+
+  it("passes when every read is listed with its kind and every entry is read", () => {
+    const report = reconcileCi(
+      new Map([
+        ["NPM_TOKEN", read(["secret"], ["release.yml"])],
+        ["STAGING_ENABLED", read(["variable"], ["pipeline.yml"])],
+        ["LINEAR_PROJECT_ID", read(["variable"], ["nightly.yml"])],
+        ["UNREAD_SECRET", read(["secret"], ["x.yml"])],
+      ]),
+      registry,
+    );
+    expect(report).toEqual({ unlisted: [], unused: [], wrongKind: [] });
+  });
+
+  it("reports an unlisted read with its files, an unread entry, and a read of the wrong kind", () => {
+    const report = reconcileCi(
+      new Map([
+        ["NPM_TOKEN", read(["secret"], ["release.yml"])],
+        ["NEW_SECRET", read(["secret"], ["a.yml", "b.yml"])],
+        // Read as a secret, listed as a variable.
+        ["STAGING_ENABLED", read(["secret"], ["pipeline.yml"])],
+        // Read both ways: the variable read matches, the secret read does not.
+        ["LINEAR_PROJECT_ID", read(["secret", "variable"], ["n.yml"])],
+      ]),
+      registry,
+    );
+    expect(report.unlisted.map((f) => [f.key, f.locations])).toEqual([
+      ["NEW_SECRET", ["a.yml", "b.yml"]],
+    ]);
+    expect(report.unused.map((f) => f.key)).toEqual(["UNREAD_SECRET"]);
+    expect(report.wrongKind.map((f) => f.key)).toEqual([
+      "LINEAR_PROJECT_ID",
+      "STAGING_ENABLED",
+    ]);
+    expect(report.wrongKind[1]!.reason).toContain("secrets.STAGING_ENABLED");
+  });
+
+  it("does not take a name Object.prototype carries as a listed entry", () => {
+    const report = reconcileCi(
+      new Map([["constructor", read(["variable"], ["odd.yml"])]]),
+      {},
+    );
+    expect(report.unlisted.map((f) => f.key)).toEqual(["constructor"]);
+  });
+
+  it("adds every CI finding to the failure count, and leaves the two-argument count alone", () => {
+    const envReport = reconcile(
+      makeInput({
+        referenced: new Map([
+          ["DATABASE_URL", ["a.ts:1"]],
+          ["LOG_LEVEL", ["b.ts:1"]],
+          ["AI_GATEWAY_API_KEY", ["c.ts:1"]],
+        ]),
+      }),
+    );
+    expect(failureCount(envReport, false)).toBe(0);
+    const ci = reconcileCi(
+      new Map([
+        ["NEW_SECRET", read(["secret"], ["a.yml"])],
+        ["STAGING_ENABLED", read(["secret"], ["p.yml"])],
+      ]),
+      registry,
+    );
+    // One unlisted, one wrong kind, and three entries nothing reads.
+    expect(failureCount(envReport, false, ci)).toBe(5);
+    expect(failureCount(envReport, true, ci)).toBe(6);
+    expect(
+      failureCount(envReport, false, {
+        unlisted: [],
+        unused: [],
+        wrongKind: [],
+      }),
+    ).toBe(0);
   });
 });

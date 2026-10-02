@@ -1,7 +1,7 @@
 # ADR-004 — Environment variables, not Google Secret Manager
 
 **Date:** 2026-05-28
-**Status:** Accepted
+**Status:** Superseded by ADR-240 (2026-09-30)
 **Epic:** Foundations
 
 ## Context

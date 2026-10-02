@@ -88,14 +88,14 @@ describe("the model's instructions", () => {
 
   it("refuse to run when the kit does not serve a reference", async () => {
     await expect(loadSkills(TREE, fakeKit(404))).rejects.toThrow(
-      /references\/voice\.md from macanderson\/oxagen-brand@3ab3085, and the fetch returned 404/,
+      /references\/voice\.md from oxageninc\/brand@3ab3085, and the fetch returned 404/,
     );
   });
 
   it("refuse to run when main does not resolve to a commit", async () => {
     const kit = { ...fakeKit(), head: () => "" };
     await expect(loadSkills(TREE, kit)).rejects.toThrow(
-      /could not resolve macanderson\/oxagen-brand main/,
+      /could not resolve oxageninc\/brand main/,
     );
   });
 

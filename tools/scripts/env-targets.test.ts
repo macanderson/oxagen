@@ -2,18 +2,13 @@
  * Unit tests for lib/env-targets.ts.
  *
  * Guards the invariant that `pnpm dev` and `pnpm env:pull` agree on which
- * directories carry a Vercel-hydrated `.env.local`, and that a missing file
- * is reported with the exact `vercel link` command that fixes it rather than
- * surfacing later as `node: .env.local: not found` inside turbo.
+ * directories carry a `.env.local` written from Parameter Store (ADR-240), and
+ * that a missing file is named up front rather than surfacing later as
+ * `node: .env.local: not found` inside turbo.
  */
 
 import { describe, expect, it } from "vitest";
-import {
-  ENV_TARGETS,
-  linkHint,
-  missingEnvTargets,
-  VERCEL_SCOPE,
-} from "./lib/env-targets";
+import { ENV_TARGETS, missingEnvTargets } from "./lib/env-targets";
 
 describe("ENV_TARGETS", () => {
   it("names only directories that exist in this monorepo", () => {
@@ -23,11 +18,14 @@ describe("ENV_TARGETS", () => {
     expect(dirs).not.toContain("apps/website");
   });
 
-  it("maps every target to a Vercel project in the oxagen scope", () => {
+  it("has exactly one root target, the one env:pull gives operator values", () => {
+    expect(ENV_TARGETS.filter((t) => t.dir === ".")).toHaveLength(1);
+  });
+
+  it("carries no Vercel project link", () => {
     for (const t of ENV_TARGETS) {
-      expect(t.project).toMatch(/^oxagen-v2-(app|api|mcp)$/);
+      expect(Object.keys(t).sort()).toEqual(["dir", "name"]);
     }
-    expect(VERCEL_SCOPE).toBe("oxagen");
   });
 });
 
@@ -49,22 +47,5 @@ describe("missingEnvTargets", () => {
       return true;
     });
     expect(seen[0]).toBe("/repo/.env.local");
-  });
-});
-
-describe("linkHint", () => {
-  it("emits one subshell vercel link line per target", () => {
-    const hint = linkHint(
-      missingEnvTargets("/repo", (p) => p === "/repo/.env.local"),
-    );
-    expect(hint.split("\n")).toEqual([
-      "  (cd apps/app && vercel link --yes --project oxagen-v2-app --scope oxagen)",
-      "  (cd apps/api && vercel link --yes --project oxagen-v2-api --scope oxagen)",
-      "  (cd apps/mcp && vercel link --yes --project oxagen-v2-mcp --scope oxagen)",
-    ]);
-  });
-
-  it("is empty for no targets", () => {
-    expect(linkHint([])).toBe("");
   });
 });
