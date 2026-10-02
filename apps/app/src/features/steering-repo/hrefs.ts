@@ -18,8 +18,9 @@ export type SteeringGithubLeg = { mode: "install" | "authorize" };
 /**
  * `GET /api/v1/{org}/connections/steering/github`: the API signs the state and
  * redirects to GitHub. Both legs return through the app's one callback,
- * `/oauth/github/callback`, which sends the person to `returnTo` with
- * `?steering=connected` or `?steering=error&code=`.
+ * `/oauth/github/callback`, and the `/github/steering` landing (#5151), which
+ * sends a member to `returnTo` with `?steering=connected` or
+ * `?steering=error&code=`.
  */
 export function steeringGithubHref(
   org: string,
