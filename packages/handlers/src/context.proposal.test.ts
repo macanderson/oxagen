@@ -161,6 +161,44 @@ describe("propose_record", () => {
   });
 });
 
+describe("dismiss_proposal racing a close recorded from the host (#5077)", () => {
+  it("takes the close as the person's when the sync recorded it first with no closer", async () => {
+    const h = harness();
+    const { proposalId } = await createProposeRecordHandler(h)(
+      proposal(),
+      ctx(),
+    );
+    await createOpenContextPrHandler(h)({ proposalId }, ctx());
+    const close = h.github.closePullRequest.bind(h.github);
+    // The sync reads the closed PR and records the close between this
+    // call's host close and its own write.
+    h.github.closePullRequest = async (repo, number) => {
+      await close(repo, number);
+      const row = h.store.proposals[0]!;
+      await h.store.updateProposal(
+        row.id,
+        {
+          status: "rejected",
+          dismissedAt: new Date(),
+          dismissedReason: "Closed on GitHub without merging",
+          updatedById: null,
+        },
+        ["checks_passed"],
+      );
+    };
+    const out = await createDismissProposalHandler(h)(
+      { proposalId, reason: "superseded" },
+      ctx(),
+    );
+    expect(out).toEqual({ proposalId, status: "rejected" });
+    expect(h.store.proposals[0]).toMatchObject({
+      status: "rejected",
+      dismissedReason: "superseded",
+      updatedById: AUTHOR,
+    });
+  });
+});
+
 describe("list_proposals", () => {
   it("lists newest first with support, a null PR and a null check tally before a PR opens, filtered by status", async () => {
     const h = harness();

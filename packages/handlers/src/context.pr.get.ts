@@ -24,7 +24,7 @@ export function createGetContextPrHandler(
     const [ledger, merged, names] = await Promise.all([
       deps.store.ledgerLength(scope),
       deps.store.mergedRefs(row),
-      deps.store.userNames(contextPrUserIds(row)),
+      deps.store.userNames(scope, contextPrUserIds(row)),
     ]);
     return contextPrView(row, ledger, merged, names);
   };

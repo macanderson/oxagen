@@ -293,7 +293,7 @@ describe("the activity", () => {
     const host = section("Activity").querySelector('[data-step="closed"]');
     expect(host).toHaveAttribute("data-origin", "host");
     expect(host).toHaveTextContent(
-      "Closed without merging: Closed on GitHub without merging",
+      "Closed: Closed on GitHub without merging",
     );
     cleanup();
     await renderPage({ contextPr: readOk(contextPr("rejected")) });
@@ -328,7 +328,7 @@ describe("the activity, on GitLab and with failures", () => {
     const closed = activity.querySelector('[data-step="closed"]');
     expect(closed).toHaveTextContent("Closed without merging");
     expect(closed).toHaveTextContent("on GitLab");
-    expect(closed).not.toHaveTextContent("Closed without merging:");
+    expect(closed).not.toHaveTextContent("Closed:");
   });
 
   it("adds no finished step while a check still runs", async () => {

@@ -11,7 +11,7 @@ import type { WsCtx } from "@/server/viewer";
 import type { PullRequestUrl } from "@/shared/pull-request-url";
 import { linkText, mono } from "@/ui/control-styles";
 import { PullRequestLink } from "@/ui/navigation";
-import { buildDiff, type DiffOp } from "@/shared/line-diff";
+import { buildDiff, type DiffLine, type DiffOp } from "@/shared/line-diff";
 import { SteeringReadFailure } from "./read-failure";
 import { Section } from "./section";
 
@@ -32,12 +32,41 @@ const LINE_TONE = {
 /** A file's text with its final line end dropped, so the diff draws no empty last line. */
 const body = (text: string | null) => (text ?? "").replace(/\r?\n$/, "");
 
+/** A removed line is unique by its base number, an added one by its head number, and a kept one by both. */
+const rowKey = (line: DiffLine) =>
+  `${line.op}:${String(line.before)}:${String(line.after)}`;
+
+function DiffRow({ line }: { line: DiffLine }) {
+  const t = useTranslations("steering.pr.diff");
+  return (
+    <tr data-line={KIND[line.op]} className={LINE_TONE[line.op]}>
+      <td className="w-10 select-none px-2 text-right text-dim">
+        {line.before ?? ""}
+      </td>
+      <td className="w-10 select-none px-2 text-right text-dim">
+        {line.after ?? ""}
+      </td>
+      <td className="w-4 select-none text-dim" aria-hidden="true">
+        {SIGN[line.op]}
+      </td>
+      <td className="whitespace-pre-wrap break-all pe-3 text-foreground">
+        <span className="sr-only">{t(`lines.${KIND[line.op]}`)} </span>
+        {line.text}
+      </td>
+    </tr>
+  );
+}
+
 function FileDiff({ file }: { file: ContextPrDiff["files"][number] }) {
   const t = useTranslations("steering.pr.diff");
   // The transcript's diff (shared/line-diff.ts): bounded, and trimmed to the
   // changed lines with three lines of context around each run.
   const diff = buildDiff(body(file.before), body(file.after));
-  const lines = diff.hunks.flatMap((hunk) => hunk.lines);
+  // A row marks where the unchanged lines between two hunks were left out.
+  const rows = diff.hunks.flatMap((hunk, index) => [
+    ...(index === 0 ? [] : [{ gap: hunk.beforeStart } as const]),
+    ...hunk.lines.map((line) => ({ line })),
+  ]);
   return (
     <div
       data-diff-file={file.path}
@@ -56,29 +85,17 @@ function FileDiff({ file }: { file: ContextPrDiff["files"][number] }) {
         className={`${mono} w-full border-collapse text-[11.5px]`}
       >
         <tbody>
-          {lines.map((line) => (
-            <tr
-              // A removed line is unique by its base number, an added one by
-              // its head number, and a kept one by both.
-              key={`${line.op}:${String(line.before)}:${String(line.after)}`}
-              data-line={KIND[line.op]}
-              className={LINE_TONE[line.op]}
-            >
-              <td className="w-10 select-none px-2 text-right text-dim">
-                {line.before ?? ""}
-              </td>
-              <td className="w-10 select-none px-2 text-right text-dim">
-                {line.after ?? ""}
-              </td>
-              <td className="w-4 select-none text-dim" aria-hidden="true">
-                {SIGN[line.op]}
-              </td>
-              <td className="whitespace-pre-wrap break-all pe-3 text-foreground">
-                <span className="sr-only">{t(`lines.${KIND[line.op]}`)} </span>
-                {line.text}
-              </td>
-            </tr>
-          ))}
+          {rows.map((row) =>
+            "gap" in row ? (
+              <tr key={`gap:${String(row.gap)}`} data-gap="">
+                <td colSpan={4} className="px-2 text-dim">
+                  {t("gap")}
+                </td>
+              </tr>
+            ) : (
+              <DiffRow key={rowKey(row.line)} line={row.line} />
+            ),
+          )}
         </tbody>
       </table>
       {diff.wholesale ? (

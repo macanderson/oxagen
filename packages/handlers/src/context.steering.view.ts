@@ -97,10 +97,19 @@ export function publishedRecordView(
  * A governance proposal (#4795) publishes no record and appends no promotion
  * event, so its merge leaves the ledger length as it was and names neither.
  */
-/** The user a `user:<uuid>` source names, or null for any other source. */
-export function sourceUserId(source: string): string | null {
-  const match = /^user:([0-9a-f-]{36})$/i.exec(source);
-  return match?.[1] ?? null;
+/** A UUID in its canonical 8-4-4-4-12 form. */
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * The user who raised the proposal, when Oxagen recorded them: the row's
+ * creator, and only when the source names that same user. `source` is the
+ * caller's own label (propose_record takes any string), so a source that
+ * names someone else is printed as written and never resolved to a name.
+ */
+export function sourceUserId(row: ProposalRow): string | null {
+  const creator = row.createdById;
+  if (creator === null || !UUID.test(creator)) return null;
+  return row.source === `user:${creator}` ? creator : null;
 }
 
 /**
@@ -116,6 +125,9 @@ const HOST_CLOSE = /^(Closed|Merged) on (GitHub|GitLab)\b/;
  * dismissal records the acting user.
  */
 export function closedOnHost(row: ProposalRow): boolean {
+  // A proposal that never had a pull request has nothing the host could
+  // close: an append dismissed as a duplicate records no updater either.
+  if (row.prNumber === null) return false;
   return (
     row.updatedById === null ||
     (row.dismissedReason !== null && HOST_CLOSE.test(row.dismissedReason))
@@ -125,7 +137,7 @@ export function closedOnHost(row: ProposalRow): boolean {
 /** The users a Context PR view names, for the store's display-name read. */
 export function contextPrUserIds(row: ProposalRow): string[] {
   return [
-    sourceUserId(row.source),
+    sourceUserId(row),
     row.mergedByUserId,
     row.status === "rejected" && !closedOnHost(row) ? row.updatedById : null,
   ].filter((id): id is string => id !== null);
@@ -139,7 +151,7 @@ export function contextPrView(
 ): ContextPr {
   const nameOf = (id: string | null) =>
     id === null ? null : (names.get(id) ?? null);
-  const sourceUser = sourceUserId(row.source);
+  const sourceUser = sourceUserId(row);
   const hostClosed = row.status === "rejected" && closedOnHost(row);
   const closedBy = row.status !== "rejected" || hostClosed ? null : row.updatedById;
   // Read from governance.toml when the PR opens; null until then.

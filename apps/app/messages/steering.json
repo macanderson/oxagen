@@ -614,7 +614,7 @@
         "checksFailed": "A check failed",
         "merged": "Merged",
         "closed": "Closed without merging",
-        "closedBecause": "Closed without merging: {reason}",
+        "closedBecause": "Closed: {reason}",
         "inOxagen": "in Oxagen",
         "onHost": "on {host}",
         "github": "GitHub",
@@ -637,6 +637,7 @@
         },
         "truncated": "This file is longer than the page shows.",
         "wholesale": "This file is too large to compare line by line, so every line shows as replaced.",
+        "gap": "Unchanged lines left out",
         "noPr": "No pull request is open yet, so there is no branch to compare.",
         "settled": "The branch was deleted when the pull request merged or closed.",
         "openFiles": "Open the files on the host",
@@ -677,7 +678,7 @@
       "dismiss": {
         "open": "Close without merging",
         "title": "Close this pull request",
-        "body": "A closed proposal steers nothing. The host closes the pull request and deletes its branch first, and Oxagen records the close only when the host agrees.",
+        "body": "A closed proposal steers nothing. An open pull request for it is closed on the host and its branch deleted first, and Oxagen records the close only when the host agrees.",
         "reason": "Optional reason",
         "confirm": "Close the pull request",
         "pending": "Closing"

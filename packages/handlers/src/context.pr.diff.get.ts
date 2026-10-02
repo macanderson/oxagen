@@ -18,6 +18,41 @@ import {
 import { steeringDeps, type SteeringDeps } from "./context.steering.deps";
 import { assertSameHost } from "./context.steering.github";
 
+/**
+ * Diffs already read, by repository, base and head commit. The text of a
+ * file at a commit never changes, and the Context PR page re-reads itself
+ * every ten seconds while the pull request is open, so a cached diff keeps
+ * that poll from spending the installation's API budget the repository sync
+ * needs. The production branch can move under a cached entry; the diff is
+ * then a few seconds behind the base, which the next head or a restart
+ * clears. Bounded, oldest out first.
+ */
+const DIFF_CACHE_MAX = 200;
+type CachedDiff = {
+  files: {
+    path: string;
+    status: "added" | "modified" | "removed";
+    before: string | null;
+    after: string | null;
+    truncated: boolean;
+  }[];
+  moreFiles: boolean;
+};
+const cache = new Map<string, CachedDiff>();
+
+function remember(key: string, value: CachedDiff): void {
+  cache.set(key, value);
+  if (cache.size > DIFF_CACHE_MAX) {
+    const oldest = cache.keys().next().value;
+    if (oldest !== undefined) cache.delete(oldest);
+  }
+}
+
+/** @internal Test support: forget every cached diff. */
+export function clearContextPrDiffCacheForTests(): void {
+  cache.clear();
+}
+
 /** A side's text, cut at the cap. */
 function capped(text: string | null): { text: string | null; cut: boolean } {
   if (text === null || text.length <= CONTEXT_PR_DIFF_MAX_CHARS)
@@ -52,10 +87,24 @@ export function createGetContextPrDiffHandler(
 
     const repo = await deps.github.resolveRepository(scope);
     assertSameHost(repo, row.provider, row.prUrl);
-    // The head as the host has it now, so a push after the checks ran shows.
-    const head = await deps.github.branchHead(repo, row.branch);
+    // The head the checks ran on, which the repository sync moves when the
+    // branch moves on the host; the branch's tip only before a file is
+    // committed.
+    const head =
+      row.headSha ?? (await deps.github.branchHead(repo, row.branch));
     if (head === null) return empty("settled");
     const base = row.baseRef ?? repo.defaultBranch;
+    const key = `${repo.provider}:${repo.fullName}:${base}:${head}`;
+    const cached = cache.get(key);
+    if (cached !== undefined) {
+      return {
+        proposalId: row.publicId,
+        state: "diff" as const,
+        baseRef: base,
+        headSha: head,
+        ...cached,
+      };
+    }
     const changed = await deps.github.changedFiles(repo, base, head);
     const shown = changed.slice(0, CONTEXT_PR_DIFF_MAX_FILES);
     const files = await Promise.all(
@@ -79,13 +128,17 @@ export function createGetContextPrDiffHandler(
         };
       }),
     );
+    const read: CachedDiff = {
+      files,
+      moreFiles: changed.length > shown.length,
+    };
+    remember(key, read);
     return {
       proposalId: row.publicId,
       state: "diff" as const,
       baseRef: base,
       headSha: head,
-      files,
-      moreFiles: changed.length > shown.length,
+      ...read,
     };
   };
 }

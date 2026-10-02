@@ -214,7 +214,7 @@ export class MemoryStore implements SteeringStore {
   }
   /** Display names by user id; a test sets the ones it reads. */
   names = new Map<string, string>();
-  async userNames(userIds: readonly string[]) {
+  async userNames(_scope: { orgId: string }, userIds: readonly string[]) {
     return new Map(
       userIds.flatMap((id) => {
         const name = this.names.get(id);

@@ -30,7 +30,12 @@ import { createOpenContextPrHandler } from "./context.pr.open";
 import { createRefreshContextPrHandler } from "./context.pr.refresh";
 import { createProposeRecordHandler } from "./context.proposal.create";
 import { createDismissProposalHandler } from "./context.proposal.dismiss";
-import { AUTHOR, ctx, harness } from "./context.steering.test-support";
+import {
+  AUTHOR,
+  REVIEWER,
+  ctx,
+  harness,
+} from "./context.steering.test-support";
 
 const proposal = () =>
   contextProposalCreate.input.parse({
@@ -272,5 +277,40 @@ describe("get_context_pr after a close in Oxagen", () => {
       sourceName: "Dana Reyes",
       support: { runs: ["run_1"], agents: ["a-intel.core.cc"] },
     });
+  });
+});
+
+describe("get_context_pr names only who Oxagen recorded (#5077)", () => {
+  it("prints a source that names someone else as written, never as their name", async () => {
+    const h = harness();
+    h.store.names.set(REVIEWER, "Owner Name");
+    const { proposalId } = await createProposeRecordHandler(h)(
+      contextProposalCreate.input.parse({
+        ...proposal(),
+        source: `user:${REVIEWER}`,
+      }),
+      ctx(),
+    );
+    const view = await createGetContextPrHandler(h)({ proposalId }, ctx());
+    expect(view.raised).toMatchObject({
+      source: `user:${REVIEWER}`,
+      sourceName: null,
+    });
+  });
+
+  it("never calls a close on a proposal with no pull request a close on the host", async () => {
+    const h = harness();
+    const { proposalId } = await createProposeRecordHandler(h)(
+      proposal(),
+      ctx(),
+    );
+    const row = h.store.proposals[0]!;
+    await h.store.updateProposal(
+      row.id,
+      { status: "rejected", dismissedReason: "duplicate", updatedById: null },
+      ["proposed"],
+    );
+    const view = await createGetContextPrHandler(h)({ proposalId }, ctx());
+    expect(view.closed).toMatchObject({ onHost: false, reason: "duplicate" });
   });
 });

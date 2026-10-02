@@ -35,7 +35,6 @@ import { contextPrMerge } from "@oxagen/oxagen/contracts/context.pr.merge";
 import { contextProposalDismiss } from "@oxagen/oxagen/contracts/context.proposal.dismiss";
 import { z } from "zod";
 import type { ContextPr } from "@/data/contracts/steering";
-import { toContextPr } from "@/data/live/mappers/steering";
 import type {
   AttachedInstallation,
   GitHubInstallations,
@@ -412,8 +411,84 @@ export async function readRepositoryChange(
     page: "repositories",
   });
   if (!read.ok) return readToActionResult(read);
-  // The Steering port's own mapper, so both pages draw one Context PR shape.
-  return { ok: true, value: toContextPr(read.value) };
+  // The same shape the Steering port's mapper draws (data/live/mappers/
+  // steering.ts). A feature may not import a live mapper (INV-07), so the
+  // mapping is spelled here and the actions test pins it field by field.
+  const out = read.value;
+  return {
+    ok: true,
+    value: {
+      proposalId: out.proposalId,
+      lineage: out.lineageId,
+      kind: out.kind,
+      status: out.status,
+      governanceMode: out.governanceMode,
+      pr:
+        out.pr === null
+          ? null
+          : {
+              number: out.pr.number,
+              url: out.pr.url,
+              repository: out.pr.repository,
+              baseRef: out.pr.baseRef,
+              branch: out.pr.branch,
+              headSha: out.pr.headSha,
+              provider: out.pr.provider,
+            },
+      raised: {
+        statement: out.raised.statement,
+        rationale: out.raised.rationale,
+        source: out.raised.source,
+        sourceName: out.raised.sourceName,
+        force: out.raised.force,
+        constraintEffect: out.raised.constraintEffect,
+        sharingScope: out.raised.sharingScope,
+        support: {
+          runs: out.raised.support.runs,
+          agents: out.raised.support.agents,
+          recordIds: out.raised.support.recordIds,
+          evidenceLinks: out.raised.support.evidenceLinks,
+        },
+        at: out.raised.at,
+      },
+      body: out.body,
+      checks: out.checks.map((check) => ({
+        name: check.name,
+        status: check.status,
+        summary: check.summary,
+        detailsUrl: check.detailsUrl,
+        startedAt: check.startedAt,
+        completedAt: check.completedAt,
+      })),
+      onMerge: {
+        path: out.onMerge.publishes.path,
+        bundleVersion: {
+          current: out.onMerge.bundleVersion.current,
+          afterMerge: out.onMerge.bundleVersion.afterMerge,
+        },
+      },
+      merged:
+        out.merged === null
+          ? null
+          : {
+              commit: out.merged.commit,
+              at: out.merged.at,
+              promotionEventId: out.merged.promotionEventId,
+              recordId: out.merged.recordId,
+              byName: out.merged.byName,
+              onHost: out.merged.onHost,
+            },
+      closed:
+        out.closed === null
+          ? null
+          : {
+              at: out.closed.at,
+              reason: out.closed.reason,
+              byName: out.closed.byName,
+              onHost: out.closed.onHost,
+            },
+    },
+  };
 }
 
 /**

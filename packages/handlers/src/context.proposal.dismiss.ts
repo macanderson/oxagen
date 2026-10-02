@@ -107,10 +107,32 @@ export function createDismissProposalHandler(
         { noClaimSince: claimCutoff(deps.now()) },
       );
     } catch (err) {
-      // Another dismissal landed first; this one answers as it did.
-      if (err instanceof HandlerError && err.reason === "proposal_rejected")
-        return { proposalId: row.publicId, status: "rejected" };
-      throw err;
+      if (!(err instanceof HandlerError && err.reason === "proposal_rejected"))
+        throw err;
+      // Another write closed it first. When that write was the repository
+      // sync or refresh_context_pr recording the close this call just made
+      // on the host, it left no closer; the close is this person's, so it
+      // takes their reason and their name (#5077). Another dismissal keeps
+      // its own.
+      const current = await deps.store.findProposal(scope, input.proposalId);
+      if (current?.status === "rejected" && current.updatedById === null) {
+        await deps.store
+          .updateProposal(
+            current.id,
+            {
+              dismissedReason: input.reason ?? null,
+              updatedById: actingUserId,
+            },
+            ["rejected"],
+          )
+          .catch((rewrite: unknown) => {
+            if (
+              !(rewrite instanceof HandlerError && rewrite.code === "conflict")
+            )
+              throw rewrite;
+          });
+      }
+      return { proposalId: row.publicId, status: "rejected" };
     }
     return { proposalId: row.publicId, status: "rejected" };
   };
