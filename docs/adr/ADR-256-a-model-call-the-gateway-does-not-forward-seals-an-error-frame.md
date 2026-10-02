@@ -84,6 +84,12 @@ record showed nothing.
 - **The line between the two.** A call that left the host is an `llm_call`
   whatever became of it, and its frame carries the request that left. A call
   that never left is an `error`.
+- **One exception, older than this ADR.** The operator can stop a call while
+  `beforeForward` runs, before the proxy opens the call to the vendor. That
+  call still seals an `llm_call` with `api_error_class` `interrupted`, from
+  `settle`, and its frame holds the request the proxy would have sent. This
+  ADR leaves that path as it is: the frame records the operator's cut, and
+  the proxy had built the request by then.
 
 ## Consequences
 
