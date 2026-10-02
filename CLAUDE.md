@@ -292,14 +292,15 @@ Mac set this on 2026-10-02 for every repository in an Oxagen organization (`oxag
 | Priority | `priority` | Filing. It matches the `P` label |
 | Model Tier | `model_tier` | Filing. Lite is T1, Standard T2, Pro T3, and Ultra T4 |
 | Area(s) | `areas` | Filing. One or more names from the `AREA:` labels |
-| Minutes Actual | `minutes_actual` | Run end. Add your minutes to the value already there |
 | Minutes Estimated | `minutes_estimated` | Filing |
+| Minutes Actual | `minutes_actual` | Run end. Add your minutes to the value already there |
 | Blocked | `blocked` | Yes while the work waits on a maintainer decision |
 | Blocked Reason | `blocked_reason` | With Blocked set to Yes. Each open decision as a question |
 | Agent Self Reflection | `agent_self_reflection` | Reflection |
 | Agent Self Grade | `agent_self_grade` | Reflection. A to F |
 
-- **Minutes are plain integers.** Count the agent minutes spent building the change or watching its PR, up to the point where the PR is ready for review with CI green. Do not count the wait for review or merge. Both fields start with Minutes so GitHub, which lists an organization's own fields alphabetically, shows them side by side.
+- **Minutes are plain integers.** Count the agent minutes spent building the change or watching its PR, up to the point where the PR is ready for review with CI green. Do not count the wait for review or merge.
+- **An issue shows the fields in the table's order.** Every issue type pins them that way. `tools/sync-issue-fields.mjs` in oxageninc/roadmap lists a type that drifts, and the order is set on the organization's issue types settings page, because no API sets it.
 - **Record the reflection when your run ends.** In one pass, add your minutes to Minutes Actual and set Agent Self Reflection and Agent Self Grade. If the work changed a schema and the issue lacks `MIGRATION-REQUIRED`, apply it then.
 - **Blocked is the roadmap's list of decisions.** The roadmap app lists every open issue with Blocked set to Yes as a decision for Mac. Set it back to No and clear Blocked Reason once the decision is made. Keep applying `NEEDS:DECISION` as well.
 - **The `All issues` board keeps Prompt and Resolution.** The board is a project in the `macanderson` account (`gh project list --owner macanderson`). Put the issue on it, set Prompt when you file the issue, and set Resolution when it closes. Do not write the board's Model Tier, Size, `agent_mins_est`, or `agent_mins`, and do not post the reflection as a comment.
