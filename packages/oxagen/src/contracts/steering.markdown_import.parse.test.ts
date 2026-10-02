@@ -46,8 +46,9 @@ describe("the Markdown import contracts", () => {
         org: { Owner: "allow", Admin: "allow" },
         workspace: { Owner: "allow", Member: "allow" },
       });
-      // The Steering page's dialog (lane IMP2) adds the app layer with its binding.
-      expect(cap.layers).not.toContain("app");
+      // The Steering page's Import Markdown dialog operates both (lane IMP2,
+      // #4913), bound in apps/app/capability-ui-map.json.
+      expect(cap.layers).toContain("app");
     }
   });
 

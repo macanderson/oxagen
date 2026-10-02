@@ -44,7 +44,7 @@ import { Badge } from "@/ui/badge";
 import { OutcomePanel } from "@/ui/form-feedback";
 import { ListTable } from "@/ui/list-table";
 import { SafeLink } from "@/ui/navigation";
-import { RouteTabs } from "@/ui/route-tabs";
+import { RouteTabPanel, RouteTabs } from "@/ui/route-tabs";
 import {
   API_KEYS_SHOW,
   type ApiKeysShow,
@@ -209,7 +209,9 @@ function ApiKeysSection({
             current={current}
             show={view.show}
           />
-          <Refused read={read} orgRole={orgRole} />
+          <RouteTabPanel panel={WORKSPACE_PANEL}>
+            <Refused read={read} orgRole={orgRole} />
+          </RouteTabPanel>
         </KeysPanel>
       )}
       <Surfaces org={orgSlug} />
@@ -333,8 +335,11 @@ function Refused({
   );
 }
 
+/** The id of the keys the workspace picker's selected tab names. */
+const WORKSPACE_PANEL = "api-keys-workspace-panel";
+
 /**
- * The workspaces the viewer may enter, as links on this one route (ADR-073).
+ * The workspaces the viewer may enter, as tabs on this one route (ADR-073).
  * A link carries the filter across — a person who asked to see revoked keys
  * asked about keys, not about this workspace — and drops the page, because the
  * next workspace has a roster of its own and page four of this one says
@@ -355,7 +360,7 @@ function WorkspacePicker({
   return (
     <RouteTabs
       label={t("workspace.label")}
-      tablist
+      panel={WORKSPACE_PANEL}
       tabs={workspaces.map((ws) => ({
         to: apiKeysLink(orgSlug, { workspace: ws.slug, show }),
         // An archived workspace is named as archived. It is here because its
@@ -435,72 +440,74 @@ function Keys({
         {picker}
         <RevokedFilter org={org} ws={ws} show={show} ended={ended} />
       </div>
-      {archivedNote}
-      {kept.length === 0 ? (
-        <p
-          className={`${emptyLine} ${panelBody}`}
-          data-state={
-            show === "all" || ended === 0 ? "empty" : "empty-filtered"
-          }
-        >
-          {show === "all" || ended === 0
-            ? t("empty")
-            : t("emptyFiltered", { ended })}
-        </p>
-      ) : (
-        <ListTable
-          label={t("tableLabel")}
-          columns={[
-            { label: t("columns.name") },
-            { label: t("columns.principal") },
-            { label: t("columns.grants") },
-            { label: t("columns.createdBy") },
-            { label: t("columns.lastUsed") },
-            { label: t("columns.actions30d"), numeric: true },
-            { label: t("columns.expires") },
-            { label: t("columns.actions"), hidden: true },
-          ]}
-          empty={t("noMatch")}
-          rows={kept.map((key) => ({
-            key: key.id,
-            data: { "data-api-key": key.id },
-            cells: [
-              <div key="name">
-                <div className="font-semibold text-foreground md:truncate">
-                  {key.name}
-                </div>
-                <div className={`${mono} text-[11px] text-dim md:truncate`}>
-                  {t("masked", { prefix: key.prefix })}
-                </div>
-              </div>,
-              // Principal, Grants and Created by: list_api_keys returns none
-              // of them, and Actions 30d has no per-key count (#3934).
-              <NotRecordedValue key="principal" />,
-              <NotRecordedValue key="grants" />,
-              <NotRecordedValue key="createdBy" />,
-              <span key="lastUsed" className={`${mono} text-[11px] text-dim`}>
-                {key.lastUsedAt === null ? (
-                  t("neverUsed")
-                ) : (
-                  <DateCell iso={key.lastUsedAt} />
-                )}
-              </span>,
-              <NotRecordedValue key="actions30d" />,
-              <KeyExpiryCell key="expires" apiKey={key} now={now} />,
-              <KeyActionsCell
-                key="actions"
-                apiKey={key}
-                org={org}
-                ws={ws}
-                archived={archived}
-                now={now}
-                listedIds={listedIds}
-                after={here}
-              />,
-            ],
-          }))}
-        />
-      )}
+      <RouteTabPanel panel={WORKSPACE_PANEL}>
+        {archivedNote}
+        {kept.length === 0 ? (
+          <p
+            className={`${emptyLine} ${panelBody}`}
+            data-state={
+              show === "all" || ended === 0 ? "empty" : "empty-filtered"
+            }
+          >
+            {show === "all" || ended === 0
+              ? t("empty")
+              : t("emptyFiltered", { ended })}
+          </p>
+        ) : (
+          <ListTable
+            label={t("tableLabel")}
+            columns={[
+              { label: t("columns.name") },
+              { label: t("columns.principal") },
+              { label: t("columns.grants") },
+              { label: t("columns.createdBy") },
+              { label: t("columns.lastUsed") },
+              { label: t("columns.actions30d"), numeric: true },
+              { label: t("columns.expires") },
+              { label: t("columns.actions"), hidden: true },
+            ]}
+            empty={t("noMatch")}
+            rows={kept.map((key) => ({
+              key: key.id,
+              data: { "data-api-key": key.id },
+              cells: [
+                <div key="name">
+                  <div className="font-semibold text-foreground md:truncate">
+                    {key.name}
+                  </div>
+                  <div className={`${mono} text-[11px] text-dim md:truncate`}>
+                    {t("masked", { prefix: key.prefix })}
+                  </div>
+                </div>,
+                // Principal, Grants and Created by: list_api_keys returns none
+                // of them, and Actions 30d has no per-key count (#3934).
+                <NotRecordedValue key="principal" />,
+                <NotRecordedValue key="grants" />,
+                <NotRecordedValue key="createdBy" />,
+                <span key="lastUsed" className={`${mono} text-[11px] text-dim`}>
+                  {key.lastUsedAt === null ? (
+                    t("neverUsed")
+                  ) : (
+                    <DateCell iso={key.lastUsedAt} />
+                  )}
+                </span>,
+                <NotRecordedValue key="actions30d" />,
+                <KeyExpiryCell key="expires" apiKey={key} now={now} />,
+                <KeyActionsCell
+                  key="actions"
+                  apiKey={key}
+                  org={org}
+                  ws={ws}
+                  archived={archived}
+                  now={now}
+                  listedIds={listedIds}
+                  after={here}
+                />,
+              ],
+            }))}
+          />
+        )}
+      </RouteTabPanel>
       <div className={panelBody}>
         <p className={note}>{t("note")}</p>
       </div>

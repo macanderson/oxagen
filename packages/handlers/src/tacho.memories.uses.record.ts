@@ -1,5 +1,5 @@
 // tacho.memories.uses.record.ts: the memory files runs read on an enrolled
-// host, and the memory files each full scan found there (ADR-245).
+// host, and the memory files each full scan found there (ADR-248).
 //
 // The daemon's hook sees each Claude Code Read, Grep, and Bash call that
 // names a memory file, and its memory reader lists every memory file at each

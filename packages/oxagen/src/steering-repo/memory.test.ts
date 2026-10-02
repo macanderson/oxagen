@@ -63,7 +63,7 @@ describe("memory", () => {
     ["an id with no mem_ prefix", { id: "01K5QK9A" }, ["id"], "invalid_string"],
     ["an agent that is not a lineage", { agent: "Release Bot" }, ["agent"], "invalid_string"],
     ["a run with no run_ prefix", { run: "01K5QK7D" }, ["run"], "invalid_string"],
-    ["an unknown capture", { capture: "import" }, ["capture"], "invalid_enum_value"],
+    ["an unknown capture", { capture: "telepathy" }, ["capture"], "invalid_enum_value"],
     ["an empty statement", { statement: "" }, ["statement"], "too_small"],
     ["a statement over 2,000 characters", { statement: "x".repeat(2001) }, ["statement"], "too_big"],
     ["an unknown kind", { kind: "rule" }, ["kind"], "invalid_enum_value"],

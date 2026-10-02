@@ -28,6 +28,11 @@ describe("build", () => {
     expect(first.html).not.toMatch(/\b20\d\d-\d\d-\d\dT/); // no build timestamps
     for (const f of flows) expect(first.html).toContain(`id="${f.id}"`);
     expect(first.model.capabilities.length).toBeGreaterThan(100);
+    // The inventory section renders, and every CI_REGISTRY entry it lists has
+    // a reader in this tree (pnpm env:check fails the run otherwise).
+    expect(first.html).toContain('<section id="secrets">');
+    expect(first.model.ci.length).toBeGreaterThan(0);
+    for (const c of first.model.ci) expect(c.workflows, c.name).not.toEqual([]);
     expect(
       first.model.apiRoutes.filter((r) => r.capability).length /
         first.model.apiRoutes.length,

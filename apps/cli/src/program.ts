@@ -676,7 +676,7 @@ export function buildProgram(): Command {
   const steeringCmd = program
     .command("steering")
     .description(
-      "Steering freshness: whether .oxagen/ carries the records merged on the production branch",
+      "Steering records: whether .oxagen/ carries the ones merged on the production branch, and Markdown import",
     );
   steeringCmd
     .command("status")
@@ -745,6 +745,51 @@ export function buildProgram(): Command {
         await steeringHooks(action, opts);
       },
     );
+  steeringCmd
+    .command("import")
+    .argument(
+      "<paths...>",
+      "Markdown files, or folders to search for .md, .markdown, and .mdx files",
+    )
+    .description(
+      "Read Markdown files into steering records and Cedar policies. Previews unless --yes.",
+    )
+    .option(
+      "--as <target>",
+      "records or policies for every file. Without it, each file takes the target its text implies, such as policies for a file with a cedar block.",
+    )
+    .option(
+      "-y, --yes",
+      "Open one steering PR with every row marked add. Records that conflict with a published record are left out.",
+    )
+    .option("--json", "Output JSON")
+    .action(
+      async (
+        paths: string[],
+        opts: { as?: string; yes?: boolean; json?: boolean },
+      ) => {
+        const { handleSteeringImport } = await import(
+          "./commands/steering-import.js"
+        );
+        await handleSteeringImport(paths, opts);
+      },
+    );
+
+  // ── tools: the workspace's MCP servers (migrate_tools_to_steering) ─────────
+
+  const toolsCmd = program
+    .command("tools")
+    .description("The workspace's connected MCP servers and their tools");
+  toolsCmd
+    .command("migrate")
+    .description(
+      "Open the pull request that moves the workspace's MCP servers into its steering repo, or print the one already open",
+    )
+    .option("--json", "Output JSON")
+    .action(async (opts: { json?: boolean }) => {
+      const { toolsMigrate } = await import("./commands/tools.js");
+      await toolsMigrate(opts);
+    });
 
   // ── run: the recorded run (export_run, get_run_export) ────────────────────
 

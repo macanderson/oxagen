@@ -31,6 +31,7 @@ const REVIEW_CODES = [
   "tool_key_collision",
   "test_invalid",
   "test_holds_credential",
+  "tool_paging_missing",
 ] as const;
 
 type ReviewCode = (typeof REVIEW_CODES)[number];

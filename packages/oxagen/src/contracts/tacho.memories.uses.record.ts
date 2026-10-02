@@ -1,6 +1,6 @@
 /**
  * The memory files a run read on an enrolled host, and the memory files each
- * full scan found there, sent by the Tacho daemon (ADR-245).
+ * full scan found there, sent by the Tacho daemon (ADR-248).
  *
  * A use names the file, the run's root session as the host knows it, how many
  * times the run read the file since the host last reported, and when it last

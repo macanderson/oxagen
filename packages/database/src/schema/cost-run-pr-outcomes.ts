@@ -19,6 +19,7 @@ import {
   check,
   index,
   integer,
+  jsonb,
   text,
   timestamp,
   unique,
@@ -213,6 +214,89 @@ export const runPrReverts = costSchema.table(
     targetCheck: check(
       "run_pr_reverts_target_check",
       sql`(${t.number} > 0 AND ${t.mergeCommitSha} IS NULL) OR (${t.number} IS NULL AND ${t.mergeCommitSha} IS NOT NULL)`,
+    ),
+  }),
+);
+
+/** One pull request receipt a ledger run recorded, as the walk keeps it. */
+export interface RunPrReceipt {
+  repositoryId: string;
+  number: number;
+  headSha: string | null;
+}
+
+/** Why the refresh could not write a ledger run's rows on its last try. */
+export const RUN_PR_RECEIPT_WALK_UNRESOLVED = [
+  "run_not_found",
+  "repository_not_connected",
+  "read_failed",
+] as const;
+
+// cost.run_pr_receipt_walks: where the outcome refresh stands in each ledger
+// run's pull request receipts (#4511).
+//
+// One pass reads at most 20 pages of 500 events per run. `after_seq` is the
+// run_seq of the last event read, and the next pass resumes after it, so a run
+// of any length is read in full within a bounded number of passes. `receipts`
+// holds what the walk found so far. The refresh writes the run's outcome rows
+// only once the walk is `complete` and every receipt names a connected
+// repository, since rows for part of a run would read as the whole of it. A
+// run it cannot resolve records why in `unresolved` and waits until
+// `retry_after`, so it holds no slot of the pass meanwhile. The refresh
+// deletes a workspace's rows created more than 31 days ago. Like
+// `run_pr_outcomes`, it is a derived index.
+export const runPrReceiptWalks = costSchema.table(
+  "run_pr_receipt_walks",
+  {
+    id: uuid("id").primaryKey().default(uuidv7Default),
+    ...orgScopeMixin(),
+    createdAt: ts("created_at").notNull().defaultNow(),
+    updatedAt: ts("updated_at").notNull().defaultNow(),
+    /** The ledger run's public id (`arun_…`). */
+    runId: text("run_id").notNull(),
+    /** The `run_seq` of the last event the walk read; null before the first page. */
+    afterSeq: text("after_seq"),
+    /** True once the walk read the run's last event. */
+    complete: boolean("complete").notNull().default(false),
+    /** The receipts read so far. */
+    receipts: jsonb("receipts")
+      .$type<RunPrReceipt[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    /** When a pass last walked the run or tried to name its receipts. */
+    attemptedAt: ts("attempted_at").notNull(),
+    /** Why the last try wrote no rows; null when nothing stands in the way. */
+    unresolved: text("unresolved"),
+    /** When the refresh tries an unresolved run again. */
+    retryAfter: ts("retry_after"),
+  },
+  (t) => ({
+    runUniq: uniqueIndex("run_pr_receipt_walks_run_uniq").on(
+      t.orgId,
+      t.workspaceId,
+      t.runId,
+    ),
+    // The refresh's prune of rows whose runs left the window.
+    createdIdx: index("run_pr_receipt_walks_created_idx").on(
+      t.orgId,
+      t.workspaceId,
+      t.createdAt,
+    ),
+    runIdCheck: check(
+      "run_pr_receipt_walks_run_id_check",
+      sql`${t.runId} ~ '^arun_[0-9a-z]+$'`,
+    ),
+    receiptsCheck: check(
+      "run_pr_receipt_walks_receipts_check",
+      sql`jsonb_typeof(${t.receipts}) = 'array'`,
+    ),
+    unresolvedCheck: check(
+      "run_pr_receipt_walks_unresolved_check",
+      sql`${t.unresolved} IS NULL OR ${t.unresolved} IN ('run_not_found', 'repository_not_connected', 'read_failed')`,
+    ),
+    retryCheck: check(
+      "run_pr_receipt_walks_retry_check",
+      sql`(${t.unresolved} IS NULL) = (${t.retryAfter} IS NULL)`,
     ),
   }),
 );

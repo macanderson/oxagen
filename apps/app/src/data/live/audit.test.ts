@@ -216,6 +216,7 @@ describe("audit.exportEvents", () => {
 describe("audit.retention", () => {
   const posture = {
     includedMonths: 12,
+    includedDays: 360,
     effectiveRetentionDays: 2555,
     extendedRetentionEnabled: true,
     usdPerGbMonth: 0.023,

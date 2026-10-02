@@ -1,6 +1,6 @@
 // The Steering hub (roadmap pages/steering.md; #2961): the header with the
-// governance chip and the one gold action, the five tabs, the Library's shelf
-// row, and the body of the tab or shelf in view.
+// governance chip, Import Markdown (#4913), and the one gold action, the five
+// tabs, the Library's shelf row, and the body of the tab or shelf in view.
 //
 // Every tab reads the record registry first, because the Library's count sits
 // on the Library tab wherever the reader is, and because that read is the
@@ -26,6 +26,7 @@ import { Skills, SkillsLoading } from "@/features/skills";
 import type { WsCtx } from "@/server/viewer";
 import { SteeringCreate, tabHoldsPrimary } from "./create-action";
 import { GovernanceChip } from "./governance";
+import { ImportMarkdown } from "./import/import-markdown";
 import { LibraryAll } from "./library-all";
 import { readLibrary } from "./library-read";
 import { SteeringEmpty, SteeringFailure } from "./page-state";
@@ -41,13 +42,9 @@ import { OntologyShelf } from "./tabs/ontology";
 import { ProposalsTab } from "./tabs/proposals";
 import { RecordsShelf } from "./tabs/records";
 import { SkillSourceShelf } from "./tabs/skill-source";
-import {
-  type SteeringAt,
-  type SteeringView,
-  TAB_PANEL_ID,
-  tabId,
-} from "./view";
+import { type SteeringAt, type SteeringView, TAB_PANEL_ID } from "./view";
 import { routes } from "@/shared/safe-path";
+import { RouteTabPanel } from "@/ui/route-tabs";
 
 /** The page header, drawn by the route with these actions; the route owns its title key. */
 export type SteeringHeader = (actions: ReactNode) => ReactNode;
@@ -312,6 +309,9 @@ export async function Steering({
             workspace={ctx.wsName}
             governance={governance}
           />
+          {/* Import Markdown shows on an empty library too: a workspace with
+              no record is where a folder of rules starts (#4913). */}
+          <ImportMarkdown org={ctx.orgSlug} ws={ctx.wsSlug} />
           {empty || bodyGold === "empty" ? null : (
             <SteeringCreate
               view={view}
@@ -331,12 +331,7 @@ export async function Steering({
           proposals: hub.ok ? hub.value.proposalsWaiting : null,
         }}
       />
-      <div
-        role="tabpanel"
-        id={TAB_PANEL_ID}
-        aria-labelledby={tabId(view.tab)}
-        className="flex flex-col gap-4"
-      >
+      <RouteTabPanel panel={TAB_PANEL_ID} className="flex flex-col gap-4">
         {view.tab === "library" ? (
           <ShelfRow at={at} current={view.shelf ?? "all"} counts={shelves} />
         ) : null}
@@ -356,7 +351,7 @@ export async function Steering({
             repository,
           })
         )}
-      </div>
+      </RouteTabPanel>
     </div>
   );
 }

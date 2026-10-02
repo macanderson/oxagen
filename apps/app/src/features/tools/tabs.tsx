@@ -3,8 +3,11 @@
 // Off switches). The tool registry and the toolbelts carry no tab of their
 // own: they are views of Tool servers, beside the servers list, so the chain
 // the Tools page made readable (Provider → Tool → Toolbelt → Agent) stays one
-// click apart. The row is links marked with `aria-current`, drawn smaller than
-// the tab strip so it reads as part of the tab, not a second row of tabs.
+// click apart. The row is a `RouteTabs` row in the `pill` look
+// (ADR-243): a tablist with one tab stop and the arrow
+// keys, drawn smaller than the tab strip so it reads as part of the tab. The
+// selected view names the panel the Tool servers tab draws under the row
+// (`SERVER_VIEW_PANEL`).
 //
 // Each count is one the record can stand behind. Servers counts the roster.
 // Tools counts the versions of the registry's first page, with a plus when a
@@ -12,23 +15,19 @@
 // because the belts are read on their own view only.
 import { useLocale, useTranslations } from "next-intl";
 import { formatCount } from "@/ui/money-format";
-import { SafeLink } from "@/ui/navigation";
+import { RouteTabs } from "@/ui/route-tabs";
 import { type ToolsAt, type ToolsTab, toolsLink } from "./view";
 
 /** The Tool servers views, in the order the row draws them. */
 const SERVER_VIEWS = ["providers", "tools", "toolbelts"] as const;
 type ServerView = (typeof SERVER_VIEWS)[number];
 
+/** The id of the panel a view's body draws in, under the row. */
+export const SERVER_VIEW_PANEL = "server-view-panel";
+
 export function isServerView(tab: ToolsTab): tab is ServerView {
   return SERVER_VIEWS.some((view) => view === tab);
 }
-
-const pill =
-  "inline-flex min-h-7 max-md:min-h-11 items-center gap-1.5 rounded-full border px-3 text-[12.5px] font-medium transition-colors " +
-  "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring";
-const pillIdle =
-  "border-border text-muted-foreground hover:bg-hl hover:text-foreground";
-const pillCurrent = "border-foreground/30 bg-hl text-foreground";
 
 export function ServerViews({
   at,
@@ -59,27 +58,20 @@ export function ServerViews({
     }
   };
   return (
-    <nav aria-label={t("label")} className="flex flex-wrap gap-1.5">
-      {SERVER_VIEWS.map((view) => {
+    <RouteTabs
+      label={t("label")}
+      panel={SERVER_VIEW_PANEL}
+      look="pill"
+      tabs={SERVER_VIEWS.map((view) => {
         const n = count(view);
-        const here = view === current;
-        return (
-          <SafeLink
-            key={view}
-            to={toolsLink(at, { tab: view })}
-            data-view={view}
-            aria-current={here ? "page" : undefined}
-            className={`${pill} ${here ? pillCurrent : pillIdle}`}
-          >
-            {t(view)}
-            {n === null ? null : (
-              <span data-count={view} className="text-muted-foreground">
-                {n}
-              </span>
-            )}
-          </SafeLink>
-        );
+        return {
+          to: toolsLink(at, { tab: view }),
+          label: t(view),
+          current: view === current,
+          name: view,
+          ...(n === null ? {} : { count: <span data-count={view}>{n}</span> }),
+        };
       })}
-    </nav>
+    />
   );
 }

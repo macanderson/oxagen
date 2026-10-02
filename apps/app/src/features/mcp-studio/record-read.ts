@@ -52,6 +52,7 @@ function toStudioRecord(out: ServerOutput): StudioRecord {
       definitionBudget: out.exposure.budget,
     },
     sync: { schedule: out.sync.schedule, lastAt: out.sync.lastAt },
+    feedbackWindowDays: out.feedback.windowDays,
     tools: out.tools.map((tool) => {
       const shape = tool.key === null ? undefined : shaping.get(tool.key);
       return {

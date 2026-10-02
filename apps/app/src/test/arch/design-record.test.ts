@@ -1,6 +1,6 @@
 // INV-32 (ARCHITECTURE.md §4, ADR-226): the app has two sources of record. The
 // v3 mockup at the pin in ADR-226 (`mockups/src/v3.css` in oxagen-roadmap) sets
-// layout and behavior. The brand kit (`macanderson/oxagen-brand`, synced into
+// layout and behavior. The brand kit (`oxageninc/brand`, synced into
 // `packages/ui/src/styles/house-tokens.css`) sets tokens, type, and marks.
 // `src/ui/control-styles.ts`, `src/ui/table.tsx`, `src/ui/route-tabs.tsx`,
 // `src/ui/badge.tsx` and `src/app/globals.css` carry the rules as recipes.
@@ -77,7 +77,12 @@ describe("design record: the recipes carry the mockup's rules", () => {
     // v3 draws page tabs as a muted track with a raised tab. Until a slice
     // ports that, the gold underline stays the app's rule for every tab row.
     expect(lightRoot()).toMatch(/--tab-border-active:\s*var\(--gold\)/);
-    expect(tabLink).toContain("aria-[current=page]:border-gold");
+    // A tab row is a tablist (ADR-243, #3995), so the
+    // selected tab is the one with `aria-selected`, as engine.css keys
+    // `.tab[aria-selected]`. A tab carries no `aria-current`.
+    expect(tabLink).toContain("aria-selected:border-gold");
+    expect(tabLink).toContain("aria-selected:text-foreground");
+    expect(tabLink).not.toContain("aria-[current=page]");
     expect(tabLink).not.toContain("border-foreground");
   });
 
@@ -346,7 +351,7 @@ describe("design record: one face for every heading and every line", () => {
       /--font-wordmark:\s*var\(--font-space-grotesk, "Space Grotesk"\)/,
     );
     // The kit's tokens are the rule. A local @theme that re-points a face
-    // would be a second copy of it (macanderson/oxagen-brand#27).
+    // would be a second copy of it (oxageninc/brand#27).
     const shared = readFileSync(path.join(styles, "globals.css"), "utf8");
     expect(shared).not.toMatch(/^\s*--font-(display|sans|wordmark|mono):/m);
   });

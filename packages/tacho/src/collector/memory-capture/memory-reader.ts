@@ -30,7 +30,7 @@
  *
  * A scan also lists every memory it found, one list per location, for
  * `record_tacho_memory_uses`, which retires the memories a scan no longer
- * finds (ADR-245). A location's list comes back only when the scan read all
+ * finds (ADR-248). A location's list comes back only when the scan read all
  * of it: every folder listed, where a missing folder counts as empty, or the
  * whole store read. A partial list would retire memories that still exist.
  * A location whose folder or store is not there sends no list. A harness

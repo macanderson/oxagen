@@ -29,7 +29,7 @@ not help.
 # Writing rules
 
 The full use and avoid lists, with replacements, are in the branding skill's
-`references/words.md`, which lives in `macanderson/oxagen-brand` under
+`references/words.md`, which lives in `oxageninc/brand` under
 `skills/oxagen-branding/`. The stub at `.claude/skills/oxagen-branding/` says
 how to read it from `main`.
 
@@ -74,6 +74,16 @@ how to read it from `main`.
   ("robust"), or slogans.
 - Do not use metaphors or clever labels for actions or instructions. Prefer
   direct labels: "Activity history," not "Your work’s memory."
+
+## Settings in docs
+
+A capability doc or an operator runbook never says which setting, or which
+value, turns a control on. It says the control depends on a deployment
+setting and links the setting's `ENV_REGISTRY` entry
+(`packages/config/src/registry.ts`). The entry's description is the one place
+that claims what the setting does. Four docs on #3169 said a control was on
+while the code had it off, and the fix was one place to be wrong instead of
+four. `AGENTS.md` has the full rule (#3202).
 
 ## Words and punctuation to avoid
 

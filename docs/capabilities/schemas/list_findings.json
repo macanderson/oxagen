@@ -236,7 +236,8 @@
                 "model_class_fit",
                 "repeated_instructions",
                 "recurring_runs",
-                "spend_with_no_outcome"
+                "spend_with_no_outcome",
+                "retry_loops"
               ]
             },
             "level": {

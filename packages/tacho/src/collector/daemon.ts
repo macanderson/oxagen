@@ -707,7 +707,7 @@ async function initializeDaemon(
     );
   // The memory files each Claude Code run reads, counted as uses of their
   // memories and sent after each memory scan (`./memory-capture/memory-uses`,
-  // ADR-245). Only a daemon with a started listener scans, and only that one
+  // ADR-248). Only a daemon with a started listener scans, and only that one
   // counts. Codex counts its own uses of each memory, and the counts this
   // host last reported live in `memory-counts.json`, so a restart reports
   // only the rise since (`./memory-capture/memory-counts`).
@@ -4669,7 +4669,7 @@ async function initializeDaemon(
   // that a core capability carries no flag while Oxagen has no customers
   // (ADR-238). After each scan the daemon reports the memory files runs read
   // since the last one, and the files a complete scan found, so a memory
-  // whose file is gone retires (ADR-245).
+  // whose file is gone retires (ADR-248).
   let memoryTimer: NodeJS.Timeout | undefined;
   if (options.listen ?? true) {
     const codexMemories = createCodexMemoryStore({

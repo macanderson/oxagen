@@ -1,4 +1,4 @@
-# ADR-245: Memories keep their rows and rank by use
+# ADR-248: Memories keep their rows and rank by use
 
 - **Status:** Accepted. Mac ruled on 2026-09-30 that memories rank by use.
   The mechanism below is the agent's reading of that ruling.

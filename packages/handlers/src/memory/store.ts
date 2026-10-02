@@ -1,11 +1,11 @@
 // memory/store.ts: the Postgres side of the memory pipeline (ADR-206,
-// ADR-245).
+// ADR-248).
 //
 // Each method but listCurateWorkspaces opens the scope's tenant transaction
 // and filters by the scope as well, so one missing policy still leaks no row.
 // A method given an empty id, lineage, or use list returns before any query.
 //
-// A memory keeps its row for life (ADR-245). `state` moves it through
+// A memory keeps its row for life (ADR-248). `state` moves it through
 // waiting, in_pr, promoted, dismissed, and retired, and nothing here deletes
 // a memory.
 import { schema, type Tx, withSystemDb, withTenantDb } from "@oxagen/database";

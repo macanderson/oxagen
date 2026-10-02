@@ -34,6 +34,7 @@ const fakeCtx = {
 
 const OUTPUT = {
   includedMonths: 12,
+  includedDays: 360,
   effectiveRetentionDays: null,
   extendedRetentionEnabled: false,
   usdPerGbMonth: 0.08,

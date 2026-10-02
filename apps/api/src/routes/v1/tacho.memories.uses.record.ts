@@ -8,7 +8,7 @@ import type { AppEnv } from "../../app";
 
 /**
  * Count the memory files the calling host's runs read, and retire the
- * memories whose files its full scans no longer find (ADR-245).
+ * memories whose files its full scans no longer find (ADR-248).
  *
  * Machine-to-machine: the host's API key carries its org and workspace, so
  * this route lives on the static /v1/tacho router and refuses anything but an

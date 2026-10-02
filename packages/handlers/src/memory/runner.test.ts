@@ -1,4 +1,4 @@
-// The memory runner's reads and writes (ADR-206, ADR-245), end to end over
+// The memory runner's reads and writes (ADR-206, ADR-248), end to end over
 // fakes.
 //
 // Capture and the digest read a wrapped run through the in-memory run stores
@@ -1198,7 +1198,7 @@ describe("curateMemories", () => {
       dropped: 2,
       pullRequest: null,
     });
-    // Both rows stay (ADR-245).
+    // Both rows stay (ADR-248).
     expect(
       store.memories.map((m) => [m.statement, m.state, m.promotedLineage]),
     ).toEqual([
@@ -1429,7 +1429,7 @@ describe("curateMemories", () => {
     const again = gh.pulls[1];
     expect(again?.head).toBe("memory/2026-09-30");
     // The first memory waited again after its PR closed, so the record cites
-    // it beside the three new ones (ADR-245).
+    // it beside the three new ones (ADR-248).
     expect(again?.body).toContain(
       `- \`${PLANNED_PATH}\`. It cites 4 memories from 3 runs.`,
     );

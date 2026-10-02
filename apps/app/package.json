@@ -34,6 +34,7 @@
     "@oxagen/oxagen": "workspace:*",
     "@oxagen/plugins": "workspace:*",
     "@oxagen/rules": "workspace:*",
+    "@oxagen/steering-check": "workspace:*",
     "@oxagen/storage": "workspace:*",
     "@oxagen/telemetry": "workspace:*",
     "@oxagen/ui": "workspace:*",

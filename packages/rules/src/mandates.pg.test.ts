@@ -26,6 +26,8 @@
  *     rule_ids and input_digest; the same call after approval proceeds on
  *     the held reservation and marks the approval used, once; the settlement
  *     closure settles with the effect id read from the output
+ *   - the parked approval names the run that parked it (`run_public_id`),
+ *     and null when no run was in scope or the id names no run here (#3478)
  *   - a capability that is no declared tool, or a tool with no consequence
  *     tag, yields no opinion and writes nothing
  *   - an approval past its window: expireApproval releases what the call
@@ -76,6 +78,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     const NOW = new Date("2026-09-14T12:00:00Z");
     const NEXT_MONTH = new Date("2026-10-02T12:00:00Z");
     const mandateIds: string[] = [];
+    const runIds: string[] = [];
 
     const inScope = <T>(fn: () => Promise<T>) =>
       runInTenantScope({ orgId, workspaceId }, fn);
@@ -273,6 +276,11 @@ describe.skipIf(!process.env.DATABASE_URL)(
           await tx
             .delete(schema.mandates)
             .where(inArray(schema.mandates.id, mandateIds));
+        }
+        if (runIds.length > 0) {
+          await tx
+            .delete(schema.agentRuns)
+            .where(inArray(schema.agentRuns.id, runIds));
         }
         await tx
           .delete(schema.tools)
@@ -976,6 +984,61 @@ describe.skipIf(!process.env.DATABASE_URL)(
       // The approval is single-use: the same call again parks a new row.
       const again = await decide(checkArgs(agent, input));
       expect(again.kind).toBe("pending");
+    });
+
+    // #3478. The mandate gate is the one approval writer that recorded no
+    // run, so a run's approvals list missed every call a mandate parked, and
+    // `resolve_approval` could not refuse the run that raised one (ADR-175).
+    it("records the run that parked the call, and null when no run resolves in this workspace", async () => {
+      const agent = randomUUID();
+      await insertMandate(agent, {
+        approvalRules: {
+          humanAbove: { amount: "100000000" },
+          alwaysHumanFor: [],
+          approvers: [],
+        },
+      });
+      const runId = randomUUID();
+      const [run] = await withSystemDb((tx) =>
+        tx
+          .insert(schema.agentRuns)
+          .values({
+            id: runId,
+            orgId,
+            workspaceId,
+            surface: "api-chat",
+            spec: {},
+          })
+          .returning({ publicId: schema.agentRuns.publicId }),
+      );
+      runIds.push(runId);
+      const runOf = async (approvalPublicId: string) => {
+        const [row] = await withSystemDb((tx) =>
+          tx
+            .select({ runPublicId: schema.approvalRequests.runPublicId })
+            .from(schema.approvalRequests)
+            .where(eq(schema.approvalRequests.publicId, approvalPublicId)),
+        );
+        return row?.runPublicId;
+      };
+      // Each case parks its own row: a different amount is a different call.
+      const parkWith = async (value: string, extra: Record<string, unknown>) => {
+        const parked = await decide(
+          checkArgs(agent, { amount: { value } }, extra),
+        );
+        expect(parked.kind).toBe("pending");
+        if (parked.kind !== "pending") throw new Error("not parked");
+        return runOf(parked.approvalPublicId);
+      };
+
+      expect(await parkWith("150.00", { runId })).toBe(run!.publicId);
+      expect(await parkWith("151.00", {})).toBeNull();
+      expect(await parkWith("152.00", { runId: null })).toBeNull();
+      // A run of another workspace, or one that never existed, is not named.
+      expect(await parkWith("153.00", { runId: randomUUID() })).toBeNull();
+      // A placeholder that is no uuid parks the call instead of failing the
+      // check on Postgres's uuid cast.
+      expect(await parkWith("154.00", { runId: "toolbelt-read" })).toBeNull();
     });
 
     it("lets a call under the rule proceed on a fresh reservation and releases it when the handler fails", async () => {

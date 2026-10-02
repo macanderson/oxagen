@@ -26,7 +26,7 @@ import {
   statValue,
 } from "@/ui/control-styles";
 import { formatCount } from "@/ui/money-format";
-import { NotRecordedValue, isoDate } from "./section";
+import { NotRecordedValue, isoDate, retentionDaysBelowPaid } from "./section";
 import type { Statement } from "./statement";
 import { ChargeBasis, StatementAmount } from "./this-period";
 
@@ -94,13 +94,18 @@ function GovernedTile({ statement: s }: { statement: Statement }) {
 function RetainedTile({ retention }: { retention: EvidenceRetention }) {
   const t = useTranslations("billing");
   const locale = useLocale();
+  const days = retentionDaysBelowPaid(retention);
   return (
     <Tile
       name="retained"
       term={t("tiles.retained")}
-      note={t("tiles.retainedNote", {
-        months: formatCount(retention.includedMonths, locale),
-      })}
+      note={
+        days === null
+          ? t("tiles.retainedNote", {
+              months: formatCount(retention.includedMonths, locale),
+            })
+          : t("tiles.retainedDaysNote", { days: formatCount(days, locale) })
+      }
     >
       <NotRecordedValue>{t("notRecorded")}</NotRecordedValue>
     </Tile>

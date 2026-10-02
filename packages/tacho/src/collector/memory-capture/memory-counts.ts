@@ -1,6 +1,6 @@
 /**
  * Memory counts: the uses a harness counted itself, turned into the rise
- * since the last report (ADR-245, lane MEM3).
+ * since the last report (ADR-248, lane MEM3).
  *
  * Codex keeps a `usage_count` on each memory row. Each memory scan reads the
  * count every row holds now (`./codex-store`), and `rises` compares it with

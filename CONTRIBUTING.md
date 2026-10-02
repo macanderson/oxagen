@@ -7,15 +7,23 @@ Oxagen is workforce management for autonomous agents, on the shared agent contro
 - Node.js 24.21.0 or later (`node -v`; `.node-version` holds the pin, so `nvm use` or `fnm use` picks it up)
 - pnpm 12+ (`npm i -g pnpm`) — the repo pins `pnpm@12.6.0` via `packageManager`
 - Docker (for local Postgres :5433, Neo4j :7687, ClickHouse :8123)
+- AWS CLI v2 (`brew install awscli`), signed in to account 916294258235. Every secret and setting lives in SSM Parameter Store (ADR-240)
 
 ## First-Time Setup
 
 ```bash
-cp .env.example .env.local   # fill in required values
+aws sts get-caller-identity  # confirm the AWS CLI is signed in
 pnpm install
-pnpm env:check               # validate .env.local
+pnpm env:pull                # write the four .env.local files from /oxagen/development
 pnpm dev                     # starts Docker + migrations + all apps
 ```
+
+`pnpm env:pull` keeps everything below the override line at the end of each
+`.env.local`, so put machine-specific values there. Without access to Oxagen's
+AWS account, copy `.env.example` to `.env.local` in the root, `apps/app`,
+`apps/api`, and `apps/mcp`, and fill in your own values.
+[`docs/runbooks/secrets-and-variables.md`](docs/runbooks/secrets-and-variables.md)
+covers pulling, saving a value with `pnpm env:push`, and rotating a secret.
 
 ## Git Workflow — branch early, push often, open a PR
 
@@ -190,8 +198,9 @@ Actions, Release, Run workflow, then pick `patch`, `minor` or `major`. That run:
 When the PR merges, the `tag` job tags `v<version>` and `desktop-v<version>`,
 opens the GitHub release with the notes, publishes `@oxagen/cli` to npm, and
 the `desktop-v` tag starts `.github/workflows/desktop.yml`, which builds the
-app on four runners and publishes the installers, their checksums and the
-listing page to https://downloads.oxagen.sh/. The docs page is live at
+app on four runners and publishes the installers, the bare executables, the
+updater files, their checksums, the listing page, and the in-app update feed
+to https://downloads.oxagen.sh/ (ADR-247). The docs page is live at
 https://docs.oxagen.sh/docs/releases/v<version> once main deploys.
 
 The workflow needs the `RELEASE_TOKEN` secret: a fine-grained personal

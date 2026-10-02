@@ -1,6 +1,6 @@
 /**
  * Codex's memories: the rows of `stage1_outputs` in Codex's SQLite store,
- * `<codex home>/memories_1.sqlite`, one memory per source thread (ADR-245,
+ * `<codex home>/memories_1.sqlite`, one memory per source thread (ADR-248,
  * lane MEM3).
  *
  * A row's `raw_memory` opens with a block of `key: value` lines, with or
