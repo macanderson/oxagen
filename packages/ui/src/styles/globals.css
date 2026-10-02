@@ -990,11 +990,13 @@
 
 /*
  * Brand type tokens come from the kit's house-tailwind.css, imported above, in
- * its non-inline @theme: --font-sans and --font-display are Aeonik, --font-mono
- * is Monaspace Neon, and --font-wordmark is Space Grotesk. Every heading and
- * every line of text in the app and the docs is Aeonik, and Space Grotesk
- * sets the wordmarks (Mac, 2026-10-02). The kit carries
- * that rule (oxageninc/brand#80), so this file does not override it.
+ * its non-inline @theme: --font-sans is Aeonik, --font-heading reads it,
+ * --font-display is Space Grotesk, --font-mono is Monaspace Neon, and
+ * --font-wordmark is Space Grotesk. Aeonik sets every line of text and, in the
+ * app, every heading. Space Grotesk sets h1 to h3 on a marketing or customer
+ * site, which points --font-heading at --font-display in its own stylesheet,
+ * and the wordmarks (Mac, 2026-10-02). The kit carries that rule
+ * (oxageninc/brand#83), so this file does not override it.
  */
 
 @custom-variant dark (&:is(.dark *));
@@ -1015,10 +1017,11 @@
   }
 
   /*
-   * TYPE RULE: Aeonik (--font-sans, and --font-display, which names the same
-   * face) sets every heading and everything read. Monaspace Neon (--font-mono)
-   * sets code and identifiers, with texture healing on. Space Grotesk
-   * (--font-wordmark) sets the wordmark only.
+   * TYPE RULE: Aeonik (--font-sans) sets everything read and every h4 to h6.
+   * h1 to h3 read --font-heading, which is Aeonik in the app and Space
+   * Grotesk (--font-display) on a site that points it there, as the docs do.
+   * Monaspace Neon (--font-mono) sets code and identifiers, with texture
+   * healing on. Space Grotesk (--font-wordmark) sets the wordmark.
    */
   h4,
   h5,
@@ -1031,8 +1034,8 @@
   h1,
   h2,
   h3 {
-    font-family: var(--font-display);
-    /* The kit's own heading weight and tracking, drawn in Aeonik.
+    font-family: var(--font-heading);
+    /* The kit's own heading weight and tracking.
        --ox-weight-display (700) is for a page title, which the text-m-h1 and
        text-a-h1 utilities carry. */
     font-weight: var(--ox-weight-heading);

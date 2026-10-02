@@ -32,9 +32,9 @@ describe("styles.css fonts", () => {
     expect(faces).toMatch(/font-family:\s*"Space Grotesk"/);
   });
 
-  it("sets the wordmark in the display face", () => {
+  it("sets the wordmark in the kit's wordmark face", () => {
     expect(rule(".wordmark")).toMatch(
-      /font-family:\s*var\(--ox-font-display\);/,
+      /font-family:\s*var\(--ox-font-wordmark\);/,
     );
   });
 
