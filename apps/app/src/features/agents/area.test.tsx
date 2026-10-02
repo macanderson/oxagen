@@ -516,9 +516,13 @@ describe("Agents page › bodies", () => {
     const calls = await renderArea("runtimes", {}, owner, {
       runtime: enrollment().id,
     });
-    // The table stays behind the drawer.
+    // The table stays behind the drawer. The table reads its rows' agents
+    // for their harness, and the drawer reads its host's agent.
     expect(screen.getByRole("table", { name: "Runtimes" })).toBeInTheDocument();
-    expect(calls.runtimes.agents).toEqual([["acme.core.release-manager"]]);
+    expect(calls.runtimes.agents).toEqual([
+      ["acme.core.release-manager"],
+      ["acme.core.release-manager"],
+    ]);
   });
 
   it.each(["agents", "servers", "switches"] as const)(

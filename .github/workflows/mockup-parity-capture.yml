@@ -97,7 +97,7 @@ env:
 
 jobs:
   capture:
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-large-{0}', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
     # The container, services, job env, and the setup steps down to Seed e2e
     # are copied from pipeline.yml's e2e job, which is their source. Keep them
     # in step with it.

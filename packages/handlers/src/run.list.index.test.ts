@@ -177,6 +177,20 @@ describe("the index page query", () => {
     expect(tacho).toContain('"parent_session_uuid" is null');
   });
 
+  // Mac's ruling of 2026-10-01: the open-source Stella coding agent a
+  // customer runs as a CLI is a customer agent, monitored exactly like Claude
+  // Code and Codex (ADR-235). The in-app assistant's turns leave the list by
+  // their ledger surface. Nothing filters a wrapped session by its runtime or
+  // harness, so a Stella CLI session lists like the others.
+  it("filters no wrapped session by runtime or harness, so the Stella CLI's sessions list", () => {
+    const { sql, params } = pageSql();
+    const { tacho } = branches(sql);
+    expect(tacho).not.toMatch(/"(runtime|harness)" (not )?(in|=|<>|!=|like|ilike)/i);
+    for (const harness of ["claude-code", "codex", "stella"]) {
+      expect(params).not.toContain(harness);
+    }
+  });
+
   it("reads wrapped sessions alone under a pull-request filter", () => {
     const { sql } = pageSql({ sessionsOnly: true });
     expect(sql).not.toContain("union all");
