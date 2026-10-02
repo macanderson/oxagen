@@ -1,5 +1,9 @@
 name: Bug report
 description: Something that exists behaves wrongly (KIND:BUG)
+# The form sets the kind twice over, as the issue type and as its label. The creator still
+# applies the priority, tier, size, and area labels and fills the filing fields.
+type: Bug
+labels: ["KIND:BUG"]
 body:
   - type: markdown
     attributes:
