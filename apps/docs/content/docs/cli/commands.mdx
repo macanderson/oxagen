@@ -231,6 +231,7 @@ oxagen agent unenroll [--harness <name>] [--all] [--token <apiKey>] [--purge] [-
 oxagen agent reassign [--workspace <slug>] [--org <slug>] [--harness <list>] [--token <apiKey>] [--api-url <url>] [--reason <text>] [--default]
 oxagen agent export [--session <id>] [--format <format>] [--out <file>] [--list]
 oxagen agent verify [--harness claude-code|codex|cursor|stella] [--json]
+oxagen agent backfill [--since <date>] [--until <date>] [--project <name>]... [--dry-run] [--json]
 oxagen agent detect [--json]
 oxagen agent hosts [--status active|paused|suspended|revoked] [--limit <n>] [--json]
 ```
@@ -244,8 +245,41 @@ Each of these acts on the machine you run it on, except `hosts`, which reads the
 | `reassign` | Points an agent at another workspace or org. It revokes the enrollment and enrolls again through your CLI login, keeping the device key. `--harness` with no `--workspace` replaces the harness list. `--default` also makes the new org and workspace the CLI default in `config.json`. |
 | `export` | Exports a session from the local event log. `--format trace` writes the `contextgraph-trace` journal, and `--format otlp` writes OTLP JSON. The default, `--format tacho`, writes the recorder's own NDJSON. `--list` lists the sessions in the log. `--out` writes a file in place of stdout. |
 | `verify` | Runs one headless turn of a harness, Claude Code by default, and confirms the collector chained it. `--json` prints the result as JSON. It exits 1 when the turn was not chained. |
+| `backfill` | Records the Claude Code sessions this machine ran before it enrolled. See [oxagen agent backfill](#oxagen-agent-backfill-record-sessions-from-before-enrollment). |
 | `detect` | Lists the harnesses this machine has (Claude Code, Codex, Cursor, Stella, and Claude Desktop) and which of them are enrolled. |
 | `hosts` | Lists every machine enrolled in this workspace, with the tier each of its apps reaches. |
+
+## oxagen agent backfill: record sessions from before enrollment
+
+```bash
+oxagen agent backfill [--since <date>] [--until <date>] [--project <name>]... [--exclude-project <name>]... [--session <id>]... [--dry-run] [--json]
+```
+
+Records the Claude Code sessions this machine ran before it enrolled, from the transcripts Claude Code keeps under `~/.claude/projects`. The running daemon reads each transcript, rebuilds the session's record from it, and sends it to Oxagen the way it sends a live session. The command only asks the daemon and prints its report.
+
+A backfilled run is rebuilt, not watched. Nothing enforced a policy while it ran, so its record names no policy decision, approval, or token. Its git facts are the branch and directory the transcript recorded, and its cost is an estimate from the price book on the day it ran. That cost never counts toward a budget or a bill. Run `--dry-run` first and read the report before the first real pass.
+
+| Flag | Description |
+|---|---|
+| `--since <date>` | Only sessions that started on or after this UTC date, written `YYYY-MM-DD`. |
+| `--until <date>` | Only sessions that started before this UTC date. |
+| `--project <name>` | Only this folder under `~/.claude/projects`. Repeat it for more folders. A folder's name is its working directory with each `/` and `.` written as `-`. |
+| `--exclude-project <name>` | Skip this folder. It applies after `--project`. A machine enrolled into a work workspace should skip its personal folders. |
+| `--session <id>` | Only this session and its subagents. Repeat it for more sessions. |
+| `--dry-run` | Read every transcript, count what a pass would record, and ask Oxagen which sessions it already holds. Record and send nothing. |
+| `--json` | Print the report as one JSON object, with no progress lines. |
+
+The report prints counts only: each folder with its session count and dates, the sessions by what happened to them, the records by kind, the tokens by model, and the read errors. It never prints a prompt, a reply, a title, a tool input, or a path from inside a transcript.
+
+A pass leaves a session alone when this machine already records it live, when Oxagen already holds it, when an earlier pass recorded it, or when its transcript changed in the last 15 minutes. It asks Oxagen first, so a machine that lost its local state does not record a session twice. When Oxagen does not answer, the pass records nothing. Run the command again later. A pass that stops partway resumes where it stopped the next time it runs.
+
+| Exit code | Meaning |
+|---|---|
+| `0` | The pass finished. A skipped session is not a failure. |
+| `1` | The pass stopped before the end. Run the command again to resume. |
+| `2` | An option is invalid. |
+| `3` | The daemon did not answer. `oxagen agent status` shows why. |
+| `4` | This machine is not enrolled. |
 
 ## oxagen agent run: one agent session under Oxagen
 

@@ -76,7 +76,12 @@ import {
 } from "@oxagen/recorder";
 import { clickhouse } from "./clickhouse";
 
-type CostFrameBasis = "gateway_observed" | "client_attested";
+/**
+ * How a frame's cost is known. `estimated` is a frame a backfill rebuilt from
+ * a transcript (ADR-161): the price book prices it at its own `ts`, and the
+ * figure is an estimate of spend that happened before the host recorded it.
+ */
+type CostFrameBasis = "gateway_observed" | "client_attested" | "estimated";
 
 export interface ModelCallFrameRow {
   /** RFC 3339. */
@@ -397,6 +402,9 @@ const FRAME_PROXY_OBSERVED = `toUInt8(c.metering = '${TACHO_METERING_OBSERVED}' 
  */
 const CACHE_KEEP_ALIVE_VALUE = "attrs['oxagen.cache_keep_alive']";
 
+/** The mark a backfilled frame carries (ADR-161, `RECORD_BASIS_ATTR`). */
+const RECORD_BASIS_VALUE = "attrs['oxagen.record_basis']";
+
 /**
  * The proxy sighting's token sources and system context, grouped on one
  * call id, for the join named `alias` on `c.<key>`. Keyed on each id apart
@@ -622,7 +630,8 @@ export async function readModelCallFrames(args: {
         ${FRAME_CONTEXT_DIGEST} AS system_context_digest,
         ${consume === undefined ? FRAME_CONTEXT_PARTS : "NULL"} AS system_context_parts,
         ${FRAME_PROXY_OBSERVED} AS proxy_observed,
-        toUInt8(c.keep_alive = '1') AS cache_keep_alive
+        toUInt8(c.keep_alive = '1') AS cache_keep_alive,
+        toUInt8(c.record_basis = 'backfill') AS backfilled
       FROM (
         SELECT
           ts, seq, session_uuid, model, provider, input_tokens, output_tokens,
@@ -631,7 +640,8 @@ export async function readModelCallFrames(args: {
           message_id, tool_definition_tokens, context_frame_tokens,
           steering_tokens, system_context_digest, system_context_parts,
           ${METERING_VALUE} AS metering,
-          ${CACHE_KEEP_ALIVE_VALUE} AS keep_alive
+          ${CACHE_KEEP_ALIVE_VALUE} AS keep_alive,
+          ${RECORD_BASIS_VALUE} AS record_basis
         FROM tacho_events FINAL
         WHERE org_id = {orgId:UUID}
           AND workspace_id = {workspaceId:UUID}
@@ -709,6 +719,7 @@ export async function readModelCallFrames(args: {
     system_context_parts?: string | null;
     proxy_observed?: string | number | null;
     cache_keep_alive?: string | number | null;
+    backfilled?: string | number | null;
   };
   return consumeFrames<Row, ModelCallFrameRow>(result, (r) => {
     const parts = parseSystemContextParts(r.system_context_parts);
@@ -724,12 +735,15 @@ export async function readModelCallFrames(args: {
       reasoning: Number(r.reasoning),
       serverToolRequests: Number(r.server_tool_request),
       reportedCostMicros: r.cost_micros,
+      // A call a backfill rebuilt from a transcript is estimated (ADR-161).
       // A call the loopback proxy carried is gateway_observed. A row with no
       // mark (older rows, or a call the proxy never saw) stays client_attested.
       basis:
-        Number(r.proxy_observed ?? 0) === 1
-          ? "gateway_observed"
-          : "client_attested",
+        Number(r.backfilled ?? 0) === 1
+          ? "estimated"
+          : Number(r.proxy_observed ?? 0) === 1
+            ? "gateway_observed"
+            : "client_attested",
       sessionUuid: r.session_uuid,
       toolDefinitionTokens: nullableCount(r.tool_definition_tokens),
       contextFrameTokens: nullableCount(r.context_frame_tokens),

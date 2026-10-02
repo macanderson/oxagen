@@ -320,7 +320,10 @@ export class BackfillLedger {
   ): { cursor: ChainCursor; turnSeq: number } | undefined {
     const path = this.byUuid.get(sessionUuid);
     const entry = path === undefined ? undefined : this.entries.get(path);
-    if (entry === undefined || entry.status === "failed") return undefined;
+    // A failed pass's chain is not continued, and a file with no timed
+    // record has no chain to continue.
+    if (entry === undefined || entry.status === "failed" || entry.next_seq === 0)
+      return undefined;
     return {
       cursor: {
         seq: entry.next_seq,
@@ -905,6 +908,7 @@ async function sealTranscript(
     try {
       const read = await readSlices(file.path, sliceBytes, async (lines) => {
         await deps.exclusive(candidate.sessionId, () => {
+          if (deps.heldLocally(candidate.sessionId)) throw new TakenLive();
           const out: TachoEvent[] = [];
           for (const line of lines)
             out.push(
@@ -919,7 +923,12 @@ async function sealTranscript(
       if (read.torn) driver.tally.errors.tornTails += 1;
       finished.push(agentId);
     } catch (error) {
-      if (error instanceof Stopped || error instanceof Diverged) throw error;
+      if (
+        error instanceof Stopped ||
+        error instanceof Diverged ||
+        error instanceof TakenLive
+      )
+        throw error;
       driver.tally.errors.unreadableFiles += 1;
     }
   };
@@ -944,7 +953,6 @@ async function sealTranscript(
   const headAt = (await readHead(candidate.path, HEAD_BYTES)) ?? Buffer.alloc(0);
   let readTo = 0;
   try {
-    partial(0, "partial");
     const read = await readSlices(candidate.path, sliceBytes, async (lines) => {
       let index = 0;
       while (index < lines.length) {
@@ -955,7 +963,7 @@ async function sealTranscript(
           if (deps.heldLocally(candidate.sessionId)) throw new TakenLive();
           const out: TachoEvent[] = [];
           while (index < lines.length && spawn.length === 0) {
-            const line = lines[index] as SliceLine;
+            const line = lines[index] as SliceLine & { next: number };
             index += 1;
             if (line.text === undefined) {
               out.push(...driver.longLine(line.offset));
@@ -966,18 +974,26 @@ async function sealTranscript(
             spawn.push(...sealed.spawn);
           }
           emit(out);
+          // Where the live path picks up if a hook takes the session next:
+          // written in the same turn of the session's queue as the seal, so
+          // the read position and the chain head always agree. Nothing is
+          // written before the chain begins, so a session the pass never
+          // sealed is opened by the live path as if no pass had run.
+          if (driver.hasChain) {
+            readTo = (lines[index - 1] as { next: number }).next;
+            partial(readTo, "partial");
+          }
         });
         for (const agentId of spawn) await feedSubagent(agentId);
       }
-      readTo = lines.at(-1)?.next ?? readTo;
-      // Where the live path picks up if a hook takes the session now.
-      partial(readTo, "partial");
       await between();
     });
     readTo = read.end;
     const flushed = await deps.exclusive(candidate.sessionId, () => {
+      if (deps.heldLocally(candidate.sessionId)) throw new TakenLive();
       const result = driver.finishParent();
       emit(result.events);
+      if (driver.hasChain) partial(readTo, "partial");
       return result.spawn;
     });
     for (const agentId of flushed) await feedSubagent(agentId);
@@ -985,12 +1001,14 @@ async function sealTranscript(
       // The last line is not whole yet. The session stays open, and a later
       // pass reads on once the line is complete (spec section 8).
       driver.tally.errors.tornTails += 1;
-      partial(readTo, "partial");
       return { action: "backfilled", tally: driver.tally, bodies };
     }
     for (const agentId of driver.unspawned()) await feedSubagent(agentId);
-    await deps.exclusive(candidate.sessionId, () => emit(driver.end()));
-    partial(readTo, "done");
+    await deps.exclusive(candidate.sessionId, () => {
+      if (deps.heldLocally(candidate.sessionId)) throw new TakenLive();
+      emit(driver.end());
+      partial(readTo, "done");
+    });
     return {
       action: driver.hasChain ? "backfilled" : "skipped_empty",
       tally: driver.tally,
@@ -999,8 +1017,9 @@ async function sealTranscript(
   } catch (error) {
     if (error instanceof Stopped) throw error;
     if (error instanceof TakenLive) {
+      // The cursor file already says where the pass stopped: it is written in
+      // the same queue turn as each seal, before the hook that took over.
       deps.log(`backfill of session ${candidate.sessionId} stopped: a live hook took it`);
-      partial(readTo, "partial");
       return { action: "skipped_local_chain", tally: driver.tally, bodies };
     }
     const reason =

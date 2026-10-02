@@ -81,8 +81,8 @@ export async function backfillCommand(
     deps.err("This build cannot reach the daemon for a backfill.");
     return BACKFILL_EXIT.noDaemon;
   }
-  let report: BackfillReport | undefined;
-  let refusal: string | undefined;
+  // Filled by the stream's lines as they arrive.
+  const got: { report?: BackfillReport; refusal?: string } = {};
   let printedAt = 0;
   const answer = await deps.daemonStream(
     "/backfill",
@@ -95,11 +95,11 @@ export async function backfillCommand(
         return;
       }
       if (message["report"] !== undefined) {
-        report = message["report"] as BackfillReport;
+        got.report = message["report"] as BackfillReport;
         return;
       }
       if (typeof message["error"] === "string") {
-        refusal = message["error"];
+        got.refusal = message["error"];
         return;
       }
       const progress = message["progress"] as BackfillReport | undefined;
@@ -117,16 +117,18 @@ export async function backfillCommand(
     return BACKFILL_EXIT.noDaemon;
   }
   if (answer.status !== 200) {
-    deps.err(refusal ?? `The daemon refused the backfill (status ${answer.status}).`);
+    deps.err(
+      got.refusal ?? `The daemon refused the backfill (status ${answer.status}).`,
+    );
     return answer.status === 400 ? BACKFILL_EXIT.invalid : BACKFILL_EXIT.stopped;
   }
-  if (report === undefined) {
+  const done = got.report;
+  if (done === undefined) {
     deps.err(
       "The daemon stopped before the pass finished. Run the command again to resume from where it stopped.",
     );
     return BACKFILL_EXIT.stopped;
   }
-  const done: BackfillReport = report;
   if (options.json === true) deps.out(JSON.stringify(done));
   else for (const line of reportLines(done)) deps.out(line);
   if (!done.finished) {
