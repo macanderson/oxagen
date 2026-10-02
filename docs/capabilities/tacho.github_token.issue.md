@@ -14,6 +14,8 @@ The workspace's steering repository takes changes through a steering PR. This ca
 
 Enable a local repository with `tacho github configure --repository owner/name --harness claude-code`. Choose `codex`, `cursor`, or `stella` for another enrolled harness. The proxy requires exactly one live session in that directory. Remove the configuration with the same command plus `--remove`.
 
+A contained run uses the same proxy without that step. `oxagen agent run --contained --github-repository owner/name` names the repository. The launcher's bridge then sends the run's Git requests to the proxy with a lease for the session it started, so the container holds neither the lease nor the token. See [ADR-254](../adr/ADR-254-a-contained-run-reaches-github-through-git-custody-and-the-operator-holds-no-token.md).
+
 The credential exists only in the server response and daemon memory. The daemon revokes it after each Git request. Personal credentials and requests outside the configured transport remain outside this custody path. See [ADR-151](../adr/ADR-151-git-custody-keeps-installation-tokens-in-the-host-proxy.md).
 
 ## Refusals

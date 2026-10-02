@@ -18,12 +18,18 @@ import { statementHash } from "../memory/statement";
 import type { MemoryDraft, MemoryStore } from "../memory/types";
 import type { PublishedStatement } from "./findings";
 import type { CodeHost, PostedCheck } from "./host";
-import { checkEvent, githubPullRequestHead, gitlabMergeRequestHead } from "./request";
+import {
+  checkEvent,
+  githubPullRequestClose,
+  githubPullRequestHead,
+  gitlabMergeRequestHead,
+} from "./request";
 import {
   runCodeRepoCheck,
   type CodeRepoCheckDeps,
   type PullRequestMemory,
 } from "./run";
+import { memoryFindingStore, type MemoryFindingStore } from "./store.test-support";
 
 function fixture(name: string): Record<string, unknown> {
   return JSON.parse(
@@ -90,6 +96,7 @@ function repository(files: Record<string, Record<string, string>>, changed: stri
           : { path: to, previousPath: from ?? null };
       }),
     ),
+    touchedPaths: vi.fn(async () => changed.flatMap((entry) => entry.split(" -> "))),
     readFile: vi.fn(async (path: string, ref: string) => files[ref]?.[path] ?? null),
     postCheck: vi.fn(async (check: PostedCheck) => {
       posted.push(check);
@@ -123,8 +130,10 @@ function deps(over: {
   blockMerge?: boolean;
   records?: PublishedStatement[];
   store?: MemoryStore;
+  findings?: MemoryFindingStore;
 }) {
   const store = over.store ?? memoryStore().store;
+  const findings = over.findings ?? memoryFindingStore();
   const captured: PullRequestMemory[][] = [];
   const d: CodeRepoCheckDeps = {
     host: vi.fn(async () => over.host),
@@ -135,9 +144,10 @@ function deps(over: {
       captured.push(memories);
       return ingestMemories(store, scope, memories);
     }),
+    findings,
     now: () => new Date("2026-10-02T14:12:10.000Z"),
   };
-  return { deps: d, captured };
+  return { deps: d, captured, findings };
 }
 
 describe("runCodeRepoCheck on GitHub", () => {
@@ -369,6 +379,160 @@ describe("runCodeRepoCheck on GitHub", () => {
     });
     await expect(runCodeRepoCheck(d, githubRequest())).rejects.toThrow("pg down");
     expect(posted).toEqual([]);
+  });
+});
+
+describe("the stored findings (ADR-263)", () => {
+  const CONTRADICTION = "Always push to `main` or force-push any shared branch.";
+
+  it("stores each statement it flags, with its pull request and commit, before the check posts", async () => {
+    const { host, posted } = repository(
+      { [BASE_SHA]: {}, [HEAD_SHA]: { "AGENTS.md": `# Agents\n\n- ${CONTRADICTION}` } },
+      ["AGENTS.md"],
+    );
+    const { deps: d, findings } = deps({ host });
+    const order: string[] = [];
+    const replace = findings.replacePullRequest.bind(findings);
+    d.findings = {
+      ...findings,
+      replacePullRequest: async (...args) => {
+        order.push("stored");
+        await replace(...args);
+      },
+    };
+    vi.mocked(host.postCheck).mockImplementation(async (check) => {
+      order.push("posted");
+      posted.push(check);
+    });
+    await runCodeRepoCheck(d, githubRequest());
+    expect(order).toEqual(["stored", "posted"]);
+    expect(findings.rows).toEqual([
+      expect.objectContaining({
+        orgId: SCOPE.orgId,
+        workspaceId: SCOPE.workspaceId,
+        provider: "github",
+        providerRepositoryId: "771020341",
+        repository: "a-intel/platform",
+        pullRequestNumber: 318,
+        pullRequestUrl: "https://github.com/a-intel/platform/pull/318",
+        pullRequestState: "open",
+        headSha: HEAD_SHA,
+        path: "AGENTS.md",
+        line: 3,
+        statement: CONTRADICTION,
+        proposalPublicId: null,
+      }),
+    ]);
+  });
+
+  it("keeps a statement's id and proposal across pushes, and clears it when a push removes the line", async () => {
+    const withLine = { "AGENTS.md": `- ${CONTRADICTION}` };
+    const { host } = repository(
+      { [BASE_SHA]: {}, [HEAD_SHA]: withLine, [SYNC_SHA]: { "AGENTS.md": `- Note.\n- ${CONTRADICTION}` } },
+      ["AGENTS.md"],
+    );
+    const { deps: d, findings } = deps({ host });
+    await runCodeRepoCheck(d, githubRequest());
+    const first = findings.rows[0];
+    if (first === undefined) throw new Error("nothing stored");
+    await findings.setProposal(SCOPE, first.publicId, "prp_kept1");
+
+    await runCodeRepoCheck(d, githubRequest("github-pull-request-synchronize"));
+    expect(findings.rows).toHaveLength(1);
+    expect(findings.rows[0]).toMatchObject({
+      publicId: first.publicId,
+      proposalPublicId: "prp_kept1",
+      headSha: SYNC_SHA,
+      line: 2,
+    });
+
+    // The next push drops the line, so the pull request flags nothing.
+    const cleared = repository({ [BASE_SHA]: {}, [SYNC_SHA]: { "AGENTS.md": "- Note." } }, ["AGENTS.md"]);
+    d.host = vi.fn(async () => cleared.host);
+    await runCodeRepoCheck(d, githubRequest("github-pull-request-synchronize"));
+    expect(findings.rows).toEqual([]);
+  });
+
+  it("deletes a pull request's findings when it closes without merging, and posts nothing", async () => {
+    const { host, posted } = repository({ [BASE_SHA]: {}, [HEAD_SHA]: { "AGENTS.md": `- ${CONTRADICTION}` } }, ["AGENTS.md"]);
+    const { deps: d, findings } = deps({ host });
+    await runCodeRepoCheck(d, githubRequest());
+    expect(findings.rows).toHaveLength(1);
+    posted.length = 0;
+
+    const request = { ...githubRequest(), closed: "unmerged" as const };
+    await expect(runCodeRepoCheck(d, request)).resolves.toEqual({
+      conclusion: null,
+      settled: "unmerged",
+      files: 0,
+      findings: 1,
+      memories: 0,
+    });
+    expect(findings.rows).toEqual([]);
+    expect(posted).toEqual([]);
+  });
+
+  it("keeps a merged pull request's findings, and deletes an earlier merged one the merge removed from its file", async () => {
+    const closedBody = fixture("github-pull-request-closed");
+    const closed = githubPullRequestClose(closedBody);
+    if (closed === null) throw new Error("the fixture names no closed pull request");
+    const request = checkEvent(SCOPE, "github", closed.head, { installationId: 61200044 }, closed.close).data;
+    const MERGE_SHA = "5c4b3a2918f7e6d5c4b3a2918f7e6d5c4b3a2918";
+    const KEPT = "Run every tenant query inside withTenantDb so row level security applies to it.";
+    const findings = memoryFindingStore();
+    const earlier = {
+      orgId: SCOPE.orgId,
+      workspaceId: SCOPE.workspaceId,
+      provider: "github" as const,
+      providerRepositoryId: "771020341",
+      repository: "a-intel/platform",
+      pullRequestUrl: "https://github.com/a-intel/platform/pull/300",
+      pullRequestState: "merged" as const,
+      headSha: BASE_SHA,
+      proposalPublicId: null,
+      checkedAt: new Date("2026-10-01T00:00:00.000Z"),
+    };
+    findings.rows.push(
+      { ...earlier, publicId: "crf_gone", pullRequestNumber: 300, path: "CLAUDE.md", line: 3, statement: CONTRADICTION },
+      { ...earlier, publicId: "crf_kept", pullRequestNumber: 301, path: "CLAUDE.md", line: 4, statement: KEPT },
+      // A file this merge did not touch is not read, so its row stays.
+      { ...earlier, publicId: "crf_untouched", pullRequestNumber: 302, path: "AGENTS.md", line: 1, statement: CONTRADICTION },
+      { ...earlier, publicId: "crf_this", pullRequestNumber: 318, pullRequestState: "open", path: "CLAUDE.md", line: 9, statement: "x y z" },
+    );
+    const { host, posted } = repository(
+      { [MERGE_SHA]: { "CLAUDE.md": `# Platform\n\n- ${KEPT}` } },
+      ["CLAUDE.md"],
+    );
+    const { deps: d } = deps({ host, findings });
+    await expect(runCodeRepoCheck(d, request)).resolves.toEqual({
+      conclusion: null,
+      settled: "merged",
+      files: 1,
+      findings: 1,
+      memories: 0,
+    });
+    expect(host.touchedPaths).toHaveBeenCalledWith(BASE_SHA, SYNC_SHA);
+    expect(host.readFile).toHaveBeenCalledWith("CLAUDE.md", MERGE_SHA);
+    expect(findings.rows.map((row) => row.publicId).sort()).toEqual([
+      "crf_kept",
+      "crf_this",
+      "crf_untouched",
+    ]);
+    expect(findings.rows.find((row) => row.publicId === "crf_this")).toMatchObject({
+      pullRequestState: "merged",
+      headSha: SYNC_SHA,
+    });
+    expect(posted).toEqual([]);
+  });
+
+  it("reads no file when no earlier merged finding sits in the repository (negative)", async () => {
+    const closed = githubPullRequestClose(fixture("github-pull-request-closed"));
+    if (closed === null) throw new Error("the fixture names no closed pull request");
+    const request = checkEvent(SCOPE, "github", closed.head, { installationId: 61200044 }, closed.close).data;
+    const { host } = repository({}, ["CLAUDE.md"]);
+    const { deps: d } = deps({ host });
+    await expect(runCodeRepoCheck(d, request)).resolves.toMatchObject({ settled: "merged", findings: 0 });
+    expect(d.host).not.toHaveBeenCalled();
   });
 });
 

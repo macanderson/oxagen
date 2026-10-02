@@ -94,25 +94,40 @@ describe("oxagen agent run --contained", () => {
     });
   });
 
-  it("passes the GitHub grant only with its one repository", async () => {
-    const token = `ghs_${"b".repeat(36)}`;
-    const { deps, paths } = enrolled({
-      OXAGEN_CONTAINED_GITHUB_TOKEN: token,
-      GITHUB_REPOSITORY: "acme/app",
-    });
+  it("names the run's one repository and hands over no GitHub token", async () => {
+    const { deps, paths } = enrolled({ GITHUB_REPOSITORY: "acme/other" });
     const seen = await daemon(paths.socket, [
       { result: { sessionId: "contained-x", exitCode: 0 } },
     ]);
     expect(
       await runContained(
-        { agent: "codex", args: ["exec", "t"], image: "img" },
+        {
+          agent: "codex",
+          args: ["exec", "t"],
+          image: "img",
+          githubRepository: "acme/app",
+        },
         deps,
       ),
     ).toBe(0);
+    // Only the flag names the repository. The runner's own GITHUB_REPOSITORY
+    // does not widen a run that named none, or replace one that did.
     expect(seen.body).toMatchObject({
       harness: "codex",
-      github: { repository: "acme/app", token },
+      github: { repository: "acme/app" },
     });
+    expect(JSON.stringify(seen.body)).not.toContain("token");
+  });
+
+  it("names no repository when the flag is absent", async () => {
+    const { deps, paths } = enrolled({ GITHUB_REPOSITORY: "acme/app" });
+    const seen = await daemon(paths.socket, [
+      { result: { sessionId: "contained-x", exitCode: 0 } },
+    ]);
+    expect(
+      await runContained({ agent: "claude", args: [], image: "img" }, deps),
+    ).toBe(0);
+    expect(seen.body).not.toHaveProperty("github");
   });
 
   it("prints the launcher's refusal and exits 1", async () => {
@@ -138,7 +153,7 @@ describe("oxagen agent run --contained", () => {
     [
       { agent: "claude", args: [], image: "img" },
       { OXAGEN_CONTAINED_GITHUB_TOKEN: `ghs_${"c".repeat(36)}` },
-      /name its one repository/,
+      /OXAGEN_CONTAINED_GITHUB_TOKEN is no longer read/,
     ],
     [
       {
@@ -147,8 +162,8 @@ describe("oxagen agent run --contained", () => {
         image: "img",
         githubRepository: "acme/app",
       },
-      {},
-      /needs an installation token/,
+      { OXAGEN_CONTAINED_GITHUB_TOKEN: `ghs_${"c".repeat(36)}` },
+      /bind the repository to the workspace/,
     ],
   ])("refuses before asking the daemon: %j", async (command, env, message) => {
     const { deps, err } = enrolled(env as Record<string, string>);

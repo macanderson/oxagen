@@ -562,6 +562,64 @@ describe("GitHub daemon custody", () => {
     expect(t.upstream.mock.calls[0]?.[1]?.redirect).toBe("manual");
   });
 
+  it("leases the contained launcher's own session without a receipt, until released", async () => {
+    const t = await setup();
+    // A CI runner never ran `tacho github configure`.
+    t.host.github_broker_enabled = false;
+    t.host.github_repositories = [];
+    // A configured checkout's lease still needs its receipt. Ask before
+    // `issueForSession` runs, because that call drops every lease that is
+    // no longer live, and a dropped lease answers 401 instead.
+    expect((await t.request()).status).toBe(403);
+    const lease = t.proxy.issueForSession({
+      session: t.session.recorder.sessionUuid,
+      repository: "Acme/Repo",
+    });
+    expect(lease.status).toBe(200);
+    const token = (lease.body as { token: string }).token;
+    expect(token).toMatch(/^oxgit_/);
+    const fetchRefs = () =>
+      fetch(
+        `${t.base}/github/acme/repo.git/info/refs?service=git-upload-pack`,
+        {
+          headers: {
+            Authorization: `Basic ${Buffer.from(`oxagen:${token}`).toString("base64")}`,
+          },
+        },
+      );
+    expect((await fetchRefs()).status).toBe(200);
+    expect(JSON.stringify(t.recorded)).toContain('"gateway_brokered"');
+    t.proxy.release(token);
+    expect((await fetchRefs()).status).toBe(401);
+  });
+
+  it("refuses a contained lease for a malformed repository, an unknown or stopped session, or an inactive host", async () => {
+    const t = await setup();
+    const session = t.session.recorder.sessionUuid;
+    expect(
+      t.proxy.issueForSession({ session, repository: "acme" }).status,
+    ).toBe(400);
+    expect(
+      t.proxy.issueForSession({ session, repository: "acme/.." }).status,
+    ).toBe(400);
+    expect(
+      t.proxy.issueForSession({
+        session: "0192f000-0000-7000-8000-00000000dead",
+        repository: "acme/repo",
+      }).status,
+    ).toBe(403);
+    t.session.control.cancelled = "operator cancel";
+    expect(
+      t.proxy.issueForSession({ session, repository: "acme/repo" }).status,
+    ).toBe(403);
+    t.session.control.cancelled = null;
+    t.host.host_status = "paused";
+    expect(
+      t.proxy.issueForSession({ session, repository: "acme/repo" }).status,
+    ).toBe(403);
+    expect(t.controlFetch).not.toHaveBeenCalled();
+  });
+
   it("rechecks the session after a token is minted and revokes without forwarding", async () => {
     const t = await setup();
     t.controlFetch.mockImplementationOnce(async () => {
