@@ -466,4 +466,6 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "work.direct_orders", policyClass: "standard" },
   // One check run of a definition of done (F13, #4638). Append only.
   { table: "work.done_checks", policyClass: "standard" },
+  // One send-back note Oxagen posted on a work item (R3, #5108). Append only.
+  { table: "work.send_backs", policyClass: "standard" },
 ];
