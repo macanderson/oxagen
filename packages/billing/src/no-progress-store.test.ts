@@ -19,17 +19,27 @@ vi.mock("./cost-rollup-store", () => ({
 vi.mock("@oxagen/telemetry", () => ({
   readTachoProgressFrames: readers.readTachoProgressFrames,
 }));
+const registry = vi.hoisted(() => ({ getCapability: vi.fn() }));
+vi.mock("@oxagen/oxagen/registry", () => ({
+  getCapability: registry.getCapability,
+}));
 
 import type { RunSource } from "./cost-rollup-store";
 import type { ToolCallFrame } from "./cost-rollup";
 import type { NoProgressFrame, NoProgressLimit } from "./no-progress";
 import {
   checkNoProgress,
+  limitOfPolicy,
   loopKeyOf,
+  NO_PROGRESS_DEFAULT_LIMIT,
+  pauseKeyOf,
   readNoProgressFrames,
+  withDeclaredMutation,
   type NoProgressDeps,
   type NoProgressHit,
+  type NoProgressPauseRequest,
   type NoProgressRun,
+  type PauseRun,
 } from "./no-progress-store";
 
 const RUN: NoProgressRun = {
@@ -98,9 +108,28 @@ function deps(
   return { d, rows: store.rows };
 }
 
+/**
+ * A pause path that keeps the contract the real one keeps: one pause per
+ * loop key, and a request for a loop that already has one queues nothing.
+ */
+function idempotentPause() {
+  const queued: string[] = [];
+  const pauseRun = vi.fn<PauseRun>(async (request: NoProgressPauseRequest) => {
+    const earlier = queued.findIndex((key) =>
+      request.loops.some((l) => l.key === key),
+    );
+    if (earlier >= 0) return { paused: true, commandId: `tcm_${earlier + 1}` };
+    const first = request.loops[0];
+    if (first === undefined) throw new Error("a pause names at least one loop");
+    queued.push(first.key);
+    return { paused: true, commandId: `tcm_${queued.length}` };
+  });
+  return { queued, pauseRun };
+}
+
 describe("checkNoProgress", () => {
   it("records one hit for 20 identical calls at a limit of 20 in observe mode, and lets the run continue", async () => {
-    const pauseRun = vi.fn(async () => true);
+    const { pauseRun } = idempotentPause();
     const { d, rows } = deps({ repeats: 20, mode: "observe" }, times(20), {
       pauseRun,
     });
@@ -118,8 +147,34 @@ describe("checkNoProgress", () => {
         limitRepeats: 20,
         mode: "observe",
         outcome: "would_pause",
+        pauseBlock: null,
       },
     ]);
+  });
+
+  it("records observe hits at 20 for a workspace with no limit of its own, and lets the run continue", async () => {
+    const { pauseRun } = idempotentPause();
+    const { d, rows } = deps(limitOfPolicy(undefined), times(20), {
+      pauseRun,
+    });
+    const out = await checkNoProgress(RUN, d);
+    expect(out).toEqual({ checked: true, loops: 1, newLoops: 1, paused: false });
+    expect(pauseRun).not.toHaveBeenCalled();
+    expect([...rows.values()][0]).toMatchObject({
+      limitRepeats: 20,
+      mode: "observe",
+      outcome: "would_pause",
+      pauseBlock: null,
+    });
+  });
+
+  it("records nothing short of the default's 20 calls", async () => {
+    const { d } = deps(limitOfPolicy(undefined), times(19));
+    expect(await checkNoProgress(RUN, d)).toMatchObject({
+      checked: true,
+      loops: 0,
+    });
+    expect(d.writeHits).not.toHaveBeenCalled();
   });
 
   it("keeps one hit per loop across passes, and raises its count", async () => {
@@ -157,7 +212,7 @@ describe("checkNoProgress", () => {
   });
 
   it("pauses the run once and records paused in enforced mode when the pause path is reachable", async () => {
-    const pauseRun = vi.fn(async () => true);
+    const { queued, pauseRun } = idempotentPause();
     const calls = times(20);
     const { d, rows } = deps({ repeats: 20, mode: "enforced" }, calls, {
       pauseRun,
@@ -165,10 +220,24 @@ describe("checkNoProgress", () => {
     const out = await checkNoProgress(RUN, d);
     expect(out).toMatchObject({ newLoops: 1, paused: true });
     expect(pauseRun).toHaveBeenCalledTimes(1);
-    expect(pauseRun).toHaveBeenCalledWith(RUN);
+    const loop = {
+      tool: "Bash",
+      inputDigest: "sha256:poll",
+      outputDigest: "sha256:pending",
+      loop: 1,
+      repeats: 20,
+      atCall: 20,
+    };
+    expect(pauseRun).toHaveBeenCalledWith({
+      ...RUN,
+      loops: [{ ...loop, key: pauseKeyOf(loop) }],
+      limit: { repeats: 20, mode: "enforced" },
+    });
+    expect(queued).toHaveLength(1);
     expect([...rows.values()][0]).toMatchObject({
       mode: "enforced",
       outcome: "paused",
+      pauseBlock: null,
     });
 
     // The loop goes on after the operator resumes the run: no second pause.
@@ -182,37 +251,104 @@ describe("checkNoProgress", () => {
     });
   });
 
-  it("records would_pause in enforced mode when the pause path is not reachable", async () => {
+  it("queues no second pause when the write fails after the pause and the check retries (#4503)", async () => {
+    const { queued, pauseRun } = idempotentPause();
+    const { d, rows } = deps({ repeats: 20, mode: "enforced" }, times(20), {
+      pauseRun,
+    });
+    const write = d.writeHits;
+    let failed = false;
+    d.writeHits = vi.fn(async (...args: Parameters<typeof write>) => {
+      if (!failed) {
+        failed = true;
+        throw new Error("connection reset");
+      }
+      return write(...args);
+    });
+    await expect(checkNoProgress(RUN, d)).rejects.toThrow("connection reset");
+    expect(queued).toHaveLength(1);
+    expect(rows.size).toBe(0);
+
+    // The step retries. The loop is still unrecorded, so the check asks the
+    // pause path again for the same loop, which queues nothing.
+    const out = await checkNoProgress(RUN, d);
+    expect(out).toMatchObject({ newLoops: 1, paused: true });
+    expect(pauseRun).toHaveBeenCalledTimes(2);
+    expect(pauseRun.mock.calls[1]?.[0].loops[0]?.key).toBe(
+      pauseRun.mock.calls[0]?.[0].loops[0]?.key,
+    );
+    expect(queued).toHaveLength(1);
+    expect([...rows.values()][0]).toMatchObject({
+      outcome: "paused",
+      pauseBlock: null,
+    });
+  });
+
+  it("records would_pause with pause_unavailable in enforced mode when no pause path is installed", async () => {
     const { d, rows } = deps({ repeats: 20, mode: "enforced" }, times(20));
     const out = await checkNoProgress(RUN, d);
     expect(out).toMatchObject({ newLoops: 1, paused: false });
     expect([...rows.values()][0]).toMatchObject({
       mode: "enforced",
       outcome: "would_pause",
+      pauseBlock: "pause_unavailable",
     });
   });
 
-  it("records would_pause when the pause is refused", async () => {
-    const pauseRun = vi.fn(async () => false);
+  it("records would_pause and the reason when the run has no governed call to pause at", async () => {
+    const pauseRun = vi.fn<PauseRun>(async () => ({
+      paused: false,
+      block: "host_offline",
+    }));
     const { d, rows } = deps({ repeats: 20, mode: "enforced" }, times(20), {
       pauseRun,
     });
-    await checkNoProgress(RUN, d);
+    const out = await checkNoProgress(RUN, d);
+    expect(out).toMatchObject({ paused: false });
     expect(pauseRun).toHaveBeenCalledTimes(1);
-    expect([...rows.values()][0]?.outcome).toBe("would_pause");
+    expect([...rows.values()][0]).toMatchObject({
+      mode: "enforced",
+      outcome: "would_pause",
+      pauseBlock: "host_offline",
+    });
   });
 
-  it("does not pause a sealed run", async () => {
-    const pauseRun = vi.fn(async () => true);
+  it("does not pause a sealed run, and records why", async () => {
+    const { pauseRun } = idempotentPause();
     const { d, rows } = deps({ repeats: 20, mode: "enforced" }, times(20), {
       pauseRun,
     });
     await checkNoProgress({ ...RUN, sealed: true }, d);
     expect(pauseRun).not.toHaveBeenCalled();
-    expect([...rows.values()][0]?.outcome).toBe("would_pause");
+    expect([...rows.values()][0]).toMatchObject({
+      outcome: "would_pause",
+      pauseBlock: "run_sealed",
+    });
   });
 
-  it("records no hit and reads no calls for a workspace with no count", async () => {
+  it("asks one pause for two loops found in one pass, the first leading", async () => {
+    const { queued, pauseRun } = idempotentPause();
+    const calls = [
+      ...times(20),
+      call({ name: "Edit", isMutating: true }),
+      ...times(20),
+    ];
+    const { d, rows } = deps({ repeats: 20, mode: "enforced" }, calls, {
+      pauseRun,
+    });
+    await checkNoProgress(RUN, d);
+    expect(pauseRun).toHaveBeenCalledTimes(1);
+    expect(pauseRun.mock.calls[0]?.[0].loops.map((l) => l.loop)).toEqual([
+      1, 2,
+    ]);
+    expect(queued).toHaveLength(1);
+    expect([...rows.values()].map((r) => r.outcome)).toEqual([
+      "paused",
+      "paused",
+    ]);
+  });
+
+  it("records no hit and reads no calls for a workspace whose team cleared its limit", async () => {
     const { d } = deps(null, times(40));
     const out = await checkNoProgress(RUN, d);
     expect(out).toEqual({
@@ -259,6 +395,49 @@ describe("checkNoProgress", () => {
   });
 });
 
+describe("limitOfPolicy", () => {
+  it("starts a workspace with no policy row at 20 in observe mode", () => {
+    expect(limitOfPolicy(undefined)).toEqual({ repeats: 20, mode: "observe" });
+    expect(NO_PROGRESS_DEFAULT_LIMIT).toEqual({ repeats: 20, mode: "observe" });
+  });
+
+  it("runs no check for a team that cleared its count", () => {
+    expect(limitOfPolicy({ repeats: null, mode: "enforced" })).toBeNull();
+  });
+
+  it("keeps the limit a team set", () => {
+    expect(limitOfPolicy({ repeats: 5, mode: "enforced" })).toEqual({
+      repeats: 5,
+      mode: "enforced",
+    });
+  });
+});
+
+describe("withDeclaredMutation", () => {
+  it("takes a ledger call's write flag from its capability", () => {
+    registry.getCapability.mockImplementation((name: string) =>
+      name === "get_run_cost"
+        ? { mutates: false }
+        : name === "register_agent"
+          ? {}
+          : undefined,
+    );
+    const read = call({ name: "get_run_cost" });
+    expect(withDeclaredMutation(read).isMutating).toBe(false);
+    // A capability that does not declare `mutates: false` writes.
+    expect(
+      withDeclaredMutation(call({ name: "register_agent" })).isMutating,
+    ).toBe(true);
+    // A call the registry does not know keeps its null flag.
+    expect(withDeclaredMutation(call({ name: "Bash" })).isMutating).toBeNull();
+    // A flag the frame already carries is kept.
+    expect(
+      withDeclaredMutation(call({ name: "get_run_cost", isMutating: true }))
+        .isMutating,
+    ).toBe(true);
+  });
+});
+
 describe("readNoProgressFrames", () => {
   it("reads a wrapped run's tool calls and file changes from its own sessions", async () => {
     const frames = [call(), { fileChanged: true as const }];
@@ -282,6 +461,7 @@ describe("readNoProgressFrames", () => {
   });
 
   it("reads a ledger run's tool calls, which carry its file changes", async () => {
+    registry.getCapability.mockReturnValue(undefined);
     const calls = times(3);
     readers.readRunToolCalls.mockResolvedValueOnce(calls);
     const source = {
@@ -291,7 +471,46 @@ describe("readNoProgressFrames", () => {
         runUuid: "00000000-0000-4000-8000-0000000000cc",
       },
     } as unknown as RunSource;
-    expect(await readNoProgressFrames(source)).toBe(calls);
+    expect(await readNoProgressFrames(source)).toEqual(calls);
     expect(readers.readRunToolCalls).toHaveBeenCalledWith(source);
+  });
+
+  it("records one hit for a ledger run with 20 identical read-only capability calls at a limit of 20 (#4503)", async () => {
+    registry.getCapability.mockImplementation((name: string) =>
+      name === "list_runs" ? { mutates: false } : undefined,
+    );
+    readers.readRunToolCalls.mockResolvedValueOnce(
+      Array.from({ length: 20 }, () =>
+        call({
+          name: "list_runs",
+          inputDigest: "sha256:first-page",
+          outputDigest: "sha256:same-runs",
+        }),
+      ),
+    );
+    const ledger = {
+      meta: { orgId: RUN.orgId, workspaceId: RUN.workspaceId },
+      frames: {
+        kind: "ledger",
+        runUuid: "00000000-0000-4000-8000-0000000000cc",
+      },
+    } as unknown as RunSource;
+    const { d, rows } = deps({ repeats: 20, mode: "observe" }, [], {
+      loadRunSource: vi.fn(async () => ledger),
+      readFrames: readNoProgressFrames,
+    });
+    const out = await checkNoProgress(
+      { ...RUN, runId: "arun_0000000000000000000001" },
+      d,
+    );
+    expect(out).toMatchObject({ checked: true, loops: 1, newLoops: 1 });
+    expect([...rows.values()]).toEqual([
+      expect.objectContaining({
+        tool: "list_runs",
+        repeats: 20,
+        atCall: 20,
+        outcome: "would_pause",
+      }),
+    ]);
   });
 });

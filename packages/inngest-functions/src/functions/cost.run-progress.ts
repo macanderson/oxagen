@@ -7,6 +7,7 @@ import {
 import { NonRetriableError } from "@oxagen/functions";
 import { createFunction } from "../create-function";
 import { RUN_PROGRESSED_EVENT } from "../events";
+import { noProgressPauseRun } from "../lib/no-progress-pause-runner";
 import { logger } from "../logger";
 
 /**
@@ -37,9 +38,10 @@ import { logger } from "../logger";
  * Last, the no-progress check (#4490) reads the run's tool calls against the
  * workspace's no-progress limit and records each loop that reached it. It
  * runs here, not at the seal, because an enforced limit pauses the run while
- * it is still open. A workspace with no limit skips it after one read. It
- * runs after the rollup steps so a failure in it never holds back the run's
- * cost.
+ * it is still open, through the pause path `@oxagen/handlers/register`
+ * installs (`no-progress-pause-runner.ts`). A workspace whose team cleared
+ * its limit skips it after one read. It runs after the rollup steps so a
+ * failure in it never holds back the run's cost.
  */
 export const [costRunProgress] = createFunction(
   {
@@ -79,12 +81,15 @@ export const [costRunProgress] = createFunction(
       }),
     );
     const noProgress = await step.run("no-progress", () =>
-      checkNoProgress({
-        runId,
-        orgId: run.orgId,
-        workspaceId: run.workspaceId,
-        sealed: run.sealed,
-      }),
+      checkNoProgress(
+        {
+          runId,
+          orgId: run.orgId,
+          workspaceId: run.workspaceId,
+          sealed: run.sealed,
+        },
+        { pauseRun: noProgressPauseRun() },
+      ),
     );
     logger.info(
       {

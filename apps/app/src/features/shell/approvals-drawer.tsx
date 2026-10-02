@@ -23,6 +23,10 @@
 // The open interjections come first (#3839): a question an agent paused its
 // run to ask, from `list_interjections`, one row each, linking to the run.
 // They count in the header and the list's heading beside the parked calls.
+//
+// A row whose writer recorded the agent leads with the agent's avatar and the
+// harness it registered in the corner, which the chrome's read resolves from
+// the agent key (#4871); a row with no agent keeps the shield.
 import { CaretLeftIcon, ShieldCheckIcon, XIcon } from "@phosphor-icons/react";
 import { useTranslations } from "next-intl";
 import { useFormatter } from "@/ui/formatter";
@@ -31,6 +35,7 @@ import type {
   ApprovalItem,
   ResolvedApprovalItem,
 } from "@/data/contracts/approvals";
+import { AgentAvatar } from "@/ui/agent-avatar";
 import { Badge } from "@/ui/badge";
 import { buttonSecondary, linkText, mono } from "@/ui/control-styles";
 import { SafeLink } from "@/ui/navigation";
@@ -90,7 +95,33 @@ function shortAgent(key: string | null): string | null {
   return key.split(".").at(-1) ?? key;
 }
 
-function Glyph() {
+/** The harness an agent key registered, or null for a key the workspace's read does not hold. */
+function harnessOf(
+  harnesses: Readonly<Record<string, string>>,
+  agentKey: string | null | undefined,
+): string | null {
+  if (agentKey === null || agentKey === undefined) return null;
+  return Object.hasOwn(harnesses, agentKey)
+    ? (harnesses[agentKey] ?? null)
+    : null;
+}
+
+/** The row's mark: the agent's avatar with its harness badge, or the shield when no agent was recorded. */
+function Glyph({
+  agent,
+  harness,
+}: {
+  agent: string | null;
+  harness: string | null;
+}) {
+  if (agent !== null)
+    return (
+      <AgentAvatar
+        value={null}
+        initials={agent.slice(0, 2).toUpperCase()}
+        harness={harness}
+      />
+    );
   return (
     <span
       aria-hidden="true"
@@ -104,11 +135,14 @@ function Glyph() {
 function PendingRow({
   item,
   wsName,
+  harness,
   now,
   onOpen,
 }: {
   item: ApprovalItem;
   wsName: string;
+  /** The harness the row's agent registered, or null when it is not known. */
+  harness: string | null;
   now: number;
   onOpen: () => void;
 }) {
@@ -126,7 +160,7 @@ function PendingRow({
         onClick={onOpen}
         className="flex w-full items-start gap-2.5 rounded-xl border border-border bg-card px-3 py-2.5 text-left text-card-foreground transition-colors hover:border-rule focus-visible:outline-2 focus-visible:outline-ring"
       >
-        <Glyph />
+        <Glyph agent={agent} harness={harness} />
         <span className="min-w-0 flex-1">
           <b className="block break-all font-mono text-[13px] font-semibold">
             {item.tool}
@@ -152,10 +186,13 @@ function PendingRow({
 function ResolvedRow({
   item,
   wsName,
+  harness,
   onOpen,
 }: {
   item: ResolvedApprovalItem;
   wsName: string;
+  /** The harness the row's agent registered, or null when it is not known. */
+  harness: string | null;
   onOpen: () => void;
 }) {
   const t = useTranslations("shell.approvals");
@@ -169,7 +206,7 @@ function ResolvedRow({
         onClick={onOpen}
         className="flex w-full items-start gap-2.5 rounded-xl border border-border bg-card px-3 py-2.5 text-left text-card-foreground opacity-80 transition-colors hover:border-rule focus-visible:outline-2 focus-visible:outline-ring"
       >
-        <Glyph />
+        <Glyph agent={agent} harness={harness} />
         <span className="min-w-0 flex-1">
           <b className="block break-all font-mono text-[13px] font-semibold">
             {item.tool}
@@ -195,10 +232,13 @@ function ResolvedRow({
  */
 function ResolvedCard({
   item,
+  harness,
   org,
   ws,
 }: {
   item: ResolvedApprovalItem;
+  /** The harness the call's agent registered, or null when it is not known. */
+  harness: string | null;
   org: string;
   ws: string;
 }) {
@@ -224,7 +264,21 @@ function ResolvedCard({
         <dt className="text-muted-foreground">{t("who")}</dt>
         {recorded(item.requester)}
         <dt className="text-muted-foreground">{t("agent")}</dt>
-        {recorded(item.agentKey)}
+        {item.agentKey === null || item.agentKey === undefined ? (
+          recorded(null)
+        ) : (
+          <dd className="flex min-w-0 items-center gap-1.5">
+            <AgentAvatar
+              value={null}
+              initials={(shortAgent(item.agentKey) ?? "")
+                .slice(0, 2)
+                .toUpperCase()}
+              harness={harness}
+              size={18}
+            />
+            <span className={`${mono} min-w-0 break-all`}>{item.agentKey}</span>
+          </dd>
+        )}
         <dt className="text-muted-foreground">{t("action")}</dt>
         <dd className={`${mono} break-all`}>{item.tool}</dd>
         <dt className="text-muted-foreground">{t("rule")}</dt>
@@ -276,7 +330,12 @@ export function ApprovalsDrawer({
   const { approvalsOpen, setApprovalsOpen } = useShellState();
   const [selected, setSelected] = useState<
     | { kind: "pending"; id: string }
-    | { kind: "resolved"; item: ResolvedApprovalItem; slug: string }
+    | {
+        kind: "resolved";
+        item: ResolvedApprovalItem;
+        slug: string;
+        harness: string | null;
+      }
     | null
   >(null);
   const closeRef = useRef<HTMLButtonElement>(null);
@@ -312,7 +371,11 @@ export function ApprovalsDrawer({
 
   const pending = data.approvals.workspaces.flatMap((w) =>
     w.pending.ok
-      ? w.pending.value.items.map((item) => ({ item, wsName: w.name }))
+      ? w.pending.value.items.map((item) => ({
+          item,
+          wsName: w.name,
+          harness: harnessOf(w.harnesses, item.agentKey),
+        }))
       : [],
   );
   const questions = data.approvals.workspaces.flatMap((w) =>
@@ -321,6 +384,7 @@ export function ApprovalsDrawer({
           item,
           wsName: w.name,
           slug: w.slug,
+          harness: harnessOf(w.harnesses, item.agentKey),
         }))
       : [],
   );
@@ -331,6 +395,7 @@ export function ApprovalsDrawer({
           item,
           wsName: w.name,
           slug: w.slug,
+          harness: harnessOf(w.harnesses, item.agentKey),
         }))
       : [],
   );
@@ -417,6 +482,7 @@ export function ApprovalsDrawer({
               {selected.kind === "resolved" ? (
                 <ResolvedCard
                   item={selected.item}
+                  harness={selected.harness}
                   org={data.org.slug}
                   ws={selected.slug}
                 />
@@ -442,7 +508,7 @@ export function ApprovalsDrawer({
                     })}
                   </p>
                   <ul className="flex flex-col gap-2">
-                    {questions.map(({ item, wsName, slug }) => (
+                    {questions.map(({ item, wsName, slug, harness }) => (
                       <InterjectionRow
                         key={item.id}
                         item={item}
@@ -452,13 +518,15 @@ export function ApprovalsDrawer({
                         now={now}
                         countdown={countdown}
                         agent={shortAgent(item.agentKey)}
+                        harness={harness}
                       />
                     ))}
-                    {pending.map(({ item, wsName }) => (
+                    {pending.map(({ item, wsName, harness }) => (
                       <PendingRow
                         key={item.id}
                         item={item}
                         wsName={wsName}
+                        harness={harness}
                         now={now}
                         onOpen={() => {
                           open({ kind: "pending", id: item.id });
@@ -509,13 +577,14 @@ export function ApprovalsDrawer({
                     })}
                   </p>
                   <ul className="flex flex-col gap-2">
-                    {resolved.map(({ item, wsName, slug }) => (
+                    {resolved.map(({ item, wsName, slug, harness }) => (
                       <ResolvedRow
                         key={item.id}
                         item={item}
                         wsName={wsName}
+                        harness={harness}
                         onOpen={() => {
-                          open({ kind: "resolved", item, slug });
+                          open({ kind: "resolved", item, slug, harness });
                         }}
                       />
                     ))}

@@ -101,9 +101,14 @@ export function cacheRun(over: Partial<RunTotalsRecord> = {}): RunTotalsRecord {
   };
 }
 
+/** The system context digest every fixture frame records unless the override sets another. */
+export const FIXTURE_DIGEST = "sys_fixture";
+
 /**
  * One model call of `run`, `seconds` after the run started, carrying the
  * tokens given, priced at `RATES` unless the override sets other prices.
+ * Every frame records `FIXTURE_DIGEST`, so a rewrite past the TTL is idle
+ * unless the override changes or clears the digest.
  */
 export function cacheFrame(
   run: RunTotalsRecord,
@@ -131,7 +136,7 @@ export function cacheFrame(
     provider: "anthropic",
     classTokens,
     classPrices: listPrices(),
-    systemContextDigest: null,
+    systemContextDigest: FIXTURE_DIGEST,
     systemContextParts: null,
     ...over,
   };

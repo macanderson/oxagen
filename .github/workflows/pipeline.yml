@@ -117,6 +117,11 @@ env:
   # scripts pin a 4 GB heap (#4990), so GitHub's 7 GB runner takes 1 and our
   # 16 GB small runner takes 3.
   LINT_TURBO_CONCURRENCY: ${{ vars.CI_RUNNERS == 'aws' && (vars.CI_HEAVY_POOL == 'small' && '3' || '12') || '1' }}
+  # Each Vitest process in the unit job's `rest` lane starts this many workers.
+  # Vitest's default is one per core less one, so 12 processes on a 16-core
+  # runner started about 180 and timed tests out (#5046). 12 processes at 2
+  # workers fit 16 cores. GitHub's 2-core runner already defaults to 1.
+  UNIT_VITEST_MAX_WORKERS: ${{ vars.CI_RUNNERS == 'aws' && (vars.CI_HEAVY_POOL == 'small' && '1' || '2') || '1' }}
   # Jobs run inside the toolchain container, so service containers are
   # reached by their service name on the shared docker network, not localhost.
   DATABASE_URL: postgres://oxagen:oxagen@postgres:5432/oxagen?sslmode=disable
@@ -756,9 +761,16 @@ jobs:
           # --max-old-space-size, and a GitHub-hosted runner shares its 7 GB
           # with the three service containers, so it gets 3. Our runners have
           # at least 64 GB and get 12.
+          #
+          # Everything after `--` goes to each package's `vitest run`. It caps
+          # every Vitest at $UNIT_VITEST_MAX_WORKERS workers (#5046). Vitest
+          # sets the pool's minimum to one per core less one unless told
+          # otherwise, which is above the cap and throws, so --minWorkers=1
+          # goes with it.
           if [ "$LANE" = rest ]; then
             pnpm turbo run test:coverage --concurrency="$TURBO_CONCURRENCY" --continue $TURBO_FILTER \
-              --filter=!@oxagen/app --filter=!@oxagen/handlers --filter=!@oxagen/app-deprecated
+              --filter=!@oxagen/app --filter=!@oxagen/handlers --filter=!@oxagen/app-deprecated \
+              -- --maxWorkers="$UNIT_VITEST_MAX_WORKERS" --minWorkers=1
           else
             pnpm turbo run test:coverage --filter=@oxagen/$LANE
           fi

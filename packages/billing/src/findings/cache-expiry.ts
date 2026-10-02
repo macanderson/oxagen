@@ -11,14 +11,20 @@
  * The finding cites a rewrite only when the keep-alive would have cost less.
  * A longer wait is a rewrite no keep-alive pays for, so it is left out. A
  * rewrite with no price is cited uncovered when its gap is short enough that
- * a keep-alive pays at list prices (`LIST_BREAKEVEN_READS`).
+ * a keep-alive pays at list prices (`LIST_BREAKEVEN_READS`). A rewrite past
+ * the TTL whose cause is unknown, because a request recorded no system
+ * context digest (`isUnknownRewrite`), is cited uncovered on the same terms.
+ * The coverage gate counts it, and it adds nothing to the sums.
  *
  * The finding also carries a TTL recommendation for its agent, set through
  * `Groups.recommend`. It weighs, across every request of the agent the pass
  * walked, what the 1-hour TTL costs more on writes against the rewrites it
  * avoids on gaps of 5 to 60 minutes, and proposes the cheaper TTL. The answer
- * may be the TTL already in effect. It prices parts of requests, so it
- * claims no frame (ADR-208, counting rule 2).
+ * may be the TTL already in effect. A rewrite whose cause is unknown is on
+ * neither side. While the frame read cap left any of the agent's runs
+ * unread, the finding proposes no TTL, since an unread run's writes could
+ * turn the comparison. It prices parts of requests, so it claims no frame
+ * (ADR-208, counting rule 2).
  */
 import {
   cacheSteps,
@@ -27,6 +33,7 @@ import {
   formatMicros,
   gapMinutes,
   isIdleRewrite,
+  isUnknownRewrite,
   keepAliveCost,
   keepAlivePings,
   perMillion,
@@ -85,13 +92,24 @@ interface TtlTally {
   priced: boolean;
 }
 
-/** What the prose reads about one finding. */
-interface IdleStats {
+/** What the prose reads about one finding's cited rewrites. */
+interface CitedStats {
   minGap: number;
   maxGap: number;
   /** Whether any cited rewrite had a 1-hour TTL. */
   oneHour: boolean;
+  /** The rewritten tokens of every cited rewrite, priced or not. */
+  tokens: number;
+  /** The cited rewrites whose cause is unknown (`isUnknownRewrite`). */
+  unknown: number;
+}
+
+/** What the prose reads about one finding. */
+interface IdleStats extends CitedStats {
+  /** Null when the finding proposes no TTL. */
   ttl: TtlComparison | null;
+  /** Whether the frame read cap left some of the subject's runs unread, so no TTL is proposed. */
+  partlyRead: boolean;
 }
 
 const statsOf = new WeakMap<Group, IdleStats>();
@@ -117,6 +135,12 @@ function inHourBand(step: CacheStep): boolean {
  * 5-minute TTL after a gap within the hour: those tokens are read at the read
  * price in place of a 5-minute write. On the 1-hour TTL, the same gap is a
  * read the 5-minute TTL would have written again.
+ *
+ * A rewrite on the 5-minute TTL after a gap within the hour whose cause is
+ * unknown may be one the 1-hour TTL avoids, or a bust it pays for at the
+ * 1-hour price. Its rewritten tokens are on neither side, and the rest of
+ * what the request wrote counts as extra. Its writes still count toward the
+ * TTL in effect.
  */
 function tally(t: TtlTally, step: CacheStep): void {
   const tokens = step.frame.classTokens;
@@ -131,13 +155,17 @@ function tally(t: TtlTally, step: CacheStep): void {
     t.priced = false;
     return;
   }
-  let avoidedTokens = 0;
+  // The rewritten tokens kept out of `extra`: an idle rewrite the 1-hour TTL
+  // avoids, or a rewrite whose cause is unknown, which is on neither side.
+  let leftOut = 0;
   if (band && step.ttl === "5m" && isIdleRewrite(step)) {
     // The rewrite at the 5-minute write price, whatever classes the request
     // wrote, so `extra` below counts the same tokens.
     t.avoided += perMillion(step.rewritten, w5 - read);
-    avoidedTokens = step.rewritten;
+    leftOut = step.rewritten;
     t.gaps += 1;
+  } else if (band && step.ttl === "5m" && isUnknownRewrite(step)) {
+    leftOut = step.rewritten;
   } else if (
     band &&
     step.ttl === "1h" &&
@@ -147,7 +175,7 @@ function tally(t: TtlTally, step: CacheStep): void {
     t.avoided += perMillion(step.readBack, w5 - read);
     t.gaps += 1;
   }
-  t.extra += perMillion(wrote - avoidedTokens, w1h - w5);
+  t.extra += perMillion(wrote - leftOut, w1h - w5);
   t.wrote5m += tokens.cache_write_5m;
   t.wrote1h += tokens.cache_write_1h;
 }
@@ -185,9 +213,30 @@ function idleMeasure(step: CacheStep): Measure | null {
   };
 }
 
+/**
+ * The fingerprints whose admitted runs the frame read cap left partly
+ * unread. A run absent from `input.frames` was either past the cap or had no
+ * frames to read, and the coverage counts do not say which. So while the cap
+ * left any run unread, every subject with an absent run counts as partly read.
+ */
+function partlyRead(input: DetectInput, ctx: DetectContext): Set<string> {
+  const out = new Set<string>();
+  const frames = input.frames;
+  if (frames === undefined || (input.frameCoverage?.capped ?? 0) === 0)
+    return out;
+  for (const run of input.runs) {
+    if (frames.has(run.runId)) continue;
+    const key = agentOrOperator("idle_cache_rewrites", run);
+    if (key === null || !ctx.groups.admits(key, run)) continue;
+    out.add(findingFingerprint(key.kind, key.level, key.subject));
+  }
+  return out;
+}
+
 function detect(input: DetectInput, ctx: DetectContext): void {
-  const cited = new Map<string, Omit<IdleStats, "ttl">>();
+  const cited = new Map<string, CitedStats>();
   const tallies = new Map<string, { key: FindingKey; tally: TtlTally }>();
+  const partial = partlyRead(input, ctx);
   for (const step of cacheSteps(input)) {
     const key = agentOrOperator("idle_cache_rewrites", step.run);
     if (key === null || !ctx.groups.admits(key, step.run)) continue;
@@ -205,23 +254,33 @@ function detect(input: DetectInput, ctx: DetectContext): void {
     };
     tallies.set(fingerprint, entry);
     tally(entry.tally, step);
-    if (!isIdleRewrite(step)) continue;
+    const unknown = isUnknownRewrite(step);
+    if (!unknown && !isIdleRewrite(step)) continue;
     const measure = idleMeasure(step);
     if (measure === null) continue;
     // The finding prices a part of the request, so it claims no frame and
-    // cites the run as a whole.
-    ctx.groups.add(key, input.window.start, step.run, measure, null);
+    // cites the run as a whole. A rewrite whose cause is unknown is cited
+    // uncovered, so the coverage gate counts it.
+    ctx.groups.add(
+      key,
+      input.window.start,
+      step.run,
+      unknown ? { ...measure, micros: null } : measure,
+      null,
+    );
     const seen = cited.get(fingerprint);
     cited.set(fingerprint, {
       minGap: Math.min(seen?.minGap ?? Infinity, step.gapMicros),
       maxGap: Math.max(seen?.maxGap ?? 0, step.gapMicros),
       oneHour: (seen?.oneHour ?? false) || step.ttl === "1h",
+      tokens: (seen?.tokens ?? 0) + step.rewritten,
+      unknown: (seen?.unknown ?? 0) + (unknown ? 1 : 0),
     });
   }
   const comparisons = new Map<string, TtlComparison | null>();
   for (const [fingerprint, { key, tally: t }] of tallies) {
     if (!cited.has(fingerprint)) continue;
-    const comparison = comparisonOf(t);
+    const comparison = partial.has(fingerprint) ? null : comparisonOf(t);
     comparisons.set(fingerprint, comparison);
     if (comparison === null) continue;
     const recommendation: FindingRecommendation = {
@@ -244,6 +303,7 @@ function detect(input: DetectInput, ctx: DetectContext): void {
     statsOf.set(group, {
       ...seen,
       ttl: comparisons.get(fingerprint) ?? null,
+      partlyRead: partial.has(fingerprint),
     });
   }
 }
@@ -255,6 +315,8 @@ const KEEP_ALIVE_WORDS: Readonly<Record<CacheTtl, string>> = {
 
 function fixOf(subject: string, stats: IdleStats, currency: string): string {
   const t = stats.ttl;
+  if (t === null && stats.partlyRead)
+    return `For ${subject}, ${KEEP_ALIVE_WORDS[stats.oneHour ? "1h" : "5m"]}. Oxagen read the frames of only some of its runs, so it proposes no cache TTL.`;
   if (t === null)
     return stats.oneHour
       ? `For ${subject}, ${KEEP_ALIVE_WORDS["1h"]}.`
@@ -281,27 +343,41 @@ export const idleCacheRewrites: Detector = {
   counting: null,
   detect,
   prose: (group, evidence) => {
-    const stats = statsOf.get(group) ?? {
+    const kept = statsOf.get(group);
+    const stats: IdleStats = kept ?? {
       minGap: 0,
       maxGap: 0,
       oneHour: false,
+      tokens: evidence.measuredTokens,
+      unknown: 0,
       ttl: null,
+      partlyRead: false,
     };
     const currency = currencyOf(group);
     const lo = gapMinutes(stats.minGap);
     const hi = gapMinutes(stats.maxGap);
     const waited = lo === hi ? `${lo} minutes` : `${lo} to ${hi} minutes`;
-    const average =
-      evidence.coveredCalls === 0
-        ? 0
-        : Math.round(evidence.measuredTokens / evidence.coveredCalls);
+    // The average spans every wait the sentence counts. With no stats from
+    // the pass, only the priced rewrites' tokens are known.
+    const waits = kept === undefined ? evidence.coveredCalls : evidence.calls;
+    const average = waits === 0 ? 0 : Math.round(stats.tokens / waits);
     const keepAlive = formatMicros(
       BigInt(evidence.counterfactualMicros),
       currency,
     );
     const rewrites = formatMicros(BigInt(evidence.measuredMicros), currency);
+    // The sums cover only the rewrites the finding prices, so the sentence
+    // names how many those are when it does not price them all.
+    const cost =
+      evidence.coveredCalls === evidence.calls
+        ? `A keep-alive would have cost ${keepAlive} against ${rewrites} in rewrites.`
+        : `For the ${evidence.coveredCalls.toLocaleString("en-US")} of ${plural(evidence.calls, "rewrite", "rewrites")} this finding prices, a keep-alive would have cost ${keepAlive} against ${rewrites}.`;
+    const unknown =
+      stats.unknown === 0
+        ? ""
+        : ` ${plural(stats.unknown, "rewrite", "rewrites")} recorded no system context digest, so ${stats.unknown === 1 ? "its" : "their"} cause is unknown.`;
     return {
-      why: `${group.subject} waited ${waited} ${plural(evidence.calls, "time", "times")}, and each wait rewrote a ${average.toLocaleString("en-US")}-token cache on average. A keep-alive would have cost ${keepAlive} against ${rewrites} in rewrites.`,
+      why: `${group.subject} waited ${waited} ${plural(evidence.calls, "time", "times")}, and each wait rewrote a ${average.toLocaleString("en-US")}-token cache on average. ${cost}${unknown}`,
       fix: fixOf(group.subject, stats, currency),
     };
   },

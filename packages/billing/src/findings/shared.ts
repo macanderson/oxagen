@@ -515,6 +515,12 @@ export interface Group {
   recommendation?: FindingRecommendation;
   /** Detector 5's split by result use, which the detector sets after its last `add`. */
   resultUse?: FindingResultUse;
+  /**
+   * Every frame an item of this group claimed, priced or not. `claims` holds
+   * only the priced ones. The pass frees these frames when the group is not
+   * written, so a later counting detector can claim them (#4607).
+   */
+  claimedFrames?: { runId: string; frameKey: string }[];
 }
 
 /** An item's measured and counterfactual sides; null micros when the counterfactual does not cover it. */
@@ -591,6 +597,10 @@ export class Groups {
     }
     group.calls += 1;
     acc.calls += 1;
+    if (claim !== null) {
+      group.claimedFrames ??= [];
+      group.claimedFrames.push({ runId: run.runId, frameKey: claim.frame.key });
+    }
     // Every cited call is pinned, covered or not: the Run page draws the
     // call the finding names, whatever the counterfactual could price.
     if (frames !== null) acc.frames.push(...frames);

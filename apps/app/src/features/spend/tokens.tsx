@@ -4,6 +4,7 @@
 // harness read fields the rollup does not record yet (#2962), so they name
 // what is missing. By agent is the agent rollup's twelve largest rows; the
 // three prompt-part columns are not recorded, and a row opens the agent page.
+// Each agent's avatar carries the harness it registered (#4871).
 import { useLocale, useTranslations } from "next-intl";
 import type { SpendReport } from "@/data/contracts/spend";
 import type { Read } from "@/data/read";
@@ -13,6 +14,7 @@ import { formatCount, formatRatio } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
 import { ReadFailure } from "@/ui/read-failure";
 import { cell, numericCell, Table } from "@/ui/table";
+import { type AgentHarnesses, AgentMark, harnessIn } from "./agent-mark";
 import { BasisLabel, NotRecordedValue } from "./figures";
 import { NotBacked, NotBackedPanel } from "./not-backed";
 import {
@@ -57,10 +59,13 @@ export function TokensSection({
   month,
   agents,
   at,
+  harnesses = {},
 }: {
   month: SpendReport;
   agents: Read<SpendReport>;
   at: SpendAt;
+  /** Each agent's registered harness, by key, for the avatars' badges. */
+  harnesses?: AgentHarnesses;
 }) {
   const t = useTranslations("spend.tokens");
   const locale = useLocale();
@@ -193,16 +198,22 @@ export function TokensSection({
                 return (
                   <tr key={row.key} data-key={row.key}>
                     <th scope="row" className={`${cell} text-left font-normal`}>
-                      <SafeLink
-                        to={routes.agent(
-                          at.org,
-                          at.ws,
-                          row.key.split(".").pop() ?? row.key,
-                        )}
-                        className={`${linkText} ${mono}`}
-                      >
-                        {row.key}
-                      </SafeLink>
+                      <span className="flex min-w-0 items-center gap-2">
+                        <AgentMark
+                          agentKey={row.key}
+                          harness={harnessIn(harnesses, row.key)}
+                        />
+                        <SafeLink
+                          to={routes.agent(
+                            at.org,
+                            at.ws,
+                            row.key.split(".").pop() ?? row.key,
+                          )}
+                          className={`${linkText} ${mono}`}
+                        >
+                          {row.key}
+                        </SafeLink>
+                      </span>
                     </th>
                     <td className={numericCell}>
                       {formatCount(row.runs, locale)}

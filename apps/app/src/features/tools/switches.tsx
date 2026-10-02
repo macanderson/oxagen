@@ -24,6 +24,7 @@ import {
 } from "@/data/contracts/tools";
 import type { Read } from "@/data/read";
 import type { OrgRole } from "@/server/viewer";
+import { AgentAvatar } from "@/ui/agent-avatar";
 import { mono, panel } from "@/ui/control-styles";
 import { NotBacked } from "./not-backed";
 import { Fact, Facts, useDate } from "./parts";
@@ -42,7 +43,15 @@ export function switchesOn(switches: readonly KillSwitch[]): number {
 }
 
 type Member = { id: string; name: string | null; email: string };
-type Agent = { id: string; slug: string; name: string };
+type Agent = { id: string; slug: string; name: string; harness: string };
+
+/** A card's heading: the thing the switch stops, and the agent when it stops one. */
+type Heading = {
+  title: string;
+  mono: boolean;
+  /** A live agent's slug and harness, for its avatar beside the title. */
+  agent?: { slug: string; harness: string };
+};
 
 /** Who took a governance action and when; the record carries an id, never a name. */
 export function Actor({
@@ -79,7 +88,7 @@ function useHeading(
   wsName: string,
   members: readonly Member[],
   agents: readonly Agent[],
-): (target: KillSwitch["target"]) => { title: string; mono: boolean } {
+): (target: KillSwitch["target"]) => Heading {
   const t = useTranslations("tools.switches");
   return (target) => {
     switch (target.kind) {
@@ -104,7 +113,11 @@ function useHeading(
         const agent = agents.find((a) => a.id === target.ref);
         return agent === undefined
           ? { title: target.ref, mono: true }
-          : { title: agent.slug, mono: true };
+          : {
+              title: agent.slug,
+              mono: true,
+              agent: { slug: agent.slug, harness: agent.harness },
+            };
       }
       case "tool_server":
       case "tool_version":
@@ -126,7 +139,7 @@ function Card({
   ships,
 }: {
   at: ToolsAt;
-  heading: { title: string; mono: boolean };
+  heading: Heading;
   kind: KillSwitch["target"]["kind"];
   /** The recorded switch, or null for a card that ships with the workspace and has no row. */
   item: KillSwitch | null;
@@ -148,11 +161,21 @@ function Card({
     >
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border px-4 py-3">
         <div className="flex min-w-0 flex-col gap-1">
-          <h3
-            className={`text-[13.5px] font-semibold text-foreground ${heading.mono ? `${mono} break-all` : ""}`}
-          >
-            {heading.title}
-          </h3>
+          <div className="flex min-w-0 items-center gap-2">
+            {heading.agent === undefined ? null : (
+              <AgentAvatar
+                value={null}
+                initials={heading.agent.slug.slice(0, 2).toUpperCase()}
+                harness={heading.agent.harness}
+                size={20}
+              />
+            )}
+            <h3
+              className={`text-[13.5px] font-semibold text-foreground ${heading.mono ? `${mono} break-all` : ""}`}
+            >
+              {heading.title}
+            </h3>
+          </div>
           <p className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             <span className="rounded border border-border px-1.5 py-0.5 text-[10.5px] font-medium">
               {t(`kinds.${kind}`)}

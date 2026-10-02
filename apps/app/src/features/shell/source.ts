@@ -12,14 +12,19 @@
 // chrome reads each workspace the viewer belongs to, a few at a time and at
 // most WORKSPACE_BOUND of them, and says so when it stopped short (#3848).
 // The reads run when the layout renders: on a full load, and on the refresh
-// every governed write ends with. Nothing polls (#3805).
+// every governed write ends with. Nothing polls (#3805). A workspace whose
+// rows name an agent also lists its agents, for the harness each row's avatar
+// wears (#4871); one with no such row costs no extra read.
 import "server-only";
 import { createHash } from "node:crypto";
 import { DEFAULT_TIME_ZONE } from "@oxagen/oxagen/contracts/user.preferences.read";
+import type { ApprovalQueue } from "@/data/contracts/approvals";
 import type { MandateRow } from "@/data/contracts/mandates";
 import type { DataSource } from "@/data/ports";
+import type { Read } from "@/data/read";
+import { harnessOfKey, readAgentHarnessIndex } from "@/features/agent-harness";
 import { getAuthUser } from "@/features/auth";
-import { type OrgCtx, requireViewer } from "@/server/viewer";
+import { type OrgCtx, requireViewer, type WsCtx } from "@/server/viewer";
 import { startOfZonedDay } from "@/shared/calendar-day";
 import type { ShellData, WorkspaceApprovals } from "./shell-data";
 
@@ -77,15 +82,18 @@ async function workspaceApprovals(
     source.interjections.open(wsCtx, { runId: null }),
     source.approvals.resolvedSince(wsCtx, { since }),
   ]);
-  // The ledger is read only where a parked call names a mandate, the same
-  // rule the Fleet page follows.
-  const mandates = new Map<string, MandateRow>();
-  if (pending.ok && pending.value.items.some((i) => i.mandateId !== null)) {
-    const read = await source.mandates.list(wsCtx, { agentId: null });
-    if (read.ok)
-      for (const mandate of read.value.mandates)
-        mandates.set(mandate.id, mandate);
-  }
+  const [mandates, harnesses] = await Promise.all([
+    parkedMandates(wsCtx, source, pending),
+    rowHarnesses(wsCtx, source, [
+      ...(pending.ok ? pending.value.items.map((i) => i.agentKey) : []),
+      ...(interjections.ok
+        ? interjections.value.items.map((i) => i.agentKey)
+        : []),
+      ...(resolved.ok
+        ? resolved.value.items.map((i) => i.agentKey ?? null)
+        : []),
+    ]),
+  ]);
   return {
     approvals: {
       slug: place.slug,
@@ -93,9 +101,52 @@ async function workspaceApprovals(
       pending,
       interjections,
       resolved,
+      harnesses,
     },
     mandates,
   };
+}
+
+/**
+ * The mandates a workspace's parked calls drew on, by public id. The ledger is
+ * read only where a parked call names a mandate, the same rule the Fleet page
+ * follows.
+ */
+async function parkedMandates(
+  wsCtx: WsCtx,
+  source: DataSource,
+  pending: Read<ApprovalQueue>,
+): Promise<ReadonlyMap<string, MandateRow>> {
+  const mandates = new Map<string, MandateRow>();
+  if (!pending.ok || !pending.value.items.some((i) => i.mandateId !== null))
+    return mandates;
+  const read = await source.mandates.list(wsCtx, { agentId: null });
+  if (read.ok)
+    for (const mandate of read.value.mandates)
+      mandates.set(mandate.id, mandate);
+  return mandates;
+}
+
+/**
+ * The harness each agent key registered, for the keys a workspace's drawer
+ * rows name. A row records the agent key and not its harness, so the agents
+ * are listed, and only where a row names one: a workspace with nothing parked
+ * or resolved today costs no extra read (#4871).
+ */
+async function rowHarnesses(
+  wsCtx: WsCtx,
+  source: DataSource,
+  keys: readonly (string | null)[],
+): Promise<Readonly<Record<string, string>>> {
+  const named = keys.filter((key) => key !== null);
+  if (named.length === 0) return {};
+  const index = await readAgentHarnessIndex(wsCtx, source);
+  const harnesses: Record<string, string> = {};
+  for (const key of named) {
+    const harness = harnessOfKey(index, key);
+    if (harness !== null) harnesses[key] = harness;
+  }
+  return harnesses;
 }
 
 export async function shellSource(
