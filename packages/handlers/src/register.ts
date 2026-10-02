@@ -1274,6 +1274,20 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./context.pr.get"))
         .getContextPrHandler as CapabilityHandlerFn,
   );
+  // The Context PR page (#5077): the host's state for one PR now, and the
+  // files its branch changes.
+  registerHandler(
+    "refresh_context_pr",
+    async () =>
+      (await import("./context.pr.refresh"))
+        .refreshContextPrHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "get_context_pr_diff",
+    async () =>
+      (await import("./context.pr.diff.get"))
+        .getContextPrDiffHandler as CapabilityHandlerFn,
+  );
   registerHandler(
     "merge_context_pr",
     async () =>

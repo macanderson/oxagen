@@ -113,6 +113,7 @@ import type {
 import type {
   ContextPr,
   ProposalPage,
+  ProposalState,
   RecordDetail,
   MemoryPage,
   OxagenTree,
@@ -680,6 +681,8 @@ export interface DataSource {
         /** Rows to a page, 1 to `STEERING_READ_MAX`; `STEERING_PAGE` when omitted. */
         limit?: number;
         lineage?: string;
+        /** open, merged or closed, as the Proposals list filters; every state when omitted. */
+        state?: ProposalState;
       },
     ): Promise<Read<ProposalPage>>;
     /** get_context_pr: one proposal's state machine, checks and what merge will do */

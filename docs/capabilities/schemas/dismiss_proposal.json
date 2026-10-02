@@ -1,7 +1,7 @@
 {
   "name": "dismiss_proposal",
   "domain": "context",
-  "description": "Reject a record proposal with a reason. Refused once the proposal has merged.",
+  "description": "Reject a record proposal, with an optional reason, closing its Context PR and deleting its branch. Refused once the proposal has merged.",
   "mode": "sync",
   "surfaces": [
     "api",
@@ -33,8 +33,7 @@
       }
     },
     "required": [
-      "proposalId",
-      "reason"
+      "proposalId"
     ],
     "additionalProperties": false
   },

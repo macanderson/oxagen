@@ -160,6 +160,23 @@ export function contextPrOutput(
       sharingScope: "workspace",
       statement: "Do not re-read CHANGELOG.md after the first read in a run.",
     },
+    raised: {
+      statement: "Do not re-read CHANGELOG.md after the first read in a run.",
+      rationale:
+        "Three sealed runs across two agents read CHANGELOG.md again after the first read.",
+      source: "agent:release-bot",
+      sourceName: null,
+      force: "must",
+      constraintEffect: "forbid",
+      sharingScope: "workspace",
+      support: {
+        runs: ["arun_01k5rs7m", "arun_01k5rs9q", "arun_01k5rt2c"],
+        agents: ["release-bot", "docs-bot"],
+        recordIds: ["cta_01k5rt6c"],
+        evidenceLinks: ["frame:arun_01k5rs7m/14"],
+      },
+      at: "2026-09-15T09:00:00.000Z",
+    },
     body: `## Context PR · \`${LINEAGE}\``,
     checks: CHECK_NAMES.map((name) => ({
       name,
@@ -176,6 +193,7 @@ export function contextPrOutput(
         "team: an org Owner or Admin, or a workspace Owner, other than the author merges",
     },
     merged: null,
+    closed: null,
     ...overrides,
   };
 }

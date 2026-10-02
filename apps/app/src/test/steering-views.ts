@@ -134,6 +134,7 @@ const NAMES = [
 function checks(statuses: readonly Check["status"][]): Check[] {
   return NAMES.map((name, index) => {
     const status = statuses[index] ?? "pending";
+    const done = status === "passed" || status === "failed";
     return {
       name,
       status,
@@ -143,6 +144,9 @@ function checks(statuses: readonly Check["status"][]): Check[] {
           : status === "passed"
             ? `${name} holds`
             : "",
+      detailsUrl: null,
+      startedAt: status === "pending" ? null : "2026-09-15T09:11:00.000Z",
+      completedAt: done ? "2026-09-15T09:12:00.000Z" : null,
     };
   });
 }
@@ -186,8 +190,26 @@ export function contextPr(
           baseRef: "main",
           branch: `steering/${LINEAGE}`,
           headSha: status === "pr_open" ? null : "9f8e7d6c5b4a",
+          provider: "github",
         }
       : null,
+    raised: {
+      statement: "Do not re-read CHANGELOG.md after the first read in a run.",
+      rationale:
+        "Three sealed runs across two agents read CHANGELOG.md again after the first read.",
+      source: "agent:release-bot",
+      sourceName: null,
+      force: "must",
+      constraintEffect: null,
+      sharingScope: "workspace",
+      support: {
+        runs: ["arun_01k5rs7m", "arun_01k5rs9q"],
+        agents: ["release-bot", "docs-bot"],
+        recordIds: [],
+        evidenceLinks: ["frame:arun_01k5rs7m/14"],
+      },
+      at: "2026-09-15T09:00:00.000Z",
+    },
     body: opened ? `## Context PR · ${LINEAGE}` : null,
     checks: CHECKS[status],
     onMerge: {
@@ -201,6 +223,17 @@ export function contextPr(
             at: "2026-09-15T09:20:00.000Z",
             promotionEventId: "ctp_8qm2x4",
             recordId: "ctr_7k2m9q4x",
+            byName: "Dana Reyes",
+            onHost: false,
+          }
+        : null,
+    closed:
+      status === "rejected"
+        ? {
+            at: "2026-09-15T09:30:00.000Z",
+            reason: "Superseded by the release checklist",
+            byName: "Dana Reyes",
+            onHost: false,
           }
         : null,
     ...overrides,
@@ -315,7 +348,7 @@ export function steeringHub(overrides: Partial<SteeringHub> = {}): SteeringHub {
       mode: "team",
     },
     proposalsWaiting: 3,
-    segments: { candidates: 4, prs: 2 },
+    states: { open: 3, merged: 6, closed: 1 },
     ...overrides,
   };
 }

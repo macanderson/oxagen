@@ -97,11 +97,51 @@ export function publishedRecordView(
  * A governance proposal (#4795) publishes no record and appends no promotion
  * event, so its merge leaves the ledger length as it was and names neither.
  */
+/** The user a `user:<uuid>` source names, or null for any other source. */
+export function sourceUserId(source: string): string | null {
+  const match = /^user:([0-9a-f-]{36})$/i.exec(source);
+  return match?.[1] ?? null;
+}
+
+/**
+ * The repository sync's own wording for a pull request the host closed or
+ * merged (context.steering.sync.ts, gitlab.webhook.ts). A proposal rejected
+ * before the sync cleared the updater on a host close is read by it.
+ */
+const HOST_CLOSE = /^(Closed|Merged) on (GitHub|GitLab)\b/;
+
+/**
+ * Whether the host closed this rejected proposal rather than a person in
+ * Oxagen. The sync clears the updater when it writes a host close; a
+ * dismissal records the acting user.
+ */
+export function closedOnHost(row: ProposalRow): boolean {
+  return (
+    row.updatedById === null ||
+    (row.dismissedReason !== null && HOST_CLOSE.test(row.dismissedReason))
+  );
+}
+
+/** The users a Context PR view names, for the store's display-name read. */
+export function contextPrUserIds(row: ProposalRow): string[] {
+  return [
+    sourceUserId(row.source),
+    row.mergedByUserId,
+    row.status === "rejected" && !closedOnHost(row) ? row.updatedById : null,
+  ].filter((id): id is string => id !== null);
+}
+
 export function contextPrView(
   row: ProposalRow,
   ledgerLength: number,
   merged: { promotionEventPublicId: string; recordPublicId: string } | null,
+  names: ReadonlyMap<string, string> = new Map(),
 ): ContextPr {
+  const nameOf = (id: string | null) =>
+    id === null ? null : (names.get(id) ?? null);
+  const sourceUser = sourceUserId(row.source);
+  const hostClosed = row.status === "rejected" && closedOnHost(row);
+  const closedBy = row.status !== "rejected" || hostClosed ? null : row.updatedById;
   // Read from governance.toml when the PR opens; null until then.
   const mode = (row.governanceMode as GovernanceMode | null) ?? null;
   const path = row.path ?? recordFilePath(row.lineageId);
@@ -143,6 +183,23 @@ export function contextPrView(
             statement: row.statement,
           }
         : null,
+    raised: {
+      statement: row.statement,
+      rationale: row.rationale,
+      source: row.source,
+      sourceName: nameOf(sourceUser),
+      force: row.force as RecordForce,
+      constraintEffect:
+        (row.constraintEffect as ConstraintEffect | null) ?? null,
+      sharingScope: row.sharingScope as PublishedSharingScope,
+      support: {
+        runs: row.supportRuns,
+        agents: row.supportAgents,
+        recordIds: row.supportingRecordIds,
+        evidenceLinks: row.evidenceLinks,
+      },
+      at: row.createdAt.toISOString(),
+    },
     body:
       row.prNumber === null
         ? null
@@ -164,8 +221,22 @@ export function contextPrView(
             commit: row.mergedCommit,
             at: row.mergedAt.toISOString(),
             byUserId: row.mergedByUserId,
+            byName: nameOf(row.mergedByUserId),
+            // A merge from Oxagen records its reviewer; the sync records a
+            // merge on the host with none (ADR-184 decision 5).
+            onHost: row.mergedByUserId === null,
             promotionEventId: merged?.promotionEventPublicId ?? null,
             recordId: merged?.recordPublicId ?? null,
+          }
+        : null,
+    closed:
+      row.status === "rejected"
+        ? {
+            at: (row.dismissedAt ?? row.updatedAt).toISOString(),
+            reason: row.dismissedReason,
+            byUserId: closedBy,
+            byName: nameOf(closedBy),
+            onHost: hostClosed,
           }
         : null,
   };

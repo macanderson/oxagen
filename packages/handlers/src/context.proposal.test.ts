@@ -189,6 +189,40 @@ describe("list_proposals", () => {
     );
     expect(none).toEqual({ proposals: [], total: 0 });
   });
+
+  it("narrows to open, merged or closed, the way a pull request list filters", async () => {
+    const h = harness();
+    const propose = createProposeRecordHandler(h);
+    const lineage = (lineageId: string) =>
+      proposal({ record: { ...proposal().record, lineageId } });
+    const open = await propose(lineage("ctx.open"), ctx());
+    const merged = await propose(lineage("ctx.merged"), ctx());
+    const closed = await propose(lineage("ctx.closed"), ctx());
+    const row = (id: string) =>
+      h.store.proposals.find((p) => p.publicId === id)!;
+    await h.store.updateProposal(row(merged.proposalId).id, { status: "merged" }, [
+      "proposed",
+    ]);
+    await h.store.updateProposal(
+      row(closed.proposalId).id,
+      { status: "rejected" },
+      ["proposed"],
+    );
+    const list = createListProposalsHandler(h);
+    const ids = async (state: "open" | "merged" | "closed") => {
+      const out = await list(contextProposalList.input.parse({ state }), ctx());
+      return { ids: out.proposals.map((p) => p.id), total: out.total };
+    };
+    expect(await ids("open")).toEqual({ ids: [open.proposalId], total: 1 });
+    expect(await ids("merged")).toEqual({ ids: [merged.proposalId], total: 1 });
+    expect(await ids("closed")).toEqual({ ids: [closed.proposalId], total: 1 });
+    // status narrows with state, so a status outside the state lists nothing.
+    const none = await list(
+      contextProposalList.input.parse({ state: "open", status: "merged" }),
+      ctx(),
+    );
+    expect(none.total).toBe(0);
+  });
 });
 
 describe("dismiss_proposal", () => {

@@ -215,6 +215,16 @@ describe("steering.proposals", () => {
       page: "steering",
     });
   });
+
+  it("narrows to one state when the Proposals filter names one", async () => {
+    kernelRead.mockResolvedValue(readOk({ proposals: [], total: 0 }));
+    await steering.proposals(ctx, { offset: 0, limit: 25, state: "merged" });
+    expect(kernelRead).toHaveBeenCalledWith(ctx, {
+      contract: contextProposalList,
+      input: { limit: 25, offset: 0, state: "merged" },
+      page: "steering",
+    });
+  });
 });
 
 describe("steering.contextPr", () => {
@@ -370,15 +380,12 @@ describe("steering.hub", () => {
   /** Answers each contract the hub reads with what the case hands it. */
   function answer(
     by: Partial<
-      Record<
-        "repos" | "tree" | "all" | "merged" | "rejected" | "proposed",
-        unknown
-      >
+      Record<"repos" | "tree" | "open" | "merged" | "closed", unknown>
     >,
   ) {
     const route = (call: {
       contract: unknown;
-      input: { status?: string };
+      input: { state?: string };
     }): unknown => {
       if (call.contract === repositoryList)
         return by.repos ?? readOk({ repositories: [MAIN] });
@@ -392,15 +399,15 @@ describe("steering.hub", () => {
           })
         );
       if (call.contract === contextProposalList) {
-        const key = call.input.status ?? "all";
+        const key = call.input.state;
         const totals: Record<string, number> = {
-          all: 15,
+          open: 9,
           merged: 4,
-          rejected: 2,
-          proposed: 3,
+          closed: 2,
         };
+        if (key === undefined) throw new Error("the hub counts by state");
         return (
-          (isProposalKey(key) ? by[key] : undefined) ??
+          (isStateKey(key) ? by[key] : undefined) ??
           readOk({ proposals: [], total: totals[key] })
         );
       }
@@ -410,22 +417,17 @@ describe("steering.hub", () => {
     kernelRead.mockImplementation(
       (
         _ctx: unknown,
-        call: { contract: unknown; input: { status?: string } },
+        call: { contract: unknown; input: { state?: string } },
       ) =>
         new Promise((resolve) => {
           resolve(route(call));
         }),
     );
   }
-  const isProposalKey = (
-    key: string,
-  ): key is "all" | "merged" | "rejected" | "proposed" =>
-    key === "all" ||
-    key === "merged" ||
-    key === "rejected" ||
-    key === "proposed";
+  const isStateKey = (key: string): key is "open" | "merged" | "closed" =>
+    key === "open" || key === "merged" || key === "closed";
 
-  it("reads governance.toml off the main repository and counts the proposals waiting", async () => {
+  it("reads governance.toml off the main repository and counts the proposals in each state", async () => {
     answer({});
     const read = await steering.hub(ctx);
     expect(read).toEqual(
@@ -437,7 +439,7 @@ describe("steering.hub", () => {
           mode: "regulated",
         },
         proposalsWaiting: 9,
-        segments: { candidates: 15, prs: 6 },
+        states: { open: 9, merged: 4, closed: 2 },
       }),
     );
     expect(kernelRead).toHaveBeenCalledWith(ctx, {
@@ -445,11 +447,13 @@ describe("steering.hub", () => {
       input: { bindingId: "rpb_0a1b2c" },
       page: "steering",
     });
-    expect(kernelRead).toHaveBeenCalledWith(ctx, {
-      contract: contextProposalList,
-      input: { limit: 1, offset: 0, status: "merged" },
-      page: "steering",
-    });
+    for (const state of ["open", "merged", "closed"]) {
+      expect(kernelRead).toHaveBeenCalledWith(ctx, {
+        contract: contextProposalList,
+        input: { limit: 1, offset: 0, state },
+        page: "steering",
+      });
+    }
   });
 
   it("says unbound when no repository is the main one, and reads no tree", async () => {
@@ -489,28 +493,17 @@ describe("steering.hub", () => {
     });
   });
 
-  it("prints no waiting count when any of the three counts fails (negative)", async () => {
-    answer({ rejected: readError("record_index_unavailable", 503) });
+  it("prints no waiting count and no filter counts when the open count fails (negative)", async () => {
+    answer({ open: readError("record_index_unavailable", 503) });
     const read = await steering.hub(ctx);
     expect(read.ok && read.value.proposalsWaiting).toBeNull();
-    expect(read.ok && read.value.segments).toBeNull();
+    expect(read.ok && read.value.states).toBeNull();
   });
 
-  it("counts the Candidates segment as every proposal and Context PRs as the waiting ones with a pull request", async () => {
-    answer({});
+  it("prints no filter counts when the closed count fails, and keeps the waiting count (negative)", async () => {
+    answer({ closed: readError("record_index_unavailable", 503) });
     const read = await steering.hub(ctx);
-    expect(read.ok && read.value.segments).toEqual({ candidates: 15, prs: 6 });
-    expect(kernelRead).toHaveBeenCalledWith(ctx, {
-      contract: contextProposalList,
-      input: { limit: 1, offset: 0, status: "proposed" },
-      page: "steering",
-    });
-  });
-
-  it("prints no segment counts when the proposed count fails, and keeps the waiting count (negative)", async () => {
-    answer({ proposed: readError("record_index_unavailable", 503) });
-    const read = await steering.hub(ctx);
-    expect(read.ok && read.value.segments).toBeNull();
+    expect(read.ok && read.value.states).toBeNull();
     expect(read.ok && read.value.proposalsWaiting).toBe(9);
   });
 });

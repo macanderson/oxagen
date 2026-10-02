@@ -57,6 +57,23 @@ export const ProposalStatus = z.enum([
 ]);
 export type ProposalStatus = z.infer<typeof ProposalStatus>;
 
+/**
+ * The three states the Proposals list filters by, as a pull request list
+ * names them: open (a candidate, or a Context PR still open), merged, and
+ * closed (dismissed in Oxagen, or closed on the repository host).
+ */
+export const PROPOSAL_STATES = ["open", "merged", "closed"] as const;
+export type ProposalState = (typeof PROPOSAL_STATES)[number];
+
+/** The state a status sits in. */
+export function proposalStateOf(status: ProposalStatus): ProposalState {
+  return status === "merged"
+    ? "merged"
+    : status === "rejected"
+      ? "closed"
+      : "open";
+}
+
 /** A published record in force. Kind, force, statement, commit and path are null on a record no Context PR wrote. */
 const PublishedRecord = z.object({
   id: PublicId,
@@ -151,14 +168,39 @@ export const ContextPr = z.object({
       branch: z.string().min(1),
       /** The commit the checks ran on; null until the file is committed. */
       headSha: z.string().min(1).nullable(),
+      /** The host the pull request lives on; GitLab calls it a merge request. */
+      provider: z.enum(["github", "gitlab"]),
     })
     .nullable(),
+  /** The proposal as raised: what it says, why, who raised it and when. */
+  raised: z.object({
+    statement: z.string(),
+    rationale: z.string(),
+    /** Who raised it as recorded: `user:<uuid>`, `api_key:<uuid>`, or an agent's own attribution. */
+    source: z.string(),
+    /** The display name when the source is a user who has one. */
+    sourceName: z.string().nullable(),
+    force: RecordForce,
+    constraintEffect: ConstraintEffect.nullable(),
+    sharingScope: SharingScope,
+    support: z.object({
+      runs: z.array(z.string()),
+      agents: z.array(z.string()),
+      recordIds: z.array(z.string()),
+      evidenceLinks: z.array(z.string()),
+    }),
+    at: Instant,
+  }),
   body: z.string().nullable(),
   checks: z.array(
     z.object({
       name: CheckName,
       status: z.enum(["pending", "running", "passed", "failed"]),
       summary: z.string(),
+      /** The check run on the host, when the App could create one. */
+      detailsUrl: z.string().min(1).nullable(),
+      startedAt: Instant.nullable(),
+      completedAt: Instant.nullable(),
     }),
   ),
   onMerge: z.object({
@@ -179,6 +221,20 @@ export const ContextPr = z.object({
       promotionEventId: PublicId.nullable(),
       /** Null for a governance proposal, which publishes no record. */
       recordId: PublicId.nullable(),
+      /** The merger's display name; null when unnamed or merged on the host. */
+      byName: z.string().nullable(),
+      /** The host merged it and the repository sync recorded it (ADR-184). */
+      onHost: z.boolean(),
+    })
+    .nullable(),
+  /** The close: a dismissal in Oxagen, or the host closing the pull request. */
+  closed: z
+    .object({
+      at: Instant,
+      reason: z.string().nullable(),
+      byName: z.string().nullable(),
+      /** The host closed it and the repository sync recorded it (ADR-184). */
+      onHost: z.boolean(),
     })
     .nullable(),
 });
@@ -373,12 +429,10 @@ export const SteeringHub = z.object({
   /** Proposals not merged and not dismissed: candidates plus open Context PRs. */
   proposalsWaiting: Count.nullable(),
   /**
-   * The Proposals segment counts (roadmap pages/steering-proposals.md): every
-   * proposal the Candidates list holds, and the Context PRs still open (every
-   * proposal less the ones with no pull request, the merged and the
-   * dismissed). Null when any count failed, like `proposalsWaiting`.
+   * The Proposals filter counts: open (the same count as `proposalsWaiting`),
+   * merged and closed. Null when any of the three failed.
    */
-  segments: z.object({ candidates: Count, prs: Count }).nullable(),
+  states: z.object({ open: Count, merged: Count, closed: Count }).nullable(),
 });
 export type SteeringHub = z.infer<typeof SteeringHub>;
 

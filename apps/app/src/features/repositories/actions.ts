@@ -35,6 +35,7 @@ import { contextPrMerge } from "@oxagen/oxagen/contracts/context.pr.merge";
 import { contextProposalDismiss } from "@oxagen/oxagen/contracts/context.proposal.dismiss";
 import { z } from "zod";
 import type { ContextPr } from "@/data/contracts/steering";
+import { toContextPr } from "@/data/live/mappers/steering";
 import type {
   AttachedInstallation,
   GitHubInstallations,
@@ -411,50 +412,8 @@ export async function readRepositoryChange(
     page: "repositories",
   });
   if (!read.ok) return readToActionResult(read);
-  const out = read.value;
-  return {
-    ok: true,
-    value: {
-      proposalId: out.proposalId,
-      lineage: out.lineageId,
-      kind: out.kind,
-      status: out.status,
-      governanceMode: out.governanceMode,
-      pr:
-        out.pr === null
-          ? null
-          : {
-              number: out.pr.number,
-              url: out.pr.url,
-              repository: out.pr.repository,
-              baseRef: out.pr.baseRef,
-              branch: out.pr.branch,
-              headSha: out.pr.headSha,
-            },
-      body: out.body,
-      checks: out.checks.map((check) => ({
-        name: check.name,
-        status: check.status,
-        summary: check.summary,
-      })),
-      onMerge: {
-        path: out.onMerge.publishes.path,
-        bundleVersion: {
-          current: out.onMerge.bundleVersion.current,
-          afterMerge: out.onMerge.bundleVersion.afterMerge,
-        },
-      },
-      merged:
-        out.merged === null
-          ? null
-          : {
-              commit: out.merged.commit,
-              at: out.merged.at,
-              promotionEventId: out.merged.promotionEventId,
-              recordId: out.merged.recordId,
-            },
-    },
-  };
+  // The Steering port's own mapper, so both pages draw one Context PR shape.
+  return { ok: true, value: toContextPr(read.value) };
 }
 
 /**

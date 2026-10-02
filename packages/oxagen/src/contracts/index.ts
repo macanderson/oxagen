@@ -327,6 +327,8 @@ import { steeringMemoriesDismiss } from "./steering.memories.dismiss";
 import { steeringMemoryPrRecordsList } from "./steering.memory_pr_records.list";
 import { contextPrOpen } from "./context.pr.open";
 import { contextPrGet } from "./context.pr.get";
+import { contextPrRefresh } from "./context.pr.refresh";
+import { contextPrDiffGet } from "./context.pr.diff.get";
 import { contextPrMerge } from "./context.pr.merge";
 import { contextPrMergeWithoutReview } from "./context.pr.merge_without_review";
 import { contextSteeringDeliveries } from "./context.steering.deliveries";
@@ -1116,6 +1118,8 @@ export {
   steeringMemoryPrRecordsList,
   contextPrOpen,
   contextPrGet,
+  contextPrRefresh,
+  contextPrDiffGet,
   contextPrMerge,
   contextPrMergeWithoutReview,
   contextGovernanceModeSet,
@@ -1573,6 +1577,8 @@ export const contracts: readonly CapabilityDeclaration[] = [
   steeringMemoryPrRecordsList,
   contextPrOpen,
   contextPrGet,
+  contextPrRefresh,
+  contextPrDiffGet,
   contextPrMerge,
   contextPrMergeWithoutReview,
   contextGovernanceModeSet,

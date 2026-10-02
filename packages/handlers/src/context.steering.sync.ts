@@ -47,11 +47,7 @@
 //      next sync tries again.
 import { emitSecurityEvent } from "@oxagen/database/security";
 import { HandlerError } from "@oxagen/oxagen";
-import {
-  CHECK_NAMES,
-  type CheckResult,
-  type GovernanceMode,
-} from "@oxagen/oxagen/contracts/context.steering.shared";
+import type { GovernanceMode } from "@oxagen/oxagen/contracts/context.steering.shared";
 import {
   type FileIssue,
   readTomlFile,
@@ -88,6 +84,13 @@ import {
   type SyncState,
   type SyncStore,
 } from "./context.steering.sync.store";
+import {
+  closedOnHostReason,
+  hostName,
+  OPEN_PR,
+  pendingChecks,
+  STALE_FROM,
+} from "./context.steering.pr-state";
 import { logger } from "./logger";
 import {
   type ReconcileLinks,
@@ -238,27 +241,7 @@ const READ_CONCURRENCY = 8;
 /** The check the sync posts on the production branch's head. */
 export const SYNC_CHECK_NAME = "Oxagen steering sync";
 
-const STALE_FROM = [
-  "checks_running",
-  "checks_passed",
-  "checks_failed",
-] as const;
-const OPEN_PR = ["pr_open", ...STALE_FROM] as const;
-
-const pendingChecks = (): CheckResult[] =>
-  CHECK_NAMES.map((name) => ({
-    name,
-    status: "pending",
-    summary: "",
-    detailsUrl: null,
-    startedAt: null,
-    completedAt: null,
-  }));
-
 type PullState = Awaited<ReturnType<SteeringHost["getPullRequest"]>>;
-
-const hostName = (repo: SteeringRepository) =>
-  repo.provider === "gitlab" ? "GitLab" : "GitHub";
 
 async function readAll(
   github: SteeringHost,
@@ -639,7 +622,7 @@ export async function syncWorkspaceSteering(
             deps,
             repo,
             row,
-            `Closed on ${hostName(repo)} without merging`,
+            closedOnHostReason(repo),
             now,
             noClaimSince,
           )
@@ -965,7 +948,14 @@ async function reject(
   try {
     await deps.steering.updateProposal(
       row.id,
-      { status: "rejected", dismissedAt: at, dismissedReason: reason },
+      // No person closed it: the host did, and the page reads a null updater
+      // on a rejected proposal as a close on the host.
+      {
+        status: "rejected",
+        dismissedAt: at,
+        dismissedReason: reason,
+        updatedById: null,
+      },
       OPEN_PR,
       { noClaimSince },
     );

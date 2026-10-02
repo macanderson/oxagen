@@ -166,12 +166,32 @@ export function toContextPr(
             baseRef: out.pr.baseRef,
             branch: out.pr.branch,
             headSha: out.pr.headSha,
+            provider: out.pr.provider,
           },
+    raised: {
+      statement: out.raised.statement,
+      rationale: out.raised.rationale,
+      source: out.raised.source,
+      sourceName: out.raised.sourceName,
+      force: out.raised.force,
+      constraintEffect: out.raised.constraintEffect,
+      sharingScope: out.raised.sharingScope,
+      support: {
+        runs: out.raised.support.runs,
+        agents: out.raised.support.agents,
+        recordIds: out.raised.support.recordIds,
+        evidenceLinks: out.raised.support.evidenceLinks,
+      },
+      at: out.raised.at,
+    },
     body: out.body,
     checks: out.checks.map((check) => ({
       name: check.name,
       status: check.status,
       summary: check.summary,
+      detailsUrl: check.detailsUrl,
+      startedAt: check.startedAt,
+      completedAt: check.completedAt,
     })),
     onMerge: {
       path: out.onMerge.publishes.path,
@@ -188,6 +208,17 @@ export function toContextPr(
             at: out.merged.at,
             promotionEventId: out.merged.promotionEventId,
             recordId: out.merged.recordId,
+            byName: out.merged.byName,
+            onHost: out.merged.onHost,
+          },
+    closed:
+      out.closed === null
+        ? null
+        : {
+            at: out.closed.at,
+            reason: out.closed.reason,
+            byName: out.closed.byName,
+            onHost: out.closed.onHost,
           },
   };
 }

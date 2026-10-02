@@ -20,6 +20,7 @@ import {
   MemoryPage,
   OxagenTree,
   ProposalPage,
+  type ProposalState,
   RecordDetail,
   RecordPage,
   STEERING_PAGE,
@@ -195,6 +196,7 @@ export const steering: DataSource["steering"] = {
         limit: q.limit ?? STEERING_PAGE,
         offset: q.offset,
         ...(q.lineage === undefined ? {} : { lineageId: q.lineage }),
+        ...(q.state === undefined ? {} : { state: q.state }),
       },
       page: "steering",
     });
@@ -252,16 +254,18 @@ export const steering: DataSource["steering"] = {
    * `.oxagen/rules/governance.toml` in a legacy one. Nothing caches the mode (ADR-061 decision 1), so the chip
    * reads the file the Context PR gate reads.
    *
-   * The waiting count is every proposal, less the merged and the dismissed.
-   * list_proposals narrows by one status at a time, so this is three counts
-   * of one row each rather than five. It is null when any count failed: a
-   * partial difference would print a number nobody counted.
+   * The waiting count is the open proposals: candidates with no pull request
+   * yet and Context PRs still open. The Proposals list's three filters,
+   * Open, Merged and Closed, each read their count here, one row apiece
+   * through list_proposals' `state`. The waiting count is null when the open
+   * count failed, and the filter counts are null when any of the three
+   * failed: a partial set would print a number nobody counted.
    */
   async hub(ctx) {
-    const count = (status?: "proposed" | "merged" | "rejected") =>
+    const count = (state: ProposalState) =>
       kernelRead(ctx, {
         contract: contextProposalList,
-        input: { limit: 1, offset: 0, ...(status ? { status } : {}) },
+        input: { limit: 1, offset: 0, state },
         page: "steering",
       });
     const governance = async (): Promise<SteeringHub["governance"]> => {
@@ -289,32 +293,24 @@ export const steering: DataSource["steering"] = {
           }
         : { state: "unread", code: failureCode(tree) };
     };
-    const [mode, all, merged, rejected, proposed] = await Promise.all([
+    const [mode, open, merged, closed] = await Promise.all([
       governance(),
-      count(),
+      count("open"),
       count("merged"),
-      count("rejected"),
-      count("proposed"),
+      count("closed"),
     ]);
-    const proposalsWaiting =
-      all.ok && merged.ok && rejected.ok
-        ? Math.max(
-            0,
-            all.value.total - merged.value.total - rejected.value.total,
-          )
-        : null;
-    // The open Context PRs are the waiting proposals less the ones with no
-    // pull request yet; the Candidates segment lists every proposal.
-    const segments =
-      all.ok && proposed.ok && proposalsWaiting !== null
+    const proposalsWaiting = open.ok ? open.value.total : null;
+    const states =
+      open.ok && merged.ok && closed.ok
         ? {
-            candidates: all.value.total,
-            prs: Math.max(0, proposalsWaiting - proposed.value.total),
+            open: open.value.total,
+            merged: merged.value.total,
+            closed: closed.value.total,
           }
         : null;
     return parsed(
       SteeringHub,
-      { governance: mode, proposalsWaiting, segments },
+      { governance: mode, proposalsWaiting, states },
       ctx.orgId,
       "hub",
     );

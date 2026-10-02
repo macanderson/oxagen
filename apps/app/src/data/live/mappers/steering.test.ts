@@ -144,6 +144,8 @@ describe("toContextPr", () => {
             commit: "4d5e6f7a8b9c",
             at: "2026-09-15T09:20:00.000Z",
             byUserId: "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+            byName: "Dana Reyes",
+            onHost: false,
             promotionEventId: "ctp_8qm2x4",
             recordId: "ctr_7k2m9q4x",
           },
@@ -155,6 +157,8 @@ describe("toContextPr", () => {
       at: "2026-09-15T09:20:00.000Z",
       promotionEventId: "ctp_8qm2x4",
       recordId: "ctr_7k2m9q4x",
+      byName: "Dana Reyes",
+      onHost: false,
     });
   });
 

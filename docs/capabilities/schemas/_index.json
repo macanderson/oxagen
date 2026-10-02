@@ -1257,6 +1257,18 @@
       "consumes": []
     },
     {
+      "name": "get_context_pr_diff",
+      "domain": "context",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "get_contract_rate",
       "domain": "billing",
       "surfaces": [
@@ -3679,6 +3691,17 @@
       "surfaces": [
         "api",
         "cli"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "refresh_context_pr",
+      "domain": "context",
+      "surfaces": [
+        "api",
+        "agent"
       ],
       "component": null,
       "produces": [],

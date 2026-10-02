@@ -454,7 +454,14 @@ export function gitlabWebhookDeps(): GitLabWebhookDeps {
       try {
         await postgresSteeringStore.updateProposal(
           id,
-          { status: "rejected", dismissedAt: at, dismissedReason: reason },
+          // The host closed it, so no person is the updater (the page reads
+          // that as a close on the host).
+          {
+            status: "rejected",
+            dismissedAt: at,
+            dismissedReason: reason,
+            updatedById: null,
+          },
           OPEN_PR,
         );
         return true;
