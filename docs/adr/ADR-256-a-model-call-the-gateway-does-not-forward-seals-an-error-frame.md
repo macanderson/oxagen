@@ -65,7 +65,11 @@ record showed nothing.
    refusal frame and `settle` mark the call as recorded, and so does handing
    the request to the vendor, after which `settle` seals the frame whatever
    happens. The request handler's catch seals only a call nothing has
-   recorded yet.
+   recorded yet. A refusal whose frame fails to reach the WAL is rolled
+   back, so it has recorded nothing. The agent is answered 502
+   `gateway_error`, and the catch seals this frame at the refusal's seq
+   when the WAL takes the write. If the WAL still refuses, that frame is
+   rolled back too, and the chain keeps no gap either way.
 7. **Same paths as a forwarded call.** A call on a path the proxy does not
    meter (`other`) seals no frame here, as it seals none when forwarded.
 8. **Counters.** The call does not count toward `calls_observed` on
