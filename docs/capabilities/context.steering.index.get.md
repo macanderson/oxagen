@@ -10,7 +10,8 @@ Two of the checks read more than the tree. The hash and conflicts checks compare
 
 - `runtimes`: the slug of each runtime enrolled in the workspace.
 - `credentials`: the name of each credential in the workspace's vault, the `<name>` of `oxagen:credential/<name>`. A revoked credential is left out.
-- `members`, `teams`, `groups`: always empty for now. Oxagen stores no member handle, no team, and no reviewer group slug yet. Until it does, the references check reports each agent's `operator` and each reviewer group as missing.
+- `members`: each member of the organization by public user id (`usr_…`). Oxagen stores no member handle yet, so an agent file names its operator by this id ([ADR-265](../adr/ADR-265-enrollment-proposes-the-runtimes-agent-file.md)).
+- `teams`, `groups`: always empty for now. Oxagen stores no team and no reviewer group slug yet. Until it does, the references check reports a team operator and each reviewer group as missing.
 
 **Surfaces:** api, cli
 
@@ -37,7 +38,7 @@ None. Send no body.
 | `index` | object or null | the published version's records; null before the first publish |
 | `index.records` | array | `{ lineage, path, id, hash, kind, effect }` for each record; `effect` is `require` or `forbid` for a constraint and null otherwise |
 | `context.runtimes` | string[] | runtime slugs enrolled in the workspace |
-| `context.members` | string[] | member handles; empty for now |
+| `context.members` | string[] | each organization member's public user id |
 | `context.teams` | string[] | team slugs; empty for now |
 | `context.groups` | string[] | reviewer group slugs; empty for now |
 | `context.credentials` | string[] | credential names in the workspace's vault, revoked ones left out |

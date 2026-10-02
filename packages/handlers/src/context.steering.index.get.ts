@@ -63,7 +63,9 @@ function names(rows: readonly { name: string }[]): string[] {
  *   needs reauthorizing stays, because the name still resolves. An
  *   organization-shared credential sits under a sentinel workspace id that
  *   workspace scope cannot see. No path writes one today.
- * - members, teams, groups: empty. See each line below.
+ * - members: each organization member's public user id, which an agent
+ *   file Oxagen writes names as its operator (ADR-265).
+ * - teams, groups: empty. See each line below.
  */
 export async function readCheckContext(
   scope: Scope,
@@ -89,12 +91,23 @@ export async function readCheckContext(
           ne(schema.mcpCredentials.status, "revoked"),
         ),
       );
+    // Each member of the organization by public user id (`usr_…`). Oxagen
+    // has no member handles, so the agent file it writes for an enrolled
+    // host names its operator this way (ADR-265).
+    const members = await tx
+      .select({ name: schema.users.publicId })
+      .from(schema.users)
+      .innerJoin(
+        schema.orgUsers,
+        and(
+          eq(schema.orgUsers.userId, schema.users.id),
+          eq(schema.orgUsers.orgId, scope.orgId),
+        ),
+      )
+      .where(isNull(schema.users.deletedAt));
     return {
       runtimes: names(runtimes),
-      // Empty: no table holds a member handle. Users and org members carry an
-      // email and a display name, and neither is the handle an agent's
-      // `operator` names.
-      members: [],
+      members: names(members),
       // Empty: Oxagen has no teams table.
       teams: [],
       // Empty: no table holds a reviewer group slug. SCIM groups carry a

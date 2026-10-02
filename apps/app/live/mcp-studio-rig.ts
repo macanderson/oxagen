@@ -11,9 +11,8 @@
  *   - a client for the sample servers' control port (mcp-studio-servers.ts)
  *
  * `mergeSteeringPullRequest` merges a steering PR through the proposal row its
- * opener wrote (#5122). One step has no Oxagen capability yet:
- * `publishAgentFile` (#5149) fails with the issue's number, so the run stops
- * there and says why. It does not work around the gap.
+ * opener wrote (#5122). `publishAgentFile` finds the agent file PR the host's
+ * enrollment opened (#5149), which the suite then merges the same way.
  *
  * Like the steering rig, it never prints a secret: the upstream token, the
  * relay token, and the gateway key stay out of every error message.
@@ -22,6 +21,7 @@ import { generateKeyPairSync } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { z } from "zod";
 import type { AgentApprovalListOutput } from "@oxagen/oxagen/contracts/agent.approval.list";
+import { agentNameForRuntime } from "@oxagen/oxagen/steering-repo/agent";
 import type { ContextProposalListOutput } from "@oxagen/oxagen/contracts/context.proposal.list";
 import type { RuntimeListItem } from "@oxagen/oxagen/contracts/runtime.list";
 import type { SteeringMarkdownImportCommitOutput } from "@oxagen/oxagen/contracts/steering.markdown_import.commit";
@@ -48,6 +48,7 @@ import {
   poll,
   reached,
   readSettings,
+  readSteeringPr,
   SECOND,
   type Settings,
   waiting,
@@ -117,8 +118,6 @@ export function readStudioSettings(env: NodeJS.ProcessEnv = process.env): Studio
 
 /** The workspace credential that holds the sample upstreams' bearer token. */
 export const UPSTREAM_CREDENTIAL = "mcp-live-upstream";
-/** The agent file the suite publishes for its enrolled host. */
-export const AGENT_NAME = "mcp-live-agent";
 
 export type SideEffect = "read" | "write" | "irreversible";
 
@@ -307,9 +306,10 @@ export function draftOps(server: StudioServer): Record<string, unknown>[] {
  * The Cedar policies the suite publishes after the tools. The first parks
  * every irreversible call until a person approves it. The second forbids the
  * test agent the MCP server's create_issue in every case, so the gateway also
- * leaves that tool out of the agent's tools/list.
+ * leaves that tool out of the agent's tools/list. `agent` is the name of the
+ * agent file enrollment proposed: the runtime's slug (ADR-265).
  */
-export function policyMarkdown(): string {
+export function policyMarkdown(agent: string): string {
   return [
     "# MCP Studio live test policies",
     "",
@@ -327,7 +327,7 @@ export function policyMarkdown(): string {
     "",
     "```cedar",
     '@id("live.deny-create-issue")',
-    `forbid (principal == Agent::${toml(AGENT_NAME)}, action == Action::"live_mcp__create_issue", resource);`,
+    `forbid (principal == Agent::${toml(agent)}, action == Action::"live_mcp__create_issue", resource);`,
     "```",
     "",
   ].join("\n");
@@ -402,6 +402,18 @@ const policyRow = z.looseObject({
 
 const importParsed = z.object({ policies: z.array(policyRow) });
 
+/** The proposals on one lineage, each with its kind and the steering PR it carries. */
+const agentProposals = z.object({
+  proposals: z.array(
+    z.object({
+      id: z.string(),
+      kind: z.string(),
+      status: z.string(),
+      pr: z.object({ number: z.number().int(), branch: z.string() }).nullable(),
+    }),
+  ),
+});
+
 /** The open proposals, each with the steering PR it carries. */
 const openProposals = z.object({
   proposals: z.array(
@@ -438,6 +450,7 @@ export type StudioContractFit = [
   Assert<Fits<SteeringMarkdownImportParseOutput, z.output<typeof importParsed>>>,
   Assert<Fits<SteeringMarkdownImportCommitOutput, z.output<typeof importCommitted>>>,
   Assert<Fits<ContextProposalListOutput, z.output<typeof openProposals>>>,
+  Assert<Fits<ContextProposalListOutput, z.output<typeof agentProposals>>>,
 ];
 
 function path(settings: Settings, rest: string): string {
@@ -547,10 +560,11 @@ export async function listApprovals(ox: Oxagen, settings: Settings) {
  * and commit opens one steering PR with every row marked add.
  */
 export async function openPolicyPr(ox: Oxagen, settings: Settings) {
+  const agent = agentNameFor(await hostRuntime(ox, settings));
   const parsed = await ox.call(
     "POST",
     path(settings, "/context/steering/import/parse"),
-    { documents: [{ filename: "mcp-live-policies.md", content: policyMarkdown(), target: "policies" }] },
+    { documents: [{ filename: "mcp-live-policies.md", content: policyMarkdown(agent), target: "policies" }] },
     importParsed,
   );
   const problems = parsed.policies.flatMap((row) => row.issues.map((issue) => `${row.path}: ${issue.message}`));
@@ -612,27 +626,42 @@ export async function mergeSteeringPullRequest(
   return { publishedVersion: merged.publishedVersion };
 }
 
-// ── Steps with no capability yet ─────────────────────────────────────────────
+// ── The agent file ───────────────────────────────────────────────────────────
+
+/** The name of the agent file enrollment proposes for a runtime: its slug (ADR-265). */
+function agentNameFor(runtime: string): string {
+  const name = agentNameForRuntime(runtime);
+  if (name === null) {
+    throw new Error(`Runtime ${runtime} has a slug no agent file can be named after, so enrollment proposed none.`);
+  }
+  return name;
+}
 
 /**
- * Publishes `agents/<AGENT_NAME>.toml` for the run's runtime, which the MCP
- * gateway needs before it serves any tool to the host. Nothing in Oxagen
- * writes an agent file yet (#5149). When it lands, propose this file through
- * it, merge the steering PR, and return the PR:
- *
- *   schema = "agent/v1"
- *   name = "<AGENT_NAME>"
- *   label = "MCP Studio live test agent"
- *   operator = "<the test account's member handle>"
- *   runtime = "<runtime>"
- *   harness = "claude-code"
+ * The steering PR that adds `agents/<runtime>.toml`, which the host's
+ * enrollment opened (#5149). The MCP gateway needs the file before it serves
+ * any tool to the host. The file names the enrolling member as operator, the
+ * runtime, and the harness the host reported. The suite merges it through
+ * `mergeSteeringPullRequest`.
  */
-export function publishAgentFile(_ox: Oxagen, _settings: Settings, runtime: string): Promise<BarePullRequest> {
-  return Promise.reject(
-    new Error(
-      `Oxagen cannot publish the agent file for runtime ${runtime} yet (#5149). Without it the gateway matches no agent to the run and serves no tool.`,
-    ),
+export async function publishAgentFile(ox: Oxagen, settings: Settings, runtime: string): Promise<BarePullRequest> {
+  const branch = `agents/${agentNameFor(runtime)}`;
+  const listed = await ox.call(
+    "POST",
+    path(settings, "/context/proposals"),
+    { lineageId: branch, limit: 20 },
+    agentProposals,
   );
+  const proposal = listed.proposals.find(
+    (p) => p.kind === "agent_file" && p.status !== "rejected" && p.pr !== null,
+  );
+  if (proposal === undefined || proposal.pr === null) {
+    throw new Error(
+      `Enrollment opened no agent file PR on ${branch} in workspace ${settings.runSlug}. Read the API log for the enrollment's "agent file:" line, which says why.`,
+    );
+  }
+  const view = await readSteeringPr(ox, settings, proposal.id);
+  return { number: proposal.pr.number, headSha: view.pr?.headSha ?? "" };
 }
 
 // ── GitHub ───────────────────────────────────────────────────────────────────

@@ -13,10 +13,8 @@
  * what it needs back from Oxagen or from the sample servers' control port.
  *
  * Every steering PR the suite opens merges through the proposal row its opener
- * wrote (#5122). One step waits on an Oxagen capability that does not exist
- * yet: publishing an agent file (#5149). The rig fails it with the issue's
- * number, so until it lands the run stops there and every later test names
- * what it missed.
+ * wrote (#5122), the agent file PR the host's enrollment opened among them
+ * (#5149).
  */
 import { expect, test } from "@playwright/test";
 import {

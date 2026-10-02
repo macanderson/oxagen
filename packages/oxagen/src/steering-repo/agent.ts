@@ -9,6 +9,7 @@ import { z } from "zod";
 import { agentHarnessSchema } from "../contracts/agent.list";
 import { runtimeSlugSchema } from "../contracts/runtime.shared";
 import { actorSchema, lineageSchema } from "./common";
+import { schemaDirective } from "./schema-ids";
 
 export const agentSchema = z
   .object({
@@ -25,3 +26,29 @@ export const agentSchema = z
   })
   .strict();
 export type AgentFile = z.output<typeof agentSchema>;
+
+/**
+ * The name Oxagen gives the agent file it writes for an enrolled runtime
+ * (#5149, ADR-265): the runtime's slug, so `agents/<slug>.toml` names the
+ * runtime it serves. Null when the slug is not a valid agent name, which
+ * `lineageSchema` decides.
+ */
+export function agentNameForRuntime(runtimeSlug: string): string | null {
+  return lineageSchema.safeParse(runtimeSlug).success ? runtimeSlug : null;
+}
+
+/**
+ * An agent/v1 file's text: the schema line, then one key per line in the
+ * schema's order. The fields are checked against `agentSchema` first, so a
+ * file that would not read back is never written. Throws a ZodError then.
+ */
+export function agentFileText(agent: AgentFile): string {
+  const fields = agentSchema.parse(agent);
+  return [
+    schemaDirective("agent/v1"),
+    ...(["schema", "name", "label", "operator", "runtime", "harness"] as const).map(
+      (key) => `${key} = ${JSON.stringify(fields[key])}`,
+    ),
+    "",
+  ].join("\n");
+}
