@@ -22,7 +22,7 @@ Mac set this on 2026-09-26 for every repository on this machine. Local builds, t
 DEREGISTERED.md  the register of de-registered (unreachable, undeleted) features
 apps/       customer-facing applications (api, app, cli, desktop, docs, mcp, web, plus app_deprecated)
 packages/   shared platform libraries (see each package.json for workspace membership)
-tools/      dev tooling (scripts, env-manager, codemods) — also a pnpm workspace member
+tools/      dev tooling (scripts, codemods) — also a pnpm workspace member
 docs/       VISION.md, capability specs, ADRs, specs (docs/specs)
 ```
 

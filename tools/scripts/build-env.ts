@@ -9,7 +9,7 @@
  * input, so the node cannot supply it when the container starts.
  *
  * The set of variables is derived from `ENV_REGISTRY` — the same authority
- * behind `.env.example`, the env-manager catalog and `env-check` — rather than
+ * behind `.env.example`, `pnpm env:pull` and `env-check` — rather than
  * restated as a list of names in a workflow, which is how three hostnames came
  * to stand in for the whole environment (#1190).
  *

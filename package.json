@@ -18,8 +18,6 @@
     "env:pull": "tsx tools/scripts/env-pull.ts",
     "env:push": "tsx tools/scripts/env-push.ts",
     "vercel:rotate-ai-key": "tsx tools/scripts/rotate-ai-gateway-key.ts",
-    "env:manager": "pnpm --filter @oxagen/env-manager dev",
-    "env:secrets:pull": "pnpm --filter @oxagen/env-manager pull",
     "build": "turbo run build",
     "lint": "turbo run lint",
     "format": "biome format --write .",

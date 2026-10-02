@@ -5,9 +5,9 @@
 ## Boundary
 
 - **Owns:** the Zod runtime schema for environment variables (`baseEnvSchema`) and its readers `loadEnv` and `requireEnv`; the registry `ENV_REGISTRY`, which records each variable's services, origin, store, refresh steps, and documentation and renders `.env.example`; the CI inventory `CI_REGISTRY`; the outbound URL guard `assertPublicHttpUrl`; and the shared domain constants (organisation types, industries, employee sizes, countries, US states, local ports, `platformVersion()`).
-- **Does not own:** the store clients that read `DATABASE_URL`, `NEO4J_URI`, and `CLICKHOUSE_URL` ([`@oxagen/database`](../database/README.md), [`@oxagen/ontology`](../ontology/README.md), [`@oxagen/telemetry`](../telemetry/README.md)), secret storage ([`@oxagen/crypto`](../crypto/README.md) and [`@oxagen/plugins`](../plugins/README.md)), or the deploy-time environment catalog (`tools/env-manager`).
+- **Does not own:** the store clients that read `DATABASE_URL`, `NEO4J_URI`, and `CLICKHOUSE_URL` ([`@oxagen/database`](../database/README.md), [`@oxagen/ontology`](../ontology/README.md), [`@oxagen/telemetry`](../telemetry/README.md)), secret storage ([`@oxagen/crypto`](../crypto/README.md) and [`@oxagen/plugins`](../plugins/README.md)), or the values themselves, which live in SSM Parameter Store (ADR-240).
 - **Depends on:** no `@oxagen/*` runtime dependencies.
-- **Used by:** `apps/api`, `apps/mcp`, `apps/app_deprecated`, `@oxagen/agent`, `@oxagen/ai`, `@oxagen/auth`, `@oxagen/billing`, `@oxagen/database`, `@oxagen/handlers`, `@oxagen/inngest-functions`, `@oxagen/notifications`, `@oxagen/ontology`, `@oxagen/oxagen`, `@oxagen/storage`, `@oxagen/telemetry`, `tools/env-manager`, and `tools/scripts`.
+- **Used by:** `apps/api`, `apps/mcp`, `apps/app_deprecated`, `@oxagen/agent`, `@oxagen/ai`, `@oxagen/auth`, `@oxagen/billing`, `@oxagen/database`, `@oxagen/handlers`, `@oxagen/inngest-functions`, `@oxagen/notifications`, `@oxagen/ontology`, `@oxagen/oxagen`, `@oxagen/storage`, `@oxagen/telemetry`, and `tools/scripts`.
 
 ## Seams
 
@@ -15,7 +15,7 @@
 |---|---|---|---|
 | `requireEnv(keys)` | export | `packages/config/src/env.ts` | Each package reads only its own keys, for example `packages/database/src/client.ts` and `packages/ai/src/models.ts` |
 | `loadEnv()` | export | `packages/config/src/env.ts` | Whole-environment check at service boot in `apps/api/src/bootstrap.ts` |
-| `ENV_REGISTRY` and `renderEnvExample()` | registry | `packages/config/src/registry.ts` | `tools/scripts/env-check.ts` (`pnpm env:check`) and `tools/env-manager/src/catalog.ts` |
+| `ENV_REGISTRY` and `renderEnvExample()` | registry | `packages/config/src/registry.ts` | `tools/scripts/env-check.ts` (`pnpm env:check`), `tools/scripts/env-pull.ts` and `env-push.ts`, `tools/scripts/build-env.ts`, and the Architecture Atlas |
 | `assertPublicHttpUrl`, `fetchWithoutRedirects` | boundary | `packages/config/src/public-url.ts` | Customer-supplied URLs in `packages/ai/src/credential-probe.ts`, `packages/ai/src/models.ts`, and `packages/handlers` |
 
 ## Entry points
