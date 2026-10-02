@@ -112,7 +112,10 @@ function ImportDialog({
   const [committing, startCommit] = useTransition();
 
   const files = picked?.files ?? [];
-  const documents = useMemo(() => documentsOf(files), [files]);
+  const documents = useMemo(
+    () => documentsOf(picked?.files ?? []),
+    [picked],
+  );
   const rows = useMemo(
     () => (parsed === null ? [] : resolveRows(parsed.result.records, edits)),
     [parsed, edits],
