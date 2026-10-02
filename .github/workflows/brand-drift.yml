@@ -8,6 +8,13 @@
 # this repo red until the sync lands (#4804). The kit's fan-out workflow opens
 # that sync PR after each kit merge.
 #
+# The check also runs the literal guard (tools/scripts/lib/brand-literals.mjs):
+# each stylesheet it lists takes its corners, shadows, font sizes, and page wrap
+# from the kit's tokens, so a theme change in the kit reaches every site with no
+# hand edit (oxageninc/brand#63). A literal is reported under the stylesheet's
+# path, so the pull request rule below fails only the pull request that touches
+# that stylesheet.
+#
 # The same command runs in pipeline.yml's checks job, which the main ruleset
 # requires, so the two cannot disagree. This file is the one the kit's
 # conformance check looks for, and its daily run catches a kit change on a day
@@ -57,7 +64,8 @@ jobs:
           if out=$(node tools/scripts/sync-brand-assets.mjs --brand .brand-kit --check 2>&1); then echo "$out"; exit 0; fi
           echo "$out"
           # Drift fails a push to main, the daily run, and a manual run. A pull request fails only
-          # when it changes a file that differs from the kit, the sync script, or this workflow.
+          # when it changes a file that differs from the kit or holds a literal, the sync script,
+          # the literal guard, or this workflow.
           # Any other pull request passes with a warning: a kit change is not that pull request's
           # doing, and the kit's fan-out opens the sync pull request that fixes it
           # (oxageninc/brand#53).
@@ -66,7 +74,7 @@ jobs:
             touched=""
             while IFS= read -r f; do
               [ -n "$f" ] || continue
-              case "$f" in tools/scripts/sync-brand-assets.mjs|.github/workflows/brand-drift.yml) touched="$f"; break ;; esac
+              case "$f" in tools/scripts/sync-brand-assets.mjs|tools/scripts/lib/brand-literals.mjs|.github/workflows/brand-drift.yml) touched="$f"; break ;; esac
               case "$flat" in *" $f "*) touched="$f"; break ;; esac
             done < <(git diff --name-only HEAD^1 HEAD)
             if [ -z "$touched" ]; then
