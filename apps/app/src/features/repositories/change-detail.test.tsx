@@ -347,6 +347,53 @@ describe("a failed check", () => {
   });
 });
 
+describe("a steering PR (#5122)", () => {
+  it("offers Merge on a tools PR at pr_open, whose merge runs the steering checks itself", async () => {
+    await loaded(
+      {
+        ...PASSED,
+        kind: "tools",
+        lineage: "tools/billing",
+        status: "pr_open",
+        checks: [],
+        onMerge: {
+          path: "tools/servers/billing",
+          bundleVersion: { current: 7, afterMerge: 7 },
+        },
+      },
+      {
+        ...ROW,
+        kind: "steering_pr",
+        lineage: "tools/billing",
+        status: "pr_open",
+        checks: null,
+      },
+    );
+    await waitFor(() => {
+      expect(callbacks.onMergeable).toHaveBeenLastCalledWith(true);
+    });
+    expect(screen.getByTestId("change-merge")).toBeEnabled();
+    expect(screen.getByText("steering PR")).toBeInTheDocument();
+    expect(screen.getByText("tools/servers/billing")).toBeInTheDocument();
+  });
+
+  it("keeps Merge disabled once a steering PR merged (negative)", async () => {
+    await loaded({
+      ...PASSED,
+      kind: "memory_pr",
+      status: "merged",
+      checks: [],
+      merged: {
+        commit: "fedcba9876543210",
+        at: "2026-09-19T10:00:00.000Z",
+        promotionEventId: null,
+        recordId: null,
+      },
+    });
+    expect(screen.queryByTestId("change-merge")).toBeNull();
+  });
+});
+
 describe("merging", () => {
   it("merges a pull request whose every check passed, then re-reads it", async () => {
     const user = await loaded(PASSED);

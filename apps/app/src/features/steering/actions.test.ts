@@ -146,6 +146,32 @@ describe("mergeContextPr", () => {
     );
   });
 
+  it("merges a steering PR proposal, whose answer names no record, and returns the merge commit (#5122)", async () => {
+    invoke.mockResolvedValue({
+      proposalId: ID,
+      status: "merged",
+      kind: "revert",
+      pullRequest: { number: 520, branch: "steering/revert-519" },
+      retired: ["ctx.release.no-reread-changelog"],
+      mergedCommit: "5e6f7a8b9c0d",
+      bundleVersion: { before: 42, after: 42 },
+      publishedVersion: 7,
+    });
+    expect(await mergeContextPr("acme", "core-platform", ID)).toEqual({
+      ok: true,
+      value: { commit: "5e6f7a8b9c0d" },
+    });
+  });
+
+  it("returns a steering PR whose steering checks failed on its head as a conflict (negative)", async () => {
+    invoke.mockRejectedValue(refused("conflict", "checks_failed"));
+    expect(await mergeContextPr("acme", "core-platform", ID)).toEqual({
+      ok: false,
+      reason: "conflict",
+      code: "checks_failed",
+    });
+  });
+
   it("returns a merge before the checks passed as a conflict (negative)", async () => {
     invoke.mockRejectedValue(refused("conflict", "checks_not_passed"));
     expect(await mergeContextPr("acme", "core-platform", ID)).toEqual({
@@ -289,18 +315,21 @@ describe("refreshContextPr", () => {
 });
 
 describe("revertSteeringPr", () => {
-  it("opens the revert and returns its pull request and check", async () => {
-    invoke.mockResolvedValue({
-      proposalId: ID,
-      reverted: { number: 519, mergedCommit: "4d5e6f7a8b9c" },
-      pullRequest: {
-        number: 520,
-        url: "https://github.com/acme/oxagen-core-platform/pull/520",
-        branch: "steering/revert-519",
-        headSha: "9f8e7d6c",
-      },
-      check: "success",
-    });
+  const REVERT = {
+    proposalId: ID,
+    reverted: { number: 519, mergedCommit: "4d5e6f7a8b9c" },
+    pullRequest: {
+      number: 520,
+      url: "https://github.com/acme/oxagen-core-platform/pull/520",
+      branch: "steering/revert-519",
+      headSha: "9f8e7d6c",
+    },
+    check: "success",
+    revertProposalId: "prp_01k6revert",
+  } as const;
+
+  it("opens the revert and returns its pull request, its check, and the proposal that carries it", async () => {
+    invoke.mockResolvedValue(REVERT);
     expect(await revertSteeringPr("acme", "core-platform", ID)).toEqual({
       ok: true,
       value: {
@@ -308,6 +337,7 @@ describe("revertSteeringPr", () => {
         url: "https://github.com/acme/oxagen-core-platform/pull/520",
         branch: "steering/revert-519",
         check: "success",
+        proposalId: "prp_01k6revert",
       },
     });
     expect(invoke).toHaveBeenCalledWith(
@@ -315,6 +345,23 @@ describe("revertSteeringPr", () => {
       { proposalId: ID },
       expect.objectContaining(TENANT),
     );
+  });
+
+  it("returns no proposal for a revert in a legacy repository, which merges on the host", async () => {
+    invoke.mockResolvedValue({ ...REVERT, revertProposalId: null });
+    expect(await revertSteeringPr("acme", "core-platform", ID)).toMatchObject({
+      ok: true,
+      value: { number: 520, proposalId: null },
+    });
+  });
+
+  it("returns a revert refused while another PR on the record is open as a conflict (negative)", async () => {
+    invoke.mockRejectedValue(refused("conflict", "lineage_pr_open"));
+    expect(await revertSteeringPr("acme", "core-platform", ID)).toEqual({
+      ok: false,
+      reason: "conflict",
+      code: "lineage_pr_open",
+    });
   });
 
   it("returns a proposal that has not merged as a conflict (negative)", async () => {

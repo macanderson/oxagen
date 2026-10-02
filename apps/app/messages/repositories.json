@@ -343,7 +343,8 @@
         "openedBy": "Opened by"
       },
       "kinds": {
-        "context_record": "context record"
+        "context_record": "context record",
+        "steering_pr": "steering PR"
       },
       "kindPaths": {
         "context_record": ".oxagen/rules/'<lineage>'.toml"

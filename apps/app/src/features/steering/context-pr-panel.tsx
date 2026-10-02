@@ -4,6 +4,12 @@
 // pull request body, what merge will do, and the merge itself, which stays
 // disabled until every check has passed. Merge is the publication.
 //
+// A steering PR proposal (#5122) is a revert, tools, import, memory, agent
+// file, or agent proposal PR. It carries no record checks, because its merge
+// runs the steering checks on the PR's head itself. So Merge is enabled while
+// its PR is open, whatever status the opener left, and no control runs the
+// record checks.
+//
 // Under the team and regulated modes the panel also offers Approve, and Merge
 // without review to an owner while no one has approved (#4518). A merged
 // steering PR offers Revert pull request, which opens a steering PR that
@@ -12,10 +18,11 @@
 // on a `memory/` branch lists its records from list_memory_pr_records
 // (#4914), each with a Drop button, or the read's failure in their place.
 import { useLocale, useTranslations } from "next-intl";
-import type {
-  ContextPr,
-  MemoryPrRecords,
-  ProposalStatus,
+import {
+  type ContextPr,
+  isSteeringPrKind,
+  type MemoryPrRecords,
+  type ProposalStatus,
 } from "@/data/contracts/steering";
 import { type Read, readError } from "@/data/read";
 import { mono } from "@/ui/control-styles";
@@ -175,9 +182,17 @@ export function ContextPrPanel({
   const { value } = read;
   const { pr, merged, onMerge, governanceMode, status } = value;
   const governance = value.kind === "governance";
+  const steeringPr = isSteeringPrKind(value.kind);
   const mode =
     governanceMode === null ? t("modeUnread") : t(`modes.${governanceMode}`);
   const open = status !== "merged" && status !== "rejected";
+  // merge_context_pr and merge_pr_without_review take a record or governance
+  // proposal only once its checks passed. They take a steering PR proposal
+  // from any open status once its PR exists, because the merge runs the
+  // steering checks on the head first (#5122).
+  const mergeReady = steeringPr
+    ? open && status !== "proposed"
+    : status === "checks_passed";
   // Solo merges on the checks alone. Team and regulated need an approval
   // from a member other than the author, or an owner's merge without one.
   const reviewed = governanceMode === "team" || governanceMode === "regulated";
@@ -224,9 +239,20 @@ export function ContextPrPanel({
             </Fact>
           </>
         )}
-        <Fact name="path" term={t("facts.path")}>
-          <span className={mono}>{onMerge.path}</span>
-        </Fact>
+        {/* A steering PR names the folder its files sit under (#5122). */}
+        {steeringPr ? (
+          <Fact name="path" term={t("facts.folder")}>
+            {onMerge.path === "." ? (
+              t("facts.root")
+            ) : (
+              <span className={mono}>{onMerge.path}</span>
+            )}
+          </Fact>
+        ) : (
+          <Fact name="path" term={t("facts.path")}>
+            <span className={mono}>{onMerge.path}</span>
+          </Fact>
+        )}
         <Fact name="governance" term={t("facts.governance")}>
           {mode}
         </Fact>
@@ -303,7 +329,8 @@ export function ContextPrPanel({
             <Fact name="merged-at" term={t("merged.at")}>
               {date(merged.at)}
             </Fact>
-            {/* A governance merge appends no promotion event and publishes no record (#4795). */}
+            {/* A governance merge (#4795) and a steering PR merge (#5122)
+                append no promotion event and publish no single record. */}
             {merged.promotionEventId === null ? null : (
               <Fact name="promotion-event" term={t("merged.promotion")}>
                 <span className={mono}>{merged.promotionEventId}</span>
@@ -335,9 +362,20 @@ export function ContextPrPanel({
           </h3>
           <ol className="flex list-decimal flex-col gap-1 ps-5 text-sm text-foreground">
             {/* A governance change publishes no record and appends no
-                promotion event (ADR-232), so it lists only what it does. */}
+                promotion event (ADR-232), so it lists only what it does. A
+                steering PR (#5122) lists the merge's own checks, its files,
+                and the version, and a revert the records it retires. */}
             {governance ? (
               <li>{t("onMerge.governance", { path: onMerge.path })}</li>
+            ) : steeringPr ? (
+              <>
+                <li>{t("onMerge.steeringChecks")}</li>
+                <li>{t("onMerge.lands")}</li>
+                {value.kind === "revert" ? (
+                  <li>{t("onMerge.retires")}</li>
+                ) : null}
+                <li>{t("onMerge.steeringVersion")}</li>
+              </>
             ) : (
               <>
                 <li>{t("onMerge.publishes", { path: onMerge.path })}</li>
@@ -367,7 +405,8 @@ export function ContextPrPanel({
             org={at.org}
             ws={at.ws}
             proposalId={value.proposalId}
-            blocked={status !== "checks_passed"}
+            blocked={!mergeReady}
+            files={steeringPr}
           />
           {/* merge_pr_without_review refuses a governance change: it lands
               only for an approver (ADR-232). */}
@@ -376,15 +415,17 @@ export function ContextPrPanel({
               org={at.org}
               ws={at.ws}
               proposalId={value.proposalId}
-              blocked={status !== "checks_passed"}
+              blocked={!mergeReady}
             />
           ) : null}
+          {/* open_context_pr runs the six record checks, so it refuses a
+              governance change and a steering PR. */}
           <ProposalWrites
             org={at.org}
             ws={at.ws}
             proposalId={value.proposalId}
             status={status}
-            governance={governance}
+            recordChecks={!governance && !steeringPr}
           />
         </div>
       ) : null}
