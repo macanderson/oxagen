@@ -12,11 +12,16 @@
 // A row is appended only when the verdict differs from the record's last row,
 // so a stage that moves one criterion from open to held while the record stays
 // pending writes nothing and sends nothing. The first verdict always lands.
+//
+// Each decide is also one check run of the work order's definition of done
+// (F13, #4638). It is appended to work.done_checks on every stage, whether or
+// not the verdict changed, with its work order, verdict, result, and time.
+// One row per work order and stage session, so a retried step adds none.
 import { schema, withTenantDb } from "@oxagen/database";
 import { decide, lockDigest, type DoneEvidence, type DoneVerdict } from "@oxagen/done-record";
 import { NonRetriableError } from "@oxagen/functions";
 import { runInTenantScope } from "@oxagen/tenancy";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, or, sql } from "drizzle-orm";
 import { createFunction } from "../create-function";
 import {
   WORK_DONE_VERDICT_EVENT,
@@ -56,29 +61,86 @@ export interface VerdictScope {
   workspaceId: string;
 }
 
+/** The stage whose end ran a check of the work order's definition of done. */
+export interface DoneCheckRun {
+  /** The send's id in work.orders, or its public id (`wo_…`). */
+  workOrderId: string;
+  /** The session that ran the stage. */
+  sessionId: string;
+  /** The stage's role in its workflow file, such as `Fix`. */
+  role: string;
+}
+
+/** A check run's result: held and proven pass, broken fails, and pending has not decided. */
+export type DoneCheckResult = "passed" | "failed" | "pending";
+
+/** The result a verdict gives its check run. */
+export function doneCheckResult(verdict: DoneVerdict): DoneCheckResult {
+  if (verdict === "held" || verdict === "proven") return "passed";
+  if (verdict === "broken") return "failed";
+  return "pending";
+}
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /** What recordDoneVerdict did. */
 export type VerdictRecord =
   | { status: "unchanged"; digest: string; verdict: DoneVerdict }
   | { status: "recorded"; id: string; digest: string; verdict: DoneVerdict };
 
 /**
- * Decide the verdict and append it to work.done_verdicts when it differs from
- * the record's last row. An advisory lock on the record serializes two stages
- * that finish at once, so both cannot append the same change.
+ * Decide the verdict, append the check run to work.done_checks, and append the
+ * verdict to work.done_verdicts when it differs from the record's last row. An
+ * advisory lock on the record serializes two stages that finish at once, so
+ * both cannot append the same change. A work order the workspace does not hold
+ * is a malformed event, and nothing is written.
  */
-export async function recordDoneVerdict(scope: VerdictScope, loaded: LoadedDoneEvidence): Promise<VerdictRecord> {
+export async function recordDoneVerdict(
+  scope: VerdictScope,
+  loaded: LoadedDoneEvidence,
+  check: DoneCheckRun,
+): Promise<VerdictRecord> {
   const outcome = decide(loaded.evidence);
   const { record } = loaded.evidence;
   // A record edited after its lock keeps the digest it was stored under, so
   // its broken verdict lands on the same history as its earlier ones.
   const digest = record.lock?.digest ?? lockDigest(record);
   const verdicts = schema.workDoneVerdicts;
+  const orders = schema.workOrders;
+  const checks = schema.workDoneChecks;
 
   return runInTenantScope(scope, () =>
     withTenantDb(async (tx) => {
       await tx.execute(
         sql`select pg_advisory_xact_lock(hashtextextended(${`work.done_verdicts:${scope.orgId}:${scope.workspaceId}:${digest}`}, 0))`,
       );
+      const named = UUID.test(check.workOrderId)
+        ? or(eq(orders.id, check.workOrderId), eq(orders.publicId, check.workOrderId))
+        : eq(orders.publicId, check.workOrderId);
+      const [order] = await tx
+        .select({ id: orders.id })
+        .from(orders)
+        .where(and(eq(orders.orgId, scope.orgId), eq(orders.workspaceId, scope.workspaceId), named))
+        .limit(1);
+      if (order === undefined) {
+        throw new NonRetriableError(
+          `work/stage.completed names work order ${check.workOrderId}, which this workspace does not hold. Send the event with the work order's id from work.orders.`,
+        );
+      }
+      await tx
+        .insert(checks)
+        .values({
+          orgId: scope.orgId,
+          workspaceId: scope.workspaceId,
+          orderId: order.id,
+          recordDigest: digest,
+          verdict: outcome.verdict,
+          result: doneCheckResult(outcome.verdict),
+          checkedAt: sql`clock_timestamp()`,
+          sessionId: check.sessionId,
+          role: check.role,
+        })
+        .onConflictDoNothing({ target: [checks.orderId, checks.sessionId] });
       const [last] = await tx
         .select({ verdict: verdicts.verdict })
         .from(verdicts)
@@ -141,7 +203,13 @@ export const [workDoneVerdict] = createFunction(
 
     const result = await step.run("record-verdict", async (): Promise<VerdictRecord | null> => {
       const loaded = await runInTenantScope(scope, () => load(data));
-      return loaded === null ? null : recordDoneVerdict(scope, loaded);
+      return loaded === null
+        ? null
+        : recordDoneVerdict(scope, loaded, {
+            workOrderId: data.work_order_id,
+            sessionId: data.session_id,
+            role: data.role,
+          });
     });
 
     if (result === null) {

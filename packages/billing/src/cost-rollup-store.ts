@@ -54,6 +54,7 @@ import {
   ZERO_TOKENS,
 } from "./cost-rollup";
 import { readFileChanges } from "./findings-run-facts";
+import { resolveRunWorkOrder, type RunWorkOrder } from "./run-work-order";
 import {
   loadPriceBookSlice,
   withPriceBookSnapshot,
@@ -629,6 +630,12 @@ export interface RunRollupDeps {
    * classes read (F17). A run read without it counts no change.
    */
   readFileChanged?: (source: RunSource) => Promise<boolean>;
+  /**
+   * The run's parent work order: a send, or the run's direct work order,
+   * which this opens the first time it sees the run (F13, #4638). A run read
+   * without it keeps the work order its row already has.
+   */
+  resolveWorkOrder?: (source: RunSource) => Promise<RunWorkOrder>;
 }
 
 type Row = typeof totals.$inferSelect;
@@ -692,7 +699,13 @@ export function runTotalsRowToRecord(row: Row): StoredRunTotals {
     toolDefinitionTokens: row.toolDefinitionTokens,
     contextFrameTokens: row.contextFrameTokens,
     steeringTokens: row.steeringTokens,
+    workOrderId: row.workOrderId,
+    workOrderKind: workOrderKind(row.workOrderKind),
   };
+}
+
+function workOrderKind(value: string | null): RunMeta["workOrderKind"] {
+  return value === "send" || value === "direct" ? value : null;
 }
 
 type ModelBreakdown = RunTotalsRecord["breakdown"]["models"][number];
@@ -962,6 +975,8 @@ export async function writeRunTotals(
     toolDefinitionTokens: storedSource(sources?.toolDefinitionTokens),
     contextFrameTokens: storedSource(sources?.contextFrameTokens),
     steeringTokens: storedSource(sources?.steeringTokens),
+    workOrderId: record.workOrderId ?? null,
+    workOrderKind: record.workOrderKind ?? null,
     rolledUpAt,
   };
   // A person's acceptance is another lane's column: a first insert carries
@@ -981,6 +996,11 @@ export async function writeRunTotals(
       set: {
         ...values,
         costCenter: sql`coalesce(${totals.costCenter}, excluded.cost_center)`,
+        // A rebuild that resolved no work order keeps the one the row has. A
+        // resolved one replaces it, so a send found later replaces the run's
+        // direct work order. The pair moves together.
+        workOrderId: sql`coalesce(excluded.work_order_id, ${totals.workOrderId})`,
+        workOrderKind: sql`case when excluded.work_order_id is null then ${totals.workOrderKind} else excluded.work_order_kind end`,
       },
       setWhere: sql`NOT ${regressesToIncomplete()} AND NOT ${reopensSealed()}`,
     });
@@ -1062,6 +1082,7 @@ const productionRunRollupDeps: RunRollupDeps = {
   write: upsertRunTotals,
   now: () => new Date(),
   readFileChanged: readRunFileChanged,
+  resolveWorkOrder: (source) => resolveRunWorkOrder(source),
 };
 
 /**
@@ -1104,25 +1125,29 @@ export async function rebuildRunTotals(
     orgId: source.meta.orgId,
     workspaceId: source.meta.workspaceId,
   };
-  const [carried, verdict, workerId, changedFile] = await Promise.all([
+  const [carried, verdict, workerId, changedFile, workOrder] = await Promise.all([
     deps.readCarried(publicId),
     deps.readVerdict(scope, publicId),
     deps.readWitnessedRun(scope, publicId),
     deps.readFileChanged?.(source) ?? false,
+    deps.resolveWorkOrder?.(source) ?? null,
   ]);
   const sources: RunTokenSources = { ...NO_RUN_TOKEN_SOURCES };
   // A witness run is a run of its own whose cost belongs to the worker's
   // operator (spec §8.5 "Stamping"), so its row names that operator, and is
   // charged back to the worker's cost center for the same reason.
   const worker = workerId === null ? null : await deps.loadRunSource(workerId);
+  const own = workOrder
+    ? { ...source.meta, workOrderId: workOrder.id, workOrderKind: workOrder.kind }
+    : source.meta;
   const meta = worker
     ? {
-        ...source.meta,
+        ...own,
         operatorPrincipalId: worker.meta.operatorPrincipalId,
         operatorKey: worker.meta.operatorKey,
         costCenter: worker.meta.costCenter,
       }
-    : source.meta;
+    : own;
   const accumulator = createRunRollup({
     meta,
     carried: { verdict, accepted: carried?.accepted ?? null },

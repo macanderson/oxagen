@@ -5075,6 +5075,8 @@
         "postgres:work.autonomy_events",
         "postgres:work.briefs",
         "postgres:work.collectors",
+        "postgres:work.direct_orders",
+        "postgres:work.done_checks",
         "postgres:work.done_records",
         "postgres:work.done_verdicts",
         "postgres:work.inbound_events",
@@ -16324,6 +16326,18 @@
           "type": "timestamp with time zone"
         },
         {
+          "name": "work_order_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "work_order_kind",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
           "name": "breakdown",
           "nullable": false,
           "primaryKey": false,
@@ -26998,6 +27012,172 @@
       "domain": "work",
       "id": "postgres:work.collectors",
       "name": "collectors",
+      "rls": "standard",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "public_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "citext"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "run_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "operator_principal_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "agent_principal_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "opened_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "item_id",
+          "nullable": true,
+          "primaryKey": false,
+          "references": "postgres:work.items",
+          "type": "uuid"
+        },
+        {
+          "name": "attached_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "attached_by",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        }
+      ],
+      "domain": "work",
+      "id": "postgres:work.direct_orders",
+      "name": "direct_orders",
+      "rls": "standard",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "created_by_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "order_id",
+          "nullable": false,
+          "primaryKey": false,
+          "references": "postgres:work.orders",
+          "type": "uuid"
+        },
+        {
+          "name": "record_digest",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "verdict",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "result",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "checked_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "session_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "role",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        }
+      ],
+      "domain": "work",
+      "id": "postgres:work.done_checks",
+      "name": "done_checks",
       "rls": "standard",
       "store": "postgres",
       "tenantScoped": true
