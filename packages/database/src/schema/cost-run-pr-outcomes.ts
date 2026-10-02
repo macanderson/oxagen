@@ -218,6 +218,65 @@ export const runPrReverts = costSchema.table(
   }),
 );
 
+// cost.run_pr_delivered_states: the newest state a GitHub delivery carried
+// for each pull request (#4511).
+//
+// A pull request delivery folds its state into the outcome rows that name the
+// pull request. A delivery that lands before the refresh writes a run's first
+// row finds no row to update. The refresh then writes the state it read from
+// GitHub, which can be older: a pull request that reopened after that read
+// would be stored closed. So every pull request delivery also keeps its state
+// here, one row per pull request, under the order `cost.run_pr_outcomes`
+// keeps: a later `source_updated_at` wins, and the later `read_at` wins
+// between two equal ones. Each refresh pass folds these states into the rows
+// it writes. The delivery deletes the workspace's rows read more than 31 days
+// ago, since every run in the 30-day outcome window started after them. Like
+// `run_pr_outcomes`, it is a derived index.
+export const runPrDeliveredStates = costSchema.table(
+  "run_pr_delivered_states",
+  {
+    id: uuid("id").primaryKey().default(uuidv7Default),
+    ...orgScopeMixin(),
+    createdAt: ts("created_at").notNull().defaultNow(),
+    updatedAt: ts("updated_at").notNull().defaultNow(),
+    /** `github:owner/repo#N` in lower case, as `run_pr_outcomes.pr_key` holds it. */
+    prKey: text("pr_key").notNull(),
+    /** `open`, `closed` or `merged`. */
+    prState: text("pr_state").notNull(),
+    /** When Oxagen received the delivery. */
+    readAt: ts("read_at").notNull(),
+    closedAt: ts("closed_at"),
+    mergedAt: ts("merged_at"),
+    mergeCommitSha: text("merge_commit_sha"),
+    baseRef: text("base_ref"),
+    headRef: text("head_ref"),
+    headSha: text("head_sha"),
+    /** GitHub's `updated_at` for this state. */
+    sourceUpdatedAt: ts("source_updated_at"),
+  },
+  (t) => ({
+    prUniq: uniqueIndex("run_pr_delivered_states_pr_uniq").on(
+      t.orgId,
+      t.workspaceId,
+      t.prKey,
+    ),
+    // The delivery's prune of one workspace's old rows.
+    workspaceReadIdx: index("run_pr_delivered_states_workspace_read_idx").on(
+      t.orgId,
+      t.workspaceId,
+      t.readAt,
+    ),
+    prKeyCheck: check(
+      "run_pr_delivered_states_pr_key_check",
+      sql`${t.prKey} ~ '^github:[^#]+#[1-9][0-9]*$'`,
+    ),
+    prStateCheck: check(
+      "run_pr_delivered_states_pr_state_check",
+      sql`${t.prState} IN ('open', 'closed', 'merged')`,
+    ),
+  }),
+);
+
 /** One pull request receipt a ledger run recorded, as the walk keeps it. */
 export interface RunPrReceipt {
   repositoryId: string;

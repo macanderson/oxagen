@@ -399,6 +399,7 @@ import "./contracts/steering.memories.list";
 import "./contracts/steering.memories.promote";
 import "./contracts/steering.memories.shared";
 import "./contracts/steering.memory_pr_records.list";
+import "./contracts/steering.propose";
 import "./contracts/steering.read";
 import "./contracts/steering.search";
 import "./contracts/steering_repo.get";

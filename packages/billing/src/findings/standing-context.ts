@@ -24,12 +24,20 @@
  * basis per source, so the finding's basis is `estimated`. It prices a part
  * of each request, so it claims no frame (ADR-208, counting rule 2). It is
  * cited at the run's agent, or at its operator when it names no agent.
+ *
+ * The finding's values name the tool provider whose definitions add the most
+ * tokens to a request, read from the system context parts of the cited runs'
+ * frames, and the workspace's weekly price per 1,000 tokens, the price the
+ * tool and steering pages quote (#5023). A provider is an MCP server: the
+ * harness's built-in tools cannot move to Searchable, so they are left out.
  */
 import type { RunTotalsRecord } from "../cost-rollup";
 import {
   STANDING_SOURCES,
   standingContextBySource,
   standingSourcesOf as sourcesOf,
+  WEEKLY_PRICE_TOKENS,
+  weeklyCostOf,
   type StandingSource,
 } from "../standing-context-price";
 import {
@@ -38,8 +46,81 @@ import {
   type DetectContext,
   type Detector,
   type DetectInput,
+  type FindingValues,
   type Group,
+  type WeeklyPricePerThousand,
 } from "./shared";
+
+/** The provider a tool part names for the harness's own tools. */
+const BUILTIN_PROVIDER = "builtin";
+
+/** One tool provider as the cited runs' frames list it. */
+interface ProviderListing {
+  name: string;
+  /** The most tokens its definitions added to one request. */
+  tokens: number;
+  /** Every tool it listed. */
+  tools: Set<string>;
+}
+
+/** What a group's values read past its own runs: its top provider and the week's price. */
+interface StandingFacts {
+  provider: (ProviderListing & { toolsCalled: number }) | null;
+  /** Null when the price was not read, or the week had no price. */
+  price: WeeklyPricePerThousand | null;
+}
+
+const factsOf = new WeakMap<Group, StandingFacts>();
+
+/**
+ * The tool provider whose definitions add the most tokens to one request, over
+ * the frames the pass read for the named runs; null when no frame listed a
+ * provider's tools. On a tie, the name that sorts first.
+ */
+function topProvider(
+  runIds: Iterable<string>,
+  input: Pick<DetectInput, "frames" | "toolCalls">,
+): (ProviderListing & { toolsCalled: number }) | null {
+  const listings = new Map<string, ProviderListing>();
+  const runs = new Set(runIds);
+  for (const runId of runs) {
+    for (const frame of input.frames?.get(runId) ?? []) {
+      const perFrame = new Map<string, number>();
+      for (const part of frame.systemContextParts ?? []) {
+        if (part.kind !== "tool" || part.provider === undefined) continue;
+        if (part.provider === BUILTIN_PROVIDER) continue;
+        perFrame.set(
+          part.provider,
+          (perFrame.get(part.provider) ?? 0) + part.tokens,
+        );
+        const listing = listings.get(part.provider) ?? {
+          name: part.provider,
+          tokens: 0,
+          tools: new Set<string>(),
+        };
+        listing.tools.add(part.name);
+        listings.set(part.provider, listing);
+      }
+      for (const [name, tokens] of perFrame) {
+        const listing = listings.get(name)!;
+        listing.tokens = Math.max(listing.tokens, tokens);
+      }
+    }
+  }
+  let top: ProviderListing | null = null;
+  for (const listing of listings.values())
+    if (
+      top === null ||
+      listing.tokens > top.tokens ||
+      (listing.tokens === top.tokens && listing.name < top.name)
+    )
+      top = listing;
+  if (top === null) return null;
+  const called = new Set<string>();
+  for (const call of input.toolCalls)
+    if (runs.has(call.runId) && top.tools.has(call.tool)) called.add(call.tool);
+  return { ...top, toolsCalled: called.size };
+}
 
 /** A run's re-sent standing context by source, priced; null when no source reported. */
 function bySourceOf(run: RunTotalsRecord) {
@@ -84,6 +165,13 @@ function detect(input: DetectInput, ctx: DetectContext): void {
       null,
     );
   }
+  for (const group of ctx.groups.values()) {
+    if (group.kind !== "standing_context") continue;
+    factsOf.set(group, {
+      provider: topProvider(group.runs.keys(), input),
+      price: input.weeklyContextPrice ?? null,
+    });
+  }
 }
 
 /**
@@ -123,6 +211,31 @@ export function standingSplit(group: Group): string {
   return `${named.slice(0, -1).join(", ")}, and ${named.at(-1)}`;
 }
 
+/** The figures the standing context card names (#5023). */
+function valuesOf(group: Group, resentTokens: number): FindingValues {
+  const facts = factsOf.get(group);
+  const price = facts?.price ?? null;
+  const provider = facts?.provider ?? null;
+  return {
+    kind: "standing_context",
+    resentTokens,
+    toolDefinitionTokens: resentOf(group, "toolDefinitionTokens"),
+    steeringTokens: resentOf(group, "steeringTokens"),
+    contextFrameTokens: resentOf(group, "contextFrameTokens"),
+    provider:
+      provider === null
+        ? null
+        : {
+            name: provider.name,
+            tokens: provider.tokens,
+            tools: provider.tools.size,
+            toolsCalled: provider.toolsCalled,
+            weeklyPrice: weeklyCostOf(provider.tokens, price),
+          },
+    weeklyPricePerThousand: weeklyCostOf(WEEKLY_PRICE_TOKENS, price),
+  };
+}
+
 export const standingContext: Detector = {
   kinds: ["standing_context"],
   counting: null,
@@ -132,6 +245,7 @@ export const standingContext: Detector = {
     return {
       why: `${plural(pricedRuns(group).length, "run", "runs")} re-sent ${plural(evidence.measuredTokens, "estimated token", "estimated tokens")} of standing context on every model call after the first: ${standingSplit(group)}.${frames > 0 ? " The saving leaves out the context frames, which the fix does not change." : ""}`,
       fix: "Move a tool provider whose tools agents rarely call to Searchable, and hold the steering prefix to its budget.",
+      values: valuesOf(group, evidence.measuredTokens),
     };
   },
 };

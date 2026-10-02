@@ -480,7 +480,7 @@ export function buildTachoProgram(
     )
     .option(
       "--github-repository <owner/name>",
-      "The one repository the run may reach, with a token in OXAGEN_CONTAINED_GITHUB_TOKEN",
+      "The one repository the run may fetch and push, through Oxagen's Git custody. The workspace must have it bound.",
     )
     .argument("<agent>", "claude or codex")
     .argument("[args...]", "Arguments for the agent, after --")

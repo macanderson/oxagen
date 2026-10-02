@@ -144,14 +144,6 @@ export const CI_REGISTRY: Record<string, CiVarMeta> = {
       how: "Create a key at console.anthropic.com under API keys, in the workspace that bills CI. Disable the old key after the next contained run passes.",
     },
   },
-  OXAGEN_CONTAINED_APP_PRIVATE_KEY: {
-    kind: "secret",
-    description:
-      "Private key of the GitHub App (OXAGEN_CONTAINED_APP_ID) contained.yml acts as.",
-    refresh: {
-      how: "On the GitHub App's settings page, generate a private key and save the .pem. Delete the old key on the same page once the next run passes.",
-    },
-  },
   OXAGEN_CONTAINED_TOKEN: {
     kind: "secret",
     description:
@@ -316,11 +308,6 @@ export const CI_REGISTRY: Record<string, CiVarMeta> = {
     description:
       "Linear project CI files issues into. pipeline.yml and nightly.yml fall back to the oxagen-v2 project when unset.",
     refresh: { how: "Copy the id from the project's URL in Linear." },
-  },
-  OXAGEN_CONTAINED_APP_ID: {
-    kind: "variable",
-    description: "Numeric id of the GitHub App contained.yml acts as.",
-    refresh: { how: "Read it on the App's settings page. It changes only with the App." },
   },
   OXAGEN_CONTAINED_ENABLED: {
     kind: "variable",

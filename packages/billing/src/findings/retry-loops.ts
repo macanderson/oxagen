@@ -17,16 +17,24 @@
  * falls between two of its calls, since the next call may then fail for a new
  * reason. A call with no input digest or no error class never joins a streak:
  * the hook recorded too little to show that two calls match.
+ *
+ * The evidence counts every call a counted request made, as the repeat
+ * findings do, so the Spend card's calls figure counts calls (#5023). The
+ * price stays per request. The finding's values name the longest streak in
+ * one cited run: its tool and how many times in a row it failed.
  */
+import { addRequest } from "./repeats";
 import { claimKey, type RunView, type ViewCall } from "./requests";
 import {
   agentOrOperator,
+  findingFingerprint,
   plural,
   requestMeasure,
   timeOf,
   type DetectContext,
   type Detector,
   type DetectInput,
+  type Group,
   type ToolCallObservation,
 } from "./shared";
 
@@ -75,6 +83,23 @@ export function retryCalls(
   fileChanges: readonly number[],
   from: Date,
 ): Set<ToolCallObservation> {
+  return new Set(
+    retryStreaks(calls, fileChanges, from).flatMap((streak) =>
+      streak.slice(1),
+    ),
+  );
+}
+
+/**
+ * The streaks of at least `RETRY_LOOP_CALLS` identical failures among one
+ * run's calls, each in seq order with its first attempt; see
+ * {@link retryCalls}.
+ */
+function retryStreaks(
+  calls: readonly ToolCallObservation[],
+  fileChanges: readonly number[],
+  from: Date,
+): ToolCallObservation[][] {
   const fromMicros = from.getTime() * 1000;
   const breakers: Breaker[] = fileChanges.map((at) => ({ at, chain: null }));
   const chains = new Map<string, ToolCallObservation[]>();
@@ -108,7 +133,7 @@ export function retryCalls(
     return false;
   };
 
-  const out = new Set<ToolCallObservation>();
+  const out: ToolCallObservation[][] = [];
   for (const chain of chains.values()) {
     chain.sort((a, b) => a.seq - b.seq);
     let i = 0;
@@ -120,13 +145,28 @@ export function retryCalls(
         !broken(chain[j - 1]!, chain[j]!)
       )
         j += 1;
-      if (j - i >= RETRY_LOOP_CALLS)
-        for (let k = i + 1; k < j; k += 1) out.add(chain[k]!);
+      if (j - i >= RETRY_LOOP_CALLS) out.push(chain.slice(i, j));
       i = j;
     }
   }
   return out;
 }
+
+/** The longest streak a finding cites: its tool, and how many times in a row it failed. */
+interface Longest {
+  tool: string;
+  failures: number;
+}
+
+/** The longer of two streaks; on a tie, the tool that sorts first. */
+function longer(a: Longest | undefined, b: Longest): Longest {
+  if (a === undefined) return b;
+  if (b.failures !== a.failures) return b.failures > a.failures ? b : a;
+  return b.tool < a.tool ? b : a;
+}
+
+/** Each written group's longest streak, for its values. */
+const longestOf = new WeakMap<Group, Longest>();
 
 /**
  * Per run, how many of its calls are retries in a loop. The store reads
@@ -155,59 +195,79 @@ export function runsWithRetries(
   return out;
 }
 
+/**
+ * Cite one run's retries. Returns the run's longest streak when the finding
+ * cites the run, and null when it cites nothing of it.
+ */
 function detectRun(
   view: RunView,
   input: DetectInput,
   ctx: DetectContext,
   fileChangeTimes: NonNullable<DetectInput["fileChangeTimes"]>,
-): void {
-  const retries = retryCalls(
+): { fingerprint: string; longest: Longest } | null {
+  const streaks = retryStreaks(
     view.calls.map((c) => c.call),
     fileChangeTimes.byRun.get(view.run.runId) ?? [],
     fileChangeTimes.from,
   );
-  if (retries.size === 0) return;
+  if (streaks.length === 0) return null;
+  const retries = new Set(streaks.flatMap((streak) => streak.slice(1)));
   const run = view.run;
   const key = agentOrOperator("retry_loops", run);
-  if (key === null) return;
+  if (key === null) return null;
   const admitted = ctx.groups.admits(key, run);
   const isRetry = (c: ViewCall) => retries.has(c.call);
+  let cited = false;
   if (view.requests === null) {
     // No frames were read for the run: each retry is cited, and nothing
     // prices it.
     for (const c of view.calls) {
       if (!isRetry(c) || ctx.taken.has(c.call)) continue;
       ctx.taken.add(c.call);
-      if (admitted)
-        ctx.groups.add(key, input.toolWindowStart, run, requestMeasure(null), [
-          c.frame,
-        ]);
+      if (!admitted) continue;
+      ctx.groups.add(key, input.toolWindowStart, run, requestMeasure(null), [
+        c.frame,
+      ]);
+      cited = true;
     }
-    return;
-  }
-  for (const request of view.requests) {
-    if (
-      request.calls.length === 0 ||
-      !request.calls.every(isRetry) ||
-      request.calls.some((c) => ctx.taken.has(c.call))
-    )
-      continue;
-    if (request.frame !== null) {
-      const claim = claimKey(run.runId, request.frame.key);
-      if (ctx.claimed.has(claim)) continue;
-      ctx.claimed.add(claim);
+  } else {
+    for (const request of view.requests) {
+      if (
+        request.calls.length === 0 ||
+        !request.calls.every(isRetry) ||
+        request.calls.some((c) => ctx.taken.has(c.call))
+      )
+        continue;
+      if (request.frame !== null) {
+        const claim = claimKey(run.runId, request.frame.key);
+        if (ctx.claimed.has(claim)) continue;
+        ctx.claimed.add(claim);
+      }
+      for (const c of request.calls) ctx.taken.add(c.call);
+      if (!admitted) continue;
+      // One cited item per call, and the request's price once.
+      addRequest(
+        key,
+        input,
+        run,
+        request,
+        request.frame === null ? null : { detector: 1, frame: request.frame },
+        ctx,
+      );
+      cited = true;
     }
-    for (const c of request.calls) ctx.taken.add(c.call);
-    if (!admitted) continue;
-    ctx.groups.add(
-      key,
-      input.toolWindowStart,
-      run,
-      requestMeasure(request.frame),
-      request.calls.map((c) => c.frame),
-      request.frame === null ? null : { detector: 1, frame: request.frame },
-    );
   }
+  if (!cited) return null;
+  let longest: Longest | undefined;
+  for (const streak of streaks)
+    longest = longer(longest, {
+      tool: streak[0]!.tool,
+      failures: streak.length,
+    });
+  return {
+    fingerprint: findingFingerprint(key.kind, key.level, key.subject),
+    longest: longest!,
+  };
 }
 
 export const retryLoops: Detector = {
@@ -218,10 +278,37 @@ export const retryLoops: Detector = {
     // between its calls, so the detector writes nothing.
     const fileChangeTimes = input.fileChangeTimes;
     if (fileChangeTimes === undefined) return;
-    for (const view of ctx.views) detectRun(view, input, ctx, fileChangeTimes);
+    const byFingerprint = new Map<string, Longest>();
+    for (const view of ctx.views) {
+      const cited = detectRun(view, input, ctx, fileChangeTimes);
+      if (cited === null) continue;
+      byFingerprint.set(
+        cited.fingerprint,
+        longer(byFingerprint.get(cited.fingerprint), cited.longest),
+      );
+    }
+    for (const group of ctx.groups.values()) {
+      if (group.kind !== "retry_loops") continue;
+      const longest = byFingerprint.get(
+        findingFingerprint(group.kind, group.level, group.subject),
+      );
+      if (longest !== undefined) longestOf.set(group, longest);
+    }
   },
-  prose: (group, evidence) => ({
-    why: `On ${plural(group.runs.size, "run", "runs")}, a call failed ${RETRY_LOOP_CALLS} or more times in a row with the same error, and no write or file change came between the attempts. ${plural(evidence.calls, "turn", "turns")} made only those retries.`,
-    fix: "Tell the agent to read the error and change the call or the files it depends on before it tries again. A call that fails the same way twice needs a different approach.",
-  }),
+  prose: (group, evidence) => {
+    const longest = longestOf.get(group);
+    return {
+      why: `On ${plural(group.runs.size, "run", "runs")}, a call failed ${RETRY_LOOP_CALLS} or more times in a row with the same error, and no write or file change came between the attempts. ${plural(evidence.calls, "call", "calls")} came from turns that made only those retries.`,
+      fix: "Tell the agent to read the error and change the call or the files it depends on before it tries again. A call that fails the same way twice needs a different approach.",
+      ...(longest === undefined
+        ? {}
+        : {
+            values: {
+              kind: "retry_loops" as const,
+              tool: longest.tool,
+              failures: longest.failures,
+            },
+          }),
+    };
+  },
 };

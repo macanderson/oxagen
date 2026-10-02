@@ -231,6 +231,7 @@ after the registered name separately when their contract uses a dotted stem.
 | [promote_memories](steering.memories.promote.md) | [steering.memories.promote.ts](../../packages/oxagen/src/contracts/steering.memories.promote.ts) | api, mcp, cli |
 | [promote_context_record](context.record.promote.md) | [context.record.promote.ts](../../packages/oxagen/src/contracts/context.record.promote.ts) | api |
 | [propose_record](context.proposal.create.md) | [context.proposal.create.ts](../../packages/oxagen/src/contracts/context.proposal.create.ts) | api, mcp, agent |
+| [propose_steering](steering.propose.md) | [steering.propose.ts](../../packages/oxagen/src/contracts/steering.propose.ts) | mcp |
 | [publish_context_record](context.record.publish.md) | [context.record.publish.ts](../../packages/oxagen/src/contracts/context.record.publish.ts) | api |
 | [read_steering](steering.read.md) | [steering.read.ts](../../packages/oxagen/src/contracts/steering.read.ts) | mcp |
 | [refresh_context_pr](context.pr.refresh.md) | [context.pr.refresh.ts](../../packages/oxagen/src/contracts/context.pr.refresh.ts) | api, agent |

@@ -19,8 +19,13 @@ against.
 - The model vendor's key for the harness: `ANTHROPIC_API_KEY` for Claude Code,
   `OPENAI_API_KEY` for Codex. Enrollment moves it into the gateway's custody,
   and the container never sees it.
-- Optional: a GitHub App installed on the repository, if the agent needs to
-  fetch or push. You mint a token for this one repository each run.
+- Optional, if the agent needs to fetch or push: the repository bound to the
+  workspace, with the workspace's GitHub App attached on the Repositories
+  page. The deployment must allow brokered GitHub credentials, which the
+  [`OXAGEN_TACHO_GITHUB_BROKER`](../../packages/config/src/registry.ts)
+  setting controls. You mint no GitHub token. For each Git request, Oxagen
+  mints one for this repository, the collector uses it outside the
+  container, and the collector revokes it when the request ends.
 - The contained image. Build it from `packages/tacho/container/Dockerfile` at
   the tag that matches your `oxagen` version, with `--build-arg
   HARNESS=claude-code` or `HARNESS=codex`, and push it where your runners can
@@ -91,17 +96,9 @@ jobs:
           done
           cat "$RUNNER_TEMP/oxagen-daemon.log"; exit 1
 
-      - name: Mint the run's GitHub token
-        id: github-token
-        uses: actions/create-github-app-token@v2
-        with:
-          app-id: ${{ vars.GITHUB_APP_ID }}
-          private-key: ${{ secrets.GITHUB_APP_PRIVATE_KEY }}
-          repositories: ${{ github.event.repository.name }}
-
+      # No GitHub token in this job. The collector gets one for each Git
+      # request and revokes it after.
       - name: Review, contained
-        env:
-          OXAGEN_CONTAINED_GITHUB_TOKEN: ${{ steps.github-token.outputs.token }}
         run: >-
           oxagen agent run --contained
           --image ghcr.io/your-org/oxagen-contained-claude-code:2.1.1
@@ -114,10 +111,10 @@ jobs:
         run: oxagen agent unenroll
 ```
 
-Drop the token step and `--github-repository` if the agent only reads the
-checkout. For Codex, build the image with `HARNESS=codex`, put the key in
-`~/.codex/auth.json` as `OPENAI_API_KEY`, enroll with `--harness codex`, and
-run `-- codex exec "<task>"`.
+Drop `--github-repository` if the agent only reads the checkout. For Codex,
+build the image with `HARNESS=codex`, put the key in `~/.codex/auth.json` as
+`OPENAI_API_KEY`, enroll with `--harness codex`, and run
+`-- codex exec "<task>"`.
 
 The checkout must not contain `node_modules` or anything else installed with
 hard links, and no `.env`, `.env.local`, `.npmrc`, `.netrc` or similar file.
@@ -138,17 +135,19 @@ This repository runs the same job on its own pull requests in
 3. It inspects the container, sends the measurement and the session's chain
    genesis to Oxagen, and starts the agent only after Oxagen accepts it.
 4. Inside, the agent reaches the model, the hooks, Oxagen's MCP tools, and,
-   with a token, your one repository. Each goes through a socket to the
-   daemon, which adds the credential outside the container. Every other
-   request is refused and recorded.
-5. When the run ends, the launcher removes the container and revokes the
-   GitHub token.
+   with `--github-repository`, Git for your one repository. Each goes through
+   a socket to the collector, which adds the credential outside the
+   container. A Git request gets a GitHub token that Oxagen mints for that
+   request alone, and the run's record shows each use. The GitHub REST API is
+   not reachable. Every other request is refused and recorded.
+5. When the run ends, the launcher removes the container. Each GitHub token
+   was already revoked when its request ended.
 
 Oxagen marks the run `contained` when the chain verifies, the model or MCP
 traffic went through the gateway, and the receipt's genesis matches the
 chain. The launcher never sets the tier itself.
 
-## When the launcher refuses
+## Launcher refusals
 
 `oxagen agent run --contained` prints the reason and exits 1 before the agent
 starts:
@@ -161,8 +160,24 @@ starts:
 | `Remove local credential files from the contained checkout before launch` | Delete `.env`, `.npmrc` and similar files from the checkout |
 | `Contained repository contains a hard-linked file` | Check out a clean tree with no installed dependencies |
 | `Contained launch registration failed (409)` | The workspace's database is missing the contained-launch migration, or this session already has a different receipt |
-| `The run's GitHub token must reach <repo> and no other repository` | Mint the token with `repositories:` set to this one repository |
 | `The daemon must hold this harness's model credential before containment can start` | Put the vendor key in the harness settings before `oxagen agent enroll` |
+
+The command exits 2 without asking the collector while
+`OXAGEN_CONTAINED_GITHUB_TOKEN` is set. Oxagen no longer reads that variable.
+Remove it and the step that mints the token, and bind the repository to the
+workspace instead.
+
+## Git refusals
+
+Git prints Oxagen's reason after `remote:` and the agent sees it. The run
+keeps going.
+
+| Message | What to change |
+|---|---|
+| `Oxagen refused access to this repository. <repo> is not bound to this workspace` | Bind the repository to the workspace on the Repositories page |
+| `This workspace has no GitHub App installation attached` | Attach the GitHub App on the Repositories page |
+| `Brokered GitHub credentials are off on this deployment` | Turn on the deployment's [`OXAGEN_TACHO_GITHUB_BROKER`](../../packages/config/src/registry.ts) setting |
+| `Oxagen issued no GitHub credential for this run` | The session stopped or the enrollment is no longer active. Start a new run |
 
 ## What contained does not cover
 

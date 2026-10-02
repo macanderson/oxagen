@@ -385,6 +385,8 @@ import { steeringRepoProvisionRetry } from "./steering_repo.provision.retry";
 // open one steering PR with the rows a person kept (#4907).
 import { steeringMarkdownImportParse } from "./steering.markdown_import.parse";
 import { steeringMarkdownImportCommit } from "./steering.markdown_import.commit";
+// An agent opens a steering PR over MCP without a clone (#5134).
+import { steeringPropose } from "./steering.propose";
 import { contextSteeringFreshness } from "./context.steering.freshness";
 import { contextSteeringLayout } from "./context.steering.layout";
 import { contextGovernanceModeSet } from "./context.governance_mode.set";
@@ -1199,6 +1201,7 @@ export {
   steeringRepoProvisionRetry,
   steeringMarkdownImportParse,
   steeringMarkdownImportCommit,
+  steeringPropose,
   contextRecordsAppend,
   contextProposalCreate,
   contextProposalList,
@@ -1688,6 +1691,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   steeringRepoProvisionRetry,
   steeringMarkdownImportParse,
   steeringMarkdownImportCommit,
+  steeringPropose,
   contextRecordsAppend,
   contextProposalCreate,
   contextProposalList,

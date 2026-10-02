@@ -19,9 +19,10 @@ import {
 import { makeSecurityEventInserter } from "@oxagen/database/security";
 import { assertRlsConnectionSafe } from "@oxagen/database";
 import { bootstrapDataPlaneResolver } from "@oxagen/database/data-plane";
+import { registerProposingAgentResolver } from "@oxagen/handlers/steering.proposer";
 import { apiKeyGate } from "./api-key-gate";
 import { localServersRoute } from "./local-servers";
-import { servedToolsMiddleware } from "./servers/serve";
+import { servedProposingAgent, servedToolsMiddleware } from "./servers/serve";
 // The relay's upgrade mount (lane M12, ADR-225). xmcp gives no handle to its
 // HTTP server, so the mount subscribes at module load and adds its upgrade
 // listener when the server answers its first request.
@@ -54,6 +55,10 @@ bootstrapEntitlementRuntime();
 // Wire the workspace decision-rules gate — the same governance an agent
 // answers to applies to a direct MCP invocation of the same capability.
 bootstrapDecisionRulesRuntime();
+// Tell propose_steering which agent and run a request comes from, by the run
+// and published agents the served tools read. Without it every call is
+// refused as no_proposing_agent (packages/handlers/src/steering.proposer.ts).
+registerProposingAgentResolver(servedProposingAgent);
 
 // Wire the Postgres security event emitter (SOC2 CC6/CC7 audit trail).
 // Registered ONCE, after the three gate bootstraps above, so the emitter is

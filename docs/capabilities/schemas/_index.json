@@ -3638,6 +3638,16 @@
       "consumes": []
     },
     {
+      "name": "propose_steering",
+      "domain": "context",
+      "surfaces": [
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "publish_context_record",
       "domain": "context",
       "surfaces": [

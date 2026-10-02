@@ -52,6 +52,7 @@ import {
   type Detector,
   type DetectInput,
   type FindingKey,
+  type FindingValues,
   type Group,
   type RunFirstPrompt,
   type ToolCallObservation,
@@ -379,7 +380,11 @@ function detect(input: DetectInput, ctx: DetectContext): void {
   }
 }
 
-function prose(group: Group): { why: string; fix: string } {
+function prose(group: Group): {
+  why: string;
+  fix: string;
+  values?: FindingValues;
+} {
   const report = reported.get(group);
   const list = report?.prompts ?? [];
   const top = list[0];
@@ -400,6 +405,17 @@ function prose(group: Group): { why: string; fix: string } {
   return {
     why: `${lead}${more} A run changed nothing when it made no mutating call and changed no file.`,
     fix: `Start the job on a change, such as a new commit or a new issue, instead of on a clock. If it must run on a clock, run it less often or move it to a smaller model class. If it calls the model API directly and can wait, ${batch}.`,
+    // The card names the top prompt's group; with none, it shows this text.
+    ...(top === undefined
+      ? {}
+      : {
+          values: {
+            kind: KIND,
+            groupSize: top.runs,
+            unchanged: top.unchanged,
+            otherPrompts: rest.length,
+          },
+        }),
   };
 }
 
