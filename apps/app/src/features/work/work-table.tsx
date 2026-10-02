@@ -166,7 +166,7 @@ function InboxTable({
       ]}
     >
       {items.map((item) => (
-        <tr key={item.id} data-work-item={item.number} className={ROW}>
+        <tr key={item.id} data-work-item={item.number} data-status={item.status} data-wait={item.wait.kind} className={ROW}>
           <td className={cell}>
             <ItemCell org={org} ws={ws} item={item} labels />
           </td>
@@ -217,7 +217,7 @@ function RunningTable({
       ]}
     >
       {items.map((item) => (
-        <tr key={item.id} data-work-item={item.number} className={ROW}>
+        <tr key={item.id} data-work-item={item.number} data-status={item.status} data-wait={item.wait.kind} className={ROW}>
           <td className={cell}>
             <ItemCell org={org} ws={ws} item={item} labels={false} />
           </td>
@@ -277,7 +277,7 @@ function ReviewTable({
       {items.map((item) => {
         const pr = item.send?.pullRequest ?? null;
         return (
-          <tr key={item.id} data-work-item={item.number} className={ROW}>
+          <tr key={item.id} data-work-item={item.number} data-status={item.status} data-wait={item.wait.kind} className={ROW}>
             <td className={cell}>
               <ItemCell org={org} ws={ws} item={item} labels={false} />
             </td>
@@ -339,7 +339,7 @@ function DoneTable({
       {items.map((item) => {
         const agent = item.send?.agent.name ?? null;
         return (
-          <tr key={item.id} data-work-item={item.number} className={ROW}>
+          <tr key={item.id} data-work-item={item.number} data-status={item.status} data-wait={item.wait.kind} className={ROW}>
             <td className={cell}>
               <ItemCell org={org} ws={ws} item={item} labels={false} />
             </td>
