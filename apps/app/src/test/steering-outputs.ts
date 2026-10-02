@@ -1,12 +1,16 @@
 // Contract-output samples for the steering mapper, adapter and action tests
 // (ARCHITECTURE.md §5): what list_records, list_proposals and get_context_pr
 // answer for a workspace with one published constraint and one proposal whose
-// Context PR passed its checks. Test support only: src/test is never in a
+// Context PR passed its checks, and what the workspace memory reads answer for
+// one waiting memory and one memory PR. Test support only: src/test is never in a
 // production bundle.
 import type { contextPrGet } from "@oxagen/oxagen/contracts/context.pr.get";
 import type { contextProposalList } from "@oxagen/oxagen/contracts/context.proposal.list";
 import type { contextRecordsGet } from "@oxagen/oxagen/contracts/context.records.get";
 import type { contextRecordsList } from "@oxagen/oxagen/contracts/context.records.list";
+import type { steeringMemoriesGet } from "@oxagen/oxagen/contracts/steering.memories.get";
+import type { steeringMemoriesList } from "@oxagen/oxagen/contracts/steering.memories.list";
+import type { steeringMemoryPrRecordsList } from "@oxagen/oxagen/contracts/steering.memory_pr_records.list";
 import type { ContractOutput } from "@/server/kernel";
 
 type RecordsOutput = ContractOutput<typeof contextRecordsList>;
@@ -177,5 +181,133 @@ export function contextPrOutput(
     },
     merged: null,
     ...overrides,
+  };
+}
+
+type MemoriesOutput = ContractOutput<typeof steeringMemoriesList>;
+type MemoryOutput = MemoriesOutput["groups"][number]["memory"];
+
+/** A waiting Claude Code memory as list_workspace_memories answers it. */
+export function memoryOutput(
+  overrides: Partial<MemoryOutput> = {},
+): MemoryOutput {
+  return {
+    id: "mem_01k5rw3draft",
+    label: "Draft releases only",
+    summary: "Open every release as a draft first.",
+    statement: "Open every release as a draft.",
+    state: "waiting",
+    capture: "local_gateway",
+    harness: "claude-code",
+    agent: "acme.core-platform.release-manager",
+    source: "claude-code:~/.claude/projects/core/memory/feedback_draft_releases.md",
+    repos: ["github.com/acme/platform"],
+    memory_type: "feedback",
+    kind: "procedure",
+    use_count: 9,
+    use_signal: true,
+    last_used_at: AT,
+    created_at: AT,
+    promoted_lineage: null,
+    memory_pr: null,
+    ...overrides,
+  };
+}
+
+/** One page holding one group per memory. */
+export function memoriesOutput(
+  memories: MemoryOutput[] = [memoryOutput()],
+): MemoriesOutput {
+  return {
+    groups: memories.map((memory) => ({
+      memory,
+      members: [memory],
+      use_count: memory.use_count,
+      last_used_at: memory.last_used_at,
+    })),
+    total_groups: memories.length,
+    total_memories: memories.length,
+    truncated: false,
+    waiting: memories.filter((m) => m.state === "waiting").length,
+  };
+}
+
+/** get_workspace_memory for the memory above, cited by open memory PR #59. */
+export function memoryGetOutput(): ContractOutput<typeof steeringMemoriesGet> {
+  return {
+    memory: {
+      ...memoryOutput({ state: "in_pr" }),
+      run: "tse_01k5rt2q",
+      evidence: ["frame:tse_01k5rt2q/3"],
+      applies_to: null,
+      tools: null,
+      retired_at: null,
+      retired_reason: null,
+    },
+    uses: [
+      { run: "tse_01k5ru9a", signal: "read", count: 2, used_at: AT },
+      { run: null, signal: "harness_count", count: 3, used_at: AT },
+    ],
+    uses_total: 2,
+    memory_pr: {
+      id: "mpr_01k5rx",
+      number: 59,
+      url: "https://github.com/acme/oxagen-core-platform/pull/59",
+      repository: "acme/oxagen-core-platform",
+      branch: "memory/2026-09-15",
+      status: "open",
+      opened_at: AT,
+      settled_at: null,
+    },
+  };
+}
+
+/** list_memory_pr_records for memory PR #59: one kept record, one dropped. */
+export function memoryPrRecordsOutput(): ContractOutput<
+  typeof steeringMemoryPrRecordsList
+> {
+  return {
+    pull_request: {
+      id: "mpr_01k5rx",
+      number: 59,
+      url: "https://github.com/acme/oxagen-core-platform/pull/59",
+      repository: "acme/oxagen-core-platform",
+      branch: "memory/2026-09-15",
+      status: "open",
+      opened_at: AT,
+      settled_at: null,
+    },
+    branch_read: true,
+    records: [
+      {
+        action: "propose",
+        path: "steering/memory/release/core.release.draft-releases.md",
+        lineage: "core.release.draft-releases",
+        kind: "procedure",
+        title: "Draft releases only",
+        summary: "Open every release as a draft first.",
+        memories: [
+          {
+            id: "mem_01k5rw3draft",
+            statement: "Open every release as a draft.",
+            agent: "acme.core-platform.release-manager",
+            run: "tse_01k5rt2q",
+            evidence: ["frame:tse_01k5rt2q/3"],
+            state: "in_pr",
+          },
+        ],
+        dropped: null,
+      },
+      {
+        action: "propose",
+        path: "steering/memory/release/core.release.skip-lockfile.md",
+        lineage: "core.release.skip-lockfile",
+        kind: "code-rule",
+        title: "Skip the lockfile check",
+        summary: "Skip the lockfile check when only docs changed.",
+        memories: [],
+        dropped: { commit_sha: "4d5e6f7a8b9c0d1e" },
+      },
+    ],
   };
 }
