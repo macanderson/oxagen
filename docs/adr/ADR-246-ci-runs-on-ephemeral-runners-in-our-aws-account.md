@@ -416,3 +416,52 @@ measured cost per 1,000 job-minutes.
   does not suit spot runners. Serving it is its own decision.
 - **Stella.** `macanderson/stella` sits on a personal account, which an
   organization's runners cannot serve. It stays on GitHub-hosted runners.
+
+## Amendment of 2026-10-01: what the build changed
+
+CI moved to these runners at 23:36Z on 2026-10-01 (`CI_RUNNERS=aws`). These
+facts from the build supersede the matching parts of the decisions above.
+
+- **Quota.** AWS approved 300 spot and 300 on-demand vCPUs and 1,000 Lambda
+  concurrent executions. The EC2 cases for 2,400 and 1,000 stay open. The
+  account holds about 37 large runners or 150 small ones at once.
+- **Speed over concurrency.** Mac chose speed. The heavy jobs run on the
+  16-vCPU pool and ten of those stay warm. `CI_HEAVY_POOL=small` sends them to
+  the 4-vCPU pool when concurrency matters more.
+- **Warm pools.** 10 large x64, 10 small x64, and 1 deploy. The arm64 pools
+  keep none until a job is proven on arm64. The pools top up every 2 minutes.
+  GitHub lists a JIT-registered runner as `offline` until it connects, and the
+  module's pool Lambda does not count an offline runner, so a pool that tops
+  up faster than runners register keeps launching.
+- **Start path.** A systemd unit, `ci-start-runner.service`, starts the
+  runner once the network is up, about 25 seconds into boot. Image Builder's
+  cleanup empties cloud-init's per-boot directory, so the module's own
+  approach does not survive it. The unit does not wait for Docker.
+- **No EBS initialization rate.** EBS caps the combined provisioned
+  initialization rate across volumes created at once. At 300 MiB/s per
+  volume, a burst of 100 runners failed to launch. The provider keeps the
+  rate in a launch template when the attribute is removed, so the agent
+  created launch template versions without it.
+- **Image paths.** Image Builder writes the AMI id under `/imagebuilder/`
+  and its logs under `/aws/imagebuilder/`, the only places its service-linked
+  role reaches.
+- **Rollback switch.** `CI_IMAGE_REGISTRY` joins `CI_RUNNERS`: unset, the
+  workflows pull the old public GHCR images and Docker Hub.
+- **Merge gate.** The `main` ruleset had no bypass actor after the move to
+  the organization, so no PR could merge while `Brand drift` failed inside
+  `checks`. Mac approved an organization-admin bypass on 2026-10-01.
+
+### Measured
+
+| Measure | Value |
+|---|---|
+| Burst | 100 jobs on `oxagen-small-x64` (run 36944117774), 100 succeeded, 100 running at once |
+| Queue time, all cold starts | p50 65 s, p95 78 s, max 78 s |
+| Teardown | 100 of 100 runners terminated after their job |
+| Runner start after launch | 24 to 42 seconds of uptime |
+| Compute per 1,000 job-minutes | $3.09 (instance time, 51% spot), against $12 for GitHub's 4-core runner |
+| A ready PR, idle system, 4-vCPU runners | 12 to 14 minutes, set by the slowest `unit` lane |
+
+The p95 of 78 seconds is for a burst larger than the warm pool, where every
+job waits for a new machine. A job that finds a warm runner starts in
+seconds.
