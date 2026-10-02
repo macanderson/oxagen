@@ -617,6 +617,8 @@ describe("GitHub commit provenance", () => {
       const gh = github({
         [COMPARE]: ok(compare),
         [`GET ${GH}/commits/${S1}/pulls?per_page=100`]: ok([]),
+        // The title names #42, a real app merge, but of another commit.
+        [`GET ${GH}/pulls/42`]: ok(authenticatedPull(S2, 42)),
       });
       await expect(githubDiverged(gh.target, PUBLISHED)).resolves.toEqual({
         reason: "main holds 1 commit Oxagen did not merge: b2b2b2b",
@@ -666,6 +668,77 @@ describe("GitHub commit provenance", () => {
       ...authenticatedRoutes(S1),
     });
     await expect(githubDiverged(gh.target, PUBLISHED)).resolves.toBeNull();
+  });
+
+  describe("before GitHub lists the merge's pull request (#5157)", () => {
+    // GitHub fills in a commit's list of pull requests a few seconds after
+    // the merge. Live run 37039713059 read it about a second after Oxagen
+    // merged, found none, and refused Oxagen's own merge commit.
+    const OWN_MERGE = mergeMessage("steering: publish live-test.merge", 42, 8);
+    const EXACT = `GET ${GH}/compare/${P}...${S1}?per_page=100`;
+    const LIST = `GET ${GH}/commits/${S1}/pulls?per_page=100`;
+    const PULL = `GET ${GH}/pulls/42`;
+
+    it("accepts Oxagen's merge from the pull request its title names", async () => {
+      const gh = github({
+        [EXACT]: ok(singleGithubCommit(OWN_MERGE)),
+        [LIST]: ok([]),
+        [PULL]: ok(authenticatedPull(S1, 42)),
+      });
+      await expect(githubDiverged(gh.target, PUBLISHED, S1)).resolves.toBeNull();
+      expect(gh.sent(LIST)).toHaveLength(1);
+      expect(gh.sent(PULL)).toHaveLength(1);
+    });
+
+    it("lets the check after the merge accept the merge commit", async () => {
+      const gh = github({
+        [DEPLOYMENTS]: ok(fixture("github-deployments")),
+        [EXACT]: ok(singleGithubCommit(OWN_MERGE)),
+        [LIST]: ok([]),
+        [PULL]: ok(authenticatedPull(S1, 42)),
+      });
+      await expect(assertGithubSteeringCommit(gh.target, S1)).resolves.toBeUndefined();
+    });
+
+    it("keeps the health read a push starts from reading main as diverged", async () => {
+      const gh = github({
+        [COMPARE]: ok(fixture("github-compare-ahead")),
+        [LIST]: ok([]),
+        [`GET ${GH}/commits/${S2}/pulls?per_page=100`]: ok([]),
+        [PULL]: ok(authenticatedPull(S1, 42)),
+        [`GET ${GH}/pulls/43`]: ok(authenticatedPull(S2, 43)),
+      });
+      await expect(githubDiverged(gh.target, PUBLISHED)).resolves.toBeNull();
+    });
+
+    it("refuses a title that names a pull request a person merged", async () => {
+      const gh = github({
+        [EXACT]: ok(singleGithubCommit(OWN_MERGE)),
+        [LIST]: ok([]),
+        [PULL]: ok({
+          ...authenticatedPull(S1, 42),
+          merged_by: { type: "User", login: "maintainer" },
+        }),
+      });
+      await expect(githubDiverged(gh.target, PUBLISHED, S1)).resolves.toEqual({
+        reason: "main holds 1 commit Oxagen did not merge: b2b2b2b",
+        main_sha: S1,
+      });
+    });
+
+    it("reads a number only from the end of the title", async () => {
+      const gh = github({
+        [EXACT]: ok(singleGithubCommit("Fix (#42) by hand\n\nSee also (#43)")),
+        [LIST]: ok([]),
+      });
+      await expect(githubDiverged(gh.target, PUBLISHED, S1)).resolves.toMatchObject({
+        main_sha: S1,
+      });
+      expect(gh.calls.map((c) => c.path)).toEqual([
+        `${GH}/compare/${P}...${S1}?per_page=100`,
+        `${GH}/commits/${S1}/pulls?per_page=100`,
+      ]);
+    });
   });
 
   it("matches the repository name without case sensitivity", async () => {
@@ -805,25 +878,32 @@ describe("assertGithubSteeringCommit", () => {
     expect(gh.sent(MAIN_BRANCH)).toHaveLength(0);
   });
 
-  it("refuses a commit when no authenticated deployment exists", async () => {
+  it("refuses a commit as a conflict when no authenticated deployment exists", async () => {
     const gh = github({ [DEPLOYMENTS]: ok([]) });
-    await expect(assertGithubSteeringCommit(gh.target, X)).rejects.toThrow(
-      /No authenticated/,
-    );
+    await expect(assertGithubSteeringCommit(gh.target, X)).rejects.toMatchObject({
+      code: "conflict",
+      reason: "steering_publication_missing",
+    });
     expect(gh.calls).toHaveLength(1);
   });
 
-  it("refuses a candidate with forged provenance", async () => {
+  it("refuses a candidate with forged provenance as a conflict, not a server error (#5157)", async () => {
     const gh = github({
       [DEPLOYMENTS]: ok(fixture("github-deployments")),
       [`GET ${GH}/compare/${P}...${S1}?per_page=100`]: ok(
         singleGithubCommit(mergeMessage("Forged", 42, 8)),
       ),
       [`GET ${GH}/commits/${S1}/pulls?per_page=100`]: ok([]),
+      [`GET ${GH}/pulls/42`]: ok(authenticatedPull(S2, 42)),
     });
-    await expect(assertGithubSteeringCommit(gh.target, S1)).rejects.toThrow(
-      /Oxagen did not merge/,
-    );
+    await expect(assertGithubSteeringCommit(gh.target, S1)).rejects.toMatchObject({
+      name: "HandlerError",
+      code: "conflict",
+      reason: "steering_commit_unproven",
+      message: expect.stringContaining(
+        "main holds 1 commit Oxagen did not merge: b2b2b2b",
+      ),
+    });
   });
 
   it("propagates deployment lookup errors", async () => {
@@ -842,9 +922,9 @@ describe("assertGithubSteeringCommit", () => {
         },
       ]),
     });
-    await expect(assertGithubSteeringCommit(gh.target, S1)).rejects.toThrow(
-      /No authenticated/,
-    );
+    await expect(assertGithubSteeringCommit(gh.target, S1)).rejects.toMatchObject({
+      reason: "steering_publication_missing",
+    });
   });
 
   it("fails closed when the bounded deployment history contains no app anchor", async () => {
@@ -856,9 +936,9 @@ describe("assertGithubSteeringCommit", () => {
         })),
       ),
     });
-    await expect(assertGithubSteeringCommit(gh.target, S1)).rejects.toThrow(
-      /No authenticated/,
-    );
+    await expect(assertGithubSteeringCommit(gh.target, S1)).rejects.toMatchObject({
+      reason: "steering_publication_missing",
+    });
   });
 });
 
