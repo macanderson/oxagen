@@ -130,9 +130,15 @@ export type ListedFacts = Pick<DerivedItem, "facts" | "projection">;
  * head comes from pr_linked, head_observed, and merged facts, never from a
  * check. So the first query reads every fact except the checks, the reduction
  * names each send's head, and the second query reads only the checks on those
- * heads. The projection is the one every fact reduces to, and nothing else the
- * row derives reads a check fact (derive.ts). read.list.pg.test.ts proves both
- * on Postgres.
+ * heads, through item_facts_check_head_idx. The projection is the one every
+ * fact reduces to, and nothing else the row derives reads a check fact
+ * (derive.ts). read.list.pg.test.ts proves both on Postgres.
+ *
+ * The two queries can read different moments: a head's required checks and
+ * its results can commit between them. The row then shows a moment that never
+ * held, until the next read. Accept reads the item again through the store,
+ * so nothing is decided on it. The list's other queries (items, triage) have
+ * always been read the same way.
  */
 export async function listFactsByItem(tx: Tx, scope: WorkScope, itemIds: readonly string[]): Promise<Map<string, ListedFacts>> {
   const out = new Map<string, ListedFacts>();
@@ -158,7 +164,9 @@ export async function listFactsByItem(tx: Tx, scope: WorkScope, itemIds: readonl
         eq(facts.orgId, scope.orgId),
         eq(facts.workspaceId, scope.workspaceId),
         inArray(facts.itemId, [...itemIds]),
-        eq(facts.kind, "check_observed"),
+        // A literal, not a parameter, so the planner can match the partial
+        // index's predicate in a generic plan too.
+        sql`${facts.kind} = 'check_observed'`,
         inArray(facts.orderId, unique(heads.map((entry) => entry.orderId))),
         sql`(${facts.orderId}, ${facts.headSha}) IN (${pairs})`,
       ),

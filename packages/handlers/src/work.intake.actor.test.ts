@@ -29,6 +29,11 @@ const person = {
   apiKeyId: null,
 } as unknown as CapabilityContext;
 const apiKey = { ...person, userId: null, apiKeyId: "aky_1" } as unknown as CapabilityContext;
+/**
+ * A user-bound key, such as an `oxagen login` key: the API sets both the key
+ * and the user it resolves to (apps/api/src/middleware/auth.ts).
+ */
+const loginKey = { ...person, apiKeyId: "aky_2" } as unknown as CapabilityContext;
 const nobody = { ...person, userId: null, apiKeyId: null } as unknown as CapabilityContext;
 
 const VIEW: CollectorView = {
@@ -178,13 +183,17 @@ describe("set_work_collector records the person, not the role", () => {
 describe("set_work_collector takes only a signed-in person", () => {
   const input = { name: "github", connection_id: "con_01", repos: ["acme/web"] };
 
-  it("refuses an API key, even one that resolves to a person, before it writes", async () => {
+  it.each([
+    ["a key that names no user", apiKey],
+    ["a login key that resolves to a person", loginKey],
+  ])("refuses an API key, %s, before it writes", async (_name, ctx) => {
     const deps = collectorDeps();
-    await expect(createWorkCollectorSetHandler(deps)(input, apiKey)).rejects.toMatchObject({
+    await expect(createWorkCollectorSetHandler(deps)(input, ctx)).rejects.toMatchObject({
       code: "forbidden",
       reason: "person_required",
     });
     expect(mocks.role).not.toHaveBeenCalled();
+    expect(mocks.resolveActingUserId).not.toHaveBeenCalled();
     expect(deps.set).not.toHaveBeenCalled();
     expect(deps.send).not.toHaveBeenCalled();
   });

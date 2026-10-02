@@ -364,6 +364,18 @@ describe("status and wait", () => {
     expect(out.wait).toEqual(entry.wait);
   });
 
+  // The list leaves out the check facts on a send's older heads
+  // (listFactsByItem in read.ts). That is safe only while no derivation reads
+  // a check fact itself, so checks on a head no send is on must change no row
+  // (#5181).
+  it.each(CASES)("ignores checks on a head no send is on: $name", (entry) => {
+    const STALE = "0123456789abcdef".repeat(3).slice(0, 40);
+    const orders = [...new Set(entry.facts.flatMap((fact) => (fact.orderId === null ? [] : [fact.orderId])))];
+    const stale = orders.flatMap((order) => [f.check(order, STALE, "lint", "failure", 3), f.check(order, STALE, "test", "pending", 3)]);
+    const options = { triage: entry.triage, lookups: entry.lookups };
+    expect(row([...entry.facts, ...stale], options)).toEqual(row(entry.facts, options));
+  });
+
   it("covers every status the contract names", () => {
     expect(new Set(CASES.map((entry) => entry.status))).toEqual(new Set(WORK_ITEM_STATUSES));
   });

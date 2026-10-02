@@ -114,7 +114,7 @@ describe.skipIf(!enabled)("the Work list against Postgres", { timeout: 120_000 }
         { id: bulk.workspaceId, orgId: scope.orgId, name: "Bulk", slug: "bulk", namespace: "bulk" },
       ]);
     });
-  });
+  }, 30_000);
 
   afterAll(async () => {
     await withSystemDb(async (tx) => {
@@ -134,7 +134,7 @@ describe.skipIf(!enabled)("the Work list against Postgres", { timeout: 120_000 }
       await tx.delete(schema.users).where(inArray(schema.users.id, [MARCUS, AMARA]));
     });
     await closeDatabase();
-  });
+  }, 120_000); // The bulk case leaves about 25,000 facts and 500 items to delete.
 
   // -------------------------------------------------------------------------
   // Fixtures

@@ -24,6 +24,7 @@
 import type { WorkItemRowOutput, WorkWaitOutput } from "@oxagen/oxagen/contracts/work.read.shared";
 import type { TriageView } from "@oxagen/work";
 import {
+  type CheckConclusion,
   type FactKind,
   type FactOf,
   type OrderProjection,
@@ -220,6 +221,34 @@ export function statusOf(projection: WorkItemProjection, noAnswer: boolean): Wor
   }
 }
 
+/** A required check that holds a send's head, and why. */
+type RequiredCheckHold =
+  | { kind: "failed"; name: string; conclusion: CheckConclusion }
+  | { kind: "missing"; name: string }
+  | { kind: "running"; name: string };
+
+/**
+ * The required check that holds a send's head, ranked the way a person reads
+ * them: one that finished without passing, then one that has not reported,
+ * then one still running. Within a rank, the first by name. Null when every
+ * required check passed. The checks word and the wait line both read this, so
+ * they cannot name different checks (#5181). Pure.
+ */
+function requiredCheckHoldOf(order: OrderProjection): RequiredCheckHold | null {
+  const required = (order.requiredChecks ?? []).map((name) => ({
+    name,
+    conclusion: order.checks.find((check) => check.name === name)?.conclusion,
+  }));
+  for (const { name, conclusion } of required) {
+    if (conclusion !== undefined && conclusion !== "success" && conclusion !== "pending") return { kind: "failed", name, conclusion };
+  }
+  const missing = required.find((check) => check.conclusion === undefined);
+  if (missing !== undefined) return { kind: "missing", name: missing.name };
+  const running = required.find((check) => check.conclusion === "pending");
+  if (running !== undefined) return { kind: "running", name: running.name };
+  return null;
+}
+
 /**
  * The required checks on a send's head, as one word. A failure outranks a
  * check that has not reported, which outranks one still running. Pure.
@@ -229,13 +258,9 @@ export function checksWordOf(order: OrderProjection): WorkChecksWord {
   if (order.prClosed) return "pr_closed";
   if (order.requiredChecks === null) return "unread";
   if (order.requiredChecks.length === 0) return "none_required";
-  const conclusions = order.requiredChecks.map((name) => order.checks.find((check) => check.name === name)?.conclusion);
-  if (conclusions.some((conclusion) => conclusion !== undefined && conclusion !== "success" && conclusion !== "pending")) {
-    return "failing";
-  }
-  if (conclusions.some((conclusion) => conclusion === undefined)) return "missing";
-  if (conclusions.some((conclusion) => conclusion === "pending")) return "running";
-  return "passing";
+  const hold = requiredCheckHoldOf(order);
+  if (hold === null) return "passing";
+  return hold.kind === "failed" ? "failing" : hold.kind;
 }
 
 /** Whether Accept is open on a send, and if not, why (reviewGate). Pure. */
@@ -350,24 +375,15 @@ function lastAt(orderFacts: readonly WorkFact[], kind: FactKind): string | null 
 }
 
 /**
- * The required check a send in review waits on, ranked the way the checks word
- * ranks them (checksWordOf): a check that finished without passing, then one
- * that has not reported, then one still running. reviewGate stops at the
- * first required check in name order, so on its own it could name a missing
- * check while the word reads failing because another check failed (#5181).
+ * The required check a send in review waits on, the one the checks word reads
+ * (requiredCheckHoldOf). reviewGate stops at the first required check in name
+ * order, so on its own it could name a missing check while the word reads
+ * failing because another check failed (#5181).
  */
 function requiredCheckWaitOf(order: OrderProjection, head: string): WorkWaitOutput {
-  const required = (order.requiredChecks ?? []).map((name) => ({
-    name,
-    conclusion: order.checks.find((check) => check.name === name)?.conclusion,
-  }));
-  for (const { name, conclusion } of required) {
-    if (conclusion !== undefined && conclusion !== "success" && conclusion !== "pending") {
-      return { kind: "check_failed", check: name, conclusion, head };
-    }
-  }
-  const missing = required.find((check) => check.conclusion === undefined);
-  if (missing !== undefined) return { kind: "check_missing", check: missing.name, head };
+  const hold = requiredCheckHoldOf(order);
+  if (hold?.kind === "failed") return { kind: "check_failed", check: hold.name, conclusion: hold.conclusion, head };
+  if (hold?.kind === "missing") return { kind: "check_missing", check: hold.name, head };
   return { kind: "checks_running", head };
 }
 
