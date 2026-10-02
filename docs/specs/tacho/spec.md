@@ -520,7 +520,7 @@ Stella runs each hook as `bash -c <command>` and passes no session id, no pid, a
 
 `tacho-hook` finds the Stella process in this order:
 
-1. `STELLA_PID` in the hook's environment, when it names a live process. Stella does not set it yet. This contract asks Stella to export it: the pid of the Stella process that runs the hook, in the environment of every hook it runs. It is the only source that names Stella on macOS when bash forks the hook and `ps` fails.
+1. `STELLA_PID` in the hook's environment, when it names a live process. Stella does not set it yet. This contract asks Stella to export it: the pid of the Stella process that runs the hook, in the environment of every hook it runs. It is the only source that names Stella on macOS when bash forks the hook and `ps` fails. The request is [macanderson/stella#6659](https://github.com/macanderson/stella/issues/6659), opened 2026-10-02 (#4366).
 2. The cached identity under `stella-identity/`, keyed by that pid or by the hook's parent pid. A hook within a minute of the entry's last check takes it with no read, and a later hook confirms it with one start-time read.
 3. The hook's parent. When bash execs the hook, the parent is Stella. When bash forks it, the parent is a shell, and Stella is the shell's parent. On Linux `tacho-hook` reads the parent from `/proc/<pid>/stat` and spawns nothing. Elsewhere it asks `ps`, and when `ps` fails there, the shell's pid stands and that hook lands on a chain of its own (#4358).
 
