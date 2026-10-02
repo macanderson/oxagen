@@ -29,7 +29,7 @@ The API reads a request body of 36 MiB at most. It answers a larger body with 41
 
 ## Edits
 
-Each entry in `ops` names its `kind` and the `tool` it changes.
+Each entry in `ops` names its `kind`. Every kind but `expose` names the `tool` it changes.
 
 | Kind | Fields |
 |---|---|
@@ -38,6 +38,8 @@ Each entry in `ops` names its `kind` and the `tool` it changes.
 | `classify` | `tool`, `risk` (`low`, `medium`, `high`, or `critical`), `sideEffect` (`read`, `write`, or `irreversible`), `egress` (`local`, `org_tenant`, or `third_party`), and `impacts` (32 snake_case ids at most) |
 | `describe` | `tool` and `description` (1 to 1,024 characters) |
 | `test` | `tool`, `environment`, `args`, `request`, `raw`, and `shaped`. The last four are JSON strings. `request` is the request before the gateway adds the credential |
+| `cap` | `tool`, `maxResultBytes` (1 to 1,048,576, tools.toml's `max_result_bytes`), and an optional `paging`. `true` sets `paginate` to the paging pattern import found for the tool, `false` removes it, and leaving it out keeps it as it is. Review refuses paging for a tool with no paging pattern |
+| `expose` | `mode`: `direct` sends every tool definition on every request, and `search` sends the server's three search tools. Review writes server.toml again only when the mode changes |
 
 ## Sources
 

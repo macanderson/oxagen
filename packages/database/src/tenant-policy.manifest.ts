@@ -174,6 +174,9 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "cost.run_pr_outcomes", policyClass: "standard" },
   // The reverts kept until their outcome rows exist (#4491); org_id + workspace_id NOT NULL.
   { table: "cost.run_pr_reverts", policyClass: "standard" },
+  // Where the outcome refresh stands in each ledger run's receipts (#4511);
+  // org_id + workspace_id NOT NULL.
+  { table: "cost.run_pr_receipt_walks", policyClass: "standard" },
   // The loops that reached a workspace's no-progress limit (spend spec,
   // detector 1); org_id + workspace_id NOT NULL.
   { table: "cost.no_progress_hits", policyClass: "standard" },

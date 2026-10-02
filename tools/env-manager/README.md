@@ -1,5 +1,12 @@
 # @oxagen/env-manager
 
+> **Retiring.** ADR-240 makes SSM Parameter Store the one store. Nothing deploys
+> to Vercel, and `pnpm env:pull` now reads Parameter Store, so this tool's
+> Vercel fanout and its GCP mirror hold copies no running system reads. Phase 4
+> of ADR-240 deletes this package once `/oxagen/development` holds every value.
+> Use `pnpm env:pull` and `pnpm env:push`
+> ([`docs/runbooks/secrets-and-variables.md`](../../docs/runbooks/secrets-and-variables.md)).
+
 A local web UI with two pages:
 
 - `/` — see every env var per environment and **push the right value to the right

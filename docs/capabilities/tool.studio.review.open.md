@@ -74,5 +74,6 @@ The commit holds only the files that differ from the branch it lands on. The con
 | `conflict` (409) | `server_toml_missing`, `server_toml_invalid`, or `server_name_mismatch`: server.toml is absent, does not parse, or names another server |
 | `conflict` (409) | `source_required`, `source_invalid`, or `importer_not_built`: Review needs the source, the source does not import, or its importer has not shipped |
 | `conflict` (409) | `tool_not_offered`, `tool_not_found`, or `tool_key_collision`: the source does not offer an imported tool, an edit names a tool neither tools.toml nor the source holds, or two tools derive one key |
+| `conflict` (409) | `tool_paging_missing`: a `cap` edit turns paging on for a tool whose definition has no paging pattern |
 | `conflict` (409) | `draft_unreadable`: the stored draft no longer matches the draft format |
 | `invalid_input` (400) | `server` is malformed or `builtin`, `revision` is below 1, or the input carries another field |

@@ -165,6 +165,36 @@ describe("rebuildRunTotals", () => {
     expect(record?.productiveRatio).toBe(0.5);
   });
 
+  it("reads the run's file change into the step classes (F17)", async () => {
+    const read: ToolCallFrame = {
+      name: "Read",
+      status: "ok",
+      inputDigest: "sha256:in",
+      outputDigest: "sha256:out",
+      isMutating: false,
+      resultTokens: null,
+    };
+    const runs = { [WORKER]: meta(WORKER, "prn_worker_operator") };
+    const unchanged = deps({ runs, toolCalls: [read] });
+    expect(
+      (await rebuildRunTotals(WORKER, unchanged.d))?.breakdown.stepClasses,
+    ).toEqual({ readOnly: 1, edit: 0 });
+
+    const changed = deps({ runs, toolCalls: [read] });
+    const readFileChanged = vi.fn(async () => true);
+    changed.d.readFileChanged = readFileChanged;
+    const record = await rebuildRunTotals(WORKER, changed.d);
+    // No call may have written, so no step can hold the change.
+    expect(record?.breakdown.stepClasses).toEqual({ readOnly: 0, edit: 1 });
+    expect(readFileChanged).toHaveBeenCalledWith(
+      expect.objectContaining({ meta: runs[WORKER] }),
+    );
+    expect(changed.written[0]?.breakdown.stepClasses).toEqual({
+      readOnly: 0,
+      edit: 1,
+    });
+  });
+
   it("answers no ratio for a run with no step, whatever the row held before", async () => {
     const { d } = deps({
       runs: { [WORKER]: meta(WORKER, "prn_worker_operator") },
@@ -556,6 +586,24 @@ describe("the breakdown jsonb (#4069)", () => {
       { name: "Read", calls: 1, resultTokens: null, costMicros: null },
     ]);
     expect(revived.steps).toBeNull();
+  });
+
+  it("writes the step classes beside the causes and reads them back (F17)", () => {
+    const classed = { ...breakdown, stepClasses: { readOnly: 5, edit: 2 } };
+    const stored = throughJsonb(serializeBreakdown(classed));
+    expect(stored.stepClasses).toEqual({ readOnly: 5, edit: 2 });
+    expect(stored.steps).toEqual({ failed: 1, repeated: 2, retried: 0 });
+    expect(reviveBreakdown(stored)).toEqual(classed);
+    const none = throughJsonb(
+      serializeBreakdown({ ...breakdown, stepClasses: null }),
+    );
+    expect(reviveBreakdown(none).stepClasses).toBeNull();
+  });
+
+  it("reads a row rolled up before steps had a class with no classes", () => {
+    const stored = throughJsonb(serializeBreakdown(breakdown));
+    expect("stepClasses" in stored).toBe(false);
+    expect(reviveBreakdown(stored).stepClasses).toBeUndefined();
   });
 
   it("writes the saving as a decimal string and reads it back as the same bigint or null", () => {

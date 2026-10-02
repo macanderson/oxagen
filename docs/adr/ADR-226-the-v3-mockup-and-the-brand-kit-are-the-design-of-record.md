@@ -35,7 +35,7 @@ UI, and Monaspace Neon for code, and the app loads the kit's faces.
    `mockups/src/` (`v3.css`, `shared.css`, and the area modules), and the demo
    record in `mockups/fixtures/`.
 2. **The brand kit sets tokens, type, marks, and components.** The kit is
-   `macanderson/oxagen-brand`. `tools/scripts/sync-brand-assets.mjs` copies its
+   `oxageninc/brand`. `tools/scripts/sync-brand-assets.mjs` copies its
    `tokens/house-tokens.css` to `packages/ui/src/styles/house-tokens.css`, and
    `pnpm check:brand` fails on drift. `packages/ui/src/styles/globals.css` and
    `house-tailwind.css` map those tokens to the semantic names the app uses,
@@ -217,7 +217,7 @@ down" and "Who receives it".
 
 ## Amendment of 2026-10-01: the kit carries the type rule
 
-The brand kit adopted the one-face rule in 2.4.0 (macanderson/oxagen-brand#27,
+The brand kit adopted the one-face rule in 2.4.0 (oxageninc/brand#27,
 #43). Its `house-tailwind.css` now sets `--font-display` and `--font-sans` to
 Geist, keeps Space Grotesk under `--font-wordmark`, and admits it on line 1 of
 a marketing hero through the `hero-line-1` class. The `@theme` override in

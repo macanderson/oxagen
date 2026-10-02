@@ -367,6 +367,43 @@ describe("budget", () => {
     expect(summary.slice(-tail.length)).toBe(tail);
   });
 
+  it("names the changed record that pushed the prefix over the budget", () => {
+    const base = fixtureRepo();
+    const baseTokens = Math.max(...alwaysOnBlocks(base).map((block) => block.tokens));
+    const grown = replaced(PLAIN_WORDS, "Write product copy in short sentences", `${"Keep every line short and plain. ".repeat(80)}Write product copy in short sentences`);
+    const budget = baseTokens + 300;
+    const head = replaced(GOVERNANCE, "always_on_tokens = 4000", `always_on_tokens = ${budget}`, grown);
+    const baseTree = replaced(GOVERNANCE, "always_on_tokens = 4000", `always_on_tokens = ${budget}`);
+    const findings = findingsOf(run(head, "budget", { base: baseTree }), "budget", "always-on");
+    expect(findings.length).toBeGreaterThan(0);
+    const [first] = alwaysOnBlocks(head);
+    const prior = alwaysOnBlocks(baseTree).find((block) => block.repository === first?.repository);
+    const entry = first?.entries.find((item) => item.path === PLAIN_WORDS);
+    const added = (entry?.tokens ?? 0) - (prior?.entries.find((item) => item.path === PLAIN_WORDS)?.tokens ?? 0);
+    expect(added).toBeGreaterThan(300);
+    expect(findings[0]).toMatchObject({ severity: "warning" });
+    expect(findings[0]?.message).toContain(
+      `This steering PR added tokens in a-intel.brand.plain-words (${formatCount(added)} tokens).`,
+    );
+    expect(findings[0]?.detail).toMatchObject({ added: [{ lineage: "a-intel.brand.plain-words", added }] });
+  });
+
+  it("names no record when the prefix is over budget and the change adds nothing", () => {
+    const head = replaced(GOVERNANCE, "always_on_tokens = 4000", "always_on_tokens = 1");
+    const messages = findingsOf(run(head, "budget"), "budget", "always-on").map((finding) => finding.message);
+    expect(messages.length).toBeGreaterThan(0);
+    for (const message of messages) expect(message).not.toContain("added tokens in");
+  });
+
+  it("names no record for an edit that shortens it", () => {
+    const shorter = replaced(PLAIN_WORDS, "Write product copy in short sentences and plain words, with numbers over\nadjectives.", "Write product copy plainly.");
+    const head = replaced(GOVERNANCE, "always_on_tokens = 4000", "always_on_tokens = 1", shorter);
+    const base = replaced(GOVERNANCE, "always_on_tokens = 4000", "always_on_tokens = 1");
+    const messages = findingsOf(run(head, "budget", { base }), "budget", "always-on").map((finding) => finding.message);
+    expect(messages.length).toBeGreaterThan(0);
+    for (const message of messages) expect(message).not.toContain("added tokens in");
+  });
+
   it("warns when direct-mode tool definitions pass the workspace budget", () => {
     const servers = directDefinitions(fixtureRepo());
     const total = servers.reduce((sum, server) => sum + server.tokens, 0);
