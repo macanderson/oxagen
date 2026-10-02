@@ -9,4 +9,5 @@ export * from "./cloudevent";
 export * from "./health";
 export * from "./pipeline";
 export * from "./writeback";
+export * from "./send-back";
 export * from "./mirror";

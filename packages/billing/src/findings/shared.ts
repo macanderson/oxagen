@@ -173,6 +173,13 @@ export interface PricedRequestFrame {
    * when no such frame was read.
    */
   systemContextParts?: readonly FrameContextPart[] | null;
+  /**
+   * The model proxy sent this call as a cache keep-alive while a parent run
+   * waited on a subagent (lane F32). It is spend, and no step the agent
+   * took: no tool call belongs to it, and no lighter model could have read
+   * the cache it held. Absent on every other frame.
+   */
+  cacheKeepAlive?: boolean;
 }
 
 /** One class's price at a frame's instant, from the price book. */

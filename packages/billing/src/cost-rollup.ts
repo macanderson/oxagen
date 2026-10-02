@@ -82,6 +82,12 @@ export interface ModelCallFrame {
    * tool calls it made (F17). Absent when the store names no chain.
    */
   sessionUuid?: string | null;
+  /**
+   * The model proxy sent this call as a cache keep-alive while a parent run
+   * waited on a subagent (lane F32). Its cost and tokens count like any
+   * call's. It is no step the agent took, so it counts in no step figure.
+   */
+  cacheKeepAlive?: boolean;
 }
 
 /**
@@ -185,6 +191,21 @@ export interface ModelBreakdown {
    * before they were kept.
    */
   pricedTokens?: TokenCounts;
+  /**
+   * The cache keep-alives the model proxy sent on this model (lane F32), a
+   * part of {@link tokens} and {@link costMicros}. They are not in
+   * {@link calls}, which counts the calls the agent made. Absent when the
+   * run sent none, and on a row rolled up before keep-alives were kept
+   * apart. `costMicros` is null when a keep-alive went unpriced.
+   */
+  keepAlive?: KeepAliveBreakdown;
+}
+
+/** One model's cache keep-alives within a run (lane F32). */
+export interface KeepAliveBreakdown {
+  calls: number;
+  tokens: TokenCounts;
+  costMicros: bigint | null;
 }
 
 /**
@@ -564,6 +585,12 @@ export function createRunRollup(
       hasUnpriced: boolean;
       /** The tokens of the frames that priced. */
       pricedTokens: TokenCounts;
+      /** The model's cache keep-alives; null until the first (lane F32). */
+      keepAlive: {
+        calls: number;
+        tokens: TokenCounts;
+        scaled: bigint | null;
+      } | null;
     }
   >();
   let cacheWeighted = 0;
@@ -583,12 +610,19 @@ export function createRunRollup(
   let basis: CostBasis | null = null;
 
   const addModel = (frame: ModelCallFrame, book: PriceBook) => {
-    modelCalls += 1;
-    stepModels.push(
-      frame.sessionUuid === undefined
-        ? { atMs: frame.at.getTime() }
-        : { atMs: frame.at.getTime(), chain: frame.sessionUuid },
-    );
+    // A cache keep-alive the proxy sent while the agent waited (lane F32) is
+    // spend and no step: it counts in the cost and the tokens, and in no
+    // step, no model call, and no cache figure. Placed as a step, it took
+    // the tool calls that finished after the wait.
+    const keepAlive = frame.cacheKeepAlive === true;
+    if (!keepAlive) {
+      modelCalls += 1;
+      stepModels.push(
+        frame.sessionUuid === undefined
+          ? { atMs: frame.at.getTime() }
+          : { atMs: frame.at.getTime(), chain: frame.sessionUuid },
+      );
+    }
     const p = priceFrame(book, meta.orgId, frame);
     for (const id of p.priceEntryIds) {
       if (!priceEntryIds.has(id) && priceEntryIds.size >= MAX_ROLLUP_PRICE_ENTRIES)
@@ -599,7 +633,9 @@ export function createRunRollup(
       throw new RangeError("Run rollup exceeds the distinct model limit.");
     addTokens(tokens, frame.tokens);
     const denominator = frame.tokens.input_uncached + frame.tokens.cache_read;
-    if (denominator > 0) {
+    // A keep-alive reads the whole cached prompt by design, so it would
+    // raise the agent's cache hit rate for a read the agent never made.
+    if (denominator > 0 && !keepAlive) {
       cacheWeighted +=
         (frame.tokens.cache_read / denominator) * Number(p.scaled ?? 0n);
       cacheWeights += p.scaled ?? 0n;
@@ -616,14 +652,32 @@ export function createRunRollup(
       basis: null,
       hasUnpriced: false,
       pricedTokens: { ...ZERO_TOKENS },
+      keepAlive: null,
     };
-    group.calls += 1;
-    // Folded before the unpriced branch below: an unpriced frame that read
-    // the cache is exactly a frame whose saving nobody can price.
-    group.cacheSaving =
-      group.cacheSaving === null || p.cacheSavingScaled === null
-        ? null
-        : group.cacheSaving + p.cacheSavingScaled;
+    if (keepAlive) {
+      // Its read saved nothing the agent would otherwise have paid: without
+      // the wait there is no keep-alive. Kept apart so a reader can take it
+      // out of the model's figures.
+      const kept = (group.keepAlive ??= {
+        calls: 0,
+        tokens: { ...ZERO_TOKENS },
+        scaled: 0n,
+      });
+      kept.calls += 1;
+      addTokens(kept.tokens, frame.tokens);
+      kept.scaled =
+        kept.scaled === null || p.scaled === null || p.basis === null
+          ? null
+          : kept.scaled + p.scaled;
+    } else {
+      group.calls += 1;
+      // Folded before the unpriced branch below: an unpriced frame that read
+      // the cache is exactly a frame whose saving nobody can price.
+      group.cacheSaving =
+        group.cacheSaving === null || p.cacheSavingScaled === null
+          ? null
+          : group.cacheSaving + p.cacheSavingScaled;
+    }
     addTokens(group.tokens, frame.tokens);
     group.provider ??= frame.provider;
     byModel.set(frame.model, group);
@@ -711,6 +765,18 @@ export function createRunRollup(
         basis: g.scaled === null ? null : g.basis,
         hasUnpriced: g.hasUnpriced,
         pricedTokens: g.pricedTokens,
+        ...(g.keepAlive === null
+          ? {}
+          : {
+              keepAlive: {
+                calls: g.keepAlive.calls,
+                tokens: g.keepAlive.tokens,
+                costMicros:
+                  g.keepAlive.scaled === null
+                    ? null
+                    : divideHalfEven(g.keepAlive.scaled, MILLION),
+              },
+            }),
       }))
       .sort((a, b) => (a.model < b.model ? -1 : a.model > b.model ? 1 : 0));
     // Each tool's result tokens at the run's own input price (ADR-199): the

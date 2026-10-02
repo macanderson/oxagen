@@ -415,7 +415,8 @@ export const McpServer = z.object({
   /**
    * What those tokens cost the workspace over the last 7 days, an estimate
    * the server priced from the book at each call's rate (#4537, ADR-060).
-   * Null when `contextTokens` is null or the week has no priced call.
+   * Null when `contextTokens` is null, or when any call of the week has no
+   * rate in the book, since the price would then read low (#4572).
    */
   weeklyPrice: Cost.nullable().default(null),
   /**

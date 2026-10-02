@@ -77,7 +77,7 @@ In [GitHub Developer Settings → OAuth Apps](https://github.com/settings/develo
    - Local app: `http://localhost:3000/api/auth/callback/github`
 5. **Scopes Oxagen requests:** `read:user`, `user:email`.
 6. **Client secret:** regenerate if it was pasted into chat or a ticket. Store as `GITHUB_LOGIN_CLIENT_SECRET` in SSM / `.env.local`.
-7. **Secrets-meta aliases** (env-manager): `oxagen-github-login-client-id` / `oxagen-github-login-client-secret` (also `oxagen-github-client-id` / `oxagen-github-client-secret`). Do not map App connector secrets into `GITHUB_LOGIN_*`.
+7. **Parameter names:** save both values with `pnpm env:push GITHUB_LOGIN_CLIENT_ID --env production` and the same for `GITHUB_LOGIN_CLIENT_SECRET` (ADR-240). Do not map App connector secrets into `GITHUB_LOGIN_*`.
 8. **Smoke test:** same as Google with `"provider":"github"`. The authorize page should say continue to your production app name, not an unrelated org app, and must not say the redirect_uri is not associated with this application.
 
 ## Preview relay checklist
