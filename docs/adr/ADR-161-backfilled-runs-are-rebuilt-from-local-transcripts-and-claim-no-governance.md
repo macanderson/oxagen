@@ -205,6 +205,11 @@ is not a backfill of the machine's history, and the two do not overlap:
   rewrites `source` to `transcript`, `fidelity` to `ambient`, drops
   `hook_event_name` and the `agent_start` environment snapshot, and adds
   `oxagen.record_basis = backfill` and `oxagen.git_basis = recorded`.
+- **A prompt's origin rides the transcript's copy.** The synthesized
+  `turn_start` carries the prompt's digest, size and body. The prompt's
+  `origin` stays on the transcript's `oxagen:message` copy of the prompt,
+  where the normalizer puts it, while #4969 changes which of its members a
+  frame may keep.
 - **A turn's stop reason is an attr.** A `turn_end` body has no
   `stop_reason` member, so the turn's last reply's reason is
   `oxagen.turn_stop_reason`.
