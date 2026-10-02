@@ -24,15 +24,26 @@ vi.mock("../../lib/memory-client.js", async (importActual) => {
   const actual = await importActual<typeof import("../../lib/memory-client.js")>();
   return {
     ...actual,
-    parseMarkdownImport: mocks.parseMarkdownImport,
+    // A parse answer carries memories. A test that reads none leaves them out.
+    parseMarkdownImport: async (...args: unknown[]) => ({
+      memories: [],
+      ...((await mocks.parseMarkdownImport(...args)) as object),
+    }),
     commitMarkdownImport: mocks.commitMarkdownImport,
   };
 });
 
 import { readdir } from "node:fs/promises";
-import type { MarkdownImportPolicy } from "@oxagen/oxagen/contracts/steering.markdown_import.shared";
+import type {
+  MarkdownImportMemory,
+  MarkdownImportPolicy,
+} from "@oxagen/oxagen/contracts/steering.markdown_import.shared";
 import { captureWriter } from "../../lib/capture-writer.js";
-import { formatImportPolicies, formatImportPullRequest } from "../../lib/memory-client.js";
+import {
+  formatImportMemories,
+  formatImportPolicies,
+  formatImportPullRequest,
+} from "../../lib/memory-client.js";
 import { importFilename, reconcileImportPolicies } from "../../lib/markdown-import.js";
 import { buildProgram } from "../../program.js";
 import {
@@ -90,6 +101,21 @@ function policy(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function memory(overrides: Record<string, unknown> = {}) {
+  return {
+    file: "notes.md",
+    line: 2,
+    label: "Staging resets nightly",
+    statement: "The staging database resets every night.",
+    kind: "memory",
+    force: "info",
+    duplicate: null,
+    issue: null,
+    action: "add",
+    ...overrides,
+  };
+}
+
 function parsed(filename: string, target: string, overrides: Record<string, unknown> = {}) {
   return {
     filename,
@@ -98,6 +124,7 @@ function parsed(filename: string, target: string, overrides: Record<string, unkn
     reason: "The file holds prose, so its statements become records.",
     records: target === "records" ? 1 : 0,
     policies: target === "policies" ? 1 : 0,
+    memories: target === "memories" ? 1 : 0,
     error: null,
     ...overrides,
   };
@@ -114,6 +141,20 @@ const pullRequest = (records: number, policies: number) => ({
   records,
   policies,
   skipped: 0,
+  memories: { stored: 0, skipped: [] },
+});
+
+/** A commit of memories alone: no PR. */
+const memoriesStored = (
+  stored: number,
+  skipped: { file: string; line: number; reason: string; memory: string | null }[] = [],
+) => ({
+  pullRequest: null,
+  paths: [],
+  records: 0,
+  policies: 0,
+  skipped: 0,
+  memories: { stored, skipped },
 });
 
 /** The documents each parse call was sent. */
@@ -356,6 +397,7 @@ describe("handleSteeringImport preview", () => {
       files: [parsed("a.md", "records")],
       records: [record({ file: "a.md" })],
       policies: [policy()],
+      memories: [],
       pullRequestFiles: { count: 2, max: 299, message: null },
     });
   });
@@ -406,6 +448,7 @@ describe("handleSteeringImport batching", () => {
           action: "skip",
         },
       ],
+      memories: [],
     });
     const out = captured.output();
     expect(out).toContain(`Left out policy/security.cedar from repo/f25.md: ${clash}`);
@@ -439,6 +482,7 @@ describe("handleSteeringImport batching", () => {
     expect(mocks.commitMarkdownImport).toHaveBeenCalledWith({
       records: [forbids, record(), { ...requires, conflict, action: "skip" }],
       policies: [],
+      memories: [],
     });
     expect(captured.output()).toContain(
       "Left out repo/f25.md:3 (a-intel.repo.f25.friday-deploys): it conflicts with a-intel.repo.f00.friday-deploys.",
@@ -498,6 +542,7 @@ describe("handleSteeringImport --yes", () => {
     expect(mocks.commitMarkdownImport).toHaveBeenCalledWith({
       records: [record(), { ...conflict, action: "skip" }],
       policies: [policy()],
+      memories: [],
     });
     const out = captured.output();
     expect(out).toContain(
@@ -614,14 +659,8 @@ describe("handleSteeringImport refusals", () => {
     put("a.md");
     await expect(
       handleSteeringImport([at("a.md")], { as: "skills" }, captureWriter().writer),
-    ).rejects.toThrow('Invalid --as "skills". Use records or policies.');
+    ).rejects.toThrow('Invalid --as "skills". Use records, policies, or memories.');
     expect(mocks.parseMarkdownImport).not.toHaveBeenCalled();
-  });
-
-  it("refuses --as memories, which is not a target yet (negative)", async () => {
-    await expect(
-      handleSteeringImport(["a.md"], { as: "memories" }, captureWriter().writer),
-    ).rejects.toThrow("Memories are not an import target yet. Use --as records or --as policies.");
   });
 
   it("fails when the folders hold no Markdown file, and names a missing path (negative)", async () => {
@@ -669,6 +708,132 @@ describe("handleSteeringImport refusals", () => {
   });
 });
 
+describe("handleSteeringImport --as memories", () => {
+  it("sets the memories target on every file and previews the memories", async () => {
+    put("notes.md");
+    put("more.md");
+    mocks.parseMarkdownImport.mockResolvedValue({
+      files: [parsed("notes.md", "memories"), parsed("more.md", "memories")],
+      records: [],
+      policies: [],
+      memories: [
+        memory(),
+        memory({
+          file: "more.md",
+          line: 3,
+          statement: "Use pnpm, not npm.",
+          action: "skip",
+          duplicate: { reason: "waiting", memory: "mem_01waiting", file: null, line: null },
+        }),
+      ],
+    });
+    const captured = captureWriter();
+
+    await handleSteeringImport([at("notes.md"), at("more.md")], { as: "memories" }, captured.writer);
+
+    expect(sent()[0]?.map((d) => d.target)).toEqual(["memories", "memories"]);
+    expect(mocks.commitMarkdownImport).not.toHaveBeenCalled();
+    const out = captured.output();
+    expect(out).not.toContain("No records were proposed.");
+    expect(out).toContain("notes.md:2");
+    expect(out).toContain("The staging database resets every night.");
+    expect(out).toContain("repeats waiting memory mem_01waiting");
+    expect(out).toContain("2 proposed memories.");
+    expect(out).toContain("Run again with --yes to store the memories.");
+  });
+
+  it("takes --as MEMORIES in any case", async () => {
+    put("a.md");
+    mocks.parseMarkdownImport.mockResolvedValue({ files: [], records: [], policies: [] });
+    await handleSteeringImport([at("a.md")], { as: "MEMORIES" }, captureWriter().writer);
+    expect(sent()[0]?.map((d) => d.target)).toEqual(["memories"]);
+  });
+
+  it("--yes stores the memories, opens no PR, and names each memory left out", async () => {
+    put("notes.md");
+    mocks.parseMarkdownImport.mockResolvedValue({
+      files: [parsed("notes.md", "memories")],
+      records: [],
+      policies: [],
+      memories: [memory(), memory({ line: 3, statement: "Use pnpm, not npm." })],
+    });
+    mocks.commitMarkdownImport.mockResolvedValue(
+      memoriesStored(1, [{ file: "notes.md", line: 3, reason: "rejected", memory: null }]),
+    );
+    const captured = captureWriter();
+
+    await handleSteeringImport([at("notes.md")], { as: "memories", yes: true }, captured.writer);
+
+    expect(mocks.commitMarkdownImport).toHaveBeenCalledWith({
+      records: [],
+      policies: [],
+      memories: [memory(), memory({ line: 3, statement: "Use pnpm, not npm." })],
+    });
+    const out = captured.output();
+    expect(out).not.toContain("Opened steering PR");
+    expect(out).toContain("Stored 1 waiting memory.");
+    expect(out).toContain("Left out notes.md:3: it repeats a statement a person rejected.");
+    expect(out).toContain("A memory steers no agent until a person promotes it into a steering record.");
+  });
+
+  it("--yes opens the PR for the records and stores the memories in one commit", async () => {
+    put("a.md");
+    put("notes.md");
+    mocks.parseMarkdownImport.mockResolvedValue({
+      files: [parsed("a.md", "records"), parsed("notes.md", "memories")],
+      records: [record()],
+      policies: [],
+      memories: [memory()],
+    });
+    mocks.commitMarkdownImport.mockResolvedValue({ ...pullRequest(1, 0), memories: { stored: 1, skipped: [] } });
+    const captured = captureWriter();
+
+    await handleSteeringImport([at("a.md"), at("notes.md")], { yes: true }, captured.writer);
+
+    expect(mocks.commitMarkdownImport).toHaveBeenCalledWith({
+      records: [record()],
+      policies: [],
+      memories: [memory()],
+    });
+    const out = captured.output();
+    expect(out).toContain("Opened steering PR #9 on steering/import-2026-10-01 with 1 record.");
+    expect(out).toContain("Stored 1 waiting memory.");
+  });
+
+  it("fails when no record, policy, or memory is marked add (negative)", async () => {
+    put("notes.md");
+    mocks.parseMarkdownImport.mockResolvedValue({
+      files: [],
+      records: [],
+      policies: [],
+      memories: [memory({ action: "skip" })],
+    });
+    await expect(
+      handleSteeringImport([at("notes.md")], { as: "memories", yes: true }, captureWriter().writer),
+    ).rejects.toThrow("No record, policy, or memory is marked add, so there is nothing to import.");
+    expect(mocks.commitMarkdownImport).not.toHaveBeenCalled();
+  });
+});
+
+describe("formatImportMemories", () => {
+  it("says so when there are no memories", () => {
+    expect(formatImportMemories([])).toBe("No memories were proposed.");
+  });
+
+  it("names what each skipped row repeats, and why a row cannot be stored", () => {
+    const rows = [
+      memory({ action: "skip", duplicate: { reason: "rejected", memory: null, file: null, line: null } }),
+      memory({ line: 5, action: "skip", duplicate: { reason: "import", memory: null, file: "a.md", line: 2 } }),
+      memory({ line: 7, action: "skip", issue: "A memory holds at most 2,000 characters." }),
+    ] as unknown as MarkdownImportMemory[];
+    const out = formatImportMemories(rows);
+    expect(out).toContain("repeats a statement a person rejected");
+    expect(out).toContain("repeats a.md:2");
+    expect(out).toContain("A memory holds at most 2,000 characters.");
+    expect(out).toContain("3 proposed memories.");
+  });
+});
+
 describe("formatImportPolicies", () => {
   it("says so when there are no policies", () => {
     expect(formatImportPolicies([])).toBe("No policies were proposed.");
@@ -691,5 +856,21 @@ describe("formatImportPullRequest", () => {
 
   it("names zero records when the PR holds nothing else", () => {
     expect(formatImportPullRequest(pullRequest(0, 0))).toContain("with 0 records.");
+  });
+
+  it("names each memory left out, by why", () => {
+    const out = formatImportPullRequest(
+      memoriesStored(0, [
+        { file: "a.md", line: 1, reason: "waiting", memory: "mem_01" },
+        { file: "a.md", line: 2, reason: "import", memory: null },
+        { file: "a.md", line: 3, reason: "stored", memory: null },
+      ]) as never,
+    );
+    expect(out).toContain("Stored 0 waiting memories.");
+    expect(out).toContain("Left out a.md:1: it repeats waiting memory mem_01.");
+    expect(out).toContain("Left out a.md:2: it repeats an earlier statement of this import.");
+    expect(out).toContain("Left out a.md:3: an earlier import stored it from the same line.");
+    expect(out).not.toContain("Nothing steers an agent until the PR merges.");
+    expect(out).not.toContain("A memory steers no agent");
   });
 });

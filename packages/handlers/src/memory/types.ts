@@ -392,6 +392,12 @@ export interface MemoryStore {
     reflectionId?: string | null,
   ): Promise<number>;
   /**
+   * Store memories, skipping any whose dedupe key exists, and return the
+   * dedupe key of each one written. The Markdown import names the rows it
+   * left out from what this leaves off.
+   */
+  insertMemoriesKeyed(scope: MemoryScope, drafts: MemoryDraft[]): Promise<string[]>;
+  /**
    * Store a memory as the one waiting memory of its capture and source
    * (ADR-238, ADR-248). Tacho's memory upload calls it for each
    * `local_gateway` memory, whose source is `<harness>:<path>`, so a memory

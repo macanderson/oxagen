@@ -657,6 +657,8 @@
       "back": "Back",
       "commit": "Open steering PR",
       "commitPending": "Opening the steering PR",
+      "store": "Store memories",
+      "storePending": "Storing the memories",
       "cancel": "Cancel",
       "close": "Close",
       "drop": {
@@ -689,12 +691,12 @@
         "records": "Steering records",
         "policies": "Cedar policy",
         "skip": "Skip",
-        "memories": "Memories",
-        "memoriesHint": "Arrives with memory collection"
+        "memories": "Memories"
       },
       "paths": {
         "records": "steering/",
         "policies": "policy/",
+        "memories": "Waiting memories",
         "none": "Nothing"
       },
       "status": {
@@ -718,6 +720,7 @@
       },
       "grid": {
         "intro": "Records and policies open one steering PR. Nothing steers until it merges.",
+        "memoriesIntro": "Memories wait for review on the Memories tab. A memory steers no agent until a person promotes it.",
         "tokens": "The must and should rows add {count, plural, one {# token} other {# tokens}} to every request.",
         "label": "Statements to import",
         "columns": {
@@ -740,12 +743,14 @@
         "quoted": "“{words}”",
         "none": "None",
         "kept": "Kept",
+        "fromTarget": "Set by the target",
         "notRead": "Not read",
         "statements": "{count, plural, one {# statement} other {# statements}}",
         "rules": "{count, plural, one {# rule} other {# rules}}",
         "empty": "Nothing to review. Go back and give a file a target other than Skip.",
         "unmatched": "The files went in several calls and are too large to compare with each other here. The steering PR's conflicts check compares them before it merges.",
         "summary": "{records, plural, one {# record} other {# records}} and {policies, plural, one {# policy} other {# policies}}.",
+        "memories": "{count, plural, one {# memory to store.} other {# memories to store.}}",
         "out": "{count, plural, one {# statement stays out.} other {# statements stay out.}}",
         "open": "Choose for {count, plural, one {# conflict} other {# conflicts}} before the PR opens.",
         "tooMany": "The import puts {count, number} files in the steering PR, and one PR holds at most {max, number}. Leave {over, number} out, or import the files in smaller sets."
@@ -776,7 +781,10 @@
         "conflict": "Conflict",
         "update": "Update",
         "replaced": "Replaced",
+        "tooLong": "Too long",
         "matches": "Matches {record}",
+        "waiting": "Matches waiting memory {memory}",
+        "rejected": "Matches a rejected statement",
         "conflictsWith": "With {record}",
         "replacedBy": "By line {line} of {file}",
         "rowRef": "line {line} of {file}"
@@ -789,13 +797,22 @@
       "done": {
         "opened": "Opened steering PR #{number} on {branch}. Nothing steers until it merges.",
         "counts": "{records, plural, one {# record} other {# records}} and {policies, plural, one {# policy file} other {# policy files}} in the PR.",
-        "link": "Open pull request #{number}"
+        "link": "Open pull request #{number}",
+        "stored": "{count, plural, one {Stored # waiting memory.} other {Stored # waiting memories.}}",
+        "memoriesNote": "A memory steers no agent until a person promotes it into a steering record.",
+        "memoriesLink": "Open the Memories tab",
+        "skip": {
+          "waiting": "Line {line} of {file} stays out. It repeats waiting memory {memory}.",
+          "rejected": "Line {line} of {file} stays out. It repeats a statement a person rejected.",
+          "import": "Line {line} of {file} stays out. It repeats an earlier statement of this import.",
+          "stored": "Line {line} of {file} stays out. An earlier import stored it from the same line."
+        }
       },
       "failure": {
         "denied": "Your roles in this workspace do not allow an import. A workspace Owner or Member, or an organization Owner or Admin, can import.",
         "conflictUnresolved": "A conflict still needs a choice. Choose for every conflict, then open the steering PR.",
         "policyInvalid": "A policy file failed its checks. Set its target to Skip, or fix the file and review it again.",
-        "nothingToImport": "Every row is marked skip. Tick at least one statement before you open the steering PR.",
+        "nothingToImport": "Every row is marked skip. Tick at least one statement, then import again.",
         "duplicateLineage": "Two statements would write the same record. Keep the record for one of them.",
         "duplicatePath": "Two rows would write the same file. Untick one of them.",
         "tooManyFiles": "The import marks more files add than one steering PR holds. Leave some rows out, or import the files in smaller sets.",

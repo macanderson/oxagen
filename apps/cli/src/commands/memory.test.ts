@@ -796,6 +796,7 @@ describe("memory import", () => {
           records: 1,
           policies: 0,
           skipped: 1,
+          memories: { stored: 0, skipped: [] },
         };
       }
       const docs = (body as { documents: { filename: string }[] }).documents;
@@ -885,6 +886,7 @@ describe("memory import", () => {
             records: 1,
             policies: 0,
             skipped: 1,
+            memories: { stored: 0, skipped: [] },
           },
     );
     const captured = captureWriter();

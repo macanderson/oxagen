@@ -132,6 +132,7 @@ describe("memory store with empty input", () => {
 
   it("returns before any query when the id, lineage, or use list is empty", async () => {
     await expect(store.insertMemories(bogus, [])).resolves.toBe(0);
+    await expect(store.insertMemoriesKeyed(bogus, [])).resolves.toEqual([]);
     await expect(store.recordUses(bogus, [])).resolves.toEqual({
       recorded: 0,
       unknown: 0,
@@ -277,6 +278,44 @@ describe.skipIf(!enabled)("memory store against Postgres", () => {
       "Pin the lockfile.": reflectionId,
       "Write the test first.": null,
       "Read the failing step first.": null,
+    });
+  });
+
+  it("stores an imported memory with no agent and no run, and returns the keys it wrote", async () => {
+    const scope = newScope();
+    // A Markdown import stores each statement as commit_markdown_import does.
+    const imported = (statement: string, line: number): MemoryDraft => {
+      const source = `import:CLAUDE.md#L${line}`;
+      return draft(statement, {
+        agentLineage: null,
+        runPublicId: null,
+        capture: "import",
+        evidence: [],
+        source,
+        label: statement.slice(0, 36),
+        dedupeKey: `import:${source}:${statementHash(statement)}`,
+      });
+    };
+    const first = imported("Run the migration check before the build.", 4);
+    const second = imported("Pin the lockfile.", 5);
+    expect(
+      [...(await store.insertMemoriesKeyed(scope, [first, second]))].sort(),
+    ).toEqual([first.dedupeKey, second.dedupeKey].sort());
+    // The same line imported again writes nothing and names no key.
+    expect(
+      await store.insertMemoriesKeyed(scope, [first, imported("Write the test first.", 6)]),
+    ).toEqual([`import:import:CLAUDE.md#L6:${statementHash("Write the test first.")}`]);
+
+    const waiting = await store.listWaiting(scope);
+    expect(waiting).toHaveLength(3);
+    expect(waiting.find((m) => m.source === "import:CLAUDE.md#L4")).toMatchObject({
+      capture: "import",
+      agentLineage: null,
+      runPublicId: null,
+      reflectionId: null,
+      source: "import:CLAUDE.md#L4",
+      label: "Run the migration check before the b",
+      state: "waiting",
     });
   });
 
