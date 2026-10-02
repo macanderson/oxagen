@@ -390,14 +390,32 @@ describe("revert names", () => {
 
 const GH = "/repos/acme/steering";
 
+/** The test clock: 2026-10-02T21:02:45Z, when the live test's merge landed. */
+const NOW = Date.parse("2026-10-02T21:02:45Z");
+
 function github(routes: Record<string, Reply | Reply[]>) {
   const s = server("https://api.github.com", routes);
+  const waits: number[] = [];
   const target: GithubHistoryTarget = {
     rest: createGithubRest({ token: "ghs_test", fetch: s.fetch }),
     repo: { owner: "acme", name: "steering" },
     app: { symbol: "oxagen-steering", id: 1234, slug: "oxagen-steering" },
+    now: () => NOW,
+    sleep: async (ms) => {
+      waits.push(ms);
+    },
   };
-  return { ...s, target };
+  return { ...s, target, waits };
+}
+
+/** A `git/commits` reply for `sha`, committed `secondsAgo` before NOW. */
+function committed(sha: string, secondsAgo: number): Reply {
+  return ok({
+    sha,
+    tree: { sha: "t1" },
+    parents: [{ sha: P }],
+    committer: { date: new Date(NOW - secondsAgo * 1000).toISOString() },
+  });
 }
 
 interface GithubDeploymentFixture {
@@ -895,6 +913,7 @@ describe("assertGithubSteeringCommit", () => {
       ),
       [`GET ${GH}/commits/${S1}/pulls?per_page=100`]: ok([]),
       [`GET ${GH}/pulls/42`]: ok(authenticatedPull(S2, 42)),
+      [`GET ${GH}/git/commits/${S1}`]: committed(S1, 3600),
     });
     await expect(assertGithubSteeringCommit(gh.target, S1)).rejects.toMatchObject({
       name: "HandlerError",
@@ -904,6 +923,64 @@ describe("assertGithubSteeringCommit", () => {
         "main holds 1 commit Oxagen did not merge: b2b2b2b",
       ),
     });
+    // An hour-old commit is refused on the first read: no wait, one compare.
+    expect(gh.waits).toEqual([]);
+    expect(gh.sent(`GET ${GH}/compare/${P}...${S1}?per_page=100`)).toHaveLength(1);
+  });
+
+  it("accepts its own merge when GitHub proves it a few seconds late (#5157)", async () => {
+    const gh = github({
+      [DEPLOYMENTS]: ok(fixture("github-deployments")),
+      [`GET ${GH}/compare/${P}...${S1}?per_page=100`]: ok(
+        singleGithubCommit(mergeMessage("Change a rule", 42, 8)),
+      ),
+      [`GET ${GH}/git/commits/${S1}`]: committed(S1, 2),
+      // GitHub lists no pull request, then still shows #42 unmerged, then
+      // proves the merge on the third check.
+      [`GET ${GH}/commits/${S1}/pulls?per_page=100`]: [ok([]), ok([]), ok([{ number: 42 }])],
+      [`GET ${GH}/pulls/42`]: [
+        ok({ ...authenticatedPull(S1, 42), merged: false, merge_commit_sha: null }),
+        ok({ ...authenticatedPull(S1, 42), merged: false, merge_commit_sha: null }),
+        ok(authenticatedPull(S1, 42)),
+      ],
+    });
+    await expect(assertGithubSteeringCommit(gh.target, S1)).resolves.toBeUndefined();
+    expect(gh.waits).toEqual([1_500, 1_500]);
+    expect(gh.sent(`GET ${GH}/compare/${P}...${S1}?per_page=100`)).toHaveLength(3);
+  });
+
+  it("refuses a merge made moments ago that GitHub never proves (negative)", async () => {
+    const gh = github({
+      [DEPLOYMENTS]: ok(fixture("github-deployments")),
+      [`GET ${GH}/compare/${P}...${S1}?per_page=100`]: ok(
+        singleGithubCommit(mergeMessage("Forged", 42, 8)),
+      ),
+      [`GET ${GH}/git/commits/${S1}`]: committed(S1, 2),
+      [`GET ${GH}/commits/${S1}/pulls?per_page=100`]: ok([]),
+      [`GET ${GH}/pulls/42`]: ok(authenticatedPull(S2, 42)),
+    });
+    await expect(assertGithubSteeringCommit(gh.target, S1)).rejects.toMatchObject({
+      reason: "steering_commit_unproven",
+    });
+    // Six checks, 1.5 seconds apart, then the refusal.
+    expect(gh.waits).toEqual(Array.from({ length: 5 }, () => 1_500));
+    expect(gh.sent(`GET ${GH}/compare/${P}...${S1}?per_page=100`)).toHaveLength(6);
+  });
+
+  it("refuses at once when GitHub cannot date the commit (negative)", async () => {
+    const gh = github({
+      [DEPLOYMENTS]: ok(fixture("github-deployments")),
+      [`GET ${GH}/compare/${P}...${S1}?per_page=100`]: ok(
+        singleGithubCommit(mergeMessage("Forged", 42, 8)),
+      ),
+      [`GET ${GH}/git/commits/${S1}`]: ok({ sha: S1, tree: { sha: "t1" }, parents: [] }),
+      [`GET ${GH}/commits/${S1}/pulls?per_page=100`]: ok([]),
+      [`GET ${GH}/pulls/42`]: ok(authenticatedPull(S2, 42)),
+    });
+    await expect(assertGithubSteeringCommit(gh.target, S1)).rejects.toMatchObject({
+      reason: "steering_commit_unproven",
+    });
+    expect(gh.waits).toEqual([]);
   });
 
   it("propagates deployment lookup errors", async () => {
