@@ -33,7 +33,7 @@ import {
   unsignedBundle,
 } from "./tacho-host";
 import { hostGatewayColumnReady } from "./tacho-gateway-columns";
-import { findOrCreateHostRuntime } from "./runtimes";
+import { findOrCreateHostRuntime, type RuntimeRow } from "./runtimes";
 import {
   readWorkspaceSteering,
   type WorkspaceSteering,
@@ -198,6 +198,11 @@ interface MintHostEnrollmentArgs {
 
 interface MintedHostEnrollment {
   host: TachoHostRow;
+  /**
+   * The runtime the hostname names, when the enrollment placed the host on
+   * it. Null when the host took its registered agent's runtime.
+   */
+  runtime: { id: string; slug: string; name: string } | null;
   hostEnrollmentId: string;
   apiKeyPublicId: string;
   rawKey: string;
@@ -353,10 +358,9 @@ export async function mintHostEnrollment(
         .where(eq(schema.agents.id, args.agent.id))
         .limit(1)
     : [];
-  const runtimeId =
-    agentRuntime?.runtimeId ??
-    (
-      await findOrCreateHostRuntime(
+  const placed = agentRuntime?.runtimeId
+    ? null
+    : await findOrCreateHostRuntime(
         tx,
         { orgId: args.orgId, workspaceId: args.workspaceId },
         facts.hostname,
@@ -370,8 +374,8 @@ export async function mintHostEnrollment(
               agentRuntime?.activeVersionId ?? null,
             )),
         },
-      )
-    ).id;
+      );
+  const runtimeId = agentRuntime?.runtimeId ?? (placed as RuntimeRow).id;
 
   const [inserted] = await tx
     .insert(schema.tachoHosts)
@@ -427,6 +431,10 @@ export async function mintHostEnrollment(
   ]);
   return {
     host: inserted as TachoHostRow,
+    runtime:
+      placed === null
+        ? null
+        : { id: placed.id, slug: placed.slug, name: placed.name },
     hostEnrollmentId,
     apiKeyPublicId: key.publicId,
     rawKey,

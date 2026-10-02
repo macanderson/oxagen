@@ -176,9 +176,10 @@ Never put `--` before the filename. Each build module has a co-located
 - `assets/blog.css`: the blog's own rules (index, pillar and post layouts,
   the reading measure, references, callouts). Semantic tokens only, same four
   rules as `oxagen.css`.
-- Generated images set their text as outlines from `fonts/aeonik-wght.woff2`
+- Generated images set their text as outlines from `scripts/fonts/aeonik-wght.ttf`
   at build time (`scripts/lib/text.mjs`), so a render never depends on the
-  fonts a machine has installed.
+  fonts a machine has installed. That file is the kit's `fonts/aeonik-wght.woff2`
+  unpacked to a TTF, because fontkit can't make a weight from a WOFF2.
 
 ## The palette, and the four rules
 

@@ -30,6 +30,9 @@ describe.skipIf(!enabled)("steering store against Postgres", () => {
   // The label test merges three times: a workspace of its own, for the same
   // reason.
   const labelWorkspace = crypto.randomUUID();
+  // The steering PR test retires a record and counts its ledger: a workspace
+  // of its own too (#5122).
+  const revertWorkspace = crypto.randomUUID();
   const scope = { orgId, workspaceId };
   const concurrentScope = { orgId, workspaceId: concurrentWorkspace };
   const userId = crypto.randomUUID();
@@ -48,6 +51,7 @@ describe.skipIf(!enabled)("steering store against Postgres", () => {
             otherWorkspace,
             concurrentWorkspace,
             labelWorkspace,
+            revertWorkspace,
           ]),
         );
       const ids = records.map((r) => r.id);
@@ -74,6 +78,7 @@ describe.skipIf(!enabled)("steering store against Postgres", () => {
             otherWorkspace,
             concurrentWorkspace,
             labelWorkspace,
+            revertWorkspace,
           ]),
         );
       await tx
@@ -84,6 +89,7 @@ describe.skipIf(!enabled)("steering store against Postgres", () => {
             otherWorkspace,
             concurrentWorkspace,
             labelWorkspace,
+            revertWorkspace,
           ]),
         );
     });
@@ -596,6 +602,127 @@ describe.skipIf(!enabled)("steering store against Postgres", () => {
     await expect(
       propose({ lineageId: `${lineage}.unknown-kind`, kind: "directive" }),
     ).rejects.toThrow();
+  });
+
+  it("admits each steering PR kind, merges it with its commit only, and retires a reverted record in the same transaction (#5122)", async () => {
+    const where = { orgId, workspaceId: revertWorkspace };
+    const inRevertScope = <T>(fn: () => Promise<T>) =>
+      runInTenantScope(where, fn);
+    const recordLineage = `${lineage}.reverted`;
+    // The record a Context PR published, which the revert deletes.
+    const proposal = await proposeIn(where, { lineageId: recordLineage });
+    const opened = await inRevertScope(() =>
+      store.updateProposal(
+        proposal.id,
+        {
+          status: "checks_passed",
+          repository: "a-intel/platform",
+          baseRef: "main",
+          branch: `steering/${recordLineage}`,
+          path: `steering/business-rules/${recordLineage}.md`,
+          provider: "github",
+          prNumber: 519,
+          prUrl: "https://github.com/a-intel/platform/pull/519",
+          headSha: "abc1234",
+          stampedRecordId: "rec_r",
+          recordHash: `sha256:${"c".repeat(64)}`,
+        },
+        ["proposed"],
+      ),
+    );
+    await inRevertScope(() =>
+      store.publishMerge({
+        scope: where,
+        proposal: opened,
+        body: "---\nschema: steering-record/v1\n---\n",
+        checksum: "c".repeat(64),
+        commitSha: "7d2e91a",
+        path: opened.path!,
+        mergedAt: new Date("2026-10-02T08:00:00.000Z"),
+        mergedByUserId: userId,
+        policyVersion: "governance:team",
+      }),
+    );
+    expect(await inRevertScope(() => store.ledgerLength(where))).toBe(1);
+
+    const pr = (kind: string, number: number, branch: string, lineageId = branch) =>
+      proposeIn(where, {
+        lineageId,
+        kind,
+        force: "info",
+        statement: `Steering PR #${number}`,
+        status: "checks_passed",
+        governanceMode: "team",
+        provider: "github",
+        repository: "a-intel/platform",
+        baseRef: "main",
+        branch,
+        path: "steering",
+        prNumber: number,
+        prUrl: `https://github.com/a-intel/platform/pull/${number}`,
+        headSha: `head${number}`,
+        checks: [],
+      });
+    const revert = await pr("revert", 520, "steering/revert-519", recordLineage);
+    const mergedAt = new Date("2026-10-02T09:00:00.000Z");
+    const merged = await inRevertScope(() =>
+      store.mergeSteeringPr({
+        scope: where,
+        proposal: revert,
+        commitSha: "9a8b7c6d5e4f",
+        mergedAt,
+        mergedByUserId: userId,
+        policyVersion: "governance:team",
+        retire: [recordLineage, `${lineage}.never-published`],
+      }),
+    );
+    expect(merged.retired).toEqual([recordLineage]);
+    expect(merged.proposal).toMatchObject({
+      kind: "revert",
+      status: "merged",
+      mergedCommit: "9a8b7c6d5e4f",
+      mergedByUserId: userId,
+      publishedRecordId: null,
+      promotionEventId: null,
+      mergeClaimedAt: null,
+    });
+    expect(
+      (await inRevertScope(() => store.findRecord(where, recordLineage)))?.record,
+    ).toMatchObject({ status: "retired", commitSha: "9a8b7c6d5e4f" });
+    // The retirement is one more ledger entry, approved by the merger.
+    expect(await inRevertScope(() => store.ledgerLength(where))).toBe(2);
+    await expect(
+      inRevertScope(() =>
+        store.mergeSteeringPr({
+          scope: where,
+          proposal: revert,
+          commitSha: "0f1e2d3c4b5a",
+          mergedAt,
+          mergedByUserId: userId,
+          policyVersion: "governance:team",
+          retire: [],
+        }),
+      ),
+    ).rejects.toMatchObject({ code: "conflict", reason: "already_merged" });
+
+    // Every other kind merges with its commit alone.
+    const kinds = ["tools", "import", "memory_pr", "agent_file", "agent_proposal", "workspace"];
+    for (const [i, kind] of kinds.entries()) {
+      const row = await pr(kind, 600 + i, `${kind.replace("_", "-")}/x${i}`);
+      const out = await inRevertScope(() =>
+        store.mergeSteeringPr({
+          scope: where,
+          proposal: row,
+          commitSha: `c0ffee${i}`,
+          mergedAt,
+          mergedByUserId: userId,
+          policyVersion: "governance:team",
+          retire: [],
+        }),
+      );
+      expect(out).toMatchObject({ retired: [], proposal: { kind, status: "merged" } });
+    }
+    expect(await inRevertScope(() => store.ledgerLength(where))).toBe(2);
   });
 
   it("replaces an open governance proposal in one transaction (#4795)", async () => {

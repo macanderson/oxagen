@@ -52,6 +52,16 @@ resource "aws_security_group" "aurora" {
 resource "random_password" "aurora" {
   length  = 32
   special = false
+
+  # Change this date to rotate the master password. A new value replaces the
+  # password, and the cluster and /oxagen-app/postgres/password update in
+  # place. /oxagen/production/DATABASE_URL is not managed here: rewrite it
+  # from the new parameter and redeploy app, api and mcp right after the
+  # apply. Rotated on 2026-10-02 because a drift issue had posted the old
+  # password (#5223).
+  keepers = {
+    rotated = "2026-10-02"
+  }
 }
 
 resource "aws_ssm_parameter" "aurora_password" {

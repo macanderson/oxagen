@@ -6,6 +6,19 @@ The response carries, once each and never again: the host's API key, the HMAC-si
 
 Refuses when the deployment holds no enrollment signing secret or no bundle signing key ([`TACHO_ENROLLMENT_SIGNING_SECRET`](../../packages/config/src/registry.ts), [`TACHO_BUNDLE_SIGNING_PRIVATE_KEY`](../../packages/config/src/registry.ts)), which is a deployment defect, not a caller decision. It signs only the deployment's own Tacho endpoints ([`TACHO_INGEST_ENDPOINTS`](../../packages/config/src/registry.ts)), so an operator cannot aim a fleet of hosts at a third party.
 
+## The agent file
+
+Once the host is enrolled, Oxagen opens a steering PR that adds `agents/<runtime>.toml`, the agent/v1 file the MCP gateway matches the host's runs to before it serves them any published tool ([ADR-266](../adr/ADR-266-enrollment-proposes-the-runtimes-agent-file.md), #5149). The file names the member who enrolled the host as its operator, by public user id, the runtime the hostname binds, and the first harness the host reports that an agent file can name. It carries no secret, and no `toolbelt`, `budget`, or `environment`.
+
+The PR carries an `agent_file` proposal ([ADR-265](../adr/ADR-265-every-steering-pr-oxagen-opens-carries-a-proposal-row.md)), so a person merges it from Oxagen with [`merge_context_pr`](context.pr.merge.md). Oxagen opens no PR when:
+
+- an agent file proposal for the runtime is open or merged, so enrolling the same runtime again opens no second PR
+- the production branch already holds `agents/<runtime>.toml`, or another agent file names the runtime
+- the runtime's slug is not a valid agent name, or the host reports only Claude Desktop
+- the workspace has no steering repository
+
+The enrollment's answer does not change either way. A PR that fails to open is logged, and the host stays enrolled. Enrollment waits up to 20 seconds for the PR. Past that it answers, and the PR keeps opening.
+
 ## Mode
 
 **sync**

@@ -21,6 +21,11 @@
 //
 // A governance proposal is refused: the governance mode changes only through
 // set_governance_mode (ADR-232).
+//
+// In a steering repo the revert PR carries a proposal of kind `revert`
+// (#5122, ADR-265), so merge_context_pr lands it through the merge queue. A
+// revert of a record PR shares the record's lineage, so it is refused while
+// another PR on that record is open.
 import { z } from "zod";
 import { registerCapability } from "../registry";
 
@@ -75,6 +80,13 @@ export const contextPrRevert = registerCapability({
        * host refused the report.
        */
       check: z.enum(["success", "failure"]).nullable(),
+      /**
+       * The proposal that carries the revert PR (#5122): pass it to
+       * merge_context_pr to land the revert. Null in a legacy repository,
+       * where the revert merges on the host, and null when Oxagen could not
+       * record it.
+       */
+      revertProposalId: z.string().nullable(),
     })
     .strict(),
 });

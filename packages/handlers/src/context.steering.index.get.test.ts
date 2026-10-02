@@ -11,12 +11,14 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   const tx = {
     select: () => ({
-      from: (table: unknown) => ({
-        where: async () => {
+      from: (table: unknown) => {
+        const where = async () => {
           whereCalls.count += 1;
           return rows.get(table) ?? [];
-        },
-      }),
+        };
+        // The members read joins org membership before its filter.
+        return { where, innerJoin: () => ({ where }) };
+      },
     }),
   };
   const withTenantDb = async (fn: (t: unknown) => Promise<unknown>) => fn(tx);
@@ -171,10 +173,26 @@ describe("readCheckContext", () => {
     });
     expect(context.runtimes).toEqual(["ci-linux-01", "gpu-west"]);
     expect(context.credentials).toEqual(["linear", "stripe-live", "stripe-test"]);
-    expect(whereCalls.count).toBe(2);
+    expect(whereCalls.count).toBe(3);
   });
 
-  it("returns members, teams, and groups empty, since no table holds them", async () => {
+  it("lists the organization's members by public user id, sorted, each once (ADR-266)", async () => {
+    rows.set(schema.users, [
+      { name: "usr_01k5qk7dzzzzzzzzzzzzzzzz" },
+      { name: "usr_01k5qk7daaaaaaaaaaaaaaaa" },
+      { name: "usr_01k5qk7dzzzzzzzzzzzzzzzz" },
+    ]);
+    const context = await readCheckContext({
+      orgId: CTX.orgId,
+      workspaceId: CTX.workspaceId,
+    });
+    expect(context.members).toEqual([
+      "usr_01k5qk7daaaaaaaaaaaaaaaa",
+      "usr_01k5qk7dzzzzzzzzzzzzzzzz",
+    ]);
+  });
+
+  it("returns teams and groups empty, since no table holds them", async () => {
     rows.set(schema.runtimes, [{ name: "ci-linux-01" }]);
     const context = await readCheckContext({
       orgId: CTX.orgId,

@@ -38,6 +38,7 @@ import { schemaDirective } from "@oxagen/oxagen/steering-repo/schema-ids";
 import type { SteeringRepository } from "./context.steering.github";
 import type { RepositorySteeringHost } from "./repository.link";
 import { workspaceRepositoriesLock } from "./repository.binding-write";
+import { MemoryStore as ProposalStore } from "./context.steering.test-support";
 import { createRepositoryUnlinkHandler } from "./repository.unlink";
 import { readWorkspaceToml } from "./repository.workspace-toml";
 
@@ -512,5 +513,29 @@ describe("unlink_repository: workspace.toml does not list the repository", () =>
     });
     expect(repositoryUnlink.output.parse(out)).toEqual(out);
     expectNoSteeringPullRequest(host);
+  });
+});
+
+describe("unlink_repository: the proposal row (#5122)", () => {
+  it("writes the PR's workspace proposal row, authored by the acting user a key resolves to", async () => {
+    mocks.resolveActingUserId.mockResolvedValueOnce("u_key_owner");
+    wire({ head: [LINKED_HEAD] });
+    const { host } = steering({
+      workspaceToml: workspaceToml(["github.com/acme/api", REF]),
+    });
+    const proposals = new ProposalStore();
+    const run = createRepositoryUnlinkHandler({ steering: host, proposals });
+
+    await run(INPUT, makeCTX({ userId: null, apiKeyId: "key_1" }));
+
+    expect(proposals.proposals).toHaveLength(1);
+    expect(proposals.proposals[0]).toMatchObject({
+      kind: "workspace",
+      lineageId: BRANCH,
+      status: "pr_open",
+      prNumber: 42,
+      createdById: "u_key_owner",
+      source: "api_key:key_1",
+    });
   });
 });

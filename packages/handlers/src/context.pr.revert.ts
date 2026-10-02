@@ -18,9 +18,15 @@
 // 6. In a steering repo, run the steering checks on the revert's head and
 //    report the required "Oxagen steering" check. A legacy repository has no
 //    required check, so nothing is reported there.
+// 7. In a steering repo, write the revert PR's proposal row, of kind `revert`
+//    (#5122, ADR-265), so merge_context_pr lands it through the merge queue.
+//    A revert of a record PR takes the record's lineage and path, so its merge
+//    can retire the record when the revert deletes the file. Any other revert
+//    takes its own branch as its lineage. A legacy repository gets no row:
+//    its revert merges on the host, and the repository sync reads it.
 //
-// The revert PR carries no proposal, so merge_context_pr cannot merge it yet.
-// It merges the way the other many-file steering PRs do today.
+// A revert of a record PR is refused while another PR on that record is open:
+// one concern, one pull request.
 import {
   HandlerError,
   isHandlerError,
@@ -31,12 +37,17 @@ import {
   type ContextPrRevertOutput,
 } from "@oxagen/oxagen/contracts/context.pr.revert";
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
+import { CONTEXT_RECORD_LINEAGE } from "@oxagen/oxagen/context-record-label";
 import { steeringDeps, type SteeringDeps } from "./context.steering.deps";
 import { assertSameHost } from "./context.steering.github";
 import { mergeRefusal } from "./context.steering.policy";
 import { contractRoleRequirement } from "./lib/capability-role-guard";
 import { logger } from "./logger";
 import { openRevertPr, readSteeringLayout } from "./steering-repo/merge-queue";
+import {
+  personAuthor,
+  recordSteeringPrQuietly,
+} from "./steering-repo/pr-proposal";
 import {
   reportSteeringChecks,
   workspaceSteeringPullRequestDeps,
@@ -165,6 +176,27 @@ export function createRevertSteeringPrHandler(
       );
     }
 
+    // A revert of a record PR is about that record, so its proposal takes the
+    // record's lineage. The open-PR index allows one open PR per lineage, so
+    // a PR already open on the record refuses the revert before it opens.
+    const steering = layout.layout === "steering";
+    const recordLineage = CONTEXT_RECORD_LINEAGE.test(row.lineageId)
+      ? row.lineageId
+      : null;
+    if (steering && recordLineage !== null) {
+      const other = await store.findOpenPrOnLineage(
+        scope,
+        recordLineage,
+        row.id,
+      );
+      if (other) {
+        throw refuse(
+          "lineage_pr_open",
+          `${other.prUrl ?? other.publicId} is open on ${recordLineage}. Merge or close it, then revert ${name}: one concern, one pull request.`,
+        );
+      }
+    }
+
     let opened: Awaited<ReturnType<typeof openRevertPr>>;
     try {
       opened = await openRevertPr({
@@ -187,7 +219,8 @@ export function createRevertSteeringPrHandler(
 
     const headSha = await github.branchHead(repo, opened.branch);
     let check: ContextPrRevertOutput["check"] = null;
-    if (layout.layout === "steering" && headSha !== null) {
+    let revertProposalId: string | null = null;
+    if (steering && headSha !== null) {
       const base = await github.branchHead(repo, repo.defaultBranch);
       check = await reportSteeringChecks(deps.checks, {
         host: github,
@@ -197,6 +230,31 @@ export function createRevertSteeringPrHandler(
         base: base ?? before,
         source: "context.pr.revert",
       });
+      const recorded = await recordSteeringPrQuietly(
+        store,
+        {
+          scope,
+          repo,
+          kind: "revert",
+          pullRequest: {
+            number: opened.number,
+            url: opened.htmlUrl,
+            branch: opened.branch,
+            headSha,
+          },
+          title: `Revert steering PR #${prNumber}`,
+          paths: opened.paths,
+          check,
+          author: personAuthor(actingUserId),
+          mode: layout.mode,
+          ...(recordLineage !== null && row.path
+            ? { lineageId: recordLineage, path: row.path }
+            : {}),
+          rationale: `Undoes ${name}, which merged as ${mergedCommit}. Every path that merge changed goes back to what ${repo.defaultBranch} held at ${before}.`,
+        },
+        deps.checks.now(),
+      );
+      revertProposalId = recorded?.publicId ?? null;
     }
 
     logger.info(
@@ -208,6 +266,7 @@ export function createRevertSteeringPrHandler(
         revert: opened.number,
         branch: opened.branch,
         check,
+        revertProposalId,
         layout: layout.layout,
         workspaceId: ctx.workspaceId,
       },
@@ -224,6 +283,7 @@ export function createRevertSteeringPrHandler(
         headSha,
       },
       check,
+      revertProposalId,
     };
   };
 }

@@ -22,10 +22,10 @@ import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { steeringDeps, type SteeringDeps } from "./context.steering.deps";
 import { assertSameHost } from "./context.steering.github";
 import {
+  checksAfterMove,
   closedOnHostReason,
   OPEN_PR,
-  pendingChecks,
-  STALE_FROM,
+  resetsOnMove,
 } from "./context.steering.pr-state";
 import {
   claimCutoff,
@@ -43,9 +43,6 @@ type HostState = {
 
 const isOpen = (status: string): status is (typeof OPEN_PR)[number] =>
   (OPEN_PR as readonly string[]).includes(status);
-
-const isStale = (status: string): status is (typeof STALE_FROM)[number] =>
-  (STALE_FROM as readonly string[]).includes(status);
 
 export function createRefreshContextPrHandler(
   deps: Pick<SteeringDeps, "store" | "github" | "now" | "requestSync">,
@@ -144,18 +141,19 @@ export function createRefreshContextPrHandler(
       pr.headSha !== null &&
       row.headSha !== null &&
       pr.headSha !== row.headSha &&
-      isStale(row.status)
+      resetsOnMove(row)
     ) {
       // The branch moved on the host after the checks ran, so they no longer
-      // describe what would merge. A governance proposal runs the steering
-      // checks, not the six record checks; setting the mode again runs them.
+      // describe what would merge. A governance or steering PR proposal runs
+      // the steering checks, not the six record checks: setting the mode
+      // again, or the merge, runs them (#5122).
       try {
         const moved = await deps.store.updateProposal(
           row.id,
           {
             status: "pr_open",
             headSha: pr.headSha,
-            checks: row.kind === "governance" ? [] : pendingChecks(),
+            checks: checksAfterMove(row.kind),
           },
           [row.status],
           { headSha: row.headSha, noClaimSince },
