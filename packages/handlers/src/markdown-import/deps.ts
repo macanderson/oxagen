@@ -11,10 +11,15 @@
 // - branchTaken and opener: the steering repo's branches, and the steering PR
 //   opener the tools PRs use (tools.pr.open.ts), with the Markdown import's
 //   branch rule.
+// - memories: the memory store (memory/store.ts). The waiting memories and
+//   the rejected statements a memory row is checked against, and the insert
+//   that stores the rows marked add.
 import { HandlerError, isHandlerError } from "@oxagen/oxagen";
 import { POLICY_DIR } from "@oxagen/oxagen/steering-repo/paths";
+import type { MemoryDraft } from "../memory/types";
 import type { PublishedPolicy } from "./cedar";
 import type { PublishedRecord } from "./matches";
+import type { HeldMemories } from "./memories";
 import { splitWithModel, type SplitModel } from "./split";
 import type {
   ToolsPullRequestOpener,
@@ -31,6 +36,12 @@ export interface MarkdownImportDeps {
   /** True when the steering repo already has `branch`. */
   branchTaken(scope: ImportScope, branch: string): Promise<boolean>;
   opener: ToolsPullRequestOpener;
+  memories: {
+    /** The workspace's waiting memories and rejected statements. */
+    held(scope: ImportScope): Promise<HeldMemories>;
+    /** Store the drafts, skipping any whose dedupe key exists. Returns the dedupe key of each one written. */
+    store(scope: ImportScope, drafts: MemoryDraft[]): Promise<string[]>;
+  };
   now(): Date;
 }
 
@@ -123,6 +134,26 @@ export function markdownImportDeps(): MarkdownImportDeps {
       async open(scope, args) {
         const { markdownImportPullRequestOpener } = await import("./opener");
         return markdownImportPullRequestOpener.open(scope, args);
+      },
+    },
+    memories: {
+      async held(scope) {
+        const { postgresMemoryStore } = await import("../memory/store");
+        const [waiting, rejected] = await Promise.all([
+          postgresMemoryStore.listWaiting(scope),
+          postgresMemoryStore.listRejections(scope),
+        ]);
+        return {
+          waiting: waiting.map((memory) => ({
+            publicId: memory.publicId,
+            statementHash: memory.statementHash,
+          })),
+          rejected: rejected.map((rejection) => rejection.statementHash),
+        };
+      },
+      async store(scope, drafts) {
+        const { postgresMemoryStore } = await import("../memory/store");
+        return postgresMemoryStore.insertMemoriesKeyed(scope, drafts);
       },
     },
     now: () => new Date(),

@@ -5,12 +5,14 @@
 // file-coverage guard sees it, like context.steering.shared.ts.
 //
 // Parse returns these rows for a person to review and edit. Commit takes
-// them back. Each row carries the rule both halves enforce: a force the
-// record's kind allows (forcesFor), and an effect on a constraint and on no
-// other kind.
+// them back. Each record row carries the rule both halves enforce: a force
+// the record's kind allows (forcesFor), and an effect on a constraint and on
+// no other kind. Each memory row is a memory with force info, and one marked
+// add fits the 2,000 characters a memory holds.
 import { z } from "zod";
 import { CONTEXT_RECORD_LABEL_MAX } from "../context-record-label";
 import { lineageSchema } from "../steering-repo/common";
+import { MEMORY_STATEMENT_MAX } from "../steering-repo/memory";
 import { STEERING_PR_MAX_FILES } from "../steering-repo/names";
 import { recordEffectSchema } from "../steering-repo/record-effect";
 import {
@@ -72,12 +74,13 @@ export const markdownImportPullRequestFilesSchema = z
 
 /**
  * Where a file goes. `records` splits it into steering records, `policies`
- * turns its fenced `cedar` blocks into Cedar policy files, and `skip` leaves
- * it out. The Memories target arrives with lane MEM1 (#4903).
+ * turns its fenced `cedar` blocks into Cedar policy files, `memories` splits
+ * it into statements stored as waiting memories, and `skip` leaves it out.
  */
 export const markdownImportTargetSchema = z.enum([
   "records",
   "policies",
+  "memories",
   "skip",
 ]);
 export type MarkdownImportTarget = z.output<typeof markdownImportTargetSchema>;
@@ -100,7 +103,7 @@ export const markdownImportDocumentSchema = z
     target: markdownImportTargetSchema
       .optional()
       .describe(
-        "records, policies, or skip. Omit it to take the target the file's text implies.",
+        "records, policies, memories, or skip. Omit it to take the target the file's text implies.",
       ),
   })
   .strict();
@@ -234,6 +237,98 @@ export const markdownImportRecordSchema = z
   });
 export type MarkdownImportRecord = z.output<typeof markdownImportRecordSchema>;
 
+/** Why a memory row repeats a statement the workspace already holds. */
+export const markdownImportMemoryMatchReasonSchema = z.enum([
+  "waiting",
+  "rejected",
+  "import",
+]);
+
+/**
+ * What a memory row says again: a waiting memory with the same statement
+ * hash, a statement a person rejected (memory_rejections), or an earlier
+ * memory row of the same import. A row with a match defaults to skip.
+ */
+export const markdownImportMemoryMatchSchema = z
+  .object({
+    reason: markdownImportMemoryMatchReasonSchema.describe(
+      "waiting for a waiting memory, rejected for a statement a person rejected, import for an earlier row of this import",
+    ),
+    memory: z
+      .string()
+      .nullable()
+      .describe("The waiting memory's id (mem_...), or null for any other reason"),
+    file: z
+      .string()
+      .nullable()
+      .describe("The file of the earlier row of this import, or null"),
+    line: z
+      .number()
+      .int()
+      .min(1)
+      .nullable()
+      .describe("The line of the earlier row of this import, or null"),
+  })
+  .strict();
+export type MarkdownImportMemoryMatch = z.output<
+  typeof markdownImportMemoryMatchSchema
+>;
+
+/**
+ * One memory the import proposes: a statement the model split out of a file
+ * imported as memories. Commit stores each row marked add as a waiting
+ * memory with capture `import`, no agent, no run, and the source
+ * `import:<file>#L<line>`. The memory waits for review like any other, and
+ * steers nothing until a person promotes it into a steering record.
+ */
+export const markdownImportMemorySchema = z
+  .object({
+    file: z.string().min(1).max(256).describe("The file the statement came from"),
+    line: z
+      .number()
+      .int()
+      .min(1)
+      .describe("The line of the file the statement starts on"),
+    label: z
+      .string()
+      .trim()
+      .min(1)
+      .max(200)
+      .describe("The memory's name, at most 200 characters"),
+    statement: z
+      .string()
+      .trim()
+      .min(1)
+      .max(MARKDOWN_IMPORT_FILE_CHARS_MAX)
+      .describe(
+        `The memory's text. A row marked add holds at most ${MEMORY_STATEMENT_MAX.toLocaleString("en-US")} characters.`,
+      ),
+    kind: z.literal("memory").describe("Always memory"),
+    force: z.literal("info").describe("Always info. A memory carries no other force."),
+    duplicate: markdownImportMemoryMatchSchema
+      .nullable()
+      .describe("The memory or rejected statement this row says again, or null"),
+    issue: z
+      .string()
+      .max(300)
+      .nullable()
+      .describe("Why the row cannot be stored, such as a statement that is too long, or null"),
+    action: z
+      .enum(["add", "skip"])
+      .describe("add or skip. A row with a match or an issue defaults to skip."),
+  })
+  .strict()
+  .superRefine((row, ctx) => {
+    if (row.action === "add" && row.statement.length > MEMORY_STATEMENT_MAX) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["statement"],
+        message: `a memory holds at most ${MEMORY_STATEMENT_MAX} characters`,
+      });
+    }
+  });
+export type MarkdownImportMemory = z.output<typeof markdownImportMemorySchema>;
+
 /** One Cedar statement in a policy file the import writes. */
 export const markdownImportPolicyStatementSchema = z
   .object({
@@ -300,6 +395,7 @@ export const markdownImportFileSchema = z
     reason: z.string().describe("Why the file's text implies that target"),
     records: z.number().int().nonnegative(),
     policies: z.number().int().nonnegative(),
+    memories: z.number().int().nonnegative(),
     /** Why the file yielded nothing, such as a model error. Null when it was read. */
     error: z.string().nullable(),
   })

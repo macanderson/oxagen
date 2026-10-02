@@ -194,6 +194,10 @@ describe("routes", () => {
     expect(routes.steering("acme", "core", { tab: "constructor" })).toBe(
       "/acme/core/steering",
     );
+    // The Memories tab's address, which the Markdown import links to (#4914).
+    expect(routes.steeringMemories("acme", "core")).toBe(
+      "/acme/core/steering?tab=memories",
+    );
     expect(routes.repositories("acme", "core")).toBe("/acme/core/repositories");
     expect(routes.repositories("acme", "core", "changes")).toBe(
       "/acme/core/repositories/changes",

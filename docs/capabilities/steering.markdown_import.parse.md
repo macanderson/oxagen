@@ -1,8 +1,8 @@
 # parse_markdown_import
 
-Read Markdown files and propose steering records and Cedar policies from them (#4907). It
-writes nothing. [commit_markdown_import](steering.markdown_import.commit.md) takes the rows
-back and opens the steering PR.
+Read Markdown files and propose steering records, Cedar policies, and memories from them
+(#4907). It writes nothing. [commit_markdown_import](steering.markdown_import.commit.md) takes
+the rows back, opens the steering PR, and stores the memories.
 
 You keep rules in Markdown already: `CLAUDE.md`, `AGENTS.md`, Cursor rules, a docs folder, an
 ADR folder. This call reads up to 25 of them and returns one row per statement, with a kind, a
@@ -20,7 +20,7 @@ with a record already published.
 - API: `POST /v1/:org_slug/:workspace_slug/context/steering/import/parse`, returns 200
 - MCP: `parse_markdown_import`
 - Agent: Stella finds it with `search_tools` and loads it with `load_tools`. It needs no approval (`riskLevel: low`).
-- CLI: `oxagen steering import <paths...>` reads files and the Markdown files under folders, each with the target its text implies or the one `--as` names. `oxagen memory import <files...>` reads every file as `records`. Both print the rows.
+- CLI: `oxagen steering import <paths...>` reads files and the Markdown files under folders, each with the target its text implies or the one `--as` names (`records`, `policies`, or `memories`). `oxagen memory import <files...>` reads every file as `records`. Both print the rows.
 - Authentication: org Owner or Admin, or workspace Owner or Member, checked by the handler
 - Billed: one balanced-tier model call per file it splits, counted as in-app agent spend
 
@@ -29,7 +29,7 @@ with a record already published.
 | Field | Type | Description |
 |---|---|---|
 | `documents` | 1 to 25 of `{ filename, content, target? }` | the files. `content` is at most 100,000 characters. `filename` may be a path, such as `docs/release.md`, and the lineage takes its folders |
-| `documents[].target` | `records`, `policies`, or `skip`, optional | where the file goes. Omit it to take the target the text implies |
+| `documents[].target` | `records`, `policies`, `memories`, or `skip`, optional | where the file goes. Omit it to take the target the text implies |
 
 A file with a fenced `cedar` block, or a top-level `permit(` or `forbid(` statement, implies
 `policies`. A `README.md` or `index.md`, or a file of headings and links, implies `skip`. Any
@@ -39,10 +39,11 @@ other file implies `records`.
 
 | Field | Type | Description |
 |---|---|---|
-| `files` | one per file | the target used, the target implied and why, the row counts, and an `error` when the file yielded nothing |
+| `files` | one per file | the target used, the target implied and why, the record, policy, and memory counts, and an `error` when the file yielded nothing |
 | `records` | record rows | the proposed steering records, file by file in source order |
 | `policies` | policy rows | the proposed Cedar policy files, one per file |
-| `pullRequestFiles` | `{ count, max, message }` | the files the rows marked add would put in the steering PR, against the 299 one PR holds. `message` says what to do when the count is over, and is null when it fits |
+| `memories` | memory rows | the proposed memories, file by file in source order |
+| `pullRequestFiles` | `{ count, max, message }` | the files the record and policy rows marked add would put in the steering PR, against the 299 one PR holds. `message` says what to do when the count is over, and is null when it fits. Memories count against no PR |
 
 ### Record row
 
@@ -71,6 +72,18 @@ other file implies `records`.
 | `duplicate`, `replaces` | the published policy file with the same statements, and whether the commit replaces a different file at `path` |
 | `action` | `add` or `skip` |
 
+### Memory row
+
+| Field | Description |
+|---|---|
+| `file`, `line` | where the statement came from |
+| `label` | the memory's name |
+| `statement` | the memory's text. A row marked `add` holds at most 2,000 characters |
+| `kind`, `force` | always `memory` and `info` |
+| `duplicate` | what the row says again, or null: `{ reason, memory, file, line }`. `reason` is `waiting` for a waiting memory with the same statement hash (`memory` names it), `rejected` for a statement a person rejected, or `import` for an earlier row of this import (`file` and `line` name it) |
+| `issue` | why the row cannot be stored, such as a statement over 2,000 characters, or null |
+| `action` | `add` or `skip`. A row with a `duplicate` or an `issue` defaults to `skip` |
+
 ## What parse does
 
 1. A file with `schema: steering-record/v1` frontmatter stays one record and keeps its
@@ -98,6 +111,12 @@ other file implies `records`.
    by the steering check's own `conflicts` test: the same words, or a word-set overlap of 0.9
    or more when both statements have at least 8 distinct words. A row and the steering PR's
    check therefore agree.
+8. A `memories` file is split as a `records` file is, and a file with `steering-record/v1`
+   frontmatter is one memory of its body. Each statement becomes a memory row with kind
+   `memory` and force `info`, whatever the model proposed. Each row's statement hash is
+   checked against the workspace's waiting memories, the statements a person rejected
+   (`memory_rejections`), and the rows before it. A row that matches is marked `skip` and names
+   the match. Parse reads the memory store only when a file is imported as `memories`.
 
 ## Errors
 

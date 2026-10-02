@@ -1,0 +1,233 @@
+{
+  "name": "promote_memories",
+  "domain": "context",
+  "description": "Promote waiting workspace memories into draft steering records. The drafts join the open memory PR, or open one on today's memory branch. Each record cites its memories, and nothing steers until a person merges the PR.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "cli"
+  ],
+  "sensitivity": "high",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "drafts": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "memory_ids": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1,
+              "maxItems": 50,
+              "description": "The memories the record cites. The first one's statement is the default body."
+            },
+            "statement": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2000
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "business-rule",
+                "code-rule",
+                "constraint",
+                "procedure",
+                "fact",
+                "preference",
+                "memory"
+              ]
+            },
+            "force": {
+              "type": "string",
+              "enum": [
+                "must",
+                "should",
+                "may",
+                "info"
+              ]
+            },
+            "effect": {
+              "type": "string",
+              "enum": [
+                "require",
+                "forbid"
+              ]
+            },
+            "repos": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1,
+              "maxItems": 20
+            }
+          },
+          "required": [
+            "memory_ids"
+          ],
+          "additionalProperties": false,
+          "x-server-validated": true,
+          "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
+        },
+        "minItems": 1,
+        "maxItems": 50,
+        "description": "One draft steering record per entry, each citing its memories."
+      },
+      "same_text": {
+        "type": "boolean",
+        "default": true
+      }
+    },
+    "required": [
+      "drafts"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "pull_request": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "number": {
+                "type": "integer",
+                "exclusiveMinimum": 0
+              },
+              "url": {
+                "type": "string"
+              },
+              "branch": {
+                "type": "string"
+              },
+              "opened": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "number",
+              "url",
+              "branch",
+              "opened"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "records": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string"
+            },
+            "lineage": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "business-rule",
+                "code-rule",
+                "constraint",
+                "procedure",
+                "fact",
+                "preference",
+                "memory"
+              ]
+            },
+            "force": {
+              "type": "string",
+              "enum": [
+                "must",
+                "should",
+                "may",
+                "info"
+              ]
+            },
+            "effect": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "require",
+                    "forbid"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "memory_ids": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1
+            }
+          },
+          "required": [
+            "path",
+            "lineage",
+            "kind",
+            "force",
+            "effect",
+            "memory_ids"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "skipped": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "memory_id": {
+              "type": "string"
+            },
+            "reason": {
+              "type": "string",
+              "enum": [
+                "not_found",
+                "not_waiting",
+                "already_proposed"
+              ]
+            }
+          },
+          "required": [
+            "memory_id",
+            "reason"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "pull_request",
+      "records",
+      "skipped"
+    ],
+    "additionalProperties": false
+  }
+}

@@ -207,20 +207,25 @@ after the registered name separately when their contract uses a dotted stem.
 | [revise_context_record](context.record.revise.md) | [context.record.revise.ts](../../packages/oxagen/src/contracts/context.record.revise.ts) | api, agent |
 | [append_record](context.records.append.md) | [context.records.append.ts](../../packages/oxagen/src/contracts/context.records.append.ts) | api, mcp, agent |
 | [dismiss_proposal](context.proposal.dismiss.md) | [context.proposal.dismiss.ts](../../packages/oxagen/src/contracts/context.proposal.dismiss.ts) | api, agent |
+| [dismiss_memories](steering.memories.dismiss.md) | [steering.memories.dismiss.ts](../../packages/oxagen/src/contracts/steering.memories.dismiss.ts) | api, mcp, cli |
 | [get_context_pr](context.pr.get.md) | [context.pr.get.ts](../../packages/oxagen/src/contracts/context.pr.get.ts) | api, mcp, agent |
 | [get_record](context.records.get.md) | [context.records.get.ts](../../packages/oxagen/src/contracts/context.records.get.ts) | api, mcp, agent |
 | [get_published_steering](context.steering.published.get.md) | [context.steering.published.get.ts](../../packages/oxagen/src/contracts/context.steering.published.get.ts) | api, mcp, cli |
 | [get_steering_index](context.steering.index.get.md) | [context.steering.index.get.ts](../../packages/oxagen/src/contracts/context.steering.index.get.ts) | api, cli |
 | `get_steering_freshness` | [context.steering.freshness.ts](../../packages/oxagen/src/contracts/context.steering.freshness.ts) | api, mcp, agent |
 | [get_steering_layout](context.steering.layout.md) | [context.steering.layout.ts](../../packages/oxagen/src/contracts/context.steering.layout.ts) | api, mcp, agent |
+| [get_workspace_memory](steering.memories.get.md) | [steering.memories.get.ts](../../packages/oxagen/src/contracts/steering.memories.get.ts) | api, mcp, cli |
 | [list_context_records](context.record.list.md) | [context.record.list.ts](../../packages/oxagen/src/contracts/context.record.list.ts) | api, agent, mcp |
+| [list_memory_pr_records](steering.memory_pr_records.list.md) | [steering.memory_pr_records.list.ts](../../packages/oxagen/src/contracts/steering.memory_pr_records.list.ts) | api, mcp |
 | [list_proposals](context.proposal.list.md) | [context.proposal.list.ts](../../packages/oxagen/src/contracts/context.proposal.list.ts) | api, mcp, agent |
 | [list_records](context.records.list.md) | [context.records.list.ts](../../packages/oxagen/src/contracts/context.records.list.ts) | api, mcp, agent |
+| [list_workspace_memories](steering.memories.list.md) | [steering.memories.list.ts](../../packages/oxagen/src/contracts/steering.memories.list.ts) | api, mcp, cli |
 | [merge_context_pr](context.pr.merge.md) | [context.pr.merge.ts](../../packages/oxagen/src/contracts/context.pr.merge.ts) | api, agent |
 | [merge_pr_without_review](context.pr.merge_without_review.md) | [context.pr.merge_without_review.ts](../../packages/oxagen/src/contracts/context.pr.merge_without_review.ts) | api, agent |
 | [commit_markdown_import](steering.markdown_import.commit.md) | [steering.markdown_import.commit.ts](../../packages/oxagen/src/contracts/steering.markdown_import.commit.ts) | api, mcp, agent, cli |
 | [open_context_pr](context.pr.open.md) | [context.pr.open.ts](../../packages/oxagen/src/contracts/context.pr.open.ts) | api, agent |
 | [parse_markdown_import](steering.markdown_import.parse.md) | [steering.markdown_import.parse.ts](../../packages/oxagen/src/contracts/steering.markdown_import.parse.ts) | api, mcp, agent, cli |
+| [promote_memories](steering.memories.promote.md) | [steering.memories.promote.ts](../../packages/oxagen/src/contracts/steering.memories.promote.ts) | api, mcp, cli |
 | [promote_context_record](context.record.promote.md) | [context.record.promote.ts](../../packages/oxagen/src/contracts/context.record.promote.ts) | api |
 | [propose_record](context.proposal.create.md) | [context.proposal.create.ts](../../packages/oxagen/src/contracts/context.proposal.create.ts) | api, mcp, agent |
 | [publish_context_record](context.record.publish.md) | [context.record.publish.ts](../../packages/oxagen/src/contracts/context.record.publish.ts) | api |

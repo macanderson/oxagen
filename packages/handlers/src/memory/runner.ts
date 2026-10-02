@@ -451,8 +451,9 @@ const runUri = (runPublicId: string): string => `oxagen:run/${runPublicId}`;
 /**
  * Every file path under steering/ at `head`, and each file there that reads
  * as a steering record. A file that does not read is left out.
+ * promote_memories reads the same set before it names a new record.
  */
-async function readRecords(
+export async function readRecords(
   host: SteeringHost,
   repo: SteeringRepository,
   head: string,
@@ -474,6 +475,7 @@ async function readRecords(
       lineage: record.lineage,
       kind: record.kind,
       status: record.status,
+      force: record.force,
       statement: recordStatement(read.body),
       repos: record.repos ?? null,
       appliesTo: record.applies_to ?? null,

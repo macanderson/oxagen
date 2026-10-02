@@ -11,20 +11,26 @@
 //      once. A file the model fails on is reported, and the others go on.
 //   3. policies: the file's Cedar becomes policy/<file-slug>.cedar with an
 //      @id on every statement, checked for shape (cedar.ts).
-//   4. Every record row is compared with the published records and the other
+//   4. memories: the file is split as in step 2, and each statement becomes
+//      a memory row with kind memory and force info (memories.ts).
+//   5. Every record row is compared with the published records and the other
 //      rows (matches.ts). A duplicate defaults to skip. A conflict waits for
 //      a person's choice. A policy whose statements match a published policy
-//      file is a duplicate and defaults to skip.
-//   5. The rows marked add are counted against the 299 files one steering PR
-//      holds, and the result says when the import is over.
+//      file is a duplicate and defaults to skip. A memory row whose statement
+//      a waiting memory holds, a person rejected, or an earlier row holds is
+//      skipped and names the match.
+//   6. The record and policy rows marked add are counted against the 299
+//      files one steering PR holds, and the result says when the import is
+//      over. Memories go to no PR.
 //
 // Nothing is written.
-import type { CapabilityHandler } from "@oxagen/oxagen";
+import type { CapabilityContext, CapabilityHandler } from "@oxagen/oxagen";
 import {
   markdownImportFileCount,
   markdownImportTooManyFiles,
   type MarkdownImportDocument,
   type MarkdownImportFile,
+  type MarkdownImportMemory,
   type MarkdownImportPolicy,
   type MarkdownImportRecord,
   type MarkdownImportTarget,
@@ -44,6 +50,7 @@ import {
 import type { MarkdownImportDeps } from "./deps";
 import { readFrontmatterRecord } from "./frontmatter";
 import { markMatches, type MatchedRow } from "./matches";
+import { markMemoryRows, memoryRow } from "./memories";
 import {
   fileParts,
   isIndexFile,
@@ -54,7 +61,7 @@ import {
   uniqueLineage,
 } from "./naming";
 import { importRecordPath } from "./render";
-import { splitDocument } from "./split";
+import { splitDocument, type SplitModel } from "./split";
 
 /** Model calls in flight at once, so 25 files do not open 25 gateway requests. */
 const SPLIT_CONCURRENCY = 4;
@@ -90,7 +97,55 @@ type FileResult = {
   file: MarkdownImportFile;
   records: MarkdownImportRecord[];
   policy: MarkdownImportPolicy | null;
+  memories: MarkdownImportMemory[];
 };
+
+/**
+ * A file read under the `memories` target: a file with steering-record/v1
+ * frontmatter is one memory of its body, and any other file is split by the
+ * model as a records file is. Each row is a memory with force info.
+ */
+async function readMemories(
+  document: MarkdownImportDocument,
+  ctx: CapabilityContext,
+  model: SplitModel,
+): Promise<{ rows: MarkdownImportMemory[]; error: string | null }> {
+  const read = readFrontmatterRecord(document.content);
+  if (read.kind === "invalid") return { rows: [], error: read.message };
+  if (read.kind === "record") {
+    return {
+      rows: [
+        memoryRow({
+          file: document.filename,
+          line: read.bodyLine,
+          label: read.record.label,
+          statement: read.statement,
+        }),
+      ],
+      error: null,
+    };
+  }
+  try {
+    const statements = await splitDocument({
+      filename: document.filename,
+      content: document.content,
+      ctx,
+      model,
+    });
+    if (statements.length === 0) {
+      return { rows: [], error: "The model found no durable guidance in the file." };
+    }
+    return {
+      rows: statements.map((s) =>
+        memoryRow({ file: document.filename, line: s.line, label: s.label, statement: s.statement }),
+      ),
+      error: null,
+    };
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err);
+    return { rows: [], error: `The model could not split the file: ${reason}` };
+  }
+}
 
 /** `fn` over `items` with at most `limit` calls in flight, answers in input order. */
 async function mapLimit<T, R>(
@@ -148,16 +203,24 @@ export function createParseMarkdownImportHandler(
           reason: detected.reason,
           records: 0,
           policies: 0,
+          memories: 0,
           error: null,
         };
-        if (target === "skip") return { file, records: [], policy: null };
-        if (target === "policies") {
-          return { file, records: [], policy: null };
+        // Each result gets its own arrays, so no two files share one.
+        const none = (): Omit<FileResult, "file"> => ({ records: [], policy: null, memories: [] });
+        if (target === "skip" || target === "policies") return { file, ...none() };
+        if (target === "memories") {
+          const read = await readMemories(document, ctx, deps.split);
+          return {
+            file: { ...file, memories: read.rows.length, error: read.error },
+            ...none(),
+            memories: read.rows,
+          };
         }
         const base = [org, ...fileParts(document.filename)];
         const read = readFrontmatterRecord(document.content);
         if (read.kind === "invalid") {
-          return { file: { ...file, error: read.message }, records: [], policy: null };
+          return { file: { ...file, error: read.message }, ...none() };
         }
         if (read.kind === "record") {
           const record = read.record;
@@ -171,7 +234,7 @@ export function createParseMarkdownImportHandler(
               : `The file's steering-record/v1 frontmatter names the kind. A ${record.kind} cannot carry ${record.force}, so its force is ${force}.`;
           return {
             file,
-            policy: null,
+            ...none(),
             records: [
               {
                 file: document.filename,
@@ -204,13 +267,12 @@ export function createParseMarkdownImportHandler(
           if (statements.length === 0) {
             return {
               file: { ...file, error: "The model found no durable guidance in the file." },
-              records: [],
-              policy: null,
+              ...none(),
             };
           }
           return {
             file,
-            policy: null,
+            ...none(),
             records: statements.map((s) => ({
               file: document.filename,
               line: s.line,
@@ -235,8 +297,7 @@ export function createParseMarkdownImportHandler(
           const reason = err instanceof Error ? err.message : String(err);
           return {
             file: { ...file, error: `The model could not split the file: ${reason}` },
-            records: [],
-            policy: null,
+            ...none(),
           };
         }
       },
@@ -331,12 +392,22 @@ export function createParseMarkdownImportHandler(
       };
     });
 
+    // Memory rows: each one checked against the waiting memories, the
+    // rejected statements, and the rows before it. The store is read only
+    // when a file was imported as memories.
+    const memoryRows = results.flatMap((result) => result.memories);
+    const memories =
+      memoryRows.length === 0
+        ? []
+        : markMemoryRows(memoryRows, await deps.memories.held(scope));
+
     const policyRows = results.flatMap((result) => (result.policy ? [result.policy] : []));
     const count = markdownImportFileCount({ records: rows, policies: policyRows });
     return {
       files: results.map((result) => result.file),
       records: rows,
       policies: policyRows,
+      memories,
       pullRequestFiles: {
         count,
         max: STEERING_PR_MAX_FILES,

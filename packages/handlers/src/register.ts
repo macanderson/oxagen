@@ -1223,6 +1223,39 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./context.proposal.dismiss"))
         .dismissProposalHandler as CapabilityHandlerFn,
   );
+  // Workspace memories (memory-collection spec, lane MEM5, #4912): the
+  // Memories tab's list and drawer, promotion onto a memory PR, dismissal,
+  // and the records of one memory PR.
+  registerHandler(
+    "list_workspace_memories",
+    async () =>
+      (await import("./steering.memories.list"))
+        .steeringMemoriesListHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "get_workspace_memory",
+    async () =>
+      (await import("./steering.memories.get"))
+        .steeringMemoriesGetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "promote_memories",
+    async () =>
+      (await import("./steering.memories.promote"))
+        .steeringMemoriesPromoteHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "dismiss_memories",
+    async () =>
+      (await import("./steering.memories.dismiss"))
+        .steeringMemoriesDismissHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "list_memory_pr_records",
+    async () =>
+      (await import("./steering.memory_pr_records.list"))
+        .steeringMemoryPrRecordsListHandler as CapabilityHandlerFn,
+  );
   registerHandler(
     "open_context_pr",
     async () =>

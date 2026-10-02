@@ -1,0 +1,230 @@
+{
+  "name": "list_memory_pr_records",
+  "domain": "context",
+  "description": "List the records one memory PR proposes or archives, each with the memories it cites, and which proposed records were dropped from the PR's branch.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "low",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "number": {
+        "type": "integer",
+        "exclusiveMinimum": 0,
+        "description": "The memory PR's number in its steering repository."
+      }
+    },
+    "required": [
+      "number"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "pull_request": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "number": {
+            "type": "integer",
+            "exclusiveMinimum": 0
+          },
+          "url": {
+            "type": "string"
+          },
+          "repository": {
+            "type": "string"
+          },
+          "branch": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "merged",
+              "closed"
+            ]
+          },
+          "opened_at": {
+            "type": "string"
+          },
+          "settled_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "number",
+          "url",
+          "repository",
+          "branch",
+          "status",
+          "opened_at",
+          "settled_at"
+        ],
+        "additionalProperties": false
+      },
+      "branch_read": {
+        "type": "boolean"
+      },
+      "records": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "action": {
+              "type": "string",
+              "enum": [
+                "propose",
+                "retire"
+              ]
+            },
+            "path": {
+              "type": "string"
+            },
+            "lineage": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "business-rule",
+                "code-rule",
+                "constraint",
+                "procedure",
+                "skill",
+                "fact",
+                "preference",
+                "memory"
+              ]
+            },
+            "title": {
+              "type": "string"
+            },
+            "summary": {
+              "type": "string"
+            },
+            "memories": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "statement": {
+                    "type": "string"
+                  },
+                  "agent": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "run": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "evidence": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "state": {
+                    "type": "string",
+                    "enum": [
+                      "waiting",
+                      "in_pr",
+                      "promoted",
+                      "dismissed",
+                      "retired"
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "statement",
+                  "agent",
+                  "run",
+                  "evidence",
+                  "state"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "dropped": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "commit_sha": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "commit_sha"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "action",
+            "path",
+            "lineage",
+            "kind",
+            "title",
+            "summary",
+            "memories",
+            "dropped"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "pull_request",
+      "branch_read",
+      "records"
+    ],
+    "additionalProperties": false
+  }
+}

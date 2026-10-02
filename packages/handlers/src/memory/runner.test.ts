@@ -276,6 +276,13 @@ class FakeMemoryStore implements MemoryStore {
     return written;
   }
 
+  async insertMemoriesKeyed(scope: MemoryScope, drafts: MemoryDraft[]): Promise<string[]> {
+    const written: string[] = [];
+    for (const draft of drafts)
+      if ((await this.insertMemories(scope, [draft])) > 0) written.push(draft.dedupeKey);
+    return written;
+  }
+
   async replaceSourceMemory(
     scope: MemoryScope,
     draft: MemoryDraft,
@@ -1574,6 +1581,7 @@ function activeRecord(
     path: `steering/memory/workspace/general/${over.lineage}.md`,
     kind: "memory",
     status: "active",
+    force: "info",
     statement: RECALLED,
     repos: null,
     appliesTo: null,

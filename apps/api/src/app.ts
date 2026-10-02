@@ -237,6 +237,11 @@ import { steeringIndexGetRoute } from "./routes/v1/context.steering.index.get";
 import { steeringRepoGetRoute } from "./routes/v1/steering_repo.get";
 import { steeringRepoRepairRoute } from "./routes/v1/steering_repo.repair";
 import { steeringRepoProvisionRetryRoute } from "./routes/v1/steering_repo.provision.retry";
+import { steeringMemoriesListRoute } from "./routes/v1/steering.memories.list";
+import { steeringMemoriesGetRoute } from "./routes/v1/steering.memories.get";
+import { steeringMemoriesPromoteRoute } from "./routes/v1/steering.memories.promote";
+import { steeringMemoriesDismissRoute } from "./routes/v1/steering.memories.dismiss";
+import { steeringMemoryPrRecordsListRoute } from "./routes/v1/steering.memory_pr_records.list";
 import { steeringMarkdownImportParseRoute } from "./routes/v1/steering.markdown_import.parse";
 import { steeringMarkdownImportCommitRoute } from "./routes/v1/steering.markdown_import.commit";
 import { steeringRepoImportRoute } from "./routes/v1/steering_repo.import";
@@ -1290,6 +1295,13 @@ orgScoped.route("/context/steering/repo", steeringRepoGetRoute);
 orgScoped.route("/context/steering/repo/repair", steeringRepoRepairRoute);
 // Re-send a failed or blocked steering repo setup (#4750).
 orgScoped.route("/context/steering/repo/retry", steeringRepoProvisionRetryRoute);
+// Workspace memories (#4912): the Memories tab's list and drawer, promotion
+// onto a memory PR, dismissal, and the records of one memory PR.
+orgScoped.route("/context/steering/memories/list", steeringMemoriesListRoute);
+orgScoped.route("/context/steering/memories/get", steeringMemoriesGetRoute);
+orgScoped.route("/context/steering/memories/promote", steeringMemoriesPromoteRoute);
+orgScoped.route("/context/steering/memories/dismiss", steeringMemoriesDismissRoute);
+orgScoped.route("/context/steering/memory-prs/records", steeringMemoryPrRecordsListRoute);
 // The Markdown import (#4907): parse files into proposed steering records and
 // Cedar policies, then open one steering PR with the rows a person kept.
 orgScoped.route("/context/steering/import/parse", steeringMarkdownImportParseRoute);

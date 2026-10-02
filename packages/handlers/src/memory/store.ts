@@ -48,15 +48,15 @@ const distinct = (values: string[]) => [...new Set(values)];
 
 /**
  * Insert memories inside a transaction the caller holds, skipping any whose
- * dedupe key exists. Returns the count written.
+ * dedupe key exists. Returns the dedupe key of each memory written.
  */
 async function insertMemoryRows(
   tx: Tx,
   scope: MemoryScope,
   drafts: MemoryDraft[],
   reflectionId: string | null,
-): Promise<number> {
-  if (drafts.length === 0) return 0;
+): Promise<string[]> {
+  if (drafts.length === 0) return [];
   const m = schema.memories;
   const written = await tx
     .insert(m)
@@ -83,8 +83,8 @@ async function insertMemoryRows(
       })),
     )
     .onConflictDoNothing({ target: [m.workspaceId, m.dedupeKey] })
-    .returning({ id: m.id });
-  return written.length;
+    .returning({ dedupeKey: m.dedupeKey });
+  return written.map((row) => row.dedupeKey);
 }
 
 /** The columns that retire a memory now, for `reason`. */
@@ -239,9 +239,15 @@ export const postgresMemoryStore: MemoryStore = {
 
   async insertMemories(scope, drafts, reflectionId) {
     if (drafts.length === 0) return 0;
-    return inScope(scope, (tx) =>
+    const written = await inScope(scope, (tx) =>
       insertMemoryRows(tx, scope, drafts, reflectionId ?? null),
     );
+    return written.length;
+  },
+
+  async insertMemoriesKeyed(scope, drafts) {
+    if (drafts.length === 0) return [];
+    return inScope(scope, (tx) => insertMemoryRows(tx, scope, drafts, null));
   },
 
   async replaceSourceMemory(scope, draft) {
@@ -250,7 +256,7 @@ export const postgresMemoryStore: MemoryStore = {
     const now = new Date();
     return inScope(scope, async (tx) => {
       if (source === null)
-        return (await insertMemoryRows(tx, scope, [draft], null)) > 0;
+        return (await insertMemoryRows(tx, scope, [draft], null)).length > 0;
       // Two sends from one source wait on each other, so the second reads the
       // waiting row the first wrote and never adds a second one.
       await tx.execute(
@@ -309,7 +315,7 @@ export const postgresMemoryStore: MemoryStore = {
       }
 
       if (kept === undefined)
-        return (await insertMemoryRows(tx, scope, [draft], null)) > 0;
+        return (await insertMemoryRows(tx, scope, [draft], null)).length > 0;
       await tx
         .update(m)
         .set({
