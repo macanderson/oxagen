@@ -54,6 +54,8 @@ jobs:
     # would make the signal slow enough to ignore, and a stack nobody changed
     # still plans clean, so the extra runs say nothing.
     runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-small-{0}', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
+    # Without a limit a hung job holds a runner for 360 minutes.
+    timeout-minutes: 10
     outputs:
       stacks: ${{ steps.pick.outputs.stacks }}
     steps:
@@ -111,6 +113,8 @@ jobs:
     needs: discover
     if: needs.discover.outputs.stacks != '[]'
     runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-small-{0}', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
+    # Without a limit a hung plan holds a runner for 360 minutes.
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -243,6 +247,8 @@ jobs:
       && github.ref == 'refs/heads/main'
       && needs.discover.outputs.stacks != '[]'
     runs-on: ${{ vars.CI_RUNNERS == 'aws' && 'oxagen-deploy' || 'ubuntu-latest' }}
+    # Without a limit a hung apply holds the state lock for 360 minutes.
+    timeout-minutes: 90
     # The apply role's trust policy names this environment, so the role cannot
     # be assumed by a job that does not declare it. That half is real and is
     # what makes the `if:` above the second line of defence rather than the
