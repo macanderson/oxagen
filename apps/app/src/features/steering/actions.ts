@@ -15,10 +15,10 @@ import { steeringPrMergeWithoutReview } from "@oxagen/oxagen/contracts/steering.
 import { steeringPrOpen } from "@oxagen/oxagen/contracts/steering.pr.open";
 import { steeringPrRefresh } from "@oxagen/oxagen/contracts/steering.pr.refresh";
 import { steeringPrRevert } from "@oxagen/oxagen/contracts/steering.pr.revert";
+import { steeringPrRestoreManagedBlock } from "@oxagen/oxagen/contracts/steering.pr.restore_managed_block";
 import { steeringProposalDismiss } from "@oxagen/oxagen/contracts/steering.proposal.dismiss";
 import { governanceModeSchema } from "@oxagen/oxagen/contracts/context.steering.shared";
 import { workspaceSettingsWrite } from "@oxagen/oxagen/contracts/workspace.settings.write";
-import { z } from "zod";
 import type { ActionResult, ContractOutput } from "@/server/kernel";
 import { kernelWrite } from "@/server/kernel";
 import { requireViewer } from "@/server/viewer";
@@ -281,19 +281,6 @@ export async function forgetMemory(
     : result;
 }
 
-// restore_managed_block is still a local contract under the name the
-// platform registers on main (#5130). The rename (#5188) brings that contract
-// in, and this one goes then.
-const PROPOSAL_ID = z.string().regex(/^prp_[0-9A-Za-z]+$/);
-
-const restoreManagedBlockContract = {
-  name: "restore_managed_block",
-  input: z
-    .object({ proposalId: PROPOSAL_ID, path: z.string().min(1) })
-    .strict(),
-  output: z.object({ commit_sha: z.string() }),
-};
-
 /**
  * Approve the steering PR at its head (#4518, ADR-267). Under the team and
  * regulated modes the merge queue refuses a merge with `approval_required`
@@ -359,7 +346,10 @@ export async function dropMemoryRecord(
 
 /**
  * Restore the Oxagen managed block in one file of a steering PR, as a commit
- * on the pull request's branch. The answer is that commit.
+ * on the pull request's branch (`restore_managed_block`). The six checks run
+ * again on that commit. The answer is the commit. A file that holds no
+ * managed block is refused as invalid before the kernel runs, and a block
+ * that already matches the production branch as `block_intact`.
  */
 export async function restoreManagedBlock(
   org: string,
@@ -368,9 +358,16 @@ export async function restoreManagedBlock(
   path: string,
 ): Promise<ActionResult<{ commitSha: string }>> {
   const ctx = await requireViewer(org, ws);
-  const result = await kernelWrite(ctx, restoreManagedBlockContract, {
+  // Only AGENTS.md, CLAUDE.md, and README.md hold a managed block. The
+  // contract's own enum reads the path, and any other is refused here as the
+  // seam refuses invalid input.
+  const file = steeringPrRestoreManagedBlock.input.shape.path.safeParse(path);
+  if (!file.success) {
+    return { ok: false, reason: "invalid", code: "invalid_input", field: "path" };
+  }
+  const result = await kernelWrite(ctx, steeringPrRestoreManagedBlock, {
     proposalId,
-    path,
+    path: file.data,
   });
   return result.ok
     ? { ok: true, value: { commitSha: result.value.commit_sha } }

@@ -2,10 +2,7 @@
 // and the kernel's invoke() are the only fakes, so each case shows what the
 // person gets back and whether the capability ran: ok, invalid (refused
 // before the kernel), and denied and conflict with the handler's reason
-// (INV-19). restore_managed_block is registered on main (#5130) and not yet
-// on this branch, so it answers `tool_not_registered` and never reaches
-// invoke(). When the rename (#5188) brings it in, its case here fails and
-// moves to the ok path.
+// (INV-19).
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { steeringPrOutput } from "@/test/steering-outputs";
 
@@ -451,19 +448,40 @@ describe("dropMemoryRecord", () => {
   });
 });
 
-describe("the steering PR write this branch has not registered yet", () => {
-  it.each([
-    [
-      "restoreManagedBlock",
-      () => restoreManagedBlock("acme", "core-platform", ID, "AGENTS.md"),
-    ],
-  ])("%s answers tool_not_registered (negative)", async (_name, run) => {
-    expect(await run()).toEqual({
+describe("restoreManagedBlock", () => {
+  it("restores the block through restore_managed_block and returns the commit", async () => {
+    invoke.mockResolvedValue({ commit_sha: "7c1d2e3f", status: "checks_passed" });
+    expect(
+      await restoreManagedBlock("acme", "core-platform", ID, "AGENTS.md"),
+    ).toEqual({ ok: true, value: { commitSha: "7c1d2e3f" } });
+    expect(invoke).toHaveBeenCalledWith(
+      "restore_managed_block",
+      { proposalId: ID, path: "AGENTS.md" },
+      expect.objectContaining(TENANT),
+    );
+  });
+
+  it("returns a block that already matches the production branch as a conflict (negative)", async () => {
+    invoke.mockRejectedValue(refused("conflict", "block_intact"));
+    expect(
+      await restoreManagedBlock("acme", "core-platform", ID, "CLAUDE.md"),
+    ).toEqual({ ok: false, reason: "conflict", code: "block_intact" });
+  });
+
+  it("refuses a file that holds no managed block before the kernel runs (negative)", async () => {
+    expect(
+      await restoreManagedBlock(
+        "acme",
+        "core-platform",
+        ID,
+        "steering/constraints/acme.md",
+      ),
+    ).toEqual({
       ok: false,
-      reason: "unavailable",
-      code: "tool_not_registered",
+      reason: "invalid",
+      code: "invalid_input",
+      field: "path",
     });
-    expect(requireViewer).toHaveBeenCalledWith("acme", "core-platform");
     expect(invoke).not.toHaveBeenCalled();
   });
 });

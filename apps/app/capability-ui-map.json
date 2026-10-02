@@ -174,10 +174,10 @@
     "create_workspace": {
       "route": "/[org]",
       "page": "apps/app/src/app/[org]/page.tsx",
-      "entry": "/[org] \u2014 Organization \u203a Workspaces \u203a \u201cCreate a workspace\u201d: a name only, then the steering repo status create_workspace returns and a link to Repositories (features/organization/workspace-actions.tsx, features/organization/actions.ts)",
+      "entry": "/[org] \u2014 Organization \u203a Workspaces \u203a \u201cCreate a workspace\u201d: the name, and the steering repo's Organization and Repository name (steeringRepo), then the steering repo status create_workspace returns and a link to Repositories (features/organization/workspace-actions.tsx, features/organization/actions.ts, features/steering-repo/destination-fields.tsx)",
       "proof": "apps/app/src/features/organization/workspace-actions.test.tsx",
-      "verifiedAt": "2026-09-18",
-      "verifiedBy": "session-m0-workspace-repositories"
+      "verifiedAt": "2026-10-02",
+      "verifiedBy": "steering-repo-destination-pick"
     },
     "decline_member_invite": {
       "route": "/invite/[token]",
@@ -296,6 +296,33 @@
           "verifiedBy": "session-01GDv3vs-fleet-rev1"
         }
       ]
+    },
+    "list_code_repository_findings": {
+      "route": "/[org]/[ws]/repositories",
+      "page": "apps/app/src/app/[org]/[ws]/repositories/[[...tab]]/page.tsx",
+      "entry": "Repositories › Instruction files: each linked code repository's statements that repeat or contradict a steering record, with the file, line, record and pull request (features/repositories/instruction-findings.tsx, features/repositories/instruction-findings-read.ts, features/repositories/actions.ts)",
+      "testid": "instruction-findings",
+      "proof": "apps/app/src/features/repositories/instruction-findings.test.tsx",
+      "verifiedAt": "2026-10-02",
+      "verifiedBy": "s7-instruction-files (#4518)"
+    },
+    "promote_instruction_to_steering": {
+      "route": "/[org]/[ws]/repositories",
+      "page": "apps/app/src/app/[org]/[ws]/repositories/[[...tab]]/page.tsx",
+      "entry": "Repositories › Instruction files › Promote to steering on a contradiction, which opens a steering proposal and its steering PR and names the proposal (features/repositories/instruction-drift.tsx, features/repositories/actions.ts)",
+      "testid": "instruction-drift-promote",
+      "proof": "apps/app/src/features/repositories/instruction-drift.test.tsx",
+      "verifiedAt": "2026-10-02",
+      "verifiedBy": "s7-instruction-files (#4518)"
+    },
+    "restore_managed_block": {
+      "route": "/[org]/[ws]/steering",
+      "page": "apps/app/src/app/[org]/[ws]/steering/page.tsx",
+      "entry": "/[org]/[ws]/steering: the Restore block button under a drifted managed block on an open steering PR (features/steering/write-controls.tsx, shown by steering-pr-panel.tsx)",
+      "testid": "restore-managed-block",
+      "proof": "apps/app/src/features/steering/write-controls.test.tsx",
+      "verifiedAt": "2026-10-02",
+      "verifiedBy": "s7-instruction-files (#4518)"
     },
     "seal_run": {
       "route": "/[org]/[ws]/runs/[run]",
@@ -1423,6 +1450,31 @@
       "proof": "apps/app/src/features/steering-repo/provisioning.test.tsx",
       "verifiedAt": "2026-09-29",
       "verifiedBy": "retry-4750"
+    },
+    "list_steering_repo_destinations": {
+      "route": "/[org]",
+      "page": "apps/app/src/app/[org]/page.tsx",
+      "entry": "/[org] \u2014 Organization \u203a Workspaces \u203a \u201cCreate a workspace\u201d \u203a the Organization select, read when the dialog opens: every GitHub organization and GitLab group a new workspace's steering repo can go in, starting on the organization's default (features/steering-repo/destination-fields.tsx, features/organization/actions.ts)",
+      "testid": "create-workspace-steering-connection",
+      "proof": "apps/app/src/features/organization/workspace-actions.test.tsx",
+      "verifiedAt": "2026-10-02",
+      "verifiedBy": "steering-repo-destination-pick",
+      "also": [
+        {
+          "route": "/welcome/[org]/new-workspace",
+          "page": "apps/app/src/app/(onboarding)/welcome/[org]/new-workspace/page.tsx",
+          "entry": "Onboarding \u203a Create the first workspace \u203a the Organization select (features/onboarding/ui/first-workspace-form.tsx, features/onboarding/actions.ts)",
+          "testid": "ob-workspace-steering-connection",
+          "proof": "apps/app/src/features/onboarding/ui/first-workspace-form.test.tsx"
+        },
+        {
+          "route": "/[org]/[ws]/repositories",
+          "page": "apps/app/src/app/[org]/[ws]/repositories/[[...tab]]/page.tsx",
+          "entry": "The steering repo's provisioning steps \u203a a setup stopped on a place out of reach or a refused create \u203a the Organization select beside Retry (features/steering-repo/provisioning.tsx, features/steering-repo/actions.ts)",
+          "testid": "steering-repo-change-steering-connection",
+          "proof": "apps/app/src/features/steering-repo/provisioning.test.tsx"
+        }
+      ]
     },
     "revise_steering_record": {
       "route": "/[org]/[ws]/steering/records/[lineage]",

@@ -120,7 +120,9 @@ export function toRunDetail(
   pageSize: number,
 ): z.input<typeof RunDetail> {
   return {
-    run: toRunRow(out.run),
+    // The record basis is `get_run`'s alone (ADR-161), so the Fleet row
+    // `toRunRow` builds leaves it out.
+    run: { ...toRunRow(out.run), recordBasis: out.run.recordBasis },
     frames: {
       frames: out.frames.frames.map((frame) => ({
         cursor: frame.cursor,

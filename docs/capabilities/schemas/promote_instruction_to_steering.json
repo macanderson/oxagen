@@ -1,0 +1,96 @@
+{
+  "name": "promote_instruction_to_steering",
+  "domain": "repository",
+  "description": "Propose a new version of the steering record an instruction-file statement contradicts, with the statement as its text, and open the proposal's steering PR. Takes a finding id from list_code_repository_findings. Refused for a repeat, for a statement that matches no record now, and while another PR is open on the record. Nothing steers until the PR merges.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "cli",
+    "agent"
+  ],
+  "sensitivity": "medium",
+  "agent": {
+    "requiresApproval": true,
+    "riskLevel": "medium",
+    "category": "governance"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "finding_id": {
+        "type": "string",
+        "description": "The finding's id, from list_code_repository_findings"
+      }
+    },
+    "required": [
+      "finding_id"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "proposal_id": {
+        "type": "string",
+        "description": "The proposal it opened (prp_…)"
+      },
+      "lineage": {
+        "type": "string",
+        "description": "The record the proposal revises"
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "proposed",
+          "pr_open",
+          "checks_running",
+          "checks_passed",
+          "checks_failed",
+          "merged",
+          "rejected"
+        ],
+        "description": "Where the proposal's steering PR stopped"
+      },
+      "pull_request": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "number": {
+                "type": "integer",
+                "exclusiveMinimum": 0
+              },
+              "url": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "number",
+              "url"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "proposal_id",
+      "lineage",
+      "status",
+      "pull_request"
+    ],
+    "additionalProperties": false
+  }
+}

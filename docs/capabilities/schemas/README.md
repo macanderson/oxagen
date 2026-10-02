@@ -197,6 +197,7 @@ capability rewrites, so two such branches always conflicted on it (ADR-216).
 - publish_steering_record
 - read_steering
 - refresh_steering_pr
+- restore_managed_block
 - revert_steering_pr
 - revise_steering_record
 - search_steering
@@ -398,11 +399,14 @@ capability rewrites, so two such branches always conflicted on it (ADR-216).
 - get_steering_repo
 - import_workspace_steering
 - link_repository
+- list_code_repository_findings
 - list_github_installations
 - list_installation_repositories
 - list_repositories
+- list_steering_repo_destinations
 - list_working_copies
 - open_init_pr
+- promote_instruction_to_steering
 - record_working_copy
 - repair_steering_repo
 - retry_steering_repo_provision
@@ -539,6 +543,7 @@ capability rewrites, so two such branches always conflicted on it (ADR-216).
 - list_incidents
 - list_machine_groups
 - list_tacho_hosts
+- list_tacho_session_heads
 - list_tacho_sessions
 - recall_tacho_memories
 - record_tacho_memory_uses

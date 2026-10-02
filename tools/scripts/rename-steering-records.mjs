@@ -107,6 +107,12 @@ const CODE_RULES = [
     re: /\/context\/(records?|prs?|proposals?)(?![a-z])/g,
     to: "/steering/$1",
   },
+  // The CLI names its API paths with no leading slash: "context/prs/revert".
+  {
+    id: "api-path-relative",
+    re: /(?<![\w/.-])context\/(records?|prs?|proposals?)(?![a-z])/g,
+    to: "steering/$1",
+  },
 ];
 
 // Between the two words of a name: spaces, or a line break that may carry a

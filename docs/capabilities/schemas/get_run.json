@@ -1325,6 +1325,14 @@
           },
           "repositoryUnlinked": {
             "type": "boolean"
+          },
+          "recordBasis": {
+            "type": "string",
+            "enum": [
+              "live",
+              "backfill",
+              "mixed"
+            ]
           }
         },
         "required": [
@@ -1357,7 +1365,8 @@
           "harness",
           "name",
           "summary",
-          "repositoryUnlinked"
+          "repositoryUnlinked",
+          "recordBasis"
         ],
         "additionalProperties": false
       },

@@ -130,6 +130,54 @@ function addHostWrapCommands(parent: Command): void {
     );
 
   parent
+    .command("backfill")
+    .description(
+      "Record the Claude Code sessions this machine ran before it enrolled, from the transcripts Claude Code kept",
+    )
+    .option(
+      "--since <date>",
+      "Only sessions that started on or after this UTC date (YYYY-MM-DD)",
+    )
+    .option(
+      "--until <date>",
+      "Only sessions that started before this UTC date (YYYY-MM-DD)",
+    )
+    .option(
+      "--project <name>",
+      "Only this folder under ~/.claude/projects (repeatable)",
+      (value: string, previous: string[]) => [...previous, value],
+      [] as string[],
+    )
+    .option(
+      "--exclude-project <name>",
+      "Skip this folder under ~/.claude/projects (repeatable)",
+      (value: string, previous: string[]) => [...previous, value],
+      [] as string[],
+    )
+    .option(
+      "--session <id>",
+      "Only this session and its subagents (repeatable)",
+      (value: string, previous: string[]) => [...previous, value],
+      [] as string[],
+    )
+    .option("--dry-run", "Read and count, and record and send nothing")
+    .option("--json", "Print the report as one JSON object")
+    .action(
+      async (opts: {
+        since?: string;
+        until?: string;
+        project?: string[];
+        excludeProject?: string[];
+        session?: string[];
+        dryRun?: boolean;
+        json?: boolean;
+      }) => {
+        const { handleTachoBackfill } = await import("./commands/tacho.js");
+        process.exitCode = await handleTachoBackfill(opts);
+      },
+    );
+
+  parent
     .command("verify")
     .description(
       "Run one headless turn (Claude Code by default) and confirm it was chained",
@@ -688,7 +736,7 @@ export function buildProgram(): Command {
   const steeringCmd = program
     .command("steering")
     .description(
-      "Steering records: whether .oxagen/ carries the ones merged on the production branch, and Markdown import",
+      "Steering records: whether .oxagen/ carries the ones merged on the production branch, Markdown import, and instruction file findings",
     );
   steeringCmd
     .command("status")
@@ -784,6 +832,47 @@ export function buildProgram(): Command {
           "./commands/steering-import.js"
         );
         await handleSteeringImport(paths, opts);
+      },
+    );
+  steeringCmd
+    .command("findings")
+    .description(
+      "List the statements in linked repositories' instruction files that repeat or contradict a steering record",
+    )
+    .option("--json", "Output JSON")
+    .action(async (opts: { json?: boolean }) => {
+      const { steeringFindings } = await import(
+        "./commands/steering-findings.js"
+      );
+      await steeringFindings(opts);
+    });
+  steeringCmd
+    .command("promote")
+    .argument("<finding-id>", "The crf_… id `oxagen steering findings` shows")
+    .description(
+      "Propose a new version of the record a statement contradicts, with the statement as its text, and open its steering PR",
+    )
+    .option("--json", "Output JSON")
+    .action(async (findingId: string, opts: { json?: boolean }) => {
+      const { steeringPromote } = await import(
+        "./commands/steering-promote.js"
+      );
+      await steeringPromote(findingId, opts);
+    });
+  steeringCmd
+    .command("restore-block")
+    .argument("<proposal-id>", "The prp_… proposal whose steering PR holds the file")
+    .argument("<path>", "AGENTS.md, CLAUDE.md, or README.md")
+    .description(
+      "Restore Oxagen's managed block in one file of an open steering PR, as one commit from the production branch",
+    )
+    .option("--json", "Output JSON")
+    .action(
+      async (proposalId: string, path: string, opts: { json?: boolean }) => {
+        const { steeringRestoreBlock } = await import(
+          "./commands/steering-restore-block.js"
+        );
+        await steeringRestoreBlock(proposalId, path, opts);
       },
     );
 
@@ -1789,6 +1878,17 @@ export function buildProgram(): Command {
         await agentUnenroll(agentHandle, opts);
       },
     );
+  agent
+    .command("uninstall")
+    .description(
+      "Take Oxagen off this machine without the desktop app: unenroll every agent, then remove the app's per-user copy, PATH links, and shell profile lines, and ~/.config/oxagen, which holds your `oxagen login` session",
+    )
+    .option("--token <apiKey>", "Operator token for the server-side revoke")
+    .option("--reason <text>", "Reason recorded with each revoke")
+    .action(async (opts: { token?: string; reason?: string }) => {
+      const { handleTachoUninstall } = await import("./commands/tacho.js");
+      if (!(await handleTachoUninstall(opts))) process.exitCode = 1;
+    });
 
   const agentEnv = agent
     .command("env")

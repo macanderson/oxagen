@@ -57,8 +57,10 @@ move forward.
    `NPM_TOKEN` repository secret, a granular token with read and write on
    `@oxagen/cli`. npm caps such a token at 90 days, and Mac rotates it on a
    scheduled routine. Trusted publishing through OIDC needs no stored
-   token, but npm attaches provenance only to packages built from public
-   repositories, and this one is private. Mac chose the token.
+   token, but on 2026-10-02 npm supported it only on GitHub-hosted
+   runners, and this repository's CI runs on its own (ADR-246). From a
+   private repository it would also publish without provenance. Mac chose
+   the token. Revisit this when npm supports self-hosted runners.
 7. **A failed publish leaves main green.** The publish runs in its own
    workflow, the way `desktop.yml` builds installers. When it ran inside
    `pipeline.yml`, an expired token would fail a `main` job, file a P0

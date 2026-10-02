@@ -1,14 +1,24 @@
 "use client";
 // Create the first workspace, when the organization has none: its name, and
-// nothing else. The address follows the name on the server, and
-// `create_workspace` starts the steering repo's provisioning in the same
-// write. Once it answers, the page re-reads and shows that provisioning.
+// where its steering repo goes and what it is called (#5196). The address
+// follows the name on the server, and `create_workspace` starts the steering
+// repo's provisioning in the same write. Once it answers, the page re-reads
+// and shows that provisioning.
 import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useState } from "react";
+import {
+  defaultRepoName,
+  repoNameAccepted,
+  SteeringRepoDestinationFields,
+  steeringRepoDraftOf,
+} from "@/features/steering-repo/client";
 import { Field } from "@/ui/field";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
-import { createFirstWorkspace } from "../actions";
+import {
+  createFirstWorkspace,
+  readFirstWorkspaceDestinations,
+} from "../actions";
 
 type Refused = Extract<
   Awaited<ReturnType<typeof createFirstWorkspace>>,
@@ -19,6 +29,7 @@ type NameError = "nameRequired" | "nameTooLong" | "nameInvalid" | "slugTaken";
 
 type Refusal =
   | { at: "name"; key: NameError }
+  | { at: "repoName" }
   | { at: "form"; key: "denied" }
   | { at: "form"; key: "failed"; code: string };
 
@@ -35,6 +46,8 @@ function invalidName(code: string): NameError {
 }
 
 function refusalOf(result: Refused): Refusal {
+  if (result.reason === "invalid" && result.field?.startsWith("steeringRepo"))
+    return { at: "repoName" };
   if (result.reason === "invalid")
     return { at: "name", key: invalidName(result.code) };
   if (result.reason === "conflict" && result.code === "slug_taken")
@@ -49,6 +62,7 @@ function refusalOf(result: Refused): Refusal {
 
 export function FirstWorkspaceForm({ org }: { org: string }) {
   const t = useTranslations("onboarding.welcome.workspace");
+  const tRepo = useTranslations("repositories.steeringRepo.destination");
   const navigate = useNavigate();
   const [name, setName] = useState("");
   const [pending, setPending] = useState(false);
@@ -57,10 +71,14 @@ export function FirstWorkspaceForm({ org }: { org: string }) {
   async function onSubmit(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
     if (pending) return;
+    // The repository name field marks itself invalid while it holds a name the
+    // contract would refuse, and says why under the field.
+    if (!repoNameAccepted(event.currentTarget)) return;
+    const steeringRepo = steeringRepoDraftOf(new FormData(event.currentTarget));
     setPending(true);
     setRefusal(null);
     try {
-      const result = await createFirstWorkspace(org, name);
+      const result = await createFirstWorkspace(org, name, steeringRepo);
       if (result.ok) {
         navigate.refresh();
         return;
@@ -105,6 +123,15 @@ export function FirstWorkspaceForm({ org }: { org: string }) {
         }}
         error={nameError}
         className="max-md:text-base"
+      />
+      <SteeringRepoDestinationFields
+        org={org}
+        load={readFirstWorkspaceDestinations}
+        defaultName={defaultRepoName(name)}
+        idPrefix="ob-workspace"
+        nameError={
+          refusal?.at === "repoName" ? tRepo("repoNameInvalid") : undefined
+        }
       />
       <div>
         <SubmitButton

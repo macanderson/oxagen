@@ -95,3 +95,40 @@ export function ulid(now: number = Date.now()): string {
 export function newEventId(now?: number): string {
   return `evt_${ulid(now)}`;
 }
+
+/**
+ * The `event_id` of a frame rebuilt from a transcript (ADR-161, spec
+ * `backfill.md` section 4). It keeps the live shape, `evt_` and a ULID. The
+ * time part is the frame's `ts`. The random part is the first 80 bits of
+ * `sha256(session_uuid, seq, raw_source_digest)`, so a second pass over the
+ * same bytes names the same frame and its hash does not change. A live frame
+ * keeps `newEventId`.
+ */
+export function backfillEventId(
+  sessionUuidValue: string,
+  seq: number,
+  rawSourceDigest: string,
+  tsMs: number,
+): string {
+  let time = Number.isFinite(tsMs) && tsMs >= 0 ? Math.floor(tsMs) : 0;
+  let timePart = "";
+  for (let index = 0; index < 10; index += 1) {
+    timePart = CROCKFORD[time % 32] + timePart;
+    time = Math.floor(time / 32);
+  }
+  const hash = createHash("sha256")
+    .update(sessionUuidValue)
+    .update(" ")
+    .update(String(seq))
+    .update(" ")
+    .update(rawSourceDigest)
+    .digest();
+  // 16 characters of 5 bits each: the first 80 bits of the hash.
+  let bits = 0n;
+  for (let index = 0; index < 10; index += 1)
+    bits = (bits << 8n) | BigInt(hash[index] ?? 0);
+  let randomPart = "";
+  for (let index = 15; index >= 0; index -= 1)
+    randomPart += CROCKFORD[Number((bits >> BigInt(index * 5)) & 31n)];
+  return `evt_${timePart}${randomPart}`;
+}

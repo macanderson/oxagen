@@ -36,14 +36,19 @@ import { contextGovernanceModeSet } from "@oxagen/oxagen/contracts/context.gover
 import { governanceModeSchema } from "@oxagen/oxagen/contracts/context.steering.shared";
 import { workspaceArchive } from "@oxagen/oxagen/contracts/workspace.archive";
 import {
+  type SteeringRepoDestinationsListOutput,
+  steeringRepoDestinationsList,
+} from "@oxagen/oxagen/contracts/steering_repo.destinations.list";
+import {
   type SteeringRepoProvisionStatus,
+  type WorkspaceCreateInput,
   workspaceCreate,
 } from "@oxagen/oxagen/contracts/workspace.create";
 import { workspaceInviteSend } from "@oxagen/oxagen/contracts/workspace.invite.send";
 import { workspaceSettingsWrite } from "@oxagen/oxagen/contracts/workspace.settings.write";
 import { GrantableOrgRole } from "@/data/contracts/org";
 import type { ActionResult } from "@/server/kernel";
-import { kernelWrite } from "@/server/kernel";
+import { kernelRead, kernelWrite, readToActionResult } from "@/server/kernel";
 import { requireViewer } from "@/server/viewer";
 import { slugFromName } from "./workspace-slug";
 
@@ -118,10 +123,10 @@ export async function deleteRole(
 type WorkspaceDraft = { name: string; slug: string };
 
 /**
- * A new workspace's draft: its name, and nothing else. `create_workspace`
- * makes the workspace's private steering repo itself (lane S1, #4450), so the
- * person picks no repository. `mainRepo` is deprecated in the contract and
- * this action never sends it.
+ * A new workspace's draft: its name, and where its steering repo goes and what
+ * it is called (#5196). `create_workspace` makes the private steering repo
+ * itself (lane S1, #4450), so the person picks no code repository. `mainRepo`
+ * is deprecated in the contract and this action never sends it.
  *
  * The design's form has no slug field, so the slug is made from the name
  * (`slugFromName`) unless a caller names one.
@@ -129,6 +134,8 @@ type WorkspaceDraft = { name: string; slug: string };
 export type NewWorkspaceDraft = {
   name: string;
   slug?: string;
+  /** Left out, the job takes the organization's default place and `oxagen-<slug>`. */
+  steeringRepo?: WorkspaceCreateInput["steeringRepo"];
 };
 
 /**
@@ -156,6 +163,9 @@ export async function createWorkspace(
   const result = await kernelWrite(ctx, workspaceCreate, {
     name: draft.name.trim(),
     slug: named === "" ? slugFromName(draft.name) : named,
+    ...(draft.steeringRepo === undefined
+      ? {}
+      : { steeringRepo: draft.steeringRepo }),
   });
   if (result.ok) {
     return {
@@ -171,6 +181,25 @@ export async function createWorkspace(
   if (named === "" && "field" in result && result.field === "slug")
     return { ...result, field: "name" };
   return result;
+}
+
+/**
+ * Where a new workspace's steering repo can go, for the Create a workspace
+ * dialog to offer when it opens (#5196): every GitHub organization and GitLab
+ * group the organization's stored tokens reach, and the organization's
+ * default. The read admits the roles `create_workspace` admits.
+ */
+export async function readSteeringRepoDestinations(
+  org: string,
+): Promise<ActionResult<SteeringRepoDestinationsListOutput>> {
+  const ctx = await requireViewer(org);
+  return readToActionResult(
+    await kernelRead(ctx, {
+      contract: steeringRepoDestinationsList,
+      input: {},
+      page: "organization",
+    }),
+  );
 }
 
 /**

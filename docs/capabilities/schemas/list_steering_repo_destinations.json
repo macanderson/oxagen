@@ -1,0 +1,154 @@
+{
+  "name": "list_steering_repo_destinations",
+  "domain": "repository",
+  "description": "List the GitHub organizations, personal GitHub accounts, and GitLab groups where Oxagen can create a new workspace's steering repo. Also names the organization's default and the repository name a workspace slug gets by default. Pass a destination and a name to create_workspace's steeringRepo.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "medium",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "workspace"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "slug": {
+        "type": "string",
+        "minLength": 2,
+        "maxLength": 40,
+        "x-server-validated": true,
+        "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
+      }
+    },
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "destinations": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "provider": {
+              "type": "string",
+              "enum": [
+                "github",
+                "gitlab"
+              ]
+            },
+            "id": {
+              "type": "integer",
+              "exclusiveMinimum": 0
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The GitHub organization's or personal account's login, or the GitLab group's path."
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "organization",
+                "user"
+              ],
+              "description": "organization for a GitHub organization or GitLab group, user for the owner's own personal GitHub account."
+            }
+          },
+          "required": [
+            "provider",
+            "id",
+            "name",
+            "kind"
+          ],
+          "additionalProperties": false
+        },
+        "description": "Every place the organization's stored tokens reach, GitHub first. Empty when nothing is connected yet."
+      },
+      "default": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "provider": {
+                "type": "string",
+                "enum": [
+                  "github",
+                  "gitlab"
+                ]
+              },
+              "id": {
+                "type": "integer",
+                "exclusiveMinimum": 0
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "description": "The GitHub organization's or personal account's login, or the GitLab group's path."
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "organization",
+                  "user"
+                ],
+                "description": "organization for a GitHub organization or GitLab group, user for the owner's own personal GitHub account."
+              }
+            },
+            "required": [
+              "provider",
+              "id",
+              "name",
+              "kind"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "defaultName": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "reauthorize": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "enum": [
+            "github",
+            "gitlab"
+          ]
+        },
+        "description": "Hosts that refused the stored token, so their places are missing from destinations. An organization owner must authorize Oxagen on that host again."
+      }
+    },
+    "required": [
+      "destinations",
+      "default",
+      "defaultName",
+      "reauthorize"
+    ],
+    "additionalProperties": false
+  }
+}

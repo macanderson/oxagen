@@ -1,64 +1,82 @@
 "use client";
-// The warning a code repository shows when an instruction file in it drifted
-// from the steering records (#4518). Each finding names the file, and Promote
-// to steering asks the platform to propose that file as a steering record
-// through `promote_instruction_to_steering`. The proposal reaches the steering
-// repo as a steering PR, so nothing steers from the file until that PR merges.
-// With no findings the warning draws nothing.
+// The statements a code repository's instruction files hold that repeat or
+// contradict a steering record (#4518, ADR-263). Each finding names the file
+// and line, quotes the statement, names the record, and links the pull
+// request that added it. A contradiction offers Promote to steering, which
+// proposes the line as the record's new text through
+// `promote_instruction_to_steering` and opens its steering PR, so nothing
+// steers from the line until that PR merges. A repeat offers nothing to
+// promote: steering already says it. With no findings the list draws nothing.
 import { useTranslations } from "next-intl";
 import { useState } from "react";
-import { buttonSecondary } from "@/ui/control-styles";
+import { parsePullRequestUrl } from "@/shared/pull-request-url";
+import { buttonSecondary, linkText } from "@/ui/control-styles";
 import { FormAlert } from "@/ui/form-feedback";
+import { PullRequestLink } from "@/ui/navigation";
 import { promoteInstructionToSteering } from "./actions";
 import { UNANSWERED, useRepositoriesFailure } from "./failure";
 import { code, note } from "./parts";
 
 const PROMOTE_CAPABILITY = "promote_instruction_to_steering";
 
-/** One instruction file whose content drifted from the steering records. */
+/** One statement that repeats or contradicts a steering record. */
 export type InstructionDriftFinding = {
-  /** The file's path in the repository, such as `AGENTS.md`. */
+  /** The finding's id (`crf_…`), which Promote to steering sends. */
+  id: string;
+  /** The instruction file's path in the repository, such as `AGENTS.md`. */
   path: string;
+  line: number;
+  statement: string;
+  kind: "repeat" | "contradiction";
+  /** The record's label, or its lineage when it has none. */
+  record: string;
+  pullRequest: { number: number; url: string; merged: boolean };
+  /** The proposal a promote opened that is still in flight, or null. */
+  proposalId: string | null;
 };
 
 export function InstructionDriftWarning({
   org,
   ws,
-  repositoryId,
   findings,
 }: {
   org: string;
   ws: string;
-  /** The code repository the findings are about. */
-  repositoryId: string;
   findings: readonly InstructionDriftFinding[];
 }) {
   if (findings.length === 0) return null;
   return (
     <ul data-testid="instruction-drift" className="flex flex-col gap-2">
       {findings.map((finding) => (
-        <DriftFinding
-          key={finding.path}
-          org={org}
-          ws={ws}
-          repositoryId={repositoryId}
-          path={finding.path}
-        />
+        <DriftFinding key={finding.id} org={org} ws={ws} finding={finding} />
       ))}
     </ul>
+  );
+}
+
+function PullRequest({ pullRequest }: { pullRequest: InstructionDriftFinding["pullRequest"] }) {
+  const t = useTranslations("repositories.drift");
+  const label = pullRequest.merged
+    ? t("mergedPullRequest", { number: pullRequest.number })
+    : t("openPullRequest", { number: pullRequest.number });
+  const url = parsePullRequestUrl(pullRequest.url);
+  return url === null ? (
+    <span className="text-xs text-muted-foreground">{label}</span>
+  ) : (
+    <PullRequestLink to={url} className={`${linkText} text-xs`}>
+      {label}
+    </PullRequestLink>
   );
 }
 
 function DriftFinding({
   org,
   ws,
-  repositoryId,
-  path,
+  finding,
 }: {
   org: string;
   ws: string;
-  repositoryId: string;
-  path: string;
+  finding: InstructionDriftFinding;
 }) {
   const t = useTranslations("repositories.drift");
   const failureText = useRepositoriesFailure();
@@ -71,10 +89,7 @@ function DriftFinding({
     setPending(true);
     setFailure(null);
     try {
-      const result = await promoteInstructionToSteering(org, ws, {
-        repositoryId,
-        path,
-      });
+      const result = await promoteInstructionToSteering(org, ws, finding.id);
       if (result.ok) setProposalId(result.value.proposalId);
       else setFailure(failureText(result, PROMOTE_CAPABILITY));
     } catch {
@@ -84,14 +99,29 @@ function DriftFinding({
     }
   }
 
+  const promotable =
+    finding.kind === "contradiction" && finding.proposalId === null && proposalId === null;
   return (
     <li
       data-testid="instruction-drift-finding"
-      data-path={path}
+      data-finding={finding.id}
+      data-path={finding.path}
+      data-kind={finding.kind}
       className={`${note} flex flex-col items-start gap-2 border-info`}
     >
-      <p className="text-foreground">{t.rich("detected", { path, code })}</p>
-      {proposalId === null ? (
+      <p className="text-foreground">
+        {t.rich("location", { path: finding.path, line: finding.line, code })}
+      </p>
+      <blockquote className="border-l-2 border-border pl-3 text-foreground">
+        {finding.statement}
+      </blockquote>
+      <p>
+        {finding.kind === "contradiction"
+          ? t("contradiction", { record: finding.record })
+          : t("repeat", { record: finding.record })}
+      </p>
+      <PullRequest pullRequest={finding.pullRequest} />
+      {promotable ? (
         <button
           type="button"
           data-testid="instruction-drift-promote"
@@ -104,11 +134,16 @@ function DriftFinding({
         >
           {pending ? t("promoting") : t("promote")}
         </button>
-      ) : (
+      ) : null}
+      {proposalId !== null ? (
         <p role="status" data-testid="instruction-drift-promoted">
           {t("promoted", { proposalId })}
         </p>
-      )}
+      ) : finding.proposalId !== null ? (
+        <p data-testid="instruction-drift-proposed">
+          {t("proposed", { proposalId: finding.proposalId })}
+        </p>
+      ) : null}
       {failure === null ? null : (
         <FormAlert testId="instruction-drift-failure">{failure}</FormAlert>
       )}

@@ -109,6 +109,13 @@ export interface TachoPaths extends TachoHome {
   /** Transcript byte cursors, so a restart does not re-read every transcript. */
   transcriptTailState: string;
   /**
+   * The backfill's cursor file (ADR-161): for each transcript a pass read,
+   * where it stopped and where the chain it sealed ends, so an interrupted
+   * pass resumes and a later live resume continues the chain. Paths, sizes,
+   * seqs and hashes only, no transcript text.
+   */
+  backfillCursor: string;
+  /**
    * The use count each Codex memory held at the last report, so a restart
    * reports only the rise since (`collector/memory-capture/memory-counts.ts`).
    * Counts and memory paths only, no memory text.
@@ -166,6 +173,7 @@ export const AGENT_FILES: Record<
   pendingEnds: "pending-session-ends.json",
   hookIdJournal: "hook-ids.jsonl",
   transcriptTailState: "transcript-tail.json",
+  backfillCursor: "backfill-cursor.json",
   memoryCounts: "memory-counts.json",
   stellaMemoryCursors: "stella-memory-cursors.json",
   preSessionCopies: "pre-session",

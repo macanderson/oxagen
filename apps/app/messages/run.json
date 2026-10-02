@@ -965,6 +965,17 @@
       "chain_break": "the hash chain does not hold end to end",
       "telemetry_gap": "telemetry stopped for part of the run"
     },
+    "backfill": {
+      "badge": "Backfilled",
+      "partlyBadge": "Partly backfilled",
+      "note": "Rebuilt from the Claude Code transcript on {date}. Nothing was enforced during this run.",
+      "undatedNote": "Rebuilt from the Claude Code transcript. Nothing was enforced during this run.",
+      "partlyNote": "The start of this run was rebuilt from the Claude Code transcript. Oxagen recorded the rest as it ran.",
+      "tierNotRecorded": "tier not recorded",
+      "policy": "Not recorded. Oxagen rebuilt this run from the Claude Code transcript after it ended, so no policy ran on it.",
+      "sealedBadge": "sealed at backfill",
+      "costNote": "Estimated. Oxagen rebuilt this run from the Claude Code transcript and priced each model call from its price book on the day of the call."
+    },
     "chain": {
       "title": "Chain and seal",
       "compacted": "<b>Compacted.</b> This run is read from its archive segment.",
@@ -1288,6 +1299,7 @@
       "corrective": "{count} corrective",
       "provisional": "provisional figure the agent reported",
       "estimate": "estimate",
+      "estimated": "estimated",
       "basisNotRecorded": "basis not recorded",
       "noEnd": "no end recorded",
       "mostly": {

@@ -169,6 +169,10 @@ const ACTIONS = new Set([
   // revert_steering_pr: open a steering PR that undoes a merged one (#4449).
   // Not "undo" or "rollback": git and the host both call this a revert.
   "revert",
+  // restore_managed_block: put the production branch's managed block back in
+  // one file of a steering PR (#4518). Not "repair": that writes a steering
+  // repo's settings, and this writes one file on one branch.
+  "restore",
   // drop_memory_record: take one proposed record out of an open memory PR
   // (#4518). Not "delete" or "remove": nothing published is deleted, and the
   // PR's settlement rejects the record.

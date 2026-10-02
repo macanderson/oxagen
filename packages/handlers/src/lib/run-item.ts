@@ -209,6 +209,12 @@ export type TachoSessionColumns = GeneratedSummaryColumns & {
    * session's own calls reported (`list`, `estimated`, `unknown` and more).
    */
   costBasis?: string | null;
+  /**
+   * `tacho.sessions.record_basis` (ADR-161): `live`, `backfill`, or `mixed`
+   * once a live resume continued a backfilled chain. Absent where a reader
+   * did not select it, which reads as `live`.
+   */
+  recordBasis?: string;
   /** The effort level the harness reported in its context frames. */
   effort?: string | null;
   /** The directories and git branches the session's start recorded; absent where not selected. */
@@ -760,6 +766,19 @@ export function tachoPlace(
   return { place: path === null && branch === null ? null : { path, branch } };
 }
 
+/**
+ * How a session's frames reached the record (ADR-161), as `get_run` answers
+ * it. A row read without the column, or holding a word outside the three
+ * the column's check allows, is a live session, the column's default.
+ */
+export function recordBasisOf(
+  session: Pick<TachoSessionColumns, "recordBasis">,
+): "live" | "backfill" | "mixed" {
+  return session.recordBasis === "backfill" || session.recordBasis === "mixed"
+    ? session.recordBasis
+    : "live";
+}
+
 export function toTachoRunItem(
   row: TachoSessionRow,
   totals: RunRollup | undefined,
@@ -794,8 +813,11 @@ export function toTachoRunItem(
     ...rollupTokenFields(totals),
     // A zero total is a cost only when the gateway observed it. A session
     // that reported `unknown` or `observed_unpriced` with no figure has no
-    // cost to show, so it reads as none, not as $0.
+    // cost to show, so it reads as none, not as $0. A run a backfill rebuilt
+    // has no figure of its own: the rollup prices its calls from the price
+    // book (ADR-161), and `cost` is the one figure it shows.
     reportedCost:
+      recordBasisOf(session) === "live" &&
       Number.isSafeInteger(session.totalCostMicros) &&
       ((session.totalCostMicros ?? 0) > 0 ||
         session.costBasis === TACHO_METERING_OBSERVED)
