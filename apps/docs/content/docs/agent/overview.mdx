@@ -53,7 +53,9 @@ The contract registry defines the agent's tools. A capability whose `surfaces` i
 1. The tool policy for the turn.
 2. Whether the current principal (you, or an agent acting for you) holds the grant.
 
-The agent picks tools from that list to answer your request. A rule answers each call before the handler runs: allowed, denied, or routed to you as an approval card. The IAM check happens before the handler, never inside it.
+The agent picks tools from that list to answer your request. Before the handler runs, each call passes the IAM check for you, and a capability that requires approval comes to you as an approval card. The IAM check happens before the handler, never inside it.
+
+Your workspace's decision rules and steering do not apply to the assistant. It is Oxagen's agent, and your workspace does not govern or monitor it. A turn started with an API key is the one exception: its calls still meet your workspace's decision rules.
 
 ## Delegated context
 

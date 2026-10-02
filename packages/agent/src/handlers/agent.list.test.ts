@@ -411,6 +411,14 @@ describe.skipIf(!process.env.DATABASE_URL)(
         child: true,
       });
       await support.seedLedgerRun(tenant, alpha, new Date(now - DAY_MS));
+      // Two Stella turns on alpha's row, one per in-app surface. The
+      // workspace does not monitor Stella (ADR-235), so neither counts.
+      await support.seedLedgerRun(tenant, alpha, new Date(now - DAY_MS), {
+        surface: "chat",
+      });
+      await support.seedLedgerRun(tenant, alpha, new Date(now - DAY_MS), {
+        surface: "api-chat",
+      });
       await support.seedIncident(tenant, {
         hostId: host.id,
         kind: "hooks_removed",
@@ -520,8 +528,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
       });
       expect(alpha.host).toBe("build-1");
       expect(alpha.mandates).toBe(0);
-      // Two root sessions in the window plus one ledger run; the child and
-      // the 40-day-old session are outside the count.
+      // Two root sessions in the window plus one ledger run; the child, the
+      // 40-day-old session, and the two Stella turns are outside the count.
       expect(alpha.runs30d).toBe(3);
       // The unknown-model-cost session is unpriced; the 40-day-old one is
       // outside the window.

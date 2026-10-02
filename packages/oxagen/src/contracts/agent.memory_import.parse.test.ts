@@ -13,7 +13,12 @@ describe("agent.memory.import.parse capability", () => {
     expect(agentMemoryImportParse.mode).toBe("sync");
     expect(agentMemoryImportParse.scoped).toBe(true);
     expect(agentMemoryImportParse.defaultEffect).toBe("deny");
-    expect(agentMemoryImportParse.surfaces).toEqual(["api", "mcp", "agent"]);
+  });
+
+  it("is retired: on no surface, so no route, tool, or agent turn reaches it", () => {
+    expect(agentMemoryImportParse.surfaces).toEqual([]);
+    expect(agentMemoryImportParse.layers).not.toContain("api");
+    expect(agentMemoryImportParse.layers).not.toContain("mcp");
   });
 
   it("allows org Owner/Admin and workspace Owner/Member", () => {

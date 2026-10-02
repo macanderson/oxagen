@@ -1,7 +1,7 @@
 /**
- * The in-app assistant's steering: published records and the workspace's
- * instructions, assembled by the one assembler, with a manifest of what was
- * kept and cut (ADR-093 §7, #4158).
+ * The in-app assistant's steering. The assembler ranks published records and
+ * the workspace's instructions and states what it kept and cut (ADR-093 §7).
+ * A Stella turn hands it neither (ADR-235), which `noWorkspaceSteering` pins.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { digestJcs } from "@oxagen/run-evidence";
@@ -37,7 +37,7 @@ import {
   assembleAssistantSteering,
   assistantSystemPrompt,
   instructionCandidate,
-  loadAssistantSteering,
+  noWorkspaceSteering,
   WORKSPACE_INSTRUCTIONS_ID,
   WORKSPACE_INSTRUCTIONS_MAX_CHARS,
 } from "./assistant-steering";
@@ -268,50 +268,34 @@ describe("assembleAssistantSteering", () => {
   });
 });
 
-describe("loadAssistantSteering", () => {
-  const load = () =>
-    loadAssistantSteering({
+// ADR-235: a Stella turn reads no workspace steering. The workspace has
+// published a record and set instructions here, and neither reaches the turn.
+describe("noWorkspaceSteering", () => {
+  it("reads nothing from the workspace and names no item in the manifest", () => {
+    mocks.readPublished.mockResolvedValue([record({})]);
+    const steering = noWorkspaceSteering({
       orgId: "org-1",
       workspaceId: "ws-1",
-      promptConfig: { additionalInstructions: INSTRUCTIONS },
-      requestId: "req-1",
     });
-
-  it("reads the published records in the turn's tenant scope and assembles them", async () => {
-    mocks.readPublished.mockResolvedValueOnce([record({})]);
-    const steering = await load();
-    expect(mocks.withTenantDb).toHaveBeenCalledTimes(1);
-    expect(mocks.readPublished).toHaveBeenCalledWith({}, "org-1", "ws-1");
-    expect(steering.text).toContain("Ask before deleting data.");
-    expect(steering.text).toContain(INSTRUCTIONS);
+    expect(mocks.withTenantDb).not.toHaveBeenCalled();
+    expect(mocks.readPublished).not.toHaveBeenCalled();
+    expect(steering.text).toBeNull();
+    expect(steering.manifest).toMatchObject({
+      included: 0,
+      cut: 0,
+      text_digest: null,
+      items: [],
+    });
+    expect(steering.instructionsDigest).toBeNull();
     expect(steering.unavailableKinds).toEqual([]);
   });
 
-  it("runs on the instructions alone when the registry does not answer, and says so", async () => {
-    mocks.readPublished.mockRejectedValueOnce(new Error("registry is down"));
-    const steering = await load();
-    expect(steering.unavailableKinds).toEqual(["record"]);
-    expect(steering.text).toContain(INSTRUCTIONS);
-    expect(steering.manifest.items.map((i) => i.id)).toEqual([
-      WORKSPACE_INSTRUCTIONS_ID,
-    ]);
-  });
-
-  it("assembles over-budget steering without refusing the turn", async () => {
-    mocks.readPublished.mockResolvedValueOnce([record({})]);
-    const steering = await loadAssistantSteering({
+  it("leaves the system prompt as the baseline, byte for byte", () => {
+    const steering = noWorkspaceSteering({
       orgId: "org-1",
       workspaceId: "ws-1",
-      promptConfig: {
-        additionalInstructions: "z".repeat(
-          ASSISTANT_STEERING_BUDGET_TOKENS * 4,
-        ),
-      },
     });
-    expect(outcomeOf(steering, WORKSPACE_INSTRUCTIONS_ID)).toMatchObject({
-      reason: "budget",
-    });
-    expect(steering.text).toContain("Ask before deleting data.");
+    expect(assistantSystemPrompt("GOVERNANCE", steering)).toBe("GOVERNANCE");
   });
 });
 
