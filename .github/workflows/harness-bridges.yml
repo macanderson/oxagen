@@ -52,6 +52,13 @@ jobs:
 
       - uses: actions/checkout@v5
 
+      # GitHub's images put Node on the PATH. Our runners (ADR-246) keep it in
+      # the tool cache, and a runner from an image older than #5021 has no
+      # `node` on the PATH at all, so ask for the repository's pin.
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+
       - name: The bridges arrive as text files
         shell: bash
         run: |
@@ -66,8 +73,16 @@ jobs:
       - name: The check fails before the bootstrap
         shell: bash
         run: |
-          if node tools/scripts/ensure-harness-bridges.mjs --check; then
+          # Exit 1 is the check failing. Any other code, such as 127 when
+          # `node` is missing, means the check never ran.
+          code=0
+          node tools/scripts/ensure-harness-bridges.mjs --check || code=$?
+          if [ "$code" -eq 0 ]; then
             echo "::error::the check passed on text-file bridges"
+            exit 1
+          fi
+          if [ "$code" -ne 1 ]; then
+            echo "::error::the check exited $code instead of failing with 1"
             exit 1
           fi
 
