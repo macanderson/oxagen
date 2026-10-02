@@ -6,12 +6,18 @@
 // published version store, the steering checks' reads, and the role gate are
 // fakes, and the MCP server's agent resolver is a fake registered through
 // steering.proposer.ts the way apps/mcp/src/middleware.ts registers the real
-// one.
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+// one. search_steering and read_steering read version 21 of the workspace
+// fixture and version 4 of the organization fixture (steering.test-support.ts)
+// through a fake of the version store port steering.published.ts binds.
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import type { Delivery } from "@oxagen/steering-bundle";
 
 const fakes = vi.hoisted(() => ({
   host: null as unknown,
   assertContractRole: vi.fn(),
+  delivery: null as Delivery | null,
+  readFile: null as null | ((...args: unknown[]) => Promise<string>),
+  published: vi.fn(),
 }));
 
 vi.mock("./lib/capability-role-guard", () => ({ assertContractRole: fakes.assertContractRole }));
@@ -33,6 +39,22 @@ vi.mock("./context.steering.host", () => ({
       },
     );
   }),
+}));
+// The port steering.published.ts binds the two read tools to. It answers the
+// fixture versions, and records each scope it was asked for.
+vi.mock("./tacho.published", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./tacho.published")>()),
+  VERSION_STORE_PUBLISHED: {
+    published: async (scope: unknown) => {
+      fakes.published(scope);
+      if (fakes.delivery === null) throw new Error("the fixture versions are not built yet");
+      return fakes.delivery;
+    },
+    readAsset: async (...args: unknown[]) => {
+      if (fakes.readFile === null) throw new Error("the fixture reader is not set");
+      return fakes.readFile(...args);
+    },
+  },
 }));
 vi.mock("./tacho.published.postgres", () => ({
   postgresTachoPublished: {
@@ -74,9 +96,15 @@ import { GOVERNANCE_TOML_PATH } from "@oxagen/oxagen/steering-repo/paths";
 import { readSteeringRecord } from "@oxagen/oxagen/steering-repo/record";
 import type { SteeringRepository } from "./context.steering.github";
 import { registerProposingAgentResolver } from "./steering.proposer";
+import { fixtureDelivery, readFixtureFile } from "./steering.test-support";
 import type { ToolsPullRequestHost } from "./tools.pr.open";
 
 await import("./register");
+
+beforeAll(async () => {
+  fakes.delivery = await fixtureDelivery();
+  fakes.readFile = readFixtureFile as (...args: unknown[]) => Promise<string>;
+});
 
 const ORG = "0192d4a8-7c1e-7a00-8000-00000000ac3e";
 const WS = "0192d4a8-7c1e-7a00-8000-00000000ac3f";
@@ -163,6 +191,7 @@ beforeEach(() => {
   clearSecurityEventEmitter();
   fakes.assertContractRole.mockReset();
   fakes.assertContractRole.mockResolvedValue("Member");
+  fakes.published.mockClear();
   host = steeringHost();
   fakes.host = host;
   registerProposingAgentResolver(async (ctx) =>
@@ -238,5 +267,67 @@ describe("propose_steering on the mcp surface", () => {
     const call = invoke("propose_steering", INPUT, { ...CTX, surface: "api" }, { surface: "api" });
     await expect(call).rejects.toMatchObject({ code: "surface_denied" });
     expect(fakes.assertContractRole).not.toHaveBeenCalled();
+  });
+});
+
+describe("search_steering on the mcp surface", () => {
+  it("is a registered capability on the mcp surface, with a handler", () => {
+    const cap = getCapability("search_steering");
+    expect(getSurfaces(cap as NonNullable<typeof cap>)).toEqual(["mcp"]);
+    expect(hasHandler("search_steering")).toBe(true);
+  });
+
+  it("finds a record in the versions published now", async () => {
+    const out = (await invoke("search_steering", { query: "refund" }, CTX, { surface: "mcp" })) as {
+      workspace_version: number | null;
+      organization_version: number | null;
+      hits: { lineage: string; source: string }[];
+    };
+    expect(fakes.published).toHaveBeenCalledWith({ orgId: ORG, workspaceId: WS, runId: null });
+    expect(out.workspace_version).toBe(21);
+    expect(out.organization_version).toBe(4);
+    expect(out.hits).toContainEqual(
+      expect.objectContaining({ lineage: "a-intel.domain.refund", source: "workspace" }),
+    );
+  });
+
+  it("refuses a call that names a run, before it reads a version", async () => {
+    const call = invoke("search_steering", { query: "refund" }, { ...CTX, runId: "run_1" }, { surface: "mcp" });
+    await expect(call).rejects.toMatchObject({ code: "not_found", reason: "steering_run_versions_unrecorded" });
+    expect(fakes.published).not.toHaveBeenCalled();
+  });
+});
+
+describe("read_steering on the mcp surface", () => {
+  it("is a registered capability on the mcp surface, with a handler", () => {
+    const cap = getCapability("read_steering");
+    expect(getSurfaces(cap as NonNullable<typeof cap>)).toEqual(["mcp"]);
+    expect(hasHandler("read_steering")).toBe(true);
+  });
+
+  it("reads a record as the model reads it, from the version published now", async () => {
+    const out = (await invoke("read_steering", { lineage: "a-intel.domain.refund" }, CTX, {
+      surface: "mcp",
+    })) as { lineage: string; source: string; version: number; path: string; text: string };
+    expect(fakes.published).toHaveBeenCalledWith({ orgId: ORG, workspaceId: WS, runId: null });
+    expect(out).toMatchObject({
+      lineage: "a-intel.domain.refund",
+      source: "workspace",
+      version: 21,
+      path: "steering/domain/a-intel.domain.refund.md",
+    });
+    expect(out.text.startsWith("### Refund\n")).toBe(true);
+    expect(out.text).not.toContain("schema: steering-record/v1");
+  });
+
+  it("refuses a call that names a run, before it reads a version", async () => {
+    const call = invoke(
+      "read_steering",
+      { lineage: "a-intel.domain.refund" },
+      { ...CTX, runId: "run_1" },
+      { surface: "mcp" },
+    );
+    await expect(call).rejects.toMatchObject({ code: "not_found", reason: "steering_run_versions_unrecorded" });
+    expect(fakes.published).not.toHaveBeenCalled();
   });
 });
