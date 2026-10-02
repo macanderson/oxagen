@@ -122,7 +122,11 @@ async function permittedKinds(
     resolveActorOrgRoles(ctx.orgId, userId),
     resolveActorWorkspaceRoles(ctx.orgId, ctx.workspaceId, userId),
   ]);
-  const actor = { orgRoles, workspaceRoles };
+  const actor = {
+    orgRoles,
+    workspaceRoles,
+    agentRun: ctx.agentRun != null || ctx.deployedAgentInvocation != null,
+  };
   return new Set([...asked].filter((k) => maySeeKind(k, actor)));
 }
 

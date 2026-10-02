@@ -36,7 +36,8 @@ export const billingBudgetSetHandler: CapabilityHandler<
     { ...ctx, userId: actingUserId },
     input.scope === "workspace"
       ? { org: ["Owner", "Admin", "Billing"], workspace: ["Owner", "Admin"] }
-      : { org: ["Owner", "Admin", "Billing"] },
+      : // The org ceiling is billing: the workspace rule does not reach it (#5228).
+        { org: ["Owner", "Admin", "Billing"], namedRolesOnly: true },
   );
   const workspaceId = input.scope === "workspace" ? ctx.workspaceId : null;
 

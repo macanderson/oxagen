@@ -63,6 +63,7 @@ export function FlipControls({
   label,
   members,
   returnTo,
+  levels = KILL_SWITCH_KINDS,
 }: {
   at: ToolsAt;
   denyGeneration: KillSwitchBoard["denyGeneration"];
@@ -96,6 +97,11 @@ export function FlipControls({
    * server page passes its own path, so the person stays on the server.
    */
   returnTo?: SafePath;
+  /**
+   * The levels the header's dialog offers, every level by default. A viewer
+   * who may flip only the switches inside the workspace gets those levels.
+   */
+  levels?: readonly KillSwitch["target"]["kind"][];
 }) {
   const t = useTranslations("tools.switches.dialog");
   const kinds = useTranslations("tools.switches.kinds");
@@ -108,7 +114,7 @@ export function FlipControls({
   /** The kernel answered `changed: false`: the switch was already that way. */
   const [unchanged, setUnchanged] = useState(false);
   const [kind, setKind] = useState<KillSwitch["target"]["kind"]>(
-    existing?.target.kind ?? fixed?.kind ?? "class",
+    existing?.target.kind ?? fixed?.kind ?? levels[0] ?? "class",
   );
 
   /** A card flips the other way; the header dialog always denies. */
@@ -265,7 +271,7 @@ export function FlipControls({
                   }}
                   className={inputBase}
                 >
-                  {KILL_SWITCH_KINDS.map((option) => (
+                  {levels.map((option) => (
                     <option key={option} value={option}>
                       {kinds(option)}
                     </option>

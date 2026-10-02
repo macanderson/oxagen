@@ -4,7 +4,7 @@
 // Two exported helpers, both idempotent (safe to re-run):
 //
 //   bootstrapOrgIAM({ orgId, ownerUserId, actorUserId, tx? })
-//     Upserts the 7 system roles for the org, creates the owner's principal,
+//     Upserts the 8 system roles for the org, creates the owner's principal,
 //     assigns them the org "Owner" role, seeds all role_grants from every
 //     capability's defaultRoles declaration, AND upserts the three Agent RBAC
 //     system roles (docs/specs/agent-rbac/spec.md §3.2 — Agent Observer /
@@ -33,7 +33,10 @@ import { schema, withSystemDb } from "@oxagen/database";
 import type { Tx } from "@oxagen/database";
 import { eq, and, isNull } from "drizzle-orm";
 import { listCapabilities } from "@oxagen/oxagen";
-import { ORG_OWNER_ROLE_NAME } from "@oxagen/oxagen/iam";
+import {
+  ORG_OWNER_ROLE_NAME,
+  WORKSPACE_FULL_ACCESS_ROLES,
+} from "@oxagen/oxagen/iam";
 import { logger } from "./logger";
 import {
   AGENT_ROLE_SPECS,
@@ -58,7 +61,14 @@ const ORG_ROLES = [
   "Compliance",
   "Billing",
 ] as const;
-const WORKSPACE_ROLES = ["Owner", "Member", "Viewer"] as const;
+// Owner and Admin come from the resolver's WORKSPACE_FULL_ACCESS_ROLES, for
+// the same reason: rule 7.6 admits the workspace roles by these names (#5228).
+// Nobody holds Admin until workspace membership can assign it (#3198).
+const WORKSPACE_ROLES = [
+  ...WORKSPACE_FULL_ACCESS_ROLES,
+  "Member",
+  "Viewer",
+] as const;
 
 type OrgRoleName = (typeof ORG_ROLES)[number];
 type WorkspaceRoleName = (typeof WORKSPACE_ROLES)[number];
@@ -100,7 +110,7 @@ export interface BootstrapOrgIAMArgs {
 
 /**
  * Bootstrap full IAM state for a newly created org:
- *   (a) upsert the 7 system roles (4 org-level + 3 workspace-level) with
+ *   (a) upsert the 8 system roles (4 org-level + 4 workspace-level) with
  *       deterministic public_ids so re-runs are idempotent.
  *   (b) upsert the owner's principal (kind:"human", parentUserId:ownerUserId).
  *   (c) assign the owner the org "Owner" role via principal_role_assignments.
@@ -108,7 +118,7 @@ export interface BootstrapOrgIAMArgs {
  *   (e) upsert the 3 Agent RBAC system roles (Agent Observer / Agent
  *       Contributor / Agent Operator, docs/specs/agent-rbac/spec.md §3.2),
  *       scope_kind='workspace', is_system_default=true — same shape as the
- *       existing 3 workspace roles from (a), just derived from
+ *       existing 4 workspace roles from (a), just derived from
  *       AGENT_ROLE_SPECS instead of the fixed WORKSPACE_ROLES list.
  *   (f) seed each agent role's role_grants from every agent-surface
  *       capability's `agent.category`/`agent.riskLevel` metadata, with the
@@ -145,8 +155,8 @@ async function bootstrapOrgIAMWithTx(
   actorUserId: string,
   d: Tx,
 ): Promise<void> {
-  // ── (a) Upsert 7 system roles ─────────────────────────────────────────────
-  // Build the full set: 4 org-level + 3 workspace-level.
+  // ── (a) Upsert 8 system roles ─────────────────────────────────────────────
+  // Build the full set: 4 org-level + 4 workspace-level.
   type RoleSpec = { scopeKind: "org" | "workspace"; name: string };
   const roleSpecs: RoleSpec[] = [
     ...ORG_ROLES.map((name) => ({ scopeKind: "org" as const, name })),

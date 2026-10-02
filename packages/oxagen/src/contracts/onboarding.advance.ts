@@ -26,6 +26,7 @@ export const onboardingAdvance = registerCapability({
   surfaces: ["api", "agent"],
   layers: ["schema", "api", "unit", "docs", "app"],
   scoped: true,
+  orgLevel: true,
   noBillingGate: true,
   mutates: true,
   sensitivity: "medium",

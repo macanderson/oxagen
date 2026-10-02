@@ -59,9 +59,10 @@ export const updateOrg = defineTool({
   defaultEffect: "deny",
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow" },
-    // v1 also listed a workspace "Admin" grant. There is no such system role —
-    // `SystemWorkspaceRole` is Owner | Member | Viewer — so the entry was
-    // unreachable, and it is not reproduced.
+    // v1 also listed a workspace "Admin" grant. There was no such system role
+    // when this was written, so the entry was unreachable, and it is not
+    // reproduced. The role exists since #5228, and needs no entry: a
+    // workspace's Owner and Admin pass every workspace capability.
     workspace: { Owner: "allow" },
   },
   mutates: true,

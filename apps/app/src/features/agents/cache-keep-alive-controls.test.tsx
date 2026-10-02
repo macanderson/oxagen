@@ -94,7 +94,7 @@ describe("KeepAliveToggle", () => {
     expect(
       await screen.findByTestId("agent-keep-alive-failure"),
     ).toHaveTextContent(
-      "The keep-alive setting did not change. Only an org Owner or Admin can change it.",
+      "The keep-alive setting did not change. Only an org Owner or Admin, or a workspace Owner or Admin, can change it.",
     );
     expect(router.refresh).not.toHaveBeenCalled();
   });

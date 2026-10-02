@@ -66,6 +66,7 @@ import {
 } from "@/data/contracts/mandates";
 import type { Read } from "@/data/read";
 import { routes } from "@/shared/safe-path";
+import { holdsWorkspaceAuthority } from "@/shared/workspace-authority";
 import { linkText, mono, panel } from "@/ui/control-styles";
 import { MandateAuthorityList } from "@/ui/mandate-authority";
 import { MandateScope } from "@/ui/mandate-scope";
@@ -153,11 +154,14 @@ const COLUMNS = [
 export function MandatesSection({
   read,
   orgRole,
+  wsRole,
   agentStatus,
   ...place
 }: {
   read: Read<MandateList>;
   orgRole: OrgRole;
+  /** The reader's workspace role. The workspace's Owner and Admin read every mandate (#5228). */
+  wsRole?: string;
   /** A retired identity can hold no new authority: the request is not offered. */
   agentStatus: AgentStatus;
 } & Place) {
@@ -183,7 +187,9 @@ export function MandatesSection({
    * or null when it would. A narrowed reader and a truncated page are both
    * reasons, and neither is visible in the rows themselves.
    */
-  const blindSpot = read.ok ? blindSpotOf(read.value, orgRole) : null;
+  const blindSpot = read.ok
+    ? blindSpotOf(read.value, orgRole, holdsWorkspaceAuthority(wsRole))
+    : null;
   /** Retirement suspends the principal, so authority granted after it can never be drawn. */
   const retired = agentStatus === "retired";
   return (

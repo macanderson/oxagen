@@ -79,7 +79,12 @@ export const userPreferencesSet = registerCapability({
       Compliance: "allow",
       Billing: "allow",
     },
-    workspace: { Owner: "allow", Member: "allow", Viewer: "allow" },
+    workspace: {
+      Owner: "allow",
+      Admin: "allow",
+      Member: "allow",
+      Viewer: "allow",
+    },
   },
   agent: { requiresApproval: false, riskLevel: "low", category: "user" },
   input: z

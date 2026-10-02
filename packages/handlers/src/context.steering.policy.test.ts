@@ -32,6 +32,7 @@ describe("who may merge", () => {
   const author = "u_author";
   const member = { userId: "u_m", orgRole: null, workspaceRole: "Member" };
   const wsOwner = { userId: "u_o", orgRole: null, workspaceRole: "Owner" };
+  const wsAdmin = { userId: "u_w", orgRole: null, workspaceRole: "Admin" };
   const orgAdmin = { userId: "u_a", orgRole: "Admin", workspaceRole: null };
   const viewer = { userId: "u_v", orgRole: null, workspaceRole: "Viewer" };
 
@@ -41,6 +42,14 @@ describe("who may merge", () => {
       mergeRefusal("solo", { ...member, userId: author }, author),
     ).toBeNull();
     expect(mergeRefusal("solo", viewer, author)).toBe("org_role_required");
+  });
+
+  it("solo and team: a workspace Admin merges as a workspace Owner does (#5228)", () => {
+    expect(mergeRefusal("solo", wsAdmin, author)).toBeNull();
+    expect(mergeRefusal("team", wsAdmin, author)).toBeNull();
+    expect(mergeRefusal("team", { ...wsAdmin, userId: author }, author)).toBe(
+      "separation_of_duties",
+    );
   });
 
   it("team: an org Owner/Admin or workspace Owner other than the author", () => {
@@ -55,6 +64,9 @@ describe("who may merge", () => {
   it("regulated: an org Owner/Admin other than the author, and nobody without a principal", () => {
     expect(mergeRefusal("regulated", orgAdmin, author)).toBeNull();
     expect(mergeRefusal("regulated", wsOwner, author)).toBe(
+      "org_role_required",
+    );
+    expect(mergeRefusal("regulated", wsAdmin, author)).toBe(
       "org_role_required",
     );
     expect(

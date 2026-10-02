@@ -5,8 +5,9 @@
 // resolver can decide without any I/O. It returns EMPTY `grants` and
 // `policies` collections: those two tables no longer exist (see the note above
 // the Promise.all in _fetchAuthz), so resolver rules 1–6 never fire on this
-// path and the decision is always made by rule 7, 7.5, or 8. The one exception
-// is denyAuthz() below, which SYNTHESIZES a policy to trip rule 2 on purpose.
+// path and the decision is always made by rule 7, 7.5, 7.6, or 8. The one
+// exception is denyAuthz() below, which SYNTHESIZES a policy to trip rule 2 on
+// purpose.
 //
 // FAIL-CLOSED ON MISSING MIGRATION: if the IAM tables do not exist yet
 // (Postgres error 42P01 — "relation does not exist"), this is "IAM
@@ -70,6 +71,14 @@ export interface AuthzData {
    * that distinction exists and where each caller draws the line.
    */
   apiKeyPurpose: string | null;
+  /**
+   * Ids of the roles the principal is assigned on the request's workspace
+   * itself (`workspace_id` equal to it), as opposed to org-wide. Rule 7.6 of
+   * the resolver reads it to admit a workspace's Owner or Admin (#5228).
+   * `roles[].principalIds` cannot say this alone: it also counts an
+   * assignment with no workspace. Absent reads as empty.
+   */
+  workspaceRoleIds?: readonly string[];
 }
 
 const EMPTY_AUTHZ: AuthzData = {
@@ -79,6 +88,7 @@ const EMPTY_AUTHZ: AuthzData = {
   roleGrants: [],
   policies: [],
   apiKeyPurpose: null,
+  workspaceRoleIds: [],
 };
 
 /**
@@ -146,6 +156,7 @@ function denyAuthz(
     // The synthetic principal above is already a non-human service id, so no
     // caller needs the key's purpose to tell it apart from a person.
     apiKeyPurpose: null,
+    workspaceRoleIds: [],
   };
 }
 
@@ -341,8 +352,9 @@ async function _fetchAuthz(args: FetchAuthzArgs): Promise<AuthzData> {
     // dropped in migration 0027 (both replaced by role-based IAM), so there is
     // nothing else to read here and `grants` / `policies` are handed to the
     // resolver empty. That makes rules 1–6 unreachable on this path by
-    // construction; rule 7 (role grant), 7.5 (system org Owner), or 8 (contract
-    // defaultEffect) decides every request. Keep both collections in the
+    // construction; rule 7 (role grant), 7.5 (system org Owner), 7.6 (system
+    // workspace Owner or Admin), or 8 (contract defaultEffect) decides every
+    // request. Keep both collections in the
     // returned AuthzData: the resolver's signature still takes them, and
     // denyAuthz() populates `policies` deliberately to trip rule 2.
     const roleRows = await tx
@@ -374,7 +386,10 @@ async function _fetchAuthz(args: FetchAuthzArgs): Promise<AuthzData> {
             )
         : Promise.resolve([] as (typeof schema.roleGrants.$inferSelect)[]),
       tx
-        .select({ roleId: schema.principalRoleAssignments.roleId })
+        .select({
+          roleId: schema.principalRoleAssignments.roleId,
+          workspaceId: schema.principalRoleAssignments.workspaceId,
+        })
         .from(schema.principalRoleAssignments)
         .where(
           and(
@@ -406,6 +421,16 @@ async function _fetchAuthz(args: FetchAuthzArgs): Promise<AuthzData> {
     // (e.g. before the seed migration runs), the set is empty — the resolver
     // will fall through to defaultEffect (deny-by-default once enforcement is on).
     const principalRoleIdSet = new Set(praRows.map((r) => r.roleId));
+    // The subset assigned on this workspace itself, for rule 7.6 (#5228). An
+    // org-only request carries ORG_ONLY_WORKSPACE_ID, which no assignment
+    // names, so the set is empty there.
+    const workspaceRoleIds = [
+      ...new Set(
+        praRows
+          .filter((r) => r.workspaceId != null && r.workspaceId === workspaceId)
+          .map((r) => r.roleId),
+      ),
+    ];
 
     const roles: Role[] = roleRows.map((r) => ({
       id: r.id,
@@ -427,6 +452,14 @@ async function _fetchAuthz(args: FetchAuthzArgs): Promise<AuthzData> {
       effect: rg.effect as "allow" | "deny" | "require_approval",
     }));
 
-    return { principal, grants, roles, roleGrants, policies, apiKeyPurpose };
+    return {
+      principal,
+      grants,
+      roles,
+      roleGrants,
+      policies,
+      apiKeyPurpose,
+      workspaceRoleIds,
+    };
   });
 }

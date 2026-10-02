@@ -3,7 +3,7 @@
 // Studio's Sync now button and Add server call this. The server is marked
 // queued and one discovery event goes out. Studio then polls
 // get_studio_discovery for the run's progress.
-import type { CapabilityContext, CapabilityHandler } from "@oxagen/oxagen";
+import type { CapabilityHandler, CheckedContext } from "@oxagen/oxagen";
 import { toolStudioDiscoveryStart } from "@oxagen/oxagen/contracts/tool.studio.discovery.start";
 import {
   startServerDiscovery,
@@ -13,12 +13,14 @@ import {
 import { discoveryView } from "./view";
 
 /** The caller, as the discovery entry points read it. */
-export function discoveryActor(ctx: CapabilityContext): DiscoveryActor {
+export function discoveryActor(ctx: CheckedContext): DiscoveryActor {
   return {
     orgId: ctx.orgId,
     workspaceId: ctx.workspaceId,
     userId: ctx.userId,
     apiKeyId: ctx.apiKeyId,
+    invokedCapability: ctx.invokedCapability,
+    agentRun: ctx.agentRun,
   };
 }
 

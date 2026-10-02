@@ -212,7 +212,7 @@ describe("the denied state", () => {
     );
     expect(denied).toHaveTextContent("Neededagent.register on core-platform");
     expect(denied).toHaveTextContent(
-      "Decided byan organization owner or admin through register_agent",
+      "Decided byan organization or workspace owner or admin through register_agent",
     );
     expect(calls.agent).toEqual([]);
     expect(calls.state).toEqual([]);

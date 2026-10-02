@@ -24,7 +24,7 @@ import type { ReactNode } from "react";
 import type { ChainCheckpoint, RunChain } from "@/data/contracts/run";
 import type { RunRow } from "@/data/contracts/runs";
 import type { Read } from "@/data/read";
-import type { OrgRole } from "@/server/viewer";
+import type { OrgRole, WsRole } from "@/server/viewer";
 import { Badge } from "@/ui/badge";
 import { mono } from "@/ui/control-styles";
 import { EnforcementTierBadge } from "@/ui/enforcement-tier";
@@ -278,11 +278,13 @@ function SealPanel({
   run,
   place,
   orgRole,
+  wsRole,
 }: {
   chain: RunChain;
   run: RunRow;
   place: Place;
   orgRole: OrgRole;
+  wsRole: WsRole;
 }) {
   const t = useTranslations("run.chain.seal");
   const tb = useTranslations("run.backfill");
@@ -340,6 +342,7 @@ function SealPanel({
                 sealed={run.status !== "live"}
                 closedIdle={run.sealSource === "idle_timeout"}
                 orgRole={orgRole}
+                wsRole={wsRole}
                 label={t("export")}
                 testId="chain-export"
               />
@@ -375,13 +378,15 @@ function ReplayGrade({
   run,
   place,
   orgRole,
+  wsRole,
   fromSeq,
 }: {
   chain: RunChain;
   run: RunRow;
   place: Place;
-  /** The viewer's organization role, which Fork is gated on. */
+  /** The viewer's organization and workspace roles, which Fork is gated on. */
   orgRole: OrgRole;
+  wsRole: WsRole;
   fromSeq: string | null;
 }) {
   const t = useTranslations("run.chain.grade");
@@ -462,6 +467,7 @@ function ReplayGrade({
             ws={place.ws}
             run={run}
             orgRole={orgRole}
+            wsRole={wsRole}
             label={
               fromSeq === null
                 ? tReplay("forkAny")
@@ -598,12 +604,14 @@ export function ChainSection({
   run,
   place,
   orgRole,
+  wsRole,
   fromSeq,
 }: {
   read: Read<RunChain>;
   run: RunRow;
   place: Place;
   orgRole: OrgRole;
+  wsRole: WsRole;
   /** The frame the page has open (`?body=`), which Fork replay starts from. */
   fromSeq: string | null;
 }) {
@@ -619,12 +627,19 @@ export function ChainSection({
     // `.grid.g2 { grid-template-columns:repeat(auto-fit,minmax(320px,1fr)) }`
     <div className="grid items-start gap-3.5 [grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr))]">
       <HashChain chain={chain} />
-      <SealPanel chain={chain} run={run} place={place} orgRole={orgRole} />
+      <SealPanel
+        chain={chain}
+        run={run}
+        place={place}
+        orgRole={orgRole}
+        wsRole={wsRole}
+      />
       <ReplayGrade
         chain={chain}
         run={run}
         place={place}
         orgRole={orgRole}
+        wsRole={wsRole}
         fromSeq={fromSeq}
       />
       <Checkpoints chain={chain} place={place} />
@@ -657,6 +672,7 @@ export async function ChainTab(props: RunTabProps): Promise<ReactNode> {
       run={run}
       place={place}
       orgRole={ctx.orgRole}
+      wsRole={ctx.wsRole}
       fromSeq={open === null || open.chainRef !== undefined ? null : open.seq}
     />
   );

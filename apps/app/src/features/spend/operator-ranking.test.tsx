@@ -4,7 +4,8 @@
 // total, every figure links to its definition, and each operator's runs link
 // to their Cost tab. Anyone else sees who can read it. With pseudonyms on, the
 // pseudonym replaces the name and the figures that could match it to a name
-// are hidden, and only an org Owner or Admin sees the switch. A period in two
+// are hidden, and only an org or workspace Owner or Admin sees the switch.
+// A period in two
 // currencies says why no ranking was built and keeps the switch in reach.
 import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -186,10 +187,13 @@ describe("canReadOperatorRanking", () => {
     );
   });
 
-  // #5182: a workspace's creator holds the workspace Owner role in IAM, and
-  // the ranking admits that Owner on every tier.
-  it("admits the workspace's Owner who holds no org manager role", () => {
+  // #5228: a workspace's Owner and Admin pass every gate in their workspace,
+  // and the ranking is a workspace capability.
+  it("admits the workspace's Owner or Admin who holds no org manager role", () => {
     expect(canReadOperatorRanking({ orgRole: "member", wsRole: "owner" })).toBe(
+      true,
+    );
+    expect(canReadOperatorRanking({ orgRole: "member", wsRole: "admin" })).toBe(
       true,
     );
   });
@@ -201,9 +205,6 @@ describe("canReadOperatorRanking", () => {
     expect(
       canReadOperatorRanking({ orgRole: "billing", wsRole: "member" }),
     ).toBe(false);
-    expect(canReadOperatorRanking({ orgRole: "member", wsRole: "admin" })).toBe(
-      false,
-    );
     expect(
       canReadOperatorRanking({ orgRole: "member", wsRole: "viewer" }),
     ).toBe(false);
@@ -212,13 +213,30 @@ describe("canReadOperatorRanking", () => {
 
 describe("canSetOperatorPseudonyms", () => {
   it("admits an org Owner or Admin", () => {
-    expect(canSetOperatorPseudonyms({ orgRole: "owner" })).toBe(true);
-    expect(canSetOperatorPseudonyms({ orgRole: "admin" })).toBe(true);
+    expect(
+      canSetOperatorPseudonyms({ orgRole: "owner", wsRole: "member" }),
+    ).toBe(true);
+    expect(
+      canSetOperatorPseudonyms({ orgRole: "admin", wsRole: "member" }),
+    ).toBe(true);
   });
 
-  it("refuses every other org role (negative)", () => {
-    expect(canSetOperatorPseudonyms({ orgRole: "member" })).toBe(false);
-    expect(canSetOperatorPseudonyms({ orgRole: "billing" })).toBe(false);
+  it("admits the workspace's Owner or Admin who holds no org manager role (#5228)", () => {
+    expect(
+      canSetOperatorPseudonyms({ orgRole: "member", wsRole: "owner" }),
+    ).toBe(true);
+    expect(
+      canSetOperatorPseudonyms({ orgRole: "member", wsRole: "admin" }),
+    ).toBe(true);
+  });
+
+  it("refuses every other org and workspace role (negative)", () => {
+    expect(
+      canSetOperatorPseudonyms({ orgRole: "member", wsRole: "member" }),
+    ).toBe(false);
+    expect(
+      canSetOperatorPseudonyms({ orgRole: "billing", wsRole: "viewer" }),
+    ).toBe(false);
   });
 });
 
@@ -355,7 +373,7 @@ describe("Operator ranking", () => {
     ).toBeInTheDocument();
     expect(
       screen.getByText(
-        /An org Owner or Admin, or this workspace's Owner, can read the operator ranking/,
+        /An org Owner or Admin, or this workspace's Owner or Admin, can read the operator ranking/,
       ),
     ).toBeInTheDocument();
     expect(screen.queryByRole("table")).toBeNull();
@@ -487,7 +505,7 @@ describe("Operator ranking › pseudonyms", () => {
     );
     expect(
       await screen.findByText(
-        "Only an org Owner or Admin can change this setting.",
+        "Only an org Owner or Admin, or this workspace's Owner or Admin, can change this setting.",
       ),
     ).toBeInTheDocument();
     expect(refresh).not.toHaveBeenCalled();

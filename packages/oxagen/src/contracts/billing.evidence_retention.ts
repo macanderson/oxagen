@@ -28,6 +28,7 @@ export const billingEvidenceRetention = registerCapability({
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
+  orgLevel: true,
   noBillingGate: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "billing" },
   sensitivity: "low",

@@ -16,6 +16,7 @@ export const orgSettingsWrite = registerCapability({
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
+  orgLevel: true,
   agent: {
     requiresApproval: false,
     riskLevel: "medium",
@@ -24,9 +25,12 @@ export const orgSettingsWrite = registerCapability({
   sensitivity: "medium",
   mutates: true,
   defaultEffect: "deny",
+  // The org's name, slug and avatar are org settings, which a workspace
+  // Owner or Admin does not change (#5228). The workspace grants that let
+  // them are gone.
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow" },
-    workspace: { Owner: "allow", Admin: "allow" },
+    workspace: {},
   },
   input: z.object({
     name: z.string().min(1).max(120).trim().optional(),

@@ -53,7 +53,8 @@ describe("org.settings.write handler", () => {
     mocks.where.mockResolvedValue(undefined);
   });
 
-  // The contract grants org Owner or Admin and workspace Owner or Admin. The
+  // The contract grants org Owner or Admin. The org's settings are the
+  // organization's, so a workspace Owner or Admin is refused (#5228). The
   // kernel's IAM check allows every capability for a non-enterprise org, so
   // the handler is the only gate there (#4194).
   describe("role gate", () => {
@@ -73,8 +74,19 @@ describe("org.settings.write handler", () => {
     });
 
     it.each([
-      ["an org Admin", { org: "Admin" }],
       ["a workspace Owner", { org: null, workspace: "Owner" }],
+      ["a workspace Admin", { org: null, workspace: "Admin" }],
+    ])("refuses %s, who holds no org role (negative)", async (_who, roles) => {
+      roleGate.roles = roles;
+      await expect(
+        orgSettingsWriteHandler({ name: "Ours now" }, CTX),
+      ).rejects.toMatchObject({ code: "forbidden", reason: "org_role_required" });
+      expect(mocks.update).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ["an org Owner", { org: "Owner" }],
+      ["an org Admin", { org: "Admin" }],
     ])("allows %s", async (_who, roles) => {
       roleGate.roles = roles;
       mocks.findFirst.mockResolvedValue(ROW);

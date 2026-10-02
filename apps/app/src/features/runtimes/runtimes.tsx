@@ -32,6 +32,7 @@ import type { DataSource } from "@/data/ports";
 import type { Read } from "@/data/read";
 import type { WsCtx } from "@/server/viewer";
 import { routes } from "@/shared/safe-path";
+import { mayActInWorkspace } from "@/shared/workspace-authority";
 import { AgentAvatar } from "@/ui/agent-avatar";
 import { Badge } from "@/ui/badge";
 import { mono } from "@/ui/control-styles";
@@ -44,9 +45,12 @@ import { AgentsCell, LastSeen } from "./named";
 import { HealthBadge, isEnrolled, NotBacked, OsLine, Sub } from "./parts";
 import { RuntimesEmpty, RuntimesFailure } from "./states";
 
-/** The org roles that may name a runtime and register its agents (INV-29). */
+/**
+ * Who may name a runtime and register its agents (INV-29): an org Owner or
+ * Admin, or the workspace's Owner or Admin (#5228).
+ */
 export function mayAddRuntime(ctx: WsCtx): boolean {
-  return ctx.orgRole === "owner" || ctx.orgRole === "admin";
+  return mayActInWorkspace(ctx.orgRole, ctx.wsRole, ["owner", "admin"]);
 }
 
 /** A day, after which a runtime that has not reported reads offline. */

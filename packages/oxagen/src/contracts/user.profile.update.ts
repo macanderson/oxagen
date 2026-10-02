@@ -74,7 +74,7 @@ export const userProfileUpdate = registerCapability({
   sensitivity: "low",
   defaultEffect: "allow",
   // Every system role at each scope: SystemOrgRole is Owner | Admin |
-  // Compliance | Billing, SystemWorkspaceRole is Owner | Member | Viewer.
+  // Compliance | Billing, SystemWorkspaceRole is Owner | Admin | Member | Viewer.
   defaultRoles: {
     org: {
       Owner: "allow",
@@ -82,7 +82,12 @@ export const userProfileUpdate = registerCapability({
       Compliance: "allow",
       Billing: "allow",
     },
-    workspace: { Owner: "allow", Member: "allow", Viewer: "allow" },
+    workspace: {
+      Owner: "allow",
+      Admin: "allow",
+      Member: "allow",
+      Viewer: "allow",
+    },
   },
   agent: { requiresApproval: false, riskLevel: "low", category: "user" },
   input: z

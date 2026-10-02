@@ -20,6 +20,11 @@
 // repository yet (#5196). The name field starts on the name the setup tried,
 // and the retry sends only what the person changed.
 //
+// The connection belongs to the whole organization. Picking it, changing it,
+// connecting GitHub and authorizing Oxagen again are an org Owner's or
+// Admin's (`canChangeConnection`). The workspace's Owner and Admin retry,
+// rename, create, move and repair their own setup (`canAct`, #5228).
+//
 // The Host connection step names where steering repos go. Until Oxagen has
 // created a repo there, an owner can switch to a different organization, which
 // clears the stored one so setup asks again (#4899).
@@ -365,14 +370,20 @@ export function SteeringRepoProvisioning({
   ws,
   view,
   canAct,
+  canChangeConnection = canAct,
   returnTo,
 }: {
   org: string;
   /** The workspace the repo is for, or null before the organization has one. */
   ws: string | null;
   view: SteeringRepoView;
-  /** An owner or admin: Retry is theirs. */
+  /** An org or workspace Owner or Admin: Retry is theirs. */
   canAct: boolean;
+  /**
+   * An org Owner or Admin: picking, changing, connecting and authorizing the
+   * organization's connection is theirs. The same as `canAct` when omitted.
+   */
+  canChangeConnection?: boolean;
   /** Where GitHub sends the person back to after Re-authorize or Connect. */
   returnTo: SafePath;
 }) {
@@ -474,7 +485,7 @@ export function SteeringRepoProvisioning({
   // version, such as on a plan that cannot protect its branches, does not
   // count (#4900).
   const changeable =
-    canAct &&
+    canChangeConnection &&
     movable &&
     view.connection !== null &&
     view.publishedVersion === null &&
@@ -497,7 +508,7 @@ export function SteeringRepoProvisioning({
           org={org}
           provider={view.provider}
           returnTo={returnTo}
-          canAct={canAct}
+          canAct={canChangeConnection}
         />
       ) : null}
       <ol aria-label={t("stepsLabel")} className="flex flex-col gap-2">
@@ -566,7 +577,7 @@ export function SteeringRepoProvisioning({
                 </p>
                 {!canAct ? null : !movable ? (
                   <GitlabSourceNote view={view} />
-                ) : choosing ? (
+                ) : choosing && !canChangeConnection ? null : choosing ? (
                   <ConnectionChooser
                     view={view}
                     pending={pending}
@@ -580,7 +591,7 @@ export function SteeringRepoProvisioning({
                     org={org}
                     ws={ws}
                     view={view}
-                    withPlaces={placeStopped}
+                    withPlaces={placeStopped && canChangeConnection}
                     pending={pending}
                     pendingLabel={pendingLabel}
                     onRetry={(changes) => {
@@ -589,7 +600,7 @@ export function SteeringRepoProvisioning({
                   />
                 ) : (
                   <>
-                    {code === STEERING_NO_CONNECTION ? (
+                    {code === STEERING_NO_CONNECTION && canChangeConnection ? (
                       <ConnectGithub org={org} returnTo={returnTo} />
                     ) : null}
                     <button

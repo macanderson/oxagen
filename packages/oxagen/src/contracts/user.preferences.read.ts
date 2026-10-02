@@ -40,7 +40,12 @@ export const userPreferencesRead = registerCapability({
       Compliance: "allow",
       Billing: "allow",
     },
-    workspace: { Owner: "allow", Member: "allow", Viewer: "allow" },
+    workspace: {
+      Owner: "allow",
+      Admin: "allow",
+      Member: "allow",
+      Viewer: "allow",
+    },
   },
   input: z.object({}),
   output: z.object({

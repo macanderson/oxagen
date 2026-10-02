@@ -87,6 +87,7 @@ export const billingPrepaidOrderList = registerCapability({
   surfaces: ["api", "mcp"],
   layers: ["schema", "api", "mcp", "unit", "docs"],
   scoped: true,
+  orgLevel: true,
   noBillingGate: true,
   mutates: false,
   sensitivity: "medium",

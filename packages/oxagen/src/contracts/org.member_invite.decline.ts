@@ -11,6 +11,7 @@ export const orgMemberInviteDecline = registerCapability({
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "e2e", "docs", "app"],
   scoped: true,
+  orgLevel: true,
   // Membership is never a charge (ADR-052 exclusion 2): the billing gate and
   // the governed-action recorder both skip this contract.
   noBillingGate: true,

@@ -40,7 +40,7 @@
       }
     },
     "failure": {
-      "denied": "Only an organization Owner or Admin, or this workspace’s Owner, can read or change this workspace’s repositories.",
+      "denied": "Only an organization Owner or Admin, or this workspace’s Owner or Admin, can read or change this workspace’s repositories.",
       "githubNotConnected": "No GitHub App installation is attached to this workspace, so Oxagen cannot reach a repository. Install the App first.",
       "repositoryNotInstalled": "The installation cannot read that repository. Grant it access on GitHub, then try again.",
       "mainRepoBound": "This workspace already binds a different main repository. Changing it is an org owner's decision, recorded as a security event.",
@@ -468,7 +468,7 @@
       "governanceMissing": "No governance.toml on the production branch. Pull requests are reviewed as team.",
       "modes": {
         "solo": "The author may merge their own.",
-        "team": "A reviewer other than the author merges: an org Owner or Admin, or a workspace Owner. This is what a missing file means.",
+        "team": "A reviewer other than the author merges: an org Owner or Admin, or a workspace Owner or Admin. This is what a missing file means.",
         "regulated": "An org Owner or Admin other than the author merges, recorded as the accountable approver."
       },
       "mode": {

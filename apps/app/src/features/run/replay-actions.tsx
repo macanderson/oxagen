@@ -26,7 +26,7 @@ import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useId, useState } from "react";
 import type { RunRow } from "@/data/contracts/runs";
 import { chooseRuns } from "@/features/shell/client";
-import type { OrgRole } from "@/server/viewer";
+import type { OrgRole, WsRole } from "@/server/viewer";
 import { canForkRun } from "@/shared/run-command-roles";
 import { UNANSWERED, useActionFailure } from "@/ui/command-failure";
 import { buttonSecondary, inputBase, mono } from "@/ui/control-styles";
@@ -287,17 +287,19 @@ export function BisectDialog({
 
 /**
  * Fork replay, or the disabled button that says why not. `fork_run` refuses a
- * wrapped session by name, a recording graded below `fork`, and a viewer
- * whose organization role is not Owner, Admin or Member. The first two are on
- * the row and the third is the viewer's, so the reason is said here rather
- * than in a refusal. The recording's reason comes first: a viewer who gains
- * the role still could not fork a recording that cannot carry it.
+ * wrapped session by name, a recording graded below `fork`, and a viewer who
+ * is neither an organization Owner, Admin or Member nor the workspace's Owner
+ * or Admin. The first two are on the row and the third is the viewer's, so
+ * the reason is said here rather than in a refusal. The recording's reason
+ * comes first: a viewer who gains the role still could not fork a recording
+ * that cannot carry it.
  */
 export function ForkAction({
   org,
   ws,
   run,
   orgRole,
+  wsRole,
   label,
   testId = "run-fork",
   fromSeq,
@@ -305,8 +307,10 @@ export function ForkAction({
   org: string;
   ws: string;
   run: RunRow;
-  /** The viewer's organization role. `fork_run` reads no workspace role. */
+  /** The viewer's organization role. */
   orgRole: OrgRole;
+  /** The viewer's workspace role: its Owner and Admin may fork too (#5228). */
+  wsRole: WsRole;
   fromSeq?: string;
 } & ActionFace) {
   const t = useTranslations("run.replay");
@@ -314,7 +318,7 @@ export function ForkAction({
   const recordingAllows =
     run.source === "ledger" &&
     (run.replayGrade === "fork" || run.replayGrade === "retry");
-  if (recordingAllows && canForkRun(orgRole))
+  if (recordingAllows && canForkRun(orgRole, wsRole))
     return (
       <ForkDialog
         org={org}
@@ -367,17 +371,25 @@ export function ReplayActions({
   ws,
   run,
   orgRole,
+  wsRole,
 }: {
   org: string;
   ws: string;
   run: RunRow;
-  /** The viewer's organization role, which Fork is gated on. */
+  /** The viewer's organization and workspace roles, which Fork is gated on. */
   orgRole: OrgRole;
+  wsRole: WsRole;
 }) {
   // The two buttons sit in the header's action row beside Export.
   return (
     <>
-      <ForkAction org={org} ws={ws} run={run} orgRole={orgRole} />
+      <ForkAction
+        org={org}
+        ws={ws}
+        run={run}
+        orgRole={orgRole}
+        wsRole={wsRole}
+      />
       <BisectDialog org={org} ws={ws} runId={run.id} />
     </>
   );

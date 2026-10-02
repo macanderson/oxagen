@@ -122,7 +122,7 @@ export function TryTab({
   tools: readonly StudioTool[];
   environments: readonly StudioEnvironment[];
   agentEnvironment: string | null;
-  /** An org Owner or Admin, who can save a call as a test in the draft. */
+  /** An org or workspace Owner or Admin, who can save a call as a test. */
   canEdit: boolean;
   /** The Test tab's capability. A test passes a fake. */
   call?: TryStudioTool;
