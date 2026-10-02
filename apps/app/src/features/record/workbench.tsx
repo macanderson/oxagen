@@ -59,7 +59,6 @@ export function RecordWorkbench({
   return (
     <div className="flex flex-col">
       <Header
-        at={at}
         detail={detail}
         pendingBranch={pending}
         dirty={dirty}

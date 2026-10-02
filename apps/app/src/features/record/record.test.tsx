@@ -234,12 +234,17 @@ describe("Record › the header", () => {
     }
   });
 
-  it("links Steering in the eyebrow back to the records", async () => {
+  // The breadcrumb is the one link back to Steering, so the eyebrow is plain
+  // text with no dot between its words (#5177).
+  it("labels the header Steering record in plain text", async () => {
     await renderRecord();
     const header = screen.getByTestId("record-header");
-    const link = within(header).getByRole("link", { name: "Steering" });
-    expect(link.getAttribute("href")).toContain("/acme/core-platform/steering");
-    expect(header.textContent).toContain("record");
+    const eyebrow = within(header).getByTestId("record-eyebrow");
+    expect(eyebrow.textContent).toBe("Steering record");
+    expect(within(eyebrow).queryByRole("link")).toBeNull();
+    expect(
+      within(header).queryByRole("link", { name: /steering/i }),
+    ).toBeNull();
   });
 
   it("draws the chips in order: kind, force, effect, scope, published, version", async () => {

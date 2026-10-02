@@ -3289,6 +3289,15 @@
     },
     {
       "domain": "context",
+      "name": "propose_steering",
+      "reads": [],
+      "surfaces": [
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "context",
       "name": "publish_context_record",
       "reads": [],
       "surfaces": [
@@ -3358,6 +3367,15 @@
         "agent",
         "api",
         "cli",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "context",
+      "name": "read_steering",
+      "reads": [],
+      "surfaces": [
         "mcp"
       ],
       "writes": []
@@ -3979,6 +3997,15 @@
       "surfaces": [
         "agent",
         "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "context",
+      "name": "search_steering",
+      "reads": [],
+      "surfaces": [
         "mcp"
       ],
       "writes": []

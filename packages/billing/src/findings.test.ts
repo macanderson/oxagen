@@ -3,6 +3,7 @@ import { FINDINGS_LIST_MAX } from "@oxagen/oxagen/contracts/finding.list";
 import {
   findingEvidenceSchema,
   findingRunCitationSchema,
+  findingValuesSchema,
 } from "@oxagen/oxagen/contracts/finding.shared";
 import { describe, expect, it } from "vitest";
 import {
@@ -382,6 +383,11 @@ describe("cache writes never read", () => {
     });
     // It prices a part of each request, so it claims no frame.
     expect(finding!.claims).toBeUndefined();
+    // #5023: the card names the tokens written.
+    expect(finding!.evidence.values).toEqual({
+      kind: "cache_writes_never_read",
+      writtenTokens: 8_000,
+    });
   });
 
   it("cites the agent when the run names no operator", () => {
@@ -491,6 +497,8 @@ describe("repeated shell commands and duplicate tool calls", () => {
     expect(finding!.why).toBe(
       "3 calls on 1 run re-ran shell commands whose identical input had already returned the identical output earlier in the run. Each came from a turn that made no other call.",
     );
+    // #5023: the text names only the runs, the calls, and the saving.
+    expect(finding!.evidence).not.toHaveProperty("values");
   });
 
   it("does not count a turn that also made a new call", () => {
@@ -1014,7 +1022,9 @@ describe("spin loops", () => {
       confidence: "high",
     });
     expect(finding!.evidence.calls).toBe(SPIN_LOOP_REPEATS);
-    expect(finding!.why).toContain(`${SPIN_LOOP_REPEATS} turns`);
+    expect(finding!.why).toContain(
+      `${SPIN_LOOP_REPEATS} calls came from turns that made only those repeats`,
+    );
     expect(finding!.claims).toHaveLength(SPIN_LOOP_REPEATS);
     expect(finding!.claims![0]).toEqual({
       detector: 1,
@@ -1024,6 +1034,61 @@ describe("spin loops", () => {
       operatorKey: OPERATOR,
       costMicros: TURN_MICROS,
     });
+  });
+
+  // #5023: a turn that made several looping calls is priced once, and each
+  // of its calls counts, so the card's number matches its calls label.
+  it("prices a turn that made several looping calls once, and counts each of its calls", () => {
+    const r = run();
+    const toolCalls = same(r, SPIN_LOOP_REPEATS + 1);
+    const [finding] = detect({
+      runs: [r],
+      toolCalls,
+      // One request made the first call, and one more made the other twenty.
+      frames: new Map([[r.runId, [request(r, 1), request(r, 2)]]]),
+    });
+    expect(finding).toMatchObject({
+      kind: "spin_loops",
+      savingMicros: TURN_MICROS,
+    });
+    expect(finding!.evidence).toMatchObject({
+      calls: SPIN_LOOP_REPEATS,
+      coveredCalls: SPIN_LOOP_REPEATS,
+      measuredTokens: TURN_TOKENS,
+    });
+    expect(finding!.evidence.runs[0]).toMatchObject({
+      calls: SPIN_LOOP_REPEATS,
+    });
+    expect(finding!.evidence.frames?.[r.runId]?.total).toBe(
+      SPIN_LOOP_REPEATS,
+    );
+    expect(finding!.claims).toHaveLength(1);
+    expect(finding!.why).toBe(
+      `On 1 run, a call ran ${SPIN_LOOP_REPEATS} or more times in a row and returned the same result each time. ${SPIN_LOOP_REPEATS} calls came from turns that made only those repeats.`,
+    );
+  });
+
+  it("stores the longest loop's tool and how many times in a row it ran (#5023)", () => {
+    const [a, b] = [run(), run()];
+    const toolCalls = [
+      ...same(a!, SPIN_LOOP_REPEATS + 1),
+      ...same(b!, SPIN_LOOP_REPEATS + 9, { tool: "mcp__github__get_pr" }),
+    ];
+    const [finding] = detect({
+      runs: [a!, b!],
+      toolCalls,
+      frames: turns(toolCalls),
+    });
+    expect(finding!.kind).toBe("spin_loops");
+    expect(finding!.evidence.values).toEqual({
+      kind: "spin_loops",
+      tool: "mcp__github__get_pr",
+      repeats: SPIN_LOOP_REPEATS + 9,
+    });
+    // The stored values parse as the contract's own shape.
+    expect(findingValuesSchema.parse(finding!.evidence.values)).toEqual(
+      finding!.evidence.values,
+    );
   });
 
   it(`leaves ${SPIN_LOOP_REPEATS - 1} repeats in a row to the duplicate tool call finding`, () => {

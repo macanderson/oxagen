@@ -5410,8 +5410,7 @@ type Messages = {
   record: {
     loading: string;
     header: {
-      steering: string;
-      record: string;
+      eyebrow: string;
       published: string;
       archived: string;
       slugTitle: string;
@@ -9276,9 +9275,30 @@ type Messages = {
         needsPromptText: string;
         text: {
           spin_loops: string;
+          retry_loops: string;
           duplicate_tool_calls: string;
           repeated_shell_commands: string;
+          standing_context: {
+            resent: string;
+            provider: string;
+            providerPrice: string;
+            contextFrames: string;
+          };
+          model_class_fit: {
+            unchanged: string;
+            edited: string;
+            mixed: string;
+          };
+          repeated_instructions: {
+            sentence: string;
+            wholePrompt: string;
+          };
+          recurring_runs: string;
           spend_with_no_outcome: string;
+          cache_writes_never_read: string;
+          idle_cache_rewrites: string;
+          cache_busts: string;
+          unpaged_results: string;
         };
       };
     };
