@@ -751,6 +751,28 @@ describe.skipIf(!enabled)("work order dispatch against Postgres", { timeout: 30_
     expect(factsOf(ended, "run_ended")).toHaveLength(1);
   });
 
+  it("ends a send as rejected when its host could not keep the work order, with the host's reason", async () => {
+    const r = await rig();
+    const item = await readyItem();
+    const sent = await send(item, r);
+    const [command] = await commandsByKey(sent.key);
+    const failed: AckedCommand = {
+      publicId: sent.commandId,
+      command: "work_order",
+      outcome: "failed",
+      payload: command!.payload,
+      detail: "could not keep the work order: disk full",
+    };
+    expect(await acks(r.hostA, [failed])).toBe(1);
+    expect(await acks(r.hostA, [failed])).toBe(0);
+    const rejected = await read(item.itemId);
+    expect(rejected.projection.state).toBe("ready");
+    expect(orderIn(rejected, sent.orderId)).toMatchObject({ delivery: "rejected", closed: true, released: true });
+    expect(factsOf(rejected, "send_rejected")).toEqual([
+      expect.objectContaining({ source: "runtime", data: { reason: "could not keep the work order: disk full" } }),
+    ]);
+  });
+
   it("stops a running send with one cancel to its run, and ends the send when the host applies it", async () => {
     const r = await rig();
     const item = await readyItem();

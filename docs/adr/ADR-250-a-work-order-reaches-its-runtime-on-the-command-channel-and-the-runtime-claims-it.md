@@ -73,13 +73,18 @@ any run starts. The claim is the handshake:
 The claim's answer is the run's first prompt: the approved brief, then the work
 item's text inside a code fence no line of it can close, labelled as data from
 the issue. A host that cannot start the order refuses it with
-`reject_work_order` and a reason.
+`reject_work_order` and a reason. A host that could not even keep the order
+acknowledges its command `failed`, and the send ends as rejected with the
+host's reason, rather than waiting for a claim that cannot come.
 
 ### Starting the run
 
-The runtime starts the run, not Oxagen. On a wrapped host the person at the
-host runs `oxagen work start`, which claims the order and starts the agent's
-harness with the first prompt. This is the delivery tasks-spec §9.6 describes,
+The runtime starts the run, not Oxagen. The host keeps a work order it
+receives and logs the command to run. The person at the host runs
+`oxagen work list` and `oxagen work start <wo>`, which claims the order and
+starts the agent's harness in the current directory with the first prompt and
+`OXAGEN_WORK_ORDER_ID` in its environment. Every refusal prints the server's
+message and starts nothing. This is the delivery tasks-spec §9.6 describes,
 and it is not a runtime under ADR-043: Oxagen hands the operator's brief to the
 operator's own runtime and records what happens.
 

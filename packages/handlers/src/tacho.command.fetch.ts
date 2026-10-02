@@ -138,10 +138,11 @@ export function createTachoCommandFetchHandler(
             command: schema.tachoControlCommands.command,
             outcome: schema.tachoControlCommands.outcome,
             payload: schema.tachoControlCommands.payload,
+            detail: schema.tachoControlCommands.outcomeDetail,
           });
         acknowledged += updated.length;
         for (const row of updated) {
-          moved.push({ publicId: String(row.publicId), command: row.command, outcome: row.outcome, payload: row.payload });
+          moved.push({ publicId: String(row.publicId), command: row.command, outcome: row.outcome, payload: row.payload, detail: row.detail });
         }
       }
       // A work order's command the host took is `send_delivered`, and a

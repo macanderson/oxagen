@@ -364,6 +364,8 @@ export interface AckedCommand {
   command: string;
   outcome: string;
   payload: unknown;
+  /** The host's detail, on a `failed` acknowledgement. */
+  detail?: string | null;
 }
 
 function workOrderOf(payload: unknown): string | null {
@@ -375,7 +377,9 @@ function workOrderOf(payload: unknown): string | null {
 /**
  * The work facts a host's acknowledgements carry. A `work_order` command the
  * host took is `send_delivered`, with the command's id: the send reached the
- * runtime and waits for its claim. A stop's `cancel` the host applied is
+ * runtime and waits for its claim. A `work_order` command the host could not
+ * keep is `send_rejected` with the host's reason, so the send ends instead of
+ * waiting for a claim that cannot come. A stop's `cancel` the host applied is
  * `stopped`. Returns the number of facts recorded.
  */
 export async function recordWorkOrderAcks(tx: Tx, scope: WorkScope, host: ClaimingHost, acked: readonly AckedCommand[], at: Date): Promise<number> {
@@ -384,12 +388,21 @@ export async function recordWorkOrderAcks(tx: Tx, scope: WorkScope, host: Claimi
     const workOrder = workOrderOf(command.payload);
     if (workOrder === null) continue;
     const delivered = command.command === "work_order" && ["received", "acknowledged", "applied"].includes(command.outcome);
+    const refused = command.command === "work_order" && command.outcome === "failed";
     const stopped = command.command === "cancel" && command.outcome === "applied";
-    if (!delivered && !stopped) continue;
+    if (!delivered && !refused && !stopped) continue;
     const row = await orderByPublicId(tx, scope, workOrder);
+    if (refused) {
+      // A host that already claimed the send keeps it: the claim is the later word.
+      const current = orderOf(await readWorkItem(tx, scope, row.itemId), row.id);
+      if (current.delivery !== "waiting_for_claim") continue;
+    }
+    const reason = command.detail?.trim() ? command.detail.trim() : "The host could not keep the work order.";
     const fact = delivered
       ? { ...runtimeFact("send_delivered", row, "oxagen", at.toISOString(), `send_delivered:${row.id}`, { command_id: command.publicId }), source: "oxagen" as const }
-      : runtimeFact("stopped", row, host.publicId, at.toISOString(), `stopped:${row.id}`, {});
+      : refused
+        ? runtimeFact("send_rejected", row, host.publicId, at.toISOString(), `send_rejected:${row.id}`, { reason: reason.slice(0, 2000) })
+        : runtimeFact("stopped", row, host.publicId, at.toISOString(), `stopped:${row.id}`, {});
     const write = await appendFacts(tx, scope, { itemId: row.itemId, facts: [fact] });
     if (!write.repeat) recorded += 1;
   }
