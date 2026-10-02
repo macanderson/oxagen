@@ -615,8 +615,12 @@ capability rewrites, so two such branches always conflicted on it (ADR-216).
 - claim_work_order
 - close_work_item
 - create_work_item
+- get_work_item
+- get_work_outcomes
 - get_work_priorities
 - list_work_collectors
+- list_work_items
+- list_work_targets
 - refresh_work_order_checks
 - reject_work_order
 - reopen_work_item

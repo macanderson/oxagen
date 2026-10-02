@@ -1,0 +1,49 @@
+---
+title: Work
+description: "Give an agent a bounded piece of work, follow it until a runtime claims it, and accept the pull request it opens."
+---
+
+Work is where you give an existing agent a bounded piece of engineering work and review what it produced. Each work item ends in a GitHub pull request. A person approves what the work must do, sends it to one agent, and accepts the result. Oxagen merges nothing and writes nothing back to GitHub.
+
+Open it from **Work** in the sidebar. The address is `/<organization>/<workspace>/work`.
+
+## Where work comes from
+
+- **GitHub Issues.** A collector reads issues from the repositories you name. Add one in **Work setup**, on the **Collectors** tab. Webhooks arrive signed, and each delivery counts once. A reconcile every 15 minutes picks up what a webhook missed.
+- **People.** Press **New work item** and write a title. A description and a repository are optional.
+
+Each item gets a number in the workspace, such as `WI-12`. Text that comes from an issue is treated as data. Oxagen shows it as text and never follows it as an instruction.
+
+## The path of one item
+
+1. **Triage.** Triage suggests a priority, labels, an estimate, and the acceptance criteria, citing a rule of your priorities record. You can correct any of it. Your correction stays in force when triage runs again. If triage fails twice, the item says why, and you can set the priority yourself or retry triage.
+2. **Brief.** The brief is the short list of criteria a reviewer checks. Each criterion keeps its key, such as `c3`, through every edit. Approving a brief records who approved it, when, and its digest.
+3. **Send.** You choose one agent you operate. The send names the approved brief and a key fixed before it leaves, so pressing Send again after a lost answer returns the same work order. The item reads **Waiting for claim** until the agent's runtime claims it. Only then does a run start.
+4. **Review.** When the run ends, the item shows the pull request, its head commit, and the checks the base branch requires on that commit. Optional checks are shown for reference and decide nothing.
+5. **Accept or return.** Accept records your acceptance of the head commit and merges nothing. Return sends the work back to the agent with your reason, as a new send.
+6. **Done.** An item is done once a person accepted its head commit and the pull request merged, in either order. A pull request closed without merging is not done.
+
+## What blocks Accept
+
+Oxagen reads the required checks from GitHub again when you press Accept. Accept stays blocked while a required check is failing, missing, cancelled, skipped, or unread. A new commit on the pull request voids an earlier acceptance. When the base branch requires no check, Accept rests on your tick for each criterion and names the commit you accepted.
+
+## The tabs
+
+| Tab | What it holds |
+|---|---|
+| Inbox | Items in triage, waiting for a brief, changed since approval, or ready to send |
+| Running | Sends waiting for a runtime to claim them, and runs in progress |
+| Review | Items whose run ended, with the required checks on the head commit |
+| Done | Items accepted and merged, and items closed with a resolution |
+
+## Who can act
+
+Anyone who can read the workspace's runs can read Work. Approving a brief and accepting work need the workspace Owner or Member role, or the organization Owner or Admin role. Every other action needs the same roles. Each action is checked on the server, whatever the page shows. Sending also requires that you operate the agent. In a regulated workspace, the person who approved a brief cannot send it.
+
+## Budget and cost
+
+Nothing is reserved when you press Send. On a gateway or contained runtime, the gateway holds the agent's budget before each model call when its version sets a ceiling. On other runtimes, Oxagen records spend after the run. A run that reported no usage shows its cost as unknown, and the item says how many of its runs have a known cost.
+
+## Outcomes
+
+**Outcomes** counts the work that finished in the last 30 days: accepted and merged, returned, and closed, each on its own. It shows lead time from the first reading of the item to its finish, with its median, its 90th percentile, and its sample. It counts review touches per accepted item and the share of run cost Oxagen knows. Reopens count only items that finished 30 or more days ago. In-app triage spend is on Billing, outside these figures.

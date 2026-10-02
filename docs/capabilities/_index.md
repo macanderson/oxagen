@@ -714,8 +714,12 @@ after the registered name separately when their contract uses a dotted stem.
 | [claim_work_order](work.order.claim.md) | [work.order.claim.ts](../../packages/oxagen/src/contracts/work.order.claim.ts) | api |
 | [close_work_item](work.item.close.md) | [work.item.close.ts](../../packages/oxagen/src/contracts/work.item.close.ts) | api |
 | [create_work_item](work.item.create.md) | [work.item.create.ts](../../packages/oxagen/src/contracts/work.item.create.ts) | api, mcp |
+| [get_work_item](work.item.get.md) | [work.item.get.ts](../../packages/oxagen/src/contracts/work.item.get.ts) | api |
+| [get_work_outcomes](work.outcomes.get.md) | [work.outcomes.get.ts](../../packages/oxagen/src/contracts/work.outcomes.get.ts) | api |
 | [get_work_priorities](work.priorities.get.md) | [work.priorities.get.ts](../../packages/oxagen/src/contracts/work.priorities.get.ts) | api, mcp |
 | [list_work_collectors](work.collectors.list.md) | [work.collectors.list.ts](../../packages/oxagen/src/contracts/work.collectors.list.ts) | api, mcp |
+| [list_work_items](work.items.list.md) | [work.items.list.ts](../../packages/oxagen/src/contracts/work.items.list.ts) | api |
+| [list_work_targets](work.targets.list.md) | [work.targets.list.ts](../../packages/oxagen/src/contracts/work.targets.list.ts) | api |
 | [refresh_work_order_checks](work.order.checks.refresh.md) | [work.order.checks.refresh.ts](../../packages/oxagen/src/contracts/work.order.checks.refresh.ts) | api |
 | [reject_work_order](work.order.reject.md) | [work.order.reject.ts](../../packages/oxagen/src/contracts/work.order.reject.ts) | api |
 | [reopen_work_item](work.item.reopen.md) | [work.item.reopen.ts](../../packages/oxagen/src/contracts/work.item.reopen.ts) | api |

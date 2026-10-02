@@ -22,6 +22,7 @@ export const workPrioritiesGet = registerCapability({
   layers: ["schema", "api", "mcp", "unit", "docs"],
   scoped: true,
   noBillingGate: true,
+  mutates: false,
   sensitivity: "low",
   defaultEffect: "deny",
   defaultRoles: {

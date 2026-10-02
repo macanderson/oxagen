@@ -92,6 +92,7 @@ export type PageKey =
   | "tools"
   | "repositories"
   | "runtimes"
+  | "work"
   | "shell";
 
 type PageFailure = {
@@ -182,6 +183,13 @@ export const PAGE_FAILURES = {
   runtimes: {
     error: { code: "collector_unreachable", status: 503 },
     permission: "runtime.read",
+  },
+  // The work records are rows in the control plane's Postgres. Reading them
+  // takes the `run.read` permission the Work actions' catalogue names
+  // (@oxagen/work/records authorize.ts, ADR-251).
+  work: {
+    error: { code: "work_records_unavailable", status: 503 },
+    permission: "run.read",
   },
   // The shell's one read fails with the control plane and needs organization
   // membership alone.

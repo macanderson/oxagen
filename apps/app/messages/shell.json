@@ -20,6 +20,7 @@
       "countNotRecordedShort": ", count not recorded"
     },
     "nav": {
+      "work": "Work",
       "fleet": "Fleet",
       "agents": "Agents",
       "steering": "Steering",
@@ -154,6 +155,7 @@
       "incidents": ", {count, plural, one {# critical incident open} other {# critical incidents open}}",
       "tileWaiting": "{count} waiting",
       "sub": {
+        "work": "inbox and review",
         "steering": "library and assignments",
         "repositories": "bindings and changes",
         "organization": "people and workspaces",

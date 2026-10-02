@@ -307,12 +307,13 @@ describe("the user-menu trigger", () => {
 });
 
 describe("sidebar", () => {
-  it("renders exactly the mockup's eight links, with Tools and Runtimes folded into Agents, and the current page", () => {
+  it("renders exactly the mockup's nine links, with Tools and Runtimes folded into Agents, and the current page", () => {
     renderShell(shellData());
     const sidebar = screen.getByRole("complementary", { name: "Sidebar" });
     const main = within(sidebar).getByRole("navigation", { name: "Main" });
     const links = within(main).getAllByRole("link");
     expect(links.map((l) => [l.textContent, l.getAttribute("href")])).toEqual([
+      ["Work", "/acme/core-platform/work"],
       ["Fleet", "/acme/core-platform"],
       ["Agents", "/acme/core-platform/agents"],
       ["Steering", "/acme/core-platform/steering"],
@@ -339,7 +340,7 @@ describe("sidebar", () => {
     nav.pathname = "/acme/billing";
     renderShell(shellData());
     const main = screen.getByRole("navigation", { name: "Main" });
-    expect(within(main).getAllByRole("link")).toHaveLength(8);
+    expect(within(main).getAllByRole("link")).toHaveLength(9);
     expect(within(main).getByRole("link", { name: "Billing" })).toHaveAttribute(
       "aria-current",
       "page",
@@ -427,6 +428,7 @@ describe("command menu", () => {
       "Agents",
       "Steering",
       "Spend",
+      "Work",
       "Repositories",
       "Organization",
       "Roles",

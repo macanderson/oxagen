@@ -349,6 +349,20 @@ registerHandlersOnce("@oxagen/handlers", () => {
   registerHandler("get_work_priorities", () =>
     import("./work.priorities.get").then((m) => m.workPrioritiesGetHandler as CapabilityHandlerFn),
   );
+  // The Work pages' reads (P1-05, #5163): the item list, one item, the send
+  // targets, and the outcome counts, each reduced from the work records.
+  registerHandler("list_work_items", () =>
+    import("./work.items.list").then((m) => m.workItemsListHandler as CapabilityHandlerFn),
+  );
+  registerHandler("get_work_item", () =>
+    import("./work.item.get").then((m) => m.workItemGetHandler as CapabilityHandlerFn),
+  );
+  registerHandler("list_work_targets", () =>
+    import("./work.targets.list").then((m) => m.workTargetsListHandler as CapabilityHandlerFn),
+  );
+  registerHandler("get_work_outcomes", () =>
+    import("./work.outcomes.get").then((m) => m.workOutcomesGetHandler as CapabilityHandlerFn),
+  );
   registerHandler("get_run_issue_providers", () =>
     import("./run.issue.providers.get").then(
       (m) => m.handler as CapabilityHandlerFn,

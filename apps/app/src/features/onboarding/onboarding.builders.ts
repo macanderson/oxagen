@@ -204,6 +204,14 @@ export function onboardingSource(reads: Reads): {
       // No runtime named, unless the test hands a list.
       named: () => Promise.resolve(reads.runtimes ?? readOk({ runtimes: [] })),
     },
+    work: {
+      list: refuse("work.list"),
+      get: refuse("work.get"),
+      targets: refuse("work.targets"),
+      outcomes: refuse("work.outcomes"),
+      collectors: refuse("work.collectors"),
+      priorities: refuse("work.priorities"),
+    },
     conversations: {
       latest: refuse("conversations.latest"),
       list: refuse("conversations.list"),
