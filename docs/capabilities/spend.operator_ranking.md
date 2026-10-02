@@ -44,6 +44,10 @@ Each row:
 | `unproductiveShare` | number or null | `unproductive` over the priced spend of the frames the operator's runs ran in the period, capped at 1; null when none of it is priced, when that spend holds another currency, when a run that crosses the period's edge could not be priced, or when pseudonyms are on |
 | `runs` | integer or null | runs with at least one counted frame; null when pseudonyms are on |
 | `topRuns` | object[] | `{ runId, unproductive }`, largest first, at most ten; empty when pseudonyms are on |
+| `doneWorkOrders` | integer | work orders the operator sent whose first passing check run of their definition of done fell in the period; shown when pseudonyms are on too |
+| `topDoneWorkOrders` | object[] | `{ workOrderId, doneAt, runs }` for those work orders, oldest pass first, at most ten; empty when pseudonyms are on |
+| `unassignedShare` | number or null | the operator's unassigned spend over the operator's spend, both by frame time; null when nothing was priced, when a run could not be priced, when the spend holds another currency, or when pseudonyms are on |
+| `topUnassignedRuns` | object[] | `{ runId, unassigned }`, largest unassigned part first, at most ten; empty when pseudonyms are on |
 
 ## Errors
 
@@ -58,10 +62,14 @@ The ranking reads the claim rows the headline reads (`readUnproductiveClaims`, A
 
 The unproductive share counts both sides by the time each frame ran. The claims reader filters on each frame's time. The spend side adds a run whose priced frames all fall in the period whole, and prices a run that crosses the period's first or last day by its frames inside the period, read from the frame store. At most 50 crossing runs are read, largest first. An operator with a crossing run left unread or unpriced gets no share.
 
-Done work orders and the unassigned share per operator are not in the answer yet. They arrive with the work order record (F13).
+A work order is done at its first passing check run of its definition of done, and counts in the period that check fell in. A person's later rejection does not undo it: it counts toward the reopen rate [`get_work_order_metrics`](spend.work_order_metrics.md) reports.
+
+Unassigned spend is spend on runs whose direct work order has no work item. A direct work order attached to a work item within 24 hours of its first run counts as assigned from that run, and one attached later counts as assigned from the attachment on. The share counts both sides by frame time, as the unproductive share does. Unassigned spend is never part of `unproductive`, so the headline and every operator total are the same with or without it.
+
+The ranking lists only operators with unproductive spend in the period. An operator with done work orders and no claimed frame has no row, so the done column is not a count for the whole workspace. [`get_work_order_metrics`](spend.work_order_metrics.md) reports every operator.
 
 ## Pseudonyms
 
-An org Owner or Admin turns pseudonyms on with [`set_operator_pseudonyms`](spend.operator_pseudonyms.set.md). A pseudonym is `Operator` and eight hex digits of an HMAC of the principal public id under a per-workspace salt, so one operator keeps one pseudonym. With the setting on, the answer carries no key, no facts, and no run ids, because a run page names its operator. It also carries no `unproductiveShare` and no `runs`. `get_spend` names each operator beside priced spend and run counts, and the share gives back an operator's priced spend, so either figure would match a pseudonym to a name. The ranks, `unproductive`, and `shareOfTotal` stay.
+An org Owner or Admin turns pseudonyms on with [`set_operator_pseudonyms`](spend.operator_pseudonyms.set.md). A pseudonym is `Operator` and eight hex digits of an HMAC of the principal public id under a per-workspace salt, so one operator keeps one pseudonym. With the setting on, the answer carries no key, no facts, and no run ids, because a run page names its operator. It also carries no `unproductiveShare`, no `unassignedShare`, and no `runs`, and it cites no work orders. `get_spend` names each operator beside priced spend and run counts, and the share gives back an operator's priced spend, so either figure would match a pseudonym to a name. The ranks, `unproductive`, `shareOfTotal`, and `doneWorkOrders` stay.
 
 The setting governs this answer. A manager who also reads named findings or run pages can still add up one person's figures and compare them.

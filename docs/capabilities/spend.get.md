@@ -56,6 +56,10 @@ A row adds `key` (an operator's principal public id `prn_…`, the `operatorId` 
 
 A run is attributed to the operator, agent and task it names; a run that names none is not on that level. The `cost_center` level is the exception: every run is on it exactly once, so its rows sum to the total. A run appears under every model its frames used and every tool it called. Tool rows carry counts and no money: no frame prices a tool call.
 
+## The assistant row
+
+The in-app assistant's spend is one row of its own in every grouping, keyed `~oxagen_assistant`. The other rows leave the assistant's share out, and the total, the days, and the reported spend still count it, so the rows sum to the total. The row's `topRuns` is always empty, and its `operator`, `provider`, `proven`, `accepted`, and `productiveRatio` are null. The row appears only when the period has a run of the assistant. Oxagen runs the assistant and the workspace does not monitor it, so no row lists one of its runs and the row opens no drill (ADR-235, amended 2026-10-02).
+
 ## Runs with no usage
 
 A harness whose model calls pass through neither the Oxagen gateway nor the local proxy records tool calls and no usage. Cursor is one, and so are Stella on a provider other than Anthropic and a Stella session with its own Anthropic base URL. The rollup counts such a run and prices none of it. `unmeteredRuns` counts the period's runs whose `cost.run_totals` row holds no model call, grouped by the session's `harness`, so a reader can see what the total leaves out. An open run counts once it has made a tool call, since the rollup writes a row on a run's first batch, before its first model call can land. A run not yet rolled up has no row and is not counted. A ledger run meters every call through the gateway, so it is never counted. The count is read from Postgres, like the rest of this answer.

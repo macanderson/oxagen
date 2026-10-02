@@ -2,6 +2,7 @@ import { rebuildDailyTotals, rebuildRunTotals, utcDay } from "@oxagen/billing";
 import { NonRetriableError } from "@oxagen/functions";
 import { createFunction } from "../create-function";
 import { RUN_FIT_REQUESTED_EVENT } from "../events";
+import { isInAppRun } from "../lib/in-app-run";
 import { logger } from "../logger";
 
 /**
@@ -13,6 +14,11 @@ import { logger } from "../logger";
  * retry; a degraded frame store throws, and Inngest retries. Once the rows
  * land it requests a findings pass over the run's workspace (ADR-062 §4) and
  * the run's Model fit reading (ADR-201).
+ *
+ * An in-app assistant run gets both rows and neither request. Its cost is
+ * part of what the organization spent, so the rows stay. The workspace does
+ * not monitor the assistant (ADR-235, 2026-10-02 amendment), so no finding
+ * and no Model fit reading is made for it.
  *
  * Concurrency is per run: two seals of one run in flight would race the same
  * row, and the last write wins either way.
@@ -52,6 +58,20 @@ export const [costRunRollup] = createFunction(
         day: run.day,
       }),
     );
+    // A Tacho session (`tse_…`) is never an in-app run, so only a ledger run
+    // spends a step on the read.
+    const inApp =
+      runId.startsWith("arun_") &&
+      (await step.run("in-app-run", () =>
+        isInAppRun({ orgId: run.orgId, workspaceId: run.workspaceId }, runId),
+      ));
+    if (inApp) {
+      logger.info(
+        { runId, costMicros: run.costMicros, costBasis: run.costBasis },
+        "cost.run-rollup complete; an in-app run requests no findings and no Model fit",
+      );
+      return { runId, rolledUp: true };
+    }
     await step.sendEvent("request-findings", {
       name: "cost/findings.requested",
       data: { orgId: run.orgId, workspaceId: run.workspaceId },

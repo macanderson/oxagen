@@ -1,4 +1,7 @@
-import { spendGet } from "@oxagen/oxagen/contracts/spend.get";
+import {
+  ASSISTANT_SPEND_KEY,
+  spendGet,
+} from "@oxagen/oxagen/contracts/spend.get";
 import type { UnmeteredRuns } from "@oxagen/oxagen/contracts/spend.shared";
 import { describe, expect, it, vi } from "vitest";
 import {
@@ -9,6 +12,7 @@ import {
   mcpServerShares,
   reportedSpend,
 } from "./spend.get";
+import type { SpendRunRecord } from "./spend.shared";
 import {
   daily,
   ctx,
@@ -24,7 +28,7 @@ const PERIOD = { from: "2026-09-01", to: "2026-09-30" };
 function harness(
   over: {
     daily?: ReturnType<typeof daily>[];
-    runs?: ReturnType<typeof run>[];
+    runs?: SpendRunRecord[];
     unmetered?: UnmeteredRuns;
     names?: Record<string, string>;
     harnesses?: Record<string, string>;
@@ -477,6 +481,78 @@ describe("get_spend day series and top runs", () => {
       top.map((entry) => entry.runId),
     );
     expect(() => spendGet.output.parse(out)).not.toThrow();
+  });
+
+  // ADR-235, 2026-10-02 amendment. The organization paid for the in-app
+  // assistant's runs, so every figure counts them and agrees with the daily
+  // rows. The assistant's spend is one row of its own, and no row lists one of
+  // its runs.
+  it("puts an in-app run's spend in the assistant row and names none of its runs", async () => {
+    const assistant: SpendRunRecord = { ...pricedRun(900n), inApp: true };
+    const external = pricedRun(400n);
+    const h = harness({
+      daily: [
+        daily({
+          groupKind: "operator",
+          groupKey: OPERATOR,
+          runs: 2,
+          costMicros: 1300n,
+          costBasis: "client_attested",
+        }),
+      ],
+      runs: [assistant, external],
+    });
+    const out = await h.handler({ period: PERIOD, groupBy: "operator" }, ctx());
+    expect(out.total.runs).toBe(2);
+    expect(out.total.cost?.micros).toBe("1300");
+    expect(out.reported?.micros).toBe("1300");
+    expect(out.days.find((d) => d.day === "2026-09-10")).toMatchObject({
+      cost: { micros: "1300" },
+      runs: 2,
+    });
+    // The operator's row loses the assistant's share and lists only its own run.
+    expect(out.rows.map((r) => r.key)).toEqual([OPERATOR, ASSISTANT_SPEND_KEY]);
+    expect(out.rows[0]).toMatchObject({ runs: 1, cost: { micros: "400" } });
+    expect(out.rows[0]?.topRuns.map((r) => r.runId)).toEqual([
+      external.runId,
+    ]);
+    // The assistant row carries the rest, names no run, operator or provider.
+    expect(out.rows[1]).toMatchObject({
+      key: ASSISTANT_SPEND_KEY,
+      runs: 1,
+      cost: { micros: "900" },
+      operator: null,
+      provider: null,
+      topRuns: [],
+      proven: null,
+      accepted: null,
+    });
+    // The rows sum to the total.
+    const sum = out.rows.reduce(
+      (acc, r) => acc + BigInt(r.cost?.micros ?? "0"),
+      0n,
+    );
+    expect(sum).toBe(1300n);
+    // Nothing is read about the assistant's run, its name included.
+    expect(h.readRunNames).toHaveBeenCalledWith(SCOPE, [external.runId]);
+    expect(h.readRunHarnesses).toHaveBeenCalledWith(SCOPE, [external.runId]);
+    expect(() => spendGet.output.parse(out)).not.toThrow();
+  });
+
+  it("returns no assistant row for a period with no in-app run", async () => {
+    const h = harness({
+      daily: [
+        daily({
+          groupKind: "operator",
+          groupKey: OPERATOR,
+          costMicros: 400n,
+          costBasis: "client_attested",
+        }),
+      ],
+      runs: [pricedRun(400n)],
+    });
+    const out = await h.handler({ period: PERIOD, groupBy: "operator" }, ctx());
+    expect(out.rows.map((r) => r.key)).toEqual([OPERATOR]);
   });
 
   it("names the agent's registered harness on a top run that recorded none, and keeps a recorded one", async () => {

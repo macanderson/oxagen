@@ -809,10 +809,63 @@ describe("readRepositoryRemote (#3941)", () => {
   });
 
   it("answers undefined for a directory with no origin (negative)", async () => {
+    // Git exits 2 when the repository has no remote by that name.
     const exec = fakeGit({
-      "remote get-url origin": FAIL,
+      "remote get-url origin": {
+        status: 2,
+        stdout: "",
+        stderr: "error: No such remote 'origin'\n",
+      },
       "rev-parse HEAD": "c".repeat(40) + "\n",
     });
     expect(await readRepositoryRemote(exec, "/repo")).toBeUndefined();
+  });
+
+  it("answers undefined for a directory in no repository (negative)", async () => {
+    const exec = fakeGit({
+      "remote get-url origin": {
+        status: 128,
+        stdout: "",
+        stderr:
+          "fatal: not a git repository (or any of the parent directories): .git\n",
+      },
+    });
+    expect(await readRepositoryRemote(exec, "/tmp/scratch")).toBeUndefined();
+  });
+
+  it("rejects when git fails before it can say whether origin exists (#4458)", async () => {
+    // A fatal error other than "no repository": git refuses a worktree that
+    // another user owns.
+    const distrusted = fakeGit({
+      "remote get-url origin": {
+        status: 128,
+        stdout: "",
+        stderr: "fatal: detected dubious ownership in repository at '/repo'\n",
+      },
+    });
+    await expect(readRepositoryRemote(distrusted, "/repo")).rejects.toThrow(
+      "dubious ownership",
+    );
+    // A command cut off with no exit status, as a timeout leaves it.
+    const cut = fakeGit({
+      "remote get-url origin": { status: null, stdout: "", stderr: "" },
+    });
+    await expect(readRepositoryRemote(cut, "/repo")).rejects.toThrow(
+      "no exit status",
+    );
+    // A spawn that threw.
+    const thrown: ExecAsync = async (command, args) => {
+      if (command === "git" && args.includes("get-url"))
+        throw new Error("spawn git EAGAIN");
+      return { status: 0, stdout: "/repo\n", stderr: "" };
+    };
+    await expect(readRepositoryRemote(thrown, "/repo")).rejects.toThrow(
+      "spawn git EAGAIN",
+    );
+    // A success that prints no URL, which no real `origin` does.
+    const blank = fakeGit({ "remote get-url origin": "" });
+    await expect(readRepositoryRemote(blank, "/repo")).rejects.toThrow(
+      "exit 0",
+    );
   });
 });

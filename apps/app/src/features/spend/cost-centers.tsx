@@ -4,6 +4,7 @@
 // total and the unlabelled share is a row a reader can see.
 import { useLocale, useTranslations } from "next-intl";
 import {
+  ASSISTANT_SPEND_KEY,
   type SpendFigure,
   type SpendReport,
   UNASSIGNED_COST_CENTER_KEY,
@@ -63,6 +64,8 @@ export function CostCenterTable({ report }: { report: SpendReport }) {
                       <span className="text-muted-foreground">
                         {t("groups.cost_center.unassigned")}
                       </span>
+                    ) : row.key === ASSISTANT_SPEND_KEY ? (
+                      <span>{t("month.assistant.label")}</span>
                     ) : (
                       <span className={mono}>{row.key}</span>
                     )}

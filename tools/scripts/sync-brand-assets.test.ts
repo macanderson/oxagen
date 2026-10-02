@@ -41,8 +41,8 @@ function put(root: string, rel: string, content: string | Buffer) {
 
 /**
  * A copy of the repo with just what the script imports and edits in place:
- * the script, its entrypoint helper, apps/web's palette module, and the six
- * hand-authored pages the sync writes a <head> block into.
+ * the script, its entrypoint helper and literal guard, apps/web's palette
+ * module, and the six hand-authored pages the sync writes a <head> block into.
  */
 function fixtureRepo(root: string) {
   const copyIn = (rel: string) => {
@@ -51,6 +51,7 @@ function fixtureRepo(root: string) {
   };
   copyIn("tools/scripts/sync-brand-assets.mjs");
   copyIn("tools/scripts/lib/is-entrypoint.mjs");
+  copyIn("tools/scripts/lib/brand-literals.mjs");
   copyIn("apps/web/scripts/lib/theme.mjs");
   for (const page of [
     "index.html",
@@ -372,6 +373,33 @@ describe("a sync and a check against a kit", () => {
     expect(check.stderr).toMatch(/missing\s+apps\/web\/icon-512\.png/);
     expect(check.stderr).toMatch(/extra\s+\.claude\/skills\/oxagen-branding\/references\/words\.md/);
     expect(check.stderr).toContain("Run node tools/scripts/sync-brand-assets.mjs --brand <kit>");
+  });
+
+  // oxageninc/brand#63: a guarded stylesheet takes its corners, shadows, type
+  // sizes, and page wrap from the kit's tokens, so a theme change reaches it.
+  it("fails a check on a literal in a guarded stylesheet, naming the line, until it reads a token", () => {
+    sync();
+    stampDesktop();
+    const sheet = "packages/ui/src/styles/globals.css";
+    put(repo(), sheet, ":root {\n  --ui-radius: 0.5rem;\n}\n");
+    const literal = sync("--check");
+    expect(literal.status).toBe(1);
+    expect(literal.stderr).toMatch(
+      /literal\s+packages\/ui\/src\/styles\/globals\.css \(line 2: --ui-radius: 0\.5rem; use /,
+    );
+    expect(literal.stderr).toContain("KEEP in tools/scripts/lib/brand-literals.mjs");
+    put(repo(), sheet, ":root {\n  --ui-radius: var(--ox-radius-base);\n}\n");
+    const fixed = sync("--check");
+    expect(fixed.status, fixed.stderr).toBe(0);
+  });
+
+  it("names an allowlisted literal its stylesheet no longer writes", () => {
+    sync();
+    stampDesktop();
+    put(repo(), "apps/app/src/ui/phone.css", "input { font-size: var(--ox-a-body); }\n");
+    const check = sync("--check");
+    expect(check.status).toBe(1);
+    expect(check.stderr).toMatch(/keep\s+apps\/app\/src\/ui\/phone\.css \(the allowlist .* keeps font-size 16px/);
   });
 
   it("fails a check when the kit changes, until the sync runs", () => {

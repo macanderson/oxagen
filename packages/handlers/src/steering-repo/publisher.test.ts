@@ -78,9 +78,23 @@ function fakeHost(files: Map<string, string> = fixtureRepo()) {
         tags.set(name, sha);
       },
     ),
+    recordDeployment: vi.fn(
+      async (
+        _repo: SteeringRepository,
+        _args: {
+          sha: string;
+          ref: string;
+          environment: string;
+          description: string;
+        },
+      ): Promise<{ url: string | null }> => ({ url: DEPLOYMENTS }),
+    ),
   };
   return { fake: host, host: host as unknown as SteeringHost };
 }
+
+const DEPLOYMENTS =
+  "https://github.com/a-intel/oxagen-core-platform/deployments/steering";
 
 // No server compiles here, so the bundle's tool manifest stays null.
 const noCompiler = (deps: Omit<PublishDeps, "project">): PublishDeps => ({
@@ -394,6 +408,89 @@ describe("steeringSyncPublish", () => {
     expect(fake.resolveRepository).toHaveBeenCalledWith(SCOPE);
     expect(storeFor).toHaveBeenCalledWith(SCOPE);
     expect(store.published.get(KEY)?.commit).toBe(HEAD);
+    // Unasked, as provisioning's first publish is, it records no deployment.
+    expect(fake.recordDeployment).not.toHaveBeenCalled();
+  });
+
+  it("records a version it publishes as one deployment, and none when the head is current", async () => {
+    const { fake, host } = fakeHost();
+    const store = memoryVersionStore();
+    const port = steeringSyncPublish({
+      host,
+      store: () => store,
+      extend: noCompiler,
+      now,
+      recordDeployments: true,
+    });
+    await expect(port(SCOPE)).resolves.toEqual({
+      status: "published",
+      version: 1,
+    });
+    expect(fake.recordDeployment).toHaveBeenCalledTimes(1);
+    expect(fake.recordDeployment).toHaveBeenCalledWith(REPO, {
+      sha: HEAD,
+      ref: "main",
+      environment: "steering",
+      description: "Steering version 1",
+    });
+
+    // The next sync finds the head published, so nothing new is deployed.
+    await expect(port(SCOPE)).resolves.toEqual({
+      status: "current",
+      version: 1,
+    });
+    expect(fake.recordDeployment).toHaveBeenCalledTimes(1);
+  });
+
+  it("records no deployment for a refusal, a stale head, or the legacy layout", async () => {
+    const { fake, host } = fakeHost();
+    const refused = steeringSyncPublish({
+      host,
+      store: () => memoryVersionStore(),
+      readHealth: async () => "diverged",
+      recordDeployments: true,
+    });
+    await expect(refused(SCOPE)).resolves.toMatchObject({ status: "refused" });
+
+    fake.branchHead.mockResolvedValueOnce(HEAD).mockResolvedValueOnce(LATER);
+    const stale = steeringSyncPublish({
+      host,
+      store: () => memoryVersionStore(),
+      extend: noCompiler,
+      now,
+      recordDeployments: true,
+    });
+    await expect(stale(SCOPE)).resolves.toMatchObject({ status: "stale" });
+
+    const legacy = fakeHost(new Map([["README.md", "# Platform\n"]]));
+    const port = steeringSyncPublish({
+      host: legacy.host,
+      store: () => memoryVersionStore(),
+      recordDeployments: true,
+    });
+    await expect(port(SCOPE)).resolves.toBeNull();
+
+    expect(fake.recordDeployment).not.toHaveBeenCalled();
+    expect(legacy.fake.recordDeployment).not.toHaveBeenCalled();
+  });
+
+  it("keeps the published version when the host refuses the deployment record", async () => {
+    const { fake, host } = fakeHost();
+    fake.recordDeployment.mockRejectedValueOnce(new Error("403 Forbidden"));
+    const store = memoryVersionStore();
+    const port = steeringSyncPublish({
+      host,
+      store: () => store,
+      extend: noCompiler,
+      now,
+      recordDeployments: true,
+    });
+    await expect(port(SCOPE)).resolves.toEqual({
+      status: "published",
+      version: 1,
+    });
+    expect(fake.recordDeployment).toHaveBeenCalledTimes(1);
+    expect(store.published.get(KEY)?.version).toBe(1);
   });
 
   it("publishes nothing from a repository in the legacy layout", async () => {

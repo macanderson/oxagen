@@ -154,8 +154,7 @@ const CLIENT_SETTING: Refresh = {
 
 /**
  * The registry. Ordered for `.env.example` layout. `services`/`requiredIn`
- * reflect real consumers (derived from the source-reference audit); preserve
- * the env-manager catalog's historical routing where it was already tuned.
+ * reflect real consumers (derived from the source-reference audit).
  */
 export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   // ── Node ──────────────────────────────────────────────────────────────────
@@ -1025,8 +1024,7 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
       "Stripe publishable key. Every environment, production included, is " +
       "the sandbox's pk_test_ key until the production cutover. " +
       "Provisioning-only: no service reads it. The browser reads the " +
-      "NEXT_PUBLIC_ prefixed name, and env-manager pulls this one from the " +
-      "secret store so the two stay in step.",
+      "NEXT_PUBLIC_ prefixed name. Keep the two equal.",
     secret: false,
     clientExposed: false,
     services: [],
@@ -1163,9 +1161,9 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
       "Negotiated model rates as inline JSON, in USD per one million tokens: " +
       '{"claude-sonnet-5":{"inputPer1M":2.40,"outputPer1M":12.00,"cachedInputPer1M":0.24,"cacheWrite5mPer1M":3.00}}. ' +
       "Leave unset unless you have negotiated rates with a model provider.",
-    // Contract terms. The env manager maps this flag straight to Vercel's
-    // `plain` vs `encrypted`, so `false` would leave negotiated rates readable
-    // to anyone with project-environment access and unmasked in build logs.
+    // Contract terms. The flag makes the parameter a SecureString and masks
+    // the value in CI logs, so `false` would leave negotiated rates readable
+    // to anyone who can list the parameters and unmasked in build logs.
     secret: true,
     clientExposed: false,
     services: ["api", "app", "mcp"],
@@ -1226,13 +1224,10 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
       "rather than issuing an enrollment no install could verify.",
     secret: true,
     clientExposed: false,
-    // Deliberately unclaimed, unlike its Tacho counterpart. `valueOrigin:
-    // "generate"` means the env-manager deploy path mints a fresh value for
-    // every key in the catalog and never returns it
-    // (tools/env-manager/src/server.ts), and a Stella install verifies
-    // enrollment documents against an out-of-band copy of this exact secret —
-    // so claiming it for a service would rotate the fleet's copy away on the
-    // next deploy. Giving create_stella_enrollment a deployed secret needs a
+    // Deliberately unclaimed, unlike its Tacho counterpart. A Stella install
+    // verifies enrollment documents against an out-of-band copy of this exact
+    // secret, so a new value here strands every install still holding the old
+    // one. Giving create_stella_enrollment a deployed secret needs a
     // distribution story first.
     services: [],
     requiredIn: [],
@@ -1428,7 +1423,8 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: DEPLOYED,
     valueOrigin: "manual",
     refresh: {
-      how: "In the Vercel dashboard, open AI Gateway, API keys. Create a key, save it in each environment that uses the gateway, restart, then delete the old key.",
+      how: "The script mints one key per environment through the Vercel API and saves each under that environment's prefix. Restart api, app, and mcp for staging and production, then delete the old keys in the Vercel dashboard under AI Gateway, API keys.",
+      command: "pnpm vercel:rotate-ai-key oxagen-inc --env development,staging,production",
     },
   },
   OXAGEN_MODEL_PROVIDER: {
@@ -2067,41 +2063,6 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     valueOrigin: "manual",
   },
 
-  // ── env-manager tooling (operator/local-only; never pushed to app projects) ──
-  VERCEL_TOKEN: {
-    group: "env-manager tooling",
-    description:
-      "Vercel API token (admin) the env-manager uses to read/write project env vars.",
-    secret: true,
-    clientExposed: false,
-    services: [],
-    requiredIn: [],
-    valueOrigin: "manual",
-    store: "operator",
-    refresh: {
-      how: "Create a token at vercel.com/account/tokens. Only tools/env-manager reads it, and phase 4 of ADR-240 retires that tool.",
-    },
-  },
-  VERCEL_TEAM_ID: {
-    group: "env-manager tooling",
-    description: "Vercel team id (defaults to the oxagen team).",
-    secret: false,
-    clientExposed: false,
-    services: [],
-    requiredIn: [],
-    valueOrigin: "manual",
-  },
-  ENV_MANAGER_PORT: {
-    group: "env-manager tooling",
-    description: "Local port for the env-manager web UI.",
-    secret: false,
-    clientExposed: false,
-    services: [],
-    requiredIn: [],
-    valueOrigin: "static",
-    staticValue: { "*": "7799" },
-  },
-
   // ── Security / audit ────────────────────────────────────────────────────────
   AUDIT_EXPORT_SIGNING_SECRET: {
     group: "Security",
@@ -2644,18 +2605,6 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
     placeholder: "1",
-  },
-  GCP_PROJECT: {
-    group: "Operator scripts",
-    description:
-      "Google Cloud project the env-manager pulls Secret Manager secrets from. " +
-      "Defaults to oxagen-490023.",
-    secret: false,
-    clientExposed: false,
-    services: [],
-    requiredIn: [],
-    valueOrigin: "manual",
-    placeholder: "oxagen-490023",
   },
   CONTEXT_GRAPH_PROTOCOL_DIR: {
     group: "Operator scripts",

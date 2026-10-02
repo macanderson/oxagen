@@ -1,12 +1,14 @@
-// This test reads the desktop icons and the synced avatar in the live tree.
+// This test reads the desktop icons, the synced avatar, and the guarded
+// stylesheets in the live tree.
 // vitest.config.ts leaves `*.tree.test.ts` files out of turbo's cached tasks,
 // so `pnpm check:tree-guards` runs them uncached in the checks job (#4664
 // item 2). The cached tests in sync-brand-assets.test.ts run the sync against
 // a fake kit instead.
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { GUARDED, literalDrift } from "./lib/brand-literals.mjs";
 import { desktopIconDrift } from "./sync-brand-assets.mjs";
 
 const REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));
@@ -27,5 +29,31 @@ describe("the desktop icon stamp", () => {
     const stamp = readFileSync(join(REPO_ROOT, ICONS, "source.sha256"), "utf8");
     const synced = new Map([[AVATAR, readFileSync(join(REPO_ROOT, AVATAR))]]);
     expect(desktopIconDrift(stamp, synced, committed)).toBeNull();
+  });
+});
+
+// oxageninc/brand#63, #5104: every guarded stylesheet takes its corners,
+// shadows, type sizes, and page wrap from the kit's tokens, or names the
+// literal it keeps.
+describe("the guarded stylesheets", () => {
+  it("are all in the tree, so a rename cannot drop one from the guard", () => {
+    const missing = GUARDED.map((g) => g.path).filter(
+      (path) => !existsSync(join(REPO_ROOT, path)),
+    );
+    expect(missing).toEqual([]);
+  });
+
+  it("write no literal the kit has a token for, and keep no stale entry", () => {
+    const files = new Map(
+      GUARDED.map(({ path }): [string, string] => [
+        path,
+        readFileSync(join(REPO_ROOT, path), "utf8"),
+      ]),
+    );
+    const tokens = readFileSync(
+      join(REPO_ROOT, "packages/ui/src/styles/house-tokens.css"),
+      "utf8",
+    );
+    expect(literalDrift(files, { tokens })).toEqual({ hits: [], stale: [] });
   });
 });

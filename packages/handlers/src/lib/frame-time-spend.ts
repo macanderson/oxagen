@@ -258,7 +258,7 @@ async function readRuns(
  * rollup reads the run's frames by (`loadRunSource`), without its system
  * connection. Null when the workspace holds no such run.
  */
-async function readRunRef(
+export async function readRunRef(
   scope: SpendScope,
   runId: string,
 ): Promise<FrameRunRef | null> {
@@ -317,7 +317,7 @@ async function readRunRef(
   });
 }
 
-function toFrame(row: ModelCallFrameRow): ModelCallFrame {
+export function toFrame(row: ModelCallFrameRow): ModelCallFrame {
   return {
     at: new Date(row.at),
     model: row.model,

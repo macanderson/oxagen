@@ -9,7 +9,7 @@ import { PreviewCard as PreviewCardPrimitive } from "@base-ui/react/preview-card
 import { cn } from "@/ui/cn";
 
 const popoverSurface =
-  "relative isolate rounded-2xl bg-app-raised-bg/55 dark:bg-app-raised-bg/70 text-app-raised-fg shadow-2xl ring-1 ring-foreground/5 dark:ring-foreground/10 before:pointer-events-none before:absolute before:inset-0 before:-z-1 before:rounded-[inherit] before:backdrop-blur-lg dark:before:backdrop-blur-2xl before:backdrop-saturate-150";
+  "relative isolate rounded-2xl bg-app-raised-bg/55 dark:bg-app-raised-bg/70 text-app-raised-fg shadow-pop ring-1 ring-foreground/5 dark:ring-foreground/10 before:pointer-events-none before:absolute before:inset-0 before:-z-1 before:rounded-[inherit] before:backdrop-blur-lg dark:before:backdrop-blur-2xl before:backdrop-saturate-150";
 
 function HoverCard({ ...props }: PreviewCardPrimitive.Root.Props) {
   return <PreviewCardPrimitive.Root data-slot="hover-card" {...props} />;

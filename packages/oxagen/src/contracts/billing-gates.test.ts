@@ -103,6 +103,7 @@ const CONSOLE_CONTRACTS = [
   "set_operator_pseudonyms",
   "get_spend_per_merged_pr",
   "get_unproductive_spend",
+  "get_work_order_metrics",
   "get_spend_budget",
   "set_spend_budget",
   "export_statement",

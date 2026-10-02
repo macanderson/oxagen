@@ -93,7 +93,7 @@ function ToastList({ closeLabel }: { closeLabel: string }) {
         data-toast=""
         data-tone={tone}
         className={
-          "group/toast pointer-events-auto absolute right-0 bottom-0 isolate z-[calc(1000-var(--toast-index))] w-full origin-bottom rounded-2xl bg-app-raised-bg/55 dark:bg-app-raised-bg/70 text-app-raised-fg shadow-2xl ring-1 ring-foreground/5 will-change-transform select-none dark:ring-foreground/10 " +
+          "group/toast pointer-events-auto absolute right-0 bottom-0 isolate z-[calc(1000-var(--toast-index))] w-full origin-bottom rounded-2xl bg-app-raised-bg/55 dark:bg-app-raised-bg/70 text-app-raised-fg shadow-pop ring-1 ring-foreground/5 will-change-transform select-none dark:ring-foreground/10 " +
           "before:pointer-events-none before:absolute before:inset-0 before:-z-1 before:rounded-[inherit] before:backdrop-blur-lg dark:before:backdrop-blur-2xl before:backdrop-saturate-150 " +
           "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring " +
           "[--gap:0.75rem] [--height:var(--toast-frontmost-height,var(--toast-height))] [--offset-y:calc(var(--toast-offset-y)*-1+calc(var(--toast-index)*var(--gap)*-1)+var(--toast-swipe-movement-y))] [--peek:0.75rem] [--scale:calc(max(0,1-(var(--toast-index)*0.1)))] [--shrink:calc(1-var(--scale))] " +

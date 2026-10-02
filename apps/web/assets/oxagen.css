@@ -11,11 +11,16 @@
    in a rule or a page.
    Gold is identity and action only — never a state. States are pass/fail.
    Treatment follows docs.oxagen.sh (apps/docs, on @oxagen/ui): corners are
-   rounded on the docs scale (--r / --r-lg / --r-xl), the ONE gradient is the
+   rounded on the kit's scale (--r / --r-lg / --r-xl), the ONE gradient is the
    kit's sheen and it lands only on headline accents and the primary action,
    and backdrops are soft — a lattice that fades out, the hex constellation
    from the logomark, an ember glow — never a hard-stop texture. Depth comes
-   from hairlines and a lit shadow under the windows.
+   from hairlines: a window or panel at rest takes no shadow.
+   Corners, shadows, type sizes, and spacing read the kit's tokens, so a theme
+   change reaches this site with no edit here. The brand check
+   (tools/scripts/sync-brand-assets.mjs --check) fails on a hard-coded radius,
+   shadow, font size, or page wrap in this file, and names each literal it
+   keeps and why.
    ========================================================================== */
 
 :root {
@@ -86,14 +91,20 @@
   --add-bg: var(--st-diff-add);
   --del-bg: var(--st-diff-del);
 
-  /* ---- corners: the docs site's scale, so a button here and a button on
-     docs.oxagen.sh are the same shape. --r is @oxagen/ui's --ui-radius
-     (0.5rem); the larger steps are Tailwind's xl / 2xl, which the docs pages
-     put on windows and frames. ---- */
-  --r: 8px; /* controls: buttons, inputs, chips, menu rows */
-  --r-lg: 12px; /* windows: the terminal, cards, panels */
-  --r-xl: 16px; /* frames: card grids, the demo box */
+  /* ---- corners: the kit's tokens. --r is @oxagen/ui's --ui-radius, the
+     theme's corner base, so a button here and a button on docs.oxagen.sh are
+     the same shape. --r-lg is the website card corner the kit names
+     --ox-radius, and --r-xl is the kit's 3xl step. ---- */
+  --r: var(--ox-radius-lg); /* controls: buttons, inputs, chips, menu rows */
+  --r-lg: var(--ox-radius); /* windows: the terminal, cards, panels */
+  --r-xl: var(--ox-radius-3xl); /* frames: card grids, the demo box */
   --r-pill: 999px; /* the eyebrow pill, tags */
+  /* The page wrap. The kit's --ox-wrap is 1120px; this site's wrap is 60px
+     wider, and moving it onto --ox-wrap waits on Mac (oxageninc/product#5104). */
+  --page-wrap: 1180px;
+  /* The hairline under a control, on ink. The light theme below repoints it
+     to the paper twin. */
+  --shadow-ui: var(--ox-shadow-ui);
   --nav-h: 60px;
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
 
@@ -192,10 +203,12 @@
    OS is light (no data-theme is stamped then). */
 :root[data-theme="light"] {
   --tex-hex: var(--tex-hex-paper);
+  --shadow-ui: var(--ox-shadow-ui-ink);
 }
 @media (prefers-color-scheme: light) {
   :root:not([data-theme]) {
     --tex-hex: var(--tex-hex-paper);
+    --shadow-ui: var(--ox-shadow-ui-ink);
   }
 }
 :root {
@@ -267,7 +280,7 @@ body {
   margin: 0;
   background: var(--ground);
   color: var(--ink);
-  font: 400 16px / 1.62 var(--font-sans);
+  font: 400 var(--ox-m-body) / var(--ox-m-body-leading) var(--font-sans);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
   overflow-x: hidden;
@@ -330,7 +343,7 @@ hr {
   font-feature-settings: "calt", "liga";
 }
 .wrap {
-  width: min(1180px, calc(100% - 40px));
+  width: min(var(--page-wrap), calc(100% - 40px));
   margin-inline: auto;
 }
 .gold {
@@ -464,12 +477,12 @@ h2 .gold,
   margin-bottom: 52px;
 }
 .sec-head h2 {
-  font-size: clamp(29px, 4.2vw, 44px);
+  font-size: clamp(var(--ox-m-h3), 4.2vw, var(--ox-m-h2));
   margin: 16px 0 14px;
 }
 .sec-head p {
   color: var(--ink-3);
-  font-size: 17.5px;
+  font-size: var(--ox-m-body);
   max-width: 62ch;
 }
 .sec-alt {
@@ -486,7 +499,7 @@ h2 .gold,
   padding: 12px 22px;
   border-radius: var(--r);
   font-weight: 600;
-  font-size: 15px;
+  font-size: var(--ox-m-micro);
   border: 1px solid transparent;
   cursor: pointer;
   white-space: nowrap;
@@ -501,7 +514,7 @@ h2 .gold,
   background-color: var(--gold);
   background-image: var(--grad-ember);
   color: var(--ox-ink); /* ink on the metal in both themes */
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  box-shadow: var(--shadow-ui);
 }
 .btn-primary:hover {
   transform: scale(1.02);
@@ -561,7 +574,7 @@ h2 .gold,
   display: flex;
   align-items: center;
   gap: 24px;
-  width: min(1180px, calc(100% - 40px));
+  width: min(var(--page-wrap), calc(100% - 40px));
   margin-inline: auto;
 }
 /* The brand slot holds the house LOCKUP: the hive, a gap, then the wordmark
@@ -584,7 +597,7 @@ h2 .gold,
   margin-inline: auto;
 }
 .nav-links > a {
-  font-size: 14.5px;
+  font-size: var(--ox-m-micro);
   color: var(--ink-3);
   transition: color 0.14s;
   background: none;
@@ -605,7 +618,7 @@ h2 .gold,
   margin-left: auto;
 }
 .nav-cta .login {
-  font-size: 14.5px;
+  font-size: var(--ox-m-micro);
   color: var(--ink-3);
 }
 .nav-cta .login:hover {
@@ -700,7 +713,7 @@ h2 .gold,
   .drawer a {
     display: block;
     padding: 9px 0;
-    font-size: 16px;
+    font-size: var(--ox-m-body);
     color: var(--ink-2);
     border-bottom: 1px solid var(--line);
   }
@@ -806,10 +819,6 @@ figcaption b {
   line-height: 1.75;
   display: flex;
   flex-direction: column;
-  box-shadow:
-    0 1px 0 0 rgba(255, 255, 255, 0.06) inset,
-    0 30px 80px -28px color-mix(in srgb, var(--ember-c) 42%, transparent),
-    0 18px 50px -30px rgba(0, 0, 0, 0.7);
 }
 .term-body {
   padding: 16px 18px;
@@ -885,13 +894,13 @@ figcaption b {
   opacity: 0.3;
 }
 .card h3 {
-  font-size: 18px;
+  font-size: var(--ox-m-body);
   margin: 14px 0 8px;
   font-weight: 620;
 }
 .card p {
   color: var(--ink-3);
-  font-size: 14.8px;
+  font-size: var(--ox-m-micro);
 }
 .card-icon {
   width: 40px;
@@ -926,7 +935,7 @@ figcaption b {
   gap: 18px;
   padding: 15px 18px;
   border-bottom: 1px solid var(--line);
-  font-size: 15px;
+  font-size: var(--ox-m-micro);
 }
 .spec > div:last-child {
   border-bottom: 0;
@@ -1014,7 +1023,7 @@ figcaption b {
   border: 1px solid var(--rule);
   border-radius: var(--r);
   padding: 11px 13px;
-  font-size: 15px;
+  font-size: var(--ox-m-micro);
   color: var(--ink);
   width: 100%;
   transition: border-color 0.14s;
@@ -1046,7 +1055,7 @@ figcaption b {
   flex-wrap: wrap;
 }
 .form-status {
-  font-size: 14px;
+  font-size: var(--ox-m-micro);
   color: var(--ink-3);
   min-height: 1.5em;
 }
@@ -1083,7 +1092,7 @@ figcaption b {
   align-items: center;
   gap: 10px;
   font-weight: 620;
-  font-size: 17px;
+  font-size: var(--ox-m-body);
 }
 .unlocked .ok-line .ok-dot {
   width: 22px;
@@ -1097,7 +1106,7 @@ figcaption b {
 }
 .unlocked p {
   color: var(--ink-3);
-  font-size: 14.5px;
+  font-size: var(--ox-m-micro);
 }
 
 /* ============ footer ============ */
@@ -1135,7 +1144,7 @@ footer {
 }
 .foot-brand p {
   color: var(--ink-3);
-  font-size: 14px;
+  font-size: var(--ox-m-micro);
   margin-top: 13px;
   max-width: 30ch;
 }
@@ -1158,7 +1167,7 @@ footer {
 }
 .foot-col a,
 .foot-col li {
-  font-size: 14.5px;
+  font-size: var(--ox-m-micro);
   color: var(--ink-3);
 }
 .foot-col a:hover {
@@ -1166,7 +1175,7 @@ footer {
 }
 .foot-col address {
   font-style: normal;
-  font-size: 14.5px;
+  font-size: var(--ox-m-micro);
   color: var(--ink-3);
   line-height: 1.7;
 }
@@ -1300,10 +1309,6 @@ html:not(.js) .theme-switch {
   border: 1px solid var(--rule);
   border-radius: var(--r-lg);
   overflow: hidden;
-  box-shadow:
-    0 1px 0 0 rgba(255, 255, 255, 0.06) inset,
-    0 30px 80px -28px color-mix(in srgb, var(--ember-c) 30%, transparent),
-    0 18px 50px -30px rgba(0, 0, 0, 0.7);
 }
 .dg-bar {
   display: flex;
@@ -1448,7 +1453,7 @@ html:not(.js) .theme-switch {
   content: "";
   width: 9px;
   height: 9px;
-  border-radius: 2px;
+  border-radius: var(--ox-radius-xs);
   flex: none;
 }
 .dg-legend b {
@@ -1498,12 +1503,12 @@ html:not(.js) .theme-switch {
 
 /* the copy column beside a figure */
 .dg-copy h2 {
-  font-size: clamp(28px, 3.8vw, 40px);
+  font-size: clamp(var(--ox-m-h3), 3.8vw, var(--ox-m-h2));
   margin: 14px 0;
 }
 .dg-copy .lede {
   color: var(--ink-3);
-  font-size: 17px;
+  font-size: var(--ox-m-body);
   max-width: 56ch;
 }
 .dg-copy ul {
@@ -1517,7 +1522,7 @@ html:not(.js) .theme-switch {
   position: relative;
   padding-left: 20px;
   color: var(--ink-2);
-  font-size: 15.5px;
+  font-size: var(--ox-m-micro);
   max-width: 60ch;
 }
 .dg-copy li::before {
@@ -1528,7 +1533,7 @@ html:not(.js) .theme-switch {
   width: 7px;
   height: 7px;
   border: 1px solid var(--ink-3);
-  border-radius: 2px;
+  border-radius: var(--ox-radius-xs);
 }
 
 /* ============ reveal ============ */
@@ -1611,7 +1616,7 @@ h4 {
   border: 1px solid var(--line);
   border-radius: var(--r-pill);
   background: color-mix(in srgb, var(--panel) 70%, transparent);
-  font-size: 14px;
+  font-size: var(--ox-m-micro);
   font-weight: 500;
   color: var(--ink);
   white-space: nowrap;
@@ -1643,7 +1648,7 @@ table.matrix {
   width: 100%;
   min-width: 680px;
   border-collapse: collapse;
-  font-size: 14px;
+  font-size: var(--ox-m-micro);
 }
 .matrix th,
 .matrix td {
@@ -1720,7 +1725,7 @@ table.matrix {
 }
 .matrix-note {
   margin-top: 10px;
-  font-size: 14px;
+  font-size: var(--ox-m-micro);
   color: var(--ink-3);
   max-width: 78ch;
 }
@@ -1760,7 +1765,7 @@ table.matrix {
   height: 30px;
   margin-bottom: 14px;
   border: 1px solid var(--rule);
-  border-radius: 6px;
+  border-radius: var(--ox-radius-md);
   font-family: var(--font-mono);
   font-feature-settings: "calt", "liga";
   font-size: 12px;
@@ -1769,12 +1774,12 @@ table.matrix {
 .steps b {
   display: block;
   margin-bottom: 6px;
-  font-size: 16px;
+  font-size: var(--ox-m-body);
   font-weight: 600;
   color: var(--ink);
 }
 .steps p {
-  font-size: 14.5px;
+  font-size: var(--ox-m-micro);
   color: var(--ink-3);
 }
 /* coming soon: dashed, the pending shape */
@@ -1787,7 +1792,7 @@ table.matrix {
   padding: 16px 20px;
   border: 1px dashed var(--rule);
   border-radius: var(--r-lg);
-  font-size: 15px;
+  font-size: var(--ox-m-micro);
   color: var(--ink-3);
 }
 .soon b {
@@ -1812,7 +1817,7 @@ table.matrix {
 }
 .dg-copy .logo-row > li {
   padding: 7px 14px 7px 10px;
-  font-size: 14px;
+  font-size: var(--ox-m-micro);
   color: var(--ink);
   max-width: none;
 }

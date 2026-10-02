@@ -9,6 +9,12 @@
 // stay out. Money on the wire is micros as a decimal string with a currency
 // and, for a metered figure, the basis the rollup recorded (INV-09, INV-10);
 // a figure no frame priced is null, never a zero.
+//
+// The run read marks each run of the in-app assistant (ADR-235, 2026-10-02
+// amendment). Every total keeps its cost, because a total counts what the
+// organization spent and must agree with `cost.daily_totals`. A list that
+// names runs leaves it out, because the workspace does not monitor the
+// assistant.
 import type {
   Cost,
   SpendFigure,
@@ -19,6 +25,7 @@ import { schema, withTenantDb } from "@oxagen/database";
 import {
   dayBounds,
   foldBasis,
+  inAppRunTotal,
   runTotalsRowToRecord,
   utcDay,
   type CostBasis,
@@ -31,6 +38,7 @@ import {
   and,
   asc,
   eq,
+  getTableColumns,
   gt,
   gte,
   inArray,
@@ -234,16 +242,27 @@ function runFilterPredicate(filter: RunFilter) {
   }
 }
 
-/** The run rows that started in an inclusive day range, oldest first. */
+/**
+ * A run row as {@link readRunTotals} returns it. `inApp` is true when the run
+ * is the in-app assistant's (ADR-235). The read always sets it. A row built
+ * without it, as a test fake is, reads as not in-app.
+ */
+export type SpendRunRecord = RunTotalsRecord & { inApp?: boolean };
+
+/**
+ * The run rows that started in an inclusive day range, oldest first. Each row
+ * says whether its run is the in-app assistant's. A total counts every row.
+ * A list that names runs leaves out each row whose `inApp` is true.
+ */
 export async function readRunTotals(
   scope: SpendScope,
   q: { from: string; to: string; filter: RunFilter },
-): Promise<RunTotalsRecord[]> {
+): Promise<SpendRunRecord[]> {
   const { start } = dayBounds(q.from);
   const { next } = dayBounds(q.to);
   const rows = await withTenantDb((tx) =>
     tx
-      .select()
+      .select({ ...getTableColumns(totals), inApp: inAppRunTotal() })
       .from(totals)
       .where(
         and(
@@ -256,7 +275,10 @@ export async function readRunTotals(
       )
       .orderBy(asc(totals.startedAt)),
   );
-  return rows.map(runTotalsRowToRecord);
+  return rows.map((row) => ({
+    ...runTotalsRowToRecord(row),
+    inApp: row.inApp === true,
+  }));
 }
 
 /**

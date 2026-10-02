@@ -45,6 +45,14 @@ export const UNASSIGNED_COST_CENTER_KEY = "~none";
  */
 export const OTHER_SPEND_KEY = "~other";
 
+/**
+ * The key of the row that holds the in-app assistant's spend, in every
+ * grouping. Oxagen runs the assistant, and the workspace does not monitor it
+ * (ADR-235), so the row lists no runs and opens no drill. No other key starts
+ * with `~`, so none collides with it.
+ */
+export const ASSISTANT_SPEND_KEY = "~oxagen_assistant";
+
 /** The levels a drill opens (spec §12.9): a model has none. */
 export const SpendDrillKind = z.enum(["operator", "agent", "tool"]);
 export type SpendDrillKind = z.infer<typeof SpendDrillKind>;
@@ -104,8 +112,8 @@ const SpendRow = SpendFigure.extend({
   tokens: SpendTokens,
   /**
    * A principal public id, an agent key, a model id, a tool name, a task
-   * reference, a cost-center label, an MCP server name, or
-   * {@link OTHER_SPEND_KEY}.
+   * reference, a cost-center label, an MCP server name,
+   * {@link OTHER_SPEND_KEY}, or {@link ASSISTANT_SPEND_KEY}.
    */
   key: z.string().min(1),
   /** The model's provider on a model row; null elsewhere. */
@@ -114,7 +122,8 @@ const SpendRow = SpendFigure.extend({
   operator: OperatorFacts.nullable(),
   /**
    * The row's costliest runs, at most eight. Absent from a view built
-   * before get_spend listed them.
+   * before get_spend listed them. Always empty on the
+   * {@link ASSISTANT_SPEND_KEY} row.
    */
   topRuns: z.array(SpendTopRun).optional(),
 });
@@ -235,8 +244,10 @@ const RankedOperator = z.discriminatedUnion("kind", [
 /**
  * `get_operator_ranking` (D15): the workspace's operators by unproductive
  * spend, highest first. The operator totals and `unattributed` sum to
- * `unproductive`. Under pseudonyms, `unproductiveShare` and `runs` are null
- * and `topRuns` is empty.
+ * `unproductive`. Beside each name are its done work orders and its
+ * unassigned share (F33). Under pseudonyms, `unproductiveShare`,
+ * `unassignedShare`, and `runs` are null, and `topRuns`, `topDoneWorkOrders`,
+ * and `topUnassignedRuns` are empty. The done count stays.
  */
 export const OperatorRanking = z.object({
   period: DayRange,
@@ -256,6 +267,25 @@ export const OperatorRanking = z.object({
         z.object({
           runId: PublicId.regex(RUN_PUBLIC_ID),
           unproductive: Money,
+        }),
+      ),
+      /** Work orders done at their first passing check run in the period. */
+      doneWorkOrders: Count,
+      /** The done work orders behind the figure, each with its runs. */
+      topDoneWorkOrders: z.array(
+        z.object({
+          workOrderId: PublicId,
+          doneAt: z.string().min(1),
+          runs: z.array(PublicId.regex(RUN_PUBLIC_ID)),
+        }),
+      ),
+      /** Unassigned spend over the operator's spend, both by frame time. */
+      unassignedShare: Ratio.nullable(),
+      /** The runs behind the share, largest unassigned part first. */
+      topUnassignedRuns: z.array(
+        z.object({
+          runId: PublicId.regex(RUN_PUBLIC_ID),
+          unassigned: Money,
         }),
       ),
     }),

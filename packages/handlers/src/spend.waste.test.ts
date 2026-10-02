@@ -1,13 +1,14 @@
 import { spendWasteList } from "@oxagen/oxagen/contracts/spend.waste";
-import { type RunTotalsRecord, ZERO_TOKENS } from "@oxagen/billing";
+import { ZERO_TOKENS } from "@oxagen/billing";
 import { describe, expect, it, vi } from "vitest";
+import type { SpendRunRecord } from "./spend.shared";
 import { cacheWriteNeverRead, createSpendWasteHandler } from "./spend.waste";
 import { ctx, pricedRun, run, SCOPE } from "./spend.test-support";
 
 const PERIOD = { from: "2026-09-01", to: "2026-09-30" };
 
 function harness(
-  rows: RunTotalsRecord[],
+  rows: SpendRunRecord[],
   names: Record<string, string> = {},
 ) {
   const readRunTotals = vi.fn(async () => rows);
@@ -124,6 +125,31 @@ describe("list_waste", () => {
       large.runId,
       small.runId,
     ]);
+    expect(() => spendWasteList.output.parse(out)).not.toThrow();
+  });
+
+  // ADR-235, 2026-10-02 amendment. A cause covers the runs it cites, so the
+  // in-app assistant's runs are in none of it. The share's divisor is the
+  // period's priced spend, so it keeps them.
+  it("leaves an in-app run out of every cause and keeps its spend in the share's divisor", async () => {
+    const assistant: SpendRunRecord = {
+      ...cacheRun(1_000n, 500, 0, { cacheWriteMicros: 600n }),
+      inApp: true,
+    };
+    const external = cacheRun(400n, 100, 0, { cacheWriteMicros: 100n });
+    const h = harness([assistant, external]);
+    const out = await h.handler({ period: PERIOD }, ctx());
+    expect(out.wasted).toEqual({
+      micros: "100",
+      currency: "USD",
+      basis: "client_attested",
+    });
+    expect(out.runsWithWaste).toBe(1);
+    // 100 wasted of 1,400 priced: the assistant's 1,000 stays in the divisor.
+    expect(out.share).toBeCloseTo(100 / 1400, 10);
+    expect(out.causes[0]?.runs).toBe(1);
+    expect(out.causes[0]?.runIds).toEqual([external.runId]);
+    expect(h.readRunNames).toHaveBeenCalledWith(SCOPE, [external.runId]);
     expect(() => spendWasteList.output.parse(out)).not.toThrow();
   });
 
