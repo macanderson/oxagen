@@ -29,6 +29,7 @@ Registers directly. The mockup's pull-request path needs a bound repository, whi
 | `serverId` | string | |
 | `importDigest` | string | sha256 over the sorted checksums of the server's tool versions after this import |
 | `tools` | object[] | `{ id (tlv_…), toolId (tol_…), slug, name, version, checksum, schemaOrigin, published }`; `slug` is `mcp.<server uuid>.<name>`, the identity per server, so the same name on two servers is two tools |
+| `steeringPr` | `{ number, url }?` | Set when the server's tools live in the steering repo: the steering PR that adds the picked tools to its `tools.toml`. `tools` is then empty. |
 
 ## Roles
 
@@ -37,6 +38,8 @@ Org Owner or Admin, or workspace Owner (`assertOrgRole`, INV-29).
 ## Side effects
 
 Writes `agent.tools` and `agent.tool_versions`; stamps `mcp.mcp_servers.last_import_at` and `last_import_digest`. The contract declares the server as its audit target.
+
+For a server whose origin is `steering` (ADR-209), it writes no rows. It opens a steering PR that appends the picked tools to the server folder's `tools.toml` and lock, and the tools reach the registry when the PR merges and the next publish runs.
 
 ## Surfaces
 
