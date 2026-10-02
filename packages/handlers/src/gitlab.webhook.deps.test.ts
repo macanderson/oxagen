@@ -130,6 +130,8 @@ describe("gitlabWebhookDeps", () => {
         status: "rejected",
         dismissedAt: new Date(0),
         dismissedReason: "closed",
+        // The host closed it, so no person is the updater (#5077).
+        updatedById: null,
       },
       ["pr_open", "checks_running", "checks_passed", "checks_failed"],
     );

@@ -58,6 +58,16 @@ vi.mock("next/link", () => ({
 
 const { ChangeDetail } = await import("./change-detail");
 
+/** One check as get_context_pr answers it, with no host check run and no times. */
+const check = (
+  c: Pick<ContextPr["checks"][number], "name" | "status" | "summary">,
+): ContextPr["checks"][number] => ({
+  ...c,
+  detailsUrl: null,
+  startedAt: null,
+  completedAt: null,
+});
+
 const PASSED: ContextPr = {
   proposalId: "prp_open1",
   lineage: "ctx.scr.001-never-push-to-main",
@@ -71,30 +81,43 @@ const PASSED: ContextPr = {
     baseRef: "main",
     branch: "oxagen/prp_open1",
     headSha: "0123456789abcdef",
+    provider: "github",
+  },
+  raised: {
+    statement: "Never push to main",
+    rationale: "Main is shared and contested.",
+    source: "agent:release-bot",
+    sourceName: null,
+    force: "must",
+    constraintEffect: null,
+    sharingScope: "workspace",
+    support: { runs: [], agents: [], recordIds: [], evidenceLinks: [] },
+    at: "2026-09-19T09:00:00.000Z",
   },
   body: null,
   checks: [
-    { name: "schema", status: "passed", summary: "The record parses." },
-    { name: "record_hash", status: "passed", summary: "" },
+    check({ name: "schema", status: "passed", summary: "The record parses." }),
+    check({ name: "record_hash", status: "passed", summary: "" }),
   ],
   onMerge: {
     path: ".oxagen/rules/ctx.scr.001-never-push-to-main.toml",
     bundleVersion: { current: 7, afterMerge: 8 },
   },
   merged: null,
+  closed: null,
 };
 
 const FAILED: ContextPr = {
   ...PASSED,
   status: "checks_failed",
   checks: [
-    { name: "schema", status: "passed", summary: "The record parses." },
-    {
+    check({ name: "schema", status: "passed", summary: "The record parses." }),
+    check({
       name: "secret_pii_scan",
       status: "failed",
       summary: "Line 4 carries an email address.",
-    },
-    { name: "conflict_against_active", status: "pending", summary: "" },
+    }),
+    check({ name: "conflict_against_active", status: "pending", summary: "" }),
   ],
 };
 
@@ -314,7 +337,7 @@ describe("a failed check", () => {
     await loaded({
       ...PASSED,
       status: "checks_running",
-      checks: [{ name: "schema", status: "running", summary: "" }],
+      checks: [check({ name: "schema", status: "running", summary: "" })],
     });
     expect(screen.getByTestId("change-merge")).toBeDisabled();
     expect(screen.queryByTestId("change-stopped")).toBeNull();

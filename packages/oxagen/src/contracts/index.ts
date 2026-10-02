@@ -366,6 +366,8 @@ export {
 export type { TriageViewOutput, WorkCollectorView } from "./work.intake.shared";
 import { contextPrOpen } from "./context.pr.open";
 import { contextPrGet } from "./context.pr.get";
+import { contextPrRefresh } from "./context.pr.refresh";
+import { contextPrDiffGet } from "./context.pr.diff.get";
 import { contextPrMerge } from "./context.pr.merge";
 import { contextPrMergeWithoutReview } from "./context.pr.merge_without_review";
 import { contextPrRevert } from "./context.pr.revert";
@@ -1203,6 +1205,8 @@ export {
   workPrioritiesGet,
   contextPrOpen,
   contextPrGet,
+  contextPrRefresh,
+  contextPrDiffGet,
   contextPrMerge,
   contextPrMergeWithoutReview,
   contextPrRevert,
@@ -1685,6 +1689,8 @@ export const contracts: readonly CapabilityDeclaration[] = [
   workPrioritiesGet,
   contextPrOpen,
   contextPrGet,
+  contextPrRefresh,
+  contextPrDiffGet,
   contextPrMerge,
   contextPrMergeWithoutReview,
   contextPrRevert,

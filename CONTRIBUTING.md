@@ -195,8 +195,9 @@ Actions, Release, Run workflow, then pick `patch`, `minor` or `major`. That run:
    on. Read the notes there; edit the docs page on that branch if a line is
    wrong. CI gates the PR like any other.
 
-When the PR merges, the `tag` job tags `v<version>` and `desktop-v<version>`,
-opens the GitHub release with the notes, publishes `@oxagen/cli` to npm, and
+When the PR merges, the `tag` job tags `v<version>` and `desktop-v<version>`
+and opens the GitHub release with the notes. The `v` tag starts
+`.github/workflows/npm.yml`, which publishes `@oxagen/cli` to npm, and
 the `desktop-v` tag starts `.github/workflows/desktop.yml`, which builds the
 app on four runners and publishes the installers, the bare executables, the
 updater files, their checksums, the listing page, and the in-app update feed
@@ -207,6 +208,24 @@ The workflow needs the `RELEASE_TOKEN` secret: a fine-grained personal
 access token for this repository with contents, pull requests and workflows
 set to write. The workflow's own token cannot open a PR that CI runs on.
 `dry_run: true` previews the version and the notes without it.
+
+### The CLI on npm
+
+`npm.yml` publishes `@oxagen/cli` without a release, too (ADR-253). After
+every production deploy, `publish-cli` in `pipeline.yml` dispatches it with
+the deployed commit. A commit after release `X.Y.Z` publishes as
+`X.Y.(Z+1)-N`, where N counts the commits since the release, and a daily
+run publishes the commit the production API runs when npm is behind it.
+Every version publishes under `latest`, and `latest` only moves forward, so
+`npm install -g @oxagen/cli` installs what production runs.
+
+npm.yml publishes with the `NPM_TOKEN` repository secret: a granular npm
+token with read and write on `@oxagen/cli`. npm lets such a token live 90
+days at most, so Mac replaces it on a scheduled routine.
+`packages/config/src/ci-registry.ts` has the steps. Trusted publishing would
+need no stored token, but npm cannot attach provenance to a package built
+from a private repository, and Mac chose the token. When the token expires,
+npm.yml fails and main stays green, so check its runs after each rotation.
 
 ### From a laptop, when you want to watch it land
 

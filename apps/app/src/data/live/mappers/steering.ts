@@ -1,9 +1,10 @@
 // list_records, list_proposals and get_context_pr outputs to the Steering
 // page's view models (ARCHITECTURE.md §3.4; #2961), and the workspace memory
-// reads to the Memories tab's (#4914). Typed from the contracts' `_output`. A proposal's pull request drops its URL (the list links to the
-// Context PR panel, which carries it), and the Context PR's review sentence is
-// not carried: the page words each governance mode from its own catalog.
+// reads to the Memories tab's (#4914). Typed from the contracts' `_output`.
+// The Context PR's review sentence is not carried: the page words each
+// governance mode from its own catalog.
 import type { agentMemoryList } from "@oxagen/oxagen/contracts/agent.memory.list";
+import type { contextPrDiffGet } from "@oxagen/oxagen/contracts/context.pr.diff.get";
 import type { contextPrGet } from "@oxagen/oxagen/contracts/context.pr.get";
 import type { contextProposalList } from "@oxagen/oxagen/contracts/context.proposal.list";
 import type { contextRecordsGet } from "@oxagen/oxagen/contracts/context.records.get";
@@ -21,6 +22,7 @@ import {
 import type { z } from "zod";
 import type {
   ContextPr,
+  ContextPrDiff,
   MemoryPage,
   MemoryPrRecords,
   OxagenTree,
@@ -143,6 +145,8 @@ export function toProposalPage(
           ? null
           : {
               number: proposal.pr.number,
+              url: proposal.pr.url,
+              provider: proposal.pr.provider,
               repository: proposal.pr.repository,
               branch: proposal.pr.branch,
             },
@@ -175,12 +179,32 @@ export function toContextPr(
             baseRef: out.pr.baseRef,
             branch: out.pr.branch,
             headSha: out.pr.headSha,
+            provider: out.pr.provider,
           },
+    raised: {
+      statement: out.raised.statement,
+      rationale: out.raised.rationale,
+      source: out.raised.source,
+      sourceName: out.raised.sourceName,
+      force: out.raised.force,
+      constraintEffect: out.raised.constraintEffect,
+      sharingScope: out.raised.sharingScope,
+      support: {
+        runs: out.raised.support.runs,
+        agents: out.raised.support.agents,
+        recordIds: out.raised.support.recordIds,
+        evidenceLinks: out.raised.support.evidenceLinks,
+      },
+      at: out.raised.at,
+    },
     body: out.body,
     checks: out.checks.map((check) => ({
       name: check.name,
       status: check.status,
       summary: check.summary,
+      detailsUrl: check.detailsUrl,
+      startedAt: check.startedAt,
+      completedAt: check.completedAt,
     })),
     onMerge: {
       path: out.onMerge.publishes.path,
@@ -197,7 +221,37 @@ export function toContextPr(
             at: out.merged.at,
             promotionEventId: out.merged.promotionEventId,
             recordId: out.merged.recordId,
+            byName: out.merged.byName,
+            onHost: out.merged.onHost,
           },
+    closed:
+      out.closed === null
+        ? null
+        : {
+            at: out.closed.at,
+            reason: out.closed.reason,
+            byName: out.closed.byName,
+            onHost: out.closed.onHost,
+          },
+  };
+}
+
+/** `get_context_pr_diff` → the Context PR page's diff (#5077). */
+export function toContextPrDiff(
+  out: ContractOutput<typeof contextPrDiffGet>,
+): z.input<typeof ContextPrDiff> {
+  return {
+    state: out.state,
+    baseRef: out.baseRef,
+    headSha: out.headSha,
+    files: out.files.map((file) => ({
+      path: file.path,
+      status: file.status,
+      before: file.before,
+      after: file.after,
+      truncated: file.truncated,
+    })),
+    moreFiles: out.moreFiles,
   };
 }
 

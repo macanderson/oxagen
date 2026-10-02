@@ -43,16 +43,14 @@ If `~/.local/bin` is not on your `PATH`, add `export PATH="$HOME/.local/bin:$PAT
 
 ## From npm
 
-<Callout type="warn">
-**npm lags the app.** The `@oxagen/cli` package on npm is an older version than the one the app and the executables ship. Run `npm view @oxagen/cli version` to see which version npm holds. Use the app or the single executable for the current version.
-</Callout>
-
 The npm package needs **Node.js 20 or newer**:
 
 ```bash
 npm install -g @oxagen/cli
 oxagen --version
 ```
+
+npm's `latest` version is the one production runs. Each production deploy publishes the CLI it shipped, numbered as a build of the next release, such as `2.1.4-12`. A release publishes under its own number, such as `2.1.4`. To install one version, name it: `npm install -g @oxagen/cli@2.1.4`.
 
 ## Verify the install
 

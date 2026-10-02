@@ -643,12 +643,13 @@ function statusOf(raw: string): CheckStatus {
 function Opened({ record, ctx }: { record: OpenedRecord; ctx: CreateContext }) {
   const t = useTranslations("createRecord.opened");
   const navigate = useNavigate();
-  const target = routes.steering(ctx.org, ctx.ws, {
-    tab: "prs",
-    proposal: record.proposalId,
-  });
-  // The wizard closes on Context PRs with this pull request selected
-  // (creation-spec §5): the page behind the dialog moves there now.
+  const target = routes.steeringProposal(
+    ctx.org,
+    ctx.ws,
+    record.proposalId,
+  );
+  // The wizard closes on this pull request's Context PR page (creation-spec
+  // §5; #5077): the page behind the dialog moves there now.
   useEffect(() => {
     navigate.push(target);
   }, [navigate, target]);
