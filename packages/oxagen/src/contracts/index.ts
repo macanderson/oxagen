@@ -331,6 +331,10 @@ import { steeringRepoGet } from "./steering_repo.get";
 import { steeringRepoRepair } from "./steering_repo.repair";
 import { steeringRepoImport } from "./steering_repo.import";
 import { steeringRepoProvisionRetry } from "./steering_repo.provision.retry";
+// Markdown import: parse files into steering records and Cedar policies, then
+// open one steering PR with the rows a person kept (#4907).
+import { steeringMarkdownImportParse } from "./steering.markdown_import.parse";
+import { steeringMarkdownImportCommit } from "./steering.markdown_import.commit";
 import { contextSteeringFreshness } from "./context.steering.freshness";
 import { contextSteeringLayout } from "./context.steering.layout";
 import { contextGovernanceModeSet } from "./context.governance_mode.set";
@@ -570,6 +574,42 @@ export type {
   PublishedRecordView,
 } from "./context.steering.shared";
 export { contextPrSchema } from "./context.pr.open";
+// The Markdown import's rows (#4907). The shared file is not a capability, so
+// it is exported here to satisfy the check-contracts file-coverage guard.
+export {
+  MARKDOWN_IMPORT_FILES_MAX,
+  MARKDOWN_IMPORT_FILE_CHARS_MAX,
+  MARKDOWN_IMPORT_ROWS_MAX,
+  MARKDOWN_IMPORT_STATEMENTS_MAX,
+  markdownImportDocumentSchema,
+  markdownImportFileCount,
+  markdownImportFileSchema,
+  markdownImportMatchSchema,
+  markdownImportOriginSchema,
+  markdownImportPolicyIssueSchema,
+  markdownImportPolicySchema,
+  markdownImportPolicyStatementSchema,
+  markdownImportPullRequestFilesSchema,
+  markdownImportRecordSchema,
+  markdownImportTargetSchema,
+  markdownImportTooManyFiles,
+} from "./steering.markdown_import.shared";
+export type {
+  MarkdownImportDocument,
+  MarkdownImportFile,
+  MarkdownImportMatch,
+  MarkdownImportPolicy,
+  MarkdownImportRecord,
+  MarkdownImportTarget,
+} from "./steering.markdown_import.shared";
+export type {
+  SteeringMarkdownImportParseInput,
+  SteeringMarkdownImportParseOutput,
+} from "./steering.markdown_import.parse";
+export type {
+  SteeringMarkdownImportCommitInput,
+  SteeringMarkdownImportCommitOutput,
+} from "./steering.markdown_import.commit";
 export type { ContextPr } from "./context.pr.open";
 // The shapes the workspace memory contracts share (memory-collection spec).
 // Not a capability, so exported here to satisfy the file-coverage guard.
@@ -1052,6 +1092,8 @@ export {
   steeringRepoRepair,
   steeringRepoImport,
   steeringRepoProvisionRetry,
+  steeringMarkdownImportParse,
+  steeringMarkdownImportCommit,
   contextRecordsAppend,
   contextProposalCreate,
   contextProposalList,
@@ -1504,6 +1546,8 @@ export const contracts: readonly CapabilityDeclaration[] = [
   steeringRepoRepair,
   steeringRepoImport,
   steeringRepoProvisionRetry,
+  steeringMarkdownImportParse,
+  steeringMarkdownImportCommit,
   contextRecordsAppend,
   contextProposalCreate,
   contextProposalList,

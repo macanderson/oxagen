@@ -16,6 +16,7 @@
 // otherwise only shapes what the operator chooses: the lineage, the
 // statement, the force and the effect.
 import { CONTEXT_RECORD_LINEAGE } from "@oxagen/oxagen/context-record-label";
+import { forcesFor as sharedForcesFor } from "@oxagen/oxagen/steering-repo/record-force";
 import {
   LEGACY_RULES_DIR,
   MEMORY_DIR,
@@ -90,14 +91,13 @@ export const STATEMENT_MAX = 2000;
 const SLUG_MAX = 48;
 
 /**
- * The forces a kind may carry (creation-spec §5 step 3). A preference is soft,
- * so it is never `must` or `should`. A fact and a memory inform, so they are
- * `info`. The first entry is the default.
+ * The forces a kind may carry (creation-spec §5 step 3). The rule lives in
+ * `@oxagen/oxagen/steering-repo/record-force`, which the Markdown import's
+ * contracts enforce too, so the wizard and the import agree. The first entry
+ * is the wizard's default.
  */
 export function forcesFor(kind: RecordKind): readonly RecordForce[] {
-  if (kind === "preference") return ["may", "info"];
-  if (kind === "fact" || kind === "memory") return ["info"];
-  return ["must", "should", "may", "info"];
+  return sharedForcesFor(kind);
 }
 
 /** The force the draft holds, or the kind's default when the kind forbids it. */

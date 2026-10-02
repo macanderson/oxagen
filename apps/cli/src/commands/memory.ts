@@ -7,7 +7,7 @@
  *   oxagen memory show <id> [--json]
  *   oxagen memory promote <ids...> [--one-record] [--statement t] [--kind k] [--force f] [--effect e] [--repo r] [--no-same-text] [--json]
  *   oxagen memory dismiss <ids...> [--restore] [--json]
- *   oxagen memory import <files...> [--node r] [--yes] [--json]
+ *   oxagen memory import <files...> [--yes] [--json]
  *
  * A memory steers only the agent that wrote it, through its harness. It
  * reaches other agents only once a person promotes it into a steering record
@@ -15,19 +15,29 @@
  * list_workspace_memories, get_workspace_memory, promote_memories, and
  * dismiss_memories through lib/workspace-memory-client.
  *
+ * `oxagen memory import` reads Markdown files into steering records through
+ * parse_markdown_import and commit_markdown_import.
+ *
  * The in-app assistant's own memory store in Neo4j has no command here. Its
- * capabilities stay on the API and MCP. `oxagen memory import` still writes
- * to that store until it moves to the Markdown import (#4907).
+ * capabilities stay on the API and MCP.
  */
 import { readFile } from "node:fs/promises";
-import { basename } from "node:path";
+import { basename, isAbsolute, relative, sep } from "node:path";
+import {
+  markdownImportFileCount,
+  markdownImportTooManyFiles,
+  type MarkdownImportRecord,
+} from "@oxagen/oxagen/contracts/steering.markdown_import.shared";
+import { STEERING_PR_MAX_FILES } from "@oxagen/oxagen/steering-repo/names";
+import { markImportMatches, type ImportMatchRow } from "@oxagen/steering-check";
 import type { MemoryDraftRecord } from "@oxagen/oxagen/contracts/steering.memories.shared";
 import { ApiError } from "../lib/api.js";
 import {
-  parseImportMemories,
-  commitImportMemories,
-  formatImportDrafts,
-  formatImportResults,
+  parseMarkdownImport,
+  commitMarkdownImport,
+  formatImportRows,
+  formatImportPullRequest,
+  MARKDOWN_IMPORT_FILES_PER_CALL,
 } from "../lib/memory-client.js";
 import { stdoutWriter, type CommandWriter } from "../lib/capture-writer.js";
 import {
@@ -275,21 +285,71 @@ export async function handleMemoryDismiss(
 }
 
 export interface MemoryImportCliOptions {
-  node?: string;
-  /** Commit the parsed drafts. Without it, the command only previews them. */
+  /** Open the steering PR. Without it, the command only previews the records. */
   yes?: boolean;
   json?: boolean;
 }
 
 /**
- * `oxagen memory import <files...>` — bulk-import markdown skill files / rule
- * docs into the workspace AgentMemory graph.
+ * The capabilities `oxagen memory import` calls, by their registered names:
+ * parse_markdown_import, then commit_markdown_import on --yes.
+ */
+export const MEMORY_IMPORT_CAPABILITIES = [
+  "parse_markdown_import",
+  "commit_markdown_import",
+] as const;
+
+/**
+ * The rows of several parse calls, with the duplicates and conflicts between
+ * calls marked. A row keeps every mark its own call gave it. A row newly
+ * marked a duplicate is skipped, and one newly marked a conflict waits for a
+ * choice, as parse marks them.
+ */
+export function reconcileImportRows(
+  records: readonly MarkdownImportRecord[],
+): MarkdownImportRecord[] {
+  const rows: ImportMatchRow[] = records.map((row) => ({
+    lineage: row.lineage,
+    kind: row.kind,
+    effect: row.effect,
+    statement: row.statement,
+    path: null,
+    duplicate: row.duplicate,
+    conflict: row.conflict,
+  }));
+  markImportMatches(rows, []);
+  return records.map((row, index): MarkdownImportRecord => {
+    const marked = rows[index] as ImportMatchRow;
+    if (marked.duplicate === row.duplicate && marked.conflict === row.conflict) return row;
+    return {
+      ...row,
+      duplicate: marked.duplicate,
+      conflict: marked.conflict,
+      action: marked.conflict ? null : marked.duplicate ? "skip" : row.action,
+    };
+  });
+}
+
+/** The name a file is sent under: its path from here, or its base name when it lies outside. */
+function importFilename(path: string): string {
+  const rel = relative(process.cwd(), path).split(sep).join("/");
+  const name = rel === "" || rel.startsWith("..") || isAbsolute(rel) ? basename(path) : rel;
+  return name.length > 256 ? basename(path).slice(-256) : name;
+}
+
+/**
+ * `oxagen memory import <files...>`: read Markdown files into steering
+ * records (parse_markdown_import, target records). Each statement gets a kind,
+ * a force with the words that justify it, its source line, and any duplicate
+ * or conflict with a published record.
  *
- * Two phases mirror the parse → commit capability pair: every file is read and
- * sent to agent.memory.import.parse, which classifies atomic draft memories.
- * Importing is gated behind --yes (safe by default), so a bare invocation
- * previews the drafts table and writes nothing — the editable review grid is the
- * app's job; the CLI's review is the printed table plus an explicit --yes.
+ * A bare call previews the records and writes nothing. --yes opens one
+ * steering PR with every row marked add (commit_markdown_import). A row that
+ * conflicts with a published record needs a person's choice, and the CLI has
+ * no editor, so --yes leaves each one out and names it. Files go in calls of
+ * 25, and one pass over every call's rows marks the duplicates and conflicts
+ * between calls. An import that marks more than 299 records add does not fit
+ * one steering PR, so --yes refuses it.
  */
 export async function handleMemoryImport(
   files: string[],
@@ -298,13 +358,13 @@ export async function handleMemoryImport(
 ): Promise<void> {
   if (files.length === 0) {
     fail(
-      "Nothing to import. Pass one or more markdown files, e.g. `oxagen memory import rules.md`.",
+      "Nothing to import. Pass one or more Markdown files, such as `oxagen memory import CLAUDE.md`.",
       writer,
     );
   }
 
-  // Read every file; collect read failures rather than aborting the batch.
-  const documents: { filename: string; content: string }[] = [];
+  // Read every file, and report the ones that cannot be read rather than stop.
+  const documents: { filename: string; content: string; target: "records" }[] = [];
   const unreadable: string[] = [];
   for (const path of files) {
     try {
@@ -313,52 +373,81 @@ export async function handleMemoryImport(
         unreadable.push(`${path} (empty)`);
         continue;
       }
-      documents.push({ filename: basename(path), content });
+      documents.push({ filename: importFilename(path), content, target: "records" });
     } catch {
       unreadable.push(path);
     }
   }
   if (unreadable.length > 0) {
-    writer.writeErr(
-      `⚠ Skipped unreadable/empty files:\n  ${unreadable.join("\n  ")}`,
-    );
+    writer.writeErr(`Skipped files that are empty or unreadable:\n  ${unreadable.join("\n  ")}`);
   }
   if (documents.length === 0) {
-    fail("No readable, non-empty documents to import.", writer);
+    fail("No readable, non-empty files to import.", writer);
   }
 
   try {
-    const parsed = await parseImportMemories(documents, opts.node);
+    const parsedRows: MarkdownImportRecord[] = [];
+    const read: { filename: string; error: string | null }[] = [];
+    for (let i = 0; i < documents.length; i += MARKDOWN_IMPORT_FILES_PER_CALL) {
+      const parsed = await parseMarkdownImport(
+        documents.slice(i, i + MARKDOWN_IMPORT_FILES_PER_CALL),
+      );
+      parsedRows.push(...parsed.records);
+      read.push(...parsed.files);
+    }
+    // Each call compared only its own files. One pass over every call's rows
+    // marks a duplicate or a conflict between files sent in different calls.
+    const records = reconcileImportRows(parsedRows);
+    const count = markdownImportFileCount({ records, policies: [] });
+    const tooMany = markdownImportTooManyFiles(count);
 
-    // Preview-only (no --yes): print drafts (or JSON) and stop without writing.
     if (!opts.yes) {
       if (opts.json) {
-        writer.write(JSON.stringify(parsed, null, 2));
+        writer.write(
+          JSON.stringify(
+            {
+              files: read,
+              records,
+              pullRequestFiles: { count, max: STEERING_PR_MAX_FILES, message: tooMany },
+            },
+            null,
+            2,
+          ),
+        );
         return;
       }
-      writer.write(formatImportDrafts(parsed.drafts));
-      for (const s of parsed.skipped) {
-        writer.writeErr(`  · skipped ${s.filename}: ${s.reason}`);
+      writer.write(formatImportRows(records));
+      for (const file of read) {
+        if (file.error) writer.writeErr(`  ${file.filename}: ${file.error}`);
       }
-      if (parsed.drafts.length > 0) {
-        writer.write("\nRe-run with --yes to import these memories.");
+      if (tooMany !== null) {
+        writer.writeErr(`  ${tooMany}`);
+      } else if (records.length > 0) {
+        writer.write("\nRun again with --yes to open the steering PR.");
       }
       return;
     }
 
-    if (parsed.drafts.length === 0) {
-      fail(
-        "No memories could be extracted from the supplied documents.",
-        writer,
+    const conflicts = records.filter((row) => row.action === null);
+    for (const row of conflicts) {
+      writer.writeErr(
+        `  Left out ${row.file}:${row.line} (${row.lineage}): it conflicts with ${row.conflict?.lineage ?? "a published record"}.`,
       );
     }
+    const decided = records.map((row) =>
+      row.action === null ? { ...row, action: "skip" as const } : row,
+    );
+    if (!decided.some((row) => row.action === "add")) {
+      fail("No record is marked add, so there is no steering PR to open.", writer);
+    }
+    if (tooMany !== null) fail(tooMany, writer);
 
-    const result = await commitImportMemories(parsed.drafts);
+    const result = await commitMarkdownImport({ records: decided });
     if (opts.json) {
       writer.write(JSON.stringify(result, null, 2));
       return;
     }
-    writer.write(formatImportResults(result));
+    writer.write(formatImportPullRequest(result));
   } catch (err) {
     handleApiError(err, writer);
   }

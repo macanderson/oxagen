@@ -1187,16 +1187,15 @@ export function buildProgram(): Command {
   memory
     .command("import <files...>")
     .description(
-      "Bulk-import markdown skill files / rule docs as memories (previews unless --yes)",
+      "Read Markdown files into steering records with a kind and a force for each statement. Previews unless --yes.",
     )
-    .option("--node <ref>", "Anchor every imported memory on a graph node ref")
-    .option("-y, --yes", "Commit the parsed drafts (default previews only)")
+    .option(
+      "-y, --yes",
+      "Open one steering PR with every record marked add. Records that conflict with a published record are left out.",
+    )
     .option("--json", "Output JSON")
     .action(
-      async (
-        files: string[],
-        opts: { node?: string; yes?: boolean; json?: boolean },
-      ) => {
+      async (files: string[], opts: { yes?: boolean; json?: boolean }) => {
         const { handleMemoryImport } = await import("./commands/memory.js");
         await handleMemoryImport(files, opts);
       },

@@ -76,8 +76,6 @@ import { agentMemoryDeleteRoute } from "./routes/v1/agent.memory.delete";
 import { agentMemoryRememberRoute } from "./routes/v1/agent.memory.remember";
 import { agentMemoryPolicyReadRoute } from "./routes/v1/agent.memory_policy.read";
 import { agentMemoryPolicyWriteRoute } from "./routes/v1/agent.memory_policy.write";
-import { agentMemoryImportParseRoute } from "./routes/v1/agent.memory_import.parse";
-import { agentMemoryImportCommitRoute } from "./routes/v1/agent.memory_import.commit";
 import { agentMemoryPromoteRoute } from "./routes/v1/agent.memory.promote";
 import { agentMemoryDemoteRoute } from "./routes/v1/agent.memory.demote";
 import { agentMemoryPromotionCandidatesRoute } from "./routes/v1/agent.memory_promotion.list";
@@ -243,6 +241,8 @@ import { steeringMemoriesGetRoute } from "./routes/v1/steering.memories.get";
 import { steeringMemoriesPromoteRoute } from "./routes/v1/steering.memories.promote";
 import { steeringMemoriesDismissRoute } from "./routes/v1/steering.memories.dismiss";
 import { steeringMemoryPrRecordsListRoute } from "./routes/v1/steering.memory_pr_records.list";
+import { steeringMarkdownImportParseRoute } from "./routes/v1/steering.markdown_import.parse";
+import { steeringMarkdownImportCommitRoute } from "./routes/v1/steering.markdown_import.commit";
 import { steeringRepoImportRoute } from "./routes/v1/steering_repo.import";
 import { contextProposalCreateRoute } from "./routes/v1/context.proposal.create";
 import { contextProposalListRoute } from "./routes/v1/context.proposal.list";
@@ -1042,10 +1042,6 @@ orgScoped.route("/agent/memory/delete", agentMemoryDeleteRoute);
 orgScoped.route("/agent/memory/remember", agentMemoryRememberRoute);
 orgScoped.route("/agent/memory/policy", agentMemoryPolicyReadRoute);
 orgScoped.route("/agent/memory/policy", agentMemoryPolicyWriteRoute);
-// Bulk import: parse uploaded docs → drafts, commit the confirmed set. Mounted
-// before the "/agent/memory" catch-all so the more specific paths win.
-orgScoped.route("/agent/memory/import/parse", agentMemoryImportParseRoute);
-orgScoped.route("/agent/memory/import/commit", agentMemoryImportCommitRoute);
 orgScoped.route("/agent/memory/promote", agentMemoryPromoteRoute);
 orgScoped.route("/agent/memory/demote", agentMemoryDemoteRoute);
 orgScoped.route(
@@ -1298,6 +1294,10 @@ orgScoped.route("/context/steering/memories/get", steeringMemoriesGetRoute);
 orgScoped.route("/context/steering/memories/promote", steeringMemoriesPromoteRoute);
 orgScoped.route("/context/steering/memories/dismiss", steeringMemoriesDismissRoute);
 orgScoped.route("/context/steering/memory-prs/records", steeringMemoryPrRecordsListRoute);
+// The Markdown import (#4907): parse files into proposed steering records and
+// Cedar policies, then open one steering PR with the rows a person kept.
+orgScoped.route("/context/steering/import/parse", steeringMarkdownImportParseRoute);
+orgScoped.route("/context/steering/import/commit", steeringMarkdownImportCommitRoute);
 // The move from .oxagen/ to a steering repo, once per workspace (lane S10, #4620).
 orgScoped.route("/context/steering/repo/import", steeringRepoImportRoute);
 orgScoped.route("/context/proposals", contextProposalListRoute);

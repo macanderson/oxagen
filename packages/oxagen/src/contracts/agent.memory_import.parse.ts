@@ -22,10 +22,11 @@ export const agentMemoryImportParse = registerCapability({
   description:
     "Parse a batch of uploaded markdown documents into draft AgentMemory records, classifying each by kind + weight. Read-only: returns editable drafts for review, persists nothing.",
   mode: "sync",
-  surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  // Retired (DEREGISTERED.md §8): on no surface and with no handler. The
+  // Markdown import (parse_markdown_import) replaced it.
+  surfaces: [],
+  layers: ["schema", "unit", "docs"],
   scoped: true,
-  agent: { requiresApproval: false, riskLevel: "low", category: "memory" },
   sensitivity: "medium",
   mutates: false,
   defaultEffect: "deny",

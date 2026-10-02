@@ -554,6 +554,36 @@ export interface CapabilityContext {
    * invocation as a forged binding. No surface context builder mints one.
    */
   platformOperator?: PlatformOperatorBinding;
+  /**
+   * Present ONLY on a call Stella, the in-app assistant, makes: a tool call of
+   * one of its turns, a read the turn itself makes, and the resume of a call a
+   * turn parked (ADR-235). The customer's workspace does not govern or
+   * monitor Stella, so the kernel skips the workspace decision-rules gate for
+   * such a call. The person's own IAM check still runs.
+   *
+   * `createOxagenAssistantBinding` (oxagen-assistant.ts) mints it and records
+   * the object in a module-private registry. Any value the registry does not
+   * hold fails `isKernelIssuedOxagenAssistant`, and the kernel refuses the
+   * whole invocation as a forged binding. No surface context builder mints
+   * one. The kernel ignores it on a context that also carries `agentRun` or
+   * `deployedAgentInvocation`, because those name a customer's agent.
+   */
+  oxagenAssistant?: OxagenAssistantBinding;
+}
+
+/**
+ * A kernel-minted marker that a call is Stella's (ADR-235). It carries no
+ * principal: Stella acts as the person who asked, and IAM resolves that
+ * person. The request id names the turn the binding was minted for.
+ *
+ * The brand is the same module-private unique symbol the other kernel-issued
+ * bindings carry. The registry in oxagen-assistant.ts is the runtime half.
+ */
+export interface OxagenAssistantBinding {
+  readonly principalKind: "oxagen_assistant";
+  /** The request of the turn this binding was minted for. */
+  readonly requestId: string;
+  readonly [kernelIssuedBrand]: true;
 }
 
 /**

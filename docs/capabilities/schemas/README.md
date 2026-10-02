@@ -165,6 +165,7 @@ capability rewrites, so two such branches always conflicted on it (ADR-216).
 ## context
 
 - append_record
+- commit_markdown_import
 - dismiss_proposal
 - get_context_pr
 - get_published_steering
@@ -179,6 +180,7 @@ capability rewrites, so two such branches always conflicted on it (ADR-216).
 - merge_context_pr
 - merge_pr_without_review
 - open_context_pr
+- parse_markdown_import
 - promote_context_record
 - propose_record
 - publish_context_record
