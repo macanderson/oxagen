@@ -39,7 +39,11 @@
 # name `0020_error_events.sql` in `_migrations` and have no `error_events` —
 # which is what #3698 was, checked by this script, and reported current.
 #
-# Neo4j keeps none — its migration is idempotent `CREATE ... IF NOT EXISTS` and
+# Then a third question, about the columns the migrations dropped: for each one,
+# `system.columns` must count 0 rows on its table. Neither question above can
+# see a drop that never ran (#3072). See clickhouse_dropped_columns.
+#
+# Neo4j keeps no ledger — its migration is idempotent `CREATE ... IF NOT EXISTS` and
 # forgets what it did. But every constraint and index in `schema.cypher` is
 # NAMED, and `SHOW CONSTRAINTS` / `SHOW INDEXES` return those names, so the same
 # set difference works on names instead of filenames. That is narrower than the
@@ -296,6 +300,91 @@ clickhouse_all_declared_tables() {
   printf '%s\n%s\n' "$from_schema" "$from_migrations" | sed '/^$/d' | sort -u
 }
 
+# clickhouse_dropped_columns MIGRATIONS_DIR
+#
+# Every column a migration dropped and no later migration added back, one per
+# line as `<table> <column> <migration>`. The migration is the file that last
+# dropped the column.
+#
+# WHY THIS EXISTS (#3072)
+#
+# Neither question above can see a dropped column that survived. The ledger
+# lists the file that dropped it, and system.tables still lists its table. So a
+# drop that never ran, or a column someone put back by hand, reads as current.
+# For tacho_events.anthropic_user_email, that is an email address stored in
+# plain text, which 0031 exists to delete.
+#
+# The list comes from the committed migrations, the way the table list does.
+# Files are read in filename order, and statements in order inside each file.
+# `ALTER TABLE t ... DROP COLUMN c` adds `t c`. A later `ADD COLUMN c` on the
+# same table removes it. `DROP TABLE t` removes every column of t, because a
+# table that is gone has no column left to check. One ALTER can span lines and
+# carry several clauses (0028 adds three columns in one), so each file is
+# joined and split on `;` first, as neo4j_declared_vector_sizes does.
+#
+# packages/telemetry/src/tacho-events-ddl.test.ts holds every DROPPED_COLUMNS
+# entry to an `ALTER TABLE tacho_events DROP COLUMN IF EXISTS <name>;` line in
+# the migration the entry names. So this list carries every one of them, and
+# the script never has to read TypeScript.
+#
+# Only migrations are read, because schema.sql drops no column.
+clickhouse_dropped_columns() {
+  local dir=$1
+
+  if [[ ! -d $dir ]]; then
+    echo "clickhouse_dropped_columns: no such directory: $dir" >&2
+    return 2
+  fi
+
+  # Newline-separated lines rather than an associative array, for the reason
+  # clickhouse_migration_tables gives: macOS's bash 3.2 has no `declare -A`.
+  local dropped="" f file stmt table clause verb column
+  for f in "$dir"/*.sql; do
+    [[ -e $f ]] || continue
+    file=$(basename "$f")
+    while IFS= read -r stmt; do
+      # Drop the leading whitespace the join left behind.
+      stmt=${stmt#"${stmt%%[![:space:]]*}"}
+      case "$stmt" in
+        [Aa][Ll][Tt][Ee][Rr][[:space:]]* | [Dd][Rr][Oo][Pp][[:space:]]*) ;;
+        *) continue ;;
+      esac
+      # `DROP TABLE IF EXISTS x` matches through the `IF EXISTS`, because an
+      # ERE alternation is leftmost-longest. A DROP of anything but a table
+      # (a view, a dictionary) matches nothing and is skipped.
+      table=$(printf '%s\n' "$stmt" |
+        grep -Eio '^(ALTER|DROP)[[:space:]]+TABLE[[:space:]]+(IF[[:space:]]+EXISTS[[:space:]]+)?[A-Za-z_][A-Za-z0-9_.]*' |
+        sed -E 's/.*[[:space:]]//; s/^.*\.//')
+      case "$table" in
+        [Ii][Ff] | [Ee][Xx][Ii][Ss][Tt][Ss] | "") continue ;;
+      esac
+      case "$stmt" in
+        [Dd][Rr][Oo][Pp]*)
+          dropped=$(printf '%s\n' "$dropped" | grep -v -- "^$table " || true)
+          continue
+          ;;
+      esac
+      while IFS= read -r clause; do
+        verb=${clause%%[[:space:]]*}
+        column=${clause##*[[:space:]]}
+        case "$column" in
+          [Ii][Ff] | [Nn][Oo][Tt] | [Ee][Xx][Ii][Ss][Tt][Ss] | "") continue ;;
+        esac
+        # The latest clause decides, whatever an earlier one said.
+        dropped=$(printf '%s\n' "$dropped" | grep -v -- "^$table $column " || true)
+        case "$verb" in
+          [Dd][Rr][Oo][Pp]) dropped="$dropped"$'\n'"$table $column $file" ;;
+        esac
+      done < <(
+        printf '%s\n' "$stmt" |
+          grep -Eio '(DROP|ADD)[[:space:]]+COLUMN[[:space:]]+(IF[[:space:]]+(NOT[[:space:]]+)?EXISTS[[:space:]]+)?[A-Za-z_][A-Za-z0-9_]*'
+      )
+    done < <(sed -e 's|--.*||' "$f" | tr '\n' ' ' | tr ';' '\n')
+  done
+
+  printf '%s\n' "$dropped" | sed '/^$/d' | sort -u
+}
+
 # count_names FILE
 #
 # How many distinct non-empty lines FILE holds; 0 for an absent or empty file.
@@ -343,6 +432,67 @@ report_drift() {
   printf '%s\n' "$missing" | sed 's/^/::error::  missing: /'
   echo "::error::$store: apply with the Store Migrate (manual) workflow — read its pending list first."
   return 1
+}
+
+# report_dropped_columns DROPPED_FILE COUNTS_FILE
+#
+# The verdict on the columns migrations dropped. DROPPED_FILE holds the
+# `<table> <column> <migration>` lines clickhouse_dropped_columns prints.
+# COUNTS_FILE holds one `<table> <column> <count>` line for each column the
+# store answered for, where the count is how many rows system.columns has for
+# that column on that table.
+#
+# Returns 0 when every count is 0, and 1 when a column is still there. Returns
+# 2 when a column has no count, or a count that is not a number, because then
+# nobody knows. 2 outranks 1, as in bump_status, but every column still there
+# is named either way.
+#
+# Its own verdict rather than report_drift, because report_drift's remedy is
+# wrong here. An apply runs only the files the ledger does not list. A column
+# survives most often when the ledger lists the file that drops it, and then an
+# apply skips that file and changes nothing.
+report_dropped_columns() {
+  local dropped=$1 counts=$2
+  local store="ClickHouse dropped columns"
+  local table column file count n_dropped=0 n_present=0 n_unknown=0
+
+  if [[ ! -f $dropped ]]; then
+    echo "report_dropped_columns: no such file: $dropped" >&2
+    return 2
+  fi
+  # An absent COUNTS file is a store that answered nothing, so every column
+  # reads as unknown rather than as gone.
+  [[ -f $counts ]] || counts=/dev/null
+
+  while read -r table column file; do
+    [[ -n $table ]] || continue
+    n_dropped=$((n_dropped + 1))
+    count=$(grep -- "^$table $column " "$counts" | head -n 1 | sed -E 's/.*[[:space:]]//')
+    case "$count" in
+      "" | *[!0-9]*)
+        echo "::error::$store: the store gave no count for $table.$column, so whether it is still there is unknown."
+        n_unknown=$((n_unknown + 1))
+        ;;
+      0) ;;
+      *)
+        echo "::error::ClickHouse still has $table.$column, which $file drops."
+        n_present=$((n_present + 1))
+        ;;
+    esac
+  done < "$dropped"
+
+  if [[ $n_dropped -eq 0 ]]; then
+    echo "$store: no migration drops a column, so there is nothing to check."
+    return 0
+  fi
+  if [[ $n_present -gt 0 ]]; then
+    echo "::error::$store: if the ledger check above names that migration as missing, an apply runs it."
+    echo "::error::$store: if the ledger already lists it, an apply skips it. Run its ALTER TABLE statement against the store by hand."
+  fi
+  [[ $n_unknown -gt 0 ]] && return 2
+  [[ $n_present -gt 0 ]] && return 1
+  echo "$store: current. $n_dropped dropped by a migration, none still there."
+  return 0
 }
 
 # bump_status NEW
@@ -554,6 +704,44 @@ if [[ $ch_reachable -eq 1 ]] && require_declarations "ClickHouse tables" "$WORK/
       sed 's/^/::error::  /' | head -5
     bump_status 2
   fi
+fi
+
+# --- ClickHouse: the columns migrations dropped -----------------------------
+#
+# See clickhouse_dropped_columns for why neither question above sees these.
+# One count per column, so every answer is a row, and an empty reply cannot
+# pass for a column that is gone.
+#
+# An empty list is not refused the way require_declarations refuses one. A
+# later migration that drops a whole table takes its dropped columns off the
+# list, so an empty list can be true. The test holds the parser to the real
+# migrations instead.
+
+echo
+echo "== ClickHouse dropped columns =="
+if clickhouse_dropped_columns "$REPO/packages/telemetry/src/migrations" \
+     > "$WORK/ch-dropped.txt"; then
+  if [[ $ch_reachable -eq 1 ]]; then
+    : > "$WORK/ch-dropped-counts.txt"
+    while read -r table column _migration; do
+      [[ -n $table ]] || continue
+      # stdin from /dev/null, so nothing in the request can read the list this
+      # loop feeds through stdin.
+      if ch_query "SELECT count() FROM system.columns WHERE database = '${CLICKHOUSE_DATABASE}' AND table = '${table}' AND name = '${column}'" \
+           "$WORK/ch-column.txt" "$WORK/ch-column-err.txt" < /dev/null; then
+        printf '%s %s %s\n' "$table" "$column" "$(tr -d '[:space:]' < "$WORK/ch-column.txt")" \
+          >> "$WORK/ch-dropped-counts.txt"
+      else
+        echo "::error::ClickHouse system.columns could not be read for $table.$column."
+        cat "$WORK/ch-column.txt" "$WORK/ch-column-err.txt" 2>/dev/null |
+          sed 's/^/::error::  /' | head -5
+      fi
+    done < "$WORK/ch-dropped.txt"
+    report_dropped_columns "$WORK/ch-dropped.txt" "$WORK/ch-dropped-counts.txt"
+    bump_status $?
+  fi
+else
+  bump_status 2
 fi
 
 # --- Neo4j -----------------------------------------------------------------
