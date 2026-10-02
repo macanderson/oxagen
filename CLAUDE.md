@@ -148,11 +148,12 @@ Load `clear-prose` before you write any of these strings. `apps/app/src/test/arc
 
 ## Type
 
-Mac set this on 2026-09-29. The app uses Geist for every heading and every line of text. Space Grotesk sets the Oxagen and stella wordmarks and, on oxagen.sh, the first line of a hero. It sets nothing else.
+Mac set this on 2026-10-02, replacing the rule of 2026-09-29. Aeonik is the house sans. It sets every heading and every line of text in the app and the docs site, and all running text on oxagen.sh. Space Grotesk sets the Oxagen and stella wordmarks and, on oxagen.sh only, every h1, h2, and h3 and every hero line. The gold accent in an oxagen.sh headline shimmers with the kit's sheen. Monaspace Neon sets code. Aeonik Mono and Aeonik Fono load as faces, and no role uses them yet. Geist is retired.
 
-- The kit's `packages/ui/src/styles/house-tailwind.css` sets `--font-display` and `--font-sans` to Geist, so every heading and the `text-m-h*` and `text-a-h*` utilities draw in Geist. Space Grotesk reaches the page only through `--font-wordmark`, the `.ox-wordmark` class, and the kit's `hero-line-1` class on a marketing hero.
-- Do not write `--ox-font-display`, `--font-wordmark`, or "Space Grotesk" in app source outside a comment. `apps/app/src/test/arch/design-record.test.ts` fails on each of them.
-- The brand kit (`oxageninc/brand`) has set every heading in Geist since 2.4.0 (#27), so `globals.css` carries no font override. The files the sync writes into `packages/ui/src/styles/` stay byte-identical to the kit.
+- The brand kit (`oxageninc/brand`) owns the faces. Its `house-tailwind.css`, synced into `packages/ui/src/styles/`, sets `--font-display` and `--font-sans` to Aeonik, so every app heading and the `text-m-h*` and `text-a-h*` utilities draw in Aeonik. The files the sync writes there stay byte-identical to the kit.
+- In the app, Space Grotesk reaches the page only through `--font-wordmark` and the `.ox-wordmark` class. Do not write `--ox-font-display`, `--font-wordmark`, or "Space Grotesk" in app source outside a comment. `apps/app/src/test/arch/design-record.test.ts` fails on each of them.
+- On oxagen.sh, `apps/web/assets/oxagen.css` sets h1 to h3 from `--font-hero` (the kit's `--ox-font-display`) and everything else from `--font-sans`. Its sizes come from the kit's marketing scale through the site's own ramp (`--fs-small`, `--fs-ui`, `--fs-nav`, `--fs-sec`), so no running text sits below 15px except captions and figure labels.
+- docs.oxagen.sh reads the app scale one step up (`--docs-step`, 8/7), so its body is 16px.
 
 ## Runtime checks that matter
 
@@ -235,9 +236,11 @@ you learn better:
 | Breaking change | Yes / No | The change alters a capability contract, an API response, a CLI flag, a hook payload or a stored format that a consumer already depends on. |
 | Customer reported | Yes / No | A customer or prospect reported the problem. An audit, a reviewer, CI or telemetry did not. |
 
-Whether the change alters a Postgres, ClickHouse or Neo4j schema goes in the Requires
-Migration and Schema Changes issue fields when the run ends (Oxagen issue fields below).
-That replaced the `Impacts schema` body entry on 2026-10-02.
+An issue whose work alters a Postgres, ClickHouse or Neo4j schema carries the
+`MIGRATION-REQUIRED` label, the one its pull request gets from `migration-label.yml`. Apply
+it once you know, at the latest when your run ends. Mac set this on 2026-10-02. It replaced
+the `Impacts schema` body entry and, later that day, the Requires Migration and Schema
+Changes issue fields.
 
 Mac set this label scheme on 2026-09-30 for oxagen and stella, and every label name is
 uppercase. A complete issue carries exactly one priority, one `MODEL:`, one `SIZE:`, one
@@ -289,18 +292,17 @@ Mac set this on 2026-10-02 for every repository in an Oxagen organization (`oxag
 |---|---|---|
 | Priority | `priority` | Filing. It matches the `P` label |
 | Model Tier | `model_tier` | Filing. Lite is T1, Standard T2, Pro T3, and Ultra T4 |
-| Estimated Minutes | `estimated_minutes` | Filing |
 | Area(s) | `areas` | Filing. One or more names from the `AREA:` labels |
-| Actual Minutes | `actual_minutes` | Run end. Add your minutes to the value already there |
+| Minutes Estimated | `minutes_estimated` | Filing |
+| Minutes Actual | `minutes_actual` | Run end. Add your minutes to the value already there |
 | Blocked | `blocked` | Yes while the work waits on a maintainer decision |
 | Blocked Reason | `blocked_reason` | With Blocked set to Yes. Each open decision as a question |
-| Requires Migration | `requires_migration` | Reflection |
-| Schema Changes | `schema_changes` | Reflection. Required when Requires Migration is Yes |
 | Agent Self Reflection | `agent_self_reflection` | Reflection |
 | Agent Self Grade | `agent_self_grade` | Reflection. A to F |
 
 - **Minutes are plain integers.** Count the agent minutes spent building the change or watching its PR, up to the point where the PR is ready for review with CI green. Do not count the wait for review or merge.
-- **Record the reflection when your run ends.** In one pass, add your minutes to Actual Minutes and set Agent Self Reflection, Agent Self Grade, and Requires Migration. Requires Migration waits until then because the answer is often unknown before the work is done. When it is Yes, write Schema Changes in the same pass: each store, table, and change. GitHub cannot make one field require another, so you must.
+- **An issue shows the fields in the table's order.** Every issue type pins them that way. `tools/sync-issue-fields.mjs` in oxageninc/roadmap lists a type that drifts, and the order is set on the organization's issue types settings page, because no API sets it.
+- **Record the reflection when your run ends.** In one pass, add your minutes to Minutes Actual and set Agent Self Reflection and Agent Self Grade. If the work changed a schema and the issue lacks `MIGRATION-REQUIRED`, apply it then.
 - **Blocked is the roadmap's list of decisions.** The roadmap app lists every open issue with Blocked set to Yes as a decision for Mac. Set it back to No and clear Blocked Reason once the decision is made. Keep applying `NEEDS:DECISION` as well.
 - **The `All issues` board keeps Prompt and Resolution.** The board is a project in the `macanderson` account (`gh project list --owner macanderson`). Put the issue on it, set Prompt when you file the issue, and set Resolution when it closes. Do not write the board's Model Tier, Size, `agent_mins_est`, or `agent_mins`, and do not post the reflection as a comment.
 - **Fix any field you find wrong** on any issue you touch.

@@ -66,7 +66,7 @@ The workspace's `settings.steering_repo` holds the job's progress: the status, t
 
 ## Side effects
 
-One Postgres transaction writes `workspace.workspaces` with its `steering_repo` setting, `workspace.workspace_users` (the caller as owner), the built-in agent, the default MCP registry and the default environment. After the commit, the handler sends `steering-repo/provision.requested`. When the send fails, the handler logs it, saves the setting with status `failed` and error code `enqueue_failed`, and still returns 201. A `workspace.created` security event is recorded after the commit.
+One Postgres transaction writes `workspace.workspaces` with its `steering_repo` setting, `workspace.workspace_users` (the caller as owner), an `iam.principal_role_assignments` row that gives the caller's principal the workspace `Owner` role on the new workspace, the built-in agent, the default MCP registry and the default environment. After the commit, the handler sends `steering-repo/provision.requested`. When the send fails, the handler logs it, saves the setting with status `failed` and error code `enqueue_failed`, and still returns 201. A `workspace.created` security event is recorded after the commit.
 
 ## Routes and the context they carry
 

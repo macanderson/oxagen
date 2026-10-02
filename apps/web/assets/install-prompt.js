@@ -122,7 +122,7 @@
     "position:fixed;z-index:2147483000;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom,0px));" +
     "margin:0 auto;max-width:380px;box-sizing:border-box;display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:start;" +
     "padding:14px;border-radius:14px;border:1px solid var(--line);background:var(--bg);color:var(--fg);" +
-    "box-shadow:0 12px 32px rgba(9,9,11,.28);font:14px/1.45 Geist,ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif;" +
+    "box-shadow:0 12px 32px rgba(9,9,11,.28);font:14px/1.45 Aeonik,ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif;" +
     "animation:rise .22s ease-out}" +
     ".card.dark{--bg:#18181B;--fg:#FAFAFA;--muted:#A1A1AA;--line:#27272A}" +
     "@media (prefers-reduced-motion:reduce){.card{animation:none}}" +

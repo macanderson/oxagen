@@ -134,10 +134,10 @@ Then set the four fields CLAUDE.md marks for filing under Oxagen issue fields:
 |---|---|
 | Priority | The `P` label |
 | Model Tier | Lite for `MODEL:T1`, Standard for T2, Pro for T3, Ultra for T4 |
-| Estimated Minutes | Agent minutes, a whole number inside the size band |
+| Minutes Estimated | Agent minutes, a whole number inside the size band |
 | Area(s) | The `AREA:` label's title name, plus any other area the work changes |
 
-Leave Actual Minutes and the reflection fields to the agent that does the work. Set Blocked to
+Leave Minutes Actual and the reflection fields to the agent that does the work. Set Blocked to
 Yes, with Blocked Reason as the question, only when you apply `NEEDS:DECISION`.
 
 ### Tiers

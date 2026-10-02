@@ -35,11 +35,14 @@ import {
   formatDate,
   indexPage,
   inlineWordmark,
+  latestPosts,
   mergeSitemap,
   pillarPage,
   postPage,
   SITE,
+  siteHeader,
   urls,
+  withSiteHeader,
 } from "./lib/html.mjs";
 import { BANNER, bannerSvg, OG, ogSvg, THUMB } from "./lib/images.mjs";
 import { renderMdx } from "./lib/mdx.mjs";
@@ -267,6 +270,7 @@ export async function build({ log = console.log } = {}) {
       "utf8",
     ),
   );
+  const latest = latestPosts(posts, pillars);
 
   for (const post of posts) {
     const { html, headings } = await renderMdx(post.body, { file: post.file });
@@ -283,6 +287,7 @@ export async function build({ log = console.log } = {}) {
       pillars,
       related: relatedPosts(post, posts),
       wordmark,
+      latest,
     });
     await emit(path.join(DIST, "blog", post.slug, "index.html"), page);
     // sidecar assets next to the post
@@ -306,12 +311,13 @@ export async function build({ log = console.log } = {}) {
         pillars,
         posts: byPillar.get(pillar.slug),
         wordmark,
+        latest,
       }),
     );
   }
   await emit(
     path.join(DIST, "blog", "index.html"),
-    indexPage({ pillars, posts, wordmark, image: blogCard.og }),
+    indexPage({ pillars, posts, wordmark, image: blogCard.og, latest }),
   );
   await emit(path.join(DIST, "blog", "feed.xml"), feedXml(posts, pillars));
 
@@ -353,12 +359,18 @@ export async function build({ log = console.log } = {}) {
     );
   }
 
-  // 4. the third-party tags, on every page the build is about to publish —
-  //    one pass over dist/ so no page can be authored without them
+  // 4. the site header and the third-party tags, on every page the build is
+  //    about to publish. A hand-written page carries a `<!-- site-header -->`
+  //    placeholder, and this pass fills it with the header the blog renders,
+  //    so the menus are written once. One pass over dist/, so no page can be
+  //    authored without the tags.
+  const header = ({ demo }) =>
+    siteHeader({ wordmark, demo, pillars, latest });
   let tagged = 0;
   for (const rel of await htmlPages(DIST)) {
     const file = path.join(DIST, rel);
-    await writeFile(file, withAnalytics(await readFile(file, "utf8")));
+    const html = withSiteHeader(await readFile(file, "utf8"), header);
+    await writeFile(file, withAnalytics(html));
     tagged += 1;
   }
 

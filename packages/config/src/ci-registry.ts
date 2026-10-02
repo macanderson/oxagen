@@ -89,7 +89,7 @@ export const CI_REGISTRY: Record<string, CiVarMeta> = {
   AUTH_TOKEN_ENCRYPTION_KEY: {
     kind: "secret",
     description:
-      "CI's own key-encryption key for the app stack the test, e2e, nightly, and mockup-parity jobs start. Not production's key.",
+      "CI's own key-encryption key for the app stack the test, e2e, nightly, mockup-parity, and Work walk jobs start. Not production's key.",
     refresh: {
       how: "Mint a random 32-byte key. CI seeds a fresh database each run, so any new value works at once.",
       command: "openssl rand -base64 32",

@@ -151,16 +151,37 @@
 .hero-sub-2{margin-top:-18px}
 
 /* hero: one step's cost, rolled up to the operator */
-.h-tree{list-style:none;margin:0;padding:0;display:grid;gap:7px}
-.h-tree li{position:relative;display:grid;grid-template-columns:70px minmax(0,1fr) auto;align-items:center;gap:10px;
-  padding:8px 12px;margin-left:calc(var(--d,0) * 18px);border:1px solid var(--line);border-radius:var(--r);background:var(--panel);font-size:14px}
-.h-tree li::before{content:"";position:absolute;left:-11px;top:-8px;width:10px;height:26px;border-left:1px solid var(--rule);border-bottom:1px solid var(--rule);border-bottom-left-radius:5px}
-.h-tree li:first-child::before{content:none}
-.h-tree .n{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.h-tree .v{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;color:var(--ink-2);font-variant-numeric:tabular-nums}
-.h-tree li.hot{border:3px double var(--ink-3);padding:6px 10px}
-@media (max-width:480px){.h-tree li{margin-left:calc(var(--d,0) * 8px);grid-template-columns:58px minmax(0,1fr) auto}}
-.h-classes{display:grid;gap:10px;padding-top:4px}
+/* hero: one night of runs, then the morning report. State is carried by
+   border shape: done is solid, waiting on a person is dashed, and a run in
+   flight ends in the live dot. */
+.h-shift{display:grid;gap:9px}
+.h-axis{position:relative;height:14px;margin-left:var(--h-who);font-family:var(--font-mono);font-size:11px;color:var(--faint)}
+.h-axis span{position:absolute;left:var(--x);top:0}
+.h-shift{--h-who:132px}
+.h-row{display:grid;grid-template-columns:var(--h-who) minmax(0,1fr);align-items:center}
+.h-who{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--ox-m-micro);color:var(--ink-2);line-height:1.25}
+.h-who small{display:block;font-family:var(--font-mono);font-size:11.5px;color:var(--faint)}
+.h-track{position:relative;height:26px;border-radius:var(--r);
+  background:linear-gradient(to right,var(--line) 1px,transparent 1px) 0 0/21.43% 100%}
+.h-bar{position:absolute;top:4px;bottom:4px;left:var(--a);width:var(--w);border-radius:var(--r);border:1px solid var(--ink-3);background:var(--raised)}
+.h-bar.is-wait{border-style:dashed;border-color:var(--approval);background:color-mix(in srgb,var(--approval) 14%,transparent)}
+.h-bar.is-live{border-color:var(--rule)}
+.h-bar.is-live::after{content:"";position:absolute;right:-4px;top:50%;width:8px;height:8px;margin-top:-4px;border-radius:50%;background:var(--gold-hi);
+  box-shadow:0 0 0 4px color-mix(in srgb,var(--gold-hi) 25%,transparent);animation:hLive 2s ease-in-out infinite}
+@keyframes hLive{50%{opacity:.45}}
+.h-legend{list-style:none;margin:4px 0 0;padding:0;display:flex;flex-wrap:wrap;gap:16px;font-size:12.5px;color:var(--ink-3)}
+.h-legend li{display:inline-flex;align-items:center;gap:7px}
+.h-legend li::before{content:"";width:16px;height:9px;border-radius:3px;border:1px solid var(--ink-3);background:var(--raised)}
+.h-legend li.is-wait::before{border-style:dashed;border-color:var(--approval);background:none}
+.h-legend li.is-live::before{width:8px;height:8px;border-radius:50%;border:0;background:var(--gold-hi)}
+.h-report{display:grid;gap:10px;margin-top:18px}
+.h-tiles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.h-tile{padding:11px 13px;border:1px solid var(--line);border-radius:var(--r);background:var(--panel)}
+.h-tile.is-waste{border-style:dashed;border-color:var(--rule)}
+.h-tile span{display:block;font-size:12.5px;color:var(--ink-3)}
+.h-tile b{display:block;margin-top:5px;font-family:var(--font-mono);font-weight:500;font-size:var(--ox-m-h4);font-variant-numeric:tabular-nums;color:var(--ink)}
+@media (max-width:480px){.h-shift{--h-who:96px}.h-axis span:nth-child(even){visibility:hidden}.h-tiles{grid-template-columns:1fr 1fr}}
+@media (prefers-reduced-motion:reduce){.h-bar.is-live::after{animation:none}}
 
 /* govern: the one gate every tool call passes */
 .h-rail{position:relative}
@@ -300,39 +321,7 @@
 <body>
 <a class="skip" href="#main">Skip to content</a>
 
-<header class="nav" id="nav">
-  <div class="nav-in">
-    <a class="brand" href="#top" aria-label="Oxagen home">
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 604.125 115.625" role="img" aria-label="oxagen"><g transform="translate(21.575,22.616) scale(3.437130)"><g data-mark="hive"><path d="M0.000 -6.080L5.800 -3.040L5.800 3.040L0.000 6.080L-5.800 3.040L-5.800 -3.040Z" fill="none" stroke="currentColor" stroke-width="1" stroke-linejoin="miter"/><path d="M13.080 -6.080L18.880 -3.040L18.880 3.040L13.080 6.080L7.280 3.040L7.280 -3.040Z" fill="none" stroke="currentColor" stroke-width="1" stroke-linejoin="miter"/><path d="M6.540 4.160L12.340 7.200L12.340 13.280L6.540 16.320L0.740 13.280L0.740 7.200Z" fill="none" stroke="currentColor" stroke-width="1" stroke-linejoin="miter"/><path d="M19.620 3.660L25.897 6.950L25.897 13.530L19.620 16.820L13.343 13.530L13.343 6.950Z" fill="#D4AF37"/><path d="M0.000 13.900L6.277 17.190L6.277 23.770L0.000 27.060L-6.277 23.770L-6.277 17.190Z" fill="#D4AF37" opacity="0.55"/><path d="M13.080 14.400L18.880 17.440L18.880 23.520L13.080 26.560L7.280 23.520L7.280 17.440Z" fill="none" stroke="currentColor" stroke-width="1" stroke-linejoin="miter"/></g></g><g transform="translate(150.257,11.190)"><path class="letters" d="M33.9083 68.758Q24.1657 68.758 16.4786 64.7737Q8.79142 60.7894 4.39571 53.2965Q0 45.8035 0 35.3862V33.3718Q0 22.9544 4.39571 15.4615Q8.79142 7.96854 16.4786 3.98427Q24.1657 0 33.9083 0Q43.6509 0 51.3381 3.98427Q59.0252 7.96854 63.4209 15.4615Q67.8166 22.9544 67.8166 33.3718V35.3862Q67.8166 45.8035 63.4209 53.2965Q59.0252 60.7894 51.3381 64.7737Q43.6509 68.758 33.9083 68.758ZM33.9083 55.3486Q42.1895 55.3486 47.4689 50.0198Q52.7484 44.691 52.7484 35.0142V33.7437Q52.7484 24.067 47.5233 18.7382Q42.2981 13.4094 33.9083 13.4094Q25.6502 13.4094 20.3592 18.7382Q15.0683 24.067 15.0683 33.7437V35.0142Q15.0683 44.691 20.3592 50.0198Q25.6502 55.3486 33.9083 55.3486Z M176.569 68.758Q169.637 68.758 164.119 66.3453Q158.601 63.9327 155.387 59.2935Q152.173 54.6542 152.173 48.0088Q152.173 41.3403 155.387 36.8558Q158.601 32.3712 164.27 30.1017Q169.94 27.8323 177.174 27.8323H196.047V23.8925Q196.047 18.7316 192.874 15.5274Q189.701 12.3232 182.99 12.3232Q176.411 12.3232 173.049 15.3842Q169.686 18.4452 168.627 23.3593L154.691 18.7315Q156.27 13.6133 159.748 9.39702Q163.225 5.18071 169.049 2.59035Q174.874 0 183.208 0Q195.972 0 203.326 6.42816Q210.681 12.8563 210.681 24.9392V50.4707Q210.681 54.4204 214.368 54.4204H219.795V66.9148H209.197Q204.464 66.9148 201.442 64.5334Q198.42 62.1521 198.42 58.1563V57.8864H196.126Q195.392 59.6967 193.399 62.2985Q191.406 64.9004 187.388 66.8292Q183.369 68.758 176.569 68.758ZM179.05 56.4348Q186.581 56.4348 191.314 52.1592Q196.047 47.8837 196.047 40.6031V39.2405H178.175Q173.175 39.2405 170.208 41.3881Q167.241 43.5358 167.241 47.5513Q167.241 51.5668 170.34 54.0008Q173.439 56.4348 179.05 56.4348Z M227.767 34.6423V32.6279Q227.767 22.3817 231.86 15.0863Q235.953 7.79081 242.768 3.8954Q249.582 0 257.706 0Q266.935 0 271.762 3.33256Q276.589 6.66512 278.81 10.4107H281.042V1.8432H295.801V79.33Q295.801 85.6989 292.104 89.4725Q288.408 93.2462 282.079 93.2462H238.369V80.0541H277.023Q280.779 80.0541 280.779 76.1043V57.2775H278.547Q277.161 59.5683 274.665 61.8904Q272.168 64.2125 268.057 65.7414Q263.946 67.2702 257.706 67.2702Q249.582 67.2702 242.756 63.3748Q235.93 59.4794 231.848 52.1724Q227.767 44.8655 227.767 34.6423ZM261.938 54.0781Q270.151 54.0781 275.573 48.8612Q280.996 43.6443 280.996 34.2704V32.9999Q280.996 23.4943 275.627 18.3432Q270.259 13.1921 261.938 13.1921Q253.749 13.1921 248.315 18.3432Q242.881 23.4943 242.881 32.9999V34.2704Q242.881 43.6443 248.315 48.8612Q253.749 54.0781 261.938 54.0781Z M344.764 68.758Q334.998 68.758 327.583 64.6108Q320.167 60.4636 316.031 52.9048Q311.896 45.346 311.896 35.1689V33.589Q311.896 23.3889 315.977 15.8416Q320.059 8.2944 327.397 4.1472Q334.735 0 344.385 0Q353.881 0 360.956 4.1867Q368.031 8.37341 371.981 15.8515Q375.931 23.3297 375.931 33.2895V38.6974H327.181Q327.468 46.3334 332.587 50.9496Q337.707 55.5658 345.198 55.5658Q352.522 55.5658 356.101 52.3534Q359.681 49.141 361.553 45.0629L373.985 51.4813Q372.119 55.0656 368.63 59.1042Q365.141 63.1428 359.394 65.9504Q353.648 68.758 344.764 68.758ZM327.313 27.2892H360.622Q360.095 20.7986 355.7 16.9954Q351.304 13.1921 344.277 13.1921Q337.055 13.1921 332.691 16.9954Q328.327 20.7986 327.313 27.2892Z M391.548 66.9148V1.8432H406.353V10.9769H408.585Q410.303 7.25429 414.832 3.99908Q419.361 0.743866 428.435 0.743866Q435.956 0.743866 441.695 4.12911Q447.434 7.51435 450.651 13.5903Q453.868 19.6663 453.868 27.9442V66.9148H438.8V29.1226Q438.8 21.1969 434.891 17.3492Q430.983 13.5015 423.9 13.5015Q415.872 13.5015 411.244 18.8237Q406.617 24.146 406.617 33.9445V66.9148Z" fill="currentColor"/><path class="accent" d="M73.9979 66.9148 98.2261 34.0696 74.3764 1.8432H91.9626L107.9 24.3499H110.131L126.068 1.8432H143.654L119.805 34.0696L144.033 66.9148H126.206L110.131 44.0065H107.9L91.8244 66.9148Z" fill="#D4AF37"/></g><style>:root{color:#09090B}@media(prefers-color-scheme:dark){:root{color:#FFFFFF}}</style></svg>
-    </a>
-    <nav class="nav-links" aria-label="Primary">
-      <a href="/products/oxagen">Product</a>
-      <a href="/blog">Research</a>
-      <a href="#field-manual">Field manual</a>
-      <a class="ext" href="https://docs.oxagen.sh" target="_blank" rel="noopener">Docs</a>
-    </nav>
-    <div class="nav-cta">
-      <a class="login ext" href="https://app.oxagen.sh" target="_blank" rel="noopener">Log in</a>
-      <a class="btn btn-ghost btn-sm" href="#demo">Get a demo</a>
-      <button class="burger" id="burger" type="button" aria-expanded="false" aria-controls="drawer" aria-label="Menu"><i></i></button>
-    </div>
-  </div>
-</header>
-
-<div class="drawer" id="drawer" data-open="false">
-  <div class="wrap">
-    <a href="/products/oxagen">Overview</a>
-    <a href="#work">How it works</a>
-    <a href="#govern">Access</a>
-    <a href="#explain">Record</a>
-    <a href="#spend">Budget and rules</a>
-    <a href="#learn">Equipment</a>
-    <a href="#wrap">Supported agents</a>
-    <a href="#field-manual">Field manual</a>
-    <a href="/blog">Research</a>
-    <a href="https://docs.oxagen.sh">Docs</a>
-  </div>
-</div>
+<!-- site-header demo="ghost" -->
 
 <main id="main">
 
@@ -341,11 +330,11 @@
     <div class="wrap hero-in">
       <div class="hero-copy">
         <p class="eyebrow">Workforce management for autonomous agents</p>
-        <h1><span class="hero-line-1">Your agents are a workforce now.</span><br><span class="gold">Manage them like one.</span></h1>
+        <h1><span class="hero-line-1">Sleep tight.</span><br><span class="gold">Your agents are on the job.</span></h1>
         <p class="hero-sub">
-          Give each agent its own identity. Then set what it may do, what it may spend, and which
-          tools it gets. When an agent acts through Oxagen, a rule you wrote checks the action
-          first. <strong>Oxagen records what happened and what it cost.</strong>
+          While you turn in for the night, your fleet of agents keeps working. Each agent works
+          under the budget and rules its operator set. <strong>In the morning, Oxagen shows the
+          work your agents finished, what it cost, and the spend that bought no progress.</strong>
         </p>
         <p class="hero-sub hero-sub-2">Oxagen does not run your agents. They keep working in the tools you already use.</p>
         <div class="hero-ctas">
@@ -363,30 +352,28 @@
         </div>
       </div>
 
-      <figure class="dg reveal reveal-d1" role="img" aria-label="Illustration: step 41 of a run cost 14 cents. That cost adds into its turn, its run, the agent, and the person who started the run. The total matches the provider's bill.">
-        <div class="dg-bar"><span class="dg-dot ok"></span><b>Spend</b> added up from each step<span class="end">operator ada@acme</span></div>
+      <figure class="dg reveal reveal-d1" role="img" aria-label="Illustration: five agent runs across one night, from 18:00 to 08:00. One waits on a person and one is still running. By morning nine work orders are done, the night cost $38.20, and $4.10 of that bought no progress.">
+        <div class="dg-bar"><span class="dg-dot ok"></span><b>Overnight shift</b> five runs, one operator<span class="end">18:00 to 08:00</span></div>
         <div class="dg-body">
-          <ol class="h-tree">
-            <li class="dg-in" style="--i:0"><span class="dg-k">person</span><span class="n">ada@acme</span><span class="v">$412.60</span></li>
-            <li class="dg-in" style="--i:1;--d:1"><span class="dg-k">agent</span><span class="n">ci-fixer</span><span class="v">$96.10</span></li>
-            <li class="dg-in" style="--i:2;--d:2"><span class="dg-k">run</span><span class="n">run_01J9AB3K</span><span class="v">$1.84</span></li>
-            <li class="dg-in" style="--i:3;--d:3"><span class="dg-k">turn</span><span class="n">3 of 3</span><span class="v">$0.61</span></li>
-            <li class="dg-in hot" style="--i:4;--d:4"><span class="dg-k">step</span><span class="n">41, model call</span><span class="v">$0.14</span></li>
-          </ol>
-          <div class="h-classes dg-in" style="--i:5">
-            <span class="dg-k">what step 41 cost</span>
-            <div class="dg-stack" aria-hidden="true">
-              <span data-s="1" style="--w:.47;--i:6"></span><span data-s="2" style="--w:.32;--i:7"></span><span data-s="3" style="--w:.14;--i:8"></span><span data-s="4" style="--w:.07;--i:9"></span>
+          <div class="h-shift">
+            <div class="h-axis" aria-hidden="true"><span style="--x:0%">18:00</span><span style="--x:21.43%">21:00</span><span style="--x:42.86%">00:00</span><span style="--x:64.29%">03:00</span><span style="--x:85.71%">06:00</span></div>
+            <div class="h-row dg-in" style="--i:0"><span class="h-who">billing-fix<small>claude-code</small></span><span class="h-track"><i class="h-bar" style="--a:8%;--w:32%"></i></span></div>
+            <div class="h-row dg-in" style="--i:1"><span class="h-who">flaky-tests<small>codex</small></span><span class="h-track"><i class="h-bar" style="--a:14%;--w:46%"></i></span></div>
+            <div class="h-row dg-in" style="--i:2"><span class="h-who">docs-sync<small>stella</small></span><span class="h-track"><i class="h-bar is-wait" style="--a:30%;--w:42%"></i></span></div>
+            <div class="h-row dg-in" style="--i:3"><span class="h-who">release-notes<small>claude-code</small></span><span class="h-track"><i class="h-bar" style="--a:50%;--w:30%"></i></span></div>
+            <div class="h-row dg-in" style="--i:4"><span class="h-who">migration-check<small>codex</small></span><span class="h-track"><i class="h-bar is-live" style="--a:79%;--w:19%"></i></span></div>
+            <ul class="h-legend dg-in" style="--i:5"><li>done</li><li class="is-wait">waiting on a person</li><li class="is-live">running</li></ul>
+          </div>
+          <div class="h-report dg-in" style="--i:6">
+            <span class="dg-k">morning report</span>
+            <div class="h-tiles">
+              <div class="h-tile"><span>Work orders done</span><b>9</b></div>
+              <div class="h-tile"><span>Recorded spend</span><b>$38.20</b></div>
+              <div class="h-tile is-waste"><span>Unproductive spend</span><b>$4.10</b></div>
             </div>
-            <ul class="dg-legend">
-              <li data-s="1">tokens in 22k <b>$0.066</b></li>
-              <li data-s="2">tokens out 3k <b>$0.045</b></li>
-              <li data-s="3">cache read 64k <b>$0.019</b></li>
-              <li data-s="4">cache write 2k <b>$0.010</b></li>
-            </ul>
           </div>
         </div>
-        <div class="dg-foot"><span class="dg-tag is-ok">matched</span> the provider's bill. Difference: $0.00.</div>
+        <div class="dg-foot"><span class="dg-tag is-ok">recorded</span> Every run keeps its owning operator, ada@acme.</div>
       </figure>
     </div>
   </section>

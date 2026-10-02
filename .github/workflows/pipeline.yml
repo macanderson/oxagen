@@ -118,7 +118,8 @@ env:
   # The turbo steps below run this many tasks at once.
   TURBO_CONCURRENCY: "3"
   # Lint and typecheck run one task at a time, because their heaviest tsc and
-  # eslint scripts pin a large heap (#4990).
+  # eslint scripts pin a 4 GB heap (#4990), and apps/app and
+  # apps/app_deprecated pin 8 GB (#5212).
   LINT_TURBO_CONCURRENCY: "1"
   # Each Vitest process in the unit job's `rest` lane starts this many
   # workers (#5046).

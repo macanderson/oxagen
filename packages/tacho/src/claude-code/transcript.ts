@@ -18,7 +18,8 @@ export interface TranscriptDraft {
   body: Record<string, unknown>;
   attrs: Record<string, string>;
   context: Record<string, unknown>;
-  turn?: { prompt_id?: string };
+  /** Claude Code names a record's prompt; Codex names its turn. */
+  turn?: { prompt_id?: string; turn_id?: string };
   is_sidechain?: boolean;
   /** The record that named a session title: `ai-title` or `custom-title`. */
   hook_source_kind?: SessionTitleSource;

@@ -198,5 +198,15 @@ test("allowing merge commits drifts health and fails the steering check until re
   const repaired = await repairSteeringRepo(r.ox, r.settings);
   expect(repaired.health).toBe("healthy");
   await waitForHealth(r.ox, r.settings, "healthy", 60 * SECOND);
-  expect(await r.gh.allowsMergeCommits(fullName)).toBe(false);
+  // GitHub can answer a settings read from before the repair's write for a
+  // moment: run 37037472622 read merge commits still allowed right after
+  // Oxagen read them off. A repair that never wrote the setting still fails.
+  await poll(
+    `merge commits off again in ${fullName}`,
+    { timeoutMs: 30 * SECOND, intervalMs: 3 * SECOND },
+    async () =>
+      (await r.gh.allowsMergeCommits(fullName))
+        ? waiting("merge commits are still allowed")
+        : reached(true),
+  );
 });
