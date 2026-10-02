@@ -229,7 +229,7 @@ describe("the WAL ceiling lines (ADR-261)", () => {
       drops: [{ session_uuid: STALLED, bytes: 2.5 * GIB }],
     });
     expect(lines).toContain(
-      "Ceiling     2 sessions have shipped nothing for 60 minutes and hold 3.0 GiB of the 8.0 GiB ceiling",
+      "Ceiling     2 sessions have shipped nothing for at least 60 minutes and hold 3.0 GiB of the 8.0 GiB ceiling",
     );
     expect(lines).toContain(
       `Dropped     session ${STALLED} went over the WAL ceiling at ${ago(60_000)}: 2.5 GiB of stored content removed, events 41 to 912 ship without it`,
@@ -243,7 +243,7 @@ describe("the WAL ceiling lines (ADR-261)", () => {
     await status({}, deps);
 
     expect(lines).toContain(
-      "Ceiling     OVER: 1 session has shipped nothing for 60 minutes and holds 9.0 GiB, more than the 8.0 GiB ceiling",
+      "Ceiling     OVER: 1 session has shipped nothing for at least 60 minutes and holds 9.0 GiB, more than the 8.0 GiB ceiling",
     );
   });
 

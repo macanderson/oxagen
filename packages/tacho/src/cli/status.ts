@@ -558,7 +558,7 @@ function ceilingLines(
   if (ceiling.stalled_sessions > 0) {
     const minutes = Math.round(ceiling.stall_grace_ms / 60_000);
     const one = ceiling.stalled_sessions === 1;
-    const who = `${ceiling.stalled_sessions} session${one ? " has" : "s have"} shipped nothing for ${minutes} minute${minutes === 1 ? "" : "s"} and ${one ? "holds" : "hold"} ${formatBytes(ceiling.stalled_bytes)}`;
+    const who = `${ceiling.stalled_sessions} session${one ? " has" : "s have"} shipped nothing for at least ${minutes} minute${minutes === 1 ? "" : "s"} and ${one ? "holds" : "hold"} ${formatBytes(ceiling.stalled_bytes)}`;
     lines.push(
       ceiling.stalled_bytes > ceiling.ceiling_bytes
         ? `Ceiling     OVER: ${who}, more than the ${formatBytes(ceiling.ceiling_bytes)} ceiling`
