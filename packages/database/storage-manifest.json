@@ -2909,6 +2909,15 @@
     },
     {
       "domain": "tacho",
+      "name": "list_tacho_session_heads",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "tacho",
       "name": "list_tacho_sessions",
       "reads": [],
       "surfaces": [
@@ -26823,6 +26832,18 @@
           "nullable": false,
           "primaryKey": false,
           "type": "bigint"
+        },
+        {
+          "name": "record_basis",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "backfill_normalizer",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
         },
         {
           "name": "title",

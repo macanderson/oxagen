@@ -30,6 +30,7 @@ export const OXAGEN_COMMAND_FOR: Readonly<Record<string, string>> = {
   uninstall: "oxagen agent uninstall",
   reassign: "oxagen agent reassign",
   export: "oxagen agent export",
+  backfill: "oxagen agent backfill",
   verify: "oxagen agent verify",
   run: "oxagen agent run",
   detect: "oxagen agent detect",

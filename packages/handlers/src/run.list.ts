@@ -622,6 +622,9 @@ const tachoColumns = {
     modelFinal: sessions.modelFinal,
     totalCostMicros: sessions.totalCostMicros,
     costBasis: sessions.costBasis,
+    // How the run's frames reached the record (ADR-161). A run a backfill
+    // rebuilt reads its cost from the rollup alone, and `get_run` answers it.
+    recordBasis: sessions.recordBasis,
     effort: sessions.effort,
     // Where the session ran, as its start recorded it (the Run header's
     // checkout strip, while the work read is pending or when it failed). The

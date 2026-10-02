@@ -9,6 +9,7 @@
  *   oxagen agent uninstall  unenroll every agent, then remove what the desktop app put here
  *   oxagen agent export     a session from the local WAL (tacho | trace | otlp)
  *   oxagen agent verify     one headless harness turn, confirmed chained
+ *   oxagen agent backfill   record the Claude Code sessions run before enrollment
  *   oxagen agent hosts      every machine enrolled in this workspace, with its tier
  *   oxagen agent run        one agent session under Oxagen control
  *   oxagen agent detect     which harnesses this machine has, and which are enrolled
@@ -292,6 +293,27 @@ export async function handleTachoExport(
 ): Promise<boolean> {
   const { exportCommand } = await import("@oxagen/recorder/cli");
   return exportCommand(opts, await tachoDeps(writer));
+}
+
+/**
+ * `oxagen agent backfill`: record the Claude Code sessions this machine ran
+ * before it enrolled (ADR-161). Answers the exit code: 0 finished, 1
+ * stopped, 2 invalid options, 3 no daemon, 4 not enrolled.
+ */
+export async function handleTachoBackfill(
+  opts: {
+    since?: string;
+    until?: string;
+    project?: string[];
+    excludeProject?: string[];
+    session?: string[];
+    dryRun?: boolean;
+    json?: boolean;
+  },
+  writer: CommandWriter = stdoutWriter,
+): Promise<number> {
+  const { backfillCommand } = await import("@oxagen/recorder/cli");
+  return backfillCommand(opts, await tachoDeps(writer));
 }
 
 export async function handleTachoVerify(

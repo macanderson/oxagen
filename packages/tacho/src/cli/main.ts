@@ -33,6 +33,7 @@ import {
   credentialStatus,
   parseCredentialMode,
 } from "./credential";
+import { backfillCommand } from "./backfill";
 import { type CliDeps, defaultCliDeps, isNativeBuild } from "./deps";
 import { detect } from "./detect";
 import { enroll, parseHarnesses } from "./enroll";
@@ -115,6 +116,11 @@ export function recordedCliDeps(overrides: Partial<CliDeps> = {}): CliDeps {
     ...overrides,
     paths: withRecordedHarnessFiles(base, read.host ?? read.salvaged),
   });
+}
+
+/** Commander's way to take a repeatable option as a list. */
+function collect(value: string, previous: string[]): string[] {
+  return [...previous, value];
 }
 
 export interface RecorderProgramOptions {
@@ -457,6 +463,33 @@ export function buildTachoProgram(
         deps,
       );
       if (!ok) process.exitCode = 1;
+    });
+
+  program
+    .command("backfill")
+    .description(
+      "Record the Claude Code sessions this machine ran before it enrolled, from the transcripts Claude Code kept",
+    )
+    .option("--since <date>", "Only sessions that started on or after this UTC date (YYYY-MM-DD)")
+    .option("--until <date>", "Only sessions that started before this UTC date (YYYY-MM-DD)")
+    .option("--project <name>", "Only this folder under ~/.claude/projects (repeatable)", collect, [])
+    .option("--exclude-project <name>", "Skip this folder under ~/.claude/projects (repeatable)", collect, [])
+    .option("--session <id>", "Only this session and its subagents (repeatable)", collect, [])
+    .option("--dry-run", "Read and count, and record and send nothing")
+    .option("--json", "Print the report as one JSON object")
+    .action(async (opts: Record<string, unknown>) => {
+      process.exitCode = await backfillCommand(
+        {
+          since: opts["since"] as string | undefined,
+          until: opts["until"] as string | undefined,
+          project: opts["project"] as string[],
+          excludeProject: opts["excludeProject"] as string[],
+          session: opts["session"] as string[],
+          dryRun: opts["dryRun"] === true,
+          json: opts["json"] === true,
+        },
+        deps,
+      );
     });
 
   program

@@ -28,6 +28,7 @@ import { linkText, mono } from "@/ui/control-styles";
 import { type ListRow, ListTable } from "@/ui/list-table";
 import { SafeLink } from "@/ui/navigation";
 import { ReadFailure } from "@/ui/read-failure";
+import { isBackfilled } from "./backfill";
 import { frameHref } from "./frame-link";
 import { Note, NoValue, Panel, PanelBody } from "./parts";
 import { entriesOf } from "./recorded-entries";
@@ -259,11 +260,30 @@ function row(entry: TranscriptEntry, place: Place): ListRow {
 export function PolicyDecisions({
   read,
   place,
+  backfilled = false,
 }: {
   read: Read<RunTranscript>;
   place: Place;
+  /**
+   * The run was rebuilt from its transcript after it ended (ADR-161). No
+   * policy ran on it, so the panel says the decisions are not recorded
+   * rather than that there were none.
+   */
+  backfilled?: boolean;
 }) {
   const t = useTranslations("run.policy");
+  const tb = useTranslations("run.backfill");
+  if (backfilled)
+    return (
+      <Panel title={t("title")} testId="run-policy">
+        <p
+          data-testid="run-policy-backfilled"
+          className="text-sm text-muted-foreground"
+        >
+          {tb("policy")}
+        </p>
+      </Panel>
+    );
   const entries = entriesOf(read, "policy");
   if (entries === null || !read.ok)
     return (
@@ -344,6 +364,12 @@ function DecisionTable({
 }
 
 /** The Policy tab: the whole-run transcript narrowed to its decisions. It makes no read of its own. */
-export function PolicyTab({ everything, place }: FrameTabProps) {
-  return <PolicyDecisions read={everything} place={place} />;
+export function PolicyTab({ everything, place, run }: FrameTabProps) {
+  return (
+    <PolicyDecisions
+      read={everything}
+      place={place}
+      backfilled={isBackfilled(run)}
+    />
+  );
 }

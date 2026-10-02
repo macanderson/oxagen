@@ -431,6 +431,7 @@ import "./contracts/tacho.memories.recall";
 import "./contracts/tacho.memories.uses.record";
 import "./contracts/tacho.session.get";
 import "./contracts/tacho.session.list";
+import "./contracts/tacho.session_heads.list";
 import "./contracts/tacho.session_policy.read";
 import "./contracts/tacho.session_policy.write";
 import "./contracts/tacho.workspace_runs.pause";

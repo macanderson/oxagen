@@ -7213,6 +7213,21 @@
       }
     },
     {
+      "name": "list_tacho_session_heads",
+      "file": "tacho.session_heads.list.ts",
+      "domain": "tacho",
+      "mode": "sync",
+      "surfaces": [
+        "api"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "get_tacho_session_policy",
       "file": "tacho.session_policy.read.ts",
       "domain": "tacho",

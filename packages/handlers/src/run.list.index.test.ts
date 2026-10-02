@@ -330,6 +330,13 @@ describe("the index page query", () => {
     expect(params).toContain("observed");
   });
 
+  it("sorts a backfilled run by its rollup alone, as its row reads no reported cost (ADR-161)", () => {
+    const { sql, params } = pageSql({ order: { key: "cost", dir: "desc" } });
+    const { tacho } = branches(sql);
+    expect(tacho).toMatch(/"sessions"\."record_basis" = \$\d+ and \(/);
+    expect(params).toContain("live");
+  });
+
   it("reads one row past the page, from the offset", () => {
     const { sql, params } = pageSql({ limit: 25, offset: 50 });
     expect(sql).toMatch(/limit \$\d+ offset \$\d+$/);
