@@ -254,10 +254,9 @@ describe("set_work_collector", () => {
 describe("sync_work_collector", () => {
   it("queues a forced reconcile of a collector the workspace holds", async () => {
     const send = vi.fn(async () => undefined);
-    const out = await createWorkCollectorSyncHandler({ find: async () => ({ health: "failing" }), send, now: () => NOW })(
-      { collector_id: COLLECTOR_ID },
-      ctx,
-    );
+    const find = vi.fn(async () => ({ id: COLLECTOR_ID, health: "failing" }));
+    const out = await createWorkCollectorSyncHandler({ find, send, now: () => NOW })({ collector_id: COLLECTOR_ID }, ctx);
+    expect(find).toHaveBeenCalledWith(SCOPE, { id: COLLECTOR_ID });
     expect(mocks.role).toHaveBeenCalledWith(workCollectorSync, ctx);
     expect(send).toHaveBeenCalledWith([
       {
@@ -269,13 +268,31 @@ describe("sync_work_collector", () => {
     expect(out).toEqual({ collector_id: COLLECTOR_ID, queued: true });
   });
 
+  it("finds the collector by its name and queues the reconcile under its row id", async () => {
+    const send = vi.fn(async () => undefined);
+    const find = vi.fn(async () => ({ id: COLLECTOR_ID, health: "failing" }));
+    const out = await createWorkCollectorSyncHandler({ find, send, now: () => NOW })({ name: "github" }, ctx);
+    expect(find).toHaveBeenCalledWith(SCOPE, { name: "github" });
+    expect(out).toEqual({ collector_id: COLLECTOR_ID, queued: true });
+  });
+
+  it("refuses a call that names no collector, or names one twice", async () => {
+    const send = vi.fn();
+    const find = vi.fn();
+    const handler = createWorkCollectorSyncHandler({ find, send, now: () => NOW });
+    await expect(handler({}, ctx)).rejects.toMatchObject({ code: "invalid_input" });
+    await expect(handler({ collector_id: COLLECTOR_ID, name: "github" }, ctx)).rejects.toMatchObject({ code: "invalid_input" });
+    expect(find).not.toHaveBeenCalled();
+    expect(send).not.toHaveBeenCalled();
+  });
+
   it("refuses a collector the workspace does not hold, and a paused one", async () => {
     const send = vi.fn();
     await expect(
       createWorkCollectorSyncHandler({ find: async () => null, send, now: () => NOW })({ collector_id: COLLECTOR_ID }, ctx),
     ).rejects.toMatchObject({ code: "not_found" });
     await expect(
-      createWorkCollectorSyncHandler({ find: async () => ({ health: "paused" }), send, now: () => NOW })({ collector_id: COLLECTOR_ID }, ctx),
+      createWorkCollectorSyncHandler({ find: async () => ({ id: COLLECTOR_ID, health: "paused" }), send, now: () => NOW })({ collector_id: COLLECTOR_ID }, ctx),
     ).rejects.toMatchObject({ code: "conflict", reason: "collector_paused" });
     expect(send).not.toHaveBeenCalled();
   });
