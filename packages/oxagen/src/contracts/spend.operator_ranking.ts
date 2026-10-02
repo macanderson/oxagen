@@ -4,10 +4,11 @@
  * Every figure comes from the frames that open and applied findings claim
  * (ADR-208), counted once each, so the operator totals and the unattributed
  * total sum to the headline that `get_unproductive_spend` answers. Managers
- * read it: an org Owner or Admin. No person holds a workspace IAM role yet
- * (#3198), so in an Enterprise org the kernel could not admit a workspace
- * Owner, and the ranking names no workspace role on any tier. The ranking
- * reports the record and gives no verdict on the person.
+ * read it: an org Owner or Admin, or the workspace's Owner. A workspace's
+ * creator holds the workspace Owner role in IAM (#5182), so the kernel admits
+ * that Owner in an Enterprise org and the handler admits the same people on
+ * every tier. The ranking reports the record and gives no verdict on the
+ * person.
  *
  * With the workspace's pseudonym setting on, a stable pseudonym replaces each
  * name and the answer carries no key, no facts, and no run ids, since a run
@@ -131,7 +132,7 @@ export const spendOperatorRanking = registerCapability({
   name: "get_operator_ranking",
   domain: "spend",
   description:
-    "Rank this workspace's operators by unproductive spend over a day range, highest first: each operator's unproductive spend, its share of the headline, its share of the priced spend of the frames the operator's runs ran in the period, its run count, its done work orders, its unassigned share, and the runs and work orders behind them. Org Owner or Admin only. The operator totals and the unattributed total sum to the headline get_unproductive_spend answers, and unassigned spend is not part of it.",
+    "Rank this workspace's operators by unproductive spend over a day range, highest first: each operator's unproductive spend, its share of the headline, its share of the priced spend of the frames the operator's runs ran in the period, its run count, its done work orders, its unassigned share, and the runs and work orders behind them. Only an org Owner or Admin, or the workspace's Owner, may read it. The operator totals and the unattributed total sum to the headline get_unproductive_spend answers, and unassigned spend is not part of it.",
   mode: "sync",
   surfaces: ["api", "agent"],
   layers: ["schema", "api", "unit", "docs", "app"],
@@ -142,7 +143,7 @@ export const spendOperatorRanking = registerCapability({
   defaultEffect: "deny",
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow" },
-    workspace: {},
+    workspace: { Owner: "allow" },
   },
   agent: { requiresApproval: false, riskLevel: "low", category: "billing" },
   input: z.object({ period: dayRangeSchema }).strict(),

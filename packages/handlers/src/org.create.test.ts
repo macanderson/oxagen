@@ -464,6 +464,25 @@ describe("organizationCreateHandler (@oxagen/handlers)", () => {
     );
   });
 
+  // #5182: the workspace bootstrap gives the creator the workspace Owner role
+  // in IAM, and reads the principal and the role bootstrapOrgIAM writes. So
+  // IAM has to run first, for the same owner, on the same transaction.
+  // handlers/integration/workspace-creator-owner.test.ts runs both for real
+  // and reads the assignment back.
+  it("bootstraps IAM for the creator before the first workspace", async () => {
+    await organizationCreateHandler(INPUT, CTX);
+
+    const [iamOrder] = mocks.bootstrapOrgIAM.mock.invocationCallOrder;
+    const [wsOrder] = mocks.bootstrapWorkspace.mock.invocationCallOrder;
+    expect(iamOrder).toBeDefined();
+    expect(wsOrder).toBeDefined();
+    expect(iamOrder as number).toBeLessThan(wsOrder as number);
+    const iam = mocks.bootstrapOrgIAM.mock.calls[0]?.[0];
+    const ws = mocks.bootstrapWorkspace.mock.calls[0]?.[0];
+    expect(ws?.userId).toBe(iam?.ownerUserId);
+    expect(ws?.orgId).toBe(iam?.orgId);
+  });
+
   it("writes the $5 signup grant for the new org on the org transaction", async () => {
     await organizationCreateHandler(INPUT, CTX);
 
