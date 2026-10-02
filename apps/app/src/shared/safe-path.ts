@@ -606,7 +606,10 @@ export const routes = {
       /** A skill whose source `/steering/skills/<skill>/source` opens; only with `tab: "skills"`. */
       skill?: string;
       kind?: string;
-      /** open, merged or closed; only on Proposals, and left off at open (#5077). */
+      /**
+       * The list's state, left off at open: open, merged or closed on
+       * Proposals (#5077), a memory state on Memories (#4914).
+       */
       state?: string;
       /** How many rows a page holds; on Proposals and the Skills shelf (#4693). */
       rows?: string;
@@ -615,7 +618,6 @@ export const routes = {
       cursor?: string;
       view?: string;
       /** The Memories filters and the memory its drawer opens (#4914). */
-      state?: string;
       harness?: string;
       repo?: string;
       type?: string;
@@ -640,7 +642,6 @@ export const routes = {
       proposal: q.proposal,
       cursor: q.cursor,
       view: q.view,
-      state: q.state,
       harness: q.harness,
       agent: segments[0] === "memories" ? q.agent : undefined,
       repo: q.repo,

@@ -213,7 +213,6 @@ function carried(query: Params) {
     proposal: firstParam(query.proposal),
     cursor: firstParam(query.cursor),
     view: firstParam(query.view),
-    state: firstParam(query.state),
     harness: firstParam(query.harness),
     // A redirect that names the Compiler's agent itself keeps that one.
     ...(agent === undefined ? {} : { agent }),
@@ -457,10 +456,15 @@ export function steeringLink(
     tab: to.tab,
     agent: to.agent ?? undefined,
     kind: to.kind ?? undefined,
+    // One `state` query value serves both lists, which never share a URL.
     state:
-      to.state === undefined || to.state === null || to.state === "open"
-        ? undefined
-        : to.state,
+      to.tab === "memories"
+        ? m.state === undefined || m.state === "open"
+          ? undefined
+          : m.state
+        : to.state === undefined || to.state === null || to.state === "open"
+          ? undefined
+          : to.state,
     rows:
       to.rows === undefined || to.rows === STEERING_PAGE
         ? undefined
@@ -470,7 +474,6 @@ export function steeringLink(
         ? undefined
         : String(to.offset),
     skill: to.skill ?? undefined,
-    state: m.state === undefined || m.state === "open" ? undefined : m.state,
     harness: m.harness ?? undefined,
     repo: m.repo ?? undefined,
     type: m.type ?? undefined,
