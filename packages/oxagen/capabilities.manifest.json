@@ -7971,13 +7971,11 @@
       "domain": "work",
       "mode": "sync",
       "surfaces": [
-        "api",
-        "mcp"
+        "api"
       ],
       "layers": {
         "schema": true,
         "api": true,
-        "mcp": true,
         "unit": true,
         "docs": true
       }

@@ -1,7 +1,8 @@
 // work-intake.handlers.test.ts: the MCP tools for work intake and triage
 // (P1-03, #5103): create_work_item, revise_work_triage, retry_work_triage,
-// list_work_collectors, set_work_collector, sync_work_collector, and
-// get_work_priorities.
+// list_work_collectors, sync_work_collector, and get_work_priorities.
+// set_work_collector has no tool: only a signed-in person changes a collector
+// (#5181), and tool-registry.test.ts holds the tool files to the contracts.
 //
 // The kernel `invoke` and the context seam `buildContext` are doubles. Each
 // case checks that invoke received the contract name, the args, and
@@ -19,7 +20,6 @@ vi.mock("@oxagen/oxagen/kernel", () => ({ invoke: mocks.invoke }));
 vi.mock("../context", () => ({ buildContext: mocks.buildContext }));
 vi.mock("xmcp/headers", () => ({ headers: mocks.headers }));
 
-import setWorkCollector, { metadata as setMeta } from "./work.collector.set";
 import syncWorkCollector, { metadata as syncMeta } from "./work.collector.sync";
 import listWorkCollectors, { metadata as listMeta } from "./work.collectors.list";
 import createWorkItem, { metadata as createMeta, schema as createSchema } from "./work.item.create";
@@ -75,7 +75,6 @@ describe("work intake MCP tools", () => {
     [reviseMeta, "revise_work_triage", false],
     [retryMeta, "retry_work_triage", false],
     [listMeta, "list_work_collectors", true],
-    [setMeta, "set_work_collector", false],
     [syncMeta, "sync_work_collector", false],
     [prioritiesMeta, "get_work_priorities", true],
   ])("names %s after its contract and marks only reads read-only", (meta, name, readOnly) => {
@@ -120,11 +119,6 @@ describe("work intake MCP tools", () => {
     ],
     ["retry_work_triage", () => retryWorkTriage({ item_id: "wi_01" }), { item_id: "wi_01", state: "new", queued: true }],
     ["list_work_collectors", () => listWorkCollectors({}), { collectors: [COLLECTOR] }],
-    [
-      "set_work_collector",
-      () => setWorkCollector({ name: "github", connection_id: "con_01", repos: ["acme/web"], paused: undefined }),
-      { collector: COLLECTOR, created: true, reconcile_queued: true },
-    ],
     ["sync_work_collector", () => syncWorkCollector({ collector_id: COLLECTOR_ID, name: undefined }), { collector_id: COLLECTOR_ID, queued: true }],
     [
       "get_work_priorities",

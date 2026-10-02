@@ -4454,8 +4454,7 @@
       "name": "set_work_collector",
       "reads": [],
       "surfaces": [
-        "api",
-        "mcp"
+        "api"
       ],
       "writes": []
     },
