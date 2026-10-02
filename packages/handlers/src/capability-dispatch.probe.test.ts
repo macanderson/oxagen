@@ -22,12 +22,18 @@ const OLD_DOTTED_NAMES = [
 ];
 
 // Capabilities with NO kernel handler registration, excluded from the hasHandler
-// gate. This set is intentionally EMPTY: the last handler-less family
-// (upsert_graph_relationship + semantic.relationship.*) was deleted outright —
-// contracts, API routes, and MCP tools — so every registered capability now
-// resolves a real handler. Do NOT re-add an entry here to paper over a missing
-// handler; wire the handler (or delete the capability) instead.
-const NO_HANDLER_OK = new Set<string>([]);
+// gate. An entry is allowed only for a capability DEREGISTERED.md retires by
+// removing its registration (its lever three): the contract stays in the
+// tree, on no surface, and nothing can dispatch it. Do NOT add an entry to
+// paper over a missing handler; wire the handler (or delete the capability)
+// instead. The last handler-less family before these
+// (upsert_graph_relationship + semantic.relationship.*) was deleted outright.
+const NO_HANDLER_OK = new Set<string>([
+  // DEREGISTERED.md §8: the Neo4j memory import, replaced by the Markdown
+  // import (parse_markdown_import, commit_markdown_import).
+  "parse_memory_import",
+  "commit_memory_import",
+]);
 
 describe("ADR-025 naming realignment — dispatch probe", () => {
   const caps = listCapabilities();

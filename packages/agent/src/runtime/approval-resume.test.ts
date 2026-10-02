@@ -162,6 +162,10 @@ import {
   encryptApprovalResume,
   type ApprovalResumePayload,
 } from "./approval-resume-payload";
+import {
+  isKernelIssuedOxagenAssistant,
+  isOxagenAssistantCall,
+} from "@oxagen/oxagen/oxagen-assistant";
 /** The acting agent the resume passes on: stella, as its state read gives it. */
 const STELLA = { agentId: "agt_stella", principalId: "prn_stella" };
 const ref = {
@@ -207,7 +211,11 @@ beforeEach(async () => {
     expiresAt: new Date(Date.now() + 60_000),
     resumeStartedAt: null,
   };
+  // The kernel's order: the workspace's decision rules judge a call only
+  // when it is not Stella's (ADR-235). A resume that lost its binding would
+  // meet the real gate below, and the tests that pin the skip would fail.
   h.invoke.mockImplementation(async (_name, input, ctx, opts) => {
+    if (isOxagenAssistantCall(ctx)) return;
     const { createDecisionRulesGate } = await import("@oxagen/rules");
     await createDecisionRulesGate({
       loadRuleSet: async () => h.realRules,
@@ -273,9 +281,16 @@ describe("approved call resumption", () => {
         surface: "agent",
         runId: "new-run",
         assertValidatedInput: expect.any(Function),
-        requireFreshRules: true,
       },
     );
+    // The resume is the rest of a Stella call, so it carries a binding the
+    // kernel minted (ADR-235).
+    expect(
+      isKernelIssuedOxagenAssistant(
+        (h.invoke.mock.calls[0]![2] as { oxagenAssistant?: unknown })
+          .oxagenAssistant,
+      ),
+    ).toBe(true);
     expect(h.open.mock.calls[0]?.[0].instruction).toContain("arun_original");
     expect(h.row.resumeRunPublicId).toBe("arun_resumed");
     expect(JSON.stringify(h.started.mock.calls)).not.toContain(
@@ -291,14 +306,17 @@ describe("approved call resumption", () => {
       expect(h.invoke).not.toHaveBeenCalled();
     },
   );
+  // ADR-235: the workspace's decision rules do not govern Stella. A rule that
+  // would refuse the call, or send it to a person, does not judge the resume
+  // of a call a Stella turn parked, and writes no auto-approval receipt.
   it.each(["require_approval", "deny"] as const)(
-    "honors a standing approval only when the fresh rule allows it (%s)",
+    "resumes Stella's call past a workspace rule that would %s it",
     async (effect) => {
       h.realRules = {
         schema: "oxagen.decision-rules.v1",
         rules: [
           {
-            id: "fresh-rule",
+            id: "workspace-rule",
             description: "govern resumed writes",
             capability: "write_test",
             when: { all: [] },
@@ -308,29 +326,16 @@ describe("approved call resumption", () => {
       };
       const commit = vi.fn().mockResolvedValue(undefined);
       h.autoApprove.mockResolvedValue({ ok: true, commit });
-      expect(await resumeApprovedCall(ref)).toBe(
-        effect === "deny" ? "failed" : "succeeded",
-      );
-      if (effect === "deny") {
-        expect(h.row.resumeError).toBe("decision_rule_denied");
-        expect(h.invoke).toHaveBeenCalledTimes(1);
-        expect(commit).not.toHaveBeenCalled();
-      } else {
-        expect(h.autoApprove).toHaveBeenCalledWith(
-          expect.objectContaining({
-            capability: "write_test",
-            input: { ...(payload.rawInput as object), count: 1 },
-          }),
-        );
-        expect(commit).toHaveBeenCalledTimes(1);
-        expect(h.invoke).toHaveBeenCalledTimes(1);
-      }
+      expect(await resumeApprovedCall(ref)).toBe("succeeded");
+      expect(h.invoke).toHaveBeenCalledTimes(1);
+      expect(h.autoApprove).not.toHaveBeenCalled();
+      expect(commit).not.toHaveBeenCalled();
     },
   );
-  // #4226: a decision rule parked the call, and the resume payload seals the
-  // digest the rules gate put on its error. The resume hands it back, and the
-  // gate, judging on current rules, runs the approved call once.
-  describe("a call a decision rule parked", () => {
+  // Before ADR-235 a rule could park a Stella call, and its resume payload
+  // sealed the rule's digest (#4226). Such a payload resumes like any other:
+  // no digest is handed to the kernel, and no fresh rules are required.
+  describe("a payload sealed with a rule digest before ADR-235", () => {
     const humanRule: RuleSet = {
       schema: "oxagen.decision-rules.v1",
       rules: [
@@ -343,60 +348,28 @@ describe("approved call resumption", () => {
         },
       ],
     };
-    /** The digest the gate gave when the turn parked the call. */
-    async function parkedDigest(): Promise<string> {
-      const { createDecisionRulesGate, DecisionRuleApprovalRequiredError } =
-        await import("@oxagen/rules");
-      const error = await createDecisionRulesGate({
-        loadRuleSet: async () => humanRule,
-      })({
-        capability: "write_test",
-        input: (h.schema as z.ZodType).parse(payload.rawInput),
-        ctx: {
-          orgId: ref.orgId,
-          workspaceId: ref.workspaceId,
-          userId: payload.requesterUserId,
-        },
-      }).then(
-        () => null,
-        (e: unknown) => e,
-      );
-      expect(error).toBeInstanceOf(DecisionRuleApprovalRequiredError);
-      return (error as InstanceType<typeof DecisionRuleApprovalRequiredError>)
-        .approvalDigest!;
-    }
     beforeEach(() => {
       h.realRules = humanRule;
       h.autoApprove.mockResolvedValue(null);
     });
     it("runs the approved call once", async () => {
-      const digest = await parkedDigest();
-      h.row.resumePayload = await encryptApprovalResume({
-        ...payload,
-        ruleDigest: digest,
-      });
-      expect(await resumeApprovedCall(ref)).toBe("succeeded");
-      expect(h.invoke).toHaveBeenCalledTimes(1);
-      expect(h.invoke.mock.calls[0]![3]).toMatchObject({
-        approvedDigest: digest,
-        requireFreshRules: true,
-      });
-      expect(await resumeApprovedCall(ref)).toBe("not_claimed");
-      expect(h.invoke).toHaveBeenCalledTimes(1);
-    });
-    it("asks again when the approval does not match the call the rule judges now (negative)", async () => {
       h.row.resumePayload = await encryptApprovalResume({
         ...payload,
         ruleDigest: "0".repeat(64),
       });
-      expect(await resumeApprovedCall(ref)).toBe("failed");
-      expect(h.row.resumeError).toBe("new_rule_requires_approval");
-      expect(h.receipt).not.toHaveBeenCalled();
+      expect(await resumeApprovedCall(ref)).toBe("succeeded");
+      expect(h.invoke).toHaveBeenCalledTimes(1);
+      expect(h.invoke.mock.calls[0]![3]).not.toHaveProperty("approvedDigest");
+      expect(h.invoke.mock.calls[0]![3]).not.toHaveProperty(
+        "requireFreshRules",
+      );
+      expect(await resumeApprovedCall(ref)).toBe("not_claimed");
+      expect(h.invoke).toHaveBeenCalledTimes(1);
     });
     it("never runs a call the person denied (negative)", async () => {
       h.row.resumePayload = await encryptApprovalResume({
         ...payload,
-        ruleDigest: await parkedDigest(),
+        ruleDigest: "0".repeat(64),
       });
       h.row.resolution = "denied";
       expect(await resumeApprovedCall(ref)).toBe("not_claimed");

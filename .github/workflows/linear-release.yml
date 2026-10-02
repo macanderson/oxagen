@@ -29,7 +29,7 @@ jobs:
     # `desktop-latest` is the rolling release desktop.yml keeps the updater
     # feed (latest.json) on; it carries no commits of its own.
     if: github.event.release.tag_name != 'desktop-latest'
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-small-{0}', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
     timeout-minutes: 15
     steps:
       # Fail fast with a self-explanatory message if the pipeline key is unset,

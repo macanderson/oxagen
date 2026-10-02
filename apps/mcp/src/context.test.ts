@@ -660,6 +660,37 @@ describe("buildContext and the platform-operator binding", () => {
   });
 });
 
+// ── ADR-235: no surface builds a Stella binding ──────────────────────────────
+//
+// Stella's calls skip the workspace's decision rules because they carry a
+// binding only Stella's own turn mints (packages/oxagen/src/oxagen-assistant.ts).
+// An MCP client must not be able to claim it, so the builder puts no such key
+// on the context, whatever headers the client sends.
+
+describe("buildContext and the Stella binding", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("builds no oxagenAssistant key, even when the client names one", async () => {
+    vi.mocked(resolveApiKey).mockResolvedValue({
+      ok: true,
+      orgId: "org-1",
+      workspaceId: "ws-1",
+      apiKeyId: "key-1",
+      userId: null,
+    });
+
+    const ctx = await buildContext({
+      authorization: "Bearer ox_valid",
+      "x-oxagen-assistant": "true",
+      "x-oxagen-surface": "assistant",
+    });
+
+    expect("oxagenAssistant" in ctx).toBe(false);
+  });
+});
+
 // ── the Tacho gateway chain header (#3221) ───────────────────────────────────
 //
 // `x-tacho-gateway-session` names the daemon chain a local MCP gateway is

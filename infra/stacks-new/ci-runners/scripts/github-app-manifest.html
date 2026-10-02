@@ -1,0 +1,64 @@
+<!doctype html>
+<!--
+  Creates the CI runner scaler's GitHub App from a manifest (ADR-246).
+
+  Open this file in a browser signed in to GitHub as an owner of oxageninc and
+  press the button. GitHub shows the App's settings filled in from the manifest
+  below. After you press "Create GitHub App for oxageninc", GitHub sends you to
+  oxagen.sh with ?code=... in the address bar. Pass that code to
+  scripts/store-github-app.sh within the hour.
+
+  The manifest asks for exactly what the scaler needs:
+    - Organization permission "Self-hosted runners": read and write, to
+      register each runner just in time and remove idle ones.
+    - Repository permissions "Actions", "Checks", and "Metadata": read, to see
+      whether a job is still queued.
+    - The workflow_job event, sent to the stable webhook address the
+      ci-runners stack serves.
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CI runner GitHub App</title>
+  <style>
+    body { font: 16px/1.5 system-ui, sans-serif; max-width: 40rem; margin: 3rem auto; padding: 0 1rem; color: #111; background: #fff; }
+    pre { background: #f4f4f4; padding: 1rem; overflow-x: auto; font-size: 13px; }
+    button { font: inherit; padding: .6rem 1.2rem; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <h1>CI runner GitHub App</h1>
+  <p>Press the button while signed in to GitHub as an owner of <code>oxageninc</code>.</p>
+  <form id="create" method="post">
+    <input type="hidden" name="manifest" id="manifest">
+    <button type="submit">Create the App on GitHub</button>
+  </form>
+  <p>Then copy the <code>code</code> from the address bar on oxagen.sh and run:</p>
+  <pre>infra/stacks-new/ci-runners/scripts/store-github-app.sh &lt;code&gt;</pre>
+  <h2>Manifest</h2>
+  <pre id="shown"></pre>
+  <script>
+    const manifest = {
+      name: "oxagen-ci-runners",
+      description: "Starts an ephemeral EC2 runner in Oxagen's AWS account for each queued Actions job (ADR-246).",
+      url: "https://github.com/oxageninc/product",
+      hook_attributes: { url: "https://ci-webhook.oxagen.sh/webhook", active: true },
+      redirect_url: "https://oxagen.sh/",
+      public: false,
+      default_permissions: {
+        actions: "read",
+        checks: "read",
+        metadata: "read",
+        organization_self_hosted_runners: "write"
+      },
+      default_events: ["workflow_job"]
+    };
+    const state = crypto.getRandomValues(new Uint32Array(2)).join("");
+    document.getElementById("create").action =
+      "https://github.com/organizations/oxageninc/settings/apps/new?state=" + state;
+    document.getElementById("manifest").value = JSON.stringify(manifest);
+    document.getElementById("shown").textContent = JSON.stringify(manifest, null, 2);
+  </script>
+</body>
+</html>

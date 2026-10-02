@@ -11,8 +11,20 @@
 import { agentCreatorUserJoin, schema, type Tx } from "@oxagen/database";
 import { AGENT_CREDENTIAL_SCOPE_PURPOSE } from "@oxagen/oxagen/agent-credential";
 import type { AgentIdentityStatus } from "@oxagen/oxagen/contracts/agent.list";
+import { IN_APP_AGENT_SURFACES } from "@oxagen/oxagen/contracts/run.list";
 import { TAMPER_INCIDENT_KINDS } from "@oxagen/oxagen/contracts/tacho.incident.list";
-import { and, desc, eq, gt, inArray, isNull, ne, or, sql } from "drizzle-orm";
+import {
+  and,
+  desc,
+  eq,
+  gt,
+  inArray,
+  isNull,
+  ne,
+  notInArray,
+  or,
+  sql,
+} from "drizzle-orm";
 import {
   composeAgentKey,
   isUuid,
@@ -368,6 +380,11 @@ export function wrappedTokenFigures(sums: {
  * Runs the two run stores recorded for these agents: ledger runs by agent
  * row, root wrapped sessions by agent key. `windowStart` bounds the count and
  * the spend; the earliest start ignores the window.
+ *
+ * Stella's turns are left out (ADR-235), the same runs `list_runs` leaves out:
+ * the workspace does not monitor Oxagen's own agent. Each turn is a ledger run
+ * on the workspace's managed `qa-chat` agent, so without this filter that
+ * agent's row on the Agents page counted every question a person asked.
  */
 export async function runFiguresByAgent(
   tx: Tx,
@@ -396,6 +413,7 @@ export async function runFiguresByAgent(
         eq(schema.agentRuns.orgId, scope.orgId),
         eq(schema.agentRuns.workspaceId, scope.workspaceId),
         inArray(schema.agentRuns.agentId, ids),
+        notInArray(schema.agentRuns.surface, [...IN_APP_AGENT_SURFACES]),
       ),
     )
     .groupBy(schema.agentRuns.agentId);

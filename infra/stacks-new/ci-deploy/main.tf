@@ -44,9 +44,13 @@ locals {
       repo_id     = 1304589599
       description = "Publishes the CGP schema and specification artifacts."
     }
+    # The repository moved to the `oxageninc` organization and was renamed
+    # `product` on 2026-09-30. The move kept `repo_id`. A trust policy that
+    # still names `macanderson/oxagen` refuses every deploy with
+    # `Not authorized to perform sts:AssumeRoleWithWebIdentity`.
     oxagen-platform = {
-      repository  = "macanderson/oxagen"
-      owner_id    = 542881
+      repository  = "oxageninc/product"
+      owner_id    = 267772457
       repo_id     = 1252628274
       description = "Publishes oxagen.sh and the docs/app/api/mcp services on the node."
     }
