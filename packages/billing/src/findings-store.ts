@@ -6,10 +6,12 @@
  * §12.8; ADR-062, ADR-208).
  *
  * The findings job runs on the system connection with explicit org and
- * workspace predicates, outside a tenant scope. Handlers read the rows
- * through withTenantDb in their own modules.
+ * workspace predicates, outside a tenant scope. The one exception is the
+ * read of taken instruction lineages, which runs in the workspace's tenant
+ * scope as the proposal opener does. Handlers read the rows through
+ * withTenantDb in their own modules.
  */
-import { schema, withSystemDb, type Tx } from "@oxagen/database";
+import { schema, withSystemDb, withTenantDb, type Tx } from "@oxagen/database";
 import {
   readModelCallFrames,
   readTachoFileChanges,
@@ -19,6 +21,7 @@ import {
   type ModelCallFrameRow,
   type ToolCallObservationRow,
 } from "@oxagen/telemetry";
+import { runInTenantScope } from "@oxagen/tenancy";
 import {
   and,
   eq,
@@ -89,6 +92,7 @@ import {
   type PriceBookSlice,
   type PriceTokenClass,
 } from "./price-book";
+import { logger } from "./logger";
 import type { OutcomeRow } from "./run-pr-outcomes";
 
 const totals = schema.runTotals;
@@ -1018,39 +1022,61 @@ const INSTRUCTION_LINEAGE_PREFIX = instructionLineage("");
  * record or a proposal, in any state, in lower case (#4579). The opener checks
  * the same two tables under its lock and refuses a taken lineage. So a lineage
  * this read misses costs the pass one proposal, and the opener still never
- * opens a lineage twice.
+ * opens a lineage twice. The read runs in the workspace's tenant scope, as the
+ * opener does, so it reads the same data plane.
  */
 export async function readTakenLineages(
   scope: FindingsScope,
 ): Promise<Set<string>> {
   const pattern = `${INSTRUCTION_LINEAGE_PREFIX}%`;
-  // tenancy: the scheduled findings job runs outside a tenant scope, and both
-  // selects are filtered by the scope's orgId and workspaceId.
-  const rows = await withSystemDb((tx) =>
-    tx
-      .select({ lineage: records.slug })
-      .from(records)
-      .where(
-        and(
-          eq(records.orgId, scope.orgId),
-          eq(records.workspaceId, scope.workspaceId),
-          ilike(records.slug, pattern),
-        ),
-      )
-      .union(
-        tx
-          .select({ lineage: proposals.lineageId })
-          .from(proposals)
-          .where(
-            and(
-              eq(proposals.orgId, scope.orgId),
-              eq(proposals.workspaceId, scope.workspaceId),
-              ilike(proposals.lineageId, pattern),
-            ),
+  const rows = await runInTenantScope(scope, () =>
+    withTenantDb((tx) =>
+      tx
+        .select({ lineage: records.slug })
+        .from(records)
+        .where(
+          and(
+            eq(records.orgId, scope.orgId),
+            eq(records.workspaceId, scope.workspaceId),
+            ilike(records.slug, pattern),
           ),
-      ),
+        )
+        .union(
+          tx
+            .select({ lineage: proposals.lineageId })
+            .from(proposals)
+            .where(
+              and(
+                eq(proposals.orgId, scope.orgId),
+                eq(proposals.workspaceId, scope.workspaceId),
+                ilike(proposals.lineageId, pattern),
+              ),
+            ),
+        ),
+    ),
   );
   return new Set(rows.map((r) => r.lineage.toLowerCase()));
+}
+
+/**
+ * The taken lineages, or undefined when the read fails. The findings are
+ * already written by then, and the opener refuses a taken lineage on its own,
+ * so a failed read costs the pass some proposals and nothing else. Failing
+ * the pass would rerun every read for the workspace.
+ */
+async function takenOrNone(
+  scope: FindingsScope,
+  read: (scope: FindingsScope) => Promise<ReadonlySet<string>>,
+): Promise<ReadonlySet<string> | undefined> {
+  try {
+    return await read(scope);
+  } catch (err) {
+    logger.warn(
+      { ...scope, err },
+      "findings: reading taken instruction lineages failed",
+    );
+    return undefined;
+  }
 }
 
 /**
@@ -1520,8 +1546,8 @@ export async function runFindingsPass(
   // Only a `content_exact` workspace gets instruction proposals, so only its
   // pass reads which lineages are taken (#4579).
   const taken =
-    prompts?.mode === "content_exact"
-      ? await deps.readTakenLineages?.(scope)
+    prompts?.mode === "content_exact" && deps.readTakenLineages !== undefined
+      ? await takenOrNone(scope, deps.readTakenLineages)
       : undefined;
   await deps.openProposals(scope, {
     instructions: instructionProposals(prompts, runs, { decidedSince, taken }),

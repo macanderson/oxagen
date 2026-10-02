@@ -515,6 +515,62 @@ describe("planFrameReads with recurring runs (#4594)", () => {
   });
 });
 
+describe("planFrameReads with recurring groups of one size (#4594)", () => {
+  it("takes two groups of one size by digest, and each group's runs by rank", () => {
+    const dear = Array.from({ length: 300 }, (_, i) =>
+      planRun(`tse_dear${String(i).padStart(3, "0")}`, 1_000_000n),
+    );
+    // Within each group, the dearer run has the later id.
+    const later = [
+      planRun("tse_x0", 10_000n),
+      planRun("tse_x1", 20_000n),
+      planRun("tse_x2", 30_000n),
+      planRun("tse_x3", 40_000n),
+      planRun("tse_x4", 50_000n),
+    ];
+    const earlier = [
+      planRun("tse_y0", 10_000n),
+      planRun("tse_y1", 20_000n),
+      planRun("tse_y2", 30_000n),
+      planRun("tse_y3", 40_000n),
+      planRun("tse_y4", 50_000n),
+    ];
+    const runs = [...dear, ...later, ...earlier];
+    const at = new Date("2026-09-10T09:59:00.000Z");
+    const prompt = (digest: string): RunFirstPrompt => ({
+      at,
+      atMicros: at.getTime() * 1_000,
+      digest,
+      source: null,
+      origin: null,
+      commandName: null,
+    });
+    const prompts = new Map<string, RunFirstPrompt>([
+      ...later.map((r) => [r.runId, prompt("sha256:b")] as const),
+      ...earlier.map((r) => [r.runId, prompt("sha256:a")] as const),
+    ]);
+    const { reads } = planFrameReads(
+      runs,
+      new Map(runs.map((r) => [r.runId, tachoRef(SESSION)])),
+      new Map(),
+      FRAME_RUNS_READ_MAX,
+      prompts,
+    );
+    expect(reads.slice(0, 10).map((r) => r.runId)).toEqual([
+      "tse_y4",
+      "tse_y3",
+      "tse_y2",
+      "tse_y1",
+      "tse_y0",
+      "tse_x4",
+      "tse_x3",
+      "tse_x2",
+      "tse_x1",
+      "tse_x0",
+    ]);
+  });
+});
+
 describe("tachoRoots", () => {
   it("maps each wrapped run of the window to its root session", () => {
     const OTHER = "00000000-0000-4000-8000-0000000000bb";
@@ -1639,22 +1695,26 @@ describe("instruction proposals in a pass (#4579)", () => {
         .digest("hex"),
     );
 
-  /** One pass over the runs and their prompts, and what the opener received. */
+  /**
+   * One pass over the runs and their prompts, and what the opener received.
+   * `taken` installs the taken read: a set it answers, or an error it throws.
+   */
   async function pass(
     runs: readonly RunTotalsRecord[],
     prompts: readonly RunPrompt[],
     options: {
       decisions?: ReadonlyMap<string, Date>;
-      taken?: ReadonlySet<string>;
+      taken?: ReadonlySet<string> | Error;
       mode?: PromptRead["mode"];
     } = {},
   ) {
     const openProposals = vi.fn(
       async (_scope: unknown, _input: SpendProposalInput) => undefined,
     );
-    const readTakenLineages = vi.fn(
-      async () => options.taken ?? new Set<string>(),
-    );
+    const readTakenLineages = vi.fn(async (): Promise<ReadonlySet<string>> => {
+      if (options.taken instanceof Error) throw options.taken;
+      return options.taken ?? new Set<string>();
+    });
     await runFindingsPass(SCOPE, {
       now: () => NOW,
       readRuns: async () => [...runs],
@@ -1671,12 +1731,13 @@ describe("instruction proposals in a pass (#4579)", () => {
       ...(options.taken === undefined ? {} : { readTakenLineages }),
       write: async () => 0,
     });
-    const lineages = (openProposals.mock.calls[0]?.[1].instructions ?? []).map(
-      (p) => p.lineageId,
-    );
+    // The pass calls an installed opener on every pass, so an empty list
+    // below is what the opener received, not a missed call.
+    expect(openProposals).toHaveBeenCalledOnce();
+    const instructions = openProposals.mock.calls[0]![1].instructions;
     return {
-      instructions: openProposals.mock.calls[0]?.[1].instructions ?? [],
-      lineages,
+      instructions,
+      lineages: instructions.map((p) => p.lineageId),
       readTakenLineages,
     };
   }
@@ -1754,8 +1815,28 @@ describe("instruction proposals in a pass (#4579)", () => {
     ]);
   });
 
+  it("proposes without the taken lineages when their read fails", async () => {
+    const sentences = Array.from(
+      { length: 25 },
+      (_, i) => `Please follow rule ${i + 1} of the team handbook.`,
+    );
+    const runs = [1, 2, 3].map((n) =>
+      runAt(n, `2026-09-0${n}T10:00:00.000Z`),
+    );
+    const prompts = runs.map((run) => promptOf(run, sentences.join("\n")));
+    const { lineages, readTakenLineages } = await pass(runs, prompts, {
+      taken: new Error("postgres down"),
+    });
+    expect(readTakenLineages).toHaveBeenCalledOnce();
+    // The pass still hands the opener its first 20, which the opener checks
+    // against its own tables.
+    expect(lineages).toHaveLength(20);
+  });
+
   it("reads no taken lineages on a digest_only workspace, which gets no instruction proposals", async () => {
-    const runs = [1, 2].map((n) => runAt(n, `2026-09-0${n}T10:00:00.000Z`));
+    const runs = [1, 2, 3].map((n) =>
+      runAt(n, `2026-09-0${n}T10:00:00.000Z`),
+    );
     const text = "Run the full test suite before you open a pull request.";
     const { lineages, readTakenLineages } = await pass(
       runs,
