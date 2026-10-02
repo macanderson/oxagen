@@ -3,11 +3,12 @@
 // header with the governance chip and one gold action, the six tabs as path
 // segments, the Library's shelf row and its All shelf, the empty, error,
 // denied and loading states, and each tab and shelf making only its own
-// reads: Records in its ok, filtered, empty and paged states, Proposals with
-// their support, the writes each state allows and the page size Rows per page
-// picks (#4693), Context PRs with the table and the selected proposal's panel,
-// and Assignments with the delivery report. An axe check runs in every one. The panel's own states are in
-// context-pr-panel.test.tsx and the dialog's in governance.test.tsx.
+// reads: Records in its ok, filtered, empty and paged states, the Proposals
+// list with its Open, Merged and Closed filters, rows that open each Context
+// PR's page and the page size Rows per page picks (#4693, #5077), and
+// Assignments with the delivery report. An axe check runs in every one. The
+// Context PR page's own states are in context-pr-page.test.tsx and the
+// dialog's in governance.test.tsx.
 import {
   cleanup,
   fireEvent,
@@ -19,7 +20,6 @@ import {
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { ProposalStatus } from "@/data/contracts/steering";
 import { readError, readOk } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { CREATE_EVENT, createRequestOf } from "@/shared/create";
@@ -27,7 +27,6 @@ import { IntlProvider } from "@/test/intl";
 import { pickOption } from "@/test/select";
 import {
   agentPage,
-  contextPr,
   PROPOSAL_ID,
   publishedRecord,
   proposal,
@@ -53,6 +52,7 @@ vi.mock("./actions", () => ({
   dismissProposal: vi.fn(),
   approveContextPr: vi.fn(),
   mergePrWithoutReview: vi.fn(),
+  revertSteeringPr: vi.fn(),
   restoreManagedBlock: vi.fn(),
   dropMemoryRecord: vi.fn(),
   setSteeringGate: vi.fn(),
@@ -166,8 +166,11 @@ function proposalPage(count: number, total: number) {
     proposals: Array.from({ length: count }, (_, i) =>
       proposal({
         id: `prp_01k5rw${String(i).padStart(2, "0")}`,
+        lineage: `ctx.page.${String(i)}`,
         pr: {
           number: 600 + i,
+          url: `https://github.com/acme/core-platform/pull/${String(600 + i)}`,
+          provider: "github",
           repository: "acme/core-platform",
           branch: `steering/ctx.page.${String(i)}`,
         },
@@ -245,25 +248,8 @@ describe("the hub", () => {
     ).not.toMatch(/button-primary/);
   });
 
-  it("gives the gold to Merge pull request on a selected Context PR whose checks passed", async () => {
-    await renderSteering(`/proposals/prs?proposal=${PROPOSAL_ID}`);
-    const create = within(screen.getByTestId("hub-header")).getByRole(
-      "button",
-      { name: "Write a context record" },
-    );
-    expect(create.className).not.toMatch(/button-primary/);
-    expect(
-      screen.getByRole("button", { name: "Merge pull request" }).className,
-    ).toMatch(/button-primary/);
-    expect(
-      document.querySelectorAll('[class*="bg-button-primary-bg"]'),
-    ).toHaveLength(1);
-  });
-
-  it("keeps the gold in the header while the selected Context PR cannot merge (negative)", async () => {
-    await renderSteering(`/proposals/prs?proposal=${PROPOSAL_ID}`, {
-      contextPr: readOk(contextPr("checks_failed")),
-    });
+  it("keeps the gold in the header on the Proposals list, whose rows open each Context PR (#5077)", async () => {
+    await renderSteering("/proposals");
     expect(
       within(screen.getByTestId("hub-header")).getByRole("button", {
         name: "Write a context record",
@@ -483,17 +469,26 @@ describe("the hub", () => {
     });
   });
 
-  it("presses the Context PRs segment on /proposals/prs", async () => {
-    await renderSteering("/proposals/prs");
-    const segments = screen.getByRole("group", {
-      name: "Proposals or pull requests",
-    });
+  // #5077: the Candidates and Context PRs buttons are gone; the state
+  // filters are the one row above the list.
+  it("draws the state filters, Open pressed, and no segment buttons", async () => {
+    await renderSteering("/proposals");
+    const states = screen.getByRole("group", { name: "State" });
     expect(
-      within(segments).getByRole("button", { name: "Context PRs" }),
-    ).toHaveAttribute("aria-pressed", "true");
-    expect(
-      within(segments).getByRole("button", { name: "Candidates" }),
-    ).toHaveAttribute("aria-pressed", "false");
+      within(states)
+        .getAllByRole("button")
+        .map((chip) => [
+          chip.textContent,
+          chip.getAttribute("href"),
+          chip.getAttribute("aria-pressed"),
+        ]),
+    ).toEqual([
+      ["Open3", `${BASE}/proposals`, "true"],
+      ["Merged6", `${BASE}/proposals?state=merged`, "false"],
+      ["Closed1", `${BASE}/proposals?state=closed`, "false"],
+    ]);
+    expect(screen.queryByRole("button", { name: "Candidates" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Context PRs" })).toBeNull();
   });
 
   it("prints no mode and no waiting count when the hub read fails, and keeps the library (negative)", async () => {
@@ -1333,7 +1328,7 @@ describe("Records", () => {
 });
 
 describe("Proposals", () => {
-  it("reads one page of proposals and nothing else, and prints each with its state, tally, source, rationale and support", async () => {
+  it("reads one page of open proposals and nothing else, and lists each with its kind, pull request, checks and state", async () => {
     const calls = await renderSteering("/proposals");
     // The hub asks for the same first page to decide whether the empty state
     // takes the gold (tab-primary.ts); the kernel's per-request read table
@@ -1342,8 +1337,8 @@ describe("Proposals", () => {
       record: [],
       records: [[ctx, { kind: null, offset: 0 }]],
       proposals: [
-        [ctx, { offset: 0, limit: 50 }],
-        [ctx, { offset: 0, limit: 50 }],
+        [ctx, { offset: 0, limit: 50, state: "open" }],
+        [ctx, { offset: 0, limit: 50, state: "open" }],
       ],
       contextPr: [],
       freshness: [],
@@ -1356,64 +1351,103 @@ describe("Proposals", () => {
       memoryPrRecords: [],
       tree: [],
     });
-    const card = within(section("Proposals")).getByRole("article");
-    expect(card.querySelector("[data-status]")).toHaveTextContent(
+    const table = screen.getByRole("table", { name: "Proposals" });
+    const [row] = within(table).getAllByTestId("proposal-row");
+    if (row === undefined) throw new Error("no row");
+    expect(row).toHaveAttribute("data-proposal", PROPOSAL_ID);
+    expect(row).toHaveTextContent("ctx.release.no-reread-changelog");
+    expect(row).toHaveTextContent("constraint");
+    expect(row).toHaveTextContent("#519 on acme/core-platform");
+    expect(row).toHaveTextContent("6 of 6 pass");
+    expect(row.querySelector("[data-status]")).toHaveTextContent(
       "checks passed",
     );
-    expect(card).toHaveTextContent("6 of 6 checks pass");
-    expect(card).toHaveTextContent("Raised by agent:release-bot");
-    expect(card).toHaveTextContent(
-      "Three sealed runs across two agents read CHANGELOG.md again after the first read.",
-    );
-    expect(card).toHaveTextContent(
-      "Support: 3 runs, 2 agents, 1 records, 2 evidence links",
-    );
-    expect(card).toHaveTextContent("arun_01k5rs9q");
-    expect(card).toHaveTextContent("frame:arun_01k5rs7m/14");
   });
 
-  it("links a proposal with a pull request to its Context PR", async () => {
-    await renderSteering("/proposals");
+  it.each([
+    ["merged", "merged"],
+    ["closed", "closed"],
+  ] as const)("reads the %s proposals when the filter names them", async (state, label) => {
+    const calls = await renderSteering(`/proposals?state=${state}`);
+    expect(calls.proposals.at(-1)).toEqual([
+      ctx,
+      { offset: 0, limit: 50, state },
+    ]);
     expect(
-      screen.getByRole("link", { name: "Context PR #519" }),
-    ).toHaveAttribute("href", `${BASE}/proposals/prs?proposal=${PROPOSAL_ID}`);
+      screen.getByRole("button", { name: new RegExp(`^${label}`, "i") }),
+    ).toHaveAttribute("aria-pressed", "true");
   });
 
-  it.each<[ProposalStatus, string[]]>([
-    ["proposed", ["Open a Context PR", "Dismiss"]],
-    ["pr_open", ["Run the checks again", "Dismiss"]],
-    ["checks_failed", ["Run the checks again", "Dismiss"]],
-    ["checks_passed", ["Run the checks again", "Dismiss"]],
-    ["merged", []],
-    ["rejected", []],
-  ])("offers a %s proposal exactly its writes", async (status, writes) => {
+  it("makes the whole row a link to the Context PR's page, carrying the list it came from", async () => {
+    await renderSteering("/proposals?state=merged&rows=25");
+    const row = screen.getByTestId("proposal-row");
+    expect(row).toHaveClass("relative", "cursor-pointer");
+    const link = within(row).getByRole("link", {
+      name: "Open the Context PR for ctx.release.no-reread-changelog",
+    });
+    expect(link).toHaveAttribute(
+      "href",
+      `${BASE}/proposals/prs/${PROPOSAL_ID}?state=merged&rows=25`,
+    );
+    // The anchor is stretched over the row, so a click anywhere on the row,
+    // a cmd-click, a middle-click and Enter all follow it as a link.
+    expect(link.className).toContain("after:absolute");
+    expect(link.className).toContain("after:inset-0");
+    expect(link).not.toHaveAttribute("target");
+  });
+
+  it("keeps the link to GitHub a control of its own, above the row's link", async () => {
+    await renderSteering("/proposals");
+    const github = screen.getByRole("link", {
+      name: "Open #519 on acme/core-platform on GitHub",
+    });
+    expect(github).toHaveAttribute(
+      "href",
+      "https://github.com/acme/core-platform/pull/519",
+    );
+    expect(github).toHaveAttribute("target", "_blank");
+    expect(github.closest("td")?.className).toContain("z-[1]");
+  });
+
+  it("lists a candidate with no pull request yet as an open proposal", async () => {
     await renderSteering("/proposals", {
       proposals: readOk({
-        proposals: [proposal({ status, pr: null, checks: null })],
+        proposals: [proposal({ status: "proposed", pr: null, checks: null })],
         total: 1,
       }),
     });
-    expect(
-      within(screen.getByRole("article"))
-        .queryAllByRole("button")
-        .map((button) => button.textContent),
-    ).toEqual(writes);
+    const row = screen.getByTestId("proposal-row");
+    expect(row).toHaveTextContent("No pull request yet");
+    expect(row).toHaveTextContent("not run");
+    expect(within(row).queryByRole("link", { name: /on GitHub$/ })).toBeNull();
   });
 
-  it("says a workspace has no proposals, and how one is raised", async () => {
-    await renderSteering("/proposals", {
+  it("renders no pane under the list (negative)", async () => {
+    const calls = await renderSteering("/proposals");
+    expect(calls.contextPr).toEqual([]);
+    expect(screen.queryByRole("region", { name: "Pull request" })).toBeNull();
+  });
+
+  it.each([
+    ["open", "No open proposals", "oxagen context propose"],
+    ["merged", "No merged proposals", "once its Context PR merges"],
+    ["closed", "No closed proposals", "closed on the host"],
+  ] as const)("says the %s list is empty", async (state, title, body) => {
+    await renderSteering(`/proposals?state=${state}`, {
       proposals: readOk({ proposals: [], total: 0 }),
     });
-    expect(section("No proposals in this workspace")).toHaveTextContent(
-      "a person proposes one with oxagen context propose",
-    );
+    expect(section(title)).toHaveTextContent(body);
+    expect(screen.queryByRole("table")).toBeNull();
   });
 
-  it("reads a page at the size the URL names and steps by it, keeping it", async () => {
-    const calls = await renderSteering("/proposals?rows=10&offset=10", {
-      proposals: proposalPage(10, 30),
-    });
-    expect(calls.proposals).toEqual([[ctx, { offset: 10, limit: 10 }]]);
+  it("reads a page at the size the URL names and steps by it, keeping it and the state", async () => {
+    const calls = await renderSteering(
+      "/proposals?state=closed&rows=10&offset=10",
+      { proposals: proposalPage(10, 30) },
+    );
+    expect(calls.proposals).toEqual([
+      [ctx, { offset: 10, limit: 10, state: "closed" }],
+    ]);
     const pager = pagesRow();
     expect(
       within(pager).getByRole("combobox", { name: "Rows" }),
@@ -1423,10 +1457,21 @@ describe("Proposals", () => {
     );
     expect(
       within(pager).getByRole("link", { name: "Previous page" }),
-    ).toHaveAttribute("href", `${BASE}/proposals?rows=10`);
+    ).toHaveAttribute("href", `${BASE}/proposals?state=closed&rows=10`);
     expect(
       within(pager).getByRole("link", { name: "Next page" }),
-    ).toHaveAttribute("href", `${BASE}/proposals?rows=10&offset=20`);
+    ).toHaveAttribute(
+      "href",
+      `${BASE}/proposals?state=closed&rows=10&offset=20`,
+    );
+    expect(
+      screen.getByRole("link", {
+        name: "Open the Context PR for ctx.page.0",
+      }),
+    ).toHaveAttribute(
+      "href",
+      `${BASE}/proposals/prs/prp_01k5rw00?state=closed&rows=10&offset=10`,
+    );
   });
 
   it("opens the first page at the size picked from Rows", async () => {
@@ -1476,29 +1521,12 @@ describe("Proposals", () => {
     expect(pager.querySelector("[data-range]")).toBeNull();
   });
 
-  it("keeps the size on both segments and on the link to a Context PR", async () => {
-    const calls = await renderSteering("/proposals?rows=25");
-    // The hub's gold check asks with the body's size, so the read table
-    // still answers the second ask (tab-primary.ts).
-    expect(calls.proposals).toEqual([
-      [ctx, { offset: 0, limit: 25 }],
-      [ctx, { offset: 0, limit: 25 }],
-    ]);
-    const segments = screen.getByRole("group", {
-      name: "Proposals or pull requests",
+  it("prints no counts on the filters when a count failed (negative)", async () => {
+    await renderSteering("/proposals", {
+      hub: readOk(steeringHub({ states: null })),
     });
-    expect(
-      within(segments).getByRole("button", { name: "Candidates" }),
-    ).toHaveAttribute("href", `${BASE}/proposals?rows=25`);
-    expect(
-      within(segments).getByRole("button", { name: "Context PRs" }),
-    ).toHaveAttribute("href", `${BASE}/proposals/prs?rows=25`);
-    expect(
-      screen.getByRole("link", { name: "Context PR #519" }),
-    ).toHaveAttribute(
-      "href",
-      `${BASE}/proposals/prs?rows=25&proposal=${PROPOSAL_ID}`,
-    );
+    const states = screen.getByRole("group", { name: "State" });
+    expect(states.querySelectorAll("[data-count]")).toHaveLength(0);
   });
 
   it("renders a denied read in place of the proposals", async () => {
@@ -1507,105 +1535,11 @@ describe("Proposals", () => {
       "You cannot see Proposals in this workspace.",
     );
   });
-});
 
-describe("Context PRs", () => {
-  it("lists only the proposals with a pull request and reads no Context PR until one is selected", async () => {
-    const calls = await renderSteering("/proposals/prs", {
-      proposals: readOk({
-        proposals: [
-          proposal(),
-          proposal({ id: "prp_01k5rv9z", status: "proposed", pr: null }),
-        ],
-        total: 2,
-      }),
-    });
-    // The hub's gold check and the body ask for the same page; the kernel's
-    // per-request read table serves the second (tab-primary.ts).
-    expect(calls.proposals).toEqual([
-      [ctx, { offset: 0, limit: 50 }],
-      [ctx, { offset: 0, limit: 50 }],
-    ]);
-    expect(calls.contextPr).toEqual([]);
-    const table = screen.getByRole("table", { name: "Context PRs" });
-    const rows = within(table).getAllByRole("row").slice(1);
-    expect(rows.map((row) => row.getAttribute("data-proposal"))).toEqual([
-      PROPOSAL_ID,
-    ]);
-    expect(
-      within(rows[0] ?? table).getByRole("link", {
-        name: "#519 on acme/core-platform",
-      }),
-    ).toHaveAttribute("href", `${BASE}/proposals/prs?proposal=${PROPOSAL_ID}`);
-    expect(
-      screen.queryByRole("region", { name: /^Context PR for/ }),
-    ).toBeNull();
-  });
-
-  it("reads the Context PR of the proposal the URL selects, marks its row and renders its panel", async () => {
-    const calls = await renderSteering(
-      `/proposals/prs?proposal=${PROPOSAL_ID}`,
-    );
-    expect(calls.contextPr).toEqual([[ctx, PROPOSAL_ID]]);
-    expect(
-      screen.getByRole("link", { name: "#519 on acme/core-platform" }),
-    ).toHaveAttribute("aria-current", "true");
-    expect(
-      section("Context PR for ctx.release.no-reread-changelog"),
-    ).toHaveAttribute("data-status", "checks_passed");
-  });
-
-  it("reads no Context PR for a malformed proposal id (negative)", async () => {
-    const calls = await renderSteering("/proposals/prs?proposal=prp_1;drop");
-    expect(calls.contextPr).toEqual([]);
-  });
-
-  it("says no proposal on the page has a pull request", async () => {
-    await renderSteering("/proposals/prs", {
-      proposals: readOk({
-        proposals: [proposal({ status: "proposed", pr: null })],
-        total: 1,
-      }),
-    });
-    expect(section("Context PRs")).toHaveTextContent(
-      "No proposal on this page has a Context PR.",
-    );
-    expect(screen.queryByRole("table")).toBeNull();
-  });
-
-  it("pages the Context PRs at the size the URL names, keeping it on each row", async () => {
-    const calls = await renderSteering("/proposals/prs?rows=10&offset=10", {
-      proposals: proposalPage(10, 30),
-    });
-    expect(calls.proposals).toEqual([[ctx, { offset: 10, limit: 10 }]]);
-    const table = screen.getByRole("table", { name: "Context PRs" });
-    expect(
-      within(table).getByRole("link", { name: "#600 on acme/core-platform" }),
-    ).toHaveAttribute(
-      "href",
-      `${BASE}/proposals/prs?rows=10&offset=10&proposal=prp_01k5rw00`,
-    );
-    const pager = pagesRow();
-    expect(
-      within(pager).getByRole("link", { name: "Previous page" }),
-    ).toHaveAttribute("href", `${BASE}/proposals/prs?rows=10`);
-    expect(
-      within(pager).getByRole("link", { name: "Next page" }),
-    ).toHaveAttribute("href", `${BASE}/proposals/prs?rows=10&offset=20`);
-  });
-
-  it("draws no pager under an empty first page (negative)", async () => {
-    await renderSteering("/proposals/prs", {
-      proposals: readOk({ proposals: [], total: 0 }),
-    });
-    expect(screen.queryByRole("navigation", { name: "Pages" })).toBeNull();
-    expect(screen.queryByRole("combobox", { name: "Rows" })).toBeNull();
-  });
-
-  it("renders an error read in place of the table", async () => {
-    await renderSteering("/proposals/prs", { proposals: DOWN });
-    expect(section("Context PRs")).toHaveTextContent(
-      "Context PRs could not be loaded: record_index_unavailable.",
+  it("renders an error read in place of the list", async () => {
+    await renderSteering("/proposals", { proposals: DOWN });
+    expect(section("Proposals")).toHaveTextContent(
+      "Proposals could not be loaded: record_index_unavailable.",
     );
   });
 });

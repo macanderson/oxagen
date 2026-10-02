@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { contextProposalDismiss } from "./context.proposal.dismiss";
 
 describe("dismiss_proposal contract", () => {
-  it("is an Owner/Admin write with a required reason", () => {
+  it("is an Owner/Admin write with an optional reason", () => {
     expect(contextProposalDismiss.name).toBe("dismiss_proposal");
     expect(contextProposalDismiss.mutates).toBe(true);
     expect(contextProposalDismiss.noBillingGate).toBe(true);
@@ -16,8 +16,15 @@ describe("dismiss_proposal contract", () => {
     // A dismissal closes the Context PR and deletes its branch, so Stella
     // asks a person first.
     expect(contextProposalDismiss.agent?.requiresApproval).toBe(true);
+    // The Context PR page's Close takes an optional reason (#5077).
     expect(
       contextProposalDismiss.input.safeParse({ proposalId: "prp_1" }).success,
+    ).toBe(true);
+    expect(
+      contextProposalDismiss.input.safeParse({
+        proposalId: "prp_1",
+        reason: "   ",
+      }).success,
     ).toBe(false);
     expect(
       contextProposalDismiss.input.safeParse({

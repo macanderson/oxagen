@@ -1,11 +1,13 @@
-// The steering PR panel (#2961; spec §10.3; ADR-061): one proposal's pull
-// request as the state machine proposed → pull request open → checks running →
+// The pull request section of a Context PR's page (#2961; #5077; spec §10.3;
+// ADR-061): one proposal's pull request as the state machine proposed → pull request open → checks running →
 // checks passed or failed → merged, the six checks in the order they run, the
 // pull request body, what merge will do, and the merge itself, which stays
 // disabled until every check has passed. Merge is the publication.
 //
 // Under the team and regulated modes the panel also offers Approve, and Merge
-// without review to an owner while no one has approved (#4518). A check
+// without review to an owner while no one has approved (#4518). A merged
+// steering PR offers Revert pull request, which opens a steering PR that
+// undoes it (#4449). A check
 // finding on a managed block shows the drift and a Restore block button. A PR
 // on a `memory/` branch lists its records from list_memory_pr_records
 // (#4914), each with a Drop button, or the read's failure in their place.
@@ -16,14 +18,11 @@ import type {
   ProposalStatus,
 } from "@/data/contracts/steering";
 import { type Read, readError } from "@/data/read";
-import { parsePullRequestUrl } from "@/shared/pull-request-url";
-import { linkText, mono } from "@/ui/control-styles";
+import { mono } from "@/ui/control-styles";
 import { formatCount } from "@/ui/money-format";
-import { PullRequestLink } from "@/ui/navigation";
 import { MemoryPrReview } from "./memory-pr-review";
 import { SteeringReadFailure } from "./read-failure";
 import { Fact, Facts, Section, useDate } from "./section";
-import { ProposalStatusBadge } from "./status";
 import type { SteeringAt } from "./view";
 import {
   ApproveContextPr,
@@ -31,6 +30,7 @@ import {
   MergeWithoutReview,
   ProposalWrites,
   RestoreManagedBlock,
+  RevertSteeringPr,
 } from "./write-controls";
 
 /** One finding a check left on the steering PR's head. */
@@ -175,7 +175,6 @@ export function ContextPrPanel({
   const { value } = read;
   const { pr, merged, onMerge, governanceMode, status } = value;
   const governance = value.kind === "governance";
-  const url = pr === null ? null : parsePullRequestUrl(pr.url);
   const mode =
     governanceMode === null ? t("modeUnread") : t(`modes.${governanceMode}`);
   const open = status !== "merged" && status !== "rejected";
@@ -196,19 +195,8 @@ export function ContextPrPanel({
         ? readError("not_found", 404)
         : memoryRecords;
   return (
-    <Section
-      id="steering-pr"
-      title={t("title", { lineage: value.lineage })}
-      data-status={status}
-    >
-      <div className="flex flex-wrap items-center gap-3">
-        <ProposalStatusBadge status={status} />
-        {pr !== null && url !== null ? (
-          <PullRequestLink to={url} className={linkText}>
-            {t("goToPr", { number: String(pr.number) })}
-          </PullRequestLink>
-        ) : null}
-      </div>
+    <Section id="steering-pr" title={t("title")} data-status={status}>
+      {/* The page header carries the state badge and the link to the host. */}
       <StateMachine status={status} />
       {status === "rejected" ? (
         <p className="text-sm text-foreground">{t("rejected")}</p>
@@ -327,6 +315,17 @@ export function ContextPrPanel({
               </Fact>
             )}
           </Facts>
+          {/* revert_steering_pr refuses a governance change: setting the
+              mode again is the one route back (ADR-232). */}
+          {status === "merged" && !governance && pr !== null ? (
+            <div className="flex flex-wrap items-start gap-3">
+              <RevertSteeringPr
+                org={at.org}
+                ws={at.ws}
+                proposalId={value.proposalId}
+              />
+            </div>
+          ) : null}
         </div>
       )}
       {open ? (

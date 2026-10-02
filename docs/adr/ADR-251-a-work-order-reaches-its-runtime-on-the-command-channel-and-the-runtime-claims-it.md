@@ -102,12 +102,17 @@ already ended, gets a `cancel` when it links, so one send runs once.
   to.
 - A pull request the run names is recorded on the send (`pr_linked`) only when
   it is in the brief's repository. Oxagen then reads its head commit, the checks
-  its base branch requires, and each check's conclusion from GitHub.
+  its base branch requires, and each check's conclusion from GitHub. A send
+  follows the last pull request its run linked: a head, a merge, or a close
+  counts only for that one, so closing one pull request and opening another
+  leaves the send open on the new one.
 - The `pull_request` webhook records a new head, a human merge with its merge
   commit, or a close without merging on every send that linked the pull
   request. Oxagen merges nothing.
 - A stop is a `cancel` to the linked run. The send reads stopping until the
-  host reports the cancel applied, then stopped. A stop asked for before the run
+  host reports that cancel applied, then stopped. A `cancel` sent to a
+  duplicate run, or to a run of a send that already ended, stops only that
+  run. A stop asked for before the run
   links reaches the run when it links.
 - A send no runtime claimed can be withdrawn at once. A claimed send is stopped
   first. When a stop was asked for and no run ever linked, because the host went
@@ -128,7 +133,9 @@ GitHub and record the evidence in one transaction, then record the acceptance in
 a second transaction that names the version the first one left. The acceptance
 is admitted against the fresh evidence, so a failing, missing, cancelled, or
 skipped required check, a new head, or a required list that could not be read
-refuses it. The evidence stays recorded either way. Acceptance merges nothing,
+refuses it, and so do check results that could not be read in full at the
+press. Between two apps that report a check of the same name, the less
+successful result counts. The evidence stays recorded either way. Acceptance merges nothing,
 and a work item is done once it is accepted and merged, in either order
 (ADR-244).
 
@@ -136,8 +143,9 @@ and a work item is done once it is accepted and merged, in either order
 
 Every decision on a work item (save and approve a brief, send, withdraw, stop,
 return, accept, read checks, close, reopen) is a signed-in person's. An API key
-and an agent run are refused, because an agent holding its operator's key could
-otherwise approve, send, or accept its own work. The person also needs a role
+and an agent run are refused, including an `oxagen login` key that resolves to
+a person, because an agent holding its operator's key could otherwise approve,
+send, or accept its own work. The person also needs a role
 the action takes in the item's own workspace (`workActionRoles`).
 
 In the role editor's catalogue, approving a brief, accepting work, and reading

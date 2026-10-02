@@ -23,6 +23,7 @@ import { schema, withSystemDb } from "@oxagen/database";
 import {
   type CollectorRecord,
   type CollectorType,
+  type DeliveryResult,
   type InboundRequest,
   receiveDelivery,
 } from "@oxagen/ingestion/collectors";
@@ -52,6 +53,8 @@ export interface WorkDeliveryRouting {
   duplicates: number;
   /** Collectors whose verification refused the delivery. */
   rejected: number;
+  /** Collectors that could not store the delivery. Their reconcile reads the issue. */
+  failed: number;
 }
 
 /** What a delivery says about where it came from. */
@@ -128,12 +131,21 @@ export async function routeGithubWorkDelivery(
   input: GithubDeliveryInput,
   deps: WorkDeliveryDeps = defaultWorkDeliveryDeps,
 ): Promise<WorkDeliveryRouting> {
-  const routing: WorkDeliveryRouting = { events: [], stored: 0, duplicates: 0, rejected: 0 };
+  const routing: WorkDeliveryRouting = { events: [], stored: 0, duplicates: 0, rejected: 0, failed: 0 };
   for (const collector of await deps.collectorsFor(input.installationId, input.repository)) {
     const scope = { orgId: collector.orgId, workspaceId: collector.workspaceId };
-    const result = await runInTenantScope(scope, () =>
-      deps.receive(deps.ports(scope), { collector, request: input.request, secret: input.secret }),
-    );
+    let result: DeliveryResult;
+    try {
+      result = await runInTenantScope(scope, () =>
+        deps.receive(deps.ports(scope), { collector, request: input.request, secret: input.secret }),
+      );
+    } catch (err) {
+      // One collector's failure must not drop the events of the collectors
+      // that stored the delivery. This one's reconcile reads the issue.
+      routing.failed += 1;
+      logger.error({ err, collectorId: collector.id }, "work intake: a collector could not store a GitHub delivery; its reconcile reads the issue");
+      continue;
+    }
     switch (result.kind) {
       case "stored":
         routing.stored += 1;
