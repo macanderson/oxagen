@@ -33,6 +33,7 @@ import { formatCount } from "@/ui/money-format";
 import { ReadFailure } from "@/ui/read-failure";
 import { cell, numericCell, Table } from "@/ui/table";
 import { Fact, Facts, Note, NoValue, Panel, PanelBody } from "./parts";
+import { isBackfilled } from "./backfill";
 import { parseFrameKey } from "./frame-link";
 import { FrameLink } from "./policy-tab";
 import { ExportAction } from "./record-actions";
@@ -284,14 +285,20 @@ function SealPanel({
   orgRole: OrgRole;
 }) {
   const t = useTranslations("run.chain.seal");
+  const tb = useTranslations("run.backfill");
   const latest = chain.seals.at(-1);
+  // A rebuilt run's chain starts at the backfill (ADR-161): the seal proves
+  // the record has not changed since then, and nothing about the run itself.
+  const backfilled = isBackfilled(run);
   return (
     <Panel
       title={t("title")}
       testId="chain-seal"
       aside={
         latest === undefined ? undefined : (
-          <Badge tone="allowed">{t("sealed")}</Badge>
+          <Badge tone="allowed" data-testid="chain-sealed">
+            {backfilled ? tb("sealedBadge") : t("sealed")}
+          </Badge>
         )
       }
     >
@@ -313,8 +320,13 @@ function SealPanel({
               {/*
                 The same badge Fleet's Tier column and the Run header draw: the
                 seal's tier is the run's tier, one closed vocabulary (ADR-095).
+                Nothing gated a rebuilt run, so it has no tier to show.
               */}
-              <EnforcementTierBadge tier={chain.enforcementTier} />
+              {backfilled ? (
+                <NoValue />
+              ) : (
+                <EnforcementTierBadge tier={chain.enforcementTier} />
+              )}
             </Fact>
             <Fact label={t("archive")} code>
               {latest.archiveSegmentRef ?? <NoValue />}

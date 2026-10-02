@@ -2877,6 +2877,17 @@
       "writes": []
     },
     {
+      "domain": "repository",
+      "name": "list_steering_repo_destinations",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "tool",
       "name": "list_studio_findings",
       "reads": [],
@@ -2904,6 +2915,15 @@
         "agent",
         "api",
         "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "tacho",
+      "name": "list_tacho_session_heads",
+      "reads": [],
+      "surfaces": [
+        "api"
       ],
       "writes": []
     },
@@ -26823,6 +26843,18 @@
           "nullable": false,
           "primaryKey": false,
           "type": "bigint"
+        },
+        {
+          "name": "record_basis",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "backfill_normalizer",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
         },
         {
           "name": "title",

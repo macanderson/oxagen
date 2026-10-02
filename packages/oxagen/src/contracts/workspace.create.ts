@@ -9,6 +9,10 @@ import {
   githubOwnerSchema,
   githubRepositoryNameSchema,
 } from "./repository.shared";
+import {
+  steeringConnectionPick,
+  steeringRepoNameInput,
+} from "./steering_repo.shared";
 
 /**
  * A GitHub repository by owner and name, the older `mainRepo` shape. The
@@ -59,12 +63,20 @@ export type SteeringRepoProvisionStatus = z.output<
  *
  * The handler records the workspace and the first state of its
  * `steering_repo` setting, then starts a durable job and returns. The job
- * creates the private repository `oxagen-<slug>` in the organization's GitHub
- * organization or GitLab group, seeds it, applies the prescribed settings,
- * publishes version 1, and binds it with role steering. The call returns
- * before the repository exists, so read the workspace's `steering_repo`
- * status to follow it. When the job cannot start, the workspace still exists
- * and the status reads `failed`.
+ * creates the private steering repo, seeds it, applies the prescribed
+ * settings, publishes version 1, and binds it with role steering. The call
+ * returns before the repository exists, so read the workspace's
+ * `steering_repo` status to follow it. When the job cannot start, the
+ * workspace still exists and the status reads `failed`.
+ *
+ * `steeringRepo` says where the repository goes and what it is called. With
+ * no `connection`, the job uses the organization's stored GitHub organization
+ * or GitLab group. With one, the job checks that the owner's tokens still reach
+ * it, records it on this workspace, and makes it the organization's default
+ * when none is stored (`list_steering_repo_destinations` lists the choices).
+ * With no `name`, the job tries `oxagen-<slug>`, then `-2`, `-3`, and so on.
+ * With one, it creates exactly that name, and a taken name stops the setup
+ * with `repository_name_taken` until a retry names another.
  *
  * A workspace no longer needs a main repository. `mainRepo` is deprecated:
  * the handler accepts it so older callers keep working, logs a warning, and
@@ -80,7 +92,7 @@ export const workspaceCreate = registerCapability({
   name: "create_workspace",
   domain: "workspace",
   description:
-    "Create a workspace within the active tenant and start provisioning its private steering repo, oxagen-<slug>, in the organization's GitHub organization or GitLab group. The call returns before the repository exists, and the workspace's steering_repo status shows the progress. You no longer pass a main repository: mainRepo is deprecated and ignored. Refused when the organization already has a workspace with that slug.",
+    "Create a workspace within the active tenant and start provisioning its private steering repo. By default the repo is oxagen-<slug> in the organization's stored GitHub organization or GitLab group. Pass steeringRepo.connection (from list_steering_repo_destinations) to pick the organization or group, and steeringRepo.name to pick the name. The call returns before the repository exists, and the workspace's steering_repo status shows the progress. You no longer pass a main repository: mainRepo is deprecated and ignored. Refused when the organization already has a workspace with that slug.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
@@ -106,6 +118,20 @@ export const workspaceCreate = registerCapability({
     // The shape still validates, so an older caller that sends a malformed
     // repository gets the same refusal it always got.
     mainRepo: z.union([githubMainRepoInput, gitlabMainRepoInput]).optional(),
+    steeringRepo: z
+      .object({
+        name: steeringRepoNameInput.optional(),
+        connection: steeringConnectionPick
+          .describe(
+            "The GitHub organization, personal GitHub account, or GitLab group to create the steering repo in. One of list_steering_repo_destinations' destinations.",
+          )
+          .optional(),
+      })
+      .strict()
+      .describe(
+        "Where to create the workspace's steering repo and what to call it. Leave a field out to take its default.",
+      )
+      .optional(),
   }),
   output: z.object({
     publicId: z.string(),

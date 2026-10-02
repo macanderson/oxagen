@@ -137,6 +137,10 @@ export const PLATFORM_ALLOWLIST = new Set<string>([
   "APPDATA",
   "LOCALAPPDATA",
   "PROGRAMFILES",
+  // The XDG data root on Linux, set by the person's own environment. The
+  // uninstall that runs without the desktop app reads it, as the app does,
+  // to find the per-user copy of the sidecars (packages/tacho/src/cli/uninstall.ts).
+  "XDG_DATA_HOME",
   // Windows' command interpreter, which tacho spawns a `.cmd` shim through
   // (packages/tacho/src/host/codex-app-server.ts).
   "COMSPEC",

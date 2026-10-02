@@ -321,6 +321,21 @@ describe("runs.get", () => {
     });
   });
 
+  // ADR-161, #4028: the Run page marks a run a backfill rebuilt.
+  it("carries the record basis get_run answered onto the run row", async () => {
+    for (const recordBasis of ["live", "backfill", "mixed"] as const) {
+      kernelRead.mockResolvedValue(
+        readOk({
+          run: { ...run, recordBasis },
+          frames: { frames: [], cursor: null },
+          witnessFor: null,
+        }),
+      );
+      const read = await runs.get(ctx, "tse_4f0a", { framesAfter: null });
+      expect(read.ok && read.value.run.recordBasis).toBe(recordBasis);
+    }
+  });
+
   it("carries a parked receipt's tool, outcome and approval as fields, not as words of its label", async () => {
     kernelRead.mockResolvedValue(
       readOk({

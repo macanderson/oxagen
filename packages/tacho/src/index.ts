@@ -4,6 +4,7 @@ export * from "./digest";
 export * from "./envelope";
 export * from "./ids";
 export * from "./interjection";
+export * from "./record-basis";
 export * from "./remote";
 export * from "./timestamp";
 export * from "./wire";

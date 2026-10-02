@@ -16,6 +16,7 @@ const LIMITS = [
   ["/memories/uses", 1024 * 1024],
   ["/memories/recall", 384 * 1024],
   ["/commands", 256 * 1024],
+  ["/sessions/heads", 128 * 1024],
   ["/bundle", 64 * 1024],
   ["/memories", 32 * 1024],
   ["/work-orders/claim", 16 * 1024],

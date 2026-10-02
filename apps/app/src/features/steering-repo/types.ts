@@ -49,6 +49,24 @@ export const STEERING_IMPORT_LEGACY_CONNECTION =
 export const STEERING_NO_CONNECTION = "no_connection";
 
 /**
+ * The error code of a name the workspace chose that a repository Oxagen did
+ * not create already holds (#5196). A retry with another name goes on.
+ */
+export const STEERING_REPOSITORY_NAME_TAKEN = "repository_name_taken";
+
+/**
+ * The error code of a place the workspace chose that the organization's stored
+ * tokens no longer reach (#5196). A retry with another place goes on.
+ */
+export const STEERING_UNKNOWN_CONNECTION = "unknown_connection";
+
+/**
+ * The error code of a create the host refused for a reason other than a taken
+ * name, such as an organization policy (#4899). Another place may take it.
+ */
+export const STEERING_REPOSITORY_CREATE_REFUSED = "repository_create_refused";
+
+/**
  * @internal Exported for types.test.ts, which pins it to the job's code.
  * The error code of a workspace still steered by a code repository. The
  * setup reads `legacySource` for it and goes on through the import.
@@ -127,10 +145,17 @@ export type SteeringRepoView = {
     provider: "github" | "gitlab";
   } | null;
   /**
-   * Where the organization creates its steering repos, or null before one is
-   * chosen. An owner can reset it until Oxagen has created a repo there.
+   * Where this workspace's steering repo goes: the place the workspace chose
+   * when it was created, else the organization's stored one, or null before
+   * either is set (#5196). An owner can reset the organization's until
+   * Oxagen has created a repo there.
    */
   connection: SteeringConnectionChoice | null;
+  /**
+   * The name the workspace chose for its steering repo, which Oxagen creates
+   * exactly, or null for `oxagen-<slug>`.
+   */
+  requestedName: string | null;
   /** The connections to pick from when setup stopped with `choose_connection`. */
   connectionChoices: readonly SteeringConnectionChoice[];
   /** The workspace's last `import_workspace_steering` run, or null. See `pendingMove`. */

@@ -90,6 +90,17 @@ export const TACHO_SEAL_SOURCES = [
 ] as const;
 export type TachoSealSource = (typeof TACHO_SEAL_SOURCES)[number];
 /**
+ * How a session's frames reached the record (ADR-161). `live`: the recorder
+ * sealed them while the session ran. `backfill`: `oxagen agent backfill`
+ * rebuilt them afterwards from the transcript Claude Code kept, and nothing
+ * was enforced during the run. `mixed`: a live resume continued a
+ * backfilled chain. Ingest reads the `oxagen.record_basis` attr each frame
+ * carries; a backfill row stays `backfill` until a frame without the attr
+ * lands, and then reads `mixed` for good.
+ */
+export const TACHO_RECORD_BASES = ["live", "backfill", "mixed"] as const;
+export type TachoRecordBasis = (typeof TACHO_RECORD_BASES)[number];
+/**
  * How long a session may send nothing before the control plane closes it:
  * twelve hours, twice the host daemon's own idle sweep, so a daemon that is
  * running decides first with better facts (the harness's process, its last
@@ -657,6 +668,15 @@ export const tachoSessions = tachoSchema.table(
     toolBodyFrames: bigint("tool_body_frames", { mode: "number" })
       .notNull()
       .default(0),
+    // Provenance (ADR-161)
+    recordBasis: text("record_basis").notNull().default("live"),
+    /**
+     * The normalizer version a backfill sealed the session under, from its
+     * `agent_start`'s `oxagen.backfill_normalizer` attr. Null on a live
+     * session. A later pass skips a session sealed under its own version and
+     * reports one sealed under an older version.
+     */
+    backfillNormalizer: text("backfill_normalizer"),
     // Presentation
     title: text("title"),
     lastPromptDigest: text("last_prompt_digest"),
@@ -753,6 +773,10 @@ export const tachoSessions = tachoSchema.table(
     tierCheck: check(
       "tacho_sessions_tier_check",
       sql`${t.enforcementTier} IN (${sql.raw(inList(TACHO_ENFORCEMENT_TIERS))})`,
+    ),
+    recordBasisCheck: check(
+      "tacho_sessions_record_basis_check",
+      sql`${t.recordBasis} IN (${sql.raw(inList(TACHO_RECORD_BASES))})`,
     ),
     sealSourceCheck: check(
       "tacho_sessions_seal_source_check",

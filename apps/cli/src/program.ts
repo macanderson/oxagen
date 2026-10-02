@@ -130,6 +130,54 @@ function addHostWrapCommands(parent: Command): void {
     );
 
   parent
+    .command("backfill")
+    .description(
+      "Record the Claude Code sessions this machine ran before it enrolled, from the transcripts Claude Code kept",
+    )
+    .option(
+      "--since <date>",
+      "Only sessions that started on or after this UTC date (YYYY-MM-DD)",
+    )
+    .option(
+      "--until <date>",
+      "Only sessions that started before this UTC date (YYYY-MM-DD)",
+    )
+    .option(
+      "--project <name>",
+      "Only this folder under ~/.claude/projects (repeatable)",
+      (value: string, previous: string[]) => [...previous, value],
+      [] as string[],
+    )
+    .option(
+      "--exclude-project <name>",
+      "Skip this folder under ~/.claude/projects (repeatable)",
+      (value: string, previous: string[]) => [...previous, value],
+      [] as string[],
+    )
+    .option(
+      "--session <id>",
+      "Only this session and its subagents (repeatable)",
+      (value: string, previous: string[]) => [...previous, value],
+      [] as string[],
+    )
+    .option("--dry-run", "Read and count, and record and send nothing")
+    .option("--json", "Print the report as one JSON object")
+    .action(
+      async (opts: {
+        since?: string;
+        until?: string;
+        project?: string[];
+        excludeProject?: string[];
+        session?: string[];
+        dryRun?: boolean;
+        json?: boolean;
+      }) => {
+        const { handleTachoBackfill } = await import("./commands/tacho.js");
+        process.exitCode = await handleTachoBackfill(opts);
+      },
+    );
+
+  parent
     .command("verify")
     .description(
       "Run one headless turn (Claude Code by default) and confirm it was chained",
@@ -1820,6 +1868,17 @@ export function buildProgram(): Command {
         await agentUnenroll(agentHandle, opts);
       },
     );
+  agent
+    .command("uninstall")
+    .description(
+      "Take Oxagen off this machine without the desktop app: unenroll every agent, then remove the app's per-user copy, PATH links, and shell profile lines, and ~/.config/oxagen, which holds your `oxagen login` session",
+    )
+    .option("--token <apiKey>", "Operator token for the server-side revoke")
+    .option("--reason <text>", "Reason recorded with each revoke")
+    .action(async (opts: { token?: string; reason?: string }) => {
+      const { handleTachoUninstall } = await import("./commands/tacho.js");
+      if (!(await handleTachoUninstall(opts))) process.exitCode = 1;
+    });
 
   const agentEnv = agent
     .command("env")
