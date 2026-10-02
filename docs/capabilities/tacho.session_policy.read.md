@@ -10,7 +10,7 @@
 
 Read the workspace model policy for Claude Code, Codex, and Stella requests routed through the loopback gateway. Returns the mode, model lists, and the legacy recorded dollar ceiling. Every member can read the policy.
 
-This is a different setting from `get_budget_policy`, which governs an in-app assistant **turn**. This one governs a wrapped harness **session** on somebody's laptop, and a different enforcer applies it: the daemon's loopback model proxy, from the signed policy bundle.
+This policy governs a wrapped harness **session** on somebody's laptop. The daemon's loopback model proxy applies it, from the signed policy bundle. It never applies to Oxagen's in-app assistant ([ADR-235](../adr/ADR-235-workspaces-do-not-govern-or-monitor-stella.md)).
 
 ## Input
 

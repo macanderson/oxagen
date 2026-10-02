@@ -32,13 +32,9 @@ const mocks = vi.hoisted(() => ({
   materializeTools: vi.fn(),
   runGovernedTurn: vi.fn(),
   buildChatSystemPrompt: vi.fn(),
-  createApprovalRequest: vi.fn(),
-  waitForApproval: vi.fn(),
   withTenantDb: vi.fn(),
   invoke: vi.fn(),
   evaluateTurnCreditGate: vi.fn(),
-  createTurnBudgetGuard: vi.fn(),
-  budgetPolicyReadHandler: vi.fn(),
   recallWorkspaceMemoryDetailed: vi.fn(),
   resolveGroundingCitations: vi.fn(),
   translateAgentStream: vi.fn(),
@@ -75,8 +71,6 @@ vi.mock("@oxagen/agent", () => ({
   materializeTools: mocks.materializeTools,
   runGovernedTurn: mocks.runGovernedTurn,
   buildChatSystemPrompt: mocks.buildChatSystemPrompt,
-  createApprovalRequest: mocks.createApprovalRequest,
-  waitForApproval: mocks.waitForApproval,
 }));
 // Side-effect registrations bind handlers into the real kernel; nothing here
 // dispatches through it.
@@ -106,19 +100,9 @@ vi.mock("@oxagen/billing", async () => {
   const { z } = await import("zod");
   return {
     evaluateTurnCreditGate: mocks.evaluateTurnCreditGate,
-    createTurnBudgetGuard: mocks.createTurnBudgetGuard,
-    formatBudgetUsd: (n: number) => `$${n}`,
-    governedBudgetFromRead: () => null,
     requestTurnBudgetSchema: z.object({}).passthrough(),
-    resolveEffectiveTurnBudget: (p: unknown) => p,
-    resolveTurnBudgetPolicy: (p: unknown) => p,
-    turnBudgetPolicyFromSaved: (p: unknown) => p,
-    TURN_BUDGET_OFF: { enabled: false, limitUsd: 0 },
   };
 });
-vi.mock("@oxagen/handlers/budget.policy.read", () => ({
-  budgetPolicyReadHandler: mocks.budgetPolicyReadHandler,
-}));
 vi.mock("./recall-context", () => ({
   recallWorkspaceMemoryDetailed: mocks.recallWorkspaceMemoryDetailed,
   resolveGroundingCitations: mocks.resolveGroundingCitations,
@@ -253,9 +237,7 @@ beforeEach(() => {
     memories: [],
   });
   mocks.resolveGroundingCitations.mockResolvedValue([]);
-  mocks.budgetPolicyReadHandler.mockResolvedValue({ enabled: false });
   mocks.invoke.mockResolvedValue({});
-  mocks.createTurnBudgetGuard.mockReturnValue(undefined);
   mocks.createTurnTranslator.mockReturnValue({
     onPart: vi.fn(),
     finish: () => ({ assistantText: "", persistedBlocks: [] }),
@@ -394,5 +376,36 @@ describe("POST /api/v1/chat/stream — who pays for the tokens (ADR-053)", () =>
       ...mocks.logger.error.mock.calls,
     ];
     expect(JSON.stringify(everyLogCall)).not.toContain(ORG_CREDENTIAL.apiKey);
+  });
+});
+
+describe("POST /api/v1/chat/stream — per-turn budget field (ADR-235)", () => {
+  // The billing mock replaces requestTurnBudgetSchema, so this file cannot
+  // check that a malformed budget answers 400. The schema's own tests in
+  // packages/billing/src/turn-budget-policy.test.ts cover that. The body below
+  // is the full shape the old composer sent, which the real schema accepts.
+  it("accepts a budget on the body and runs the turn with no budget guard", async () => {
+    const req = new Request("https://app.oxagen.sh/api/v1/chat/stream", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        content: "how many runs?",
+        orgSlug: ORG.slug,
+        workspaceSlug: WORKSPACE.slug,
+        budget: {
+          enabled: true,
+          limitUsd: 0.5,
+          mode: "enforce",
+          graceOveragePct: 0.25,
+        },
+      }),
+    });
+
+    const res = await POST(req as unknown as NextRequest);
+    await res.text();
+
+    expect(res.status).toBe(200);
+    expect(mocks.runGovernedTurn).toHaveBeenCalledTimes(1);
+    expect(turnInput()).not.toHaveProperty("budgetGuard");
   });
 });

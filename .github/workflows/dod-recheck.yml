@@ -58,10 +58,14 @@ jobs:
     # when the body changed, so a retitle or a label sweep starts no runner.
     # In a `workflow_call`, `github.event_name` and `github.event` are the
     # caller's, so the filter holds for the caller repos too. Same expression
-    # as stella's own dod-recheck.yml.
+    # as stella's own dod-recheck.yml. Only an issue a member or collaborator
+    # opened counts. On a public repository anyone can open an issue and edit
+    # its body, and each edit would re-run CI jobs. Outsiders cannot edit a
+    # member's issue.
     if: >-
       github.event_name != 'issues'
-      || github.event.changes.body != null
+      || (github.event.changes.body != null
+          && contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.issue.author_association))
     # ubuntu-slim (one vCPU, $0.002 a minute): a sparse checkout and a few
     # API calls, done in seconds (#4918).
     runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-small-{0}', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-slim' }}

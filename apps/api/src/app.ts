@@ -106,10 +106,6 @@ import { orgMemberInviteDeclineRoute } from "./routes/v1/org.member_invite.decli
 import { orgMemberRemoveRoute } from "./routes/v1/org.member.remove";
 import { orgMemberRoleChangeRoute } from "./routes/v1/org.member_role.change";
 import { userPreferencesReadRoute } from "./routes/v1/user.preferences.read";
-import { budgetPolicyReadRoute } from "./routes/v1/budget.policy.read";
-import { budgetPolicyWriteRoute } from "./routes/v1/budget.policy.write";
-import { workspaceBudgetPolicyReadRoute } from "./routes/v1/workspace.budget_policy.read";
-import { workspaceBudgetPolicyWriteRoute } from "./routes/v1/workspace.budget_policy.write";
 import { billingBudgetGetRoute } from "./routes/v1/billing.budget.get";
 import { billingBudgetSetRoute } from "./routes/v1/billing.budget.set";
 import { userWorkspacePreferencesReadRoute } from "./routes/v1/user.workspace_preferences.read";
@@ -713,9 +709,6 @@ userScoped.route("/user/workspaces", workspaceListRoute);
 userScoped.route("/user/preferences/read", userPreferencesReadRoute);
 userScoped.route("/user/preferences", userPreferencesSetRoute);
 userScoped.route("/user/profile", userProfileUpdateRoute);
-// Per-turn dollar budget (user-scoped default).
-userScoped.route("/user/budget/read", budgetPolicyReadRoute);
-userScoped.route("/user/budget/write", budgetPolicyWriteRoute);
 // The onboarding gate before an organization exists (#2967): `organization`.
 userScoped.route("/onboarding/state", onboardingStateGetRoute);
 app.route("/v1", userScoped);
@@ -1208,8 +1201,6 @@ orgScoped.route("/org/invitations/accept", orgMemberInviteAcceptRoute);
 orgScoped.route("/org/invitations/decline", orgMemberInviteDeclineRoute);
 orgScoped.route("/org/invitations/revoke", revokeMemberInviteRoute);
 orgScoped.route("/org/invitations/resend", resendMemberInviteRoute);
-orgScoped.route("/workspace/budget-policy", workspaceBudgetPolicyReadRoute);
-orgScoped.route("/workspace/budget-policy", workspaceBudgetPolicyWriteRoute);
 // Hard period-to-date spend ceilings (org + workspace, OXA-1079).
 orgScoped.route("/billing/budget", billingBudgetGetRoute);
 orgScoped.route("/billing/budget", billingBudgetSetRoute);

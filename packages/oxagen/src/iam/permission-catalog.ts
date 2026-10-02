@@ -253,13 +253,8 @@ export const PERMISSION_CATALOG: readonly Permission[] = [
   {
     id: "budget.set",
     group: "Money",
-    description: "Read and set spend budgets and the budget policy",
-    capabilities: [
-      "get_spend_budget",
-      "set_spend_budget",
-      "get_budget_policy",
-      "update_budget_policy",
-    ],
+    description: "Read and set spend budgets",
+    capabilities: ["get_spend_budget", "set_spend_budget"],
   },
   // ── Audit ────────────────────────────────────────────────────────────────
   {

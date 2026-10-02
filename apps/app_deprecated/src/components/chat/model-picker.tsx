@@ -36,17 +36,11 @@ import {
 import {
   defaultModelState,
   buildSeededModelState,
-  applyWorkspaceBudgetGovernance,
   type ComposerModelState,
   type ModelStateSeed,
-  type WorkspaceBudgetGovernance,
 } from "./model-state";
-export {
-  defaultModelState,
-  buildSeededModelState,
-  applyWorkspaceBudgetGovernance,
-};
-export type { ComposerModelState, ModelStateSeed, WorkspaceBudgetGovernance };
+export { defaultModelState, buildSeededModelState };
+export type { ComposerModelState, ModelStateSeed };
 
 // ─── Vendor indicator tile ────────────────────────────────────────────────────
 

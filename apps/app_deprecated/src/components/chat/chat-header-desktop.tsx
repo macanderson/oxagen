@@ -3,8 +3,7 @@
  * chat-header-desktop.tsx — the v2 desktop chat header (chat_ux_v2 + non-mobile
  * viewport only; see chat-shell-client.tsx's mount gate). A single compact
  * (~48px) row at the top of the conversation column: agent avatar + name over
- * a `{model} · {budget}` subtitle, with a pulsing activity dot while
- * streaming.
+ * a `{model}` subtitle, with a pulsing activity dot while streaming.
  *
  * The ENTIRE header is one button — there is no separate settings icon.
  * Clicking it calls `onFocusSessionPanel`, which the caller wires to scroll
@@ -72,10 +71,8 @@ export function ChatHeaderDesktop({
     ? modelLabelOf(state.model)
     : tierLabel(state.tier ?? "fast");
 
-  const parts = sessionSubtitleParts(state, { modelLabel });
-  const subtitle = [middleEllipsis(parts.model, 32, 20, 10), parts.budget]
-    .filter((part): part is string => Boolean(part))
-    .join(" · ");
+  const parts = sessionSubtitleParts({ modelLabel });
+  const subtitle = middleEllipsis(parts.model, 32, 20, 10);
 
   return (
     <button

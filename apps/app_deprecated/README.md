@@ -36,7 +36,7 @@ system from [`@oxagen/ui`](../../packages/ui/README.md).
 |---|---|---|---|
 | `bootstrapIAMRuntime()`, `bootstrapBillingRuntime()`, `bootstrapEntitlementRuntime()`, `bootstrapDecisionRulesRuntime()` | injection | `apps/app_deprecated/instrumentation.ts` | Next.js `register()`, Node runtime only |
 | `bootstrapDataPlaneResolver()`, `setSecurityEventEmitter` | injection | `apps/app_deprecated/instrumentation.ts` | `register()`, after `assertRlsConnectionSafe()` |
-| Handler registration (`@oxagen/handlers/register`) | registry | Side-effect imports in the modules that invoke, for example `src/components/chat/budget-actions.ts` | Module load |
+| Handler registration (`@oxagen/handlers/register`) | registry | Side-effect imports in the modules that invoke, for example `src/app/[orgSlug]/[workspaceSlug]/_shared/conversation-actions.ts` | Module load |
 | Request interception | boundary | `apps/app_deprecated/src/proxy.ts` | Next.js `proxy` |
 | `@oxagen/ui` re-export layer | adapter | `apps/app_deprecated/src/components/ui/` | `eslint.next.mjs` refuses direct `@oxagen/ui/components/*` imports elsewhere |
 

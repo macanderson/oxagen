@@ -154,14 +154,9 @@ vi.mock("@/components/conversations/conversation-nav", () => ({
 vi.mock("@oxagen/oxagen", () => ({
   listCapabilities: vi.fn(() => []),
   getSurfaces: vi.fn(() => []),
-  // Workspace budget governance is resolved via invoke("workspace.budget.policy.read")
-  //. Return a benign no-governance row; the page maps limitUsd → 0.
-  invoke: vi.fn(async () => ({
-    enabled: false,
-    limitUsd: null,
-    mode: "prompt",
-    enforcement: "ceiling",
-  })),
+  // The page itself calls no capability through invoke(). Its sibling
+  // ./agent-prefs-actions imports invoke, so the mock keeps it defined.
+  invoke: vi.fn(),
 }));
 
 vi.mock("@oxagen/ai", () => ({
@@ -198,23 +193,12 @@ vi.mock("./walk-active-branch", () => ({
   walkActiveBranch: vi.fn(() => []),
 }));
 
-// conversation-page side-effect-imports "@oxagen/handlers/register" to make the
-// invoke() handlers resolvable. Stub it out — the real module eagerly loads
-// @oxagen/plugins (vault-secret-service dereferences schema.secretKeys at
+// ./agent-prefs-actions side-effect-imports "@oxagen/handlers/register" to
+// make its invoke() handler resolvable. Stub it out — the real module eagerly
+// loads @oxagen/plugins (vault-secret-service dereferences schema.secretKeys at
 // module init), which this test's partial @oxagen/database schema mock does not
 // provide. The invoke() path itself is mocked on @oxagen/oxagen above.
 vi.mock("@oxagen/handlers/register", () => ({}));
-
-// Per-turn budget default (OXA — turn-budget). budgetPolicyReadHandler is a
-// direct handler call in the page; stub it to the off state.
-vi.mock("@oxagen/handlers/budget.policy.read", () => ({
-  budgetPolicyReadHandler: vi.fn(async () => ({
-    enabled: false,
-    limitUsd: null,
-    mode: "prompt",
-    graceOveragePct: 0.25,
-  })),
-}));
 
 // Code-mode picker options (repos + environments). loadCodeModeOptions
 // never throws in the real page (degrades to empty lists); stub it to empty.
@@ -346,5 +330,17 @@ describe("ConversationPage — no conversation code binding (ADR-043)", () => {
     await renderPage();
     expect(shellSpy.props).not.toBeNull();
     expect(shellSpy.props).not.toHaveProperty("conversationCodeBinding");
+  });
+});
+
+describe("ConversationPage — no per-turn budget (ADR-235)", () => {
+  afterEach(() => {
+    shellSpy.props = null;
+  });
+
+  it("passes no budget governance to ChatShell", async () => {
+    await renderPage();
+    expect(shellSpy.props).not.toBeNull();
+    expect(shellSpy.props).not.toHaveProperty("workspaceBudgetGovernance");
   });
 });

@@ -25,7 +25,6 @@ const SEED: SessionSeed = {
   defaultAgentId: null,
   textModel: null,
   textTier: "fast",
-  budgetUsd: null,
 };
 
 const RECEIPT: MessageReceipt = {

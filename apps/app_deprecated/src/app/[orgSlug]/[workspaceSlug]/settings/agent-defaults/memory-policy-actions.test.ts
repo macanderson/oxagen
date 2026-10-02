@@ -13,7 +13,7 @@
  *   - read: asserts org membership then invokes get_memory_policy and returns
  *     the raw result.
  *
- * Mock seam mirrors models-action.test.ts / budget-action.test.ts.
+ * Mock seam mirrors models-action.test.ts.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -135,7 +135,7 @@ describe("saveMemoryPolicyAction", () => {
     expect(mockInvoke).not.toHaveBeenCalled();
   });
 
-  it("rejects a non-owner workspace role (owner-only, stricter than models/budget/prompts)", async () => {
+  it("rejects a non-owner workspace role (owner-only, stricter than models/prompts)", async () => {
     dbState.wsRoleRows = [{ role: "admin" }];
     const res = await saveMemoryPolicyAction(base());
     expect(res.ok).toBe(false);

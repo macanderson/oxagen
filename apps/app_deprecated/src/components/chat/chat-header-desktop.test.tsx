@@ -9,9 +9,8 @@
  * following the same convention as chat-header-mobile.test.tsx.
  *
  * Covers:
- *   - agent name + the `{model}` / `{model} · {budget}` subtitle
+ *   - agent name + the `{model}` subtitle
  *   - the middleEllipsis helper directly
- *   - omits missing segments cleanly
  *   - the whole header is a button that calls onFocusSessionPanel
  *   - the activity dot appears only while isStreaming
  */
@@ -44,7 +43,6 @@ const BASE_SEED: SessionSeed = {
   defaultAgentId: null,
   textModel: null,
   textTier: "fast",
-  budgetUsd: null,
 };
 
 function renderHeader(
@@ -77,21 +75,12 @@ describe("ChatHeaderDesktop — session summary", () => {
     expect(screen.getByText("Fast")).toBeInTheDocument();
   });
 
-  it("renders the current agent's name and the `{model} · {budget}` subtitle", () => {
+  it("renders the current agent's name and the `{model}` subtitle", () => {
     renderHeader(
       { agents: [CODER] },
-      {
-        ...BASE_SEED,
-        defaultAgentId: "agt_code",
-        budgetUsd: 1,
-      },
+      { ...BASE_SEED, defaultAgentId: "agt_code" },
     );
     expect(screen.getByText("Coder")).toBeInTheDocument();
-    expect(screen.getByText("Fast · $1.00 cap")).toBeInTheDocument();
-  });
-
-  it("omits the budget segment cleanly when the turn is uncapped", () => {
-    renderHeader({}, { ...BASE_SEED, defaultAgentId: "agt_code" });
     expect(screen.getByText("Fast")).toBeInTheDocument();
   });
 

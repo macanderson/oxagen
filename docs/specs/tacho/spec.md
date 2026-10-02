@@ -412,7 +412,7 @@ CGP deliberately specifies no downward channel (its governance text says fleet p
 }
 ```
 
-The bundle is **compiled from Oxagen IAM**, not authored separately: role grants and denies for the host agent's principal become `permissions` rules in Claude Code's own syntax (`Bash(git push*)`, `Write(src/**)`, `mcp__github__*`), tool risk grades come from `tool_declarations` and the contract registry, budget from `workspace_budget_policy`. The kernel's `authorizeExternalCapability()` is the policy decision point for anything the bundle does not settle (§7.2). Cedar (design ADR 0004) is retained as the decided engine for the day a policy cannot be expressed as an IAM ceiling plus a rule list; §12 records the sequencing.
+The bundle is **compiled from Oxagen IAM**, not authored separately: role grants and denies for the host agent's principal become `permissions` rules in Claude Code's own syntax (`Bash(git push*)`, `Write(src/**)`, `mcp__github__*`), tool risk grades come from `tool_declarations` and the contract registry, budget from `tacho_session_policy`. The kernel's `authorizeExternalCapability()` is the policy decision point for anything the bundle does not settle (§7.2). Cedar (design ADR 0004) is retained as the decided engine for the day a policy cannot be expressed as an IAM ceiling plus a rule list; §12 records the sequencing.
 
 Precedence at the host is the CLI's four-scope model (`apps/cli/src/config/resolve.ts`): a managed enrollment is org-locked; user and project Claude Code settings may **narrow** but never widen what the bundle allows, mirroring Stella's authority rule ("lower-precedence input may narrow authority but never widen it").
 
