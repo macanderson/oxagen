@@ -43,6 +43,9 @@
  *      again, stores it once by delivery id, and a durable job fetches the
  *      issue. A failure never fails the delivery: the 15-minute reconcile
  *      reads the issue anyway.
+ *   2f. `pull_request` → ask for the Oxagen check once per workspace that
+ *      links the repository (S2b, #5058). A steering repo's pull requests
+ *      are left to the steering check.
  *   3. Resolve connected GitHub connection(s) for this installation + repo.
  *   4. Ask the connector to extract ingestable (sourceRecordType, record) pairs.
  *   5. Fan out one `ingestion/entity.received` per (connection × record). The
@@ -62,12 +65,17 @@ import {
   githubPullRequestStateDeps,
   recordGithubPullRequestState,
 } from "@oxagen/handlers/github.pull-request.webhook";
+import { recordWorkOrderPullRequest } from "@oxagen/handlers/work.pull-request.webhook";
 import {
   findHealthScopes,
   healthRequests,
 } from "@oxagen/handlers/steering-repo/health";
 import { githubHealthSignal } from "@oxagen/handlers/steering-repo/health.events";
 import { routeGithubDiscoveryPush } from "@oxagen/handlers/mcp-studio/discovery/webhook";
+import {
+  githubCodeCheckRequests,
+  requestCodeRepoChecks,
+} from "@oxagen/handlers/code-repo-check/request";
 import {
   WORK_DELIVERY_EVENTS,
   routeGithubWorkDelivery,
@@ -179,6 +187,27 @@ async function requestSteeringHealthRead(
     logger.error(
       { err, event: eventName, reason: signal.trigger.reason },
       "GitHub App webhook: could not request a steering repo health check, so the 10-minute sweep will run it",
+    );
+  }
+}
+
+/**
+ * Ask for the Oxagen check on a pull request in a linked code repository
+ * (S2b, #5058). It logs a failure and never throws, because GitHub retries
+ * any non-2xx without end, and the next push to the pull request asks again.
+ */
+async function requestCodeRepoCheck(
+  body: Record<string, unknown>,
+  installationId: string,
+): Promise<void> {
+  try {
+    await requestCodeRepoChecks(
+      await githubCodeCheckRequests({ body, installationId }),
+    );
+  } catch (err) {
+    logger.error(
+      { err },
+      "GitHub App webhook: could not request the Oxagen check on a code repository's pull request; the next push to the pull request asks again",
     );
   }
 }
@@ -375,7 +404,27 @@ githubAppWebhookRoute.post("/", async (c) => {
         "GitHub App webhook: could not store the pull request's state; runs show the last state stored",
       );
     }
+    // ── Work orders (ADR-251) ───────────────────────────────────────────
+    // A send whose run linked this pull request records its new head, a
+    // human merge, or a close without merging. A failure never fails the
+    // delivery: Accept reads the pull request again at the press.
+    try {
+      await recordWorkOrderPullRequest({ body, installationId });
+    } catch (err) {
+      logger.error(
+        { err, eventName },
+        "GitHub App webhook: could not record the pull request on its work orders; Accept reads it again at the press",
+      );
+    }
   }
+
+  // ── Code repository check (S2b, #5058) ──────────────────────────────────
+  // A pull request in a code repository a workspace links gets the Oxagen
+  // check, posted by the Oxagen GitHub App from outside the repository. The
+  // steering sync and the health read above handle a steering repo's pull
+  // requests, and this asks nothing for them.
+  if (eventName === "pull_request" && installationId)
+    await requestCodeRepoCheck(body, installationId);
 
   // ── Work intake (P1-03, #5103) ──────────────────────────────────────────
   // An issue delivery reaches every work collector that reads its

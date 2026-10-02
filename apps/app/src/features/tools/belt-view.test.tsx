@@ -335,7 +335,7 @@ describe("BeltView › read only", () => {
       within(screen.getByTestId("belt-empty")).getByRole("link", {
         name: "Open Providers",
       }),
-    ).toHaveAttribute("href", "/acme/core-platform/agents?tab=servers");
+    ).toHaveAttribute("href", "/acme/core-platform/agents?tab=mcp-servers");
     expect(screen.getByText("No agent carries this toolbelt.")).toBeVisible();
   });
 });

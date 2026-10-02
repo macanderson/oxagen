@@ -1157,7 +1157,7 @@
       "failed": "Close this window. Oxagen shows what went wrong."
     },
     "views": {
-      "label": "Tool server views",
+      "label": "MCP server views",
       "providers": "Servers",
       "tools": "Tools",
       "toolbelts": "Toolbelts",

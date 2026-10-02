@@ -8,7 +8,9 @@
 // redirects. A tab id that is no longer served falls back to the registry, so
 // an old link never renders an empty page:
 //
-//   - `/tools/servers` is the Providers tab's name before rev1 and lands there;
+//   - `/tools/servers` is the Providers tab's name before rev1 and lands there
+//     (MCP Studio's `/tools/servers/<mcs_id>` names one server and is not
+//     parsed here);
 //   - the query tabs this page had before its tabs became segments
 //     (`?tab=registry|connections|switches|mandates|autoapprovals`) land on the
 //     tab that absorbed each one. Auto-approval rules and the mandates ledger
@@ -76,14 +78,14 @@ export function parseToolsTab(
 }
 
 /**
- * The Tools view an Agents `?tab=` names: Tool servers is the providers list,
+ * The Tools view an Agents `?tab=` names: MCP servers is the providers list,
  * with the registry (`tools`) and the toolbelts as its other two views,
  * Policies is Policy, and Off switches is Kill switches. Null for the Agents
  * and Runtimes tabs, which hold no Tools view.
  */
 export function toolsTabOfAgentsTab(tab: AgentsPageTab): ToolsTab | null {
   switch (tab) {
-    case "servers":
+    case "mcp-servers":
       return "providers";
     case "tools":
     case "toolbelts":
@@ -208,7 +210,7 @@ export function toolsLink(
 /**
  * The scope a switch at this level is recorded under, as the record scopes it
  * (`switchWorkspaceOf`, packages/handlers/src/kill_switch.set.ts): a switch
- * over a tool version, a tool server, a connection or an agent is written
+ * over a tool version, an MCP server, a connection or an agent is written
  * under the caller's workspace; class, organization, workspace and operator
  * switches are written org-wide, because each of them reaches past one
  * workspace.

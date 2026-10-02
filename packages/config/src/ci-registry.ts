@@ -193,14 +193,16 @@ export const CI_REGISTRY: Record<string, CiVarMeta> = {
   },
   STEERING_LIVE_GITHUB_APP_PRIVATE_KEY: {
     kind: "secret",
+    environment: "steering-live",
     description:
-      "Private key of the test GitHub App (STEERING_LIVE_GITHUB_APP_ID) the steering live test installs (steering-live.yml).",
+      "Private key of the rig GitHub App (STEERING_LIVE_GITHUB_APP_ID). steering-live.yml mints the rig's GitHub token with it.",
     refresh: {
-      how: "On the test App's settings page, generate a private key and save the .pem. Delete the old key once the next live run passes.",
+      how: "On the rig App's settings page, generate a private key and save the .pem. Delete the old key once the next live run passes.",
     },
   },
   STEERING_LIVE_OXAGEN_EMAIL: {
     kind: "secret",
+    environment: "steering-live",
     description: "Sign-in email of the Oxagen test account the steering live test uses.",
     refresh: {
       how: "The test account's email. Change it only with STEERING_LIVE_OXAGEN_PASSWORD.",
@@ -208,6 +210,7 @@ export const CI_REGISTRY: Record<string, CiVarMeta> = {
   },
   STEERING_LIVE_OXAGEN_PASSWORD: {
     kind: "secret",
+    environment: "steering-live",
     description: "Password of the steering live test account.",
     refresh: {
       how: "Set a new password in the Oxagen app while signed in as the test account, then save it here.",
@@ -353,8 +356,11 @@ export const CI_REGISTRY: Record<string, CiVarMeta> = {
   },
   STEERING_LIVE_GITHUB_APP_ID: {
     kind: "variable",
-    description: "Numeric id of the test GitHub App the steering live test installs.",
-    refresh: { how: "Read it on the test App's settings page." },
+    description:
+      "Numeric id of the rig GitHub App. The app is installed on STEERING_LIVE_GITHUB_ORG, and steering-live.yml mints the rig's GitHub token from it.",
+    refresh: {
+      how: "Read it on the rig App's settings page. Change it only with STEERING_LIVE_GITHUB_APP_PRIVATE_KEY.",
+    },
   },
   STEERING_LIVE_GITHUB_ORG: {
     kind: "variable",

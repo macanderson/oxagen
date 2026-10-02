@@ -191,7 +191,7 @@ describe("parseAgentsPageTab", () => {
 
   it.each([
     "agents",
-    "servers",
+    "mcp-servers",
     "policies",
     "runtimes",
     "switches",
@@ -201,12 +201,23 @@ describe("parseAgentsPageTab", () => {
     expect(parseAgentsPageTab(tab)).toBe(tab);
   });
 
+  it("opens MCP servers from the key it had before 2026-10-02", () => {
+    expect(parseAgentsPageTab("servers")).toBe("mcp-servers");
+  });
+
   it("lands the Tools page's own tab ids on the tab that holds them", () => {
-    expect(parseAgentsPageTab("providers")).toBe("servers");
+    expect(parseAgentsPageTab("providers")).toBe("mcp-servers");
     expect(parseAgentsPageTab("policy")).toBe("policies");
   });
 
-  it.each(["registry", "", "Servers", "agents/x"])(
+  it.each([
+    "registry",
+    "",
+    "Servers",
+    "MCP-servers",
+    "mcp_servers",
+    "agents/x",
+  ])(
     "reads ?tab=%j, which the page does not serve, as Agents (negative)",
     (raw) => {
       expect(parseAgentsPageTab(raw)).toBe("agents");
@@ -215,17 +226,20 @@ describe("parseAgentsPageTab", () => {
 });
 
 describe("areaTabOf", () => {
-  it("lights Tool servers for the registry and the toolbelts, its other two views", () => {
-    expect(areaTabOf("tools")).toBe("servers");
-    expect(areaTabOf("toolbelts")).toBe("servers");
+  it("lights MCP servers for the registry and the toolbelts, its other two views", () => {
+    expect(areaTabOf("tools")).toBe("mcp-servers");
+    expect(areaTabOf("toolbelts")).toBe("mcp-servers");
   });
 
-  it.each(["agents", "servers", "policies", "runtimes", "switches"] as const)(
-    "lights %s for itself",
-    (tab) => {
-      expect(areaTabOf(tab)).toBe(tab);
-    },
-  );
+  it.each([
+    "agents",
+    "mcp-servers",
+    "policies",
+    "runtimes",
+    "switches",
+  ] as const)("lights %s for itself", (tab) => {
+    expect(areaTabOf(tab)).toBe(tab);
+  });
 });
 
 describe("Agents page › header", () => {
@@ -237,7 +251,7 @@ describe("Agents page › header", () => {
     ).toBeInTheDocument();
     expect(
       within(header()).getByText(
-        "Your agents, the tool servers they call, the policies that decide each call, where they run, and the off switches.",
+        "Your agents, the MCP servers they call, the policies that decide each call, where they run, and the off switches.",
       ),
     ).toBeInTheDocument();
     expect(document.querySelectorAll("h1")).toHaveLength(1);
@@ -258,7 +272,7 @@ describe("Agents page › header", () => {
 
   it.each([
     "agents",
-    "servers",
+    "mcp-servers",
     "tools",
     "toolbelts",
     "policies",
@@ -315,14 +329,14 @@ describe("Agents page › tabs", () => {
     const all = tabs();
     expect(all.map((tab) => tab.getAttribute("href"))).toEqual([
       "/acme/core-platform/agents",
-      "/acme/core-platform/agents?tab=servers",
+      "/acme/core-platform/agents?tab=mcp-servers",
       "/acme/core-platform/agents?tab=policies",
       "/acme/core-platform/agents?tab=runtimes",
       "/acme/core-platform/agents?tab=switches",
     ]);
     expect(all.map((tab) => tab.firstChild?.textContent)).toEqual([
       "Agents",
-      "Tool servers",
+      "MCP servers",
       "Policies",
       "Runtimes",
       "Off switches",
@@ -345,7 +359,7 @@ describe("Agents page › tabs", () => {
   });
 
   it.each([
-    ["servers", 1],
+    ["mcp-servers", 1],
     ["tools", 1],
     ["toolbelts", 1],
     ["policies", 2],
@@ -363,7 +377,7 @@ describe("Agents page › tabs", () => {
       expect(lit).toHaveAttribute("data-tab", areaTabOf(tab));
       expect(lit).toHaveAttribute("tabindex", "0");
       expect(lit).not.toHaveAttribute("aria-current");
-      // Tool servers holds a second tablist, the views row, with its own
+      // MCP servers holds a second tablist, the views row, with its own
       // panel, so the page's panel is the one the lit tab names.
       const panel = element(
         document.getElementById(lit?.getAttribute("aria-controls") ?? ""),
@@ -379,7 +393,7 @@ describe("Agents page › tabs", () => {
     const [agents, servers, policies, runtimes, switches] = tabs();
     // The agents read's workspace total, not the rows on its first page.
     expect(agents).toHaveTextContent(/^Agents7$/);
-    expect(servers).toHaveTextContent(/^Tool servers2$/);
+    expect(servers).toHaveTextContent(/^MCP servers2$/);
     // No runtime named, one host enrolled.
     expect(runtimes).toHaveTextContent(/^Runtimes1$/);
     const on = element(
@@ -427,7 +441,7 @@ describe("Agents page › tabs", () => {
 
   it("prints no count a read did not answer, rather than a zero (negative)", async () => {
     await renderArea(
-      "servers",
+      "mcp-servers",
       {
         agents: readError("iam_principals_unavailable", 503),
         mcpServers: readError("tool_registry_unavailable", 503),
@@ -442,7 +456,7 @@ describe("Agents page › tabs", () => {
     );
     const [agents, servers, , runtimes, switches] = tabs();
     expect(agents).toHaveTextContent(/^Agents$/);
-    expect(servers).toHaveTextContent(/^Tool servers$/);
+    expect(servers).toHaveTextContent(/^MCP servers$/);
     // One of the two runtimes reads failed, so no partial count is printed.
     expect(runtimes).toHaveTextContent(/^Runtimes$/);
     expect(switches).toHaveTextContent(/^Off switches$/);
@@ -473,12 +487,12 @@ describe("Agents page › bodies", () => {
     ]);
   });
 
-  it("draws the servers list under the views row on Tool servers", async () => {
-    await renderArea("servers");
-    const row = screen.getByRole("tablist", { name: "Tool server views" });
+  it("draws the servers list under the views row on MCP servers", async () => {
+    await renderArea("mcp-servers");
+    const row = screen.getByRole("tablist", { name: "MCP server views" });
     expect(
       within(row).getByRole("tab", { selected: true }),
-    ).toHaveAttribute("href", "/acme/core-platform/agents?tab=servers");
+    ).toHaveAttribute("href", "/acme/core-platform/agents?tab=mcp-servers");
     expect(screen.getByRole("table", { name: "Providers" })).toBeInTheDocument();
   });
 
@@ -496,7 +510,7 @@ describe("Agents page › bodies", () => {
       screen.getByRole("region", { name: "Policy versions" }),
     ).toBeInTheDocument();
     expect(
-      screen.queryByRole("tablist", { name: "Tool server views" }),
+      screen.queryByRole("tablist", { name: "MCP server views" }),
     ).toBeNull();
   });
 
@@ -525,7 +539,7 @@ describe("Agents page › bodies", () => {
     ]);
   });
 
-  it.each(["agents", "servers", "switches"] as const)(
+  it.each(["agents", "mcp-servers", "switches"] as const)(
     "opens no drawer on the %s tab, whatever the URL carries (negative)",
     async (tab) => {
       const calls = await renderArea(tab, {}, owner, {
@@ -555,8 +569,8 @@ describe("Agents page › a body that cannot be read", () => {
     expect(tabs()).toHaveLength(5);
   });
 
-  it("keeps the header and the strip when the registry read is denied on Tool servers", async () => {
-    await renderArea("servers", {
+  it("keeps the header and the strip when the registry read is denied on MCP servers", async () => {
+    await renderArea("mcp-servers", {
       versions: { ok: false, reason: "denied", permission: "tools.read" },
     });
     expect(screen.getByTestId("tools-denied")).toBeInTheDocument();
@@ -582,15 +596,15 @@ describe("Agents page › a body that cannot be read", () => {
     expect(tabs()).toHaveLength(5);
   });
 
-  it("shows the empty state on Tool servers when no provider is registered, under the same header", async () => {
-    await renderArea("servers", {
+  it("shows the empty state on MCP servers when no provider is registered, under the same header", async () => {
+    await renderArea("mcp-servers", {
       versions: readOk(toolVersionPage({ items: [], nextCursor: null })),
       mcpServers: readOk(mcpServerList({ servers: [] })),
     });
     expect(screen.getByTestId("tools-empty")).toBeInTheDocument();
     expect(tabs()).toHaveLength(5);
     // The roster answered with none, so the tab counts a zero it can stand behind.
-    expect(tabs()[1]).toHaveTextContent(/^Tool servers0$/);
+    expect(tabs()[1]).toHaveTextContent(/^MCP servers0$/);
     // The empty state's Import a provider is drawn in the default style.
     expect(
       [...document.querySelectorAll('[class*="bg-button-primary-bg"]')].map(

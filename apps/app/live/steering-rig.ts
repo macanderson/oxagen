@@ -65,7 +65,7 @@ export function readSettings(env: NodeJS.ProcessEnv = process.env): Settings {
   const missing = REQUIRED.filter((name) => (env[name] ?? "") === "");
   if (missing.length > 0) {
     throw new Error(
-      `The steering live test is missing ${missing.join(", ")}. Issue #4724 names where each one comes from.`,
+      `The steering live test is missing ${missing.join(", ")}. The "Steering live test" section of docs/specs/github-app/github-app-setup.md says where each one comes from.`,
     );
   }
   const value = (name: (typeof REQUIRED)[number]): string => env[name] ?? "";
