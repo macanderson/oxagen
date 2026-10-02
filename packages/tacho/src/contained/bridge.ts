@@ -5,12 +5,7 @@ import {
   type ServerResponse,
 } from "node:http";
 import type { HookEnvelope } from "../collector/server";
-import {
-  forwardToGitHub,
-  gitHubTarget,
-  type ContainedGitHub,
-  type GitHubUpstreams,
-} from "./github";
+import { custodyGitPath, type ContainedGitHubCustody } from "./github";
 import type { ContainedHarness } from "./profile";
 
 export interface ContainedBridgeOptions {
@@ -29,14 +24,23 @@ export interface ContainedBridgeOptions {
   }>;
   refused: (path: string) => void;
   /**
-   * The run's GitHub grant, when the operator supplied one (ADR-152). The
-   * token never crosses into the sandbox; the bridge adds it on the way out.
+   * The run's repository and the daemon's Git custody, when the operator
+   * named a repository (ADR-254). No GitHub credential crosses into the
+   * sandbox: the bridge leases one for its own session on each request, and
+   * the custody proxy mints and revokes the vendor token.
    */
-  github?: ContainedGitHub;
-  githubUpstreams?: GitHubUpstreams;
-  /** Records a GitHub request the bridge forwarded for the run. */
-  forwarded?: (method: string, path: string) => void;
+  github?: ContainedGitHubCustody;
+  /** Records a Git request refused because custody issued no lease. */
+  githubRefused?: (path: string) => void;
 }
+
+/** The request headers the custody proxy reads from git. */
+const GIT_HEADERS = [
+  "content-type",
+  "content-encoding",
+  "git-protocol",
+  "user-agent",
+];
 
 function send(response: ServerResponse, status: number, body: unknown): void {
   response.writeHead(status, { "content-type": "application/json" });
@@ -126,17 +130,45 @@ export function containedBridgeHandler(options: ContainedBridgeOptions) {
         );
         return;
       }
-      if (options.github && path.startsWith("/github/")) {
-        const target = gitHubTarget(
-          path,
-          options.github.repository,
-          options.githubUpstreams,
-        );
-        if (target) {
-          options.forwarded?.(request.method ?? "GET", path);
-          forwardToGitHub(target, options.github.token, request, response);
+      const github = options.github;
+      const target =
+        github === undefined
+          ? undefined
+          : custodyGitPath(path, github.repository);
+      if (github !== undefined && target !== undefined) {
+        // The lease is chosen here, outside the sandbox, for the one session
+        // this bridge serves. The container never holds it, and whatever
+        // credential the container sent is dropped (ADR-254).
+        const lease = github.lease();
+        const body = lease.body as { token?: unknown; error?: unknown } | null;
+        const token = lease.status === 200 ? body?.token : undefined;
+        if (typeof token !== "string") {
+          options.githubRefused?.(path);
+          // Plain text, so git prints it to the agent as `remote:` lines.
+          response.writeHead(403, {
+            "content-type": "text/plain",
+            "cache-control": "no-store",
+          });
+          response.end(
+            `Oxagen issued no GitHub credential for this run. ${typeof body?.error === "string" ? body.error : "Check the session and the host's enrollment."}`,
+          );
           return;
         }
+        try {
+          const headers: Record<string, string> = {
+            authorization: `Basic ${Buffer.from(`oxagen:${token}`).toString("base64")}`,
+          };
+          for (const name of GIT_HEADERS) {
+            const value = request.headers[name];
+            if (typeof value === "string") headers[name] = value;
+          }
+          request.headers = headers;
+          request.url = target;
+          await github.handle(request, response);
+        } finally {
+          github.release(token);
+        }
+        return;
       }
       options.refused(path);
       send(response, 403, {

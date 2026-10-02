@@ -821,7 +821,7 @@ export function buildProgram(): Command {
     )
     .option(
       "--github-repository <owner/name>",
-      "The one repository the run may reach, with a token in OXAGEN_CONTAINED_GITHUB_TOKEN",
+      "The one repository the run may fetch and push, through Oxagen's Git custody. The workspace must have it bound.",
     )
     .argument("[command...]", "After --: claude or codex, then its arguments")
     .action(
@@ -1968,7 +1968,7 @@ export function buildProgram(): Command {
     )
     .option(
       "--github-repository <owner/name>",
-      "With --contained: the one repository the run may reach, with a token in OXAGEN_CONTAINED_GITHUB_TOKEN",
+      "With --contained: the one repository the run may fetch and push, through Oxagen's Git custody. The workspace must have it bound.",
     )
     .argument("[command...]", "After --: the agent's command and its arguments")
     .action(

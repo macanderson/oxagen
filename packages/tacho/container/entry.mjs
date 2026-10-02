@@ -46,9 +46,11 @@ const env = {
   OXAGEN_CONTAINED_ROUTE: "contained-route",
   CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1",
 };
-// GitHub is reachable only through the bridge, for the one repository the
-// launcher named (ADR-152). The token stays outside; git and the REST API see
-// a loopback URL that the bridge rewrites and authenticates.
+// GitHub is reachable only through the bridge, for Git smart HTTP to the one
+// repository the launcher named (ADR-152, ADR-254). Git sees a loopback URL
+// and sends no credential. Outside, the bridge leases one for this session
+// and the daemon's Git custody proxy mints and revokes the GitHub token. The
+// REST API has no route.
 const github = "/opt/oxagen/session/github.json";
 if (existsSync(github)) {
   const { repository } = JSON.parse(readFileSync(github, "utf8"));
@@ -58,7 +60,6 @@ if (existsSync(github)) {
     GIT_CONFIG_VALUE_0: "https://github.com/",
     GIT_CONFIG_KEY_1: "safe.directory",
     GIT_CONFIG_VALUE_1: "/workspace",
-    GITHUB_API_URL: "http://127.0.0.1:43801/github/api",
     GITHUB_REPOSITORY: repository,
   });
 }

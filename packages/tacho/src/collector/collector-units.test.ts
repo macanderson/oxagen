@@ -2168,9 +2168,13 @@ describe("shipper", () => {
       log: () => undefined,
       now: () => 0,
     });
+    const wholeFileRewrite = vi.spyOn(wal, "dropBodies");
     await s.drain();
     // Not merely unshipped: gone from disk, bytes and all.
     expect(wal.bodiesFor([prompt])).toEqual([]);
+    // And dropped off the synchronous path. `dropBodies` reads the whole body
+    // file on the daemon's only thread, which ADR-231 rules out on a drain.
+    expect(wholeFileRewrite).not.toHaveBeenCalled();
     expect(bodyFileText(paths.wal, prompt.session_uuid)).not.toContain(
       Buffer.from("the secret prompt").toString("base64"),
     );
