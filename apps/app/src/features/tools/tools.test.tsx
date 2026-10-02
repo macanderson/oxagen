@@ -1313,7 +1313,7 @@ type ToolsWriteContract = (typeof TOOLS_WRITES)[number][1];
  * Whether the page offers this capability's control to this viewer, read off
  * its own `defaultRoles.org`, the object each handler asserts. The page does
  * not read the workspace clause yet, though a workspace's creator holds the
- * workspace Owner role in IAM (#3143, #5182).
+ * workspace Owner role in IAM (#3143, #5182). Reading it is #3198.
  */
 function enforceablyGrants(
   contract: ToolsWriteContract,

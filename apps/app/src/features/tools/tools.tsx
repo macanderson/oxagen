@@ -61,8 +61,8 @@ function limitOf(rows: number): { limit?: number } {
  * workspace Owner. A workspace's creator holds that role in IAM
  * (`workspace-bootstrap.ts`, #5182), so the handlers admit them. This page
  * still reads only the org role, so it hides these controls from a creator
- * who holds no org manager role. Reading `ctx.wsRole` here is a separate
- * change.
+ * who holds no org manager role. Reading `ctx.wsRole` here belongs to #3198,
+ * which keeps the rest of the workspace role model.
  */
 function canAdministerOrg(ctx: WsCtx): boolean {
   return ctx.orgRole === "owner" || ctx.orgRole === "admin";
