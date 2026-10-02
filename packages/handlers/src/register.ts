@@ -4,7 +4,7 @@ import {
   registerServerFolderWriter,
   registerSteeringPrOpener,
 } from "@oxagen/agent/runtime/steering-pr";
-import { setInstructionProposalOpener } from "@oxagen/billing/proposal-opener";
+import { setSpendProposalOpener } from "@oxagen/billing/proposal-opener";
 import { setInterjectionTimeoutRunner } from "@oxagen/inngest-functions/interjection-timeout-runner";
 import { setMcpServerDiscoveryRunner } from "@oxagen/inngest-functions/mcp-server-discovery-runner";
 import { setMemoryRunner } from "@oxagen/inngest-functions/memory-runner";
@@ -226,17 +226,18 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .createServerFolderWriter()
         .addTools(request),
   });
-  // The findings pass (detector 6, prompt habits) opens a steering record
-  // proposal for each instruction operators repeat. The proposal path lives
-  // in this package, which @oxagen/billing cannot import. It runs in the
-  // workspace's tenant scope, and is loaded on the first pass that opens one.
-  setInstructionProposalOpener(async (scope, proposals) => {
+  // The findings pass opens the steering record proposals its findings
+  // support, through one builder per finding kind (./lib/spend-proposals).
+  // The proposal path lives in this package, which @oxagen/billing cannot
+  // import. It runs in the workspace's tenant scope, and is loaded on the
+  // first pass that has something to propose.
+  setSpendProposalOpener(async (scope, input) => {
     const [{ runInTenantScope }, open] = await Promise.all([
       import("@oxagen/tenancy"),
-      import("./lib/instruction-proposals"),
+      import("./lib/spend-proposals"),
     ]);
     await runInTenantScope(scope, () =>
-      open.openInstructionProposalsFor(scope, proposals),
+      open.openSpendProposalsFor(scope, input),
     );
   });
   // The interjection timeout (#3941) lives there too, and is loaded on its
@@ -1992,6 +1993,12 @@ registerHandlersOnce("@oxagen/handlers", () => {
     async () =>
       (await import("./spend.operator_ranking"))
         .spendOperatorRankingHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "get_spend_per_merged_pr",
+    async () =>
+      (await import("./spend.per_merged_pr"))
+        .spendPerMergedPrHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "set_operator_pseudonyms",
