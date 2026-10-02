@@ -244,7 +244,7 @@ export const WorkWait = z.discriminatedUnion("kind", [
   }),
   z.object({
     kind: z.literal("done"),
-    accepted: z.object({ by: z.string().nullable(), at: Instant }),
+    accepted: z.object({ by: z.string().nullable(), at: Instant, head: Sha }),
     mergedAt: Instant,
   }),
   z.object({
@@ -346,14 +346,6 @@ const TriageField = <T extends z.ZodType>(value: T) =>
     actor: z.string().nullable(),
     at: Instant.nullable(),
   });
-
-export const TriageOutcome = z.enum([
-  "triaged",
-  "needs_info",
-  "duplicate",
-  "out_of_scope",
-]);
-export type TriageOutcome = z.infer<typeof TriageOutcome>;
 
 export const WorkTriage = z.object({
   priority: TriageField(WorkPriorityLabel),

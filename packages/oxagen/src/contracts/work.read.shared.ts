@@ -151,9 +151,6 @@ export const workPriorityViewSchema = z
   })
   .strict();
 
-/** A person shown by name, with the time they acted. */
-const actedSchema = z.object({ by: z.string().nullable(), at: z.string() }).strict();
-
 /**
  * What an item waits for, as one code and the facts the page needs to say it.
  * Every name is a display name the server resolved, and every time an ISO
@@ -258,7 +255,8 @@ export const workWaitSchema = z.discriminatedUnion("kind", [
   z
     .object({
       kind: z.literal("done"),
-      accepted: actedSchema,
+      /** The person's acceptance and the head commit it was given on. */
+      accepted: z.object({ by: z.string().nullable(), at: z.string(), head: workHeadShaSchema }).strict(),
       merged_at: z.string(),
     })
     .strict(),

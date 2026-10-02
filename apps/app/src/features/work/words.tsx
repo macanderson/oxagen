@@ -248,7 +248,12 @@ export function WaitLine({ wait }: { wait: WorkWait }) {
       text = t("accepted_waiting_merge", { by: who(wait.by), head: shortSha(wait.head) });
       break;
     case "done":
-      text = t("done", { by: who(wait.accepted.by), accepted: when(wait.accepted.at), merged: when(wait.mergedAt) });
+      text = t("done", {
+        by: who(wait.accepted.by),
+        head: shortSha(wait.accepted.head),
+        accepted: when(wait.accepted.at),
+        merged: when(wait.mergedAt),
+      });
       break;
     case "closed":
       text = t("closed", { resolution: wait.resolution, by: who(wait.by), at: when(wait.at), reason: wait.reason });
