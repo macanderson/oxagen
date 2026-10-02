@@ -3,6 +3,8 @@
 - **Status:** Accepted
 - **Date:** 2026-09-25
 - **Owners:** app, evidence
+- **Amended by:** ADR-242 (one model reply is one step, so the fold and the
+  query agree on a reply that arrives in several parts).
 - **Amends:** ADR-182 (its consequence that the wrapped path of
   `get_run_turns` keeps a second definition of a step until each frame
   carries its step key from ingest).
@@ -69,16 +71,18 @@ at seal and a backfill for every row written before it.
     reads a chain's frames in seq order, and the fold reads them in the order
     the transcript splices them.
   - A later sighting with a richer body replaces the first one between them.
+    Amended by ADR-242 (one model reply is one step): the fold's rule 3 now
+    passes over it, so the two agree.
   - A later sighting whose first sighting is not among the run's frames sits
-    between them. The fold keeps it, as the only copy of the call, and the
-    query leaves it out.
-  - A transcript reply's further block sits between them. The fold keeps the
-    block when the reply's first block stays, so the request and the receipt
-    are two calls, and the query leaves it out and pairs them.
-    `run.turns.get.integration.test.ts` holds this difference, and #4351
-    decides it with the model step half below.
-- A transcript reply in two content blocks is two model steps in the fold
-  and one model call in the query. That is a separate decision about what a
-  step is, and #4351 carries it.
+    between them. Amended by ADR-242: the fold's rule 3 now passes over it,
+    so the tool count agrees. The fold still draws it as a model step, as the
+    only copy of the call, and the query counts none.
+  - A transcript reply's further block sits between them. Amended by
+    ADR-242: the fold gathers the block into its reply's step and pairs the
+    request with the receipt, as the query does.
+    `run.turns.get.integration.test.ts` now holds the two equal.
+- A transcript reply in two content blocks was two model steps in the fold
+  and one model call in the query. ADR-242 (#4351) decides that one reply is
+  one step, so the fold now counts it once too.
 - The query holds each group's letters in memory while it counts: one byte
   and one seq per frame, a few megabytes for the largest run.

@@ -4,7 +4,7 @@ Enrol a machine as a Tacho host (`docs/specs/tacho/spec.md` section 5.2). This i
 
 The response carries, once each and never again: the host's API key, the HMAC-signed enrollment document the collector verifies offline against the secret named by `verification_secret_env`, the initial Ed25519-signed policy bundle, and the bundle-signing public key. The host's `agentKey` is derived from the organization and workspace namespaces (ADR-024) and the hostname, so it is the identifier a bill, an audit row, and a fleet page show.
 
-Refuses when `TACHO_ENROLLMENT_SIGNING_SECRET` or `TACHO_BUNDLE_SIGNING_PRIVATE_KEY` is unset (a deployment defect, not a caller decision), and signs only endpoints listed in `TACHO_INGEST_ENDPOINTS`, so an operator cannot aim a fleet of hosts at a third party.
+Refuses when the deployment holds no enrollment signing secret or no bundle signing key ([`TACHO_ENROLLMENT_SIGNING_SECRET`](../../packages/config/src/registry.ts), [`TACHO_BUNDLE_SIGNING_PRIVATE_KEY`](../../packages/config/src/registry.ts)), which is a deployment defect, not a caller decision. It signs only the deployment's own Tacho endpoints ([`TACHO_INGEST_ENDPOINTS`](../../packages/config/src/registry.ts)), so an operator cannot aim a fleet of hosts at a third party.
 
 ## Mode
 

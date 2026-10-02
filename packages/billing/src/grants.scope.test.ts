@@ -75,6 +75,11 @@ vi.mock("./client", () => ({
   billingProvider: () => ({ getCheckoutSessionCreditPacks: vi.fn() }),
 }));
 vi.mock("./subscriptions", () => ({ syncSubscriptionFromStripe: vi.fn() }));
+// The governed-action grant rides the same system transaction; its own
+// writes are covered in signup-grant.test.ts and signup-grant.pg.test.ts.
+vi.mock("./signup-grant", () => ({
+  issueSignupGrant: vi.fn().mockResolvedValue(null),
+}));
 
 import { grantFreeCredits } from "./grants";
 

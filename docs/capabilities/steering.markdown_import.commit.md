@@ -15,7 +15,7 @@ Nothing in the PR steers an agent until it merges.
 - API: `POST /v1/:org_slug/:workspace_slug/context/steering/import/commit`, returns 201
 - MCP: `commit_markdown_import`
 - Agent: Stella finds it with `search_tools` and loads it with `load_tools`. Each call waits for a person's approval (`riskLevel: medium`).
-- CLI: `oxagen memory import <files...> --yes`
+- CLI: `oxagen steering import <paths...> --yes` and `oxagen memory import <files...> --yes`
 - Authentication: org Owner or Admin, or workspace Owner or Member, checked by the handler
 - Not billed (`noBillingGate: true`), IAM default-deny, high sensitivity
 

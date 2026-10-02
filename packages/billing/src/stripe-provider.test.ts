@@ -38,6 +38,7 @@ const stripeMethods = {
   },
   invoices: {
     retrieve: vi.fn(),
+    listLineItems: vi.fn(),
     createPreview: vi.fn(),
     create: vi.fn(),
     finalizeInvoice: vi.fn(),
@@ -88,7 +89,9 @@ vi.mock("@oxagen/config/env", () => ({
 }));
 
 // Import after mocks — also resets the singleton in stripeClient()
-const { StripeProvider } = await import("./stripe-provider");
+const { StripeProvider, MAX_INVOICE_LINES } = await import(
+  "./stripe-provider"
+);
 
 // ---------------------------------------------------------------------------
 // Helpers — minimal Stripe object factories
@@ -846,6 +849,39 @@ describe("StripeProvider", () => {
       });
     });
 
+    // #4895: the list call took Stripe's default page of 10 cards and never
+    // read has_more, so an 11th saved card was missing.
+    it("follows has_more to read every saved card", async () => {
+      stripeMethods.paymentMethods.list.mockReset();
+      stripeMethods.paymentMethods.list
+        .mockResolvedValueOnce({
+          data: [
+            makeStripePaymentMethod({ id: "pm_a" }),
+            makeStripePaymentMethod({ id: "pm_b" }),
+          ],
+          has_more: true,
+        })
+        .mockResolvedValueOnce({
+          data: [makeStripePaymentMethod({ id: "pm_c" })],
+          has_more: false,
+        });
+
+      const methods = await provider.listPaymentMethods("cus_many");
+
+      expect(methods.map((m) => m.id)).toEqual(["pm_a", "pm_b", "pm_c"]);
+      expect(stripeMethods.paymentMethods.list).toHaveBeenNthCalledWith(1, {
+        customer: "cus_many",
+        type: "card",
+        limit: 100,
+      });
+      expect(stripeMethods.paymentMethods.list).toHaveBeenNthCalledWith(2, {
+        customer: "cus_many",
+        type: "card",
+        limit: 100,
+        starting_after: "pm_b",
+      });
+    });
+
     it("returns empty array when no payment methods", async () => {
       stripeMethods.paymentMethods.list.mockResolvedValue({ data: [] });
       const methods = await provider.listPaymentMethods("cus_test_002");
@@ -984,6 +1020,95 @@ describe("StripeProvider", () => {
   // ── Invoice ─────────────────────────────────────────────────────────────────
 
   describe("getInvoice", () => {
+    // #4895: invoice.lines is one page. The mapper read lines.data and never
+    // has_more, so an invoice with 12 lines came back with 1.
+    const stripeLine = (n: number) => ({
+      description: `Line ${n}`,
+      quantity: 1,
+      price: { unit_amount: 100 },
+      amount: 100,
+      metadata: {},
+    });
+
+    it("reads every line of an invoice whose embedded page has more", async () => {
+      stripeMethods.invoices.retrieve.mockResolvedValue(
+        makeStripeInvoice({
+          lines: { data: [stripeLine(1)], has_more: true, total_count: 12 },
+        }),
+      );
+      const all = Array.from({ length: 12 }, (_, i) => stripeLine(i + 1));
+      const autoPagingToArray = vi.fn().mockResolvedValue(all);
+      stripeMethods.invoices.listLineItems.mockReturnValue({
+        autoPagingToArray,
+      });
+
+      const invoice = await provider.getInvoice("in_pages_001");
+
+      expect(invoice.lineItems).toHaveLength(12);
+      expect(invoice.lineItems[11]!.description).toBe("Line 12");
+      expect(invoice.lineItemsComplete).toBe(true);
+      expect(stripeMethods.invoices.listLineItems).toHaveBeenCalledWith(
+        "in_pages_001",
+        expect.objectContaining({ limit: 100 }),
+      );
+      expect(autoPagingToArray).toHaveBeenCalledWith({
+        limit: MAX_INVOICE_LINES + 1,
+      });
+    });
+
+    it("makes no second call for an invoice whose lines fit one page", async () => {
+      stripeMethods.invoices.listLineItems.mockClear();
+      stripeMethods.invoices.retrieve.mockResolvedValue(
+        makeStripeInvoice({
+          lines: { data: [stripeLine(1), stripeLine(2)], has_more: false },
+        }),
+      );
+
+      const invoice = await provider.getInvoice("in_one_page");
+
+      expect(invoice.lineItems).toHaveLength(2);
+      expect(invoice.lineItemsComplete).toBe(true);
+      expect(stripeMethods.invoices.listLineItems).not.toHaveBeenCalled();
+    });
+
+    it("returns the first MAX_INVOICE_LINES lines marked partial past the cap", async () => {
+      stripeMethods.invoices.retrieve.mockResolvedValue(
+        makeStripeInvoice({
+          lines: { data: [stripeLine(1)], has_more: true },
+        }),
+      );
+      const over = Array.from({ length: MAX_INVOICE_LINES + 1 }, (_, i) =>
+        stripeLine(i + 1),
+      );
+      stripeMethods.invoices.listLineItems.mockReturnValue({
+        autoPagingToArray: vi.fn().mockResolvedValue(over),
+      });
+
+      const invoice = await provider.getInvoice("in_huge");
+
+      expect(invoice.lineItems).toHaveLength(MAX_INVOICE_LINES);
+      expect(invoice.lineItemsComplete).toBe(false);
+    });
+
+    it("reads an invoice of exactly MAX_INVOICE_LINES lines as complete", async () => {
+      stripeMethods.invoices.retrieve.mockResolvedValue(
+        makeStripeInvoice({
+          lines: { data: [stripeLine(1)], has_more: true },
+        }),
+      );
+      const exact = Array.from({ length: MAX_INVOICE_LINES }, (_, i) =>
+        stripeLine(i + 1),
+      );
+      stripeMethods.invoices.listLineItems.mockReturnValue({
+        autoPagingToArray: vi.fn().mockResolvedValue(exact),
+      });
+
+      const invoice = await provider.getInvoice("in_exact");
+
+      expect(invoice.lineItems).toHaveLength(MAX_INVOICE_LINES);
+      expect(invoice.lineItemsComplete).toBe(true);
+    });
+
     it("translates a Stripe invoice to neutral shape", async () => {
       stripeMethods.invoices.retrieve.mockResolvedValue(makeStripeInvoice());
       const invoice = await provider.getInvoice("in_test_001");
@@ -1991,6 +2116,37 @@ describe("StripeProvider", () => {
       expect(event.type).toBe("invoice.paid");
       expect(event.invoice).toBeDefined();
       expect(event.invoice!.id).toBe("in_test_001");
+      expect(event.invoice!.lineItemsComplete).toBe(true);
+    });
+
+    it("marks a webhook invoice whose embedded lines have more pages incomplete", () => {
+      stripeMethods.invoices.listLineItems.mockClear();
+      stripeMethods.webhooks.constructEvent.mockReturnValue(
+        makeStripeEvent(
+          "invoice.paid",
+          makeStripeInvoice({
+            lines: {
+              data: [
+                {
+                  description: "Line 1",
+                  quantity: 1,
+                  price: { unit_amount: 100 },
+                  amount: 100,
+                  metadata: {},
+                },
+              ],
+              has_more: true,
+              total_count: 12,
+            },
+          }),
+        ),
+      );
+      const event = provider.parseWebhookEvent("raw_body", "sig_pages");
+      // Signature checks stay local: the parse makes no network call, and
+      // processStripeEvent completes the lines from its synced read.
+      expect(event.invoice!.lineItems).toHaveLength(1);
+      expect(event.invoice!.lineItemsComplete).toBe(false);
+      expect(stripeMethods.invoices.listLineItems).not.toHaveBeenCalled();
     });
 
     it("parses a checkout.session.completed event", () => {

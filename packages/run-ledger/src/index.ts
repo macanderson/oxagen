@@ -144,6 +144,7 @@ export {
 export {
   foldTranscript,
   stepFolds,
+  replyPartsOf,
   frameFolds,
   turnFolds,
   filterFoldsByKind,

@@ -72,6 +72,28 @@
  * problem the Anthropic email scrub already prevents. `model_params` is
  * dropped for the same reason it never reaches an attribute from Claude
  * Code's path: it is a settings bag nothing here reads.
+ *
+ * **No Cursor prompt carries a source, because Cursor sends none.** Claude
+ * Code writes `promptSource` and `origin` on each `user` record of its
+ * transcript, and Tacho keeps them as `prompt_source` and `prompt_origin`
+ * (`transcript.ts`). Cursor 3.22.12 (read from its shipped bundle on
+ * 2026-10-01) sends `beforeSubmitPrompt` with `prompt`, `attachments`,
+ * `composer_mode`, `conversation_id`, `generation_id`, `model`, `model_id`
+ * and `model_params`, plus the members every hook gets. None of them names
+ * the sender. The app marks a follow-up a stop hook sent
+ * (`isAutoFollowupFromStopHook`) and a message it wrote itself
+ * (`isSimulatedMsg`), and passes neither mark to the hook, so a typed prompt
+ * and a follow-up arrive in the same shape. `normalizeHook` copies a
+ * payload's `prompt_source` and `prompt_origin` onto the `turn_start`, and
+ * Codex's adapter sets both from what Codex records. This adapter sets
+ * neither. A missing source means the harness did not say, and a source
+ * guessed from the prompt text would be a value Cursor never reported.
+ *
+ * Three members do say something about automation, and each reaches the
+ * record as an attribute: `is_background_agent` and `composer_mode` on
+ * `sessionStart`, and `loop_count` on `stop`. In the app, `loop_count` is
+ * above 0 exactly when a stop hook's follow-up started the turn that just
+ * ended, because any other submission resets the count to 0.
  */
 
 function isRecord(value: unknown): value is Record<string, unknown> {

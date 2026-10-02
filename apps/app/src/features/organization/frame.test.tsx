@@ -181,9 +181,16 @@ describe("loaded", () => {
         "API keys",
         "Notifications",
       ]);
-      expect(tabs[0]).toHaveAttribute("aria-current", "page");
       expect(tabs[0]).toHaveAttribute("aria-selected", "true");
+      expect(tabs[0]).toHaveAttribute("tabindex", "0");
+      expect(tabs[0]).not.toHaveAttribute("aria-current");
       expect(tabs[1]).toHaveAttribute("aria-selected", "false");
+      expect(tabs[1]).toHaveAttribute("tabindex", "-1");
+      // The selected tab names the panel the tab's body draws in, and the
+      // panel takes that tab as its label.
+      const panel = screen.getByRole("tabpanel", { name: /^People/ });
+      expect(tabs[0]).toHaveAttribute("aria-controls", panel.id);
+      expect(within(panel).getByTestId("tab-body")).toBeInTheDocument();
       expect(tabs[2]).toHaveAttribute("href", "/acme?tab=invitations");
       expect(tabs[5]).toHaveAttribute("href", "/acme?tab=dataPlane");
       expect(tabs[7]).toHaveAttribute("href", "/acme?tab=notifications");

@@ -294,6 +294,17 @@ describe("no GitHub App installation", () => {
     expect(connect).toHaveAttribute("href", CONNECT_URL);
   });
 
+  // #4660: the about copy and the main_repo_unbound refusal state one rule.
+  // Linking a code repository and pulling published steering both refuse
+  // until the steering repository exists, and the copy says so.
+  it("says what waits on the steering repository, the rule the unbound refusal gives", async () => {
+    const { dialog } = await openSettings();
+    await screen.findByTestId("workspace-github-install");
+    expect(dialog).toHaveTextContent(
+      "Linking a code repository and pulling published steering wait until it exists.",
+    );
+  });
+
   // A deployment with no App configured has no door to offer. Saying so beats
   // a button that goes nowhere.
   it("says the App is unconfigured instead of rendering a dead button (negative)", async () => {

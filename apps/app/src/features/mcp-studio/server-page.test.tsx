@@ -242,7 +242,10 @@ function pageHeader(): HTMLElement {
 }
 
 function tabLink(tab: StudioTab): HTMLElement {
-  return element(document.getElementById(`studio-tab-${tab}`), `${tab} tab`);
+  return element(
+    document.querySelector(`[role="tab"][data-tab="${tab}"]`),
+    `${tab} tab`,
+  );
 }
 
 function countOf(tab: StudioTab): string | null {
@@ -696,8 +699,8 @@ describe("StudioServer tabs", () => {
         screen.getByRole("tablist", { name: "Server sections" }),
       ).toBeInTheDocument();
       const panel = screen.getByRole("tabpanel");
-      expect(panel).toHaveAttribute("id", `studio-panel-${tab}`);
-      expect(panel).toHaveAttribute("aria-labelledby", `studio-tab-${tab}`);
+      expect(panel).toHaveAttribute("id", "studio-panel");
+      expect(panel).toHaveAttribute("aria-labelledby", tabLink(tab).id);
       expect(within(panel).getByTestId(landmark)).toBeInTheDocument();
       for (const other of PANELS) {
         if (other.tab !== tab) {
@@ -708,14 +711,16 @@ describe("StudioServer tabs", () => {
         const link = tabLink(each);
         expect(link).toHaveAttribute("role", "tab");
         expect(link).toHaveAttribute("href", studioHref(AT, STRIPE, each));
+        // One selected state: a tab carries no `aria-current`.
+        expect(link).not.toHaveAttribute("aria-current");
         if (each === tab) {
           expect(link).toHaveAttribute("aria-selected", "true");
-          expect(link).toHaveAttribute("aria-current", "page");
-          expect(link).toHaveAttribute("aria-controls", `studio-panel-${tab}`);
+          expect(link).toHaveAttribute("aria-controls", "studio-panel");
+          expect(link).toHaveAttribute("tabindex", "0");
         } else {
           expect(link).toHaveAttribute("aria-selected", "false");
-          expect(link).not.toHaveAttribute("aria-current");
           expect(link).not.toHaveAttribute("aria-controls");
+          expect(link).toHaveAttribute("tabindex", "-1");
         }
       }
     },

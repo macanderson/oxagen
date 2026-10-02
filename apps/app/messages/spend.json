@@ -143,8 +143,6 @@
       "heroYearEnd": "a year at this run rate.",
       "attributionMissing": "The operator and agent behind a tool or workspace finding, and each finding’s trend, are not recorded yet.",
       "evidenceLine": "evidence {runs} runs · {calls} calls · {from} to {to}",
-      "atStake": "at stake ({share} of identified)",
-      "atStakeUnknown": "at stake",
       "list": "Findings ranked by savings",
       "filters": {
         "label": "Filter findings",
@@ -166,6 +164,22 @@
         "range": "{from} to {to} of {total}",
         "previous": "Previous",
         "next": "Next"
+      },
+      "card": {
+        "amount": "Amount at stake",
+        "estimatedAmount": "Estimated saving",
+        "share": "Share of spend",
+        "unit": {
+          "weeklyPerThousandTokens": "Weekly price per 1,000 tokens"
+        },
+        "estimated": "Estimated",
+        "needsPromptText": "Needs prompt text",
+        "text": {
+          "spin_loops": "{who} ran the same call 20 or more times in a row with an unchanged result. {calls, plural, one {# turn} other {# turns}} on {runs, plural, one {# run} other {# runs}} made only those repeats. The round trips cost {amount}.",
+          "duplicate_tool_calls": "{who} repeated tool calls that had already returned the same result in the run. {calls, plural, one {# turn} other {# turns}} on {runs, plural, one {# run} other {# runs}} made only those repeats. The round trips cost {amount}.",
+          "repeated_shell_commands": "Agents re-ran shell commands that had already returned the same result in the run. {calls, plural, one {# turn} other {# turns}} on {runs, plural, one {# run} other {# runs}} made only those repeats. The round trips cost {amount}.",
+          "spend_with_no_outcome": "{who} spent {amount} on {runs, plural, one {# run} other {# runs}} that ended with nothing kept."
+        }
       }
     },
     "columns": {

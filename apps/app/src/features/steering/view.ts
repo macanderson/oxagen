@@ -37,9 +37,6 @@ export type SteeringTab = (typeof STEERING_TABS)[number];
 /** The id of the region the selected tab controls: the shelf row and the body. */
 export const TAB_PANEL_ID = "steering-panel";
 
-/** A tab's element id, which the panel names as its label. */
-export const tabId = (tab: SteeringTab): string => `steering-tab-${tab}`;
-
 /**
  * The Library's shelves, in the design's order. Instructions renders only
  * where the workspace has one, so All stays the sum of the chips beside it.

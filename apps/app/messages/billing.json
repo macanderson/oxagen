@@ -33,6 +33,7 @@
       "governedNote": "above the included allowance (<basis></basis>)",
       "retained": "Retained evidence",
       "retainedNote": "{months} months included",
+      "retainedDaysNote": "{days} days included",
       "due": "Due {date}",
       "dueNote": "{currency} after the onboarding discount"
     },
@@ -56,6 +57,8 @@
         "tokens": "reported at zero (your model spend is on Spend)",
         "retention": "{months} months included · {held}",
         "retentionExtended": "{months} months included · {held} · extended retention on",
+        "retentionDays": "{days} days included · {held}",
+        "retentionExtendedDays": "{days} days included · {held} · extended retention on",
         "heldNotRecorded": "GB held not recorded",
         "discount": "the onboarding offer is not recorded yet (spec §20, deferred)",
         "total": "rounded once to cents (half-even)"
@@ -70,10 +73,13 @@
       },
       "governed": "Governed actions",
       "governedNote": "the billable unit ({included} included this month)",
+      "grantNote": "{left} of the {granted} signup grant left until {expires}",
+      "grantEndedNote": "signup grant ended {expires}",
       "sealed": "Sealed runs with at least one model call",
       "sealedNote": "reported without a price",
       "retained": "Retained evidence",
       "retainedNote": "{months} months included",
+      "retainedDaysNote": "{days} days included",
       "halted": "Runs Oxagen halted before any model call",
       "inApp": "Runs of the in-app agent",
       "free": "free",
@@ -153,7 +159,8 @@
     "priceList": {
       "title": "Price list",
       "free": "Free",
-      "freeTerms": "every governance feature, an included monthly allowance, <nr>days of evidence not recorded</nr>, <nr>seats not recorded</nr>",
+      "freeTerms": "every governance feature and one signup grant of {grant} governed actions for {days} days with {evidence} days of evidence",
+      "freeTermsNotRecorded": "every governance feature and a signup grant <nr>not recorded</nr>",
       "blocks": "Governed actions in blocks of {count}",
       "blocksTerms": "<price></price> per block at the published rate",
       "negotiated": "Negotiated agreement",
@@ -165,8 +172,8 @@
       "tokens": "Tokens Oxagen buys for you",
       "tokensTerms": "at cost and capped",
       "enterprise": "Enterprise (annual)",
-      "enterpriseTerms": "from <nr>not recorded</nr> per year",
-      "footer": "The free tier includes every feature at any volume. Its limits are evidence retention and seats."
+      "enterpriseTerms": "negotiated per organization",
+      "footer": "The free tier includes every feature. Its limits are the signup grant and evidence retention."
     },
     "billableUnits": {
       "title": "Billable units",

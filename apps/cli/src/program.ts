@@ -676,7 +676,7 @@ export function buildProgram(): Command {
   const steeringCmd = program
     .command("steering")
     .description(
-      "Steering freshness: whether .oxagen/ carries the records merged on the production branch",
+      "Steering records: whether .oxagen/ carries the ones merged on the production branch, and Markdown import",
     );
   steeringCmd
     .command("status")
@@ -743,6 +743,35 @@ export function buildProgram(): Command {
       async (action: string, opts: { harness?: string; json?: boolean }) => {
         const { steeringHooks } = await import("./commands/steering.js");
         await steeringHooks(action, opts);
+      },
+    );
+  steeringCmd
+    .command("import")
+    .argument(
+      "<paths...>",
+      "Markdown files, or folders to search for .md, .markdown, and .mdx files",
+    )
+    .description(
+      "Read Markdown files into steering records and Cedar policies. Previews unless --yes.",
+    )
+    .option(
+      "--as <target>",
+      "records or policies for every file. Without it, each file takes the target its text implies, such as policies for a file with a cedar block.",
+    )
+    .option(
+      "-y, --yes",
+      "Open one steering PR with every row marked add. Records that conflict with a published record are left out.",
+    )
+    .option("--json", "Output JSON")
+    .action(
+      async (
+        paths: string[],
+        opts: { as?: string; yes?: boolean; json?: boolean },
+      ) => {
+        const { handleSteeringImport } = await import(
+          "./commands/steering-import.js"
+        );
+        await handleSteeringImport(paths, opts);
       },
     );
 
