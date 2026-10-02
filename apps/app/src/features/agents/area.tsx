@@ -48,7 +48,7 @@ import {
 } from "@/shared/safe-path";
 import { formatCount } from "@/ui/money-format";
 import { PageHeader } from "@/ui/page-header";
-import { RouteTabs } from "@/ui/route-tabs";
+import { RouteTabPanel, RouteTabs } from "@/ui/route-tabs";
 import { Agents, AgentsLoading } from "./agents";
 import { ConnectAgentLink } from "./create-actions";
 
@@ -78,6 +78,9 @@ export function parseAgentsPageTab(raw: string | undefined): AgentsPageTab {
 export function areaTabOf(tab: AgentsPageTab): AgentsAreaTab {
   return tab === "tools" || tab === "toolbelts" ? "servers" : tab;
 }
+
+/** The id of the panel the page draws under the strip. */
+const AGENTS_PANEL = "agents-panel";
 
 /** What the strip counts, each null where the read did not answer. */
 type Counts = {
@@ -127,14 +130,15 @@ function AgentsAreaTabs({
   };
   return (
     <RouteTabs
-      tablist
       label={t("label")}
+      panel={AGENTS_PANEL}
       tabs={AGENTS_AREA_TABS.map((tab) => {
         const n = count(tab);
         return {
           to: routes.agents(org, ws, { tab }),
           label: t(tab),
           current: tab === current,
+          name: tab,
           ...(n === undefined ? {} : { count: n }),
         };
       })}
@@ -240,11 +244,7 @@ export async function AgentsArea({
         current={current}
         counts={counts}
       />
-      <div
-        role="tabpanel"
-        id={`agents-panel-${current}`}
-        className="flex flex-col gap-4"
-      >
+      <RouteTabPanel panel={AGENTS_PANEL} className="flex flex-col gap-4">
         <Suspense key={tab} fallback={<BodyLoading tab={current} />}>
           <Body
             ctx={ctx}
@@ -254,7 +254,7 @@ export async function AgentsArea({
             viewerName={viewerName}
           />
         </Suspense>
-      </div>
+      </RouteTabPanel>
       {runtime === null ? null : (
         <Suspense key={runtime} fallback={null}>
           <RuntimeInDrawer

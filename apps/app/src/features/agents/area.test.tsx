@@ -334,10 +334,14 @@ describe("Agents page › tabs", () => {
       "false",
       "false",
     ]);
-    expect(screen.getByRole("tabpanel")).toHaveAttribute(
-      "id",
-      "agents-panel-agents",
-    );
+    // The selected tab names the panel, and the panel takes it as its label.
+    const panel = screen.getByRole("tabpanel", { name: /^Agents/ });
+    expect(all[0]).toHaveAttribute("aria-controls", panel.id);
+    for (const tab of all.slice(1)) {
+      expect(tab).not.toHaveAttribute("aria-controls");
+      expect(tab).toHaveAttribute("tabindex", "-1");
+    }
+    expect(all[0]).toHaveAttribute("tabindex", "0");
   });
 
   it.each([
@@ -355,11 +359,18 @@ describe("Agents page › tabs", () => {
         (node) => node.getAttribute("aria-selected") === "true",
       );
       expect(selected).toEqual([0, 1, 2, 3, 4].map((i) => i === index));
-      expect(tabs()[index]).toHaveAttribute("aria-current", "page");
-      expect(screen.getByRole("tabpanel")).toHaveAttribute(
-        "id",
-        `agents-panel-${areaTabOf(tab)}`,
+      const lit = tabs()[index];
+      expect(lit).toHaveAttribute("data-tab", areaTabOf(tab));
+      expect(lit).toHaveAttribute("tabindex", "0");
+      expect(lit).not.toHaveAttribute("aria-current");
+      // Tool servers holds a second tablist, the views row, with its own
+      // panel, so the page's panel is the one the lit tab names.
+      const panel = element(
+        document.getElementById(lit?.getAttribute("aria-controls") ?? ""),
+        "panel",
       );
+      expect(panel).toHaveAttribute("role", "tabpanel");
+      expect(panel).toHaveAttribute("aria-labelledby", lit?.id);
     },
   );
 
@@ -464,9 +475,9 @@ describe("Agents page › bodies", () => {
 
   it("draws the servers list under the views row on Tool servers", async () => {
     await renderArea("servers");
-    const row = screen.getByRole("navigation", { name: "Tool server views" });
+    const row = screen.getByRole("tablist", { name: "Tool server views" });
     expect(
-      within(row).getByRole("link", { current: "page" }),
+      within(row).getByRole("tab", { selected: true }),
     ).toHaveAttribute("href", "/acme/core-platform/agents?tab=servers");
     expect(screen.getByRole("table", { name: "Providers" })).toBeInTheDocument();
   });
@@ -485,7 +496,7 @@ describe("Agents page › bodies", () => {
       screen.getByRole("region", { name: "Policy versions" }),
     ).toBeInTheDocument();
     expect(
-      screen.queryByRole("navigation", { name: "Tool server views" }),
+      screen.queryByRole("tablist", { name: "Tool server views" }),
     ).toBeNull();
   });
 
@@ -505,9 +516,13 @@ describe("Agents page › bodies", () => {
     const calls = await renderArea("runtimes", {}, owner, {
       runtime: enrollment().id,
     });
-    // The table stays behind the drawer.
+    // The table stays behind the drawer. The table reads its rows' agents
+    // for their harness, and the drawer reads its host's agent.
     expect(screen.getByRole("table", { name: "Runtimes" })).toBeInTheDocument();
-    expect(calls.runtimes.agents).toEqual([["acme.core.release-manager"]]);
+    expect(calls.runtimes.agents).toEqual([
+      ["acme.core.release-manager"],
+      ["acme.core.release-manager"],
+    ]);
   });
 
   it.each(["agents", "servers", "switches"] as const)(

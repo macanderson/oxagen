@@ -41,13 +41,9 @@ import { OntologyShelf } from "./tabs/ontology";
 import { ProposalsTab } from "./tabs/proposals";
 import { RecordsShelf } from "./tabs/records";
 import { SkillSourceShelf } from "./tabs/skill-source";
-import {
-  type SteeringAt,
-  type SteeringView,
-  TAB_PANEL_ID,
-  tabId,
-} from "./view";
+import { type SteeringAt, type SteeringView, TAB_PANEL_ID } from "./view";
 import { routes } from "@/shared/safe-path";
+import { RouteTabPanel } from "@/ui/route-tabs";
 
 /** The page header, drawn by the route with these actions; the route owns its title key. */
 export type SteeringHeader = (actions: ReactNode) => ReactNode;
@@ -331,12 +327,7 @@ export async function Steering({
           proposals: hub.ok ? hub.value.proposalsWaiting : null,
         }}
       />
-      <div
-        role="tabpanel"
-        id={TAB_PANEL_ID}
-        aria-labelledby={tabId(view.tab)}
-        className="flex flex-col gap-4"
-      >
+      <RouteTabPanel panel={TAB_PANEL_ID} className="flex flex-col gap-4">
         {view.tab === "library" ? (
           <ShelfRow at={at} current={view.shelf ?? "all"} counts={shelves} />
         ) : null}
@@ -356,7 +347,7 @@ export async function Steering({
             repository,
           })
         )}
-      </div>
+      </RouteTabPanel>
     </div>
   );
 }

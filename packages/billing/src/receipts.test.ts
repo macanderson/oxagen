@@ -85,6 +85,7 @@ function makeInvoice(overrides: Partial<BillingInvoice> = {}): BillingInvoice {
     orgId: "org-abc",
     billingReason: "subscription_cycle",
     gauSettlementId: null,
+    lineItemsComplete: true,
     lineItems: [
       {
         description: "Pro plan",

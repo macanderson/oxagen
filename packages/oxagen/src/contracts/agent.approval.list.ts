@@ -29,8 +29,8 @@ export const approvalListItem = z
     id: z.string().regex(/^apr_[0-9a-z]+$/),
     /**
      * The public id of the run the call was parked in (`arun_…` or `tse_…`);
-     * null when no run was in scope, or when the writer records none yet (the
-     * mandate gate does not thread a run through).
+     * null when no run was in scope. Every approval writer records it, the
+     * mandate gate included (#3478).
      */
     runId: z.string().nullable(),
     /** The capability the parked call asked for (`approval_requests.capability_name`). */

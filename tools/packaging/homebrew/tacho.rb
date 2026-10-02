@@ -2,42 +2,45 @@
 # `oxagen` (the platform CLI, which enrolls the machine and runs its hooks and
 # collector) and the recorder's legacy executable, kept under its old name for
 # machines enrolled before #4879. Each is a Node single-executable the Desktop
-# workflow builds per OS (tools/sea/compile.mjs) and attaches to the
-# desktop-v<version> release next to a `<asset>.sha256` file.
+# workflow builds per OS (tools/sea/compile.mjs) and publishes to
+# downloads.oxagen.sh/desktop/<version>/ next to a `<asset>.sha256` file.
+# Nothing here reads a GitHub release: the repository is private (ADR-247).
 #
 # This is a template until a tap exists. A formula cannot say
 # `sha256 :no_check` (that stanza is cask-only), so every digest below is a
 # per-asset digest token that `tools/packaging/stamp.mjs` fills from the
-# release's .sha256 files; see tools/packaging/README.md for the flow.
+# version's SHA256SUMS.txt; see tools/packaging/README.md for the flow.
 class Tacho < Formula
   desc "The oxagen CLI, which puts coding agents under Oxagen control"
   homepage "https://oxagen.sh/"
   version "{{version}}"
   license :cannot_represent
 
+  # The in-app update feed names the newest release and never a build.
   livecheck do
-    url :stable
-    strategy :github_releases
-    regex(/^desktop-v(\d+(?:\.\d+)+)$/i)
+    url "https://downloads.oxagen.sh/updater/latest.json"
+    strategy :json do |json|
+      json["version"]
+    end
   end
 
   on_macos do
     on_arm do
-      url "https://github.com/macanderson/oxagen/releases/download/desktop-v#{version}/tacho-aarch64-apple-darwin"
+      url "https://downloads.oxagen.sh/desktop/#{version}/tacho-aarch64-apple-darwin"
       sha256 "{{sha256:tacho-aarch64-apple-darwin}}"
 
       resource "oxagen" do
-        url "https://github.com/macanderson/oxagen/releases/download/desktop-v#{version}/oxagen-aarch64-apple-darwin"
+        url "https://downloads.oxagen.sh/desktop/#{version}/oxagen-aarch64-apple-darwin"
         sha256 "{{sha256:oxagen-aarch64-apple-darwin}}"
       end
     end
 
     on_intel do
-      url "https://github.com/macanderson/oxagen/releases/download/desktop-v#{version}/tacho-x86_64-apple-darwin"
+      url "https://downloads.oxagen.sh/desktop/#{version}/tacho-x86_64-apple-darwin"
       sha256 "{{sha256:tacho-x86_64-apple-darwin}}"
 
       resource "oxagen" do
-        url "https://github.com/macanderson/oxagen/releases/download/desktop-v#{version}/oxagen-x86_64-apple-darwin"
+        url "https://downloads.oxagen.sh/desktop/#{version}/oxagen-x86_64-apple-darwin"
         sha256 "{{sha256:oxagen-x86_64-apple-darwin}}"
       end
     end
@@ -46,11 +49,11 @@ class Tacho < Formula
   on_linux do
     # The release matrix builds Linux on x86_64 only (ubuntu-22.04).
     on_intel do
-      url "https://github.com/macanderson/oxagen/releases/download/desktop-v#{version}/tacho-x86_64-unknown-linux-gnu"
+      url "https://downloads.oxagen.sh/desktop/#{version}/tacho-x86_64-unknown-linux-gnu"
       sha256 "{{sha256:tacho-x86_64-unknown-linux-gnu}}"
 
       resource "oxagen" do
-        url "https://github.com/macanderson/oxagen/releases/download/desktop-v#{version}/oxagen-x86_64-unknown-linux-gnu"
+        url "https://downloads.oxagen.sh/desktop/#{version}/oxagen-x86_64-unknown-linux-gnu"
         sha256 "{{sha256:oxagen-x86_64-unknown-linux-gnu}}"
       end
     end

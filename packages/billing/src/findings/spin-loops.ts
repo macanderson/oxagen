@@ -4,8 +4,8 @@
  * the same result each time. A request counts when every tool call it made is
  * a repeat and one of them is in such a streak. Its whole priced cost counts
  * once, against nothing, and the finding claims its frame as detector 1. It
- * runs before repeated shell commands and duplicate tool calls, so a request
- * in a loop is never counted twice.
+ * runs before retry loops, repeated shell commands, and duplicate tool calls,
+ * so a request in a loop is counted once.
  */
 import {
   claimKey,

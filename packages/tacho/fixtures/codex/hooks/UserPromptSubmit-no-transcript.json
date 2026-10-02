@@ -1,0 +1,12 @@
+{
+  "stdin": {
+    "session_id": "019a2b3c-4d5e-7f60-8a9b-0c1d2e3f4a5b",
+    "turn_id": "019a2b3c-4d5e-7f60-8a9b-0c1d2e3f4a70",
+    "transcript_path": null,
+    "cwd": "/home/dev/proj",
+    "hook_event_name": "UserPromptSubmit",
+    "model": "gpt-6-astra",
+    "permission_mode": "default",
+    "prompt": "Fix the failing build in packages/api."
+  }
+}

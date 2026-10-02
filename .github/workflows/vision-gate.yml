@@ -4,11 +4,21 @@
 # advisory verdict (advances / neutral / drifts) as a sticky PR comment + step
 # summary. Never blocks merge (the script exits 0 unless VISION_GATE_STRICT=1);
 # fork PRs no-op safely because secrets are unavailable there.
+#
+# It also asks a doc-drift question of the same diff (#3202): does a doc or
+# runbook in the diff, operator guidance under infra/** included, claim a
+# control is on while the code leaves it off? Each finding is a warning
+# annotation and a section of the comment. It never blocks, even in strict
+# mode.
 name: Vision Gate
 
 on:
+  # No `synchronize` (#4918). The gate called a model on every push: 2,403
+  # runs on 474 pull requests in the week of 2026-09-23. A pull request's
+  # direction is set when it opens and when it is marked ready, and the
+  # verdict is advisory, so it is judged then.
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [opened, reopened, ready_for_review]
 
 permissions:
   contents: read
@@ -20,7 +30,8 @@ concurrency:
 
 jobs:
   vision-gate:
-    runs-on: ubuntu-latest
+    # ubuntu-slim (one vCPU, $0.002 a minute): a checkout and one model call.
+    runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-small-{0}', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-slim' }}
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
@@ -38,7 +49,7 @@ jobs:
       - name: Fetch base branch
         run: git fetch origin ${{ github.base_ref }} --no-tags
 
-      - name: Judge diff against docs/VISION.md
+      - name: Judge diff against docs/VISION.md, and ask the doc-drift question
         env:
           AI_GATEWAY_API_KEY: ${{ secrets.AI_GATEWAY_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

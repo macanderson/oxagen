@@ -24,8 +24,9 @@ committed.
   ([`apps/docs`](../docs/README.md)); the S3 bucket and CloudFront
   distribution (`infra/stacks-new/ci-deploy/`).
 - **Depends on:** No `@oxagen/*` dependencies. Its npm packages are build-time
-  `devDependencies`, and the browser gets no JavaScript beyond
-  `assets/oxagen.js`.
+  `devDependencies`. The browser runs `assets/oxagen.js` and the Google
+  Analytics and LinkedIn Insight tags, which the build adds to every page
+  from `scripts/lib/analytics.mjs`.
 - **Used by:** no workspace package imports it. CI's `deploy-web` job in
   `.github/workflows/pipeline.yml` publishes `dist/`.
 

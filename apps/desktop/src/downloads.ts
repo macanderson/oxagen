@@ -126,6 +126,234 @@ export function sortInstallers<T extends Installer>(installers: T[]): T[] {
   );
 }
 
+/**
+ * The four legs of `.github/workflows/desktop.yml`, by Rust triple, in page
+ * order. The bare executables are named by these triples
+ * (`tools/packaging/README.md`).
+ */
+export const EXECUTABLE_TARGETS: ReadonlyArray<{
+  triple: string;
+  os: Installer["os"];
+  variant: string;
+}> = [
+  { triple: "aarch64-apple-darwin", os: "macOS", variant: "Apple silicon" },
+  { triple: "x86_64-apple-darwin", os: "macOS", variant: "Intel" },
+  { triple: "x86_64-pc-windows-msvc", os: "Windows", variant: "x64" },
+  { triple: "x86_64-unknown-linux-gnu", os: "Linux", variant: "x86_64" },
+];
+
+/**
+ * One of the bare `oxagen` and `tacho` executables: the sidecars the app
+ * links onto PATH, published beside the installers for anyone who wants the
+ * command line without the app.
+ */
+export interface Executable {
+  /** File name as published, e.g. `oxagen-aarch64-apple-darwin`. */
+  file: string;
+  name: "oxagen" | "tacho";
+  triple: string;
+  os: Installer["os"];
+  variant: string;
+  contentType: string;
+  rank: number;
+  /** The name under `latest/`. The file name carries no version, so it is the same. */
+  latest: string;
+}
+
+/**
+ * The executable a build output is, or null. The names carry the triple but
+ * no version, so this accepts only the exact names the sidecar step writes
+ * (`apps/desktop/scripts/sidecars.mjs`). The CI artifact that carries them is
+ * built fresh by the same run, so a stale file cannot reach a new version.
+ */
+export function classifyExecutable(fileName: string): Executable | null {
+  for (const [index, target] of EXECUTABLE_TARGETS.entries()) {
+    const ext = target.os === "Windows" ? ".exe" : "";
+    for (const [offset, name] of (["oxagen", "tacho"] as const).entries()) {
+      if (fileName !== `${name}-${target.triple}${ext}`) continue;
+      return {
+        file: fileName,
+        name,
+        triple: target.triple,
+        os: target.os,
+        variant: target.variant,
+        contentType: "application/octet-stream",
+        rank: index * 2 + offset,
+        latest: fileName,
+      };
+    }
+  }
+  return null;
+}
+
+/** Executables in page order, one per file name. */
+export function sortExecutables<T extends Executable>(executables: T[]): T[] {
+  const byName = new Map(executables.map((e) => [e.file, e]));
+  return [...byName.values()].sort((a, b) => a.rank - b.rank);
+}
+
+/** The one-line `<file>.sha256` that `shasum -a 256 -c` reads. */
+export function checksumFileText(entry: {
+  file: string;
+  sha256: string;
+}): string {
+  return `${entry.sha256}  ${entry.file}\n`;
+}
+
+/**
+ * The macOS updater archive, as the build job renames it. The bundler writes
+ * `bundle/macos/Oxagen.app.tar.gz` on both Mac legs, so the job names it
+ * `Oxagen_<version>_aarch64.app.tar.gz` or `Oxagen_<version>_x64.app.tar.gz`
+ * before the upload. The two legs then cannot collide, and the version in the
+ * name keeps a stale archive from shipping under a new version, as it does
+ * for the installers.
+ */
+export function classifyUpdaterArchive(
+  fileName: string,
+  version: string,
+): { file: string; contentType: string } | null {
+  if (fileName === `Oxagen_${version}_aarch64.app.tar.gz`)
+    return { file: fileName, contentType: "application/gzip" };
+  if (fileName === `Oxagen_${version}_x64.app.tar.gz`)
+    return { file: fileName, contentType: "application/gzip" };
+  return null;
+}
+
+/**
+ * The file a `.sig` signs, when that file is one the update feed can name:
+ * an installer that updates in place, or a macOS updater archive. Null for
+ * anything else, a `.dmg.sig` included, since the updater never installs a
+ * disk image.
+ */
+export function signedFileOf(fileName: string, version: string): string | null {
+  if (!fileName.endsWith(".sig")) return null;
+  const file = fileName.slice(0, -".sig".length);
+  if (classifyUpdaterArchive(file, version) !== null) return file;
+  if (classifyInstaller(file, version) === null) return null;
+  return FEED_RULES.some((rule) => rule.test.test(file)) ? file : null;
+}
+
+/**
+ * Where the in-app updater reads its feed on the downloads host
+ * (`plugins.updater.endpoints` in `src-tauri/tauri.conf.json`). Outside
+ * `desktop/`, which holds only files that never change once published.
+ */
+export const UPDATE_FEED_KEY = "updater/latest.json";
+
+interface FeedRule {
+  test: RegExp;
+  /**
+   * The feed keys this file answers. The plugin looks up
+   * `<os>-<arch>-<bundle>` first and falls back to `<os>-<arch>`. These are
+   * the keys tauri-action wrote into the GitHub feed up to 2.1.3, so an app
+   * of any version finds its key here too.
+   */
+  platforms: string[];
+}
+
+const FEED_RULES: FeedRule[] = [
+  {
+    test: /_aarch64\.app\.tar\.gz$/,
+    platforms: ["darwin-aarch64", "darwin-aarch64-app"],
+  },
+  {
+    test: /_x64\.app\.tar\.gz$/,
+    platforms: ["darwin-x86_64", "darwin-x86_64-app"],
+  },
+  {
+    test: /_x64_[a-z]{2}-[A-Z]{2}\.msi$/,
+    platforms: ["windows-x86_64", "windows-x86_64-msi"],
+  },
+  { test: /_x64-setup\.exe$/, platforms: ["windows-x86_64-nsis"] },
+  {
+    test: /_amd64\.AppImage$/,
+    platforms: ["linux-x86_64", "linux-x86_64-appimage"],
+  },
+  { test: /_amd64\.deb$/, platforms: ["linux-x86_64-deb"] },
+  { test: /\.x86_64\.rpm$/, platforms: ["linux-x86_64-rpm"] },
+];
+
+/**
+ * The keys an app can update on only when the feed carries them: an app that
+ * does not know its bundle type asks for `<os>-<arch>`.
+ */
+export const FEED_BASE_PLATFORMS = [
+  "darwin-aarch64",
+  "darwin-x86_64",
+  "windows-x86_64",
+  "linux-x86_64",
+] as const;
+
+/** The static JSON `tauri-plugin-updater` reads. */
+export interface UpdateFeed {
+  version: string;
+  notes: string;
+  pub_date: string;
+  platforms: Record<string, { signature: string; url: string }>;
+}
+
+/**
+ * The update feed for a release, from the signature of each file. A
+ * signature is the text of the bundler's `<file>.sig`, the minisign
+ * signature the app checks against `plugins.updater.pubkey` before it
+ * installs anything. The URLs are the immutable versioned ones, so a feed
+ * names exactly the files it was written for.
+ *
+ * The feed carries releases only (ADR-158): a deploy build is refused, so an
+ * open app offers the next release and not every deploy.
+ */
+export function updateFeed(input: {
+  version: string;
+  pubDate: string;
+  host: string;
+  signed: ReadonlyArray<{ file: string; signature: string }>;
+}): UpdateFeed {
+  if (isBuildVersion(input.version) || !VERSION.test(input.version))
+    throw new Error(
+      `${input.version} is not a release; the update feed carries releases only`,
+    );
+  const base = `https://${input.host}/desktop/${encodeURIComponent(input.version)}`;
+  const platforms: UpdateFeed["platforms"] = {};
+  for (const rule of FEED_RULES) {
+    const entry = input.signed.find((s) => rule.test.test(s.file));
+    if (entry === undefined) continue;
+    const signature = entry.signature.trim();
+    if (signature === "")
+      throw new Error(`${entry.file}.sig is empty; refusing to publish it`);
+    for (const key of rule.platforms)
+      platforms[key] = {
+        signature,
+        url: `${base}/${encodeURIComponent(entry.file)}`,
+      };
+  }
+  return {
+    version: input.version,
+    notes: `What changed: ${releaseLinks(input.version).notes}`,
+    pub_date: input.pubDate,
+    platforms,
+  };
+}
+
+/** The base keys a feed lacks, so the publish can say which apps it leaves behind. */
+export function missingFeedPlatforms(feed: UpdateFeed): string[] {
+  return FEED_BASE_PLATFORMS.filter((key) => feed.platforms[key] === undefined);
+}
+
+/**
+ * Whether publishing `candidate` rewrites the update feed. Only a release
+ * does, and only when it is at least as new as the version the feed names,
+ * so a release finishing after a newer one cannot take every app backwards.
+ * Rewriting the version the feed already names (a resumed publish) is
+ * allowed, because it writes the same files.
+ */
+export function advancesFeed(
+  current: string | null,
+  candidate: string,
+): boolean {
+  if (isBuildVersion(candidate)) return false;
+  return advancesLatest(current, candidate);
+}
+
 /** `sha256sum` / `shasum -a 256` format, so `shasum -c` verifies it. */
 export function sha256SumsText(
   entries: ReadonlyArray<{ file: string; sha256: string }>,
@@ -223,6 +451,22 @@ export interface LatestManifest {
     bytes: number;
     sha256: string;
   }>;
+  /**
+   * The bare `oxagen` and `tacho` executables, in page order, each with a
+   * `.sha256` beside it at both URLs. Empty for a version published before
+   * the host carried them (2.1.3 and older).
+   */
+  executables: Array<{
+    name: Executable["name"];
+    os: Installer["os"];
+    variant: string;
+    triple: string;
+    file: string;
+    url: string;
+    latestUrl: string;
+    bytes: number;
+    sha256: string;
+  }>;
   checksums: string;
 }
 
@@ -231,6 +475,7 @@ export function latestManifest(input: {
   version: string;
   publishedAt: string;
   entries: PageEntry[];
+  executables?: ExecutableEntry[];
   host: string;
 }): LatestManifest {
   const base = `https://${input.host}`;
@@ -248,20 +493,31 @@ export function latestManifest(input: {
       bytes: e.bytes,
       sha256: e.sha256,
     })),
+    executables: sortExecutables(input.executables ?? []).map((e) => ({
+      name: e.name,
+      os: e.os,
+      variant: e.variant,
+      triple: e.triple,
+      file: e.file,
+      url: `${base}/desktop/${v}/${encodeURIComponent(e.file)}`,
+      latestUrl: `${base}/latest/${encodeURIComponent(e.latest)}`,
+      bytes: e.bytes,
+      sha256: e.sha256,
+    })),
     checksums: `${base}/desktop/${v}/SHA256SUMS.txt`,
   };
 }
 
 /**
- * `aws s3 cp` arguments that copy a published installer to its version-free
- * name, server side. The copy is short-lived in caches because the next
- * deploy replaces it, and it downloads under its versioned file name so a
- * saved file still says which build it is.
+ * `aws s3 cp` arguments that copy a published installer or executable to its
+ * version-free name, server side. The copy is short-lived in caches because
+ * the next deploy replaces it, and it downloads under its published file name
+ * so a saved installer still says which build it is.
  */
 export function latestCopyArgs(input: {
   bucket: string;
   version: string;
-  entry: Installer;
+  entry: Pick<Installer, "file" | "latest" | "contentType">;
 }): string[] {
   const { bucket, version, entry } = input;
   return [
@@ -309,6 +565,11 @@ export interface PageEntry extends Installer {
   sha256: string;
 }
 
+export interface ExecutableEntry extends Executable {
+  bytes: number;
+  sha256: string;
+}
+
 /**
  * The webfonts the page loads from `/fonts/` on the downloads host, copied
  * there by `scripts/publish-downloads.mjs` from `apps/web/fonts/` (the kit's
@@ -323,14 +584,15 @@ export const FONT_FILES = [
 ] as const;
 
 /**
- * Where a version's release notes and its GitHub release live. A deploy
- * build has neither: its notes are the next release's, so it links the
- * release index instead of a page that does not exist.
+ * Where a version's release notes live. A deploy build has none of its own:
+ * its notes are the next release's, so it links the release index instead
+ * of a page that does not exist. Nothing here names a GitHub release. The
+ * repository is private and has changed owner more than once, so every file
+ * a release ships is on the downloads host instead (ADR-247).
  */
 export function releaseLinks(version: string): {
   notes: string;
   allReleases: string;
-  githubRelease: string;
 } {
   const v = encodeURIComponent(version);
   return {
@@ -338,7 +600,6 @@ export function releaseLinks(version: string): {
       ? "https://docs.oxagen.sh/docs/releases"
       : `https://docs.oxagen.sh/docs/releases/v${v}`,
     allReleases: "https://docs.oxagen.sh/docs/releases",
-    githubRelease: `https://github.com/macanderson/oxagen/releases/tag/desktop-v${v}`,
   };
 }
 
@@ -393,17 +654,17 @@ export function renderIndexHtml(input: {
   entries: PageEntry[];
   publishedAt: string;
   /**
-   * Whether the `desktop-v<version>` GitHub release with the bare `tacho`
-   * and `oxagen` executables exists. False for a version published before
-   * the release workflow attached them (2.1.1), so the page does not send a
-   * reader to a 404. Default true: a tagged build always has one.
+   * The bare `oxagen` and `tacho` executables published beside the
+   * installers. Empty for a version published before the host carried them
+   * (2.1.3 and older), and the page then lists none rather than a link that
+   * would 404.
    */
-  cliRelease?: boolean;
+  executables?: ExecutableEntry[];
 }): string {
   const version = escapeHtml(input.version);
   const sorted = sortInstallers(input.entries);
   const links = releaseLinks(input.version);
-  // A deploy build has no notes page and no GitHub release of its own.
+  // A deploy build has no notes page of its own.
   const build = isBuildVersion(input.version);
   const hrefOf = (file: string) =>
     `desktop/${encodeURIComponent(input.version)}/${encodeURIComponent(file)}`;
@@ -454,6 +715,19 @@ ${body}
   // skips it.
   const macUpdates =
     sorted.some((e) => e.os === "macOS") && updatesItself(input.version);
+  // One row per platform with both executables, in the order the workflow's
+  // legs run. A version without them on the host gets no rows.
+  const executables = sortExecutables(input.executables ?? []);
+  const executableRows = EXECUTABLE_TARGETS.map((target) => {
+    const files = executables.filter((e) => e.triple === target.triple);
+    if (files.length === 0) return "";
+    const anchors = files
+      .map((e) => `<a href="${hrefOf(e.file)}">${e.name}</a>`)
+      .join(" ");
+    return `<li><div class="row"><span>${target.os} ${escapeHtml(target.variant)}</span><span>${anchors}</span></div><div class="file">${files.map((e) => escapeHtml(e.file)).join(" ")}</div></li>`;
+  })
+    .filter((row) => row !== "")
+    .join("\n");
   const fontFaces = [
     ["Geist", "geist-latin-wght.woff2", "100 900"],
     ["Monaspace Neon", "monaspace-neon-latin-wght.woff2", "200 800"],
@@ -546,10 +820,10 @@ ${sorted.some((e) => e.os === "macOS") ? MACOS_FIRST_LAUNCH : ""}
 ${macUpdates ? MACOS_UPDATES : ""}
 <div><h2>Verify a download</h2><p>Every file in this version is listed in <a href="desktop/${encodeURIComponent(input.version)}/SHA256SUMS.txt">SHA256SUMS.txt</a>. Put it beside the file you downloaded and run:</p><pre>shasum -a 256 -c SHA256SUMS.txt</pre></div>
 <div><h2>Command line only</h2><p>The <code>oxagen</code> command ships inside the app and links onto your PATH on first launch.${
-    input.cliRelease === false || build
+    executableRows === ""
       ? ""
-      : ` To install it without the app, take the bare binaries from the <a href="${links.githubRelease}">GitHub release</a> for ${version}.`
-  }</p></div>
+      : " To use it without the app, download the executable for your platform, rename it to <code>oxagen</code>, make it executable, and put it on your PATH. Each one has a <code>.sha256</code> beside it."
+  }</p>${executableRows === "" ? "" : `<ul class="list">\n${executableRows}\n</ul>`}</div>
 </section>
 <footer>${build ? "" : `<a href="${links.notes}">What changed in ${version}</a>`}<a href="${links.allReleases}">All releases</a><a href="https://docs.oxagen.sh/docs/cli/desktop">App guide</a><a href="https://oxagen.sh/">oxagen.sh</a></footer>
 </div>

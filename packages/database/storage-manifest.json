@@ -291,14 +291,22 @@
       "writes": []
     },
     {
-      "domain": "agent",
-      "name": "commit_memory_import",
+      "domain": "context",
+      "name": "commit_markdown_import",
       "reads": [],
       "surfaces": [
         "agent",
         "api",
+        "cli",
         "mcp"
       ],
+      "writes": []
+    },
+    {
+      "domain": "agent",
+      "name": "commit_memory_import",
+      "reads": [],
+      "surfaces": [],
       "writes": []
     },
     {
@@ -2921,14 +2929,22 @@
       "writes": []
     },
     {
-      "domain": "agent",
-      "name": "parse_memory_import",
+      "domain": "context",
+      "name": "parse_markdown_import",
       "reads": [],
       "surfaces": [
         "agent",
         "api",
+        "cli",
         "mcp"
       ],
+      "writes": []
+    },
+    {
+      "domain": "agent",
+      "name": "parse_memory_import",
+      "reads": [],
+      "surfaces": [],
       "writes": []
     },
     {
@@ -4681,6 +4697,7 @@
         "postgres:billing.gau_ledger",
         "postgres:billing.gau_reversals",
         "postgres:billing.gau_settlements",
+        "postgres:billing.gau_signup_grants",
         "postgres:billing.invoices",
         "postgres:billing.org_billing_settings",
         "postgres:billing.payment_methods",
@@ -12914,6 +12931,53 @@
           "type": "uuid"
         },
         {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "references": "postgres:org.organizations",
+          "type": "uuid"
+        },
+        {
+          "name": "granted_gau",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "granted_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "expires_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        }
+      ],
+      "domain": "billing",
+      "id": "postgres:billing.gau_signup_grants",
+      "name": "gau_signup_grants",
+      "rls": "org_only",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
           "name": "public_id",
           "nullable": false,
           "primaryKey": false,
@@ -13456,6 +13520,24 @@
           "nullable": false,
           "primaryKey": false,
           "type": "integer"
+        },
+        {
+          "name": "signup_grant_gau",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "signup_grant_days",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "subscription_required_after_grant",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "boolean"
         },
         {
           "name": "features",

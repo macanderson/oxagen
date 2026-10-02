@@ -27,30 +27,41 @@ name: Desktop
 #   Updater  TAURI_SIGNING_PRIVATE_KEY (+ TAURI_SIGNING_PRIVATE_KEY_PASSWORD when
 #            the key has one): the minisign key whose public half sits in
 #            tauri.conf.json plugins.updater.pubkey. Present → every bundle
-#            gets a .sig and the release carries latest.json. Absent → the build
-#            passes --config tauri.unsigned.conf.json (createUpdaterArtifacts:
-#            false) so `tauri build` does not stop at "public key found but no
-#            private key", and no latest.json is published; installed apps then
-#            report "up to date".
+#            gets a .sig and a release writes the update feed. Absent → the
+#            build passes --config tauri.unsigned.conf.json
+#            (createUpdaterArtifacts: false) so `tauri build` does not stop at
+#            "public key found but no private key", and the feed is left as it
+#            was; installed apps then report "up to date".
 #
-# The updater feed: installed apps poll the `desktop-latest` release, not the
-# repository's `/releases/latest`, which is whichever release across the whole
-# repository was published from the newest commit — a platform `v*` release
-# published after a desktop one would take it over and the feed would 404.
-# When a `desktop-v*` release is published, the `feed` job below copies its
-# latest.json onto `desktop-latest`.
+# The update feed (ADR-247): installed apps poll
+# https://downloads.oxagen.sh/updater/latest.json (tauri.conf.json
+# plugins.updater.endpoints). The `publish` job writes it for a release, from
+# the .sig files the build legs upload, and never for a deploy build. It
+# names the files under desktop/<version>/ on the same host, so no repository
+# owner or visibility stands between an installed app and its update. Apps
+# built before ADR-247 (2.1.3, and builds of main before it) poll the
+# `desktop-latest` GitHub release instead. That feed is still moved, by the
+# `feed` job and the publish job's GitHub feed step, but while the repository
+# is private it answers them 404, and each needs one manual reinstall from
+# https://downloads.oxagen.sh/.
 #
 # Two things publish, and both end on https://downloads.oxagen.sh/ (ADR-158):
 #
 #   A release. A `desktop-v*` tag builds all four targets, then the `publish`
-#   job copies the installers and their checksums to the downloads host,
-#   publishes the GitHub release, and points the updater feed at it.
+#   job copies the installers, the bare executables, the updater archives and
+#   signatures, and their checksums to the downloads host, writes the update
+#   feed there, and publishes the GitHub release as a mirror.
 #   `release.yml` pushes the tag when a release PR merges; a person pushing
 #   one gets the same result.
 #
-#   A production deploy. `publish-installers` in pipeline.yml dispatches this
+#   A deploy build. `publish-installers` in pipeline.yml dispatches this
 #   workflow with `publish: true` and the deployed commit once every
-#   `deploy-node` leg has shipped. The `plan` job numbers it as a build of the
+#   `deploy-node` leg has shipped, when the push changed apps/desktop, the
+#   sidecar sources (packages/tacho, apps/cli), tools/sea or this file. Once a
+#   day the schedule below builds the commit production runs, when the
+#   installers are older than it (#4918). That picks up a change that reached
+#   main in a push the pipeline superseded, and a change to a package the
+#   sidecars import. The `plan` job numbers a deploy build as a build of the
 #   next patch, `X.Y.(Z+1)-N` for the Nth commit after release X.Y.Z
 #   (tools/scripts/desktop-build-version.ts), the build legs stamp that
 #   version into the checkout, and `publish` uploads the installers under
@@ -62,8 +73,8 @@ name: Desktop
 # Either way, `publish-downloads.mjs` moves the version-free `latest/` links,
 # `latest.json` and the page only when the version is the newest the host has
 # seen, so a release and a deploy build finishing out of order cannot take the
-# links backwards. The web app's enrollment screens and the docs link
-# `latest/`.
+# links backwards. The update feed follows the same rule, for releases only.
+# The web app's enrollment screens and the docs link `latest/`.
 #
 # A manual run without `publish` builds and uploads the bundles as workflow
 # artifacts only. `preview` does the same with the version a deploy would
@@ -75,6 +86,12 @@ on:
       - "desktop-v*.*.*"
   release:
     types: [published]
+  # The daily deploy build (#4918). Before it, every production deploy
+  # dispatched a build: 105 in the week of 2026-09-23, 2,487 of them macOS
+  # minutes. `plan` builds the commit production runs, and skips when the
+  # installers already published are that commit or newer.
+  schedule:
+    - cron: "40 7 * * *"
   workflow_dispatch:
     inputs:
       publish:
@@ -98,6 +115,12 @@ permissions:
 # with the tip built rather than every commit or none (the #2730 lesson).
 # Every other run, a release tag above all, gets a group of its own and can
 # never be evicted by a deploy.
+#
+# The daily build keeps a group of its own too. In the deploy group it could
+# evict a waiting deploy build whose commit `publish-installers` had already
+# recorded, then skip that commit as built, and the commit would never be
+# built. Run beside a deploy build, it builds a different commit, because its
+# plan skips the one the record names.
 concurrency:
   group: >-
     desktop-${{
@@ -112,23 +135,88 @@ jobs:
   plan:
     name: Plan the build
     if: github.event_name != 'release'
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-small-{0}', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
     timeout-minutes: 10
+    # Job-level scopes replace the workflow's: the checkout, and the
+    # production deployment records the daily build reads.
+    permissions:
+      contents: read
+      deployments: read
     outputs:
       sha: ${{ steps.plan.outputs.sha }}
       version: ${{ steps.plan.outputs.version }}
       channel: ${{ steps.plan.outputs.channel }}
       publish: ${{ steps.plan.outputs.publish }}
     steps:
+      # The daily build's commit is the one production runs: the oldest commit
+      # recorded live for the five services `deploy-node` ships, because
+      # `publish-installers` waits for all five and the installers must never
+      # run ahead of the platform they talk to. check-deploy-tip.mjs writes
+      # those records. The build is skipped when the installers last asked for
+      # (`deploy:desktop`) are that commit or a newer one.
+      - name: Find the commit production runs
+        id: target
+        if: github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          live() {
+            gh api "repos/$GITHUB_REPOSITORY/deployments?environment=production&task=deploy:$1&per_page=1" \
+              --jq '.[0].sha // ""'
+          }
+          # The compare API's status for $1...$2, or `unknown` when it cannot
+          # answer. `ahead` means $2 descends from $1.
+          relation() {
+            gh api "repos/$GITHUB_REPOSITORY/compare/$1...$2" --jq '.status' || echo unknown
+          }
+          tip=""
+          for service in stella-serve docs app api mcp; do
+            sha=$(live "$service")
+            if [ -z "$sha" ]; then
+              echo "::error::No production deployment of $service is recorded, so the commit production runs is unknown."
+              exit 1
+            fi
+            if [ -z "$tip" ]; then
+              tip=$sha
+              continue
+            fi
+            # Keep the older of the two commits.
+            rel=$(relation "$tip" "$sha")
+            case "$rel" in
+              ahead | identical) ;;
+              behind) tip=$sha ;;
+              *)
+                echo "::error::$service runs ${sha:0:9}, and comparing it with ${tip:0:9} answered \"$rel\". Dispatch this workflow with publish and a sha to build by hand."
+                exit 1
+                ;;
+            esac
+          done
+          echo "sha=$tip" >> "$GITHUB_OUTPUT"
+          desktop=$(live desktop)
+          if [ -n "$desktop" ]; then
+            rel=$(relation "$tip" "$desktop")
+            if [ "$rel" = ahead ] || [ "$rel" = identical ]; then
+              echo "::notice::The installers of ${desktop:0:9} are published, and production runs ${tip:0:9}, which is not newer. Nothing to build."
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          fi
+          echo "Production runs ${tip:0:9}, and the installers were last asked for at ${desktop:-no recorded commit}. Building ${tip:0:9}."
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+
       - uses: actions/checkout@v5
+        if: steps.target.outputs.skip != 'true'
         with:
-          ref: ${{ inputs.sha || github.sha }}
+          ref: ${{ steps.target.outputs.sha || inputs.sha || github.sha }}
           fetch-depth: 0
 
       # A deploy build publishes to the host every customer downloads from,
       # so it builds only what main carries.
       - name: The commit is on main
-        if: github.event_name == 'workflow_dispatch' && inputs.publish
+        if: >-
+          (github.event_name == 'workflow_dispatch' && inputs.publish) ||
+          (github.event_name == 'schedule' && steps.target.outputs.skip != 'true')
         run: |
           git fetch --no-tags origin main
           if ! git merge-base --is-ancestor HEAD origin/main; then
@@ -137,7 +225,9 @@ jobs:
           fi
 
       - uses: ./.github/actions/pnpm-install
-        if: github.event_name == 'workflow_dispatch' && (inputs.publish || inputs.preview)
+        if: >-
+          (github.event_name == 'workflow_dispatch' && (inputs.publish || inputs.preview)) ||
+          (github.event_name == 'schedule' && steps.target.outputs.skip != 'true')
 
       # A deploy dispatches this workflow on main with the deployed commit as
       # `sha`, so the steps run from main's tip while the tree they build is
@@ -150,11 +240,17 @@ jobs:
       - name: Choose the version
         id: plan
         env:
-          PUBLISH: ${{ github.event_name == 'workflow_dispatch' && inputs.publish }}
+          PUBLISH: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.publish) }}
           PREVIEW: ${{ github.event_name == 'workflow_dispatch' && !inputs.publish && inputs.preview }}
+          SKIP: ${{ steps.target.outputs.skip }}
           WORKFLOW_SHA: ${{ github.workflow_sha }}
         run: |
           set -euo pipefail
+          if [ "$SKIP" = "true" ]; then
+            echo "channel=skip" >> "$GITHUB_OUTPUT"
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           if [ "$PUBLISH" = "true" ] && [ "$WORKFLOW_SHA" != "$(git rev-parse HEAD)" ]; then
             git cat-file -e "$WORKFLOW_SHA^{commit}" 2>/dev/null \
@@ -469,6 +565,33 @@ jobs:
           done
           gh release upload "$GITHUB_REF_NAME" "${assets[@]}" --clobber
 
+      # The bundler writes the macOS updater archive as Oxagen.app.tar.gz on
+      # both Mac legs, and the publish job would keep only one of two files
+      # with the same name. Named by version and architecture here, as the
+      # .dmg is, the two cannot collide and a stale archive cannot ship under
+      # a new version (classifyUpdaterArchive in apps/desktop/src/downloads.ts).
+      # tauri-action has already attached the original to the GitHub release.
+      - name: Name the macOS updater archive by version and architecture
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          VERSION: ${{ needs.plan.outputs.version }}
+          TRIPLE: ${{ matrix.triple }}
+        run: |
+          dir="apps/desktop/src-tauri/target/$TRIPLE/release/bundle/macos"
+          case "$TRIPLE" in
+            aarch64-*) arch=aarch64 ;;
+            *) arch=x64 ;;
+          esac
+          if [ ! -f "$dir/Oxagen.app.tar.gz" ]; then
+            echo "::notice::No updater archive: this build ran without TAURI_SIGNING_PRIVATE_KEY."
+            exit 0
+          fi
+          mv "$dir/Oxagen.app.tar.gz" "$dir/Oxagen_${VERSION}_${arch}.app.tar.gz"
+          if [ -f "$dir/Oxagen.app.tar.gz.sig" ]; then
+            mv "$dir/Oxagen.app.tar.gz.sig" "$dir/Oxagen_${VERSION}_${arch}.app.tar.gz.sig"
+          fi
+
       - name: Upload bundles
         uses: actions/upload-artifact@v4
         with:
@@ -476,6 +599,7 @@ jobs:
           if-no-files-found: error
           path: |
             apps/desktop/src-tauri/binaries/*
+            apps/desktop/src-tauri/target/${{ matrix.triple }}/release/bundle/macos/*.app.tar.gz
             apps/desktop/src-tauri/target/${{ matrix.triple }}/release/bundle/dmg/*.dmg
             apps/desktop/src-tauri/target/${{ matrix.triple }}/release/bundle/dmg/*.sha256
             apps/desktop/src-tauri/target/${{ matrix.triple }}/release/bundle/deb/*.deb
@@ -488,8 +612,8 @@ jobs:
   # Everything that happens after a published build, in the order a reader of
   # downloads.oxagen.sh would want: the files land under their immutable
   # version prefix, `latest/` and the page move to the new version, then, for
-  # a release only, the GitHub release opens with the notes and the feed
-  # follows. The job assumes the platform deploy role through OIDC, which the
+  # a release only, the update feed moves and the GitHub release mirror opens
+  # with the notes. The job assumes the platform deploy role through OIDC, which the
   # `production` environment scopes; `desktop-v*` tags and main are allowed
   # to deploy to it, and infra/stacks-new/ci-deploy/roles.tf grants the role
   # the downloads bucket.
@@ -497,12 +621,14 @@ jobs:
     name: Publish the installers
     needs: [plan, build]
     if: needs.plan.outputs.publish == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNERS == 'aws' && 'oxagen-deploy' || 'ubuntu-latest' }}
     timeout-minutes: 30
     environment: production
     permissions:
       contents: write
       id-token: write
+      # The daily build records the commit it published (the last step).
+      deployments: write
     steps:
       - uses: actions/checkout@v5
         with:
@@ -524,9 +650,11 @@ jobs:
           role-to-assume: arn:aws:iam::916294258235:role/gha-deploy-oxagen-platform
           aws-region: us-east-1
 
-      # `--dir` walks the download recursively, keeps only the installers whose
-      # name carries this version, and refuses a version that is already
-      # published (those URLs are immutable; a fix ships as a new version).
+      # `--dir` walks the download recursively, keeps only the files that
+      # belong to this version (installers, executables, updater archives and
+      # their signatures), and refuses a version that is already published
+      # (those URLs are immutable; a fix ships as a new version). For a
+      # release it also writes the update feed.
       # `--resume` is for a re-run of this job after a later step failed: the
       # same files already published means the upload is done, so the page is
       # redrawn and the steps below run again (each is idempotent). The script
@@ -556,6 +684,41 @@ jobs:
           echo "::error::downloads.oxagen.sh/latest.json does not name $VERSION or newer two minutes after the invalidation"
           exit 1
 
+      # A release built with the updater key moves the update feed that every
+      # app built since ADR-247 polls. The feed names this release or a newer
+      # one. A build without the key carries no signatures and leaves the
+      # feed as it was.
+      - name: Confirm the update feed names this release
+        if: needs.plan.outputs.channel == 'release'
+        env:
+          VERSION: ${{ needs.plan.outputs.version }}
+        run: |
+          shopt -s globstar nullglob
+          sigs=(installers/**/*.sig)
+          if [ "${#sigs[@]}" -eq 0 ]; then
+            echo "::notice::This build carries no updater signatures, so the update feed is unchanged."
+            exit 0
+          fi
+          for _ in 1 2 3 4 5 6; do
+            if curl -fsS "https://downloads.oxagen.sh/updater/latest.json" -o feed.json &&
+              node apps/desktop/scripts/check-latest.mjs feed.json "$VERSION" downloads.oxagen.sh/updater/latest.json; then
+              # A feed without a platform's key leaves every app there on its
+              # old version, and the publish script only warns about it.
+              if [ "$(jq -r .version feed.json)" = "$VERSION" ]; then
+                for key in darwin-aarch64 darwin-x86_64 windows-x86_64 linux-x86_64; do
+                  if ! jq -e --arg k "$key" '.platforms[$k].url and .platforms[$k].signature' feed.json >/dev/null; then
+                    echo "::error::the update feed for $VERSION has no $key entry, so apps there are not offered it"
+                    exit 1
+                  fi
+                done
+              fi
+              exit 0
+            fi
+            sleep 20
+          done
+          echo "::error::downloads.oxagen.sh/updater/latest.json does not name $VERSION or newer two minutes after the invalidation"
+          exit 1
+
       # tauri-action left the release as a draft so nothing links to bundles
       # that are not all there yet. Every leg built (this job needs them all),
       # the installers are on the downloads host, so the release opens now,
@@ -574,29 +737,51 @@ jobs:
 
           Installers for macOS, Windows, and Linux, each with its SHA-256: https://downloads.oxagen.sh/
 
-          The bare \`tacho\` and \`oxagen\` executables for each platform are attached below, each with a \`.sha256\`. They are the same binaries the app links onto your PATH.
+          The bare \`tacho\` and \`oxagen\` executables for each platform are on the same page and attached below, each with a \`.sha256\`. They are the same binaries the app links onto your PATH.
           EOF
           gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" \
             --title "Oxagen $v" --notes-file notes.md --draft=false --latest=false
 
-      # A release published with the workflow's own token raises no `release`
-      # event, so the feed job below does not run for it; move the feed here.
-      - name: Point the update feed at this release
+      # The GitHub feed that apps built before ADR-247 poll. A release
+      # published with the workflow's own token raises no `release` event, so
+      # the feed job below does not run for it; move that feed here.
+      - name: Point the GitHub update feed at this release
         if: needs.plan.outputs.channel == 'release'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ github.ref_name }}
         run: bash .github/scripts/desktop-update-feed.sh
 
-  # The update feed. tauri.conf.json's updater endpoint is
-  # releases/download/desktop-latest/latest.json; this copies the just-
+      # The daily build records its commit as the installers' commit, the
+      # record `publish-installers` in pipeline.yml writes when it dispatches.
+      # The next daily build then sees the installers as current and skips.
+      # check-deploy-tip.mjs reads the commit from GITHUB_SHA, which on a
+      # schedule is main's tip, so the built commit is passed in its place.
+      # It records only when no newer commit's installers were asked for in
+      # the hour this build took.
+      - name: Record the installers' commit
+        if: github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOY_SERVICE: desktop
+          SHA: ${{ needs.plan.outputs.sha }}
+        run: |
+          set -euo pipefail
+          GITHUB_OUTPUT="$RUNNER_TEMP/order" GITHUB_SHA="$SHA" node tools/scripts/check-deploy-tip.mjs
+          if grep -qx 'ship=true' "$RUNNER_TEMP/order"; then
+            GITHUB_SHA="$SHA" node tools/scripts/check-deploy-tip.mjs --record
+          fi
+
+  # The GitHub update feed, which apps built before ADR-247 poll at
+  # releases/download/desktop-latest/latest.json. This copies the just-
   # published desktop release's latest.json there (its platform URLs point at
   # the versioned release's assets, which stay put). A release built without
-  # the updater key carries no latest.json and leaves the feed as it was.
+  # the updater key carries no latest.json and leaves the feed as it was. The
+  # feed on downloads.oxagen.sh is the `publish` job's.
   feed:
-    name: Point the update feed at this release
+    name: Point the GitHub update feed at this release
     if: github.event_name == 'release' && startsWith(github.event.release.tag_name, 'desktop-v')
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-small-{0}', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5

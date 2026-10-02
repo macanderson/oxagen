@@ -3,17 +3,9 @@
   "domain": "agent",
   "description": "Write a batch of confirmed draft memories into the workspace AgentMemory graph. Per-item error capture — not all-or-nothing. Backs the bulk-import button.",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp",
-    "agent"
-  ],
+  "surfaces": [],
   "sensitivity": "medium",
-  "agent": {
-    "requiresApproval": false,
-    "riskLevel": "low",
-    "category": "memory"
-  },
+  "agent": null,
   "chain": {
     "produces": [],
     "consumes": [],

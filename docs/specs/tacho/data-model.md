@@ -206,8 +206,8 @@ OTel `tool_decision` and `tool.blocked_on_user` seal as `harness_permission`, no
 | Column | Type | From |
 |---|---|---|
 | `prompt_digest`, `prompt_length` | String, UInt32 | hook `prompt` (digested) / OTel `prompt_length` |
-| `prompt_source` | LC | transcript `promptSource` (`user`, `sdk`, `slash_command`, `hook`, …) |
-| `prompt_origin` | String (JSON) | transcript `origin` / result `origin` |
+| `prompt_source` | LC | Claude Code: transcript `promptSource` on the `oxagen:message` copy of the prompt (`typed`, `queued` for a prompt typed while the agent worked, `system`, `sdk`). Codex: the same values on the `turn_start`, from `withCodexPromptSource`. Stella: none |
+| `prompt_origin` | String (JSON) | Claude Code: transcript `origin` / result `origin`, `{"kind": …}` with `human`, `task-notification`, `peer`, `coordinator`, or `auto-continuation`. Codex: `human`, `coordinator`, or `heartbeat` on the `turn_start`. Stella: none |
 | `is_meta`, `is_sidechain` | N(Bool) | transcript |
 | `interrupted_message_id` | String | transcript |
 | `response_digest`, `response_length` | String, UInt32 | OTel `assistant_response` |

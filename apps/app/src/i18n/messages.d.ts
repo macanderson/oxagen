@@ -1020,6 +1020,7 @@ type Messages = {
             repeated_instructions: string;
             recurring_runs: string;
             spend_with_no_outcome: string;
+            retry_loops: string;
           };
         };
       };
@@ -1822,6 +1823,7 @@ type Messages = {
       governedNote: string;
       retained: string;
       retainedNote: string;
+      retainedDaysNote: string;
       due: string;
       dueNote: string;
     };
@@ -1845,6 +1847,8 @@ type Messages = {
         tokens: string;
         retention: string;
         retentionExtended: string;
+        retentionDays: string;
+        retentionExtendedDays: string;
         heldNotRecorded: string;
         discount: string;
         total: string;
@@ -1859,10 +1863,13 @@ type Messages = {
       };
       governed: string;
       governedNote: string;
+      grantNote: string;
+      grantEndedNote: string;
       sealed: string;
       sealedNote: string;
       retained: string;
       retainedNote: string;
+      retainedDaysNote: string;
       halted: string;
       inApp: string;
       free: string;
@@ -1943,6 +1950,7 @@ type Messages = {
       title: string;
       free: string;
       freeTerms: string;
+      freeTermsNotRecorded: string;
       blocks: string;
       blocksTerms: string;
       negotiated: string;
@@ -9028,6 +9036,7 @@ type Messages = {
         repeated_instructions: string;
         recurring_runs: string;
         spend_with_no_outcome: string;
+        retry_loops: string;
       };
       kindDefinition: {
         cache_writes_never_read: string;
@@ -9042,6 +9051,7 @@ type Messages = {
         repeated_instructions: string;
         recurring_runs: string;
         spend_with_no_outcome: string;
+        retry_loops: string;
       };
       level: {
         tool: string;
@@ -9116,8 +9126,6 @@ type Messages = {
       heroYearEnd: string;
       attributionMissing: string;
       evidenceLine: string;
-      atStake: string;
-      atStakeUnknown: string;
       list: string;
       filters: {
         label: string;
@@ -9139,6 +9147,22 @@ type Messages = {
         range: string;
         previous: string;
         next: string;
+      };
+      card: {
+        amount: string;
+        estimatedAmount: string;
+        share: string;
+        unit: {
+          weeklyPerThousandTokens: string;
+        };
+        estimated: string;
+        needsPromptText: string;
+        text: {
+          spin_loops: string;
+          duplicate_tool_calls: string;
+          repeated_shell_commands: string;
+          spend_with_no_outcome: string;
+        };
       };
     };
     columns: {
@@ -9205,6 +9229,10 @@ type Messages = {
         haltedEarly: string;
       };
       causesMissing: string;
+      retryLoopsWhy: string;
+      retryLoopsNone: string;
+      retryLoopsFindings: string;
+      retryLoopsOpen: string;
       runs: string;
       note: string;
       runAmountMissing: string;
