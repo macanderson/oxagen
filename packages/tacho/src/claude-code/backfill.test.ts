@@ -220,6 +220,9 @@ describe("a backfilled transcript", () => {
         session_kind: "interactive",
       });
       expect(start?.attrs["oxagen.synthesized_from"]).toBe("queue-operation");
+      expect(start?.attrs["oxagen.backfill_normalizer"]).toBe(
+        BACKFILL_NORMALIZER_VERSION,
+      );
     });
 
     it("end of a finished file: agent_stop at the last timed record", () => {

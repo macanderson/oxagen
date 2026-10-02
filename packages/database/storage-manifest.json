@@ -26504,6 +26504,18 @@
           "type": "bigint"
         },
         {
+          "name": "record_basis",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "backfill_normalizer",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
           "name": "title",
           "nullable": true,
           "primaryKey": false,

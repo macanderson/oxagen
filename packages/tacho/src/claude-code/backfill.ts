@@ -58,6 +58,9 @@ const TESTED_CLAUDE_CODE_VERSIONS = {
 } as const;
 
 const UNTESTED_VERSION_ATTR = "oxagen.normalizer_untested_version";
+
+/** The normalizer version on a backfilled session's `agent_start`. */
+const NORMALIZER_ATTR = "oxagen.backfill_normalizer";
 const SYNTHESIZED_FROM_ATTR = "oxagen.synthesized_from";
 
 /** The `session_end_reason` of a backfilled session's `agent_stop`. */
@@ -779,17 +782,23 @@ export class TranscriptBackfill {
         permission_mode: permissionMode,
       }) as Parameters<SessionRecorder["noteContext"]>[0],
     );
+    // The start names the normalizer version, so the control plane can tell
+    // a later pass which version sealed the session (`backfill_normalizer`).
     return this.hook(
       first,
       "SessionStart",
       { source: BACKFILL_START_SOURCE },
       timestampOf(first),
-      untested && version !== undefined
-        ? (draft) => ({
-            ...draft,
-            attrs: { ...draft.attrs, [UNTESTED_VERSION_ATTR]: version },
-          })
-        : undefined,
+      (draft) => ({
+        ...draft,
+        attrs: {
+          ...draft.attrs,
+          [NORMALIZER_ATTR]: BACKFILL_NORMALIZER_VERSION,
+          ...(untested && version !== undefined
+            ? { [UNTESTED_VERSION_ATTR]: version }
+            : {}),
+        },
+      }),
     );
   }
 
