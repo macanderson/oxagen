@@ -160,7 +160,7 @@ export function SignupForm({
               <a
                 href={TERMS_URL}
                 target="_blank"
-                rel="noopener"
+                rel="noopener noreferrer"
                 className={legalLink}
               >
                 {chunks}
@@ -170,7 +170,7 @@ export function SignupForm({
               <a
                 href={PRIVACY_URL}
                 target="_blank"
-                rel="noopener"
+                rel="noopener noreferrer"
                 className={legalLink}
               >
                 {chunks}

@@ -607,7 +607,7 @@ describe("SignupForm", () => {
     expect(privacy).toHaveAttribute("href", "https://oxagen.sh/privacy");
     for (const link of [terms, privacy]) {
       expect(link).toHaveAttribute("target", "_blank");
-      expect(link).toHaveAttribute("rel", "noopener");
+      expect(link).toHaveAttribute("rel", "noopener noreferrer");
     }
   });
 
