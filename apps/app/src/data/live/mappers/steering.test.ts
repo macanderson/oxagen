@@ -44,7 +44,9 @@ describe("toRecordPage", () => {
   it("keeps a record the server did not price as null, never a zero", () => {
     const view = RecordPage.parse(
       toRecordPage(
-        recordsOutput([recordOutput({ contextTokens: null, weeklyPrice: null })]),
+        recordsOutput([
+          recordOutput({ contextTokens: null, weeklyPrice: null }),
+        ]),
       ),
     );
     expect(view.records[0]).toMatchObject({

@@ -19,7 +19,7 @@ import { costSchema } from "./spend.shared";
  * fields are added here, not to `publishedRecordSchema`, because only the
  * list prices a record.
  */
-export const listedRecordSchema = publishedRecordSchema.extend({
+const listedRecordSchema = publishedRecordSchema.extend({
   /**
    * The tokens of the line the signed bundle carries for the record,
    * `- <statement> (<kind>; <lineage>)`, in the assembler's unit. Null for a
