@@ -26,7 +26,7 @@ const Sha = z.string().regex(/^[0-9a-f]{40}$/);
 export const WorkTab = z.enum(["inbox", "running", "review", "done"]);
 export type WorkTab = z.infer<typeof WorkTab>;
 
-export const WorkItemState = z.enum([
+const WorkItemState = z.enum([
   "new",
   "held",
   "triaged",
@@ -39,7 +39,6 @@ export const WorkItemState = z.enum([
   "done",
   "closed",
 ]);
-export type WorkItemState = z.infer<typeof WorkItemState>;
 
 /** The word beside an item's dot, decided on the server. */
 export const WorkStatus = z.enum([
@@ -126,13 +125,12 @@ export const CloseResolution = z.enum(["cancelled", "declined", "duplicate"]);
 export type CloseResolution = z.infer<typeof CloseResolution>;
 
 /** Whether Accept is open on a send, and if not, why. */
-export const ReviewGate = z.object({
+const ReviewGate = z.object({
   open: z.boolean(),
   block: ReviewBlock.nullable(),
   /** A check name, a head commit, or a delivery state the block names. */
   detail: z.string().nullable(),
 });
-export type ReviewGate = z.infer<typeof ReviewGate>;
 
 /** What an item's runs cost: the known total and how many runs it covers. */
 export const CostCoverage = z.object({
@@ -257,20 +255,18 @@ export const WorkWait = z.discriminatedUnion("kind", [
 ]);
 export type WorkWait = z.infer<typeof WorkWait>;
 
-export const AgentRef = z.object({
+const AgentRef = z.object({
   id: PublicId.nullable(),
   name: z.string().nullable(),
   harness: z.string().nullable(),
 });
-export type AgentRef = z.infer<typeof AgentRef>;
 
-export const PullRequestRef = z.object({
+const PullRequestRef = z.object({
   repository: z.string(),
   number: z.number().int().positive(),
   url: z.string(),
   head: Sha.nullable(),
 });
-export type PullRequestRef = z.infer<typeof PullRequestRef>;
 
 /** The latest send of an item, as a list row shows it. */
 export const SendSummary = z.object({
@@ -329,7 +325,7 @@ export type WorkItemList = z.infer<typeof WorkItemList>;
 
 // ---- one work item --------------------------------------------------------
 
-export const SourceRevision = z.object({
+const SourceRevision = z.object({
   revision: Revision,
   at: Instant,
   kind: z.enum(["collected", "entered", "changed"]),
@@ -337,7 +333,6 @@ export const SourceRevision = z.object({
   description: z.string().nullable(),
   labels: z.array(z.string()),
 });
-export type SourceRevision = z.infer<typeof SourceRevision>;
 
 const TriageField = <T extends z.ZodType>(value: T) =>
   z.object({
@@ -347,7 +342,7 @@ const TriageField = <T extends z.ZodType>(value: T) =>
     at: Instant.nullable(),
   });
 
-export const WorkTriage = z.object({
+const WorkTriage = z.object({
   priority: TriageField(WorkPriorityLabel),
   priorityReason: z.string().nullable(),
   cites: z.array(z.string()),
@@ -396,7 +391,7 @@ export const WorkTriage = z.object({
 });
 export type WorkTriage = z.infer<typeof WorkTriage>;
 
-export const BriefCriterion = z.object({
+const BriefCriterion = z.object({
   /** The stable criterion key, such as `c3`. */
   criterion: z.string().regex(/^c[1-9][0-9]{0,5}$/),
   text: z.string(),
@@ -405,7 +400,6 @@ export const BriefCriterion = z.object({
   evidence: z.string(),
   provenance: z.enum(["source", "triage", "person"]),
 });
-export type BriefCriterion = z.infer<typeof BriefCriterion>;
 
 export const BriefRevision = z.object({
   id: PublicId,
@@ -420,13 +414,12 @@ export const BriefRevision = z.object({
 });
 export type BriefRevision = z.infer<typeof BriefRevision>;
 
-export const WorkBrief = z.object({
+const WorkBrief = z.object({
   state: z.enum(["none", "triage_draft", "draft", "approved", "out_of_date"]),
   revisions: z.array(BriefRevision),
   triageCriteria: z.array(z.string()),
   repository: z.string().nullable(),
 });
-export type WorkBrief = z.infer<typeof WorkBrief>;
 
 const Check = z.object({
   name: z.string(),
@@ -442,7 +435,6 @@ const Acceptance = z.object({
   criteria: z.array(z.string()),
   requiredChecks: z.array(z.string()),
 });
-export type WorkAcceptance = z.infer<typeof Acceptance>;
 
 const Reasoned = z.object({
   reason: z.string(),
@@ -551,14 +543,13 @@ export type WorkItemDetail = z.infer<typeof WorkItemDetail>;
 
 // ---- agents that can take a send ----------------------------------------
 
-export const WorkTargetRefusal = z.enum([
+const WorkTargetRefusal = z.enum([
   "no_runtime",
   "no_host",
   "host_outdated",
   "not_operator",
   "busy",
 ]);
-export type WorkTargetRefusal = z.infer<typeof WorkTargetRefusal>;
 
 export const WorkTarget = z.object({
   id: PublicId,
