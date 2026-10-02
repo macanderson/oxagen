@@ -1,5 +1,5 @@
 /**
- * The role `ci-image.yml` assumes to publish CI images and the pnpm store.
+ * The role `ci-image.yml` assumes to publish the CI images.
  *
  * Only `ci-image.yml` on `main` can assume it: the subject pins the branch,
  * and `job_workflow_ref` pins the workflow file, so another workflow on main
@@ -52,7 +52,7 @@ data "aws_iam_policy_document" "ci_image_assume" {
 
 resource "aws_iam_role" "ci_image" {
   name                 = "gha-ci-image"
-  description          = "Publish the CI images to ECR Public and the pnpm store to S3, from ci-image.yml on main."
+  description          = "Publish the CI images to ECR Public, from ci-image.yml on main."
   assume_role_policy   = data.aws_iam_policy_document.ci_image_assume.json
   max_session_duration = 3600
 }
@@ -78,12 +78,6 @@ data "aws_iam_policy_document" "ci_image" {
       "ecr-public:UploadLayerPart",
     ]
     resources = [for r in aws_ecrpublic_repository.ci : r.arn]
-  }
-
-  statement {
-    sid       = "PublishPnpmStore"
-    actions   = ["s3:PutObject"]
-    resources = ["${aws_s3_bucket.image_assets.arn}/pnpm-store/*"]
   }
 }
 

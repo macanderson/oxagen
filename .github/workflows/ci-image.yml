@@ -13,15 +13,13 @@ name: ci-image
 #
 # Each architecture builds natively on its own runner, pushes a staging tag,
 # and the `publish` job joins the two into one multi-architecture `:latest`
-# and `:sha-<commit>`. The same jobs publish a pnpm store per architecture to
-# S3, and the daily runner image build bakes it in.
+# and `:sha-<commit>`.
 #
 # Rebuild triggers:
 #   - Dockerfile / this workflow / the service image list changes (push to main)
 #   - .node-version (Node pin), root package.json (packageManager pnpm pin),
 #     apps/app/package.json (@playwright/test pin), or pnpm-lock.yaml changes
-#   - daily at 05:00 UTC, before the 07:00 runner image build, so OS patches
-#     and the newest lockfile reach the runner image the same day
+#   - daily at 05:00 UTC, so OS patches reach the images the same day
 #   - manual dispatch
 
 on:
@@ -50,7 +48,6 @@ concurrency:
 env:
   AWS_REGION: us-east-1
   ROLE: arn:aws:iam::916294258235:role/gha-ci-image
-  ASSETS_BUCKET: oxagen-ci-runners-916294258235
 
 jobs:
   build:
@@ -60,11 +57,9 @@ jobs:
       matrix:
         include:
           - arch: amd64
-            runner_arch: x64
-            runner: ${{ vars.CI_RUNNERS == 'aws' && 'oxagen-large-x64' || 'ubuntu-latest' }}
+            runner: ubuntu-latest
           - arch: arm64
-            runner_arch: arm64
-            runner: ${{ vars.CI_RUNNERS == 'aws' && 'oxagen-large-arm64' || 'ubuntu-24.04-arm' }}
+            runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 45
     steps:
@@ -139,31 +134,9 @@ jobs:
           docker run --rm "$REGISTRY/oxagen-ci-e2e:build-$ARCH" \
             sh -c 'ls "$PLAYWRIGHT_BROWSERS_PATH" | grep -q chromium'
 
-      # The runner image bakes this store in, so the day's first install on a
-      # cold runner copies packages from disk instead of downloading them. It
-      # is fetched inside the base image just built, so the pnpm that fills it
-      # is the pnpm every job runs.
-      - name: Publish the pnpm store
-        env:
-          REGISTRY: ${{ steps.registry.outputs.registry }}
-          ARCH: ${{ matrix.arch }}
-          # Not RUNNER_ARCH: GitHub sets that one itself (X64, ARM64), and it
-          # wins over a step's env, so the store landed under the wrong key.
-          STORE_ARCH: ${{ matrix.runner_arch }}
-        run: |
-          set -euo pipefail
-          store="$RUNNER_TEMP/pnpm-store"
-          mkdir -p "$store"
-          docker run --rm -v "$PWD:/repo" -v "$store:/store" -w /repo \
-            "$REGISTRY/oxagen-ci-base:build-$ARCH" \
-            pnpm fetch --store-dir /store
-          tar -C "$store" -I 'zstd -T0 -3' -cf "$RUNNER_TEMP/store.tar.zst" .
-          du -sh "$store" "$RUNNER_TEMP/store.tar.zst"
-          aws s3 cp "$RUNNER_TEMP/store.tar.zst" "s3://$ASSETS_BUCKET/pnpm-store/$STORE_ARCH.tar.zst" --only-show-errors
-
   publish:
     needs: build
-    runs-on: ${{ vars.CI_RUNNERS == 'aws' && 'oxagen-small-arm64' || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
