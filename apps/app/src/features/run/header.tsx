@@ -370,7 +370,7 @@ function WhereFromRow({
           key={`${pull.seq ?? ""}${pull.name}`}
           url={pull.note}
           label={recordedPullLabel(pull)}
-          state={null}
+          state={storedPullState(run, pull.note)}
         />
       ))}
       <SessionPath
@@ -426,12 +426,28 @@ function ForgeChip({
   );
 }
 
+/** A pull request's state, as the work read or the stored row gives it. */
+type PullState = NonNullable<RunRow["pullRequests"]>[number]["state"];
+
+/**
+ * The state stored for a pull request the frames recorded, matched on its
+ * URL, or null when no forge has reported one (ADR-192). `get_run` reads it
+ * beside the frames, the same row `list_runs` reads for Fleet, so a chip the
+ * live work read did not reach still names the state Fleet shows. An absent
+ * list means the read did not happen, and reads null too.
+ */
+function storedPullState(run: RunRow, url: string | null): PullState {
+  if (url === null) return null;
+  return run.pullRequests?.find((pull) => pull.url === url)?.state ?? null;
+}
+
 /**
  * A pull request's chip and its state beside it. The chip opens the pull
  * request on GitHub or GitLab in a new tab when its URL names a page Oxagen
  * recognises, else it is the label alone. `state` is the live state the work
- * read took from the forge; a pull request only the frames recorded has none
- * Oxagen can vouch for, and says "status unknown" rather than "open".
+ * read took from the forge, else the state a forge last reported to Oxagen's
+ * store. A pull request no forge has reported says "status unknown" rather
+ * than "open".
  */
 function PullChip({
   url,
@@ -442,7 +458,7 @@ function PullChip({
   url: string | null;
   label: string;
   title?: string;
-  state: RunWork["pullRequests"][number]["state"] | null;
+  state: PullState;
 }) {
   const t = useTranslations("run.header");
   const target = url === null ? null : parsePullRequestUrl(url);
@@ -545,7 +561,7 @@ function WhereFromWork({
   const machine = work.value.machine?.name ?? run.machine?.hostname ?? null;
   // A pull request the frames recorded that the work read could not read
   // back (its repository is not connected, or it is a GitLab merge request)
-  // is still the run's: it is listed with its link and no state.
+  // is still the run's: it is listed with its link and the stored state.
   const recordedOnly = (pulls ?? []).filter(
     (node) => !prs.some((pr) => samePull(node, pr)),
   );
@@ -597,7 +613,7 @@ function WhereFromWork({
               key={`${node.chainRef ?? ""}:${node.seq ?? ""}:${node.name}`}
               url={node.note}
               label={recordedPullLabel(node)}
-              state={null}
+              state={storedPullState(run, node.note)}
             />
           ))}
         </>

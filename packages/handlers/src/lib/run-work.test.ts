@@ -442,6 +442,21 @@ describe("run work reads", () => {
       "AND if(attrs['pr.url'] != '', attrs['pr.url'], attrs['pr_url']) != ''",
     );
   });
+  // A pull request opened with `gh pr create` or an MCP tool is recorded on
+  // a `pr_open` effect frame and may never get a pr_link frame. The work
+  // read and the spine count it, as `list_runs` does (#5259).
+  it.each([
+    ["readWorkPrLinks", readWorkPrLinks],
+    ["readRunPrLinks", READS.readRunPrLinks],
+  ] as const)(
+    "%s counts a pr_open frame that carries a URL",
+    async (_name, read) => {
+      const query = await queryOf(read);
+      expect(query).toContain(
+        "(kind = 'oxagen:pr_link' OR attrs['pr.url'] != '')",
+      );
+    },
+  );
   // #3823: a subagent records on a chain of its own, so the spine reads its
   // PR links too. Each subagent chain is fenced by the run's root, so a chain
   // of another run named in the list reads nothing.

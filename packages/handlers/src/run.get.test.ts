@@ -22,6 +22,7 @@ import {
 } from "./run.get";
 import type { PauseCommandRow, PausePosition } from "./lib/run-pause";
 import type { SessionConfig } from "./lib/run-work";
+import type { RunPullRequest } from "@oxagen/oxagen/contracts/run.list";
 import { encodeRunCursor, type RunScope } from "./run.list";
 import {
   ctx,
@@ -91,6 +92,15 @@ type Over = {
   position?: PausePosition;
   /** The position read rejects, as ClickHouse over its memory cap does. */
   positionFails?: boolean;
+  /**
+   * The pull requests the session's frames name, with their stored states.
+   * The read is wired only when this or `pullsFail` is set.
+   */
+  pulls?: RunPullRequest[];
+  /** The pull request read rejects, as ClickHouse over its memory cap does. */
+  pullsFail?: boolean;
+  /** Every list of sessions the pull request read was asked for. */
+  pullsAsked?: string[][];
   /** Every chain and seq the position read was asked for. */
   positionAsked?: [string, number][];
   /** Stands in for `resolveActingUserId`; the real one by default. */
@@ -187,6 +197,18 @@ function harness(over: Over = {}) {
                 ? Promise.reject(new Error("Code: 241. Memory limit exceeded"))
                 : Promise.resolve(over.position ?? { turn: null, step: null });
             },
+          },
+        }),
+    ...(over.pulls === undefined && over.pullsFail !== true
+      ? {}
+      : {
+          pullRequests: (sessionUuids: readonly string[]) => {
+            over.pullsAsked?.push([...sessionUuids]);
+            return over.pullsFail === true
+              ? Promise.reject(new Error("Code: 241. Memory limit exceeded"))
+              : Promise.resolve(
+                  new Map([[SESSION_UUID, over.pulls ?? []]]),
+                );
           },
         }),
   };
@@ -731,6 +753,53 @@ describe("get_run", () => {
 });
 
 describe("frame cursor", () => {
+  describe("pull requests (ADR-192)", () => {
+    const merged: RunPullRequest = {
+      url: "https://github.com/acme/app/pull/41",
+      number: 41,
+      repository: "acme/app",
+      state: "merged",
+      stateSeenAt: "2026-10-02T09:00:00.000Z",
+    };
+    const unreported: RunPullRequest = {
+      url: "https://gitlab.com/acme/web/-/merge_requests/9",
+      number: 9,
+      repository: "acme/web",
+      state: null,
+      stateSeenAt: null,
+    };
+
+    it("answers a wrapped run's pull requests with their stored states, read once for its own session", async () => {
+      const pullsAsked: string[][] = [];
+      const { get } = harness({ pulls: [merged, unreported], pullsAsked });
+      const out = await get(input({ runId: TACHO_ID }), ctx());
+      expect(runGet.output.parse(out)).toEqual(out);
+      expect(out.run.pullRequests).toEqual([merged, unreported]);
+      expect(pullsAsked).toEqual([[SESSION_UUID]]);
+    });
+
+    it("answers an empty list for a wrapped run whose frames name no pull request", async () => {
+      const { get } = harness({ pulls: [] });
+      const out = await get(input({ runId: TACHO_ID }), ctx());
+      expect(out.run.pullRequests).toEqual([]);
+    });
+
+    it("leaves the field out and keeps the header when the read fails (negative)", async () => {
+      const { get } = harness({ pullsFail: true });
+      const out = await get(input({ runId: TACHO_ID }), ctx());
+      expect(out.run.id).toBe(TACHO_ID);
+      expect(out.run).not.toHaveProperty("pullRequests");
+    });
+
+    it("never asks for a ledger run, which records no pull request frames (negative)", async () => {
+      const pullsAsked: string[][] = [];
+      const { get } = harness({ pulls: [merged], pullsAsked });
+      const out = await get(input(), ctx());
+      expect(out.run).not.toHaveProperty("pullRequests");
+      expect(pullsAsked).toEqual([]);
+    });
+  });
+
   it("round-trips a run_seq and refuses anything else", () => {
     expect(decodeFrameCursor(encodeFrameCursor("9223372036854775807"))).toBe(
       "9223372036854775807",
