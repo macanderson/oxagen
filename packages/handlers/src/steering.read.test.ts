@@ -30,7 +30,7 @@ async function refusal(promise: Promise<unknown>): Promise<HandlerError> {
   throw new Error("expected a HandlerError");
 }
 
-describe("steering_read", () => {
+describe("read_steering", () => {
   it("reads a record as the model reads it, with no frontmatter", async () => {
     const published = vi.fn(() => Promise.resolve(delivery));
     const read = createSteeringReadHandler({ published, readFile: readFixtureFile });
@@ -74,7 +74,7 @@ describe("steering_read", () => {
     expect(error.code).toBe("not_found");
     expect(error.reason).toBe("steering_record_not_found");
     expect(error.message).toBe(
-      "No published steering version holds a-intel.brand.missing. Find the lineage with steering_search.",
+      "No published steering version holds a-intel.brand.missing. Find the lineage with search_steering.",
     );
   });
 

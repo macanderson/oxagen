@@ -25,7 +25,8 @@
     "./no-progress-pause-runner": "./src/lib/no-progress-pause-runner.ts",
     "./code-repo-check-runner": "./src/lib/code-repo-check-runner.ts",
     "./work-intake-runner": "./src/lib/work-intake-runner.ts",
-    "./work-order-results-runner": "./src/lib/work-order-results-runner.ts"
+    "./work-order-results-runner": "./src/lib/work-order-results-runner.ts",
+    "./work-order-send-back-ports": "./src/lib/work-order-send-back-ports.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

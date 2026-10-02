@@ -1,0 +1,82 @@
+{
+  "name": "read_steering",
+  "domain": "context",
+  "description": "Read one steering record from the workspace's or the organization's published steering: a heading with its label, then its body. With file, read that file from a skill's folder instead. The workspace's record wins over an organization record of the same lineage. Find a lineage with search_steering.",
+  "mode": "sync",
+  "surfaces": [
+    "mcp"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "context"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "lineage": {
+        "type": "string",
+        "description": "The record or skill to read, such as a-intel.domain.refund."
+      },
+      "file": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 512
+      }
+    },
+    "required": [
+      "lineage"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "lineage": {
+        "type": "string"
+      },
+      "label": {
+        "type": "string"
+      },
+      "kind": {
+        "type": "string"
+      },
+      "source": {
+        "type": "string",
+        "enum": [
+          "workspace",
+          "organization"
+        ]
+      },
+      "version": {
+        "type": "integer",
+        "minimum": 1
+      },
+      "path": {
+        "type": "string"
+      },
+      "text": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "lineage",
+      "label",
+      "kind",
+      "source",
+      "version",
+      "path",
+      "text"
+    ],
+    "additionalProperties": false
+  }
+}

@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import {
   ceilingOf,
@@ -405,6 +407,32 @@ describe("evidence", () => {
     expect(toolUseIdOf(meta(""))).toBeUndefined();
     expect(toolUseIdOf(meta("t".repeat(513)))).toBeUndefined();
     expect(toolUseIdOf(meta("t".repeat(512)))).toBe("t".repeat(512));
+  });
+
+  it("reads the tool-use id from a tools/call Claude Code 2.1.287 sent (#4355)", async () => {
+    // Captured over stdio from a real `claude -p` session. The gateway serves
+    // HTTP, so this pins the key and the shape of its value, and the hand-built
+    // call above covers the HTTP path. The id is synthetic, with the prefix and
+    // length of the captured one.
+    const captured = JSON.parse(
+      readFileSync(
+        resolve(
+          __dirname,
+          "../../fixtures/claude-code/mcp/tools-call-2.1.287.json",
+        ),
+        "utf8",
+      ),
+    ) as { method: string; params: Record<string, unknown> };
+    expect(captured.method).toBe("tools/call");
+    expect(captured.params["_meta"]).toHaveProperty([
+      CLAUDE_CODE_TOOL_USE_ID_META,
+    ]);
+    const id = toolUseIdOf(captured.params);
+    expect(id).toMatch(/^toolu_01[A-Za-z0-9]{22}$/);
+
+    const { gw, records } = gateway();
+    await gw.handle(captured, CTX);
+    expect(records[0]?.toolUseId).toBe(id);
   });
 
   it("records the arguments and the result, so the call replays", async () => {

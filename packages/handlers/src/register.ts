@@ -14,6 +14,7 @@ import { setRunFitRunner } from "@oxagen/inngest-functions/run-fit-runner";
 import { setRunPrOutcomesRunner } from "@oxagen/inngest-functions/run-pr-outcomes-runner";
 import { setPullRequestBackfillRunner } from "@oxagen/inngest-functions/run-pull-request-backfill-runner";
 import { setWorkOrderResultsRunner } from "@oxagen/inngest-functions/work-order-results-runner";
+import { setWorkOrderSendBackPorts } from "@oxagen/inngest-functions/work-order-send-back-ports";
 import { setSteeringRepoHealthRunner } from "@oxagen/inngest-functions/steering-repo-health-runner";
 import { setSteeringRepoProvisionRunner } from "@oxagen/inngest-functions/steering-repo-provision-runner";
 import { setSteeringSyncRunner } from "@oxagen/inngest-functions/steering-sync-runner";
@@ -236,6 +237,13 @@ registerHandlersOnce("@oxagen/handlers", () => {
       refresh.refreshRunPrOutcomes(refresh.defaultOutcomeRefreshDeps(), scope),
     );
   });
+  // The hourly send-back job (R3, #5108) resolves a work item to its
+  // collector through the work intake stores and records each note in
+  // work.send_backs, both in this package. The job calls the ports inside the
+  // workspace's tenant scope, and they load on its first pass.
+  setWorkOrderSendBackPorts(async (scope) =>
+    (await import("./lib/work-intake/send-back")).sendBackPorts(scope),
+  );
   // A tools steering PR opens through tools.pr.open.ts (M11). In a workspace
   // whose servers live in its steering repo, registering a server, enabling
   // a plugin, and importing tools open one through the server folder writer
@@ -2795,6 +2803,18 @@ registerHandlersOnce("@oxagen/handlers", () => {
     async () =>
       (await import("./context.steering.index.get"))
         .steeringIndexGetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "search_steering",
+    async () =>
+      (await import("./steering.search"))
+        .steeringSearchHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "read_steering",
+    async () =>
+      (await import("./steering.read"))
+        .steeringReadHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "set_production_branch",

@@ -1,6 +1,7 @@
 # ADR-183: Claude Code email addresses in ClickHouse and Postgres
 
-- **Status:** Accepted
+- **Status:** Accepted. Consequences amended on 2026-10-02 (#3072): the
+  store drift check confirms the ClickHouse drop.
 - **Date:** 2026-09-25
 - **Owners:** platform
 - **Related:** issue #3072 (with #3176 and #3210 folded in), ADR-084 (the
@@ -109,6 +110,15 @@ every part that holds a matching row.
 
 - The drops are irreversible. Once `migration-gate` applies them, the
   addresses written before #3173 are gone from both stores.
+- *Added 2026-10-02 (#3072).* `infra/tools/check-store-drift.sh` counts every
+  column a ClickHouse migration dropped in `system.columns`, and reads the
+  store as behind while a count is not 0. The daily Store Drift run therefore
+  reports `tacho_events.anthropic_user_email` by name if it is still there,
+  with no one holding production credentials. `migration-gate` runs the same
+  check, so a surviving column also holds the deploy. The gate's apply cannot
+  clear it when the ledger already lists 0031, so the column is then dropped
+  by hand with 0031's statement. The check covers ClickHouse only, not
+  `tacho.sessions` in Postgres.
 - `RETIRED_COLUMNS` is empty. Retiring a column still means listing it there
   first, then moving it to `DROPPED_COLUMNS` with the migration that drops it.
 - The erasure matches the address on the person's Oxagen account. Rows from a
