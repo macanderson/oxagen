@@ -392,12 +392,16 @@ const GH = "/repos/acme/steering";
 
 function github(routes: Record<string, Reply | Reply[]>) {
   const s = server("https://api.github.com", routes);
+  const waits: number[] = [];
   const target: GithubHistoryTarget = {
     rest: createGithubRest({ token: "ghs_test", fetch: s.fetch }),
     repo: { owner: "acme", name: "steering" },
     app: { symbol: "oxagen-steering", id: 1234, slug: "oxagen-steering" },
+    sleep: async (ms) => {
+      waits.push(ms);
+    },
   };
-  return { ...s, target };
+  return { ...s, target, waits };
 }
 
 interface GithubDeploymentFixture {
@@ -539,6 +543,9 @@ describe("githubDiverged", () => {
     });
     await expect(githubDiverged(gh.target, PUBLISHED)).resolves.toEqual(DIVERGENCE);
     expect(gh.sent(MAIN_BRANCH)).toHaveLength(0);
+    // A health read names no candidate, so it never waits for a link.
+    expect(gh.sent(`GET ${GH}/commits/${X}/pulls?per_page=100`)).toHaveLength(1);
+    expect(gh.waits).toEqual([]);
   });
 
   it("reads main from the branch when the compare cannot find the published commit", async () => {
@@ -824,6 +831,24 @@ describe("assertGithubSteeringCommit", () => {
     await expect(assertGithubSteeringCommit(gh.target, S1)).rejects.toThrow(
       /Oxagen did not merge/,
     );
+    // The candidate may be a merge GitHub has not linked yet, so its link is
+    // read 8 times, a second apart, before the refusal (#5157).
+    expect(gh.sent(`GET ${GH}/commits/${S1}/pulls?per_page=100`)).toHaveLength(8);
+    expect(gh.waits).toEqual(Array.from({ length: 7 }, () => 1_000));
+  });
+
+  it("accepts its own merge once GitHub links the commit to its pull request (#5157)", async () => {
+    const gh = github({
+      [DEPLOYMENTS]: ok(fixture("github-deployments")),
+      [`GET ${GH}/compare/${P}...${S1}?per_page=100`]: ok(
+        singleGithubCommit("Change a rule"),
+      ),
+      [`GET ${GH}/commits/${S1}/pulls?per_page=100`]: [ok([]), ok([]), ok([{ number: 42 }])],
+      [`GET ${GH}/pulls/42`]: ok(authenticatedPull(S1, 42)),
+    });
+    await expect(assertGithubSteeringCommit(gh.target, S1)).resolves.toBeUndefined();
+    expect(gh.sent(`GET ${GH}/commits/${S1}/pulls?per_page=100`)).toHaveLength(3);
+    expect(gh.waits).toEqual([1_000, 1_000]);
   });
 
   it("propagates deployment lookup errors", async () => {

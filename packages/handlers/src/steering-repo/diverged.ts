@@ -246,7 +246,21 @@ export interface GithubHistoryTarget {
   repo: RepoAddress & { id?: number };
   app: SteeringApp;
   defaultBranch?: string;
+  /** Waits between reads while GitHub links a new merge commit to its pull request. Defaults to a timer. */
+  sleep?: (ms: number) => Promise<void>;
 }
+
+/**
+ * GitHub links a merge commit to its pull request a moment after the merge,
+ * so `commits/<sha>/pulls` can list nothing for a commit merged seconds ago.
+ * The merge handler checks its own merge straight away, and on 2026-10-02 it
+ * refused Oxagen's merge 720e225 as one "Oxagen did not merge" two seconds
+ * after GitHub merged it (#5157). Accepting an exact commit therefore reads
+ * the link again, at most LINK_READS times LINK_INTERVAL_MS apart, before it
+ * decides the commit has no pull request.
+ */
+const LINK_READS = 8;
+const LINK_INTERVAL_MS = 1_000;
 
 interface GithubDeployment {
   sha: string;
@@ -371,17 +385,51 @@ interface GithubMergedPull {
   merged_by?: { type?: string; login?: string } | null;
 }
 
-/** Authenticate the merge against the full pull request returned by GitHub. */
+/**
+ * The pull requests GitHub links to `sha`. With `settle`, an empty list is
+ * read again until GitHub links one or LINK_READS reads pass.
+ */
+async function githubCommitPulls(
+  t: GithubHistoryTarget,
+  sha: string,
+  settle: boolean,
+): Promise<{ number: number }[]> {
+  const read = async () =>
+    need(
+      (
+        await t.rest.request<{ number: number }[]>(
+          "GET",
+          `${githubRoot(t)}/commits/${seg(sha)}/pulls?per_page=100`,
+        )
+      ).data,
+      "GitHub commit pull requests",
+    );
+  let listed = await read();
+  const sleep =
+    t.sleep ??
+    ((ms: number) => new Promise<void>((done) => setTimeout(done, ms)));
+  for (
+    let reads = 1;
+    settle && listed.length === 0 && reads < LINK_READS;
+    reads += 1
+  ) {
+    await sleep(LINK_INTERVAL_MS);
+    listed = await read();
+  }
+  return listed;
+}
+
+/**
+ * Authenticate the merge against the full pull request returned by GitHub.
+ * `settle` waits for GitHub to link a commit merged moments ago.
+ */
 async function githubAuthenticatedMerge(
   t: GithubHistoryTarget,
   sha: string,
+  settle = false,
 ): Promise<boolean> {
   const root = githubRoot(t);
-  const listed = await t.rest.request<{ number: number }[]>(
-    "GET",
-    `${root}/commits/${seg(sha)}/pulls?per_page=100`,
-  );
-  for (const summary of need(listed.data, "GitHub commit pull requests")) {
+  for (const summary of await githubCommitPulls(t, sha, settle)) {
     const response = await t.rest.request<GithubMergedPull>(
       "GET",
       `${root}/pulls/${seg(summary.number)}`,
@@ -461,9 +509,15 @@ export async function githubDiverged(
       parents: commit.parents.map((parent) => parent.sha),
       message: commit.commit.message,
       // A restored tree discards earlier changes. Every later commit needs proof.
+      // Only the exact commit a caller asked about may be a merge so new that
+      // GitHub has not linked it yet, so only it waits for the link.
       authenticated:
         compare.status === "ahead" && !truncated && index > restored_at
-          ? await githubAuthenticatedMerge(t, commit.sha)
+          ? await githubAuthenticatedMerge(
+              t,
+              commit.sha,
+              commit.sha === candidateSha,
+            )
           : false,
     });
   }
