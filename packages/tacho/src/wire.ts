@@ -275,8 +275,9 @@ export const BUNDLE_FEATURE_CACHE_KEEP_ALIVE = "cache_keep_alive" as const;
  * (P1-04, ADR-250). The control plane drains `work_order` rows only to a host
  * that advertises this, because `tachoCommandSchema` is an enum and a host
  * built before the value fails its whole poll, and every later command with
- * it, over one row it cannot name. The host side adds it to
- * `TACHO_BUNDLE_FEATURES` in the change that handles the command.
+ * it, over one row it cannot name. This host keeps the order in its
+ * `work-orders` directory (`collector/inbox.ts`), and `oxagen work start`
+ * claims it (`cli/work.ts`).
  */
 export const BUNDLE_FEATURE_WORK_ORDERS = "work_orders" as const;
 
@@ -300,6 +301,7 @@ export const TACHO_BUNDLE_FEATURES = [
   BUNDLE_FEATURE_CEDAR,
   BUNDLE_FEATURE_SKILLS,
   BUNDLE_FEATURE_CACHE_KEEP_ALIVE,
+  BUNDLE_FEATURE_WORK_ORDERS,
 ] as const;
 
 export type TachoBundleFeature = (typeof TACHO_BUNDLE_FEATURES)[number];
@@ -678,6 +680,95 @@ export const deliveredCommandResponseSchema =
 export type DeliveredCommandResponse = z.output<
   typeof deliveredCommandResponseSchema
 >;
+
+/** A work order's public id, as the control plane writes it. */
+export const WORK_ORDER_ID_PATTERN = /^wo_[0-9a-z]+$/;
+
+/** A work item's public id. */
+export const WORK_ITEM_ID_PATTERN = /^wi_[0-9a-z]+$/;
+
+/**
+ * The payload of a `work_order` command (ADR-250): the order's id, its
+ * idempotency key, and the work item's id. It never carries the brief. The
+ * host reads the brief when it claims the order. Passthrough, so a field the
+ * control plane adds later does not fail the command.
+ */
+export const workOrderCommandPayloadSchema = z
+  .object({
+    work_order: z.string().regex(WORK_ORDER_ID_PATTERN),
+    key: z.string().min(1).max(256),
+    item: z.string().regex(WORK_ITEM_ID_PATTERN),
+  })
+  .passthrough();
+
+export type WorkOrderCommandPayload = z.output<
+  typeof workOrderCommandPayloadSchema
+>;
+
+/** Where a host claims a work order (`claim_work_order`), under the API URL. */
+export const WORK_ORDER_CLAIM_PATH = "/v1/tacho/work-orders/claim";
+
+/** Where a host refuses a work order (`reject_work_order`), under the API URL. */
+export const WORK_ORDER_REJECT_PATH = "/v1/tacho/work-orders/reject";
+
+/**
+ * The answer to a claim, as the host reads it. The contract's output is
+ * strict on the server. This copy passes unknown keys through, for the same
+ * reason `deliveredCommandResponseSchema` does: a field added on the server
+ * must not stop a host from starting the work.
+ */
+export const workOrderClaimResponseSchema = z
+  .object({
+    repeat: z.boolean(),
+    work_order: z
+      .object({
+        id: z.string().regex(WORK_ORDER_ID_PATTERN),
+        key: z.string(),
+        send: z.number().int().min(1),
+        item_id: z.string(),
+        item_number: z.string(),
+        brief_revision: z.number().int().min(1),
+        repository: z.string(),
+        agent_id: z.string(),
+        harness: z.string(),
+      })
+      .passthrough(),
+    prompt: z.string().min(1),
+  })
+  .passthrough();
+
+export type WorkOrderClaimResponse = z.output<
+  typeof workOrderClaimResponseSchema
+>;
+
+/** The answer to a refusal. Passthrough for the same reason as the claim. */
+export const workOrderRejectResponseSchema = z
+  .object({ repeat: z.boolean() })
+  .passthrough();
+
+export type WorkOrderRejectResponse = z.output<
+  typeof workOrderRejectResponseSchema
+>;
+
+/**
+ * The environment variable `oxagen work start` sets on the harness it starts.
+ * The hook process inherits it from the harness, and the hook client passes
+ * it to the daemon, which names the order on the session's `agent_start`.
+ */
+export const WORK_ORDER_ENV = "OXAGEN_WORK_ORDER_ID";
+
+/**
+ * The frame attribute that names a run's work order. Ingest links a new root
+ * run to the order only when the host that sent the frames claimed it.
+ */
+export const WORK_ORDER_ATTR = "oxagen.work_order.id";
+
+/** The work order id in `value`, or undefined when it is not one. */
+export function workOrderIdOf(value: unknown): string | undefined {
+  return typeof value === "string" && WORK_ORDER_ID_PATTERN.test(value)
+    ? value
+    : undefined;
+}
 
 /** The forces a steering item carries, in the order the assembler ranks them. */
 export const steeringForceSchema = z.enum(["must", "should", "may", "info"]);
