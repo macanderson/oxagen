@@ -40,7 +40,7 @@ record.
 
 ## Decision
 
-### Git goes through custody
+### Git route
 
 When a run names a repository, the bridge sends that repository's Git smart
 HTTP requests (`/github/git/<owner>/<repo>/...`) to the ADR-151 proxy in the
@@ -56,7 +56,7 @@ requests:
 4. It streams the request to GitHub, revokes the token, and records the HTTP
    status.
 
-### How the lease crosses the bridge
+### Lease handoff
 
 The lease never enters the container. The bridge already belongs to one
 session: the launcher starts it for that session, on a Unix socket in the
@@ -78,8 +78,8 @@ enrollment again on each request and while a request streams, as it does for
 an ADR-151 lease. No HTTP route reaches `issueForSession`. Only the bridge
 calls it, inside the daemon.
 
-#3815 proposed writing the lease into the read-only session directory. The
-bridge holds it instead, for three reasons:
+Issue #3815 proposed writing the lease into the read-only session directory.
+The bridge holds it instead, for three reasons:
 
 1. A credential inside the sandbox is one the agent can send elsewhere. That
    is why ADR-152 kept the GitHub token out, and a lease is no different.
@@ -90,7 +90,7 @@ bridge holds it instead, for three reasons:
    the container starts. A longer run would lose Git at minute 15. A lease per
    request has no such limit.
 
-### The custody switch
+### Custody switch
 
 ADR-151 has two switches. On the host, `tacho github configure` turns on
 `github_broker_enabled` for a configured checkout. A contained run opts in by
@@ -101,7 +101,7 @@ still gates every mint. The server still mints only for a repository bound to
 the host's workspace, still refuses the steering repository, and still
 requires the key's creator to hold Owner or Admin.
 
-### The push record
+### Push record
 
 ADR-151 (#3788) puts `oxagen.credential_basis` on each recorded `git push`
 command. It says `gateway_brokered` only for a push in a checkout that
@@ -116,7 +116,7 @@ container writes, so a remote the agent pointed elsewhere reads
 `harness_held`. As before, the basis is client-attested, and the `token_use`
 frame is the daemon's own proof.
 
-### The operator-token path is removed
+### Operator token
 
 The daemon no longer accepts a token in a contained run request. The CLI no
 longer reads `OXAGEN_CONTAINED_GITHUB_TOKEN`, and it refuses to start while
@@ -132,7 +132,7 @@ token goes unused. Two options were weighed.
   reach GitHub binds the repository and attaches the GitHub App on the
   Repositories page. The record then names a binding too.
 
-### The REST route is removed
+### REST route
 
 The bridge no longer forwards `/github/api/...`, and the container no longer
 gets `GITHUB_API_URL`. Three options were weighed.
