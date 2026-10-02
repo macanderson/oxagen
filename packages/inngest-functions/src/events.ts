@@ -139,8 +139,9 @@ export type WorkEventReceivedEventData = WorkEventScope & {
 
 /**
  * A work item that is new, or whose subject, description, or labels changed.
- * Sent by the fetch worker and the reconcile after the upsert commits.
- * Consumed by the triage function.
+ * Sent by the fetch worker and the reconcile after the upsert commits, by
+ * manual entry, and by a person's retry of triage (`retry`). Consumed by the
+ * triage function.
  */
 export const WORK_ITEM_RECEIVED_EVENT = "work/item.received";
 
@@ -148,7 +149,24 @@ export const WORK_ITEM_RECEIVED_EVENT = "work/item.received";
 export type WorkItemReceivedEventData = WorkEventScope & {
   /** The work item's public id (`wi_…`). */
   item_id: string;
-  change: "new" | "updated";
+  change: "new" | "updated" | "retry";
+};
+
+/**
+ * One collector to check now. Sent by the 15-minute reconcile sweep, the
+ * nightly count, and `sync_work_collector`. Consumed by the collector check,
+ * which reads one collector at a time.
+ */
+export const WORK_COLLECTOR_CHECK_EVENT = "work/collector.check.requested";
+
+/** The data `WORK_COLLECTOR_CHECK_EVENT` carries. */
+export type WorkCollectorCheckEventData = WorkEventScope & {
+  /** The work.collectors row's uuid. */
+  collector_id: string;
+  /** `reconcile` reads changes since the cursor. `count` compares open items. */
+  check: "reconcile" | "count";
+  /** True to read a failing collector anyway, as after a person reconnects it. */
+  force: boolean;
 };
 
 /**
