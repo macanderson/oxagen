@@ -334,3 +334,27 @@ describe("run show", () => {
     ]);
   });
 });
+
+// ADR-250: a work order waits on the agent's host until the person at the
+// machine starts it, so `oxagen work` lists the waiting orders and starts one
+// by its id.
+describe("work", () => {
+  const program = buildProgram();
+  const work = program.commands.find((c) => c.name() === "work");
+
+  it("carries list and start, and start takes one required work order id", () => {
+    expect(work, "work must be registered").toBeDefined();
+    expect(work?.commands.map((c) => c.name()).sort()).toEqual([
+      "list",
+      "start",
+    ]);
+    const start = work?.commands.find((c) => c.name() === "start");
+    const args = start?.registeredArguments ?? [];
+    expect(args.map((a) => a.name())).toEqual(["work-order"]);
+    expect(args[0]?.required).toBe(true);
+  });
+
+  it("is listed in the top-level help", () => {
+    expect(program.helpInformation()).toMatch(/^\s+work\b/m);
+  });
+});
