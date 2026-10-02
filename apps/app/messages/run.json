@@ -1198,6 +1198,7 @@
       "noPullRequest": "no pull request",
       "pullState": {
         "open": "open",
+        "draft": "draft",
         "closed": "closed",
         "merged": "merged",
         "unknown": "status unknown"

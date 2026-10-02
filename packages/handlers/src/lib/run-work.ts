@@ -238,9 +238,13 @@ export function prAttr(name: "url" | "number" | "repository"): string {
 
 /**
  * The pull requests the harness said this session opened or linked, one row
- * per URL, from `oxagen:pr_link` frames. Claude Code writes one each time a
- * session creates or links a PR, so the link is certain and needs no branch
- * match. The earliest frame names where the run produced it.
+ * per URL, from `oxagen:pr_link` frames and from the `pr_open` effect frames
+ * whose call printed a URL (`gh pr create`, an MCP pull request tool). Claude
+ * Code writes a pr_link each time a session creates or links a PR, and a
+ * pr_open frame carries the URL the forge answered, so either link is certain
+ * and needs no branch match. `list_runs` reads the same two kinds
+ * (run-list-work.ts), so the Run header and the Fleet row name the same pull
+ * requests. The earliest frame names where the run produced it.
  */
 export async function readWorkPrLinks(
   sessionUuid: string,
@@ -253,7 +257,8 @@ export async function readWorkPrLinks(
       FROM tacho_events FINAL
       WHERE org_id = {orgId:UUID} AND workspace_id = {workspaceId:UUID}
         AND session_uuid = {sessionUuid:UUID}
-        AND kind = 'oxagen:pr_link' AND ${prAttr("url")} != ''
+        AND (kind = 'oxagen:pr_link' OR attrs['pr.url'] != '')
+        AND ${prAttr("url")} != ''
       GROUP BY url ORDER BY first_seq ASC LIMIT {limit:UInt32}`,
     params: { sessionUuid, limit: WORK_PR_LINK_CAP + 1 },
   });

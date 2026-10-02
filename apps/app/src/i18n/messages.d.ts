@@ -7701,6 +7701,7 @@ type Messages = {
       noPullRequest: string;
       pullState: {
         open: string;
+        draft: string;
         closed: string;
         merged: string;
         unknown: string;
