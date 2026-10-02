@@ -180,7 +180,13 @@ export interface CollectorDefinition<Config> extends ConnectorDefinition {
   verify(req: InboundRequest, secret: Secret): VerifyResult; // fails closed
   doorbell(req: InboundRequest): ItemRef[]; // ids only, never fields
   fetchById(ref: ItemRef, conn: Connection): Promise<ProviderItem>;
-  listChangedSince(cursor: Cursor, conn: Connection): Promise<Page<ProviderItem>>;
+  /**
+   * One page of what changed since the cursor. The pipeline passes the
+   * collector's parsed [scope] table, so a module can read only the places
+   * the collector names. A module may ignore it: toWorkItem still skips a
+   * record outside the scope.
+   */
+  listChangedSince(cursor: Cursor, conn: Connection, config?: Config): Promise<Page<ProviderItem>>;
   /**
    * Map one fetched record to work item fields. Pure.
    *

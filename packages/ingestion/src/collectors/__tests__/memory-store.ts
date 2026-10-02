@@ -92,10 +92,10 @@ export class MemoryCollectorStore implements CollectorStore {
     row.outcome = outcome;
   }
 
-  async findItem(collectorId: string, providerId: string): Promise<StoredWorkItem | null> {
-    const item = this.items.find(
-      (row) => row.collectorId === collectorId && row.providerId === providerId,
-    );
+  // One provider item is one work item in the workspace, whichever collector
+  // heard it (ADR-244), so the collector id plays no part in the key.
+  async findItem(_collectorId: string, providerId: string): Promise<StoredWorkItem | null> {
+    const item = this.items.find((row) => row.providerId === providerId);
     return item ? stored(item) : null;
   }
 
@@ -103,9 +103,7 @@ export class MemoryCollectorStore implements CollectorStore {
     collector: CollectorRecord,
     input: WorkItemInput,
   ): Promise<{ item: StoredWorkItem; created: boolean }> {
-    const existing = this.items.find(
-      (row) => row.collectorId === collector.id && row.providerId === input.providerId,
-    );
+    const existing = this.items.find((row) => row.providerId === input.providerId);
     if (existing) {
       existing.subject = input.subject;
       existing.description = input.description;

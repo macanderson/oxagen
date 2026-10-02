@@ -464,6 +464,35 @@ describe("receiveDelivery", () => {
   });
 });
 
+describe("receiveDelivery with no raw store", () => {
+  it("stores the screened delivery and keeps no raw bytes", async () => {
+    const s = setup();
+    delete s.h.ports.putRaw;
+    const stored = await s.deliver({ event: "item.changed", ids: ["101"] }, "d-raw");
+    expect(stored).toMatchObject({ kind: "stored", deliveryId: "d-raw" });
+    expect(at(s.h.store.events, 0).rawRef).toBeNull();
+    expect(s.h.raw.size).toBe(0);
+  });
+});
+
+describe("one provider item is one work item in a workspace", () => {
+  it("stores an item a second collector hears as the same work item", async () => {
+    const s = setup();
+    s.h.store.addCollector({ id: "col-2" });
+    putRecord(s.fake, { id: "101", title: "Checkout fails", updatedAt: s.ago(2) });
+    await s.deliverAndProcess(["101"]);
+    const second = await receiveDelivery(s.h.ports, {
+      collector: s.h.store.collector("col-2"),
+      request: fakeDelivery({ secret: SECRET, deliveryId: "d-other", payload: { event: "item.changed", ids: ["101"] } }),
+      secret: SECRET,
+    });
+    if (second.kind !== "stored") throw new Error(`the delivery was ${second.kind}`);
+    const processed = await processInboundEvent(s.h.ports, second.inboundEventId);
+    expect(processed).toEqual({ kind: "collected", changes: [] });
+    expect(s.h.store.items).toHaveLength(1);
+  });
+});
+
 describe("processInboundEvent", () => {
   it("returns missing for an event or a collector that is gone", async () => {
     const s = setup();
