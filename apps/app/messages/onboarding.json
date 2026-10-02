@@ -292,6 +292,16 @@
         "backToWrap": "Back to wrap an agent"
       }
     },
+    "steeringConnect": {
+      "connectedTitle": "GitHub connected",
+      "connectedBody": "Oxagen Connect is installed on GitHub. The connection is saved to the Oxagen organization that started it. The account you're signed in with can't open that organization. To see the connection there, sign out, then sign in with an account in that organization.",
+      "errorTitle": "GitHub connection failed",
+      "error": "GitHub didn't connect ({code}). The account you're signed in with can't open the Oxagen organization that started the connection. Sign in with an account in that organization, then connect GitHub again from there.",
+      "errorNoCode": "GitHub didn't connect. The account you're signed in with can't open the Oxagen organization that started the connection. Sign in with an account in that organization, then connect GitHub again from there.",
+      "emptyTitle": "No connection result",
+      "emptyBody": "This page shows how a GitHub connection ended. Start one from your organization in Oxagen.",
+      "home": "Go to Oxagen"
+    },
     "gate": {
       "title": "Finish setting up this workspace",
       "lead": "Oxagen opens when an agent you wrapped has talked to it. That first frame is also the installer's smoke test, so one path covers both.",

@@ -507,16 +507,21 @@ function validateReturnTo(raw: string | undefined): string | null {
 }
 
 /**
- * The URL that sends the person back to `returnTo` on the app, with `params`
- * set on its query. `returnTo` has passed `validateReturnTo`, so the result
- * stays on the app's host.
+ * The app's steering connect landing, `/github/steering`, with `returnTo` as
+ * `return_to` and `params` set on its query (#5151). The landing sends a
+ * member of the organization on to `returnTo` with the same params. Anyone
+ * else gets a result page there instead of the organization's 404. That
+ * covers a browser signed in to another Oxagen account than the one that
+ * started the connect. `returnTo` has passed `validateReturnTo`, so the
+ * landing reads a path on the app.
  */
-function appReturnUrl(
+function steeringLandingUrl(
   appBaseUrl: string,
   returnTo: string,
-  params: Record<string, string> = {},
+  params: Record<string, string>,
 ): string {
-  const url = new URL(`${appBaseUrl.replace(/\/+$/, "")}${returnTo}`);
+  const url = new URL(`${appBaseUrl.replace(/\/+$/, "")}/github/steering`);
+  url.searchParams.set("return_to", returnTo);
   for (const [key, value] of Object.entries(params))
     url.searchParams.set(key, value);
   return url.toString();
@@ -2336,7 +2341,8 @@ githubOauthCallbackRoute.get("/callback", async (c) => {
  * Answers 302 to GitHub, which returns to the app's first callback URL,
  * `/oauth/github/callback`. The signed state carries purpose "steering", so
  * the callback stores the organization's steering token and sends the person
- * back to `return_to`. Neither URL carries `redirect_uri`: GitHub refuses one
+ * back to `return_to` through the app's landing, `/github/steering` (#5151).
+ * Neither URL carries `redirect_uri`: GitHub refuses one
  * that does not match a registered callback exactly, and the install URL
  * cannot carry one at all.
  */
@@ -2434,8 +2440,10 @@ interface SteeringCallbackInput {
  * so the job uses it even when the owner can reach several. Without one, the
  * job finds the installation from the token's `/user/installations`.
  *
- * Every failure redirects to the state's `return_to` with
- * `steering=error&code=<reason>`. Success adds `steering=connected`.
+ * Every outcome redirects to the app's landing, `/github/steering`, with the
+ * state's `return_to` (#5151). A failure adds `steering=error&code=<reason>`,
+ * and success adds `steering=connected`. The landing sends a member of the
+ * organization on to `return_to` with the same query.
  */
 async function completeSteeringConnect(
   c: Context<AppEnv>,
@@ -2446,7 +2454,7 @@ async function completeSteeringConnect(
   const { orgId, userId, returnTo } = steering;
   const fail = (reason: string) =>
     c.redirect(
-      appReturnUrl(input.appBaseUrl, returnTo, {
+      steeringLandingUrl(input.appBaseUrl, returnTo, {
         steering: "error",
         code: reason,
       }),
@@ -2560,7 +2568,7 @@ async function completeSteeringConnect(
   }
 
   return c.redirect(
-    appReturnUrl(input.appBaseUrl, returnTo, { steering: "connected" }),
+    steeringLandingUrl(input.appBaseUrl, returnTo, { steering: "connected" }),
     302,
   );
 }

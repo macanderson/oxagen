@@ -45,6 +45,8 @@
  *   - a state signed for any other purpose, or with malformed fields → 400
  *   - records the installation, stores the token as github_steering, and
  *     resends each waiting scope
+ *   - every outcome lands on the app's /github/steering with return_to and
+ *     the outcome on its query, never on return_to itself (#5151)
  *   - keeps the installation the install leg named, only when the owner's
  *     token lists it on a GitHub organization
  *
@@ -2937,6 +2939,12 @@ const STEERING_BASE = `/v1/${ORG}/connections/steering`;
 const RETIRED_STEERING_CALLBACK_PATH = "/oauth/github/steering";
 const STEERING_USER_ID = "user-id-test";
 const STEERING_RETURN_TO = "/onboarding/steering";
+/**
+ * Where the callback sends every steering outcome: the app's landing, with
+ * `return_to` first and the outcome after it (#5151). URLSearchParams encodes
+ * each slash in the path.
+ */
+const STEERING_LANDING = `${APP_URL}/github/steering?return_to=${encodeURIComponent(STEERING_RETURN_TO)}`;
 
 /** Steering runs on the Oxagen GitHub App, so it reads only `GITHUB_APP_*` (ADR-228). */
 const STEERING_ENV: Record<string, string | undefined> = {
@@ -3315,7 +3323,7 @@ describe("GET /oauth/github/callback with a steering state (ADR-228)", () => {
   }
 
   function errorRedirect(code: string) {
-    return `${APP_URL}${STEERING_RETURN_TO}?steering=error&code=${code}`;
+    return `${STEERING_LANDING}&steering=error&code=${code}`;
   }
 
   /** What GitHub answers for the owner's `/user/installations`. */
@@ -3556,7 +3564,7 @@ describe("GET /oauth/github/callback with a steering state (ADR-228)", () => {
 
     expect(res.status).toBe(302);
     expect(res.headers.get("location")).toBe(
-      `${APP_URL}${STEERING_RETURN_TO}?steering=connected`,
+      `${STEERING_LANDING}&steering=connected`,
     );
 
     // The code went to GitHub with the Oxagen GitHub App's client, the same
@@ -3638,7 +3646,7 @@ describe("GET /oauth/github/callback with a steering state (ADR-228)", () => {
 
     expect(res.status).toBe(302);
     expect(res.headers.get("location")).toBe(
-      `${APP_URL}${STEERING_RETURN_TO}?steering=connected`,
+      `${STEERING_LANDING}&steering=connected`,
     );
     const expiresAt = insert.captured.values?.expiresAt;
     expect(expiresAt).toBeInstanceOf(Date);
@@ -3693,7 +3701,7 @@ describe("GET /oauth/github/callback with a steering state (ADR-228)", () => {
 
     expect(res.status).toBe(302);
     expect(res.headers.get("location")).toBe(
-      `${APP_URL}${STEERING_RETURN_TO}?steering=connected`,
+      `${STEERING_LANDING}&steering=connected`,
     );
     // The install goes into the platform registry, as a direct install does.
     expect(vi.mocked(upsertGithubInstallation)).toHaveBeenCalledWith({
@@ -3760,7 +3768,7 @@ describe("GET /oauth/github/callback with a steering state (ADR-228)", () => {
 
     expect(res.status).toBe(302);
     expect(res.headers.get("location")).toBe(
-      `${APP_URL}${STEERING_RETURN_TO}?steering=connected`,
+      `${STEERING_LANDING}&steering=connected`,
     );
     const connection = {
       provider: "github",
@@ -3823,7 +3831,7 @@ describe("GET /oauth/github/callback with a steering state (ADR-228)", () => {
 
     expect(res.status).toBe(302);
     expect(res.headers.get("location")).toBe(
-      `${APP_URL}${STEERING_RETURN_TO}?steering=connected`,
+      `${STEERING_LANDING}&steering=connected`,
     );
     expect(mocks.keepSteeringConnection).toHaveBeenCalledTimes(1);
   });
@@ -3873,7 +3881,7 @@ describe("GET /oauth/github/callback with a steering state (ADR-228)", () => {
 
       expect(res.status).toBe(302);
       expect(res.headers.get("location")).toBe(
-        `${APP_URL}${STEERING_RETURN_TO}?steering=connected`,
+        `${STEERING_LANDING}&steering=connected`,
       );
       expect(mocks.fetch.mock.calls[2]?.[0]).toBe(INSTALLATIONS_URL);
       expect(mocks.keepSteeringConnection).not.toHaveBeenCalled();
@@ -3898,7 +3906,7 @@ describe("GET /oauth/github/callback with a steering state (ADR-228)", () => {
 
       expect(res.status).toBe(302);
       expect(res.headers.get("location")).toBe(
-        `${APP_URL}${STEERING_RETURN_TO}?steering=connected`,
+        `${STEERING_LANDING}&steering=connected`,
       );
       expect(mocks.fetch).toHaveBeenCalledTimes(2);
       expect(mocks.keepSteeringConnection).not.toHaveBeenCalled();

@@ -29,6 +29,7 @@ type Messages = {
     register: string;
     cliAuthorize: string;
     cliComplete: string;
+    steeringConnect: string;
     fleet: string;
     run: string;
     agents: string;
@@ -4035,6 +4036,16 @@ type Messages = {
         rejectedNext: string;
         backToWrap: string;
       };
+    };
+    steeringConnect: {
+      connectedTitle: string;
+      connectedBody: string;
+      errorTitle: string;
+      error: string;
+      errorNoCode: string;
+      emptyTitle: string;
+      emptyBody: string;
+      home: string;
     };
     gate: {
       title: string;
