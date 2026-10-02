@@ -73,7 +73,7 @@ describe("scansForReleaseLinks", () => {
       "docs/adr/ADR-202-the-macos-desktop-app-installs-updates-without-asking.md",
       "tools/scripts/lib/release-artifacts.ts",
       "apps/desktop/src-tauri/icons/icon.png",
-      "apps/web/fonts/geist-latin-wght.woff2",
+      "apps/web/fonts/aeonik-wght.woff2",
     ]) {
       expect(scansForReleaseLinks(path), path).toBe(false);
     }
