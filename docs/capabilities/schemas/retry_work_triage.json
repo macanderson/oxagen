@@ -1,0 +1,65 @@
+{
+  "name": "retry_work_triage",
+  "domain": "work",
+  "description": "Queue triage to run again on a work item, after a failure or a change to the priorities record. A person's corrections stay in force.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "medium",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "item_id": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "item_id"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "item_id": {
+        "type": "string"
+      },
+      "state": {
+        "type": "string",
+        "enum": [
+          "new",
+          "held",
+          "triaged",
+          "needs_info",
+          "changed",
+          "ready",
+          "sent",
+          "running",
+          "review",
+          "done",
+          "closed"
+        ]
+      },
+      "queued": {
+        "const": true
+      }
+    },
+    "required": [
+      "item_id",
+      "state",
+      "queued"
+    ],
+    "additionalProperties": false
+  }
+}

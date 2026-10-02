@@ -242,6 +242,13 @@ import { steeringMemoriesGetRoute } from "./routes/v1/steering.memories.get";
 import { steeringMemoriesPromoteRoute } from "./routes/v1/steering.memories.promote";
 import { steeringMemoriesDismissRoute } from "./routes/v1/steering.memories.dismiss";
 import { steeringMemoryPrRecordsListRoute } from "./routes/v1/steering.memory_pr_records.list";
+import { workItemCreateRoute } from "./routes/v1/work.item.create";
+import { workTriageReviseRoute } from "./routes/v1/work.triage.revise";
+import { workTriageRetryRoute } from "./routes/v1/work.triage.retry";
+import { workCollectorsListRoute } from "./routes/v1/work.collectors.list";
+import { workCollectorSetRoute } from "./routes/v1/work.collector.set";
+import { workCollectorSyncRoute } from "./routes/v1/work.collector.sync";
+import { workPrioritiesGetRoute } from "./routes/v1/work.priorities.get";
 import { steeringMarkdownImportParseRoute } from "./routes/v1/steering.markdown_import.parse";
 import { steeringMarkdownImportCommitRoute } from "./routes/v1/steering.markdown_import.commit";
 import { steeringRepoImportRoute } from "./routes/v1/steering_repo.import";
@@ -344,6 +351,16 @@ import { runExportGetRoute } from "./routes/v1/run.export.get";
 import { runExportDownloadRoute } from "./routes/v1/run.export.download";
 import { workDoneBadgeRoute } from "./routes/v1/work.done.badge";
 import { workDoneKeyRoute } from "./routes/v1/work.done.key";
+import { workBriefSaveRoute } from "./routes/v1/work.brief.save";
+import { workBriefApproveRoute } from "./routes/v1/work.brief.approve";
+import { workItemCloseRoute } from "./routes/v1/work.item.close";
+import { workItemReopenRoute } from "./routes/v1/work.item.reopen";
+import { workOrderSendRoute } from "./routes/v1/work.order.send";
+import { workOrderCancelRoute } from "./routes/v1/work.order.cancel";
+import { workOrderStopRoute } from "./routes/v1/work.order.stop";
+import { workOrderReturnRoute } from "./routes/v1/work.order.return";
+import { workOrderAcceptRoute } from "./routes/v1/work.order.accept";
+import { workOrderChecksRefreshRoute } from "./routes/v1/work.order.checks.refresh";
 import { runSealRoute } from "./routes/v1/run.seal";
 import { runSummarizeRoute } from "./routes/v1/run.summarize";
 import { agentListRoute } from "./routes/v1/agent.list";
@@ -593,13 +610,15 @@ const TACHO_INGEST_PER_MIN = 120;
 // memories on the extra prompts, since the daemon fails open on a 429, and
 // its command poll and bundle refresh keep their own budget.
 const TACHO_RECALL_PER_MIN = 120;
-// Four more paths each hold a bucket of TACHO_HOST_PER_MIN of their own:
-// the GitHub credential, the contained launch, the memory upload, and the
-// memory use report. A memory upload is its own bucket because a daemon's
-// first scan sends every memory file a harness holds, and that burst must not
-// starve the command poll or the bundle refresh. The use report sends a few
-// calls every five minutes, and it must not spend the upload's bucket.
-const TACHO_OWN_BUCKET_PATHS = 4;
+// Five more buckets of TACHO_HOST_PER_MIN each: the GitHub credential, the
+// contained launch, the memory upload, the memory use report, and the work
+// order claim and rejection, which share one. A memory upload is its own
+// bucket because a daemon's first scan sends every memory file a harness
+// holds, and that burst must not starve the command poll or the bundle
+// refresh. The use report sends a few calls every five minutes, and it must
+// not spend the upload's bucket. A host claims or rejects each work order it
+// receives, and a retry of either must not spend the command poll's bucket.
+const TACHO_OWN_BUCKET_PATHS = 5;
 
 // Tacho hosts speak to Oxagen with their enrolled API key, whose scope pins
 // org and workspace, so the machine routes sit on a static path outside the
@@ -792,6 +811,15 @@ tachoScoped.use(
   distributedRateLimiter({
     keyPrefix: "tacho-recall",
     max: TACHO_RECALL_PER_MIN,
+    bucketKey: enrolledMachineBucketKey,
+  }),
+);
+// The work order claim and rejection (ADR-251) share one bucket.
+tachoScoped.use(
+  "/work-orders/*",
+  distributedRateLimiter({
+    keyPrefix: "tacho-work-orders",
+    max: TACHO_HOST_PER_MIN,
     bucketKey: enrolledMachineBucketKey,
   }),
 );
@@ -1312,6 +1340,27 @@ orgScoped.route("/context/steering/memories/get", steeringMemoriesGetRoute);
 orgScoped.route("/context/steering/memories/promote", steeringMemoriesPromoteRoute);
 orgScoped.route("/context/steering/memories/dismiss", steeringMemoriesDismissRoute);
 orgScoped.route("/context/steering/memory-prs/records", steeringMemoryPrRecordsListRoute);
+// A person's work item actions (P1-04, ADR-251): the brief, each send, and
+// the close. Each handler refuses an API key and an agent run.
+orgScoped.route("/work/items/brief/save", workBriefSaveRoute);
+orgScoped.route("/work/items/brief/approve", workBriefApproveRoute);
+orgScoped.route("/work/items/close", workItemCloseRoute);
+orgScoped.route("/work/items/reopen", workItemReopenRoute);
+orgScoped.route("/work/orders/send", workOrderSendRoute);
+orgScoped.route("/work/orders/cancel", workOrderCancelRoute);
+orgScoped.route("/work/orders/stop", workOrderStopRoute);
+orgScoped.route("/work/orders/return", workOrderReturnRoute);
+orgScoped.route("/work/orders/accept", workOrderAcceptRoute);
+orgScoped.route("/work/orders/checks/refresh", workOrderChecksRefreshRoute);
+// Work intake and triage (P1-03, #5103): manual entry, triage revision and
+// retry, GitHub collectors and their health, and the priorities record.
+orgScoped.route("/work/items/create", workItemCreateRoute);
+orgScoped.route("/work/triage/revise", workTriageReviseRoute);
+orgScoped.route("/work/triage/retry", workTriageRetryRoute);
+orgScoped.route("/work/collectors/list", workCollectorsListRoute);
+orgScoped.route("/work/collectors/set", workCollectorSetRoute);
+orgScoped.route("/work/collectors/sync", workCollectorSyncRoute);
+orgScoped.route("/work/priorities/get", workPrioritiesGetRoute);
 // The Markdown import (#4907): parse files into proposed steering records and
 // Cedar policies, then open one steering PR with the rows a person kept.
 orgScoped.route("/context/steering/import/parse", steeringMarkdownImportParseRoute);

@@ -24,6 +24,14 @@ vi.mock("@oxagen/iam/org-role", () => ({
   },
 }));
 
+// The real port, watched, so a test can read the options the production
+// sync deps build it with.
+vi.mock("./steering-repo/publisher", async (importOriginal) => {
+  const real =
+    await importOriginal<typeof import("./steering-repo/publisher")>();
+  return { ...real, steeringSyncPublish: vi.fn(real.steeringSyncPublish) };
+});
+
 import { createOpenContextPrHandler } from "./context.pr.open";
 import { createMergeContextPrHandler } from "./context.pr.merge";
 import { createProposeRecordHandler } from "./context.proposal.create";
@@ -33,9 +41,11 @@ import { MERGE_CLAIM_SECONDS } from "./context.steering.store";
 import {
   MERGE_GRACE_SECONDS,
   SYNC_CHECK_NAME,
+  syncDeps,
   syncWorkspaceSteering,
   type SyncDeps,
 } from "./context.steering.sync";
+import { steeringSyncPublish } from "./steering-repo/publisher";
 import type { SyncFinding } from "./context.steering.sync.plan";
 import {
   MemorySyncStore,
@@ -957,6 +967,18 @@ describe("publishing the steering repository (#4447)", () => {
     const r = rig();
     const out = await r.run();
     expect(out.published).toBeNull();
+  });
+
+  // A merge whose own publish failed records no deployment. The sync that
+  // publishes it later records the one deployment instead (#4449).
+  // publisher.test.ts shows the port records one per published version and
+  // none for a current, refused, or stale head.
+  it("asks the production port to record each version it publishes as a deployment", () => {
+    syncDeps();
+    expect(vi.mocked(steeringSyncPublish)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(steeringSyncPublish)).toHaveBeenCalledWith(
+      expect.objectContaining({ recordDeployments: true }),
+    );
   });
 
   it("keeps the sync when the publish throws, and the next sync tries again", async () => {

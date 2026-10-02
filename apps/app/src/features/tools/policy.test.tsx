@@ -141,9 +141,9 @@ describe("Tools › policy", () => {
     expect(
       document.querySelectorAll('[class*="bg-button-primary-bg"]'),
     ).toHaveLength(0);
-    // Policies is no view of Tool servers, so the views row is not drawn.
+    // Policies is no view of MCP servers, so the views row is not drawn.
     expect(
-      screen.queryByRole("tablist", { name: "Tool server views" }),
+      screen.queryByRole("tablist", { name: "MCP server views" }),
     ).not.toBeInTheDocument();
   });
 

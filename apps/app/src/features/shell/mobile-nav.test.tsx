@@ -299,7 +299,7 @@ describe("thumb bar", () => {
     ["/acme/core-platform/runs/run_01", "fleet"],
     ["/acme/core-platform/agents", "agents"],
     // Tools and Runtimes are tabs of Agents, and their old paths light it.
-    ["/acme/core-platform/agents?tab=servers", "agents"],
+    ["/acme/core-platform/agents?tab=mcp-servers", "agents"],
     ["/acme/core-platform/tools", "agents"],
     ["/acme/core-platform/runtimes/mbell-mbp-16", "agents"],
     ["/acme/core-platform/spend", "spend"],

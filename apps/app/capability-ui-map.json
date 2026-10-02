@@ -120,9 +120,9 @@
       "verifiedBy": "session-20daa43b-cutover"
     },
     "create_connection": {
-      "route": "/[org]/[ws]/agents?tab=servers",
+      "route": "/[org]/[ws]/agents?tab=mcp-servers",
       "page": "apps/app/src/app/[org]/[ws]/agents/page.tsx",
-      "entry": "Agents › Tool servers › Connections: “Add a connection” opens the dialog that invokes create_connection (features/tools/add-connection.tsx, features/tools/actions.ts)",
+      "entry": "Agents › MCP servers › Connections: “Add a connection” opens the dialog that invokes create_connection (features/tools/add-connection.tsx, features/tools/actions.ts)",
       "testid": "connection-add-open",
       "proof": "apps/app/src/features/tools/connections.test.tsx",
       "verifiedAt": "2026-09-23",
@@ -382,9 +382,9 @@
       "verifiedBy": "skills-lifecycle-ci-witness"
     },
     "get_connection": {
-      "route": "/[org]/[ws]/agents?tab=servers",
+      "route": "/[org]/[ws]/agents?tab=mcp-servers",
       "page": "apps/app/src/app/[org]/[ws]/agents/page.tsx",
-      "entry": "Agents › Tool servers › Connections: a row opens the connection drawer, which reads get_connection on open (features/tools/connection-drawer.tsx, features/tools/actions.ts)",
+      "entry": "Agents › MCP servers › Connections: a row opens the connection drawer, which reads get_connection on open (features/tools/connection-drawer.tsx, features/tools/actions.ts)",
       "testid": "connection-open-con_01k5n1",
       "proof": "apps/app/src/features/tools/connections.test.tsx",
       "verifiedAt": "2026-09-23",
@@ -709,7 +709,7 @@
     "import_tools": {
       "route": "/[org]/[ws]/agents?tab=tools",
       "page": "apps/app/src/app/[org]/[ws]/agents/page.tsx",
-      "entry": "Agents header “Add server”, the Tools view's “Import a provider” and Tool servers' “Add a provider” open the three-step import dialog whose last step invokes import_tools; a provider's drill-down re-imports (features/tools/import-provider.tsx, features/tools/provider-dialog.tsx, features/tools/actions.ts)",
+      "entry": "Agents header “Add server”, the Tools view's “Import a provider” and MCP servers' “Add a provider” open the three-step import dialog whose last step invokes import_tools; a provider's drill-down re-imports (features/tools/import-provider.tsx, features/tools/provider-dialog.tsx, features/tools/actions.ts)",
       "proof": "apps/app/src/features/tools/write-controls.test.tsx",
       "verifiedAt": "2026-09-23",
       "verifiedBy": "session_01BgZ1geHLLuub8kPYfH8Qup"
@@ -825,9 +825,9 @@
       ]
     },
     "list_connections": {
-      "route": "/[org]/[ws]/agents?tab=servers",
+      "route": "/[org]/[ws]/agents?tab=mcp-servers",
       "page": "apps/app/src/app/[org]/[ws]/agents/page.tsx",
-      "entry": "Agents › Tool servers: the connections table above the credential grants log (features/tools/connections.tsx, data/live/tools.ts, data/live/mappers/tools.ts)",
+      "entry": "Agents › MCP servers: the connections table above the credential grants log (features/tools/connections.tsx, data/live/tools.ts, data/live/mappers/tools.ts)",
       "proof": "apps/app/src/features/tools/connections.test.tsx",
       "verifiedAt": "2026-09-23",
       "verifiedBy": "session_01BgZ1geHLLuub8kPYfH8Qup"
@@ -842,9 +842,9 @@
       "verifiedBy": "session-2ce52f08-stella-session-list"
     },
     "list_credential_grants": {
-      "route": "/[org]/[ws]/agents?tab=servers",
+      "route": "/[org]/[ws]/agents?tab=mcp-servers",
       "page": "apps/app/src/app/[org]/[ws]/agents/page.tsx",
-      "entry": "Agents › Tool servers: the credential grants log (features/tools/connections.tsx GrantsLog, data/live/tools.ts)",
+      "entry": "Agents › MCP servers: the credential grants log (features/tools/connections.tsx GrantsLog, data/live/tools.ts)",
       "proof": "apps/app/src/features/tools/tools.test.tsx",
       "verifiedAt": "2026-09-23",
       "verifiedBy": "session_01BgZ1geHLLuub8kPYfH8Qup"
@@ -942,9 +942,9 @@
       "verifiedBy": "session-20daa43b-cutover"
     },
     "list_mcp_servers": {
-      "route": "/[org]/[ws]/agents?tab=servers",
+      "route": "/[org]/[ws]/agents?tab=mcp-servers",
       "page": "apps/app/src/app/[org]/[ws]/agents/page.tsx",
-      "entry": "Agents › Tool servers: the providers table and drill-down, the Provider cell on each tool row, and the provider picker in the import dialog (features/tools/providers.tsx, features/tools/provider-row.tsx, features/tools/provider-dialog.tsx, data/live/tools.ts)",
+      "entry": "Agents › MCP servers: the providers table and drill-down, the Provider cell on each tool row, and the provider picker in the import dialog (features/tools/providers.tsx, features/tools/provider-row.tsx, features/tools/provider-dialog.tsx, data/live/tools.ts)",
       "proof": "apps/app/src/features/tools/tools.test.tsx",
       "verifiedAt": "2026-09-23",
       "verifiedBy": "session_01BgZ1geHLLuub8kPYfH8Qup"
@@ -1089,7 +1089,7 @@
     "list_tool_versions": {
       "route": "/[org]/[ws]/agents?tab=tools",
       "page": "apps/app/src/app/[org]/[ws]/agents/page.tsx",
-      "entry": "Agents › Tool servers › Tools: the tool versions table, its category chips and the tab count (features/tools/registry.tsx, data/live/tools.ts)",
+      "entry": "Agents › MCP servers › Tools: the tool versions table, its category chips and the tab count (features/tools/registry.tsx, data/live/tools.ts)",
       "proof": "apps/app/src/features/tools/tools.test.tsx",
       "verifiedAt": "2026-09-23",
       "verifiedBy": "session_01BgZ1geHLLuub8kPYfH8Qup"
@@ -1263,27 +1263,27 @@
       "verifiedBy": "runtime-agent-enrollment (#4369)"
     },
     "register_mcp_server": {
-      "route": "/[org]/[ws]/agents?tab=servers",
+      "route": "/[org]/[ws]/agents?tab=mcp-servers",
       "page": "apps/app/src/app/[org]/[ws]/agents/page.tsx",
-      "entry": "Agents › Tool servers: “Add a provider” (and “Add server” in the Agents header) opens the import dialog whose Connect step invokes register_mcp_server (features/tools/import-provider.tsx, features/tools/actions.ts)",
+      "entry": "Agents › MCP servers: “Add a provider” (and “Add server” in the Agents header) opens the import dialog whose Connect step invokes register_mcp_server (features/tools/import-provider.tsx, features/tools/actions.ts)",
       "testid": "tools-import-open",
       "proof": "apps/app/src/features/tools/write-controls.test.tsx",
       "verifiedAt": "2026-09-23",
       "verifiedBy": "session_01BgZ1geHLLuub8kPYfH8Qup"
     },
     "search_mcp_registry": {
-      "route": "/[org]/[ws]/agents?tab=servers",
+      "route": "/[org]/[ws]/agents?tab=mcp-servers",
       "page": "apps/app/src/app/[org]/[ws]/agents/page.tsx",
-      "entry": "Agents › Tool servers: “Add a provider” opens the wizard on Browse the registry, whose search invokes search_mcp_registry (features/tools/registry-browser.tsx, features/tools/provider-auth-actions.ts)",
+      "entry": "Agents › MCP servers: “Add a provider” opens the wizard on Browse the registry, whose search invokes search_mcp_registry (features/tools/registry-browser.tsx, features/tools/provider-auth-actions.ts)",
       "testid": "registry-browser",
       "proof": "apps/app/src/features/tools/provider-oauth.test.tsx",
       "verifiedAt": "2026-09-24",
       "verifiedBy": "session_013LENK7WiiY5jb2DzroLwiY"
     },
     "start_mcp_authorization": {
-      "route": "/[org]/[ws]/agents?tab=servers",
+      "route": "/[org]/[ws]/agents?tab=mcp-servers",
       "page": "apps/app/src/app/[org]/[ws]/agents/page.tsx",
-      "entry": "Agents › Tool servers: “Add a provider” → Authorize with {name} (a registry or custom OAuth server), and Reconnect on an OAuth provider's row, invoke start_mcp_authorization and open the sign-in popup (features/tools/use-provider-oauth.ts, features/tools/provider-auth-actions.ts)",
+      "entry": "Agents › MCP servers: “Add a provider” → Authorize with {name} (a registry or custom OAuth server), and Reconnect on an OAuth provider's row, invoke start_mcp_authorization and open the sign-in popup (features/tools/use-provider-oauth.ts, features/tools/provider-auth-actions.ts)",
       "testid": "tools-import-connect",
       "proof": "apps/app/src/features/tools/provider-oauth.test.tsx",
       "verifiedAt": "2026-09-24",
@@ -1627,7 +1627,7 @@
     "set_tool_classification": {
       "route": "/[org]/[ws]/agents?tab=tools",
       "page": "apps/app/src/app/[org]/[ws]/agents/page.tsx",
-      "entry": "Agents › Tool servers › Tools: a row opens the tool dialog, whose form reclassifies the version (features/tools/tool-dialog.tsx, setToolClassification in features/tools/actions.ts)",
+      "entry": "Agents › MCP servers › Tools: a row opens the tool dialog, whose form reclassifies the version (features/tools/tool-dialog.tsx, setToolClassification in features/tools/actions.ts)",
       "proof": "apps/app/src/features/tools/write-controls.test.tsx",
       "verifiedAt": "2026-09-23",
       "verifiedBy": "session_01BgZ1geHLLuub8kPYfH8Qup"
@@ -1987,9 +1987,9 @@
       "verifiedBy": "steering-memories-tab (#4914)"
     },
     "delete_mcp_server": {
-      "route": "/[org]/[ws]/agents?tab=servers",
+      "route": "/[org]/[ws]/agents?tab=mcp-servers",
       "page": "apps/app/src/app/[org]/[ws]/agents/page.tsx",
-      "entry": "Agents › Tool servers: Remove on a provider row and in the provider drill-down's footer invokes delete_mcp_server after saying what stops and what is kept for replay (features/tools/provider-dialog.tsx, removeProvider in features/tools/actions.ts)",
+      "entry": "Agents › MCP servers: Remove on a provider row and in the provider drill-down's footer invokes delete_mcp_server after saying what stops and what is kept for replay (features/tools/provider-dialog.tsx, removeProvider in features/tools/actions.ts)",
       "proof": "apps/app/src/features/tools/tools.test.tsx",
       "verifiedAt": "2026-09-23",
       "verifiedBy": "session_01BgZ1geHLLuub8kPYfH8Qup"
@@ -2082,7 +2082,7 @@
     "list_toolbelts": {
       "route": "/[org]/[ws]/agents?tab=toolbelts",
       "page": "apps/app/src/app/[org]/[ws]/agents/page.tsx",
-      "entry": "Agents › Tool servers › Toolbelts: the All tools belt, then the clones (features/tools/toolbelts.tsx)",
+      "entry": "Agents › MCP servers › Toolbelts: the All tools belt, then the clones (features/tools/toolbelts.tsx)",
       "proof": "apps/app/src/features/tools/toolbelts.test.tsx",
       "verifiedAt": "2026-09-26",
       "verifiedBy": "runtime-agent-enrollment (#4369)",
@@ -2106,7 +2106,7 @@
     "get_toolbelt": {
       "route": "/[org]/[ws]/agents?tab=toolbelts",
       "page": "apps/app/src/app/[org]/[ws]/agents/page.tsx",
-      "entry": "Agents › Tool servers › Toolbelts › one belt, its tools grouped by server (features/tools/toolbelts.tsx, features/tools/belt-view.tsx)",
+      "entry": "Agents › MCP servers › Toolbelts › one belt, its tools grouped by server (features/tools/toolbelts.tsx, features/tools/belt-view.tsx)",
       "proof": "apps/app/src/features/tools/tools.test.tsx",
       "verifiedAt": "2026-09-26",
       "verifiedBy": "runtime-agent-enrollment (#4369)"
@@ -2114,7 +2114,7 @@
     "clone_toolbelt": {
       "route": "/[org]/[ws]/agents?tab=toolbelts",
       "page": "apps/app/src/app/[org]/[ws]/agents/page.tsx",
-      "entry": "Agents › Tool servers › Toolbelts › Clone (features/tools/clone-toolbelt.tsx)",
+      "entry": "Agents › MCP servers › Toolbelts › Clone (features/tools/clone-toolbelt.tsx)",
       "proof": "apps/app/src/features/tools/clone-toolbelt.test.tsx",
       "verifiedAt": "2026-09-26",
       "verifiedBy": "runtime-agent-enrollment (#4369)"
@@ -2122,7 +2122,7 @@
     "update_toolbelt": {
       "route": "/[org]/[ws]/agents?tab=toolbelts",
       "page": "apps/app/src/app/[org]/[ws]/agents/page.tsx",
-      "entry": "Agents › Tool servers › Toolbelts › a custom belt's server and tool switches (features/tools/belt-view.tsx)",
+      "entry": "Agents › MCP servers › Toolbelts › a custom belt's server and tool switches (features/tools/belt-view.tsx)",
       "proof": "apps/app/src/features/tools/belt-view.test.tsx",
       "verifiedAt": "2026-09-26",
       "verifiedBy": "runtime-agent-enrollment (#4369)"
@@ -2130,7 +2130,7 @@
     "delete_toolbelt": {
       "route": "/[org]/[ws]/agents?tab=toolbelts",
       "page": "apps/app/src/app/[org]/[ws]/agents/page.tsx",
-      "entry": "Agents › Tool servers › Toolbelts › Delete on a custom belt no agent carries (features/tools/belt-view.tsx)",
+      "entry": "Agents › MCP servers › Toolbelts › Delete on a custom belt no agent carries (features/tools/belt-view.tsx)",
       "proof": "apps/app/src/features/tools/belt-view.test.tsx",
       "verifiedAt": "2026-09-26",
       "verifiedBy": "runtime-agent-enrollment (#4369)"
@@ -2138,7 +2138,7 @@
     "set_tool_state": {
       "route": "/[org]/[ws]/agents?tab=toolbelts",
       "page": "apps/app/src/app/[org]/[ws]/agents/page.tsx",
-      "entry": "Agents › Tool servers › Toolbelts › All tools: each tool's or server's availability and default (features/tools/belt-view.tsx)",
+      "entry": "Agents › MCP servers › Toolbelts › All tools: each tool's or server's availability and default (features/tools/belt-view.tsx)",
       "proof": "apps/app/src/features/tools/belt-view.test.tsx",
       "verifiedAt": "2026-09-26",
       "verifiedBy": "runtime-agent-enrollment (#4369)"

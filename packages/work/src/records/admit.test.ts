@@ -140,6 +140,12 @@ describe("withdraw, stop, and return", () => {
     refused(sent, { kind: "withdraw", orderId: "o9" }, "not_found");
   });
 
+  it("withdraws a claimed send only after a stop that no run confirmed, and never one with a run", () => {
+    expect(admit([...claimed, f.stopRequested("o1", 6)], { kind: "withdraw", orderId: "o1" })).toEqual({ repeat: false });
+    refused([...claimed, f.runtime("run_linked", "o1", 6), f.stopRequested("o1", 7)], { kind: "withdraw", orderId: "o1" }, "not_allowed");
+    refused([...claimed, f.runtime("stopped", "o1", 6)], { kind: "withdraw", orderId: "o1" }, "not_allowed");
+  });
+
   it("stops only a claimed or running send", () => {
     expect(admit(claimed, { kind: "stop", orderId: "o1" })).toEqual({ repeat: false });
     expect(admit([...claimed, f.stopRequested("o1", 6)], { kind: "stop", orderId: "o1" })).toEqual({ repeat: true });

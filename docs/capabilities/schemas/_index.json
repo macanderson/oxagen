@@ -13,6 +13,16 @@
       "consumes": []
     },
     {
+      "name": "accept_work_order",
+      "domain": "work",
+      "surfaces": [
+        "api"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "add_conversation_attachment",
       "domain": "conversation",
       "surfaces": [
@@ -85,6 +95,16 @@
         "api",
         "mcp",
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "approve_work_brief",
+      "domain": "work",
+      "surfaces": [
+        "api"
       ],
       "component": null,
       "produces": [],
@@ -274,6 +294,16 @@
       "consumes": []
     },
     {
+      "name": "cancel_work_order",
+      "domain": "work",
+      "surfaces": [
+        "api"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "change_member_role",
       "domain": "org",
       "surfaces": [
@@ -308,12 +338,32 @@
       "consumes": []
     },
     {
+      "name": "claim_work_order",
+      "domain": "work",
+      "surfaces": [
+        "api"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "clone_toolbelt",
       "domain": "toolbelt",
       "surfaces": [
         "api",
         "mcp",
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "close_work_item",
+      "domain": "work",
+      "surfaces": [
+        "api"
       ],
       "component": null,
       "produces": [],
@@ -546,6 +596,17 @@
       "domain": "tacho",
       "surfaces": [
         "api"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "create_work_item",
+      "domain": "work",
+      "surfaces": [
+        "api",
+        "mcp"
       ],
       "component": null,
       "produces": [],
@@ -2190,6 +2251,17 @@
       "consumes": []
     },
     {
+      "name": "get_work_priorities",
+      "domain": "work",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "get_workspace_memory",
       "domain": "context",
       "surfaces": [
@@ -3177,6 +3249,17 @@
       "consumes": []
     },
     {
+      "name": "list_work_collectors",
+      "domain": "work",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "list_working_copies",
       "domain": "repository",
       "surfaces": [
@@ -3719,6 +3802,16 @@
       "consumes": []
     },
     {
+      "name": "refresh_work_order_checks",
+      "domain": "work",
+      "surfaces": [
+        "api"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "register_agent",
       "domain": "agent",
       "surfaces": [
@@ -3745,6 +3838,16 @@
       "surfaces": [
         "api",
         "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "reject_work_order",
+      "domain": "work",
+      "surfaces": [
+        "api"
       ],
       "component": null,
       "produces": [],
@@ -3821,6 +3924,16 @@
       "domain": "assistant",
       "surfaces": [
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "reopen_work_item",
+      "domain": "work",
+      "surfaces": [
+        "api"
       ],
       "component": null,
       "produces": [],
@@ -3930,6 +4043,27 @@
       "consumes": []
     },
     {
+      "name": "retry_work_triage",
+      "domain": "work",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "return_work_order",
+      "domain": "work",
+      "surfaces": [
+        "api"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "reveal_secret",
       "domain": "secret",
       "surfaces": [
@@ -3946,6 +4080,17 @@
       "surfaces": [
         "api",
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "revise_work_triage",
+      "domain": "work",
+      "surfaces": [
+        "api",
+        "mcp"
       ],
       "component": null,
       "produces": [],
@@ -4110,6 +4255,16 @@
       "consumes": []
     },
     {
+      "name": "save_work_brief",
+      "domain": "work",
+      "surfaces": [
+        "api"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "seal_run",
       "domain": "run",
       "surfaces": [
@@ -4204,6 +4359,16 @@
       "surfaces": [
         "api",
         "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "send_work_order",
+      "domain": "work",
+      "surfaces": [
+        "api"
       ],
       "component": null,
       "produces": [],
@@ -4592,6 +4757,17 @@
       "consumes": []
     },
     {
+      "name": "set_work_collector",
+      "domain": "work",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "setup_schema",
       "domain": "schema",
       "surfaces": [
@@ -4662,6 +4838,16 @@
         "api",
         "mcp",
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "stop_work_order",
+      "domain": "work",
+      "surfaces": [
+        "api"
       ],
       "component": null,
       "produces": [],
@@ -4766,6 +4952,17 @@
         "mcp",
         "cli",
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "sync_work_collector",
+      "domain": "work",
+      "surfaces": [
+        "api",
+        "mcp"
       ],
       "component": null,
       "produces": [],

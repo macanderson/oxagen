@@ -5,6 +5,7 @@ import {
   registerSteeringPrOpener,
 } from "@oxagen/agent/runtime/steering-pr";
 import { setSpendProposalOpener } from "@oxagen/billing/proposal-opener";
+import { setCodeRepoCheckRunner } from "@oxagen/inngest-functions/code-repo-check-runner";
 import { setInterjectionTimeoutRunner } from "@oxagen/inngest-functions/interjection-timeout-runner";
 import { setMcpServerDiscoveryRunner } from "@oxagen/inngest-functions/mcp-server-discovery-runner";
 import { setMemoryRunner } from "@oxagen/inngest-functions/memory-runner";
@@ -12,9 +13,14 @@ import { setNoProgressPauseRunner } from "@oxagen/inngest-functions/no-progress-
 import { setRunFitRunner } from "@oxagen/inngest-functions/run-fit-runner";
 import { setRunPrOutcomesRunner } from "@oxagen/inngest-functions/run-pr-outcomes-runner";
 import { setPullRequestBackfillRunner } from "@oxagen/inngest-functions/run-pull-request-backfill-runner";
+import { setWorkOrderResultsRunner } from "@oxagen/inngest-functions/work-order-results-runner";
 import { setSteeringRepoHealthRunner } from "@oxagen/inngest-functions/steering-repo-health-runner";
 import { setSteeringRepoProvisionRunner } from "@oxagen/inngest-functions/steering-repo-provision-runner";
 import { setSteeringSyncRunner } from "@oxagen/inngest-functions/steering-sync-runner";
+import {
+  setWorkIntakeRunner,
+  type WorkIntakeRunner,
+} from "@oxagen/inngest-functions/work-intake-runner";
 import {
   registerHandler,
   registerHandlersOnce,
@@ -184,6 +190,21 @@ registerHandlersOnce("@oxagen/handlers", () => {
       return postgresMemoryStore.listCurateWorkspaces();
     },
   });
+  // The Oxagen check on a linked code repository's pull requests (S2b,
+  // #5058) reads the host, the registry, and the published version through
+  // this package. It runs in the workspace's tenant scope, and is loaded on
+  // its first run.
+  setCodeRepoCheckRunner(async (request) => {
+    const [{ runInTenantScope }, run, deps] = await Promise.all([
+      import("@oxagen/tenancy"),
+      import("./code-repo-check/run"),
+      import("./code-repo-check/deps"),
+    ]);
+    return runInTenantScope(
+      { orgId: request.orgId, workspaceId: request.workspaceId },
+      () => run.runCodeRepoCheck(deps.codeRepoCheckDeps, request),
+    );
+  });
   // The pull request backfill (ADR-192) lives in @oxagen/inngest-functions
   // for the same reason, and is loaded on its first run.
   setPullRequestBackfillRunner(async (request) =>
@@ -191,6 +212,18 @@ registerHandlersOnce("@oxagen/handlers", () => {
       request,
     ),
   );
+  // A work order's run end and pull request (ADR-251) write work records and
+  // read GitHub through this package too, and load on their first run.
+  setWorkOrderResultsRunner({
+    async runEnded(request) {
+      const { recordRunEnded } = await import("./lib/work-records/results");
+      return recordRunEnded({ orgId: request.orgId, workspaceId: request.workspaceId }, request.runId);
+    },
+    async pullRequestLinked(request) {
+      const { recordRunPullRequest } = await import("./lib/work-records/results");
+      return recordRunPullRequest({ orgId: request.orgId, workspaceId: request.workspaceId }, request.rootSessionUuid, request.url);
+    },
+  });
   // The hourly run outcome refresh (#4491) reads GitHub through this package
   // too. It runs in the workspace's tenant scope, and is loaded on its first
   // run.
@@ -270,6 +303,44 @@ registerHandlersOnce("@oxagen/handlers", () => {
       );
     },
   });
+  // Work intake and triage (P1-03, #5103) read GitHub and write the work
+  // records through this package, which @oxagen/inngest-functions cannot
+  // import. Each call loads the runner on its first use.
+  const workIntake = async (): Promise<WorkIntakeRunner> =>
+    (await import("./lib/work-intake/runner")).createWorkIntakeRunner();
+  setWorkIntakeRunner({
+    openDelivery: async (scope, id) => (await workIntake()).openDelivery(scope, id),
+    collectRef: async (scope, collectorId, ref) => (await workIntake()).collectRef(scope, collectorId, ref),
+    closeDelivery: async (scope, id) => (await workIntake()).closeDelivery(scope, id),
+    collectorTargets: async () => (await workIntake()).collectorTargets(),
+    reconcilePage: async (scope, collectorId, force) => (await workIntake()).reconcilePage(scope, collectorId, force),
+    finishReconcile: async (scope, collectorId, summary) => (await workIntake()).finishReconcile(scope, collectorId, summary),
+    count: async (scope, collectorId) => (await workIntake()).count(scope, collectorId),
+    triage: async (scope, item, retry) => (await workIntake()).triage(scope, item, retry),
+    recordTriageFailure: async (scope, item, reason) => (await workIntake()).recordTriageFailure(scope, item, reason),
+    prune: async (now) => (await workIntake()).prune(now),
+  });
+  registerHandler("create_work_item", () =>
+    import("./work.item.create").then((m) => m.workItemCreateHandler as CapabilityHandlerFn),
+  );
+  registerHandler("revise_work_triage", () =>
+    import("./work.triage.revise").then((m) => m.workTriageReviseHandler as CapabilityHandlerFn),
+  );
+  registerHandler("retry_work_triage", () =>
+    import("./work.triage.retry").then((m) => m.workTriageRetryHandler as CapabilityHandlerFn),
+  );
+  registerHandler("list_work_collectors", () =>
+    import("./work.collectors.list").then((m) => m.workCollectorsListHandler as CapabilityHandlerFn),
+  );
+  registerHandler("set_work_collector", () =>
+    import("./work.collector.set").then((m) => m.workCollectorSetHandler as CapabilityHandlerFn),
+  );
+  registerHandler("sync_work_collector", () =>
+    import("./work.collector.sync").then((m) => m.workCollectorSyncHandler as CapabilityHandlerFn),
+  );
+  registerHandler("get_work_priorities", () =>
+    import("./work.priorities.get").then((m) => m.workPrioritiesGetHandler as CapabilityHandlerFn),
+  );
   registerHandler("get_run_issue_providers", () =>
     import("./run.issue.providers.get").then(
       (m) => m.handler as CapabilityHandlerFn,
@@ -1257,6 +1328,68 @@ registerHandlersOnce("@oxagen/handlers", () => {
     async () =>
       (await import("./steering.memories.dismiss"))
         .steeringMemoriesDismissHandler as CapabilityHandlerFn,
+  );
+  // Phase 1 work actions (P1-04, ADR-251): a person's decisions on a work
+  // item, and a host's claim or refusal of a work order.
+  registerHandler(
+    "save_work_brief",
+    async () =>
+      (await import("./work.brief.save")).workBriefSaveHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "approve_work_brief",
+    async () =>
+      (await import("./work.brief.approve")).workBriefApproveHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "send_work_order",
+    async () =>
+      (await import("./work.order.send")).workOrderSendHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "cancel_work_order",
+    async () =>
+      (await import("./work.order.cancel")).workOrderCancelHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "stop_work_order",
+    async () =>
+      (await import("./work.order.stop")).workOrderStopHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "return_work_order",
+    async () =>
+      (await import("./work.order.return")).workOrderReturnHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "accept_work_order",
+    async () =>
+      (await import("./work.order.accept")).workOrderAcceptHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "refresh_work_order_checks",
+    async () =>
+      (await import("./work.order.checks.refresh")).workOrderChecksRefreshHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "close_work_item",
+    async () =>
+      (await import("./work.item.close")).workItemCloseHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "reopen_work_item",
+    async () =>
+      (await import("./work.item.reopen")).workItemReopenHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "claim_work_order",
+    async () =>
+      (await import("./work.order.claim")).workOrderClaimHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "reject_work_order",
+    async () =>
+      (await import("./work.order.reject")).workOrderRejectHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "list_memory_pr_records",

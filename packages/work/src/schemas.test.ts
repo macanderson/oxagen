@@ -444,7 +444,8 @@ describe("triage/v1", () => {
   });
 
   it("ties each state to the fields it needs", () => {
-    expectInvalid(validate, { ...triage, workflow: null });
+    // Phase 1 runs no workflows, so a triaged decision may name none.
+    expectValid(validate, { ...triage, workflow: null });
     expectInvalid(validate, { ...triage, done_record: null });
     expectValid(validate, {
       ...triage,

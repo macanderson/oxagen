@@ -321,7 +321,7 @@ describe("the name step", () => {
     );
     expect(screen.getByTestId("register-toolbelt-import")).toHaveAttribute(
       "href",
-      "/acme/core-platform/agents?tab=servers",
+      "/acme/core-platform/agents?tab=mcp-servers",
     );
     expect(screen.queryByRole("radiogroup", { name: "Toolbelt" })).toBeNull();
     await user.type(screen.getByLabelText("Name"), "Perf watch");

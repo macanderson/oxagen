@@ -1,10 +1,12 @@
 // The Agents page (roadmap mockups `agents`): the agents in this workspace and
 // everything that governs them, on one page. It absorbed the Tools page and
 // the Runtimes list, so its strip carries five tabs in this order: Agents,
-// Tool servers, Policies, Runtimes and Off switches. The tab is the `?tab=`
+// MCP servers, Policies, Runtimes and Off switches. The tab is the `?tab=`
 // query value, not a path segment, because `/agents/<segment>` is one agent's
-// page. The registry and the toolbelts are views of Tool servers
-// (`?tab=tools`, `?tab=toolbelts`), so the strip lights Tool servers for them.
+// page. MCP servers is `?tab=mcp-servers`, and the key it had before
+// 2026-10-02, `servers`, still opens it. The registry and the toolbelts are
+// views of MCP servers (`?tab=tools`, `?tab=toolbelts`), so the strip lights
+// MCP servers for them.
 //
 // One header serves every tab, with the mockup's three actions in its order:
 // Import, Add server, and Connect an agent. Connect an agent is the page's one
@@ -12,7 +14,7 @@
 // one tab writes sits in that tab's body: Add a runtime on Runtimes, and Flip
 // a kill switch on Off switches.
 //
-// The strip counts what each tab lists: the live agents, the tool servers, the
+// The strip counts what each tab lists: the live agents, the MCP servers, the
 // runtimes, and the switches denying. Policies has no count, because the
 // Cedar policy files the mockup counts are not what the tab reads.
 //
@@ -20,7 +22,7 @@
 // roadmap mockups `agt-runtime`), and the tab stays behind it.
 //
 // The header and the strip stay on every state a tab can reach, so a person
-// whose agents read failed can still open Tool servers. A tab's body carries
+// whose agents read failed can still open MCP servers. A tab's body carries
 // its own not-loaded states and its own skeleton.
 import { useLocale, useTranslations } from "next-intl";
 import { type ReactNode, Suspense } from "react";
@@ -59,24 +61,25 @@ const PAGE_TABS: readonly AgentsPageTab[] = [
 ];
 
 /**
- * The tab a `?tab=` names, or Agents. The Tools page's own tab ids
- * (`providers`, `policy`) land on the tab that holds them, so a link written
- * for either page never renders an empty one.
+ * The tab a `?tab=` names, or Agents. The MCP servers tab's old key
+ * (`servers`) and the Tools page's own tab ids (`providers`, `policy`) land on
+ * the tab that holds them, so a link written before a rename never renders an
+ * empty tab.
  */
 export function parseAgentsPageTab(raw: string | undefined): AgentsPageTab {
   if (raw === undefined) return "agents";
-  if (raw === "providers") return "servers";
+  if (raw === "servers" || raw === "providers") return "mcp-servers";
   if (raw === "policy") return "policies";
   return PAGE_TABS.find((tab) => tab === raw) ?? "agents";
 }
 
 /**
- * The tab the strip lights: a Tool servers view lights Tool servers.
+ * The tab the strip lights: an MCP servers view lights MCP servers.
  *
  * @internal Exported for its unit test; nothing outside this module imports it.
  */
 export function areaTabOf(tab: AgentsPageTab): AgentsAreaTab {
-  return tab === "tools" || tab === "toolbelts" ? "servers" : tab;
+  return tab === "tools" || tab === "toolbelts" ? "mcp-servers" : tab;
 }
 
 /** The id of the panel the page draws under the strip. */
@@ -85,7 +88,7 @@ const AGENTS_PANEL = "agents-panel";
 /** What the strip counts, each null where the read did not answer. */
 type Counts = {
   agents: number | null;
-  servers: number | null;
+  mcpServers: number | null;
   runtimes: number | null;
   switchesOn: number | null;
   switchesOnIsFloor: boolean;
@@ -104,14 +107,15 @@ function AgentsAreaTabs({
 }) {
   const t = useTranslations("agents.area.tabs");
   const locale = useLocale();
+  const figure = (n: number | null): ReactNode | undefined =>
+    n === null ? undefined : formatCount(n, locale);
   const count = (tab: AgentsAreaTab): ReactNode | undefined => {
     switch (tab) {
       case "agents":
-      case "servers":
-      case "runtimes": {
-        const n = counts[tab];
-        return n === null ? undefined : formatCount(n, locale);
-      }
+      case "runtimes":
+        return figure(counts[tab]);
+      case "mcp-servers":
+        return figure(counts.mcpServers);
       case "switches":
         if (counts.switchesOn === null) return undefined;
         return (
@@ -153,7 +157,7 @@ function BodyLoading({ tab }: { tab: AgentsAreaTab }) {
       return <AgentsLoading />;
     case "runtimes":
       return <RuntimesLoading />;
-    case "servers":
+    case "mcp-servers":
     case "policies":
     case "switches":
       return <ToolsLoading />;

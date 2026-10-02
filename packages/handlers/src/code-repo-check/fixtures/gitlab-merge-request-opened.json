@@ -1,0 +1,30 @@
+{
+  "object_kind": "merge_request",
+  "event_type": "merge_request",
+  "user": { "id": 31337, "username": "dana-ops", "name": "Dana Ops" },
+  "project": {
+    "id": 4242,
+    "name": "api",
+    "path_with_namespace": "acme/platform/api",
+    "default_branch": "main",
+    "web_url": "https://gitlab.com/acme/platform/api"
+  },
+  "object_attributes": {
+    "id": 330917221,
+    "iid": 7,
+    "title": "Write down the deploy notes in AGENTS.md",
+    "state": "opened",
+    "action": "open",
+    "draft": false,
+    "source_branch": "notes/deploy",
+    "target_branch": "main",
+    "url": "https://gitlab.com/acme/platform/api/-/merge_requests/7",
+    "updated_at": "2026-10-02 14:12:09 UTC",
+    "last_commit": {
+      "id": "5f0e9d8c7b6a5f4e3d2c1b0a9f8e7d6c5b4a3f2e",
+      "message": "Write down the deploy notes",
+      "timestamp": "2026-10-02T14:11:40+00:00"
+    },
+    "merge_commit_sha": null
+  }
+}

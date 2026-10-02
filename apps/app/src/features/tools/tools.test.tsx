@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 // The Tools views (mockup `tools.md`), now tabs of the Agents page, on a fake
 // DataSource: the header actions they add to the Agents header, the counts
-// they hand its tab strip, the Tool servers views row with the counts the
+// they hand its tab strip, the MCP servers views row with the counts the
 // record can stand behind, a body's not-loaded states replacing that body, and
-// the registry, Toolbelts, Tool servers and Off switches bodies. The Policies
+// the registry, Toolbelts, MCP servers and Off switches bodies. The Policies
 // body has its own suite (policy.test.tsx), and the Agents page's header and
 // strip theirs (features/agents/area.test.tsx). Every element with no store
 // behind it is asserted to say so and to carry the issue that owns the store.
@@ -167,9 +167,9 @@ async function renderActions(
 }
 
 const at = { org: "acme", ws: "core-platform" };
-/** The Tool servers views row, drawn above the registry, providers and toolbelts. */
+/** The MCP servers views row, drawn above the registry, providers and toolbelts. */
 const viewsRow = () =>
-  screen.queryByRole("tablist", { name: "Tool server views" });
+  screen.queryByRole("tablist", { name: "MCP server views" });
 
 /** Every gold (`.btn.primary`) control on the screen. */
 const golds = () => [
@@ -255,7 +255,7 @@ describe("Tools › tab counts", () => {
   it("counts the providers and the switches denying", async () => {
     const { source } = toolsSource({});
     expect(await toolsTabCounts(owner, source)).toEqual({
-      servers: 2,
+      mcpServers: 2,
       switchesOn: 1,
       switchesOnIsFloor: false,
     });
@@ -277,7 +277,7 @@ describe("Tools › tab counts", () => {
       killSwitches: readError("tool_registry_unavailable", 503),
     });
     expect(await toolsTabCounts(owner, source)).toEqual({
-      servers: null,
+      mcpServers: null,
       switchesOn: null,
       switchesOnIsFloor: false,
     });
@@ -286,7 +286,7 @@ describe("Tools › tab counts", () => {
 
 describe("Tools › server views", () => {
   it.each([
-    ["providers", "servers"],
+    ["providers", "mcp-servers"],
     ["tools", "tools"],
     ["toolbelts", "toolbelts"],
   ] as const)(
@@ -301,7 +301,7 @@ describe("Tools › server views", () => {
         "toolbelts",
       ]);
       expect(links.map((link) => link.getAttribute("href"))).toEqual([
-        "/acme/core-platform/agents?tab=servers",
+        "/acme/core-platform/agents?tab=mcp-servers",
         "/acme/core-platform/agents?tab=tools",
         "/acme/core-platform/agents?tab=toolbelts",
       ]);
@@ -321,7 +321,7 @@ describe("Tools › server views", () => {
   );
 
   it.each(["policy", "switches"] as const)(
-    "draws no views row on the %s body, which is no view of Tool servers",
+    "draws no views row on the %s body, which is no view of MCP servers",
     async (tab) => {
       await renderTools({}, tab);
       expect(viewsRow()).toBeNull();
@@ -399,7 +399,7 @@ describe("Tools › server views", () => {
   );
 
   it.each([
-    ["providers", "servers"],
+    ["providers", "mcp-servers"],
     ["tools", "tools"],
     ["toolbelts", "toolbelts"],
     ["policy", "policies"],
@@ -826,7 +826,7 @@ describe("Tools › toolbelts view", () => {
   });
 });
 
-describe("Tools › tool servers view", () => {
+describe("Tools › MCP servers view", () => {
   it("captions the roster with counts read off the rows, and draws the design's columns", async () => {
     await renderTools({}, "providers");
     expect(screen.getByTestId("tools-providers-caption")).toHaveTextContent(
@@ -979,7 +979,7 @@ describe("Tools › tool servers view", () => {
     fireEvent.click(dialog.getByTestId("provider-remove-confirm"));
     await vi.waitFor(() => {
       expect(router.replace).toHaveBeenCalledWith(
-        "/acme/core-platform/agents?tab=servers",
+        "/acme/core-platform/agents?tab=mcp-servers",
       );
     });
     expect(actions.removeProvider).toHaveBeenCalledWith(
@@ -1098,7 +1098,10 @@ describe("Tools › tool servers view", () => {
     });
     expect(
       within(pages).getByRole("link", { name: "Next page" }),
-    ).toHaveAttribute("href", "/acme/core-platform/agents?tab=servers&cursor=g2");
+    ).toHaveAttribute(
+      "href",
+      "/acme/core-platform/agents?tab=mcp-servers&cursor=g2",
+    );
   });
 
   it("asks the kernel for as many grants as Rows names, and leaves the default off (#4693)", async () => {

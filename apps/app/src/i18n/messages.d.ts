@@ -1302,7 +1302,7 @@ type Messages = {
       tabs: {
         label: string;
         agents: string;
-        servers: string;
+        "mcp-servers": string;
         policies: string;
         runtimes: string;
         switches: string;

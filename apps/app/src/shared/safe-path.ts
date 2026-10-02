@@ -52,12 +52,12 @@ const ROOT = mint("/");
 
 /**
  * The Agents page's tabs, in the order the strip draws them (roadmap mockups
- * `agents`): the agents, the tool servers they call, the policies that decide
+ * `agents`): the agents, the MCP servers they call, the policies that decide
  * each call, the runtimes they run on, and the off switches.
  */
 export const AGENTS_AREA_TABS = [
   "agents",
-  "servers",
+  "mcp-servers",
   "policies",
   "runtimes",
   "switches",
@@ -66,7 +66,7 @@ export type AgentsAreaTab = (typeof AGENTS_AREA_TABS)[number];
 
 /**
  * The `?tab=` values the Agents page serves: its five tabs, and the two views
- * of Tool servers that carry no tab of their own, the tool registry and the
+ * of MCP servers that carry no tab of their own, the tool registry and the
  * toolbelts.
  */
 export type AgentsPageTab = AgentsAreaTab | "tools" | "toolbelts";
@@ -80,7 +80,7 @@ const TOOLS_VIEW_TAB: Readonly<
 > = {
   tools: "tools",
   toolbelts: "toolbelts",
-  providers: "servers",
+  providers: "mcp-servers",
   policy: "policies",
   switches: "switches",
 };
@@ -302,7 +302,7 @@ export const routes = {
   },
   /**
    * Agents, the one page for agents and what governs them (roadmap mockups
-   * `agents?tab=`). `tab` picks Tool servers, Policies, Runtimes or Off
+   * `agents?tab=`). `tab` picks MCP servers, Policies, Runtimes or Off
    * switches, and is left off for the Agents tab. It is a query value, not a
    * path segment, because `/agents/<segment>` is one agent's page. On the
    * Agents tab `cursor` opens a later page of the identities table and
@@ -521,9 +521,9 @@ export const routes = {
   /**
    * The governance views of the Agents page, which absorbed the Tools page.
    * Each Tools view keeps its name here and lands on the Agents tab that holds
-   * it: Providers on Tool servers, Policy on Policies, Kill switches on Off
+   * it: Providers on MCP servers, Policy on Policies, Kill switches on Off
    * switches. The registry (`tab` left off) and Toolbelts are views of the
-   * Tool servers tab, `?tab=tools` and `?tab=toolbelts`. A category chip, a
+   * MCP servers tab, `?tab=tools` and `?tab=toolbelts`. A category chip, a
    * provider chip, the API-names toggle, the rows a page of the view's list
    * holds (#4693), a cursor and the toolbelt open on the Toolbelts view
    * (`belt`, ADR-198) are query values.

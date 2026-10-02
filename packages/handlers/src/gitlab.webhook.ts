@@ -1,4 +1,4 @@
-// audit-exempt: an unauthenticated webhook receiver; the only writes are a proposal rejected because its merge request was closed on GitLab, a connection marked errored after GitLab rejected its token, a project path label, a repository sync request, a steering repo health check request, and the merge request state stored on the run rows that name it. None is a privileged mutation a person makes.
+// audit-exempt: an unauthenticated webhook receiver; the only writes are a proposal rejected because its merge request was closed on GitLab, a connection marked errored after GitLab rejected its token, a project path label, a repository sync request, a steering repo health check request, a code repository check request, and the merge request state stored on the run rows that name it. None is a privileged mutation a person makes.
 //
 // gitlab.webhook.ts: what a GitLab project webhook delivery does (#3762).
 //
@@ -108,6 +108,17 @@ export interface GitLabWebhookDeps {
    * #4560). A failure is logged. Absent, nothing is asked.
    */
   requestHealthCheck?(signal: HealthSignal): Promise<void>;
+  /**
+   * Ask for the Oxagen check on a merge request in a code repository the
+   * connection's workspace links (S2b, #5058). A failure is logged. Absent,
+   * nothing is asked.
+   */
+  requestCodeCheck?(
+    scope: WebhookScope,
+    connection: WebhookConnection,
+    event: GitLabMergeRequestEvent,
+    body: unknown,
+  ): Promise<void>;
 }
 
 export interface GitLabWebhookRequest {
@@ -225,6 +236,30 @@ async function requestHealthCheck(
   }
 }
 
+/**
+ * Ask for the Oxagen check on the merge request (S2b, #5058). A failure is
+ * logged and never fails the delivery: GitLab disables a hook that keeps
+ * failing, and the next push to the merge request asks again.
+ */
+async function requestCodeCheck(
+  deps: GitLabWebhookDeps,
+  scope: WebhookScope,
+  connection: WebhookConnection,
+  event: GitLabMergeRequestEvent,
+  body: unknown,
+): Promise<void> {
+  const request = deps.requestCodeCheck;
+  if (!request) return;
+  try {
+    await request(scope, connection, event, body);
+  } catch (err) {
+    logger.error(
+      { err, connectionId: connection.id, iid: event.iid },
+      "gitlab.webhook: could not request the Oxagen check on the merge request; the next push to it asks again",
+    );
+  }
+}
+
 /** Why a proposal is rejected when its merge request closes on GitLab. */
 export const CLOSED_ON_GITLAB = "Merge request closed on GitLab";
 
@@ -294,6 +329,9 @@ export async function handleGitLabWebhook(
       // Every run row that names this merge request shows its state, whether
       // or not a proposal is behind it (ADR-192).
       await recordMergeRequestState(deps, scope, connection, event);
+      // A merge request in a linked code repository gets the Oxagen check,
+      // posted as a commit status with the connection's token.
+      await requestCodeCheck(deps, scope, connection, event, req.body);
       // Any merge can change the production branch, whether or not Oxagen
       // opened the merge request. The payload's word is enough to ask: the
       // sync reads the branch, and finds nothing when nothing merged.
@@ -483,6 +521,18 @@ export function gitlabWebhookDeps(): GitLabWebhookDeps {
     client: (token) => createGitLabClient({ token }),
     now: () => new Date(),
     runInScope: (scope, fn) => runInTenantScope(scope, fn),
+    async requestCodeCheck(scope, connection, event, body) {
+      const { gitlabCodeCheckRequest, requestCodeRepoChecks } = await import(
+        "./code-repo-check/request"
+      );
+      const request = await gitlabCodeCheckRequest({
+        scope,
+        connectionId: connection.id,
+        event,
+        body,
+      });
+      if (request !== null) await requestCodeRepoChecks([request]);
+    },
     async requestSync(scope, reason) {
       // A request that cannot be sent must not fail the delivery: GitLab
       // retries a 5xx and disables a hook that keeps failing, which would

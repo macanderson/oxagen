@@ -1,4 +1,13 @@
 import { contextLabelsBackfill } from "./functions/context.labels-backfill";
+import {
+  workIntakeCheck,
+  workIntakeCollect,
+  workIntakeCountSweep,
+  workIntakePrune,
+  workIntakeSweep,
+  workIntakeTriage,
+  workIntakeTriageOnFailure,
+} from "./functions/work.intake";
 import { steeringSync, steeringSyncSweep } from "./functions/steering.sync";
 import { mcpServerDiscover } from "./functions/mcp-server.discover";
 import { mcpServerSync } from "./functions/mcp-server.sync";
@@ -79,9 +88,11 @@ import {
   runEnrichmentSweep,
 } from "./functions/run.enrich";
 import { runPullRequestBackfill } from "./functions/run.pull-request-backfill";
+import { workOrderPullRequestLinked, workOrderRunEnded } from "./functions/work.order-results";
 import { agentInterjectionTimeout } from "./functions/agent.interjection-timeout";
 import { agentInterjectionTimeoutSweep } from "./functions/agent.interjection-timeout-sweep";
 import { conversationTitle } from "./functions/conversation.title";
+import { codeRepoCheck } from "./functions/code-repo.check";
 
 // The DurableFunction objects returned by createFunction are also valid Inngest
 // function instances at runtime (they are Object.assign-ed Inngest functions).
@@ -90,6 +101,14 @@ import { conversationTitle } from "./functions/conversation.title";
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const functions: any[] = [
   contextLabelsBackfill,
+  // Work intake and triage (P1-03, #5103).
+  workIntakeCollect,
+  workIntakeSweep,
+  workIntakeCountSweep,
+  workIntakeCheck,
+  workIntakeTriage,
+  workIntakeTriageOnFailure,
+  workIntakePrune,
   steeringSync,
   steeringSyncSweep,
   steeringRepoProvision,
@@ -155,7 +174,10 @@ export const functions: any[] = [
   runEnrichOnFailure,
   runEnrichmentSweep,
   runPullRequestBackfill,
+  workOrderRunEnded,
+  workOrderPullRequestLinked,
   agentInterjectionTimeout,
   agentInterjectionTimeoutSweep,
   conversationTitle,
+  codeRepoCheck,
 ].filter((fn): fn is NonNullable<typeof fn> => fn != null);

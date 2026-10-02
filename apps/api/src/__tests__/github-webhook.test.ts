@@ -23,6 +23,12 @@
  *   for one health read per scope (S2, #4560, ADR-228), before the lifecycle
  *   answers; its failure never changes the response, and nothing reads the
  *   retired steering app's env
+ * - pull_request → the Oxagen check request on a linked code repository
+ *   (S2b, #5058), once per delivery with an installation; its failure never
+ *   changes the response
+ * - issues / issue_comment → the delivery reaches work intake (P1-03,
+ *   #5103) with the installation, the repository, and the raw request; its
+ *   failure never changes the response
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
@@ -43,7 +49,10 @@ const mocks = vi.hoisted(() => ({
   githubSyncTargets: vi.fn(),
   requestSteeringSync: vi.fn(),
   recordGithubPullRequestState: vi.fn(),
+  githubCodeCheckRequests: vi.fn(),
+  requestCodeRepoChecks: vi.fn(),
   routeGithubDiscoveryPush: vi.fn(),
+  routeGithubWorkDelivery: vi.fn(),
   findHealthScopes: vi.fn(),
   // Mirrors the real healthRequests, so the test reads the events it sends.
   healthRequests: vi.fn(
@@ -140,11 +149,28 @@ vi.mock("@oxagen/handlers/github.pull-request.webhook", () => ({
   recordGithubPullRequestState: mocks.recordGithubPullRequestState,
 }));
 
+// The code repository check request (S2b, #5058) reads the binding heads
+// and sends its own event. Its routing has its own suite; here it is a seam,
+// so these tests assert what the route hands it and that its failure never
+// reaches GitHub.
+vi.mock("@oxagen/handlers/code-repo-check/request", () => ({
+  githubCodeCheckRequests: mocks.githubCodeCheckRequests,
+  requestCodeRepoChecks: mocks.requestCodeRepoChecks,
+}));
+
 // The MCP server discovery push route (lane M10, #4682) reads Postgres and
 // has its own suite. Here it is a seam, so these tests assert which deliveries
 // reach it and that its failure never reaches GitHub.
 vi.mock("@oxagen/handlers/mcp-studio/discovery/webhook", () => ({
   routeGithubDiscoveryPush: mocks.routeGithubDiscoveryPush,
+}));
+
+// Work intake (P1-03, #5103) reads and writes Postgres and has its own suite
+// (lib/work-intake/delivery.test.ts). Here it is a seam, so these tests
+// assert which deliveries reach it and that its failure never reaches GitHub.
+vi.mock("@oxagen/handlers/lib/work-intake/delivery", () => ({
+  WORK_DELIVERY_EVENTS: new Set(["issues", "issue_comment"]),
+  routeGithubWorkDelivery: mocks.routeGithubWorkDelivery,
 }));
 
 // The steering repo health scope lookup reads Postgres and has its own suite.
@@ -238,6 +264,10 @@ beforeEach(() => {
     rows: 1,
   });
   mocks.routeGithubDiscoveryPush.mockResolvedValue(0);
+  // No workspace links the repository unless a test says so (S2b, #5058).
+  mocks.githubCodeCheckRequests.mockResolvedValue([]);
+  mocks.requestCodeRepoChecks.mockResolvedValue(0);
+  mocks.routeGithubWorkDelivery.mockResolvedValue({ events: [], stored: 0, duplicates: 0, rejected: 0 });
   // No steering repo matches unless a test says so (S2, #4560).
   mocks.findHealthScopes.mockResolvedValue([]);
 });
@@ -952,6 +982,57 @@ describe("github app webhook – pull request state (ADR-192)", () => {
   });
 });
 
+describe("github app webhook – code repository check (S2b, #5058)", () => {
+  const PR_BODY = {
+    action: "opened",
+    installation: { id: 61200044 },
+    repository: { id: 771020341, full_name: "a-intel/platform" },
+    pull_request: {
+      number: 318,
+      state: "open",
+      head: { sha: "9b1f6c0d2e3a4b5c6d7e8f90a1b2c3d4e5f60718" },
+      base: { sha: "1e2d3c4b5a69788796a5b4c3d2e1f0a9b8c7d6e5" },
+    },
+  };
+  const REQUEST = {
+    id: "code-repo-check:ws-1:github:771020341:318:9b1f:1e2d",
+    name: "code-repo/check.requested",
+    data: { workspaceId: "ws-1" },
+  };
+
+  it("asks for the check with the body and the installation, and sends what the routing returns", async () => {
+    mocks.githubCodeCheckRequests.mockResolvedValue([REQUEST]);
+    const res = await app.fetch(signedPost("pull_request", PR_BODY));
+    expect(res.status).toBe(200);
+    expect(mocks.githubCodeCheckRequests).toHaveBeenCalledTimes(1);
+    expect(mocks.githubCodeCheckRequests).toHaveBeenCalledWith({
+      body: PR_BODY,
+      installationId: "61200044",
+    });
+    expect(mocks.requestCodeRepoChecks).toHaveBeenCalledWith([REQUEST]);
+  });
+
+  it("asks nothing for a push or a delivery with no installation (negative)", async () => {
+    await app.fetch(signedPost("push", PR_BODY));
+    const { installation: _installation, ...body } = PR_BODY;
+    await app.fetch(signedPost("pull_request", body));
+    expect(mocks.githubCodeCheckRequests).not.toHaveBeenCalled();
+    expect(mocks.requestCodeRepoChecks).not.toHaveBeenCalled();
+  });
+
+  it("answers GitHub as usual and logs when the request fails (negative)", async () => {
+    mocks.githubCodeCheckRequests.mockRejectedValue(new Error("pg down"));
+    const res = await app.fetch(signedPost("pull_request", PR_BODY));
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { received: boolean }).received).toBe(true);
+    expect(mocks.requestCodeRepoChecks).not.toHaveBeenCalled();
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.objectContaining({ err: expect.any(Error) }),
+      expect.stringContaining("Oxagen check"),
+    );
+  });
+});
+
 describe("github app webhook – steering repo health read (S2, #4560, ADR-228)", () => {
   // The app that carried steering before ADR-228. Nothing reads its env now,
   // and it still delivers to this route (#4937).
@@ -1248,6 +1329,55 @@ describe("github app webhook – steering repo health read (S2, #4560, ADR-228)"
     expect(logger.error).toHaveBeenCalledWith(
       expect.objectContaining({ reason: "pull_request.opened" }),
       expect.stringContaining("could not request a steering repo health check"),
+    );
+  });
+});
+
+describe("github app webhook – work intake (P1-03, #5103)", () => {
+  const issueBody = {
+    action: "opened",
+    installation: { id: 555 },
+    repository: { full_name: "acme/widgets" },
+    issue: { node_id: "I_1", number: 3 },
+  };
+
+  it("hands a verified issue delivery to work intake, with the installation, repository, and raw request", async () => {
+    const res = await app.fetch(signedPost("issues", issueBody));
+    expect(res.status).toBe(200);
+    expect(mocks.routeGithubWorkDelivery).toHaveBeenCalledTimes(1);
+    const [input] = mocks.routeGithubWorkDelivery.mock.calls[0] as [
+      { installationId: string; repository: string; secret: string; request: { headers: Record<string, string>; body: Uint8Array } },
+    ];
+    expect(input.installationId).toBe("555");
+    expect(input.repository).toBe("acme/widgets");
+    expect(input.secret).toBe(SECRET);
+    expect(input.request.headers["x-github-event"]).toBe("issues");
+    expect(input.request.headers["x-hub-signature-256"]).toMatch(/^sha256=/);
+    expect(Buffer.from(input.request.body).toString("utf8")).toBe(JSON.stringify(issueBody));
+  });
+
+  it("hands over an issue comment, and nothing else", async () => {
+    await app.fetch(signedPost("issue_comment", issueBody));
+    expect(mocks.routeGithubWorkDelivery).toHaveBeenCalledTimes(1);
+    await app.fetch(signedPost("pull_request", issueBody));
+    await app.fetch(signedPost("push", issueBody));
+    expect(mocks.routeGithubWorkDelivery).toHaveBeenCalledTimes(1);
+  });
+
+  it("hands over nothing without an installation or a repository, or with a bad signature", async () => {
+    await app.fetch(signedPost("issues", { ...issueBody, installation: undefined }));
+    await app.fetch(signedPost("issues", { ...issueBody, repository: undefined }));
+    await app.fetch(signedPost("issues", issueBody, { badSig: true }));
+    expect(mocks.routeGithubWorkDelivery).not.toHaveBeenCalled();
+  });
+
+  it("answers GitHub as usual and logs when work intake fails", async () => {
+    mocks.routeGithubWorkDelivery.mockRejectedValue(new Error("db down"));
+    const res = await app.fetch(signedPost("issues", issueBody));
+    expect(res.status).toBe(200);
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.objectContaining({ eventName: "issues" }),
+      expect.stringContaining("work intake"),
     );
   });
 });

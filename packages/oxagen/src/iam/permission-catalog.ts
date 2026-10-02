@@ -64,6 +64,29 @@ export const PERMISSION_CATALOG: readonly Permission[] = [
     description: "Approve or deny a tool call waiting on a person",
     capabilities: ["resolve_approval"],
   },
+  // Phase 1 work actions (ADR-244, ADR-251). Their own permissions, so a
+  // role that holds run.control or run.approve keeps it: a permission reads
+  // as held only when every capability it names is allowed.
+  {
+    id: "work.control",
+    group: "Runs",
+    description: "Write a work item's brief, send it to an agent, and stop, withdraw, return, close, or reopen it",
+    capabilities: [
+      "save_work_brief",
+      "send_work_order",
+      "cancel_work_order",
+      "stop_work_order",
+      "return_work_order",
+      "close_work_item",
+      "reopen_work_item",
+    ],
+  },
+  {
+    id: "work.approve",
+    group: "Runs",
+    description: "Approve a work item's brief and accept its result",
+    capabilities: ["approve_work_brief", "accept_work_order", "refresh_work_order_checks"],
+  },
   // ── Agents ───────────────────────────────────────────────────────────────
   {
     id: "agent.read",

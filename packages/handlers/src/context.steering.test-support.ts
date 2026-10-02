@@ -39,6 +39,13 @@ import {
   type SyncStateWrite,
   type SyncStore,
 } from "./context.steering.sync.store";
+import { setSharedMergeLockForTests } from "./steering-repo/merge-queue";
+
+// The merge queue's lock across processes is a Postgres advisory lock, and
+// these doubles run without a database. Every suite that imports them merges
+// under a lock that only runs the merge. Calls in one process still wait in
+// order. merge-queue.lock.test.ts and merge-queue.pg.test.ts test the real one.
+setSharedMergeLockForTests((_key, work) => work());
 
 type SyncScope = { orgId: string; workspaceId: string };
 

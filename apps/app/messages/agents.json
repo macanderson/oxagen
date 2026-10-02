@@ -1111,7 +1111,7 @@
       "noneTitle": "No mandate",
       "lead": "A mandate is bounded, expiring authority for the consequences it names. Nothing in a role, a grant or a toolbelt substitutes for one.",
       "none": "No mandate is recorded for this agent. None was granted and none was requested, so it cannot carry a consequence.",
-      "noneDetail": "A call that carries an impact is denied before dispatch, whether or not the tool is on this agent's belt. No credential is minted and nothing reaches a tool server.",
+      "noneDetail": "A call that carries an impact is denied before dispatch, whether or not the tool is on this agent's belt. No credential is minted and nothing reaches an MCP server.",
       "authority": "Remaining authority is what the ledger says: every draw reserves, then settles against a receipt or releases. The tools a mandate covers appear on the belt gated by mandate and approval, never as plainly allowed.",
       "columns": {
         "mandate": "Mandate",
@@ -1234,11 +1234,11 @@
       "observe": "observe"
     },
     "area": {
-      "description": "Your agents, the tool servers they call, the policies that decide each call, where they run, and the off switches.",
+      "description": "Your agents, the MCP servers they call, the policies that decide each call, where they run, and the off switches.",
       "tabs": {
         "label": "Agents sections",
         "agents": "Agents",
-        "servers": "Tool servers",
+        "mcp-servers": "MCP servers",
         "policies": "Policies",
         "runtimes": "Runtimes",
         "switches": "Off switches",

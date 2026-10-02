@@ -13,6 +13,8 @@ import {
   noteRecallHints,
   RECALL_PATHS_KEPT,
   RECALL_TOOLS_KEPT,
+  REPOSITORY_RETRY_FIRST_MS,
+  REPOSITORY_RETRY_MAX_MS,
   type RecallHintsHolder,
   readRepository,
   recallScope,
@@ -206,23 +208,114 @@ describe("readRepository", () => {
     expect(read).toHaveBeenCalledTimes(1);
   });
 
-  it("settles a read that fails as no repository", async () => {
-    const rejected = session();
-    await expect(
-      readRepository(rejected, async () => {
-        throw new Error("git is gone");
-      }),
-    ).resolves.toBeUndefined();
-    expect(rejected.recallHints?.repository?.settled).toBe(true);
-    expect(recallScope(rejected).repositoryDigests).toEqual([]);
+  it("answers a failed read as no repository until its wait is over, then reads again (#4458)", async () => {
+    let clock = 1_000;
+    const now = () => clock;
+    const holder = session();
+    const read = vi.fn(
+      async (): Promise<RepositoryRemote | undefined> => REMOTE,
+    );
+    read.mockRejectedValueOnce(new Error("git timed out"));
+    await expect(readRepository(holder, read, now)).resolves.toBeUndefined();
+    expect(holder.recallHints?.repository).toMatchObject({
+      settled: true,
+      failures: 1,
+      retryAt: 1_000 + REPOSITORY_RETRY_FIRST_MS,
+    });
+    expect(recallScope(holder).repositoryDigests).toEqual([]);
+    // A hook inside the wait keeps the failure and runs no git.
+    clock += REPOSITORY_RETRY_FIRST_MS - 1;
+    await expect(readRepository(holder, read, now)).resolves.toBeUndefined();
+    expect(read).toHaveBeenCalledTimes(1);
+    // The first hook after the wait asks git again, and the answer replaces
+    // the failure.
+    clock += 1;
+    await expect(readRepository(holder, read, now)).resolves.toEqual(REMOTE);
+    expect(read).toHaveBeenCalledTimes(2);
+    expect(holder.recallHints?.repository).not.toHaveProperty("failures");
+    expect(holder.recallHints?.repository).not.toHaveProperty("retryAt");
+    expect(recallScope(holder).repositoryDigests).toEqual(DIGESTS);
+    // The repository it found answers from then on.
+    clock += REPOSITORY_RETRY_MAX_MS;
+    await readRepository(holder, read, now);
+    expect(read).toHaveBeenCalledTimes(2);
+  });
 
-    const thrown = session();
+  it("counts a reader that throws at once as a failure", async () => {
+    const holder = session();
     await expect(
-      readRepository(thrown, () => {
-        throw new Error("spawn failed");
-      }),
+      readRepository(
+        holder,
+        () => {
+          throw new Error("spawn failed");
+        },
+        () => 0,
+      ),
     ).resolves.toBeUndefined();
-    expect(thrown.recallHints?.repository?.settled).toBe(true);
+    expect(holder.recallHints?.repository).toMatchObject({
+      settled: true,
+      failures: 1,
+      retryAt: REPOSITORY_RETRY_FIRST_MS,
+    });
+  });
+
+  it("keeps a read that found no origin for the rest of the session", async () => {
+    let clock = 0;
+    const now = () => clock;
+    const holder = session();
+    const read = vi.fn(async () => undefined);
+    await expect(readRepository(holder, read, now)).resolves.toBeUndefined();
+    expect(holder.recallHints?.repository?.settled).toBe(true);
+    expect(holder.recallHints?.repository).not.toHaveProperty("failures");
+    expect(holder.recallHints?.repository).not.toHaveProperty("retryAt");
+    clock += 24 * 60 * 60_000;
+    await readRepository(holder, read, now);
+    expect(read).toHaveBeenCalledTimes(1);
+  });
+
+  it("doubles the wait with each failure in a row, up to its cap", async () => {
+    let clock = 0;
+    const now = () => clock;
+    const holder = session();
+    const read = vi.fn(async (): Promise<RepositoryRemote | undefined> => {
+      throw new Error("dubious ownership");
+    });
+    const waits: number[] = [];
+    for (let i = 0; i < 7; i += 1) {
+      await readRepository(holder, read, now);
+      const retryAt = holder.recallHints?.repository?.retryAt ?? clock;
+      waits.push(retryAt - clock);
+      clock = retryAt;
+    }
+    expect(read).toHaveBeenCalledTimes(7);
+    expect(waits).toEqual([
+      30_000, 60_000, 120_000, 240_000, 480_000, 600_000, 600_000,
+    ]);
+    expect(holder.recallHints?.repository?.failures).toBe(7);
+  });
+
+  it("starts the count again in a directory that has not failed", async () => {
+    let clock = 0;
+    const now = () => clock;
+    const holder = session();
+    const read = vi.fn(async (): Promise<RepositoryRemote | undefined> => {
+      throw new Error("git timed out");
+    });
+    await readRepository(holder, read, now);
+    clock = holder.recallHints?.repository?.retryAt ?? clock;
+    await readRepository(holder, read, now);
+    expect(holder.recallHints?.repository?.failures).toBe(2);
+    // A write elsewhere moves the session, and a failed read has no root to
+    // cover the new directory, so it is read now.
+    holder.workDir = "/scratch";
+    await readRepository(holder, read, now);
+    expect(read).toHaveBeenCalledTimes(3);
+    expect(read).toHaveBeenLastCalledWith("/scratch");
+    expect(holder.recallHints?.repository).toMatchObject({
+      cwd: "/scratch",
+      failures: 1,
+      retryAt: clock + REPOSITORY_RETRY_FIRST_MS,
+    });
   });
 
   it("reads nothing for a session with no directory", () => {

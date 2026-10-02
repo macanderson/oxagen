@@ -9,13 +9,21 @@
 // and one ledger line. The squash merge is pinned to the commit that was
 // checked (or stamped), and its message ends with the Oxagen-* trailers.
 //
-// The queue is a lock held in this process. merge_context_pr runs on the api
-// surface only, and one API process serves it today, so the lock orders every
-// merge of a repository. A second process needs a lock both can see. Without
-// one, the host still refuses a merge pinned to a head that moved, and two
-// ledger lines in the same period file conflict, so one merge is refused. Two
-// merges that straddle a ledger period write different files, though, so both
-// can land, each with the same version.
+// The queue has two locks. merge_context_pr merges on the api surface, and
+// set_governance_mode merges on the mcp surface too, so two processes can
+// merge the same repository at once.
+//
+// - Inside one process, calls for a repository wait in the order they
+//   arrived, so only the call at the head of the queue reaches Postgres.
+// - Across processes, that call takes a Postgres advisory lock on the
+//   repository's queue key, on the shared database every process connects
+//   to. A transaction holds the lock while the merge runs and releases it
+//   when the merge ends, or when the process dies and its connection closes.
+//
+// Holding the lock keeps one database connection open per merge in
+// progress. A merge waits at most a minute for another process's merge, then
+// refuses with `merge_queue_busy` and nothing merged.
+import { withSystemDb } from "@oxagen/database";
 import { HandlerError } from "@oxagen/oxagen";
 import type { GovernanceMode } from "@oxagen/oxagen/contracts/context.steering.shared";
 import { readTomlFile } from "@oxagen/oxagen/steering-repo/files";
@@ -34,6 +42,7 @@ import {
   PROMOTIONS_DIR,
 } from "@oxagen/oxagen/steering-repo/paths";
 import type { PromotionChange } from "@oxagen/oxagen/steering-repo/promotion";
+import { sql } from "drizzle-orm";
 import type {
   SteeringHost,
   SteeringRepository,
@@ -68,9 +77,115 @@ export function mergeQueueKey(repo: SteeringRepository): string {
 }
 
 /**
+ * A lock every process that merges steering PRs can see. It runs `work` while
+ * it holds the lock for `key`, and releases the lock when `work` settles.
+ */
+export type SharedMergeLock = <T>(
+  key: string,
+  work: () => Promise<T>,
+) => Promise<T>;
+
+export interface PostgresMergeLockOptions {
+  /** How long a merge waits for another process's merge before it refuses. */
+  waitMs?: number;
+}
+
+const MERGE_WAIT_MS = 60_000;
+/** The advisory lock's key is this prefix and the queue key. */
+const MERGE_LOCK_PREFIX = "steering-merge-queue:";
+/** SQLSTATE lock_not_available: `lock_timeout` ran out. */
+const LOCK_NOT_AVAILABLE = "55P03";
+
+/** True when `err`, or an error in its cause chain, is lock_not_available. */
+function isLockTimeout(err: unknown): boolean {
+  let cur: unknown = err;
+  for (let depth = 0; depth < 5; depth += 1) {
+    if (typeof cur !== "object" || cur === null) return false;
+    const e = cur as { code?: unknown; cause?: unknown };
+    if (e.code === LOCK_NOT_AVAILABLE) return true;
+    cur = e.cause;
+  }
+  return false;
+}
+
+function mergeQueueBusy(key: string, waitMs: number): HandlerError {
+  return new HandlerError({
+    code: "conflict",
+    reason: "merge_queue_busy",
+    message: `Another merge on ${key} held the merge queue for over ${Math.round(waitMs / 1000)} seconds, so nothing merged. Merge again in a minute.`,
+  });
+}
+
+/**
+ * The shared lock in Postgres: a transaction-scoped advisory lock on a hash
+ * of the queue key, on the shared database. A wait longer than `waitMs`
+ * refuses with `merge_queue_busy`, and `work` never starts.
+ *
+ * `work` runs inside the lock's transaction, which reads and writes no row.
+ * If that transaction fails after `work` finished, for instance because the
+ * connection dropped, the lock is already gone. The merge stands, so the
+ * failure is logged and `work`'s own result is returned.
+ */
+export function postgresMergeLock(
+  options: PostgresMergeLockOptions = {},
+): SharedMergeLock {
+  const waitMs = options.waitMs ?? MERGE_WAIT_MS;
+  return async <T>(key: string, work: () => Promise<T>): Promise<T> => {
+    const held: { work?: Promise<T> } = {};
+    try {
+      // tenancy: global lock on the host repository's queue key; it reads and writes no row, so no orgId or workspaceId filter applies.
+      await withSystemDb(async (tx) => {
+        await tx.execute(
+          sql`select set_config('lock_timeout', ${String(waitMs)}, true)`,
+        );
+        await tx.execute(
+          sql`select pg_advisory_xact_lock(hashtextextended(${`${MERGE_LOCK_PREFIX}${key}`}::text, 0))`,
+        );
+        held.work = work();
+        // Hold the lock until the merge settles. Its error reaches the
+        // caller below, after the lock is released.
+        await held.work.then(
+          () => undefined,
+          () => undefined,
+        );
+      });
+    } catch (err) {
+      if (held.work === undefined) {
+        throw isLockTimeout(err) ? mergeQueueBusy(key, waitMs) : err;
+      }
+      logger.warn(
+        { err, key },
+        "steering merge queue: the merge ran, but its lock's transaction failed; Postgres released the lock with the connection",
+      );
+    }
+    const running = held.work;
+    if (running === undefined) {
+      throw new Error(`The merge lock for ${key} ended before the merge ran.`);
+    }
+    return running;
+  };
+}
+
+let sharedLock: SharedMergeLock = postgresMergeLock();
+
+/**
+ * Replace the shared lock, and answer the one it replaced. Unit tests run
+ * without a database, so the steering test harness swaps in a lock that only
+ * runs `work`. Production never calls this.
+ */
+export function setSharedMergeLockForTests(
+  lock: SharedMergeLock,
+): SharedMergeLock {
+  const before = sharedLock;
+  sharedLock = lock;
+  return before;
+}
+
+/**
  * Run `work` after every earlier call for the same repository has finished,
- * in the order the calls arrived. A call that throws still lets the next one
- * run. The lock covers this process only.
+ * in this process and in every other one. Calls in one process run in the
+ * order they arrived, and only the head of that queue takes the shared lock.
+ * A call that throws still lets the next one run.
  */
 export async function inMergeQueue<T>(
   repo: SteeringRepository,
@@ -86,7 +201,7 @@ export async function inMergeQueue<T>(
   tails.set(key, tail);
   await before;
   try {
-    return await work();
+    return await sharedLock(key, work);
   } finally {
     release();
     if (tails.get(key) === tail) tails.delete(key);
@@ -689,26 +804,34 @@ function stampedBranchMoved(branch: string, number: number): HandlerError {
 // ── After the merge ──────────────────────────────────────────────────────────
 
 /**
- * Record a publish as a deployment of the merge commit to the steering
- * environment. The publish has already landed, so a refusal is logged and
- * answered as null, never thrown.
+ * Record a publish as a deployment of the published commit to the steering
+ * environment. The description is `Steering version N from #M`, or
+ * `Steering version N` when no pull request is known, as for a version the
+ * repository sync publishes. The publish has already landed, so a refusal is
+ * logged and answered as null, never thrown.
  */
 export async function recordPublishDeployment(
   host: SteeringHost,
   repo: SteeringRepository,
-  args: { sha: string; version: number; number: number },
+  args: { sha: string; version: number; number?: number },
 ): Promise<string | null> {
+  const from = args.number === undefined ? "" : ` from #${args.number}`;
   try {
     const { url } = await host.recordDeployment(repo, {
       sha: args.sha,
       ref: repo.defaultBranch,
       environment: STEERING_ENVIRONMENT,
-      description: `Steering version ${args.version} from #${args.number}`,
+      description: `Steering version ${args.version}${from}`,
     });
     return url;
   } catch (err) {
     logger.warn(
-      { err, repository: repo.fullName, sha: args.sha, pr: args.number },
+      {
+        err,
+        repository: repo.fullName,
+        sha: args.sha,
+        pr: args.number ?? null,
+      },
       "steering merge queue: published, but the host refused the deployment record",
     );
     return null;

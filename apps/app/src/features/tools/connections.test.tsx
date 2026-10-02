@@ -49,7 +49,7 @@ const { connectionGetOutput, credentialGrantListOutput } = await import(
 const { ConnectionDetail } = await import("@/data/contracts/tools");
 
 const at = { org: "acme", ws: "core-platform" };
-const CONNECTIONS = "/acme/core-platform/agents?tab=servers";
+const CONNECTIONS = "/acme/core-platform/agents?tab=mcp-servers";
 
 /** The element or a failure naming what was missing: the tests assert, they never cast. */
 function element(node: Element | null | undefined, what: string): HTMLElement {

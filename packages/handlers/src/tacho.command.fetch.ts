@@ -32,7 +32,10 @@ import {
   resolveEnrolledHost,
   touchHost,
 } from "./lib/tacho-host";
+import { hostCedarReader } from "./lib/tacho-host-cedar";
 import { hostSkillsReader } from "./lib/tacho-host-skills";
+import { type AckedCommand, recordWorkOrderAcks } from "./lib/work-records/runtime";
+import { logger } from "./logger";
 import {
   type TachoPublished,
   VERSION_STORE_PUBLISHED,
@@ -90,7 +93,7 @@ export function ackPatch(
 }
 
 export interface TachoCommandFetchDeps {
-  /** The workspace's and the organization's published steering, for the skills the envelope's etag covers. */
+  /** The workspace's and the organization's published steering, for the skills and the Cedar policies the envelope's etag covers. */
   published: TachoPublished;
 }
 
@@ -103,6 +106,7 @@ export function createTachoCommandFetchHandler(
   deps: TachoCommandFetchDeps,
 ): CapabilityHandler<typeof tachoCommandFetch> {
   const skillsReader = hostSkillsReader(deps.published);
+  const cedarReader = hostCedarReader(deps.published);
   return async (input, ctx) => {
     const now = new Date();
     const { acknowledged, seen } = await withTenantDb(async (tx) => {
@@ -113,6 +117,7 @@ export function createTachoCommandFetchHandler(
         input.host_enrollment_id,
       );
       let acknowledged = 0;
+      const moved: AckedCommand[] = [];
       for (const ack of input.acknowledgements) {
         const updated = await tx
           .update(schema.tachoControlCommands)
@@ -127,17 +132,53 @@ export function createTachoCommandFetchHandler(
               ),
             ),
           )
-          .returning({ id: schema.tachoControlCommands.id });
+          .returning({
+            id: schema.tachoControlCommands.id,
+            publicId: schema.tachoControlCommands.publicId,
+            command: schema.tachoControlCommands.command,
+            outcome: schema.tachoControlCommands.outcome,
+            payload: schema.tachoControlCommands.payload,
+            detail: schema.tachoControlCommands.outcomeDetail,
+          });
         acknowledged += updated.length;
+        for (const row of updated) {
+          moved.push({ publicId: String(row.publicId), command: row.command, outcome: row.outcome, payload: row.payload, detail: row.detail });
+        }
+      }
+      // A work order's command the host took is `send_delivered`, and a
+      // stop's `cancel` it applied is `stopped` (ADR-251). They are recorded
+      // in a savepoint: a work record that refuses them must not undo the
+      // acknowledgements, or the host would send them again on every poll.
+      if (moved.some((row) => row.command === "work_order" || row.command === "cancel")) {
+        try {
+          await tx.transaction((savepoint) =>
+            recordWorkOrderAcks(
+              savepoint as never,
+              { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+              { id: host.id, publicId: String(host.publicId), runtimeId: host.runtimeId, agentId: host.agentId },
+              moved,
+              now,
+            ),
+          );
+        } catch (error) {
+          logger.warn(
+            { err: error, host: host.publicId },
+            "fetch_commands: a work order acknowledgement was not recorded on its work item",
+          );
+        }
       }
       const seen = await touchHost(tx as never, host, input.daemon, now, false);
       return { acknowledged, seen };
     });
     // `seen` carries the features this poll advertised, which decide whether
-    // the host parses skills at all.
-    const skills = await skillsReader.read(tachoCommandFetch.name, ctx, seen);
+    // the host parses skills and Cedar at all. Both are read at once, so the
+    // production port answers them with one read.
+    const [skills, policy] = await Promise.all([
+      skillsReader.read(tachoCommandFetch.name, ctx, seen),
+      cedarReader.read(tachoCommandFetch.name, ctx, seen),
+    ]);
     const control = await withTenantDb((tx) =>
-      controlEnvelope(tx as never, ctx, seen, now, skills),
+      controlEnvelope(tx as never, ctx, seen, now, skills, policy),
     );
     return { acknowledged, control };
   };

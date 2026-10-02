@@ -123,6 +123,7 @@ import {
 } from "./lib/interjection-frames";
 import { recordProofFrames } from "./lib/proof";
 import { readdressNextRunCommands } from "./lib/next-run-commands";
+import { linkRunFromIngest } from "./lib/work-records/runtime";
 import { sendPullRequestLinks } from "./lib/run-pull-request-links";
 import {
   type TachoHostRow,
@@ -133,6 +134,10 @@ import {
   touchHost,
   unstorableBatch,
 } from "./lib/tacho-host";
+import {
+  type HostCedarReader,
+  hostCedarReader,
+} from "./lib/tacho-host-cedar";
 import {
   type HostSkillsReader,
   hostSkillsReader,
@@ -1374,7 +1379,7 @@ export function firstRootPrompts(
 }
 
 export interface TachoEventsIngestDeps {
-  /** The workspace's and the organization's published steering, for the skills the envelope's etag covers. */
+  /** The workspace's and the organization's published steering, for the skills and the Cedar policies the envelope's etag covers. */
   published: TachoPublished;
 }
 
@@ -1387,8 +1392,9 @@ export function createTachoEventsIngestHandler(
   deps: TachoEventsIngestDeps,
 ): CapabilityHandler<typeof tachoEventsIngest> {
   const skillsReader = hostSkillsReader(deps.published);
+  const cedarReader = hostCedarReader(deps.published);
   return (input, ctx) =>
-    ingestBatch(input, ctx, skillsReader).catch((err: unknown) => {
+    ingestBatch(input, ctx, skillsReader, cedarReader).catch((err: unknown) => {
       throw unstorableBatch("ingest_tacho_events", err) ?? err;
     });
 }
@@ -1401,6 +1407,7 @@ const ingestBatch = async (
   input: TachoEventsIngestInput,
   ctx: CheckedContext,
   skillsReader: HostSkillsReader,
+  cedarReader: HostCedarReader,
 ): Promise<TachoEventsIngestOutput> => {
   const now = new Date();
   const capability = "ingest_tacho_events";
@@ -2504,6 +2511,24 @@ const ingestBatch = async (
           hostFeatures: host.bundleFeatures ?? [],
           now,
         });
+        // A run `oxagen work start` launched names its work order on its
+        // frames. The send binds the run only when this host claimed it, and
+        // the first run to link wins (ADR-251). A refusal never fails ingest.
+        try {
+          const linked = await linkRunFromIngest(
+            tx as never,
+            { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+            { id: host.id, publicId: String(host.publicId), runtimeId: host.runtimeId ?? null, agentId: host.agentId ?? null },
+            String(sessionRow.publicId),
+            events,
+            now,
+          );
+          if (linked !== null && linked !== "linked" && linked !== "repeat") {
+            logger.warn({ run: sessionRow.publicId, outcome: linked }, "tacho ingest: the run names a work order it does not hold");
+          }
+        } catch (error) {
+          logger.warn({ err: error, run: sessionRow.publicId }, "tacho ingest: the run's work order link was refused");
+        }
       }
       // Everything below is this batch's events landing on the session row, so
       // it is gated on the same answer. A refused batch belongs to a different
@@ -3070,12 +3095,16 @@ const ingestBatch = async (
   // received: a pause or a steer held back for that lease. Drained here, any
   // earlier failure leaves them queued, and the re-sent batch delivers them.
   //
-  // The envelope's etag covers the host's published skills, as the bundle's
-  // does, so they are read first, outside any tenant transaction
-  // (./lib/tacho-host-skills.ts says why).
-  const skills = await skillsReader.read(capability, ctx, result.seen);
+  // The envelope's etag covers the host's published skills and Cedar
+  // policies, as the bundle's does, so they are read first, outside any
+  // tenant transaction (./lib/tacho-host-skills.ts says why). Both at once,
+  // so the production port answers them with one read.
+  const [skills, policy] = await Promise.all([
+    skillsReader.read(capability, ctx, result.seen),
+    cedarReader.read(capability, ctx, result.seen),
+  ]);
   const control = await withTenantDb((tx) =>
-    controlEnvelope(tx as never, ctx, result.seen, new Date(), skills),
+    controlEnvelope(tx as never, ctx, result.seen, new Date(), skills, policy),
   );
 
   return {

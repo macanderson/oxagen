@@ -1254,6 +1254,21 @@ describe("recordPublishDeployment", () => {
     ]);
   });
 
+  it("names no pull request when the publish came from no merge Oxagen knows", async () => {
+    const gh = steeringRepo();
+    await expect(
+      recordPublishDeployment(gh, REPO, { sha: "push521", version: 22 }),
+    ).resolves.toBe("https://github.com/a-intel/platform/deployments/steering");
+    expect(gh.deployments).toEqual([
+      {
+        sha: "push521",
+        ref: "main",
+        environment: "steering",
+        description: "Steering version 22",
+      },
+    ]);
+  });
+
   it("logs a refused deployment instead of failing the publish", async () => {
     const gh = steeringRepo();
     gh.deploymentRefused = true;

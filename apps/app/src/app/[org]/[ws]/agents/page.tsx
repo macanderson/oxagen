@@ -17,9 +17,10 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 // Agents (roadmap mockups `agents`): the agents and what governs them, on one
-// page. The tab is `?tab=`: Agents (left off), Tool servers (`servers`, with
-// its `tools` and `toolbelts` views), Policies, Runtimes and Off switches. The
-// Tools page and the Runtimes list redirect here. The column set (Composition
+// page. The tab is `?tab=`: Agents (left off), MCP servers (`mcp-servers`,
+// with its `tools` and `toolbelts` views), Policies, Runtimes and Off
+// switches. The old key `servers` still opens MCP servers. The Tools page and
+// the Runtimes list redirect here. The column set (Composition
 // or Operations) is the agents table's own session state, not a query
 // parameter; `deregistered=show` is one because the server read changes with
 // it. The header and the strip stay while a tab's reads run; a tab's body

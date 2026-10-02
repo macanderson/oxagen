@@ -130,7 +130,7 @@ Use these files to inspect the current app:
 | Translations | `apps/app/messages/` |
 | Package versions | Each app's `package.json` and `pnpm-workspace.yaml` overrides |
 
-The workspace root is Fleet. Workspace routes include Runs, Mandates, Agents, Steering, Spend, Skills, and registration. Agents carries the Tool servers, Policies, Runtimes, and Off switches tabs as `?tab=` values, and `/tools` and `/runtimes` redirect there. One runtime opens in a drawer over the Runtimes tab (`&runtime=<id>`). Organization routes include Organization, Billing, Audit, Roles, API keys, and Model funding. Read the route source before adding a link. The former `[orgSlug]/[workspaceSlug]` routes and `src/components/` belong to `apps/app_deprecated`.
+The workspace root is Fleet. Workspace routes include Runs, Mandates, Agents, Steering, Spend, Skills, and registration. Agents carries the MCP servers (`mcp-servers`), Policies, Runtimes, and Off switches tabs as `?tab=` values, and `/tools` and `/runtimes` redirect there. One runtime opens in a drawer over the Runtimes tab (`&runtime=<id>`). Organization routes include Organization, Billing, Audit, Roles, API keys, and Model funding. Read the route source before adding a link. The former `[orgSlug]/[workspaceSlug]` routes and `src/components/` belong to `apps/app_deprecated`.
 
 The current assistant flyout and the retained API chat transport are separate surfaces. Do not copy the deprecated app's `use-tool-stream.ts` path into new app guidance. Use existing data ports and server actions, and keep platform actions behind capability contracts.
 
