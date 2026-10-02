@@ -36,6 +36,7 @@ import { HandlerError, type CapabilityHandler } from "@oxagen/oxagen";
 import { steeringPrOpen } from "@oxagen/oxagen/contracts/steering.pr.open";
 import {
   CHECK_NAMES,
+  type CheckFinding,
   isSteeringPrKind,
   type CheckName,
   type CheckResult,
@@ -85,6 +86,11 @@ import {
   steeringPrView,
   prBody,
 } from "./context.steering.view";
+import { logger } from "./logger";
+import {
+  MANAGED_BLOCK_FILES,
+  managedBlockFinding,
+} from "./steering-repo/managed-block";
 import {
   readSteeringLayout,
   type SteeringLayout,
@@ -311,6 +317,7 @@ export function createOpenSteeringPrHandler(
           stampedRecordId: file.id,
           recordHash: file.hash,
           checks: pendingChecks(),
+          checkFindings: [],
           updatedById: actingUserId,
         },
         ["proposed"],
@@ -338,6 +345,7 @@ export function createOpenSteeringPrHandler(
           governanceMode: mode,
           headSha: pr.headSha,
           checks: pendingChecks(),
+          checkFindings: [],
           updatedById: actingUserId,
         },
         OPEN_PR,
@@ -523,11 +531,19 @@ async function runHeadChecks(
   // Every check passed, so the file parses and its stamp recomputes: the
   // row now describes the record at this head, the one the merge publishes.
   const identity = allPassed ? checkedIdentity(path, fileText) : null;
+  const checkFindings = await managedBlockFindings(
+    deps,
+    repo,
+    layout,
+    changedPaths,
+    headSha,
+  );
   return deps.store.updateProposal(
     row.id,
     {
       status: allPassed ? "checks_passed" : "checks_failed",
       checks: row.checks.map((c) => ({ ...c, detailsUrl })),
+      checkFindings,
       ...(identity
         ? { stampedRecordId: identity.id, recordHash: identity.hash }
         : {}),
@@ -535,6 +551,45 @@ async function runHeadChecks(
     ["checks_running"],
     { headSha },
   );
+}
+
+/**
+ * The managed blocks this head changes, as the findings the panel draws
+ * Restore block from (#4518 item 7, ADR-267). Only a steering repository
+ * holds managed blocks, and only a file the PR changes can drift. Each file
+ * is read on the production branch and at the head. A read the host refuses
+ * is logged and leaves that run with no findings: the six outcomes already
+ * stand, and Restore block is offered again on the next run.
+ */
+async function managedBlockFindings(
+  deps: CheckDeps,
+  repo: SteeringRepository,
+  layout: SteeringLayout,
+  changedPaths: readonly string[],
+  headSha: string,
+): Promise<CheckFinding[]> {
+  if (layout.layout !== "steering") return [];
+  const files = MANAGED_BLOCK_FILES.filter((file) =>
+    changedPaths.includes(file),
+  );
+  try {
+    const findings: CheckFinding[] = [];
+    for (const file of files) {
+      const [production, head] = await Promise.all([
+        deps.github.readFile(repo, file, repo.defaultBranch),
+        deps.github.readFile(repo, file, headSha),
+      ]);
+      const finding = managedBlockFinding(file, production, head);
+      if (finding !== null) findings.push(finding);
+    }
+    return findings;
+  } catch (err) {
+    logger.warn(
+      { err, repository: repo.fullName, headSha, files },
+      "open_steering_pr: the managed blocks could not be read, so this run stores no findings",
+    );
+    return [];
+  }
 }
 
 export interface Recheck {
@@ -571,6 +626,7 @@ export async function recheckSteeringPr(
       status: "checks_running",
       headSha: input.to,
       checks: pendingChecks(),
+      checkFindings: [],
       updatedById: input.updatedById,
     },
     ["checks_passed"],
@@ -617,6 +673,7 @@ export async function checkCommittedHead(
       status: "checks_running",
       headSha: input.to,
       checks: pendingChecks(),
+      checkFindings: [],
       updatedById: input.updatedById,
     },
     OPEN_PR,

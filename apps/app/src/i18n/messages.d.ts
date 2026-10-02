@@ -10711,6 +10711,15 @@ type Messages = {
         prNotRecorded: string;
         repositoryChanged: string;
         mergeCommitUnknown: string;
+        authorCannotApprove: string;
+        prClosed: string;
+        memoryPrNotFound: string;
+        memoryPrSettled: string;
+        recordNotInPr: string;
+        recordNotProposed: string;
+        memoryPrElsewhere: string;
+        branchMissing: string;
+        lastRecord: string;
         nothingToRevert: string;
         revertBranchExists: string;
         toolNotRegistered: string;

@@ -3,15 +3,16 @@
  * in their harnesses' own stores, which Oxagen collects from enrolled hosts
  * (memory-collection spec; ADR-248).
  *
- * `oxagen memory list|show|promote|dismiss` call the org-scoped routes of
- * list_workspace_memories, get_workspace_memory, promote_memories, and
- * dismiss_memories through `apiPostOrThrow`. The shapes are the contracts'
- * own output types.
+ * `oxagen memory list|show|promote|dismiss|drop` call the org-scoped routes
+ * of list_workspace_memories, get_workspace_memory, promote_memories,
+ * dismiss_memories, and drop_memory_record through `apiPostOrThrow`. The
+ * shapes are the contracts' own output types.
  */
 import type { SteeringMemoriesDismissOutput } from "@oxagen/oxagen/contracts/steering.memories.dismiss";
 import type { SteeringMemoriesGetOutput } from "@oxagen/oxagen/contracts/steering.memories.get";
 import type { SteeringMemoriesListOutput } from "@oxagen/oxagen/contracts/steering.memories.list";
 import type { SteeringMemoriesPromoteOutput } from "@oxagen/oxagen/contracts/steering.memories.promote";
+import type { SteeringMemoryPrRecordDropOutput } from "@oxagen/oxagen/contracts/steering.memory_pr_records.drop";
 import type {
   MemoryDraftRecord,
   WorkspaceMemory,
@@ -24,6 +25,7 @@ export type {
   SteeringMemoriesGetOutput,
   SteeringMemoriesListOutput,
   SteeringMemoriesPromoteOutput,
+  SteeringMemoryPrRecordDropOutput,
 };
 
 /** The routes, under /v1/<org>/<workspace>/. */
@@ -32,6 +34,7 @@ const ROUTES = {
   get: "context/steering/memories/get",
   promote: "context/steering/memories/promote",
   dismiss: "context/steering/memories/dismiss",
+  drop: "context/steering/memory-prs/records/drop",
 } as const;
 
 export const WORKSPACE_MEMORY_STATES: readonly WorkspaceMemoryState[] = [
@@ -85,6 +88,14 @@ export async function dismissWorkspaceMemories(input: {
   restore: boolean;
 }): Promise<SteeringMemoriesDismissOutput> {
   return apiPostOrThrow<SteeringMemoriesDismissOutput>(ROUTES.dismiss, input);
+}
+
+/** drop_memory_record. */
+export async function dropMemoryPrRecord(input: {
+  number: number;
+  path: string;
+}): Promise<SteeringMemoryPrRecordDropOutput> {
+  return apiPostOrThrow<SteeringMemoryPrRecordDropOutput>(ROUTES.drop, input);
 }
 
 // ── Formatters ──────────────────────────────────────────────────────────────
@@ -271,3 +282,15 @@ export function formatDismissResult(
   return lines.join("\n");
 }
 
+/** What a drop did: the commit on the memory PR's branch, and what happens at merge. */
+export function formatDropResult(result: SteeringMemoryPrRecordDropOutput): string {
+  const pr = result.pull_request;
+  const short = result.commit_sha.slice(0, 7);
+  return [
+    result.already_dropped
+      ? `${result.path} was already dropped from memory PR #${pr.number} in commit ${short}.`
+      : `Dropped ${result.path} from memory PR #${pr.number} in commit ${short} on ${pr.branch}.`,
+    "When the PR merges, the record's statements are rejected and its memories wait again.",
+    pr.url,
+  ].join("\n");
+}

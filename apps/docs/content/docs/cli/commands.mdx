@@ -67,7 +67,7 @@ Bounded semantic (vector) search across the workspace context graph. `-l/--label
 ## oxagen memory: workspace memories
 
 ```bash
-oxagen memory list|show|promote|dismiss|import
+oxagen memory list|show|promote|dismiss|drop|import
 ```
 
 The memories agents wrote in their harnesses, which Oxagen collects from enrolled hosts. See [Memory from the CLI](/docs/cli/memory).
@@ -78,6 +78,7 @@ The memories agents wrote in their harnesses, which Oxagen collects from enrolle
 | `show <id>` | One memory with its text, source, uses, and memory PR. |
 | `promote <ids...>` | Draft steering records on the open memory PR, or a new one. Set `--kind`, `--force`, `--effect`, `--statement`, or `--repo`. |
 | `dismiss <ids...>` | Set memories aside so the curator does not propose them again. `--restore` brings them back. |
+| `drop <number> <path>` | Take one proposed record out of an open memory PR. When the PR merges, the record's statements are rejected and its memories wait again. |
 | `import <files...>` | Read Markdown rule docs into steering records with a kind and a force for each statement. Previews unless `--yes`, which opens one steering PR. |
 
 ## oxagen init: link a project

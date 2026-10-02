@@ -298,8 +298,9 @@ describe("tenant policy manifest", () => {
     // for each pull request (R2, #4511). 174 adds agent.code_repository_findings
     // (S7, #4518, ADR-263). All three landed 2026-10-02.
     // 173 after #5102 drops workspace.workspace_budget_policy (ADR-277,
+    // 2026-10-02). 174 adds agent.steering_pr_approvals (S7, #4518, ADR-267,
     // 2026-10-02).
-    expect(POLICY_MANIFEST.length).toBe(173);
+    expect(POLICY_MANIFEST.length).toBe(174);
   });
 
   it("covers the ADR-055 GAU tables as org_only (WL-24)", () => {

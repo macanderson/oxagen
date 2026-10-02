@@ -173,6 +173,10 @@ const ACTIONS = new Set([
   // one file of a steering PR (#4518). Not "repair": that writes a steering
   // repo's settings, and this writes one file on one branch.
   "restore",
+  // drop_memory_record: take one proposed record out of an open memory PR
+  // (#4518). Not "delete" or "remove": nothing published is deleted, and the
+  // PR's settlement rejects the record.
+  "drop",
   "approve",
   // authorize_cli — the CLI consent mint (apps/app/ARCHITECTURE.md §3.7).
   "authorize",

@@ -1,0 +1,52 @@
+{
+  "name": "approve_steering_pr",
+  "domain": "context",
+  "description": "Approve a proposal's steering PR at its current head. Under the team and regulated governance modes the merge counts this approval beside the approvals on the host. Refused to the PR's author, on a pull request that is not open, and when the head moved since the checks ran. Answers how many people approved the head in Oxagen.",
+  "mode": "sync",
+  "surfaces": [
+    "api"
+  ],
+  "sensitivity": "high",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "proposalId": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "proposalId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "proposalId": {
+        "type": "string"
+      },
+      "headSha": {
+        "type": "string"
+      },
+      "approvals": {
+        "type": "integer",
+        "exclusiveMinimum": 0
+      }
+    },
+    "required": [
+      "proposalId",
+      "headSha",
+      "approvals"
+    ],
+    "additionalProperties": false
+  }
+}
