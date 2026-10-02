@@ -16,7 +16,8 @@
 //   store's lock from the version read through publish(), so the version a
 //   merge writes into its trailer is the one publish() assigns.
 // - steeringSyncPublish: the repository sync's publish port
-//   (`SyncDeps.publish`), over the same publisher.
+//   (`SyncDeps.publish`), over the same publisher. For the sync it also
+//   records each version it publishes as a deployment.
 import { schema, withSystemDb } from "@oxagen/database";
 import { HandlerError } from "@oxagen/oxagen";
 import type { RepoHealth } from "@oxagen/oxagen/steering-repo/health";
@@ -32,7 +33,7 @@ import {
 import { and, eq } from "drizzle-orm";
 import type { SteeringHost, SteeringRepository } from "../context.steering.github";
 import type { SyncPublish, SyncPublished } from "../context.steering.sync";
-import { readSteeringLayout } from "./merge-queue";
+import { readSteeringLayout, recordPublishDeployment } from "./merge-queue";
 import { assertSteeringCommit } from "./provenance";
 import {
   heldVersionStore,
@@ -271,6 +272,14 @@ export type SteeringSyncPublishOptions = Omit<
   extend?: (deps: SteeringPublishDeps) => PublishDeps;
   /** The version store for a scope. The workspace's Postgres store when unset. */
   store?: (scope: VersionScope) => VersionStore;
+  /**
+   * Record each version the port publishes as a deployment to the steering
+   * environment, through `recordPublishDeployment`. The repository sync sets
+   * it. Provisioning leaves it unset: its own step records version 1 before
+   * the first publish, because publish() checks the commit against that
+   * deployment, so a second record would name the same version twice.
+   */
+  recordDeployments?: boolean;
 };
 
 /**
@@ -286,7 +295,10 @@ export type SteeringSyncPublishOptions = Omit<
  * steering repository therefore publishes, and the sync reaches this port.
  *
  * The production sync deps pass `extend: withToolProjection`, so a version the
- * sync publishes also writes the workspace's tool registry.
+ * sync publishes also writes the workspace's tool registry. They also pass
+ * `recordDeployments`, so each version the sync publishes is recorded as a
+ * deployment, as each version a merge publishes is. A version that was
+ * already published, refused, or stale records none.
  */
 export function steeringSyncPublish(
   options: SteeringSyncPublishOptions,
@@ -302,9 +314,17 @@ export function steeringSyncPublish(
       scope,
       store: options.store?.(scope),
     });
-    return syncPublished(
-      await publisher.publish(repo, await productionHead(host, repo)),
+    const result = await publisher.publish(
+      repo,
+      await productionHead(host, repo),
     );
+    if (options.recordDeployments && result.status === "published") {
+      await recordPublishDeployment(host, repo, {
+        sha: result.commit,
+        version: result.version,
+      });
+    }
+    return syncPublished(result);
   };
 }
 

@@ -266,13 +266,25 @@ export interface RepositoryRead {
   cwd: string;
   /**
    * Settles with the answer, or with undefined on any failure. It never
-   * rejects, so a read nobody awaits cannot end the daemon.
+   * rejects, so a read nobody awaits cannot end the daemon. `failures` tells
+   * a failure apart from a directory with no `origin`.
    */
   answer: Promise<RepositoryRemote | undefined>;
   /** True once `answer` has settled. */
   settled: boolean;
   /** The answer, once `answer` settled with one. */
   remote?: RepositoryRemote;
+  /**
+   * How many reads of `cwd` in a row failed, this one included. Set only on
+   * a read that failed. A read that found no `origin` did not fail (#4458).
+   */
+  failures?: number;
+  /**
+   * When a later hook may read `cwd` again after this read failed, in epoch
+   * milliseconds. Until then the failure answers for `cwd`, so a git that
+   * keeps failing does not run at every hook.
+   */
+  retryAt?: number;
 }
 
 /** What a session's memory recalls are scoped by (see `recall-hints.ts`). */
