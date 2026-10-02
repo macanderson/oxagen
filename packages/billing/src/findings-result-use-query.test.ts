@@ -22,4 +22,10 @@ describe("the result use read through chSelect", () => {
       "(kind = 'llm_call' AND source = 'transcript')",
     );
   });
+
+  it("reads a tool call only from the sources that write its input and output body", () => {
+    expect(RESULT_STEPS_QUERY).toContain(
+      "(kind = 'tool_call' AND source IN ('hook', 'collector'))",
+    );
+  });
 });

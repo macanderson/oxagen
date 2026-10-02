@@ -890,7 +890,7 @@ describe("result use (decision 7)", () => {
     expect(finding!.savingMicros).toBe(54_000n + 24_000n);
     expect(finding!.evidence.resultUse?.mode).toBe("digest_only");
     expect(finding!.why).toBe(
-      `${TOOL} returned 2 results over 5,000 tokens on 1 run. Later requests read them 5 times. Upper bound: this workspace keeps no tool result text, so Oxagen cannot tell which results a later step quoted. This figure counts every re-read.`,
+      `${TOOL} returned 2 results over 5,000 tokens on 1 run. Later requests read them 5 times. Upper bound: Oxagen checks for a quote only where a workspace keeps both tool call and model call text, and this one does not. This figure counts every re-read.`,
     );
     expect(finding!.fix).toContain(
       "keep tool call and model call text in the workspace's retention policy",

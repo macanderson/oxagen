@@ -65,8 +65,10 @@ interface StepRow {
 
 /**
  * The frames on one chain from `from` on that carry a body digest: tool
- * calls, and the text the agent wrote. A model proxy's `llm_call` is left
- * out, since its body holds the whole request.
+ * calls, and the text the agent wrote. A tool call is read from the two
+ * sources that write its `{"input":…,"output":…}` body, the hook and the MCP
+ * gateway (`collector`). A model proxy's `llm_call` is left out, since its
+ * body holds the whole request.
  */
 export const RESULT_STEPS_QUERY = `SELECT seq,
   formatDateTime(ts, '%Y-%m-%dT%H:%i:%S.%fZ', 'UTC') AS at,
@@ -77,7 +79,8 @@ export const RESULT_STEPS_QUERY = `SELECT seq,
     AND ts >= {from:DateTime64(3)}
     AND received_at >= {from:DateTime64(3)} - INTERVAL 1 DAY
     AND content_digest != ''
-    AND (kind IN ('tool_call', 'turn_end', 'subagent_stop')
+    AND ((kind = 'tool_call' AND source IN ('hook', 'collector'))
+      OR kind IN ('turn_end', 'subagent_stop')
       OR (kind = 'llm_call' AND source = 'transcript'))
   ORDER BY ts, seq
   LIMIT {limit:UInt32}`;
@@ -266,7 +269,7 @@ export async function readResultUse(
     const resultSeqs = new Map(
       chain.results.map((c) => [c.seq, resultUseKey(c)]),
     );
-    const frames: ChainFrame[] = kept.map((row, i) => {
+    const frames = kept.map((row, i): ChainFrame => {
       const seq = Number(row.seq);
       const resultKey =
         row.kind === "tool_call" && row.source === "hook"

@@ -419,7 +419,7 @@ function their(n: number): string {
 function useLines(split: FindingResultUse, currency: string): string {
   if (split.mode !== "content_exact")
     return split.mode === "digest_only"
-      ? " Upper bound: this workspace keeps no tool result text, so Oxagen cannot tell which results a later step quoted. This figure counts every re-read."
+      ? " Upper bound: Oxagen checks for a quote only where a workspace keeps both tool call and model call text, and this one does not. This figure counts every re-read."
       : " Upper bound: no later step was checked for a quote of these results. This figure counts every re-read.";
   const { used, unused, unchecked } = split;
   const lines: string[] = [];
