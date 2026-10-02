@@ -22,9 +22,20 @@ const lefthook = readFileSync(join(repoRoot, "lefthook.yml"), "utf8");
 
 // ── The sweep, over the real tree ───────────────────────────────────────────
 
+// The root check scripts live in tools/scripts, so an import resolves through
+// the root's node_modules or through tools/scripts/node_modules, where pnpm
+// links what @oxagen/scripts declares. The root declares no workspace package
+// (#4918): turbo hashes the files of each workspace package the root depends
+// on into every task's hash, so those packages are declared by
+// @oxagen/scripts, and hook-preflight.mjs names it in the filtered install.
+const scriptsPkg = JSON.parse(
+  readFileSync(join(repoRoot, "tools", "scripts", "package.json"), "utf8"),
+);
 const declared = new Set([
   ...Object.keys(rootPkg.dependencies ?? {}),
   ...Object.keys(rootPkg.devDependencies ?? {}),
+  ...Object.keys(scriptsPkg.dependencies ?? {}),
+  ...Object.keys(scriptsPkg.devDependencies ?? {}),
 ]);
 
 const runs = lefthookRuns(lefthook);
@@ -53,6 +64,17 @@ function importsOf(command: string) {
 }
 
 describe("root scripts declare what they import (#3403)", () => {
+  it("keeps workspace packages out of the root package.json (#4918)", () => {
+    const rootDeps = {
+      ...(rootPkg.dependencies ?? {}),
+      ...(rootPkg.devDependencies ?? {}),
+    };
+    const workspace = Object.entries(rootDeps)
+      .filter(([, spec]) => String(spec).startsWith("workspace:"))
+      .map(([name]) => name);
+    expect(workspace).toEqual([]);
+  });
+
   it("reads the hooks it is meant to sweep", () => {
     // Guards the sweep against passing empty: a parser change that found no
     // run lines would make every assertion below vacuous.
@@ -69,7 +91,7 @@ describe("root scripts declare what they import (#3403)", () => {
   });
 
   it.each(swept)(
-    "%s imports only packages the root declares",
+    "%s imports only packages the root or @oxagen/scripts declares",
     (_label, command) => {
       const undeclared = [...importsOf(command)]
         .filter(([name]) => !declared.has(name))

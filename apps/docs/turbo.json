@@ -9,15 +9,15 @@
       "inputs": ["content/**", "source.config.ts", "package.json"],
       "outputs": [".source/**"]
     },
+    // `.source/**` is not an input (#4918). It is generated and gitignored, and
+    // on CI it hashed differently on every run: four main runs on 2026-10-01
+    // gave this task four hashes while gen:source kept one, so it never hit the
+    // cache. The gen:source edge carries the same information. Its hash covers
+    // `content/**`, `source.config.ts`, and the fumadocs-mdx version, and turbo
+    // folds it into this task's hash.
     "typecheck": {
-      "dependsOn": ["gen:source"],
-      "inputs": [
-        "$TURBO_DEFAULT$",
-        "src/**",
-        "tsconfig.json",
-        "package.json",
-        ".source/**"
-      ],
+      "dependsOn": ["^build", "gen:source"],
+      "inputs": ["$TURBO_DEFAULT$", "src/**", "tsconfig.json", "package.json"],
       "outputs": []
     },
     "build": {

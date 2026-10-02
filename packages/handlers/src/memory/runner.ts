@@ -670,7 +670,7 @@ export async function curateMemories(
   // A waiting or promoted memory that no run used for `retire_after_days`
   // retires before the plan reads the queue (ADR-245). Its clock runs from
   // its newest use, or from its capture when no run used it.
-  const retired = await deps.store.retireUnused(
+  const retiredUnused = await deps.store.retireUnused(
     scope,
     new Date(now.getTime() - settings.retire_after_days * 86_400_000),
     now,
@@ -703,7 +703,7 @@ export async function curateMemories(
   const linked = await deps.store.linkMemories(scope, plan.said);
   if (plan.stampRecalls.length > 0)
     await deps.store.stampRecalls(scope, plan.stampRecalls, now);
-  const dropped = retired + linked;
+  const dropped = retiredUnused + linked;
 
   // A record that cannot be written stays out of the PR. Its memories keep
   // waiting, and a retirement is proposed again by a later pass.
