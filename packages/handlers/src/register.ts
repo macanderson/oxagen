@@ -12,6 +12,7 @@ import { setNoProgressPauseRunner } from "@oxagen/inngest-functions/no-progress-
 import { setRunFitRunner } from "@oxagen/inngest-functions/run-fit-runner";
 import { setRunPrOutcomesRunner } from "@oxagen/inngest-functions/run-pr-outcomes-runner";
 import { setPullRequestBackfillRunner } from "@oxagen/inngest-functions/run-pull-request-backfill-runner";
+import { setWorkOrderResultsRunner } from "@oxagen/inngest-functions/work-order-results-runner";
 import { setSteeringRepoHealthRunner } from "@oxagen/inngest-functions/steering-repo-health-runner";
 import { setSteeringRepoProvisionRunner } from "@oxagen/inngest-functions/steering-repo-provision-runner";
 import { setSteeringSyncRunner } from "@oxagen/inngest-functions/steering-sync-runner";
@@ -191,6 +192,18 @@ registerHandlersOnce("@oxagen/handlers", () => {
       request,
     ),
   );
+  // A work order's run end and pull request (ADR-250) write work records and
+  // read GitHub through this package too, and load on their first run.
+  setWorkOrderResultsRunner({
+    async runEnded(request) {
+      const { recordRunEnded } = await import("./lib/work-records/results");
+      return recordRunEnded({ orgId: request.orgId, workspaceId: request.workspaceId }, request.runId);
+    },
+    async pullRequestLinked(request) {
+      const { recordRunPullRequest } = await import("./lib/work-records/results");
+      return recordRunPullRequest({ orgId: request.orgId, workspaceId: request.workspaceId }, request.rootSessionUuid, request.url);
+    },
+  });
   // The hourly run outcome refresh (#4491) reads GitHub through this package
   // too. It runs in the workspace's tenant scope, and is loaded on its first
   // run.

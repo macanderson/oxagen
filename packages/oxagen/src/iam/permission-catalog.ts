@@ -55,14 +55,30 @@ export const PERMISSION_CATALOG: readonly Permission[] = [
   {
     id: "run.control",
     group: "Runs",
-    description: "Pause, resume, cancel and steer runs",
-    capabilities: ["dispatch_command"],
+    description: "Pause, resume, cancel and steer runs, and send, stop, and return work",
+    capabilities: [
+      "dispatch_command",
+      // Phase 1 work actions (ADR-244, ADR-250).
+      "save_work_brief",
+      "send_work_order",
+      "cancel_work_order",
+      "stop_work_order",
+      "return_work_order",
+      "close_work_item",
+      "reopen_work_item",
+    ],
   },
   {
     id: "run.approve",
     group: "Runs",
-    description: "Approve or deny a tool call waiting on a person",
-    capabilities: ["resolve_approval"],
+    description: "Approve or deny a tool call waiting on a person, and approve and accept work",
+    capabilities: [
+      "resolve_approval",
+      // Phase 1 work actions (ADR-244, ADR-250). Read checks supports Accept.
+      "approve_work_brief",
+      "accept_work_order",
+      "refresh_work_order_checks",
+    ],
   },
   // ── Agents ───────────────────────────────────────────────────────────────
   {

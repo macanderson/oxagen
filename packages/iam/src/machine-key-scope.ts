@@ -102,11 +102,12 @@ export const STELLA_TELEMETRY_PURPOSE = "stella_operational_telemetry_v1";
 export const MACHINE_KEY_CAPABILITIES: Readonly<
   Record<string, ReadonlySet<string>>
 > = {
-  // The enrolled daemon's seven control calls, and nothing else. A host
+  // The enrolled daemon's nine control calls, and nothing else. A host
   // reports events, fetches its mandate, polls for commands, asks for a
   // repository-scoped git credential (ADR-151), sends the memories its
   // harnesses wrote, asks for the memories a prompt should see (ADR-206),
-  // and reports the memory files its runs read (ADR-248); it does not
+  // reports the memory files its runs read (ADR-248), and claims or refuses
+  // a work order sent to its agent (ADR-250); it does not
   // enroll, revoke, or read the fleet. The command poll is `fetch_commands`
   // since ADR-025 renamed it from `fetch_tacho_commands`; this list kept the
   // old name, so every host's poll was refused and a pause or revoke never
@@ -128,6 +129,11 @@ export const MACHINE_KEY_CAPABILITIES: Readonly<
     // ADR-248: the memory files the host's runs read, and the files each
     // memory scan found, in the key's own workspace.
     "record_tacho_memory_uses",
+    // ADR-250: the host claims a work order sent to its agent before any run
+    // starts, or refuses one it cannot start. Each call checks that the order
+    // went to this host's runtime and agent.
+    "claim_work_order",
+    "reject_work_order",
   ]),
   [LEDGER_RUN_SCOPE_PURPOSE]: new Set(["ingest_run_frames"]),
   [STELLA_TELEMETRY_PURPOSE]: new Set(["ingest_stella_operational_telemetry"]),

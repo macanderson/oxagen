@@ -79,6 +79,7 @@ import {
   runEnrichmentSweep,
 } from "./functions/run.enrich";
 import { runPullRequestBackfill } from "./functions/run.pull-request-backfill";
+import { workOrderPullRequestLinked, workOrderRunEnded } from "./functions/work.order-results";
 import { agentInterjectionTimeout } from "./functions/agent.interjection-timeout";
 import { agentInterjectionTimeoutSweep } from "./functions/agent.interjection-timeout-sweep";
 import { conversationTitle } from "./functions/conversation.title";
@@ -155,6 +156,8 @@ export const functions: any[] = [
   runEnrichOnFailure,
   runEnrichmentSweep,
   runPullRequestBackfill,
+  workOrderRunEnded,
+  workOrderPullRequestLinked,
   agentInterjectionTimeout,
   agentInterjectionTimeoutSweep,
   conversationTitle,

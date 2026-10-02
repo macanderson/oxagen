@@ -33,6 +33,8 @@ import {
   touchHost,
 } from "./lib/tacho-host";
 import { hostSkillsReader } from "./lib/tacho-host-skills";
+import { type AckedCommand, recordWorkOrderAcks } from "./lib/work-records/runtime";
+import { logger } from "./logger";
 import {
   type TachoPublished,
   VERSION_STORE_PUBLISHED,
@@ -113,6 +115,7 @@ export function createTachoCommandFetchHandler(
         input.host_enrollment_id,
       );
       let acknowledged = 0;
+      const moved: AckedCommand[] = [];
       for (const ack of input.acknowledgements) {
         const updated = await tx
           .update(schema.tachoControlCommands)
@@ -127,8 +130,39 @@ export function createTachoCommandFetchHandler(
               ),
             ),
           )
-          .returning({ id: schema.tachoControlCommands.id });
+          .returning({
+            id: schema.tachoControlCommands.id,
+            publicId: schema.tachoControlCommands.publicId,
+            command: schema.tachoControlCommands.command,
+            outcome: schema.tachoControlCommands.outcome,
+            payload: schema.tachoControlCommands.payload,
+          });
         acknowledged += updated.length;
+        for (const row of updated) {
+          moved.push({ publicId: String(row.publicId), command: row.command, outcome: row.outcome, payload: row.payload });
+        }
+      }
+      // A work order's command the host took is `send_delivered`, and a
+      // stop's `cancel` it applied is `stopped` (ADR-250). They are recorded
+      // in a savepoint: a work record that refuses them must not undo the
+      // acknowledgements, or the host would send them again on every poll.
+      if (moved.some((row) => row.command === "work_order" || row.command === "cancel")) {
+        try {
+          await tx.transaction((savepoint) =>
+            recordWorkOrderAcks(
+              savepoint as never,
+              { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+              { id: host.id, publicId: String(host.publicId), runtimeId: host.runtimeId, agentId: host.agentId },
+              moved,
+              now,
+            ),
+          );
+        } catch (error) {
+          logger.warn(
+            { err: error, host: host.publicId },
+            "fetch_commands: a work order acknowledgement was not recorded on its work item",
+          );
+        }
       }
       const seen = await touchHost(tx as never, host, input.daemon, now, false);
       return { acknowledged, seen };

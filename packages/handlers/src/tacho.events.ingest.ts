@@ -123,6 +123,7 @@ import {
 } from "./lib/interjection-frames";
 import { recordProofFrames } from "./lib/proof";
 import { readdressNextRunCommands } from "./lib/next-run-commands";
+import { linkRunFromIngest } from "./lib/work-records/runtime";
 import { sendPullRequestLinks } from "./lib/run-pull-request-links";
 import {
   type TachoHostRow,
@@ -2504,6 +2505,24 @@ const ingestBatch = async (
           hostFeatures: host.bundleFeatures ?? [],
           now,
         });
+        // A run `oxagen work start` launched names its work order on its
+        // frames. The send binds the run only when this host claimed it, and
+        // the first run to link wins (ADR-250). A refusal never fails ingest.
+        try {
+          const linked = await linkRunFromIngest(
+            tx as never,
+            { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+            { id: host.id, publicId: String(host.publicId), runtimeId: host.runtimeId ?? null, agentId: host.agentId ?? null },
+            String(sessionRow.publicId),
+            events,
+            now,
+          );
+          if (linked !== null && linked !== "linked" && linked !== "repeat") {
+            logger.warn({ run: sessionRow.publicId, outcome: linked }, "tacho ingest: the run names a work order it does not hold");
+          }
+        } catch (error) {
+          logger.warn({ err: error, run: sessionRow.publicId }, "tacho ingest: the run's work order link was refused");
+        }
       }
       // Everything below is this batch's events landing on the session row, so
       // it is gated on the same answer. A refused batch belongs to a different

@@ -348,3 +348,44 @@ export async function recordWorkOrderAcks(tx: Tx, scope: WorkScope, host: Claimi
   }
   return recorded;
 }
+
+// ---------------------------------------------------------------------------
+// Ingest
+// ---------------------------------------------------------------------------
+
+/** The attribute a run started for a work order carries (WORK_OTLP_ATTRIBUTES.workOrderId). */
+export const WORK_ORDER_RUN_ATTR = "oxagen.work_order.id";
+
+/**
+ * The work order a new run's frames name, or null. The host stamps the
+ * attribute on the session's frames when `oxagen work start` launched it; a
+ * daemon that re-keys a client's `oxagen.*` attribute writes it under
+ * `client_claimed.`, which counts the same here, because the claim check in
+ * `linkWorkOrderRun` is what makes it trustworthy. Pure.
+ */
+export function workOrderNamedBy(events: readonly { attrs?: Readonly<Record<string, string>> }[]): string | null {
+  for (const event of events) {
+    const value = event.attrs?.[WORK_ORDER_RUN_ATTR] ?? event.attrs?.[`client_claimed.${WORK_ORDER_RUN_ATTR}`];
+    if (typeof value === "string" && /^wo_[0-9a-z]+$/.test(value)) return value;
+  }
+  return null;
+}
+
+/**
+ * Link a run ingest just opened to the work order its frames name, in a
+ * savepoint of the ingest transaction. A refusal (another host, an ended
+ * send, a missing order) rolls back only the savepoint, and the caller logs
+ * it: a run's events are recorded whatever its work order says.
+ */
+export async function linkRunFromIngest(
+  tx: Tx,
+  scope: WorkScope,
+  host: ClaimingHost,
+  runId: string,
+  events: readonly { attrs?: Readonly<Record<string, string>> }[],
+  at: Date,
+): Promise<RunLinkOutcome | null> {
+  const workOrder = workOrderNamedBy(events);
+  if (workOrder === null) return null;
+  return tx.transaction((savepoint) => linkWorkOrderRun(savepoint as Tx, scope, { host, runId, workOrder, at }));
+}
