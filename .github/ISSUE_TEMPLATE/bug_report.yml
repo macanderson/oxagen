@@ -1,13 +1,16 @@
 name: Bug report
-description: Something that exists behaves wrongly (the triage pass adds KIND:BUG)
-labels: ["TRIAGE"]
+description: Something that exists behaves wrongly (KIND:BUG)
+# The form sets the kind twice over, as the issue type and as its label. The creator still
+# applies the priority, tier, size, and area labels and fills the filing fields.
+type: Bug
+labels: ["KIND:BUG"]
 body:
   - type: markdown
     attributes:
       value: |
         **Security vulnerabilities must NOT be reported here.** Use [private vulnerability reporting](https://github.com/oxageninc/product/security/advisories/new) or `security@oxagen.sh` (see SECURITY.md).
 
-        Creators apply exactly one label, `TRIAGE` (SCR-005). The triage pass (`/triage-issues`) replaces it with one priority label, one `MODEL:` tier, one `SIZE:`, `KIND:BUG`, and one `AREA:`, then adds `JOB:` and one or two `PILLAR:` labels. Do not add those yourself. Title it `Queued Bug (<Area>): <what goes wrong>` in plain words.
+        File the issue complete. Title it `<Priority> <Tier> <Size> Bug (<Area>): <what goes wrong>` in plain words. Apply one priority label, one `MODEL:` tier, one `SIZE:`, `KIND:BUG`, and one `AREA:`, then `JOB:` and one or two `PILLAR:` labels where they apply. Set the issue type to Bug, and set the Priority, Model Tier, Estimated Minutes, and Area(s) fields. CLAUDE.md has the rules under Issue titles and Oxagen issue fields.
 
         Before filing: if you can fix it in the branch you are on, fix it there (SCR-004). File only when the fix needs a maintainer decision, a rig, a credential or real spend, or is larger than one session.
   - type: dropdown
@@ -61,6 +64,6 @@ body:
         - [ ] Defect fixed at the named path; the repro no longer reproduces
         - [ ] Scoped tests added/updated and passing
         - [ ] Code comments and docs updated
-        - [ ] Residue fixed in the same PR, or filed with the `TRIAGE` label only
+        - [ ] Residue fixed in the same PR, or filed as a complete issue
     validations:
       required: true

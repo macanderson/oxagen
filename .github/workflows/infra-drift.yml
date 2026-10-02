@@ -182,9 +182,11 @@ jobs:
             }
 
             // The title format in CLAUDE.md under Issue titles. The workflow
-            // owns this issue, so the triage pass leaves its title alone.
+            // owns this issue, so the triage pass leaves its title alone and
+            // adds the labels the title names. The issue has no priority
+            // label, which is what puts it in the `/triage-issues` sweep.
             await github.rest.issues.create({
-              owner, repo, labels: [LABEL, 'TRIAGE'],
+              owner, repo, labels: [LABEL],
               title: 'P1 T3 S DevOps (Deploy): Infrastructure has drifted from the configuration',
               body,
             })
