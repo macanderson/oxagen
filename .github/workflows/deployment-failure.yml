@@ -45,6 +45,9 @@ permissions:
   contents: read
   actions: read
   issues: write
+  # Reads a failed job's annotations to tell a lost runner from a real
+  # failure (rerun-lost-runner.mjs).
+  checks: read
 
 jobs:
   record:
@@ -58,6 +61,7 @@ jobs:
         with:
           sparse-checkout: |
             tools/scripts/deployment-failure-issue.mjs
+            tools/scripts/rerun-lost-runner.mjs
             .node-version
           sparse-checkout-cone-mode: false
       - uses: actions/setup-node@v4

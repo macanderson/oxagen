@@ -218,6 +218,32 @@ online is launched again. On 2026-10-01 a broken image did that to 121
 machines in 15 minutes. Drain the pools as above whenever the image is
 suspect, and resume them once a runner registers in under a minute.
 
+## A job that lost its runner
+
+A job whose log ends with `The runner has received a shutdown signal` lost its
+runner mid-job. On our pools that almost always means AWS reclaimed the spot
+instance. The job API can still show the running step as `success`, and the
+job carries no annotation.
+
+1. Confirm it while EC2 still lists the instance, about an hour after it
+   ends. The instance id is the end of the runner name:
+   `aws ec2 describe-instances --instance-ids i-<id> --query 'Reservations[].Instances[].StateReason'`.
+   `Server.SpotInstanceTermination` is a spot reclaim. Anything else, such as
+   the out-of-memory kills in #4990, is a real fault.
+2. Do nothing for a reclaim. `rerun-lost-runner.yml` reruns the lost job and
+   the jobs that depend on it once the CI run finishes. It reruns a run at
+   most twice, and only while the run is on its branch's head commit. On
+   `main`, `deployment-failure.yml` still files the P0 and marks the job, and
+   the green rerun closes it.
+3. If the workflow missed a run, dispatch it with the run id. It applies the
+   same rules:
+   `gh workflow run rerun-lost-runner.yml --repo oxageninc/product -f run_id=<run id>`.
+   After the third loss in a row, read the pool's interruption count below
+   before you rerun with `gh run rerun <run id> --failed`.
+
+The termination watcher counts every reclaim as `SpotInterruptionWarning` in
+the `oxagen/ci-runners` CloudWatch namespace, per pool and instance type.
+
 ## A job that waits
 
 1. Check the label. A job runs only on a pool whose label equals its whole

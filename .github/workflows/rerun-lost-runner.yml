@@ -1,0 +1,68 @@
+# Rerun a CI job that failed because its runner went away mid-job.
+#
+# AWS reclaims spot runners (ADR-246), and the job on one fails with "The
+# runner has received a shutdown signal". Nothing reran those jobs on `main`,
+# so each reclaim turned main red and filed a P0 (#5180). On a pull request
+# the PR's watcher reran them by hand.
+#
+# The rules (what counts as a lost runner, which jobs rerun, the attempt
+# limit, skipping a branch that moved on) live in
+# tools/scripts/rerun-lost-runner.mjs, where they are tested.
+#
+# ## Why workflow_run
+#
+# A rerun needs the run to have finished: GitHub refuses to rerun a job while
+# other jobs in its run are queued. workflow_run fires once, when the CI run
+# concludes, and runs this file from the default branch with a token that can
+# start the rerun.
+#
+# ## Why no concurrency group
+#
+# Each CI run concludes once per attempt, so there is nothing to collapse, and
+# a group would let one run's report evict another's.
+#
+# ## How this meets deployment-failure.yml on main
+#
+# Both fire when a main run fails. deployment-failure.yml files or updates the
+# P0 as before and marks each job that lost its runner. This workflow reruns
+# those jobs. The rerun concludes the same run again, and a green attempt
+# closes the P0.
+name: rerun-lost-runner
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: A CI run id to check for lost runners and rerun
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: write
+  checks: read
+
+jobs:
+  rerun:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'failure'
+    # A sparse checkout and a script that makes a few API calls.
+    runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-small-{0}', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-slim' }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          sparse-checkout: |
+            tools/scripts/rerun-lost-runner.mjs
+            .node-version
+          sparse-checkout-cone-mode: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+      - name: Rerun jobs that lost their runner
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RERUN_RUN_ID: ${{ github.event_name == 'workflow_dispatch' && inputs.run_id || github.event.workflow_run.id }}
+        run: node tools/scripts/rerun-lost-runner.mjs
