@@ -9,6 +9,7 @@ import type { TachoKind } from "../envelope";
 import { type DraftContent, textContent } from "../evidence/frame-body";
 import { redactText } from "../evidence/redaction";
 import { digestText } from "./context";
+import { promptOriginOf } from "./payload-members";
 import { cutAt } from "./tools";
 
 export interface TranscriptDraft {
@@ -313,6 +314,10 @@ export function normalizeTranscriptLine(
       const content = message?.["content"];
       const drafts: TranscriptDraft[] = [];
       if (typeof content === "string") {
+        // Who sent the prompt, kept to an allow-list. A message from another
+        // agent carries its whole text in `origin.body`, and a body member
+        // ships unredacted beside the redacted `content` (#4969).
+        const origin = promptOriginOf(record["origin"]);
         drafts.push({
           ...draft("oxagen:message", {
             prompt_digest: digestText(content),
@@ -320,9 +325,7 @@ export function normalizeTranscriptLine(
             ...(s(record["promptSource"]) !== undefined
               ? { prompt_source: s(record["promptSource"]) }
               : {}),
-            ...(record["origin"] !== undefined
-              ? { prompt_origin: record["origin"] }
-              : {}),
+            ...(origin !== undefined ? { prompt_origin: origin } : {}),
             ...(b(record["isMeta"]) !== undefined
               ? { is_meta: b(record["isMeta"]) }
               : {}),

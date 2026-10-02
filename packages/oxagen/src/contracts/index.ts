@@ -110,6 +110,8 @@ import { workingCopyRecord } from "./repository.working_copy.record";
 import { workingCopyList } from "./repository.working_copy.list";
 import { publishedSteeringGet } from "./context.steering.published.get";
 import { steeringIndexGet } from "./context.steering.index.get";
+import { steeringSearch } from "./steering.search";
+import { steeringRead } from "./steering.read";
 import { runList } from "./run.list";
 import { runCostGet } from "./run.cost";
 import { runTurnsGet } from "./run.turns.get";
@@ -384,6 +386,8 @@ import { steeringRepoProvisionRetry } from "./steering_repo.provision.retry";
 // open one steering PR with the rows a person kept (#4907).
 import { steeringMarkdownImportParse } from "./steering.markdown_import.parse";
 import { steeringMarkdownImportCommit } from "./steering.markdown_import.commit";
+// An agent opens a steering PR over MCP without a clone (#5134).
+import { steeringPropose } from "./steering.propose";
 import { contextSteeringFreshness } from "./context.steering.freshness";
 import { contextSteeringLayout } from "./context.steering.layout";
 import { contextGovernanceModeSet } from "./context.governance_mode.set";
@@ -989,6 +993,8 @@ export {
   workingCopyList,
   publishedSteeringGet,
   steeringIndexGet,
+  steeringSearch,
+  steeringRead,
   runList,
   runGet,
   runFrameBodyGet,
@@ -1178,6 +1184,7 @@ export {
   steeringRepoProvisionRetry,
   steeringMarkdownImportParse,
   steeringMarkdownImportCommit,
+  steeringPropose,
   contextRecordsAppend,
   contextProposalCreate,
   contextProposalList,
@@ -1476,6 +1483,8 @@ export const contracts: readonly CapabilityDeclaration[] = [
   workingCopyList,
   publishedSteeringGet,
   steeringIndexGet,
+  steeringSearch,
+  steeringRead,
   runList,
   runGet,
   runFrameBodyGet,
@@ -1664,6 +1673,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   steeringRepoProvisionRetry,
   steeringMarkdownImportParse,
   steeringMarkdownImportCommit,
+  steeringPropose,
   contextRecordsAppend,
   contextProposalCreate,
   contextProposalList,

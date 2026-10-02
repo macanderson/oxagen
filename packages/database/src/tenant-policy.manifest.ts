@@ -182,6 +182,9 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   // Where the outcome refresh stands in each ledger run's receipts (#4511);
   // org_id + workspace_id NOT NULL.
   { table: "cost.run_pr_receipt_walks", policyClass: "standard" },
+  // The newest state a GitHub delivery carried for each pull request (#4511);
+  // org_id + workspace_id NOT NULL.
+  { table: "cost.run_pr_delivered_states", policyClass: "standard" },
   // The loops that reached a workspace's no-progress limit (spend spec,
   // detector 1); org_id + workspace_id NOT NULL.
   { table: "cost.no_progress_hits", policyClass: "standard" },

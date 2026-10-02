@@ -38,7 +38,7 @@ The workspace's costed findings ranked by the money at stake, with the totals th
 | `counts` | object | `{ findings, high, medium, operators }`; `operators` counts the distinct operators whose runs the listed findings cite |
 | `findings` | object[] | at most 50; open findings largest saving first, decided findings most recent decision first |
 
-Each finding carries `id` (`fnd_…`), `kind`, `level`, `subject`, `saving` (cost), `confidence` (`high` or `medium`), `window`, `why`, `fix`, `runs` and `calls` (what it cites), `status`, `detectedAt`, `decidedAt` and `appliedActionId`. A finding whose fix names a setting also carries `recommendation`: the `setting`, the proposed `value`, and the `current` value when the findings job read one.
+Each finding carries `id` (`fnd_…`), `kind`, `level`, `subject`, `saving` (cost), `confidence` (`high` or `medium`), `window`, `why`, `fix`, `runs` and `calls` (what it cites), `status`, `detectedAt`, `decidedAt` and `appliedActionId`. A finding whose fix names a setting also carries `recommendation`: the `setting`, the proposed `value`, and the `current` value when the findings job read one. A finding also carries `values`, its kind's figures that the Spend card fills its text from, such as a spin loop's tool and how many times in a row it ran, or the retention mode that decides the Needs prompt text badge. `values.kind` names the shape. A finding the job wrote before it stored values has none, and neither do `duplicate_tool_calls` and `repeated_shell_commands`, whose text needs only `runs`, `calls`, and `saving`.
 
 A read that names `runId` adds `citation` to each finding: what it cites in that run. A read without `runId` carries no `citation` key.
 

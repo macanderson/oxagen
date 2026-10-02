@@ -15,7 +15,7 @@
 // statement is gone from it.
 //
 // The migration that creates this table and its tenant policies is
-// 20261002153000_code_repository_findings.sql.
+// 20261002170000_code_repository_findings.sql.
 import { sql } from "drizzle-orm";
 import {
   check,

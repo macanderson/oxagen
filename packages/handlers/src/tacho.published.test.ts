@@ -3,8 +3,8 @@
 //
 // The port reads the version published now, and a run has to read the
 // versions its request manifest names (#4447). The fence is the port's scope
-// type, whose run id is `null`. Binding the port where steering_search or
-// steering_read expects `ReadPublished` fails to compile. CI's typecheck
+// type, whose run id is `null`. Binding the port where search_steering or
+// read_steering expects `ReadPublished` fails to compile. CI's typecheck
 // reads the `@ts-expect-error` lines below, so an unused directive fails it
 // the day that fence opens.
 import { describe, expect, it } from "vitest";
@@ -18,10 +18,10 @@ import {
 
 describe("TachoPublished", () => {
   it("cannot bind as a run-scoped reader", () => {
-    // @ts-expect-error steering_search needs a run's pins, which the port ignores.
+    // @ts-expect-error search_steering needs a run's pins, which the port ignores.
     const search: SteeringSearchDeps["published"] =
       VERSION_STORE_PUBLISHED.published;
-    // @ts-expect-error steering_read needs a run's pins, which the port ignores.
+    // @ts-expect-error read_steering needs a run's pins, which the port ignores.
     const read: SteeringReadDeps["published"] =
       VERSION_STORE_PUBLISHED.published;
     expect([search, read]).toHaveLength(2);

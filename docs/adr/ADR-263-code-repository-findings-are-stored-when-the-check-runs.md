@@ -88,7 +88,7 @@ Three facts decide it.
 ## Consequences
 
 - A schema change: `agent.code_repository_findings`, with the standard tenant
-  policy. The migration is 20261002153000_code_repository_findings.sql.
+  policy. The migration is 20261002170000_code_repository_findings.sql.
 - A finding appears on the page after the check runs on the pull request,
   not before. A repository linked before #5112 shows nothing until its next
   pull request.

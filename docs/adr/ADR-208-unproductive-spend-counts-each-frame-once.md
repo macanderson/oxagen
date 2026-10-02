@@ -152,8 +152,8 @@ carries each wrapped frame's `seq`, and the items below use it.
   MCP, and the Spend card all name the figure calls, and every other kind
   already counted calls. Renaming the field to turns would break the contract
   for those kinds. The prose says how many calls repeated and that each came
-  from a turn that made no other call. Spin loops and retry loops still count
-  requests (see Consequences).
+  from a turn that made no other call. Spin loops and retry loops counted
+  requests until #5023 (see Consequences).
 - **Item 7. Ties are read by chain and `seq`.**
   - Calls of one instant are judged against the calls before it, never
     against each other. Two chains can make one identical call in one
@@ -179,9 +179,10 @@ carries each wrapped frame's `seq`, and the items below use it.
 - Two parallel subagents whose model calls the proxy recorded on the root
   chain stay indistinguishable there. A subagent's call can take a sibling's
   later root frame.
-- `spin_loops` and `retry_loops` still count requests in `evidence.calls`,
-  under the same calls label. Their modules belong to no lane of this change,
-  so they keep the old count until one adopts the per-call count.
+- `spin_loops` and `retry_loops` counted requests in `evidence.calls`, under
+  the same calls label, because their modules belonged to no lane of this
+  change. #5023 (2026-10-02) gives them the per-call count: a counted request
+  adds each call it made, and its price once, as `repeats.ts` does.
 - Until the first pass after the migration, the headline leaves out the
   frames of applied findings whose claims the migration deleted. A replay
   finds frames only for runs inside the pass's 30-day window and frame read

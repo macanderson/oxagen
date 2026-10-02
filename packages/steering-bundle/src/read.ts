@@ -1,42 +1,28 @@
-// read.ts: steering_read (steering-repo-spec, Agent use).
+// read.ts: read_steering (steering-repo-spec, Agent use).
 //
 // It returns one record as the model reads it, a heading with the label and
 // then the body with its @tool: mentions rendered, or one file from a skill's
 // folder. The frontmatter never reaches the model. Both come from the
 // published version, found by blob, so a read during a run sees the same text
 // the run's index described.
-import { z } from "zod";
+//
+// The input and output shapes live in @oxagen/oxagen, where the contract
+// registers them, and this module re-exports them.
 import type { Bundle, BundleRecord } from "@oxagen/oxagen/steering-repo/bundle";
-import { lineageSchema } from "@oxagen/oxagen/steering-repo/common";
 import { readSteeringRecord } from "@oxagen/oxagen/steering-repo/record";
+import type {
+  SteeringReadInput,
+  SteeringReadOutput,
+} from "@oxagen/oxagen/steering-repo/steering-tools";
 import { toolModesOf } from "./mentions";
 import { recordSection, type BundleSource, type Delivery, type ReadBody } from "./render";
 
-export const steeringReadInputSchema = z
-  .object({
-    lineage: lineageSchema.describe("The record or skill to read, such as a-intel.domain.refund."),
-    file: z
-      .string()
-      .min(1)
-      .max(512)
-      .optional()
-      .describe("A file in the skill's folder, such as words.md. Unset, the record itself."),
-  })
-  .strict();
-export type SteeringReadInput = z.input<typeof steeringReadInputSchema>;
-
-export const steeringReadOutputSchema = z
-  .object({
-    lineage: z.string(),
-    label: z.string(),
-    kind: z.string(),
-    source: z.enum(["workspace", "organization"]),
-    version: z.number().int().min(1),
-    path: z.string(),
-    text: z.string(),
-  })
-  .strict();
-export type SteeringReadOutput = z.output<typeof steeringReadOutputSchema>;
+export {
+  steeringReadInputSchema,
+  steeringReadOutputSchema,
+  type SteeringReadInput,
+  type SteeringReadOutput,
+} from "@oxagen/oxagen/steering-repo/steering-tools";
 
 /** One file of a published version, read by its blob. */
 export type ReadFile = (
