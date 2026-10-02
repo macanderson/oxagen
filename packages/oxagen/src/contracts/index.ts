@@ -514,6 +514,9 @@ export {
   toolbeltSlugSchema,
 } from "./toolbelt.shared";
 export type { ToolbeltKind, ToolbeltRef } from "./toolbelt.shared";
+// The surfaces an in-app agent turn runs on (ADR-235). Not a capability, so
+// exported here to satisfy the file-coverage guard.
+export { IN_APP_AGENT_SURFACES } from "./run.shared";
 // Who an operator is, shared by the rows that name one (get_spend). Not a
 // capability, so exported here to satisfy the file-coverage guard.
 export { operatorFactsSchema } from "./operator.shared";

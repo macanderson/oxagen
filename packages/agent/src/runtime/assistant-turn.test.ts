@@ -1571,7 +1571,9 @@ describe("the prepared turn", () => {
 // the belt the engine receives is the one production builds. Before the fix a
 // tool an emergency deny named reached the engine and the run's allowlist,
 // because the listing read the denies only for an agent run, and this turn
-// never carries one: not before the run opens, and not after.
+// never carries one: not before the run opens, and not after. Since ADR-235
+// the only deny that reaches the assistant is the switch on its own agent,
+// which only Oxagen sets. A customer's switch leaves its belt as it was.
 describe("the belt the engine is handed", () => {
   const REGISTRY = [
     {
@@ -1615,7 +1617,10 @@ describe("the belt the engine is handed", () => {
     );
   });
 
-  it("leaves a switched tool out of the engine's tools, the model's aliases, and the run's allowlist", async () => {
+  // ADR-235: a customer's kill switch does not reach Oxagen's in-app
+  // assistant. The belt still reads the switches, to find one on the
+  // assistant's own agent (the test below), and drops every other row.
+  it("keeps a tool a customer's capability switch names, in the engine's tools, the model's aliases, and the run's allowlist", async () => {
     mocks.readActiveEmergencyDenies.mockResolvedValue([killSwitch()]);
     const aliases: Array<Record<string, string>> = [];
     await runTurn(request, { onTools: (map) => aliases.push(map) });
@@ -1627,14 +1632,14 @@ describe("the belt the engine is handed", () => {
     );
     const turnInput = mocks.runGovernedTurn.mock.calls[0]![0];
     expect(Object.keys(turnInput.tools).sort()).toEqual(
-      [LOAD_TOOLS, SEARCH_TOOLS, "recall_memory"].sort(),
+      [LOAD_TOOLS, SEARCH_TOOLS, "recall_memory", "set_budget"].sort(),
     );
-    expect(aliases).toEqual([{ recall_memory: "recall_memory" }]);
-    expect(mocks.openAssistantRun.mock.calls[0]![0].toolAllowlist).toEqual([
-      "recall_memory",
-      SEARCH_TOOLS,
-      LOAD_TOOLS,
+    expect(aliases).toEqual([
+      { recall_memory: "recall_memory", set_budget: "set_budget" },
     ]);
+    expect(
+      [...mocks.openAssistantRun.mock.calls[0]![0].toolAllowlist].sort(),
+    ).toEqual(["recall_memory", "set_budget", SEARCH_TOOLS, LOAD_TOOLS].sort());
     // The refusals keep their order: the credit gate before anything is
     // written, the belt before the run, the run before the engine.
     expect(mocks.log).toEqual([
@@ -1663,13 +1668,15 @@ describe("the belt the engine is handed", () => {
     expect(execution![2]).not.toHaveProperty("agentRun");
   });
 
-  it("leaves out a tool a deny names by the assistant agent's principal", async () => {
+  // ADR-235: only a switch on the assistant's own agent reaches it. A
+  // capability deny on its principal is a customer's switch, so it does not.
+  it("keeps a tool a deny names by the assistant agent's principal", async () => {
     mocks.readActiveEmergencyDenies.mockResolvedValue([
       killSwitch("prn_assistant"),
     ]);
     await runTurn(request);
     const turnInput = mocks.runGovernedTurn.mock.calls[0]![0];
-    expect(Object.keys(turnInput.tools)).not.toContain("set_budget");
+    expect(Object.keys(turnInput.tools)).toContain("set_budget");
     expect(Object.keys(turnInput.tools)).toContain("recall_memory");
   });
 
