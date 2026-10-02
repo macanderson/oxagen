@@ -4,13 +4,13 @@
  * and a broken file each leave the registry matching the production branch,
  * and each problem reaches the sync state and the commit's check.
  *
- * The Context PR cases run the real open and merge handlers against the same
+ * The steering PR cases run the real open and merge handlers against the same
  * registry, so they show the two paths agree: a merge from Oxagen and the sync
  * its push triggers publish one version, not two.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { HandlerError } from "@oxagen/oxagen";
-import { contextProposalCreate } from "@oxagen/oxagen/contracts/context.proposal.create";
+import { steeringProposalCreate } from "@oxagen/oxagen/contracts/steering.proposal.create";
 import { schemaDirective } from "@oxagen/oxagen/steering-repo/schema-ids";
 
 vi.mock("@oxagen/iam/org-role", () => ({
@@ -32,9 +32,9 @@ vi.mock("./steering-repo/publisher", async (importOriginal) => {
   return { ...real, steeringSyncPublish: vi.fn(real.steeringSyncPublish) };
 });
 
-import { createOpenContextPrHandler } from "./context.pr.open";
-import { createMergeContextPrHandler } from "./context.pr.merge";
-import { createProposeRecordHandler } from "./context.proposal.create";
+import { createOpenSteeringPrHandler } from "./steering.pr.open";
+import { createMergeSteeringPrHandler } from "./steering.pr.merge";
+import { createProposeRecordHandler } from "./steering.proposal.create";
 import { syncView } from "./context.steering.freshness";
 import { buildRecordFile, serializeRecordFile } from "./context.steering.file";
 import { MERGE_CLAIM_SECONDS } from "./context.steering.store";
@@ -393,12 +393,12 @@ describe("syncWorkspaceSteering", () => {
   });
 });
 
-describe("Context PRs on the host", () => {
+describe("Steering PRs on the host", () => {
   const LINEAGE = "ctx.release.no-reread-changelog";
 
   async function openedAndPassed(r: Rig): Promise<string> {
     const { proposalId } = await createProposeRecordHandler(r.h)(
-      contextProposalCreate.input.parse({
+      steeringProposalCreate.input.parse({
         record: {
           lineageId: LINEAGE,
           kind: "rule",
@@ -411,7 +411,7 @@ describe("Context PRs on the host", () => {
       }),
       ctx(),
     );
-    await createOpenContextPrHandler(r.h)({ proposalId }, ctx());
+    await createOpenSteeringPrHandler(r.h)({ proposalId }, ctx());
     return proposalId;
   }
 
@@ -477,7 +477,7 @@ describe("Context PRs on the host", () => {
     r.h.github.mergeOnHost(r.h.github.pulls[0]!.number);
     pastGrace(r);
     await expect(
-      createMergeContextPrHandler(r.h)(
+      createMergeSteeringPrHandler(r.h)(
         { proposalId: id },
         ctx({ userId: REVIEWER }),
       ),
@@ -499,7 +499,7 @@ describe("Context PRs on the host", () => {
     const id = await openedAndPassed(r);
     // The sync reads the PR as open, then a head that already holds the
     // merge: it publishes the lineage without deferring it.
-    const merge = createMergeContextPrHandler(r.h);
+    const merge = createMergeSteeringPrHandler(r.h);
     const realGet = r.h.github.getPullRequest.bind(r.h.github);
     const open = await realGet(
       r.h.github.repository!,
@@ -563,7 +563,7 @@ describe("Context PRs on the host", () => {
     expect(proposal(r, id)).toMatchObject({
       status: "rejected",
       dismissedReason: "Closed on GitHub without merging",
-      // No person closed it; the Context PR page reads this as a close on
+      // No person closed it; the steering PR page reads this as a close on
       // the host (#5077).
       updatedById: null,
     });
@@ -596,7 +596,7 @@ describe("Context PRs on the host", () => {
   // A merge Oxagen made is Oxagen's to publish, with its reviewer on the
   // ledger. The sync its push triggers leaves the lineage alone inside the
   // grace window, and after it finds the content already published.
-  it("leaves a fresh Oxagen merge to merge_context_pr and publishes it once", async () => {
+  it("leaves a fresh Oxagen merge to merge_steering_pr and publishes it once", async () => {
     const r = rig();
     const id = await openedAndPassed(r);
     r.h.github.mergeOnHost(r.h.github.pulls[0]!.number);
@@ -608,7 +608,7 @@ describe("Context PRs on the host", () => {
     expect(active(r)).toEqual([]);
     expect(proposal(r, id).status).toBe("checks_passed");
 
-    await createMergeContextPrHandler(r.h)(
+    await createMergeSteeringPrHandler(r.h)(
       { proposalId: id },
       ctx({ userId: REVIEWER }),
     );

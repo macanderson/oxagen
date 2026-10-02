@@ -566,7 +566,7 @@ export interface BarePullRequest {
 
 /**
  * Merges a steering PR that has no proposal row. Oxagen has no capability for
- * this yet: `merge_context_pr` takes only a proposal id (#5122). A merge made
+ * this yet: `merge_steering_pr` takes only a proposal id (#5122). A merge made
  * on GitHub leaves `main` with a commit Oxagen did not merge, so the steering
  * repo reads diverged and nothing publishes. The suite stops here instead.
  * When #5122 lands, call its capability here and return the version it

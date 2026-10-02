@@ -308,7 +308,7 @@ export function breadcrumbs(
             : { kind: "name", text: label, href: null },
         );
       } else if (id === "proposals" && sub === "prs" && rest[3] !== undefined) {
-        // One Context PR (#5077) ends the trail on the lineage its page
+        // One steering PR (#5077) ends the trail on the lineage its page
         // declared, under Steering's Proposals list; the proposal id stands
         // in until the page has declared it.
         const proposal = rest[3];

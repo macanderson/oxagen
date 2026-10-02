@@ -6,9 +6,9 @@
  *                          --scope <workspace|repository> --statement "…"
  *                          --rationale "…" [--effect <require|forbid>] [--json]
  *
- * The Context PR is opened, checked and merged in Oxagen
- * (`open_context_pr`, `merge_context_pr`). Neither declares the `cli`
- * surface: merge_context_pr needs a signed-in reviewer, which an API key is
+ * The steering PR is opened, checked and merged in Oxagen
+ * (`open_steering_pr`, `merge_steering_pr`). Neither declares the `cli`
+ * surface: merge_steering_pr needs a signed-in reviewer, which an API key is
  * not.
  *
  * `oxagen context revert` — open a steering PR that undoes a merged one
@@ -119,7 +119,7 @@ export async function contextPropose(
   }
   writer.write(`${result.lineageId} · ${result.proposalId} · ${result.status}`);
   writer.write(
-    "open its Context PR from Oxagen → Steering; merge there publishes it",
+    "open its steering PR from Oxagen → Steering; merge there publishes it",
   );
 }
 

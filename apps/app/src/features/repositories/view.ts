@@ -30,7 +30,7 @@ const CHANGE_ID = /^[A-Za-z0-9_-]{1,64}$/;
 
 /**
  * The view a route's optional catch-all names: none is the first tab, one
- * known segment is that tab, `changes/<id>` is one Context PR on the Changes
+ * known segment is that tab, `changes/<id>` is one steering PR on the Changes
  * tab (the URL the close comment links to), and anything else is null, which
  * the route answers with a 404 rather than a page that guesses.
  */

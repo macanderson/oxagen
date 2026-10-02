@@ -1,13 +1,13 @@
 "use client";
-// The Context PR writes on its page (#5077): open a proposal's Context PR
+// The steering PR writes on its page (#5077): open a proposal's steering PR
 // (or run its checks again), close it without merging with an optional
-// reason, approve, merge, merge without review, revert a merged Context PR,
+// reason, approve, merge, merge without review, revert a merged steering PR,
 // restore a drifted managed block, and drop one record from a memory PR.
 // Open, close, merge and revert sit behind a confirming dialog. Merge is the
 // page's one primary action and stays disabled until every check has passed.
 // Each write calls the host first and moves the proposal only when the host
 // agreed, so a refusal is named where the person acted and changes nothing.
-// A completed write reloads the Context PR page, except a drop, which marks
+// A completed write reloads the steering PR page, except a drop, which marks
 // its card in place, and a revert, which links the pull request it opened in
 // place.
 import { useTranslations } from "next-intl";
@@ -27,12 +27,12 @@ import { PullRequestLink, useNavigate } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";
 import { UNANSWERED, useActionFailure } from "./action-failure";
 import {
-  approveContextPr,
+  approveSteeringPr,
   dismissProposal,
   dropMemoryRecord,
-  mergeContextPr,
+  mergeSteeringPr,
   mergePrWithoutReview,
-  openContextPr,
+  openSteeringPr,
   restoreManagedBlock,
   revertSteeringPr,
   type RevertOpened,
@@ -155,18 +155,18 @@ export function ProposalWrites({
 }: Target & {
   status: ProposalStatus;
   /**
-   * A governance change (#4795). open_context_pr refuses it: setting the mode
+   * A governance change (#4795). open_steering_pr refuses it: setting the mode
    * again runs its steering checks. So it offers dismiss only.
    */
   governance?: boolean;
 }) {
   const t = useTranslations("steering.actions");
   // Only `merged` and `rejected` are terminal. `checks_passed` is not: when the
-  // head moves after the checks clear, merge_context_pr refuses with
+  // head moves after the checks clear, merge_steering_pr refuses with
   // `head_moved` and tells the person to run the checks again
-  // (packages/handlers/src/context.pr.merge.ts). Suppressing the re-run control
-  // in that state hid the only thing that invokes open_context_pr, so the
-  // Context PR could not be merged from the app after any later edit. Merge
+  // (packages/handlers/src/steering.pr.merge.ts). Suppressing the re-run control
+  // in that state hid the only thing that invokes open_steering_pr, so the
+  // steering PR could not be merged from the app after any later edit. Merge
   // stays gated on `checks_passed` on its own, below.
   const settled = status === "merged" || status === "rejected";
   const rerun = status !== "proposed";
@@ -175,7 +175,7 @@ export function ProposalWrites({
     <>
       {settled || governance ? null : (
         <WriteDialog
-          testId="open-context-pr"
+          testId="open-steering-pr"
           copy={{
             open: t(rerun ? "open.rerun" : "open.open"),
             title: t(rerun ? "open.rerun" : "open.title"),
@@ -183,7 +183,7 @@ export function ProposalWrites({
             confirm: t(rerun ? "open.rerunConfirm" : "open.confirm"),
             pending: t("open.pending"),
           }}
-          write={() => openContextPr(org, ws, proposalId)}
+          write={() => openSteeringPr(org, ws, proposalId)}
           after={page}
         />
       )}
@@ -228,7 +228,7 @@ export function ProposalWrites({
  * Merge pull request: the page's gold action once every check passed, behind
  * a dialog that says what merging does. Disabled with its reason until then.
  */
-export function MergeContextPr({
+export function MergeSteeringPr({
   org,
   ws,
   proposalId,
@@ -238,7 +238,7 @@ export function MergeContextPr({
   return (
     <div className="flex flex-col gap-2">
       <WriteDialog
-        testId="merge-context-pr"
+        testId="merge-steering-pr"
         primary
         blocked={blocked}
         copy={{
@@ -248,7 +248,7 @@ export function MergeContextPr({
           confirm: t("dialogConfirm"),
           pending: t("pending"),
         }}
-        write={() => mergeContextPr(org, ws, proposalId)}
+        write={() => mergeSteeringPr(org, ws, proposalId)}
         after={routes.steeringProposal(org, ws, proposalId)}
       />
       {blocked ? (
@@ -300,14 +300,14 @@ function WriteButton({
 }
 
 /** Approve: the approval a team or regulated merge needs from a member other than the author. */
-export function ApproveContextPr({ org, ws, proposalId }: Target) {
+export function ApproveSteeringPr({ org, ws, proposalId }: Target) {
   const t = useTranslations("steering.actions.approve");
   return (
     <WriteButton
-      testId="approve-context-pr"
+      testId="approve-steering-pr"
       label={t("confirm")}
       pendingLabel={t("pending")}
-      write={() => approveContextPr(org, ws, proposalId)}
+      write={() => approveSteeringPr(org, ws, proposalId)}
       after={routes.steeringProposal(org, ws, proposalId)}
     />
   );

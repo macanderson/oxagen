@@ -2,11 +2,11 @@
 // bound repository uses. Mutates nothing. The kernel capability.invoke_*
 // audit covers access.
 //
-// get_steering_layout (#4765): the same read open_context_pr makes before it
+// get_steering_layout (#4765): the same read open_steering_pr makes before it
 // writes a record file (readSteeringLayout, steering-repo/merge-queue.ts), so
 // a client can preview the path and branch it will actually write. Answers
 // `layout: null`, never a guess, when no repository is bound or the read
-// fails. A wrong preview is worse than none, and open_context_pr would
+// fails. A wrong preview is worse than none, and open_steering_pr would
 // refuse the write on the same failure.
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import {

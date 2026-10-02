@@ -16,7 +16,7 @@ export type RecordForce = z.output<typeof recordForceSchema>;
 
 /**
  * A kind the force rule reads: one of the eight steering-record/v1 kinds, or
- * `rule`, the context-record/v0.1 kind a steering repo writes as a business
+ * `rule`, the v0.1 record kind a steering repo writes as a business
  * rule or a code rule.
  */
 export type ForceKind = RecordKind | "rule";

@@ -1,21 +1,21 @@
 import { z } from "zod";
 import { defineTool } from "./_define";
-import { contextRecordKindSchema } from "./append-record";
-import { contextRecordList } from "../context.record.list";
+import { steeringRecordKindSchema } from "./append-record";
+import { steeringRecordList } from "../steering.record.list";
 import { agentMemoryList } from "../agent.memory.list";
 import { agentMemoryCitationsList } from "../agent.memory_citation.list";
 import { agentMemoryRecordSchema } from "../agent.memory.model";
 
-const recordRow = contextRecordList.output.shape.records.element.shape;
+const recordRow = steeringRecordList.output.shape.records.element.shape;
 const memoryRow = agentMemoryRecordSchema.shape;
 
 /**
  * Appendix E: `list_records` — "by kind, scope, status, lineage". Absorbs
- * `list_context_records`, `list_memories`, `list_memory_citations` and
+ * `list_steering_records`, `list_memories`, `list_memory_citations` and
  * `get_citation_stats`.
  *
  * **Four readers become one because there is now one thing to read.** v1 split
- * its reads by store: `list_context_records` read the Postgres registry of
+ * its reads by store: `list_steering_records` read the Postgres registry of
  * published records, `list_memories` read Neo4j `:AgentMemory` nodes, and the
  * two citation readers read `:Citation`. §9 makes all of them `:Record` nodes
  * in the organization's graph carrying `ws`, `kind`, `lineage_id`,
@@ -30,7 +30,7 @@ const memoryRow = agentMemoryRecordSchema.shape;
  *
  * **The analytics do not carry.** `get_citation_stats` returned daily series,
  * top-N rollups and least-useful-memory rankings — a dashboard, not a list. §14
- * page 6 (Steering) is defined as "Published records, proposals, open Context
+ * page 6 (Steering) is defined as "Published records, proposals, open steering
  * PRs, effect metrics, and retirement candidates", so effect metrics are a
  * surface concern reading the rollup directly. Folding a dashboard into a list
  * tool would make every page of records pay for a 30-day aggregation.
@@ -39,16 +39,16 @@ export const listRecords = defineTool({
   name: "list_records",
   domain: "context",
   description:
-    "List the workspace's context records filtered by kind, sharing scope, lifecycle status or lineage, with citation pressure per record. One list over the §9 record graph — memories, evidence, knowledge and context-use records alike.",
+    "List the workspace's steering records filtered by kind, sharing scope, lifecycle status or lineage, with citation pressure per record. One list over the §9 record graph — memories, evidence, knowledge and context-use records alike.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "e2e", "docs"],
   scoped: true,
-  // Carried from `list_context_records`: reading steering is not AI usage.
+  // Carried from `list_steering_records`: reading steering is not AI usage.
   noBillingGate: true,
 
   absorbs: [
-    "list_context_records",
+    "list_steering_records",
     "list_memories",
     "list_memory_citations",
     "get_citation_stats",
@@ -136,7 +136,7 @@ export const listRecords = defineTool({
 
   /**
    * All four are `{ requiresApproval: false, riskLevel: "low" }`. The category
-   * is `list_context_records`' "introspection" rather than the memory
+   * is `list_steering_records`' "introspection" rather than the memory
    * contracts' "memory": what this returns is now the steering corpus, not a
    * memory store.
    */
@@ -148,7 +148,7 @@ export const listRecords = defineTool({
   sensitivity: "low",
   defaultEffect: "deny",
   /**
-   * The memory contracts' narrower map carries: `list_context_records` also
+   * The memory contracts' narrower map carries: `list_steering_records` also
    * granted workspace Admin, the three memory readers did not. Taking the
    * intersection keeps the grant a deliberate addition at cutover rather than
    * something one of four sources let in.
@@ -158,7 +158,7 @@ export const listRecords = defineTool({
     workspace: { Owner: "allow", Member: "allow" },
   },
   /**
-   * All four handlers were read — `context.record.list.ts`,
+   * All four handlers were read — `steering.record.list.ts`,
    * `agent.memory.list.ts`, `agent.memory_citation.list.ts` and
    * `agent.memory_citation.stats.ts`. None contains an insert, update, MERGE or
    * SET. That is worth stating because the sibling `recall_context` reads in
@@ -169,7 +169,7 @@ export const listRecords = defineTool({
   input: z.object({
     // The §9 kind set, shared with `append_record` so a filter can never name a
     // kind the append path cannot produce.
-    kind: contextRecordKindSchema.optional(),
+    kind: steeringRecordKindSchema.optional(),
 
     /**
      * §10.2: `workspace` records live in the main repo and steer every run;
@@ -180,9 +180,9 @@ export const listRecords = defineTool({
     sharingScope: z.enum(["workspace", "repository"]).optional(),
 
     /**
-     * Widened from `list_context_records`' `active`/`retired`/`superseded`.
+     * Widened from `list_steering_records`' `active`/`retired`/`superseded`.
      * `retracted` is what `retract_record` produces, and §10.3 step 5 calls
-     * retirement "a Context PR that sets `status = "archived"` in place" — so
+     * retirement "a steering PR that sets `status = "archived"` in place" — so
      * the spec's own spelling replaces v1's `retired`. `superseded` stays even
      * though §9 says it is derived rather than stored: it is still a legal
      * thing to ask for, the handler just computes it.
@@ -219,10 +219,10 @@ export const listRecords = defineTool({
     sort: agentMemoryList.input.shape.sort,
     sortDir: agentMemoryList.input.shape.sortDir,
 
-    // Carried from `list_context_records`, whose bounds are the stricter pair
+    // Carried from `list_steering_records`, whose bounds are the stricter pair
     // (max 200, default 50, and both described).
-    limit: contextRecordList.input.shape.limit,
-    offset: contextRecordList.input.shape.offset,
+    limit: steeringRecordList.input.shape.limit,
+    offset: steeringRecordList.input.shape.offset,
   }),
 
   output: z.object({
@@ -236,7 +236,7 @@ export const listRecords = defineTool({
         checksum: recordRow.checksum,
         updatedAt: recordRow.updatedAt,
 
-        kind: contextRecordKindSchema,
+        kind: steeringRecordKindSchema,
         lineageId: z.string(),
         sharingScope: z.enum(["workspace", "repository"]),
         status: z.enum([
@@ -264,9 +264,9 @@ export const listRecords = defineTool({
       }),
     ),
 
-    // Carried from `list_context_records`: the count ignoring limit/offset,
+    // Carried from `list_steering_records`: the count ignoring limit/offset,
     // without which a pager cannot render.
-    total: contextRecordList.output.shape.total,
+    total: steeringRecordList.output.shape.total,
   }),
 });
 

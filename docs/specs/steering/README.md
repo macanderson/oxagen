@@ -182,7 +182,7 @@ merge, and the ledger records `without_review: true`.
 
 ### Merge
 
-You merge from the app (`merge_context_pr`). Oxagen then works through its
+You merge from the app (`merge_steering_pr`). Oxagen then works through its
 merge queue (`packages/handlers/src/steering-repo/merge-queue.ts`), one
 steering PR at a time per repository:
 
@@ -247,7 +247,7 @@ chain.
 
 ### Publish
 
-After the merge, `merge_context_pr` publishes the new head
+After the merge, `merge_steering_pr` publishes the new head
 (`packages/steering-bundle/src/publish.ts`,
 `packages/handlers/src/steering-repo/publisher.ts`). The repository sync
 publishes too, as its last step. On GitHub steering repositories, it accepts
@@ -362,7 +362,7 @@ The conversion writes each v0.1 record to `steering/imported/<lineage>.md`
 
 Before the steering repo, each record was a `context-record/v0.1` TOML file
 under `.oxagen/rules/` in the workspace's bound repository. Six checks ran on
-each Context PR, and Postgres held the ledger. A repository without
+each steering PR, and Postgres held the ledger. A repository without
 `steering/governance.toml` still uses that layout. The merge queue still
 merges it, the sync mirrors its files into the Postgres registry, and
 `lib/tacho-steering.ts` builds the policy bundle's `context.system` from that

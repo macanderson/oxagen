@@ -1,7 +1,7 @@
 {
   "name": "get_record",
   "domain": "context",
-  "description": "Get one context record: a published record by ctr_ id or lineage id with its versions and publishing PR, or an appended record by cta_ id with its provenance",
+  "description": "Get one steering record: a published record by ctr_ id or lineage id with its versions and publishing PR, or an appended record by cta_ id with its provenance",
   "mode": "sync",
   "surfaces": [
     "api",

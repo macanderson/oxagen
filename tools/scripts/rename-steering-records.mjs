@@ -13,7 +13,8 @@
  *                                                           identifiers the rename would collide with
  *
  * It leaves alone: applied migrations, the pre-Atlas migration archive, ADR
- * history, release notes, the agent memory folder, and three kinds of token
+ * history, dated audits and reviews, release notes, the agent memory folder,
+ * and three kinds of token
  * that name something outside this rename: an applied migration's file name,
  * an ADR's file name, and Stella's record file format tag. Other senses of
  * "context" (the context graph, context frames, context_precision) never
@@ -43,6 +44,8 @@ const EXCLUDE = [
   /^packages\/database\/atlas\/migrations\//,
   /^packages\/database\/drizzle\//,
   /^docs\/adr\//,
+  // Dated audits and reviews record the tree as it was on their date.
+  /^docs\/(?:audits|reviews)\//,
   /^apps\/docs\/content\/docs\/releases\//,
   /^tools\/scripts\/rename-steering-records\.mjs$/,
   /(?:^|\/)node_modules\//,
@@ -84,6 +87,12 @@ const CODE_RULES = [
   { id: "pascal-proposal", re: /ContextProposal/g, to: "SteeringProposal" },
   { id: "camel-promotion", re: /contextPromotion/g, to: "steeringPromotion" },
   { id: "pascal-promotion", re: /ContextPromotion/g, to: "SteeringPromotion" },
+  // The version table's deploy probe, named for the record before the rename.
+  {
+    id: "version-probe",
+    re: /CONTEXT_VERSION_CLASSIFICATION_COLUMN/g,
+    to: "STEERING_VERSION_CLASSIFICATION_COLUMN",
+  },
   // kebab-case
   { id: "kebab-record", re: /context-record/g, to: "steering-record" },
   { id: "kebab-pr", re: /context-pr(s?)(?![a-z])/g, to: "steering-pr$1" },
@@ -160,6 +169,13 @@ const WORD_RULES = [
     id: "words-pr-upper",
     re: new RegExp(String.raw`\bCONTEXT(${SEP})(PRS?)\b`, "g"),
     to: (_m, sep, pr) => `STEERING${sep}${pr}`,
+  },
+  // "a steering context record" and "Steering/context records" said the
+  // word twice once renamed.
+  {
+    id: "words-doubled",
+    re: /\b([Ss])teering[ /]steering (records?|PRs?)\b/g,
+    to: (_m, s, noun) => `${s}teering ${noun}`,
   },
 ];
 

@@ -36,7 +36,7 @@ type Messages = {
     agent: string;
     mandate: string;
     record: string;
-    contextPr: string;
+    steeringPr: string;
     steering: string;
     repositories: string;
     spend: string;
@@ -2565,7 +2565,7 @@ type Messages = {
       passed: string;
       failed: string;
       running: string;
-      onContextPrs: string;
+      onSteeringPrs: string;
     };
     failure: {
       orgRoleRequired: string;
@@ -6046,10 +6046,10 @@ type Messages = {
         openedBy: string;
       };
       kinds: {
-        context_record: string;
+        steering_record: string;
       };
       kindPaths: {
-        context_record: string;
+        steering_record: string;
       };
       states: {
         pr_open: string;

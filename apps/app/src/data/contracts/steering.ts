@@ -1,7 +1,7 @@
 // The Steering page's view models (#2961; ADR-061; MC spec §10), from
-// list_records, list_proposals and get_context_pr, and the Memories tab's
+// list_records, list_proposals and get_steering_pr, and the Memories tab's
 // from the workspace memory reads (#4914). A record is in force
-// because a Context PR merged it; a proposal steers nothing; the Context PR
+// because a steering PR merged it; a proposal steers nothing; the steering PR
 // carries the state machine, its checks and what merge will do. Effect
 // metrics, retirement and promotion thresholds have no view model: they are
 // not in this release.
@@ -17,7 +17,7 @@ export const STEERING_PAGE = 50;
 /** The most rows one list_records call answers (its contract's `limit` bound). */
 export const STEERING_READ_MAX = 200;
 
-/** The six kinds of context-record/v0.1 (spec §10.2), in the mockup's order. */
+/** The six kinds of a v0.1 record file (spec §10.2), in the mockup's order. */
 export const RECORD_KINDS = [
   "rule",
   "constraint",
@@ -61,7 +61,7 @@ export type ProposalStatus = z.infer<typeof ProposalStatus>;
 
 /**
  * The three states the Proposals list filters by, as a pull request list
- * names them: open (a candidate, or a Context PR still open), merged, and
+ * names them: open (a candidate, or a steering PR still open), merged, and
  * closed (dismissed in Oxagen, or closed on the repository host).
  */
 export const PROPOSAL_STATES = ["open", "merged", "closed"] as const;
@@ -76,7 +76,7 @@ export function proposalStateOf(status: ProposalStatus): ProposalState {
       : "open";
 }
 
-/** A published record in force. Kind, force, statement, commit and path are null on a record no Context PR wrote. */
+/** A published record in force. Kind, force, statement, commit and path are null on a record no steering PR wrote. */
 const PublishedRecord = z.object({
   id: PublicId,
   /** The lineage the record or proposal is about: the file stem under .oxagen/rules/, not an id. */
@@ -135,7 +135,7 @@ export const Proposal = z.object({
     evidenceLinks: z.array(z.string()),
   }),
   status: ProposalStatus,
-  /** Null until a Context PR is opened. */
+  /** Null until a steering PR is opened. */
   pr: z
     .object({
       number: z.number().int().positive(),
@@ -170,7 +170,7 @@ const CheckName = z.enum([
 
 const GovernanceMode = z.enum(["solo", "team", "regulated"]);
 
-export const ContextPr = z.object({
+export const SteeringPr = z.object({
   proposalId: PublicId,
   /** The lineage the record or proposal is about: the file stem under .oxagen/rules/, not an id. */
   lineage: z.string().min(1),
@@ -258,14 +258,14 @@ export const ContextPr = z.object({
     })
     .nullable(),
 });
-export type ContextPr = z.infer<typeof ContextPr>;
+export type SteeringPr = z.infer<typeof SteeringPr>;
 
 /**
- * The files a Context PR's branch changes, each read from the host as it is
+ * The files a steering PR's branch changes, each read from the host as it is
  * on the production branch and on the head (#5077). `settled` once the pull
  * request merged or closed, because its branch is deleted.
  */
-export const ContextPrDiff = z.object({
+export const SteeringPrDiff = z.object({
   state: z.enum(["diff", "no_pr", "settled"]),
   baseRef: z.string().nullable(),
   headSha: z.string().nullable(),
@@ -280,7 +280,7 @@ export const ContextPrDiff = z.object({
   ),
   moreFiles: z.boolean(),
 });
-export type ContextPrDiff = z.infer<typeof ContextPrDiff>;
+export type SteeringPrDiff = z.infer<typeof SteeringPrDiff>;
 
 /**
  * The freshness panel on the Steering page: what the workspace has published,
@@ -296,7 +296,7 @@ export const SteeringFreshness = z.object({
   /** The production-branch commit the newest record published at. */
   headCommit: z.string().min(1).nullable(),
   publishedAt: Instant.nullable(),
-  /** `owner/repo`, and the branch a Context PR targets. Null until one is bound. */
+  /** `owner/repo`, and the branch a steering PR targets. Null until one is bound. */
   repository: z.string().min(1).nullable(),
   defaultBranch: z.string().min(1).nullable(),
   gates: z.object({
@@ -332,7 +332,7 @@ export type SteeringFreshness = z.infer<typeof SteeringFreshness>;
  * (#4765): `steering` when its production branch carries
  * `steering/governance.toml`, `legacy` otherwise, and null while no
  * repository is bound or the read failed. The record page needs it to name
- * the file and branch `open_context_pr` writes, because the two layouts
+ * the file and branch `open_steering_pr` writes, because the two layouts
  * disagree on both.
  */
 export const SteeringLayout = z.object({
@@ -432,7 +432,7 @@ export type SteeringDeliveries = z.infer<typeof SteeringDeliveries>;
  * branch, as `get_repository_tree` read it: `steering/governance.toml` in a
  * steering repository, `.oxagen/rules/governance.toml` in a legacy one
  * (#4821). `absent` is no file,
- * which the Context PR gate reads as `team`; `invalid` is a file naming no
+ * which the steering PR gate reads as `team`; `invalid` is a file naming no
  * mode the gate knows, which refuses every open and merge.
  */
 const DeclaredGovernanceMode = z.enum([
@@ -468,7 +468,7 @@ export const SteeringHub = z.object({
     z.object({ state: z.literal("unbound") }),
     z.object({ state: z.literal("unread"), code: z.string().min(1) }),
   ]),
-  /** Proposals not merged and not dismissed: candidates plus open Context PRs. */
+  /** Proposals not merged and not dismissed: candidates plus open steering PRs. */
   proposalsWaiting: Count.nullable(),
   /**
    * The Proposals filter counts: open (the same count as `proposalsWaiting`),
@@ -485,7 +485,7 @@ export type SteeringHub = z.infer<typeof SteeringHub>;
 
 /**
  * The eight kinds of steering-record/v1, the kinds a workspace memory and a
- * memory PR's record carry. The registry's six context-record kinds are
+ * memory PR's record carry. The registry's six steering-record kinds are
  * `RecordKind` above.
  */
 const STEERING_RECORD_KINDS = [

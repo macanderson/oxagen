@@ -80,16 +80,16 @@ function fakeTx(db: {
       return {
         from: (table) => ({
           where: async () => {
-            if (tableName(table) === "context_promotions")
+            if (tableName(table) === "steering_promotions")
               return db.version ?? [];
-            expect(tableName(table)).toBe("context_records");
+            expect(tableName(table)).toBe("steering_records");
             seen.joined = false;
             return asRead();
           },
           leftJoin: (joined) => ({
             where: async () => {
-              expect(tableName(table)).toBe("context_records");
-              expect(tableName(joined)).toBe("context_record_versions");
+              expect(tableName(table)).toBe("steering_records");
+              expect(tableName(joined)).toBe("steering_record_versions");
               seen.joined = true;
               return asRead();
             },
@@ -221,9 +221,9 @@ describe("readSteeringVersion", () => {
     const [ready, pending] = captured.map(
       (fragment) => new PgDialect().sqlToQuery(fragment).sql,
     );
-    expect(ready).toContain('"context_record_versions"');
-    expect(ready).toContain('order by "agent"."context_records"."id"');
-    expect(pending).not.toContain('"context_record_versions"');
+    expect(ready).toContain('"steering_record_versions"');
+    expect(ready).toContain('order by "agent"."steering_records"."id"');
+    expect(pending).not.toContain('"steering_record_versions"');
   });
 });
 

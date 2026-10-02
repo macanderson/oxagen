@@ -410,20 +410,29 @@ const PLATFORM_NAMED_ROWS: Readonly<
   // both label inputs cap their text at the ceiling the contract enforces
   // (ADR-178), the way Steer the fleet reads STEER_TEXT_MAX above.
   "src/features/create/record-wizard.tsx": {
-    "@oxagen/oxagen/context-record-label": [
-      "CONTEXT_RECORD_LABEL_MAX",
-      "CONTEXT_RECORD_LINEAGE",
-      "contextRecordLabel",
-      "contextRecordSlug",
+    "@oxagen/oxagen/steering-record-label": [
+      "STEERING_RECORD_LABEL_MAX",
+      "STEERING_RECORD_LINEAGE",
+      "steeringRecordLabel",
+      "steeringRecordSlug",
     ],
+    "@oxagen/oxagen/steering-repo/paths": ["LEGACY_RECORD_SCHEMA"],
+  },
+  // The record page names the legacy file format with the constant the
+  // steering repo reads, so a format rename in Stella is one change.
+  "src/features/record/lineage-panel.tsx": {
+    "@oxagen/oxagen/steering-repo/paths": ["LEGACY_RECORD_SCHEMA"],
+  },
+  "src/features/record/propose-dialog.tsx": {
+    "@oxagen/oxagen/steering-repo/paths": ["LEGACY_RECORD_SCHEMA"],
   },
   "src/features/create/clone-editor.tsx": {
-    "@oxagen/oxagen/context-record-label": ["CONTEXT_RECORD_LABEL_MAX"],
+    "@oxagen/oxagen/steering-record-label": ["STEERING_RECORD_LABEL_MAX"],
   },
   "src/features/create/record-file.ts": {
-    "@oxagen/oxagen/context-record-label": ["CONTEXT_RECORD_LINEAGE"],
+    "@oxagen/oxagen/steering-record-label": ["STEERING_RECORD_LINEAGE"],
     // The wizard's preview needs the same record path and branch
-    // open_context_pr writes (#4765), for both repository layouts. These are
+    // open_steering_pr writes (#4765), for both repository layouts. These are
     // the dependency-free path primitives, not the handler layer.
     "@oxagen/oxagen/steering-repo/paths": [
       "LEGACY_RULES_DIR",

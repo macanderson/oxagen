@@ -874,8 +874,8 @@ function wire(db: FakeDb): void {
           workspaces: { findFirst: async () => db.workspace },
         },
         // Two reads share `select`, told apart by the table. The steering
-        // read (`readWorkspaceSteering`) counts `context_promotions` for the
-        // bundle cache key and joins `context_records` to their pinned
+        // read (`readWorkspaceSteering`) counts `steering_promotions` for the
+        // bundle cache key and joins `steering_records` to their pinned
         // versions; this fixture holds no steering, so both answer empty.
         // The other is the one grouped read `gatewayInvocationsFor` makes:
         // this host's invocations for the chains the batch names, newest per
@@ -924,7 +924,7 @@ function wire(db: FakeDb): void {
                       }))
                   : tableName(table) === "contained_launches"
                     ? db.containedLaunches
-                    : tableName(table) === "context_promotions"
+                    : tableName(table) === "steering_promotions"
                       ? [{ ledger: 0, steering: 0 }]
                       : tableName(table) === "session_files"
                         ? // The rollup reads this session's existing rows to keep

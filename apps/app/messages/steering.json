@@ -26,7 +26,7 @@
       "chip": "Governance:",
       "chipTitle": "Change the governance mode",
       "absentTitle": "{repository} has no {path}. A missing file means team.",
-      "invalidTitle": "{path} on {repository} names no mode Oxagen knows, so every Context PR open and merge is refused.",
+      "invalidTitle": "{path} on {repository} names no mode Oxagen knows, so every steering PR open and merge is refused.",
       "unboundTitle": "No main repository is bound, so no governance.toml is read.",
       "unreadTitle": "The governance mode could not be read: {code}.",
       "shown": {
@@ -58,8 +58,8 @@
       "note": "The mode is read off the file when a pull request is opened and again when it is merged, so raising it takes effect on everything already in flight.",
       "cancel": "Cancel",
       "close": "Close",
-      "submit": "Open the Context PR",
-      "pending": "Opening the Context PR",
+      "submit": "Open the steering PR",
+      "pending": "Opening the steering PR",
       "commit": "Commit the change",
       "commitPending": "Committing the change",
       "proposed": "Pull request opened on {repository}: {path} sets mode = {mode}. It takes effect on merge for everything already in flight; nothing else in Oxagen writes that file.",
@@ -477,7 +477,7 @@
     },
     "proposals": {
       "title": "Proposals",
-      "lead": "A proposal publishes when its Context PR passes every check and merges.",
+      "lead": "A proposal publishes when its steering PR passes every check and merges.",
       "states": {
         "label": "State",
         "open": "Open",
@@ -493,7 +493,7 @@
           "state": "State",
           "updated": "Updated"
         },
-        "open": "Open the Context PR for {lineage}",
+        "open": "Open the steering PR for {lineage}",
         "noPr": "No pull request yet",
         "number": "#{number} on {repository}",
         "openOnGitHub": "Open {pr} on GitHub",
@@ -508,7 +508,7 @@
         },
         "merged": {
           "title": "No merged proposals",
-          "body": "A proposal lists here once its Context PR merges."
+          "body": "A proposal lists here once its steering PR merges."
         },
         "closed": {
           "title": "No closed proposals",
@@ -517,9 +517,9 @@
       }
     },
     "pr": {
-      "heading": "Context PR",
+      "heading": "Steering PR",
       "title": "Pull request",
-      "machine": "Context PR state",
+      "machine": "Steering PR state",
       "rejected": "This proposal is closed. Its pull request is closed and its branch deleted.",
       "notOpened": "No pull request is open for this proposal yet.",
       "modeUnread": "read from the governance file when the pull request opens",
@@ -582,14 +582,14 @@
         "evidence": "Evidence"
       },
       "page": {
-        "eyebrow": "Context PR",
+        "eyebrow": "Steering PR",
         "crumbs": "Proposals list",
         "back": {
           "open": "Back to open proposals",
           "merged": "Back to merged proposals",
           "closed": "Back to closed proposals"
         },
-        "loading": "Loading the Context PR",
+        "loading": "Loading the steering PR",
         "number": "#{number} on {repository}"
       },
       "record": {
@@ -671,8 +671,8 @@
     },
     "actions": {
       "open": {
-        "open": "Open a Context PR",
-        "title": "Open a Context PR",
+        "open": "Open a steering PR",
+        "title": "Open a steering PR",
         "rerun": "Run the checks again",
         "body": "Oxagen opens a branch with the one record file, opens the pull request with the rationale and support, and runs the six checks one at a time. Merge is the publication.",
         "confirm": "Open the pull request",
@@ -766,7 +766,7 @@
     },
     "create": {
       "skill": "Add a skill",
-      "record": "Write a context record"
+      "record": "Write a steering record"
     },
     "import": {
       "button": "Import Markdown",

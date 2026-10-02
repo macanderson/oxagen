@@ -1,7 +1,7 @@
 {
   "name": "append_record",
   "domain": "context",
-  "description": "Append one context record to the workspace — an observation, memory, knowledge claim, evidence, context-use record or record proposal — content-addressed by record_hash. A directive is refused: it reaches the workspace only through a Context PR.",
+  "description": "Append one steering record to the workspace — an observation, memory, knowledge claim, evidence, context-use record or record proposal — content-addressed by record_hash. A directive is refused: it reaches the workspace only through a steering PR.",
   "mode": "sync",
   "surfaces": [
     "api",

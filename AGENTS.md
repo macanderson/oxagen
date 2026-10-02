@@ -383,7 +383,7 @@ Four harnesses are first-class here: Claude Code, Codex, Cursor and Stella (ADR-
 ## Standing decisions — apply without asking
 
 This block is the record of each standing decision in this repository. A
-workspace linked to it holds the same decisions as context records and
+workspace linked to it holds the same decisions as steering records and
 steers every connected repository from them. A connected repository does
 not carry a copy.
 

@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
-// The context-record wizard as a person drives it, through the host the
+// The steering-record wizard as a person drives it, through the host the
 // workspace layout mounts: describe the concern, pick a kind, write the
 // statement, read the six checks, and open the pull request. The cases pin
-// what propose_record and open_context_pr are sent, that the kind gates the
+// what propose_record and open_steering_pr are sent, that the kind gates the
 // force and the constraint effect, that the one gold control waits on what
 // its step needs, that a refusal is named where the person acted, that a
 // retry reuses the proposal already made, and that the pull request step
@@ -169,7 +169,7 @@ afterEach(async () => {
   }
 });
 
-describe("the context-record wizard: describe", () => {
+describe("the steering-record wizard: describe", () => {
   it("opens on Describe with five steps, and names the grant it needs", async () => {
     mount();
     await screen.findByTestId("create-record");
@@ -248,7 +248,7 @@ describe("the context-record wizard: describe", () => {
   });
 });
 
-describe("the context-record wizard: kind", () => {
+describe("the steering-record wizard: kind", () => {
   it("shows six kinds, each saying what it can never do, and waits for one", async () => {
     await toKind();
     for (const kind of [
@@ -276,7 +276,7 @@ describe("the context-record wizard: kind", () => {
   });
 });
 
-describe("the context-record wizard: statement", () => {
+describe("the steering-record wizard: statement", () => {
   it("drafts the statement, says who drafted it, and lets the operator edit and revert", async () => {
     const file = await toStatement();
     expect(screen.getByTestId("draft-note").textContent).toContain(
@@ -383,7 +383,7 @@ describe("the context-record wizard: statement", () => {
   });
 });
 
-describe("the context-record wizard: checks", () => {
+describe("the steering-record wizard: checks", () => {
   it("spells the six checks out for this record", async () => {
     await toStatement("constraint");
     fireEvent.click(primary());
@@ -404,7 +404,7 @@ describe("the context-record wizard: checks", () => {
 
 });
 
-describe("the context-record wizard: record path", () => {
+describe("the steering-record wizard: record path", () => {
   it("previews the steering folder and branch in a steering repository", async () => {
     readMainRepository.mockResolvedValue({
       ok: true,
@@ -458,8 +458,8 @@ describe("the context-record wizard: record path", () => {
   });
 });
 
-describe("the context-record wizard: pull request", () => {
-  it("proposes the record, opens its Context PR, and lands on Context PRs", async () => {
+describe("the steering-record wizard: pull request", () => {
+  it("proposes the record, opens its steering PR, and lands on steering PRs", async () => {
     openRecordPr.mockResolvedValue(opened());
     await toPullRequest();
     expect(screen.getByTestId("pr-branch").textContent).toBe(
@@ -495,7 +495,7 @@ describe("the context-record wizard: pull request", () => {
       screen.getByTestId("opened-checks").querySelectorAll("li"),
     ).toHaveLength(6);
     expect(screen.getByText(t("opened.passed"))).toBeTruthy();
-    // The page behind moves to Context PRs with this pull request selected.
+    // The page behind moves to steering PRs with this pull request selected.
     const target =
       "/acme/core-platform/steering/proposals/prs/prp_01K5ABC";
     await waitFor(() => {
@@ -503,7 +503,7 @@ describe("the context-record wizard: pull request", () => {
     });
     expect(
       screen
-        .getByRole("link", { name: t("opened.onContextPrs") })
+        .getByRole("link", { name: t("opened.onSteeringPrs") })
         .getAttribute("href"),
     ).toBe(target);
     // Once the pull request is open the only way on is Close.

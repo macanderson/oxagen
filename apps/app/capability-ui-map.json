@@ -230,7 +230,7 @@
     "dismiss_proposal": {
       "route": "/[org]/[ws]/steering/proposals/prs/[proposal]",
       "page": "apps/app/src/app/[org]/[ws]/steering/proposals/prs/[proposal]/page.tsx",
-      "entry": "Close without merging on the Context PR page (features/steering/write-controls.tsx)",
+      "entry": "Close without merging on the steering PR page (features/steering/write-controls.tsx)",
       "testid": "dismiss-proposal-open",
       "proof": "apps/app/src/features/steering/write-controls.test.tsx",
       "verifiedAt": "2026-10-02",
@@ -390,28 +390,28 @@
       "verifiedAt": "2026-09-23",
       "verifiedBy": "session_01BgZ1geHLLuub8kPYfH8Qup"
     },
-    "get_context_pr_diff": {
+    "get_steering_pr_diff": {
       "route": "/[org]/[ws]/steering/proposals/prs/[proposal]",
       "page": "apps/app/src/app/[org]/[ws]/steering/proposals/prs/[proposal]/page.tsx",
-      "entry": "The Changes section of the Context PR page (features/steering/context-pr-diff.tsx)",
-      "proof": "apps/app/src/features/steering/context-pr-page.test.tsx",
+      "entry": "The Changes section of the steering PR page (features/steering/steering-pr-diff.tsx)",
+      "proof": "apps/app/src/features/steering/steering-pr-page.test.tsx",
       "verifiedAt": "2026-10-02",
       "verifiedBy": "session_01B5MzP4EGjHSj52UKpWTxyz"
     },
-    "refresh_context_pr": {
+    "refresh_steering_pr": {
       "route": "/[org]/[ws]/steering/proposals/prs/[proposal]",
       "page": "apps/app/src/app/[org]/[ws]/steering/proposals/prs/[proposal]/page.tsx",
-      "entry": "Refresh from GitHub on the Context PR page, and the refresh when the page opens (features/steering/context-pr-controls.tsx)",
-      "testid": "refresh-context-pr",
-      "proof": "apps/app/src/features/steering/context-pr-page.test.tsx",
+      "entry": "Refresh from GitHub on the steering PR page, and the refresh when the page opens (features/steering/steering-pr-controls.tsx)",
+      "testid": "refresh-steering-pr",
+      "proof": "apps/app/src/features/steering/steering-pr-page.test.tsx",
       "verifiedAt": "2026-10-02",
       "verifiedBy": "session_01B5MzP4EGjHSj52UKpWTxyz"
     },
-    "get_context_pr": {
+    "get_steering_pr": {
       "route": "/[org]/[ws]/steering/proposals/prs/[proposal]",
       "page": "apps/app/src/app/[org]/[ws]/steering/proposals/prs/[proposal]/page.tsx",
-      "entry": "The Context PR page (#5077): the read behind the whole page (features/steering/context-pr-page.tsx)",
-      "proof": "apps/app/src/features/steering/context-pr-page.test.tsx",
+      "entry": "The steering PR page (#5077): the read behind the whole page (features/steering/steering-pr-page.tsx)",
+      "proof": "apps/app/src/features/steering/steering-pr-page.test.tsx",
       "verifiedAt": "2026-10-02",
       "verifiedBy": "session_01B5MzP4EGjHSj52UKpWTxyz"
     },
@@ -1127,11 +1127,11 @@
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
     },
-    "merge_context_pr": {
+    "merge_steering_pr": {
       "route": "/[org]/[ws]/steering/proposals/prs/[proposal]",
       "page": "apps/app/src/app/[org]/[ws]/steering/proposals/prs/[proposal]/page.tsx",
-      "entry": "Merge pull request on the Context PR page, behind its confirming dialog (features/steering/write-controls.tsx)",
-      "testid": "merge-context-pr-open",
+      "entry": "Merge pull request on the steering PR page, behind its confirming dialog (features/steering/write-controls.tsx)",
+      "testid": "merge-steering-pr-open",
       "proof": "apps/app/src/features/steering/write-controls.test.tsx",
       "verifiedAt": "2026-10-02",
       "verifiedBy": "session_01B5MzP4EGjHSj52UKpWTxyz"
@@ -1139,7 +1139,7 @@
     "merge_pr_without_review": {
       "route": "/[org]/[ws]/steering",
       "page": "apps/app/src/app/[org]/[ws]/steering/page.tsx",
-      "entry": "/[org]/[ws]/steering — the Merge without review button on an unapproved steering PR (features/steering/write-controls.tsx, shown by context-pr-panel.tsx)",
+      "entry": "/[org]/[ws]/steering — the Merge without review button on an unapproved steering PR (features/steering/write-controls.tsx, shown by steering-pr-panel.tsx)",
       "testid": "merge-without-review",
       "proof": "apps/app/src/features/steering/write-controls.test.tsx",
       "verifiedAt": "2026-09-27",
@@ -1148,17 +1148,17 @@
     "revert_steering_pr": {
       "route": "/[org]/[ws]/steering",
       "page": "apps/app/src/app/[org]/[ws]/steering/page.tsx",
-      "entry": "/[org]/[ws]/steering — the Revert pull request button on a merged steering PR, behind a confirming dialog (features/steering/write-controls.tsx, shown by context-pr-panel.tsx)",
+      "entry": "/[org]/[ws]/steering — the Revert pull request button on a merged steering PR, behind a confirming dialog (features/steering/write-controls.tsx, shown by steering-pr-panel.tsx)",
       "testid": "revert-steering-pr",
       "proof": "apps/app/src/features/steering/write-controls.test.tsx",
       "verifiedAt": "2026-10-02",
       "verifiedBy": "054a9da7"
     },
-    "open_context_pr": {
+    "open_steering_pr": {
       "route": "/[org]/[ws]/steering/proposals/prs/[proposal]",
       "page": "apps/app/src/app/[org]/[ws]/steering/proposals/prs/[proposal]/page.tsx",
-      "entry": "Open a Context PR, or Run the checks again, on the Context PR page (features/steering/write-controls.tsx)",
-      "testid": "open-context-pr-open",
+      "entry": "Open a steering PR, or Run the checks again, on the steering PR page (features/steering/write-controls.tsx)",
+      "testid": "open-steering-pr-open",
       "proof": "apps/app/src/features/steering/write-controls.test.tsx",
       "verifiedAt": "2026-10-02",
       "verifiedBy": "session_01B5MzP4EGjHSj52UKpWTxyz"
@@ -1209,7 +1209,7 @@
     "propose_record": {
       "route": "/[org]/[ws]/steering",
       "page": "apps/app/src/app/[org]/[ws]/steering/page.tsx",
-      "entry": "Steering \u203a Write a context record (every tab but Skills), and \u2318K Create \u203a Context record: the context-record wizard's pull request step, which proposes the record and opens its Context PR (features/create/record-wizard.tsx, features/create/actions.ts)",
+      "entry": "Steering \u203a Write a steering record (every tab but Skills), and \u2318K Create \u203a Steering record: the steering-record wizard's pull request step, which proposes the record and opens its steering PR (features/create/record-wizard.tsx, features/create/actions.ts)",
       "proof": "apps/app/src/features/create/record-wizard.test.tsx",
       "verifiedAt": "2026-09-19",
       "verifiedBy": "session-wizard-record"
@@ -1415,10 +1415,10 @@
       "verifiedAt": "2026-09-29",
       "verifiedBy": "retry-4750"
     },
-    "revise_context_record": {
+    "revise_steering_record": {
       "route": "/[org]/[ws]/steering/records/[lineage]",
       "page": "apps/app/src/app/[org]/[ws]/steering/records/[lineage]/page.tsx",
-      "entry": "Record \u203a Revise this statement \u2014 the statement editor raises a revision proposal through revise_context_record (features/record/statement-editor.tsx, features/record/actions.ts)",
+      "entry": "Record \u203a Revise this statement \u2014 the statement editor raises a revision proposal through revise_steering_record (features/record/statement-editor.tsx, features/record/actions.ts)",
       "proof": "apps/app/src/features/record/record.test.tsx",
       "verifiedAt": "2026-09-21",
       "verifiedBy": "session_01543PwE8waLyyNrrYvJWQ18"
@@ -1921,7 +1921,7 @@
     "get_steering_layout": {
       "route": "/[org]/[ws]/steering",
       "page": "apps/app/src/app/[org]/[ws]/steering/page.tsx",
-      "entry": "Steering \u203a Write a context record, and \u2318K Create \u203a Context record: the context-record wizard previews the file and branch its Context PR will write for the bound repository's layout (features/create/record-wizard.tsx, features/create/actions.ts)",
+      "entry": "Steering \u203a Write a steering record, and \u2318K Create \u203a Steering record: the steering-record wizard previews the file and branch its steering PR will write for the bound repository's layout (features/create/record-wizard.tsx, features/create/actions.ts)",
       "proof": "apps/app/src/features/create/record-wizard.test.tsx",
       "verifiedAt": "2026-09-30",
       "verifiedBy": "steering-preview-4765"
@@ -1990,8 +1990,8 @@
     "list_memory_pr_records": {
       "route": "/[org]/[ws]/steering/proposals/prs",
       "page": "apps/app/src/app/[org]/[ws]/steering/[...view]/page.tsx",
-      "entry": "Steering \u203a Proposals \u203a Context PRs: a selected memory PR lists its records and the memories each one cites, read by the PR's number (features/steering/tabs/proposals.tsx, features/steering/context-pr-panel.tsx, features/steering/memory-pr-review.tsx)",
-      "proof": "apps/app/src/features/steering/context-pr-panel.test.tsx",
+      "entry": "Steering \u203a Proposals \u203a Steering PRs: a selected memory PR lists its records and the memories each one cites, read by the PR's number (features/steering/tabs/proposals.tsx, features/steering/steering-pr-panel.tsx, features/steering/memory-pr-review.tsx)",
+      "proof": "apps/app/src/features/steering/steering-pr-panel.test.tsx",
       "verifiedAt": "2026-10-01",
       "verifiedBy": "steering-memories-tab (#4914)"
     },

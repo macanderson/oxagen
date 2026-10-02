@@ -1,5 +1,5 @@
 import type { FindingDraft } from "@oxagen/billing/proposal-opener";
-import { contextProposalCreate } from "@oxagen/oxagen/contracts/context.proposal.create";
+import { steeringProposalCreate } from "@oxagen/oxagen/contracts/steering.proposal.create";
 import { describe, expect, it } from "vitest";
 import { agentLineage, proposalSource } from "./shared";
 import { spinLoopProposals } from "./spin-loops";
@@ -107,7 +107,7 @@ describe("spinLoopProposals", () => {
 
   it("builds a proposal the propose_record contract accepts", () => {
     const [proposal] = build(spinDraft(AGENT));
-    const parsed = contextProposalCreate.input.safeParse({
+    const parsed = steeringProposalCreate.input.safeParse({
       record: {
         lineageId: proposal!.lineageId,
         title: proposal!.title,

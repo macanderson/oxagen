@@ -1,8 +1,8 @@
 /**
  * registry-digest — canonical JSON + SHA-256 for the agent-asset registry.
  *
- * The immutability contract for tool_versions / context_record_versions /
- * context_promotions rows, mirroring skillBodyChecksum: a stored version can
+ * The immutability contract for tool_versions / steering_record_versions /
+ * steering_promotions rows, mirroring skillBodyChecksum: a stored version can
  * later be proven byte-identical to what was published, and a promotion
  * ledger entry can be re-verified against its predecessor. Canonicalization
  * is recursive key-sorting (object key order must not change the digest);

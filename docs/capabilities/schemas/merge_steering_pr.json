@@ -1,0 +1,224 @@
+{
+  "name": "merge_steering_pr",
+  "domain": "context",
+  "description": "Merge a proposal's steering PR (a GitHub pull request or a GitLab merge request) and publish its record: refused until every check passed and unless the caller is a reviewer the governance mode allows; writes the promotion event to the ledger, bumps the steering version and emits steering.published",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "agent"
+  ],
+  "sensitivity": "high",
+  "agent": {
+    "requiresApproval": true,
+    "riskLevel": "high",
+    "category": "governance"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "proposalId": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "proposalId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "anyOf": [
+      {
+        "type": "object",
+        "properties": {
+          "proposalId": {
+            "type": "string"
+          },
+          "status": {
+            "const": "merged"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "rule",
+              "constraint",
+              "procedure",
+              "fact",
+              "memory",
+              "preference"
+            ]
+          },
+          "record": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "lineageId": {
+                "type": "string"
+              },
+              "version": {
+                "type": "integer",
+                "exclusiveMinimum": 0
+              },
+              "path": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "lineageId",
+              "version",
+              "path"
+            ],
+            "additionalProperties": false
+          },
+          "mergedCommit": {
+            "type": "string"
+          },
+          "promotionEvent": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "seq": {
+                "type": "integer",
+                "exclusiveMinimum": 0
+              },
+              "chainDigest": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "seq",
+              "chainDigest"
+            ],
+            "additionalProperties": false
+          },
+          "bundleVersion": {
+            "type": "object",
+            "properties": {
+              "before": {
+                "type": "integer"
+              },
+              "after": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "before",
+              "after"
+            ],
+            "additionalProperties": false
+          },
+          "publishedVersion": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "proposalId",
+          "status",
+          "kind",
+          "record",
+          "mergedCommit",
+          "promotionEvent",
+          "bundleVersion",
+          "publishedVersion"
+        ],
+        "additionalProperties": false
+      },
+      {
+        "type": "object",
+        "properties": {
+          "proposalId": {
+            "type": "string"
+          },
+          "status": {
+            "const": "merged"
+          },
+          "kind": {
+            "const": "governance"
+          },
+          "governance": {
+            "type": "object",
+            "properties": {
+              "mode": {
+                "type": "string",
+                "enum": [
+                  "solo",
+                  "team",
+                  "regulated"
+                ]
+              },
+              "path": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "mode",
+              "path"
+            ],
+            "additionalProperties": false
+          },
+          "mergedCommit": {
+            "type": "string"
+          },
+          "bundleVersion": {
+            "type": "object",
+            "properties": {
+              "before": {
+                "type": "integer"
+              },
+              "after": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "before",
+              "after"
+            ],
+            "additionalProperties": false
+          },
+          "publishedVersion": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "proposalId",
+          "status",
+          "kind",
+          "governance",
+          "mergedCommit",
+          "bundleVersion",
+          "publishedVersion"
+        ],
+        "additionalProperties": false
+      }
+    ]
+  }
+}

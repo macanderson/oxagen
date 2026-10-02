@@ -13,7 +13,7 @@
 //
 // A promoted memory record goes where the curator puts one, under
 // steering/memory/. Every other kind goes to its kind's folder, as
-// open_context_pr and the Markdown import write it: a promoted code rule is
+// open_steering_pr and the Markdown import write it: a promoted code rule is
 // a steering record like any other, and the curator's stale check, which
 // reads only steering/memory/, never proposes archiving it.
 import { OXAGEN_PR_LABELS } from "@oxagen/github";

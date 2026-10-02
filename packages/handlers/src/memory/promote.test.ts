@@ -230,7 +230,7 @@ describe("promoteMemories opening a memory PR", () => {
     });
 
     const lineage = memoryLineage(statement, new Set());
-    // A constraint goes to its kind's folder, as open_context_pr writes one,
+    // A constraint goes to its kind's folder, as open_steering_pr writes one,
     // and its repository scope lives in its frontmatter.
     const path = `steering/constraints/${lineage}.md`;
     expect(result.records).toEqual([

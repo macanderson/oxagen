@@ -544,7 +544,7 @@ function foldTarget(
 }
 
 /**
- * Fold each path-only context into the Git context recorded at the same path,
+ * Fold each path-only context into the Git context read at the same path,
  * so a session's first hook is not a checkout of its own that no repository
  * or branch can match. The merged row keeps the Git context's branch, remote,
  * head, and repository, and spans both rows' sequences. Contexts that name a

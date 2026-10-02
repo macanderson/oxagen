@@ -13,9 +13,9 @@ import {
 import type { SkillScope } from "./skill-config.store";
 import { recordFilePath } from "./context.steering.file";
 import {
-  contextRecordLabel,
-  fitContextRecordLabel,
-} from "@oxagen/oxagen/context-record-label";
+  steeringRecordLabel,
+  fitSteeringRecordLabel,
+} from "@oxagen/oxagen/steering-record-label";
 import { sha256Hex, canonicalJson } from "./registry-digest";
 
 export type ConfigurationSource = {
@@ -44,18 +44,18 @@ export async function readConfigurationSource(
     const [record] = await withTenantDb((tx) =>
       tx
         .select({
-          slug: schema.contextRecords.slug,
-          label: schema.contextRecords.label,
-          constraintEffect: schema.contextRecords.constraintEffect,
+          slug: schema.steeringRecords.slug,
+          label: schema.steeringRecords.label,
+          constraintEffect: schema.steeringRecords.constraintEffect,
         })
-        .from(schema.contextRecords)
+        .from(schema.steeringRecords)
         .where(
           and(
-            eq(schema.contextRecords.orgId, scope.orgId),
-            eq(schema.contextRecords.workspaceId, scope.workspaceId),
+            eq(schema.steeringRecords.orgId, scope.orgId),
+            eq(schema.steeringRecords.workspaceId, scope.workspaceId),
             or(
-              eq(schema.contextRecords.publicId, sourceId),
-              eq(schema.contextRecords.slug, sourceId),
+              eq(schema.steeringRecords.publicId, sourceId),
+              eq(schema.steeringRecords.slug, sourceId),
             ),
           ),
         )
@@ -66,8 +66,8 @@ export async function readConfigurationSource(
       // A record's name is its label (ADR-178). A row written before the
       // label existed gets the one its slug reads as.
       name =
-        fitContextRecordLabel(record.label ?? "") ||
-        contextRecordLabel(record.slug);
+        fitSteeringRecordLabel(record.label ?? "") ||
+        steeringRecordLabel(record.slug);
       if (
         record.constraintEffect === "require" ||
         record.constraintEffect === "forbid"
@@ -188,22 +188,22 @@ export async function readTakenConfigurationNames(
     // A record's label may repeat (ADR-178), so only its slug is taken.
     if (kind === "record") {
       const records = await tx
-        .select({ slug: schema.contextRecords.slug })
-        .from(schema.contextRecords)
+        .select({ slug: schema.steeringRecords.slug })
+        .from(schema.steeringRecords)
         .where(
           and(
-            eq(schema.contextRecords.orgId, scope.orgId),
-            eq(schema.contextRecords.workspaceId, scope.workspaceId),
+            eq(schema.steeringRecords.orgId, scope.orgId),
+            eq(schema.steeringRecords.workspaceId, scope.workspaceId),
           ),
         );
       for (const row of records) slugs.add(row.slug);
       const proposals = await tx
-        .select({ lineageId: schema.contextProposals.lineageId })
-        .from(schema.contextProposals)
+        .select({ lineageId: schema.steeringProposals.lineageId })
+        .from(schema.steeringProposals)
         .where(
           and(
-            eq(schema.contextProposals.orgId, scope.orgId),
-            eq(schema.contextProposals.workspaceId, scope.workspaceId),
+            eq(schema.steeringProposals.orgId, scope.orgId),
+            eq(schema.steeringProposals.workspaceId, scope.workspaceId),
           ),
         );
       for (const row of proposals) slugs.add(row.lineageId);
@@ -235,25 +235,25 @@ export async function configurationNameTaken(
   const rows = await withTenantDb(async (tx) => {
     if (kind === "record") {
       const records = await tx
-        .select({ id: schema.contextRecords.id })
-        .from(schema.contextRecords)
+        .select({ id: schema.steeringRecords.id })
+        .from(schema.steeringRecords)
         .where(
           and(
-            eq(schema.contextRecords.orgId, scope.orgId),
-            eq(schema.contextRecords.workspaceId, scope.workspaceId),
-            eq(schema.contextRecords.slug, slug),
+            eq(schema.steeringRecords.orgId, scope.orgId),
+            eq(schema.steeringRecords.workspaceId, scope.workspaceId),
+            eq(schema.steeringRecords.slug, slug),
           ),
         )
         .limit(1);
       if (records.length) return records;
       return tx
-        .select({ id: schema.contextProposals.id })
-        .from(schema.contextProposals)
+        .select({ id: schema.steeringProposals.id })
+        .from(schema.steeringProposals)
         .where(
           and(
-            eq(schema.contextProposals.orgId, scope.orgId),
-            eq(schema.contextProposals.workspaceId, scope.workspaceId),
-            eq(schema.contextProposals.lineageId, slug),
+            eq(schema.steeringProposals.orgId, scope.orgId),
+            eq(schema.steeringProposals.workspaceId, scope.workspaceId),
+            eq(schema.steeringProposals.lineageId, slug),
           ),
         )
         .limit(1);

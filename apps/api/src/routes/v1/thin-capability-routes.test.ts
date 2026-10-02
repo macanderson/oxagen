@@ -113,13 +113,13 @@ import { billingBudgetSet } from "@oxagen/oxagen/contracts/billing.budget.set";
 import { budgetPolicyRead } from "@oxagen/oxagen/contracts/budget.policy.read";
 import { budgetPolicyWrite } from "@oxagen/oxagen/contracts/budget.policy.write";
 import { chatMessageExecution } from "@oxagen/oxagen/contracts/chat.message.execution";
-import { contextRecordPromote } from "@oxagen/oxagen/contracts/context.record.promote";
-import { contextRecordPublish } from "@oxagen/oxagen/contracts/context.record.publish";
-import { contextRecordsList } from "@oxagen/oxagen/contracts/context.records.list";
-import { contextRecordsGet } from "@oxagen/oxagen/contracts/context.records.get";
-import { contextRecordsAppend } from "@oxagen/oxagen/contracts/context.records.append";
-import { contextProposalCreate } from "@oxagen/oxagen/contracts/context.proposal.create";
-import { contextProposalList } from "@oxagen/oxagen/contracts/context.proposal.list";
+import { steeringRecordPromote } from "@oxagen/oxagen/contracts/steering.record.promote";
+import { steeringRecordPublish } from "@oxagen/oxagen/contracts/steering.record.publish";
+import { steeringRecordsList } from "@oxagen/oxagen/contracts/steering.records.list";
+import { steeringRecordsGet } from "@oxagen/oxagen/contracts/steering.records.get";
+import { steeringRecordsAppend } from "@oxagen/oxagen/contracts/steering.records.append";
+import { steeringProposalCreate } from "@oxagen/oxagen/contracts/steering.proposal.create";
+import { steeringProposalList } from "@oxagen/oxagen/contracts/steering.proposal.list";
 import { steeringMemoriesDismiss } from "@oxagen/oxagen/contracts/steering.memories.dismiss";
 import { steeringMemoriesGet } from "@oxagen/oxagen/contracts/steering.memories.get";
 import { steeringMemoriesList } from "@oxagen/oxagen/contracts/steering.memories.list";
@@ -132,15 +132,15 @@ import { workCollectorSet } from "@oxagen/oxagen/contracts/work.collector.set";
 import { workCollectorSync } from "@oxagen/oxagen/contracts/work.collector.sync";
 import { workPrioritiesGet } from "@oxagen/oxagen/contracts/work.priorities.get";
 import { steeringMemoryPrRecordsList } from "@oxagen/oxagen/contracts/steering.memory_pr_records.list";
-import { contextProposalDismiss } from "@oxagen/oxagen/contracts/context.proposal.dismiss";
-import { contextPrOpen } from "@oxagen/oxagen/contracts/context.pr.open";
+import { steeringProposalDismiss } from "@oxagen/oxagen/contracts/steering.proposal.dismiss";
+import { steeringPrOpen } from "@oxagen/oxagen/contracts/steering.pr.open";
 import { skillPropose } from "@oxagen/oxagen/contracts/skill.propose";
-import { contextPrGet } from "@oxagen/oxagen/contracts/context.pr.get";
-import { contextPrRefresh } from "@oxagen/oxagen/contracts/context.pr.refresh";
-import { contextPrDiffGet } from "@oxagen/oxagen/contracts/context.pr.diff.get";
-import { contextPrMerge } from "@oxagen/oxagen/contracts/context.pr.merge";
-import { contextPrMergeWithoutReview } from "@oxagen/oxagen/contracts/context.pr.merge_without_review";
-import { contextPrRevert } from "@oxagen/oxagen/contracts/context.pr.revert";
+import { steeringPrGet } from "@oxagen/oxagen/contracts/steering.pr.get";
+import { steeringPrRefresh } from "@oxagen/oxagen/contracts/steering.pr.refresh";
+import { steeringPrDiffGet } from "@oxagen/oxagen/contracts/steering.pr.diff.get";
+import { steeringPrMerge } from "@oxagen/oxagen/contracts/steering.pr.merge";
+import { steeringPrMergeWithoutReview } from "@oxagen/oxagen/contracts/steering.pr.merge_without_review";
+import { steeringPrRevert } from "@oxagen/oxagen/contracts/steering.pr.revert";
 import { conversationAttachmentAdd } from "@oxagen/oxagen/contracts/conversation.attachment.add";
 import { tachoCommandDispatch } from "@oxagen/oxagen/contracts/tacho.command.dispatch";
 import { tachoCommandList } from "@oxagen/oxagen/contracts/tacho.command.list";
@@ -279,13 +279,13 @@ import { billingBudgetSetRoute } from "./billing.budget.set";
 import { budgetPolicyReadRoute } from "./budget.policy.read";
 import { budgetPolicyWriteRoute } from "./budget.policy.write";
 import { chatMessageExecutionRoute } from "./chat.message.execution";
-import { contextRecordPromoteRoute } from "./context.record.promote";
-import { contextRecordPublishRoute } from "./context.record.publish";
-import { contextRecordsListRoute } from "./context.records.list";
-import { contextRecordsGetRoute } from "./context.records.get";
-import { contextRecordsAppendRoute } from "./context.records.append";
-import { contextProposalCreateRoute } from "./context.proposal.create";
-import { contextProposalListRoute } from "./context.proposal.list";
+import { steeringRecordPromoteRoute } from "./steering.record.promote";
+import { steeringRecordPublishRoute } from "./steering.record.publish";
+import { steeringRecordsListRoute } from "./steering.records.list";
+import { steeringRecordsGetRoute } from "./steering.records.get";
+import { steeringRecordsAppendRoute } from "./steering.records.append";
+import { steeringProposalCreateRoute } from "./steering.proposal.create";
+import { steeringProposalListRoute } from "./steering.proposal.list";
 import { steeringMemoriesDismissRoute } from "./steering.memories.dismiss";
 import { steeringMemoriesGetRoute } from "./steering.memories.get";
 import { steeringMemoriesListRoute } from "./steering.memories.list";
@@ -298,15 +298,15 @@ import { workCollectorSetRoute } from "./work.collector.set";
 import { workCollectorSyncRoute } from "./work.collector.sync";
 import { workPrioritiesGetRoute } from "./work.priorities.get";
 import { steeringMemoryPrRecordsListRoute } from "./steering.memory_pr_records.list";
-import { contextProposalDismissRoute } from "./context.proposal.dismiss";
-import { contextPrOpenRoute } from "./context.pr.open";
+import { steeringProposalDismissRoute } from "./steering.proposal.dismiss";
+import { steeringPrOpenRoute } from "./steering.pr.open";
 import { skillProposeRoute } from "./skill.propose";
-import { contextPrGetRoute } from "./context.pr.get";
-import { contextPrRefreshRoute } from "./context.pr.refresh";
-import { contextPrDiffGetRoute } from "./context.pr.diff.get";
-import { contextPrMergeRoute } from "./context.pr.merge";
-import { contextPrMergeWithoutReviewRoute } from "./context.pr.merge_without_review";
-import { contextPrRevertRoute } from "./context.pr.revert";
+import { steeringPrGetRoute } from "./steering.pr.get";
+import { steeringPrRefreshRoute } from "./steering.pr.refresh";
+import { steeringPrDiffGetRoute } from "./steering.pr.diff.get";
+import { steeringPrMergeRoute } from "./steering.pr.merge";
+import { steeringPrMergeWithoutReviewRoute } from "./steering.pr.merge_without_review";
+import { steeringPrRevertRoute } from "./steering.pr.revert";
 import { conversationAttachmentAddRoute } from "./conversation.attachment.add";
 import { conversationChatRoute } from "./conversation.chat";
 import { costPriceEntryListRoute } from "./cost.price_entry.list";
@@ -449,29 +449,29 @@ interface ThinRoute {
 const ROUTES: ThinRoute[] = [
   // Steering (ADR-061).
   {
-    file: "context.records.list",
-    route: contextRecordsListRoute as unknown as Hono<never>,
+    file: "steering.records.list",
+    route: steeringRecordsListRoute as unknown as Hono<never>,
     method: "POST",
-    capability: contextRecordsList.name,
+    capability: steeringRecordsList.name,
     body: { kind: "rule" },
     expectedInput: { kind: "rule", limit: 50, offset: 0 },
     invalidBody: { kind: "directive" },
     status: 200,
   },
   {
-    file: "context.records.get",
-    route: contextRecordsGetRoute as unknown as Hono<never>,
+    file: "steering.records.get",
+    route: steeringRecordsGetRoute as unknown as Hono<never>,
     method: "POST",
-    capability: contextRecordsGet.name,
+    capability: steeringRecordsGet.name,
     body: { recordId: "ctx.release.notes-format" },
     invalidBody: {},
     status: 200,
   },
   {
-    file: "context.records.append",
-    route: contextRecordsAppendRoute as unknown as Hono<never>,
+    file: "steering.records.append",
+    route: steeringRecordsAppendRoute as unknown as Hono<never>,
     method: "POST",
-    capability: contextRecordsAppend.name,
+    capability: steeringRecordsAppend.name,
     body: { kind: "observation", lineageId: "ctx.a", statement: "x" },
     expectedInput: {
       kind: "observation",
@@ -485,10 +485,10 @@ const ROUTES: ThinRoute[] = [
     status: 200,
   },
   {
-    file: "context.proposal.create",
-    route: contextProposalCreateRoute as unknown as Hono<never>,
+    file: "steering.proposal.create",
+    route: steeringProposalCreateRoute as unknown as Hono<never>,
     method: "POST",
-    capability: contextProposalCreate.name,
+    capability: steeringProposalCreate.name,
     body: {
       record: {
         lineageId: "ctx.a",
@@ -523,20 +523,20 @@ const ROUTES: ThinRoute[] = [
     status: 200,
   },
   {
-    file: "context.proposal.list",
-    route: contextProposalListRoute as unknown as Hono<never>,
+    file: "steering.proposal.list",
+    route: steeringProposalListRoute as unknown as Hono<never>,
     method: "POST",
-    capability: contextProposalList.name,
+    capability: steeringProposalList.name,
     body: {},
     expectedInput: { limit: 50, offset: 0 },
     invalidBody: { status: "candidate" },
     status: 200,
   },
   {
-    file: "context.proposal.dismiss",
-    route: contextProposalDismissRoute as unknown as Hono<never>,
+    file: "steering.proposal.dismiss",
+    route: steeringProposalDismissRoute as unknown as Hono<never>,
     method: "POST",
-    capability: contextProposalDismiss.name,
+    capability: steeringProposalDismiss.name,
     body: { proposalId: "prp_1", reason: "duplicate" },
     // The reason is optional (#5077), but a blank one is still refused.
     invalidBody: { proposalId: "prp_1", reason: "" },
@@ -674,10 +674,10 @@ const ROUTES: ThinRoute[] = [
     status: 200,
   },
   {
-    file: "context.pr.open",
-    route: contextPrOpenRoute as unknown as Hono<never>,
+    file: "steering.pr.open",
+    route: steeringPrOpenRoute as unknown as Hono<never>,
     method: "POST",
-    capability: contextPrOpen.name,
+    capability: steeringPrOpen.name,
     body: { proposalId: "prp_1" },
     invalidBody: { proposalId: "ctr_1" },
     status: 200,
@@ -702,55 +702,55 @@ const ROUTES: ThinRoute[] = [
     status: 200,
   },
   {
-    file: "context.pr.get",
-    route: contextPrGetRoute as unknown as Hono<never>,
+    file: "steering.pr.get",
+    route: steeringPrGetRoute as unknown as Hono<never>,
     method: "POST",
-    capability: contextPrGet.name,
+    capability: steeringPrGet.name,
     body: { proposalId: "prp_1" },
     invalidBody: {},
     status: 200,
   },
   {
-    file: "context.pr.refresh",
-    route: contextPrRefreshRoute as unknown as Hono<never>,
+    file: "steering.pr.refresh",
+    route: steeringPrRefreshRoute as unknown as Hono<never>,
     method: "POST",
-    capability: contextPrRefresh.name,
+    capability: steeringPrRefresh.name,
     body: { proposalId: "prp_1" },
     invalidBody: {},
     status: 200,
   },
   {
-    file: "context.pr.diff.get",
-    route: contextPrDiffGetRoute as unknown as Hono<never>,
+    file: "steering.pr.diff.get",
+    route: steeringPrDiffGetRoute as unknown as Hono<never>,
     method: "POST",
-    capability: contextPrDiffGet.name,
+    capability: steeringPrDiffGet.name,
     body: { proposalId: "prp_1" },
     invalidBody: { proposalId: "nope" },
     status: 200,
   },
   {
-    file: "context.pr.merge",
-    route: contextPrMergeRoute as unknown as Hono<never>,
+    file: "steering.pr.merge",
+    route: steeringPrMergeRoute as unknown as Hono<never>,
     method: "POST",
-    capability: contextPrMerge.name,
+    capability: steeringPrMerge.name,
     body: { proposalId: "prp_1" },
     invalidBody: { proposalId: "prp_1", force: true },
     status: 200,
   },
   {
-    file: "context.pr.merge_without_review",
-    route: contextPrMergeWithoutReviewRoute as unknown as Hono<never>,
+    file: "steering.pr.merge_without_review",
+    route: steeringPrMergeWithoutReviewRoute as unknown as Hono<never>,
     method: "POST",
-    capability: contextPrMergeWithoutReview.name,
+    capability: steeringPrMergeWithoutReview.name,
     body: { proposalId: "prp_1" },
     invalidBody: { proposalId: "prp_1", force: true },
     status: 200,
   },
   {
-    file: "context.pr.revert",
-    route: contextPrRevertRoute as unknown as Hono<never>,
+    file: "steering.pr.revert",
+    route: steeringPrRevertRoute as unknown as Hono<never>,
     method: "POST",
-    capability: contextPrRevert.name,
+    capability: steeringPrRevert.name,
     body: { proposalId: "prp_1" },
     invalidBody: { proposalId: "prp_1", number: 7 },
     jsonGuard: true,
@@ -1517,10 +1517,10 @@ const ROUTES: ThinRoute[] = [
     status: 200,
   },
   {
-    file: "context.record.promote",
-    route: contextRecordPromoteRoute as unknown as Hono<never>,
+    file: "steering.record.promote",
+    route: steeringRecordPromoteRoute as unknown as Hono<never>,
     method: "POST",
-    capability: contextRecordPromote.name,
+    capability: steeringRecordPromote.name,
     body: {
       record_id: "ctr_1",
       action: "promote",
@@ -1537,10 +1537,10 @@ const ROUTES: ThinRoute[] = [
     status: 200,
   },
   {
-    file: "context.record.publish",
-    route: contextRecordPublishRoute as unknown as Hono<never>,
+    file: "steering.record.publish",
+    route: steeringRecordPublishRoute as unknown as Hono<never>,
     method: "POST",
-    capability: contextRecordPublish.name,
+    capability: steeringRecordPublish.name,
     // #3302: kind/force/statement are required on every publish.
     body: {
       record_id: "no-raw-db",

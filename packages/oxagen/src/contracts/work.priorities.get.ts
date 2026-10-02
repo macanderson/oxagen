@@ -5,7 +5,7 @@
  *
  * The priorities record is a steering record whose lineage is
  * `work.priorities` or ends in `.work.priorities`. A person edits it with a
- * Context PR (open_context_pr), and triage reads each new version after it
+ * steering PR (open_steering_pr), and triage reads each new version after it
  * merges. With no such record, or more than one, `record` is null and
  * `problem` says what to fix.
  */

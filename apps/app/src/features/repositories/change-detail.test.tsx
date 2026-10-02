@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// One Context PR on the Changes tab over fake server actions: every state the
+// One steering PR on the Changes tab over fake server actions: every state the
 // detail can be in (loading, refused, loaded with checks passed, failed,
 // running or merged, and a proposal with no pull request yet), Merge and its
 // refusal, and Close with the comment it previews. The actions are proven
@@ -17,7 +17,7 @@ import userEvent from "@testing-library/user-event";
 import type { MouseEvent, ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RepositoryChange } from "@/data/contracts/repository";
-import type { ContextPr } from "@/data/contracts/steering";
+import type { SteeringPr } from "@/data/contracts/steering";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import type { closeRepositoryChange } from "./actions";
@@ -58,17 +58,17 @@ vi.mock("next/link", () => ({
 
 const { ChangeDetail } = await import("./change-detail");
 
-/** One check as get_context_pr answers it, with no host check run and no times. */
+/** One check as get_steering_pr answers it, with no host check run and no times. */
 const check = (
-  c: Pick<ContextPr["checks"][number], "name" | "status" | "summary">,
-): ContextPr["checks"][number] => ({
+  c: Pick<SteeringPr["checks"][number], "name" | "status" | "summary">,
+): SteeringPr["checks"][number] => ({
   ...c,
   detailsUrl: null,
   startedAt: null,
   completedAt: null,
 });
 
-const PASSED: ContextPr = {
+const PASSED: SteeringPr = {
   proposalId: "prp_open1",
   lineage: "ctx.scr.001-never-push-to-main",
   kind: "rule",
@@ -107,7 +107,7 @@ const PASSED: ContextPr = {
   closed: null,
 };
 
-const FAILED: ContextPr = {
+const FAILED: SteeringPr = {
   ...PASSED,
   status: "checks_failed",
   checks: [
@@ -126,7 +126,7 @@ const ROW: RepositoryChange = {
   lineage: "ctx.scr.001-never-push-to-main",
   statement: "Never push to main",
   why: "Main is shared and contested.",
-  kind: "context_record",
+  kind: "steering_record",
   pullRequest: {
     number: 42,
     url: "https://github.com/acme/platform/pull/42",
@@ -164,7 +164,7 @@ function detail(row: RepositoryChange | null = ROW) {
   );
 }
 
-async function loaded(pr: ContextPr, row: RepositoryChange | null = ROW) {
+async function loaded(pr: SteeringPr, row: RepositoryChange | null = ROW) {
   actions.readRepositoryChange.mockResolvedValue({ ok: true, value: pr });
   const user = userEvent.setup();
   detail(row);

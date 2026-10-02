@@ -18,7 +18,7 @@ import {
 } from "yaml";
 import { z } from "zod";
 import { jcsBytes, sha256Digest } from "@oxagen/run-evidence";
-import { CONTEXT_RECORD_LABEL_MAX } from "../context-record-label";
+import { STEERING_RECORD_LABEL_MAX } from "../steering-record-label";
 import {
   lineageSchema,
   recordIdSchema,
@@ -100,7 +100,7 @@ const recordShape = z
   .object({
     schema: z.literal("steering-record/v1"),
     lineage: lineageSchema,
-    label: z.string().min(1).max(CONTEXT_RECORD_LABEL_MAX),
+    label: z.string().min(1).max(STEERING_RECORD_LABEL_MAX),
     description: z
       .string()
       .max(SKILL_DESCRIPTION_MAX)

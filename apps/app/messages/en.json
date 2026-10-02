@@ -33,7 +33,7 @@
     "agent": "Agent",
     "mandate": "Mandate",
     "record": "Record",
-    "contextPr": "Context PR",
+    "steeringPr": "Steering PR",
     "steering": "Steering",
     "repositories": "Repositories",
     "spend": "Spend",

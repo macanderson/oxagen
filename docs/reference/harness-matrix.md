@@ -71,7 +71,7 @@ Some MCP calls can never pass through a local gateway, because the vendor runs t
 | Cursor | Browser, Web search, Fetch | Built-in, or an in-process extension |
 | Claude Desktop | Remote connectors | Anthropic's cloud calls them |
 
-Stella reads MCP servers only from `.stella/mcp.toml` inside each workspace and from plugins, and it skips the workspace file in an untrusted checkout [SM]. The gateway's entries can reach that file through a pull request, as a context record does. An admin cannot pin Stella's server set until Stella gains a managed server list.
+Stella reads MCP servers only from `.stella/mcp.toml` inside each workspace and from plugins, and it skips the workspace file in an untrusted checkout [SM]. The gateway's entries can reach that file through a pull request, as a steering record does. An admin cannot pin Stella's server set until Stella gains a managed server list.
 
 ### Gemini CLI extension
 
@@ -83,7 +83,7 @@ Aider exposes conversation-history files and an OpenAI API-base option. Its docu
 
 ## GitLab
 
-Updated 2026-09-23 for [#3762](https://github.com/oxageninc/product/issues/3762). The harness rows above are unchanged. gitlab.com is now a second repository host for steering: a workspace can bind a gitlab.com project as its main repository, and a context record publishes as a merge request on it. Self-managed GitLab is not supported. Every call goes to gitlab.com until a host setting and an outbound-network review exist.
+Updated 2026-09-23 for [#3762](https://github.com/oxageninc/product/issues/3762). The harness rows above are unchanged. gitlab.com is now a second repository host for steering: a workspace can bind a gitlab.com project as its main repository, and a steering record publishes as a merge request on it. Self-managed GitLab is not supported. Every call goes to gitlab.com until a host setting and an outbound-network review exist.
 
 The implementation sits behind one provider seam. [The steering host](../../packages/handlers/src/context.steering.host.ts) reads the provider of the workspace's main binding head and sends every steering call to [the GitHub implementation](../../packages/handlers/src/context.steering.github.ts) or [the GitLab implementation](../../packages/handlers/src/context.steering.gitlab.ts). The GitLab side uses [the `@oxagen/gitlab` client](../../packages/gitlab/src/client.ts): merge requests, commit statuses, repository files, branches and compare, and project hooks. It authenticates with a project access token and addresses the project by its numeric id, so a project moved to another group keeps working.
 
@@ -95,10 +95,10 @@ This inventory uses registered capability names. Their source files retain dotte
 |---|---|---|
 | `get_pr`, `get_pr_diff` | Merge request, diffs, notes | Not implemented. These read GitHub PRs for agents and remain GitHub-only |
 | `get_ci_status`, `list_branches` | Commit statuses, pipelines, branches | Not implemented; GitHub-only |
-| `open_context_pr`, `get_context_pr`, `merge_context_pr` | Open, read, merge a merge request | Implemented through the provider seam. Checks are commit statuses; the merge squashes with `sha` pinned to the checked head; a proposal records which host issued its number |
+| `open_steering_pr`, `get_steering_pr`, `merge_steering_pr` | Open, read, merge a merge request | Implemented through the provider seam. Checks are commit statuses; the merge squashes with `sha` pinned to the checked head; a proposal records which host issued its number |
 | `revert_steering_pr` | Open a merge request that undoes a merged one | Implemented through the provider seam. It reads the merge commit's parent through the commits API and reports the required check as a commit status |
-| `propose_record`, `revise_context_record`, `publish_context_record`, `set_governance_mode`, `get_steering_freshness` | Branch/file changes and merge history | Implemented through the provider seam. `get_steering_freshness` names the host so the CLI matches a gitlab.com remote, nested groups included |
-| `list_proposals`, `dismiss_proposal`, `list_context_records`, `promote_context_record` | Local proposal and record state | Local semantics kept. `dismiss_proposal` closes the merge request and deletes its branch, and leaves alone a PR opened on the other host |
+| `propose_record`, `revise_steering_record`, `publish_steering_record`, `set_governance_mode`, `get_steering_freshness` | Branch/file changes and merge history | Implemented through the provider seam. `get_steering_freshness` names the host so the CLI matches a gitlab.com remote, nested groups included |
+| `list_proposals`, `dismiss_proposal`, `list_steering_records`, `promote_steering_record` | Local proposal and record state | Local semantics kept. `dismiss_proposal` closes the merge request and deletes its branch, and leaves alone a PR opened on the other host |
 | `propose_skill` | Repository commits and merge requests | Implemented through the provider seam |
 | `update_skill_config` | Repository commits and merge requests | Refused on a GitLab binding with `conflict: repository_host_unsupported` |
 | `get_clone_draft`, `preview_skill_search`, `summarize_skill_search`, `propose_configuration_clone` | Repository file reads for clone drafts and skill search | Refused on a GitLab binding with `conflict: repository_host_unsupported`. All four read the workspace's files through [the skill repository resolver](../../packages/handlers/src/skill-config.repository.ts), which serves GitHub bindings only |

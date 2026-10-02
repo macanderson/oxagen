@@ -1,18 +1,18 @@
 // context.steering.store.ts — the Postgres seam under the steering handlers
-// (ADR-061): the published registry (agent.context_records and its versions),
+// (ADR-061): the published registry (agent.steering_records and its versions),
 // the promotions ledger, the proposals and the appended records. Every
 // handler takes a `SteeringStore`; this file is the one that runs SQL, inside
 // the tenant scope the kernel entered. The tests run the handlers against the
 // in-memory store in context.steering.test-support.ts.
 import {
   ambientPlaneKey,
-  CONTEXT_VERSION_CLASSIFICATION_COLUMN,
+  STEERING_VERSION_CLASSIFICATION_COLUMN,
   hasColumnFresh,
   isUniqueViolation,
   schema,
   withTenantDb,
 } from "@oxagen/database";
-import { contextRecordLabel } from "@oxagen/oxagen/context-record-label";
+import { steeringRecordLabel } from "@oxagen/oxagen/steering-record-label";
 import { readRecordFile } from "./context.steering.file";
 import { HandlerError } from "@oxagen/oxagen";
 import type {
@@ -46,7 +46,7 @@ interface SteeringScope {
 }
 
 export type ProposalRow = Omit<
-  typeof schema.contextProposals.$inferSelect,
+  typeof schema.steeringProposals.$inferSelect,
   "checks" | "title" | "label"
 > & { checks: CheckResult[]; title?: string | null; label?: string | null };
 
@@ -123,7 +123,7 @@ export interface ProposalGuard {
 }
 
 export type PublishedRecordRow = Omit<
-  typeof schema.contextRecords.$inferSelect,
+  typeof schema.steeringRecords.$inferSelect,
   "label"
 > & {
   label?: string | null;
@@ -308,8 +308,8 @@ export interface SteeringStore {
    * The newest publishing commit on the production branch, for the steering
    * freshness check: a developer's checkout that cannot reach this commit is
    * reading records that are no longer the ones in force. Null until a
-   * Context PR has merged (a record published through
-   * `publish_context_record` carries no commit).
+   * steering PR has merged (a record published through
+   * `publish_steering_record` carries no commit).
    */
   latestPublication(scope: SteeringScope): Promise<{
     commitSha: string;
@@ -355,7 +355,7 @@ export interface SteeringStore {
     row: ProposalRow,
   ): Promise<{ promotionEventPublicId: string; recordPublicId: string } | null>;
   /**
-   * The display names of these users, for the Context PR page's raised,
+   * The display names of these users, for the steering PR page's raised,
    * merged and closed lines, read only for members of the organization so a
    * name never crosses an organization boundary. A user with no display
    * name, no row or no membership is left out, and the page names them
@@ -377,7 +377,7 @@ export interface SteeringStore {
   /**
    * Move a governance proposal from `checks_passed` to `merged`, with its
    * commit and approver, and clear its merge claim. It publishes no record
-   * and appends no promotion event: `context_promotions` keeps one chain per
+   * and appends no promotion event: `steering_promotions` keeps one chain per
    * record. A proposal no longer at `checks_passed` throws `already_merged`.
    */
   mergeGovernance(input: MergeGovernanceInput): Promise<ProposalRow>;
@@ -406,7 +406,7 @@ export function headMoved(
 }
 
 /**
- * How long a merge's claim on a proposal stands (#4504). `merge_context_pr`
+ * How long a merge's claim on a proposal stands (#4504). `merge_steering_pr`
  * claims the proposal before it stamps the pull request, and clears the claim
  * when it publishes or when the host did not merge. Until then a check rerun,
  * a dismissal, and the repository sync leave the proposal alone, so the merge
@@ -486,15 +486,15 @@ const asChecks = (v: unknown): CheckResult[] =>
   Array.isArray(v) ? (v as CheckResult[]) : [];
 
 function toProposal(
-  row: typeof schema.contextProposals.$inferSelect,
+  row: typeof schema.steeringProposals.$inferSelect,
 ): ProposalRow {
   return { ...row, checks: asChecks(row.checks) };
 }
 
 function scoped(scope: SteeringScope) {
   return and(
-    eq(schema.contextProposals.orgId, scope.orgId),
-    eq(schema.contextProposals.workspaceId, scope.workspaceId),
+    eq(schema.steeringProposals.orgId, scope.orgId),
+    eq(schema.steeringProposals.workspaceId, scope.workspaceId),
   );
 }
 
@@ -506,9 +506,9 @@ const OPEN_PR_STATUSES = [
 ] as const;
 
 const recordColumns = {
-  ...getTableColumns(schema.contextRecords),
-  version: schema.contextRecordVersions.versionNumber,
-  checksum: schema.contextRecordVersions.checksum,
+  ...getTableColumns(schema.steeringRecords),
+  version: schema.steeringRecordVersions.versionNumber,
+  checksum: schema.steeringRecordVersions.checksum,
 };
 
 export const postgresSteeringStore: SteeringStore = {
@@ -519,24 +519,24 @@ export const postgresSteeringStore: SteeringStore = {
       );
       if (options?.createOnly) {
         const [record] = await tx
-          .select({ id: schema.contextRecords.id })
-          .from(schema.contextRecords)
+          .select({ id: schema.steeringRecords.id })
+          .from(schema.steeringRecords)
           .where(
             and(
-              eq(schema.contextRecords.orgId, values.orgId),
-              eq(schema.contextRecords.workspaceId, values.workspaceId),
-              eq(schema.contextRecords.slug, values.lineageId),
+              eq(schema.steeringRecords.orgId, values.orgId),
+              eq(schema.steeringRecords.workspaceId, values.workspaceId),
+              eq(schema.steeringRecords.slug, values.lineageId),
             ),
           )
           .limit(1);
         const [proposal] = await tx
-          .select({ id: schema.contextProposals.id })
-          .from(schema.contextProposals)
+          .select({ id: schema.steeringProposals.id })
+          .from(schema.steeringProposals)
           .where(
             and(
-              eq(schema.contextProposals.orgId, values.orgId),
-              eq(schema.contextProposals.workspaceId, values.workspaceId),
-              eq(schema.contextProposals.lineageId, values.lineageId),
+              eq(schema.steeringProposals.orgId, values.orgId),
+              eq(schema.steeringProposals.workspaceId, values.workspaceId),
+              eq(schema.steeringProposals.lineageId, values.lineageId),
             ),
           )
           .limit(1);
@@ -549,7 +549,7 @@ export const postgresSteeringStore: SteeringStore = {
           });
       }
       const [row] = await tx
-        .insert(schema.contextProposals)
+        .insert(schema.steeringProposals)
         .values(values)
         .returning();
       if (!row)
@@ -562,9 +562,9 @@ export const postgresSteeringStore: SteeringStore = {
     const [row] = await withTenantDb((tx) =>
       tx
         .select()
-        .from(schema.contextProposals)
+        .from(schema.steeringProposals)
         .where(
-          and(scoped(scope), eq(schema.contextProposals.publicId, publicId)),
+          and(scoped(scope), eq(schema.steeringProposals.publicId, publicId)),
         )
         .limit(1),
     );
@@ -575,8 +575,8 @@ export const postgresSteeringStore: SteeringStore = {
     const [row] = await withTenantDb((tx) =>
       tx
         .select()
-        .from(schema.contextProposals)
-        .where(eq(schema.contextProposals.id, id))
+        .from(schema.steeringProposals)
+        .where(eq(schema.steeringProposals.id, id))
         .limit(1),
     );
     return row ? toProposal(row) : null;
@@ -586,14 +586,14 @@ export const postgresSteeringStore: SteeringStore = {
     if (!row.promotionEventId || !row.publishedRecordId) return null;
     return withTenantDb(async (tx) => {
       const [promotion] = await tx
-        .select({ publicId: schema.contextPromotions.publicId })
-        .from(schema.contextPromotions)
-        .where(eq(schema.contextPromotions.id, row.promotionEventId!))
+        .select({ publicId: schema.steeringPromotions.publicId })
+        .from(schema.steeringPromotions)
+        .where(eq(schema.steeringPromotions.id, row.promotionEventId!))
         .limit(1);
       const [record] = await tx
-        .select({ publicId: schema.contextRecords.publicId })
-        .from(schema.contextRecords)
-        .where(eq(schema.contextRecords.id, row.publishedRecordId!))
+        .select({ publicId: schema.steeringRecords.publicId })
+        .from(schema.steeringRecords)
+        .where(eq(schema.steeringRecords.id, row.publishedRecordId!))
         .limit(1);
       if (!promotion || !record) return null;
       return {
@@ -630,16 +630,16 @@ export const postgresSteeringStore: SteeringStore = {
     const [row] = await withTenantDb((tx) =>
       tx
         .select()
-        .from(schema.contextProposals)
+        .from(schema.steeringProposals)
         .where(
           and(
             scoped(scope),
-            eq(schema.contextProposals.lineageId, lineageId),
-            sql`${schema.contextProposals.status} IN (${sql.join(
+            eq(schema.steeringProposals.lineageId, lineageId),
+            sql`${schema.steeringProposals.status} IN (${sql.join(
               OPEN_PR_STATUSES.map((s) => sql`${s}`),
               sql`, `,
             )})`,
-            sql`${schema.contextProposals.id} <> ${excludingId}`,
+            sql`${schema.steeringProposals.id} <> ${excludingId}`,
           ),
         )
         .limit(1),
@@ -651,27 +651,27 @@ export const postgresSteeringStore: SteeringStore = {
     const where = and(
       scoped(scope),
       filter.status
-        ? eq(schema.contextProposals.status, filter.status)
+        ? eq(schema.steeringProposals.status, filter.status)
         : undefined,
       filter.statuses
-        ? inArray(schema.contextProposals.status, [...filter.statuses])
+        ? inArray(schema.steeringProposals.status, [...filter.statuses])
         : undefined,
       filter.lineageId
-        ? eq(schema.contextProposals.lineageId, filter.lineageId)
+        ? eq(schema.steeringProposals.lineageId, filter.lineageId)
         : undefined,
     );
     return withTenantDb(async (tx) => {
       const [c] = await tx
         .select({ total: count() })
-        .from(schema.contextProposals)
+        .from(schema.steeringProposals)
         .where(where);
       const rows = await tx
         .select()
-        .from(schema.contextProposals)
+        .from(schema.steeringProposals)
         .where(where)
         .orderBy(
-          desc(schema.contextProposals.createdAt),
-          desc(schema.contextProposals.id),
+          desc(schema.steeringProposals.createdAt),
+          desc(schema.steeringProposals.id),
         )
         .limit(page.limit)
         .offset(page.offset);
@@ -681,16 +681,16 @@ export const postgresSteeringStore: SteeringStore = {
 
   async updateProposal(id, patch, from, guard) {
     return withTenantDb(async (tx) => {
-      const claimCol = schema.contextProposals.mergeClaimedAt;
+      const claimCol = schema.steeringProposals.mergeClaimedAt;
       const [row] = await tx
-        .update(schema.contextProposals)
+        .update(schema.steeringProposals)
         .set({ ...patch, updatedAt: sql`now()` })
         .where(
           and(
-            eq(schema.contextProposals.id, id),
-            inArray(schema.contextProposals.status, [...from]),
+            eq(schema.steeringProposals.id, id),
+            inArray(schema.steeringProposals.status, [...from]),
             guard?.headSha !== undefined
-              ? eq(schema.contextProposals.headSha, guard.headSha)
+              ? eq(schema.steeringProposals.headSha, guard.headSha)
               : undefined,
             guard?.noClaimSince !== undefined
               ? or(isNull(claimCol), lte(claimCol, guard.noClaimSince))
@@ -701,13 +701,13 @@ export const postgresSteeringStore: SteeringStore = {
       if (row) return toProposal(row);
       const [current] = await tx
         .select({
-          publicId: schema.contextProposals.publicId,
-          status: schema.contextProposals.status,
-          headSha: schema.contextProposals.headSha,
+          publicId: schema.steeringProposals.publicId,
+          status: schema.steeringProposals.status,
+          headSha: schema.steeringProposals.headSha,
           mergeClaimedAt: claimCol,
         })
-        .from(schema.contextProposals)
-        .where(eq(schema.contextProposals.id, id))
+        .from(schema.steeringProposals)
+        .where(eq(schema.steeringProposals.id, id))
         .limit(1);
       if (!current)
         throw new Error(
@@ -722,33 +722,33 @@ export const postgresSteeringStore: SteeringStore = {
       await tx.execute(
         sql`select pg_advisory_xact_lock(hashtextextended(${`${values.workspaceId}:${values.lineageId.toLowerCase()}`}, 0))`,
       );
-      const claimCol = schema.contextProposals.mergeClaimedAt;
+      const claimCol = schema.steeringProposals.mergeClaimedAt;
       const [set] = await tx
-        .update(schema.contextProposals)
+        .update(schema.steeringProposals)
         .set({ ...prior.patch, updatedAt: sql`now()` })
         .where(
           and(
-            eq(schema.contextProposals.id, prior.id),
-            inArray(schema.contextProposals.status, [...prior.from]),
+            eq(schema.steeringProposals.id, prior.id),
+            inArray(schema.steeringProposals.status, [...prior.from]),
             prior.guard?.headSha !== undefined
-              ? eq(schema.contextProposals.headSha, prior.guard.headSha)
+              ? eq(schema.steeringProposals.headSha, prior.guard.headSha)
               : undefined,
             prior.guard?.noClaimSince !== undefined
               ? or(isNull(claimCol), lte(claimCol, prior.guard.noClaimSince))
               : undefined,
           ),
         )
-        .returning({ id: schema.contextProposals.id });
+        .returning({ id: schema.steeringProposals.id });
       if (!set) {
         const [current] = await tx
           .select({
-            publicId: schema.contextProposals.publicId,
-            status: schema.contextProposals.status,
-            headSha: schema.contextProposals.headSha,
+            publicId: schema.steeringProposals.publicId,
+            status: schema.steeringProposals.status,
+            headSha: schema.steeringProposals.headSha,
             mergeClaimedAt: claimCol,
           })
-          .from(schema.contextProposals)
-          .where(eq(schema.contextProposals.id, prior.id))
+          .from(schema.steeringProposals)
+          .where(eq(schema.steeringProposals.id, prior.id))
           .limit(1);
         if (!current)
           throw new Error(
@@ -757,7 +757,7 @@ export const postgresSteeringStore: SteeringStore = {
         throw refusedWrite(current, prior.from, prior.guard);
       }
       const [row] = await tx
-        .insert(schema.contextProposals)
+        .insert(schema.steeringProposals)
         .values(values)
         .returning();
       if (!row)
@@ -768,39 +768,39 @@ export const postgresSteeringStore: SteeringStore = {
 
   async listRecords(scope, filter, page) {
     const where = and(
-      eq(schema.contextRecords.orgId, scope.orgId),
-      eq(schema.contextRecords.workspaceId, scope.workspaceId),
-      isNull(schema.contextRecords.deletedAt),
-      filter.kind ? eq(schema.contextRecords.kind, filter.kind) : undefined,
+      eq(schema.steeringRecords.orgId, scope.orgId),
+      eq(schema.steeringRecords.workspaceId, scope.workspaceId),
+      isNull(schema.steeringRecords.deletedAt),
+      filter.kind ? eq(schema.steeringRecords.kind, filter.kind) : undefined,
       filter.sharingScope
-        ? eq(schema.contextRecords.sharingScope, filter.sharingScope)
+        ? eq(schema.steeringRecords.sharingScope, filter.sharingScope)
         : undefined,
       filter.status
-        ? eq(schema.contextRecords.status, filter.status)
+        ? eq(schema.steeringRecords.status, filter.status)
         : undefined,
       filter.lineageId
-        ? eq(schema.contextRecords.slug, filter.lineageId)
+        ? eq(schema.steeringRecords.slug, filter.lineageId)
         : undefined,
     );
     return withTenantDb(async (tx) => {
       const [c] = await tx
         .select({ total: count() })
-        .from(schema.contextRecords)
+        .from(schema.steeringRecords)
         .where(where);
       const rows = await tx
         .select(recordColumns)
-        .from(schema.contextRecords)
+        .from(schema.steeringRecords)
         .leftJoin(
-          schema.contextRecordVersions,
+          schema.steeringRecordVersions,
           eq(
-            schema.contextRecordVersions.id,
-            schema.contextRecords.activeVersionId,
+            schema.steeringRecordVersions.id,
+            schema.steeringRecords.activeVersionId,
           ),
         )
         .where(where)
         .orderBy(
-          desc(schema.contextRecords.updatedAt),
-          asc(schema.contextRecords.slug),
+          desc(schema.steeringRecords.updatedAt),
+          asc(schema.steeringRecords.slug),
         )
         .limit(page.limit)
         .offset(page.offset);
@@ -812,22 +812,22 @@ export const postgresSteeringStore: SteeringStore = {
     return withTenantDb(async (tx) => {
       const [record] = await tx
         .select(recordColumns)
-        .from(schema.contextRecords)
+        .from(schema.steeringRecords)
         .leftJoin(
-          schema.contextRecordVersions,
+          schema.steeringRecordVersions,
           eq(
-            schema.contextRecordVersions.id,
-            schema.contextRecords.activeVersionId,
+            schema.steeringRecordVersions.id,
+            schema.steeringRecords.activeVersionId,
           ),
         )
         .where(
           and(
-            eq(schema.contextRecords.orgId, scope.orgId),
-            eq(schema.contextRecords.workspaceId, scope.workspaceId),
-            isNull(schema.contextRecords.deletedAt),
+            eq(schema.steeringRecords.orgId, scope.orgId),
+            eq(schema.steeringRecords.workspaceId, scope.workspaceId),
+            isNull(schema.steeringRecords.deletedAt),
             or(
-              eq(schema.contextRecords.publicId, idOrLineage),
-              eq(schema.contextRecords.slug, idOrLineage),
+              eq(schema.steeringRecords.publicId, idOrLineage),
+              eq(schema.steeringRecords.slug, idOrLineage),
             ),
           ),
         )
@@ -835,28 +835,28 @@ export const postgresSteeringStore: SteeringStore = {
       if (!record) return null;
       const versions = await tx
         .select({
-          publicId: schema.contextRecordVersions.publicId,
-          version: schema.contextRecordVersions.versionNumber,
-          checksum: schema.contextRecordVersions.checksum,
-          isLatest: schema.contextRecordVersions.isLatest,
-          publishedAt: schema.contextRecordVersions.publishedAt,
+          publicId: schema.steeringRecordVersions.publicId,
+          version: schema.steeringRecordVersions.versionNumber,
+          checksum: schema.steeringRecordVersions.checksum,
+          isLatest: schema.steeringRecordVersions.isLatest,
+          publishedAt: schema.steeringRecordVersions.publishedAt,
         })
-        .from(schema.contextRecordVersions)
-        .where(eq(schema.contextRecordVersions.recordId, record.id))
-        .orderBy(desc(schema.contextRecordVersions.versionNumber));
+        .from(schema.steeringRecordVersions)
+        .where(eq(schema.steeringRecordVersions.recordId, record.id))
+        .orderBy(desc(schema.steeringRecordVersions.versionNumber));
       const [publisher] = await tx
         .select({
-          publicId: schema.contextProposals.publicId,
-          prUrl: schema.contextProposals.prUrl,
+          publicId: schema.steeringProposals.publicId,
+          prUrl: schema.steeringProposals.prUrl,
         })
-        .from(schema.contextProposals)
+        .from(schema.steeringProposals)
         .where(
           and(
-            eq(schema.contextProposals.publishedRecordId, record.id),
-            eq(schema.contextProposals.status, "merged"),
+            eq(schema.steeringProposals.publishedRecordId, record.id),
+            eq(schema.steeringProposals.status, "merged"),
           ),
         )
-        .orderBy(desc(schema.contextProposals.mergedAt))
+        .orderBy(desc(schema.steeringProposals.mergedAt))
         .limit(1);
       return {
         record,
@@ -914,20 +914,20 @@ export const postgresSteeringStore: SteeringStore = {
     return withTenantDb((tx) =>
       tx
         .select(recordColumns)
-        .from(schema.contextRecords)
+        .from(schema.steeringRecords)
         .leftJoin(
-          schema.contextRecordVersions,
+          schema.steeringRecordVersions,
           eq(
-            schema.contextRecordVersions.id,
-            schema.contextRecords.activeVersionId,
+            schema.steeringRecordVersions.id,
+            schema.steeringRecords.activeVersionId,
           ),
         )
         .where(
           and(
-            eq(schema.contextRecords.orgId, scope.orgId),
-            eq(schema.contextRecords.workspaceId, scope.workspaceId),
-            eq(schema.contextRecords.status, "active"),
-            isNull(schema.contextRecords.deletedAt),
+            eq(schema.steeringRecords.orgId, scope.orgId),
+            eq(schema.steeringRecords.workspaceId, scope.workspaceId),
+            eq(schema.steeringRecords.status, "active"),
+            isNull(schema.steeringRecords.deletedAt),
           ),
         ),
     );
@@ -935,26 +935,26 @@ export const postgresSteeringStore: SteeringStore = {
 
   async latestPublication(scope) {
     const published = and(
-      eq(schema.contextRecords.orgId, scope.orgId),
-      eq(schema.contextRecords.workspaceId, scope.workspaceId),
-      isNotNull(schema.contextRecords.commitSha),
-      isNotNull(schema.contextRecords.publishedAt),
-      isNull(schema.contextRecords.deletedAt),
+      eq(schema.steeringRecords.orgId, scope.orgId),
+      eq(schema.steeringRecords.workspaceId, scope.workspaceId),
+      isNotNull(schema.steeringRecords.commitSha),
+      isNotNull(schema.steeringRecords.publishedAt),
+      isNull(schema.steeringRecords.deletedAt),
     );
     const rows = await withTenantDb((tx) => {
       const newestInstant = tx
-        .select({ at: max(schema.contextRecords.publishedAt) })
-        .from(schema.contextRecords)
+        .select({ at: max(schema.steeringRecords.publishedAt) })
+        .from(schema.steeringRecords)
         .where(published);
       return (
         tx
           .select({
-            commitSha: schema.contextRecords.commitSha,
-            publishedAt: schema.contextRecords.publishedAt,
+            commitSha: schema.steeringRecords.commitSha,
+            publishedAt: schema.steeringRecords.publishedAt,
           })
-          .from(schema.contextRecords)
+          .from(schema.steeringRecords)
           // Every publication at the newest instant, in one round trip.
-          // `published_at` is GitHub's merge instant (see `merge_context_pr`),
+          // `published_at` is GitHub's merge instant (see `merge_steering_pr`),
           // so a publication retried after a later merge still sorts earlier.
           //
           // GitHub reports that instant to the second, and two PRs can merge
@@ -968,11 +968,11 @@ export const postgresSteeringStore: SteeringStore = {
           .where(
             and(
               published,
-              eq(schema.contextRecords.publishedAt, sql`(${newestInstant})`),
+              eq(schema.steeringRecords.publishedAt, sql`(${newestInstant})`),
             ),
           )
           // Stable, so `commitSha` does not flip between two reads.
-          .orderBy(desc(schema.contextRecords.id))
+          .orderBy(desc(schema.steeringRecords.id))
       );
     });
     const newest = rows[0];
@@ -993,11 +993,11 @@ export const postgresSteeringStore: SteeringStore = {
     const [c] = await withTenantDb((tx) =>
       tx
         .select({ total: count() })
-        .from(schema.contextPromotions)
+        .from(schema.steeringPromotions)
         .where(
           and(
-            eq(schema.contextPromotions.orgId, scope.orgId),
-            eq(schema.contextPromotions.workspaceId, scope.workspaceId),
+            eq(schema.steeringPromotions.orgId, scope.orgId),
+            eq(schema.steeringPromotions.workspaceId, scope.workspaceId),
           ),
         ),
     );
@@ -1006,42 +1006,42 @@ export const postgresSteeringStore: SteeringStore = {
 
   async versionAndPublication(scope) {
     const published = and(
-      eq(schema.contextRecords.orgId, scope.orgId),
-      eq(schema.contextRecords.workspaceId, scope.workspaceId),
-      isNotNull(schema.contextRecords.commitSha),
-      isNotNull(schema.contextRecords.publishedAt),
-      isNull(schema.contextRecords.deletedAt),
+      eq(schema.steeringRecords.orgId, scope.orgId),
+      eq(schema.steeringRecords.workspaceId, scope.workspaceId),
+      isNotNull(schema.steeringRecords.commitSha),
+      isNotNull(schema.steeringRecords.publishedAt),
+      isNull(schema.steeringRecords.deletedAt),
     );
     const { countRow, rows } = await withTenantDb(async (tx) => {
       const newestInstant = tx
-        .select({ at: max(schema.contextRecords.publishedAt) })
-        .from(schema.contextRecords)
+        .select({ at: max(schema.steeringRecords.publishedAt) })
+        .from(schema.steeringRecords)
         .where(published);
       const [countRow] = await tx
         .select({ total: count() })
-        .from(schema.contextPromotions)
+        .from(schema.steeringPromotions)
         .where(
           and(
-            eq(schema.contextPromotions.orgId, scope.orgId),
-            eq(schema.contextPromotions.workspaceId, scope.workspaceId),
+            eq(schema.steeringPromotions.orgId, scope.orgId),
+            eq(schema.steeringPromotions.workspaceId, scope.workspaceId),
           ),
         );
       const rows = await tx
         .select({
-          commitSha: schema.contextRecords.commitSha,
-          publishedAt: schema.contextRecords.publishedAt,
+          commitSha: schema.steeringRecords.commitSha,
+          publishedAt: schema.steeringRecords.publishedAt,
         })
-        .from(schema.contextRecords)
+        .from(schema.steeringRecords)
         // Same tie-break as `latestPublication`: every publication at the
         // newest instant, stable on id so `commitSha` does not flip between
         // reads.
         .where(
           and(
             published,
-            eq(schema.contextRecords.publishedAt, sql`(${newestInstant})`),
+            eq(schema.steeringRecords.publishedAt, sql`(${newestInstant})`),
           ),
         )
-        .orderBy(desc(schema.contextRecords.id));
+        .orderBy(desc(schema.steeringRecords.id));
       return { countRow, rows };
     });
     const newest = rows[0];
@@ -1147,7 +1147,7 @@ export const postgresSteeringStore: SteeringStore = {
       // only with the DDL, which is the one thing that must not interleave
       // here. Taking it early moves the acquisition, it does not add one.
       await tx.execute(
-        sql`lock table ${schema.contextRecordVersions} in row exclusive mode`,
+        sql`lock table ${schema.steeringRecordVersions} in row exclusive mode`,
       );
 
       // `hasColumnFresh`, not `hasColumn`: a cached MISS must not reach a
@@ -1160,23 +1160,23 @@ export const postgresSteeringStore: SteeringStore = {
       // permanently, for that version (discussion_r4050451667).
       const versionClassificationReady = await hasColumnFresh(
         tx,
-        CONTEXT_VERSION_CLASSIFICATION_COLUMN,
+        STEERING_VERSION_CLASSIFICATION_COLUMN,
         await ambientPlaneKey(),
       );
       const [existing] = await tx
         .select({
-          id: schema.contextRecords.id,
-          publicId: schema.contextRecords.publicId,
-          label: schema.contextRecords.label,
-          activeVersionId: schema.contextRecords.activeVersionId,
+          id: schema.steeringRecords.id,
+          publicId: schema.steeringRecords.publicId,
+          label: schema.steeringRecords.label,
+          activeVersionId: schema.steeringRecords.activeVersionId,
         })
-        .from(schema.contextRecords)
+        .from(schema.steeringRecords)
         .where(
           and(
-            eq(schema.contextRecords.orgId, scope.orgId),
-            eq(schema.contextRecords.workspaceId, scope.workspaceId),
-            eq(schema.contextRecords.slug, proposal.lineageId),
-            isNull(schema.contextRecords.deletedAt),
+            eq(schema.steeringRecords.orgId, scope.orgId),
+            eq(schema.steeringRecords.workspaceId, scope.workspaceId),
+            eq(schema.steeringRecords.slug, proposal.lineageId),
+            isNull(schema.steeringRecords.deletedAt),
           ),
         )
         .limit(1);
@@ -1186,13 +1186,13 @@ export const postgresSteeringStore: SteeringStore = {
         // The merged file names the record (ADR-178). A file written before
         // ADR-178 has no label, and then an omitted label keeps the record's
         // own. The fallback is derived from the slug and fits the 36-character
-        // CHECK: a label that fails context_records_label_check fails after
+        // CHECK: a label that fails steering_records_label_check fails after
         // GitHub has merged.
         label:
           readRecordFile(input.body)?.label ??
           proposal.label ??
           existing?.label ??
-          contextRecordLabel(proposal.lineageId),
+          steeringRecordLabel(proposal.lineageId),
         status: "active" as const,
         kind: proposal.kind,
         force: proposal.force,
@@ -1215,7 +1215,7 @@ export const postgresSteeringStore: SteeringStore = {
         recordPublicId = existing.publicId;
       } else {
         const [created] = await tx
-          .insert(schema.contextRecords)
+          .insert(schema.steeringRecords)
           .values({
             orgId: scope.orgId,
             workspaceId: scope.workspaceId,
@@ -1224,8 +1224,8 @@ export const postgresSteeringStore: SteeringStore = {
             ...classification,
           })
           .returning({
-            id: schema.contextRecords.id,
-            publicId: schema.contextRecords.publicId,
+            id: schema.steeringRecords.id,
+            publicId: schema.steeringRecords.publicId,
           });
         if (!created)
           throw new Error("[context.steering] record insert returned no row");
@@ -1241,12 +1241,12 @@ export const postgresSteeringStore: SteeringStore = {
       if (existing?.activeVersionId) {
         const [active] = await tx
           .select({
-            id: schema.contextRecordVersions.id,
-            versionNumber: schema.contextRecordVersions.versionNumber,
-            checksum: schema.contextRecordVersions.checksum,
+            id: schema.steeringRecordVersions.id,
+            versionNumber: schema.steeringRecordVersions.versionNumber,
+            checksum: schema.steeringRecordVersions.checksum,
           })
-          .from(schema.contextRecordVersions)
-          .where(eq(schema.contextRecordVersions.id, existing.activeVersionId))
+          .from(schema.steeringRecordVersions)
+          .where(eq(schema.steeringRecordVersions.id, existing.activeVersionId))
           .limit(1);
         if (active?.checksum === input.checksum)
           reused = { id: active.id, version: active.versionNumber };
@@ -1274,7 +1274,7 @@ export const postgresSteeringStore: SteeringStore = {
               type: "commit",
               uri: `${proposal.repository ?? ""}@${input.commitSha}:${input.path}`,
               digest: input.checksum,
-              method: "context_pr",
+              method: "steering_pr",
               by: proposal.publicId,
             },
           ],
@@ -1282,9 +1282,9 @@ export const postgresSteeringStore: SteeringStore = {
         }));
 
       await tx
-        .update(schema.contextRecords)
+        .update(schema.steeringRecords)
         .set({ ...classification, activeVersionId: version.id })
-        .where(eq(schema.contextRecords.id, recordId));
+        .where(eq(schema.steeringRecords.id, recordId));
 
       // The promotion event: the next link in the record's chain, and one more
       // entry in the workspace ledger (its steering version).
@@ -1301,7 +1301,7 @@ export const postgresSteeringStore: SteeringStore = {
       // `checks_passed` and both reached here publish once, the second one
       // rolling back its record, version and ledger row.
       const [transitioned] = await tx
-        .update(schema.contextProposals)
+        .update(schema.steeringProposals)
         .set({
           status: "merged",
           mergedCommit: input.commitSha,
@@ -1315,11 +1315,11 @@ export const postgresSteeringStore: SteeringStore = {
         })
         .where(
           and(
-            eq(schema.contextProposals.id, proposal.id),
-            eq(schema.contextProposals.status, "checks_passed"),
+            eq(schema.steeringProposals.id, proposal.id),
+            eq(schema.steeringProposals.status, "checks_passed"),
           ),
         )
-        .returning({ id: schema.contextProposals.id });
+        .returning({ id: schema.steeringProposals.id });
       if (!transitioned) throw alreadyMerged(proposal.publicId);
 
       return {
@@ -1341,7 +1341,7 @@ export const postgresSteeringStore: SteeringStore = {
   async mergeGovernance(input) {
     const [row] = await withTenantDb((tx) =>
       tx
-        .update(schema.contextProposals)
+        .update(schema.steeringProposals)
         .set({
           status: "merged",
           mergedCommit: input.commitSha,
@@ -1353,9 +1353,9 @@ export const postgresSteeringStore: SteeringStore = {
         })
         .where(
           and(
-            eq(schema.contextProposals.id, input.proposal.id),
-            eq(schema.contextProposals.kind, "governance"),
-            eq(schema.contextProposals.status, "checks_passed"),
+            eq(schema.steeringProposals.id, input.proposal.id),
+            eq(schema.steeringProposals.kind, "governance"),
+            eq(schema.steeringProposals.status, "checks_passed"),
           ),
         )
         .returning(),

@@ -64,7 +64,7 @@ export const [steeringSync] = createFunction(
       runOnce(scope, data.force === true),
     );
     if (first.retryAfterSeconds === null) return first;
-    // A Context PR Oxagen merged is still inside its grace window; the merge
+    // A steering PR Oxagen merged is still inside its grace window; the merge
     // publishes it with its reviewer on the ledger. Sync again after the
     // window, when anything the merge left unpublished is the sync's.
     await step.sleep("merge-grace", `${first.retryAfterSeconds}s`);

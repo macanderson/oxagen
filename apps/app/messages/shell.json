@@ -77,7 +77,7 @@
         "any": "Create anything",
         "tool": "New tool",
         "skill": "Add a skill",
-        "record": "Write a context record"
+        "record": "Write a steering record"
       },
       "footer": {
         "move": "move",

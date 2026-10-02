@@ -13,7 +13,7 @@
 // A steering repository keeps `steering/governance.toml`. Every route there
 // opens a steering PR. Solo and Apply now land it through the merge queue. The
 // review route leaves it open, records it as a governance proposal, and
-// merge_context_pr lands it for an approver (ADR-232, #4795).
+// merge_steering_pr lands it for an approver (ADR-232, #4795).
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { HandlerError } from "@oxagen/oxagen";
 import { contextGovernanceModeSet } from "@oxagen/oxagen/contracts/context.governance_mode.set";
@@ -74,14 +74,14 @@ import {
   type PromotionLine,
 } from "@oxagen/oxagen/steering-repo/promotion";
 import type { CheckReport } from "@oxagen/steering-check";
-import { contextPrMerge } from "@oxagen/oxagen/contracts/context.pr.merge";
+import { steeringPrMerge } from "@oxagen/oxagen/contracts/steering.pr.merge";
 import { makeSetGovernanceModeHandler } from "./context.governance_mode.set";
-import { createGetContextPrHandler } from "./context.pr.get";
+import { createGetSteeringPrHandler } from "./steering.pr.get";
 import {
-  createMergeContextPrHandler,
+  createMergeSteeringPrHandler,
   type MergeSeams,
-} from "./context.pr.merge";
-import { contextPrMergeWithoutReview } from "@oxagen/oxagen/contracts/context.pr.merge_without_review";
+} from "./steering.pr.merge";
+import { steeringPrMergeWithoutReview } from "@oxagen/oxagen/contracts/steering.pr.merge_without_review";
 import {
   MERGE_GRACE_SECONDS,
   syncWorkspaceSteering,
@@ -592,7 +592,7 @@ describe("set_governance_mode in a steering repository", () => {
     ).toBe(before.replace('mode = "team"', 'mode = "solo"'));
     // A proposal records no governance change and no override.
     expect(deps.events).toEqual([]);
-    // The PR is recorded as a governance proposal, for merge_context_pr to
+    // The PR is recorded as a governance proposal, for merge_steering_pr to
     // land for an approver (#4795), and the answer names it for the page.
     expect(out.proposalId).toBe(deps.store.proposals[0]?.publicId);
     expect(deps.store.proposals).toEqual([
@@ -829,7 +829,7 @@ describe("set_governance_mode in a steering repository", () => {
   });
 });
 
-// ── merge_context_pr on a governance proposal (#4795) ───────────────────────
+// ── merge_steering_pr on a governance proposal (#4795) ───────────────────────
 
 /** The merge seams for a healthy steering repository, over `seams`' checks. */
 function mergeSeams(
@@ -853,13 +853,13 @@ async function proposeSolo(deps: Harness): Promise<string> {
   return row.publicId;
 }
 
-describe("merge_context_pr on a governance proposal", () => {
+describe("merge_steering_pr on a governance proposal", () => {
   it("lands the reviewed change for an approver and refuses its author", async () => {
     const deps = steeringMode("team");
     const before = await productionText(deps);
     const proposalId = await proposeSolo(deps);
     const seams = doubles();
-    const merge = createMergeContextPrHandler(deps, mergeSeams(seams));
+    const merge = createMergeSteeringPrHandler(deps, mergeSeams(seams));
 
     await expect(
       merge({ proposalId }, ctx({ userId: AUTHOR })),
@@ -877,7 +877,7 @@ describe("merge_context_pr on a governance proposal", () => {
       bundleVersion: { before: 0, after: 0 },
       publishedVersion: 21,
     });
-    expect(() => contextPrMerge.output.parse(out)).not.toThrow();
+    expect(() => steeringPrMerge.output.parse(out)).not.toThrow();
     expect(deps.github.merges).toHaveLength(1);
     expect(deps.github.merges[0]?.commitTitle).toBe(
       `steering: set governance mode to solo (#${deps.github.pulls[0]?.number})`,
@@ -909,7 +909,7 @@ describe("merge_context_pr on a governance proposal", () => {
     ]);
     expect(deps.events[0]).toMatchObject({
       actorUserId: REVIEWER,
-      capability: "merge_context_pr",
+      capability: "merge_steering_pr",
       detail: {
         previousMode: "team",
         mode: "solo",
@@ -921,7 +921,7 @@ describe("merge_context_pr on a governance proposal", () => {
     });
 
     // The PR view says merged, with no promotion event and no record.
-    const view = await createGetContextPrHandler(deps)(
+    const view = await createGetSteeringPrHandler(deps)(
       { proposalId },
       ctx({ userId: REVIEWER }),
     );
@@ -951,7 +951,7 @@ describe("merge_context_pr on a governance proposal", () => {
     const seams = doubles();
 
     await expect(
-      createMergeContextPrHandler(deps, mergeSeams(seams))(
+      createMergeSteeringPrHandler(deps, mergeSeams(seams))(
         { proposalId },
         ctx({ userId: REVIEWER }),
       ),
@@ -986,7 +986,7 @@ describe("merge_context_pr on a governance proposal", () => {
       },
     };
 
-    const out = await createMergeContextPrHandler(
+    const out = await createMergeSteeringPrHandler(
       deps,
       mergeSeams(seams, { publisher: () => published }),
     )({ proposalId }, ctx({ userId: REVIEWER }));
@@ -1008,7 +1008,7 @@ describe("merge_context_pr on a governance proposal", () => {
     deps.requestSync = vi.fn(async () => undefined);
 
     await expect(
-      createMergeContextPrHandler(deps, mergeSeams(doubles()))({ proposalId }, ctx({ userId: REVIEWER })),
+      createMergeSteeringPrHandler(deps, mergeSeams(doubles()))({ proposalId }, ctx({ userId: REVIEWER })),
     ).rejects.toMatchObject({ code: "conflict", reason: "merged_outside_oxagen" });
     // Nobody is credited with the merge, and no governance event claims a
     // review. The sync records it as a change made outside Oxagen.
@@ -1027,7 +1027,7 @@ describe("merge_context_pr on a governance proposal", () => {
     );
     const seams = doubles();
 
-    const out = await createMergeContextPrHandler(deps, mergeSeams(seams))(
+    const out = await createMergeSteeringPrHandler(deps, mergeSeams(seams))(
       { proposalId },
       ctx({ userId: REVIEWER }),
     );
@@ -1063,7 +1063,7 @@ describe("merge_context_pr on a governance proposal", () => {
     deps.store.proposals[0]!.headSha = bad;
 
     await expect(
-      createMergeContextPrHandler(deps, mergeSeams(doubles()))(
+      createMergeSteeringPrHandler(deps, mergeSeams(doubles()))(
         { proposalId },
         ctx({ userId: REVIEWER }),
       ),
@@ -1078,7 +1078,7 @@ describe("merge_context_pr on a governance proposal", () => {
     const proposalId = await proposeSolo(deps);
 
     await expect(
-      createMergeContextPrHandler(deps, mergeSeams(doubles(failed())))(
+      createMergeSteeringPrHandler(deps, mergeSeams(doubles(failed())))(
         { proposalId },
         ctx({ userId: REVIEWER }),
       ),
@@ -1093,7 +1093,7 @@ describe("merge_context_pr on a governance proposal", () => {
     deps.github.approvals = [];
 
     await expect(
-      createMergeContextPrHandler(
+      createMergeSteeringPrHandler(
         deps,
         mergeSeams(doubles(), { holdsMergeWithoutReview: async () => true }),
       )({ proposalId }, ctx({ userId: REVIEWER })),
@@ -1113,10 +1113,10 @@ describe("merge_context_pr on a governance proposal", () => {
     const proposalId = await proposeSolo(deps);
 
     await expect(
-      createMergeContextPrHandler(
+      createMergeSteeringPrHandler(
         deps,
         mergeSeams(doubles()),
-        contextPrMergeWithoutReview.name,
+        steeringPrMergeWithoutReview.name,
       )({ proposalId }, ctx({ userId: REVIEWER })),
     ).rejects.toMatchObject({ reason: "review_required" });
     expect(deps.github.merges).toEqual([]);
@@ -1288,11 +1288,11 @@ describe("the repository sync on a governance change", () => {
     });
   });
 
-  it("records nothing for a change merge_context_pr landed, which recorded its own", async () => {
+  it("records nothing for a change merge_steering_pr landed, which recorded its own", async () => {
     const deps = steeringMode("team");
     const sync = await syncedBaseline(deps);
     const proposalId = await proposeSolo(deps);
-    await createMergeContextPrHandler(deps, mergeSeams(doubles()))(
+    await createMergeSteeringPrHandler(deps, mergeSeams(doubles()))(
       { proposalId },
       ctx({ userId: REVIEWER }),
     );
@@ -1305,7 +1305,7 @@ describe("the repository sync on a governance change", () => {
 
     expect(out.governanceChange).toBeNull();
     expect(deps.events).toEqual([]);
-    // The sync leaves the proposal merge_context_pr landed as it was.
+    // The sync leaves the proposal merge_steering_pr landed as it was.
     expect(
       deps.store.proposals.find((p) => p.publicId === proposalId),
     ).toMatchObject({ status: "merged", mergedByUserId: REVIEWER });

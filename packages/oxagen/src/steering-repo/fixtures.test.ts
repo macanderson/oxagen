@@ -37,6 +37,7 @@ import {
   LEGACY_GOVERNANCE_PATH,
   LEGACY_RULES_DIR,
   LEGACY_WORKSPACE_TOML_PATH,
+  LEGACY_RECORD_SCHEMA,
   README_PATH,
   recordFileName,
   recordLineageFromPath,
@@ -469,7 +470,7 @@ const legacyRecordSchema = z
 // A v0.1 rules file holds one record.
 const legacyRecordFileSchema = z
   .object({
-    schema: z.literal("context-record/v0.1"),
+    schema: z.literal(LEGACY_RECORD_SCHEMA),
     set_id: z.string(),
     record: z.tuple([legacyRecordSchema]),
   })

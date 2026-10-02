@@ -1,19 +1,19 @@
 "use server";
-// The Context PR writes (#2961; ADR-061), each through the kernel seam for the
+// The steering PR writes (#2961; ADR-061), each through the kernel seam for the
 // workspace viewer the URL names. Every contract is `noBillingGate`.
-// open_context_pr and dismiss_proposal gate the acting user's role in their
-// handlers (INV-29); merge_context_pr gates the signed-in reviewer the
+// open_steering_pr and dismiss_proposal gate the acting user's role in their
+// handlers (INV-29); merge_steering_pr gates the signed-in reviewer the
 // governance mode names, and revert_steering_pr gates the acting user by the
 // same mode. A refusal comes back as `denied` or `conflict` with
 // the handler's reason as its code, and nothing changed.
 import { agentMemoryUpdate } from "@oxagen/oxagen/contracts/agent.memory.update";
 import { contextGovernanceModeSet } from "@oxagen/oxagen/contracts/context.governance_mode.set";
-import { contextPrMerge } from "@oxagen/oxagen/contracts/context.pr.merge";
-import { contextPrMergeWithoutReview } from "@oxagen/oxagen/contracts/context.pr.merge_without_review";
-import { contextPrOpen } from "@oxagen/oxagen/contracts/context.pr.open";
-import { contextPrRefresh } from "@oxagen/oxagen/contracts/context.pr.refresh";
-import { contextPrRevert } from "@oxagen/oxagen/contracts/context.pr.revert";
-import { contextProposalDismiss } from "@oxagen/oxagen/contracts/context.proposal.dismiss";
+import { steeringPrMerge } from "@oxagen/oxagen/contracts/steering.pr.merge";
+import { steeringPrMergeWithoutReview } from "@oxagen/oxagen/contracts/steering.pr.merge_without_review";
+import { steeringPrOpen } from "@oxagen/oxagen/contracts/steering.pr.open";
+import { steeringPrRefresh } from "@oxagen/oxagen/contracts/steering.pr.refresh";
+import { steeringPrRevert } from "@oxagen/oxagen/contracts/steering.pr.revert";
+import { steeringProposalDismiss } from "@oxagen/oxagen/contracts/steering.proposal.dismiss";
 import { governanceModeSchema } from "@oxagen/oxagen/contracts/context.steering.shared";
 import { workspaceSettingsWrite } from "@oxagen/oxagen/contracts/workspace.settings.write";
 import { z } from "zod";
@@ -21,29 +21,29 @@ import type { ActionResult, ContractOutput } from "@/server/kernel";
 import { kernelWrite } from "@/server/kernel";
 import { requireViewer } from "@/server/viewer";
 
-/** Opens the proposal's Context PR and runs its six checks, or re-runs them on the pull request already open; returns where the machine stopped. */
-export async function openContextPr(
+/** Opens the proposal's steering PR and runs its six checks, or re-runs them on the pull request already open; returns where the machine stopped. */
+export async function openSteeringPr(
   org: string,
   ws: string,
   proposalId: string,
 ): Promise<
-  ActionResult<{ status: ContractOutput<typeof contextPrOpen>["status"] }>
+  ActionResult<{ status: ContractOutput<typeof steeringPrOpen>["status"] }>
 > {
   const ctx = await requireViewer(org, ws);
-  const result = await kernelWrite(ctx, contextPrOpen, { proposalId });
+  const result = await kernelWrite(ctx, steeringPrOpen, { proposalId });
   return result.ok
     ? { ok: true, value: { status: result.value.status } }
     : result;
 }
 
 /** Merges the pull request once every check passed; merge publishes the record. */
-export async function mergeContextPr(
+export async function mergeSteeringPr(
   org: string,
   ws: string,
   proposalId: string,
 ): Promise<ActionResult<{ commit: string }>> {
   const ctx = await requireViewer(org, ws);
-  const result = await kernelWrite(ctx, contextPrMerge, { proposalId });
+  const result = await kernelWrite(ctx, steeringPrMerge, { proposalId });
   return result.ok
     ? { ok: true, value: { commit: result.value.mergedCommit } }
     : result;
@@ -69,7 +69,7 @@ export async function revertSteeringPr(
   proposalId: string,
 ): Promise<ActionResult<RevertOpened>> {
   const ctx = await requireViewer(org, ws);
-  const result = await kernelWrite(ctx, contextPrRevert, { proposalId });
+  const result = await kernelWrite(ctx, steeringPrRevert, { proposalId });
   if (!result.ok) return result;
   const { pullRequest, check } = result.value;
   return {
@@ -96,7 +96,7 @@ export async function dismissProposal(
 ): Promise<ActionResult<{ status: "rejected" }>> {
   const ctx = await requireViewer(org, ws);
   const trimmed = reason.trim();
-  const result = await kernelWrite(ctx, contextProposalDismiss, {
+  const result = await kernelWrite(ctx, steeringProposalDismiss, {
     proposalId,
     ...(trimmed === "" ? {} : { reason: trimmed }),
   });
@@ -106,11 +106,11 @@ export async function dismissProposal(
 }
 
 /**
- * Reads the Context PR from the host now and moves the proposal to the host's
+ * Reads the steering PR from the host now and moves the proposal to the host's
  * state (#5077; ADR-184). Answers the host's state and whether anything
  * moved, so the page knows to draw again.
  */
-export async function refreshContextPr(
+export async function refreshSteeringPr(
   org: string,
   ws: string,
   proposalId: string,
@@ -118,11 +118,11 @@ export async function refreshContextPr(
   ActionResult<{
     changed: boolean;
     syncRequested: boolean;
-    host: ContractOutput<typeof contextPrRefresh>["host"];
+    host: ContractOutput<typeof steeringPrRefresh>["host"];
   }>
 > {
   const ctx = await requireViewer(org, ws);
-  const result = await kernelWrite(ctx, contextPrRefresh, { proposalId });
+  const result = await kernelWrite(ctx, steeringPrRefresh, { proposalId });
   return result.ok
     ? {
         ok: true,
@@ -280,7 +280,7 @@ export async function forgetMemory(
 }
 
 // The steering PR writes the platform has not registered yet (#4518):
-// approve_context_pr, drop_memory_record and restore_managed_block. Each one
+// approve_steering_pr, drop_memory_record and restore_managed_block. Each one
 // is a local contract under the name the platform will register, so the
 // kernel answers `unavailable` with code `tool_not_registered` today, and the
 // same call reaches the handler, unchanged, once the capability lands. The
@@ -288,8 +288,8 @@ export async function forgetMemory(
 // as merge_pr_without_review's did (#4528).
 const PROPOSAL_ID = z.string().regex(/^prp_[0-9A-Za-z]+$/);
 
-const approveContextPrContract = {
-  name: "approve_context_pr",
+const approveSteeringPrContract = {
+  name: "approve_steering_pr",
   input: z.object({ proposalId: PROPOSAL_ID }).strict(),
   output: z.object({ approvals: z.number().int().nonnegative() }),
 };
@@ -318,19 +318,19 @@ const restoreManagedBlockContract = {
  * queue refuses a merge with `approval_required` until a member other than
  * the author approves. The answer is the approval count after this one.
  */
-export async function approveContextPr(
+export async function approveSteeringPr(
   org: string,
   ws: string,
   proposalId: string,
 ): Promise<ActionResult<{ approvals: number }>> {
   const ctx = await requireViewer(org, ws);
-  return kernelWrite(ctx, approveContextPrContract, { proposalId });
+  return kernelWrite(ctx, approveSteeringPrContract, { proposalId });
 }
 
 /**
  * Merge a steering PR that holds no approval. The merge queue allows this to
  * an org or workspace owner, or to a member holding
- * `merge_pr_without_review`. It takes the same input as merge_context_pr.
+ * `merge_pr_without_review`. It takes the same input as merge_steering_pr.
  */
 export async function mergePrWithoutReview(
   org: string,
@@ -338,7 +338,7 @@ export async function mergePrWithoutReview(
   proposalId: string,
 ): Promise<ActionResult<{ commit: string }>> {
   const ctx = await requireViewer(org, ws);
-  const result = await kernelWrite(ctx, contextPrMergeWithoutReview, {
+  const result = await kernelWrite(ctx, steeringPrMergeWithoutReview, {
     proposalId,
   });
   return result.ok

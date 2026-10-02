@@ -3,7 +3,7 @@
  * as `context.system` and the manifest it carries as `context.manifest`
  * (ADR-091, ADR-093, ADR-144).
  *
- * A context record merged through a Context PR is published with a `force`.
+ * A steering record merged through a steering PR is published with a `force`.
  * Every active record is a candidate; `@oxagen/steering-assembler` ranks the
  * candidates by tier and then by recency, fits the `must` and `should` ones
  * to the budget, and says in the manifest what happened to each: included,

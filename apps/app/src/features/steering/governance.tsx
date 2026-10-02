@@ -3,21 +3,21 @@
 // (roadmap pages/steering.md, `govChip` and `govmode`).
 //
 // The chip reads the mode the main repository's governance file declares now,
-// as the Context PR gate reads it: `steering/governance.toml` in a steering
+// as the steering PR gate reads it: `steering/governance.toml` in a steering
 // repository, `.oxagen/rules/governance.toml` in a legacy one, and every
 // string names the file the read names (#4821). It prints "unbound" or "not
 // read" rather than a mode nobody read. A missing file reads as `team`,
 // because that is what the gate does with it, and the chip's title says the
 // file is missing. The chip is never gold: gold is identity, not state.
 //
-// The dialog's pick is local state until Open the Context PR. Confirming
+// The dialog's pick is local state until Open the steering PR. Confirming
 // calls `set_governance_mode`, which writes that file and nothing else: a pull
 // request under `team` or `regulated`, and under `solo` a change that lands at
 // once. Picking the mode already in force reports that nothing changed and
 // calls nothing.
 //
 // The dialog says what that capability does, which is less than the design
-// asks (#3859): the pull request is an ordinary one, not a Context PR, so the
+// asks (#3859): the pull request is an ordinary one, not a steering PR, so the
 // report says "pull request"; under `solo` the confirm button names the
 // commit it makes; and a lowering needs no org-owner approval yet, so the
 // note names the issue in place of promising one.
@@ -273,8 +273,8 @@ function GovernanceResult({
           {t("openPr", { number: value.pullRequest.number })}
         </PullRequestLink>
       )}
-      {/* A reviewer lands a steering repository's change from its Context PR
-          panel, through merge_context_pr (ADR-232). */}
+      {/* A reviewer lands a steering repository's change from its steering PR
+          panel, through merge_steering_pr (ADR-232). */}
       {value.outcome !== "proposed" || value.proposalId === null ? null : (
         <SafeLink
           to={routes.steeringProposal(at.org, at.ws, value.proposalId)}

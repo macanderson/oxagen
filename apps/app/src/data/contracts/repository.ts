@@ -284,7 +284,7 @@ export type InitPullRequest = {
 
 /**
  * One pull request Oxagen has open or has had merged, as the Changes tab
- * lists it. Today every row is a context record's Context PR
+ * lists it. Today every row is a steering record's steering PR
  * (`list_proposals`): the other kinds the mockup names (init, skill, agent,
  * tool, configuration) have no list read yet, and the tab says so.
  */
@@ -295,7 +295,7 @@ export type RepositoryChange = {
   statement: string;
   /** Why it was proposed, as the proposal recorded it. */
   why: string;
-  kind: "context_record";
+  kind: "steering_record";
   pullRequest: {
     number: number;
     url: string;

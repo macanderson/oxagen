@@ -70,7 +70,7 @@ afterEach(() => {
 });
 
 describe("oxagen context propose", () => {
-  it("records the proposal through propose_record and says where its Context PR is opened", async () => {
+  it("records the proposal through propose_record and says where its steering PR is opened", async () => {
     (apiPostOrThrow as Mock).mockResolvedValueOnce(PROPOSAL);
     const { writer, out, err } = memoryWriter();
     await contextPropose(FLAGS, writer);
@@ -89,7 +89,7 @@ describe("oxagen context propose", () => {
     });
     expect(out).toEqual([
       "ctx.a · prp_9 · proposed",
-      "open its Context PR from Oxagen → Steering; merge there publishes it",
+      "open its steering PR from Oxagen → Steering; merge there publishes it",
     ]);
     expect(err).toEqual([]);
   });

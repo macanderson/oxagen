@@ -5,7 +5,7 @@
 // dialogs, the related records, and the not-loaded states in the design's
 // words. Each render carries an axe check (INV-26).
 //
-// What the write does is proven in packages/handlers/src/context.record.page.test.ts,
+// What the write does is proven in packages/handlers/src/steering.record.page.test.ts,
 // where a pull request opens, changes one file and merges. This suite is about
 // what the page renders and what it declines to claim.
 import {
@@ -25,6 +25,7 @@ import {
   type RecordKind,
 } from "@/data/contracts/steering";
 import { readError, readOk } from "@/data/read";
+import { LEGACY_RECORD_SCHEMA } from "@oxagen/oxagen/steering-repo/paths";
 import { CREATE_EVENT, createRequestOf } from "@/shared/create";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
@@ -468,7 +469,7 @@ describe("Record › the lineage panel", () => {
     expect(fact("effect")).toBe(
       "rendered 214 · cited 37 · violated not recorded",
     );
-    expect(fact("schema")).toBe("context-record/v0.1");
+    expect(fact("schema")).toBe(LEGACY_RECORD_SCHEMA);
   });
 
   it("says never rendered for a record no run carried, and not recorded with no rollup", async () => {
@@ -1121,7 +1122,7 @@ describe("Record › the file and branch in the repository's layout", () => {
   it("keeps the record's own path over the layout", async () => {
     await renderRecord({ layout: readOk({ layout: "steering" }) });
     expect(lineageFact("file")).toContain(`.oxagen/rules/${LINEAGE}.toml`);
-    expect(lineageFact("schema")).toBe("context-record/v0.1");
+    expect(lineageFact("schema")).toBe(LEGACY_RECORD_SCHEMA);
   });
 
   it("shows a placeholder, never a legacy guess, when the layout read failed (negative)", async () => {

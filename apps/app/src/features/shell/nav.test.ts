@@ -333,7 +333,7 @@ describe("breadcrumbs", () => {
     ).toEqual([{ kind: "nav", key: "steering", href: null }]);
   });
 
-  it("one Context PR ends on its declared lineage under Steering's Proposals list (#5077)", () => {
+  it("one steering PR ends on its declared lineage under Steering's Proposals list (#5077)", () => {
     const at = "/acme/core-platform/steering/proposals/prs/prp_01k5ru4a";
     expect(breadcrumbs(at, names).slice(2)).toEqual([
       {

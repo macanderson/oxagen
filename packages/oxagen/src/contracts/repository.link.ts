@@ -29,7 +29,7 @@
  *   - `conflict: repository_already_linked`: it is linked already.
  *   - `conflict: main_repo_claimed`: it is another workspace's steering
  *     repository, which holds that workspace's steering records. A linked
- *     code repository receives no Context PR, because every record lives in
+ *     code repository receives no steering PR, because every record lives in
  *     the steering repository (ADR-212).
  *     A repository that steers no workspace may be linked by any number of
  *     workspaces.

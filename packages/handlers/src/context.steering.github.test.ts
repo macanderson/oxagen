@@ -210,7 +210,7 @@ describe("the GitHub seam", () => {
    * after the binding is written changes `getRepoInfo().defaultBranch` and
    * nothing else: the binding is immutable and the settings page still names
    * the approved ref.
-   * If steering followed GitHub, every Context PR would be opened against,
+   * If steering followed GitHub, every steering PR would be opened against,
    * compared against and merged into a branch no one approved — and
    * `assertProductionBase`, which compares a PR's base against this same
    * field, would agree with the wrong answer instead of catching it.
@@ -232,8 +232,8 @@ describe("the GitHub seam", () => {
    * The repository's NAME is an identifier too, and had the same defect one
    * field over.
    *
-   * `open_context_pr` dots `fullName` into the `set_id` at the top of every
-   * Context record file and stores it as the proposal row's `repository`, so
+   * `open_steering_pr` dots `fullName` into the `set_id` at the top of every
+   * steering record file and stores it as the proposal row's `repository`, so
    * it is what groups a workspace's records into one set. Taking it from live
    * `getRepoInfo()` meant renaming the repository on GitHub re-stamped every
    * later record with a different set id while the existing ones kept the old
@@ -286,7 +286,7 @@ describe("the GitHub seam", () => {
     expect(repo.currentFullName).toBe("a-intel/platform");
   });
 
-  it("refuses a Context PR retargeted at the branch GitHub now calls default", async () => {
+  it("refuses a steering PR retargeted at the branch GitHub now calls default", async () => {
     const { gh } = seam(fakeClient(), {
       source: "binding",
       owner: "a-intel",
@@ -299,7 +299,7 @@ describe("the GitHub seam", () => {
     // not the approved one. The merge gate refuses it.
     expect(() =>
       assertProductionBase(repo, "main", "https://github.com/x/pull/9"),
-    ).toThrow(/targets main; a Context PR merges only into release/);
+    ).toThrow(/targets main; a steering PR merges only into release/);
     // And still admits one on the approved ref.
     expect(() =>
       assertProductionBase(repo, "release", "https://github.com/x/pull/9"),
@@ -590,7 +590,7 @@ describe("the GitHub seam", () => {
  * The steering head and its binding version name the repository. The
  * connection a head hangs from names no repository. A read that looked only
  * at `delivery_config` answered null right after a head was written, and every
- * Context PR behaved as though no repository were connected.
+ * steering PR behaved as though no repository were connected.
  */
 describe("the workspace's main repository", () => {
   const SELECT_SCOPE = { orgId: "org", workspaceId: "ws" };
@@ -716,11 +716,11 @@ describe("the workspace's main repository", () => {
   });
 
   // A `linked` head, or one the exclusivity migration demoted, is a
-  // repository the workspace can see and is not steered by. Context PRs and
+  // repository the workspace can see and is not steered by. Steering PRs and
   // `get_steering_freshness` both resolve through this read, so an unordered
   // `limit(1)` without the filter could steer either one by a linked head.
   // Kept on purpose (#3340): Mac decided on 2026-10-01 that a linked code
-  // repository never receives Context PRs, so this read stays pinned to the
+  // repository never receives steering PRs, so this read stays pinned to the
   // steering head.
   it("names the head's role in the joined read, so only a steering head steers", async () => {
     const counts = db({ bound: [] });
@@ -786,7 +786,7 @@ describe("the workspace's main repository", () => {
    * The joined read misses for two different reasons — no head was ever
    * written, or a head exists and the connection it was bound through is
    * retired — and the join cannot tell them apart. Treating the second as the
-   * first hands steering and every Context PR to whatever repository a
+   * first hands steering and every steering PR to whatever repository a
    * still-connected legacy sources connection happens to name in its ingestion
    * `delivery_config`, which is an UNRELATED repository: `owner`/`repo` there
    * mean the sync target, not the main repo. Writing steering into the wrong

@@ -34,9 +34,9 @@ import {
   agentToolCalls,
   tools,
   toolVersions,
-  contextRecords,
-  contextRecordVersions,
-  contextPromotions,
+  steeringRecords,
+  steeringRecordVersions,
+  steeringPromotions,
   approvalRequests,
   agentRuns,
   agentRunEvents,
@@ -192,7 +192,7 @@ export const mcpServerChangesRelations = relations(
 // app-enforced; in-domain links use Drizzle relations.
 
 // Workspace agent-asset registry (stella-cutover Wave 4): identity ↔ versions,
-// plus the append-only promotions ledger for context records.
+// plus the append-only promotions ledger for steering records.
 
 export const toolsRelations = relations(tools, ({ one, many }) => ({
   workspace: one(workspaces, {
@@ -214,43 +214,43 @@ export const toolVersionsRelations = relations(toolVersions, ({ one }) => ({
   }),
 }));
 
-export const contextRecordsRelations = relations(
-  contextRecords,
+export const steeringRecordsRelations = relations(
+  steeringRecords,
   ({ one, many }) => ({
     workspace: one(workspaces, {
-      fields: [contextRecords.workspaceId],
+      fields: [steeringRecords.workspaceId],
       references: [workspaces.id],
     }),
-    versions: many(contextRecordVersions),
-    promotions: many(contextPromotions),
+    versions: many(steeringRecordVersions),
+    promotions: many(steeringPromotions),
   }),
 );
 
-export const contextRecordVersionsRelations = relations(
-  contextRecordVersions,
+export const steeringRecordVersionsRelations = relations(
+  steeringRecordVersions,
   ({ one }) => ({
-    record: one(contextRecords, {
-      fields: [contextRecordVersions.recordId],
-      references: [contextRecords.id],
+    record: one(steeringRecords, {
+      fields: [steeringRecordVersions.recordId],
+      references: [steeringRecords.id],
     }),
-    parentVersion: one(contextRecordVersions, {
-      fields: [contextRecordVersions.parentVersionId],
-      references: [contextRecordVersions.id],
-      relationName: "context_record_version_parent",
+    parentVersion: one(steeringRecordVersions, {
+      fields: [steeringRecordVersions.parentVersionId],
+      references: [steeringRecordVersions.id],
+      relationName: "steering_record_version_parent",
     }),
   }),
 );
 
-export const contextPromotionsRelations = relations(
-  contextPromotions,
+export const steeringPromotionsRelations = relations(
+  steeringPromotions,
   ({ one }) => ({
-    record: one(contextRecords, {
-      fields: [contextPromotions.recordId],
-      references: [contextRecords.id],
+    record: one(steeringRecords, {
+      fields: [steeringPromotions.recordId],
+      references: [steeringRecords.id],
     }),
-    version: one(contextRecordVersions, {
-      fields: [contextPromotions.versionId],
-      references: [contextRecordVersions.id],
+    version: one(steeringRecordVersions, {
+      fields: [steeringPromotions.versionId],
+      references: [steeringRecordVersions.id],
     }),
   }),
 );

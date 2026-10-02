@@ -208,7 +208,7 @@ const ACTIONS = new Set([
   "link",
   "unlink",
   // steering (MC spec App. E, ADR-061): the protocol's append, a proposal,
-  // and the merge that publishes a Context PR.
+  // and the merge that publishes a steering PR.
   "append",
   "propose",
   "merge",

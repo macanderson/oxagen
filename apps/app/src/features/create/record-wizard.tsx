@@ -1,24 +1,25 @@
 "use client";
-// The context-record wizard (roadmap creation-spec §5; mockup `wzRecord`).
+// The steering-record wizard (roadmap creation-spec §5; mockup `wzRecord`).
 // Describe the concern, pick its kind, write the statement, read what the six
 // checks will assert, and open the pull request. The kind comes before the
 // sentence because it decides how the record reaches a run and what the checks
 // assert about it, and each kind card says what that kind can never do.
 //
-// The last step calls propose_record, then open_context_pr: the proposal is
-// the Context PR's own state, and open_context_pr cuts a branch and commits a
+// The last step calls propose_record, then open_steering_pr: the proposal is
+// the steering PR's own state, and open_steering_pr cuts a branch and commits a
 // record whose path and branch follow the bound repository's layout (steering
 // or legacy; recordPathFor/branchFor in ./record-file mirror the handler) and
 // runs the six checks (MC spec §10.3). The record steers nothing until a
 // person merges it. On success the page behind the dialog moves to Steering ·
-// Context PRs with the new pull request selected, so closing the wizard lands
+// Steering PRs with the new pull request selected, so closing the wizard lands
 // there (creation-spec §5).
 import {
-  CONTEXT_RECORD_LABEL_MAX,
-  CONTEXT_RECORD_LINEAGE,
-  contextRecordLabel,
-  contextRecordSlug,
-} from "@oxagen/oxagen/context-record-label";
+  STEERING_RECORD_LABEL_MAX,
+  STEERING_RECORD_LINEAGE,
+  steeringRecordLabel,
+  steeringRecordSlug,
+} from "@oxagen/oxagen/steering-record-label";
+import { LEGACY_RECORD_SCHEMA } from "@oxagen/oxagen/steering-repo/paths";
 import { useTranslations } from "next-intl";
 import { type ReactNode, useEffect, useId } from "react";
 import {
@@ -163,7 +164,7 @@ const code = (chunks: ReactNode) => <span className={mono}>{chunks}</span>;
 
 /**
  * A typed name as the person wrote it, trimmed and with runs of whitespace
- * collapsed. contextRecordLabel is for a label built from a slug: run on a
+ * collapsed. steeringRecordLabel is for a label built from a slug: run on a
  * typed name it drops punctuation and recases every word.
  */
 function tidyName(name: string): string {
@@ -183,10 +184,10 @@ function recordOf(api: Api, ctx: CreateContext) {
   const statement = d.statement ?? seed;
   const sent = normalizeStatement(statement);
   const suggestedSlug =
-    d.name === null ? lineageOf(ctx.ws, d.desc) : contextRecordSlug(d.name);
-  const lineageId = d.slug === null ? suggestedSlug : contextRecordSlug(d.slug);
+    d.name === null ? lineageOf(ctx.ws, d.desc) : steeringRecordSlug(d.name);
+  const lineageId = d.slug === null ? suggestedSlug : steeringRecordSlug(d.slug);
   const label =
-    d.name === null ? contextRecordLabel(lineageId) : tidyName(d.name);
+    d.name === null ? steeringRecordLabel(lineageId) : tidyName(d.name);
   const force = forceOf(kind, d.force);
   const choice: RecordChoice = {
     lineageId,
@@ -212,16 +213,16 @@ function recordOf(api: Api, ctx: CreateContext) {
     fits:
       sent !== "" &&
       sent.length <= STATEMENT_MAX &&
-      CONTEXT_RECORD_LINEAGE.test(lineageId) &&
+      STEERING_RECORD_LINEAGE.test(lineageId) &&
       label !== "" &&
-      label.length <= CONTEXT_RECORD_LABEL_MAX,
+      label.length <= STEERING_RECORD_LABEL_MAX,
   };
 }
 
 function DescribeStep({ api, ctx }: StepProps<RecordDraft>) {
   const t = useTranslations("createRecord.describe");
   const labelId = useId();
-  const slugValid = CONTEXT_RECORD_LINEAGE.test(
+  const slugValid = STEERING_RECORD_LINEAGE.test(
     recordOf(api, ctx).choice.lineageId,
   );
   return (
@@ -232,10 +233,10 @@ function DescribeStep({ api, ctx }: StepProps<RecordDraft>) {
           id={labelId}
           aria-describedby={`${labelId}-hint`}
           className={inputBase}
-          maxLength={CONTEXT_RECORD_LABEL_MAX}
+          maxLength={STEERING_RECORD_LABEL_MAX}
           value={
             api.draft.name ??
-            contextRecordLabel(lineageOf(ctx.ws, api.draft.desc))
+            steeringRecordLabel(lineageOf(ctx.ws, api.draft.desc))
           }
           onChange={(event) => {
             api.update({ name: event.target.value });
@@ -258,14 +259,14 @@ function DescribeStep({ api, ctx }: StepProps<RecordDraft>) {
             api.draft.slug ??
             (api.draft.name === null
               ? lineageOf(ctx.ws, api.draft.desc)
-              : contextRecordSlug(api.draft.name))
+              : steeringRecordSlug(api.draft.name))
           }
           onChange={(event) => {
             api.update({ slug: event.target.value });
           }}
           onBlur={() => {
             if (api.draft.slug !== null)
-              api.update({ slug: contextRecordSlug(api.draft.slug) });
+              api.update({ slug: steeringRecordSlug(api.draft.slug) });
           }}
         />
         {slugValid ? (
@@ -509,7 +510,10 @@ function ChecksStep({ api, ctx }: StepProps<RecordDraft>) {
   const record = recordOf(api, ctx);
   const effect = record.choice.constraintEffect;
   const detail: Record<(typeof CHECKS)[number], ReactNode> = {
-    schema: t.rich("items.schema.detail", { code }),
+    schema: t.rich("items.schema.detail", {
+      code,
+      schema: LEGACY_RECORD_SCHEMA,
+    }),
     lineage: t.rich("items.lineage.detail", {
       lineage: record.choice.lineageId,
       code,
@@ -553,7 +557,7 @@ function PullRequestStep({ api, ctx }: StepProps<RecordDraft>) {
   const lineage = record.choice.lineageId;
   const effect = record.choice.constraintEffect;
   const detail: Record<(typeof CHECKS)[number], ReactNode> = {
-    schema: t.rich("checks.schema", { code }),
+    schema: t.rich("checks.schema", { code, schema: LEGACY_RECORD_SCHEMA }),
     lineage: t.rich("checks.lineage", { lineage, code }),
     hash: t("checks.hash"),
     secrets: t("checks.secrets"),
@@ -648,7 +652,7 @@ function Opened({ record, ctx }: { record: OpenedRecord; ctx: CreateContext }) {
     ctx.ws,
     record.proposalId,
   );
-  // The wizard closes on this pull request's Context PR page (creation-spec
+  // The wizard closes on this pull request's steering PR page (creation-spec
   // §5; #5077): the page behind the dialog moves there now.
   useEffect(() => {
     navigate.push(target);
@@ -727,7 +731,7 @@ function Opened({ record, ctx }: { record: OpenedRecord; ctx: CreateContext }) {
       <p className="text-muted-foreground">{outcome}</p>
       <p>
         <SafeLink to={target} className={linkText}>
-          {t("onContextPrs")}
+          {t("onSteeringPrs")}
         </SafeLink>
       </p>
     </div>
@@ -748,7 +752,7 @@ function useRecordStep(props: StepProps<RecordDraft>): StepView {
         label: t("describe.next"),
         enabled:
           d.desc.trim() !== "" &&
-          CONTEXT_RECORD_LINEAGE.test(record.choice.lineageId) &&
+          STEERING_RECORD_LINEAGE.test(record.choice.lineageId) &&
           (d.name === null || d.name.trim() !== ""),
       },
     };

@@ -57,7 +57,7 @@ function run(answers: Record<string, { n: number }[]>) {
 
 const APPROVALS = getTableName(schema.approvalRequests);
 const INTERJECTIONS = getTableName(schema.interjections);
-const PROPOSALS = getTableName(schema.contextProposals);
+const PROPOSALS = getTableName(schema.steeringProposals);
 const INCIDENTS = getTableName(schema.tachoIncidents);
 
 beforeEach(() => vi.clearAllMocks());

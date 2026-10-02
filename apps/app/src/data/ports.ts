@@ -111,8 +111,8 @@ import type {
   UnproductiveSpend,
 } from "./contracts/spend";
 import type {
-  ContextPr,
-  ContextPrDiff,
+  SteeringPr,
+  SteeringPrDiff,
   ProposalPage,
   ProposalState,
   RecordDetail,
@@ -690,10 +690,10 @@ export interface DataSource {
         state?: ProposalState;
       },
     ): Promise<Read<ProposalPage>>;
-    /** get_context_pr: one proposal's state machine, checks and what merge will do */
-    contextPr(ctx: WsCtx, proposalId: string): Promise<Read<ContextPr>>;
-    /** get_context_pr_diff: the files the Context PR's branch changes, read from the host now (#5077) */
-    contextPrDiff(ctx: WsCtx, proposalId: string): Promise<Read<ContextPrDiff>>;
+    /** get_steering_pr: one proposal's state machine, checks and what merge will do */
+    steeringPr(ctx: WsCtx, proposalId: string): Promise<Read<SteeringPr>>;
+    /** get_steering_pr_diff: the files the steering PR's branch changes, read from the host now (#5077) */
+    steeringPrDiff(ctx: WsCtx, proposalId: string): Promise<Read<SteeringPrDiff>>;
     /** get_steering_freshness: what is published, where, and the two gates */
     freshness(ctx: WsCtx): Promise<Read<SteeringFreshness>>;
     /** get_steering_layout: whether the main repository uses the steering or the legacy layout, null while none is bound or the read failed */
@@ -720,7 +720,7 @@ export interface DataSource {
       ctx: WsCtx,
       memoryId: string,
     ): Promise<Read<WorkspaceMemoryDetail>>;
-    /** list_memory_pr_records: the records one memory PR proposes, for the review card on Context PRs. */
+    /** list_memory_pr_records: the records one memory PR proposes, for the review card on steering PRs. */
     memoryPrRecords(
       ctx: WsCtx,
       prNumber: number,

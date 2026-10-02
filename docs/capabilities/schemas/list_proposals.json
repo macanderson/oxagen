@@ -1,7 +1,7 @@
 {
   "name": "list_proposals",
   "domain": "context",
-  "description": "List the workspace's record proposals with their support and Context PR state, newest first, optionally narrowed to one status, one state (open, merged or closed) or one lineage",
+  "description": "List the workspace's record proposals with their support and steering PR state, newest first, optionally narrowed to one status, one state (open, merged or closed) or one lineage",
   "mode": "sync",
   "surfaces": [
     "api",

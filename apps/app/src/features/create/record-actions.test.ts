@@ -1,7 +1,7 @@
-// The context-record wizard's two writes through the kernel seam (actions.ts):
+// The steering-record wizard's two writes through the kernel seam (actions.ts):
 // the viewer and the kernel call are the fakes. propose_record gets the
 // record the operator chose and the description as its rationale, with no
-// support. open_context_pr gets the proposal id, and the action narrows its
+// support. open_steering_pr gets the proposal id, and the action narrows its
 // answer to what the wizard's last screen shows. A refusal comes back as it
 // was, with nothing else run.
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -21,11 +21,11 @@ vi.mock("@/server/kernel", async (importOriginal) => ({
   kernelWrite,
 }));
 
-const { contextProposalCreate } = await import(
-  "@oxagen/oxagen/contracts/context.proposal.create"
+const { steeringProposalCreate } = await import(
+  "@oxagen/oxagen/contracts/steering.proposal.create"
 );
-const { contextPrOpen } = await import(
-  "@oxagen/oxagen/contracts/context.pr.open"
+const { steeringPrOpen } = await import(
+  "@oxagen/oxagen/contracts/steering.pr.open"
 );
 const { openRecordPr, proposeRecord } = await import("./actions");
 
@@ -40,7 +40,7 @@ const RECORD = {
   statement: "Do not re-read CHANGELOG.md in a run.",
 };
 
-const CONTEXT_PR = {
+const STEERING_PR = {
   proposalId: "prp_01K5ABC",
   lineageId: RECORD.lineageId,
   kind: "rule",
@@ -95,7 +95,7 @@ describe("proposeRecord", () => {
       rationale: "  Agents re-read it every turn  ",
     });
     expect(requireViewer).toHaveBeenCalledWith("acme", "core-platform");
-    expect(kernelWrite).toHaveBeenCalledWith(CTX, contextProposalCreate, {
+    expect(kernelWrite).toHaveBeenCalledWith(CTX, steeringProposalCreate, {
       record: RECORD,
       rationale: "Agents re-read it every turn",
       support: {},
@@ -125,10 +125,10 @@ describe("proposeRecord", () => {
 });
 
 describe("openRecordPr", () => {
-  it("opens the Context PR and keeps what the last screen shows", async () => {
-    kernelWrite.mockResolvedValue({ ok: true, value: CONTEXT_PR });
+  it("opens the steering PR and keeps what the last screen shows", async () => {
+    kernelWrite.mockResolvedValue({ ok: true, value: STEERING_PR });
     const result = await openRecordPr("acme", "core-platform", "prp_01K5ABC");
-    expect(kernelWrite).toHaveBeenCalledWith(CTX, contextPrOpen, {
+    expect(kernelWrite).toHaveBeenCalledWith(CTX, steeringPrOpen, {
       proposalId: "prp_01K5ABC",
     });
     expect(result).toEqual({
@@ -152,7 +152,7 @@ describe("openRecordPr", () => {
   it("answers a null pull request while none is open (empty)", async () => {
     kernelWrite.mockResolvedValue({
       ok: true,
-      value: { ...CONTEXT_PR, status: "proposed", pr: null, checks: [] },
+      value: { ...STEERING_PR, status: "proposed", pr: null, checks: [] },
     });
     const result = await openRecordPr("acme", "core-platform", "prp_01K5ABC");
     expect(result).toMatchObject({ ok: true, value: { pr: null, checks: [] } });

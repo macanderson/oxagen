@@ -24,8 +24,8 @@ vi.mock("@/server/kernel", async (importOriginal) => ({
 }));
 
 const { skillPropose } = await import("@oxagen/oxagen/contracts/skill.propose");
-const { contextProposalCreate } = await import(
-  "@oxagen/oxagen/contracts/context.proposal.create"
+const { steeringProposalCreate } = await import(
+  "@oxagen/oxagen/contracts/steering.proposal.create"
 );
 const { contextSteeringFreshness } = await import(
   "@oxagen/oxagen/contracts/context.steering.freshness"
@@ -143,7 +143,7 @@ describe("proposeRecord", () => {
       record,
       rationale: "  Why  ",
     });
-    expect(kernelWrite).toHaveBeenCalledWith(CTX, contextProposalCreate, {
+    expect(kernelWrite).toHaveBeenCalledWith(CTX, steeringProposalCreate, {
       record,
       rationale: "Why",
       support: {},

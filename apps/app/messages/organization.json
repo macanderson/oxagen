@@ -123,7 +123,7 @@
       },
       "governance": {
         "heading": "Governance mode",
-        "about": "Written to the main repository’s governance file through a Context PR. It takes effect on merge. The mode decides who merges a Context PR in this workspace.",
+        "about": "Written to the main repository’s governance file through a steering PR. It takes effect on merge. The mode decides who merges a steering PR in this workspace.",
         "unchanged": "Leave unchanged",
         "solo": "solo (the author may merge their own)",
         "team": "team (a code owner must review)",
@@ -650,7 +650,7 @@
           "edit": "Edit"
         },
         "tiers": {
-          "complex": "reflection, promotion rationale, Context PR bodies, run names and summaries",
+          "complex": "reflection, promotion rationale, steering PR bodies, run names and summaries",
           "light": "classification, labeling, entity and property naming, redaction hints, approval summaries, reranking",
           "embed": "embeddings for entities, records, documents, issues, code",
           "rerank": "reordering hybrid retrieval candidates"

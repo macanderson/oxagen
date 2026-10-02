@@ -21,29 +21,29 @@ import { IntlProvider } from "@/test/intl";
 
 const {
   router,
-  openContextPr,
-  mergeContextPr,
+  openSteeringPr,
+  mergeSteeringPr,
   dismissProposal,
-  approveContextPr,
+  approveSteeringPr,
   mergePrWithoutReview,
   restoreManagedBlock,
   revertSteeringPr,
 } = vi.hoisted(() => ({
   router: { push: vi.fn(), replace: vi.fn(), refresh: vi.fn() },
-  openContextPr: vi.fn(),
-  mergeContextPr: vi.fn(),
+  openSteeringPr: vi.fn(),
+  mergeSteeringPr: vi.fn(),
   dismissProposal: vi.fn(),
-  approveContextPr: vi.fn(),
+  approveSteeringPr: vi.fn(),
   mergePrWithoutReview: vi.fn(),
   restoreManagedBlock: vi.fn(),
   revertSteeringPr: vi.fn(),
 }));
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
 vi.mock("./actions", () => ({
-  openContextPr,
-  mergeContextPr,
+  openSteeringPr,
+  mergeSteeringPr,
   dismissProposal,
-  approveContextPr,
+  approveSteeringPr,
   mergePrWithoutReview,
   restoreManagedBlock,
   revertSteeringPr,
@@ -51,8 +51,8 @@ vi.mock("./actions", () => ({
 }));
 
 const {
-  ApproveContextPr,
-  MergeContextPr,
+  ApproveSteeringPr,
+  MergeSteeringPr,
   MergeWithoutReview,
   ProposalWrites,
   RestoreManagedBlock,
@@ -71,10 +71,10 @@ beforeEach(() => {
   for (const fn of [
     router.replace,
     router.refresh,
-    openContextPr,
-    mergeContextPr,
+    openSteeringPr,
+    mergeSteeringPr,
     dismissProposal,
-    approveContextPr,
+    approveSteeringPr,
     mergePrWithoutReview,
     restoreManagedBlock,
     revertSteeringPr,
@@ -91,15 +91,15 @@ afterEach(async () => {
   }
 });
 
-describe("Open a Context PR", () => {
-  function openDialog(label = "Open a Context PR") {
+describe("Open a steering PR", () => {
+  function openDialog(label = "Open a steering PR") {
     render(<ProposalWrites {...TARGET} status="proposed" />, { wrapper: intl });
     fireEvent.click(screen.getByRole("button", { name: label }));
-    return screen.getByTestId("open-context-pr");
+    return screen.getByTestId("open-steering-pr");
   }
 
-  it("opens the pull request for this proposal and reloads its Context PR", async () => {
-    openContextPr.mockResolvedValue({
+  it("opens the pull request for this proposal and reloads its steering PR", async () => {
+    openSteeringPr.mockResolvedValue({
       ok: true,
       value: { status: "checks_passed" },
     });
@@ -110,19 +110,19 @@ describe("Open a Context PR", () => {
     await waitFor(() => {
       expect(router.replace).toHaveBeenCalledWith(PRS);
     });
-    expect(openContextPr).toHaveBeenCalledWith(
+    expect(openSteeringPr).toHaveBeenCalledWith(
       "acme",
       "core-platform",
       "prp_01k5ru4a",
     );
     expect(router.refresh).toHaveBeenCalledOnce();
     await waitFor(() => {
-      expect(screen.queryByTestId("open-context-pr")).toBeNull();
+      expect(screen.queryByTestId("open-steering-pr")).toBeNull();
     });
   });
 
   it("names a refusal in the dialog and navigates nowhere (negative)", async () => {
-    openContextPr.mockResolvedValue({
+    openSteeringPr.mockResolvedValue({
       ok: false,
       reason: "conflict",
       code: "lineage_pr_open",
@@ -132,7 +132,7 @@ describe("Open a Context PR", () => {
       screen.getByRole("button", { name: "Open the pull request" }),
     );
     expect(
-      await screen.findByTestId("open-context-pr-failure"),
+      await screen.findByTestId("open-steering-pr-failure"),
     ).toHaveTextContent(
       "Another pull request is already open for this lineage. Merge or close it first.",
     );
@@ -140,20 +140,20 @@ describe("Open a Context PR", () => {
   });
 
   it("names a write that threw before it answered (negative)", async () => {
-    openContextPr.mockRejectedValue(new Error("network"));
+    openSteeringPr.mockRejectedValue(new Error("network"));
     openDialog();
     fireEvent.click(
       screen.getByRole("button", { name: "Open the pull request" }),
     );
     expect(
-      await screen.findByTestId("open-context-pr-failure"),
+      await screen.findByTestId("open-steering-pr-failure"),
     ).toHaveTextContent(
       "The change could not be made: action_failed. Nothing was changed.",
     );
   });
 
   it("offers to run the checks again once the pull request exists", async () => {
-    openContextPr.mockResolvedValue({
+    openSteeringPr.mockResolvedValue({
       ok: true,
       value: { status: "checks_failed" },
     });
@@ -170,7 +170,7 @@ describe("Open a Context PR", () => {
   });
 
   it("still offers the re-run once the checks have passed, because the head can move under them", async () => {
-    openContextPr.mockResolvedValue({
+    openSteeringPr.mockResolvedValue({
       ok: true,
       value: { status: "checks_running" },
     });
@@ -182,7 +182,7 @@ describe("Open a Context PR", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "Run the checks" }));
     await waitFor(() => {
-      expect(openContextPr).toHaveBeenCalledWith(
+      expect(openSteeringPr).toHaveBeenCalledWith(
         "acme",
         "core-platform",
         "prp_01k5ru4a",
@@ -288,39 +288,39 @@ describe("Merge pull request", () => {
   }
 
   it("cannot be opened while the checks have not passed (negative)", () => {
-    render(<MergeContextPr {...TARGET} blocked />, { wrapper: intl });
+    render(<MergeSteeringPr {...TARGET} blocked />, { wrapper: intl });
     const button = screen.getByRole("button", { name: "Merge pull request" });
     expect(button).toBeDisabled();
     fireEvent.click(button);
-    expect(screen.queryByTestId("merge-context-pr")).toBeNull();
-    expect(mergeContextPr).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("merge-steering-pr")).toBeNull();
+    expect(mergeSteeringPr).not.toHaveBeenCalled();
     expect(
       screen.getByText("Merge is blocked until every check passes."),
     ).toBeInTheDocument();
   });
 
   it("asks first, and merges nothing until the person confirms", () => {
-    render(<MergeContextPr {...TARGET} blocked={false} />, { wrapper: intl });
+    render(<MergeSteeringPr {...TARGET} blocked={false} />, { wrapper: intl });
     const button = screen.getByRole("button", { name: "Merge pull request" });
     expect(button.className).toMatch(/button-primary/);
     fireEvent.click(button);
-    expect(screen.getByTestId("merge-context-pr")).toHaveTextContent(
+    expect(screen.getByTestId("merge-steering-pr")).toHaveTextContent(
       "Merging publishes the record",
     );
-    expect(mergeContextPr).not.toHaveBeenCalled();
+    expect(mergeSteeringPr).not.toHaveBeenCalled();
   });
 
-  it("merges this proposal's pull request and reloads its Context PR", async () => {
-    mergeContextPr.mockResolvedValue({
+  it("merges this proposal's pull request and reloads its steering PR", async () => {
+    mergeSteeringPr.mockResolvedValue({
       ok: true,
       value: { commit: "4d5e6f7" },
     });
-    render(<MergeContextPr {...TARGET} blocked={false} />, { wrapper: intl });
+    render(<MergeSteeringPr {...TARGET} blocked={false} />, { wrapper: intl });
     confirmMerge();
     await waitFor(() => {
       expect(router.replace).toHaveBeenCalledWith(PRS);
     });
-    expect(mergeContextPr).toHaveBeenCalledWith(
+    expect(mergeSteeringPr).toHaveBeenCalledWith(
       "acme",
       "core-platform",
       "prp_01k5ru4a",
@@ -328,15 +328,15 @@ describe("Merge pull request", () => {
   });
 
   it("names a separation-of-duties refusal beside the button (negative)", async () => {
-    mergeContextPr.mockResolvedValue({
+    mergeSteeringPr.mockResolvedValue({
       ok: false,
       reason: "denied",
       code: "separation_of_duties",
     });
-    render(<MergeContextPr {...TARGET} blocked={false} />, { wrapper: intl });
+    render(<MergeSteeringPr {...TARGET} blocked={false} />, { wrapper: intl });
     confirmMerge();
     expect(
-      await screen.findByTestId("merge-context-pr-failure"),
+      await screen.findByTestId("merge-steering-pr-failure"),
     ).toHaveTextContent(
       "Under this governance mode the author does not merge their own proposal. Another reviewer merges it.",
     );
@@ -346,13 +346,13 @@ describe("Merge pull request", () => {
 
 describe("Approve", () => {
   it("approves this proposal's pull request and reloads its steering PR", async () => {
-    approveContextPr.mockResolvedValue({ ok: true, value: { approvals: 1 } });
-    render(<ApproveContextPr {...TARGET} />, { wrapper: intl });
+    approveSteeringPr.mockResolvedValue({ ok: true, value: { approvals: 1 } });
+    render(<ApproveSteeringPr {...TARGET} />, { wrapper: intl });
     fireEvent.click(screen.getByRole("button", { name: "Approve" }));
     await waitFor(() => {
       expect(router.replace).toHaveBeenCalledWith(PRS);
     });
-    expect(approveContextPr).toHaveBeenCalledWith(
+    expect(approveSteeringPr).toHaveBeenCalledWith(
       "acme",
       "core-platform",
       "prp_01k5ru4a",
@@ -360,15 +360,15 @@ describe("Approve", () => {
   });
 
   it("says the platform has not registered approve yet (negative)", async () => {
-    approveContextPr.mockResolvedValue({
+    approveSteeringPr.mockResolvedValue({
       ok: false,
       reason: "unavailable",
       code: "tool_not_registered",
     });
-    render(<ApproveContextPr {...TARGET} />, { wrapper: intl });
+    render(<ApproveSteeringPr {...TARGET} />, { wrapper: intl });
     fireEvent.click(screen.getByRole("button", { name: "Approve" }));
     expect(
-      await screen.findByTestId("approve-context-pr-failure"),
+      await screen.findByTestId("approve-steering-pr-failure"),
     ).toHaveTextContent("Oxagen has not registered this action yet.");
     expect(router.replace).not.toHaveBeenCalled();
   });
