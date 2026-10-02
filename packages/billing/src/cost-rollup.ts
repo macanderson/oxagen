@@ -37,7 +37,15 @@ import {
   type PriceBook,
   type PriceTokenClass,
 } from "./price-book";
-import { RepeatedCalls, repeatKindOf } from "./step-grade";
+import {
+  classifySteps,
+  RepeatedCalls,
+  repeatKindOf,
+  stepRequestsOf,
+  type StepClasses,
+  type StepModelCall,
+  type StepToolCall,
+} from "./step-grade";
 
 export type { CostBasis, SpendGroupKind } from "@oxagen/database/schema";
 export { UNASSIGNED_COST_CENTER_KEY } from "@oxagen/database/schema";
@@ -69,6 +77,11 @@ export interface ModelCallFrame {
   /** The micro-USD the frame's own record carries; null when it carries none. */
   reportedCostMicros: bigint | null;
   basis: FrameBasis;
+  /**
+   * The chain the call was recorded on (`session_uuid`), which places the
+   * tool calls it made (F17). Absent when the store names no chain.
+   */
+  sessionUuid?: string | null;
 }
 
 /**
@@ -89,6 +102,13 @@ export interface ToolCallFrame {
   isMutating: boolean | null;
   /** The tool-result tokens the OTel tool span recorded for the call. */
   resultTokens: number | null;
+  /**
+   * When the call ran (RFC 3339) and the chain it ran on, which place it
+   * under the model call that made it (F17). Absent or null when the store
+   * read neither.
+   */
+  at?: string | null;
+  sessionUuid?: string | null;
 }
 
 /** What the run's own record says, independent of its frames. */
@@ -187,6 +207,13 @@ export interface RunBreakdown {
    * step, and a row rolled up before grading existed, which revives as null.
    */
   steps: StepCauses | null;
+  /**
+   * Every step by class (F17): `readOnly` when none of its calls may write
+   * and no file changed, `edit` otherwise. The two sum to the run's steps.
+   * Null for a run with no step, and absent on a row rolled up before steps
+   * had a class.
+   */
+  stepClasses?: StepClasses | null;
 }
 
 /** The `cost.run_totals` row, as the store writes it. */
@@ -430,6 +457,11 @@ interface RollupInput {
    * rollup computes it from the steps it grades.
    */
   carried?: Pick<RunTotalsRecord, "verdict" | "accepted">;
+  /**
+   * Whether a session of the run recorded a file change, which the step
+   * classes read (F17). False when the store read none.
+   */
+  changedFile?: boolean;
 }
 
 /** Rebuild one run's row from its frames. */
@@ -444,8 +476,13 @@ export function rollupRun(input: RollupInput): RunTotalsRecord {
 export const MAX_ROLLUP_GROUPS = 4_096;
 const MAX_ROLLUP_PRICE_ENTRIES = 65_536;
 
-/** Aggregate streamed frames while retaining only model and tool totals. */
-export function createRunRollup(input: Pick<RollupInput, "meta" | "carried">) {
+/**
+ * Aggregate streamed frames while retaining model and tool totals, and each
+ * call's time and chain for the step classes (F17).
+ */
+export function createRunRollup(
+  input: Pick<RollupInput, "meta" | "carried" | "changedFile">,
+) {
   const { meta } = input;
   const tokens: TokenCounts = { ...ZERO_TOKENS };
   const priceEntryIds = new Set<string>();
@@ -472,11 +509,20 @@ export function createRunRollup(input: Pick<RollupInput, "meta" | "carried">) {
   let failed = 0;
   let repeated = 0;
   const seen = new RepeatedCalls();
+  // Each call's time and chain, kept until the run ends so the step classes
+  // can place each tool call under the model call that made it (F17).
+  const stepModels: StepModelCall[] = [];
+  const stepTools: StepToolCall[] = [];
   let scaledTotal: bigint | null = null;
   let basis: CostBasis | null = null;
 
   const addModel = (frame: ModelCallFrame, book: PriceBook) => {
     modelCalls += 1;
+    stepModels.push(
+      frame.sessionUuid === undefined
+        ? { atMs: frame.at.getTime() }
+        : { atMs: frame.at.getTime(), chain: frame.sessionUuid },
+    );
     const p = priceFrame(book, meta.orgId, frame);
     for (const id of p.priceEntryIds) {
       if (!priceEntryIds.has(id) && priceEntryIds.size >= MAX_ROLLUP_PRICE_ENTRIES)
@@ -536,6 +582,13 @@ export function createRunRollup(input: Pick<RollupInput, "meta" | "carried">) {
   >();
   const addTool = (call: ToolCallFrame) => {
     toolCalls += 1;
+    const atMs =
+      call.at === undefined || call.at === null ? null : Date.parse(call.at);
+    stepTools.push(
+      call.sessionUuid === undefined
+        ? { atMs, isMutating: call.isMutating }
+        : { atMs, chain: call.sessionUuid, isMutating: call.isMutating },
+    );
     const repeat = call.repeated ?? (
       call.name !== null &&
       call.inputDigest !== null &&
@@ -625,6 +678,13 @@ export function createRunRollup(input: Pick<RollupInput, "meta" | "carried">) {
         models,
         tools,
         steps: grade === null ? null : grade.causes,
+        stepClasses:
+          steps === 0
+            ? null
+            : classifySteps({
+                requests: stepRequestsOf(stepModels, stepTools),
+                changedFile: input.changedFile ?? false,
+              }),
       },
       verdict: input.carried?.verdict ?? null,
       accepted: input.carried?.accepted ?? null,

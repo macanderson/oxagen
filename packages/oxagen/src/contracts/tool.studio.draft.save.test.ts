@@ -6,6 +6,7 @@ import { getCapability } from "../registry";
 import {
   STUDIO_DRAFT_OPS_BYTES_MAX,
   STUDIO_DRAFT_OPS_MAX,
+  STUDIO_MAX_RESULT_BYTES,
   STUDIO_SERVER_TOML_MAX,
   studioSourceBytes,
   toolStudioDraftSave,
@@ -52,10 +53,29 @@ describe("save_studio_draft input", () => {
           raw: "{}",
           shaped: "{}",
         },
+        { kind: "cap", tool: "search", maxResultBytes: 16_000, paging: true },
+        { kind: "cap", tool: "list", maxResultBytes: 4_000 },
+        { kind: "expose", mode: "search" },
       ],
       revision: 0,
     };
     expect(toolStudioDraftSave.input.parse(input)).toEqual(input);
+  });
+
+  it("refuses a cap outside tools.toml's range and an exposure mode server.toml does not take", () => {
+    for (const op of [
+      { kind: "cap", tool: "search", maxResultBytes: 0 },
+      { kind: "cap", tool: "search", maxResultBytes: STUDIO_MAX_RESULT_BYTES + 1 },
+      { kind: "cap", tool: "search", maxResultBytes: 1.5 },
+      { kind: "cap", tool: "search", maxResultBytes: 4_000, paging: "cursor" },
+      { kind: "cap", maxResultBytes: 4_000 },
+      { kind: "expose", mode: "hidden" },
+      { kind: "expose", mode: "search", tool: "search" },
+    ]) {
+      expect(
+        toolStudioDraftSave.input.safeParse({ server: "ledger", ops: [op] }).success,
+      ).toBe(false);
+    }
   });
 
   it("accepts each source type", () => {

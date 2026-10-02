@@ -340,6 +340,81 @@ describe("ChangesTab tool surface", () => {
   });
 });
 
+describe("ChangesTab result caps and exposure", () => {
+  it("shows a cap as a change to the tool and names its tokens and paging", () => {
+    seedDraft(draftKey("billing"), {
+      revision: 0,
+      ops: [
+        { kind: "cap", tool: "list_invoices", maxResultBytes: 16_000, paging: true },
+        { kind: "cap", tool: "create_refund", maxResultBytes: 4_000 },
+      ],
+    });
+    renderTab(BILLING);
+    const row = screen.getByTestId("studio-change-list_invoices");
+    expect(row).toHaveAttribute("data-change", "changed");
+    expect(within(row).getByText("result cap")).toBeInTheDocument();
+    expect(screen.getByTestId("studio-edit-0")).toHaveTextContent(
+      "Cap list_invoices at 4,000 tokens, paging on",
+    );
+    expect(screen.getByTestId("studio-edit-1")).toHaveTextContent(
+      "Cap create_refund at 1,000 tokens",
+    );
+    expect(screen.getByTestId("studio-edit-1").textContent).not.toContain("paging");
+    expect(files()).toEqual(["tools/servers/billing/tools.toml"]);
+  });
+
+  it("shows a change of exposure mode on its own line and in server.toml", () => {
+    seedDraft(draftKey("stripe"), {
+      revision: 0,
+      ops: [{ kind: "expose", mode: "search" }],
+    });
+    renderTab(STRIPE);
+    expect(screen.getByTestId("studio-changes-exposure").textContent).toBe(
+      "Exposure modeFull→toSearchable",
+    );
+    expect(
+      screen.queryByText("The tools agents see do not change."),
+    ).toBeNull();
+    expect(screen.queryByRole("table", { name: "Tool surface" })).toBeNull();
+    expect(screen.getByTestId("studio-edit-0")).toHaveTextContent(
+      "Set the exposure mode to Searchable",
+    );
+    expect(files()).toEqual(["tools/servers/stripe/server.toml"]);
+  });
+
+  it("removes the exposure edit by its own name", () => {
+    seedDraft(draftKey("stripe"), {
+      revision: 0,
+      ops: [IMPORT_REFUND, { kind: "expose", mode: "search" }],
+    });
+    renderTab(STRIPE);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Remove the exposure mode edit" }),
+    );
+    expect(screen.queryByTestId("studio-changes-exposure")).toBeNull();
+    expect(stored(draftKey("stripe"))).toEqual({
+      revision: 0,
+      ops: [IMPORT_REFUND],
+    });
+  });
+
+  it("drops the over-budget warning once the draft moves the server to search mode", () => {
+    seedDraft(draftKey("billing"), {
+      revision: 2,
+      ops: [IMPORT_VOID, CLASSIFY_REFUND, { kind: "expose", mode: "search" }],
+    });
+    const record = recordOf(BILLING);
+    if (record === null) throw new Error("no billing record");
+    renderTab(BILLING, {
+      record: {
+        ...record,
+        exposure: { mode: "direct", definitionBudget: 1_000 },
+      },
+    });
+    expect(screen.queryByTestId("studio-pr-over-budget")).toBeNull();
+  });
+});
+
 describe("ChangesTab findings", () => {
   it("says findings wait on the record when none could be read", () => {
     renderTab(BILLING, { findings: null });

@@ -81,6 +81,25 @@
         "counts": "{imported} imported of {offered} the last discovery listed",
         "search": "These definitions would fit the budget better behind tool search.",
         "compileError": "The server's tools.toml did not compile. Fix it in the steering repository."
+      },
+      "exposure": {
+        "title": "Tool exposure",
+        "staged": "In the draft",
+        "modes": {
+          "direct": "Full",
+          "search": "Searchable"
+        },
+        "bodies": {
+          "direct": "Every request carries the definition of each imported tool.",
+          "search": "Every request carries three search tools, and an agent finds a tool before it calls it."
+        }
+      },
+      "calls": {
+        "title": "Calls",
+        "counts": "Agents called {called} of {counted} imported tools in the last {days, plural, one {day} other {# days}}.",
+        "unrecorded": "{count, plural, one {# imported tool has no recorded call count, so it is not counted.} other {# imported tools have no recorded call count, so they are not counted.}}",
+        "missing": "Oxagen could not read the call counts for this server's tools.",
+        "uncalled": "Tools with no calls"
       }
     },
     "panel": {
@@ -111,6 +130,20 @@
       "draftNotBuilt": "Draft is not available yet. You can write the description yourself.",
       "draftFailed": "Draft failed: {message}",
       "draftError": "Draft did not finish. Try again.",
+      "cap": "Result cap",
+      "capTokens": "Cap in tokens",
+      "capUnread": "This panel does not show the cap tools.toml sets now. A cap you add to the draft replaces it.",
+      "capHint": "tools.toml caps a result in bytes, and Oxagen writes 4 bytes for each token. A tool with no cap is cut at {tokens} tokens.",
+      "capInvalid": "Enter a whole number of tokens from 1 to {max}.",
+      "capImportFirst": "Import this tool before you set its result cap.",
+      "paging": "Paging",
+      "pagingChoice": {
+        "keep": "Leave as it is",
+        "on": "On",
+        "off": "Off"
+      },
+      "pagingHint": "With paging on, the gateway reads page after page into one result until it reaches the cap. Review refuses paging for a tool whose definition has no paging pattern.",
+      "pagingNone": "Only a tool from an OpenAPI or GraphQL definition can page, so this cap cuts the result.",
       "shaping": "Shaping",
       "shapingMissing": "Shaping is set in tools.toml, and Oxagen has not read this server's tools.toml yet.",
       "hidden": "Hidden inputs",
@@ -275,14 +308,17 @@
       "edits": {
         "title": "Edits",
         "unstage": "Remove",
-        "unstageNamed": "Remove the edit to {tool}"
+        "unstageNamed": "Remove the edit to {tool}",
+        "unstageExposure": "Remove the exposure mode edit"
       },
       "ops": {
         "import": "Import {tool}",
         "remove": "Remove {tool}",
         "classify": "Classify {tool}: risk {risk}, side effect {sideEffect}",
         "describe": "Describe {tool}",
-        "test": "Add a test call to {tool} in {environment}"
+        "test": "Add a test call to {tool} in {environment}",
+        "cap": "Cap {tool} at {tokens} tokens{paging, select, on {, paging on} off {, paging off} other {}}",
+        "expose": "Set the exposure mode to {mode}"
       },
       "files": {
         "title": "Files",
@@ -296,6 +332,7 @@
         "tokensUnmeasured": "not measured",
         "tokensAdded": "+{tokens} tokens",
         "tokensRemoved": "−{tokens} tokens",
+        "exposure": "Exposure mode",
         "columns": {
           "change": "Change",
           "tool": "Tool",
@@ -308,7 +345,8 @@
         },
         "fields": {
           "classification": "classification",
-          "description": "description"
+          "description": "description",
+          "cap": "result cap"
         }
       },
       "findings": {
@@ -374,7 +412,8 @@
           "tool_not_offered": "The source no longer offers a tool this draft imports. Remove it from the draft, then open the steering PR again.",
           "tool_key_collision": "Two tools in this draft share one key in tools.toml. Remove one of them, then open the steering PR again.",
           "test_invalid": "A saved test cannot be recorded. Save the test again, then open the steering PR.",
-          "test_holds_credential": "A saved test carries a credential header. Remove the header, save the test again, then open the steering PR."
+          "test_holds_credential": "A saved test carries a credential header. Remove the header, save the test again, then open the steering PR.",
+          "tool_paging_missing": "A tool in this draft has no paging pattern, so the gateway cannot page its results. Set its paging to Leave as it is, then open the steering PR again."
         }
       },
       "review": {

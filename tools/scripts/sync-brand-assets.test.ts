@@ -41,7 +41,7 @@ function put(root: string, rel: string, content: string | Buffer) {
 
 /**
  * A copy of the repo with just what the script imports and edits in place:
- * the script, its entrypoint helper, apps/web's palette module, and the four
+ * the script, its entrypoint helper, apps/web's palette module, and the six
  * hand-authored pages the sync writes a <head> block into.
  */
 function fixtureRepo(root: string) {
@@ -57,6 +57,8 @@ function fixtureRepo(root: string) {
     "story/index.html",
     "read/index.html",
     "products/oxagen/index.html",
+    "terms/index.html",
+    "privacy/index.html",
   ]) {
     put(
       root,

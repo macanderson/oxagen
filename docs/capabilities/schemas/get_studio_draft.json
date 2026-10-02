@@ -217,6 +217,53 @@
                         "shaped"
                       ],
                       "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "const": "cap"
+                        },
+                        "tool": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 128
+                        },
+                        "maxResultBytes": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 1048576
+                        },
+                        "paging": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "tool",
+                        "maxResultBytes"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "const": "expose"
+                        },
+                        "mode": {
+                          "type": "string",
+                          "enum": [
+                            "direct",
+                            "search"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "mode"
+                      ],
+                      "additionalProperties": false
                     }
                   ]
                 }
