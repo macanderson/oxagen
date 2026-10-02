@@ -1,16 +1,12 @@
 import { resolveDataPlane } from "@oxagen/tenancy";
-import type { CapabilityHandler } from "@oxagen/oxagen";
+import type { CapabilityHandler, CheckedContext } from "@oxagen/oxagen";
 import { HandlerError } from "@oxagen/oxagen/handler-error";
 import { runTokenIssue } from "@oxagen/oxagen/contracts/run.token.issue";
 import {
   LEDGER_RUN_SCOPE_PURPOSE,
   LEDGER_RUN_TOKEN_TTL_MS,
 } from "@oxagen/oxagen/ledger-run-token";
-import {
-  assertOrgRole,
-  resolveActingUserId,
-  type OrgRoleActor,
-} from "@oxagen/iam/org-role";
+import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { isHandlerError } from "@oxagen/oxagen/handler-error";
 import { schema, type Tx, withTenantDb } from "@oxagen/database";
 import { lockRunForControl } from "@oxagen/run-ledger";
@@ -54,7 +50,7 @@ export const runTokenIssueHandler: CapabilityHandler<
       throw new HandlerError({ code: "not_found", reason: "run_not_found" });
     if (run.cancelled || !["pending", "running"].includes(run.status))
       throw new HandlerError({ code: "conflict", reason: "run_not_writable" });
-    await assertRunParty(tx, scope, run.id, { ...ctx, userId });
+    await assertRunParty(tx, scope, run.id, ctx);
     const attempt = await tx.query.agentRunAttempts.findFirst({
       where: and(
         eq(schema.agentRunAttempts.publicId, input.attemptId),
@@ -115,9 +111,13 @@ async function assertRunParty(
   tx: Tx,
   scope: { orgId: string; workspaceId: string },
   runId: string,
-  actor: OrgRoleActor & { userId: string },
+  ctx: CheckedContext,
 ): Promise<void> {
-  const { userId } = actor;
+  // The handler refused an API key, so this is the session's own user and
+  // reads nothing.
+  const userId = await resolveActingUserId(ctx);
+  if (!userId)
+    throw new HandlerError({ code: "forbidden", reason: "operator_required" });
   const [row] = await tx
     .select({
       initiating: schema.agentRuns.initiatingPrincipalId,
@@ -141,7 +141,7 @@ async function assertRunParty(
     );
   if (own.some((principal) => parties.includes(principal.id))) return;
   try {
-    await assertOrgRole(actor, { org: ["Owner", "Admin"] }, tx);
+    await assertOrgRole({ ...ctx, userId }, { org: ["Owner", "Admin"] }, tx);
     return;
   } catch (err) {
     if (!isHandlerError(err) || err.code !== "forbidden") throw err;

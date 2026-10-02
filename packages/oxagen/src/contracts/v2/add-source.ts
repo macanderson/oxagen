@@ -95,10 +95,11 @@ export const addSource = defineTool({
    * Owner/Admin, `configure_integration` names Owner/Member. Neither Admin nor
    * Member survives. Member does not because the stricter source wins — a
    * Member can update a source's mappings (`update_source`) but cannot open a
-   * new ingestion path. **Admin does not because it is not a workspace role at
-   * all**: `SystemWorkspaceRole` is Owner | Member | Viewer (§6.3), so
-   * `install_plugin`'s workspace Admin grant was dead weight that never matched
-   * a principal. Carrying it forward would have reproduced the bug.
+   * new ingestion path. **Admin does not because it was not a workspace role
+   * when this was written**: `SystemWorkspaceRole` was Owner | Member | Viewer
+   * (§6.3), so `install_plugin`'s workspace Admin grant never matched a
+   * principal. Since #5228 the role exists, and a workspace's Owner and Admin
+   * pass every workspace capability with no entry here.
    */
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow" },

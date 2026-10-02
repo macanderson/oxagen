@@ -129,7 +129,7 @@ export const contextSteeringFreshness = registerCapability({
   defaultEffect: "allow",
   // Every role that exists, at both scopes. The workspace list is the one
   // `workspace_users_role_check` enforces (owner, admin, member, billing,
-  // compliance, viewer), not the narrower SystemWorkspaceRole type.
+  // compliance, viewer), wider than the SystemWorkspaceRole type.
   //
   // These are the grants a workspace's own IAM configuration starts from.
   // They do not decide the enterprise path by themselves, which is what

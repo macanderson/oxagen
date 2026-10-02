@@ -80,8 +80,8 @@ export const updateWorkspace = defineTool({
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow" },
     // Strict intersection of the four: settings/budget/routing allowed
-    // workspace Owner (and an unreachable "Admin" that is not a
-    // `SystemWorkspaceRole`), `update_memory_policy` allowed Owner alone.
+    // workspace Owner (and an "Admin" that was not a `SystemWorkspaceRole`
+    // until #5228), `update_memory_policy` allowed Owner alone.
     workspace: { Owner: "allow" },
   },
   /**

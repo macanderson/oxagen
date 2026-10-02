@@ -325,6 +325,30 @@ function workspaceRuleApplies(
 }
 
 /**
+ * The workspace Owner or Admin role that admits `userId` under the workspace
+ * rule (#5228), or null. For a gate that reads the org role itself rather
+ * than through `assertOrgRole`, such as the operator gates in
+ * packages/handlers/src/lib/api-key-authz.ts: it asks the same question
+ * `assertOrgRole` asks, so the rule stays in one place. Reads nothing when
+ * the rule cannot apply.
+ */
+export async function workspaceAuthorityRole(
+  ctx: OrgRoleActor,
+  userId: string,
+  transaction?: Tx,
+): Promise<string | null> {
+  if (!workspaceRuleApplies(ctx, { org: [] }) || !ctx.workspaceId) return null;
+  return workspaceFullAccessRole(
+    await resolveActorWorkspaceRoles(
+      ctx.orgId,
+      ctx.workspaceId,
+      userId,
+      transaction,
+    ),
+  );
+}
+
+/**
  * Refuse unless the signed-in user holds one of `required.org` in `ctx.orgId`,
  * or — when the handler names `required.workspace` — one of those roles on
  * `ctx.workspaceId`.

@@ -70,8 +70,9 @@ export const openContextPr = defineTool({
   sensitivity: "high",
   defaultEffect: "deny",
   // v1 also spelled a workspace `Admin` grant, which `SystemWorkspaceRole`
-  // (Owner | Member | Viewer) does not have — it granted nothing, so it is
-  // dropped rather than reproduced.
+  // did not have when this was written, so it granted nothing and is dropped.
+  // Since #5228 a workspace's Owner and Admin pass every workspace capability
+  // with no entry here.
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow" },
     workspace: { Owner: "allow" },

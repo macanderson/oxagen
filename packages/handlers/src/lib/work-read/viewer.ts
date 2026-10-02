@@ -45,8 +45,17 @@ export async function workViewer(ctx: CheckedContext): Promise<WorkViewer> {
   if (userId === null) return NOTHING;
   // The invoked capability lets the gate admit the workspace's Owner or Admin
   // (#5228), as each Work action's own check does.
-  const actor = { orgId: ctx.orgId, workspaceId: ctx.workspaceId, userId, invokedCapability: ctx.invokedCapability };
-  const canControl = await passes(assertOrgRole(actor, workActionRoles("send")));
-  const canApprove = await passes(assertOrgRole(actor, workActionRoles("accept")));
+  const canControl = await passes(
+    assertOrgRole(
+      { orgId: ctx.orgId, workspaceId: ctx.workspaceId, userId, invokedCapability: ctx.invokedCapability },
+      workActionRoles("send"),
+    ),
+  );
+  const canApprove = await passes(
+    assertOrgRole(
+      { orgId: ctx.orgId, workspaceId: ctx.workspaceId, userId, invokedCapability: ctx.invokedCapability },
+      workActionRoles("accept"),
+    ),
+  );
   return { can_control: canControl, can_approve: canApprove };
 }

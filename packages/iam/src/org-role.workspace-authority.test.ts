@@ -38,23 +38,10 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   return { ...real, withOrgDb: mocks.withOrgDb };
 });
 
-// Plain-object predicates, so the tx double can read which workspace a role
-// lookup is pinned to without depending on Drizzle's SQL internals.
-vi.mock("drizzle-orm", async (importOriginal) => {
-  const real = await importOriginal<typeof import("drizzle-orm")>();
-  return {
-    ...real,
-    and: (...args: unknown[]) => ({ op: "and", args }),
-    or: (...args: unknown[]) => ({ op: "or", args }),
-    eq: (...args: unknown[]) => ({ op: "eq", args }),
-    gt: (...args: unknown[]) => ({ op: "gt", args }),
-    isNull: (...args: unknown[]) => ({ op: "isNull", args }),
-  };
-});
-
 import { schema } from "@oxagen/database";
 import {
   assertOrgRole,
+  workspaceAuthorityRole,
   type OrgRoleActor,
   type OrgRoleRequirement,
 } from "./org-role";
@@ -64,31 +51,25 @@ const WS_A = "00000000-0000-4000-8000-00000000b001";
 const WS_B = "00000000-0000-4000-8000-00000000b002";
 const USER = "00000000-0000-4000-8000-00000000c001";
 
-type Pred = { op: string; args: unknown[] };
+/** Whether a drizzle SQL tree binds `value` as a parameter. */
+function binds(node: unknown, value: string, seen = new Set<unknown>()): boolean {
+  if (node === value) return true;
+  if (typeof node !== "object" || node === null || seen.has(node)) return false;
+  seen.add(node);
+  if (Array.isArray(node)) return node.some((n) => binds(n, value, seen));
+  if ("queryChunks" in node) return binds(node.queryChunks, value, seen);
+  if ("value" in node) return binds(node.value, value, seen);
+  return false;
+}
 
 /**
- * Which assignments a role lookup asked for: `null` for org-wide, a workspace
- * id for one workspace. The lookup pins `workspace_id IS NULL` or
- * `workspace_id = <id>`, and nothing else names that column.
+ * Which assignments a role lookup asked for: `null` for org-wide, else the
+ * workspace id it pins. The lookup binds the role's scope kind, and a
+ * workspace lookup binds the workspace id too.
  */
-function scopeOf(where: unknown): string | null | undefined {
-  const column = schema.principalRoleAssignments.workspaceId;
-  const walk = (node: unknown): string | null | undefined => {
-    if (typeof node !== "object" || node === null || !("op" in node)) {
-      return undefined;
-    }
-    const pred = node as Pred;
-    if (pred.op === "isNull" && pred.args[0] === column) return null;
-    if (pred.op === "eq" && pred.args[0] === column) {
-      return pred.args[1] as string;
-    }
-    for (const arg of pred.args) {
-      const found = walk(arg);
-      if (found !== undefined) return found;
-    }
-    return undefined;
-  };
-  return walk(where);
+function scopeOf(where: unknown, known: readonly string[]): string | null {
+  if (!binds(where, "workspace")) return null;
+  return known.find((id) => binds(where, id)) ?? "unknown-workspace";
 }
 
 /** The roles one person holds: org-wide, and per workspace. */
@@ -110,13 +91,16 @@ function hold(holding: Holding): void {
           innerJoin: () => ({
             where: (where: unknown) => ({
               limit: async () => {
-                const scope = scopeOf(where);
+                const scope = scopeOf(where, [
+                  ...Object.keys(holding.workspace),
+                  WS_A,
+                  WS_B,
+                  ORG_ONLY_WORKSPACE_ID,
+                ]);
                 const names =
                   scope === null
                     ? holding.org
-                    : scope === undefined
-                      ? []
-                      : (holding.workspace[scope] ?? []);
+                    : (holding.workspace[scope] ?? []);
                 return names.map((roleName) => ({ roleName }));
               },
             }),
@@ -336,6 +320,34 @@ describe("what turns the rule off", () => {
     expect(
       await decide({ ...actor(cap(), WS_A), userId: null }, ORG_OWNER_ONLY),
     ).toBeNull();
+  });
+});
+
+describe("workspaceAuthorityRole, for gates that read the org role themselves", () => {
+  const cap = () =>
+    workspaceCapabilities.find((c) => c.name === "create_tacho_enrollment")!;
+
+  it.each(["Owner", "Admin"])("names the workspace %s", async (role) => {
+    hold({ org: [], workspace: { [WS_A]: [role] } });
+    await expect(workspaceAuthorityRole(actor(cap(), WS_A), USER)).resolves.toBe(
+      role,
+    );
+  });
+
+  it("names nothing for a Member, on another workspace, or on an org-level capability (negative)", async () => {
+    hold({ org: [], workspace: { [WS_A]: ["Member"], [WS_B]: [] } });
+    expect(await workspaceAuthorityRole(actor(cap(), WS_A), USER)).toBeNull();
+    hold({ org: [], workspace: { [WS_A]: ["Owner"] } });
+    expect(await workspaceAuthorityRole(actor(cap(), WS_B), USER)).toBeNull();
+    const orgLevel = orgCapabilities.find((c) => c.name === "create_api_key")!;
+    expect(await workspaceAuthorityRole(actor(orgLevel, WS_A), USER)).toBeNull();
+  });
+
+  it("reads nothing when the rule cannot apply", async () => {
+    hold({ org: [], workspace: { [WS_A]: ["Owner"] } });
+    const { invokedCapability: _omitted, ...bare } = actor(cap(), WS_A);
+    expect(await workspaceAuthorityRole(bare, USER)).toBeNull();
+    expect(mocks.withOrgDb).not.toHaveBeenCalled();
   });
 });
 

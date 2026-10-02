@@ -368,11 +368,13 @@ export function makeSetGovernanceModeHandler(
     // edited from the same dialog. With a `workspaceId` the gate is org-level
     // only, because `assertOrgRole` reads the workspace role on
     // `ctx.workspaceId` and a role in one workspace must not reach another.
+    // `namedRolesOnly` keeps the workspace Owner and Admin rule off it too
+    // (#5228).
     await assertOrgRole(
       { ...ctx, userId: actingUserId },
       input.workspaceId === undefined
         ? { org: ["Owner", "Admin"], workspace: ["Owner", "Admin"] }
-        : { org: ["Owner", "Admin"] },
+        : { org: ["Owner", "Admin"], namedRolesOnly: true },
     );
     // assertOrgRole refuses a call with no acting user, so this never throws.
     // It narrows the type: the ledger and the events name a person.
