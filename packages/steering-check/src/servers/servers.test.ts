@@ -1,7 +1,15 @@
 // The servers half of the compile check against small edits to the fixture's
 // billing folder. Each test names the rule, line, and field an agent reads.
 import type { Finding as LintFinding, RecordedCall } from "@oxagen/mcp-studio";
-import { parseLock } from "@oxagen/mcp-studio";
+import {
+  compile as compileServer,
+  formatJson,
+  lock as lockServer,
+  mcpToolsLockSchema,
+  parseLock,
+  parseServerToml,
+  parseToolsToml,
+} from "@oxagen/mcp-studio";
 import { fixtureRepo } from "@oxagen/oxagen/steering-repo/fixture-repo";
 import { describe, expect, it, vi } from "vitest";
 import { runChecks } from "../run";
@@ -283,6 +291,130 @@ describe("the lock", () => {
       expect(finding).toMatchObject({ rule: "lock-parses", path: LOCK });
       expect(finding.message).toMatch(/^The lock does not parse: /);
     }
+  });
+});
+
+/** The owned check's result in a report. */
+function ownedOf(report: CheckReport): CheckResult {
+  const result = report.results.find((entry) => entry.check === "owned");
+  if (result === undefined) throw new Error("The report has no owned result.");
+  return result;
+}
+
+const REFUND_ID = "The refund's id, such as re_1.";
+
+/**
+ * The billing lock a sync writes once the server describes get_refund's
+ * refund_id: the upstream moves, so get_refund's definition changes and its
+ * version rises from 1 to 2. MCP Studio's compile() and lock() write it, as
+ * sync.ts does.
+ */
+function syncedBillingLock(): string {
+  const production = parseLock(textOf(fixtureRepo(), LOCK));
+  const server = parseServerToml(textOf(fixtureRepo(), SERVER));
+  const tools = parseToolsToml(textOf(fixtureRepo(), TOOLS));
+  if (!production.ok || !server.ok || !tools.ok) throw new Error("The billing fixture does not parse.");
+  const moved = JSON.parse(textOf(fixtureRepo(), LOCK)) as {
+    tools: Record<string, { upstream: { inputSchema: { properties: Record<string, Record<string, unknown>> } } }>;
+  };
+  const refundId = moved.tools.get_refund?.upstream.inputSchema.properties.refund_id;
+  if (refundId === undefined) throw new Error("The billing lock has no get_refund refund_id.");
+  refundId.description = REFUND_ID;
+  const upstream = mcpToolsLockSchema.parse(moved);
+  const compiled = compileServer({
+    server: server.value,
+    tools: tools.value,
+    upstream: lockedUpstreamTools(upstream),
+    security_schemes: lockedSecuritySchemes(upstream),
+    descriptor_set: undefined,
+  });
+  return formatJson(lockServer({ compiled, source: production.value.source, previous: production.value }));
+}
+
+describe("the lock a steering PR writes", () => {
+  it("passes the lock a sync writes, with the changed tool one version up", async () => {
+    const synced = syncedBillingLock();
+    const read = parseLock(synced);
+    if (!read.ok) throw new Error("The synced lock does not parse.");
+    expect(read.value.tools.get_refund?.version).toBe(2);
+    expect(read.value.tools.get_charge?.version).toBe(1);
+
+    const head = withFile(LOCK, synced);
+    expect(SERVER_READERS.lock?.("billing", head, fixtureRepo())).toEqual({ ok: true });
+    const report = await runChecksWithServers(inputFor(head));
+    expect(ownedOf(report)).toMatchObject({ status: "passed", findings: [] });
+    expect(report.findings.filter((finding) => finding.severity === "error")).toEqual([]);
+  });
+
+  it("refuses a version a person raised by hand", async () => {
+    const head = replaced(STRIPE_LOCK, '"version": 3', '"version": 4');
+    expect(ownedOf(await runChecksWithServers(inputFor(head))).findings).toEqual([
+      expect.objectContaining({
+        rule: "oxagen-writes",
+        severity: "error",
+        path: STRIPE_LOCK,
+        line: lineStarting(textOf(head, STRIPE_LOCK), '      "version": 4'),
+        message: `This steering PR changes ${STRIPE_LOCK}, and the lock it holds is not one Oxagen writes. stripe__create_refund is at version 4. Its definition_hash is the production lock's, so its version stays 3.`,
+      }),
+    ]);
+  });
+
+  it("refuses a definition change whose version did not rise", async () => {
+    const synced = syncedBillingLock();
+    const head = withFile(LOCK, synced.replace(/("get_refund": \{[\s\S]*?"version": )2/, (_, entry: string) => `${entry}1`));
+    expect(ownedOf(await runChecksWithServers(inputFor(head))).findings).toEqual([
+      expect.objectContaining({
+        rule: "oxagen-writes",
+        message: `This steering PR changes ${LOCK}, and the lock it holds is not one Oxagen writes. billing__get_refund is at version 1. Its definition_hash differs from the production lock's, so its version is 2.`,
+      }),
+    ]);
+  });
+
+  it("refuses a lock not in the form Oxagen writes", async () => {
+    const head = replaced(STRIPE_LOCK, '"version": 1\n', '"version": 1 \n');
+    const [finding] = ownedOf(await runChecksWithServers(inputFor(head))).findings;
+    expect(finding).toMatchObject({ rule: "oxagen-writes", path: STRIPE_LOCK });
+    expect(finding?.message).toMatch(/not one Oxagen writes\. tools\.lock\.json is not in the form Oxagen writes, so it was edited by hand\./);
+  });
+
+  it("refuses a lock entry for a tool tools.toml does not import", async () => {
+    const block = textOf(fixtureRepo(), TOOLS).match(/\[tools\.get_refund\][\s\S]*?\n\n/)?.[0];
+    if (block === undefined) throw new Error("tools.toml has no get_refund block.");
+    const head = replaced(TOOLS, block, "", withFile(LOCK, syncedBillingLock()));
+    const [finding] = ownedOf(await runChecksWithServers(inputFor(head))).findings;
+    expect(finding?.message).toContain("The lock holds billing__get_refund, and tools.toml imports no tool keyed get_refund.");
+  });
+
+  it("refuses a lock whose source is not the one server.toml names", () => {
+    const openapi = textOf(fixtureRepo(), SERVER).replace('name = "billing"', 'name = "stripe"');
+    const head = withFile("tools/servers/stripe/server.toml", openapi);
+    expect(SERVER_READERS.lock?.("stripe", head, fixtureRepo())).toEqual({
+      ok: false,
+      problems: ["The lock's source is remote, and server.toml's source is openapi."],
+    });
+  });
+
+  it("starts each tool of a new server at version 1", async () => {
+    const base = without(STRIPE_LOCK, without("tools/servers/stripe/server.toml"));
+    expect(ownedOf(await runChecksWithServers(inputFor(fixtureRepo(), { base }))).findings).toEqual([
+      expect.objectContaining({
+        rule: "oxagen-writes",
+        line: 1,
+        message: `This steering PR adds ${STRIPE_LOCK}, and the lock it holds is not one Oxagen writes. stripe__create_refund is at version 3, and a tool new to the lock starts at version 1.`,
+      }),
+    ]);
+  });
+
+  it("still refuses a removed lock", async () => {
+    const head = without(STRIPE_LOCK);
+    expect(ownedOf(await runChecksWithServers(inputFor(head))).findings).toEqual([
+      expect.objectContaining({
+        rule: "oxagen-writes",
+        path: STRIPE_LOCK,
+        line: null,
+        message: `This steering PR removes ${STRIPE_LOCK}. It holds a server's reviewed upstream definitions, which Oxagen writes when it syncs the server.`,
+      }),
+    ]);
   });
 });
 
