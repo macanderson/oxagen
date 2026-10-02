@@ -513,7 +513,8 @@ export const costCenters = costSchema.table(
  * The finding kinds (spec §12.8; ADR-062's detector table). The first four
  * shipped with ADR-062. ADR-208 adds `spin_loops` and the seven kinds the
  * later unproductive spend detectors write, so each lane adds a detector
- * without a migration of its own.
+ * without a migration of its own. `retry_loops` came later, with detector 1's
+ * retry rule.
  */
 export const FINDING_KINDS = [
   "cache_writes_never_read",
@@ -528,6 +529,7 @@ export const FINDING_KINDS = [
   "repeated_instructions",
   "recurring_runs",
   "spend_with_no_outcome",
+  "retry_loops",
 ] as const;
 export type FindingKind = (typeof FINDING_KINDS)[number];
 

@@ -6,7 +6,9 @@
  * does not enforce at `preToolUse`.
  *
  * The payloads here are Cursor's documented shape (verified 2026-09-18
- * against https://cursor.com/docs/agent/hooks, fetched that day).
+ * against https://cursor.com/docs/agent/hooks, fetched that day). The prompt
+ * source tests at the end use Cursor 3.22.12's payloads as its shipped bundle
+ * builds them.
  */
 import { describe, expect, it } from "vitest";
 import {
@@ -305,5 +307,96 @@ describe("a decision becomes the flat answer Cursor reads", () => {
     ).toEqual({ additional_context: "note" });
     expect(JSON.parse(cursorAnswer({}, "PostToolUseFailure"))).toEqual({});
     expect(cursorAnswer({}, "SessionEnd")).toBe("{}\n");
+  });
+});
+
+/**
+ * Cursor 3.22.12's payloads, built the way its shipped bundle builds them
+ * (read 2026-10-01): the event's own members first, then the members every
+ * agent hook gets. In 3.22.12 that includes `session_id` on every event, set
+ * to the conversation id.
+ */
+const CONVERSATION = "3f9c2a6e-5b1d-4c8e-9a70-1d2e3f405162";
+const CURSOR_3_22_COMMON = {
+  session_id: CONVERSATION,
+  cursor_version: "3.22.12",
+  workspace_roots: ["/Users/kim/repo"],
+  user_email: null,
+  transcript_path: "/Users/kim/.cursor/projects/repo/transcript.jsonl",
+};
+const MODEL = {
+  model: "claude-4.5-sonnet-thinking",
+  model_id: "claude-sonnet-4-5",
+  model_params: [{ id: "thinking", value: "true" }],
+};
+
+describe("who sent a prompt", () => {
+  it("adds no source to a prompt, because Cursor sends none", () => {
+    // A typed prompt and a stop hook's follow-up both arrive in this shape:
+    // Cursor submits the follow-up through the same path and passes the hook
+    // no mark that says which one it is.
+    const translated = translateCursorPayload({
+      conversation_id: CONVERSATION,
+      generation_id: "gen-1",
+      ...MODEL,
+      composer_mode: "agent",
+      prompt: "fix the failing test in src/app.ts",
+      attachments: [{ type: "file", file_path: "/Users/kim/repo/src/app.ts" }],
+      ...CURSOR_3_22_COMMON,
+      hook_event_name: "beforeSubmitPrompt",
+    }) as Record<string, unknown>;
+    expect(translated["hook_event_name"]).toBe("UserPromptSubmit");
+    expect(translated).not.toHaveProperty("prompt_source");
+    expect(translated).not.toHaveProperty("prompt_origin");
+
+    const [draft] = normalizeHook(translated, {}, { sessionUuid: "uuid-1" });
+    expect(draft?.kind).toBe("turn_start");
+    expect(draft?.body["prompt_digest"]).toBeDefined();
+    expect(draft?.body).not.toHaveProperty("prompt_source");
+    expect(draft?.body).not.toHaveProperty("prompt_origin");
+    // The mode says how the agent works, not who sent the prompt.
+    expect(draft?.attrs["hook.composer_mode"]).toBe("agent");
+  });
+
+  it("keeps the automation marks Cursor does send as attributes", () => {
+    const [start] = normalizeHook(
+      translateCursorPayload({
+        conversation_id: CONVERSATION,
+        generation_id: "",
+        ...MODEL,
+        is_background_agent: true,
+        composer_mode: "agent",
+        ...CURSOR_3_22_COMMON,
+        hook_event_name: "sessionStart",
+      }),
+      {},
+      { sessionUuid: "uuid-1" },
+    );
+    expect(start?.kind).toBe("agent_start");
+    expect(start?.attrs["hook.is_background_agent"]).toBe("true");
+    expect(start?.attrs["hook.composer_mode"]).toBe("agent");
+
+    const [end] = normalizeHook(
+      translateCursorPayload({
+        status: "completed",
+        loop_count: 1,
+        conversation_id: CONVERSATION,
+        generation_id: "gen-2",
+        ...MODEL,
+        input_tokens: 1200,
+        output_tokens: 80,
+        cache_read_tokens: 0,
+        cache_write_tokens: 0,
+        ...CURSOR_3_22_COMMON,
+        hook_event_name: "stop",
+      }),
+      {},
+      { sessionUuid: "uuid-1" },
+    );
+    expect(end?.kind).toBe("turn_end");
+    // Above 0: a stop hook's follow-up started the turn this stop ends.
+    expect(end?.attrs["hook.loop_count"]).toBe("1");
+    expect(end?.body).not.toHaveProperty("prompt_source");
+    expect(end?.body).not.toHaveProperty("prompt_origin");
   });
 });
