@@ -38,8 +38,19 @@ describe("pinProblem", () => {
     expect(pinProblem("github/codeql-action/init@v3")).toBeNull();
     expect(pinProblem("./.github/actions/pnpm-install")).toBeNull();
     expect(
-      pinProblem("oxageninc/product/.github/workflows/dod-check.yml@main"),
+      pinProblem("oxageninc/product/.github/workflows/reusable.yml@main"),
     ).toBeNull();
+  });
+
+  // The DoD caller stubs call the shared workflows in oxageninc/.github
+  // (#5183). That is another repository, so its ref must be a commit.
+  it("accepts a shared workflow in oxageninc/.github only when pinned to a commit", () => {
+    expect(
+      pinProblem(`oxageninc/.github/.github/workflows/dod-check.yml@${SHA}`),
+    ).toBeNull();
+    expect(
+      pinProblem("oxageninc/.github/.github/workflows/dod-check.yml@main"),
+    ).toMatch(/not a 40-character/);
   });
 
   it("requires a digest on a docker image", () => {
