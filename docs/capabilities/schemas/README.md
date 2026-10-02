@@ -503,6 +503,7 @@ capability rewrites, so two such branches always conflicted on it (ADR-216).
 - get_spend_drill
 - get_spend_per_merged_pr
 - get_unproductive_spend
+- get_work_order_metrics
 - list_cost_centers
 - list_findings
 - list_waste

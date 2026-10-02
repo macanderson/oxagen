@@ -384,6 +384,7 @@ import "./contracts/spend.shared";
 import "./contracts/spend.statement.export";
 import "./contracts/spend.unproductive";
 import "./contracts/spend.waste";
+import "./contracts/spend.work_order_metrics";
 import "./contracts/steering.markdown_import.commit";
 import "./contracts/steering.markdown_import.parse";
 import "./contracts/steering.markdown_import.shared";

@@ -1,7 +1,7 @@
 {
   "name": "get_operator_ranking",
   "domain": "spend",
-  "description": "Rank this workspace's operators by unproductive spend over a day range, highest first: each operator's unproductive spend, its share of the headline, its share of the priced spend of the frames the operator's runs ran in the period, its run count, and the runs behind it. Org Owner or Admin only. The operator totals and the unattributed total sum to the headline get_unproductive_spend answers.",
+  "description": "Rank this workspace's operators by unproductive spend over a day range, highest first: each operator's unproductive spend, its share of the headline, its share of the priced spend of the frames the operator's runs ran in the period, its run count, its done work orders, its unassigned share, and the runs and work orders behind them. Org Owner or Admin only. The operator totals and the unattributed total sum to the headline get_unproductive_spend answers, and unassigned spend is not part of it.",
   "mode": "sync",
   "surfaces": [
     "api",
@@ -311,6 +311,84 @@
                 "additionalProperties": false
               },
               "maxItems": 10
+            },
+            "doneWorkOrders": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "topDoneWorkOrders": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "workOrderId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "doneAt": {
+                    "type": "string"
+                  },
+                  "runs": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "maxItems": 10
+                  }
+                },
+                "required": [
+                  "workOrderId",
+                  "doneAt",
+                  "runs"
+                ],
+                "additionalProperties": false
+              },
+              "maxItems": 10
+            },
+            "unassignedShare": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "topUnassignedRuns": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "runId": {
+                    "type": "string"
+                  },
+                  "unassigned": {
+                    "type": "object",
+                    "properties": {
+                      "micros": {
+                        "type": "string"
+                      },
+                      "currency": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "micros",
+                      "currency"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "runId",
+                  "unassigned"
+                ],
+                "additionalProperties": false
+              },
+              "maxItems": 10
             }
           },
           "required": [
@@ -320,7 +398,11 @@
             "shareOfTotal",
             "unproductiveShare",
             "runs",
-            "topRuns"
+            "topRuns",
+            "doneWorkOrders",
+            "topDoneWorkOrders",
+            "unassignedShare",
+            "topUnassignedRuns"
           ],
           "additionalProperties": false
         }
