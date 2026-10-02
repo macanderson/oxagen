@@ -3,11 +3,10 @@
 //
 // Pure. workspace-store.ts reads the rows, and the handlers pass them here
 // to name each memory's harness, to group memories that say the same thing,
-// to shape each row as the contracts answer it, and to give a promoted draft
-// its default force.
-import type { RecordForce } from "@oxagen/oxagen/contracts/context.steering.shared";
+// and to shape each row as the contracts answer it. A promoted draft's force
+// follows `forcesFor` and `defaultForceFor` in steering-repo/record-force.ts,
+// the rule the record wizard and the Markdown import read.
 import type {
-  PromotableKind,
   WorkspaceMemory,
   WorkspaceMemoryGroup,
 } from "@oxagen/oxagen/contracts/steering.memories.shared";
@@ -118,32 +117,6 @@ export function groupRankedMemories<T extends GroupableMemory>(
     groups.push(started.group);
   }
   return groups;
-}
-
-/**
- * The forces a kind may carry. A preference is soft, so it is never `must`
- * or `should`. A fact and a memory inform, so they are `info`. Every other
- * kind may carry any force.
- *
- * This copies `forcesFor` in apps/app/src/features/create/record-file.ts.
- * PR #4928 moves the rule to packages/oxagen/src/steering-repo/record-force.ts,
- * and this file reads it from there once that PR merges.
- */
-export function allowedForces(kind: PromotableKind): readonly RecordForce[] {
-  if (kind === "preference") return ["may", "info"];
-  if (kind === "fact" || kind === "memory") return ["info"];
-  return ["must", "should", "may", "info"];
-}
-
-/**
- * The force a kind takes when the person names none: `should` for a rule
- * kind, `may` for a preference, and `info` for a fact and a memory. The same
- * default as `defaultForceFor` in PR #4928.
- */
-export function defaultForce(kind: PromotableKind): RecordForce {
-  if (kind === "preference") return "may";
-  if (kind === "fact" || kind === "memory") return "info";
-  return "should";
 }
 
 /** A memory row as the workspace memory contracts answer it. */

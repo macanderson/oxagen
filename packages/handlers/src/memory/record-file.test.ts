@@ -12,6 +12,7 @@ import {
   archiveRecordText,
   memoryRecordKind,
   renderMemoryRecord,
+  renderPromotedRecord,
 } from "./record-file";
 import type { MemoryRecordDraft } from "./types";
 
@@ -398,5 +399,45 @@ describe("archiveRecordText", () => {
   it("throws when the record has no body", () => {
     const bare = ACTIVE.slice(0, ACTIVE.indexOf("\n---\n") + "\n---\n".length);
     expect(() => archiveRecordText(bare)).toThrow(/the body is empty/);
+  });
+});
+
+describe("renderPromotedRecord", () => {
+  it("keeps the person's kind, force, and effect, and marks the record as a person's", () => {
+    const text = renderPromotedRecord({
+      ...draft(),
+      kind: "constraint",
+      force: "must",
+      effect: "forbid",
+    });
+    const { record, body } = readBack(text);
+    expect(record).toMatchObject({
+      kind: "constraint",
+      force: "must",
+      effect: "forbid",
+      scope: "repository",
+      repos: [REPO],
+      origin: "user",
+      status: "active",
+      provenance: { source: "run", uri: URI },
+    });
+    expect(record.provenance.memories).toHaveLength(2);
+    expect(recordStatement(body)).toBe(STATEMENT);
+  });
+
+  it("writes a procedure as a procedure, where the curator would write a memory", () => {
+    const promoted = readBack(
+      renderPromotedRecord({ ...draft(), kind: "procedure", force: "should", effect: null }),
+    );
+    const curated = readBack(renderMemoryRecord({ ...draft(), kind: "procedure" }));
+    expect(promoted.record).toMatchObject({ kind: "procedure", force: "should" });
+    expect(promoted.record.effect).toBeUndefined();
+    expect(curated.record).toMatchObject({ kind: "memory", force: "info", origin: "inferred" });
+  });
+
+  it("throws for a constraint with no effect, which no steering record may be", () => {
+    expect(() =>
+      renderPromotedRecord({ ...draft(), kind: "constraint", force: "must", effect: null }),
+    ).toThrow(/does not read as a steering record/);
   });
 });

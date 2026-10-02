@@ -17,6 +17,10 @@ import type {
 } from "@oxagen/oxagen/contracts/steering.memories.shared";
 import { HandlerError } from "@oxagen/oxagen/handler-error";
 import { STEERING_DIR } from "@oxagen/oxagen/steering-repo/paths";
+import {
+  defaultForceFor,
+  forcesFor,
+} from "@oxagen/oxagen/steering-repo/record-force";
 import type {
   ProvenanceMemory,
   RecordEffect,
@@ -30,7 +34,6 @@ import { memoryRecordKind, renderPromotedRecord } from "./record-file";
 import { prepareBranch, readRecords } from "./runner";
 import { saysSame } from "./statement";
 import type { MemoryPrRecord, MemoryScope, MemoryStore, OpenMemoryPr } from "./types";
-import { allowedForces, defaultForce } from "./workspace";
 import type { WorkspaceMemoryRow, WorkspaceMemoryStore } from "./workspace-store";
 
 /** What promotion reads and writes through. Tests pass fakes. */
@@ -103,11 +106,11 @@ function chooseForce(
   first: WorkspaceMemoryRow,
 ): Pick<ResolvedDraft, "kind" | "force" | "effect"> {
   const kind = draft.kind ?? promotable(first.kind);
-  const force = draft.force ?? defaultForce(kind);
-  if (!allowedForces(kind).includes(force))
+  const force = draft.force ?? defaultForceFor(kind);
+  if (!forcesFor(kind).includes(force))
     refuse(
       "force_not_allowed",
-      `A ${kind} record cannot carry force ${force}. Use one of: ${allowedForces(kind).join(", ")}.`,
+      `A ${kind} record cannot carry force ${force}. Use one of: ${forcesFor(kind).join(", ")}.`,
     );
   if (kind === "constraint" && draft.effect === undefined)
     refuse(

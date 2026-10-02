@@ -1,11 +1,9 @@
 // What workspace.ts decides about a memory with no database: its harness,
 // whether the harness reports uses, which memories say the same thing, how
-// a page of groups is cut, and the force a promoted draft takes.
+// a page of groups is cut, and how a row is shaped for the contracts.
 import { describe, expect, it } from "vitest";
 import { statementHash } from "./statement";
 import {
-  allowedForces,
-  defaultForce,
   groupPage,
   groupRankedMemories,
   harnessOf,
@@ -196,23 +194,5 @@ describe("memoryView", () => {
         status: "open",
       },
     });
-  });
-});
-
-describe("forces", () => {
-  it("lets a rule kind carry any force and defaults it to should", () => {
-    for (const kind of ["business-rule", "code-rule", "constraint", "procedure"] as const) {
-      expect(allowedForces(kind)).toEqual(["must", "should", "may", "info"]);
-      expect(defaultForce(kind)).toBe("should");
-    }
-  });
-
-  it("keeps a preference soft and a fact or a memory at info", () => {
-    expect(allowedForces("preference")).toEqual(["may", "info"]);
-    expect(defaultForce("preference")).toBe("may");
-    expect(allowedForces("fact")).toEqual(["info"]);
-    expect(defaultForce("fact")).toBe("info");
-    expect(allowedForces("memory")).toEqual(["info"]);
-    expect(defaultForce("memory")).toBe("info");
   });
 });

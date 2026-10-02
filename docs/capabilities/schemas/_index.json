@@ -831,6 +831,18 @@
       "consumes": []
     },
     {
+      "name": "dismiss_memories",
+      "domain": "context",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "dismiss_memory_promotion",
       "domain": "agent",
       "surfaces": [
@@ -2133,6 +2145,18 @@
       "consumes": []
     },
     {
+      "name": "get_workspace_memory",
+      "domain": "context",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "get_workspace_settings",
       "domain": "workspace",
       "surfaces": [
@@ -2707,6 +2731,17 @@
       "consumes": []
     },
     {
+      "name": "list_memory_pr_records",
+      "domain": "context",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "list_memory_promotions",
       "domain": "agent",
       "surfaces": [
@@ -3109,6 +3144,18 @@
       "consumes": []
     },
     {
+      "name": "list_workspace_memories",
+      "domain": "context",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "list_workspaces",
       "domain": "workspace",
       "surfaces": [
@@ -3346,6 +3393,18 @@
       "domain": "context",
       "surfaces": [
         "api"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "promote_memories",
+      "domain": "context",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
       ],
       "component": null,
       "produces": [],
