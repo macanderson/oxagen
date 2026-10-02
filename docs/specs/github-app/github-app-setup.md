@@ -682,6 +682,18 @@ On each copy of the app, from its settings page on GitHub:
 6. Ask an organization owner to install the app on the GitHub organization, on all repositories or
    on selected repositories, or to accept the new permissions on an installation it already has.
 
+On the GitHub organization that holds steering repos, from its settings page on GitHub:
+
+7. Open **Policies**, then **Repository**. If any repository policy turns on **Restrict
+   creations**, add the Oxagen app under **Allow list**, **Apps**. Do the same for **Restrict
+   visibility** if it leaves out private repositories, and for **Restrict names** if its patterns
+   leave out `oxagen-config` and `oxagen-<workspace-slug>`. An enterprise can set these policies
+   too, under its own **Policies**. GitHub refuses a create that a policy blocks with
+   `422 Due to policy, you are not permitted to perform that operation on this repository.`, and
+   provisioning stops at `create_repository` with `repository_create_refused`. On 2026-10-01 the
+   `oxageninc` organization's policy "No Delete/Transfer" restricted creations to organization
+   admins, and GTM's steering repo could not be created there.
+
 ### Moving from the Oxagen Steering app
 
 The retired app is Oxagen Github Connect (`oxagen-github-connect`, App ID 5121606). A steering

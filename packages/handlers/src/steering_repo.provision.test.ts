@@ -1966,6 +1966,11 @@ describe("a refused create", () => {
     });
     expect((err as Error).message).toContain("GitHub refused to create a repository in acme");
     expect((err as Error).message).toContain("Due to policy");
+    // A repository policy that restricts creations is the usual cause, so the
+    // message names the fix (#4899).
+    expect((err as Error).message).toContain(
+      "add the Oxagen app to its allow list",
+    );
     expect(h.state(WS)).toMatchObject({
       status: "blocked",
       failed_step: "create_repository",

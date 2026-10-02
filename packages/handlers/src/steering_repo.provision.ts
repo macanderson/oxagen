@@ -672,7 +672,7 @@ function createRefused(
     return new SteeringProvisionBlockedError("repository_name_taken", message);
   return new SteeringProvisionBlockedError(
     REPOSITORY_CREATE_REFUSED,
-    `${host} refused to create a repository in ${account}: ${message} Check that account's billing and repository settings, or use a different organization.`,
+    `${host} refused to create a repository in ${account}: ${message} If ${account} has a repository policy that restricts creations, add the Oxagen app to its allow list. Otherwise check the account's billing and repository settings, or use a different organization.`,
   );
 }
 

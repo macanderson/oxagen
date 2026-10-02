@@ -43,7 +43,7 @@ permissions:
 
 jobs:
   verified:
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-small-{0}', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
     # Longer than the grace, because the guard now waits the grace out rather
     # than reporting `pending` and leaving a genuinely missing run unreported
     # until the next push or the daily cron. The wait itself is bounded by

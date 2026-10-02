@@ -291,14 +291,22 @@
       "writes": []
     },
     {
-      "domain": "agent",
-      "name": "commit_memory_import",
+      "domain": "context",
+      "name": "commit_markdown_import",
       "reads": [],
       "surfaces": [
         "agent",
         "api",
+        "cli",
         "mcp"
       ],
+      "writes": []
+    },
+    {
+      "domain": "agent",
+      "name": "commit_memory_import",
+      "reads": [],
+      "surfaces": [],
       "writes": []
     },
     {
@@ -2932,14 +2940,22 @@
       "writes": []
     },
     {
-      "domain": "agent",
-      "name": "parse_memory_import",
+      "domain": "context",
+      "name": "parse_markdown_import",
       "reads": [],
       "surfaces": [
         "agent",
         "api",
+        "cli",
         "mcp"
       ],
+      "writes": []
+    },
+    {
+      "domain": "agent",
+      "name": "parse_memory_import",
+      "reads": [],
+      "surfaces": [],
       "writes": []
     },
     {
