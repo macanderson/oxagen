@@ -924,6 +924,36 @@ describe("runs.cost", () => {
     );
   });
 
+  it("maps each no-progress hit into the view (#4490)", async () => {
+    const hit = {
+      tool: "Bash",
+      loop: 1,
+      repeats: 24,
+      limit: 20,
+      atCall: 20,
+      mode: "enforced" as const,
+      outcome: "would_pause" as const,
+      pauseBlock: "host_offline" as const,
+      detectedAt: "2026-10-01T12:00:00.000Z",
+    };
+    kernelRead.mockResolvedValue(
+      readOk({
+        runId: "tse_4f0a",
+        rollup: null,
+        baseline: null,
+        noProgressHits: [hit],
+      }),
+    );
+    expect(await runs.cost(ctx, "tse_4f0a")).toEqual(
+      readOk({
+        baseline: null,
+        rollup: null,
+        provisional: null,
+        noProgressHits: [hit],
+      }),
+    );
+  });
+
   it("maps the agent's baseline, the graded steps and each tool's estimated cost into the view (#3984, #3892)", async () => {
     const usd = (micros: string, basis: "mixed" | "estimated") => ({
       micros,

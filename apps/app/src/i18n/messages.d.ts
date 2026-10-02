@@ -7045,6 +7045,29 @@ type Messages = {
         productiveValue: string;
         productiveSteps: string;
       };
+      noProgress: {
+        title: string;
+        note: string;
+        line: string;
+        mode: {
+          observe: string;
+          enforced: string;
+        };
+        outcome: {
+          observe: string;
+          paused: string;
+          blocked: string;
+          blockedUnrecorded: string;
+        };
+        block: {
+          run_sealed: string;
+          no_host: string;
+          host_revoked: string;
+          host_offline: string;
+          no_connection_point: string;
+          pause_unavailable: string;
+        };
+      };
     };
     commands: {
       reasonLabel: string;
