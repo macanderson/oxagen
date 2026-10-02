@@ -75,15 +75,23 @@ command -v oxagen
 
 In the app, **Uninstall** removes every enrollment, the links, every per-user copy, and `~/.config/oxagen`. Then remove the app: drag it to the Trash on macOS, remove it in **Settings > Apps** on Windows, or remove the package on Linux.
 
-If you removed the app first, run the per-user copy's `oxagen` to take the hooks and the collector out:
+If you removed the app first, run the per-user copy's `oxagen`:
 
 ```bash
-"$HOME/Library/Application Support/oxagen/bin/<version>/oxagen" agent unenroll --all --purge
+"$HOME/Library/Application Support/oxagen/bin/<version>/oxagen" agent uninstall
 ```
 
-Use the Linux or Windows directory from the table above on those platforms. Then delete the `oxagen` directory that holds the copy, both links in `~/.local/bin`, and the lines from `# >>> oxagen >>>` to `# <<< oxagen <<<` in your shell profile. With fish, delete `~/.config/fish/conf.d/oxagen.fish` instead.
+Use the Linux or Windows directory from the table above on those platforms. The command does what **Uninstall** does, without the app:
 
-If the per-user copy is gone as well, the Cursor and Stella hooks on macOS and Linux allow each action instead of blocking it, and Claude Code and Codex report a hook error on each tool call. On Windows the Cursor and Stella hooks block. Install the app again and use **Uninstall**, or run `oxagen agent unenroll --all --purge` from any other install of the `oxagen` CLI.
+1. It removes every enrollment: the hooks, the collector service, the keys, and the local event log. If an enrollment cannot be fully removed, the command stops here and says what to fix, because a hook that is left would still run the copy.
+2. It removes the links in `~/.local/bin`, the lines the app added to your shell profile, and on Windows the shims and the entry on your user `PATH`. The app keeps a list of each of these in `~/.config/oxagen/desktop.json` each time it opens. The command removes only what is still the way the app wrote it. A link you pointed somewhere else stays, and the command names it.
+3. It removes every per-user copy and `~/.config/oxagen`.
+
+On Windows the command cannot delete the `oxagen.exe` it is running from. It names that folder, so you can delete it after the command finishes.
+
+Older versions of the app kept no such list. If you removed the app before a version that keeps one ever opened, the command still removes the copies, and it names the links and the profile lines for you to delete by hand.
+
+If the per-user copy is gone as well, the Cursor and Stella hooks on macOS and Linux allow each action instead of blocking it, and Claude Code and Codex report a hook error on each tool call. On Windows the Cursor and Stella hooks block. Install the app again and use **Uninstall**, or run `oxagen agent uninstall` from any other install of the `oxagen` CLI.
 
 ## Updates
 
