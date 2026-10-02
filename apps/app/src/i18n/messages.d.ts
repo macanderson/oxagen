@@ -9080,6 +9080,7 @@ type Messages = {
       };
       note: string;
       emptyTitle: string;
+      operatorNames: string;
       empty: string;
       kind: {
         cache_writes_never_read: string;

@@ -1412,6 +1412,9 @@ describe("Spend › Findings › Operator ranking", () => {
     expect(
       screen.getByRole("list", { name: "Findings ranked by savings" }),
     ).toBeVisible();
+    expect(
+      screen.getByRole("heading", { name: "Operator names" }),
+    ).toBeInTheDocument();
   });
 
   it("asks no ranking for a workspace Owner who holds no org manager role (negative)", async () => {
@@ -1991,17 +1994,71 @@ describe("Spend › a tab's own read failing", () => {
     );
   });
 
-  it("still lists findings, naming nobody, when the operator rollup read fails", async () => {
+  // #4574: the operator rollup fails on its own. Its section says so beside
+  // the ranking that loaded, and the findings stay, naming nobody.
+  it("shows the operator rollup's own failure beside the findings and the ranking", async () => {
+    const orgOwner = unsafeMint(WsCtx, {
+      userId: "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+      orgId: "7a000000-0000-4000-8000-0000000000a1",
+      orgSlug: "acme",
+      orgName: "Acme Robotics",
+      orgRole: "owner",
+      workspaceId: "7b000000-0000-4000-8000-000000000001",
+      wsSlug: "core-platform",
+      wsName: "Core platform",
+      wsRole: "member",
+    });
     loaded();
     byGroup.mockImplementation((_ctx, groupBy) =>
       Promise.resolve(
         groupBy === "model" ? monthByModel() : readError("rollup_down", 503),
       ),
     );
-    await renderSpend(["findings"]);
+    operatorRanking.mockResolvedValue(
+      readOk({
+        period: PERIOD,
+        pseudonyms: false,
+        unproductive: HEADLINE.unproductive,
+        unattributed: {
+          unproductive: { micros: "0", currency: "USD" },
+          runs: 0,
+        },
+        operators: [
+          {
+            rank: 1,
+            operator: { kind: "named", key: "prn_marcusbell", facts: MARCUS },
+            unproductive: HEADLINE.unproductive,
+            shareOfTotal: 1,
+            unproductiveShare: null,
+            runs: 1,
+            topRuns: [{ runId: "arun_01", unproductive: HEADLINE.unproductive }],
+          },
+        ],
+      }),
+    );
+    await renderSpend(["findings"], undefined, orgOwner);
+
+    const failure = screen
+      .getByRole("heading", { name: "Operator names" })
+      .closest("section");
+    if (failure === null) throw new Error("no operator rollup section");
+    expect(failure).toHaveAttribute("data-state", "error");
+    expect(failure).toHaveTextContent("503 rollup_down");
+    // The rollup's failure is its own panel, not the page's.
+    expect(screen.queryByTestId("spend-error")).toBeNull();
+
+    // The findings stay, naming the operator by key alone.
     expect(
       document.querySelector('li[data-finding="fnd_01k5rtop"]')?.textContent,
     ).toContain("prn_marcusbell");
+
+    // The ranking that loaded sits after the failure, whole.
+    const ranking = screen.getByRole("table", { name: "Operator ranking" });
+    expect(ranking).toHaveTextContent("Marcus Bell");
+    expect(
+      failure.compareDocumentPosition(ranking) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 
   it("offers a workspace owner the gateway policy form under the budgets", async () => {

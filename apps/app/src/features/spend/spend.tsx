@@ -92,6 +92,16 @@ function Header({
   );
 }
 
+/** The operator rollup's own refusal, beside the ranking that answered. */
+function OperatorNamesFailure({
+  read,
+}: {
+  read: Extract<Read<SpendReport>, { ok: false }>;
+}) {
+  const t = useTranslations("spend.findings");
+  return <SpendSectionFailure read={read} title={t("operatorNames")} />;
+}
+
 export async function Spend({ ctx, source, view, today }: SpendProps) {
   const at: SpendAt = { org: ctx.orgSlug, ws: ctx.wsSlug };
   const now = today ?? requestInstant();
@@ -260,6 +270,10 @@ async function body({
               )
             }
           />
+          {/* The rollup names the person on each operator finding. It and
+              the ranking are read apart, so a rollup that fails says so here
+              and leaves the ranking whole (#4574). */}
+          {operators.ok ? null : <OperatorNamesFailure read={operators} />}
           <OperatorRankingSection
             ranking={ranking}
             at={at}

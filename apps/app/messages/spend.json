@@ -35,6 +35,7 @@
       },
       "note": "Each saving is measured minus counterfactual over the runs it cites, at the price each call actually paid. Evidence opens the runs and the arithmetic behind every number, and Fix opens the change that removes it.",
       "emptyTitle": "No finding is open",
+      "operatorNames": "Operator names",
       "empty": "No open finding matches the supported patterns in the available data. Missing usage or prices can prevent a cost estimate.",
       "kind": {
         "cache_writes_never_read": "Cache written and never read",
