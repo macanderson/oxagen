@@ -202,7 +202,8 @@ describe("a backfill pass", () => {
       // No cursor file and an empty WAL: nothing on this host says the
       // session was ever recorded.
       const wal = new FakeWal();
-      const asked: string[][] = [];
+      const asked: Array<Array<{ sessionUuid: string; sessionId: string }>> =
+        [];
       const report = await runBackfill(
         {},
         deps(root, wal, {
@@ -217,7 +218,9 @@ describe("a backfill pass", () => {
           },
         }),
       );
-      expect(asked).toEqual([[sessionUuid(HOST, SESSION)]]);
+      expect(asked).toEqual([
+        [{ sessionUuid: sessionUuid(HOST, SESSION), sessionId: SESSION }],
+      ]);
       expect(report.sessions[action]).toBe(1);
       expect(report.sessions.backfilled).toBe(0);
       expect(wal.appends).toBe(0);

@@ -531,6 +531,7 @@ capability rewrites, so two such branches always conflicted on it (ADR-216).
 - list_incidents
 - list_machine_groups
 - list_tacho_hosts
+- list_tacho_session_heads
 - list_tacho_sessions
 - recall_tacho_memories
 - record_tacho_memory_uses

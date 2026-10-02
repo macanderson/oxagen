@@ -183,6 +183,13 @@ export function parseBackfillRequest(
   return { request };
 }
 
+/** One session a pass asks the control plane about. */
+export interface SessionKey {
+  sessionUuid: string;
+  /** The Claude Code session id, the transcript's file name. */
+  sessionId: string;
+}
+
 /** What the control plane holds for one session (`list_tacho_session_heads`). */
 export interface ServerSessionHead {
   session_uuid: string;
@@ -403,11 +410,12 @@ export interface BackfillDeps {
   /** The chain uuid a Claude Code session id takes on this host. */
   sessionUuidOf: (harnessSessionId: string) => string;
   /**
-   * The control plane's heads for these sessions, or undefined when it did
-   * not answer. A session it does not hold is absent from the map.
+   * The control plane's heads for these sessions, keyed by the uuid asked
+   * about, or undefined when it did not answer. A session it does not hold
+   * is absent from the map.
    */
   sessionHeads: (
-    sessionUuids: readonly string[],
+    sessions: readonly SessionKey[],
   ) => Promise<ReadonlyMap<string, ServerSessionHead> | undefined>;
   /** A backfill-mode recorder for the session, on `clock`. */
   recorder: (harnessSessionId: string, clock: BackfillClock) => SessionRecorder;
@@ -798,7 +806,10 @@ async function askServer(
   for (let index = 0; index < pending.length; index += SESSION_HEADS_BATCH) {
     const batch = pending
       .slice(index, index + SESSION_HEADS_BATCH)
-      .map((candidate) => candidate.sessionUuid);
+      .map((candidate) => ({
+        sessionUuid: candidate.sessionUuid,
+        sessionId: candidate.sessionId,
+      }));
     const answer = await deps.sessionHeads(batch);
     if (answer === undefined) return undefined;
     for (const [uuid, head] of answer) heads.set(uuid, head);
@@ -820,7 +831,12 @@ function serverAction(
   if (head.record_basis !== "backfill") return "skipped_server_chain";
   // This host's own pass stopped partway: the replay finishes it.
   const entry = ledger.entry(candidate.path);
-  if (entry?.status === "partial" && entry.ino === candidate.ino) return undefined;
+  if (
+    entry?.status === "partial" &&
+    entry.ino === candidate.ino &&
+    head.session_uuid === candidate.sessionUuid
+  )
+    return undefined;
   return head.backfill_normalizer === BACKFILL_NORMALIZER_VERSION
     ? "skipped_already_backfilled"
     : "skipped_older_normalizer";

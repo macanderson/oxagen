@@ -64,9 +64,13 @@ import {
   proofObservedBodySchema,
 } from "@oxagen/run-evidence";
 import {
+  BACKFILL_NORMALIZER_ATTR,
   countsLlmCallSplit,
   countsLlmCallUsage,
   deriveSessionTitle,
+  isBackfilledFrame,
+  nextRecordBasis,
+  type RecordBasis,
   fallbackRunTitle,
   retainsBody,
   TACHO_GATEWAY_TIER,
@@ -419,7 +423,13 @@ export function foldDelta(delta: SessionDelta, event: TachoEvent): void {
         delta.numApiErrors += 1;
       break;
     case "tool_call":
-      if (event.source === "hook" || event.source === "collector") {
+      // A backfilled chain has only the transcript's copy of each call
+      // (ADR-161), so that copy is the one counted there.
+      if (
+        event.source === "hook" ||
+        event.source === "collector" ||
+        isBackfilledFrame(event)
+      ) {
         delta.numToolCalls += 1;
         if (body["tool_status"] === "error") delta.numToolErrors += 1;
         if (body["tool_status"] === "rejected") delta.numToolRejections += 1;
@@ -999,6 +1009,33 @@ export function reportedCostBasis(
     basis = reported;
   }
   return basis;
+}
+
+/**
+ * The cost the batch's counted model calls carried on frames a backfill
+ * sealed (ADR-161). The ingest counts it toward the session's totals and
+ * keeps it out of the spend-budget counter.
+ */
+export function backfilledCostMicros(counted: readonly TachoEvent[]): number {
+  let micros = 0;
+  for (const event of counted) {
+    if (event.kind !== "llm_call" || !isBackfilledFrame(event)) continue;
+    const cost = (event.body as Body)["cost_usd_micros"];
+    if (typeof cost === "number" && Number.isFinite(cost) && cost > 0)
+      micros += cost;
+  }
+  return micros;
+}
+
+/**
+ * The normalizer version a backfill sealed this chain under, from its
+ * `agent_start`, or null for a live chain.
+ */
+function backfillNormalizerOf(events: readonly TachoEvent[]): string | null {
+  const start = events.find(
+    (event) => event.kind === "agent_start" && isBackfilledFrame(event),
+  );
+  return start?.attrs[BACKFILL_NORMALIZER_ATTR] ?? null;
 }
 
 /** The insert values for a session row seen for the first time. */
@@ -1799,6 +1836,8 @@ const ingestBatch = async (
           // `observed` once the host's model proxy has metered this session,
           // which is what stops its self-reported usage being counted too.
           costBasis: true,
+          // Live, backfilled from a transcript, or both (ADR-161).
+          recordBasis: true,
           // The session's own server-clock birth. A gateway call the control
           // plane served before this chain existed is not evidence about it.
           createdAt: true,
@@ -2001,11 +2040,24 @@ const ingestBatch = async (
         sessionGenesisHash,
         firstObserved !== undefined,
       );
-      const derivedTier = containedTierOf(
-        gatewayTier,
-        containedLaunches.get(sessionUuid),
-        sessionGenesisHash,
-      );
+      // How this session's frames reached the record after this batch
+      // (ADR-161). A chain rebuilt from a transcript was gated by nothing,
+      // so it opens and stays on `observe` whatever the host's mode is now.
+      // A row read without the column (a test double, or a read from
+      // before the migration) is a live session.
+      const currentBasis =
+        existing === undefined
+          ? undefined
+          : ((existing.recordBasis ?? "live") as RecordBasis);
+      const recordBasis = nextRecordBasis(currentBasis, fresh);
+      const derivedTier =
+        recordBasis === "backfill"
+          ? "observe"
+          : containedTierOf(
+              gatewayTier,
+              containedLaunches.get(sessionUuid),
+              sessionGenesisHash,
+            );
       // What a `gateway` tier stands on: the control plane's record of a
       // served MCP call, or the first model call the proxy observed.
       const gatewayEvidenceAt =
@@ -2219,6 +2271,9 @@ const ingestBatch = async (
             }
           : {}),
         ...costBasisPatch,
+        ...(currentBasis !== undefined && recordBasis !== currentBasis
+          ? { recordBasis }
+          : {}),
         updatedAt: now,
         ...reopen,
         ...terminalColumns,
@@ -2353,6 +2408,8 @@ const ingestBatch = async (
           .values({
             ...row,
             repositoryUnlinked,
+            recordBasis,
+            backfillNormalizer: backfillNormalizerOf(events),
             ...(machineSnapshot === undefined ? {} : { machineSnapshot }),
             ...terminalColumns,
             ...costBasisPatch,
@@ -2565,8 +2622,11 @@ const ingestBatch = async (
               ...questions,
             ]);
         }
-        if (delta.totalCostMicros > 0)
-          batchSpendMicros += BigInt(delta.totalCostMicros);
+        // Backfilled cost is an estimate of spend that already happened, and
+        // the budget it would count against is today's (ADR-161), so it
+        // never reaches the spend-budget counter.
+        const liveCostMicros = delta.totalCostMicros - backfilledCostMicros(counted);
+        if (liveCostMicros > 0) batchSpendMicros += BigInt(liveCostMicros);
         // A reopen asks too, whatever the batch carried: the run's row was
         // rebuilt at the close and reads final until it is rebuilt open.
         if (

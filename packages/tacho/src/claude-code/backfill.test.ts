@@ -259,14 +259,14 @@ describe("a backfilled transcript", () => {
       const ends = ofKind(root, "turn_end");
       expect(ends).toHaveLength(3);
       expect(body(ends[0])["turn_duration_ms"]).toBe(9500);
-      expect(body(ends[0])["stop_reason"]).toBe("end_turn");
+      expect(ends[0]?.attrs["oxagen.turn_stop_reason"]).toBe("end_turn");
       expect(ends[0]?.ts).toBe("2026-08-10T10:00:10.500Z");
     });
 
     it("a turn with no turn_duration closes at its last reply", () => {
       const ends = ofKind(root, "turn_end");
       expect(ends[1]?.ts).toBe("2026-08-10T10:00:17.000Z");
-      expect(body(ends[1])["stop_reason"]).toBe("end_turn");
+      expect(ends[1]?.attrs["oxagen.turn_stop_reason"]).toBe("end_turn");
       expect(ends[1]?.attrs["oxagen.synthesized_from"]).toBe("assistant:a-0006");
       // The last turn has no reply, and the end of the file closes it.
       expect(ends[2]?.ts).toBe("2026-08-10T10:00:20.000Z");

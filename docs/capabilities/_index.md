@@ -620,6 +620,7 @@ after the registered name separately when their contract uses a dotted stem.
 | [list_incidents](tacho.incident.list.md) | [tacho.incident.list.ts](../../packages/oxagen/src/contracts/tacho.incident.list.ts) | api, mcp, agent |
 | [list_machine_groups](tacho.machine_group.list.md) | [tacho.machine_group.list.ts](../../packages/oxagen/src/contracts/tacho.machine_group.list.ts) | none |
 | [list_tacho_hosts](tacho.host.list.md) | [tacho.host.list.ts](../../packages/oxagen/src/contracts/tacho.host.list.ts) | api, mcp, agent |
+| [list_tacho_session_heads](tacho.session_heads.list.md) | [tacho.session_heads.list.ts](../../packages/oxagen/src/contracts/tacho.session_heads.list.ts) | api |
 | [list_tacho_sessions](tacho.session.list.md) | [tacho.session.list.ts](../../packages/oxagen/src/contracts/tacho.session.list.ts) | api |
 | [recall_tacho_memories](tacho.memories.recall.md) | [tacho.memories.recall.ts](../../packages/oxagen/src/contracts/tacho.memories.recall.ts) | api |
 | [record_tacho_memory_uses](tacho.memories.uses.record.md) | [tacho.memories.uses.record.ts](../../packages/oxagen/src/contracts/tacho.memories.uses.record.ts) | api |

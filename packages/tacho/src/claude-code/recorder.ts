@@ -31,6 +31,7 @@ import {
   prepareContent,
 } from "../evidence/frame-body";
 import { backfillEventId, newEventId, sessionUuid } from "../ids";
+import { RECORD_BASIS_ATTR } from "../record-basis";
 import {
   LLM_CALL_DUPLICATE_OF_ATTR,
   LlmCallLedger,
@@ -130,13 +131,6 @@ export const AFTER_STOP_ATTR = "oxagen.after_stop";
  * chain rather than guessed onto one of them.
  */
 export const SUBAGENT_TYPE_AMBIGUOUS_ATTR = "oxagen.subagent_type_ambiguous";
-
-/**
- * The attr every frame of a chain rebuilt from a finished transcript carries
- * (ADR-161). It is inside the hash, so the marker is part of the sealed
- * frame. Ingest reads it to set `tacho.sessions.record_basis`.
- */
-export const RECORD_BASIS_ATTR = "oxagen.record_basis";
 
 /** Where a backfilled frame's git facts came from: the transcript's own lines. */
 const GIT_BASIS_ATTR = "oxagen.git_basis";

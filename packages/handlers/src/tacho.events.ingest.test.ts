@@ -127,6 +127,7 @@ import {
 } from "@oxagen/inngest-functions/tacho-idle-close";
 import {
   IDLE_CLOSE_UNDONE,
+  backfilledCostMicros,
   enforcementTierOf,
   firstRootPrompts,
   foldDelta,
@@ -7344,5 +7345,140 @@ describe("the repository question a host raised (#3941)", () => {
     ).event;
     await tachoEventsIngestHandler(batch([question]), CONTEXT);
     expect(mocks.recordInterjectionFrames).not.toHaveBeenCalled();
+  });
+});
+
+// #4028, ADR-161: a session `oxagen agent backfill` rebuilt from a transcript.
+describe("a backfilled session", () => {
+  const BACKFILL = {
+    "oxagen.record_basis": "backfill",
+    "oxagen.git_basis": "recorded",
+  };
+
+  /** A finished session as a backfill seals it: every frame marked. */
+  function backfilled(): TachoEvent[] {
+    let cursor: ChainCursor = GENESIS_CURSOR;
+    const out: TachoEvent[] = [];
+    for (const draft of [
+      unsealed("agent_start", { session_start_source: "backfill" }, "transcript", CLAUDE_CODE, {
+        fidelity: "ambient",
+        attrs: { ...BACKFILL, "oxagen.backfill_normalizer": "1" },
+      }),
+      unsealed("turn_start", { prompt_length: 3 }, "transcript", CLAUDE_CODE, {
+        fidelity: "ambient",
+        attrs: BACKFILL,
+      }),
+      unsealed(
+        "llm_call",
+        {
+          model: "claude-haiku-4-5-20251001",
+          input_tokens: 10,
+          output_tokens: 5,
+          cost_usd_micros: 1200,
+          cost_basis: "estimated",
+        },
+        "transcript",
+        CLAUDE_CODE,
+        { fidelity: "ambient", attrs: BACKFILL },
+      ),
+      unsealed(
+        "tool_call",
+        { tool_name: "Bash", tool_use_id: "toolu_1", tool_status: "ok" },
+        "transcript",
+        CLAUDE_CODE,
+        { fidelity: "ambient", attrs: BACKFILL },
+      ),
+      unsealed("turn_end", {}, "transcript", CLAUDE_CODE, {
+        fidelity: "ambient",
+        attrs: BACKFILL,
+      }),
+      unsealed(
+        "agent_stop",
+        {
+          session_outcome: "unknown",
+          session_end_reason: "backfill_end_of_file",
+          completeness_gaps: ["backfill"],
+        },
+        "transcript",
+        CLAUDE_CODE,
+        { fidelity: "ambient", attrs: BACKFILL },
+      ),
+    ]) {
+      const sealed = sealEvent(draft, cursor);
+      cursor = sealed.next;
+      out.push(sealed.event);
+    }
+    return out;
+  }
+
+  it("records the session as backfilled, on observe, and keeps its cost off the budget counter", async () => {
+    const db = fakeDb();
+    // An enforcing host: the backfill still claims no gate.
+    (db.hosts[0] as Record<string, unknown>)["mode"] = "enforce";
+    wire(db);
+    const events = backfilled();
+    const output = await tachoEventsIngestHandler(batch(events), CONTEXT);
+    expect(output.accepted).toBe(events.length);
+    expect(output.chain_breaks).toEqual([]);
+    expect(db.sessions.get(SESSION)).toMatchObject({
+      recordBasis: "backfill",
+      backfillNormalizer: "1",
+      enforcementTier: "observe",
+      costBasis: "estimated",
+      replayGrade: "inspect",
+    });
+    expect(mocks.recordSpend).not.toHaveBeenCalled();
+    // A transcript tool call is not a governed action: nothing is billed.
+    for (const event of events) expect(isBillableToolCall(event)).toBe(false);
+  });
+
+  it("reads mixed for good once a live resume continues the chain", async () => {
+    const db = fakeDb();
+    wire(db);
+    const events = backfilled();
+    await tachoEventsIngestHandler(batch(events), CONTEXT);
+    const last = events.at(-1) as TachoEvent;
+    const resumed = sealEvent(
+      unsealed("agent_start", { session_start_source: "resume" }),
+      { seq: last.seq + 1, prevHash: last.hash },
+    ).event;
+    await tachoEventsIngestHandler(batch([resumed]), CONTEXT);
+    expect(db.sessions.get(SESSION)).toMatchObject({ recordBasis: "mixed" });
+  });
+
+  it("leaves a live session live", async () => {
+    const db = fakeDb();
+    wire(db);
+    await tachoEventsIngestHandler(batch(session()), CONTEXT);
+    expect(db.sessions.get(SESSION)).toMatchObject({
+      recordBasis: "live",
+      backfillNormalizer: null,
+    });
+  });
+
+  it("counts a backfilled transcript tool call, and a live one only from its hook", () => {
+    const [transcriptCall] = backfilled().filter((e) => e.kind === "tool_call");
+    const backfilledDelta = { numToolCalls: 0, numToolErrors: 0, numToolRejections: 0, filesRead: 0 } as Parameters<typeof foldDelta>[0];
+    foldDelta(backfilledDelta, transcriptCall as TachoEvent);
+    expect(backfilledDelta.numToolCalls).toBe(1);
+
+    const live = sealEvent(
+      unsealed(
+        "tool_call",
+        { tool_name: "Bash", tool_use_id: "toolu_1", tool_status: "ok" },
+        "transcript",
+      ),
+      GENESIS_CURSOR,
+    ).event;
+    const liveDelta = { numToolCalls: 0, numToolErrors: 0, numToolRejections: 0, filesRead: 0 } as Parameters<typeof foldDelta>[0];
+    foldDelta(liveDelta, live);
+    expect(liveDelta.numToolCalls).toBe(0);
+  });
+
+  it("names only backfilled model calls' cost as kept off the counter", () => {
+    const [estimated] = backfilled().filter((e) => e.kind === "llm_call");
+    const live = session().filter((e) => e.kind === "llm_call");
+    expect(backfilledCostMicros([estimated as TachoEvent, ...live])).toBe(1200);
+    expect(backfilledCostMicros(live)).toBe(0);
   });
 });

@@ -33,6 +33,10 @@
  */
 import { digestJcs, type JsonValue } from "../digest";
 import type { TachoEvent } from "../envelope";
+import {
+  BACKFILL_COMPLETENESS_GAP,
+  BACKFILL_NORMALIZER_ATTR,
+} from "../record-basis";
 import type { HookDraft } from "./hooks";
 import { countsLlmCallUsage } from "./llm-call-dedupe";
 import type { SessionRecorder } from "./recorder";
@@ -59,9 +63,13 @@ const TESTED_CLAUDE_CODE_VERSIONS = {
 
 const UNTESTED_VERSION_ATTR = "oxagen.normalizer_untested_version";
 
-/** The normalizer version on a backfilled session's `agent_start`. */
-const NORMALIZER_ATTR = "oxagen.backfill_normalizer";
 const SYNTHESIZED_FROM_ATTR = "oxagen.synthesized_from";
+
+/**
+ * Why the model stopped on a backfilled turn's last reply. An attr, because
+ * a `turn_end` body carries no `stop_reason` member.
+ */
+const TURN_STOP_REASON_ATTR = "oxagen.turn_stop_reason";
 
 /** The `session_end_reason` of a backfilled session's `agent_stop`. */
 const BACKFILL_END_REASON = "backfill_end_of_file";
@@ -661,8 +669,13 @@ export class TranscriptBackfill {
         this.parentMs,
         (draft) => ({
           ...draft,
-          // Nothing watched the session end, so its outcome is not known.
-          body: { ...draft.body, session_outcome: "unknown" },
+          // Nothing watched the session end, so its outcome is not known. The
+          // `backfill` gap keeps the replay grade at `inspect` (ADR-161).
+          body: {
+            ...draft.body,
+            session_outcome: "unknown",
+            completeness_gaps: [BACKFILL_COMPLETENESS_GAP],
+          },
         }),
       ),
     );
@@ -793,7 +806,7 @@ export class TranscriptBackfill {
         ...draft,
         attrs: {
           ...draft.attrs,
-          [NORMALIZER_ATTR]: BACKFILL_NORMALIZER_VERSION,
+          [BACKFILL_NORMALIZER_ATTR]: BACKFILL_NORMALIZER_VERSION,
           ...(untested && version !== undefined
             ? { [UNTESTED_VERSION_ATTR]: version }
             : {}),
@@ -868,12 +881,15 @@ export class TranscriptBackfill {
         events.push(
           ...this.hook(record, "Stop", {}, ms, (draft) => ({
             ...draft,
+            attrs: {
+              ...draft.attrs,
+              ...(reply?.stopReason !== undefined
+                ? { [TURN_STOP_REASON_ATTR]: reply.stopReason }
+                : {}),
+            },
             body: {
               ...draft.body,
               ...(duration !== undefined ? { turn_duration_ms: duration } : {}),
-              ...(reply?.stopReason !== undefined
-                ? { stop_reason: reply.stopReason }
-                : {}),
             },
           })),
         );
@@ -972,15 +988,12 @@ export class TranscriptBackfill {
                   reply.uuid !== undefined
                     ? `assistant:${reply.uuid}`
                     : "assistant",
+                ...(reply.stopReason !== undefined
+                  ? { [TURN_STOP_REASON_ATTR]: reply.stopReason }
+                  : {}),
               },
             }
           : {}),
-        body: {
-          ...draft.body,
-          ...(reply?.stopReason !== undefined
-            ? { stop_reason: reply.stopReason }
-            : {}),
-        },
       }));
     } finally {
       this.clock.ms = saved;

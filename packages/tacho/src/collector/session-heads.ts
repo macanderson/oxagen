@@ -14,17 +14,21 @@
  */
 import { z } from "zod";
 import type { FetchLike } from "../host/control-client";
-import type { ServerSessionHead } from "./backfill";
+import type { ServerSessionHead, SessionKey } from "./backfill";
 
 export const SESSION_HEADS_PATH = "/v1/tacho/sessions/heads";
 
 /** How long one batch waits for its answer. */
 const SESSION_HEADS_TIMEOUT_MS = 30_000;
 
+/** A harness session id the route takes; others are asked by uuid alone. */
+const HARNESS_SESSION_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
+
 const answerSchema = z.object({
   sessions: z.array(
     z.object({
       session_uuid: z.string(),
+      harness_session_id: z.string(),
       seq_count: z.number().int().min(0),
       record_basis: z.enum(["live", "backfill", "mixed"]),
       backfill_normalizer: z.string().nullable(),
@@ -45,9 +49,9 @@ export interface SessionHeadsDeps {
 export function createSessionHeads(
   deps: SessionHeadsDeps,
 ): (
-  sessionUuids: readonly string[],
+  sessions: readonly SessionKey[],
 ) => Promise<ReadonlyMap<string, ServerSessionHead> | undefined> {
-  return async (sessionUuids) => {
+  return async (sessions) => {
     const host = deps.host();
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), SESSION_HEADS_TIMEOUT_MS);
@@ -64,7 +68,10 @@ export function createSessionHeads(
           },
           body: JSON.stringify({
             host_enrollment_id: host.host_enrollment_id,
-            session_uuids: sessionUuids,
+            session_uuids: sessions.map((session) => session.sessionUuid),
+            harness_session_ids: sessions
+              .map((session) => session.sessionId)
+              .filter((id) => HARNESS_SESSION_ID.test(id)),
           }),
           signal: controller.signal,
         },
@@ -94,10 +101,27 @@ export function createSessionHeads(
       );
       return undefined;
     }
-    const wanted = new Set(sessionUuids);
+    // Keyed by the uuid this host asked about. A session an earlier
+    // enrollment recorded under another uuid answers for the one asked.
+    const byUuid = new Set(sessions.map((session) => session.sessionUuid));
+    const byId = new Map(
+      sessions.map((session) => [session.sessionId, session.sessionUuid]),
+    );
     const heads = new Map<string, ServerSessionHead>();
-    for (const head of parsed.sessions)
-      if (wanted.has(head.session_uuid)) heads.set(head.session_uuid, head);
+    for (const head of parsed.sessions) {
+      const asked = byUuid.has(head.session_uuid)
+        ? head.session_uuid
+        : byId.get(head.harness_session_id);
+      if (asked === undefined) continue;
+      // The uuid this host would write to wins over a match by id.
+      if (heads.has(asked) && asked !== head.session_uuid) continue;
+      heads.set(asked, {
+        session_uuid: head.session_uuid,
+        seq_count: head.seq_count,
+        record_basis: head.record_basis,
+        backfill_normalizer: head.backfill_normalizer,
+      });
+    }
     return heads;
   };
 }

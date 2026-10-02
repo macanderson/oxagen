@@ -2886,6 +2886,15 @@
     },
     {
       "domain": "tacho",
+      "name": "list_tacho_session_heads",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "tacho",
       "name": "list_tacho_sessions",
       "reads": [],
       "surfaces": [
