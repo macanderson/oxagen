@@ -71,7 +71,7 @@ export const chainCheckpointSchema = z
   .object({
     /**
      * The last frame the checkpoint covers, which is the sequence the device
-     * key signed (ADR-253).
+     * key signed (ADR-260).
      */
     seq: z.string().regex(/^\d+$/),
     /** The chain head the checkpoint committed to (`sha256:…`). */

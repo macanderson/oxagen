@@ -7373,7 +7373,7 @@ describe("the repository question a host raised (#3941)", () => {
   });
 });
 
-describe("the collector's signed checkpoints (ADR-253, #3406)", () => {
+describe("the collector's signed checkpoints (ADR-260, #3406)", () => {
   /**
    * An open session's first two frames and the checkpoint the collector
    * seals over them, signed by `key` the way `checkpoint` in

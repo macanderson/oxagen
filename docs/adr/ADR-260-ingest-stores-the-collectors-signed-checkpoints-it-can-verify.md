@@ -1,4 +1,4 @@
-# ADR-253: Ingest stores the collector's signed checkpoints it can verify
+# ADR-260: Ingest stores the collector's signed checkpoints it can verify
 
 - **Status:** Accepted. The agent building the tacho-checkpoints lane chose
   this. Mac has not ruled on it. Issue #3406 asked for this decision and

@@ -2540,7 +2540,7 @@ const ingestBatch = async (
         await rollupModels(tx, ctx, sessionId, counted, now);
         await rollupFiles(tx, ctx, sessionId, fresh, now, observedStatusColumn);
         await rollupCommands(tx, ctx, sessionId, fresh, now);
-        // The collector's signed checkpoints among the new frames (ADR-253).
+        // The collector's signed checkpoints among the new frames (ADR-260).
         // A frame whose signature does not verify against the host's
         // enrolled device key is left out and logged. The batch is still
         // accepted, and the frame still reaches ClickHouse as sent.

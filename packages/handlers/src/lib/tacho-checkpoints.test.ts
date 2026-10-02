@@ -1,5 +1,5 @@
 /**
- * The collector's signed checkpoints, as ingest keeps them (ADR-253, #3406).
+ * The collector's signed checkpoints, as ingest keeps them (ADR-260, #3406).
  *
  * Each case builds a real chain: two frames, then the `checkpoint` frame the
  * collector seals after them, signed by a real Ed25519 device key the way

@@ -341,7 +341,7 @@ File identity uses each frame's recorded worktree root. A relative path with a k
 ### 3.8 `tacho_checkpoints` (`tchk_`)
 `session_id`, `seq`, `chain_head`, `event_count`, `device_key_fingerprint`, `device_signature`, `platform_key_id`, `platform_signature`, `signed_at`, `countersigned_at`, `anchor_root` (nullable, phase D), `anchored_at`.
 
-Ingest writes one row for each collector `checkpoint` frame whose device-key signature verifies against the host's enrolled key, and writes none for a frame that fails (ADR-253). `seq` is the last frame the checkpoint covers, so a row can be verified again from its own columns, the session uuid, and the host's public key. The platform columns stay null until the control plane countersigns.
+Ingest writes one row for each collector `checkpoint` frame whose device-key signature verifies against the host's enrolled key, and writes none for a frame that fails (ADR-260). `seq` is the last frame the checkpoint covers, so a row can be verified again from its own columns, the session uuid, and the host's public key. The platform columns stay null until the control plane countersigns.
 
 ## 4. Envelope kinds and their typed bodies
 

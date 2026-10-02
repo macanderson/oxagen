@@ -70,7 +70,7 @@ const sessions = schema.tachoSessions;
 /**
  * The signed checkpoints of one wrapped session, in sequence. Ingest writes
  * a row only once its device-key signature verifies (`recordCheckpoints` in
- * lib/tacho-checkpoints.ts, ADR-253), so every row read here was verified.
+ * lib/tacho-checkpoints.ts, ADR-260), so every row read here was verified.
  * `sessionId` is `tacho.sessions.id` (the row UUID), matching how ingest and
  * `tacho.session.get` write and read the foreign key. Passing the external
  * `session_uuid` here returns an empty list for every normal wrapped run.

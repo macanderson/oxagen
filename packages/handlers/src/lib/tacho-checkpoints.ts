@@ -1,6 +1,6 @@
 /**
  * The signed checkpoints a host's collector seals, kept in `tacho.checkpoints`
- * (ADR-253, #3406).
+ * (ADR-260, #3406).
  *
  * About once a minute the collector seals a `checkpoint` frame on each chain
  * that moved (`checkpoint` in packages/tacho/src/collector/daemon.ts). The

@@ -363,7 +363,7 @@ describe("get_run_chain", () => {
   });
 
   it("names the newest checkpoint's head as the root of a session still recording (#3406)", async () => {
-    // Ingest now writes the collector's signed checkpoints (ADR-253), so a
+    // Ingest now writes the collector's signed checkpoints (ADR-260), so a
     // live wrapped session has rows here. It has no seal yet, and its newest
     // checkpoint is the latest commitment the host signed.
     const older = `sha256:${"b".repeat(64)}`;
