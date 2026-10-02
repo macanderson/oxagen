@@ -894,7 +894,7 @@ figcaption b {
   opacity: 0.3;
 }
 .card h3 {
-  font-size: var(--ox-m-h4);
+  font-size: var(--ox-m-body);
   margin: 14px 0 8px;
   font-weight: 620;
 }
@@ -1774,7 +1774,7 @@ table.matrix {
 .steps b {
   display: block;
   margin-bottom: 6px;
-  font-size: var(--ox-m-h4);
+  font-size: var(--ox-m-body);
   font-weight: 600;
   color: var(--ink);
 }
