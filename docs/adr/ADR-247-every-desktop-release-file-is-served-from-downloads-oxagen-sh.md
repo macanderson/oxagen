@@ -97,4 +97,8 @@ could download an executable.
   commands onto your PATH.
 - The CLI install script's host, `cli.oxagen.sh`, does not resolve. The
   installation guide now leads with the app and the executable on the host,
-  and #4960 asks Mac which host the install command should use.
+  and #4960 asks Mac which host the install command should use. On
+  2026-10-02 the command moved to `https://docs.oxagen.sh/install.sh`, the
+  host that already served the script, and the script downloads
+  `latest/oxagen-<rust triple>` from this host. The choice is a proposal
+  until Mac confirms it on #4960.
