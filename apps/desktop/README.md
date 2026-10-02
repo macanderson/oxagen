@@ -13,11 +13,14 @@ the workspace the host reports to, add or drop a wrapper, and unenroll. Spec: `d
   the two CLIs on PATH (`src-tauri/src/cli_install.rs`), the two user-scoped
   API reads, the tray, and the in-app updater.
 - **Does not own:** enrollment, hook writing, or the collector
-  ([`@oxagen/recorder`](../../packages/tacho/README.md), run as the bundled
-  recorder sidecar); sign-in and workspace defaults ([`apps/cli`](../cli/README.md),
-  run as the `oxagen` sidecar); the organization and workspace lists
-  ([`apps/api`](../api/README.md)); the house tokens and fonts
-  ([`@oxagen/ui`](../../packages/ui/README.md)).
+  ([`@oxagen/recorder`](../../packages/tacho/README.md)), or sign-in and
+  workspace defaults ([`apps/cli`](../cli/README.md)). The app runs all of
+  them as the bundled `oxagen` sidecar: `oxagen agent <verb>` for the
+  recorder, the same commands a person types (#4891). The page never starts
+  the bundled tacho executable. The bundle keeps it so the per-user copy
+  still carries it for machines enrolled before #4879. The app also does not own the
+  organization and workspace lists ([`apps/api`](../api/README.md)) or the
+  house tokens and fonts ([`@oxagen/ui`](../../packages/ui/README.md)).
 - **Depends on:** `@oxagen/ui`, for `styles/house-tokens.css` and
   `styles/house-fonts.css` (`src/styles.css`). The recorder and `oxagen`
   binaries are staged into the bundle by `scripts/sidecars.mjs`, not
@@ -71,9 +74,9 @@ collector's `/status` on loopback) and every action runs a sidecar:
 | Panel | Reads | Action |
 |---|---|---|
 | Account | `config.json` | `oxagen login` (browser PKCE), `oxagen logout` |
-| This machine | `host.json`, daemon `/status`, the recorder sidecar's `status --json` | the recorder sidecar's `enroll --harness …` and `unenroll [--purge]` |
-| Workspace | `POST /v1/user/organizations`, `POST /v1/user/workspaces` | the recorder sidecar's `reassign --org … --workspace …`, run through the `oxagen` sidecar with `--default` when the CLI default should follow |
-| Wrappers | `host.harnesses`, hook presence per harness | the recorder sidecar's `reassign --harness …` |
+| This machine | `host.json`, daemon `/status`, `oxagen agent status --json` | `oxagen agent enroll --harness …`, a bare `oxagen agent enroll` for Re-apply, and `oxagen agent unenroll --all [--purge]` |
+| Workspace | `POST /v1/user/organizations`, `POST /v1/user/workspaces` | `oxagen agent reassign --org … --workspace …`, with `--default` when the CLI default should follow |
+| Wrappers | `host.harnesses`, hook presence per harness | `oxagen agent reassign --harness …` |
 | Command line | PATH, `cli_install` state | linked automatically on every launch; "Link into PATH" / "Remove links" for manual control |
 | Updates (macOS) | `autoUpdate` in `desktop.json`, `update_policy` | "Install updates automatically" writes `autoUpdate` through `set_auto_update` |
 | Uninstall | — | `remove_local_data` after unenroll; then the platform uninstaller |

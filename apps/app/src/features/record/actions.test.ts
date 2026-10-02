@@ -54,6 +54,17 @@ const CONTEXT_PR = {
     headSha: "0123456789abcdef",
     path: ".oxagen/rules/ctx.scr.001-never-push-to-main.toml",
   },
+  raised: {
+    statement: "Never push to main.",
+    rationale: "Three runs needed it.",
+    source: "user:7a000000-0000-4000-8000-0000000000b1",
+    sourceName: null,
+    force: "should",
+    constraintEffect: null,
+    sharingScope: "workspace",
+    support: { runs: [], agents: [], recordIds: [], evidenceLinks: [] },
+    at: "2026-09-30T08:00:00.000Z",
+  },
   record: null,
   body: null,
   checks: [],
@@ -66,6 +77,7 @@ const CONTEXT_PR = {
     review: null,
   },
   merged: null,
+  closed: null,
 };
 
 beforeEach(() => {

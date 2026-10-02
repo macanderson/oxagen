@@ -79,9 +79,9 @@ const WHY: Record<Twelve, string> = {
   cache_writes_never_read:
     "3 runs wrote 120,000 prompt-cache tokens and read none of them back.",
   duplicate_tool_calls:
-    "7 turns on 3 runs only repeated tool calls with an identical input and output digest earlier in the same run.",
+    "7 calls on 3 runs repeated tool calls with an identical input and output digest earlier in the same run. Each came from a turn that made no other call.",
   repeated_shell_commands:
-    "7 turns on 3 runs only re-ran shell commands whose identical input had already returned the identical output earlier in the run.",
+    "7 calls on 3 runs re-ran shell commands whose identical input had already returned the identical output earlier in the run. Each came from a turn that made no other call.",
   unpaged_results:
     "github.search_code returned 4 results over 5,000 tokens on 3 runs. Later requests read them 7 times.",
   spin_loops:
@@ -107,9 +107,9 @@ const WRITTEN: Partial<Record<Twelve, string>> = {
   spin_loops:
     "reviewer ran the same call 20 or more times in a row with an unchanged result. 7 turns on 3 runs made only those repeats. The round trips cost $2.50.",
   duplicate_tool_calls:
-    "reviewer repeated tool calls that had already returned the same result in the run. 7 turns on 3 runs made only those repeats. The round trips cost $2.50.",
+    "reviewer repeated tool calls that had already returned the same result in the run. 7 calls on 3 runs each came from a turn that made no other call. The round trips cost $2.50.",
   repeated_shell_commands:
-    "Agents re-ran shell commands that had already returned the same result in the run. 7 turns on 3 runs made only those repeats. The round trips cost $2.50.",
+    "Agents re-ran shell commands that had already returned the same result in the run. 7 calls on 3 runs each came from a turn that made no other call. The round trips cost $2.50.",
   spend_with_no_outcome:
     "Ana Ruiz spent $2.50 on 3 runs that ended with nothing kept.",
 };
@@ -211,6 +211,28 @@ describe("Detector cards", () => {
     );
     expect(card("fnd_spendwithnooutcome")).toHaveTextContent(
       "reviewer spent $2.50 on 1 run that ended with nothing kept.",
+    );
+  });
+
+  // #4506 pass 7: a repeat finding counts every call its counted turns made,
+  // so the number the card prints is a count of calls, as both lines name it.
+  it("prints a repeat finding's number as calls in its text and in its evidence line", () => {
+    list([
+      findingOf("duplicate_tool_calls", { runs: 1, calls: 3 }),
+      findingOf("repeated_shell_commands", {
+        level: "tool",
+        subject: "Bash",
+        runs: 1,
+        calls: 1,
+      }),
+    ]);
+    const duplicate = card("fnd_duplicatetoolcalls");
+    expect(duplicate).toHaveTextContent(
+      "3 calls on 1 run each came from a turn that made no other call.",
+    );
+    expect(duplicate).toHaveTextContent("evidence 1 runs · 3 calls");
+    expect(card("fnd_repeatedshellcommands")).toHaveTextContent(
+      "1 call on 1 run came from a turn that made no other call.",
     );
   });
 

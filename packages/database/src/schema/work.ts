@@ -11,7 +11,7 @@
 // 20261002063000_work_direct_orders.sql) adds the direct work order of a run
 // no send covers (work.direct_orders) and each check run of a definition of
 // done (work.done_checks). R3 (#5108, migration
-// 20261002140000_work_send_backs.sql) adds the send-back notes Oxagen posted
+// 20261002152000_work_send_backs.sql) adds the send-back notes Oxagen posted
 // (work.send_backs). Every table carries the org mixin and the same
 // row-level security as the rest of the database.
 //

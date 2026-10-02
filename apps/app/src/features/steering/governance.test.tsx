@@ -262,7 +262,7 @@ describe("the governance dialog", () => {
     });
     expect(review).toHaveAttribute(
       "href",
-      "/acme/core-platform/steering/proposals/prs?proposal=prp_01k6c0v3",
+      "/acme/core-platform/steering/proposals/prs/prp_01k6c0v3",
     );
     expect(
       within(dialog).getByRole("link", { name: "Open pull request #43" }),

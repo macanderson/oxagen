@@ -315,6 +315,8 @@ describe("Record › the header", () => {
             status: "checks_running",
             pr: {
               number: 522,
+              url: "https://github.com/acme/platform/pull/522",
+              provider: "github",
               repository: "acme/platform",
               branch: `steering/${LINEAGE}`,
             },

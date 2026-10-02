@@ -14,8 +14,11 @@
 # comes from a GitHub release, because the repository is private. The same static-site
 # module the marketing site uses: a private bucket reached only through an
 # Origin Access Control, security headers, and TLS on the branded hostname.
-# A download is a file with an extension, so the rewrite function passes it
-# through untouched.
+# The rewrite function treats a path whose last segment has no dot as a page
+# and adds `/index.html`. Installers, checksums, and archives have extensions,
+# so it passes them through. The bare `oxagen` and `tacho` executables have
+# none, so `desktop/*` and `latest/*` skip the function entirely: `desktop/*`
+# through its immutable cache behavior, `latest/*` through a raw-path one.
 #
 # The bucket predates this stack: 2.1.1 was published to it by hand on
 # 2026-09-14 with a public-read policy on `desktop/*` so the first links could
@@ -48,6 +51,10 @@ module "downloads" {
   # A published version never changes: `desktop/2.1.1/…` is cut once and a
   # fix ships as a new version, so those objects can be cached for a year.
   immutable_path_patterns = ["/desktop/*"]
+  # `latest/` is overwritten on every release, so it keeps the default cache
+  # policy and the publish script's `/latest/*` invalidation. It holds no page,
+  # so skipping the rewrite changes nothing but the bare executables (#5123).
+  raw_path_patterns = ["/latest/*"]
 
   tags = { Brand = local.brand }
 }

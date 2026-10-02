@@ -137,6 +137,14 @@ export interface ModelCallFrameRow {
    * included.
    */
   cacheKeepAlive?: true;
+  /**
+   * The frame's place on its chain (`seq`). A chain numbers every event it
+   * records from one counter, so a tool call's `seq` on the same chain orders
+   * against it when the two share a millisecond. With `sessionUuid` it names
+   * the `llm_call` event, and no later read changes either (#4506). Absent on
+   * a ledger frame, which has no chain.
+   */
+  seq?: number;
 }
 
 const SYSTEM_CONTEXT_PARTS = systemContextPartSchema
@@ -489,9 +497,15 @@ function runSessions(run: {
  * priced per request. Web fetches are not counted: the vendor does not charge
  * per fetch (#3721).
  *
- * A wrapped frame also names the chain it was recorded on. `ts` keeps
- * milliseconds, so two chains' calls can share one instant, and the findings
- * job tells their requests apart by the chain.
+ * A wrapped frame also names the chain it was recorded on and its `seq` on
+ * that chain. `ts` keeps milliseconds, so two calls can share one instant.
+ * The findings job tells two chains' requests apart by the chain, and two
+ * requests of one chain apart by `seq`.
+ *
+ * A wrapped `llm_call` row that names no model is left out, since no price
+ * covers it. `keepModelless` keeps it, with `model` empty: the findings job
+ * reads it as the start of a request it cannot price, so the tool calls after
+ * it do not join the request before it (#4506).
  */
 /** Per-query bounds keep spillable work below the service memory limit. */
 export const COST_FRAME_QUERY_SETTINGS: ClickHouseSettings = {
@@ -540,6 +554,8 @@ export async function readModelCallFrames(args: {
   orgId: string;
   workspaceId: string;
   run: FrameRunRef;
+  /** Keep a wrapped `llm_call` row that names no model; see above. */
+  keepModelless?: boolean;
 }, consume?: FrameConsumer<ModelCallFrameRow>): Promise<ModelCallFrameRow[]> {
   const ch = clickhouse();
   const run = args.run;
@@ -622,7 +638,8 @@ export async function readModelCallFrames(args: {
         ${FRAME_CONTEXT_DIGEST} AS system_context_digest,
         ${consume === undefined ? FRAME_CONTEXT_PARTS : "NULL"} AS system_context_parts,
         ${FRAME_PROXY_OBSERVED} AS proxy_observed,
-        toUInt8(c.keep_alive = '1') AS cache_keep_alive
+        toUInt8(c.keep_alive = '1') AS cache_keep_alive,
+        c.seq AS seq
       FROM (
         SELECT
           ts, seq, session_uuid, model, provider, input_tokens, output_tokens,
@@ -640,7 +657,7 @@ export async function readModelCallFrames(args: {
           AND kind = 'llm_call'
           AND source IN {sources:Array(String)}
           AND ${NOT_A_DUPLICATE}
-          AND model != ''
+          ${args.keepModelless === true ? "" : "AND model != ''"}
       ) AS c
       LEFT JOIN (
         SELECT
@@ -709,6 +726,7 @@ export async function readModelCallFrames(args: {
     system_context_parts?: string | null;
     proxy_observed?: string | number | null;
     cache_keep_alive?: string | number | null;
+    seq?: string | number | null;
   };
   return consumeFrames<Row, ModelCallFrameRow>(result, (r) => {
     const parts = parseSystemContextParts(r.system_context_parts);
@@ -741,6 +759,7 @@ export async function readModelCallFrames(args: {
       ...(Number(r.cache_keep_alive ?? 0) === 1
         ? { cacheKeepAlive: true as const }
         : {}),
+      ...(r.seq === undefined || r.seq === null ? {} : { seq: Number(r.seq) }),
     };
   }, consume);
 }

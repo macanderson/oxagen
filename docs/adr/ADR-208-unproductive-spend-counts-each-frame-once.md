@@ -1,7 +1,7 @@
 # ADR-208: Unproductive spend counts each model-call frame once
 
 - **Status:** Accepted
-- **Date:** 2026-09-26
+- **Date:** 2026-09-26. Amended on 2026-10-02 (#4506): items 5, 6, and 7.
 - **Owners:** billing, spend
 - **Related:** ADR-062 (the findings job and its detectors), ADR-199 (a run's
   steps are graded from recorded outcomes), ADR-205 (a run's reads cover every
@@ -125,3 +125,64 @@ request, as detector 3 does.
   chain in one millisecond are still told apart by their content alone.
 - Runs past the 200-run frame cap (10) are cited and not priced, so a large
   workspace can under-count. The cap bounds the ClickHouse reads of one pass.
+
+## Amendment 2026-10-02: event keys, ties, and calls (#4506)
+
+Review passes 4 to 7 on #4502 found five ways the job could misplace or
+miscount a request. Each rests on one fact: `tacho_events.ts` keeps
+milliseconds, so two events can share an instant. A chain numbers every event
+it records, model calls and tool calls alike, from one counter (`seq`, dense
+per `session_uuid`, `sealEvent` in `@oxagen/recorder`). The frame read now
+carries each wrapped frame's `seq`, and the items below use it.
+
+- **Item 5. A wrapped frame's key is its event identity.** The key is the
+  store's `at` text, then `#`, then the chain's session uuid and the frame's
+  `seq` on it: `<at>#<uuid>:<seq>`. Neither part changes, so a frame keeps its
+  key when a frame of the same instant that sorts ahead of it becomes visible
+  later, for example when a new chain widens the read. The old key, the
+  frame's place at that instant, moved, and an applied finding's claim then
+  missed the key a later finding gave the same frame. A ledger frame has no
+  chain, and the `metered_token_usage` view exposes no row id, so it keeps
+  `<at>#<n>` by content. Migration `20261002141500_finding_claims_event_keys`
+  deletes the claims of each applied finding that holds an old key on a
+  wrapped run, and the next pass gives the finding its claims again under the
+  new keys (`claimBackfill`).
+- **Item 6. The evidence counts calls.** A counted request adds each tool
+  call it made to `evidence.calls`, and its price once. The contract, the API,
+  MCP, and the Spend card all name the figure calls, and every other kind
+  already counted calls. Renaming the field to turns would break the contract
+  for those kinds. The prose says how many calls repeated and that each came
+  from a turn that made no other call. Spin loops and retry loops still count
+  requests (see Consequences).
+- **Item 7. Ties are read by chain and `seq`.**
+  - Calls of one instant are judged against the calls before it, never
+    against each other. Two chains can make one identical call in one
+    millisecond, and neither read the other's result.
+  - A frame of the call's own chain at the call's instant comes before the
+    call only when its `seq` is lower. Two requests of one chain in one
+    millisecond stay two requests, each with its own calls and price.
+  - A subagent's call takes the root chain's latest frame when that frame is
+    later than its own chain's latest. The proxy records a subagent's model
+    call on the root chain (ADR-168), and it names no subagent there, so a
+    later root frame is read as the subagent's next request.
+  - A wrapped model call that names no model is read too, as a frame with no
+    price. It starts a request, so the calls after it no longer join the
+    priced request before it. Only the request view reads such a frame, and
+    no detector prices it. The rollup and every other reader still leave it
+    out.
+
+### Consequences of the amendment
+
+- Placement by `seq` holds only within one instant. Across instants the job
+  still orders by time, because a chain seals some model calls late (a
+  transcript row at `SubagentStop`), so `seq` order is not call order.
+- Two parallel subagents whose model calls the proxy recorded on the root
+  chain stay indistinguishable there. A subagent's call can take a sibling's
+  later root frame.
+- `spin_loops` and `retry_loops` still count requests in `evidence.calls`,
+  under the same calls label. Their modules belong to no lane of this change,
+  so they keep the old count until one adopts the per-call count.
+- Until the first pass after the migration, the headline leaves out the
+  frames of applied findings whose claims the migration deleted. A replay
+  finds frames only for runs inside the pass's 30-day window and frame read
+  cap, so an older frame of such a finding is not claimed again.
