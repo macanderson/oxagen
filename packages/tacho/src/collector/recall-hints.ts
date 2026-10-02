@@ -7,9 +7,10 @@
  * Tool hooks fill the lists, in the same shape from all four harnesses. Each
  * list keeps the most recent entries, each once, and a repeat moves to the
  * front. The repository is read off the prompt's path, from the directory
- * the session works in (`workingDir`), and read again only when that
- * directory leaves the repository. The lists live in memory only, and
- * `forgetRecallHints` clears them when the session ends.
+ * the session works in (`workingDir`). It is read again when that directory
+ * leaves the repository, or after a short wait when git failed. The lists
+ * live in memory only, and `forgetRecallHints` clears them when the session
+ * ends.
  */
 import { isAbsolute, relative, resolve, sep } from "node:path";
 import type { RepositoryRemote } from "./git-facts";
@@ -40,10 +41,28 @@ export type RecallHintsHolder = Pick<
   "cwd" | "workDir" | "recallHints"
 >;
 
-/** Reads the repository a directory is in (`readRepositoryRemote`). */
+/**
+ * Reads the repository a directory is in (`readRepositoryRemote`). It
+ * answers undefined for a directory in no repository or with no `origin`,
+ * and rejects when git failed before it could say.
+ */
 export type RepositoryReader = (
   cwd: string,
 ) => Promise<RepositoryRemote | undefined>;
+
+/** How long a failed repository read answers before a hook reads again. */
+export const REPOSITORY_RETRY_FIRST_MS = 30_000;
+
+/** The longest wait between two failed reads of one directory. */
+export const REPOSITORY_RETRY_MAX_MS = 10 * 60_000;
+
+/** The wait after `failures` failed reads of one directory in a row. */
+function retryDelay(failures: number): number {
+  return Math.min(
+    REPOSITORY_RETRY_FIRST_MS * 2 ** (failures - 1),
+    REPOSITORY_RETRY_MAX_MS,
+  );
+}
 
 /** The scope of one recall, as `MemoryRecallRequest` takes it. */
 export type RecallScope = Pick<
@@ -145,39 +164,60 @@ function covers(held: RepositoryRead, dir: string): boolean {
   return root !== undefined && relativeTo(root, dir) !== undefined;
 }
 
+/** True when `held` failed and its wait is over, so a hook reads again. */
+function retryDue(held: RepositoryRead, at: number): boolean {
+  return held.retryAt !== undefined && at >= held.retryAt;
+}
+
 /**
  * The read of the session's repository: the one already held when it
  * answers for the directory the session works in (`workingDir`), or a new
  * one started now. Undefined when no directory is known. The answer never
  * rejects, so a caller may leave it running and read `recallScope` later.
+ *
+ * A read that found no `origin` answers for its directory for the rest of
+ * the session. A read that failed answers only until its `retryAt`, so a
+ * later hook asks git again (#4458). The wait starts at
+ * `REPOSITORY_RETRY_FIRST_MS` and doubles with each failure in a row, up to
+ * `REPOSITORY_RETRY_MAX_MS`. `now` is the clock, which a test replaces.
  */
 export function readRepository(
   record: RecallHintsHolder,
   read: RepositoryReader,
+  now: () => number = Date.now,
 ): Promise<RepositoryRemote | undefined> | undefined {
   const dir = workingDir(record);
   if (dir === undefined) return undefined;
   const hints = hintsOf(record);
   const held = hints.repository;
-  if (held !== undefined && covers(held, dir)) return held.answer;
+  if (held !== undefined && covers(held, dir) && !retryDue(held, now()))
+    return held.answer;
+  // A failed read has no root, so it covers only its own directory. A new
+  // read of that directory counts on from its failures.
+  const failedBefore =
+    held !== undefined && held.cwd === dir ? (held.failures ?? 0) : 0;
   const next: RepositoryRead = {
     cwd: dir,
     settled: false,
     answer: Promise.resolve(undefined),
   };
   // `then` runs the reader after this call returns, so a reader that throws
-  // at once settles the answer as undefined too.
+  // at once counts as a failure too.
   next.answer = Promise.resolve()
     .then(() => read(dir))
     .then(
-      (remote) => remote,
-      () => undefined,
-    )
-    .then((remote) => {
-      next.settled = true;
-      if (remote !== undefined) next.remote = remote;
-      return remote;
-    });
+      (remote) => {
+        next.settled = true;
+        if (remote !== undefined) next.remote = remote;
+        return remote;
+      },
+      () => {
+        next.settled = true;
+        next.failures = failedBefore + 1;
+        next.retryAt = now() + retryDelay(next.failures);
+        return undefined;
+      },
+    );
   hints.repository = next;
   return next.answer;
 }
