@@ -53,6 +53,7 @@ vi.mock("./actions", () => ({
   dismissProposal: vi.fn(),
   approveContextPr: vi.fn(),
   mergePrWithoutReview: vi.fn(),
+  revertSteeringPr: vi.fn(),
   restoreManagedBlock: vi.fn(),
   dropMemoryRecord: vi.fn(),
   setSteeringGate: vi.fn(),
