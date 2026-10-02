@@ -1,4 +1,5 @@
 import {
+  blankOutcome,
   type OutcomeRow,
   type OutcomeRun,
   prKeyOf,
@@ -8,17 +9,26 @@ import {
   type TachoPrLink,
 } from "@oxagen/billing";
 import { GitHubApiError, type GitHubClient } from "@oxagen/github";
+import type { AttemptEventReadRecord } from "@oxagen/run-ledger";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { event } from "../run.test-support";
 import {
   type ForgeOutcome,
   type ForgeOutcomeRead,
   type LedgerRunPr,
+  type LedgerRunRead,
+  OUTCOME_LEDGER_READS_PER_PASS,
+  OUTCOME_RUN_ID_BATCH,
+  OUTCOME_UNRESOLVED_RETRY_MS,
   type OutcomeRefreshDeps,
+  RECEIPT_WALK_PAGE,
+  RECEIPT_WALK_PAGES,
   readGithubOutcome,
   readLedgerRunPrs,
   refreshRunPrOutcomes,
+  walkLedgerReceipts,
 } from "./run-pr-outcomes-refresh";
+import type { ReceiptWalk } from "./run-pr-receipt-walks";
 
 const mocks = vi.hoisted(() => ({
   connectedRunRepositories: vi.fn(),
@@ -38,12 +48,17 @@ vi.mock("../logger", () => ({
 const SCOPE = { orgId: "org-1", workspaceId: "ws-1" };
 const NOW = new Date("2026-09-27T12:00:00.000Z");
 const hoursAgo = (h: number) => new Date(NOW.getTime() - h * 3_600_000);
+const daysAgo = (d: number) => hoursAgo(d * 24);
 
-const run = (runId: string, runSource: "ledger" | "tacho" = "tacho"): OutcomeRun => ({
+const run = (
+  runId: string,
+  runSource: "ledger" | "tacho" = "tacho",
+  startedHoursAgo = 30,
+): OutcomeRun => ({
   runId,
   runSource,
-  startedAt: hoursAgo(30),
-  sealedAt: hoursAgo(29),
+  startedAt: hoursAgo(startedHoursAgo),
+  sealedAt: hoursAgo(startedHoursAgo - 1),
 });
 
 const link = (runId: string, number: number, over: Partial<TachoPrLink> = {}): TachoPrLink => ({
@@ -100,7 +115,13 @@ interface FakeInput {
   runs: OutcomeRun[];
   reasons?: Record<string, string | null>;
   links?: TachoPrLink[];
+  /**
+   * The pull requests each ledger run's complete walk names. A run left out
+   * names a repository the workspace does not connect.
+   */
   ledger?: Record<string, LedgerRunPr[]>;
+  /** In place of `ledger`, the production reader over a fake ledger. */
+  ledgerPrs?: OutcomeRefreshDeps["ledgerPrs"];
   forge?: Record<string, ForgeOutcome | Error>;
   /** Reverts already kept, as a GitHub delivery or an earlier pass keeps them. */
   reverts?: RevertEvidence[];
@@ -119,26 +140,64 @@ function fake(input: FakeInput) {
   const reads: string[] = [];
   const saved: OutcomeRow[][] = [];
   const ledgerAsked: string[][] = [];
+  const walks = new Map<string, ReceiptWalk>();
+  /** The run ids each batched read named, per read. */
+  const batches = {
+    readRows: [] as number[],
+    terminalReasons: [] as number[],
+    tachoLinks: [] as number[],
+    receiptWalks: [] as number[],
+  };
   const reverts: RevertEvidence[] = [...(input.reverts ?? [])];
   const revertsAsked: Date[] = [];
   const writes: string[] = [];
-  const control = { failSaveRows: false };
+  const control = { failSaveRows: false, now: NOW };
   const deps: OutcomeRefreshDeps = {
-    now: () => NOW,
+    now: () => control.now,
     listRuns: () => Promise.resolve(input.runs),
-    terminalReasons: () =>
-      Promise.resolve(new Map(Object.entries(input.reasons ?? {}))),
-    readRows: (_scope, ids) =>
-      Promise.resolve([...rows.values()].filter((r) => ids.includes(r.runId))),
-    tachoLinks: (_scope, ids) =>
-      Promise.resolve((input.links ?? []).filter((l) => ids.includes(l.runId))),
-    ledgerPrs: (_scope, ids) => {
-      ledgerAsked.push([...ids]);
+    terminalReasons: (_scope, batch) => {
+      batches.terminalReasons.push(batch.length);
+      const ids = new Set(batch.map((r) => r.runId));
       return Promise.resolve(
-        new Map(
-          Object.entries(input.ledger ?? {}).filter(([id]) => ids.includes(id)),
-        ),
+        new Map(Object.entries(input.reasons ?? {}).filter(([id]) => ids.has(id))),
       );
+    },
+    readRows: (_scope, ids) => {
+      batches.readRows.push(ids.length);
+      const named = new Set(ids);
+      return Promise.resolve([...rows.values()].filter((r) => named.has(r.runId)));
+    },
+    tachoLinks: (_scope, ids) => {
+      batches.tachoLinks.push(ids.length);
+      return Promise.resolve((input.links ?? []).filter((l) => ids.includes(l.runId)));
+    },
+    receiptWalks: (_scope, ids) => {
+      batches.receiptWalks.push(ids.length);
+      return Promise.resolve(ids.flatMap((id) => walks.get(id) ?? []));
+    },
+    ledgerPrs: (scope, requests, now) => {
+      ledgerAsked.push(requests.map((r) => r.runId));
+      if (input.ledgerPrs) return input.ledgerPrs(scope, requests, now);
+      return Promise.resolve(
+        requests.map((r): LedgerRunRead => {
+          const prs = input.ledger?.[r.runId];
+          const walk: ReceiptWalk = {
+            runId: r.runId,
+            afterSeq: "1",
+            complete: true,
+            receipts: [],
+            attemptedAt: now,
+            unresolved: prs ? null : "repository_not_connected",
+            retryAfter: prs ? null : new Date(now.getTime() + OUTCOME_UNRESOLVED_RETRY_MS),
+          };
+          return { walk, prs: prs ?? null };
+        }),
+      );
+    },
+    saveReceiptWalks: (_scope, next) => {
+      writes.push("saveReceiptWalks");
+      for (const walk of next) walks.set(walk.runId, walk);
+      return Promise.resolve();
     },
     readForge: (_scope, pr) => {
       const key = prKeyOf(pr.provider, pr.repository, pr.number);
@@ -179,6 +238,8 @@ function fake(input: FakeInput) {
     reads,
     saved,
     ledgerAsked,
+    walks,
+    batches,
     reverts,
     revertsAsked,
     writes,
@@ -485,15 +546,16 @@ describe("refreshRunPrOutcomes", () => {
     expect([...t.rows.keys()].some((k) => k.startsWith("arun_f6"))).toBe(false);
   });
 
-  it("reads a ledger run's receipts only while the run has no row", async () => {
+  it("reads a ledger run's receipts until its walk is complete, and not again", async () => {
     const t = fake({
       runs: [run("arun_e5", "ledger")],
       ledger: { arun_e5: [] },
     });
     await refreshRunPrOutcomes(t.deps, SCOPE);
     await refreshRunPrOutcomes(t.deps, SCOPE);
-    expect(t.ledgerAsked).toEqual([["arun_e5"], []]);
+    expect(t.ledgerAsked).toEqual([["arun_e5"]]);
     expect(rowOf(t.rows, "arun_e5", "none")).toBeDefined();
+    expect(t.walks.get("arun_e5")).toMatchObject({ complete: true, unresolved: null });
   });
 
   it("writes nothing and reads nothing on a pass after the rows settled", async () => {
@@ -596,6 +658,57 @@ describe("refreshRunPrOutcomes", () => {
     });
     expect(rowOf(t.rows, "tse_a1", "github:acme/app#6")?.prState).toBe("open");
     expect(out.forgeReads).toBe(1);
+  });
+
+  it("stops reading a closed or merged pull request 14 days after it closed, even with CI pending", async () => {
+    const seen = { stateSeenAt: daysAgo(16), sourceUpdatedAt: daysAgo(16) };
+    const t = fake({
+      runs: [run("tse_a1", "tacho", 20 * 24), run("tse_b2", "tacho", 20 * 24), run("tse_c3", "tacho", 20 * 24)],
+      links: [link("tse_a1", 5, seen), link("tse_b2", 6, seen), link("tse_c3", 7, seen)],
+      forge: {
+        "github:acme/app#5": forge("closed", { updatedAt: daysAgo(15), ci: "pending" }),
+        "github:acme/app#6": forge("merged", {
+          mergedAt: daysAgo(15),
+          ci: "pending",
+          branch: null,
+        }),
+        "github:acme/app#7": forge("closed", { updatedAt: daysAgo(2), ci: "pending" }),
+      },
+    });
+    await refreshRunPrOutcomes(t.deps, SCOPE);
+    expect(rowOf(t.rows, "tse_a1", "github:acme/app#5")).toMatchObject({
+      prState: "closed",
+      closedAt: daysAgo(15),
+      ciState: "pending",
+    });
+    t.reads.length = 0;
+    await refreshRunPrOutcomes(t.deps, SCOPE);
+    // Only the pull request that closed two days ago is read again.
+    expect(t.reads).toEqual(["github:acme/app#7"]);
+  });
+
+  it("binds at most OUTCOME_RUN_ID_BATCH run ids per read, and reads every stored row back", async () => {
+    const tacho = Array.from({ length: OUTCOME_RUN_ID_BATCH * 2 + 500 }, (_, i) =>
+      run(`tse_${i.toString(36)}`),
+    );
+    const ledgerRuns = Array.from({ length: OUTCOME_RUN_ID_BATCH + 500 }, (_, i) =>
+      run(`arun_${i.toString(36)}`, "ledger"),
+    );
+    const t = fake({
+      runs: [...tacho, ...ledgerRuns],
+      ledger: Object.fromEntries(ledgerRuns.map((r) => [r.runId, []])),
+    });
+    await refreshRunPrOutcomes(t.deps, SCOPE);
+    expect(t.batches.readRows).toEqual([1000, 1000, 1000, 1000]);
+    expect(t.batches.terminalReasons).toEqual([1000, 1000, 1000, 1000]);
+    expect(t.batches.tachoLinks).toEqual([1000, 1000, 500]);
+    expect(t.batches.receiptWalks).toEqual([1000, 500]);
+    // Every wrapped run, and the first 100 ledger runs, have their none row.
+    expect(t.rows.size).toBe(tacho.length + OUTCOME_LEDGER_READS_PER_PASS);
+    const second = await refreshRunPrOutcomes(t.deps, SCOPE);
+    // The rows written on the first pass come back through the batched reads
+    // and are not written again. Only the next 100 ledger runs' rows are new.
+    expect(second.rows).toBe(OUTCOME_LEDGER_READS_PER_PASS);
   });
 
   it("replaces a run's none row when the run gains a pull request", async () => {
@@ -718,76 +831,379 @@ describe("readGithubOutcome", () => {
     client.getPullRequest.mockRejectedValue(new GitHubApiError(502, "Bad Gateway"));
     await expect(readGithubOutcome(asClient, pr, () => NOW)).rejects.toThrow("502");
   });
+
+  it("reads CI as pending when the checks read stopped short of the last check", async () => {
+    client.getPullRequest.mockResolvedValue(pull());
+    client.listCiChecks.mockResolvedValue({ ...passing, complete: false });
+    client.getBranch.mockResolvedValue(null);
+    const out = await readGithubOutcome(asClient, pr, () => NOW);
+    expect(out).toMatchObject({ ci: { state: "pending", headSha: "a".repeat(40) } });
+  });
+
+  it("reads CI as failed from a partial read when a check it read failed", async () => {
+    client.getPullRequest.mockResolvedValue(pull());
+    client.listCiChecks.mockResolvedValue({
+      ...passing,
+      statuses: [
+        {
+          context: "ci",
+          state: "failure",
+          targetUrl: null,
+          createdAt: "2026-09-27T08:50:00Z",
+          updatedAt: "2026-09-27T08:55:00Z",
+        },
+      ],
+      complete: false,
+    });
+    client.getBranch.mockResolvedValue(null);
+    const out = await readGithubOutcome(asClient, pr, () => NOW);
+    expect(out).toMatchObject({ ci: { state: "failed" } });
+  });
+});
+
+const opened = (runSeq: number, repositoryId: string, number: number) =>
+  event(runSeq, {
+    eventType: "provider_publish.pull_request_opened",
+    payload: {
+      provider_repository_id: repositoryId,
+      pull_request_number: number,
+      head_commit_sha: "b".repeat(40),
+    },
+  });
+
+/** `count` events from run_seq 1, each a plain tool call unless `receipts` puts a receipt at its seq. */
+function eventsOf(
+  count: number,
+  receipts: Record<number, [repositoryId: string, number: number]> = {},
+): AttemptEventReadRecord[] {
+  return Array.from({ length: count }, (_, i) => {
+    const seq = i + 1;
+    const receipt = receipts[seq];
+    return receipt ? opened(seq, receipt[0], receipt[1]) : event(seq);
+  });
+}
+
+/**
+ * A run store over in-memory events keyed by run public id, cursored on
+ * run_seq as the Postgres store reads them. A run in `failing` throws on read.
+ */
+function ledgerOf(
+  events: Record<string, AttemptEventReadRecord[]>,
+  failing: ReadonlySet<string> = new Set(),
+) {
+  const pages: { runId: string; after: string }[] = [];
+  const store = {
+    getRunByPublicId: vi.fn((publicId: string) =>
+      Promise.resolve(publicId in events ? { runId: `uuid-${publicId}` } : null),
+    ),
+    readAttemptEventsSince: vi.fn((runId: string, after: string, limit = 500) => {
+      const publicId = runId.replace("uuid-", "");
+      pages.push({ runId: publicId, after });
+      if (failing.has(publicId))
+        return Promise.reject(new Error("archive segment unreadable"));
+      return Promise.resolve(
+        (events[publicId] ?? [])
+          .filter((e) => Number(e.runSeq) > Number(after))
+          .slice(0, limit),
+      );
+    }),
+  };
+  return {
+    store: store as unknown as Parameters<typeof readLedgerRunPrs>[0],
+    pages,
+  };
+}
+
+const connected = {
+  connectionId: "conn-1",
+  providerRepositoryId: "R_1",
+  owner: "Acme",
+  name: "App",
+  host: "github.com",
+  url: "https://github.com/Acme/App",
+};
+
+const WALK_BOUND = RECEIPT_WALK_PAGE * RECEIPT_WALK_PAGES;
+
+describe("walkLedgerReceipts", () => {
+  it("reads every event when the run ends inside the bound", async () => {
+    const { store } = ledgerOf({ arun_d4: eventsOf(3, { 2: ["R_1", 12] }) });
+    expect(await walkLedgerReceipts(store, "uuid-arun_d4", null)).toEqual({
+      receipts: [{ repositoryId: "R_1", number: 12, headSha: "b".repeat(40) }],
+      afterSeq: "3",
+      complete: true,
+    });
+  });
+
+  it("stops at the bound with the last event it read, and resumes after it", async () => {
+    const { store, pages } = ledgerOf({
+      arun_d4: eventsOf(WALK_BOUND + 300, { 3: ["R_1", 12], [WALK_BOUND + 200]: ["R_1", 13] }),
+    });
+    const first = await walkLedgerReceipts(store, "uuid-arun_d4", null);
+    expect(first).toMatchObject({ afterSeq: String(WALK_BOUND), complete: false });
+    expect(first.receipts.map((r) => r.number)).toEqual([12]);
+    expect(pages).toHaveLength(RECEIPT_WALK_PAGES);
+    const second = await walkLedgerReceipts(store, "uuid-arun_d4", first.afterSeq);
+    expect(second).toMatchObject({ afterSeq: String(WALK_BOUND + 300), complete: true });
+    expect(second.receipts.map((r) => r.number)).toEqual([13]);
+    expect(pages.at(-1)).toEqual({ runId: "arun_d4", after: String(WALK_BOUND) });
+  });
+
+  it("skips a receipt whose number could not be stored", async () => {
+    const { store } = ledgerOf({ arun_d4: [opened(1, "R_1", 0), opened(2, "R_1", 1.5)] });
+    expect(await walkLedgerReceipts(store, "uuid-arun_d4", null)).toEqual({
+      receipts: [],
+      afterSeq: "2",
+      complete: true,
+    });
+  });
+
+  it("keeps its position when a resumed walk finds no new event", async () => {
+    const { store } = ledgerOf({ arun_d4: eventsOf(WALK_BOUND) });
+    const first = await walkLedgerReceipts(store, "uuid-arun_d4", null);
+    expect(first).toMatchObject({ afterSeq: String(WALK_BOUND), complete: false });
+    expect(await walkLedgerReceipts(store, "uuid-arun_d4", first.afterSeq)).toEqual({
+      receipts: [],
+      afterSeq: String(WALK_BOUND),
+      complete: true,
+    });
+  });
 });
 
 describe("readLedgerRunPrs", () => {
-  const opened = (runSeq: number, repositoryId: string, number: number) =>
-    event(runSeq, {
-      eventType: "provider_publish.pull_request_opened",
-      payload: {
-        provider_repository_id: repositoryId,
-        pull_request_number: number,
-        head_commit_sha: "b".repeat(40),
-      },
-    });
-  const repository = {
-    connectionId: "conn-1",
-    providerRepositoryId: "R_1",
-    owner: "Acme",
-    name: "App",
-    host: "github.com",
-    url: "https://github.com/Acme/App",
-  };
-
   beforeEach(() => {
     mocks.connectedRunRepositories.mockReset();
-    mocks.connectedRunRepositories.mockResolvedValue([repository]);
+    mocks.connectedRunRepositories.mockResolvedValue([connected]);
   });
 
-  function store(events: Record<string, ReturnType<typeof event>[]>) {
-    return {
-      getRunByPublicId: vi.fn((publicId: string) =>
-        Promise.resolve(publicId in events ? { runId: `uuid-${publicId}` } : null),
-      ),
-      readAttemptEventsSince: vi.fn((runId: string) =>
-        Promise.resolve(events[runId.replace("uuid-", "")] ?? []),
-      ),
-    } as unknown as Parameters<typeof readLedgerRunPrs>[0];
-  }
+  const fresh = (runId: string) => ({ runId, walk: null });
 
   it("names each receipt's pull request from the workspace's repositories", async () => {
-    const out = await readLedgerRunPrs(
-      store({ arun_d4: [opened(1, "R_1", 12)], arun_e5: [] }),
-      SCOPE,
-      ["arun_d4", "arun_e5"],
-    );
-    expect(out.get("arun_d4")).toEqual([
+    const { store } = ledgerOf({ arun_d4: [opened(1, "R_1", 12)], arun_e5: [] });
+    const out = await readLedgerRunPrs(store, SCOPE, [fresh("arun_d4"), fresh("arun_e5")], NOW);
+    expect(out).toEqual([
       {
-        provider: "github",
-        repository: "acme/app",
-        number: 12,
-        url: "https://github.com/Acme/App/pull/12",
-        headSha: "b".repeat(40),
+        walk: {
+          runId: "arun_d4",
+          afterSeq: "1",
+          complete: true,
+          receipts: [{ repositoryId: "R_1", number: 12, headSha: "b".repeat(40) }],
+          attemptedAt: NOW,
+          unresolved: null,
+          retryAfter: null,
+        },
+        prs: [
+          {
+            provider: "github",
+            repository: "acme/app",
+            number: 12,
+            url: "https://github.com/Acme/App/pull/12",
+            headSha: "b".repeat(40),
+          },
+        ],
+      },
+      {
+        walk: {
+          runId: "arun_e5",
+          afterSeq: null,
+          complete: true,
+          receipts: [],
+          attemptedAt: NOW,
+          unresolved: null,
+          retryAfter: null,
+        },
+        prs: [],
       },
     ]);
-    expect(out.get("arun_e5")).toEqual([]);
   });
 
-  it("leaves out a run whose only receipts name a repository the workspace no longer connects", async () => {
-    const out = await readLedgerRunPrs(
-      store({ arun_d4: [opened(1, "R_gone", 12)] }),
-      SCOPE,
-      ["arun_d4", "arun_missing"],
-    );
-    expect(out.size).toBe(0);
+  it("holds back a run when one receipt names a repository the workspace no longer connects", async () => {
+    const { store } = ledgerOf({ arun_d4: [opened(1, "R_1", 12), opened(2, "R_gone", 13)] });
+    const [out] = await readLedgerRunPrs(store, SCOPE, [fresh("arun_d4")], NOW);
+    expect(out).toMatchObject({
+      prs: null,
+      walk: {
+        complete: true,
+        unresolved: "repository_not_connected",
+        retryAfter: new Date(NOW.getTime() + OUTCOME_UNRESOLVED_RETRY_MS),
+      },
+    });
+    expect(out?.walk.receipts).toHaveLength(2);
   });
 
-  it("leaves out a run when one receipt names a connected repository and another does not", async () => {
+  it("names a complete walk's kept receipts on a retry without reading an event", async () => {
+    const { store, pages } = ledgerOf({ arun_d4: [] });
+    const walk: ReceiptWalk = {
+      runId: "arun_d4",
+      afterSeq: "7",
+      complete: true,
+      receipts: [{ repositoryId: "R_1", number: 12, headSha: null }],
+      attemptedAt: hoursAgo(7),
+      unresolved: "repository_not_connected",
+      retryAfter: hoursAgo(1),
+    };
+    const [out] = await readLedgerRunPrs(store, SCOPE, [{ runId: "arun_d4", walk }], NOW);
+    expect(pages).toEqual([]);
+    expect(out?.walk).toMatchObject({ unresolved: null, retryAfter: null, attemptedAt: NOW });
+    expect(out?.prs?.map((p) => p.number)).toEqual([12]);
+  });
+
+  it("records a run the ledger does not find, and one whose events cannot be read, with a retry time", async () => {
+    const { store } = ledgerOf({ arun_bad: [opened(1, "R_1", 7)] }, new Set(["arun_bad"]));
     const out = await readLedgerRunPrs(
-      store({ arun_d4: [opened(1, "R_1", 12), opened(2, "R_gone", 13)] }),
+      store,
       SCOPE,
-      ["arun_d4"],
+      [fresh("arun_missing"), fresh("arun_bad")],
+      NOW,
     );
-    expect(out.size).toBe(0);
+    const retryAfter = new Date(NOW.getTime() + OUTCOME_UNRESOLVED_RETRY_MS);
+    expect(out.map((r) => r.walk)).toEqual([
+      expect.objectContaining({ unresolved: "run_not_found", retryAfter, afterSeq: null }),
+      expect.objectContaining({
+        unresolved: "read_failed",
+        retryAfter,
+        afterSeq: null,
+        complete: false,
+      }),
+    ]);
+    expect(out.every((r) => r.prs === null)).toBe(true);
   });
 });
+
+describe("refreshRunPrOutcomes over ledger runs", () => {
+  beforeEach(() => {
+    mocks.connectedRunRepositories.mockReset();
+    mocks.connectedRunRepositories.mockResolvedValue([connected]);
+  });
+
+  const over = (ledger: ReturnType<typeof ledgerOf>): OutcomeRefreshDeps["ledgerPrs"] =>
+    (scope, runs, now) => readLedgerRunPrs(ledger.store, scope, runs, now);
+
+  it("has a row for every pull request of a run whose receipts pass the walk bound, by the second pass", async () => {
+    const ledger = ledgerOf({
+      arun_d4: eventsOf(WALK_BOUND + 300, { 3: ["R_1", 12], [WALK_BOUND + 200]: ["R_1", 13] }),
+    });
+    const t = fake({
+      runs: [run("arun_d4", "ledger")],
+      reasons: { arun_d4: "success" },
+      ledgerPrs: over(ledger),
+      forge: {
+        "github:acme/app#12": forge("open"),
+        "github:acme/app#13": forge("open"),
+      },
+    });
+    await refreshRunPrOutcomes(t.deps, SCOPE);
+    // The first pass stops at the bound and writes no row: rows for part of
+    // the run would read as all of it.
+    expect(t.rows.size).toBe(0);
+    expect(t.walks.get("arun_d4")).toMatchObject({
+      afterSeq: String(WALK_BOUND),
+      complete: false,
+      unresolved: null,
+    });
+    await refreshRunPrOutcomes(t.deps, SCOPE);
+    expect(ledger.pages.filter((p) => p.after === "0")).toHaveLength(1);
+    expect(rowOf(t.rows, "arun_d4", "github:acme/app#12")).toMatchObject({
+      prState: "open",
+      terminalReason: "success",
+    });
+    expect(rowOf(t.rows, "arun_d4", "github:acme/app#13")).toMatchObject({
+      prState: "open",
+    });
+    expect(t.walks.get("arun_d4")).toMatchObject({ complete: true });
+    // A complete walk is not read again.
+    const pagesBefore = ledger.pages.length;
+    await refreshRunPrOutcomes(t.deps, SCOPE);
+    expect(ledger.pages).toHaveLength(pagesBefore);
+  });
+
+  it("reads an older run past more than 100 newer runs it cannot resolve", async () => {
+    const newer = OUTCOME_LEDGER_READS_PER_PASS + 1;
+    const events: Record<string, AttemptEventReadRecord[]> = {
+      arun_old: [opened(1, "R_1", 40)],
+    };
+    const runs = [run("arun_old", "ledger", 200)];
+    for (let i = 0; i < newer; i++) {
+      const runId = `arun_n${i.toString(36)}`;
+      events[runId] = [opened(1, "R_gone", 100 + i)];
+      runs.push(run(runId, "ledger", 10 + i / 100));
+    }
+    const t = fake({
+      runs,
+      ledgerPrs: over(ledgerOf(events)),
+      forge: { "github:acme/app#40": forge("open") },
+    });
+    const first = await refreshRunPrOutcomes(t.deps, SCOPE);
+    expect(t.ledgerAsked[0]).toHaveLength(OUTCOME_LEDGER_READS_PER_PASS);
+    expect(t.ledgerAsked[0]).not.toContain("arun_old");
+    expect(t.rows.size).toBe(0);
+    expect(first.deferred).toBe(2);
+    expect(t.walks.get("arun_n0")).toMatchObject({
+      unresolved: "repository_not_connected",
+      retryAfter: new Date(NOW.getTime() + OUTCOME_UNRESOLVED_RETRY_MS),
+    });
+    // The runs it could not resolve wait for their retry time and take no
+    // slot, so the next pass reaches the older run.
+    await refreshRunPrOutcomes(t.deps, SCOPE);
+    expect(t.ledgerAsked[1]).toEqual([`arun_n${(newer - 1).toString(36)}`, "arun_old"]);
+    expect(rowOf(t.rows, "arun_old", "github:acme/app#40")).toMatchObject({
+      prState: "open",
+    });
+    // At their retry time they are read again.
+    t.control.now = new Date(NOW.getTime() + OUTCOME_UNRESOLVED_RETRY_MS);
+    await refreshRunPrOutcomes(t.deps, SCOPE);
+    expect(t.ledgerAsked[2]).toHaveLength(OUTCOME_LEDGER_READS_PER_PASS);
+    expect(t.ledgerAsked[2]).not.toContain("arun_old");
+  });
+
+  it("goes on past a run whose events cannot be read", async () => {
+    const ledger = ledgerOf(
+      { arun_bad: [opened(1, "R_1", 7)], arun_ok: [opened(1, "R_1", 8)] },
+      new Set(["arun_bad"]),
+    );
+    const t = fake({
+      runs: [run("arun_bad", "ledger", 10), run("arun_ok", "ledger", 20)],
+      ledgerPrs: over(ledger),
+      forge: { "github:acme/app#8": forge("open") },
+    });
+    await refreshRunPrOutcomes(t.deps, SCOPE);
+    expect(t.walks.get("arun_bad")).toMatchObject({
+      unresolved: "read_failed",
+      afterSeq: null,
+      complete: false,
+    });
+    expect(rowOf(t.rows, "arun_ok", "github:acme/app#8")).toBeDefined();
+  });
+
+  it("walks once a run named before walks were kept, and adds the pull requests the old bound missed", async () => {
+    const ledger = ledgerOf({
+      arun_d4: eventsOf(WALK_BOUND + 10, { 3: ["R_1", 12], [WALK_BOUND + 5]: ["R_1", 13] }),
+    });
+    const t = fake({
+      runs: [run("arun_d4", "ledger")],
+      ledgerPrs: over(ledger),
+      forge: {
+        "github:acme/app#12": forge("open"),
+        "github:acme/app#13": forge("open"),
+      },
+    });
+    const pr12 = {
+      provider: "github" as const,
+      repository: "acme/app",
+      number: 12,
+      url: "https://github.com/Acme/App/pull/12",
+    };
+    t.rows.set("arun_d4 github:acme/app#12", {
+      ...blankOutcome("arun_d4", "ledger", pr12),
+      prState: "open",
+      prStateReadAt: hoursAgo(2),
+    });
+    await refreshRunPrOutcomes(t.deps, SCOPE);
+    await refreshRunPrOutcomes(t.deps, SCOPE);
+    expect(rowOf(t.rows, "arun_d4", "github:acme/app#13")).toMatchObject({
+      prState: "open",
+    });
+    expect(rowOf(t.rows, "arun_d4", "github:acme/app#12")?.prState).toBe("open");
+  });
+});
+

@@ -3,10 +3,14 @@
 import { describe, expect, it } from "vitest";
 import type { ToolCallFrame } from "./cost-rollup";
 import {
+  classifySteps,
   gradeSteps,
   RepeatedCalls,
   repeatKindOf,
   SHELL_TOOL,
+  stepClassOf,
+  stepRequestsOf,
+  type StepRequest,
 } from "./step-grade";
 
 /** A tool call that ran and returned, read-only unless a test says otherwise. */
@@ -204,5 +208,179 @@ describe("RepeatedCalls", () => {
     seen.repeats("", "Read", "sha256:in", "");
     expect(seen.repeats("", "Read", "sha256:in", "")).toBe(false);
     expect(seen.repeats("", "Read", "sha256:in", null)).toBe(false);
+  });
+});
+
+describe("stepClassOf", () => {
+  const reads = { isMutating: false };
+  const writes = { isMutating: true };
+  const unknown = { isMutating: null };
+
+  it("classes a step whose calls all change nothing as read_only", () => {
+    expect(stepClassOf({ calls: [reads, reads], changedFile: false })).toBe(
+      "read_only",
+    );
+  });
+
+  it("classes a step that made no call as read_only", () => {
+    expect(stepClassOf({ calls: [], changedFile: false })).toBe("read_only");
+  });
+
+  it("classes a step with a mutating call as an edit", () => {
+    expect(stepClassOf({ calls: [reads, writes], changedFile: false })).toBe(
+      "edit",
+    );
+  });
+
+  it("classes a step with a call the classifier said nothing about as an edit", () => {
+    expect(stepClassOf({ calls: [reads, unknown], changedFile: false })).toBe(
+      "edit",
+    );
+  });
+
+  it("classes a step in which a file changed as an edit", () => {
+    expect(stepClassOf({ calls: [reads], changedFile: true })).toBe("edit");
+    expect(stepClassOf({ calls: [], changedFile: true })).toBe("edit");
+  });
+});
+
+describe("classifySteps", () => {
+  const reads = { isMutating: false };
+  const writes = { isMutating: true };
+
+  /** A model call that made the calls given. */
+  const request = (
+    ...calls: { isMutating: boolean | null }[]
+  ): StepRequest => ({ modelCall: true, calls });
+
+  it("gives every step one class, so the classes sum to the steps", () => {
+    const requests = [request(reads, reads), request(writes), request()];
+    const classes = classifySteps({ requests, changedFile: false });
+    // Model calls: read, edit, read. Tool calls: read, read, edit.
+    expect(classes).toEqual({ readOnly: 4, edit: 2 });
+    const steps = requests.length + requests.flatMap((r) => r.calls).length;
+    expect(classes.readOnly + classes.edit).toBe(steps);
+  });
+
+  it("classes 50 steps that only read and 1 that edits", () => {
+    const requests = [
+      ...Array.from({ length: 50 }, () => request(reads)),
+      request(writes),
+    ];
+    // Each request is a model call and the one tool call it made.
+    expect(classifySteps({ requests, changedFile: false })).toEqual({
+      readOnly: 100,
+      edit: 2,
+    });
+  });
+
+  it("counts calls made before the first model call as tool-call steps only", () => {
+    expect(
+      classifySteps({
+        requests: [{ modelCall: false, calls: [reads, writes] }, request()],
+        changedFile: false,
+      }),
+    ).toEqual({ readOnly: 2, edit: 1 });
+  });
+
+  it("places a run's file change on its steps that may write", () => {
+    expect(
+      classifySteps({
+        requests: [request(reads), request(writes)],
+        changedFile: true,
+      }),
+    ).toEqual({ readOnly: 2, edit: 2 });
+  });
+
+  it("counts every step as an edit when the run changed a file and no call may write", () => {
+    expect(
+      classifySteps({
+        requests: [request(reads), request()],
+        changedFile: true,
+      }),
+    ).toEqual({ readOnly: 0, edit: 3 });
+  });
+
+  it("answers zero of each for a run with no step", () => {
+    expect(classifySteps({ requests: [], changedFile: false })).toEqual({
+      readOnly: 0,
+      edit: 0,
+    });
+  });
+});
+
+describe("stepRequestsOf", () => {
+  const read = (atMs: number | null, chain?: string | null) =>
+    chain === undefined
+      ? { atMs, isMutating: false }
+      : { atMs, chain, isMutating: false };
+  const write = (atMs: number | null, chain?: string | null) =>
+    chain === undefined
+      ? { atMs, isMutating: true }
+      : { atMs, chain, isMutating: true };
+
+  it("places each call under the latest model call at or before it", () => {
+    const models = [{ atMs: 10 }, { atMs: 30 }, { atMs: 50 }];
+    const r20 = read(20);
+    const w30 = write(30);
+    const requests = stepRequestsOf(models, [r20, w30]);
+    expect(requests).toEqual([
+      { modelCall: true, calls: [r20] },
+      { modelCall: true, calls: [w30] },
+      { modelCall: true, calls: [] },
+    ]);
+  });
+
+  it("puts the calls before every model call, and those with no time, in a request no model call made", () => {
+    const early = write(5);
+    const untimed = read(null);
+    const requests = stepRequestsOf([{ atMs: 10 }], [early, untimed]);
+    expect(requests).toEqual([
+      { modelCall: false, calls: [early, untimed] },
+      { modelCall: true, calls: [] },
+    ]);
+  });
+
+  it("prefers the model call on the call's own chain, then the run's latest", () => {
+    const models = [
+      { atMs: 10, chain: "root" },
+      { atMs: 20, chain: "child" },
+      { atMs: 25 },
+    ];
+    const onRoot = write(30, "root");
+    const onOther = write(30, "other");
+    const requests = stepRequestsOf(models, [onRoot, onOther]);
+    expect(requests).toEqual([
+      { modelCall: true, calls: [onRoot] },
+      { modelCall: true, calls: [] },
+      // A model call that names no chain counts toward the run's latest.
+      { modelCall: true, calls: [onOther] },
+    ]);
+  });
+
+  it("reads a null chain as the run's own", () => {
+    const models = [{ atMs: 10, chain: null }, { atMs: 20, chain: "child" }];
+    const call = read(30, null);
+    expect(stepRequestsOf(models, [call])[0]).toEqual({
+      modelCall: true,
+      calls: [call],
+    });
+  });
+
+  it("orders model calls by time whatever order they arrive in", () => {
+    const models = [{ atMs: 50 }, { atMs: 10 }];
+    const call = write(20);
+    expect(stepRequestsOf(models, [call])).toEqual([
+      { modelCall: true, calls: [] },
+      { modelCall: true, calls: [call] },
+    ]);
+  });
+
+  it("gives a model call with no readable time no call", () => {
+    const call = read(20);
+    expect(stepRequestsOf([{ atMs: Number.NaN }], [call])).toEqual([
+      { modelCall: false, calls: [call] },
+      { modelCall: true, calls: [] },
+    ]);
   });
 });

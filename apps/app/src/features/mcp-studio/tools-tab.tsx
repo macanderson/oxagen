@@ -15,8 +15,15 @@
 // of those the last discovery listed, whether the definitions would fit
 // better behind tool search, and whether tools.toml compiled. Both reads are
 // lane M10's (#4682). When a read fails, the tab says so in its place.
+//
+// Two of spend detector 2's levers sit beside that hint. Tool exposure stages
+// server.toml's exposure mode: Full sends every imported definition on every
+// request, and Searchable sends the server's three search tools. Calls counts
+// the imported tools agents called over the record's feedback window, from
+// each key's call count, and names the ones no agent called, so the person
+// can see what a provider costs against what agents use.
 import { useLocale, useTranslations } from "next-intl";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useId, useState } from "react";
 import type { ToolRiskGrade, ToolSideEffect } from "@/data/contracts/tools";
 import { Badge, type BadgeTone } from "@/ui/badge";
 import { panel, panelBody, panelHeader, panelTitle } from "@/ui/control-styles";
@@ -32,9 +39,12 @@ import { StateWrap } from "@/ui/state-wrap";
 import { cell, headCell, numericCell } from "@/ui/table";
 import {
   type DraftOp,
+  draftExposure,
   draftTokens,
+  type ExposureMode,
   importedAfter,
   stagedClassification,
+  stagedExposure,
 } from "./draft";
 import type { StudioRecord, StudioTool } from "./model";
 import { StudioNotRecorded, StudioNotRecordedValue } from "./not-recorded";
@@ -44,6 +54,7 @@ import type {
   DraftStudioDescription,
   StudioToolsList,
 } from "./studio-calls";
+import { toolCalls } from "./tool-calls";
 import { ToolPanel } from "./tool-panel";
 import { useStudioDraft } from "./use-draft";
 
@@ -200,6 +211,183 @@ function Listed({ listed }: { listed: StudioToolsList }) {
   );
 }
 
+const MODES: readonly ExposureMode[] = ["direct", "search"];
+
+/**
+ * server.toml's exposure mode, staged in the draft. Choosing the mode
+ * server.toml already sets drops a staged change rather than staging a
+ * second one.
+ */
+function Exposure({
+  record,
+  ops,
+  canEdit,
+  onStage,
+  onUnstage,
+}: {
+  record: StudioRecord;
+  ops: readonly DraftOp[];
+  canEdit: boolean;
+  onStage: (op: DraftOp) => void;
+  onUnstage: (index: number) => void;
+}) {
+  const t = useTranslations("mcpStudio.tools.exposure");
+  const id = useId();
+  const current = record.exposure.mode;
+  const shown = stagedExposure(ops) ?? current;
+  const changed = draftExposure({ tools: [], exposure: current }, ops) !== null;
+  const choose = (mode: ExposureMode) => {
+    if (mode === shown) return;
+    if (mode === current) {
+      const at = ops.findIndex((op) => op.kind === "expose");
+      if (at !== -1) onUnstage(at);
+      return;
+    }
+    onStage({ kind: "expose", mode });
+  };
+  return (
+    <section
+      aria-labelledby={`${id}-h`}
+      className={panel}
+      data-testid="studio-exposure"
+    >
+      <div className={panelHeader}>
+        <h2 id={`${id}-h`} className={panelTitle}>
+          {t("title")}
+        </h2>
+        {changed ? (
+          <Badge tone="approval" data-testid="studio-exposure-staged">
+            {t("staged")}
+          </Badge>
+        ) : null}
+      </div>
+      <div className={`${panelBody} flex flex-col gap-2`}>
+        {canEdit ? (
+          <fieldset className="flex flex-col gap-2">
+            <legend className="sr-only">{t("title")}</legend>
+            {MODES.map((mode) => (
+              <div key={mode} className="flex items-start gap-2 text-[13px]">
+                <input
+                  id={`${id}-${mode}`}
+                  type="radio"
+                  name={`${id}-mode`}
+                  value={mode}
+                  checked={shown === mode}
+                  aria-describedby={`${id}-${mode}-body`}
+                  onChange={() => {
+                    choose(mode);
+                  }}
+                  className="mt-0.5 size-4 accent-gold"
+                  data-testid={`studio-exposure-${mode}`}
+                />
+                <div className="flex flex-col">
+                  <label
+                    htmlFor={`${id}-${mode}`}
+                    className="font-medium text-foreground"
+                  >
+                    {t(`modes.${mode}`)}
+                  </label>
+                  <span
+                    id={`${id}-${mode}-body`}
+                    className="text-[12.5px] text-muted-foreground"
+                  >
+                    {t(`bodies.${mode}`)}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </fieldset>
+        ) : (
+          <p
+            className="flex flex-col text-[13px] text-foreground"
+            data-testid="studio-exposure-mode"
+          >
+            <span className="font-medium">{t(`modes.${shown}`)}</span>
+            <span className="text-[12.5px] text-muted-foreground">
+              {t(`bodies.${shown}`)}
+            </span>
+          </p>
+        )}
+      </div>
+    </section>
+  );
+}
+
+/** The imported tools agents called over the feedback window, and the ones they did not. */
+function Calls({
+  record,
+  tools,
+}: {
+  record: StudioRecord;
+  tools: readonly StudioTool[];
+}) {
+  const t = useTranslations("mcpStudio.tools.calls");
+  const locale = useLocale();
+  const id = useId();
+  const calls = toolCalls(record, tools);
+  if (calls.kind === "none") return null;
+  return (
+    <section
+      aria-labelledby={`${id}-h`}
+      className={panel}
+      data-testid="studio-calls"
+    >
+      <div className={panelHeader}>
+        <h2 id={`${id}-h`} className={panelTitle}>
+          {t("title")}
+        </h2>
+      </div>
+      <div className={`${panelBody} flex flex-col gap-2`}>
+        {calls.kind === "notRecorded" ? (
+          <StudioNotRecorded gap="record" testId="studio-calls-missing">
+            {t("missing")}
+          </StudioNotRecorded>
+        ) : (
+          <>
+            <p
+              className="text-[13px] text-foreground"
+              data-testid="studio-calls-counts"
+            >
+              {t("counts", {
+                called: formatCount(calls.called, locale),
+                counted: formatCount(calls.counted, locale),
+                days: calls.windowDays,
+              })}
+            </p>
+            {calls.unrecorded === 0 ? null : (
+              <p
+                className="text-[12.5px] text-muted-foreground"
+                data-testid="studio-calls-unrecorded"
+              >
+                {t("unrecorded", { count: calls.unrecorded })}
+              </p>
+            )}
+            {calls.uncalled.length === 0 ? null : (
+              <>
+                <h3
+                  id={`${id}-uncalled`}
+                  className="text-[13px] font-semibold text-foreground"
+                >
+                  {t("uncalled")}
+                </h3>
+                <ul
+                  aria-labelledby={`${id}-uncalled`}
+                  className="flex flex-wrap gap-x-3 gap-y-1 font-mono text-[12.5px] text-foreground"
+                  data-testid="studio-calls-uncalled"
+                >
+                  {calls.uncalled.map((name) => (
+                    <li key={name}>{name}</li>
+                  ))}
+                </ul>
+              </>
+            )}
+          </>
+        )}
+      </div>
+    </section>
+  );
+}
+
 export function ToolsTab({
   at,
   serverName,
@@ -301,6 +489,21 @@ export function ToolsTab({
       <Budget record={record} tools={tools} ops={ops} />
       <DiscoveryProgress at={at} server={serverName} canStart={canEdit} />
       {listed === null ? null : <Listed listed={listed} />}
+      {record === null ? null : (
+        <>
+          <Exposure
+            record={record}
+            ops={ops}
+            canEdit={canEdit}
+            onStage={stage}
+            onUnstage={(index) => {
+              setRefused(false);
+              studioDraft.unstage(index);
+            }}
+          />
+          <Calls record={record} tools={tools} />
+        </>
+      )}
       {record === null ? (
         <StudioNotRecorded gap="record" testId="studio-tools-missing">
           {t("missing")}
@@ -499,6 +702,10 @@ export function ToolsTab({
           onOpenChange={(next) => {
             if (!next) setOpenTool(null);
           }}
+          pageable={
+            record?.source.type === "openapi" ||
+            record?.source.type === "graphql"
+          }
           {...(draft === undefined ? {} : { draft })}
         />
       )}

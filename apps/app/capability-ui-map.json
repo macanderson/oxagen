@@ -102,6 +102,15 @@
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
     },
+    "commit_markdown_import": {
+      "route": "/[org]/[ws]/steering",
+      "page": "apps/app/src/app/[org]/[ws]/steering/page.tsx",
+      "entry": "Steering \u203a Import Markdown \u203a Review statements \u203a Open steering PR: the statement grid's commit, which opens one steering PR on steering/import-<date> and links to it (features/steering/import/import-markdown.tsx, features/steering/import/actions.ts)",
+      "testid": "import-commit",
+      "proof": "apps/app/src/features/steering/import/import-markdown.test.tsx",
+      "verifiedAt": "2026-10-01",
+      "verifiedBy": "steering-import-dialog (#4913)"
+    },
     "create_api_key": {
       "route": "/[org]/api-keys",
       "page": "apps/app/src/app/[org]/api-keys/page.tsx",
@@ -1123,6 +1132,15 @@
       "proof": "apps/app/src/features/repositories/repositories.test.tsx",
       "verifiedAt": "2026-09-19",
       "verifiedBy": "session-mc-repositories-page"
+    },
+    "parse_markdown_import": {
+      "route": "/[org]/[ws]/steering",
+      "page": "apps/app/src/app/[org]/[ws]/steering/page.tsx",
+      "entry": "Steering \u203a Import Markdown: drop or choose Markdown files, give each a target, then Review statements, which splits each file into the statement grid (features/steering/import/import-markdown.tsx, features/steering/import/actions.ts)",
+      "testid": "import-review",
+      "proof": "apps/app/src/features/steering/import/import-markdown.test.tsx",
+      "verifiedAt": "2026-10-01",
+      "verifiedBy": "steering-import-dialog (#4913)"
     },
     "pause_workspace_runs": {
       "route": "/[org]/[ws]",

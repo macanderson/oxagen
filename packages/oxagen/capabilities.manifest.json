@@ -6442,7 +6442,8 @@
         "mcp": true,
         "cli": true,
         "unit": true,
-        "docs": true
+        "docs": true,
+        "app": true
       }
     },
     {
@@ -6462,7 +6463,8 @@
         "mcp": true,
         "cli": true,
         "unit": true,
-        "docs": true
+        "docs": true,
+        "app": true
       }
     },
     {

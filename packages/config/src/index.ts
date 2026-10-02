@@ -1,5 +1,6 @@
 export * from "./env";
 export * from "./registry";
+export * from "./ci-registry";
 export * from "./domain";
 export * from "./geo";
 

@@ -450,6 +450,7 @@ export function stripeRecord(): StudioRecord {
     environments: [],
     exposure: { mode: "direct", definitionBudget: STRIPE_BUDGET },
     sync: { schedule: "on-change", lastAt: "2026-09-27T08:00:00.000Z" },
+    feedbackWindowDays: 30,
     tools: [
       recordTool("create_payment", {
         imported: true,
@@ -528,6 +529,7 @@ export function billingRecord(): StudioRecord {
     ],
     exposure: { mode: "direct", definitionBudget: 8000 },
     sync: { schedule: "daily", lastAt: "2026-09-27T06:00:00.000Z" },
+    feedbackWindowDays: 30,
     tools: [
       recordTool("list_invoices", {
         imported: true,
@@ -579,6 +581,7 @@ export function scratchRecord(): StudioRecord {
     environments: [],
     exposure: { mode: "direct", definitionBudget: 8000 },
     sync: { schedule: "manual", lastAt: null },
+    feedbackWindowDays: 30,
     tools: [],
   };
 }
@@ -630,6 +633,7 @@ export function warehouseRecord(): StudioRecord {
     environments: [],
     exposure: { mode: "search", definitionBudget: 8000 },
     sync: { schedule: "on-change", lastAt: "2026-09-27T07:30:00.000Z" },
+    feedbackWindowDays: 30,
     tools,
   };
 }
@@ -659,6 +663,7 @@ export function packageRecord(): StudioRecord {
     environments: [],
     exposure: { mode: "direct", definitionBudget: 8000 },
     sync: { schedule: "on-change", lastAt: null },
+    feedbackWindowDays: 30,
     tools: [],
   };
 }
@@ -678,6 +683,7 @@ export function localRecord(): StudioRecord {
     environments: [],
     exposure: { mode: "direct", definitionBudget: 8000 },
     sync: { schedule: "manual", lastAt: null },
+    feedbackWindowDays: 30,
     tools: [],
   };
 }
