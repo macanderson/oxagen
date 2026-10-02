@@ -9119,8 +9119,6 @@ type Messages = {
       heroYearEnd: string;
       attributionMissing: string;
       evidenceLine: string;
-      atStake: string;
-      atStakeUnknown: string;
       list: string;
       filters: {
         label: string;
@@ -9142,6 +9140,22 @@ type Messages = {
         range: string;
         previous: string;
         next: string;
+      };
+      card: {
+        amount: string;
+        estimatedAmount: string;
+        share: string;
+        unit: {
+          weeklyPerThousandTokens: string;
+        };
+        estimated: string;
+        needsPromptText: string;
+        text: {
+          spin_loops: string;
+          duplicate_tool_calls: string;
+          repeated_shell_commands: string;
+          spend_with_no_outcome: string;
+        };
       };
     };
     columns: {
