@@ -687,8 +687,9 @@
       "unattributed": "Runs with no operator",
       "total": "Workspace total",
       "hidden": "Hidden",
-      "hiddenNote": "Pseudonyms are on. The unproductive share, the run count, and the runs are hidden, because each could match a pseudonym to a name in the By operator table.",
+      "hiddenNote": "Pseudonyms are on. The unproductive share, the unassigned share, the run count, and the runs and work orders behind them are hidden, because each could match a pseudonym to a name in the By operator table.",
       "runsBehind": "{count, plural, one {# run} other {# runs}}",
+      "doneBehind": "{count, plural, one {# work order} other {# work orders}}",
       "definitionsTitle": "Definitions",
       "columns": {
         "rank": "Rank",
@@ -696,6 +697,8 @@
         "unproductive": "Unproductive spend",
         "shareOfTotal": "Share of total",
         "unproductiveShare": "Unproductive share",
+        "doneWorkOrders": "Done work orders",
+        "unassignedShare": "Unassigned share",
         "runs": "Runs",
         "runsBehind": "Runs behind"
       },
@@ -703,7 +706,9 @@
         "unproductive": "The cost of the frames Oxagen marked unproductive in this operator's runs during the period. A frame that two checks mark counts once.",
         "shareOfTotal": "This operator's unproductive spend divided by the workspace total for the period.",
         "unproductiveShare": "This operator’s unproductive spend divided by the cost of the frames this operator’s runs ran in the period.",
-        "runs": "The runs in the period with at least one frame marked unproductive."
+        "runs": "The runs in the period with at least one frame marked unproductive.",
+        "doneWorkOrders": "Work orders this operator sent whose definition of done passed in the period. A work order counts when its first check passes. If a person rejects it later, it still counts here, and the rejection adds to its reopen rate.",
+        "unassignedShare": "The cost of this operator’s frames on runs with no work item, divided by the cost of all the frames this operator’s runs ran in the period. A run attached to a work item within 24 hours of its start counts as assigned from its start. A run attached later counts as assigned from the attachment on. Unassigned spend is not part of unproductive spend."
       },
       "pseudonyms": {
         "on": "Pseudonyms on. Each operator shows as a stable pseudonym.",

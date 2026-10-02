@@ -198,6 +198,16 @@ describe("spend port", () => {
             unproductiveShare: 0.5,
             runs: 2,
             topRuns: [{ runId: "arun_01", unproductive: usd("8000000") }],
+            doneWorkOrders: 2,
+            topDoneWorkOrders: [
+              {
+                workOrderId: "wo_01",
+                doneAt: "2026-09-12T10:00:00.000Z",
+                runs: ["arun_01"],
+              },
+            ],
+            unassignedShare: 0.25,
+            topUnassignedRuns: [{ runId: "arun_01", unassigned: usd("2000000") }],
           },
         ],
       }),
@@ -215,6 +225,14 @@ describe("spend port", () => {
       facts: null,
     });
     expect(read.value.unattributed.runs).toBe(1);
+    expect(read.value.operators[0]?.doneWorkOrders).toBe(2);
+    expect(read.value.operators[0]?.topDoneWorkOrders[0]?.workOrderId).toBe(
+      "wo_01",
+    );
+    expect(read.value.operators[0]?.unassignedShare).toBe(0.25);
+    expect(read.value.operators[0]?.topUnassignedRuns).toEqual([
+      { runId: "arun_01", unassigned: usd("2000000") },
+    ]);
   });
 
   it("operatorRanking maps a pseudonym row with no key and no share (negative)", async () => {
@@ -234,6 +252,10 @@ describe("spend port", () => {
             unproductiveShare: null,
             runs: null,
             topRuns: [],
+            doneWorkOrders: 2,
+            topDoneWorkOrders: [],
+            unassignedShare: null,
+            topUnassignedRuns: [],
           },
         ],
       }),
@@ -246,6 +268,8 @@ describe("spend port", () => {
       pseudonym: "Operator 0A1B2C3D",
     });
     expect(row?.runs).toBeNull();
+    expect(row?.unassignedShare).toBeNull();
+    expect(row?.doneWorkOrders).toBe(2);
     expect(captureError).not.toHaveBeenCalled();
   });
 

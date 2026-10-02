@@ -235,8 +235,10 @@ const RankedOperator = z.discriminatedUnion("kind", [
 /**
  * `get_operator_ranking` (D15): the workspace's operators by unproductive
  * spend, highest first. The operator totals and `unattributed` sum to
- * `unproductive`. Under pseudonyms, `unproductiveShare` and `runs` are null
- * and `topRuns` is empty.
+ * `unproductive`. Beside each name are its done work orders and its
+ * unassigned share (F33). Under pseudonyms, `unproductiveShare`,
+ * `unassignedShare`, and `runs` are null, and `topRuns`, `topDoneWorkOrders`,
+ * and `topUnassignedRuns` are empty. The done count stays.
  */
 export const OperatorRanking = z.object({
   period: DayRange,
@@ -256,6 +258,25 @@ export const OperatorRanking = z.object({
         z.object({
           runId: PublicId.regex(RUN_PUBLIC_ID),
           unproductive: Money,
+        }),
+      ),
+      /** Work orders done at their first passing check run in the period. */
+      doneWorkOrders: Count,
+      /** The done work orders behind the figure, each with its runs. */
+      topDoneWorkOrders: z.array(
+        z.object({
+          workOrderId: z.string().min(1),
+          doneAt: z.string().min(1),
+          runs: z.array(PublicId.regex(RUN_PUBLIC_ID)),
+        }),
+      ),
+      /** Unassigned spend over the operator's spend, both by frame time. */
+      unassignedShare: Ratio.nullable(),
+      /** The runs behind the share, largest unassigned part first. */
+      topUnassignedRuns: z.array(
+        z.object({
+          runId: PublicId.regex(RUN_PUBLIC_ID),
+          unassigned: Money,
         }),
       ),
     }),

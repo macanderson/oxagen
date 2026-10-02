@@ -65,6 +65,16 @@ const RANKING: OperatorRanking = {
         { runId: "arun_01", unproductive: usd("4000000") },
         { runId: "arun_02", unproductive: usd("2000000") },
       ],
+      doneWorkOrders: 3,
+      topDoneWorkOrders: [
+        {
+          workOrderId: "wo_01",
+          doneAt: "2026-09-03T10:00:00.000Z",
+          runs: ["arun_04", "arun_05"],
+        },
+      ],
+      unassignedShare: 0.4,
+      topUnassignedRuns: [{ runId: "arun_06", unassigned: usd("1500000") }],
     },
     {
       rank: 2,
@@ -74,6 +84,10 @@ const RANKING: OperatorRanking = {
       unproductiveShare: null,
       runs: 1,
       topRuns: [{ runId: "arun_03", unproductive: usd("3000000") }],
+      doneWorkOrders: 0,
+      topDoneWorkOrders: [],
+      unassignedShare: null,
+      topUnassignedRuns: [],
     },
   ],
 };
@@ -90,6 +104,10 @@ const PSEUDONYMS: OperatorRanking = {
       unproductiveShare: null,
       runs: null,
       topRuns: [],
+      doneWorkOrders: 3,
+      topDoneWorkOrders: [],
+      unassignedShare: null,
+      topUnassignedRuns: [],
     },
     {
       rank: 2,
@@ -99,6 +117,10 @@ const PSEUDONYMS: OperatorRanking = {
       unproductiveShare: null,
       runs: null,
       topRuns: [],
+      doneWorkOrders: 3,
+      topDoneWorkOrders: [],
+      unassignedShare: null,
+      topUnassignedRuns: [],
     },
   ],
 };
@@ -195,6 +217,8 @@ describe("Operator ranking", () => {
       "Unproductive spend",
       "Share of total",
       "Unproductive share",
+      "Done work orders",
+      "Unassigned share",
       "Runs",
       "Runs behind",
     ]);
@@ -234,6 +258,8 @@ describe("Operator ranking", () => {
       "#spend-ranking-def-unproductive",
       "#spend-ranking-def-shareOfTotal",
       "#spend-ranking-def-unproductiveShare",
+      "#spend-ranking-def-doneWorkOrders",
+      "#spend-ranking-def-unassignedShare",
       "#spend-ranking-def-runs",
     ]);
     for (const target of targets) {
@@ -244,6 +270,40 @@ describe("Operator ranking", () => {
     expect(
       within(rowNamed("total")).getByRole("link", { name: "$10.00" }),
     ).toHaveAttribute("href", "#spend-ranking-def-unproductive");
+  });
+
+  it("shows each operator's done work orders and unassigned share beside the name", () => {
+    show(readOk(RANKING));
+    const marcus = rowAt(1);
+    expect(
+      within(marcus).getByRole("link", { name: "3" }),
+    ).toHaveAttribute("href", "#spend-ranking-def-doneWorkOrders");
+    expect(
+      within(marcus).getByRole("link", { name: "40%" }),
+    ).toHaveAttribute("href", "#spend-ranking-def-unassignedShare");
+    expect(
+      document.getElementById("spend-ranking-def-doneWorkOrders")?.textContent,
+    ).toMatch(/definition of done passed/);
+    expect(
+      document.getElementById("spend-ranking-def-unassignedShare")?.textContent,
+    ).toMatch(/not part of unproductive spend/);
+    // The unattributed and total rows carry no done count or share.
+    expect(rowNamed("total").textContent).not.toContain("40%");
+  });
+
+  it("links the work orders and runs behind the done count and the unassigned share", async () => {
+    show(readOk(RANKING));
+    const marcus = rowAt(1);
+    await userEvent.click(within(marcus).getByText("1 work order"));
+    expect(within(marcus).getByText("wo_01")).toBeInTheDocument();
+    expect(
+      within(marcus).getByRole("link", { name: "arun_04" }),
+    ).toHaveAttribute("href", "/acme/core-platform/runs/arun_04?tab=cost");
+    await userEvent.click(within(marcus).getByText("1 run"));
+    expect(
+      within(marcus).getByRole("link", { name: "arun_06" }),
+    ).toHaveAttribute("href", "/acme/core-platform/runs/arun_06?tab=cost");
+    expect(marcus).toHaveTextContent("$1.50");
   });
 
   it("links the runs behind each figure to their Cost tab", async () => {
@@ -347,7 +407,12 @@ describe("Operator ranking › pseudonyms", () => {
     expect(within(first).queryByRole("link", { name: /Marcus/ })).toBeNull();
     expect(first).toHaveTextContent("$6.00");
     expect(first).toHaveTextContent("60%");
-    expect(first.querySelectorAll('[data-hidden="true"]')).toHaveLength(3);
+    expect(first.querySelectorAll('[data-hidden="true"]')).toHaveLength(4);
+    // The done count stays under pseudonyms; the work orders behind it do not.
+    expect(
+      within(first).getByRole("link", { name: "3" }),
+    ).toHaveAttribute("href", "#spend-ranking-def-doneWorkOrders");
+    expect(first.querySelector("[data-evidence]")).toBeNull();
     expect(first.querySelector("a[href*='/runs/']")).toBeNull();
     expect(screen.getByText(/Pseudonyms are on\./)).toBeInTheDocument();
     expect(screen.getByText(/Pseudonyms on\./)).toBeInTheDocument();
