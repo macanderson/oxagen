@@ -16,6 +16,15 @@
  * those two figures would match a pseudonym to a name. The unproductive
  * figures and the ranks stay.
  *
+ * Beside each name are its done work orders and its unassigned share (F33,
+ * spend spec Operator productivity). A work order is done at its first
+ * passing check run of its definition of done, in the period that check fell
+ * in. The unassigned share is the operator's spend on runs whose direct work
+ * order has no work item, with a 24-hour grace window, over the operator's
+ * spend, both counted by frame time. Unassigned spend is never part of the
+ * unproductive figures. Under pseudonyms the done count stays, and the share
+ * and the work orders and runs behind both are dropped.
+ *
  * A period whose claims hold two currencies is refused with `conflict`
  * (`ranking_mixed_currency`), since the ranking sums one currency.
  */
@@ -78,6 +87,39 @@ export const operatorRankingRowSchema = z
           .strict(),
       )
       .max(OPERATOR_RANKING_RUNS_MAX),
+    /**
+     * Work orders the operator sent whose first passing check run of their
+     * definition of done fell in the period. Shown under pseudonyms too.
+     */
+    doneWorkOrders: z.number().int().nonnegative(),
+    /** The done work orders behind the figure, oldest pass first, each with its runs; empty under pseudonyms. */
+    topDoneWorkOrders: z
+      .array(
+        z
+          .object({
+            /** The work order's public id (`wo_…`). */
+            workOrderId: z.string().min(1),
+            /** When its first passing check run finished. */
+            doneAt: z.string().datetime(),
+            runs: z.array(runPublicIdSchema).max(OPERATOR_RANKING_RUNS_MAX),
+          })
+          .strict(),
+      )
+      .max(OPERATOR_RANKING_RUNS_MAX),
+    /**
+     * The operator's unassigned spend over the operator's spend, both by
+     * frame time. Null when nothing was priced, when a run could not be
+     * priced, when the spend holds another currency, or under pseudonyms.
+     */
+    unassignedShare: ratioSchema.nullable(),
+    /** The runs behind the share, largest unassigned part first; empty under pseudonyms. */
+    topUnassignedRuns: z
+      .array(
+        z
+          .object({ runId: runPublicIdSchema, unassigned: moneySchema })
+          .strict(),
+      )
+      .max(OPERATOR_RANKING_RUNS_MAX),
   })
   .strict();
 
@@ -85,7 +127,7 @@ export const spendOperatorRanking = registerCapability({
   name: "get_operator_ranking",
   domain: "spend",
   description:
-    "Rank this workspace's operators by unproductive spend over a day range, highest first: each operator's unproductive spend, its share of the headline, its share of the priced spend of the frames the operator's runs ran in the period, its run count, and the runs behind it. Org Owner or Admin only. The operator totals and the unattributed total sum to the headline get_unproductive_spend answers.",
+    "Rank this workspace's operators by unproductive spend over a day range, highest first: each operator's unproductive spend, its share of the headline, its share of the priced spend of the frames the operator's runs ran in the period, its run count, its done work orders, its unassigned share, and the runs and work orders behind them. Org Owner or Admin only. The operator totals and the unattributed total sum to the headline get_unproductive_spend answers, and unassigned spend is not part of it.",
   mode: "sync",
   surfaces: ["api", "agent"],
   layers: ["schema", "api", "unit", "docs", "app"],

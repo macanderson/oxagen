@@ -27,6 +27,16 @@ const named = {
     { runId: "arun_1", unproductive: usd("500") },
     { runId: "tse_2", unproductive: usd("200") },
   ],
+  doneWorkOrders: 1,
+  topDoneWorkOrders: [
+    {
+      workOrderId: "wo_1",
+      doneAt: "2026-09-12T10:00:00.000Z",
+      runs: ["arun_1"],
+    },
+  ],
+  unassignedShare: 0.25,
+  topUnassignedRuns: [{ runId: "tse_2", unassigned: usd("50") }],
 };
 
 const out = {
@@ -64,6 +74,9 @@ describe("get_operator_ranking contract", () => {
       unproductiveShare: null,
       runs: null,
       topRuns: [],
+      topDoneWorkOrders: [],
+      unassignedShare: null,
+      topUnassignedRuns: [],
     };
     const parsed = spendOperatorRanking.output.parse({
       ...out,
@@ -90,6 +103,25 @@ describe("get_operator_ranking contract", () => {
         operators: [
           { ...row, operator: { kind: "pseudonym", pseudonym: "Ada" } },
         ],
+      }).success,
+    ).toBe(false);
+  });
+
+  it("carries the done work orders and the unassigned share beside each name", () => {
+    const parsed = spendOperatorRanking.output.parse(out).operators[0];
+    expect(parsed?.doneWorkOrders).toBe(1);
+    expect(parsed?.topDoneWorkOrders[0]?.workOrderId).toBe("wo_1");
+    expect(parsed?.unassignedShare).toBe(0.25);
+    expect(
+      spendOperatorRanking.output.safeParse({
+        ...out,
+        operators: [{ ...named, unassignedShare: 1.5 }],
+      }).success,
+    ).toBe(false);
+    expect(
+      spendOperatorRanking.output.safeParse({
+        ...out,
+        operators: [{ ...named, doneWorkOrders: -1 }],
       }).success,
     ).toBe(false);
   });
