@@ -99,6 +99,13 @@ function Headline({ headline }: { headline: Read<UnproductiveSpend> }) {
   );
 }
 
+/** The catalog key that names each part detector. */
+const PART_LABEL = {
+  2: "detector.2",
+  3: "detector.3",
+  5: "detector.5",
+} as const;
+
 /**
  * What detectors 2, 3, and 5 price and what detector 4 estimates, each
  * beside the headline and none added to it (rules 2 and 3).
@@ -121,7 +128,7 @@ function PartFigures({ headline }: { headline: Read<UnproductiveSpend> }) {
             className="contents"
           >
             <dt className="text-muted-foreground">
-              {t(`detector.${part.detector}`)}
+              {t(PART_LABEL[part.detector])}
             </dt>
             <dd className="text-right font-medium tabular-nums">
               <Money value={part.saving} />

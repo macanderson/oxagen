@@ -518,9 +518,11 @@ describe("setOperatorPseudonymsAction", () => {
   });
 
   it("refuses a value that is not a boolean, setting nothing (negative)", async () => {
-    expect(
-      await setOperatorPseudonymsAction(at, "yes" as unknown as boolean),
-    ).toEqual({
+    // A Server Action takes whatever the client posts. A method type's
+    // parameters are bivariant, so this binding admits a string with no cast.
+    const loose: { set(where: typeof at, enabled: unknown): Promise<unknown> } =
+      { set: setOperatorPseudonymsAction };
+    expect(await loose.set(at, "yes")).toEqual({
       ok: false,
       reason: "invalid",
       code: "invalid_input",
