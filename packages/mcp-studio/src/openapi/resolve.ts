@@ -3,7 +3,9 @@
 // A parameter, a request body, a response, a path item, or a security
 // scheme is followed through its $ref chain. A schema is expanded into a
 // copy with no $ref left, because a tool's inputSchema and outputSchema
-// stand alone. Four guards keep a stranger's document from running away:
+// stand alone. Keywords beside a schema's $ref hold in addition to its
+// target, so neither replaces the other's constraints. Four guards keep a
+// stranger's document from running away:
 //
 // - A schema that refers to itself is expanded RECURSION_DEPTH times, then
 //   cut to a stub with a note.
@@ -85,6 +87,98 @@ class ExpansionBudget extends NodeBudget {
 
 function withoutRef(record: JsonRecord): JsonRecord {
   return Object.fromEntries(Object.entries(record).filter(([key]) => key !== "$ref"));
+}
+
+/**
+ * Keywords that describe a schema and constrain nothing. Beside a $ref, the
+ * author wrote one to describe this use of the target, so it replaces the
+ * target's own.
+ */
+const ANNOTATIONS = new Set([
+  "title",
+  "description",
+  "deprecated",
+  "default",
+  "examples",
+  "example",
+  "readOnly",
+  "writeOnly",
+  "$comment",
+  "externalDocs",
+  "xml",
+  "discriminator",
+]);
+
+/** Keywords that make an object refuse a property its `properties` does not name. */
+const CLOSED_KEYS = ["additionalProperties", "patternProperties", "unevaluatedProperties"] as const;
+
+function isAnnotation(key: string): boolean {
+  return ANNOTATIONS.has(key) || key.startsWith("x-");
+}
+
+function closes(schema: JsonRecord): boolean {
+  return CLOSED_KEYS.some((key) => schema[key] !== undefined);
+}
+
+/** True when both are absent, or both are records with the same names. */
+function sameNames(a: unknown, b: unknown): boolean {
+  if (a === undefined || b === undefined) return a === b;
+  if (!isRecord(a) || !isRecord(b)) return false;
+  const names = Object.keys(a);
+  return names.length === Object.keys(b).length && names.every((name) => Object.hasOwn(b, name));
+}
+
+/**
+ * True when merging the two schemas' properties into one object would change
+ * which properties it accepts. A side that refuses unnamed properties refuses
+ * them against its own `properties` only, so its list cannot grow.
+ */
+function closedMismatch(target: JsonRecord, siblings: JsonRecord): boolean {
+  const opens = (closed: JsonRecord, other: JsonRecord): boolean =>
+    closes(closed) && other.properties !== undefined && !sameNames(closed.properties, other.properties);
+  return opens(target, siblings) || opens(siblings, target);
+}
+
+function mergeProperties(inner: JsonRecord, outer: JsonRecord): JsonRecord {
+  const properties: JsonRecord = { ...inner };
+  for (const [name, schema] of Object.entries(outer)) {
+    if (!Object.hasOwn(properties, name)) setOwn(properties, name, schema);
+    else if (!deepEqual(properties[name], schema)) setOwn(properties, name, { allOf: [properties[name], schema] });
+  }
+  return properties;
+}
+
+/**
+ * A $ref's target and the keywords beside it, as one schema that holds both.
+ * OpenAPI 3.1 applies keywords beside a $ref in addition to the target, so
+ * neither replaces the other: the required lists join, the properties merge,
+ * and annotations such as description come from beside the $ref. When both
+ * set any other keyword differently, the result is an allOf of the two, which
+ * keeps every constraint exactly.
+ */
+function conjoin(target: JsonRecord, siblings: JsonRecord): JsonRecord {
+  if (closedMismatch(target, siblings)) return allOfBoth(target, siblings);
+  const merged: JsonRecord = { ...target };
+  for (const [key, value] of Object.entries(siblings)) {
+    const before = merged[key];
+    if (!Object.hasOwn(merged, key) || isAnnotation(key)) setOwn(merged, key, value);
+    else if (deepEqual(before, value)) continue;
+    else if (key === "required" && isList(before) && isList(value)) {
+      merged.required = [...before, ...value.filter((name) => !before.includes(name))];
+    } else if (key === "properties" && isRecord(before) && isRecord(value)) {
+      merged.properties = mergeProperties(before, value);
+    } else {
+      return allOfBoth(target, siblings);
+    }
+  }
+  return merged;
+}
+
+/** The target and the constraints beside its $ref as an allOf, with the annotations kept outside it. */
+function allOfBoth(target: JsonRecord, siblings: JsonRecord): JsonRecord {
+  const annotations = Object.entries(siblings).filter(([key]) => isAnnotation(key));
+  const constraints = Object.fromEntries(Object.entries(siblings).filter(([key]) => !isAnnotation(key)));
+  return { ...Object.fromEntries(annotations), allOf: [target, constraints] };
 }
 
 function refName(ref: string): string {
@@ -212,12 +306,12 @@ export class Resolver {
   }
 
   /**
-   * Follows a $ref chain to the value at its end. Each $ref's other keys
-   * merge over the value, and the outermost wins.
+   * Follows a $ref chain to the value at its end. `hops` holds each $ref's
+   * other keys, outermost first.
    */
-  private follow(value: unknown): { value: unknown; ref: string | undefined; siblings: JsonRecord } {
+  private follow(value: unknown): { value: unknown; ref: string | undefined; hops: JsonRecord[] } {
     let current = value;
-    let siblings: JsonRecord = {};
+    const hops: JsonRecord[] = [];
     let ref: string | undefined;
     const seen = new Set<string>();
     while (isRecord(current) && typeof current.$ref === "string") {
@@ -231,17 +325,23 @@ export class Resolver {
         );
       }
       seen.add(ref);
-      siblings = { ...withoutRef(current), ...siblings };
+      const siblings = withoutRef(current);
+      if (Object.keys(siblings).length > 0) hops.push(siblings);
       current = this.target(ref);
     }
-    return { value: current, ref, siblings };
+    return { value: current, ref, hops };
   }
 
-  /** A parameter, request body, response, path item, or security scheme, with its $ref chain followed. */
+  /**
+   * A parameter, request body, response, path item, or security scheme, with
+   * its $ref chain followed. A Reference Object's summary and description
+   * replace the target's, and the outermost wins.
+   */
   resolveObject(value: unknown): unknown {
     const followed = this.follow(value);
-    if (Object.keys(followed.siblings).length === 0 || !isRecord(followed.value)) return followed.value;
-    return { ...followed.value, ...followed.siblings };
+    const target = followed.value;
+    if (followed.hops.length === 0 || !isRecord(target)) return target;
+    return followed.hops.reduceRight<JsonRecord>((merged, siblings) => ({ ...merged, ...siblings }), target);
   }
 
   /** A schema as a copy with no $ref left, for one side of a call. */
@@ -260,8 +360,12 @@ export class Resolver {
   private expandRef(record: JsonRecord, direction: Direction, depth: number): unknown {
     const followed = this.follow(record);
     const ref = followed.ref as string;
-    const { value: target, siblings } = followed;
-    if (target === true) return this.expandPlain(siblings, direction, depth);
+    const target = followed.value;
+    // Each hop's keys hold in addition to everything inside it, so the fold
+    // runs from the innermost hop out, and the outermost annotation wins.
+    const inside = (start: JsonRecord): JsonRecord =>
+      followed.hops.reduceRight((schema, siblings) => conjoin(schema, siblings), start);
+    if (target === true) return this.expandPlain(inside({}), direction, depth);
     if (target === false) return { not: {} };
     if (!isRecord(target)) {
       this.noteOnce(`not-schema:${ref}`, `The $ref "${ref}" does not point at a schema, so import read it as any value.`);
@@ -282,7 +386,7 @@ export class Resolver {
     }
     this.active.set(ref, open + 1);
     try {
-      return this.expandPlain({ ...target, ...siblings }, direction, depth);
+      return this.expandPlain(inside(target), direction, depth);
     } finally {
       if (open === 0) this.active.delete(ref);
       else this.active.set(ref, open);

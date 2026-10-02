@@ -1147,6 +1147,7 @@ describe("the GitHub seam's merge-queue calls", () => {
       client: () => client,
       rest: () => rest,
       linkAccount,
+      sleep: async () => {},
     });
     const repo = await gh.resolveRepository(SCOPE);
     return { gh, repo, calls, linkAccount };
@@ -1180,7 +1181,7 @@ describe("the GitHub seam's merge-queue calls", () => {
   });
 
   it("wraps a refused REST merge as github_refused", async () => {
-    const { gh, repo } = await restSeam({
+    const { gh, repo, calls } = await restSeam({
       [`PUT ${REPO_PATH}/pulls/7/merge`]: refuse(405, "Head branch was modified"),
     });
     await expect(
@@ -1193,6 +1194,107 @@ describe("the GitHub seam's merge-queue calls", () => {
     ).rejects.toMatchObject({
       reason: "github_refused",
       message: expect.stringContaining("Head branch was modified"),
+    });
+    // Only "not mergeable" waits for GitHub; any other refusal answers at once.
+    expect(calls.map((c) => c.method)).toEqual(["PUT"]);
+  });
+
+  describe("a merge GitHub answers 'not mergeable' while it checks the new head (#5157)", () => {
+    const MERGE = `PUT ${REPO_PATH}/pulls/7/merge`;
+    const PULL = `GET ${REPO_PATH}/pulls/7`;
+    const args = { number: 7, commitTitle: "t", sha: "h1", commitMessage: "m" };
+    const pull = (mergeable: boolean | null, sha = "h1", state = "open") => ({
+      state,
+      mergeable,
+      head: { sha },
+    });
+    /** Answers each call from `answers` in turn, and the last one after that. */
+    const inTurn = (...answers: Route[]): Route => {
+      let call = 0;
+      return (body) => answers[Math.min(call++, answers.length - 1)]!(body);
+    };
+
+    it("reads the pull request until GitHub knows, then merges again", async () => {
+      const { gh, repo, calls } = await restSeam({
+        [MERGE]: inTurn(refuse(405, "Pull Request is not mergeable"), () => ({
+          sha: "sq2",
+        })),
+        [PULL]: inTurn(
+          () => pull(null),
+          () => pull(true),
+        ),
+      });
+      await expect(gh.mergePullRequest(repo, args)).resolves.toEqual({
+        sha: "sq2",
+      });
+      expect(calls.map((c) => c.method)).toEqual(["PUT", "GET", "GET", "PUT"]);
+    });
+
+    it("keeps GitHub's refusal when GitHub says the pull request can't merge", async () => {
+      const { gh, repo, calls } = await restSeam({
+        [MERGE]: refuse(405, "Pull Request is not mergeable"),
+        [PULL]: () => pull(false),
+      });
+      await expect(gh.mergePullRequest(repo, args)).rejects.toMatchObject({
+        reason: "github_refused",
+        message: expect.stringContaining("not mergeable"),
+      });
+      expect(calls.map((c) => c.method)).toEqual(["PUT", "GET"]);
+    });
+
+    it.each([
+      { name: "the head moved", answer: pull(null, "h2") },
+      { name: "the pull request closed", answer: pull(null, "h1", "closed") },
+    ])("keeps GitHub's refusal when $name", async ({ answer }) => {
+      const { gh, repo, calls } = await restSeam({
+        [MERGE]: refuse(405, "Pull Request is not mergeable"),
+        [PULL]: () => answer,
+      });
+      await expect(gh.mergePullRequest(repo, args)).rejects.toMatchObject({
+        reason: "github_refused",
+      });
+      expect(calls.map((c) => c.method)).toEqual(["PUT", "GET"]);
+    });
+
+    it("keeps GitHub's refusal when reading the pull request fails", async () => {
+      const { gh, repo, calls } = await restSeam({
+        [MERGE]: refuse(405, "Pull Request is not mergeable"),
+        [PULL]: refuse(502, "Bad Gateway"),
+      });
+      await expect(gh.mergePullRequest(repo, args)).rejects.toMatchObject({
+        reason: "github_refused",
+        message: expect.stringContaining("not mergeable"),
+      });
+      expect(calls.map((c) => c.method)).toEqual(["PUT", "GET"]);
+    });
+
+    it("stops reading after 15 reads with no answer", async () => {
+      const { gh, repo, calls } = await restSeam({
+        [MERGE]: refuse(405, "Pull Request is not mergeable"),
+        [PULL]: () => pull(null),
+      });
+      await expect(gh.mergePullRequest(repo, args)).rejects.toMatchObject({
+        reason: "github_refused",
+      });
+      expect(calls.filter((c) => c.method === "GET")).toHaveLength(15);
+      expect(calls.filter((c) => c.method === "PUT")).toHaveLength(1);
+    });
+
+    it("merges at most three times", async () => {
+      const { gh, repo, calls } = await restSeam({
+        [MERGE]: refuse(405, "Pull Request is not mergeable"),
+        [PULL]: () => pull(true),
+      });
+      await expect(gh.mergePullRequest(repo, args)).rejects.toMatchObject({
+        reason: "github_refused",
+      });
+      expect(calls.map((c) => c.method)).toEqual([
+        "PUT",
+        "GET",
+        "PUT",
+        "GET",
+        "PUT",
+      ]);
     });
   });
 

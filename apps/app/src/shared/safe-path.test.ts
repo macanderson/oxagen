@@ -5,6 +5,7 @@ import {
   readNext,
   routes,
   sanitizeNext,
+  withSteeringOutcome,
 } from "./safe-path";
 
 const ROOT = routes.root();
@@ -489,5 +490,53 @@ describe("routes", () => {
       routes.spend("acme", "core-platform", { tab: "month", by: "mcp_server" }),
     ).toBe("/acme/core-platform/spend?by=mcp_server");
     expect(() => routes.run("", "x", "arun_1")).toThrow("unsafe_path");
+  });
+});
+
+describe("steering connect outcome (#5151)", () => {
+  it("sets the outcome on a path with no query", () => {
+    expect(
+      withSteeringOutcome(sanitizeNext("/acme/core/steering", ROOT), {
+        steering: "connected",
+      }),
+    ).toBe("/acme/core/steering?steering=connected");
+    expect(
+      withSteeringOutcome(sanitizeNext("/welcome/acme/new-workspace", ROOT), {
+        steering: "error",
+        code: "store_failed",
+      }),
+    ).toBe("/welcome/acme/new-workspace?steering=error&code=store_failed");
+  });
+
+  it("keeps the path's own query and hash and replaces a stale outcome", () => {
+    expect(
+      withSteeringOutcome(
+        sanitizeNext("/acme/core/steering?tab=gates&code=old#top", ROOT),
+        { steering: "connected" },
+      ),
+    ).toBe("/acme/core/steering?tab=gates&steering=connected#top");
+  });
+
+  it("leaves the code off an error that has none", () => {
+    expect(withSteeringOutcome(ROOT, { steering: "error", code: null })).toBe(
+      "/?steering=error",
+    );
+  });
+
+  it("builds the result page's path", () => {
+    expect(routes.steeringConnectResult({ steering: "connected" })).toBe(
+      "/github/steering/result?steering=connected",
+    );
+    expect(
+      routes.steeringConnectResult({
+        steering: "error",
+        code: "github_install_requested",
+      }),
+    ).toBe(
+      "/github/steering/result?steering=error&code=github_install_requested",
+    );
+    expect(routes.steeringConnectResult({ steering: "error", code: null })).toBe(
+      "/github/steering/result?steering=error",
+    );
   });
 });
