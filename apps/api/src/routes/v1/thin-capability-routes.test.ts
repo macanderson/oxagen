@@ -520,7 +520,8 @@ const ROUTES: ThinRoute[] = [
     method: "POST",
     capability: contextProposalDismiss.name,
     body: { proposalId: "prp_1", reason: "duplicate" },
-    invalidBody: { proposalId: "prp_1" },
+    // The reason is optional (#5077), but a blank one is still refused.
+    invalidBody: { proposalId: "prp_1", reason: "" },
     status: 200,
   },
   // Workspace memories (#4912).
