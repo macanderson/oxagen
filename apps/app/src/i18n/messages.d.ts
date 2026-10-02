@@ -11562,6 +11562,7 @@ type Messages = {
       };
       weeklyAbsent: string;
       weeklyUnpriced: string;
+      weeklyUnpricedTitle: string;
       weeklyTokenCount: string;
       weeklyTokens: string;
       weeklyTitle: string;
