@@ -394,7 +394,7 @@ describe("a model call the proxy did not carry", () => {
     expectNoSources(side);
   });
 
-  it("counts steering on every name Claude Code gives its main thread", () => {
+  it("counts steering on a print-mode call and a qualified main-thread call", () => {
     const chain = withManifest();
     const sources = ["sdk", "repl_main_thread:outputStyle:Explanatory"];
     for (const [index, source] of sources.entries()) {

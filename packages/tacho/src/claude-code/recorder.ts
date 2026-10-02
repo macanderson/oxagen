@@ -97,7 +97,7 @@ const NO_SIGHTING: SightingAttrs = { attrs: {}, commit: () => {} };
 /**
  * The `query_source` values Claude Code gives a request on the session's own
  * conversation: `repl_main_thread` in the interactive terminal, and `sdk` in
- * print mode and the Agent SDK. Every other value names a side call, a
+ * print mode (`claude -p`). Every other value names a side call, a
  * compaction, or a subagent.
  */
 const MAIN_CONVERSATION_QUERY_SOURCES: ReadonlySet<string> = new Set([

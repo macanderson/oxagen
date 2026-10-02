@@ -207,8 +207,9 @@ absent member means nothing measured it. It never means zero.
 - **Steering on both paths.** Claude Code delivers steering in
   `SessionStart` context, which rides the conversation, so even the request
   cannot say which bytes are steering. The session's `steering.manifest`
-  frame can. So both paths take the steering count from the manifest, and a
-  call the proxy did not carry gets the same count a proxied call would.
+  frame can. So both paths take the steering count from the manifest. On a
+  call of the session's own conversation, a call the proxy did not carry
+  gets the same count a proxied call would.
 - **Only the session's own conversation carries steering.** Claude Code
   also makes side calls, such as a session title or a check of a Bash
   command's prefix. A side call sends a short prompt of its own, without the
@@ -222,7 +223,7 @@ absent member means nothing measured it. It never means zero.
     still takes the root session's count, as #4505 already noted.
   - An OTel `api_request` record names the subsystem that made the call in
     `query_source`. `repl_main_thread`, a value that starts
-    `repl_main_thread:`, and `sdk` (print mode and the Agent SDK) are the
+    `repl_main_thread:`, and `sdk` (print mode, `claude -p`) are the
     session's own conversation. Every other value takes no count, `compact`
     included. A record with no `query_source`, from an older Claude Code,
     cannot say which call it is, so it takes no count either.
