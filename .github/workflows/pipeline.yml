@@ -126,9 +126,10 @@ env:
   # 16 GB and take 4.
   TURBO_CONCURRENCY: ${{ vars.CI_RUNNERS == 'aws' && (vars.CI_HEAVY_POOL == 'small' && '4' || '12') || '3' }}
   # Lint and typecheck run fewer tasks at once. Their heaviest tsc and eslint
-  # scripts pin a 4 GB heap (#4990), so GitHub's 7 GB runner takes 1 and our
-  # 16 GB small runner takes 3.
-  LINT_TURBO_CONCURRENCY: ${{ vars.CI_RUNNERS == 'aws' && (vars.CI_HEAVY_POOL == 'small' && '3' || '12') || '1' }}
+  # scripts pin a 4 GB heap (#4990), and apps/app and apps/app_deprecated pin
+  # 8 GB (#5212), so GitHub's 7 GB runner takes 1 and our 16 GB small runner
+  # takes 2.
+  LINT_TURBO_CONCURRENCY: ${{ vars.CI_RUNNERS == 'aws' && (vars.CI_HEAVY_POOL == 'small' && '2' || '12') || '1' }}
   # Each Vitest process in the unit job's `rest` lane starts this many workers.
   # Vitest's default is one per core less one, so 12 processes on a 16-core
   # runner started about 180 and timed tests out (#5046). 12 processes at 2
