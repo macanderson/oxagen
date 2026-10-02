@@ -109,8 +109,9 @@ function backfillBody(
   }
   if (kind === "llm_call") return { ...body, cost_basis: "estimated" };
   return body;
-    
-/*
+}
+
+/**
  * The `query_source` values Claude Code gives a request on the session's own
  * conversation: `repl_main_thread` in the interactive terminal, and `sdk` in
  * print mode (`claude -p`). Every other value names a side call, a
