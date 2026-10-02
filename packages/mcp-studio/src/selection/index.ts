@@ -8,6 +8,8 @@ export {
   runSelection,
   SELECTION_INSTRUCTIONS,
   SELECTION_RUN_ERROR_CODES,
+  SELECTION_TASKS_MAX,
+  SELECTION_TESTS_FILE,
   selectionReplySchema,
   SelectionRunError,
   selectionTools,
