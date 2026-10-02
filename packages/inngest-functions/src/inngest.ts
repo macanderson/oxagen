@@ -44,6 +44,12 @@ type Events = {
       idempotencyKey: string;
       payload: unknown;
       receivedAt: string; // ISO-8601
+      /**
+       * True for a record read at connect time: by the initial sync, or by a
+       * poll with no saved cursor. The pipeline writes the node and sends no
+       * entity.created or entity.updated for it. Webhooks leave it unset.
+       */
+      backfill?: boolean;
     };
   };
 
