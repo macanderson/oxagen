@@ -230,9 +230,12 @@ describe.skipIf(!enabled)("send-back ports against Postgres", () => {
     expect(resolveGitHubToken).not.toHaveBeenCalled();
   });
 
-  it("resolves a work item a person entered, or one the workspace does not hold, to no collector", async () => {
+  it("resolves a work item a person entered, one the workspace does not hold, or one with no module to no collector", async () => {
     await expect(inScope(() => sendBackPorts(scope).resolve(manualItemId))).resolves.toBeNull();
     await expect(inScope(() => sendBackPorts(scope).resolve(crypto.randomUUID()))).resolves.toBeNull();
+    // A collector whose type has no registered module has nothing to write with.
+    const noModule = sendBackPorts(scope, { definition: () => undefined });
+    await expect(inScope(() => noModule.resolve(providerItemId))).resolves.toBeNull();
     const results = await inScope(() => sendBackWorkOrders([send(manualItemId, "c", "b", "a")], sendBackPorts(scope)));
     expect(results).toEqual([{ orderId, outcome: "no_collector" }]);
   });
@@ -289,23 +292,24 @@ describe.skipIf(!enabled)("send-back ports against Postgres", () => {
   });
 
   it("reads each workspace's notes only", async () => {
-    const key = { orderId, lastRunId: runId("c") };
+    const key = { orderId, lastRunId: runId("k") };
+    await inScope(() => sendBackPorts(scope).record.add(key));
     await expect(inScope(() => sendBackPorts(scope).record.has(key))).resolves.toBe(true);
     await expect(inScope(() => sendBackPorts(other).record.has(key), other)).resolves.toBe(false);
   });
 
   it("never changes a posted note", async () => {
+    const key = { orderId, lastRunId: runId("m") };
+    await inScope(() => sendBackPorts(scope).record.add(key));
     await expect(
       withSystemDb((tx) =>
         tx
           .update(schema.workSendBacks)
           .set({ lastRunId: runId("z") })
-          .where(eq(schema.workSendBacks.orgId, scope.orgId)),
+          .where(eq(schema.workSendBacks.lastRunId, key.lastRunId)),
       ),
     ).rejects.toThrow();
-    expect(await sendBackRows()).toEqual([
-      { orderId, lastRunId: runId("c") },
-      { orderId, lastRunId: runId("f") },
-    ]);
+    await expect(inScope(() => sendBackPorts(scope).record.has(key))).resolves.toBe(true);
+    await expect(inScope(() => sendBackPorts(scope).record.has({ orderId, lastRunId: runId("z") }))).resolves.toBe(false);
   });
 });

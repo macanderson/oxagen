@@ -164,8 +164,11 @@ beforeEach(() => {
 });
 
 describe("cost.work-order-send-back-hourly", () => {
-  it("runs hourly at 45 past, after the outcome refresh at 15 past", () => {
-    expect(hourly().config).toMatchObject({ id: "cost.work-order-send-back-hourly" });
+  it("runs hourly at 45 past, after the outcome refresh at 15 past, one run at a time", () => {
+    expect(hourly().config).toMatchObject({
+      id: "cost.work-order-send-back-hourly",
+      concurrency: { limit: 1 },
+    });
     expect(hourly().trigger).toEqual({ cron: "45 * * * *" });
   });
 

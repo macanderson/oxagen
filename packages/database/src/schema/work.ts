@@ -19,7 +19,7 @@
 // work.triage_corrections, work.done_verdicts, work.done_checks,
 // work.send_backs, and work.autonomy_events. The
 // migrations revoke UPDATE and DELETE from oxagen_app on each, and a trigger
-// refuses any UPDATE of a brief or a fact. work.items is soft deleted: it
+// refuses any UPDATE of a brief, a fact, a check run, or a send-back note. work.items is soft deleted: it
 // carries deleted_at and deleted_by_id, and oxagen_app has no DELETE on it. A
 // soft-deleted item keeps its number and its provider key, so a collector that
 // hears from the same provider item finds the deleted row.

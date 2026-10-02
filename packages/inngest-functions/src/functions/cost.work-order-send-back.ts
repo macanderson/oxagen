@@ -91,9 +91,17 @@ async function sendBackPass(
  * the outcome window. A pass returns counts only, because a durable step's
  * output is JSON and the finder's costs are bigints. One workspace's failed
  * pass does not stop the sweep, and the next hour retries it.
+ *
+ * One run at a time. A pass checks the record, posts the note, then records
+ * it, so two overlapping runs could both post one streak's note. The unique
+ * index would stop only the second row.
  */
 export const [costWorkOrderSendBackHourly] = createFunction(
-  { id: "cost.work-order-send-back-hourly", retries: 2 },
+  {
+    id: "cost.work-order-send-back-hourly",
+    retries: 2,
+    concurrency: { limit: 1 },
+  },
   { cron: "45 * * * *" },
   async ({ step }) => {
     const scopes = await step.run("list-workspaces", () =>
