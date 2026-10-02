@@ -56,22 +56,25 @@ sooner re-pins sooner, and that is a one-line PR.
 ## What it does not do
 
 **Pinning the workflow does not pin the script it runs.** `dod-check.yml` and
-`dod-recheck.yml` both fetch `tools/scripts/scr-dod-check.mjs` from oxagen with:
+`dod-recheck.yml` both fetch `tools/scripts/scr-dod-check.mjs` from
+`oxageninc/.github` with:
 
 ```yaml
-ref: ${{ github.repository == 'oxageninc/product' && github.sha || 'main' }}
+ref: ${{ github.repository == 'oxageninc/.github' && github.sha || 'main' }}
 ```
 
 Inside a called workflow, `github.sha` is the *caller's* commit, which does not
-exist in oxagen — so a caller always resolves `main` for the checker even when
-the workflow itself is pinned. The pin covers the steps; the logic they run
-floats.
+exist in `oxageninc/.github` — so a caller always resolves `main` for the
+checker even when the workflow itself is pinned. The pin covers the steps; the
+logic they run floats. Until 2026-10-02 the workflows and the script lived in
+oxagen and the expression named `oxageninc/product` (see the last amendment).
 
 This ADR does not fix it. Closing it means passing the intended ref in as an
 input and having every caller keep two pins in step, which trades the
 inconsistency for a bookkeeping burden that will itself drift. The exposure is
-bounded by what that file is: parsing functions with unit tests in oxagen, whose
-behaviour changing without those tests noticing is the smaller risk.
+bounded by what that file is: parsing functions with unit tests (in oxagen then,
+in `oxageninc/.github` now), whose behaviour changing without those tests
+noticing is the smaller risk.
 
 ## Consequences
 
@@ -100,3 +103,19 @@ suppression alone would leave the checker comparing the wrong fact.
 
 The checker-script exposure recorded above is unchanged: called workflows read
 Oxagen's main branch for their script, even while their workflow steps are pinned.
+
+## Amendment: the implementation moves to oxageninc/.github (2026-10-02)
+
+oxageninc/product went private on 2026-10-01. GitHub does not let a public
+repository, or one with another owner, call a private repository's reusable
+workflow, and a caller's `GITHUB_TOKEN` cannot check out its scripts. Mac
+decided on #5183 to move the three DoD workflows and the scripts they import to
+the public `oxageninc/.github`. ADR-039's last amendment records the move.
+
+This decision holds as written. Every caller pins an `oxageninc/.github`
+commit, and product is now one of five callers. `scr-corpus-check.yml` fetches
+`scr-drift-issue.mjs` from `oxageninc/.github` at the same commit as the stubs,
+so a re-pin changes both. The snippet above names the new repository.
+
+The checker-script exposure is unchanged. Called workflows read the scripts
+from `main` of `oxageninc/.github`, even while their steps are pinned.

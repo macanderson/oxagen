@@ -18,9 +18,11 @@
 #
 # ## Token
 #
-# All five repos are public today, and GITHUB_TOKEN can read public content in
-# other repositories, so no PAT is required. SCR_CORPUS_TOKEN is honoured when
-# set, for the day one of them turns private.
+# Four of the five repos are public, and GITHUB_TOKEN can read public content
+# in other repositories. The fifth is oxageninc/product, which went private on
+# 2026-10-01 and is where this runs, so its own token reads it. No PAT is
+# required. SCR_CORPUS_TOKEN is honoured when set, for the day another of them
+# turns private.
 #
 # If a repo does go private without that secret, the tree request 404s and the
 # script exits 2 — "the check could not run" — which fails this job loudly.
@@ -38,16 +40,19 @@ on:
     paths:
       - "docs/scr/**"
       - "tools/scripts/scr-corpus-check.mjs"
+      - "tools/scripts/check-dod-stub-parity.mjs"
       - ".github/workflows/scr-corpus-check.yml"
-      # The DoD caller stubs are the other thing replicated across those four
-      # repos, and they drift the same way (oxagen#2661). A change to either
-      # workflow here is usually the change the callers have to follow.
+      # The DoD caller stubs are the other thing replicated across the five
+      # repos, and they drift the same way (oxagen#2661). This repository
+      # carries the same stubs as the other four since the implementation
+      # moved to oxageninc/.github (#5183), so a change to one here is usually
+      # a re-pin the other callers have to follow.
       - ".github/workflows/dod-check.yml"
       - ".github/workflows/dod-recheck.yml"
       # The close guard is the third replicated stub and the one carrying
       # issues: write (oxagen#1336). Changing it here is exactly the moment
-      # four callers have to re-pin, so it belongs on this list for the same
-      # reason as the other two.
+      # the other callers have to re-pin, so it belongs on this list for the
+      # same reason as the other two.
       - ".github/workflows/dod-close-guard.yml"
 
 permissions:
@@ -60,6 +65,20 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
+
+      # The drift steps below import scr-drift-issue.mjs. It lives in
+      # oxageninc/.github beside scr-dod-check.mjs, which it imports (#5183).
+      # The ref is the commit the DoD caller stubs pin, so re-pin the two
+      # together. This step comes after the checkout above, which cleans the
+      # workspace.
+      - name: Fetch the SCR tooling
+        uses: actions/checkout@v5
+        with:
+          repository: oxageninc/.github
+          ref: c339971e0ad74bff568bc0ba1363ee980c296733
+          path: .scr-tools
+          sparse-checkout: tools/scripts
+          sparse-checkout-cone-mode: false
 
       - uses: actions/setup-node@v4
         with:
@@ -76,13 +95,13 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.SCR_CORPUS_TOKEN || secrets.GITHUB_TOKEN }}
         run: node tools/scripts/scr-corpus-check.mjs
 
-      # The DoD caller stubs are replicated across the same four repos, for the
-      # same reason and with the same failure mode: a fix lands here and
-      # reaches three of four. It rides this job rather than a workflow of its
-      # own because it asks the identical question of the identical repos and
-      # needs no dependencies either. It fails open on a network or rate-limit
-      # error, so a GitHub outage cannot be what blocks a merge here.
-      - name: Compare the DoD caller stubs across the four repos
+      # The DoD caller stubs are replicated across the same five repos, for the
+      # same reason and with the same failure mode: a re-pin reaches four of
+      # five. It rides this job rather than a workflow of its own because it
+      # asks the identical question of the identical repos and needs no
+      # dependencies either. It fails open on a network or rate-limit error,
+      # so a GitHub outage cannot be what blocks a merge here.
+      - name: Compare the DoD caller stubs across the five repos
         env:
           GITHUB_TOKEN: ${{ secrets.SCR_CORPUS_TOKEN || secrets.GITHUB_TOKEN }}
         run: node tools/scripts/check-dod-stub-parity.mjs
@@ -111,7 +130,7 @@ jobs:
             // The DoD comes from the tested module, so the close step below
             // can tick exactly the items a green run verifies.
             const { driftDodSection } = await import(
-              `${process.env.GITHUB_WORKSPACE}/tools/scripts/scr-drift-issue.mjs`
+              `${process.env.GITHUB_WORKSPACE}/.scr-tools/tools/scripts/scr-drift-issue.mjs`
             )
             const body = [
               MARKER,
@@ -136,7 +155,7 @@ jobs:
             // tested inline, and inline it destroyed an unrelated issue's body
             // (#2666). Search is a candidate list, never an answer.
             const { confirmMarkedIssues, decideDriftAction } = await import(
-              `${process.env.GITHUB_WORKSPACE}/tools/scripts/scr-drift-issue.mjs`
+              `${process.env.GITHUB_WORKSPACE}/.scr-tools/tools/scripts/scr-drift-issue.mjs`
             )
 
             const confirmed = await confirmMarkedIssues(
@@ -198,7 +217,7 @@ jobs:
             // candidates, and only a body that carries the marker in its prose
             // is the drift issue. An issue quoting it in backticks stays open.
             const { confirmMarkedIssues, decideCloseAction, prepareDriftClose } = await import(
-              `${process.env.GITHUB_WORKSPACE}/tools/scripts/scr-drift-issue.mjs`
+              `${process.env.GITHUB_WORKSPACE}/.scr-tools/tools/scripts/scr-drift-issue.mjs`
             )
 
             const confirmed = await confirmMarkedIssues(
