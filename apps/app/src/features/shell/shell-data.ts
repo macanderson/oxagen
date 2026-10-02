@@ -27,6 +27,12 @@ export type WorkspaceApprovals = {
   pending: Read<ApprovalQueue>;
   interjections: Read<InterjectionQueue>;
   resolved: Read<{ items: ResolvedApprovalItem[]; more: boolean }>;
+  /**
+   * The harness each agent named in these rows registered, by agent key, for
+   * the badge on the row's avatar (#4871). Empty when no row names an agent
+   * or the agents read failed; an agent missing from it draws no badge.
+   */
+  harnesses: Readonly<Record<string, string>>;
 };
 
 /**

@@ -5053,12 +5053,15 @@
       ],
       "tables": [
         "postgres:work.autonomy_events",
+        "postgres:work.briefs",
         "postgres:work.collectors",
         "postgres:work.done_records",
         "postgres:work.done_verdicts",
         "postgres:work.inbound_events",
+        "postgres:work.item_facts",
         "postgres:work.item_links",
         "postgres:work.items",
+        "postgres:work.orders",
         "postgres:work.training_exports",
         "postgres:work.triage_corrections",
         "postgres:work.triage_decisions"
@@ -15517,6 +15520,12 @@
         {
           "name": "outcome",
           "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "pause_block",
+          "nullable": true,
           "primaryKey": false,
           "type": "text"
         },
@@ -26805,6 +26814,89 @@
           "type": "uuid"
         },
         {
+          "name": "public_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "citext"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "created_by_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "item_id",
+          "nullable": false,
+          "primaryKey": false,
+          "references": "postgres:work.items",
+          "type": "uuid"
+        },
+        {
+          "name": "revision",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "item_revision",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "body",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
+          "name": "digest",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "author",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        }
+      ],
+      "domain": "work",
+      "id": "postgres:work.briefs",
+      "name": "briefs",
+      "rls": "standard",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
           "name": "org_id",
           "nullable": false,
           "primaryKey": false,
@@ -27141,6 +27233,146 @@
           "type": "timestamp with time zone"
         },
         {
+          "name": "created_by_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "item_id",
+          "nullable": false,
+          "primaryKey": false,
+          "references": "postgres:work.briefs",
+          "type": "uuid"
+        },
+        {
+          "name": "order_id",
+          "nullable": true,
+          "primaryKey": false,
+          "references": "postgres:work.orders",
+          "type": "uuid"
+        },
+        {
+          "name": "kind",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "source",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "item_revision",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "brief_id",
+          "nullable": true,
+          "primaryKey": false,
+          "references": "postgres:work.briefs",
+          "type": "uuid"
+        },
+        {
+          "name": "brief_digest",
+          "nullable": true,
+          "primaryKey": false,
+          "references": "postgres:work.briefs",
+          "type": "text"
+        },
+        {
+          "name": "repository",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "pr_number",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "head_sha",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "run_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "criterion_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "actor",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "data",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
+          "name": "occurred_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "dedupe_key",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        }
+      ],
+      "domain": "work",
+      "id": "postgres:work.item_facts",
+      "name": "item_facts",
+      "rls": "standard",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
           "name": "from_id",
           "nullable": false,
           "primaryKey": false,
@@ -27411,11 +27643,181 @@
           "nullable": true,
           "primaryKey": false,
           "type": "smallint"
+        },
+        {
+          "name": "source_repository",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "source_digest",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "material_revision",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "version",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
         }
       ],
       "domain": "work",
       "id": "postgres:work.items",
       "name": "items",
+      "rls": "standard",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "public_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "citext"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "created_by_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "item_id",
+          "nullable": false,
+          "primaryKey": false,
+          "references": "postgres:work.briefs",
+          "type": "uuid"
+        },
+        {
+          "name": "item_revision",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "send",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "brief_id",
+          "nullable": false,
+          "primaryKey": false,
+          "references": "postgres:work.briefs",
+          "type": "uuid"
+        },
+        {
+          "name": "brief_revision",
+          "nullable": false,
+          "primaryKey": false,
+          "references": "postgres:work.briefs",
+          "type": "integer"
+        },
+        {
+          "name": "brief_digest",
+          "nullable": false,
+          "primaryKey": false,
+          "references": "postgres:work.briefs",
+          "type": "text"
+        },
+        {
+          "name": "idempotency_key",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "agent_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "runtime_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "runtime_tier",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "operator_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "mandate_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "repository",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "budget_reservation_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "released_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "closed_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        }
+      ],
+      "domain": "work",
+      "id": "postgres:work.orders",
+      "name": "orders",
       "rls": "standard",
       "store": "postgres",
       "tenantScoped": true
@@ -27614,7 +28016,7 @@
         },
         {
           "name": "model",
-          "nullable": false,
+          "nullable": true,
           "primaryKey": false,
           "type": "text"
         },
@@ -27638,9 +28040,15 @@
         },
         {
           "name": "cost_usd",
-          "nullable": false,
+          "nullable": true,
           "primaryKey": false,
           "type": "numeric(12, 6)"
+        },
+        {
+          "name": "item_revision",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "integer"
         }
       ],
       "domain": "work",

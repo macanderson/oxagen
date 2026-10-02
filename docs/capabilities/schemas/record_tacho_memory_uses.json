@@ -41,6 +41,13 @@
               "minLength": 1,
               "maxLength": 1024
             },
+            "signal": {
+              "type": "string",
+              "enum": [
+                "read",
+                "citation"
+              ]
+            },
             "session_uuid": {
               "type": "string",
               "format": "uuid"

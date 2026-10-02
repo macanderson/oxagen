@@ -11,17 +11,20 @@
  * Code loads that index at every session start, and it lists every memory.
  * The queue merges reads of one file in one run, so two reads make one use
  * with a count of two, and the API keeps one use per memory, run, and signal.
+ * A Stella turn that put a memory in the prompt is a `citation` use
+ * (`./stella-memories`), queued the same way under its own signal.
  *
  * `report` runs after each memory scan. It sends the queue in calls of at
- * most `MEMORY_USES_PER_REPORT` uses, then the rise in each count a harness
- * keeps itself (Codex's `usage_count`, `./memory-counts`) in calls of at most
+ * most `MEMORY_USES_PER_REPORT` uses, reads before citations and never both
+ * in one call, then the rise in each count a harness keeps itself (Codex's
+ * `usage_count`, `./memory-counts`) in calls of at most
  * `MEMORY_COUNTS_PER_REPORT`, then the scan's lists in a call of their own,
- * so a refused list never costs a use. A use whose run the API has not
- * recorded yet comes back `pending`, and waits for the next report, for a
- * day at most. Uses still queued when the daemon stops are lost: a use is a
- * count, and losing a few between reports skews no ranking. A count's rise
- * is not queued: each report works it out again from the store until the
- * control plane takes it.
+ * so a refused citation, count, or list never costs a read. A use whose run
+ * the API has not recorded yet comes back `pending`, and waits for the next
+ * report, for a day at most. Uses still queued when the daemon stops are
+ * lost: a use is a count, and losing a few between reports skews no
+ * ranking. A count's rise is not queued: each report works it out again
+ * from the store until the control plane takes it.
  */
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import type { FetchLike } from "../../host/control-client";
@@ -167,12 +170,17 @@ export function memoryReadsOf(
   return [...files.values()];
 }
 
-/** One read the hook handler saw. */
+/** How a run used a memory, as `record_tacho_memory_uses` names it. */
+export type MemoryUseSignal = "read" | "citation";
+
+/** One read the hook handler saw, or one citation a Stella turn made. */
 export interface MemoryRead extends MemoryFile {
   /** The root session of the run that read the file. */
   sessionUuid: string;
   /** When the hook arrived, as an ISO 8601 timestamp. */
   at: string;
+  /** `read` when left out. */
+  signal?: MemoryUseSignal;
 }
 
 /** One use as the queue holds it until a report sends it. */
@@ -180,6 +188,7 @@ interface QueuedUse {
   harness: TachoHarness;
   path: string;
   sessionUuid: string;
+  signal: MemoryUseSignal;
   count: number;
   usedAt: string;
 }
@@ -203,8 +212,11 @@ export interface MemoryUsesDeps {
 }
 
 export interface MemoryUses {
-  /** Queue one read. It never waits and never throws. */
-  note: (read: MemoryRead) => void;
+  /**
+   * Queue one read. It never waits and never throws. False when the queue
+   * was full and the read was not counted.
+   */
+  note: (read: MemoryRead) => boolean;
   /**
    * Send the queued uses, then the rise in each of `counts`, then `scans`.
    * A report that overlaps one still running joins it, and that report's
@@ -225,8 +237,9 @@ type CallResult =
   | { kind: "refused"; status: number }
   | { kind: "kept" };
 
-const keyOf = (use: Pick<QueuedUse, "harness" | "path" | "sessionUuid">) =>
-  `${use.harness}\n${use.sessionUuid}\n${use.path}`;
+const keyOf = (
+  use: Pick<QueuedUse, "harness" | "path" | "sessionUuid" | "signal">,
+) => `${use.harness}\n${use.sessionUuid}\n${use.signal}\n${use.path}`;
 
 /** The later of two ISO 8601 timestamps. */
 function later(a: string, b: string): string {
@@ -347,21 +360,39 @@ export function createMemoryUses(deps: MemoryUsesDeps): MemoryUses {
   ): Promise<void> {
     if (overflowed > 0) {
       deps.log(
-        `memory uses: the queue was full, so ${overflowed} memory reads were not counted`,
+        `memory uses: the queue was full, so ${overflowed} memory uses were not counted`,
       );
       overflowed = 0;
     }
     // Taken out of the queue before the call, so a read noted while the call
-    // runs starts a new use rather than one the answer then removes.
-    const taken = [...queue.values()];
+    // runs starts a new use rather than one the answer then removes. Reads
+    // go first, and each call holds one signal.
+    const queued = [...queue.values()];
     queue.clear();
-    for (let start = 0; start < taken.length; start += MEMORY_USES_PER_REPORT) {
-      const batch = taken.slice(start, start + MEMORY_USES_PER_REPORT);
+    const taken = [
+      ...queued.filter((use) => use.signal === "read"),
+      ...queued.filter((use) => use.signal !== "read"),
+    ];
+    const batches: QueuedUse[][] = [];
+    for (const use of taken) {
+      const last = batches[batches.length - 1];
+      if (
+        last !== undefined &&
+        last.length < MEMORY_USES_PER_REPORT &&
+        last[0]?.signal === use.signal
+      )
+        last.push(use);
+      else batches.push([use]);
+    }
+    for (const [position, batch] of batches.entries()) {
       const result = await call(
         {
           uses: batch.map((use) => ({
             harness: use.harness,
             path: use.path,
+            // A read leaves its signal out, so the body stays the one an API
+            // without signals takes.
+            ...(use.signal === "read" ? {} : { signal: use.signal }),
             session_uuid: use.sessionUuid,
             count: use.count,
             used_at: use.usedAt,
@@ -372,7 +403,8 @@ export function createMemoryUses(deps: MemoryUsesDeps): MemoryUses {
       if (result.kind === "kept") {
         // Every call after this one would fail the same way, so this batch
         // and the rest wait for the next report, and so do the scans.
-        for (const use of taken.slice(start)) requeue(use);
+        for (const rest of batches.slice(position))
+          for (const use of rest) requeue(use);
         return;
       }
       if (result.kind === "refused") {
@@ -439,24 +471,27 @@ export function createMemoryUses(deps: MemoryUsesDeps): MemoryUses {
 
   return {
     note: (read) => {
-      const key = keyOf(read);
+      const signal = read.signal ?? "read";
+      const key = keyOf({ ...read, signal });
       const queued = queue.get(key);
       if (queued !== undefined) {
         queued.count = Math.min(queued.count + 1, MEMORY_USE_COUNT_MAX);
         queued.usedAt = later(queued.usedAt, read.at);
-        return;
+        return true;
       }
       if (queue.size >= MEMORY_USES_QUEUED_MAX) {
         overflowed += 1;
-        return;
+        return false;
       }
       queue.set(key, {
         harness: read.harness,
         path: read.path,
         sessionUuid: read.sessionUuid,
+        signal,
         count: 1,
         usedAt: read.at,
       });
+      return true;
     },
     report: (scans, counts) => {
       running ??= reportOnce(scans, counts)

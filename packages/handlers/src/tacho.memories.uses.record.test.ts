@@ -172,6 +172,44 @@ describe("record_tacho_memory_uses", () => {
     expect(deps.runsOf).not.toHaveBeenCalled();
   });
 
+  it("stores a Stella citation as a citation of the memory its lineage names", async () => {
+    const { deps, handler } = handlerWith();
+    const input = contract.input.parse({
+      host_enrollment_id: HOST,
+      uses: [
+        use({
+          harness: "stella",
+          path: "mem_3f9a1c0b7e2d4a5c6b8e9f01",
+          signal: "citation",
+          count: 2,
+        }),
+        use(),
+      ],
+    });
+    await expect(handler(input, ctx)).resolves.toMatchObject({
+      recorded: 2,
+      pending: [],
+    });
+    expect(deps.recordUses).toHaveBeenCalledWith(scope, [
+      {
+        capture: "local_gateway",
+        source: "stella:mem_3f9a1c0b7e2d4a5c6b8e9f01",
+        runPublicId: "tse_run1",
+        signal: "citation",
+        count: 2,
+        usedAt: new Date("2026-10-01T11:00:00.000Z"),
+      },
+      {
+        capture: "local_gateway",
+        source: `claude-code:${FILE}`,
+        runPublicId: "tse_run1",
+        signal: "read",
+        count: 1,
+        usedAt: new Date("2026-10-01T11:00:00.000Z"),
+      },
+    ]);
+  });
+
   it("answers a use whose run Oxagen has not recorded yet as pending, by its index", async () => {
     const { deps, handler } = handlerWith();
     const input = contract.input.parse({

@@ -7,6 +7,10 @@
 // key the way every Tacho control call does, then asks that the key's
 // creator still holds a role the contract grants.
 //
+// A use is a Claude Code read unless it names its signal. A Stella
+// `citation` names the memory by its lineage, so its source is
+// `stella:<lineage>`.
+//
 // A use names the run by its root session's uuid, because the host never
 // learns the `tse_…` id. The handler reads that id from tacho.sessions, for
 // this host's sessions only. A use whose session row has not landed yet comes
@@ -127,7 +131,7 @@ export function createTachoMemoryUsesRecordHandler(
         capture: "local_gateway",
         source: `${use.harness}:${use.path}`,
         runPublicId: run,
-        signal: "read",
+        signal: use.signal ?? "read",
         count: use.count,
         usedAt: usedAt > at ? at : usedAt,
       });

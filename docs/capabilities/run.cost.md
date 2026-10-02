@@ -31,6 +31,7 @@ The Run page's cost strip and Cost tab (Mission Control spec §12.6, §12.7; ADR
 | `rollup` | object or null | null until the rollup has built a row for the run, or for an id with no row in the caller's workspace |
 | `provisional` | object, null or absent | present only while `rollup` is null and the id names a wrapped session in the caller's workspace |
 | `baseline` | object or null | the agent's own recent runs, described below; null when the run names no agent, or the agent has fewer than 5 sealed runs in the window (#3984) |
+| `noProgressHits` | object[] | each loop that reached the workspace's no-progress limit, described below, in the order each reached it (#4490). Empty when none did |
 
 The rollup:
 
@@ -70,6 +71,20 @@ The rollup grades each step from what its frame recorded (ADR-199). A step is on
 - `retried`: the session's API retries, one model call each, and never more than the run's model calls.
 
 A step whose frame hides its outcome counts as advanced. Waits have no record and are not a cause. A ledger run records no read-only flag, so its repeats are not graded.
+
+A no-progress hit is one loop: the same call, with the same tool, input digest, and output digest, made again and again in a row until the count reached the workspace's limit (spend spec, detector 1). Every workspace starts at 20 calls in observe mode until its team sets its own limit. `cost.run-progress` records each loop once and raises its count as the loop grows.
+
+| Field | Type | Description |
+|---|---|---|
+| `tool` | string | the repeated call's tool |
+| `loop` | integer | 1 for the call's first loop in the run, 2 for its second |
+| `repeats` | integer | the calls in the loop so far, the first one included |
+| `limit` | integer | the limit the loop reached |
+| `atCall` | integer | the call that reached the limit, counted from 1 in the run's call order |
+| `mode` | string | `observe` records the hit and lets the run go on. `enforced` also pauses the run |
+| `outcome` | string | `paused` when an enforced limit queued a pause, which the run's host applies at the next checkpoint by refusing the agent's next governed call. `would_pause` for every observe hit, and for an enforced hit that could not pause the run |
+| `pauseBlock` | string or null | why an enforced limit could not pause the run: `run_sealed`, `no_host`, `host_revoked`, `host_offline`, `no_connection_point` (no host carries commands for the run, such as a ledger run), or `pause_unavailable` (the check had no pause path). Null on every other hit |
+| `detectedAt` | string | RFC 3339; when the loop reached the limit |
 
 The provisional figures come from `tacho.session_models` and the root session's tool-call counter. Ingest adds each counted `llm_call` frame to them as it lands, so they cover the run up to its last recorded event. The rollup replaces them once it rebuilds the run.
 

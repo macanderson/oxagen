@@ -115,6 +115,13 @@ export interface TachoPaths extends TachoHome {
    */
   memoryCounts: string;
   /**
+   * Each Stella context store the memory scan found, with the last memory use
+   * it took there, so a restart counts no use twice
+   * (`collector/memory-capture/stella-memories.ts`). Paths and numbers only,
+   * no memory text.
+   */
+  stellaMemoryCursors: string;
+  /**
    * Copies of the files that held uncommitted edits when a session first
    * read a worktree, one directory per session, so a reconciliation can
    * count only the session's lines in them (ADR-188). Never shipped, and
@@ -153,6 +160,7 @@ export const AGENT_FILES: Record<
   hookIdJournal: "hook-ids.jsonl",
   transcriptTailState: "transcript-tail.json",
   memoryCounts: "memory-counts.json",
+  stellaMemoryCursors: "stella-memory-cursors.json",
   preSessionCopies: "pre-session",
   stellaIdentity: "stella-identity",
 };

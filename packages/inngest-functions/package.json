@@ -21,7 +21,8 @@
     "./memory-runner": "./src/lib/memory-runner.ts",
     "./run-pull-request-backfill-runner": "./src/lib/run-pull-request-backfill-runner.ts",
     "./run-pr-outcomes-runner": "./src/lib/run-pr-outcomes-runner.ts",
-    "./interjection-timeout-runner": "./src/lib/interjection-timeout-runner.ts"
+    "./interjection-timeout-runner": "./src/lib/interjection-timeout-runner.ts",
+    "./no-progress-pause-runner": "./src/lib/no-progress-pause-runner.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

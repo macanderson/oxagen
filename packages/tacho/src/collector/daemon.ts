@@ -166,6 +166,11 @@ import {
   createMemoryUses,
   memoryReadsOf,
 } from "./memory-capture/memory-uses";
+import {
+  createStellaMemories,
+  fileStellaCursorStorage,
+  stellaRunsOf,
+} from "./memory-capture/stella-memories";
 import { createMachineLoop } from "./local-servers/machine";
 import { pushCredentialBasis } from "./push-basis";
 import { forgetRecallHints } from "./recall-hints";
@@ -4669,7 +4674,9 @@ async function initializeDaemon(
   // that a core capability carries no flag while Oxagen has no customers
   // (ADR-238). After each scan the daemon reports the memory files runs read
   // since the last one, and the files a complete scan found, so a memory
-  // whose file is gone retires (ADR-248).
+  // whose file is gone retires (ADR-248). Stella's memories and the turns
+  // that used them come from each Stella workspace's context store, read
+  // after the memory folders (`./memory-capture/stella-memories`).
   let memoryTimer: NodeJS.Timeout | undefined;
   if (options.listen ?? true) {
     const codexMemories = createCodexMemoryStore({
@@ -4695,9 +4702,35 @@ async function initializeDaemon(
       // same rise in Codex's counts, and the store would add both.
       stores: () => (host.harnesses.includes("codex") ? [codexMemories] : []),
     });
+    const stellaMemories =
+      memoryUses === undefined
+        ? undefined
+        : createStellaMemories({
+            runs: () => stellaRunsOf(registry.list()),
+            exists: async (path) => {
+              try {
+                return (await stat(path)).isFile();
+              } catch {
+                return false;
+              }
+            },
+            storage: fileStellaCursorStorage(paths.stellaMemoryCursors, log),
+            send: createMemoryUpload({
+              host: () => host,
+              fetch: options.fetch ?? globalThis.fetch,
+              log,
+            }),
+            uses: memoryUses,
+            log,
+            now,
+          });
     const scanMemories = (): void => {
       memoryReader
         .scan()
+        .then(async (result) => {
+          await stellaMemories?.scan();
+          return result;
+        })
         .then((result) => memoryUses?.report(result.scans, result.counts))
         .catch((error: unknown) => {
           log(

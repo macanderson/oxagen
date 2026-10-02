@@ -16,4 +16,6 @@ Every enrolled host's daemon reads the memory folders every five minutes, and no
 
 The daemon of the agent that enrolls Codex also reads Codex's store, `memories_1.sqlite` in `CODEX_HOME` (`~/.codex` by default), read-only. Each row of `stage1_outputs` is one memory: its `path` is `thread/<thread_id>`, its `statement` is the row's `description:` line, and its `label` is the row's `rollout_slug`. The rest of the row is not sent.
 
+Stella keeps its memories in each workspace's `.stella/private/context.db`. The daemon finds each workspace from the folders of the Stella runs it has seen, reads the `export_memories_v1` view there, and sends each live memory with its lineage as `path`, so its source is `stella:<lineage>`. The memory's kind, such as `reflection`, is its `memory_type`.
+
 The daemon calls `POST /v1/tacho/memories`. Each host gets 30 calls a minute on this path, separate from the command poll and the bundle refresh. See [ADR-206](../adr/ADR-206-memories-wait-in-oxagen-and-reach-a-repository-by-a-memory-pr.md), [ADR-238](../adr/ADR-238-oxagen-collects-harness-memories-and-recalls-none-of-them.md), and [ADR-248](../adr/ADR-248-memories-keep-their-rows-and-rank-by-use.md).

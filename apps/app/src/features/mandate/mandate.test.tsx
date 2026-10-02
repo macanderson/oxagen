@@ -73,9 +73,13 @@ type DetailRead = Parameters<typeof mandateSource>[0];
 async function renderMandate(
   read: DetailRead,
   query: Readonly<Record<string, string>> = {},
-  options: { mandate?: string; as?: OrgRole } = {},
+  options: {
+    mandate?: string;
+    as?: OrgRole;
+    agents?: Parameters<typeof mandateSource>[1];
+  } = {},
 ) {
-  const { source, calls } = mandateSource(read);
+  const { source, calls, agentCalls } = mandateSource(read, options.agents);
   const element = await Mandate({
     ctx: options.as === undefined ? ctx : viewer(options.as),
     source,
@@ -83,7 +87,7 @@ async function renderMandate(
     searchParams: query,
   });
   const view = render(<IntlProvider>{element}</IntlProvider>);
-  return { calls, ...view };
+  return { calls, agentCalls, ...view };
 }
 
 const movements = () => screen.getAllByTestId("ledger-movement");
@@ -203,6 +207,36 @@ describe("Mandate › loaded", () => {
       "href",
       "/a-intel/core-platform/agents/invoice-bot/permissions",
     );
+  });
+
+  // #4871: the agent named its harness nowhere on the page. Its avatar in the
+  // header and the grant now wears the harness the agent registered.
+  it("badges the agent's avatar with its registered harness, in the header and the grant", async () => {
+    const { agentCalls } = await renderMandate(mandateDetailRead());
+    // Retired agents stay in the read: retirement keeps an agent's mandates.
+    expect(agentCalls).toEqual([[ctx, { cursor: null, includeRetired: true }]]);
+    for (const where of ["mandate-agent", "mandate-grant"]) {
+      const scope = screen.getByTestId(where);
+      expect(scope.querySelector("[data-avatar]")).toHaveTextContent("IN");
+      expect(scope.querySelector("[data-harness-badge]")).toHaveAttribute(
+        "data-harness-badge",
+        "codex",
+      );
+    }
+  });
+
+  it("draws the avatar with no badge when the agents read fails, and the page still loads (negative)", async () => {
+    await renderMandate(
+      mandateDetailRead(),
+      {},
+      { agents: readError("agent_index_unavailable", 503) },
+    );
+    for (const where of ["mandate-agent", "mandate-grant"]) {
+      const scope = screen.getByTestId(where);
+      expect(scope.querySelector("[data-agent-avatar]")).not.toBeNull();
+      expect(scope.querySelector("[data-harness-badge]")).toBeNull();
+    }
+    expect(screen.getByTestId("mandate-tiles")).toBeInTheDocument();
   });
 
   it("shows the grant: the agent, who granted it, the effect, the scope and the window", async () => {
@@ -455,9 +489,13 @@ describe("Mandate › error", () => {
   });
 
   it("renders no header naming the mandate beside a body that could not load it (negative)", async () => {
-    await renderMandate(readError("mandate_ledger_unavailable", 503));
+    const { agentCalls } = await renderMandate(
+      readError("mandate_ledger_unavailable", 503),
+    );
     expect(screen.queryByRole("heading", { level: 1 })).toBeNull();
     expect(screen.queryByTestId("mandate-tiles")).toBeNull();
+    // No agent is drawn, so none is read.
+    expect(agentCalls).toEqual([]);
   });
 });
 
@@ -508,7 +546,9 @@ describe("Mandate › not found", () => {
   });
 
   it("is a 404 for an address that is not a mandate id, without reading (negative)", async () => {
-    const { source, calls } = mandateSource(readOk(mandateDetail()));
+    const { source, calls, agentCalls } = mandateSource(
+      readOk(mandateDetail()),
+    );
     await expect(
       Mandate({
         ctx,
@@ -518,6 +558,7 @@ describe("Mandate › not found", () => {
       }),
     ).rejects.toThrow("NEXT_NOT_FOUND");
     expect(calls).toEqual([]);
+    expect(agentCalls).toEqual([]);
   });
 });
 
