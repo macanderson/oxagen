@@ -106,6 +106,9 @@ describe("get_unproductive_spend headline", () => {
       readOperatorSpend: async () => ({ rows: [], partial: new Set() }),
       readOperatorFacts: async () => new Map(),
       readPolicy: async () => ({ pseudonyms: false, salt: null }),
+      readRuns: async () => [],
+      priceSegments: async () => new Map(),
+      readOrders: async () => [],
     })({ period: PERIOD }, ctx());
     expect(headline.unproductive).toEqual(ranking.unproductive);
   });
