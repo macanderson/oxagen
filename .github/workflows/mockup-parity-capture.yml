@@ -103,9 +103,6 @@ jobs:
     # in step with it.
     container:
       image: ${{ vars.CI_IMAGE_REGISTRY || 'ghcr.io/macanderson' }}/oxagen-ci-e2e:latest
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
     env:
       # next start sets NODE_ENV=production; VERCEL_ENV marks the process as
       # not a real production runtime (the e2e job says why).
