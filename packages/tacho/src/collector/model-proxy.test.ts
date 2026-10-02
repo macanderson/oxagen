@@ -3615,6 +3615,7 @@ describe("the wire and the host file", () => {
       "unbound_repo",
       "cedar",
       "skills",
+      "cache_keep_alive",
     ]);
   });
 

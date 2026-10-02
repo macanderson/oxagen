@@ -74,6 +74,22 @@ export function verifyBundle(
   }
 }
 
+/**
+ * The finding that turns the cache keep-alive on for this host's agent, or
+ * undefined when the bundle leaves it off (lane F32, decision 6 of the spend
+ * plan). The control plane signs `cache_keep_alive` only when the agent's
+ * idle cache finding shows a keep-alive costs less than the rewrites it saves
+ * and the owning team has not turned it off, so absence is the off answer:
+ * no finding, a team that turned it off, or a control plane that predates the
+ * field. The model proxy reads this on every tick, so a bundle refresh that
+ * drops the field stops the next keep-alive.
+ */
+export function cacheKeepAliveFinding(
+  bundle: Pick<PolicyBundle, "cache_keep_alive">,
+): string | undefined {
+  return bundle.cache_keep_alive?.finding_id;
+}
+
 // ---------------------------------------------------------------------------
 // Rule matching, Claude Code permission syntax
 // ---------------------------------------------------------------------------

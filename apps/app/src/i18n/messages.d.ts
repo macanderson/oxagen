@@ -669,6 +669,19 @@ type Messages = {
             open: string;
             rest: string;
           };
+          keepAlive: {
+            term: string;
+            on: string;
+            off: string;
+            onSub: string;
+            offSub: string;
+            turnOff: string;
+            turnOn: string;
+            turningOff: string;
+            turningOn: string;
+            denied: string;
+            failed: string;
+          };
         };
         composition: {
           title: string;

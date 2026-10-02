@@ -1793,6 +1793,13 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./agent.toolbelt.assign"))
         .agentToolbeltAssignHandler as CapabilityHandlerFn,
   );
+  // Lane F32: the per-agent switch for the model proxy's cache keep-alive.
+  registerHandler(
+    "set_agent_cache_keep_alive",
+    async () =>
+      (await import("./agent.cache_keep_alive.set"))
+        .agentCacheKeepAliveSetHandler as CapabilityHandlerFn,
+  );
   registerHandler(
     "create_runtime",
     async () =>

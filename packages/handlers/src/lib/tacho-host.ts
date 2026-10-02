@@ -58,6 +58,10 @@ import {
   type SteeringTx,
   type WorkspaceSteering,
 } from "./tacho-steering";
+import {
+  parsesCacheKeepAlive,
+  resolveCacheKeepAlive,
+} from "./tacho-cache-keep-alive";
 
 import {
   readTachoSessionPolicyIn,
@@ -98,6 +102,9 @@ interface TachoTx {
     // cast honest: a fake built to this interface and missing `workspaces`
     // type-checks past the cast and throws at the first call (#3710).
     workspaces: { findFirst: (args: unknown) => Promise<unknown> };
+    // The cache keep-alive's answer (lane F32, `tacho-cache-keep-alive.ts`):
+    // the agent's idle cache findings, for a host that advertised the field.
+    findings: { findMany: (args: unknown) => Promise<unknown> };
   };
   // The `unbound_repo` read (`resolveUnboundRepo`, #3941) also runs on a cast
   // to the real `Tx`, for a host that advertised the field: the head skills
@@ -416,6 +423,11 @@ export interface HostMandate {
    * advertised `BUNDLE_FEATURE_UNBOUND_REPO` whose workspace has skills on.
    */
   unboundRepo?: UnboundRepoClause;
+  /**
+   * The cache keep-alive, on for the host's agent (lane F32). Resolved only
+   * for a host that advertised `BUNDLE_FEATURE_CACHE_KEEP_ALIVE`.
+   */
+  cacheKeepAlive?: NonNullable<PolicyBundle["cache_keep_alive"]>;
 }
 
 /**
@@ -569,6 +581,8 @@ export async function resolveHostMandate(
     ? { containment: { required: true as const } }
     : {};
   const unbound = await unboundRepo(tx, ctx, host);
+  const cacheKeepAlive = await resolveCacheKeepAlive(tx, ctx, host);
+  const keepAlive = cacheKeepAlive === undefined ? {} : { cacheKeepAlive };
   try {
     const budget = deriveBundleBudget(
       await readAgentVersionBudget(tx, host.agentId),
@@ -577,7 +591,14 @@ export async function resolveHostMandate(
           host.bundleFeatures?.includes(BUNDLE_FEATURE_DAILY_BUDGET) === true,
       },
     );
-    return { permissions, budget, ...models, ...unbound, ...containment };
+    return {
+      permissions,
+      budget,
+      ...models,
+      ...unbound,
+      ...containment,
+      ...keepAlive,
+    };
   } catch (error) {
     if (!isHandlerError(error) || error.reason !== "invalid_agent_config")
       throw error;
@@ -592,6 +613,7 @@ export async function resolveHostMandate(
       ...models,
       ...unbound,
       ...containment,
+      ...keepAlive,
     };
   }
 }
@@ -703,6 +725,10 @@ export function unsignedBundle(
     // Only to a host that can parse it: the host's bundle schema is strict.
     ...(mandate.unboundRepo !== undefined && parsesUnboundRepo(host)
       ? { unbound_repo: mandate.unboundRepo }
+      : {}),
+    // The same: signed only to a host that can parse it.
+    ...(mandate.cacheKeepAlive !== undefined && parsesCacheKeepAlive(host)
+      ? { cache_keep_alive: mandate.cacheKeepAlive }
       : {}),
   };
   const etag = digestJcs(content as unknown as JsonValue).slice(

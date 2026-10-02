@@ -50,6 +50,7 @@ const {
   readAssignableRoles,
   readCostCenters,
   setAgentCostCenter,
+  setAgentCacheKeepAlive,
   requestMandate,
   retireAgent,
   revokeAgentRole,
@@ -1333,6 +1334,73 @@ describe("setAgentCostCenter", () => {
         "core-platform",
         "release-bot",
         "ENG-1001",
+      ),
+    ).toMatchObject({ ok: false, reason: "denied" });
+  });
+});
+
+describe("setAgentCacheKeepAlive", () => {
+  it("turns the keep-alive off for the agent by slug and answers the stored setting", async () => {
+    invoke.mockResolvedValue({
+      agentId: "agt_releasebot",
+      cacheKeepAlive: false,
+    });
+    expect(
+      await setAgentCacheKeepAlive(
+        "acme",
+        "core-platform",
+        " release-bot ",
+        false,
+      ),
+    ).toEqual({ ok: true, value: { cacheKeepAlive: false } });
+    expect(requireViewer).toHaveBeenCalledWith("acme", "core-platform");
+    expect(invoke).toHaveBeenCalledWith(
+      "set_agent_cache_keep_alive",
+      { agent: "release-bot", cacheKeepAlive: false },
+      expect.objectContaining(TENANT),
+    );
+  });
+
+  it("turns the keep-alive back on", async () => {
+    invoke.mockResolvedValue({
+      agentId: "agt_releasebot",
+      cacheKeepAlive: true,
+    });
+    expect(
+      await setAgentCacheKeepAlive(
+        "acme",
+        "core-platform",
+        "release-bot",
+        true,
+      ),
+    ).toEqual({ ok: true, value: { cacheKeepAlive: true } });
+    expect(invoke).toHaveBeenCalledWith(
+      "set_agent_cache_keep_alive",
+      { agent: "release-bot", cacheKeepAlive: true },
+      expect.objectContaining(TENANT),
+    );
+  });
+
+  it("refuses a blank agent before the kernel runs (negative)", async () => {
+    expect(
+      await setAgentCacheKeepAlive("acme", "core-platform", " ", false),
+    ).toEqual({
+      ok: false,
+      reason: "invalid",
+      code: "invalid_input",
+      field: "agent",
+    });
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("returns a denial as denied (negative)", async () => {
+    invoke.mockRejectedValue(denied("set_agent_cache_keep_alive"));
+    expect(
+      await setAgentCacheKeepAlive(
+        "acme",
+        "core-platform",
+        "release-bot",
+        false,
       ),
     ).toMatchObject({ ok: false, reason: "denied" });
   });

@@ -49,6 +49,7 @@ vi.mock("./actions", () => ({
   revokeAgentRole: vi.fn(),
   readCostCenters: vi.fn(),
   setAgentCostCenter: vi.fn(),
+  setAgentCacheKeepAlive: vi.fn(),
   revokeHostEnrollment: vi.fn(),
   issueAgentEnrollmentToken: vi.fn(),
   moveAgent: vi.fn(),

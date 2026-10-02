@@ -11,7 +11,9 @@
 // the rollup does record, output and reasoning, carry their figures. Coaching
 // is derived from that split, so it waits on the same gap and says so rather
 // than claiming there is nothing to change. The one exception is the cache
-// TTL, which the idle cache finding proposes from the request frames.
+// TTL, which the idle cache finding proposes from the request frames. Beside
+// it sits the agent's cache keep-alive setting (lane F32), which an org Owner
+// or Admin turns off or on from here.
 import { useLocale, useTranslations } from "next-intl";
 import type {
   AgentDetail,
@@ -26,6 +28,7 @@ import type { SteeringDeliveries } from "@/data/contracts/steering";
 import type { Read } from "@/data/read";
 import { routes } from "@/shared/safe-path";
 import { tamperOf } from "./agent-reads";
+import { KeepAliveToggle } from "./cache-keep-alive-controls";
 import { type CacheTtlAdvice, cacheTtlOf } from "./cache-ttl";
 import { Badge, type BadgeTone } from "@/ui/badge";
 import { buttonSecondary, linkText, mono } from "@/ui/control-styles";
@@ -283,15 +286,69 @@ function CacheTtlLine({
   );
 }
 
+/**
+ * Whether the gateway may keep this agent's prompt cache warm while it waits
+ * on a subagent (lane F32), with the button that changes it for a viewer who
+ * may. Another viewer sees the setting and no button.
+ */
+function KeepAliveLine({
+  org,
+  ws,
+  agentSlug,
+  on,
+  canChange,
+}: {
+  org: string;
+  ws: string;
+  agentSlug: string;
+  on: boolean;
+  canChange: boolean;
+}) {
+  const t = useTranslations("agents.detail.overview.coaching.keepAlive");
+  return (
+    <div data-testid="cache-keep-alive" data-state={on ? "on" : "off"}>
+      <Facts
+        rows={[
+          {
+            term: t("term"),
+            value: (
+              <>
+                {on ? t("on") : t("off")}
+                <Sub>{on ? t("onSub") : t("offSub")}</Sub>
+                {canChange ? (
+                  <KeepAliveToggle
+                    org={org}
+                    ws={ws}
+                    agentSlug={agentSlug}
+                    on={on}
+                  />
+                ) : null}
+              </>
+            ),
+          },
+        ]}
+      />
+    </div>
+  );
+}
+
 function Coaching({
   org,
   ws,
   agentKey,
+  agentSlug,
+  keepAlive,
+  canSetKeepAlive,
   findings,
 }: {
   org: string;
   ws: string;
   agentKey: string | null;
+  agentSlug: string;
+  /** The agent's cache keep-alive setting. */
+  keepAlive: boolean;
+  /** Whether the viewer may change it (an org Owner or Admin). */
+  canSetKeepAlive: boolean;
   findings: Read<SpendFindings> | null;
 }) {
   const t = useTranslations("agents.detail.overview.coaching");
@@ -315,6 +372,13 @@ function Coaching({
       {advice === null ? null : (
         <CacheTtlLine advice={advice} org={org} ws={ws} />
       )}
+      <KeepAliveLine
+        org={org}
+        ws={ws}
+        agentSlug={agentSlug}
+        on={keepAlive}
+        canChange={canSetKeepAlive}
+      />
       <NotBacked gap="G3">
         {advice === null ? t("notBacked") : t("ttl.rest")}
       </NotBacked>
@@ -619,6 +683,7 @@ export function Overview({
   lastRun,
   operatorName,
   place,
+  canSetKeepAlive,
 }: {
   detail: AgentDetail;
   toolbelt: Read<Toolbelt>;
@@ -632,6 +697,8 @@ export function Overview({
   lastRun: RunRow | null;
   operatorName: string | null;
   place: Place;
+  /** Whether the viewer may turn the cache keep-alive on or off (an org Owner or Admin). */
+  canSetKeepAlive: boolean;
 }) {
   const health = healthOf(detail, incidents, lastRun);
   return (
@@ -642,6 +709,9 @@ export function Overview({
           org={place.org}
           ws={place.ws}
           agentKey={detail.identity.agentKey}
+          agentSlug={detail.identity.slug}
+          keepAlive={detail.identity.cacheKeepAlive}
+          canSetKeepAlive={canSetKeepAlive}
           findings={findings}
         />
       </div>
