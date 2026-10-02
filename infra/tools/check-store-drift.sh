@@ -26,7 +26,8 @@
 #
 # HOW EACH STORE IS ASKED
 #
-# ClickHouse is asked twice, because its schema arrives two ways. `db-migrate.ts`
+# ClickHouse is asked three questions. The first two exist because its schema
+# arrives two ways, and the third, further down, checks dropped columns. `db-migrate.ts`
 # records each applied file in `<database>._migrations` (column `filename`), so
 # one question is a set difference against
 # `packages/telemetry/src/migrations/*.sql`. The second question is `system.tables`

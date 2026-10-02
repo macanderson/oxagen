@@ -51,7 +51,7 @@ repository:
 | ClickHouse dropped columns | `DROP COLUMN` in `migrations/*.sql`, less any column a later file adds back or whose table it drops | `SELECT count() FROM system.columns`, one per column, which must be 0 |
 | Neo4j | named constraints and indexes in `packages/ontology/src/schema.cypher` | `SHOW CONSTRAINTS` / `SHOW INDEXES` |
 
-ClickHouse is asked **twice** because its schema arrives two ways.
+ClickHouse is asked three questions. The first two exist because its schema arrives two ways.
 `packages/telemetry/src/migrate.ts` applies `schema.sql` on every call, outside
 the ledger, and that file holds twelve table definitions `_migrations` will
 never mention. Checking only the ledger would call a store current while most of
