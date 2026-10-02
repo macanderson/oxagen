@@ -13,7 +13,8 @@
 // triage records that on the item instead of guessing. ADR-250 records the
 // rule.
 //
-// The rules are the record's statement, numbered `1.`, `2.`, and on, each at
+// The rules are the active version's statement (or the record row's, for a
+// version the legacy publish path wrote), numbered `1.`, `2.`, and on, each at
 // the start of a line (@oxagen/work priorityCites).
 import { createHash } from "node:crypto";
 import { schema, type Tx } from "@oxagen/database";
@@ -74,6 +75,7 @@ export async function readPriorities(tx: Tx, scope: WorkScope): Promise<Prioriti
       version: versions.versionNumber,
       checksum: versions.checksum,
       statement: versions.statement,
+      recordStatement: records.statement,
       body: versions.body,
       publishedAt: versions.publishedAt,
     })
@@ -92,7 +94,9 @@ export async function readPriorities(tx: Tx, scope: WorkScope): Promise<Prioriti
   if (rows.length > 1) return { kind: "ambiguous", lineages: rows.map((row) => String(row.lineage)).sort() };
   const row = rows[0]!;
   const lineage = String(row.lineage).toLowerCase();
-  const body = row.statement ?? row.body;
+  // A version the legacy publish path wrote carries no statement of its own,
+  // and the record row holds it then.
+  const body = row.statement ?? row.recordStatement ?? row.body;
   return {
     kind: "found",
     record: {
