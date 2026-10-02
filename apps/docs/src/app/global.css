@@ -118,7 +118,7 @@
    their aside. Fumadocs sets the nav title link to a fixed 15px by hand
    (text-[0.9375rem]) in the sidebar and leaves it at the page's 16px in the
    docs header, so neither followed the theme. The ox-nav-title class is set
-   in src/lib/layout.shared.tsx. */
+   in src/components/docs/nav-title.tsx. */
 #nd-sidebar,
 #nd-sidebar-mobile,
 #toc-title,
