@@ -481,8 +481,10 @@ parts above.
   pools had taken that quota. Its scale-up failed with `VcpuLimitExceeded`
   161 times in four hours, and `deploy oxagen.sh` waited a median 8.1 minutes
   for a runner, against 0.1 before. `max_runners` in `terraform.tfvars` now
-  caps the CI pools at 496 vCPUs combined (22 large, 36 small). That leaves
-  96 on-demand vCPUs for the deploy pool and 8 for production.
+  caps the CI pools at 496 vCPUs combined (22 large, 36 small). While spot
+  is at its quota, that leaves 96 on-demand vCPUs for the deploy pool and 8
+  for production. When spot capacity runs short instead, CI can take more
+  on-demand and the reserve shrinks.
 - **Build lanes on the small pool.** The three `build` lanes move to
   `oxagen-small-<arch>`. Each finished in under 2 minutes on a 16-vCPU runner
   and in 2 to 3 minutes on a 4-vCPU one, well inside `unit (app)`. Each move
