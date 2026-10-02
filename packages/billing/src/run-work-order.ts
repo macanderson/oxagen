@@ -20,11 +20,13 @@
  * run's row. The direct work order stays, unattached, and no spend points at
  * it.
  *
- * Everything here runs on the system connection with explicit org and
- * workspace predicates, as the rest of the rollup does.
+ * The rollup runs outside a tenant scope, so each read and write here opens
+ * the run's own tenant scope and goes through withTenantDb, where the work
+ * records live. Every query also names the run's org and workspace.
  */
-import { schema, withSystemDb } from "@oxagen/database";
+import { schema, withTenantDb, type Tx } from "@oxagen/database";
 import { readRunWorkOrderClaims } from "@oxagen/telemetry";
+import { runInTenantScope } from "@oxagen/tenancy";
 import { and, asc, eq, or } from "drizzle-orm";
 import type { RunMeta } from "./cost-rollup";
 
@@ -72,10 +74,13 @@ const agents = schema.agents;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/** Run fn in the run's own tenant scope. */
+function inRunScope<T>(scope: Scope, fn: (tx: Tx) => Promise<T>): Promise<T> {
+  return runInTenantScope({ orgId: scope.orgId, workspaceId: scope.workspaceId }, () => withTenantDb(fn));
+}
+
 async function readLinkedSend(scope: Scope, runId: string): Promise<string | null> {
-  // tenancy: the rollup runs outside a tenant scope, so the read names the
-  // run's org and workspace.
-  const rows = await withSystemDb((tx) =>
+  const rows = await inRunScope(scope, (tx) =>
     tx
       .select({ orderId: facts.orderId })
       .from(facts)
@@ -108,9 +113,7 @@ async function verifyClaim(scope: Scope, claim: string, agentPrincipalId: string
   const named = UUID.test(claim)
     ? or(eq(orders.publicId, claim), eq(orders.id, claim))
     : eq(orders.publicId, claim);
-  // tenancy: the rollup runs outside a tenant scope, so the read names the
-  // run's org and workspace on the send and on the agent it went to.
-  const rows = await withSystemDb((tx) =>
+  const rows = await inRunScope(scope, (tx) =>
     tx
       .select({ id: orders.id })
       .from(orders)
@@ -129,10 +132,9 @@ async function verifyClaim(scope: Scope, claim: string, agentPrincipalId: string
 }
 
 async function openDirectOrder(meta: RunMeta): Promise<string> {
-  // tenancy: the rollup runs outside a tenant scope. The row carries the
-  // run's own org and workspace, and a run's public id is unique across
-  // tenants, so the conflict target finds only this run's row.
-  return withSystemDb(async (tx) => {
+  // A run's public id is unique across tenants, so the conflict target finds
+  // only this run's row.
+  return inRunScope(meta, async (tx) => {
     const [opened] = await tx
       .insert(directOrders)
       .values({
