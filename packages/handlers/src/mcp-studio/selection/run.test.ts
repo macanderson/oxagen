@@ -274,12 +274,12 @@ describe("run_studio_selection runs the folder's selection tests", () => {
       basis: "published",
       revision: null,
       model: "fast-model",
-      counts: { total: 2, hits: 2, misses: 0, malformed: 0, skipped: 0, notRun: 0 },
+      counts: { total: 2, hits: 2, misses: 0, malformed: 0, skipped: 0, errors: 0, notRun: 0 },
       cases: [
         { line: 1, task: REFUND_TASK, expected: REFUND, status: "hit", chosen: REFUND },
         { line: 2, task: CHARGES_TASK, expected: CHARGES, status: "hit", chosen: CHARGES },
       ],
-      stoppedAtDeadline: false,
+      stopped: null,
     });
     expect(toolStudioSelectionRun.output.parse(out)).toStrictEqual(out);
     expect(r.fake.requests.map((request) => request.task)).toStrictEqual([REFUND_TASK, CHARGES_TASK]);
@@ -326,7 +326,7 @@ describe("run_studio_selection runs the folder's selection tests", () => {
     const r = rig({ tree, model: model.model });
     const out = await r.run();
 
-    expect(out.counts).toStrictEqual({ total: 7, hits: 2, misses: 3, malformed: 1, skipped: 1, notRun: 0 });
+    expect(out.counts).toStrictEqual({ total: 7, hits: 2, misses: 3, malformed: 1, skipped: 1, errors: 0, notRun: 0 });
     expect(out.cases.map((entry) => [entry.line, entry.status])).toStrictEqual([
       [1, "hit"],
       [2, "miss"],
@@ -388,7 +388,7 @@ describe("run_studio_selection runs the folder's selection tests", () => {
     const out = await r.run();
 
     expect(out.model).toBeNull();
-    expect(out.counts).toStrictEqual({ total: 1, hits: 0, misses: 0, malformed: 0, skipped: 1, notRun: 0 });
+    expect(out.counts).toStrictEqual({ total: 1, hits: 0, misses: 0, malformed: 0, skipped: 1, errors: 0, notRun: 0 });
     expect(r.fake.requests).toHaveLength(0);
   });
 
@@ -532,6 +532,33 @@ describe("run_studio_selection and a failed model call", () => {
     await expect(r.run()).rejects.toBe(failure);
     expect(model.requests).toHaveLength(SELECTION_CONCURRENCY);
   });
+
+  it("returns the answers that came back before a failure, with the failed task marked error", async () => {
+    const tasks = refundTasks(SELECTION_CONCURRENCY + 2);
+    const failing = tasks[1]?.task;
+    const model = fakeModel((request) => {
+      if (request.task === failing) throw new Error("The provider answered 503.");
+      return { tool: REFUND };
+    });
+    const r = rig({ tree: withSelection(tasks), model: model.model });
+
+    const out = await r.run();
+
+    expect(out.stopped).toBe("model_failed");
+    expect(out.cases[1]).toStrictEqual({
+      line: 2,
+      task: failing,
+      expected: REFUND,
+      status: "error",
+      reason: "The model call failed: The provider answered 503.",
+    });
+    const others = out.cases.filter((entry) => entry.line !== 2);
+    expect(others.every((entry) => entry.status === "hit" || entry.status === "not_run")).toBe(true);
+    expect(out.counts.errors).toBe(1);
+    expect(out.counts.hits).toBeGreaterThan(0);
+    expect(out.counts.hits + out.counts.errors + out.counts.notRun).toBe(tasks.length);
+    expect(toolStudioSelectionRun.output.parse(out)).toStrictEqual(out);
+  });
 });
 
 // ── The deadline ─────────────────────────────────────────────────────────────
@@ -564,13 +591,14 @@ describe("run_studio_selection at its deadline", () => {
     const out = await run;
 
     expect(model.peak()).toBe(SELECTION_CONCURRENCY);
-    expect(out.stoppedAtDeadline).toBe(false);
+    expect(out.stopped).toBeNull();
     expect(out.counts).toStrictEqual({
       total: SELECTION_TASKS_MAX,
       hits: SELECTION_TASKS_MAX,
       misses: 0,
       malformed: 0,
       skipped: 0,
+      errors: 0,
       notRun: 0,
     });
     expect(model.requests).toHaveLength(SELECTION_TASKS_MAX);
@@ -586,7 +614,7 @@ describe("run_studio_selection at its deadline", () => {
     const out = await run;
 
     const answered = 4 * SELECTION_CONCURRENCY;
-    expect(out.stoppedAtDeadline).toBe(true);
+    expect(out.stopped).toBe("deadline");
     expect(out.model).toBe("slow-model");
     expect(out.counts).toStrictEqual({
       total: SELECTION_TASKS_MAX,
@@ -594,6 +622,7 @@ describe("run_studio_selection at its deadline", () => {
       misses: 0,
       malformed: 0,
       skipped: 0,
+      errors: 0,
       notRun: SELECTION_TASKS_MAX - answered,
     });
     expect(out.cases.slice(0, answered).every((entry) => entry.status === "hit")).toBe(true);

@@ -92,6 +92,11 @@
             "type": "integer",
             "minimum": 0
           },
+          "errors": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 0
+          },
           "notRun": {
             "type": "integer",
             "minimum": 0,
@@ -183,6 +188,7 @@
                   "enum": [
                     "malformed",
                     "skipped",
+                    "error",
                     "not_run"
                   ]
                 },
@@ -202,9 +208,20 @@
           ]
         }
       },
-      "stoppedAtDeadline": {
-        "type": "boolean",
-        "default": false
+      "stopped": {
+        "anyOf": [
+          {
+            "type": "string",
+            "enum": [
+              "deadline",
+              "model_failed"
+            ]
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null
       }
     },
     "required": [

@@ -23,4 +23,5 @@ export {
   type SelectionReport,
   type SelectionRequest,
   type SelectionRunErrorCode,
+  type SelectionStop,
 } from "./selection";

@@ -15,8 +15,10 @@ import { studioServerNameSchema } from "./tool.studio.draft.save";
  * Studio shows them, draft edits included. It reads tests/selection.jsonl
  * from the production branch, because Review does not write that file.
  *
- * The run asks a few tasks at once. At its deadline it returns the tasks that
- * finished, marks the rest not_run, and sets stoppedAtDeadline (#5171).
+ * The run asks a few tasks at once. When it reaches its deadline, or a model
+ * call fails, it starts no more tasks and returns every task that finished,
+ * so the answers already billed are never lost. A failed task is error, each
+ * task it did not ask is not_run, and stopped says why (#5171).
  */
 
 const taskSchema = {
@@ -41,8 +43,8 @@ export const studioSelectionCaseSchema = z.union([
   }),
   z.object({
     ...taskSchema,
-    /** malformed: the reply could not be read, or named a tool the server does not offer. skipped: the task expects a tool the server does not offer, so the run did not ask. not_run: the run reached its deadline before the model answered. */
-    status: z.enum(["malformed", "skipped", "not_run"]),
+    /** malformed: the reply could not be read, or named a tool the server does not offer. skipped: the task expects a tool the server does not offer, so the run did not ask. error: the model call failed, and reason holds the provider's code and message. not_run: the run stopped before the model answered. */
+    status: z.enum(["malformed", "skipped", "error", "not_run"]),
     reason: z.string(),
   }),
 ]);
@@ -79,20 +81,27 @@ export const toolStudioSelectionRun = registerCapability({
     revision: z.number().int().min(1).nullable(),
     /** The model the run asked, or null when it asked nothing. */
     model: z.string().nullable(),
-    /** How many tasks came out each way. hits, misses, malformed, skipped, and notRun add up to total. */
+    /** How many tasks came out each way. hits, misses, malformed, skipped, errors, and notRun add up to total. */
     counts: z.object({
       total: z.number().int().min(0),
       hits: z.number().int().min(0),
       misses: z.number().int().min(0),
       malformed: z.number().int().min(0),
       skipped: z.number().int().min(0),
-      /** Tasks the run did not finish before its deadline. Defaults to 0, so an output from before #5171 still parses. */
+      /** Tasks whose model call failed. Defaults to 0, so an output from before #5171 still parses. */
+      errors: z.number().int().min(0).default(0),
+      /** Tasks the run did not ask because it stopped early. Defaults to 0, so an output from before #5171 still parses. */
       notRun: z.number().int().min(0).default(0),
     }),
     /** One result per task, in the order of tests/selection.jsonl. */
     cases: z.array(studioSelectionCaseSchema),
-    /** True when the run reached its deadline before every task finished. Each task it did not finish is not_run. */
-    stoppedAtDeadline: z.boolean().default(false),
+    /**
+     * Why the run stopped before it asked every task, or null when it asked
+     * them all. deadline: it reached its deadline. model_failed: a model call
+     * failed, so it started no more tasks. Defaults to null, so an output from
+     * before #5171 still parses.
+     */
+    stopped: z.enum(["deadline", "model_failed"]).nullable().default(null),
   }),
 });
 

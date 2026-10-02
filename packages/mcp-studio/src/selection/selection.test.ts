@@ -193,7 +193,7 @@ describe("runSelection", () => {
         chosen: test.expect,
       })),
     );
-    expect(report.counts).toStrictEqual({ total: 2, hits: 2, misses: 0, malformed: 0, skipped: 0, notRun: 0 });
+    expect(report.counts).toStrictEqual({ total: 2, hits: 2, misses: 0, malformed: 0, skipped: 0, errors: 0, notRun: 0 });
     expect(fake.requests.map((request) => request.task)).toStrictEqual(tests.map((test) => test.task));
     for (const request of fake.requests) {
       expect(request.instructions).toBe(SELECTION_INSTRUCTIONS);
@@ -208,7 +208,7 @@ describe("runSelection", () => {
     const report = await runSelection(TOOLS, [{ task, expect: REFUND }], fake.model);
 
     expect(report.cases).toStrictEqual([{ line: 1, task, expected: REFUND, status: "miss", chosen: CHARGES }]);
-    expect(report.counts).toStrictEqual({ total: 1, hits: 0, misses: 1, malformed: 0, skipped: 0, notRun: 0 });
+    expect(report.counts).toStrictEqual({ total: 1, hits: 0, misses: 1, malformed: 0, skipped: 0, errors: 0, notRun: 0 });
   });
 
   it("counts a no-tool answer as a miss when a tool fits and as a hit when none does", async () => {
@@ -229,7 +229,7 @@ describe("runSelection", () => {
       { line: 2, task: haiku, expected: null, status: "hit", chosen: null },
       { line: 3, task: joke, expected: null, status: "miss", chosen: REFUND },
     ]);
-    expect(report.counts).toStrictEqual({ total: 3, hits: 1, misses: 2, malformed: 0, skipped: 0, notRun: 0 });
+    expect(report.counts).toStrictEqual({ total: 3, hits: 1, misses: 2, malformed: 0, skipped: 0, errors: 0, notRun: 0 });
   });
 
   it.each([
@@ -254,7 +254,7 @@ describe("runSelection", () => {
         reason: "The model's reply is not { tool: <name or null> }, so the run could not tell which tool it picked.",
       },
     ]);
-    expect(report.counts).toStrictEqual({ total: 1, hits: 0, misses: 0, malformed: 1, skipped: 0, notRun: 0 });
+    expect(report.counts).toStrictEqual({ total: 1, hits: 0, misses: 0, malformed: 1, skipped: 0, errors: 0, notRun: 0 });
   });
 
   it("reports a reply that names a tool the server does not offer as malformed", async () => {
@@ -291,7 +291,7 @@ describe("runSelection", () => {
         reason: `The server does not offer ${NOT_OFFERED}, so the run did not ask the model. Import the tool, or correct the task's expect.`,
       },
     ]);
-    expect(report.counts).toStrictEqual({ total: 1, hits: 0, misses: 0, malformed: 0, skipped: 1, notRun: 0 });
+    expect(report.counts).toStrictEqual({ total: 1, hits: 0, misses: 0, malformed: 0, skipped: 1, errors: 0, notRun: 0 });
   });
 
   it("counts each task once, and the counts add up to the total", async () => {
@@ -327,7 +327,7 @@ describe("runSelection", () => {
       [7, "skipped"],
       [8, "hit"],
     ]);
-    expect(report.counts).toStrictEqual({ total: 8, hits: 3, misses: 2, malformed: 2, skipped: 1, notRun: 0 });
+    expect(report.counts).toStrictEqual({ total: 8, hits: 3, misses: 2, malformed: 2, skipped: 1, errors: 0, notRun: 0 });
     const { total, ...parts } = report.counts;
     expect(Object.values(parts).reduce((sum, count) => sum + count, 0)).toBe(total);
     expect(fake.requests).toHaveLength(7);
@@ -340,8 +340,8 @@ describe("runSelection", () => {
 
     expect(report).toStrictEqual({
       cases: [],
-      counts: { total: 0, hits: 0, misses: 0, malformed: 0, skipped: 0, notRun: 0 },
-      stopped: false,
+      counts: { total: 0, hits: 0, misses: 0, malformed: 0, skipped: 0, errors: 0, notRun: 0 },
+      stopped: null,
     });
     expect(fake.requests).toHaveLength(0);
   });
@@ -394,6 +394,7 @@ describe("runSelection", () => {
       misses: 0,
       malformed: 0,
       skipped: 0,
+      errors: 0,
       notRun: 0,
     });
     expect(fake.requests).toHaveLength(SELECTION_TASKS_MAX);
@@ -418,9 +419,9 @@ describe("runSelection", () => {
     expect(fake.requests).toHaveLength(0);
   });
 
-  it("starts no task after a failed model call, lets the calls already out finish, and keeps them", async () => {
+  it("starts no task after a failed model call, and returns every task that finished", async () => {
     vi.useFakeTimers();
-    const failure = new Error("The provider answered 503.");
+    const failure = Object.assign(new Error("The provider answered 503."), { code: "provider_unavailable" });
     const cases = refundTasks(SELECTION_CONCURRENCY + 2);
     const failing = cases[1]?.task;
     const fake = delayedModel(
@@ -431,26 +432,81 @@ describe("runSelection", () => {
       },
     );
 
-    const run = rejection(runSelection(TOOLS, cases, fake.model));
+    const run = runSelection(TOOLS, cases, fake.model);
     await vi.advanceTimersByTimeAsync(1_000);
-    const error = await run;
+    const report = await run;
 
-    expect(error).toBeInstanceOf(SelectionRunError);
-    expect(error).toMatchObject({
-      code: "model_failed",
-      line: 2,
-      message: `The model call for task 2 failed, so the run stopped with ${SELECTION_CONCURRENCY - 1} of ${cases.length} tasks finished.`,
-    });
-    expect((error as SelectionRunError).cause).toBe(failure);
-    // The calls out when task 2 failed still finished, and the run kept them.
-    expect((error as SelectionRunError).completed.map((result) => [result.line, result.status])).toStrictEqual(
-      Array.from({ length: SELECTION_CONCURRENCY }, (_, index) => [index + 1, "hit"]).filter(([line]) => line !== 2),
+    expect(report.stopped).toBe("model_failed");
+    // The calls out when task 2 failed still finished, and the run kept them:
+    // each one is a billed answer.
+    expect(report.cases.map((result) => [result.line, result.status])).toStrictEqual(
+      cases.map((_, index) => {
+        const line = index + 1;
+        if (line === 2) return [line, "error"];
+        return [line, line <= SELECTION_CONCURRENCY ? "hit" : "not_run"];
+      }),
     );
+    expect(report.cases[1]).toStrictEqual({
+      line: 2,
+      task: failing,
+      expected: REFUND,
+      status: "error",
+      reason: "The model call failed (provider_unavailable): The provider answered 503.",
+    });
+    expect(report.counts).toStrictEqual({
+      total: cases.length,
+      hits: SELECTION_CONCURRENCY - 1,
+      misses: 0,
+      malformed: 0,
+      skipped: 0,
+      errors: 1,
+      notRun: cases.length - SELECTION_CONCURRENCY,
+    });
     // No task after the first round was asked.
     expect(fake.requests).toHaveLength(SELECTION_CONCURRENCY);
   });
 
-  it("stops after the first round when every call fails, and names the first task", async () => {
+  it("keeps a malformed answer that came back before a failure, because it was billed", async () => {
+    vi.useFakeTimers();
+    const cases = refundTasks(2);
+    const fake = delayedModel(
+      (request) => (request.task === cases[0]?.task ? 100 : 500),
+      (request) => {
+        if (request.task === cases[1]?.task) throw new Error("The provider answered 500.");
+        return { pick: REFUND };
+      },
+    );
+
+    const run = runSelection(TOOLS, cases, fake.model);
+    await vi.advanceTimersByTimeAsync(500);
+    const report = await run;
+
+    expect(report.stopped).toBe("model_failed");
+    expect(report.cases.map((result) => result.status)).toStrictEqual(["malformed", "error"]);
+  });
+
+  it("clips a long provider message in a failed task's reason", async () => {
+    vi.useFakeTimers();
+    const cases = refundTasks(2);
+    const fake = delayedModel(
+      (request) => (request.task === cases[0]?.task ? 100 : 500),
+      (request) => {
+        if (request.task === cases[1]?.task) throw new Error("x".repeat(2_000));
+        return { tool: REFUND };
+      },
+    );
+
+    const run = runSelection(TOOLS, cases, fake.model);
+    await vi.advanceTimersByTimeAsync(500);
+    const failed = (await run).cases[1];
+
+    expect(failed?.status).toBe("error");
+    expect(failed !== undefined && "reason" in failed ? failed.reason : "").toBe(
+      `The model call failed: ${"x".repeat(500)}...`,
+    );
+  });
+
+  it("throws when every call fails, because no task has an answer to report", async () => {
     const failure = new Error("The provider answered 503.");
     const fake = fakeModel(() => {
       throw failure;
@@ -458,9 +514,35 @@ describe("runSelection", () => {
 
     const error = await rejection(runSelection(TOOLS, refundTasks(SELECTION_CONCURRENCY + 3), fake.model));
 
-    expect(error).toMatchObject({ code: "model_failed", line: 1, completed: [] });
+    expect(error).toBeInstanceOf(SelectionRunError);
+    expect(error).toMatchObject({
+      code: "model_failed",
+      line: 1,
+      message: "The model call for task 1 failed, and no task got an answer, so the run has no result to report.",
+    });
     expect((error as SelectionRunError).cause).toBe(failure);
+    expect((error as SelectionRunError).completed.every((result) => result.status === "error")).toBe(true);
     expect(fake.requests).toHaveLength(SELECTION_CONCURRENCY);
+  });
+
+  it("throws when the only finished tasks are skipped ones, because the model answered nothing", async () => {
+    const fake = fakeModel(() => {
+      throw new Error("The provider answered 401.");
+    });
+
+    const error = await rejection(
+      runSelection(
+        TOOLS,
+        [
+          { task: "void", expect: NOT_OFFERED },
+          { task: "refund", expect: REFUND },
+        ],
+        fake.model,
+      ),
+    );
+
+    expect(error).toMatchObject({ code: "model_failed", line: 2 });
+    expect((error as SelectionRunError).completed.map((result) => result.status)).toStrictEqual(["skipped", "error"]);
   });
 });
 
@@ -484,8 +566,8 @@ describe("runSelection asks several tasks at once", () => {
 
     expect(fake.peak()).toBe(SELECTION_CONCURRENCY);
     expect(fake.requests.map((request) => request.task)).toStrictEqual(cases.map((test) => test.task));
-    expect(report.stopped).toBe(false);
-    expect(report.counts).toStrictEqual({ total: cases.length, hits: cases.length, misses: 0, malformed: 0, skipped: 0, notRun: 0 });
+    expect(report.stopped).toBeNull();
+    expect(report.counts).toStrictEqual({ total: cases.length, hits: cases.length, misses: 0, malformed: 0, skipped: 0, errors: 0, notRun: 0 });
   });
 
   it("starts a new task when any call answers, not when a whole round does", async () => {
@@ -539,7 +621,7 @@ describe("runSelection asks several tasks at once", () => {
     const report = await run;
 
     expect(deadline.aborted).toBe(false);
-    expect(report.stopped).toBe(false);
+    expect(report.stopped).toBeNull();
     expect(report.counts.hits).toBe(SELECTION_TASKS_MAX);
     expect(fake.peak()).toBe(SELECTION_CONCURRENCY);
   });
@@ -556,13 +638,14 @@ describe("runSelection at its deadline", () => {
     await vi.advanceTimersByTimeAsync(1_500);
     const report = await run;
 
-    expect(report.stopped).toBe(true);
+    expect(report.stopped).toBe("deadline");
     expect(report.counts).toStrictEqual({
       total: cases.length,
       hits: SELECTION_CONCURRENCY,
       misses: 0,
       malformed: 0,
       skipped: 0,
+      errors: 0,
       notRun: cases.length - SELECTION_CONCURRENCY,
     });
     expect(report.cases.slice(0, SELECTION_CONCURRENCY).every((result) => result.status === "hit")).toBe(true);
@@ -592,7 +675,7 @@ describe("runSelection at its deadline", () => {
     await vi.advanceTimersByTimeAsync(1_000);
     const report = await run;
 
-    expect(report.stopped).toBe(true);
+    expect(report.stopped).toBe("deadline");
     expect(report.cases.map((result) => result.status)).toStrictEqual(["hit", "not_run"]);
   });
 
@@ -605,7 +688,7 @@ describe("runSelection at its deadline", () => {
 
     const report = await runSelection(TOOLS, refundTasks(1), fake.model, controller.signal);
 
-    expect(report.stopped).toBe(true);
+    expect(report.stopped).toBe("deadline");
     expect(report.cases).toStrictEqual([
       { line: 1, task: "Refund charge ch_1.", expected: REFUND, status: "not_run", reason: NOT_RUN_REASON },
     ]);
@@ -627,12 +710,12 @@ describe("runSelection at its deadline", () => {
     );
 
     expect(fake.requests).toHaveLength(0);
-    expect(report.stopped).toBe(true);
+    expect(report.stopped).toBe("deadline");
     expect(report.cases.map((result) => [result.line, result.status])).toStrictEqual([
       [1, "not_run"],
       [2, "skipped"],
     ]);
-    expect(report.counts).toStrictEqual({ total: 2, hits: 0, misses: 0, malformed: 0, skipped: 1, notRun: 1 });
+    expect(report.counts).toStrictEqual({ total: 2, hits: 0, misses: 0, malformed: 0, skipped: 1, errors: 0, notRun: 1 });
   });
 
   it("reports a run that finished before the signal aborted as finished", async () => {
@@ -642,7 +725,7 @@ describe("runSelection at its deadline", () => {
     const report = await runSelection(TOOLS, refundTasks(2), fake.model, controller.signal);
     controller.abort();
 
-    expect(report.stopped).toBe(false);
+    expect(report.stopped).toBeNull();
     expect(report.counts.notRun).toBe(0);
   });
 });

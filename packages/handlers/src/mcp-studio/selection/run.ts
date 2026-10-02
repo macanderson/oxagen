@@ -12,10 +12,10 @@
 //      once, and reports each hit and miss. runSelection refuses more than
 //      SELECTION_TASKS_MAX tasks before the model resolves, so an over-cap
 //      file spends nothing.
-//   4. Stops at SELECTION_RUN_DEADLINE_MS. It starts no new task, cuts off the
-//      calls still out, and returns the tasks that finished, with the rest
-//      marked not_run and stoppedAtDeadline set (#5171). A person sees each
-//      answer that came back before the deadline.
+//   4. Stops at SELECTION_RUN_DEADLINE_MS, or at the first failed model call.
+//      It starts no new task and returns every task that finished, with a
+//      failed task marked error, the rest marked not_run, and stopped saying
+//      why (#5171). A person sees each answer the workspace paid for.
 //
 // Only a person starts a run. No schedule, compile check, or webhook calls
 // this handler, because every task is a billed model call. It writes nothing
@@ -89,8 +89,9 @@ async function readSelectionTests(
 
 /**
  * The refusal a person reads for a run that failed, or the error itself when
- * it is an outage. The deadline is not a failure: runSelection returns the
- * tasks that finished.
+ * it is an outage. Neither the deadline nor a failed call is a failure here
+ * when a task got an answer: runSelection returns the tasks that finished. It
+ * throws model_failed only when no task got one.
  */
 function failed(error: unknown, server: string): unknown {
   if (!(error instanceof SelectionRunError)) return error;
@@ -138,7 +139,7 @@ export function createRunStudioSelectionHandler(
       model: model.modelId(),
       counts: report.counts,
       cases: report.cases,
-      stoppedAtDeadline: report.stopped,
+      stopped: report.stopped,
     };
   };
 }
