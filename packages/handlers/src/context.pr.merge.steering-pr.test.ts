@@ -345,6 +345,99 @@ describe("merge_context_pr on a steering PR proposal", () => {
     expect(h.events.map((e) => e.eventType)).toContain("steering.published");
   });
 
+  it("finishes a merge an earlier call claimed and landed, and merges nothing twice", async () => {
+    const h = steeringHarness();
+    const opened = await openSteeringPr(h, TOOLS_PULL_REQUEST, {
+      branch: "tools/billing",
+      path: TOOLS_FILE,
+      content: await toolsText(h),
+    });
+    const row = rowFor(h, opened.number);
+    // An earlier call claimed the row and the host merged the PR. That call
+    // failed before the row moved to merged.
+    row.mergeClaimedAt = new Date("2026-09-26T11:59:00.000Z");
+    const mergeSha = h.github.mergeOnHost(opened.number);
+    const s = seams();
+
+    const out = await createMergeContextPrHandler(h, s)(
+      { proposalId: row.publicId },
+      ctx({ userId: REVIEWER }),
+    );
+
+    expect(out).toMatchObject({ kind: "tools", mergedCommit: mergeSha, retired: [] });
+    // The resume lands nothing again and runs no checks on a merged PR.
+    expect(h.github.merges).toEqual([]);
+    expect(s.checked).toEqual([]);
+    expect(rowFor(h, opened.number)).toMatchObject({
+      status: "merged",
+      mergedCommit: mergeSha,
+      mergedByUserId: REVIEWER,
+    });
+  });
+
+  it("brings a branch that fell behind up to date and runs the steering checks again on the new head", async () => {
+    const h = steeringHarness();
+    const opened = await openSteeringPr(h, TOOLS_PULL_REQUEST, {
+      branch: "tools/billing",
+      path: TOOLS_FILE,
+      content: await toolsText(h),
+    });
+    h.github.commit(
+      REPO.defaultBranch,
+      "steering/platform/release-notes.md",
+      "Every release has notes.\n",
+    );
+    const s = seams();
+
+    const out = await createMergeContextPrHandler(h, s)(
+      { proposalId: rowFor(h, opened.number).publicId },
+      ctx({ userId: REVIEWER }),
+    );
+
+    expect(out.kind).toBe("tools");
+    expect(h.github.updates).toEqual([
+      expect.objectContaining({ branch: "tools/billing" }),
+    ]);
+    // Once on the head the row named, once on the head the update made.
+    expect(s.checked).toHaveLength(2);
+    expect(s.checked[0]).toBe(opened.headSha);
+    expect(s.checked[1]).not.toBe(opened.headSha);
+    expect(rowFor(h, opened.number).status).toBe("merged");
+  });
+
+  it("records checks_failed and merges nothing when the checks fail on the updated head (negative)", async () => {
+    const h = steeringHarness();
+    const opened = await openSteeringPr(h, TOOLS_PULL_REQUEST, {
+      branch: "tools/billing",
+      path: TOOLS_FILE,
+      content: await toolsText(h),
+    });
+    h.github.commit(
+      REPO.defaultBranch,
+      "steering/platform/release-notes.md",
+      "Every release has notes.\n",
+    );
+    let calls = 0;
+    const s: Seams = {
+      ...seams(),
+      steeringCheck: async () => (++calls === 1 ? passed() : failed()),
+    };
+
+    await expect(
+      createMergeContextPrHandler(h, s)(
+        { proposalId: rowFor(h, opened.number).publicId },
+        ctx({ userId: REVIEWER }),
+      ),
+    ).rejects.toMatchObject({ code: "conflict", reason: "checks_failed" });
+
+    expect(calls).toBe(2);
+    expect(h.github.merges).toEqual([]);
+    expect(rowFor(h, opened.number)).toMatchObject({
+      status: "checks_failed",
+      mergeClaimedAt: null,
+    });
+  });
+
   it("refuses the author's own merge in team mode, as for a record", async () => {
     const h = steeringHarness();
     const opened = await openSteeringPr(h, TOOLS_PULL_REQUEST, {
@@ -616,6 +709,30 @@ describe("a revert steering PR", () => {
       revert(h)({ proposalId }, ctx({ userId: OWNER })),
     ).rejects.toMatchObject({ code: "conflict", reason: "lineage_pr_open" });
     expect(h.github.pulls).toHaveLength(pulls);
+  });
+
+  it("reverts a revision, which puts the earlier file back and retires nothing", async () => {
+    const h = steeringHarness();
+    await mergedRecord(h);
+    const { proposalId: revision } = await createProposeRecordHandler(h)(
+      proposalInput("Read CHANGELOG.md once per run, then use the cached copy."),
+      ctx(),
+    );
+    await createOpenContextPrHandler(h)({ proposalId: revision }, ctx());
+    await createMergeContextPrHandler(h)({ proposalId: revision }, ctx({ userId: REVIEWER }));
+    const record = h.store.records.find((r) => r.slug === LINEAGE);
+
+    const reverted = await revert(h)({ proposalId: revision }, ctx({ userId: OWNER }));
+    const out = await createMergeContextPrHandler(h, seams())(
+      { proposalId: reverted.revertProposalId! },
+      ctx({ userId: REVIEWER }),
+    );
+
+    expect(out).toMatchObject({ kind: "revert", retired: [] });
+    expect(await h.github.readFile(REPO, record?.path ?? "", "main")).toContain(
+      "Do not re-read CHANGELOG.md more than once in a run.",
+    );
+    expect(h.store.records.find((r) => r.slug === LINEAGE)?.status).toBe("active");
   });
 
   it("reverts a merged tools PR on a revert branch of its own, and retires nothing", async () => {

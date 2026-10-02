@@ -42,7 +42,6 @@ type Check = ContextPr["checks"][number];
 /** The signed-in person the close comment names. */
 export type Closer = { name: string; email: string };
 
-/** Every check reported, none failed, and nothing merged yet. */
 /** The statuses a steering PR merges from: its merge runs the steering checks first (#5122). */
 const STEERING_PR_MERGEABLE: ReadonlySet<string> = new Set([
   "pr_open",
@@ -51,6 +50,11 @@ const STEERING_PR_MERGEABLE: ReadonlySet<string> = new Set([
   "checks_failed",
 ]);
 
+/**
+ * Whether Merge is offered. Nothing merged yet, and then: a steering PR in a
+ * status its merge starts from, or a record PR whose every check reported and
+ * passed.
+ */
 function canMerge(pr: ContextPr): boolean {
   if (pr.merged !== null) return false;
   if (isSteeringPrKind(pr.kind)) return STEERING_PR_MERGEABLE.has(pr.status);

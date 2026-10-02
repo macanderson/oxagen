@@ -28,7 +28,7 @@ import type { StudioSource } from "@oxagen/oxagen/contracts/tool.studio.draft.sa
 import { CREDENTIAL_REF_PREFIX } from "@oxagen/oxagen/steering-repo/names";
 import { serverFolderPath } from "@oxagen/oxagen/steering-repo/paths";
 import type { SteeringRepository } from "../../context.steering.github";
-import { authorOf } from "../../steering-repo/pr-proposal";
+import { actingAuthor } from "../../steering-repo/pr-proposal";
 import {
   TOOLS_BRANCH_PREFIX,
   toolsPullRequestOpener,
@@ -142,7 +142,7 @@ export function createOpenStudioReviewHandler(
       body: reviewBody(folder, draft.revision),
       commitMessage: reviewCommitMessage(folder, draft.revision),
       // The PR's proposal row names the person who opened the Review (#5122).
-      author: authorOf(ctx),
+      author: await actingAuthor(ctx),
     } satisfies Omit<ToolsPullRequestArgs, "files">;
 
     // An open PR on the branch gets a commit against the branch's files, read

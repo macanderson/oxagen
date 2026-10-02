@@ -12,7 +12,7 @@ import {
 } from "@oxagen/oxagen/contracts/steering.memories.promote";
 import { assertContractRole } from "./lib/capability-role-guard";
 import type { PromoteDeps } from "./memory/promote";
-import { authorOf } from "./steering-repo/pr-proposal";
+import { actingAuthor } from "./steering-repo/pr-proposal";
 
 /** The deps a call runs with. A function, so each call gets a fresh steering host. */
 export type SteeringMemoriesPromoteDeps = () => Promise<PromoteDeps>;
@@ -50,7 +50,7 @@ export function createSteeringMemoriesPromoteHandler(
     const result = await promoteMemories(await deps(), scope, {
       drafts: input.drafts,
       sameText: input.same_text,
-      author: authorOf(ctx),
+      author: await actingAuthor(ctx),
     });
     return {
       pull_request: result.pullRequest,
