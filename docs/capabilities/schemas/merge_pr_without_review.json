@@ -218,6 +218,92 @@
           "publishedVersion"
         ],
         "additionalProperties": false
+      },
+      {
+        "type": "object",
+        "properties": {
+          "proposalId": {
+            "type": "string"
+          },
+          "status": {
+            "const": "merged"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "revert",
+              "tools",
+              "import",
+              "memory_pr",
+              "agent_file",
+              "agent_proposal"
+            ]
+          },
+          "pullRequest": {
+            "type": "object",
+            "properties": {
+              "number": {
+                "type": "integer",
+                "exclusiveMinimum": 0
+              },
+              "branch": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "number",
+              "branch"
+            ],
+            "additionalProperties": false
+          },
+          "retired": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "mergedCommit": {
+            "type": "string"
+          },
+          "bundleVersion": {
+            "type": "object",
+            "properties": {
+              "before": {
+                "type": "integer"
+              },
+              "after": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "before",
+              "after"
+            ],
+            "additionalProperties": false
+          },
+          "publishedVersion": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "proposalId",
+          "status",
+          "kind",
+          "pullRequest",
+          "retired",
+          "mergedCommit",
+          "bundleVersion",
+          "publishedVersion"
+        ],
+        "additionalProperties": false
       }
     ]
   }

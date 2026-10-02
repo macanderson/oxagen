@@ -10,9 +10,10 @@
  *   - a client for the MCP gateway, which calls tools as an enrolled agent
  *   - a client for the sample servers' control port (mcp-studio-servers.ts)
  *
- * Two steps have no Oxagen capability yet. `mergeSteeringPullRequest` (#5122)
- * and `publishAgentFile` (#5149) fail with the issue's number, so the run
- * stops there and says why. Neither works around the gap.
+ * `mergeSteeringPullRequest` merges a steering PR through the proposal row its
+ * opener wrote (#5122). One step has no Oxagen capability yet:
+ * `publishAgentFile` (#5149) fails with the issue's number, so the run stops
+ * there and says why. It does not work around the gap.
  *
  * Like the steering rig, it never prints a secret: the upstream token, the
  * relay token, and the gateway key stay out of every error message.
@@ -21,6 +22,7 @@ import { generateKeyPairSync } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { z } from "zod";
 import type { AgentApprovalListOutput } from "@oxagen/oxagen/contracts/agent.approval.list";
+import type { ContextProposalListOutput } from "@oxagen/oxagen/contracts/context.proposal.list";
 import type { RuntimeListItem } from "@oxagen/oxagen/contracts/runtime.list";
 import type { SteeringMarkdownImportCommitOutput } from "@oxagen/oxagen/contracts/steering.markdown_import.commit";
 import type { SteeringMarkdownImportParseOutput } from "@oxagen/oxagen/contracts/steering.markdown_import.parse";
@@ -38,6 +40,7 @@ import {
   type GithubRig,
   HttpError,
   MCP_STUDIO_SUITE,
+  mergeSteeringPr,
   MINUTE,
   newestRun,
   type Oxagen,
@@ -399,6 +402,17 @@ const policyRow = z.looseObject({
 
 const importParsed = z.object({ policies: z.array(policyRow) });
 
+/** The open proposals, each with the steering PR it carries. */
+const openProposals = z.object({
+  proposals: z.array(
+    z.object({
+      id: z.string(),
+      kind: z.string(),
+      pr: z.object({ number: z.number().int(), branch: z.string() }).nullable(),
+    }),
+  ),
+});
+
 const importCommitted = z.object({
   pullRequest: z
     .object({ number: z.number().int(), url: z.string(), branch: z.string(), headSha: z.string() })
@@ -423,6 +437,7 @@ export type StudioContractFit = [
   Assert<Fits<AgentApprovalListOutput, z.output<typeof approvalsListed>>>,
   Assert<Fits<SteeringMarkdownImportParseOutput, z.output<typeof importParsed>>>,
   Assert<Fits<SteeringMarkdownImportCommitOutput, z.output<typeof importCommitted>>>,
+  Assert<Fits<ContextProposalListOutput, z.output<typeof openProposals>>>,
 ];
 
 function path(settings: Settings, rest: string): string {
@@ -556,33 +571,48 @@ export async function openPolicyPr(ox: Oxagen, settings: Settings) {
   return committed.pullRequest;
 }
 
-// ── Steps with no capability yet ─────────────────────────────────────────────
+// ── Steering PRs ─────────────────────────────────────────────────────────────
 
-/** A steering PR that has no proposal row: a Studio Review, a sync, or a Markdown import. */
+/** A steering PR the suite merges: a Studio Review, a sync, a Markdown import, or an agent file. */
 export interface BarePullRequest {
   number: number;
   headSha: string;
 }
 
+/** The open proposal that carries steering PR `number`, or null when none does. */
+async function openProposalFor(ox: Oxagen, settings: Settings, number: number) {
+  const listed = await ox.call(
+    "POST",
+    path(settings, "/context/proposals"),
+    { state: "open", limit: 200 },
+    openProposals,
+  );
+  return listed.proposals.find((p) => p.pr?.number === number) ?? null;
+}
+
 /**
- * Merges a steering PR that has no proposal row. Oxagen has no capability for
- * this yet: `merge_context_pr` takes only a proposal id (#5122). A merge made
- * on GitHub leaves `main` with a commit Oxagen did not merge, so the steering
- * repo reads diverged and nothing publishes. The suite stops here instead.
- * When #5122 lands, call its capability here and return the version it
- * published.
+ * Merges a steering PR through Oxagen. Each opener writes a proposal row for
+ * the PR it opens (#5122), so the suite finds the row by the PR's number and
+ * calls `merge_context_pr` with it. The merge runs the steering checks on the
+ * PR's head, lands it through the merge queue, and answers the steering
+ * version it published.
  */
-export function mergeSteeringPullRequest(
-  _ox: Oxagen,
-  _settings: Settings,
+export async function mergeSteeringPullRequest(
+  ox: Oxagen,
+  settings: Settings,
   pr: BarePullRequest,
 ): Promise<{ publishedVersion: number | null }> {
-  return Promise.reject(
-    new Error(
-      `Oxagen cannot merge steering PR #${String(pr.number)} yet: no capability merges a steering PR that has no proposal (#5122). A merge on GitHub would leave the steering repo diverged, so the suite stops here.`,
-    ),
-  );
+  const proposal = await openProposalFor(ox, settings, pr.number);
+  if (proposal === null) {
+    throw new Error(
+      `No open proposal in workspace ${settings.runSlug} carries steering PR #${String(pr.number)}. Its opener writes one when it opens the PR, so read the API log for a "proposal row was not written" error.`,
+    );
+  }
+  const merged = await mergeSteeringPr(ox, settings, proposal.id);
+  return { publishedVersion: merged.publishedVersion };
 }
+
+// ── Steps with no capability yet ─────────────────────────────────────────────
 
 /**
  * Publishes `agents/<AGENT_NAME>.toml` for the run's runtime, which the MCP

@@ -12,6 +12,7 @@ import {
 } from "@oxagen/oxagen/contracts/steering.memories.promote";
 import { assertContractRole } from "./lib/capability-role-guard";
 import type { PromoteDeps } from "./memory/promote";
+import { authorOf } from "./steering-repo/pr-proposal";
 
 /** The deps a call runs with. A function, so each call gets a fresh steering host. */
 export type SteeringMemoriesPromoteDeps = () => Promise<PromoteDeps>;
@@ -19,16 +20,22 @@ export type SteeringMemoriesPromoteDeps = () => Promise<PromoteDeps>;
 /** The steering host and the two Postgres memory stores, loaded on the first call. */
 export const defaultSteeringMemoriesPromoteDeps: SteeringMemoriesPromoteDeps =
   async () => {
-    const [{ createSteeringHost }, { postgresMemoryStore }, { postgresWorkspaceMemoryStore }] =
-      await Promise.all([
-        import("./context.steering.host"),
-        import("./memory/store"),
-        import("./memory/workspace-store"),
-      ]);
+    const [
+      { createSteeringHost },
+      { postgresMemoryStore },
+      { postgresWorkspaceMemoryStore },
+      { postgresSteeringStore },
+    ] = await Promise.all([
+      import("./context.steering.host"),
+      import("./memory/store"),
+      import("./memory/workspace-store"),
+      import("./context.steering.store"),
+    ]);
     return {
       host: createSteeringHost(),
       store: postgresMemoryStore,
       workspace: postgresWorkspaceMemoryStore,
+      proposals: postgresSteeringStore,
       now: () => new Date(),
     };
   };
@@ -43,6 +50,7 @@ export function createSteeringMemoriesPromoteHandler(
     const result = await promoteMemories(await deps(), scope, {
       drafts: input.drafts,
       sameText: input.same_text,
+      author: authorOf(ctx),
     });
     return {
       pull_request: result.pullRequest,

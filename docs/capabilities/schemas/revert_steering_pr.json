@@ -103,13 +103,24 @@
             "type": "null"
           }
         ]
+      },
+      "revertProposalId": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
       }
     },
     "required": [
       "proposalId",
       "reverted",
       "pullRequest",
-      "check"
+      "check",
+      "revertProposalId"
     ],
     "additionalProperties": false
   }

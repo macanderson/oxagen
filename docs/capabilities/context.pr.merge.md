@@ -45,6 +45,27 @@ In a steering repository under `team` or `regulated`, `set_governance_mode` reco
 
 The repository sync does not yet record a governance PR merged outside Oxagen, and leaves its proposal open (#4795).
 
+### A steering PR proposal
+
+Every steering PR Oxagen opens carries a proposal row ([ADR-264](../adr/ADR-264-every-steering-pr-oxagen-opens-carries-a-proposal-row.md), #5122). Its kind names the PR:
+
+| kind | the PR |
+| --- | --- |
+| `revert` | the PR [`revert_steering_pr`](context.pr.revert.md) opens |
+| `tools` | a `tools/` PR from Studio's Review, the server sync, or the server folder writer |
+| `import` | the Markdown import's `steering/import-<date>` PR |
+| `memory_pr` | a `memory/<date>` PR from the curator or [`promote_memories`](steering.memories.promote.md) |
+| `agent_file` | the PR that adds `agents/<name>.toml` when a host enrolls |
+| `agent_proposal` | the PR an agent opens with `propose_steering` |
+
+The row's lineage is the PR's branch, and its path is the folder every changed file sits under. A revert of a record PR takes the record's lineage and path instead. This capability lands the PR through the same queue, reviewer rule, claim, approvals, stamp, and trailers as a record, with these differences:
+
+- The merge starts from any open status, because it runs the steering checks itself. It runs them on the head the row names against the production branch, reports the "Oxagen steering" check, and runs them again after each update the queue makes. A failure marks the proposal `checks_failed`, refuses `checks_failed`, and merges nothing.
+- The merge reads no record body, so it never refuses `record_file_missing`. The commit title is `steering: merge <branch> (#n)`. Once merged, publish() makes the production branch the next steering version, and the call emits `steering.published`.
+- A merged revert retires each registry record whose file it deleted. The record's status becomes `retired` at the merge commit, and a `retire` promotion event joins its chain with the merger as approver. A revert that restores an earlier version of a file leaves the registry as it is.
+- A PR someone merged on the host carries no merge claim, so the call asks the repository sync to read it and refuses `merged_outside_oxagen`.
+- Only a steering repository merges one. A legacy repository refuses `steering_repo_required`.
+
 A merged `must` or `should` record reaches agents through the signed policy bundle: it is compiled into `context.system`, which changes the bundle etag, so every enrolled host in the workspace fetches it on its next poll (ADR-091). Delivery into context frames (spec §10.4) is not built yet.
 
 ## Input
@@ -78,6 +99,19 @@ A governance proposal answers the governance arm:
 | `bundleVersion` | `{ before, after }` | Equal, because the merge appends no ledger entry |
 | `publishedVersion` | `number` or `null` | As in the record arm |
 
+A steering PR proposal answers the steering PR arm:
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `proposalId` | `string` | |
+| `status` | `"merged"` | |
+| `kind` | `revert`, `tools`, `import`, `memory_pr`, `agent_file`, or `agent_proposal` | |
+| `pullRequest` | `{ number, branch }` | The PR that merged |
+| `retired` | `string[]` | The lineages of the records a revert retired. Empty for every other merge |
+| `mergedCommit` | `string` | |
+| `bundleVersion` | `{ before, after }` | They differ by the number of retired records, one ledger entry each |
+| `publishedVersion` | `number` or `null` | As in the record arm |
+
 ## Errors
 
 | code | reason | meaning |
@@ -91,5 +125,6 @@ A governance proposal answers the governance arm:
 | `forbidden` | `approval_required` | Outside `solo` mode no approval stands at the head that merges, and the merger is not an owner and does not hold `merge_pr_without_review`. Nothing merges. |
 | `conflict` | `merge_time_unknown` | The merge landed on GitHub and GitHub did not say when, so the publication would have to guess the instant `latestPublication` orders by. Nothing is published, the proposal stays `checks_passed`, and the next call resumes the merge GitHub holds and publishes it. |
 | `conflict` | `governance_invalid` / `governance_file_missing` / `checks_failed` / `layout_changed` | A governance proposal only. The file at the head is not governance/v1 or is gone, the steering checks failed, or the production branch no longer holds `steering/governance.toml`. Nothing merges. Set the mode again. |
+| `conflict` | `checks_failed` / `steering_repo_required` / `merged_outside_oxagen` | A steering PR proposal only. The steering checks failed on the head, and the "Oxagen steering" check on the PR holds the report; the repository is not a steering repository; or someone merged the PR on the host. Nothing merges. |
 | `forbidden` | `review_required` | A governance proposal only. No approval stands, and the merger would otherwise land it without review, or the call is `merge_pr_without_review`. Nothing merges. |
 | `forbidden` | `no_principal` / `org_role_required` / `separation_of_duties` | `no_principal` before anything is read (an API key); the rest is the governance mode's reviewer rule. |

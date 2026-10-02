@@ -87,7 +87,13 @@
                 "fact",
                 "memory",
                 "preference",
-                "governance"
+                "governance",
+                "revert",
+                "tools",
+                "import",
+                "memory_pr",
+                "agent_file",
+                "agent_proposal"
               ]
             },
             "force": {

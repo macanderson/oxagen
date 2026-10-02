@@ -12,10 +12,11 @@
  * test keeps state in the module that a later test needs: each one reads
  * what it needs back from Oxagen or from the sample servers' control port.
  *
- * Two steps wait on Oxagen capabilities that do not exist yet: merging a
- * steering PR that has no proposal (#5122), and publishing an agent file
- * (#5149). The rig fails each with the issue's number, so until both land the
- * run stops at the first merge and every later test names what it missed.
+ * Every steering PR the suite opens merges through the proposal row its opener
+ * wrote (#5122). One step waits on an Oxagen capability that does not exist
+ * yet: publishing an agent file (#5149). The rig fails it with the issue's
+ * number, so until it lands the run stops there and every later test names
+ * what it missed.
  */
 import { expect, test } from "@playwright/test";
 import {

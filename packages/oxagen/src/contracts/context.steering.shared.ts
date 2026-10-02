@@ -19,17 +19,59 @@ export const recordKindSchema = z.enum([
 export type RecordKind = z.infer<typeof recordKindSchema>;
 
 /**
- * What a proposal asks to change: a record of one of the six kinds, or the
- * steering repository's governance mode (#4795). A governance proposal is the
- * review-route PR `set_governance_mode` opens on `steering/governance`. It
- * changes `steering/governance.toml` and publishes no record, so every reader
- * of a record keeps `RecordKind` and never sees `governance`.
+ * The steering PRs Oxagen opens that change files rather than one record
+ * (#5122, ADR-264). Each one carries a proposal row of its kind, so
+ * merge_context_pr lands it through the merge queue like a record PR.
+ *
+ * - `revert`: the PR revert_steering_pr opens to undo a merged steering PR.
+ * - `tools`: a tools/ PR from Studio's Review, the server sync (M10), or the
+ *   server folder writer (M13).
+ * - `import`: the Markdown import's steering/import-<date> PR.
+ * - `memory_pr`: the memory PR on memory/<date>, from the curator or from a
+ *   person promoting memories. `memory` alone is the record kind.
+ * - `agent_file`: the PR that adds agents/<name>.toml when a host enrolls (#5149).
+ * - `agent_proposal`: the PR an agent opens with propose_steering (#5134).
+ */
+export const steeringPrKindSchema = z.enum([
+  "revert",
+  "tools",
+  "import",
+  "memory_pr",
+  "agent_file",
+  "agent_proposal",
+]);
+export type SteeringPrKind = z.infer<typeof steeringPrKindSchema>;
+
+/**
+ * What a proposal asks to change: a record of one of the six kinds, the
+ * steering repository's governance mode (#4795), or the files of one steering
+ * PR (#5122). A governance proposal is the review-route PR
+ * `set_governance_mode` opens on `steering/governance`. It changes
+ * `steering/governance.toml` and publishes no record. A steering PR proposal
+ * publishes no single record either. Every reader of a record keeps
+ * `RecordKind`, and `isRecordKind` tells a record proposal from the rest.
  */
 export const proposalKindSchema = z.enum([
   ...recordKindSchema.options,
   "governance",
+  ...steeringPrKindSchema.options,
 ]);
 export type ProposalKind = z.infer<typeof proposalKindSchema>;
+
+const RECORD_KINDS: ReadonlySet<string> = new Set(recordKindSchema.options);
+const STEERING_PR_KINDS: ReadonlySet<string> = new Set(
+  steeringPrKindSchema.options,
+);
+
+/** True for a proposal that publishes one record: one of the six record kinds. */
+export function isRecordKind(kind: string): kind is RecordKind {
+  return RECORD_KINDS.has(kind);
+}
+
+/** True for a proposal that carries a steering PR's files rather than one record. */
+export function isSteeringPrKind(kind: string): kind is SteeringPrKind {
+  return STEERING_PR_KINDS.has(kind);
+}
 
 /**
  * The lineage every governance proposal shares. The open-PR index allows one

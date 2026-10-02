@@ -336,7 +336,8 @@ const mergeFacts = {
 };
 
 // The merge answers a union on `kind`: a governance proposal carries the mode
-// it landed, and every record kind carries its record (#4795, ADR-232).
+// it landed, every record kind carries its record (#4795, ADR-232), and a
+// steering PR proposal carries its pull request (#5122, ADR-264).
 const mergeResult = z.union([
   z.object({
     ...mergeFacts,
@@ -347,6 +348,12 @@ const mergeResult = z.union([
     ...mergeFacts,
     kind: z.string(),
     record: z.object({ lineageId: z.string(), version: z.number().int(), path: z.string() }),
+  }),
+  z.object({
+    ...mergeFacts,
+    kind: z.string(),
+    pullRequest: z.object({ number: z.number().int(), branch: z.string() }),
+    retired: z.array(z.string()),
   }),
 ]);
 

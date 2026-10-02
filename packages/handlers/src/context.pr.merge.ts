@@ -64,6 +64,16 @@
 // merge_pr_without_review lands one without review: Apply now is the recorded
 // override. The output is the governance arm of the union on `kind`.
 //
+// A steering PR proposal (#5122, ADR-264) is a revert, tools, Markdown import,
+// memory, agent file, or agent proposal PR that its opener recorded. It lands
+// through the same queue, reviewer rule, claim, stamp, trailers, and
+// approvals, with three differences. The merge runs the steering checks on
+// the PR's head itself, so it starts from any open status. It reads no record
+// body: the PR's files are on the production branch once it merges, and
+// publish() makes them the next steering version. A merged revert retires
+// each registry record whose file it deleted. A PR merged on the host without
+// a claim is refused `merged_outside_oxagen`, as a governance PR is.
+//
 // One window stays open: a crash or a timeout after the stamp merged and
 // before the row moved to the stamp commit leaves the row at the checked
 // head. Once the claim lapses, the next call reads a merged PR at another
@@ -79,9 +89,13 @@ import {
   type ContextPrMergeOutput,
 } from "@oxagen/oxagen/contracts/context.pr.merge";
 import { contextPrMergeWithoutReview } from "@oxagen/oxagen/contracts/context.pr.merge_without_review";
-import type {
-  GovernanceMode,
-  RecordKind,
+import {
+  isRecordKind,
+  isSteeringPrKind,
+  type GovernanceMode,
+  type ProposalStatus,
+  type RecordKind,
+  type SteeringPrKind,
 } from "@oxagen/oxagen/contracts/context.steering.shared";
 import { readTomlFile } from "@oxagen/oxagen/steering-repo/files";
 import {
@@ -166,11 +180,11 @@ export interface MergeSeams {
    */
   publisher?: (scope: Scope, host: SteeringHost) => SteeringPublisher;
   /**
-   * The steering checks a governance proposal runs on its head at merge
-   * time and after each update (#4795). A governance merge refuses to start
-   * without it.
+   * The steering checks a governance or steering PR proposal runs on its
+   * head at merge time and after each update (#4795, #5122). Either merge
+   * refuses to start without it.
    */
-  governanceCheck?: SteeringGovernanceSeams["check"];
+  steeringCheck?: SteeringGovernanceSeams["check"];
 }
 
 /** A proposal row whose pull request is recorded, so it can merge. */
@@ -181,6 +195,19 @@ type RecordedRow = ProposalRow & {
   path: string;
   headSha: string;
 };
+
+/**
+ * The statuses a steering PR proposal merges from (#5122). Its merge runs the
+ * steering checks on the PR's head itself, so the status its opener left is
+ * not the gate. `checks_running` is here because only a merge runs them, and
+ * a merge that stopped partway leaves it.
+ */
+const STEERING_PR_MERGEABLE: readonly ProposalStatus[] = [
+  "pr_open",
+  "checks_running",
+  "checks_passed",
+  "checks_failed",
+];
 
 function mergeable(row: ProposalRow | null, proposalId: string): RecordedRow {
   if (!row) {
@@ -197,7 +224,10 @@ function mergeable(row: ProposalRow | null, proposalId: string): RecordedRow {
       message: `${row.prUrl ?? row.publicId} is already merged`,
     });
   }
-  if (row.status !== "checks_passed") {
+  const ready = isSteeringPrKind(row.kind)
+    ? STEERING_PR_MERGEABLE.includes(row.status as ProposalStatus)
+    : row.status === "checks_passed";
+  if (!ready) {
     throw new HandlerError({
       code: "conflict",
       reason: "checks_not_passed",
@@ -205,10 +235,11 @@ function mergeable(row: ProposalRow | null, proposalId: string): RecordedRow {
     });
   }
   const { prNumber, repository, branch, path, headSha } = row;
-  // A governance proposal changes steering/governance.toml, which carries no
-  // record stamp.
+  // Only a record proposal carries a record stamp. A governance proposal
+  // changes steering/governance.toml, and a steering PR proposal changes the
+  // files of its PR.
   const stamped =
-    row.kind === "governance" || (!!row.stampedRecordId && !!row.recordHash);
+    !isRecordKind(row.kind) || (!!row.stampedRecordId && !!row.recordHash);
   if (
     prNumber === null ||
     !repository ||
@@ -337,20 +368,24 @@ export function createMergeContextPrHandler(
           },
           holdsMergeWithoutReview: () => holdsMergeWithoutReview(scope, userId),
         });
+      const call: ProposalMerge = {
+        deps,
+        seams,
+        capability,
+        scope,
+        requestId: ctx.requestId ?? null,
+        userId,
+        repo,
+        row: recorded,
+        pr,
+        layout,
+        approve,
+      };
       if (recorded.kind === "governance") {
-        return mergeGovernanceProposal({
-          deps,
-          seams,
-          capability,
-          scope,
-          requestId: ctx.requestId ?? null,
-          userId,
-          repo,
-          row: recorded,
-          pr,
-          layout,
-          approve,
-        });
+        return mergeGovernanceProposal(call);
+      }
+      if (isSteeringPrKind(recorded.kind)) {
+        return mergeSteeringPrProposal(call, nextVersion);
       }
       // The published body is the file at the merged commit.
       let body = await readBody(deps, repo, path, recorded.headSha);
@@ -555,7 +590,8 @@ export function createMergeContextPrHandler(
   };
 }
 
-interface GovernanceMerge {
+/** One merge of a proposal that publishes no single record, as the handler hands it on. */
+interface ProposalMerge {
   deps: SteeringDeps;
   seams: MergeSeams;
   capability: string;
@@ -622,7 +658,7 @@ function reviewRequired(prUrl: string | null): HandlerError {
  * commit and the approver, and `steering.governance_changed` names both.
  */
 async function mergeGovernanceProposal(
-  input: GovernanceMerge,
+  input: ProposalMerge,
 ): Promise<ContextPrMergeOutput> {
   const { deps, seams, scope, repo, pr, userId } = input;
   const recorded = input.row;
@@ -639,11 +675,11 @@ async function mergeGovernanceProposal(
       `${repo.fullName} no longer holds ${path} on ${repo.defaultBranch}, so nothing merged. Set the mode again.`,
     );
   }
-  const check = seams.governanceCheck;
+  const check = seams.steeringCheck;
   const publisherFor = seams.publisher;
   if (!check || !publisherFor) {
     throw new Error(
-      "merge_context_pr: a governance merge needs the governanceCheck and publisher seams",
+      "merge_context_pr: a governance merge needs the steeringCheck and publisher seams",
     );
   }
   // A merge the host already holds is read at its merge commit: the branch
@@ -845,6 +881,292 @@ async function mergeGovernanceProposal(
     governance: { mode: setting, path },
     mergedCommit: commitSha,
     bundleVersion: { before: ledger, after: ledger },
+    publishedVersion,
+  };
+}
+
+/** What a message calls each kind of steering PR proposal. */
+const STEERING_PR_NOUN: Record<SteeringPrKind, string> = {
+  revert: "revert steering PR",
+  tools: "tools steering PR",
+  import: "Markdown import steering PR",
+  memory_pr: "memory PR",
+  agent_file: "agent file steering PR",
+  agent_proposal: "agent's steering PR",
+};
+
+/**
+ * The registry records a merged revert deleted (#5122, ADR-264). A revert
+ * proposal of a record PR holds the record's lineage. When the registry holds
+ * that record active and its file is gone at the merge commit, it retires.
+ * Any other revert, and a revert that restored an earlier version of the
+ * file, retires nothing.
+ */
+async function revertedRecords(
+  deps: SteeringDeps,
+  scope: Scope,
+  repo: SteeringRepository,
+  row: ProposalRow,
+  commitSha: string,
+): Promise<string[]> {
+  if (row.kind !== "revert") return [];
+  const held = await deps.store.findRecord(scope, row.lineageId);
+  if (!held || held.record.status !== "active" || !held.record.path) return [];
+  // findRecord also matches a public id, so the slug must be the lineage.
+  if (held.record.slug.toLowerCase() !== row.lineageId.toLowerCase()) return [];
+  const text = await deps.github.readFile(repo, held.record.path, commitSha);
+  return text === null ? [row.lineageId] : [];
+}
+
+/**
+ * Land a steering PR proposal (#5122, ADR-264): a revert, tools, Markdown
+ * import, memory, agent file, or agent proposal PR. The caller holds the
+ * merge queue and has checked the health, the reviewer rule, the claim, the
+ * head, and the base.
+ *
+ * 1. Run the steering checks on the head the row names against the
+ *    production head, and report them as the "Oxagen steering" check. The
+ *    opener's own report may be stale, and a memory PR opens with none. A
+ *    failure moves the row to `checks_failed` and nothing merges.
+ * 2. Claim the row and land the PR through landSteeringPr: the update, the
+ *    re-check, the stamp, the approvals, and the trailers a record PR gets.
+ * 3. Retire each record a revert deleted, move the row to `merged`, publish
+ *    the steering version, and emit `steering.published`.
+ *
+ * A PR the host already merged resumes from its merge commit only when an
+ * earlier merge from Oxagen claimed it. A PR someone merged on the host
+ * carries no claim, so the merge asks the repository sync to read it and
+ * refuses `merged_outside_oxagen`, as a governance merge does.
+ */
+async function mergeSteeringPrProposal(
+  input: ProposalMerge,
+  nextVersion: (scope: Scope) => Promise<number>,
+): Promise<ContextPrMergeOutput> {
+  const { deps, seams, scope, repo, pr, userId, layout } = input;
+  const recorded = input.row;
+  const kind = recorded.kind as SteeringPrKind;
+  const noun = STEERING_PR_NOUN[kind];
+  const { prNumber, branch } = recorded;
+  const name = recorded.prUrl ?? recorded.publicId;
+  let row: ProposalRow = recorded;
+  if (layout.layout !== "steering") {
+    throw new HandlerError({
+      code: "conflict",
+      reason: "steering_repo_required",
+      message: `${repo.fullName} has no steering/governance.toml on ${repo.defaultBranch}, so Oxagen merges no ${noun} there. Merge ${name} on ${repo.provider === "gitlab" ? "GitLab" : "GitHub"}, or set up the steering repo first.`,
+    });
+  }
+  const check = seams.steeringCheck;
+  if (!check) {
+    throw new Error(
+      "merge_context_pr: a steering PR merge needs the steeringCheck seam",
+    );
+  }
+  const checks: GovernanceCheckContext = {
+    host: deps.github,
+    repo,
+    scope,
+    now: deps.now,
+    check,
+    rerun: "Merge the pull request from Oxagen again to run them.",
+  };
+
+  let passed: string[] = [];
+  if (pr.merged) {
+    // Only a merge Oxagen started resumes here. A lapsed claim still counts:
+    // the earlier call landed the PR and failed before its record did.
+    if (recorded.mergeClaimedAt === null) {
+      await requestSync(deps, scope, recorded);
+      throw new HandlerError({
+        code: "conflict",
+        reason: "merged_outside_oxagen",
+        message: `${name} was merged outside Oxagen, so no approval in Oxagen stands behind it. Review the repository health before making another change.`,
+      });
+    }
+  } else {
+    // The opener's report ran against the production branch of that moment,
+    // and a memory PR opens with none. The checks run now, on the head that
+    // would merge.
+    row = await deps.store.updateProposal(
+      recorded.id,
+      { status: "checks_running", updatedById: userId },
+      STEERING_PR_MERGEABLE,
+      { headSha: recorded.headSha, noClaimSince: claimCutoff(deps.now()) },
+    );
+    const main = await deps.github.branchHead(repo, repo.defaultBranch);
+    const report =
+      main === null
+        ? null
+        : await runGovernanceChecks(checks, recorded.headSha, main);
+    const ok = report?.passed === true;
+    row = await deps.store.updateProposal(
+      row.id,
+      { status: ok ? "checks_passed" : "checks_failed" },
+      ["checks_running"],
+      { headSha: recorded.headSha },
+    );
+    if (!ok || !report) {
+      throw new HandlerError({
+        code: "conflict",
+        reason: "checks_failed",
+        message: `The steering checks ${report === null ? "did not run" : "failed"} on ${recorded.headSha}, so nothing merged. The "Oxagen steering" check on ${name} holds the report. Fix the branch, then merge again.`,
+      });
+    }
+    passed = passedCheckNames(report);
+  }
+
+  const publisher = seams.publisher
+    ? seams.publisher(scope, deps.github)
+    : null;
+  const outcome = await underPublishLock(publisher, repo, async (held) => {
+    const mergedAs = pr.merged ? pr.mergeCommitSha : null;
+    const steering = publisher
+      ? await steeringVersion(publisher, deps, scope, repo, row, mergedAs)
+      : null;
+    const version = steering ? steering.version : await nextVersion(scope);
+
+    let commitSha: string;
+    let mergedAt: Date;
+    let attempts = 0;
+    if (pr.merged) {
+      if (!pr.mergeCommitSha) {
+        throw new HandlerError({
+          code: "conflict",
+          reason: "github_refused",
+          message: `${name} is merged with no merge commit`,
+        });
+      }
+      commitSha = pr.mergeCommitSha;
+      mergedAt = requireMergedAt(pr.mergedAt, recorded.prUrl);
+    } else {
+      // Claim the proposal before the stamp moves the PR's head.
+      row = await deps.store.updateProposal(
+        row.id,
+        { mergeClaimedAt: deps.now() },
+        ["checks_passed"],
+        { headSha: recorded.headSha, noClaimSince: claimCutoff(deps.now()) },
+      );
+      const landed = await landSteeringPr({
+        host: deps.github,
+        repo,
+        number: prNumber,
+        branch,
+        checkedHead: recorded.headSha,
+        checks: passed,
+        layout,
+        approve: input.approve,
+        mergedBy: userId,
+        commitTitle: `steering: merge ${branch} (#${prNumber})`,
+        version,
+        now: deps.now,
+        // The queue merged the production branch into the PR's branch. The
+        // row follows the new head through checks_running, as a governance
+        // proposal's does.
+        recheck: async (head) => {
+          const from = row.headSha ?? recorded.headSha;
+          row = await deps.store.updateProposal(
+            row.id,
+            { status: "checks_running", headSha: head, updatedById: userId },
+            ["checks_passed"],
+            { headSha: from },
+          );
+          const base = await deps.github.branchHead(repo, repo.defaultBranch);
+          const again =
+            base === null ? null : await runGovernanceChecks(checks, head, base);
+          const ok = again?.passed === true;
+          row = await deps.store.updateProposal(
+            row.id,
+            { status: ok ? "checks_passed" : "checks_failed" },
+            ["checks_running"],
+            { headSha: head },
+          );
+          return { ok, checks: ok && again ? passedCheckNames(again) : [] };
+        },
+      }).catch(async (err: unknown) => {
+        await releaseUnmergedClaim(deps, repo, prNumber, row);
+        throw err;
+      });
+      commitSha = landed.commitSha;
+      attempts = landed.attempts;
+      if (landed.mergedHead !== row.headSha) {
+        // The stamp commit merged: the row follows it, so a retry reads a
+        // merged PR at the head the row names.
+        row = await deps.store.updateProposal(
+          row.id,
+          { headSha: landed.mergedHead },
+          ["checks_passed"],
+          { headSha: landed.checkedHead },
+        );
+      }
+      mergedAt = requireMergedAt(
+        await mergedAtOnGitHub(deps, repo, prNumber),
+        recorded.prUrl,
+      );
+    }
+    await assertSteeringCommit(deps.github, repo, commitSha);
+    await deps.github.deleteBranch(repo, branch);
+    const result = await deps.store.mergeSteeringPr({
+      scope,
+      proposal: row,
+      commitSha,
+      mergedAt,
+      mergedByUserId: userId,
+      policyVersion: `governance:${layout.mode}`,
+      retire: await revertedRecords(deps, scope, repo, row, commitSha),
+    });
+    // S5 already published a resumed merge whose version it holds. Any other
+    // merge is live only once publish() says so.
+    const live =
+      !held ||
+      steering?.published === true ||
+      (await publishSteering(held, repo, commitSha, version));
+    return { commitSha, attempts, version, result, live };
+  });
+  const { commitSha, attempts, version, result, live } = outcome;
+  const publishedVersion = publisher !== null && live ? version : null;
+  const deploymentUrl = live
+    ? await recordPublishDeployment(deps.github, repo, {
+        sha: commitSha,
+        version,
+        number: prNumber,
+      })
+    : null;
+  deps.emit({
+    eventType: "steering.published",
+    actorUserId: userId,
+    orgId: scope.orgId,
+    workspaceId: scope.workspaceId,
+    capability: input.capability,
+    outcome: "success",
+    ip: null,
+    userAgent: null,
+    requestId: input.requestId,
+  });
+  // A retirement appends one promotion event to the ledger. Nothing else here does.
+  const ledger = await deps.store.ledgerLength(scope);
+  logger.info(
+    {
+      proposalId: recorded.publicId,
+      kind,
+      pr: recorded.prUrl,
+      commit: commitSha,
+      version,
+      publishedVersion,
+      attempts,
+      retired: result.retired,
+      deploymentUrl,
+      workspaceId: scope.workspaceId,
+    },
+    "context.pr.merge: merged a steering PR",
+  );
+  return {
+    proposalId: recorded.publicId,
+    status: "merged",
+    kind,
+    pullRequest: { number: prNumber, branch },
+    retired: result.retired,
+    mergedCommit: commitSha,
+    bundleVersion: { before: ledger - result.retired.length, after: ledger },
     publishedVersion,
   };
 }
@@ -1153,8 +1475,9 @@ export const productionMergeSeams: MergeSeams = {
       extend: withToolProjection,
       readHealth: readSteeringHealth,
     }),
-  // The checks set_governance_mode runs when it opens the PR (#4795).
-  governanceCheck: productionSteeringGovernanceSeams.check,
+  // The checks set_governance_mode runs when it opens the PR (#4795), and
+  // every steering PR proposal runs at merge time (#5122).
+  steeringCheck: productionSteeringGovernanceSeams.check,
 };
 
 export const mergeContextPrHandler = createMergeContextPrHandler(

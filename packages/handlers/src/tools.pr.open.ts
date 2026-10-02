@@ -21,11 +21,15 @@
 //   5. Run the steering PR checks on the new head and report the result as
 //      the "Oxagen steering" check. A report that fails is logged. The PR is
 //      open, and the missing required check blocks its merge.
+//   6. Write the PR's proposal row, of the kind's proposalKind, so
+//      merge_context_pr can land it (#5122, ADR-264). A row that fails to
+//      write is logged, and the next commit added to the PR writes it again.
 //
 // With `existing`, step 2 finds that PR open on the branch and targeting the
-// production branch, step 3 adds one commit on the branch's head, and step 4
-// replaces the PR's title and body. When the caller names `at` and the
-// branch moved off it, the call is refused before it writes.
+// production branch, step 3 adds one commit on the branch's head, step 4
+// replaces the PR's title and body, and step 6 moves the row to the new head.
+// When the caller names `at` and the branch moved off it, the call is refused
+// before it writes.
 //
 // The host is either GitHub or GitLab: createSteeringHost() routes each call
 // by the repository's provider. A person's role is not checked here, because
@@ -33,6 +37,7 @@
 // caller's role first.
 import type { SteeringPrOpener } from "@oxagen/agent/runtime/steering-pr";
 import { HandlerError, isHandlerError } from "@oxagen/oxagen";
+import type { SteeringPrKind } from "@oxagen/oxagen/contracts/context.steering.shared";
 import { REQUIRED_CHECK_NAME } from "@oxagen/oxagen/steering-repo/names";
 import { OXAGEN_PR_LABELS } from "@oxagen/github";
 import {
@@ -49,8 +54,19 @@ import type {
   SteeringRepository,
 } from "./context.steering.github";
 import { createSteeringHost } from "./context.steering.host";
+import { postgresSteeringStore } from "./context.steering.store";
 import { logger } from "./logger";
-import { readSteeringLayout } from "./steering-repo/merge-queue";
+import {
+  readSteeringLayout,
+  type SteeringLayout,
+} from "./steering-repo/merge-queue";
+import {
+  jobAuthor,
+  personAuthor,
+  recordSteeringPrQuietly,
+  type SteeringPrAuthor,
+  type SteeringPrProposalStore,
+} from "./steering-repo/pr-proposal";
 import {
   STEERING_PR_MAX_FILES,
   branchScopeRefusal,
@@ -82,6 +98,11 @@ export interface ToolsPullRequestArgs {
    * when the branch's head is not this commit.
    */
   at?: string;
+  /**
+   * Who opens the PR, as its proposal row records it: a person
+   * (`personAuthor`) or a job (`jobAuthor`). Oxagen itself when omitted.
+   */
+  author?: SteeringPrAuthor;
 }
 
 export interface ToolsPullRequestResult {
@@ -123,6 +144,8 @@ export interface ToolsPullRequestDeps {
   readContext: (
     scope: ToolsPullRequestScope,
   ) => Promise<CheckInput["context"]>;
+  /** Where each PR's proposal row is written (#5122). */
+  proposals: SteeringPrProposalStore;
   now: () => Date;
 }
 
@@ -196,6 +219,8 @@ export interface SteeringPullRequestKind {
   refusal: (
     args: Pick<ToolsPullRequestArgs, "branch" | "files">,
   ) => { reason: string; message: string } | null;
+  /** The kind of the proposal row each PR of this kind carries (#5122, ADR-264). */
+  proposalKind: SteeringPrKind;
 }
 
 /** The tools steering PR: Studio's Review, M10's sync, and M13's server folder writer. */
@@ -203,7 +228,11 @@ export const TOOLS_PULL_REQUEST: SteeringPullRequestKind = {
   reasonPrefix: "tools",
   noun: "tools steering PR",
   refusal: toolsPullRequestRefusal,
+  proposalKind: "tools",
 };
+
+/** The author a PR's row records when the caller names none. */
+const OXAGEN_AUTHOR: SteeringPrAuthor = jobAuthor("oxagen");
 
 /** The check run's title and summary for one report. */
 export function checkRunText(report: CheckReport): {
@@ -322,15 +351,15 @@ export function createSteeringPullRequestOpener(
   deps: ToolsPullRequestDeps,
   kind: SteeringPullRequestKind,
 ): ToolsPullRequestOpener {
-  /** Run the checks on `head` and report them on the host. */
-  async function reportChecks(
+  /** Run the checks on `head`, report them on the host, and answer the conclusion. */
+  function reportChecks(
     host: ToolsPullRequestHost,
     repo: SteeringRepository,
     scope: ToolsPullRequestScope,
     head: string,
     base: string,
-  ): Promise<void> {
-    await reportSteeringChecks(deps, {
+  ): Promise<"success" | "failure" | null> {
+    return reportSteeringChecks(deps, {
       host,
       repo,
       scope,
@@ -338,6 +367,32 @@ export function createSteeringPullRequestOpener(
       base,
       source: "tools.pr.open",
     });
+  }
+
+  /** Write the PR's proposal row, after its check is reported. */
+  async function recordRow(
+    scope: ToolsPullRequestScope,
+    repo: SteeringRepository,
+    args: ToolsPullRequestArgs,
+    opened: ToolsPullRequestResult,
+    check: "success" | "failure" | null,
+    mode: SteeringLayout["mode"],
+  ): Promise<void> {
+    await recordSteeringPrQuietly(
+      deps.proposals,
+      {
+        scope,
+        repo,
+        kind: kind.proposalKind,
+        pullRequest: opened,
+        title: args.title,
+        paths: args.files.map((file) => file.path),
+        check,
+        author: args.author ?? OXAGEN_AUTHOR,
+        mode,
+      },
+      deps.now(),
+    );
   }
 
   /**
@@ -452,13 +507,15 @@ export function createSteeringPullRequestOpener(
           if (adopted === null) throw err;
           pr = adopted;
         }
-        await reportChecks(host, repo, scope, sha, base);
-        return {
+        const check = await reportChecks(host, repo, scope, sha, base);
+        const opened = {
           number: pr.number,
           url: pr.htmlUrl,
           branch: args.branch,
           headSha: sha,
         };
+        await recordRow(scope, repo, args, opened, check, layout.mode);
+        return opened;
       }
 
       // The PR must still be open, on this branch, and into the production
@@ -499,13 +556,15 @@ export function createSteeringPullRequestOpener(
         title: args.title,
         body: args.body,
       });
-      await reportChecks(host, repo, scope, sha, productionHead);
-      return {
+      const check = await reportChecks(host, repo, scope, sha, productionHead);
+      const opened = {
         number: pr.number,
         url: pr.htmlUrl,
         branch: args.branch,
         headSha: sha,
       };
+      await recordRow(scope, repo, args, opened, check, layout.mode);
+      return opened;
     },
   };
 }
@@ -539,6 +598,7 @@ export const workspaceSteeringPullRequestDeps: ToolsPullRequestDeps = {
     const { readCheckContext } = await import("./context.steering.index.get");
     return readCheckContext(scope);
   },
+  proposals: postgresSteeringStore,
   now: () => new Date(),
 };
 
@@ -587,6 +647,10 @@ export function createSteeringPrOpener(
             path: file.path,
             content: file.content,
           })),
+          author:
+            request.actorUserId === null
+              ? jobAuthor("mcp-studio-migrate")
+              : personAuthor(request.actorUserId),
         },
       );
       return { number: opened.number, url: opened.url, branch: opened.branch };

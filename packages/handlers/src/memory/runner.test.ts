@@ -12,7 +12,11 @@ import { fixtureRepo } from "@oxagen/oxagen/steering-repo/fixture-repo";
 import { digestBytes } from "@oxagen/recorder";
 import type { TachoFrameRow } from "@oxagen/telemetry";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { FakeGitHub, REPO } from "../context.steering.test-support";
+import {
+  FakeGitHub,
+  MemoryStore as SteeringProposalStore,
+  REPO,
+} from "../context.steering.test-support";
 import { remoteDigests } from "../lib/remote-digests";
 import { logger } from "../logger";
 import {
@@ -647,6 +651,7 @@ function harness(over: Over = {}) {
   );
   const store = over.store ?? new FakeMemoryStore();
   const gh = over.gh ?? steeringRepo();
+  const proposals = new SteeringProposalStore();
   const generate = vi.fn<MemoryRunnerDeps["generate"]>(() =>
     Promise.resolve(over.answer ?? ANSWER),
   );
@@ -675,10 +680,11 @@ function harness(over: Over = {}) {
     },
     store,
     host: gh,
+    proposals,
     generate,
     enrichmentEnabled: () => Promise.resolve(over.enrichment ?? true),
   };
-  return { deps, store, gh, generate };
+  return { deps, store, gh, generate, proposals };
 }
 
 // ── Capture ─────────────────────────────────────────────────────────────────
@@ -1179,6 +1185,24 @@ describe("curateMemories", () => {
     ]);
     expect(memory.memoryPrId).toBe(opened.id);
     expect(memory.state).toBe("in_pr");
+  });
+
+  it("writes the memory PR's proposal row, so a person merges it through Oxagen (#5122)", async () => {
+    const { pull, gh, proposals } = await openedMemoryPr();
+    expect(proposals.proposals).toHaveLength(1);
+    expect(proposals.proposals[0]).toMatchObject({
+      kind: "memory_pr",
+      lineageId: BRANCH,
+      status: "pr_open",
+      branch: BRANCH,
+      prNumber: pull.number,
+      headSha: gh.heads.get(BRANCH),
+      statement: "Memory PR 2026-09-27",
+      source: "memory-curator",
+      createdById: null,
+      governanceMode: "team",
+      checks: [],
+    });
   });
 
   it("opens one memory PR a day", async () => {
