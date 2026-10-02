@@ -6,6 +6,7 @@ import { HeroTerminal } from "@/components/landing/hero-terminal";
 import { ContextWindow } from "@/components/landing/context-window";
 import { CopyCommand } from "@/components/landing/copy-command";
 import { HexField } from "@/components/ui/hex-field";
+import { INSTALL_CMD } from "@/lib/install";
 
 export const metadata: Metadata = {
   title: "Oxagen docs: the agent control plane",
@@ -76,14 +77,6 @@ const SURFACES = [
 ];
 
 const APP_URL = "https://app.oxagen.sh";
-
-/**
- * The one command the docs actually recommend. Kept identical to the /install
- * page and the floating InstallCliButton: a global npm install of @oxagen/cli
- * is not reliably standalone yet (see /docs/cli/installation), so the landing
- * CTAs must not advertise one.
- */
-const INSTALL_CMD = "curl -fsSL https://cli.oxagen.sh/install.sh | sh";
 
 export default function HomePage(): ReactNode {
   return (

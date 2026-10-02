@@ -24,7 +24,15 @@ Each version also publishes `oxagen` as one executable per platform, the same fi
 | Linux x86_64 | `oxagen-x86_64-unknown-linux-gnu` |
 | Windows x64 | `oxagen-x86_64-pc-windows-msvc.exe` |
 
-On macOS or Linux, download the file for your platform and its checksum, check it, and install it:
+On macOS or Linux, run the install script:
+
+```bash
+curl -fsSL https://docs.oxagen.sh/install.sh | sh
+```
+
+The script downloads the file for your platform from `latest/`, checks its SHA-256, and installs it to `~/.local/bin`. It never uses sudo. On Linux arm64, which has no executable yet, it installs from npm instead. To pin a version, run it as `curl -fsSL https://docs.oxagen.sh/install.sh | OXAGEN_INSTALL_BASE=https://downloads.oxagen.sh/desktop/<version> sh`.
+
+To do the same steps by hand, download the file for your platform and its checksum, check it, and install it:
 
 ```bash
 name=oxagen-aarch64-apple-darwin   # the file for your platform, from the table

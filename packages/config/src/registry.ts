@@ -2420,14 +2420,15 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   OXAGEN_INSTALL_BASE: {
     group: "Operator scripts",
     description:
-      "Base URL the published install.sh downloads CLI release archives from. " +
-      "Set it to install from a staging bucket instead of cli.oxagen.sh.",
+      "Base URL the published install.sh downloads the oxagen-<rust triple> " +
+      "executable and its .sha256 from. Set it to install a pinned version, " +
+      "such as https://downloads.oxagen.sh/desktop/<version>.",
     secret: false,
     clientExposed: false,
     services: [],
     requiredIn: [],
     valueOrigin: "manual",
-    placeholder: "https://cli.oxagen.sh/releases/latest",
+    placeholder: "https://downloads.oxagen.sh/latest",
   },
   OXAGEN_INSTALL_DIR: {
     group: "Operator scripts",
