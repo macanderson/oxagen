@@ -246,6 +246,56 @@ describe("a backfill pass", () => {
     expect(wal.appends).toBe(0);
   });
 
+  it("seals the sessions an answered batch named when a later batch gets no answer, and the next pass asks about the rest", async () => {
+    // A second, older session beside the fixture, so the newest-first order
+    // puts the fixture in the first batch and this one in the second.
+    const { root } = projectsRoot();
+    const other = "0b1f0000-0000-4000-8000-00000000b002";
+    const otherPath = join(root, PROJECT, `${other}.jsonl`);
+    writeFileSync(
+      otherPath,
+      `${JSON.stringify({
+        type: "user",
+        uuid: "u-b002",
+        timestamp: "2026-08-09T09:00:00.000Z",
+        sessionId: other,
+        cwd: "/work/synthetic-repo",
+        version: "2.1.281",
+        message: { role: "user", content: "Synthetic prompt for b002" },
+      })}\n`,
+    );
+    utimesSync(otherPath, OLD, OLD);
+    const wal = new FakeWal();
+    const asked: string[][] = [];
+    // The route's rate limit: the first call answers, the second does not.
+    let calls = 0;
+    const run = deps(root, wal, {
+      headsBatch: 1,
+      sessionHeads: async (sessions) => {
+        asked.push(sessions.map((session) => session.sessionId));
+        calls += 1;
+        return calls === 1 ? new Map() : undefined;
+      },
+    });
+    const first = await runBackfill({}, run);
+    expect(asked).toEqual([[SESSION], [other]]);
+    expect(first.sessions.backfilled).toBe(1);
+    expect(first.sessions.skipped_server_unanswered).toBe(1);
+    expect(wal.chains.has(sessionUuid(HOST, SESSION))).toBe(true);
+    expect(wal.chains.has(sessionUuid(HOST, other))).toBe(false);
+
+    // A minute later the route answers again. The cursor file skips the
+    // session the first pass sealed, so only the other one is asked about.
+    asked.length = 0;
+    calls = 0;
+    const second = await runBackfill({}, run);
+    expect(asked).toEqual([[other]]);
+    expect(second.sessions.skipped_already_backfilled).toBe(1);
+    expect(second.sessions.backfilled).toBe(1);
+    expect(wal.chains.has(sessionUuid(HOST, other))).toBe(true);
+    dense(wal);
+  });
+
   it("writes nothing on a dry run, and reports what it would send", async () => {
     const { root } = projectsRoot();
     const wal = new FakeWal();

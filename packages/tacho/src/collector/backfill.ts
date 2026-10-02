@@ -19,7 +19,10 @@
  * 4. The control plane holds it (`list_tacho_session_heads`): skipped. A host
  *    whose `TACHO_HOME` was wiped has no cursor file, and ingest answers a
  *    second chain at seq 0 for a session it holds as a chain break, so a pass
- *    that cannot ask seals nothing (a dry run still reports).
+ *    seals no session it could not ask about (a dry run still reports it).
+ *    The pass asks in batches and stops at the first batch with no answer.
+ *    The sessions in the batches that were answered are sealed, and the next
+ *    pass asks about the rest.
  *
  * The rest are read as streams, sealed by a backfill-mode recorder through
  * `TranscriptBackfill`, and appended to the WAL like live frames, so the
@@ -92,6 +95,9 @@ const LEDGER_FLUSH_MS = 2_000;
 
 /** How often the pass checks the WAL's backlog and reports progress. */
 const CHECK_EVERY_MS = 1_000;
+
+/** How many transcripts the local checks take before they yield the thread. */
+const LOCAL_CHECKS_PER_TURN = 256;
 
 export const BACKFILL_ACTIONS = [
   "backfilled",
@@ -442,6 +448,8 @@ export interface BackfillDeps {
   signal?: AbortSignal;
   /** The slice size; tests make it small. */
   sliceBytes?: number;
+  /** How many sessions one pre-flight call names; tests make it small. */
+  headsBatch?: number;
 }
 
 /** One transcript a pass found. */
@@ -558,15 +566,19 @@ export async function runBackfill(
     const found = await discover(request, deps, tally);
     projects = found.projects;
     const pending: Candidate[] = [];
-    for (const candidate of found.candidates) {
+    for (const [index, candidate] of found.candidates.entries()) {
       const local = localAction(candidate, deps);
       if (local !== undefined) sessions[local] += 1;
       else pending.push(candidate);
       if (deps.signal?.aborted === true) throw new Stopped();
+      // Each check reads the registry and stats the WAL on the daemon's one
+      // thread, so a long history yields to the hooks now and then (ADR-231).
+      if (index % LOCAL_CHECKS_PER_TURN === LOCAL_CHECKS_PER_TURN - 1)
+        await new Promise<void>((resolve) => setImmediate(resolve));
     }
-    const heads = await askServer(pending, deps);
+    const server = await askServer(pending, deps);
     for (const candidate of pending) {
-      const action = serverAction(candidate, heads, deps.ledger);
+      const action = serverAction(candidate, server, deps.ledger);
       // A real pass starts no chain the control plane could not check. A dry
       // run still reads the session, so its counts say what a pass would
       // seal once the control plane answers.
@@ -800,34 +812,52 @@ function localAction(
     : "skipped_older_normalizer";
 }
 
-/** Ask the control plane for every pending session, in batches. */
+/** What the pre-flight learned. */
+interface ServerAnswer {
+  /** The heads the control plane named, keyed by the uuid asked about. */
+  heads: ReadonlyMap<string, ServerSessionHead>;
+  /** The sessions whose batch the control plane answered. */
+  answered: ReadonlySet<string>;
+}
+
+/**
+ * Ask the control plane about every pending session, in batches. It stops at
+ * the first batch with no answer. The route takes 30 calls a minute per
+ * host, so a pass over more than 15,000 sessions gets no answer for the
+ * rest. Those are skipped, and the next pass asks about them, because the
+ * cursor file then holds the ones this pass sealed.
+ */
 async function askServer(
   pending: readonly Candidate[],
   deps: BackfillDeps,
-): Promise<Map<string, ServerSessionHead> | undefined> {
+): Promise<ServerAnswer> {
   const heads = new Map<string, ServerSessionHead>();
-  for (let index = 0; index < pending.length; index += SESSION_HEADS_BATCH) {
-    const batch = pending
-      .slice(index, index + SESSION_HEADS_BATCH)
-      .map((candidate) => ({
+  const answered = new Set<string>();
+  const size = Math.max(1, deps.headsBatch ?? SESSION_HEADS_BATCH);
+  for (let index = 0; index < pending.length; index += size) {
+    const batch = pending.slice(index, index + size);
+    const answer = await deps.sessionHeads(
+      batch.map((candidate) => ({
         sessionUuid: candidate.sessionUuid,
         sessionId: candidate.sessionId,
-      }));
-    const answer = await deps.sessionHeads(batch);
-    if (answer === undefined) return undefined;
+      })),
+    );
+    if (answer === undefined) break;
     for (const [uuid, head] of answer) heads.set(uuid, head);
+    for (const candidate of batch) answered.add(candidate.sessionUuid);
   }
-  return heads;
+  return { heads, answered };
 }
 
 /** The action the control plane's answer decides, or undefined to seal. */
 function serverAction(
   candidate: Candidate,
-  heads: ReadonlyMap<string, ServerSessionHead> | undefined,
+  server: ServerAnswer,
   ledger: BackfillLedger,
 ): BackfillAction | undefined {
-  if (heads === undefined) return "skipped_server_unanswered";
-  const head = heads.get(candidate.sessionUuid);
+  if (!server.answered.has(candidate.sessionUuid))
+    return "skipped_server_unanswered";
+  const head = server.heads.get(candidate.sessionUuid);
   if (head === undefined) return undefined;
   // The live path's chain, or one a live resume continued: the backfill
   // never fills a gap in a witnessed chain.

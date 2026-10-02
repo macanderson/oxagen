@@ -228,10 +228,12 @@ is not a backfill of the machine's history, and the two do not overlap:
   machine that lost `TACHO_HOME` enrolls again with a new session scope, so
   its uuids differ from the ones it shipped. The answer names the same
   agent's session with that id, and the pass skips it instead of recording
-  the run twice. It answers root sessions only. Any failure to answer makes
-  a real pass seal nothing; a dry run still counts. The route takes 30 calls
-  a minute per host, so a pass over more than 15,000 transcripts must be run
-  again for the rest.
+  the run twice. It answers root sessions only. A real pass seals no session
+  the control plane did not answer for; a dry run still counts it. The pass
+  asks in batches of 500 and stops at the first batch with no answer. The
+  route takes 30 calls a minute per host, so a pass over more than 15,000
+  new transcripts seals the first 15,000. The next pass skips those through
+  the cursor file and asks about the rest.
 - **The row records the normalizer.** `tacho.sessions.backfill_normalizer`
   holds the version from the `agent_start` attr `oxagen.backfill_normalizer`,
   beside `record_basis`. Migration `20261002150000`.

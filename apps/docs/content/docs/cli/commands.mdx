@@ -271,7 +271,7 @@ A backfilled run is rebuilt, not watched. Nothing enforced a policy while it ran
 
 The report prints counts only: each folder with its session count and dates, the sessions by what happened to them, the records by kind, the tokens by model, and the read errors. It never prints a prompt, a reply, a title, a tool input, or a path from inside a transcript.
 
-A pass leaves a session alone when this machine already records it live, when Oxagen already holds it, when an earlier pass recorded it, or when its transcript changed in the last 15 minutes. It asks Oxagen first, so a machine that lost its local state does not record a session twice. When Oxagen does not answer, the pass records nothing. Run the command again later. A pass that stops partway resumes where it stopped the next time it runs.
+A pass leaves a session alone when this machine already records it live, when Oxagen already holds it, when an earlier pass recorded it, or when its transcript changed in the last 15 minutes. It asks Oxagen first, so a machine that lost its local state does not record a session twice. The pass records no session Oxagen did not answer for. Run the command again later to record those sessions. A pass that stops partway resumes where it stopped the next time it runs.
 
 | Exit code | Meaning |
 |---|---|
