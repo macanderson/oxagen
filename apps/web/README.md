@@ -191,7 +191,8 @@ Never put `--` before the filename. Each build module has a co-located
   file no longer matches it. The brand sync rewrites the WOFF2 when the kit's
   Aeonik changes, and it can't write the TTF. So after a sync that changes
   the WOFF2, run `node apps/web/scripts/unpack-aeonik.mjs` from the repo root
-  and commit the TTF and the stamp.
+  and commit the TTF and the stamp. Don't write the stamp by hand: it would
+  pass a TTF that no unpack made.
 
 ## The palette, and the four rules
 

@@ -53,11 +53,17 @@ describe("aeonikDrift", () => {
     );
   });
 
-  it("fails when the stamp names neither file", () => {
+  it("fails unless the stamp holds the WOFF2 line and then the TTF line", () => {
+    const want = `${STAMP} must hold two lines, one for ${WOFF2} and then one for ${TTF}`;
     const other = `${hex(woff2)}  some/other.woff2\n${hex(ttf)}  some/other.ttf\n`;
-    expect(aeonikDrift(other, woff2, ttf)).toBe(
-      `${WOFF2} changed after the TTF was unpacked from it`,
-    );
+    const swapped = `${hex(ttf)}  ${TTF}\n${hex(woff2)}  ${WOFF2}\n`;
+    // A stale line for the same file must not sit beside the current one.
+    const stale = `${stamp}${hex(Buffer.from("older woff2"))}  ${WOFF2}\n`;
+    const oneLine = `${hex(woff2)}  ${WOFF2}\n`;
+    const wrongTtf = `${hex(woff2)}  ${WOFF2}\n${hex(ttf)}  some/other.ttf\n`;
+    for (const bad of [other, swapped, stale, oneLine, wrongTtf]) {
+      expect(aeonikDrift(bad, woff2, ttf)).toBe(want);
+    }
   });
 
   it("fails on a stamp line that is not a sha256 and a path", () => {

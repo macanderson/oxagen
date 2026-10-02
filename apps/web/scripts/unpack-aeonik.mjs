@@ -7,10 +7,10 @@
 // With no flag, the script unpacks apps/web/fonts/aeonik-wght.woff2 with
 // fontTools into apps/web/scripts/fonts/aeonik-wght.ttf, then writes the stamp
 // beside the TTF (lib/aeonik-ttf.mjs says what the stamp holds). The unpack
-// needs Python 3 with the fonttools and brotli packages
-// (`pip install fonttools brotli`). Set PYTHON to use an interpreter other than
-// python3. The TTF keeps the WOFF2's modified date, so a second run on the same
-// WOFF2 writes the same bytes.
+// runs the first python3 on PATH, which needs the fonttools and brotli packages
+// (`pip install fonttools brotli`). To use a virtual environment that has them,
+// activate it first. The TTF keeps the WOFF2's modified date, so a second run on
+// the same WOFF2 writes the same bytes.
 //
 // With --check, the script writes nothing and needs Node alone. It exits 1 when
 // the stamp does not match both files, and it names the command to run. CI runs
@@ -63,7 +63,15 @@ font.flavor = None
 font.save(sys.argv[2])
 `;
 
-if (process.argv.includes("--check")) {
+const args = process.argv.slice(2);
+if (args.length > 1 || (args.length === 1 && args[0] !== "--check")) {
+  // A mistyped flag must not fall through to the unpack and rewrite the TTF.
+  console.error(`aeonik-ttf: unknown arguments: ${args.join(" ")}`);
+  console.error(`usage: ${UNPACK} [--check]`);
+  process.exit(2);
+}
+
+if (args[0] === "--check") {
   const reason = aeonikDrift(
     read(STAMP)?.toString("utf8") ?? null,
     read(WOFF2),
@@ -73,22 +81,25 @@ if (process.argv.includes("--check")) {
     console.error(`aeonik-ttf: ${TTF} is out of step with ${WOFF2}: ${reason}.`);
     console.error(
       `Run ${UNPACK} and commit the TTF and ${STAMP}. ` +
-        "The unpack needs Python 3 with fontTools: pip install fonttools brotli.",
+        "The unpack needs Python 3 with fontTools: pip install fonttools brotli. " +
+        "Don't write the stamp by hand: it would pass a TTF that no unpack made.",
     );
     process.exit(1);
   }
   console.log(`aeonik-ttf: ${TTF} is the unpack of ${WOFF2}`);
 } else {
-  const python = process.env.PYTHON || "python3";
-  const run = spawnSync(python, ["-c", UNPACK_PY, abs(WOFF2), abs(TTF)], {
+  const run = spawnSync("python3", ["-c", UNPACK_PY, abs(WOFF2), abs(TTF)], {
     stdio: "inherit",
   });
   if (run.error || run.status !== 0) {
     console.error(
-      `aeonik-ttf: FAILED. ${python} could not unpack ${WOFF2}` +
-        (run.error ? ` (${run.error.message})` : "") +
-        ". The unpack needs Python 3 with fontTools: pip install fonttools brotli. " +
-        "Set PYTHON to use another interpreter.",
+      `aeonik-ttf: FAILED. python3 could not unpack ${WOFF2}, so the TTF and ` +
+        "the stamp are unchanged. " +
+        (run.error
+          ? `python3 did not start (${run.error.message}). `
+          : "The error above says why. ") +
+        "The unpack needs Python 3 with fontTools: pip install fonttools brotli. " +
+        "To use a virtual environment that has them, activate it and run this again.",
     );
     process.exit(2);
   }

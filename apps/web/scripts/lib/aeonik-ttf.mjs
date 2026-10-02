@@ -8,7 +8,8 @@
 // stamp beside the TTF: the sha256 of the WOFF2 it read and of the TTF it
 // wrote, one `<sha256>  <path>` line each, the form `shasum -a 256` prints.
 // `node apps/web/scripts/unpack-aeonik.mjs --check` compares the stamp with
-// both files, and CI runs that check in `pnpm check:contracts`.
+// both files, and CI runs that check in `pnpm check:contracts`. Only the unpack
+// writes the stamp. A stamp written by hand would pass a TTF that no unpack made.
 
 import { createHash } from "node:crypto";
 
@@ -50,16 +51,19 @@ export function aeonikDrift(stamp, woff2, ttf) {
   if (stamp === null) {
     return `${STAMP} is missing, so nothing records which WOFF2 the TTF came from`;
   }
-  const hashes = new Map();
-  for (const line of stamp.trim().split(/\r?\n/)) {
-    const m = LINE.exec(line);
-    if (!m) return `${STAMP} has a line that is not "<sha256>  <path>"`;
-    hashes.set(m[2], m[1]);
+  const lines = stamp.trim().split(/\r?\n/).map((line) => LINE.exec(line));
+  if (lines.some((m) => !m)) {
+    return `${STAMP} has a line that is not "<sha256>  <path>"`;
   }
-  if (hashes.get(WOFF2) !== sha256(woff2)) {
+  // Exactly the two lines the unpack writes, so a stale or extra line can't
+  // sit beside the line the check reads.
+  if (lines.length !== 2 || lines[0][2] !== WOFF2 || lines[1][2] !== TTF) {
+    return `${STAMP} must hold two lines, one for ${WOFF2} and then one for ${TTF}`;
+  }
+  if (lines[0][1] !== sha256(woff2)) {
     return `${WOFF2} changed after the TTF was unpacked from it`;
   }
-  if (hashes.get(TTF) !== sha256(ttf)) {
+  if (lines[1][1] !== sha256(ttf)) {
     return `${TTF} changed after the unpack wrote it`;
   }
   return null;
