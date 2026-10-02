@@ -5,7 +5,8 @@
 // deployment setting (`PR_DIFF_BUCKET`, packages/config/src/registry.ts). A
 // deployment that names none keeps no diffs: the sync still records the pull
 // request, its links, and each head's file list, and marks the revision
-// `unconfigured`, so a later capture can fill it once a bucket exists.
+// `unconfigured`, so a later capture can fill it once a bucket exists. The
+// bucket's region is `PR_DIFF_BUCKET_REGION`.
 //
 // Every write is write-once. The key names the head commit, so the same key
 // always holds the same bytes, and a retried step that finds its object
@@ -15,16 +16,14 @@ import { createS3ObjectStore, type ObjectStore } from "@oxagen/storage/s3";
 /** The one store this deployment keeps diffs in, or null when it names none. */
 export type DiffStore = ObjectStore;
 
-let override: DiffStore | null | undefined;
 let cached: DiffStore | null | undefined;
 
 /**
  * The deployment's diff store. Read once per process from `PR_DIFF_BUCKET`
- * and `AWS_REGION`; the bucket's own default encryption applies to every
- * object.
+ * and `PR_DIFF_BUCKET_REGION`; the bucket's own default encryption applies to
+ * every object.
  */
 export function diffStore(): DiffStore | null {
-  if (override !== undefined) return override;
   if (cached !== undefined) return cached;
   const bucket = process.env["PR_DIFF_BUCKET"]?.trim();
   cached =
@@ -32,15 +31,9 @@ export function diffStore(): DiffStore | null {
       ? null
       : createS3ObjectStore({
           bucket,
-          ...(process.env["AWS_REGION"]
-            ? { region: process.env["AWS_REGION"] }
+          ...(process.env["PR_DIFF_BUCKET_REGION"]
+            ? { region: process.env["PR_DIFF_BUCKET_REGION"] }
             : {}),
         });
   return cached;
-}
-
-/** Install a store for a test, or `undefined` to read the environment again. */
-export function setDiffStoreForTests(store: DiffStore | null | undefined): void {
-  override = store;
-  cached = undefined;
 }
