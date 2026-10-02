@@ -55,7 +55,7 @@ export function CommittedMemories({
           className="flex list-disc flex-col gap-0.5 pl-5 text-muted-foreground"
         >
           {memories.skipped.map((skip) => (
-            <li key={`${skip.file}:${skip.line}`} data-reason={skip.reason}>
+            <li key={`${skip.file}:${String(skip.line)}`} data-reason={skip.reason}>
               {noteOf(skip)}
             </li>
           ))}

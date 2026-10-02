@@ -388,7 +388,7 @@ function MemoryRow({
   return (
     <tr
       data-testid="import-memory"
-      data-source={`${memory.file}:${memory.line}`}
+      data-source={`${memory.file}:${String(memory.line)}`}
       data-action={row.action}
     >
       <td>

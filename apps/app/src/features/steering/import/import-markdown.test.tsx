@@ -421,7 +421,7 @@ describe("the statement grid", () => {
     );
     expect(
       within(done).getByRole("link", { name: "Open pull request #41" }),
-    ).toHaveAttribute("href", OPENED.url);
+    ).toHaveAttribute("href", OPENED.pullRequest.url);
   });
 
   it("leaves a statement out on Keep the record, and a row a person unticks", async () => {
@@ -542,7 +542,7 @@ describe("the Memories target", () => {
   /** Each memory row the last commit sent, as its source and its action. */
   const sentMemories = (): [string, string][] =>
     (commitMarkdownImport.mock.lastCall?.[2].memories ?? []).map(
-      (m): [string, string] => [`${m.file}:${m.line}`, m.action],
+      (m): [string, string] => [`${m.file}:${String(m.line)}`, m.action],
     );
 
   it("sends a memory file with the memories target and draws each memory with force info", async () => {
