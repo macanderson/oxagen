@@ -7,6 +7,15 @@ Work is where you give an existing agent a bounded piece of engineering work and
 
 Open it from **Work** in the sidebar. The address is `/<organization>/<workspace>/work`.
 
+## Setup
+
+Work needs four things before an item can reach an agent. **Work setup** shows each one.
+
+1. **A GitHub connection.** Connect GitHub on the **Repositories** page. Install the Oxagen GitHub App on each repository you want Work to read.
+2. **A collector.** On the **Collectors** tab, choose **Add collector**. Give it a name, choose the GitHub connection, and list each repository as `owner/name`. You can skip this step and add every item by hand.
+3. **A priorities record.** Triage ranks items by the workspace's priorities steering record. On the **Priorities** tab, choose **Edit priorities** to open a steering pull request for it. Until one is merged, triage records a failure on each item, and you set the priority yourself.
+4. **An agent that can take work.** The **Runtimes** tab says whether each agent can take a send now. An agent needs a runtime, a host enrolled for it on a build of oxagen that takes work orders, and you as its operator.
+
 ## Where work comes from
 
 - **GitHub Issues.** A collector reads issues from the repositories you name. Add one in **Work setup**, on the **Collectors** tab. Webhooks arrive signed, and each delivery counts once. A reconcile every 15 minutes picks up what a webhook missed.
@@ -22,6 +31,24 @@ Each item gets a number in the workspace, such as `WI-12`. Text that comes from 
 4. **Review.** When the run ends, the item shows the pull request, its head commit, and the checks the base branch requires on that commit. Optional checks are shown for reference and decide nothing.
 5. **Accept or return.** Accept records your acceptance of the head commit and merges nothing. Return sends the work back to the agent with your reason, as a new send.
 6. **Done.** An item is done once a person accepted its head commit and the pull request merged, in either order. A pull request closed without merging is not done.
+
+## On the agent's machine
+
+A send reaches the agent's host the next time the host polls Oxagen. The person at that machine starts the work:
+
+```bash
+oxagen work list
+oxagen work start <work order>
+```
+
+`oxagen work list` shows each work order waiting on the machine. Run `oxagen work start` in a checkout of the brief's repository. It claims the work order, then starts the agent's harness with the brief as its first prompt. The item reads **Running** once the run links to the send. When Oxagen refuses the claim, nothing starts, and the message says why. See [oxagen work](/docs/cli/commands#oxagen-work-work-orders-on-this-machine).
+
+## Stop and withdraw
+
+- **Cancel the send** ends a send that no runtime has claimed. It ends at once.
+- **Stop the run** asks the runtime to stop the run at its next safe point. The send reads **Stopping** until the runtime confirms, then **Stopped**. If the host stays offline, Oxagen closes the run after twelve hours with no report, and the item moves to **Review**.
+- **Withdraw the send** ends a send that a runtime claimed but never started a run for, once a stop has waited with no answer. A run that starts for it later is stopped.
+- A second start of the same send is refused, and a second run that names the send is stopped. One send has one run.
 
 ## What blocks Accept
 
@@ -47,3 +74,10 @@ Nothing is reserved when you press Send. On a gateway or contained runtime, the 
 ## Outcomes
 
 **Outcomes** counts the work that finished in the last 30 days: accepted and merged, returned, and closed, each on its own. It shows lead time from the first reading of the item to its finish, with its median, its 90th percentile, and its sample. It counts review touches per accepted item and the share of run cost Oxagen knows. Reopens count only items that finished 30 or more days ago. In-app triage spend is on Billing, outside these figures.
+
+The `get_work_outcomes` API also reports how sends reach a runtime and how the workspace uses Work each week. Outcomes does not draw these figures yet.
+
+- **Delivery** puts each send of the window in one group: claimed by a runtime, rejected, withdrawn before a claim, or still waiting. It also gives the minutes from send to claim, with the median, the 90th percentile, and the sample.
+- **Each week** counts the items that came into Work and the sends people made. It also says whether at least one item was accepted and merged that week.
+
+These figures describe how work moves through the workspace. None of them names or rates a person.

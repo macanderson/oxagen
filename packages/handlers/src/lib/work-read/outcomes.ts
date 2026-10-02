@@ -96,6 +96,8 @@ export interface OutcomesInput {
   runs: ReadonlyMap<string, RunCost>;
   /** Sends a person made in the window, each with what the runtime did. */
   sends: readonly SendOutcome[];
+  /** More sends were made in the window than read.ts read. */
+  sendsTruncated: boolean;
   /** Items entered and sends made in each UTC week of the window, counted by the database. */
   intake: readonly WeekIntake[];
 }
@@ -161,7 +163,7 @@ function countKind(facts: readonly WorkFact[], kind: WorkFact["kind"]): number {
 }
 
 /** Each send in one bucket, and the claim time over the claimed sends. Pure. */
-function countDelivery(sends: readonly SendOutcome[]): WorkOutcomesGetOutput["delivery"] {
+function countDelivery(sends: readonly SendOutcome[], truncated: boolean): WorkOutcomesGetOutput["delivery"] {
   let claimed = 0;
   let rejected = 0;
   let withdrawn = 0;
@@ -188,6 +190,7 @@ function countDelivery(sends: readonly SendOutcome[]): WorkOutcomesGetOutput["de
     withdrawn,
     waiting,
     claim_minutes: { median: nearestRank(minutes, 0.5), p90: nearestRank(minutes, 0.9), sample: minutes.length },
+    truncated,
   };
 }
 
@@ -282,7 +285,7 @@ export function computeOutcomes(input: OutcomesInput): Omit<WorkOutcomesGetOutpu
     touches: { per_item: accepted.length === 0 ? null : touchTotal / accepted.length, ...touches },
     cost: costOf(runIds, input.runs),
     reopens: { cohort, reopened, waiting },
-    delivery: countDelivery(input.sends),
+    delivery: countDelivery(input.sends, input.sendsTruncated),
     weeks,
   };
 }

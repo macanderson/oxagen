@@ -277,6 +277,9 @@
               "sample"
             ],
             "additionalProperties": false
+          },
+          "truncated": {
+            "type": "boolean"
           }
         },
         "required": [
@@ -285,7 +288,8 @@
           "rejected",
           "withdrawn",
           "waiting",
-          "claim_minutes"
+          "claim_minutes",
+          "truncated"
         ],
         "additionalProperties": false
       },

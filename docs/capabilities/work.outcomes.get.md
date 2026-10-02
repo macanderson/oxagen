@@ -31,8 +31,8 @@ Count the workspace's work accepted and merged, returned, and closed in a window
 | `touches` | object | A person's decisions on the accepted items, and the touches per item |
 | `cost` | `{ runs, known_runs, total }` | What the accepted items' runs cost |
 | `reopens` | `{ cohort, reopened, waiting }` | Reopens of items that finished 30 or more days ago |
-| `delivery` | `{ sends, claimed, rejected, withdrawn, waiting, claim_minutes }` | The sends a person made in the window, each in one bucket, and the minutes from send to claim |
-| `truncated` | `boolean` | True when more items finished, or more sends were made, than one read counts |
+| `delivery` | `{ sends, claimed, rejected, withdrawn, waiting, claim_minutes, truncated }` | The sends a person made in the window, each in one bucket, and the minutes from send to claim |
+| `truncated` | `boolean` | True when more items finished than one read counts |
 | `weeks` | `{ week, accepted_merged, returned, median_lead_hours, entered, sent, full_flow }[]` | Each UTC week from Monday that overlaps the window |
 
 ## Semantics
@@ -50,7 +50,7 @@ Every figure is counted from the work records ([ADR-244](../adr/ADR-244-phase-1-
 - `claim_minutes` runs from each claimed send to the runtime's first claim. The median and the 90th percentile use the nearest rank, as lead time does, and both are null with no sample. A claim time that would run backwards is left out of the sample.
 - A week's `entered` counts the items whose first source reading, collected or entered, fell in that week. Its `sent` counts the sends a person made that week. The database counts both, so neither stops at a cap.
 - A week's `full_flow` is true when at least one item was accepted and merged in that week.
-- One read counts at most 2,000 items and 2,000 sends, newest first. `truncated` is true when either read had more. The figures then cover the newest ones.
+- One read counts at most 2,000 items and 2,000 sends, newest first. `truncated` is true when more items could count, and `delivery.truncated` when more sends were made. The figures then cover the newest ones.
 
 A refusal answers with a code:
 

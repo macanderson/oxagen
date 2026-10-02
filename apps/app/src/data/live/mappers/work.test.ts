@@ -309,6 +309,7 @@ describe("toWorkTargetList and toWorkOutcomes", () => {
         withdrawn: 0,
         waiting: 1,
         claim_minutes: { median: 3, p90: 3, sample: 1 },
+        truncated: false,
       },
       truncated: false,
       weeks: [{ week: "2026-09-28", accepted_merged: 0, returned: 1, median_lead_hours: null, entered: 2, sent: 2, full_flow: false }],

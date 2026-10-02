@@ -128,12 +128,14 @@ export const workOutcomesGet = registerCapability({
               sample: z.number().int().nonnegative(),
             })
             .strict(),
+          /** More sends were made in the window than one read counts. The delivery figures cover the newest of them. */
+          truncated: z.boolean(),
         })
         .strict(),
       /**
-       * More items finished, or more sends were made, than one read counts.
-       * Those figures cover the newest of them. The weekly entered and sent
-       * counts never stop at a cap.
+       * More items finished than one read counts. The figures cover the
+       * newest of them. Delivery carries its own flag, and the weekly entered
+       * and sent counts never stop at a cap.
        */
       truncated: z.boolean(),
       weeks: z.array(

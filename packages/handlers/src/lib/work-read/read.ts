@@ -711,9 +711,12 @@ const OUTCOMES_SENDS_MAX = 2000;
 /** What the outcomes read loaded inside its tenant transaction. */
 interface OutcomesLoad {
   items: OutcomeItem[];
+  /** More items could count than the read took. */
+  itemsTruncated: boolean;
   sends: SendOutcome[];
+  /** More sends were made in the window than the read took. */
+  sendsTruncated: boolean;
   intake: WeekIntake[];
-  truncated: boolean;
 }
 
 /**
@@ -831,8 +834,9 @@ async function intakeByWeek(tx: Tx, scope: WorkScope, windowStart: Date, now: Da
  *
  * For the pilot measures it also reads the sends in the window, at most
  * OUTCOMES_SENDS_MAX of them, and each week's entered and sent counts, which
- * have no cap. `truncated` says when the items or the sends ran past their
- * cap. The caller runs inside the tenant scope.
+ * have no cap. `truncated` says when the items ran past their cap, and
+ * `delivery.truncated` when the sends did. The caller runs inside the tenant
+ * scope.
  */
 export async function readWorkOutcomes(scope: WorkScope, days: number, now: Date): Promise<WorkOutcomesGetOutput> {
   const windowStart = new Date(now.getTime() - days * DAY_MS);
@@ -876,9 +880,10 @@ export async function readWorkOutcomes(scope: WorkScope, days: number, now: Date
     const intake = await intakeByWeek(tx, scope, windowStart, now);
     return {
       items: outcomeItems,
+      itemsTruncated: candidates.length > OUTCOMES_ITEMS_MAX,
       sends: sent.sends,
+      sendsTruncated: sent.truncated,
       intake,
-      truncated: candidates.length > OUTCOMES_ITEMS_MAX || sent.truncated,
     };
   });
   // Price only the runs of items done in the window: those are the ones the
@@ -894,7 +899,7 @@ export async function readWorkOutcomes(scope: WorkScope, days: number, now: Date
     doneInWindow.flatMap((item) => itemRunIds(item.projection)),
   );
   return {
-    ...computeOutcomes({ now, days, items: loaded.items, runs, sends: loaded.sends, intake: loaded.intake }),
-    truncated: loaded.truncated,
+    ...computeOutcomes({ now, days, items: loaded.items, runs, sends: loaded.sends, sendsTruncated: loaded.sendsTruncated, intake: loaded.intake }),
+    truncated: loaded.itemsTruncated,
   };
 }

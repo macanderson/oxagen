@@ -52,7 +52,7 @@ const DONE_SLOW = [
 const usd = (micros: bigint | null): RunCost => ({ costMicros: micros, currency: "USD", basis: "metered", tier: "gateway" });
 
 /** A 7-day window with nothing in it. */
-const EMPTY: OutcomesInput = { now: NOW, days: 7, items: [], runs: new Map(), sends: [], intake: [] };
+const EMPTY: OutcomesInput = { now: NOW, days: 7, items: [], runs: new Map(), sends: [], sendsTruncated: false, intake: [] };
 
 /** A send at `minute`, changed by `over`. */
 function send(minute: number, over: Partial<SendOutcome> = {}): SendOutcome {
@@ -104,7 +104,7 @@ describe("computeOutcomes", () => {
   ]);
   // The database named only the week the fixtures fall in.
   const intake = [{ week: "2026-09-28", entered: 4, sent: 3 }];
-  const out = workOutcomesGet.output.parse({ ...computeOutcomes({ now: NOW, days: 7, items, runs, sends: [], intake }), truncated: false });
+  const out = workOutcomesGet.output.parse({ ...computeOutcomes({ now: NOW, days: 7, items, runs, sends: [], sendsTruncated: false, intake }), truncated: false });
 
   it("counts accepted and merged, returned, and closed apart", () => {
     expect(out.days).toBe(7);
@@ -164,6 +164,7 @@ describe("computeOutcomes", () => {
       withdrawn: 0,
       waiting: 0,
       claim_minutes: { median: null, p90: null, sample: 0 },
+      truncated: false,
     });
     expect(result.weeks.length).toBeGreaterThanOrEqual(5);
     expect(result.weeks.every((week) => week.entered === 0 && week.sent === 0 && !week.full_flow)).toBe(true);
@@ -190,6 +191,7 @@ describe("the pilot measures", () => {
       withdrawn: 1,
       waiting: 1,
       claim_minutes: { median: 2, p90: 10, sample: 2 },
+      truncated: false,
     });
     expect(delivery.claimed + delivery.rejected + delivery.withdrawn + delivery.waiting).toBe(delivery.sends);
   });
@@ -200,6 +202,12 @@ describe("the pilot measures", () => {
     const { delivery } = computeOutcomes({ ...EMPTY, sends: [...claimed, backwards] });
     expect(delivery.claimed).toBe(6);
     expect(delivery.claim_minutes).toEqual({ median: 5, p90: 9, sample: 5 });
+  });
+
+  it("says when the sends ran past the read's cap on delivery alone", () => {
+    const result = workOutcomesGet.output.parse({ ...computeOutcomes({ ...EMPTY, sends: [send(0)], sendsTruncated: true }), truncated: false });
+    expect(result.delivery).toMatchObject({ sends: 1, waiting: 1, truncated: true });
+    expect(result.truncated).toBe(false);
   });
 
   it("reads each week's entered and sent counts from the database's intake, and 0 for a week it did not name", () => {

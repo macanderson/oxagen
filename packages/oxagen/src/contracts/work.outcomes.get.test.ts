@@ -18,6 +18,7 @@ const OUTPUT = {
     withdrawn: 1,
     waiting: 1,
     claim_minutes: { median: 2, p90: 12.5, sample: 4 },
+    truncated: false,
   },
   truncated: false,
   weeks: [{ week: "2026-09-28", accepted_merged: 2, returned: 0, median_lead_hours: 5, entered: 6, sent: 3, full_flow: true }],
@@ -56,6 +57,7 @@ describe("get_work_outcomes contract", () => {
         withdrawn: 0,
         waiting: 0,
         claim_minutes: { median: null, p90: null, sample: 0 },
+        truncated: false,
       },
       weeks: [{ week: "2026-09-28", accepted_merged: 0, returned: 0, median_lead_hours: null, entered: 0, sent: 0, full_flow: false }],
     };
