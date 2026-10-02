@@ -245,6 +245,13 @@ describe("recurring runs", () => {
       why: `5 runs started with the same prompt in the last 30 days. 5 of them changed nothing. ${WHY_TAIL}`,
     });
     expect(finding!.fix).toContain("instead of on a clock");
+    // #5023: the card names the group's size and its runs that changed nothing.
+    expect(finding!.evidence.values).toEqual({
+      kind: "recurring_runs",
+      groupSize: 5,
+      unchanged: 5,
+      otherPrompts: 0,
+    });
     expect([...finding!.citedRuns].sort()).toEqual(runs.map((r) => r.runId));
     expect(finding!.evidence).toMatchObject({ calls: 15, coveredCalls: 15 });
     expect(finding!.evidence.frames).toBeUndefined();
@@ -920,6 +927,12 @@ describe("recurring runs", () => {
     expect(findings[0]!.why).toBe(
       `6 runs started with the same prompt in the last 30 days. 6 of them changed nothing. 1 other prompt also started 5 or more runs each, and 5 runs of those changed nothing. ${WHY_TAIL}`,
     );
+    expect(findings[0]!.evidence.values).toEqual({
+      kind: "recurring_runs",
+      groupSize: 6,
+      unchanged: 6,
+      otherPrompts: 1,
+    });
   });
 
   it("adds nothing from a prompt whose runs are all unknown to another prompt's finding", () => {
