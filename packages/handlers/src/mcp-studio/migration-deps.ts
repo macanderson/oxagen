@@ -74,7 +74,9 @@ export function toolMigrationDeps(): ToolMigrationDeps {
   return {
     now: () => new Date(),
 
-    hasSteeringRepo: (scope) => registeredOpener().hasSteeringRepo(scope),
+    // async so a missing opener rejects instead of throwing before the caller
+    // holds a promise.
+    hasSteeringRepo: async (scope) => registeredOpener().hasSteeringRepo(scope),
 
     movableServers: (scope) =>
       withTenantDb((tx) => listMovableLegacyServers(tx, scope)),
