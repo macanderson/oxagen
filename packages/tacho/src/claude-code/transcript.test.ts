@@ -339,3 +339,132 @@ describe("pull requests the session opened", () => {
     expect(line({ type: "pr-link", prNumber: 1 }).drafts).toEqual([]);
   });
 });
+
+describe("the sender of a message another agent sent", () => {
+  const messageBody = KIND_BODIES["oxagen:message"];
+  const KEY = "sk-ant-api03-SyntheticKeyForTachoTests0123456789abcdefghijkl";
+
+  /**
+   * A `user` line Claude Code 2.1.287 wrote for a message another agent
+   * sent. The members and their order are as recorded. Every value that
+   * named a person, a path, a session or the message is synthetic.
+   */
+  const PEER_LINE = {
+    parentUuid: "5d0c7a1e-2b3f-4c5d-8e9f-000000000001",
+    isSidechain: false,
+    promptId: "5d0c7a1e-2b3f-4c5d-8e9f-000000000002",
+    type: "user",
+    message: { role: "user", content: "The lint step passes now." },
+    isMeta: true,
+    uuid: "5d0c7a1e-2b3f-4c5d-8e9f-000000000003",
+    timestamp: "2026-09-30T14:02:11.000Z",
+    permissionMode: "bypassPermissions",
+    origin: {
+      kind: "peer",
+      from: "uds:/tmp/peer-sockets/40001.sock",
+      verifiedPeerPid: 40001,
+      msg_id: "5d0c7a1e-2b3f-4c5d-8e9f-000000000004",
+      name: "lint-fixer",
+      fromMode: "bypass",
+      body: "The lint step passes now.",
+    },
+    promptSource: "system",
+    turnOrigin: "peer",
+    turnPosition: { promptIndex: 1, turnIndex: 1 },
+    queueSkipAttachments: true,
+    sessionKind: "bg",
+    userType: "external",
+    entrypoint: "cli",
+    cwd: "/home/dev/proj",
+    sessionId: "5d0c7a1e-2b3f-4c5d-8e9f-000000000100",
+    version: "2.1.287",
+    gitBranch: "main",
+  };
+
+  function peer(origin: Record<string, unknown>, content?: string) {
+    const out = line({
+      ...PEER_LINE,
+      ...(content !== undefined ? { message: { role: "user", content } } : {}),
+      origin,
+    });
+    expect(out.drafts).toHaveLength(1);
+    return out.drafts[0]!;
+  }
+
+  it("keeps who sent the message and drops what they sent", () => {
+    const draft = line(PEER_LINE).drafts[0]!;
+    expect(draft.kind).toBe("oxagen:message");
+    expect(draft.body["prompt_source"]).toBe("system");
+    expect(draft.body["prompt_origin"]).toEqual({
+      kind: "peer",
+      from: "uds:/tmp/peer-sockets/40001.sock",
+      verifiedPeerPid: 40001,
+      msg_id: "5d0c7a1e-2b3f-4c5d-8e9f-000000000004",
+      name: "lint-fixer",
+      fromMode: "bypass",
+    });
+    expect(messageBody.safeParse(draft.body).success).toBe(true);
+  });
+
+  it("keeps the other recorded sender members and drops any it does not list", () => {
+    const draft = peer({
+      kind: "peer",
+      from: "task-9f2c",
+      senderTaskId: "task-9f2c",
+      name: "worker",
+      fromSession: "local_5d0c7a1e",
+      hopChain: ["5d0c7a1e0b1f4f6e9d3a0001"],
+      body: "The tests pass.",
+      futureMember: "free text Claude Code may add later",
+      nested: { text: "anything" },
+    });
+    expect(draft.body["prompt_origin"]).toEqual({
+      kind: "peer",
+      from: "task-9f2c",
+      name: "worker",
+      fromSession: "local_5d0c7a1e",
+      senderTaskId: "task-9f2c",
+      hopChain: ["5d0c7a1e0b1f4f6e9d3a0001"],
+    });
+  });
+
+  it("puts a credential from the message body in no body member", () => {
+    // The prompt text itself is the frame's `content`, which the recorder
+    // redacts when it seals. The origin's copy is a body member and was
+    // never redacted.
+    const draft = peer(
+      { ...PEER_LINE.origin, body: `deploy with ${KEY}` },
+      "deploy with the key I sent",
+    );
+    expect(JSON.stringify(draft.body)).not.toContain(KEY);
+    expect(JSON.stringify(draft.body)).not.toContain("deploy with");
+    expect(JSON.stringify(draft.attrs)).not.toContain(KEY);
+    expect(JSON.stringify(draft.context)).not.toContain(KEY);
+  });
+
+  it("replaces a credential in a kept member with its marker", () => {
+    const draft = peer({ ...PEER_LINE.origin, name: `agent ${KEY}` });
+    const origin = draft.body["prompt_origin"] as Record<string, unknown>;
+    expect(origin["name"]).toMatch(/^agent /);
+    expect(origin["name"]).not.toContain(KEY);
+  });
+
+  it("keeps the kind of every other origin as recorded", () => {
+    expect(peer({ kind: "human" }).body["prompt_origin"]).toEqual({
+      kind: "human",
+    });
+    expect(
+      peer({ kind: "task-notification", producer: "session-task" }).body[
+        "prompt_origin"
+      ],
+    ).toEqual({ kind: "task-notification", producer: "session-task" });
+  });
+
+  it("leaves out an origin that is not an object naming a kind", () => {
+    expect(peer({ body: "no kind" }).body).not.toHaveProperty(
+      "prompt_origin",
+    );
+    const out = line({ ...PEER_LINE, origin: "peer" });
+    expect(out.drafts[0]?.body).not.toHaveProperty("prompt_origin");
+  });
+});
