@@ -28,15 +28,20 @@ private_repositories = [
   "oxagen-gtm",
 ]
 
-# Set to true once scripts/store-github-app.sh has written the App's values.
-github_app_ready = false
+# The App exists (id 5153708) and its id, key, and webhook secret are in
+# Parameter Store (2026-10-01).
+github_app_ready = true
 
-# Idle runners per pool once the App is ready. Speed first (Mac, 2026-10-01).
+# Idle runners per pool. Mac chose speed over concurrency on 2026-10-01, so
+# the heavy pipeline jobs run on oxagen-large-x64 and ten of those wait warm,
+# enough for one pull request's heavy lanes to start at once. Ten small
+# runners carry the light jobs and housekeeping. The account holds 300 spot
+# and 300 on-demand vCPUs, so the warm pools hold 216 of them idle.
 warm_pool = {
-  "oxagen-large-arm64" = 30
+  "oxagen-large-arm64" = 0
   "oxagen-large-x64"   = 10
-  "oxagen-small-arm64" = 20
-  "oxagen-small-x64"   = 4
+  "oxagen-small-arm64" = 0
+  "oxagen-small-x64"   = 10
   "oxagen-deploy"      = 1
 }
 

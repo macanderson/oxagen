@@ -49,11 +49,11 @@ UI, and Monaspace Neon for code, and the app loads the kit's faces.
 The mockup is read at one commit:
 
 ```
-oxageninc/roadmap @ 41cb720584b4829f213eb5910f634452ea21f53a, path mockups/
+oxageninc/roadmap @ bfd267fc88679fa8a88bc6a185112850c81e6581, path mockups/
 ```
 
-This is the last `main` commit that touched `mockups/` (roadmap #273,
-2026-09-29 23:11 UTC). Every other file that sends an agent to the mockup
+This is the last `main` commit that touched `mockups/` (roadmap #283,
+2026-10-01 03:00 UTC). Every other file that sends an agent to the mockup
 points here instead of repeating the SHA.
 
 Amended 2026-09-29: the pin moves from roadmap #261 (`8a4c0a45`) to roadmap
@@ -67,9 +67,21 @@ Off switches), with Connect an agent as its one primary action, and a server
 page at `agents/<server>`. It also carries the Agent work phase pages of
 roadmap #269 and #270.
 
+Amended 2026-10-01: the pin moves from roadmap #273 (`41cb7205`) to roadmap
+#283 (`bfd267fc`). Mac decided on 2026-09-30 that the mockup draws the app's
+agent pages (roadmap #276): the Agents tab is the app's four tiles and its agents
+table with the Composition
+and Operations columns, an agent opens its own page at `agents/<key>/<tab>` with
+the app's seven tabs, and every agent avatar carries its harness mark in the
+lower-left corner, as `AgentAvatar` draws it. The new commit also carries the kit
+wordmark and installable pages (roadmap #274), the parity audit's page registry
+and prompts (#275), the organization steering repo named `oxagen-config` (#277),
+the Phase 1 Work lifecycle and its error states (#278), and the house brand
+synced from `oxagen-brand` (#283).
+
 To read a file at the pin, run
-`git -C ../oxagen-roadmap show 41cb720584b4829f213eb5910f634452ea21f53a:mockups/README.md`,
-or open `https://github.com/oxageninc/roadmap/tree/41cb720584b4829f213eb5910f634452ea21f53a/mockups`.
+`git -C ../oxagen-roadmap show bfd267fc88679fa8a88bc6a185112850c81e6581:mockups/README.md`,
+or open `https://github.com/oxageninc/roadmap/tree/bfd267fc88679fa8a88bc6a185112850c81e6581/mockups`.
 
 Moving the pin is a permitted amendment to this ADR. A pull request changes the
 SHA and the date on the pin line, and names the mockup changes the new commit

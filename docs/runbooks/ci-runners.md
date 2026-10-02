@@ -11,11 +11,19 @@ A workflow picks a pool by its one label.
 
 | Label | Arch | Size | Warm runners | Max | Network |
 |---|---|---|---|---|---|
-| `oxagen-large-arm64` | arm64 | 16 vCPU, 64 to 128 GB | 30 | 250 | CI VPC |
+| `oxagen-large-arm64` | arm64 | 16 vCPU, 64 to 128 GB | 0 | 250 | CI VPC |
 | `oxagen-large-x64` | x64 | 16 vCPU, 64 to 128 GB | 10 | 100 | CI VPC |
-| `oxagen-small-arm64` | arm64 | 4 vCPU, 16 GB | 20 | 150 | CI VPC |
-| `oxagen-small-x64` | x64 | 4 vCPU, 16 GB | 4 | 50 | CI VPC |
+| `oxagen-small-arm64` | arm64 | 4 vCPU, 16 GB | 0 | 150 | CI VPC |
+| `oxagen-small-x64` | x64 | 4 vCPU, 16 GB | 10 | 150 | CI VPC |
 | `oxagen-deploy` | arm64 | 16 vCPU, 64 GB | 1 | 6 | production VPC |
+
+`pipeline.yml` sends `checks`, `build`, `unit`, `e2e`, `rls-integration`, and
+`rds-compatibility` to `oxagen-large-<arch>`, the light jobs to
+`oxagen-small-<arch>`, and every production job to `oxagen-deploy`. The
+repository variables choose: `CI_RUNNERS=aws` turns our runners on,
+`CI_RUNNER_ARCH` picks `x64` (the default) or `arm64`, `CI_HEAVY_POOL=small`
+sends the heavy jobs to the small pool, and `CI_IMAGE_REGISTRY` points the
+toolchain and service images at ECR Public (`public.ecr.aws/z5z6u7g2`).
 
 `locals.pools` in `runners.tf` lists each pool's instance types in priority
 order, and `warm_pool` in `terraform.tfvars` sets the warm sizes. The warm
@@ -30,20 +38,15 @@ from another branch waits for a runner that never comes. Dispatch from `main`.
 roll back with `CI_RUNNERS` first, and the apply that repairs them runs on a
 GitHub-hosted runner.
 
-## While the EC2 quota is small
+## The EC2 quota
 
-Until AWS approves the quota cases below, the account holds 64 vCPUs of
-runners at once: four 16-vCPU runners or sixteen 4-vCPU ones. Run this way:
-
-- `CI_HEAVY_POOL=small` sends the heavy `pipeline.yml` jobs to the 4-vCPU,
-  16 GB pool, 16 at a time, with turbo at 4 tasks.
-- `github_app_ready` stays `false`, so no warm runner holds capacity a job
-  needs. Jobs start cold, in about a minute.
-- The housekeeping workflows stay on GitHub-hosted runners (#5000 waits), so
-  our capacity adds to GitHub's.
-
-When the quota lands, delete `CI_HEAVY_POOL`, set `github_app_ready = true`,
-and merge #5000.
+On 2026-10-01 AWS approved 300 spot and 300 on-demand vCPUs, with the cases
+for 2,400 and 1,000 still open. That holds about 37 large runners or 150
+small ones at once. Mac chose speed over concurrency, so the heavy jobs use
+the large pool. When a burst needs more runners than the quota holds, the
+fleet fails over from spot to on-demand and then queues, and the queue-age
+and vCPU alarms fire. To trade speed for concurrency during a crunch, set
+`CI_HEAVY_POOL=small`, and delete it afterwards.
 
 ## Roll back to GitHub-hosted runners
 
@@ -86,7 +89,12 @@ function above. Roll back with `CI_RUNNERS` first if jobs must keep running.
 
 ## Rebuild the runner image
 
-Image Builder rebuilds both images at 07:00 UTC every day. To build now:
+Image Builder rebuilds both images at 07:00 UTC every day. A build downloads
+`image/` from the assets bucket when it starts, and every `infra` apply of
+this stack uploads those files again from the commit being applied. Start a
+build by hand only when no `infra` run is in progress, or a run applying an
+older commit can replace the files under it (2026-10-01, build 4). To build
+now:
 
 ```sh
 for arn in $(aws imagebuilder list-image-pipelines --query "imagePipelineList[?starts_with(name, 'oxagen-ci-runner-')].arn" --output text); do
@@ -97,7 +105,7 @@ done
 A build takes 20 to 40 minutes. When it finishes, Image Builder writes the new
 AMI id to `/imagebuilder/oxagen-ci-runner/arm64` and `/imagebuilder/oxagen-ci-runner/x64`,
 and the next runner launches from it. Build logs are in the
-`/oxagen/ci-runners/image-builds` log group and under `logs/` in
+`/aws/imagebuilder/oxagen-ci-runner` log group and under `logs/` in
 `s3://oxagen-ci-runners-916294258235`.
 
 To roll an image back, point the parameter at an older AMI:
@@ -110,6 +118,17 @@ aws ssm put-parameter --name /imagebuilder/oxagen-ci-runner/arm64 --type String 
 
 The next scheduled build overwrites it. Set the pipeline's status to
 `DISABLED` in `image.tf` to hold an image longer.
+
+## How a runner starts
+
+`ci-start-runner.service` runs the module's start script once the network is
+up, about 25 seconds into boot. The script reads its pool's settings from the
+instance tags and Parameter Store, registers with a JIT config, runs one job,
+and terminates the instance. Docker starts beside it. The image does not use
+cloud-init's per-boot directory, because Image Builder's cleanup empties
+`/var/lib/cloud`. Node is on the `PATH` (`/usr/local/bin`) and in the tool
+cache. A runner that does not register within 5 minutes is removed by
+scale-down.
 
 ## Create the GitHub App
 
@@ -174,10 +193,21 @@ topic. Confirm the subscription email once after the first apply.
 | `ci-runners-<pool>-scale-up-errors` | The scale-up Lambda threw 3 or more times in 5 minutes | Same log group. `Bad credentials` means the App's key is wrong. `VcpuLimitExceeded` means a quota |
 | `ci-runners-webhook-errors` | GitHub's events are not reaching the queues | `/aws/lambda/ci-webhook`. `signature` errors mean the webhook secret differs between GitHub and Parameter Store |
 | `ci-runners-webhook-5xx` | API Gateway answered GitHub with 5xx | The same log group, and the App's "Advanced" tab for failed deliveries |
-| `ci-runners-image-build-failed` (an EventBridge rule, not an alarm) | A runner image failed to build | The `/oxagen/ci-runners/image-builds` log group. Runners keep the previous image |
+| `ci-runners-image-build-failed` (an EventBridge rule, not an alarm) | A runner image failed to build | The `/aws/imagebuilder/oxagen-ci-runner` log group. Runners keep the previous image |
+
+| `ci-runners-<spot or on-demand>-vcpu-near-quota` | Running vCPUs passed 80% of the EC2 quota for 5 minutes | Compare busy runners with instances: `gh api orgs/oxageninc/actions/runners --paginate --jq '[.runners[] \| select(.busy)] \| length'` against the instance count above. Busy close to instances means real demand, so raise the quota. Many instances and few busy runners means machines that boot and never register: drain the pools, read one instance's console (`aws ec2 get-console-output --latest`), and fix the image |
 
 The AWS Budget `ci-runners-monthly` emails at 80% and 100% of actual spend and
 at 100% of forecast spend.
+
+## Runners that never register
+
+The runner registers with a JIT config made at launch, so GitHub lists a
+booting runner as `offline`. The pool Lambda counts only idle online runners,
+so a runner that takes longer than the pool's 2-minute interval to come
+online is launched again. On 2026-10-01 a broken image did that to 121
+machines in 15 minutes. Drain the pools as above whenever the image is
+suspect, and resume them once a runner registers in under a minute.
 
 ## A job that waits
 

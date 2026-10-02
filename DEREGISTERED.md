@@ -267,13 +267,31 @@ candidate when this file is next pruned.
 
 ## 8. Memory import
 
-**De-registered by:** spec Appendix E, "records are appended, not imported".
-**Replaced by:** `append_record` / `propose_record` (`packages/oxagen/src/contracts/v2/`).
+**De-registered by:** spec Appendix E, "records are appended, not imported",
+and the memory collection spec's lane IMP1 (#4907), which took both off every
+surface on 2026-09-30.
+**Replaced by:** `parse_markdown_import` / `commit_markdown_import`
+(`packages/oxagen/src/contracts/steering.markdown_import.*.ts`, handlers in
+`packages/handlers/src/markdown-import/`), which read Markdown files into
+steering records and Cedar policies and open one steering PR. `oxagen memory
+import` calls the new pair.
 
 | Registered name | Stem | Parity |
 |---|---|---|
-| `parse_memory_import` | `agent.memory_import.parse` | C_AM |
-| `commit_memory_import` | `agent.memory_import.commit` | C_AM |
+| `parse_memory_import` | `agent.memory_import.parse` | C___ |
+| `commit_memory_import` | `agent.memory_import.commit` | C___ |
+
+Both contracts declare `surfaces: []`, and neither has a handler
+registration: the two loaders left `packages/agent/src/handlers/index.ts`, and
+`packages/handlers/src/capability-dispatch.probe.test.ts` names both in its
+`NO_HANDLER_OK` set. The handler files stay in `packages/agent/src/handlers/`
+(`agent.memory_import.parse.ts`, `agent.memory_import.commit.ts`) with the
+splitter in `packages/agent/src/memory/import.ts`, unloaded.
+[ADR-239](docs/adr/ADR-239-the-neo4j-memory-import-loses-its-adapters-and-its-deprecated-upload.md)
+deleted the API routes, the MCP tools, and `apps/app_deprecated`'s Bulk Import
+server actions, which §13 lists. A contract on no surface can hold neither a
+route nor a tool: the MCP tool registry test requires a tool file for exactly
+the contracts on the `mcp` surface.
 
 ---
 
@@ -359,6 +377,7 @@ the only path from this file to `git rm`.
 | Feature | ADR | Deleted in | Recoverable from |
 |---|---|---|---|
 | The agent definition file (`.oxagen/agents/<slug>.toml`) and every capability that authored or read it: `propose_agent`, `commit_agent_definition`, `create/update/delete/publish/get/list_agent_def(s)`, `suggest/revise/summarize_agent_def`, `deploy_agent`, the `agent` kind of the configuration clone, `agent-definition-source.ts`, and their routes, MCP tools, handlers and docs. An agent is now one operator on one runtime with one harness, carrying a toolbelt. | [ADR-198](docs/adr/ADR-198-an-agent-is-one-operator-on-one-runtime-with-one-harness.md) | #4369 | git history before #4369 |
+| The Neo4j memory import's adapters: the API routes `apps/api/src/routes/v1/agent.memory_import.{parse,commit}.ts`, the MCP tools `apps/mcp/src/tools/agent.memory_import.{parse,commit}.ts`, and `apps/app_deprecated`'s `knowledge/memory/bulk-import-actions.ts` with its test. The contracts and handlers stay, as §8 says. | [ADR-239](docs/adr/ADR-239-the-neo4j-memory-import-loses-its-adapters-and-its-deprecated-upload.md) | #4928 | git history before #4928 |
 
 ---
 
