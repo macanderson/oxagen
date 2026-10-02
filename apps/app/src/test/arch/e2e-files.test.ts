@@ -153,10 +153,18 @@ describe("e2e files", () => {
   });
 
   it("test:e2e fails when Playwright matches no test", () => {
-    const pkg = JSON.parse(
+    const pkg: unknown = JSON.parse(
       readFileSync(path.join(APP_DIR, "package.json"), "utf8"),
-    ) as { scripts?: Record<string, string> };
-    const script = pkg.scripts?.["test:e2e"] ?? "";
+    );
+    const scripts =
+      typeof pkg === "object" && pkg !== null && "scripts" in pkg
+        ? pkg.scripts
+        : undefined;
+    const script =
+      typeof scripts === "object" && scripts !== null && "test:e2e" in scripts
+        ? scripts["test:e2e"]
+        : undefined;
+    expect(typeof script).toBe("string");
     expect(script).toMatch(/\bplaywright test\b/);
     expect(script).not.toContain("--pass-with-no-tests");
   });
