@@ -43,7 +43,7 @@ export interface CodeRepoCheckRequest {
   /**
    * Null for a check of an open pull request. `merged` or `unmerged` when the
    * pull request closed: the job then settles the stored findings and posts
-   * no check (ADR-253).
+   * no check (ADR-254).
    */
   closed: CodeRepoPullRequestClose | null;
   /** The commit a merge made on the default branch, when the host names it. */

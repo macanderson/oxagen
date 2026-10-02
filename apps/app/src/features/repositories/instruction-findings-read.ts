@@ -1,6 +1,6 @@
 // The instruction-file statements in the workspace's linked code repositories
 // that repeat or contradict a steering record, as the Repositories page reads
-// them (#4518, ADR-253). The Oxagen check stores each statement it flags on a
+// them (#4518, ADR-254). The Oxagen check stores each statement it flags on a
 // pull request, and `list_code_repository_findings` compares them with
 // today's records. This module reads it through the lane's server action and
 // keeps what the section draws.

@@ -12,14 +12,16 @@ name: Release
 #         other PR, including `check:prose` on the notes.
 #
 #   tag   (push to main) runs when that PR merges: it tags `vX.Y.Z` and
-#         `desktop-vX.Y.Z`, opens the GitHub release with the notes, publishes
-#         `@oxagen/cli` to npm, and the `desktop-v*` tag starts desktop.yml,
-#         whose publish job builds the app, copies the installers to
+#         `desktop-vX.Y.Z` and opens the GitHub release with the notes. The
+#         `v*` tag starts npm.yml, which publishes `@oxagen/cli` to npm
+#         (ADR-253), and the `desktop-v*` tag starts desktop.yml, whose
+#         publish job builds the app, copies the installers to
 #         downloads.oxagen.sh and rewrites its page. The docs page deploys
 #         with main, so docs.oxagen.sh/docs/releases/vX.Y.Z is live before the
 #         installers are. Between releases, a deploy that changes the
 #         installer sources, and a daily schedule, publish a build of main
-#         (`X.Y.(Z+1)-N`) the same way (ADR-158, #4918).
+#         (`X.Y.(Z+1)-N`) the same way (ADR-158, #4918). Every production
+#         deploy publishes the CLI's build of main to npm the same way.
 #
 # RELEASE_TOKEN is required: a fine-grained personal access token for this
 # repository with contents: write, pull requests: write and workflows: write,
@@ -98,7 +100,7 @@ jobs:
       - uses: ./.github/actions/pnpm-install
 
       # --no-git: this job commits and pushes itself, to a branch, below.
-      # --no-npm: the tag job publishes the CLI once the version is on main.
+      # --no-npm: npm.yml publishes the CLI once the release tag exists.
       #
       # There is no longer a --no-vercel to pass. The step it skipped wrote
       # PLATFORM_VERSION into the Vercel projects; production runs on AWS and
@@ -175,9 +177,12 @@ jobs:
     if: "github.event_name == 'push' && startsWith(github.event.head_commit.message, 'chore(release): v')"
     runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-large-{0}', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
     timeout-minutes: 30
-    # A step's `if` cannot read `secrets`; it can read the job's `env`.
-    env:
-      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+    # Job-level scopes replace the workflow's. `actions: write` lets the
+    # fallback below dispatch desktop.yml and npm.yml; without it the dispatch
+    # API answers 403.
+    permissions:
+      contents: write
+      actions: write
     steps:
       - uses: actions/checkout@v5
         with:
@@ -219,8 +224,9 @@ jobs:
             git push origin "refs/tags/$tag"
           done
           if [ "$HAS_RELEASE_TOKEN" != "true" ]; then
-            echo "::warning::tags were pushed with GITHUB_TOKEN, which starts no workflow; dispatching desktop.yml on desktop-v$VERSION by hand."
+            echo "::warning::tags were pushed with GITHUB_TOKEN, which starts no workflow; dispatching desktop.yml on desktop-v$VERSION and npm.yml on v$VERSION by hand."
             gh workflow run desktop.yml --ref "desktop-v$VERSION"
+            gh workflow run npm.yml --ref "v$VERSION"
           fi
 
       - name: Open the GitHub release
@@ -242,33 +248,3 @@ jobs:
           } > notes.md
           gh release create "v$VERSION" --repo "$GITHUB_REPOSITORY" \
             --title "Oxagen v$VERSION" --notes-file notes.md --latest
-
-      - uses: ./.github/actions/pnpm-install
-
-      # The CLI as a single-file bundle with a clean manifest; publishing
-      # apps/cli/package.json itself would leak workspace:* deps. Same checks
-      # as release.ts's publishCliToNpm, which this replaces in CI.
-      - name: Publish @oxagen/cli to npm
-        if: env.NPM_TOKEN != ''
-        env:
-          VERSION: ${{ steps.v.outputs.version }}
-        run: |
-          set -euo pipefail
-          if npm view "@oxagen/cli@$VERSION" version >/dev/null 2>&1; then
-            echo "@oxagen/cli@$VERSION is already on npm; leaving it"
-            exit 0
-          fi
-          pnpm -C apps/cli publish:standalone
-          manifest="apps/cli/dist-standalone/package.json"
-          have="$(node -p "require('./$manifest').version")"
-          if [ "$have" != "$VERSION" ]; then
-            echo "::error::the standalone manifest says $have, not $VERSION"
-            exit 1
-          fi
-          if node -p "Object.values(require('./$manifest').dependencies||{}).some(v=>String(v).startsWith('workspace:'))" | grep -q true; then
-            echo "::error::workspace:* dependencies leaked into the publish manifest"
-            exit 1
-          fi
-          echo "//registry.npmjs.org/:_authToken=\${NPM_TOKEN}" > apps/cli/dist-standalone/.npmrc
-          (cd apps/cli/dist-standalone && npm publish)
-          echo "::notice::@oxagen/cli@$VERSION published"

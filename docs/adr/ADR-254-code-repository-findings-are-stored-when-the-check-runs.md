@@ -1,4 +1,4 @@
-# ADR-253: Code repository findings are stored when the check runs
+# ADR-254: Code repository findings are stored when the check runs
 
 - **Status:** Accepted. The agent building lane S7 chose this under SCR-002.
   Mac has not ruled on it.

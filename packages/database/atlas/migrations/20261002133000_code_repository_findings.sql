@@ -1,5 +1,5 @@
 -- The instruction-file statements the Oxagen check flags in linked code
--- repositories (S7, #4518, ADR-253).
+-- repositories (S7, #4518, ADR-254).
 --
 -- One row per statement the check on a pull request flagged: the repository,
 -- the pull request, the commit the check read, the file, the line, and the
@@ -42,7 +42,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS code_repository_findings_statement_uq ON agent
 CREATE INDEX IF NOT EXISTS code_repository_findings_repository_idx ON agent.code_repository_findings (org_id, workspace_id, provider, provider_repository_id, path);
 
 COMMENT ON TABLE agent.code_repository_findings IS
-  'Instruction-file statements the Oxagen check flagged on pull requests in linked code repositories (ADR-253).';
+  'Instruction-file statements the Oxagen check flagged on pull requests in linked code repositories (ADR-254).';
 COMMENT ON COLUMN agent.code_repository_findings.pull_request_state IS
   'open while the pull request is open, merged once its lines reached the default branch.';
 COMMENT ON COLUMN agent.code_repository_findings.proposal_public_id IS

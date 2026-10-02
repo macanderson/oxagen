@@ -1,7 +1,7 @@
 // audit-exempt: a proposal and its steering PR steer nothing until merge_context_pr publishes the record (MC spec §9.2), and that merge emits steering.published; the kernel's capability.invoke_* audit records the call.
 //
 // code-repo-check/promote.ts: promote_instruction_to_steering (S7, #4518;
-// ADR-253).
+// ADR-254).
 //
 // A person reads a finding on the Repositories page: a line in a code
 // repository's AGENTS.md (or another instruction file) that says the

@@ -121,9 +121,10 @@ export const CI_REGISTRY: Record<string, CiVarMeta> = {
   },
   NPM_TOKEN: {
     kind: "secret",
-    description: "npm token release.yml publishes the CLI package with.",
+    description:
+      "npm token npm.yml publishes @oxagen/cli with, after every production deploy and every release tag. It expires within 90 days.",
     refresh: {
-      how: "On npmjs.com, open Access Tokens and generate a granular token with publish rights on the CLI package. Delete the old token after the next release publishes.",
+      how: "On npmjs.com, signed in as the account that owns @oxagen, open Access Tokens and generate a granular token with read and write on @oxagen/cli and the longest expiry npm allows (90 days). If the account requires two-factor authentication for writes, let the token bypass it. Save it with `gh secret set NPM_TOKEN`, which reads the value from a prompt. Dispatch npm.yml with no inputs, or wait for the next deploy, and check its run publishes or reports the version already on npm. Then delete the old token. Mac rotates it on a scheduled routine.",
     },
   },
   OPENROUTER_API_KEY: {

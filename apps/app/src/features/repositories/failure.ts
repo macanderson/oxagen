@@ -83,7 +83,7 @@ export function useRepositoriesFailure(): (
             return t("gitlabNotConnected");
           case "repository_host_unsupported":
             return t("repositoryHostUnsupported");
-          // promote_instruction_to_steering (#4518, ADR-253).
+          // promote_instruction_to_steering (#4518, ADR-254).
           case "finding_not_found":
             return t("findingNotFound");
           case "finding_resolved":

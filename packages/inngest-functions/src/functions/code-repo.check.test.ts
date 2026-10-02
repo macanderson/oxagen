@@ -151,7 +151,7 @@ describe("codeRepoCheckRequestOf", () => {
     ).toBeNull();
   });
 
-  it("reads a closed pull request, and an event sent before closes were routed as a check (ADR-253)", () => {
+  it("reads a closed pull request, and an event sent before closes were routed as a check (ADR-254)", () => {
     const merged = {
       ...GITHUB_REQUEST,
       closed: "merged" as const,

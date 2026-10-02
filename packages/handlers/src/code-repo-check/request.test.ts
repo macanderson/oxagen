@@ -175,7 +175,7 @@ describe("githubCodeCheckRequests", () => {
     expect(deps.sharedHeads).not.toHaveBeenCalled();
   });
 
-  it("asks each linking workspace to settle a merged pull request's findings, with the merge commit (ADR-253)", async () => {
+  it("asks each linking workspace to settle a merged pull request's findings, with the merge commit (ADR-254)", async () => {
     const deps = heads({ "github:771020341": [linked(ORG, PLATFORM)] });
     const events = await githubCodeCheckRequests(
       { body: fixture("github-pull-request-closed"), installationId: "61200044" },
@@ -269,7 +269,7 @@ describe("the GitLab merge request request", () => {
     expect(gitlabMergeRequestHead({ ...event, action: "approved" }, body)).toBeNull();
   });
 
-  it("asks the workspace to settle a merge request that merged or closed (ADR-253)", async () => {
+  it("asks the workspace to settle a merge request that merged or closed (ADR-254)", async () => {
     const merged = { ...event, state: "merged", action: "merge", mergeCommitSha: "7a6b5c4d" };
     expect(gitlabMergeRequestClose(merged, body)?.close).toEqual({
       closed: "merged",

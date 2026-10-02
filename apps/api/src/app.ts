@@ -880,7 +880,7 @@ orgScoped.route("/repository/main", repositoryMainGetRoute);
 orgScoped.route("/repositories", repositoryListRoute);
 orgScoped.route("/repository/link", repositoryLinkRoute);
 orgScoped.route("/repository/unlink", repositoryUnlinkRoute);
-// The Instruction files section of the Repositories page (#4518, ADR-253): the
+// The Instruction files section of the Repositories page (#4518, ADR-254): the
 // statements the Oxagen check flagged, and the write that promotes one into a
 // steering proposal. Hono matches each mounted path exactly, so the read does
 // not catch the promote path below it.

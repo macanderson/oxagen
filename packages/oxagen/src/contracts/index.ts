@@ -370,7 +370,7 @@ import { contextPrMerge } from "./context.pr.merge";
 import { contextPrMergeWithoutReview } from "./context.pr.merge_without_review";
 import { contextPrRevert } from "./context.pr.revert";
 // Instruction files in linked code repositories, and the managed blocks of a
-// steering PR (#4518, ADR-253).
+// steering PR (#4518, ADR-254).
 import { codeRepositoryFindingsList } from "./repository.findings.list";
 import { instructionPromote } from "./repository.instruction.promote";
 import { contextPrRestoreManagedBlock } from "./context.pr.restore_managed_block";

@@ -1,5 +1,5 @@
 // instruction-files.handlers.test.ts: the MCP tools for the Repositories
-// page's Instruction files section (#4518, ADR-253):
+// page's Instruction files section (#4518, ADR-254):
 // list_code_repository_findings, promote_instruction_to_steering, and
 // restore_managed_block.
 //

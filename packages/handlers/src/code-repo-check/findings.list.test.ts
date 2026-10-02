@@ -1,4 +1,4 @@
-// list_code_repository_findings (S7, #4518; ADR-253): the stored statements,
+// list_code_repository_findings (S7, #4518; ADR-254): the stored statements,
 // compared with today's records on every read. The store is in memory with
 // the workspace's linked repositories, and the records are the steering repo
 // fixture's.

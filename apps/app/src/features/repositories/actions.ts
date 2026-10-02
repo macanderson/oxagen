@@ -536,7 +536,7 @@ export async function closeRepositoryChange(
 /**
  * The instruction-file statements in the workspace's linked code repositories
  * that repeat or contradict a steering record (`list_code_repository_findings`,
- * ADR-253). The Oxagen check stores them on each pull request, and the read
+ * ADR-254). The Oxagen check stores them on each pull request, and the read
  * compares them with today's records.
  */
 export async function listCodeRepositoryFindings(

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// The Repositories page's instruction files section (#4518, ADR-253). It
+// The Repositories page's instruction files section (#4518, ADR-254). It
 // reads `list_code_repository_findings`: each linked code repository with a
 // statement that repeats or contradicts a steering record lists it, a read
 // that fails says why, and a workspace with no finding draws no section.

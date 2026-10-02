@@ -1449,7 +1449,7 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .revertSteeringPrHandler as CapabilityHandlerFn,
   );
   // Restore the managed block on a steering PR's branch, and list or promote
-  // the instruction-file statements the Oxagen check stores (#4518, ADR-253).
+  // the instruction-file statements the Oxagen check stores (#4518, ADR-254).
   registerHandler(
     "restore_managed_block",
     async () =>

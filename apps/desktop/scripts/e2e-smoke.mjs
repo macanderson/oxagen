@@ -19,12 +19,16 @@
  *      --login, `oxagen login --browser` first;
  *   2. org + workspace: POST /v1/user/organizations and /v1/user/workspaces,
  *      the same user-scoped calls the pickers make;
- *   3. `tacho detect --json`; with --enroll, `tacho enroll --org … --workspace
- *      … --harness …` (default: every detected harness);
- *   4. `tacho status --json`: enrollment, service, hooks per harness;
- *   5. with --enroll, `tacho verify --harness <h> --json` per registered
- *      harness — one headless turn, confirmed sealed — and the workspace's
- *      URL in the app.
+ *   3. `oxagen agent detect --json`; with --enroll, `oxagen agent enroll
+ *      --org … --workspace … --harness …` (default: every detected harness);
+ *   4. `oxagen agent status --json`: enrollment, service, hooks per harness;
+ *   5. with --enroll, `oxagen agent verify --harness <h> --json` per
+ *      registered harness — one headless turn, confirmed sealed — and the
+ *      workspace's URL in the app.
+ *
+ * The app runs every recorder command on its `oxagen` sidecar (#4891). The
+ * bundled `tacho` is only checked for its version, because the per-user copy
+ * keeps it for machines enrolled before #4879.
  *
  * Exit 0 when every step that ran passed. Nothing here needs the repo: copy
  * the file to the test machine and run it with any Node >= 18.
@@ -214,11 +218,11 @@ if (org) {
 }
 
 // 3. Detect, then register.
-const detectRun = run("tacho", ["detect", "--json"]);
+const detectRun = run("oxagen", ["agent", "detect", "--json"]);
 const detected = lastJson(detectRun.stdout);
 const installed = (detected?.harnesses ?? []).filter((h) => h.installed);
 record(
-  "tacho detect",
+  "oxagen agent detect",
   detectRun.code === 0 && detected !== null && detectRun.ms < 30_000,
   detected
     ? `${installed.map((h) => `${h.label} ${h.version ?? "?"}`).join(", ") || "no agents found"} in ${detectRun.ms} ms`
@@ -230,12 +234,13 @@ const harnesses =
 if (has("--enroll")) {
   if (!org || !workspace || harnesses === "") {
     record(
-      "tacho enroll",
+      "oxagen agent enroll",
       false,
       "need an org, a workspace and at least one detected agent",
     );
   } else {
-    const enroll = run("tacho", [
+    const enroll = run("oxagen", [
+      "agent",
       "enroll",
       "--org",
       org,
@@ -246,7 +251,7 @@ if (has("--enroll")) {
     ]);
     const lastErr = enroll.stderr.trim().split("\n").filter(Boolean).at(-1);
     record(
-      `tacho enroll ${org}/${workspace} --harness ${harnesses}`,
+      `oxagen agent enroll ${org}/${workspace} --harness ${harnesses}`,
       enroll.code === 0,
       enroll.code === 0
         ? `${enroll.ms} ms`
@@ -256,7 +261,7 @@ if (has("--enroll")) {
 }
 
 // 4. Status.
-const statusRun = run("tacho", ["status", "--json"]);
+const statusRun = run("oxagen", ["agent", "status", "--json"]);
 const status = lastJson(statusRun.stdout);
 if (status?.enrolled) {
   const hooks = [
@@ -274,7 +279,7 @@ if (status?.enrolled) {
       : null,
   ].filter(Boolean);
   record(
-    "tacho status",
+    "oxagen agent status",
     Boolean(status.service?.running) &&
       (status.hooks?.complete ?? true) &&
       (status.codexHooks?.complete ?? true) &&
@@ -284,7 +289,7 @@ if (status?.enrolled) {
   );
 } else {
   record(
-    "tacho status",
+    "oxagen agent status",
     !has("--enroll"),
     has("--enroll")
       ? "not enrolled after enroll"
@@ -295,10 +300,10 @@ if (status?.enrolled) {
 // 5. First run per harness + the workspace in the app.
 if (has("--enroll") && status?.enrolled) {
   for (const h of status.host?.harnesses ?? []) {
-    const verify = run("tacho", ["verify", "--harness", h, "--json"]);
+    const verify = run("oxagen", ["agent", "verify", "--harness", h, "--json"]);
     const result = lastJson(verify.stdout);
     record(
-      `tacho verify --harness ${h}`,
+      `oxagen agent verify --harness ${h}`,
       result?.ok === true,
       result
         ? `${result.detail}${result.seq ? ` (${result.seq} events)` : ""} in ${verify.ms} ms`
@@ -318,9 +323,9 @@ if (has("--enroll") && status?.enrolled) {
 // machine that holds more than one agent, which bare `unenroll` refuses
 // (ADR-203). It is the argv the wizard's Uninstall sends.
 if (has("--cleanup")) {
-  const un = run("tacho", ["unenroll", "--all", "--purge"]);
+  const un = run("oxagen", ["agent", "unenroll", "--all", "--purge"]);
   record(
-    "tacho unenroll --all --purge",
+    "oxagen agent unenroll --all --purge",
     un.code === 0,
     un.code === 0
       ? "hooks, service, credentials removed"

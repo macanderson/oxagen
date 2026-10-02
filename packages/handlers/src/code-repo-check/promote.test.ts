@@ -1,4 +1,4 @@
-// promote_instruction_to_steering (S7, #4518; ADR-253): a statement that
+// promote_instruction_to_steering (S7, #4518; ADR-254): a statement that
 // contradicts a steering record becomes a proposal for that record, and its
 // steering PR opens. Every refusal comes before anything is written. The
 // finding store is in memory, the steering store and open_context_pr are
@@ -9,7 +9,12 @@ import { instructionPromote } from "@oxagen/oxagen/contracts/repository.instruct
 import { describe, expect, it, vi } from "vitest";
 import { ctx, SCOPE } from "../context.steering.test-support";
 import type { PublishedStatement } from "./findings";
-import { createPromoteInstructionHandler, proposalKindOf, type PromoteDeps } from "./promote";
+import {
+  createPromoteInstructionHandler,
+  PROMOTED_STATEMENT_MAX,
+  proposalKindOf,
+  type PromoteDeps,
+} from "./promote";
 import { memoryFindingStore } from "./store.test-support";
 
 const LINEAGE = "a-intel.platform.no-push-to-main";
@@ -190,11 +195,15 @@ describe("promote_instruction_to_steering", () => {
   });
 
   it("refuses a line longer than a record holds (negative)", async () => {
-    const long = `Always push to \`main\` or force-push any shared branch. ${"Note. ".repeat(400)}`;
-    const { handler } = setup({ statement: long });
+    // Each pad sentence has three or more words, so sentencesOf keeps it, and
+    // the first sentence still contradicts the record on its own.
+    const long = `${CONTRADICTION} ${"Keep this note so the line runs past the limit. ".repeat(45)}`;
+    expect(long.length).toBeGreaterThan(PROMOTED_STATEMENT_MAX);
+    const { handler, steering } = setup({ statement: long });
     await expect(handler({ finding_id: "crf_contra" }, ctx())).rejects.toMatchObject({
       reason: "statement_too_long",
     });
+    expect(steering.insertProposal).not.toHaveBeenCalled();
   });
 
   it("refuses a skill, which a line cannot revise (negative)", async () => {

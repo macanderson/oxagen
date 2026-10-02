@@ -1,4 +1,4 @@
-// The findings store against Postgres (S7, #4518; ADR-253). It runs where
+// The findings store against Postgres (S7, #4518; ADR-254). It runs where
 // DATABASE_URL names a migrated database, as in CI's unit lanes. A linked
 // repository is seeded the way linking writes it: a source connection, a
 // binding, and a `linked` binding head.

@@ -80,7 +80,7 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   // workspace, so its row has a null workspace_id → workspace_nullable.
   { table: "agent.steering_repo_health", policyClass: "workspace_nullable" },
   // The instruction-file statements the Oxagen check flagged in linked code
-  // repositories (ADR-253); org_id + workspace_id NOT NULL.
+  // repositories (ADR-254); org_id + workspace_id NOT NULL.
   { table: "agent.code_repository_findings", policyClass: "standard" },
   { table: "agent.agent_executions", policyClass: "standard" },
   { table: "agent.agent_execution_steps", policyClass: "standard" },
