@@ -85,7 +85,7 @@ Use the Linux or Windows directory from the table above on those platforms. The 
 
 1. It removes every enrollment: the hooks, the collector service, the keys, and the local event log. If an enrollment cannot be fully removed, the command stops here and says what to fix, because a hook that is left would still run the copy.
 2. It removes the links in `~/.local/bin`, the lines the app added to your shell profile, and on Windows the shims and the entry on your user `PATH`. The app keeps a list of each of these in `~/.config/oxagen/desktop.json` each time it opens. The command removes only what is still the way the app wrote it. A link you pointed somewhere else stays, and the command names it.
-3. It removes every per-user copy and `~/.config/oxagen`.
+3. It removes every per-user copy and `~/.config/oxagen`. That folder holds your `oxagen login` session, so the `oxagen` command asks you to sign in again afterward.
 
 On Windows the command cannot delete the `oxagen.exe` it is running from. It names that folder, so you can delete it after the command finishes.
 

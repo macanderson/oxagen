@@ -607,7 +607,7 @@ export async function uninstall(
   for (const item of tally.left) deps.err(`warning: ${item}`);
   deps.out(
     tally.left.length === 0
-      ? "Oxagen is off this machine. If the Oxagen app is still installed, remove it too, or it puts the per-user copy back the next time it opens."
+      ? "Oxagen is off this machine. Your `oxagen login` session went with ~/.config/oxagen, so run `oxagen login` again before you use the CLI. If the Oxagen app is still installed, remove it too, or it puts the per-user copy back the next time it opens."
       : "Oxagen is off this machine except for what the warnings above name.",
   );
   return {

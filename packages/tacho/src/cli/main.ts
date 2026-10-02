@@ -388,7 +388,7 @@ export function buildTachoProgram(
   program
     .command("uninstall")
     .description(
-      "Take Oxagen off this machine without the desktop app: unenroll every agent, then remove the app's per-user copy, links, shell profile lines, and settings",
+      "Take Oxagen off this machine without the desktop app: unenroll every agent, then remove the app's per-user copy, PATH links, and shell profile lines, and ~/.config/oxagen, which holds your `oxagen login` session",
     )
     .option("--token <apiKey>", "Operator token for the server-side revoke")
     .option("--token-stdin", "Read the operator token from stdin")
