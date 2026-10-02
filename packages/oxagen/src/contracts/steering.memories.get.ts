@@ -27,7 +27,7 @@ export const steeringMemoriesGet = registerCapability({
     "Read one workspace memory with its full text, its source, the runs that used it, and the memory PR that last cited it.",
   mode: "sync",
   surfaces: ["api", "mcp", "cli"],
-  layers: ["schema", "api", "mcp", "cli", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "cli", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
   mutates: false,

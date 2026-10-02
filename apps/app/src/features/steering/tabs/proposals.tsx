@@ -1,7 +1,9 @@
 // Proposals: what is proposed but not published (roadmap pages/steering.md;
 // the tab body is pages/steering-proposals.md, which the steering-tabs lane
 // builds). Its two segments are the candidates and their Context PRs, each an
-// address: `/steering/proposals` and `/steering/proposals/prs`.
+// address: `/steering/proposals` and `/steering/proposals/prs`. A selected
+// Context PR open on a `memory/` branch is a memory PR, and its records are
+// read by its number (list_memory_pr_records, #4914).
 import { useTranslations } from "next-intl";
 import type { ContextPr } from "@/data/contracts/steering";
 import type { DataSource } from "@/data/ports";
@@ -100,6 +102,18 @@ export async function ProposalsTab({
       ? (preread ?? source.steering.contextPr(ctx, proposal))
       : null,
   ]);
+  const memoryPr =
+    pr?.ok === true &&
+    pr.value.pr !== null &&
+    pr.value.pr.branch.startsWith("memory/") &&
+    pr.value.status !== "merged" &&
+    pr.value.status !== "rejected"
+      ? pr.value.pr.number
+      : null;
+  const memoryRecords =
+    memoryPr === null
+      ? null
+      : await source.steering.memoryPrRecords(ctx, memoryPr);
   // A Context PR can merge or close on the repository host at any moment, and
   // the repository sync moves the proposal within seconds (ADR-184). While
   // one is open, the page re-reads itself so the change shows up here.
@@ -117,6 +131,7 @@ export async function ProposalsTab({
           read={read}
           selected={proposal}
           pr={pr}
+          memoryRecords={memoryRecords}
           canMergeWithoutReview={canMergeWithoutReview(ctx)}
         />
       ) : (

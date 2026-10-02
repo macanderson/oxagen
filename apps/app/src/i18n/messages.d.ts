@@ -9873,6 +9873,7 @@ type Messages = {
     tabs: {
       label: string;
       library: string;
+      memories: string;
       assignments: string;
       gates: string;
       proposals: string;
@@ -10138,6 +10139,7 @@ type Messages = {
           title: string;
           body: string;
         };
+        hint: string;
         gapTitle: string;
         notRecorded: string;
         tiles: {
@@ -10434,7 +10436,7 @@ type Messages = {
       };
       memory: {
         title: string;
-        notBacked: string;
+        empty: string;
         memories: string;
         unknownAgent: string;
         evidence: string;
@@ -10723,6 +10725,187 @@ type Messages = {
         tier: string;
         superseded: string;
         unknown: string;
+      };
+    };
+    memories: {
+      title: string;
+      lead: string;
+      retry: string;
+      count: string;
+      empty: {
+        title: string;
+        body: string;
+      };
+      noMatch: string;
+      clearFilters: string;
+      filters: {
+        label: string;
+        state: string;
+        harness: string;
+        agent: string;
+        repo: string;
+        type: string;
+        everyHarness: string;
+        everyAgent: string;
+        everyRepo: string;
+        everyType: string;
+      };
+      states: {
+        open: string;
+        waiting: string;
+        in_pr: string;
+        promoted: string;
+        dismissed: string;
+        retired: string;
+        all: string;
+      };
+      types: {
+        user: string;
+        feedback: string;
+        project: string;
+        reference: string;
+      };
+      harness: {
+        "claude-code": string;
+        codex: string;
+        cursor: string;
+        stella: string;
+        "claude-desktop": string;
+      };
+      captures: {
+        remember: string;
+        pull_request: string;
+        local_gateway: string;
+        import: string;
+      };
+      columns: {
+        select: string;
+        memory: string;
+        uses: string;
+        lastUsed: string;
+        harness: string;
+        agent: string;
+        repo: string;
+        state: string;
+      };
+      selectAll: string;
+      selectRow: string;
+      noSignal: string;
+      never: string;
+      none: string;
+      noAgent: string;
+      prLink: string;
+      sameCount: string;
+      selection: {
+        label: string;
+        count: string;
+        clear: string;
+        dismiss: string;
+        promote: string;
+      };
+      drawer: {
+        subtitle: string;
+        section: string;
+        notFoundTitle: string;
+        notFound: string;
+        facts: {
+          state: string;
+          uses: string;
+          lastUsed: string;
+          harness: string;
+          agent: string;
+          repo: string;
+          type: string;
+          captured: string;
+          source: string;
+        };
+        usesValue: string;
+        noSource: string;
+        statement: string;
+        runs: string;
+        noRuns: string;
+        moreUses: string;
+        reported: string;
+        why: {
+          remember: string;
+          pullRequest: string;
+          import: string;
+          other: string;
+        };
+        memoryPr: string;
+        record: string;
+        prNumber: string;
+        prStatus: {
+          open: string;
+          merged: string;
+          closed: string;
+        };
+        noPr: string;
+        promotedMerged: string;
+        dismissed: string;
+        retiredDeleted: string;
+        retiredUnused: string;
+        sameStatement: string;
+        dismiss: string;
+        promote: string;
+        openPr: string;
+        restore: string;
+        restorePending: string;
+        restored: string;
+      };
+      promote: {
+        title: string;
+        sub: string;
+        subNew: string;
+        draft: string;
+        from: string;
+        statement: string;
+        kind: string;
+        kindSuggested: string;
+        kindChosen: string;
+        force: string;
+        forceOnly: string;
+        forceDefault: string;
+        forceChosen: string;
+        scope: string;
+        workspace: string;
+        scopeHint: string;
+        effect: string;
+        effectHint: string;
+        summary: string;
+        submitJoin: string;
+        submitOpen: string;
+        pending: string;
+        cancel: string;
+        noneWaiting: string;
+        tooMany: string;
+        emptyStatement: string;
+        done: string;
+        doneNone: string;
+        skipped: string;
+      };
+      dismiss: {
+        title: string;
+        sub: string;
+        confirm: string;
+        pending: string;
+        cancel: string;
+        noneWaiting: string;
+        done: string;
+      };
+      failure: {
+        denied: string;
+        steeringRepoRequired: string;
+        memoryPrFull: string;
+        memoryPrSettled: string;
+        memoryBranchTaken: string;
+        forceNotAllowed: string;
+        effect: string;
+        recordUnreadable: string;
+        refused: string;
+        invalid: string;
+        pendingApproval: string;
+        unavailable: string;
       };
     };
   };

@@ -30,7 +30,7 @@ export const steeringMemoriesDismiss = registerCapability({
     "Dismiss workspace memories so the curator does not propose their statements again, or restore dismissed memories with restore: true.",
   mode: "sync",
   surfaces: ["api", "mcp", "cli"],
-  layers: ["schema", "api", "mcp", "cli", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "cli", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
   mutates: true,

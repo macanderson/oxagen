@@ -9,6 +9,7 @@ Promote waiting workspace memories into draft steering records on a memory PR (#
 - API: `POST /v1/:org_slug/:workspace_slug/context/steering/memories/promote`, returns 200
 - MCP: `promote_memories`
 - CLI: `oxagen memory promote <ids...>`
+- App: Steering › Memories, Promote memories on the selected rows or Promote memory in the drawer. The dialog drafts one record per row
 - Authentication: org Owner or Admin, or workspace Owner or Member, checked by the handler
 - Billing: `noBillingGate: true`
 - Not on the agent surface.

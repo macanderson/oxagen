@@ -3,7 +3,11 @@
 // panel.
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
-import type { ContextPr, ProposalPage } from "@/data/contracts/steering";
+import type {
+  ContextPr,
+  MemoryPrRecords,
+  ProposalPage,
+} from "@/data/contracts/steering";
 import type { Read } from "@/data/read";
 import { linkText, mono } from "@/ui/control-styles";
 import { SafeLink } from "@/ui/navigation";
@@ -21,6 +25,7 @@ export function ContextPrs({
   read,
   selected,
   pr,
+  memoryRecords = null,
   canMergeWithoutReview = false,
 }: {
   at: SteeringAt;
@@ -32,6 +37,8 @@ export function ContextPrs({
   selected: string | null;
   /** get_context_pr for `selected`; null when nothing is selected. */
   pr: Read<ContextPr> | null;
+  /** list_memory_pr_records for a selected memory PR; null for any other. */
+  memoryRecords?: Read<MemoryPrRecords> | null;
   /** The viewer may merge a steering PR no one has approved. */
   canMergeWithoutReview?: boolean;
 }) {
@@ -115,6 +122,7 @@ export function ContextPrs({
         <ContextPrPanel
           at={at}
           read={pr}
+          memoryRecords={memoryRecords}
           canMergeWithoutReview={canMergeWithoutReview}
         />
       )}
