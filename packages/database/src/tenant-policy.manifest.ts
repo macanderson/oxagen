@@ -459,4 +459,8 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "work.orders", policyClass: "standard" },
   // One fact in a work item's history. Append only.
   { table: "work.item_facts", policyClass: "standard" },
+  // The direct work order of a run no send covers (F13, #4638).
+  { table: "work.direct_orders", policyClass: "standard" },
+  // One check run of a definition of done (F13, #4638). Append only.
+  { table: "work.done_checks", policyClass: "standard" },
 ];

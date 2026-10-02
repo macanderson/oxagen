@@ -1,5 +1,5 @@
-// work.done.verdict.test.ts: the verdict row a finished stage appends, and the
-// work/done.verdict event it sends.
+// work.done.verdict.test.ts: the verdict row a finished stage appends, the
+// check run it records (F13, #4638), and the work/done.verdict event it sends.
 import { lockDigest, type DoneRecord } from "@oxagen/done-record";
 import { NonRetriableError } from "@oxagen/functions";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -9,6 +9,28 @@ const mocks = vi.hoisted(() => ({
   withTenantDb: vi.fn(),
   runInTenantScope: vi.fn(),
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+}));
+
+/** The mocked tables, shared by the schema mock and the fake transaction. */
+const tables = vi.hoisted(() => ({
+  verdicts: {
+    id: "verdicts.id",
+    orgId: "verdicts.org_id",
+    workspaceId: "verdicts.workspace_id",
+    createdAt: "verdicts.created_at",
+    recordDigest: "verdicts.record_digest",
+    verdict: "verdicts.verdict",
+  },
+  orders: {
+    id: "orders.id",
+    publicId: "orders.public_id",
+    orgId: "orders.org_id",
+    workspaceId: "orders.workspace_id",
+  },
+  checks: {
+    orderId: "checks.order_id",
+    sessionId: "checks.session_id",
+  },
 }));
 
 type StepRun = (name: string, fn: () => unknown) => Promise<unknown>;
@@ -28,14 +50,9 @@ vi.mock("../create-function", () => ({
 }));
 vi.mock("@oxagen/database", () => ({
   schema: {
-    workDoneVerdicts: {
-      id: "verdicts.id",
-      orgId: "verdicts.org_id",
-      workspaceId: "verdicts.workspace_id",
-      createdAt: "verdicts.created_at",
-      recordDigest: "verdicts.record_digest",
-      verdict: "verdicts.verdict",
-    },
+    workDoneVerdicts: tables.verdicts,
+    workOrders: tables.orders,
+    workDoneChecks: tables.checks,
   },
   withTenantDb: mocks.withTenantDb,
   // One identity for both seams, so a role gate that reads through withOrgDb
@@ -46,13 +63,14 @@ vi.mock("drizzle-orm", async (importOriginal) => ({
   ...(await importOriginal<typeof import("drizzle-orm")>()),
   eq: (...args: unknown[]) => ({ eq: args }),
   and: (...args: unknown[]) => ({ and: args }),
+  or: (...args: unknown[]) => ({ or: args }),
   desc: (column: unknown) => ({ desc: column }),
   sql: (strings: TemplateStringsArray, ...values: unknown[]) => ({ sql: strings.join("?"), values }),
 }));
 vi.mock("@oxagen/tenancy", () => ({ runInTenantScope: mocks.runInTenantScope }));
 vi.mock("../logger", () => ({ logger: mocks.logger }));
 
-const { recordDoneVerdict, setDoneEvidenceLoader } = await import("./work.done.verdict");
+const { doneCheckResult, recordDoneVerdict, setDoneEvidenceLoader } = await import("./work.done.verdict");
 type Loaded = Parameters<typeof recordDoneVerdict>[1];
 
 const ORG = "0193a8f0-0000-7000-8000-000000000001";
@@ -73,13 +91,19 @@ const UNLOCKED: DoneRecord = {
 const DIGEST = lockDigest(UNLOCKED);
 const LOCKED: DoneRecord = { ...UNLOCKED, lock: { digest: DIGEST, by: "priya", at: AT } };
 
+const ORDER = "0193a8f0-0000-7000-8000-000000000003";
+const SESSION = "0193a8f0-0000-7000-8000-000000000004";
+
 const EVENT_DATA: WorkStageCompletedEventData = {
   org_id: ORG,
   workspace_id: WORKSPACE,
-  work_order_id: "0193a8f0-0000-7000-8000-000000000003",
+  work_order_id: ORDER,
   role: "Fix",
-  session_id: "0193a8f0-0000-7000-8000-000000000004",
+  session_id: SESSION,
 };
+
+/** The stage whose end ran the check. */
+const CHECK = { workOrderId: ORDER, sessionId: SESSION, role: "Fix" };
 
 /** Evidence with each named check passing (true) or failing (false). */
 function loaded(checks: Record<string, boolean>, record: DoneRecord = LOCKED): Loaded {
@@ -93,14 +117,27 @@ function loaded(checks: Record<string, boolean>, record: DoneRecord = LOCKED): L
   };
 }
 
-/** A transaction whose last verdict row is `last`, and whose insert returns `inserted`. */
-function fakeTx(last: { verdict: string }[], inserted: { id: string }[] = [{ id: "row-2" }]) {
+/**
+ * A transaction whose last verdict row is `last`, whose verdict insert returns
+ * `inserted`, and whose work order lookup finds `order`.
+ */
+function fakeTx(
+  last: { verdict: string }[],
+  inserted: { id: string }[] = [{ id: "row-2" }],
+  order: { id: string }[] = [{ id: ORDER }],
+) {
   const seen = {
     executed: [] as unknown[],
     where: [] as unknown[],
     orderBy: [] as unknown[],
     limit: [] as unknown[],
+    /** Verdict rows. */
     values: [] as unknown[],
+    /** The work order lookup's filter. */
+    orderWhere: [] as unknown[],
+    /** Check run rows, and each one's conflict target. */
+    checks: [] as unknown[],
+    conflicts: [] as unknown[],
   };
   const tx = {
     execute: (query: unknown) => {
@@ -108,12 +145,16 @@ function fakeTx(last: { verdict: string }[], inserted: { id: string }[] = [{ id:
       return Promise.resolve();
     },
     select: () => ({
-      from: () => ({
+      from: (table: unknown) => ({
         where: (where: unknown) => {
+          if (table === tables.orders) {
+            seen.orderWhere.push(where);
+            return { limit: () => Promise.resolve(order) };
+          }
           seen.where.push(where);
           return {
-            orderBy: (...order: unknown[]) => {
-              seen.orderBy.push(order);
+            orderBy: (...orderBy: unknown[]) => {
+              seen.orderBy.push(orderBy);
               return {
                 limit: (count: number) => {
                   seen.limit.push(count);
@@ -125,8 +166,17 @@ function fakeTx(last: { verdict: string }[], inserted: { id: string }[] = [{ id:
         },
       }),
     }),
-    insert: () => ({
+    insert: (table: unknown) => ({
       values: (values: unknown) => {
+        if (table === tables.checks) {
+          seen.checks.push(values);
+          return {
+            onConflictDoNothing: (config: unknown) => {
+              seen.conflicts.push(config);
+              return Promise.resolve();
+            },
+          };
+        }
         seen.values.push(values);
         return { returning: () => Promise.resolve(inserted) };
       },
@@ -145,7 +195,7 @@ beforeEach(() => {
 describe("recordDoneVerdict", () => {
   it("appends the first verdict under the record's lock digest", async () => {
     const seen = fakeTx([]);
-    await expect(recordDoneVerdict(SCOPE, loaded({}))).resolves.toEqual({
+    await expect(recordDoneVerdict(SCOPE, loaded({}), CHECK)).resolves.toEqual({
       status: "recorded",
       id: "row-2",
       digest: DIGEST,
@@ -171,7 +221,7 @@ describe("recordDoneVerdict", () => {
 
   it("locks the record and reads its last row before it writes", async () => {
     const seen = fakeTx([]);
-    await recordDoneVerdict(SCOPE, loaded({}));
+    await recordDoneVerdict(SCOPE, loaded({}), CHECK);
     expect(seen.executed).toEqual([
       {
         sql: "select pg_advisory_xact_lock(hashtextextended(?, 0))",
@@ -193,7 +243,7 @@ describe("recordDoneVerdict", () => {
 
   it("writes nothing when the verdict matches the last row", async () => {
     const seen = fakeTx([{ verdict: "pending" }]);
-    await expect(recordDoneVerdict(SCOPE, loaded({ c1: true }))).resolves.toEqual({
+    await expect(recordDoneVerdict(SCOPE, loaded({ c1: true }), CHECK)).resolves.toEqual({
       status: "unchanged",
       digest: DIGEST,
       verdict: "pending",
@@ -204,7 +254,7 @@ describe("recordDoneVerdict", () => {
   it("appends a changed verdict with the criteria states and the commit", async () => {
     const seen = fakeTx([{ verdict: "pending" }], [{ id: "row-3" }]);
     const input = { ...loaded({ c1: true, c2: true }), commitSha: "4f2a9c1" };
-    await expect(recordDoneVerdict(SCOPE, input)).resolves.toEqual({
+    await expect(recordDoneVerdict(SCOPE, input, CHECK)).resolves.toEqual({
       status: "recorded",
       id: "row-3",
       digest: DIGEST,
@@ -225,7 +275,7 @@ describe("recordDoneVerdict", () => {
 
   it("stores each reason code once", async () => {
     const seen = fakeTx([{ verdict: "pending" }]);
-    await recordDoneVerdict(SCOPE, loaded({ c1: false, c2: false }));
+    await recordDoneVerdict(SCOPE, loaded({ c1: false, c2: false }), CHECK);
     expect(seen.values).toEqual([
       expect.objectContaining({
         verdict: "broken",
@@ -240,7 +290,7 @@ describe("recordDoneVerdict", () => {
 
   it("keys a record with no lock by its computed digest, and breaks it", async () => {
     const seen = fakeTx([]);
-    await expect(recordDoneVerdict(SCOPE, loaded({ c1: true, c2: true }, UNLOCKED))).resolves.toMatchObject({
+    await expect(recordDoneVerdict(SCOPE, loaded({ c1: true, c2: true }, UNLOCKED), CHECK)).resolves.toMatchObject({
       digest: DIGEST,
       verdict: "broken",
     });
@@ -250,15 +300,95 @@ describe("recordDoneVerdict", () => {
   it("keeps the stored digest for a record edited after its lock", async () => {
     const seen = fakeTx([{ verdict: "held" }]);
     const edited: DoneRecord = { ...LOCKED, lineage: "aintel.platform.other" };
-    await recordDoneVerdict(SCOPE, loaded({ c1: true, c2: true }, edited));
+    await recordDoneVerdict(SCOPE, loaded({ c1: true, c2: true }, edited), CHECK);
     expect(seen.values).toEqual([
       expect.objectContaining({ recordDigest: DIGEST, verdict: "broken", reasons: ["LOCK_MISMATCH"] }),
     ]);
   });
 
+  it("records a check run with its work order, verdict, result, and time", async () => {
+    const seen = fakeTx([]);
+    await recordDoneVerdict(SCOPE, loaded({}), CHECK);
+    expect(seen.checks).toEqual([
+      {
+        orgId: ORG,
+        workspaceId: WORKSPACE,
+        orderId: ORDER,
+        recordDigest: DIGEST,
+        verdict: "pending",
+        result: "pending",
+        checkedAt: { sql: "clock_timestamp()", values: [] },
+        sessionId: SESSION,
+        role: "Fix",
+      },
+    ]);
+    // One row per work order and stage session, so a retried step adds none.
+    expect(seen.conflicts).toEqual([{ target: ["checks.order_id", "checks.session_id"] }]);
+  });
+
+  it("records a check run when the verdict did not change", async () => {
+    const seen = fakeTx([{ verdict: "pending" }]);
+    await recordDoneVerdict(SCOPE, loaded({ c1: true }), CHECK);
+    expect(seen.values).toEqual([]);
+    expect(seen.checks).toEqual([expect.objectContaining({ verdict: "pending", result: "pending" })]);
+  });
+
+  it("records a passing check run for a held record and a failing one for a broken record", async () => {
+    const held = fakeTx([{ verdict: "pending" }]);
+    await recordDoneVerdict(SCOPE, loaded({ c1: true, c2: true }), CHECK);
+    expect(held.checks).toEqual([expect.objectContaining({ verdict: "held", result: "passed" })]);
+
+    const broken = fakeTx([{ verdict: "held" }]);
+    await recordDoneVerdict(SCOPE, loaded({ c1: false, c2: true }), CHECK);
+    expect(broken.checks).toEqual([expect.objectContaining({ verdict: "broken", result: "failed" })]);
+  });
+
+  it("finds the work order by its id or public id in the event's workspace", async () => {
+    const byId = fakeTx([]);
+    await recordDoneVerdict(SCOPE, loaded({}), CHECK);
+    expect(byId.orderWhere).toEqual([
+      {
+        and: [
+          { eq: ["orders.org_id", ORG] },
+          { eq: ["orders.workspace_id", WORKSPACE] },
+          { or: [{ eq: ["orders.id", ORDER] }, { eq: ["orders.public_id", ORDER] }] },
+        ],
+      },
+    ]);
+
+    const byPublicId = fakeTx([]);
+    await recordDoneVerdict(SCOPE, loaded({}), { ...CHECK, workOrderId: "wo_01K5ZQ4M8T2DXW" });
+    expect(byPublicId.orderWhere).toEqual([
+      {
+        and: [
+          { eq: ["orders.org_id", ORG] },
+          { eq: ["orders.workspace_id", WORKSPACE] },
+          { eq: ["orders.public_id", "wo_01K5ZQ4M8T2DXW"] },
+        ],
+      },
+    ]);
+    expect(byPublicId.checks).toEqual([expect.objectContaining({ orderId: ORDER })]);
+  });
+
+  it("refuses a work order the workspace does not hold, and writes nothing", async () => {
+    const seen = fakeTx([], [{ id: "row-2" }], []);
+    const done = recordDoneVerdict(SCOPE, loaded({}), CHECK);
+    await expect(done).rejects.toBeInstanceOf(NonRetriableError);
+    await expect(done).rejects.toThrow(`names work order ${ORDER}`);
+    expect(seen.checks).toEqual([]);
+    expect(seen.values).toEqual([]);
+  });
+
+  it("gives each verdict its check result", () => {
+    expect(doneCheckResult("held")).toBe("passed");
+    expect(doneCheckResult("proven")).toBe("passed");
+    expect(doneCheckResult("broken")).toBe("failed");
+    expect(doneCheckResult("pending")).toBe("pending");
+  });
+
   it("throws when the insert returns no row", async () => {
     fakeTx([], []);
-    await expect(recordDoneVerdict(SCOPE, loaded({}))).rejects.toThrow(
+    await expect(recordDoneVerdict(SCOPE, loaded({}), CHECK)).rejects.toThrow(
       `work.done_verdicts returned no row for ${DIGEST}`,
     );
   });
@@ -314,6 +444,16 @@ describe("workDoneVerdict", () => {
     const { done, sendEvent } = run();
     await expect(done).resolves.toEqual({ status: "unchanged", digest: DIGEST, verdict: "pending" });
     expect(sendEvent).not.toHaveBeenCalled();
+  });
+
+  it("records the check run under the event's work order, session, and role", async () => {
+    const seen = fakeTx([{ verdict: "pending" }]);
+    setDoneEvidenceLoader(() => Promise.resolve(loaded({})));
+    const { done } = run();
+    await done;
+    expect(seen.checks).toEqual([
+      expect.objectContaining({ orderId: ORDER, sessionId: SESSION, role: "Fix", result: "pending" }),
+    ]);
   });
 
   it("sends work/done.verdict once per new row", async () => {
