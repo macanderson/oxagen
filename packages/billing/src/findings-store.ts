@@ -23,6 +23,7 @@ import {
   and,
   eq,
   gte,
+  ilike,
   inArray,
   isNull,
   lt,
@@ -45,6 +46,7 @@ import {
   detectFindings,
   DETECTORS,
   FINDINGS_WINDOW_DAYS,
+  instructionLineage,
   instructionProposals,
   microsOf,
   replayClaims,
@@ -69,6 +71,7 @@ import {
 } from "./findings";
 import { openSpendProposals } from "./findings/open-proposals";
 import type { SpendProposalInput } from "./findings/proposal-opener";
+import { RECURRING_RUNS_MIN } from "./findings/recurring-runs";
 import { readRunPrompts } from "./findings-prompts";
 import { readResultUse } from "./findings-result-use";
 import {
@@ -92,15 +95,28 @@ const totals = schema.runTotals;
 const sessions = schema.tachoSessions;
 const findings = schema.findings;
 const claims = schema.findingClaims;
+const records = schema.contextRecords;
+const proposals = schema.contextProposals;
 
 /** Tool calls one pass reads, newest first; past this the tool-call window starts at the oldest call read. */
 export const TOOL_CALL_READ_MAX = 200_000;
 /**
- * Runs one pass reads model-call frames for: most repeats first, then the
- * dearest. A run past this cap has no frames, and `frameCoverage.capped`
- * counts it (ADR-208, ADR-210).
+ * Runs one pass reads model-call frames for. Up to
+ * `FRAME_RUNS_RECURRING_RESERVE` of them go to runs that share a first
+ * prompt, and the rest go most repeats first, then the dearest. A run past
+ * this cap has no frames, and `frameCoverage.capped` counts it (ADR-208,
+ * ADR-210).
  */
 export const FRAME_RUNS_READ_MAX = 200;
+/**
+ * The places in `FRAME_RUNS_READ_MAX` kept for runs whose first prompt
+ * started `RECURRING_RUNS_MIN` or more runs in the window (#4594, ADR-210).
+ * A scheduled job's runs are cheap and repeat no call, so without these
+ * places the dearer runs fill the read first, and recurring runs (detector 7)
+ * cannot price the job. A place the recurring runs do not need goes back to
+ * the other runs.
+ */
+export const FRAME_RUNS_RECURRING_RESERVE = 50;
 /**
  * Model-call frames one pass holds across every run it reads (#4506). A run
  * whose frames would pass it is not read, and `frameCoverage.capped` counts
@@ -182,6 +198,13 @@ interface FindingsPassDeps {
     scope: FindingsScope,
     input: SpendProposalInput,
   ) => Promise<void>;
+  /**
+   * The repeated instruction lineages that already have a steering record or
+   * a proposal, in lower case. The opener refuses each of them, so the pass
+   * skips them before it caps its proposals (#4579). Absent, the pass skips
+   * none.
+   */
+  readTakenLineages?: (scope: FindingsScope) => Promise<ReadonlySet<string>>;
   /**
    * Each run's frame source, by run public id. Without it, a wrapped run's
    * source is its root and the chains its tool calls name, and a ledger run
@@ -394,19 +417,68 @@ function mergeRef(stored: FrameRunRef, fromCalls: FrameRunRef): FrameRunRef {
   };
 }
 
+/** One run's first prompt group: the prompt's digest and how many runs it started. */
+interface PromptGroup {
+  digest: string;
+  size: number;
+}
+
 /**
- * The runs a pass reads model-call frames for, and what the plan left out.
- * Every run in the window with a frame source is ranked: most repeats first,
- * then the dearest, then by run id. The first `limit` are read. `capped`
- * counts the ranked runs past the limit, and `unmatched` the runs with no
- * source, so a detector can tell a run with no frames from a run the pass did
- * not read (ADR-210).
+ * The first prompt group of each run whose first prompt started
+ * `RECURRING_RUNS_MIN` or more of the window's runs (#4594). Recurring runs
+ * (detector 7) group by the digest, and also by the prompt's source and
+ * origin where the recorder reports them, and leave out a prompt a person
+ * sent. Each of its groups sits inside one digest group, so a plan that
+ * groups by the digest alone misses none of them.
+ */
+function recurringGroups(
+  runs: readonly RunTotalsRecord[],
+  firstPrompts: ReadonlyMap<string, RunFirstPrompt>,
+): Map<string, PromptGroup> {
+  const byDigest = new Map<string, string[]>();
+  for (const run of runs) {
+    const digest = firstPrompts.get(run.runId)?.digest;
+    if (digest === undefined) continue;
+    const list = byDigest.get(digest) ?? [];
+    list.push(run.runId);
+    byDigest.set(digest, list);
+  }
+  const out = new Map<string, PromptGroup>();
+  for (const [digest, runIds] of byDigest) {
+    if (runIds.length < RECURRING_RUNS_MIN) continue;
+    for (const runId of runIds)
+      out.set(runId, { digest, size: runIds.length });
+  }
+  return out;
+}
+
+/**
+ * The runs a pass reads model-call frames for, and what the plan left out
+ * (ADR-210). Every run in the window with a frame source is ranked: most
+ * repeats first, then the dearest, then by run id.
+ *
+ * The plan keeps `reserve` of its `limit` places for recurring runs: runs
+ * whose first prompt digest started `RECURRING_RUNS_MIN` or more runs in the
+ * window (#4594). The ranking fills the first `limit - reserve` places. The
+ * reserve then takes the recurring runs the ranking left out, smallest group
+ * first, since recurring runs need at least half a group's calls priced to
+ * write its finding. Two groups of one size go by digest, and one group's runs
+ * keep their rank. A reserved place no recurring run needs goes to the next
+ * run in the ranking.
+ *
+ * The reserved runs come first in the read. When the frame cap stops the
+ * read, it drops the ranked runs at the end and keeps these. `capped` counts
+ * the ranked runs past the limit, and
+ * `unmatched` the runs with no source, so a detector can tell a run with no
+ * frames from a run the pass did not read.
  */
 export function planFrameReads(
   runs: readonly RunTotalsRecord[],
   refs: ReadonlyMap<string, FrameRunRef>,
   repeatsByRun: ReadonlyMap<string, number>,
   limit: number,
+  firstPrompts: ReadonlyMap<string, RunFirstPrompt> = new Map(),
+  reserve: number = FRAME_RUNS_RECURRING_RESERVE,
 ): { reads: FrameRead[]; coverage: FrameCoverage } {
   const cost = (r: RunTotalsRecord) => r.costMicros ?? -1n;
   const ranked = [...runs].sort((a, b) => {
@@ -425,7 +497,26 @@ export function planFrameReads(
     if (ref === undefined) unmatched += 1;
     else matched.push({ runId: run.runId, ref });
   }
-  const reads = matched.slice(0, Math.max(0, limit));
+  const places = Math.max(0, limit);
+  const kept = Math.min(Math.max(0, reserve), places);
+  const head = matched.slice(0, places - kept);
+  const left = matched.slice(head.length);
+  const groups = recurringGroups(runs, firstPrompts);
+  // The sort is stable, so one group's runs keep their rank.
+  const reserved = left
+    .filter((r) => groups.has(r.runId))
+    .sort((a, b) => {
+      const ga = groups.get(a.runId)!;
+      const gb = groups.get(b.runId)!;
+      if (ga.size !== gb.size) return ga.size - gb.size;
+      return ga.digest < gb.digest ? -1 : ga.digest > gb.digest ? 1 : 0;
+    })
+    .slice(0, kept);
+  const inReserve = new Set(reserved.map((r) => r.runId));
+  const rest = left
+    .filter((r) => !inReserve.has(r.runId))
+    .slice(0, kept - reserved.length);
+  const reads = [...reserved, ...head, ...rest];
   return {
     reads,
     coverage: {
@@ -919,6 +1010,49 @@ function readDecisions(scope: FindingsScope): Promise<Map<string, Date>> {
   return withSystemDb((tx) => decisionsOf(tx, scope));
 }
 
+/** The start of every repeated instruction lineage: `ctx.habits.instruction-`. */
+const INSTRUCTION_LINEAGE_PREFIX = instructionLineage("");
+
+/**
+ * The workspace's repeated instruction lineages that already have a steering
+ * record or a proposal, in any state, in lower case (#4579). The opener checks
+ * the same two tables under its lock and refuses a taken lineage. So a lineage
+ * this read misses costs the pass one proposal, and the opener still never
+ * opens a lineage twice.
+ */
+export async function readTakenLineages(
+  scope: FindingsScope,
+): Promise<Set<string>> {
+  const pattern = `${INSTRUCTION_LINEAGE_PREFIX}%`;
+  // tenancy: the scheduled findings job runs outside a tenant scope, and both
+  // selects are filtered by the scope's orgId and workspaceId.
+  const rows = await withSystemDb((tx) =>
+    tx
+      .select({ lineage: records.slug })
+      .from(records)
+      .where(
+        and(
+          eq(records.orgId, scope.orgId),
+          eq(records.workspaceId, scope.workspaceId),
+          ilike(records.slug, pattern),
+        ),
+      )
+      .union(
+        tx
+          .select({ lineage: proposals.lineageId })
+          .from(proposals)
+          .where(
+            and(
+              eq(proposals.orgId, scope.orgId),
+              eq(proposals.workspaceId, scope.workspaceId),
+              ilike(proposals.lineageId, pattern),
+            ),
+          ),
+      ),
+  );
+  return new Set(rows.map((r) => r.lineage.toLowerCase()));
+}
+
 /**
  * Replace the workspace's open findings with the pass's, in one transaction:
  * an open row the pass no longer proves is deleted, and a proven one is
@@ -1244,19 +1378,23 @@ const productionDeps: FindingsPassDeps = {
   readPrompts: (scope, window, runIdBySession, runIds) =>
     readRunPrompts(scope, window, runIdBySession, runIds, readFrames),
   openProposals: openSpendProposals,
+  readTakenLineages,
 };
 
 /**
  * One findings pass over a workspace's trailing window: read the run rows,
  * the tool calls, the file change frames, and each run's first prompt, file
  * changes, compactions, and outcomes; read and price the model-call frames of
- * up to `FRAME_RUNS_READ_MAX` runs and `FRAME_READ_MAX_FRAMES` frames; detect;
- * and replace the open findings and their claims. The pass then gives each
- * applied finding with no claim row the claims a replay finds for it. It also
- * reads the window's operator prompts, and opens the steering record
- * proposals its repeated instructions and findings support. Throws when a
- * store is degraded: the job retries rather than writing findings from
- * missing frames.
+ * up to `FRAME_RUNS_READ_MAX` runs and `FRAME_READ_MAX_FRAMES` frames, with
+ * `FRAME_RUNS_RECURRING_RESERVE` of those runs kept for recurring prompts;
+ * detect; and replace the open findings and their claims. The pass then gives
+ * each applied finding with no claim row the claims a replay finds for it. It
+ * also reads the window's operator prompts, and opens the steering record
+ * proposals its repeated instructions and findings support. A decision on a
+ * repeated instructions finding holds for its proposal too, and a lineage
+ * that already has a record or a proposal does not use up the pass's cap
+ * (#4579). Throws when a store is degraded: the job retries rather than
+ * writing findings from missing frames.
  */
 export async function runFindingsPass(
   scope: FindingsScope,
@@ -1313,11 +1451,14 @@ export async function runFindingsPass(
   const ranked = runsWithRepeats(toolCalls);
   for (const [runId, n] of runsWithRetries(toolCalls, fileChangeTimes))
     ranked.set(runId, (ranked.get(runId) ?? 0) + n);
+  // A cheap scheduled job's runs get places of their own, so recurring runs
+  // can price them in a busy workspace (#4594).
   const { reads, coverage } = planFrameReads(
     runs,
     frameSources(runs, rows, runIdBySession, stored),
     ranked,
     FRAME_RUNS_READ_MAX,
+    firstPrompts,
   );
   // A call that named no model bounds a request and is priced by nothing, so
   // only the request view reads it (#4506).
@@ -1375,8 +1516,15 @@ export async function runFindingsPass(
     const backfill = claimBackfill(unclaimed, replayClaims(input, released));
     if (backfill.length > 0) await deps.writeClaimBackfill?.(scope, backfill);
   }
-  await deps.openProposals?.(scope, {
-    instructions: instructionProposals(prompts, runs),
+  if (deps.openProposals === undefined) return { findings: written };
+  // Only a `content_exact` workspace gets instruction proposals, so only its
+  // pass reads which lineages are taken (#4579).
+  const taken =
+    prompts?.mode === "content_exact"
+      ? await deps.readTakenLineages?.(scope)
+      : undefined;
+  await deps.openProposals(scope, {
+    instructions: instructionProposals(prompts, runs, { decidedSince, taken }),
     findings: drafts,
   });
   return { findings: written };
