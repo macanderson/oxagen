@@ -223,9 +223,10 @@ npm.yml publishes with the `NPM_TOKEN` repository secret: a granular npm
 token with read and write on `@oxagen/cli`. npm lets such a token live 90
 days at most, so Mac replaces it on a scheduled routine.
 `packages/config/src/ci-registry.ts` has the steps. Trusted publishing would
-need no stored token, but npm cannot attach provenance to a package built
-from a private repository, and Mac chose the token. When the token expires,
-npm.yml fails and main stays green, so check its runs after each rotation.
+need no stored token, but npm supports it only on GitHub-hosted runners, and
+this repository's CI runs on its own (ADR-246), so Mac chose the token. When
+the token expires, npm.yml fails and main stays green, so check its runs
+after each rotation.
 
 ### From a laptop, when you want to watch it land
 

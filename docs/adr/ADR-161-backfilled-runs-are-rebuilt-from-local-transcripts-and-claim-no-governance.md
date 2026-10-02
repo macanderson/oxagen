@@ -146,3 +146,148 @@ Transcripts from harnesses other than Claude Code are out of scope, because `tra
 - [ ] WAL backlog cap, live-first shipping, and the checkpoint file with resume after interruption, each covered by a test.
 - [ ] The Run page badge, the "Not recorded" governance panels, the "Estimated" cost label, and the chain status wording, covered by a component test.
 - [ ] `docs/specs/tacho/spec.md` and `data-model.md` describe `record_basis`, the `backfill` gap, and the command. The published CLI reference documents `tacho backfill`.
+
+## Amendment of 2026-10-02: the first build, and the tailer's import
+
+The first implementation (#4028) changed some details above. These facts
+supersede the matching parts of the decision, of
+`docs/specs/tacho/backfill.md`, and of the definition of done.
+
+### The tailer's first-start import and this command
+
+Since #4819 the transcript tailer reads a transcript from byte 0 the first
+time it meets a session, outside the hook queues (ADR-231 decision 5). That
+is not a backfill of the machine's history, and the two do not overlap:
+
+1. **What the command adds.** The tailer reads only the transcripts of the
+   sessions the daemon's registry holds: a session a hook, an OTel record,
+   the model proxy, or the detector met after the daemon started. It never
+   lists `~/.claude/projects`, and the detector passes over a transcript
+   that stopped changing before the daemon started. A session that ended
+   before the machine enrolled and never resumed is read only by
+   `oxagen agent backfill`. The command also brings what the tailer's import
+   does not: frames a second pass seals byte for byte the same,
+   `record_basis = backfill`, the server pre-flight, the date, project and
+   session filters, a dry run that prints counts only, estimated cost, and
+   no governance claim.
+2. **One session, one recorder.** A pass leaves a session to the live path
+   when the registry holds it, holds a chain tombstone for it, the tailer
+   holds a cursor for it, or the WAL holds a chain for it that no pass
+   wrote. Before every slice, the pass checks again on the session's own
+   queue and stops when a live hook took the session. The other way round,
+   the cursor file records where each pass left the transcript and the
+   chain, in the same queue turn as each seal. When a backfilled session
+   resumes, the registry continues the chain from the WAL, or from the
+   cursor file once the WAL has dropped it, and the tailer reads on from the
+   first byte the pass did not read (`adoptedChain`, `adoptedCursor`). The
+   resumed session reads `mixed`, and its chain never starts again at seq 0.
+3. **The tailer's import stays live.** Its frames carry no
+   `record_basis = backfill` and keep random event ids. A session the tailer
+   reads is one the recorder met, so hook frames interleave with its
+   transcript frames on one chain, and its seqs are not a function of the
+   transcript's bytes. Deterministic ids would make no second read
+   idempotent there: the tailer's cursor already does that. The lines it
+   reads from before the daemon met the session are a gap in what was
+   witnessed, and the existing completeness grade already reports it.
+
+### What the build changed
+
+- **The command is `oxagen agent backfill`.** The `tacho` executable is an
+  alias since #4879. It talks to the daemon's `POST /backfill` over the local
+  socket and streams progress as one JSON line a second. It exits 0 when the
+  pass finished, 1 when it stopped, 2 on a bad option, 3 when no daemon
+  answered, and 4 when the machine is not enrolled.
+- **Hook frames are rebuilt as hooks.** The driver turns transcript records
+  into the hook payloads they imply (`SessionStart`, `UserPromptSubmit`,
+  `Stop`, `PreToolUse`, `SubagentStart`, `SubagentStop`, `PreCompact`,
+  `SessionEnd`) and feeds them to the recorder's own hook path. Every frame
+  takes the shape the live hook gives it. In backfill mode the recorder
+  rewrites `source` to `transcript`, `fidelity` to `ambient`, drops
+  `hook_event_name` and the `agent_start` environment snapshot, and adds
+  `oxagen.record_basis = backfill` and `oxagen.git_basis = recorded`.
+- **A prompt's origin rides the transcript's copy.** The synthesized
+  `turn_start` carries the prompt's digest, size and body. The prompt's
+  `origin` stays on the transcript's `oxagen:message` copy of the prompt,
+  where the normalizer puts it, while #4969 changes which of its members a
+  frame may keep.
+- **A turn's stop reason is an attr.** A `turn_end` body has no
+  `stop_reason` member, so the turn's last reply's reason is
+  `oxagen.turn_stop_reason`.
+- **The seal says what the run was.** The backfilled `agent_stop` carries
+  `session_end_reason = backfill_end_of_file`, `session_outcome = unknown`,
+  and `completeness_gaps = ["backfill"]`, so the replay grade is `inspect`.
+  Ingest keeps a backfilled session on `observe` whatever the host's mode,
+  counts its transcript tool calls (a live session counts the hook's copy),
+  and keeps its cost off the spend-budget counter. A transcript tool call
+  is never a governed action, so nothing reaches a Stripe meter.
+- **The rollup marks the cost estimated.** The cost frame read gives a
+  backfilled call the basis `estimated`, and `priceFrame` prices it from
+  `cost.price_entries` at its own `ts`.
+- **The pre-flight also asks by session id.** `list_tacho_session_heads`
+  takes up to 500 chain uuids and the same sessions' harness session ids. A
+  machine that lost `TACHO_HOME` enrolls again with a new session scope, so
+  its uuids differ from the ones it shipped. The answer names the same
+  agent's session with that id, and the pass skips it instead of recording
+  the run twice. It answers root sessions only. A real pass seals no session
+  the control plane did not answer for; a dry run still counts it. The pass
+  asks in batches of 500 and stops at the first batch with no answer. The
+  route takes 30 calls a minute per host, so a pass over more than 15,000
+  new transcripts seals the first 15,000. The next pass skips those through
+  the cursor file and asks about the rest.
+- **The row records the normalizer.** `tacho.sessions.backfill_normalizer`
+  holds the version from the `agent_start` attr `oxagen.backfill_normalizer`,
+  beside `record_basis`. Migration `20261002173000`.
+- **The cursor file is `backfill-cursor.json`** in the agent's directory, as
+  the spec renamed it. A pass that stopped partway reads the transcript again
+  from byte 0. The frames are deterministic, so the replay drops what the
+  WAL holds after it checks the last held frame's hash. A different hash
+  there marks the transcript failed for good.
+- **The backlog pause counts events.** The WAL counts unshipped events, not
+  bytes. The first import measured about 12 KiB an event, so the pass waits
+  while more than 5,000 are unshipped, about 64 MiB.
+- **A torn final line leaves the session open.** The pass seals what it
+  read, writes no `agent_stop`, and a later pass reads on once the line is
+  whole.
+
+### The run's cost and the Run page
+
+- **One figure for a rebuilt run's cost.** A backfilled `agent_stop` can
+  carry Claude Code's own total from the transcript's `cost-state`. Ingest
+  keeps it in `harness_reported_cost_micros` for comparison and never
+  writes it over `total_cost_micros` for a session whose `record_basis` is
+  `backfill` or `mixed`. The run row answers no `reportedCost` for such a
+  run, and the Fleet cost sort skips its session total the same way, so
+  the rollup's price-book estimate is the one figure the run shows.
+- **The budget split counts the calls the totals count.** The cost kept
+  off the spend-budget counter is the backfilled calls'
+  `cost_usd_micros`, counted by `countsLlmCallUsage`, the rule the
+  session totals use. A copy of a call another sighting already counted
+  adds to neither.
+- **`get_run` answers `recordBasis`.** A ledger run answers `live`. Fleet
+  rows leave it out, so Fleet draws no badge yet.
+- **The Run page.** A `backfill` run shows a "Backfilled" badge in the
+  header with one line under it: "Rebuilt from the Claude Code transcript
+  on <date>. Nothing was enforced during this run." The date is the seal's,
+  and only when the pass's own `agent_stop` sealed the run, because the
+  control plane stamps a seal when it receives it. After an idle close or
+  an operator's seal the line names no date. The header's tier, the Policy
+  tab's decisions, and the seal's tier read "not recorded", the seal's
+  badge reads "sealed at backfill", and the stat row and the Cost tab label
+  the cost "estimated". The Run page draws no elevation or mandate panel,
+  so there was none to change.
+- **A resumed run keeps its panels.** A `mixed` run shows "Partly
+  backfilled" with the line "The start of this run was rebuilt from the
+  Claude Code transcript. Oxagen recorded the rest as it ran." Its tier,
+  policy decisions and seal show what the live part recorded, because that
+  part was governed.
+
+### Not built yet
+
+- Forks: `oxagen.forked_from` from `fork-context-ref`, and counting a
+  copied `requestId` once across files. The pass counts the record and
+  reads each file on its own.
+- Repository attribution through a live session's `cwd` and remote digest.
+- The badge on Fleet and the operator review, which need `recordBasis` on
+  `list_runs`.
+- The surfaces that refuse governed evidence for a backfilled session
+  (spec section 3).

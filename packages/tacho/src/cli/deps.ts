@@ -5,7 +5,7 @@
 import { spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { existsSync } from "node:fs";
-import { get as httpGet } from "node:http";
+import { get as httpGet, request as httpRequest } from "node:http";
 import { createServer } from "node:net";
 import {
   arch as osArch,
@@ -605,6 +605,18 @@ export interface CliDeps {
   runtime: RuntimeCommands;
   /** GET a daemon route on the loopback port with the local bearer. */
   daemonGet: (path: string) => Promise<unknown | undefined>;
+  /**
+   * POST to the daemon over its socket (loopback TCP on Windows) with the
+   * local bearer, and hand each line of the answer to `onLine` as it
+   * arrives. No response timeout: `oxagen agent backfill` streams its
+   * progress for as long as the pass runs. Answers the status, or undefined
+   * when the host is not enrolled or the daemon does not answer.
+   */
+  daemonStream?: (
+    path: string,
+    body: unknown,
+    onLine: (line: string) => void,
+  ) => Promise<{ status: number } | undefined>;
   findFreePort: () => Promise<number>;
   randomToken: () => string;
   sleep: (ms: number) => Promise<void>;
@@ -1121,6 +1133,57 @@ export function defaultCliDeps(
       } catch {
         return undefined;
       }
+    },
+    daemonStream: (path, body, onLine) => {
+      const host = readHostFile(paths.hostFile);
+      if (host === undefined) return Promise.resolve(undefined);
+      const payload = JSON.stringify(body);
+      return new Promise((resolvePromise) => {
+        let settled = false;
+        const settle = (answer: { status: number } | undefined) => {
+          if (settled) return;
+          settled = true;
+          resolvePromise(answer);
+        };
+        const req = httpRequest(
+          {
+            ...(platform === "win32"
+              ? { host: "127.0.0.1", port: host.port }
+              : { socketPath: paths.socket }),
+            path,
+            method: "POST",
+            agent: false,
+            headers: {
+              Authorization: `Bearer ${host.local_token}`,
+              "Content-Type": "application/json",
+              "Content-Length": Buffer.byteLength(payload),
+            },
+          },
+          (res) => {
+            let buffered = "";
+            res.setEncoding("utf8");
+            res.on("data", (chunk: string) => {
+              buffered += chunk;
+              let newline = buffered.indexOf("\n");
+              while (newline !== -1) {
+                onLine(buffered.slice(0, newline));
+                buffered = buffered.slice(newline + 1);
+                newline = buffered.indexOf("\n");
+              }
+            });
+            res.on("end", () => {
+              if (buffered.trim() !== "") onLine(buffered);
+              settle({ status: res.statusCode ?? 0 });
+            });
+            res.on("error", () => settle({ status: res.statusCode ?? 0 }));
+            // A daemon that stops mid-pass closes the stream with no final
+            // report, and the command reports the pass as stopped.
+            res.on("close", () => settle({ status: res.statusCode ?? 0 }));
+          },
+        );
+        req.on("error", () => settle(undefined));
+        req.end(payload);
+      });
     },
     claude: () => claudeFacts(exec, platform, env, home),
     codex: () => harnessFacts(exec, "codex", platform, env, home),

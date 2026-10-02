@@ -551,8 +551,8 @@ function absolute(path: string, env: Readonly<Record<string, string | undefined>
 
 /**
  * The scope's steering repo, or null when it has none that is ready. The
- * organization's settings name the connection, and the workspace's (or the
- * organization's) settings name the repository.
+ * workspace's (or the organization's) settings name the repository. The
+ * connection is the one the workspace chose, else the organization's.
  */
 export async function loadHealthTarget(
   scope: HealthScope,
@@ -592,7 +592,9 @@ export async function loadHealthTarget(
     state.repository === null
   )
     return null;
-  const connection = readSteeringConnection(org.settings);
+  // A workspace that chose its own GitHub organization or GitLab group reads
+  // its repository through that one, not the organization's.
+  const connection = state.connection ?? readSteeringConnection(org.settings);
   return {
     target: {
       scope,

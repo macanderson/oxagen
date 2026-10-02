@@ -144,13 +144,15 @@ const ALLOWED: Record<
     // the approval decision the assistant flyout's parked cards make (#4162).
     // Run's carries the delivery report Fleet's steer receipt opens (#2953).
     // Studio's carries Add server's local command, definition, package and
-    // discovery forms (#4678).
+    // discovery forms (#4678). Steering repo's carries the Organization and
+    // Repository name fields both create-workspace forms show (#5196).
     if (
       isFeatureBarrel(target) ||
       target === "features/fleet/client" ||
       target === "features/run/client" ||
       target === "features/shell/client" ||
-      target === "features/mcp-studio/client"
+      target === "features/mcp-studio/client" ||
+      target === "features/steering-repo/client"
     )
       return true;
     if (under(target, "ui") || under(target, "shared")) return true;
