@@ -389,7 +389,6 @@ const WorkTriage = z.object({
     }),
   ),
 });
-export type WorkTriage = z.infer<typeof WorkTriage>;
 
 const BriefCriterion = z.object({
   /** The stable criterion key, such as `c3`. */

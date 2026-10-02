@@ -12,7 +12,6 @@ import type {
   WorkSend,
   WorkTarget,
   WorkTargetList,
-  WorkTriage,
 } from "@/data/contracts/work";
 import type { DataSource } from "@/data/ports";
 import { type Read, readOk } from "@/data/read";
@@ -46,6 +45,7 @@ const HEAD_AT = "2026-10-01T10:58:00Z";
 const MERGED_AT = "2026-10-01T12:30:00Z";
 
 type Item = WorkItemDetail["item"];
+type WorkTriage = WorkItemDetail["triage"];
 
 export function workItem(overrides: Partial<Item> = {}): Item {
   return {
