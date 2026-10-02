@@ -2663,6 +2663,28 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     valueOrigin: "manual",
     placeholder: "35930652260",
   },
+  RERUN_RUN_ID: {
+    group: "Operator scripts",
+    description:
+      "The failed CI run that rerun-lost-runner.mjs checks for jobs whose runner was lost. rerun-lost-runner.yml sets it from the workflow_run event, or from the run_id input on a manual dispatch.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "37027349832",
+  },
+  DEFAULT_BRANCH: {
+    group: "Operator scripts",
+    description:
+      "The repository's default branch. rerun-lost-runner.mjs reruns a lost job on this branch even after newer commits land. rerun-lost-runner.yml sets it from the event's repository. Defaults to main.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "main",
+  },
   DEPLOY_SERVICE: {
     group: "Operator scripts",
     description:

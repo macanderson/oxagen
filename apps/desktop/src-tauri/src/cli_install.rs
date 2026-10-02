@@ -1082,21 +1082,32 @@ fn clear_quarantine(_path: &Path) {}
 /// bundled sidecars, recording in `created` every directory made for it, so
 /// Uninstall can remove them again. Every launch runs this, whatever the
 /// PATH link setting says: enrollment names the copy, and a PATH link is a
-/// separate choice.
-fn keep_versioned_copy(env: &InstallEnv, created: &mut Vec<PathBuf>) -> Result<PathBuf, String> {
+/// separate choice. A journal that cannot be written goes into `skipped` as
+/// a note and the copy is still made, because the hooks and the service
+/// name the copy whether or not the record of it was saved.
+fn keep_versioned_copy(
+    env: &InstallEnv,
+    created: &mut Vec<PathBuf>,
+    skipped: &mut Vec<String>,
+) -> Result<PathBuf, String> {
     let bundled = env
         .sidecars
         .as_deref()
         .ok_or_else(|| "cannot locate the bundled binaries".to_string())?;
     let kept = env.kept_dir();
     created.extend(create_dir_tracking(&kept)?);
+    // Journaled before the copy, so a launch that dies part way still leaves
+    // a record of where it was copying to.
+    if let Err(e) = record_journal(&env.roots, &[journal_entry("copy", &kept, None)]) {
+        skipped.push(format!("could not record what was written: {e}"));
+    }
     keep_sidecars(bundled, &kept)
 }
 
 /// `keep_versioned_copy`, with what it created written to `desktop.json`.
-fn keep_versioned_copy_recorded(env: &InstallEnv) -> Result<PathBuf, String> {
+fn keep_versioned_copy_recorded(env: &InstallEnv, skipped: &mut Vec<String>) -> Result<PathBuf, String> {
     let mut created = Vec::new();
-    let kept = keep_versioned_copy(env, &mut created);
+    let kept = keep_versioned_copy(env, &mut created, skipped);
     record_created(&env.roots, &created)?;
     kept
 }
@@ -1209,6 +1220,9 @@ pub(crate) fn prune_old_copies(env: &InstallEnv) -> Vec<String> {
     if !names_flat_copy(&references, &durable) {
         remove_sidecars_in(&durable, &mut removed, &mut left);
     }
+    // A copy that is gone is no longer the journal's to name. One Windows
+    // would not let go of stays, with its entry, for a later launch.
+    let _ = forget_journal(&env.roots, |kind, path| kind == "copy" && !Path::new(path).exists());
     removed
 }
 
@@ -1445,6 +1459,118 @@ fn record_created(roots: &Roots, paths: &[PathBuf]) -> Result<(), String> {
     write_desktop_config(roots, &config)
 }
 
+/// `desktop.json`'s key for the install journal: one entry for each thing an
+/// install wrote other than the directories and empty files in `created`.
+/// `oxagen agent uninstall` reads it, with the app gone, and removes each
+/// thing only while it is still what the app wrote (ADR-230, amendment of
+/// 2026-10-02, #4298). The entries, and what each names:
+///
+/// - `{"kind":"copy","path":<dir>}`: a per-user copy of the two sidecars;
+/// - `{"kind":"link","path":<link>,"target":<file>}`: a PATH symlink;
+/// - `{"kind":"shim","path":<file>,"text":<text>}`: a Windows `.cmd` shim;
+/// - `{"kind":"profile","path":<file>}`: a shell profile holding the block;
+/// - `{"kind":"fish","path":<file>}`: the fish file, which is wholly ours;
+/// - `{"kind":"user-path","path":<dir>}`: a directory on the Windows user
+///   PATH.
+///
+/// `packages/tacho/src/cli/uninstall.ts` is the reader.
+const JOURNAL: &str = "journal";
+
+/// One journal entry: its kind, its path, and the one extra field a link
+/// (`target`) or a shim (`text`) carries.
+fn journal_entry(kind: &str, path: &Path, extra: Option<(&str, String)>) -> Value {
+    let mut entry = Map::new();
+    entry.insert("kind".to_string(), Value::String(kind.to_string()));
+    entry.insert("path".to_string(), Value::String(path.display().to_string()));
+    if let Some((key, value)) = extra {
+        entry.insert(key.to_string(), Value::String(value));
+    }
+    Value::Object(entry)
+}
+
+/// The journal entry for the link (Unix) or the shim (Windows) `link_one`
+/// keeps at `dir` for `name`.
+fn link_entry(dir: &Path, name: &str, target: &Path) -> Value {
+    if cfg!(windows) {
+        journal_entry(
+            "shim",
+            &dir.join(format!("{name}.cmd")),
+            Some(("text", windows_shim_content(target))),
+        )
+    } else {
+        journal_entry("link", &dir.join(name), Some(("target", target.display().to_string())))
+    }
+}
+
+fn read_journal(roots: &Roots) -> Vec<Value> {
+    read_json_object(&roots.desktop_config_path())
+        .get(JOURNAL)
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default()
+}
+
+/// The kind and the path, which together name the thing an entry is about.
+fn journal_key(entry: &Value) -> (Option<&str>, Option<&str>) {
+    (
+        entry.get("kind").and_then(Value::as_str),
+        entry.get("path").and_then(Value::as_str),
+    )
+}
+
+/// Add `entries` to the journal. Each replaces the entry with its kind and
+/// path, so a link moved to a newer copy is recorded once, with its new
+/// target. Nothing is written when the journal already holds them all, so a
+/// launch that changes nothing leaves `desktop.json` as it was.
+fn record_journal(roots: &Roots, entries: &[Value]) -> Result<(), String> {
+    let mut journal = read_journal(roots);
+    let mut changed = false;
+    for entry in entries {
+        if journal.contains(entry) {
+            continue;
+        }
+        journal.retain(|kept| journal_key(kept) != journal_key(entry));
+        journal.push(entry.clone());
+        changed = true;
+    }
+    if !changed {
+        return Ok(());
+    }
+    let mut config = read_json_object(&roots.desktop_config_path());
+    config.insert(JOURNAL.to_string(), Value::Array(journal));
+    write_desktop_config(roots, &config)
+}
+
+/// `record_journal` for a pass that reports through `view`: a journal that
+/// cannot be written is a note, not a failed install.
+fn note_journal(roots: &Roots, entries: &[Value], view: &mut CliInstallView) {
+    if let Err(e) = record_journal(roots, entries) {
+        view.skipped.push(format!("could not record what was written: {e}"));
+    }
+}
+
+/// Drop the entries `gone(kind, path)` picks: things a "Remove links" or a
+/// prune took off the machine. An entry without a kind and a path goes too.
+fn forget_journal(roots: &Roots, gone: impl Fn(&str, &str) -> bool) -> Result<(), String> {
+    let mut config = read_json_object(&roots.desktop_config_path());
+    let Some(Value::Array(journal)) = config.get(JOURNAL) else {
+        return Ok(());
+    };
+    let kept: Vec<Value> = journal
+        .iter()
+        .filter(|entry| match journal_key(entry) {
+            (Some(kind), Some(path)) => !gone(kind, path),
+            _ => false,
+        })
+        .cloned()
+        .collect();
+    if kept.len() == journal.len() {
+        return Ok(());
+    }
+    config.insert(JOURNAL.to_string(), Value::Array(kept));
+    write_desktop_config(roots, &config)
+}
+
 /// Create `dir` and every missing parent, returning the ones that were made,
 /// outermost first.
 fn create_dir_tracking(dir: &Path) -> Result<Vec<PathBuf>, String> {
@@ -1502,6 +1628,10 @@ fn ensure_profile_block(
     } else {
         upsert_path_block(existing.as_deref().unwrap_or(""), &dir_text)
     };
+    // Journaled before the write, and when the block is already there, which
+    // an app from before the journal wrote.
+    let entry_kind = if kind == ShellKind::Fish { "fish" } else { "profile" };
+    record_journal(roots, &[journal_entry(entry_kind, &profile_path, None)])?;
     if existing.as_deref() == Some(updated.as_str()) {
         return Ok(Some(profile_path.display().to_string()));
     }
@@ -1666,7 +1796,7 @@ pub(crate) fn install_cli_locked(env: &InstallEnv) -> CliInstallView {
 
     // Made before anything else, and whether or not anything is linked:
     // every command enrollment writes names this copy (ADR-230).
-    let sidecars = match keep_versioned_copy(env, &mut created) {
+    let sidecars = match keep_versioned_copy(env, &mut created, &mut view.skipped) {
         Ok(kept) => kept,
         Err(e) => {
             let _ = record_created(roots, &created);
@@ -1747,7 +1877,13 @@ pub(crate) fn install_cli_locked(env: &InstallEnv) -> CliInstallView {
             continue;
         }
         let target = sidecars.join(exe(name));
-        match link_one(&dir, name, &target, &durable) {
+        let outcome = link_one(&dir, name, &target, &durable);
+        // A link this pass made, or found already right, is ours either way:
+        // an app from before the journal made it.
+        if matches!(outcome, LinkOutcome::Linked(_) | LinkOutcome::AlreadyCorrect) {
+            note_journal(roots, &[link_entry(&dir, name, &target)], &mut view);
+        }
+        match outcome {
             LinkOutcome::Linked(path) => {
                 view.files.push(path);
                 any_ours = true;
@@ -1770,6 +1906,9 @@ pub(crate) fn install_cli_locked(env: &InstallEnv) -> CliInstallView {
     if any_ours {
         #[cfg(windows)]
         {
+            // The link directory is Oxagen's own, so its PATH entry is ours
+            // whether this pass adds it or finds it there.
+            note_journal(roots, &[journal_entry("user-path", &dir, None)], &mut view);
             let already = path_var_contains(&env.process_path, &dir);
             view.path_updated = already;
             if !already {
@@ -1835,7 +1974,7 @@ pub(crate) fn ensure_cli_installed_in(env: &InstallEnv, state: &CliInstallState)
         };
         // Opting out of PATH links does not opt out of the copy: the hooks
         // and the service name it.
-        if let Err(e) = keep_versioned_copy_recorded(env) {
+        if let Err(e) = keep_versioned_copy_recorded(env, &mut view.skipped) {
             view.skipped.push(format!(
                 "could not keep a copy of the tools in {}: {e}",
                 env.kept_dir().display()
@@ -2017,6 +2156,17 @@ pub(crate) fn unlink_cli_in(env: &InstallEnv) -> UnlinkOutcome {
     #[cfg(windows)]
     if let Err(e) = remove_from_user_path_windows(&env.roots.cli_install_dir().display().to_string()) {
         outcome.failed.push(format!("user PATH: {e}"));
+    }
+    // What this took off is gone, so the journal stops naming it. The copies
+    // stay, and so do their entries. After a failure every entry stays, and
+    // a later uninstall checks each one again.
+    let forgotten = if outcome.failed.is_empty() {
+        forget_journal(&env.roots, |kind, _| kind != "copy")
+    } else {
+        Ok(())
+    };
+    if let Err(e) = forgotten {
+        outcome.failed.push(e);
     }
     outcome.removed.extend(remove_created(&env.roots));
     outcome
@@ -2743,6 +2893,58 @@ mod tests {
         assert!(!names_dir(&[], &old));
     }
 
+    /// ADR-230, amendment of 2026-10-02: the journal names a link with its
+    /// target and a shim with its whole text, which is what
+    /// `oxagen agent uninstall` compares before it removes either.
+    #[test]
+    fn a_link_is_journaled_with_its_target_and_a_shim_with_its_text() {
+        let dir = Path::new("/home/dev/.local/bin");
+        let target = Path::new("/home/dev/.local/share/oxagen/bin/2.1.3/tacho");
+        let expected = if cfg!(windows) {
+            serde_json::json!({
+                "kind": "shim",
+                "path": dir.join("tacho.cmd").display().to_string(),
+                "text": windows_shim_content(target),
+            })
+        } else {
+            serde_json::json!({
+                "kind": "link",
+                "path": dir.join("tacho").display().to_string(),
+                "target": target.display().to_string(),
+            })
+        };
+        assert_eq!(link_entry(dir, "tacho", target), expected);
+    }
+
+    /// One entry per thing: a link moved to a newer copy is recorded once,
+    /// with its new target. A pass that changes nothing writes nothing, and
+    /// forgetting drops only what it picks.
+    #[test]
+    fn the_journal_keeps_one_entry_per_thing_and_writes_only_what_changed() {
+        let roots = crate::machine::test_support::scratch_roots("journal", "/bin/zsh");
+        let link = roots.home.join(".local").join("bin").join("tacho");
+        let copy = roots.durable_bin_dir().join("2.1.4");
+        let old = journal_entry("link", &link, Some(("target", "/a/2.1.3/tacho".to_string())));
+        let new = journal_entry("link", &link, Some(("target", "/a/2.1.4/tacho".to_string())));
+        let kept = journal_entry("copy", &copy, None);
+        record_journal(&roots, &[kept.clone(), old]).unwrap();
+        record_journal(&roots, std::slice::from_ref(&new)).unwrap();
+        assert_eq!(read_journal(&roots), vec![kept.clone(), new.clone()]);
+
+        // Written by hand, compact: a record that changes nothing leaves the
+        // bytes alone.
+        let path = roots.desktop_config_path();
+        let text = serde_json::json!({ "journal": [kept.clone(), new.clone()], "x": 1 }).to_string();
+        fs::write(&path, &text).unwrap();
+        record_journal(&roots, &[new, kept.clone()]).unwrap();
+        assert_eq!(fs::read_to_string(&path).unwrap(), text);
+
+        forget_journal(&roots, |kind, _| kind != "copy").unwrap();
+        assert_eq!(read_journal(&roots), vec![kept]);
+        // Other keys survive both.
+        assert_eq!(read_json_object(&path).get("x"), Some(&serde_json::json!(1)));
+    }
+
     fn put_file(path: &Path, text: &[u8]) {
         fs::create_dir_all(path.parent().unwrap()).unwrap();
         fs::write(path, text).unwrap();
@@ -2776,7 +2978,7 @@ mod tests {
     #[test]
     fn a_launch_keeps_a_copy_of_this_version_and_the_next_one_copies_nothing() {
         let env = scratch_env("kept-copy", "2.1.3");
-        let kept = keep_versioned_copy_recorded(&env).unwrap();
+        let kept = keep_versioned_copy_recorded(&env, &mut Vec::new()).unwrap();
         assert_eq!(kept, env.roots.durable_bin_dir().join("2.1.3"));
         assert_eq!(fs::read(kept.join(exe("tacho"))).unwrap(), b"tacho 2.1.3");
         assert!(has_both_sidecars(&kept));
@@ -2786,7 +2988,7 @@ mod tests {
 
         // A copy of the same length, no older than the bundle: left alone.
         fs::write(kept.join(exe("tacho")), b"TACHO 2.1.3").unwrap();
-        keep_versioned_copy_recorded(&env).unwrap();
+        keep_versioned_copy_recorded(&env, &mut Vec::new()).unwrap();
         assert_eq!(fs::read(kept.join(exe("tacho"))).unwrap(), b"TACHO 2.1.3");
 
         // A rebuilt bundle of the same version is newer: copied again.
@@ -2798,8 +3000,28 @@ mod tests {
             .unwrap()
             .set_modified(later)
             .unwrap();
-        keep_versioned_copy_recorded(&env).unwrap();
+        keep_versioned_copy_recorded(&env, &mut Vec::new()).unwrap();
         assert_eq!(fs::read(kept.join(exe("tacho"))).unwrap(), b"tacho 2.1.3");
+    }
+
+    /// #4298: the hooks and the service name the copy, so a `desktop.json`
+    /// that cannot be written costs the journal entry, never the copy.
+    #[test]
+    fn a_journal_that_cannot_be_written_still_leaves_the_copy() {
+        let env = scratch_env("kept-copy-no-journal", "2.1.4");
+        // A directory where desktop.json belongs makes every write to it fail.
+        fs::create_dir_all(env.roots.desktop_config_path()).unwrap();
+        let mut created = Vec::new();
+        let mut skipped = Vec::new();
+        let kept = keep_versioned_copy(&env, &mut created, &mut skipped).unwrap();
+        assert!(has_both_sidecars(&kept));
+        assert_eq!(fs::read(kept.join(exe("tacho"))).unwrap(), b"tacho 2.1.4");
+        assert!(
+            skipped
+                .iter()
+                .any(|note| note.starts_with("could not record what was written")),
+            "{skipped:?}"
+        );
     }
 
     /// A downloaded bundle is quarantined, and a copy keeps extended
@@ -2824,7 +3046,7 @@ mod tests {
             &["-w", "com.apple.quarantine", "0081;00000000;Safari;"],
             &bundled
         ));
-        let kept = keep_versioned_copy_recorded(&env).unwrap();
+        let kept = keep_versioned_copy_recorded(&env, &mut Vec::new()).unwrap();
         assert!(xattr(&["-p", "com.apple.quarantine"], &bundled));
         assert!(!xattr(&["-p", "com.apple.quarantine"], &kept.join("tacho")));
         assert_eq!(fs::read(kept.join("tacho")).unwrap(), b"tacho 2.1.3");
@@ -2870,6 +3092,12 @@ mod tests {
         let removed = prune_old_copies(&new);
         assert!(!old_dir.exists(), "{removed:?}");
         assert!(has_both_sidecars(&new_dir));
+        // The journal names the copy that is left, and not the one that went.
+        let copies: Vec<Value> = read_journal(&new.roots)
+            .into_iter()
+            .filter(|entry| entry.get("kind") == Some(&Value::from("copy")))
+            .collect();
+        assert_eq!(copies, vec![journal_entry("copy", &new_dir, None)]);
     }
 
     /// The same bundle directory and home as `env`, carrying `version`.
@@ -2893,11 +3121,11 @@ mod tests {
     #[test]
     fn no_copy_is_removed_while_a_host_file_cannot_be_read() {
         let old = scratch_env("unreadable", "2.1.3");
-        keep_versioned_copy_recorded(&old).unwrap();
+        keep_versioned_copy_recorded(&old, &mut Vec::new()).unwrap();
         let host = old.roots.tacho_root().join("agents").join("0a1b2c3d").join("host.json");
         put_file(&host, b"{ truncated");
         let new = scratch_env_over(&old, "2.1.4");
-        keep_versioned_copy_recorded(&new).unwrap();
+        keep_versioned_copy_recorded(&new, &mut Vec::new()).unwrap();
         assert!(prune_old_copies(&new).is_empty());
         assert!(has_both_sidecars(&old.kept_dir()));
         // Once it reads and names nothing, the old copy goes.

@@ -102,7 +102,7 @@ export const STELLA_TELEMETRY_PURPOSE = "stella_operational_telemetry_v1";
 export const MACHINE_KEY_CAPABILITIES: Readonly<
   Record<string, ReadonlySet<string>>
 > = {
-  // The enrolled daemon's nine control calls, and nothing else. A host
+  // The enrolled daemon's ten control calls, and nothing else. A host
   // reports events, fetches its mandate, polls for commands, asks for a
   // repository-scoped git credential (ADR-151), sends the memories its
   // harnesses wrote, asks for the memories a prompt should see (ADR-206),
@@ -134,6 +134,10 @@ export const MACHINE_KEY_CAPABILITIES: Readonly<
     // went to this host's runtime and agent.
     "claim_work_order",
     "reject_work_order",
+    // ADR-161: before a backfill seals a session, which of them the control
+    // plane already holds for this host. Read-only, and it answers only the
+    // calling host's own sessions.
+    "list_tacho_session_heads",
   ]),
   [LEDGER_RUN_SCOPE_PURPOSE]: new Set(["ingest_run_frames"]),
   [STELLA_TELEMETRY_PURPOSE]: new Set(["ingest_stella_operational_telemetry"]),

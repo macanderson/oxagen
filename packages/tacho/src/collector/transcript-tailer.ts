@@ -190,6 +190,27 @@ export interface TranscriptTailerOptions {
   now?: () => number;
   /** How long a sealed session's transcript may sit unchanged before its cursor drains; see `DEFAULT_SEALED_TAIL_IDLE_MS`. */
   sealedIdleMs?: number;
+  /**
+   * Where a backfill stopped reading a transcript (ADR-161), for a session
+   * this tailer holds no cursor for. A session the backfill sealed that
+   * resumes live is then read from the first byte the backfill did not
+   * read, and its finished subagents are not read again. A file whose inode
+   * or head changed since is read from byte 0, as any cursor's is.
+   */
+  adoptedCursor?: (
+    harnessSessionId: string,
+    path: string,
+  ) => AdoptedTranscriptCursor | undefined;
+}
+
+/** Where a backfill left a transcript; see `adoptedCursor`. */
+export interface AdoptedTranscriptCursor {
+  offset: number;
+  ino: number;
+  /** The file's first bytes, base64, as `HEAD_BYTES` fingerprints them. */
+  head: string;
+  /** The subagents whose transcripts the backfill read to the end. */
+  subagents: string[];
 }
 
 /**
@@ -433,6 +454,15 @@ export class TranscriptTailer {
     }
   }
 
+  /**
+   * Whether this tailer keeps a cursor for the session, live or kept after
+   * the registry forgot it. A backfill leaves such a session to the live
+   * path (ADR-161).
+   */
+  holdsCursor(harnessSessionId: string): boolean {
+    return this.cursors.has(sessionMapKey(harnessSessionId));
+  }
+
   /** The cursors, for persistence and for tests. */
   state(): PersistedTailState {
     return {
@@ -465,6 +495,22 @@ export class TranscriptTailer {
     // A drained cursor is final whatever path the session reports now.
     if (existing?.drained) return existing;
     if (existing !== undefined && existing.path === path) return existing;
+    const adopted =
+      existing === undefined
+        ? this.options.adoptedCursor?.(session.harnessSessionId, path)
+        : undefined;
+    if (adopted !== undefined) {
+      const cursor: Cursor = {
+        path,
+        offset: adopted.offset,
+        ino: adopted.ino,
+        head: adopted.head,
+        subagents: [...adopted.subagents],
+      };
+      this.cursors.set(key, cursor);
+      this.dirty = true;
+      return cursor;
+    }
     // A session that reports a different transcript path (a resume that
     // moved projects) starts over on the new file; the old one is done.
     const cursor: Cursor = {

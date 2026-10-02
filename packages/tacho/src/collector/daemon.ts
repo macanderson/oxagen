@@ -105,7 +105,7 @@ import {
   type WalCeilingPolicy,
 } from "../host/wal-ceiling";
 import { keepWorkOrder as keepPendingWorkOrder } from "../host/work-orders";
-import { ulid } from "../ids";
+import { sessionUuid as deriveSessionUuid, ulid } from "../ids";
 import { toProtocolTimestamp } from "../timestamp";
 import {
   tachoHarnessSchema,
@@ -123,6 +123,13 @@ import {
   TACHO_CREDENTIAL_GATEWAY_BROKERED,
   TACHO_CREDENTIAL_HARNESS_HELD,
 } from "../wire";
+import {
+  BackfillLedger,
+  type BackfillReport,
+  backfillRecorders,
+  parseBackfillRequest,
+  runBackfill,
+} from "./backfill";
 import { Detector } from "./detector";
 import { readRepositoryRemote } from "./git-facts";
 import { createGitLane } from "./git-lane";
@@ -216,6 +223,7 @@ import {
   Shipper,
   serverRequestedWaitMs,
 } from "./spool";
+import { createSessionHeads } from "./session-heads";
 import { TranscriptTailer } from "./transcript-tailer";
 
 export interface DaemonTimers {
@@ -843,11 +851,16 @@ async function initializeDaemon(
   // same machine and in the same workspace, so a live session keeps its uuid
   // across `enroll --force`, a harness addition and a harness-only reassign
   // (ADR-179).
+  // Where each backfill pass left each transcript and its chain (ADR-161).
+  // The registry continues a backfilled chain from it, and the tailer reads
+  // on from it, when a backfilled session resumes live.
+  const backfillLedger = new BackfillLedger(paths.backfillCursor, log, now);
   const registry = new SessionRegistry({
     context,
     scope: sessionScopeOf(host),
     now,
     processStarts: hookProcessStarts,
+    adoptedChain: (sessionUuid) => backfillLedger.chainHead(sessionUuid),
   });
   // Read before anything in this startup touches the file, so it names the
   // previous process's last write — the moment its record of a live session
@@ -2091,8 +2104,96 @@ async function initializeDaemon(
     statePath: paths.transcriptTailState,
     exclusive: (session, apply) =>
       queues.session(session.harnessSessionId, async () => apply()),
+    adoptedCursor: (harnessSessionId, path) =>
+      backfillLedger.transcriptCursor(harnessSessionId, path),
     log,
   });
+
+  // --- backfill ----------------------------------------------------------
+  // `oxagen agent backfill` asks this daemon to read the Claude Code
+  // transcripts no session it holds covers (ADR-161). One pass runs at a
+  // time. It reads outside the hook queues and seals each slice on the
+  // session's own queue, like the tailer (ADR-231).
+  const sessionHeads = createSessionHeads({
+    host: () => host,
+    fetch: options.fetch ?? globalThis.fetch,
+    log,
+  });
+  let backfillRunning = false;
+  function startBackfill(
+    input: unknown,
+  ):
+    | { status: number; body: unknown }
+    | {
+        run: (
+          progress: (report: BackfillReport) => void,
+          signal: AbortSignal,
+        ) => Promise<BackfillReport>;
+      } {
+    const parsed = parseBackfillRequest(input);
+    if ("error" in parsed) return { status: 400, body: { error: parsed.error } };
+    if (backfillRunning)
+      return {
+        status: 409,
+        body: { error: "A backfill pass is already running on this machine. Wait for it to finish, then run the command again." },
+      };
+    backfillRunning = true;
+    return {
+      run: async (progress, signal) => {
+        // Either the client going away or the daemon stopping ends the pass.
+        const both = new AbortController();
+        const stop = (reason: unknown) => {
+          if (!both.signal.aborted) both.abort(reason);
+        };
+        const onClient = () => stop("cancelled");
+        const onDaemon = () => stop("daemon_stopping");
+        signal.addEventListener("abort", onClient, { once: true });
+        stopping.signal.addEventListener("abort", onDaemon, { once: true });
+        if (signal.aborted) onClient();
+        if (stopping.signal.aborted) onDaemon();
+        try {
+          const scope = sessionScopeOf(host);
+          return await runBackfill(parsed.request, {
+            roots: options.transcriptRoots ?? [paths.claudeProjects],
+            ledger: backfillLedger,
+            now,
+            heldLocally: (harnessSessionId) =>
+              registry.holdsChain(harnessSessionId) ||
+              transcriptTailer.holdsCursor(harnessSessionId),
+            sessionUuidOf: (harnessSessionId) =>
+              deriveSessionUuid(scope, harnessSessionId),
+            sessionHeads,
+            recorder: backfillRecorders(context, scope),
+            exclusive: (harnessSessionId, apply) =>
+              queues.session(harnessSessionId, async () => apply()),
+            record,
+            walTail: (sessionUuid) => {
+              const head = wal.lastEvent(sessionUuid);
+              return head === undefined
+                ? undefined
+                : { seq: head.seq + 1, prevHash: head.hash };
+            },
+            unshippedEvents: () => wal.stats().unshipped,
+            sleep: (ms) =>
+              new Promise((resolve) => {
+                setTimeout(resolve, ms);
+              }),
+            bodyMode: () => retentionInForce().mandate.mode,
+            bodyShips: (body) =>
+              retentionAllows(retentionInForce().mandate, body.content_class),
+            log,
+            progress,
+            signal: both.signal,
+          });
+        } finally {
+          signal.removeEventListener("abort", onClient);
+          stopping.signal.removeEventListener("abort", onDaemon);
+          backfillRunning = false;
+        }
+      },
+    };
+  }
+  // --- end backfill ------------------------------------------------------
 
   /**
    * What the tailer does before a hook is sealed: a `Stop` or `SessionEnd`
@@ -4144,6 +4245,7 @@ async function initializeDaemon(
         ending: pendingSessionEnds.has(session.recorder.sessionUuid),
         seq: session.recorder.chainCursor.seq,
       })),
+    startBackfill,
     exportSession: (key: string, format: ExportFormat) => {
       const byId = registry.get(key)?.recorder.sessionUuid;
       const uuid = byId ?? key;

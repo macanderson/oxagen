@@ -452,6 +452,13 @@ export const RunRow = z.object({
    */
   costIsEstimate: z.boolean().optional(),
   reportedCost: Cost.nullable().optional(),
+  /**
+   * How the run's frames reached the record (ADR-161): `live` as it ran,
+   * `backfill` rebuilt from the harness's transcript after it ended, or
+   * `mixed`, a backfilled run a live session continued. `get_run` answers
+   * it; a Fleet row leaves it out, which reads as not read.
+   */
+  recordBasis: z.enum(["live", "backfill", "mixed"]).optional(),
   model: RunModel.nullable(),
   /** The effort level the harness reported; null when it reported none. */
   effort: z.string().min(1).nullable().optional(),

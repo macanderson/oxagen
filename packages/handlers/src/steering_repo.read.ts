@@ -31,11 +31,9 @@ import type {
 import { repoRef } from "@oxagen/oxagen/steering-repo/names";
 import { and, eq } from "drizzle-orm";
 import {
-  isPersonalConnection,
   readSteeringConnection,
   readSteeringRepoState,
-  steeringConnectionId,
-  steeringConnectionName,
+  steeringConnectionChoiceOf,
   type SteeringConnection,
   type SteeringRepoState,
 } from "./steering_repo.provision";
@@ -127,6 +125,7 @@ export const NO_STEERING_REPO: SteeringRepoGetOutput = {
   differences: [],
   legacySource: null,
   connection: null,
+  requestedName: null,
   connectionChoices: [],
   importRun: null,
 };
@@ -135,12 +134,7 @@ export const NO_STEERING_REPO: SteeringRepoGetOutput = {
 function connectionView(
   c: SteeringConnection,
 ): SteeringRepoGetOutput["connectionChoices"][number] {
-  return {
-    provider: c.provider,
-    id: steeringConnectionId(c),
-    name: steeringConnectionName(c),
-    kind: isPersonalConnection(c) ? "user" : "organization",
-  };
+  return steeringConnectionChoiceOf(c);
 }
 
 function legacySourceView(
@@ -204,7 +198,9 @@ export function createGetSteeringRepoHandler(
       deps.readImport(scope),
     ]);
     const legacySource = legacySourceView(legacy);
-    const connection = stored === null ? null : connectionView(stored);
+    // The connection the workspace chose comes before the organization's.
+    const where = state?.connection ?? stored;
+    const connection = where === null ? null : connectionView(where);
     const importRun = importRunView(imported);
     if (state === null)
       return { ...NO_STEERING_REPO, legacySource, connection, importRun };
@@ -251,6 +247,7 @@ export function createGetSteeringRepoHandler(
       differences,
       legacySource,
       connection,
+      requestedName: state.requested_name,
       connectionChoices: state.connection_choices.map(connectionView),
       importRun,
     };

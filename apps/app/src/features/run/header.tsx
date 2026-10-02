@@ -36,6 +36,7 @@ import { formatCount } from "@/ui/money-format";
 import { GitHubLink, PullRequestLink, SafeLink } from "@/ui/navigation";
 import { ReplayGradeBadge } from "@/ui/replay-grade";
 import { StatusBadge } from "@/ui/status-badge";
+import { BackfillBadge, BackfillNote, isBackfilled } from "./backfill";
 import { CopyPath, CopyRunId } from "./copy-text";
 import { DeliveryReport } from "./delivery-report";
 import { effortVerdict, fitOf, runEffort } from "./fit";
@@ -1032,10 +1033,17 @@ export function RunHeader({
               sub={<AgentLine run={run} agent={agent} roster={roster} />}
             />
             <RunStatusWord run={run} parked={parked} />
-            <EnforcementTierBadge
-              tier={run.enforcementTier}
-              testId="run-tier"
-            />
+            <BackfillBadge run={run} />
+            {/* Nothing gated a run rebuilt from its transcript (ADR-161), so
+                the tier its row holds is no record of enforcement. */}
+            {isBackfilled(run) ? (
+              <Chip testId="run-tier">{t("backfill.tierNotRecorded")}</Chip>
+            ) : (
+              <EnforcementTierBadge
+                tier={run.enforcementTier}
+                testId="run-tier"
+              />
+            )}
             {run.replayGrade === null ? null : (
               <ReplayGradeBadge grade={run.replayGrade} />
             )}
@@ -1045,6 +1053,7 @@ export function RunHeader({
               </Chip>
             )}
           </div>
+          <BackfillNote run={run} />
           <Rig run={run} agent={agent} />
           <Suspense
             fallback={<WhereFromRow run={run} pulls={pulls} read="pending" />}
