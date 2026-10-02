@@ -32,7 +32,7 @@ The steering repo spec proposed the name `steering_search`. ADR-025 puts the ver
 | `workspace_version` | `int` or null | The workspace version searched. Null before its first publish. |
 | `organization_version` | `int` or null | The organization version searched. Null before its first publish. |
 | `hits` | array | `{ lineage, label, description?, kind, force, always_on, source, line }` for each hit, best match first. |
-| `hits[].always_on` | `boolean` | True when the always-on block of a run on `repository` holds the record: the version's block for that repository, else its block for every other repository. With no `repository`, that second block. A record whose tool target no server provides is never always on. |
+| `hits[].always_on` | `boolean` | True when the always-on block of a run on `repository` holds the record: the version's block for that repository, else its block for every other repository. With no `repository`, that second block. A record whose tool target the workspace does not import is never always on. |
 | `hits[].source` | `"workspace"` or `"organization"` | The version the hit came from. |
 | `hits[].line` | `string` | The record's index line. |
 | `total` | `int` | How many records matched before the limit. |

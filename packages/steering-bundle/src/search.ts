@@ -58,8 +58,8 @@ function reachesRepository(record: BundleRecord, repository: string | undefined)
  * A hit is always on when the block a run on the repository receives holds
  * it: the version's block for that repository, else its block for every
  * other repository. With no repository, that second block. So a record whose
- * tool target is missing from the version's tools, which publish leaves out
- * of every block, is never always on (#4483).
+ * tool target the workspace does not import, which publish leaves out of
+ * every block, is never always on (#4483).
  *
  * The workspace's record shadows an organization record of the same lineage,
  * as read_steering's lookup does, so each lineage comes back once (#4483).

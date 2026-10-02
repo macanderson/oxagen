@@ -335,7 +335,7 @@ describe("searchSteering", () => {
   it("marks a record always on when the block for any other repository holds it", () => {
     const output = searchSteering(both, { limit: STEERING_SEARCH_MAX_LIMIT });
     expect(Object.fromEntries(output.hits.map((hit) => [hit.lineage, hit.always_on]))).toEqual({
-      // force must, but it names one repository and targets a tool no server provides
+      // force must, but it names one repository, so only that repository's block holds it
       "a-intel.billing.refunds-over-100": false,
       "a-intel.brand.plain-words": true,
       // force may
@@ -416,8 +416,22 @@ describe("searchSteering", () => {
     expect(searchSteering(delivery, { query: "secrets" }).total).toBe(0);
   });
 
-  it("leaves a record out of always on when its tool target is missing, even on its repository", () => {
+  it("marks a record always on for the repository it names when its tool is imported", () => {
+    // The billing server's tools.toml imports create_refund, so publish puts the
+    // record in the billing-service block even though no server compiles here.
     const output = searchSteering(both, { repository: BILLING_SERVICE, limit: STEERING_SEARCH_MAX_LIMIT });
+    expect(hitFor(output, "a-intel.billing.refunds-over-100").always_on).toBe(true);
+    expect(hitFor(output, "a-intel.platform.no-push-to-main").always_on).toBe(true);
+  });
+
+  it("leaves a record out of always on when the repository's block does not hold it", () => {
+    // Publish leaves a record out of every block when its tool target is not
+    // imported. The block decides, not the record's force and load.
+    const delivery: Delivery = {
+      workspace: withBlock(workspace, BILLING_SERVICE, ["a-intel.platform.no-push-to-main"]),
+      organization,
+    };
+    const output = searchSteering(delivery, { repository: BILLING_SERVICE, limit: STEERING_SEARCH_MAX_LIMIT });
     expect(hitFor(output, "a-intel.billing.refunds-over-100").always_on).toBe(false);
     expect(hitFor(output, "a-intel.platform.no-push-to-main").always_on).toBe(true);
   });
