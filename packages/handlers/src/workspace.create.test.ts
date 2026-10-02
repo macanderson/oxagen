@@ -137,7 +137,8 @@ vi.mock("@oxagen/database", async (importOriginal) => {
         // assignments. It tells an org-wide assignment from a workspace one
         // by the scope the WHERE pins. The bootstrap reads the org's
         // workspace namespaces, and an empty answer keeps the slug as the
-        // namespace.
+        // namespace. It then reads the creator's principal and the org's
+        // workspace Owner role for the creator's assignment (#5182).
         select: () => ({
           from: (table: unknown) => {
             let lastWhere: SQL | null = null;
@@ -150,6 +151,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
                 return mocks.tenant.principalId
                   ? [{ id: mocks.tenant.principalId }]
                   : [];
+              if (table === real.schema.roles) return [{ id: "rol_ws_owner" }];
               if (table === real.schema.principalRoleAssignments) {
                 const pinsWorkspace =
                   lastWhere !== null &&
@@ -496,10 +498,33 @@ describe("createWorkspaceCreateHandler: the org and slug checks", () => {
 });
 
 describe("createWorkspaceCreateHandler: the creating transaction", () => {
+  // #5182: permission checks read IAM assignments, so the creator's Owner
+  // role on the new workspace is written there, on the same transaction.
+  it("gives the creator's principal the workspace Owner role on the new workspace", async () => {
+    await handler(INPUT, CTX);
+
+    const wsInsert = mocks.inserts.find((w) => w.table === schema.workspaces);
+    const assignment = mocks.inserts.filter(
+      (w) => w.table === schema.principalRoleAssignments,
+    );
+    expect(assignment).toHaveLength(1);
+    expect(assignment[0]?.txIndex).toBe(wsInsert?.txIndex);
+    expect(assignment[0]?.values).toEqual({
+      principalId: "prn_1",
+      roleId: "rol_ws_owner",
+      orgId: CTX.orgId,
+      workspaceId: "internal_ws_id",
+      assignedBy: "u_1",
+      createdById: "u_1",
+      updatedById: "u_1",
+    });
+  });
+
   it("moves the transaction's workspace scope onto the new workspace before any workspace-scoped row", async () => {
     await handler(INPUT, CTX);
-    // One move, after insert 1 (workspaces). Insert 2 (workspace_users), the
-    // seeds and the settings update all run under the new workspace.
+    // One move, after insert 1 (workspaces). Insert 2 (workspace_users),
+    // insert 3 (the creator's Owner assignment), the seeds and the settings
+    // update all run under the new workspace.
     expect(mocks.txScopeMoves).toEqual([1]);
     expect(mocks.txInsertWsUsers).toHaveBeenCalled();
   });
@@ -517,8 +542,9 @@ describe("createWorkspaceCreateHandler: the creating transaction", () => {
     const wsInsert = mocks.inserts.find((w) => w.table === schema.workspaces);
     expect(update?.table).toBe(schema.workspaces);
     expect(update?.txIndex).toBe(wsInsert?.txIndex);
-    // The update follows the workspace and workspace_users inserts.
-    expect(update?.afterInserts).toBe(2);
+    // The update follows the workspace, workspace_users and assignment
+    // inserts.
+    expect(update?.afterInserts).toBe(3);
     expect(paramsOf(update?.where)).toEqual(["internal_ws_id"]);
     expect(steeringStateIn(update?.values.settings)).toEqual({
       status: "provisioning",
@@ -667,13 +693,15 @@ describe("createWorkspaceCreateHandler: a deprecated mainRepo", () => {
     );
     expect(out).not.toHaveProperty("mainRepo");
     expect(out.steering_repo).toEqual({ status: "provisioning" });
-    // Only the workspace and its owner membership are inserted: no
-    // connection, binding or head.
-    expect(mocks.inserts).toHaveLength(2);
+    // Only the workspace, its owner membership and the owner's IAM
+    // assignment are inserted: no connection, binding or head.
+    expect(mocks.inserts).toHaveLength(3);
     expect(
       mocks.inserts.every(
         (w) =>
-          w.table === schema.workspaces || w.table === schema.workspaceUsers,
+          w.table === schema.workspaces ||
+          w.table === schema.workspaceUsers ||
+          w.table === schema.principalRoleAssignments,
       ),
     ).toBe(true);
     expect(mocks.updates).toHaveLength(1);
@@ -701,7 +729,7 @@ describe("createWorkspaceCreateHandler: a deprecated mainRepo", () => {
     expect(JSON.stringify(mocks.inserts.map((w) => w.values))).not.toContain(
       token,
     );
-    expect(mocks.inserts).toHaveLength(2);
+    expect(mocks.inserts).toHaveLength(3);
   });
 
   it("logs no warning when the input carries no mainRepo", async () => {

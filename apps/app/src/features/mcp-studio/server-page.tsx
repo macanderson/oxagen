@@ -114,8 +114,8 @@ async function serverVersions(
 
 /**
  * An org Owner or Admin: the roles `set_kill_switch` and the Studio writes
- * assert at org scope. It is the Tools page's rule (tools.tsx), for the same
- * reason: no person holds a workspace IAM role yet (#3198).
+ * assert at org scope. It is the Tools page's rule (tools.tsx), which does not
+ * read the workspace Owner role yet (#5182).
  */
 function canAdministerOrg(ctx: WsCtx): boolean {
   return ctx.orgRole === "owner" || ctx.orgRole === "admin";
