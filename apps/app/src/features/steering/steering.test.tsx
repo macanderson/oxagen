@@ -1065,12 +1065,12 @@ describe("Records", () => {
         total: 2,
       }),
     });
-    const [priced, unpriced] = within(
-      section("Published records"),
-    ).getAllByRole("article");
-    const price = priced!.querySelector('[data-term="weekly-price"]');
+    const cards = within(section("Published records")).getAllByRole("article");
+    expect(cards).toHaveLength(2);
+    const [priced, unpriced] = cards;
+    const price = priced?.querySelector('[data-term="weekly-price"]');
     expect(price).toHaveTextContent("$0.2496 a week (estimate)");
-    expect(unpriced!.querySelector('[data-term="weekly-price"]')).toBeNull();
+    expect(unpriced?.querySelector('[data-term="weekly-price"]')).toBeNull();
     expect(unpriced).not.toHaveTextContent("a week");
   });
 
