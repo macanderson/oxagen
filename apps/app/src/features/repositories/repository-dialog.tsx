@@ -303,7 +303,7 @@ function Body({
         <section aria-labelledby="repository-dialog-records">
           <h3
             id="repository-dialog-records"
-            className="mb-1.5 text-[12.5px] font-semibold text-muted-foreground"
+            className="mb-1.5 text-sm font-semibold text-muted-foreground"
           >
             {t("recordsHere")}
           </h3>
@@ -435,7 +435,7 @@ function ProductionBranchForm({
     >
       <h3
         id={`${fieldId}-heading`}
-        className="text-[12.5px] font-semibold text-muted-foreground"
+        className="text-sm font-semibold text-muted-foreground"
       >
         {t("heading")}
       </h3>
@@ -475,7 +475,7 @@ function ProductionBranchForm({
           id={fieldId}
           type="text"
           data-testid="repository-dialog-branch-input"
-          className={`mt-1 font-mono text-base sm:text-[13px] ${inputBase}`}
+          className={`mt-1 font-mono text-base sm:text-sm ${inputBase}`}
           placeholder={current}
           autoCapitalize="none"
           autoCorrect="off"
