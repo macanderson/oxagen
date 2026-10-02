@@ -24,11 +24,11 @@ describe("Card — render", () => {
     expect(getByText("Card body")).toBeInTheDocument();
   });
 
-  it("includes rounded-xl and shadow classes", () => {
+  it("takes the house card corner, rounded-2xl, with no shadow (ADR-221)", () => {
     const { container } = render(<Card>Content</Card>);
     const el = container.firstChild as HTMLElement;
-    expect(el.className).toContain("rounded-xl");
-    expect(el.className).toContain("shadow");
+    expect(el.className).toContain("rounded-2xl");
+    expect(el.className).not.toMatch(/\bshadow/);
   });
 
   it("merges custom className", () => {
