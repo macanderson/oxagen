@@ -141,6 +141,8 @@ jobs:
   verify:
     needs: deploy
     runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-small-{0}', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
+    # Without a limit a hung job holds a runner for 360 minutes.
+    timeout-minutes: 30
     environment: staging
     steps:
       - uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
