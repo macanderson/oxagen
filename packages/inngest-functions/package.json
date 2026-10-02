@@ -23,6 +23,7 @@
     "./run-pr-outcomes-runner": "./src/lib/run-pr-outcomes-runner.ts",
     "./interjection-timeout-runner": "./src/lib/interjection-timeout-runner.ts",
     "./no-progress-pause-runner": "./src/lib/no-progress-pause-runner.ts",
+    "./work-intake-runner": "./src/lib/work-intake-runner.ts",
     "./work-order-results-runner": "./src/lib/work-order-results-runner.ts"
   },
   "scripts": {

@@ -985,7 +985,7 @@ function deliverable(now: Date) {
 }
 
 /**
- * Whether this host can take a `work_order` command (ADR-250). A host built
+ * Whether this host can take a `work_order` command (ADR-251). A host built
  * before the command parses `command` as an enum that lacks it, and one row it
  * cannot name fails its whole poll and ingest response. So a `work_order` row
  * waits, queued, until its host advertises the feature: the person at the host

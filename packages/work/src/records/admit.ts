@@ -188,7 +188,7 @@ export function admitDecision(item: WorkItemProjection, action: WorkItemDecision
       // A claimed send is stopped first. If the runtime claimed it, a stop was
       // asked for, and no run ever linked (the host went away), a person may
       // then withdraw it: the send ends, and a run that links later is
-      // cancelled when it does (ADR-250), so nothing runs it twice.
+      // cancelled when it does (ADR-251), so nothing runs it twice.
       const order = findOrder(item, action.orderId);
       if (order.delivery === "withdrawn") return REPEAT;
       if (order.closed) refuse("not_allowed", "This send is over.");

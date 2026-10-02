@@ -1,4 +1,4 @@
-// The small pure pieces of the work dispatch path (ADR-250): how a refusal
+// The small pure pieces of the work dispatch path (ADR-251): how a refusal
 // reaches a surface, the runtime tier a send forecasts, a pull request URL and
 // a `pull_request` delivery, the work order a run names, the source text and
 // the return reason a claim's prompt reads, and the contract's copies of the

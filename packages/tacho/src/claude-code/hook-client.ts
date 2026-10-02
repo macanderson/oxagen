@@ -1167,7 +1167,7 @@ export async function runTachoHook(deps: HookRunDeps): Promise<HookRunResult> {
   const elapsed = deps.elapsedMs ?? (() => 0);
   // Read at each post, so the time already spent comes off the budget.
   const responseBudget = (): number => responseBudgetMs(killMs, elapsed());
-  // The work order `oxagen work start` started this harness for (ADR-250).
+  // The work order `oxagen work start` started this harness for (ADR-251).
   // Passed on only when it is a work order id, so nothing else crosses under
   // the name. The daemon names it on the session's `agent_start`.
   const workOrder = workOrderIdOf(deps.env[WORK_ORDER_ENV]);

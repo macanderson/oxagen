@@ -12,7 +12,7 @@
 // Permissions, which proposed run.approve and run.control). The Work actions
 // have bundles of their own because a bundle reads as held only when every
 // capability in it is allowed: adding them to run.control would have taken
-// run.control away from every role that held it (ADR-250).
+// run.control away from every role that held it (ADR-251).
 //
 // Separation of duties: in a workspace whose governance mode is regulated, the
 // person who approved a brief cannot send it (tasks-spec.md §8.4). Anyone who

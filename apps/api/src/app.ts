@@ -242,6 +242,13 @@ import { steeringMemoriesGetRoute } from "./routes/v1/steering.memories.get";
 import { steeringMemoriesPromoteRoute } from "./routes/v1/steering.memories.promote";
 import { steeringMemoriesDismissRoute } from "./routes/v1/steering.memories.dismiss";
 import { steeringMemoryPrRecordsListRoute } from "./routes/v1/steering.memory_pr_records.list";
+import { workItemCreateRoute } from "./routes/v1/work.item.create";
+import { workTriageReviseRoute } from "./routes/v1/work.triage.revise";
+import { workTriageRetryRoute } from "./routes/v1/work.triage.retry";
+import { workCollectorsListRoute } from "./routes/v1/work.collectors.list";
+import { workCollectorSetRoute } from "./routes/v1/work.collector.set";
+import { workCollectorSyncRoute } from "./routes/v1/work.collector.sync";
+import { workPrioritiesGetRoute } from "./routes/v1/work.priorities.get";
 import { steeringMarkdownImportParseRoute } from "./routes/v1/steering.markdown_import.parse";
 import { steeringMarkdownImportCommitRoute } from "./routes/v1/steering.markdown_import.commit";
 import { steeringRepoImportRoute } from "./routes/v1/steering_repo.import";
@@ -805,7 +812,7 @@ tachoScoped.use(
     bucketKey: enrolledMachineBucketKey,
   }),
 );
-// The work order claim and rejection (ADR-250) share one bucket.
+// The work order claim and rejection (ADR-251) share one bucket.
 tachoScoped.use(
   "/work-orders/*",
   distributedRateLimiter({
@@ -1331,7 +1338,7 @@ orgScoped.route("/context/steering/memories/get", steeringMemoriesGetRoute);
 orgScoped.route("/context/steering/memories/promote", steeringMemoriesPromoteRoute);
 orgScoped.route("/context/steering/memories/dismiss", steeringMemoriesDismissRoute);
 orgScoped.route("/context/steering/memory-prs/records", steeringMemoryPrRecordsListRoute);
-// A person's work item actions (P1-04, ADR-250): the brief, each send, and
+// A person's work item actions (P1-04, ADR-251): the brief, each send, and
 // the close. Each handler refuses an API key and an agent run.
 orgScoped.route("/work/items/brief/save", workBriefSaveRoute);
 orgScoped.route("/work/items/brief/approve", workBriefApproveRoute);
@@ -1343,6 +1350,15 @@ orgScoped.route("/work/orders/stop", workOrderStopRoute);
 orgScoped.route("/work/orders/return", workOrderReturnRoute);
 orgScoped.route("/work/orders/accept", workOrderAcceptRoute);
 orgScoped.route("/work/orders/checks/refresh", workOrderChecksRefreshRoute);
+// Work intake and triage (P1-03, #5103): manual entry, triage revision and
+// retry, GitHub collectors and their health, and the priorities record.
+orgScoped.route("/work/items/create", workItemCreateRoute);
+orgScoped.route("/work/triage/revise", workTriageReviseRoute);
+orgScoped.route("/work/triage/retry", workTriageRetryRoute);
+orgScoped.route("/work/collectors/list", workCollectorsListRoute);
+orgScoped.route("/work/collectors/set", workCollectorSetRoute);
+orgScoped.route("/work/collectors/sync", workCollectorSyncRoute);
+orgScoped.route("/work/priorities/get", workPrioritiesGetRoute);
 // The Markdown import (#4907): parse files into proposed steering records and
 // Cedar policies, then open one steering PR with the rows a person kept.
 orgScoped.route("/context/steering/import/parse", steeringMarkdownImportParseRoute);

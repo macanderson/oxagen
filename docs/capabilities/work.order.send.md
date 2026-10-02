@@ -52,4 +52,4 @@ A refusal answers with a code:
 - `forbidden` (403): the caller is not a signed-in person, is an agent run, holds no role the action takes, does not operate the agent, or approved the brief in a regulated workspace.
 - A body that does not match the input answers 400 before the handler runs.
 
-See [ADR-250](../adr/ADR-250-a-work-order-reaches-its-runtime-on-the-command-channel-and-the-runtime-claims-it.md) for the work actions and [ADR-244](../adr/ADR-244-phase-1-work-records-are-facts-and-the-state-is-reduced-from-them.md) for the work records.
+See [ADR-251](../adr/ADR-251-a-work-order-reaches-its-runtime-on-the-command-channel-and-the-runtime-claims-it.md) for the work actions and [ADR-244](../adr/ADR-244-phase-1-work-records-are-facts-and-the-state-is-reduced-from-them.md) for the work records.

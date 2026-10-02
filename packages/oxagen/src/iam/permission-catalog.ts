@@ -64,7 +64,7 @@ export const PERMISSION_CATALOG: readonly Permission[] = [
     description: "Approve or deny a tool call waiting on a person",
     capabilities: ["resolve_approval"],
   },
-  // Phase 1 work actions (ADR-244, ADR-250). Their own permissions, so a
+  // Phase 1 work actions (ADR-244, ADR-251). Their own permissions, so a
   // role that holds run.control or run.approve keeps it: a permission reads
   // as held only when every capability it names is allowed.
   {

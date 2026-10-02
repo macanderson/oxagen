@@ -8,7 +8,7 @@ import type { AppEnv } from "../../app";
 
 /**
  * Refuse a work order the calling enrolled host cannot start, with the
- * reason (`reject_work_order`, ADR-250).
+ * reason (`reject_work_order`, ADR-251).
  *
  * Machine-to-machine: the host's API key carries its org and workspace, so
  * this route lives on the static /v1/tacho router and refuses anything but an

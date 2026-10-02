@@ -2,7 +2,7 @@
  * The host's HTTPS client to the control plane (spec section 3.1 steps 3
  * and 4; section 7.4). Machine-to-machine calls, each authenticated by the
  * host API key and validated against the wire schemas: ingest, bundle, and
- * the command poll, plus the claim and refusal of a work order (ADR-250).
+ * the command poll, plus the claim and refusal of a work order (ADR-251).
  * `fetch` is injected so tests run against a fake control plane.
  */
 import {
@@ -207,7 +207,7 @@ export interface ControlClient {
     daemon?: Omit<DaemonHealth, "spool_oldest_at" | "bundle_etag">,
   ) => Promise<CommandsResponse>;
   /**
-   * Claim a work order for this host before any run starts (ADR-250). The
+   * Claim a work order for this host before any run starts (ADR-251). The
    * answer carries the run's first prompt. A refused claim throws
    * `ControlError`, whose body holds the server's message.
    */

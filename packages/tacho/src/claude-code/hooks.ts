@@ -495,7 +495,7 @@ export function normalizeHook(
           : {}),
       };
       // `oxagen work start` sets the work order on the harness it starts,
-      // and the hook client passes it on (ADR-250). The session's start names
+      // and the hook client passes it on (ADR-251). The session's start names
       // it, and ingest links the run to the order only when this host
       // claimed it, so a value set by some other process links nothing.
       const workOrder = workOrderIdOf(env[WORK_ORDER_ENV]);

@@ -17,7 +17,7 @@ const input = {
   key: `${ITEM}:r2:s1`,
 };
 
-// send_work_order (agent-work-phase-1.html, Delivery and review; P1-04, ADR-250).
+// send_work_order (agent-work-phase-1.html, Delivery and review; P1-04, ADR-251).
 describe("send_work_order contract", () => {
   it("registers a person's work action on the API surface alone", () => {
     expect(contract.name).toBe("send_work_order");

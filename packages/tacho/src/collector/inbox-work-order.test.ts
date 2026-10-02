@@ -1,5 +1,5 @@
 /**
- * A `work_order` command (P1-04, ADR-250): the host keeps the order for the
+ * A `work_order` command (P1-04, ADR-251): the host keeps the order for the
  * person at the machine, acknowledges `received`, and starts nothing. The
  * store is a scratch directory, so nothing here touches a real agent.
  */

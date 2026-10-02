@@ -1,5 +1,5 @@
 // `reject_work_order`: an enrolled host refuses a work order it cannot start
-// (ADR-250).
+// (ADR-251).
 //
 // The host's key is checked as for claim_work_order, then the key's creator
 // must still hold a role the contract grants. The send ends as rejected

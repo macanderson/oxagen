@@ -341,6 +341,27 @@ import { workItemReopen } from "./work.item.reopen";
 import { workOrderClaim } from "./work.order.claim";
 import { workOrderReject } from "./work.order.reject";
 import { steeringMemoryPrRecordsList } from "./steering.memory_pr_records.list";
+import { workItemCreate } from "./work.item.create";
+import { workTriageRevise } from "./work.triage.revise";
+import { workTriageRetry } from "./work.triage.retry";
+import { workCollectorsList } from "./work.collectors.list";
+import { workCollectorSet } from "./work.collector.set";
+import { workCollectorSync } from "./work.collector.sync";
+import { workPrioritiesGet } from "./work.priorities.get";
+// The shapes the work intake and triage contracts share (P1-03, #5103).
+// Not a capability, so exported here to satisfy the file-coverage guard.
+export {
+  collectorHealthSchema,
+  repositoryNameSchema,
+  triageOutcomeSchema,
+  triageStandingSchema,
+  triageViewSchema,
+  workCollectorSchema,
+  workItemIdSchema,
+  workItemStateSchema,
+  workPrioritySchema,
+} from "./work.intake.shared";
+export type { TriageViewOutput, WorkCollectorView } from "./work.intake.shared";
 import { contextPrOpen } from "./context.pr.open";
 import { contextPrGet } from "./context.pr.get";
 import { contextPrMerge } from "./context.pr.merge";
@@ -655,7 +676,7 @@ export type {
   WorkspaceMemoryGroup,
   WorkspaceMemoryState,
 } from "./steering.memories.shared";
-// Phase 1 work action vocabulary (P1-04, ADR-250). The shared file is not a
+// Phase 1 work action vocabulary (P1-04, ADR-251). The shared file is not a
 // capability, so it is exported here for the check-contracts file-coverage guard.
 export {
   WORK_ACTION_CLOSE_RESOLUTIONS,
@@ -668,7 +689,6 @@ export {
   workDigestSchema,
   workHeadShaSchema,
   workItemAfterSchema,
-  workItemIdSchema,
   workItemVersionSchema,
   workOrderAfterSchema,
   workOrderIdSchema,
@@ -1169,6 +1189,13 @@ export {
   workItemReopen,
   workOrderClaim,
   workOrderReject,
+  workItemCreate,
+  workTriageRevise,
+  workTriageRetry,
+  workCollectorsList,
+  workCollectorSet,
+  workCollectorSync,
+  workPrioritiesGet,
   contextPrOpen,
   contextPrGet,
   contextPrMerge,
@@ -1641,6 +1668,13 @@ export const contracts: readonly CapabilityDeclaration[] = [
   workItemReopen,
   workOrderClaim,
   workOrderReject,
+  workItemCreate,
+  workTriageRevise,
+  workTriageRetry,
+  workCollectorsList,
+  workCollectorSet,
+  workCollectorSync,
+  workPrioritiesGet,
   contextPrOpen,
   contextPrGet,
   contextPrMerge,

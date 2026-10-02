@@ -673,7 +673,7 @@ type CommandListOutput = ContractOutput<typeof tachoCommandList>;
  * `list_commands` as the delivery report reads it (#2953). The requested mode
  * and the mode achieved stay two fields, never one (INV-10), and a blank
  * issuer name reads as none, since the view refuses an empty one. A
- * `work_order` command is addressed to a host, never to a run (ADR-250), so a
+ * `work_order` command is addressed to a host, never to a run (ADR-251), so a
  * run's delivery report leaves it out. The Work page reads the send.
  */
 export function toCommandReport(

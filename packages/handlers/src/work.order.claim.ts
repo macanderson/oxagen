@@ -1,5 +1,5 @@
 // `claim_work_order`: an enrolled host claims a work order before it starts a
-// run for it (ADR-250).
+// run for it (ADR-251).
 //
 // The host's key is checked the way every Tacho control call checks it
 // (resolveEnrolledHost: the key belongs to the enrollment the call names, and

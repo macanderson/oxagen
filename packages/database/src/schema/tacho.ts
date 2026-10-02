@@ -113,7 +113,7 @@ export const TACHO_COMMANDS = [
   "refresh_bundle",
   "kill",
   // A send of an approved work brief to the host that runs the target agent
-  // (P1-04, #5100; ADR-250). Drained only by a host that advertises the
+  // (P1-04, #5100; ADR-251). Drained only by a host that advertises the
   // `work_orders` bundle feature, because an older host's parser refuses the
   // whole poll over a command name it does not know.
   "work_order",
@@ -1009,7 +1009,7 @@ export const tachoControlCommands = tachoSchema.table(
     outcomeDetail: text("outcome_detail"),
     /**
      * Unique per workspace when set. A work order's command takes the order's
-     * key, so a retried send finds the command it wrote (ADR-250). Null on
+     * key, so a retried send finds the command it wrote (ADR-251). Null on
      * every other command.
      */
     idempotencyKey: text("idempotency_key"),

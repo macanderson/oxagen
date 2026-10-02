@@ -1,4 +1,4 @@
-// The first prompt a claimed work order starts its run with (ADR-250): the
+// The first prompt a claimed work order starts its run with (ADR-251): the
 // brief first, then the issue text fenced as data, with a fence no line of the
 // text can close.
 import { describe, expect, it } from "vitest";

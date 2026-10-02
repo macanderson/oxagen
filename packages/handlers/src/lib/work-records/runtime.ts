@@ -1,5 +1,5 @@
 // runtime.ts: what the runtime reports about a send, checked against the
-// host that reports it (P1-04, ADR-250).
+// host that reports it (P1-04, ADR-251).
 //
 // A send is delivered to the target agent's enrolled host as a `work_order`
 // command (delivery.ts). From there:

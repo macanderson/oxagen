@@ -272,7 +272,7 @@ export const BUNDLE_FEATURE_CACHE_KEEP_ALIVE = "cache_keep_alive" as const;
 /**
  * The host can take a `work_order` command: it keeps the send for the person
  * at the host and claims it with `claim_work_order` before any run starts
- * (P1-04, ADR-250). The control plane drains `work_order` rows only to a host
+ * (P1-04, ADR-251). The control plane drains `work_order` rows only to a host
  * that advertises this, because `tachoCommandSchema` is an enum and a host
  * built before the value fails its whole poll, and every later command with
  * it, over one row it cannot name. This host keeps the order in its
@@ -579,7 +579,7 @@ export const tachoCommandSchema = z.enum([
   "revoke",
   "refresh_bundle",
   "kill",
-  // A send of an approved work brief to this host (P1-04, ADR-250). The
+  // A send of an approved work brief to this host (P1-04, ADR-251). The
   // control plane hands it only to a host that advertises
   // `BUNDLE_FEATURE_WORK_ORDERS`, because a host built before this value
   // fails its whole poll on a command name it does not know.
@@ -688,7 +688,7 @@ export const WORK_ORDER_ID_PATTERN = /^wo_[0-9a-z]+$/;
 export const WORK_ITEM_ID_PATTERN = /^wi_[0-9a-z]+$/;
 
 /**
- * The payload of a `work_order` command (ADR-250): the order's id, its
+ * The payload of a `work_order` command (ADR-251): the order's id, its
  * idempotency key, and the work item's id. It never carries the brief. The
  * host reads the brief when it claims the order. Passthrough, so a field the
  * control plane adds later does not fail the command.

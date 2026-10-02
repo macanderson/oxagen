@@ -1,4 +1,4 @@
-// The person gate on every work action (ADR-250): a decision on a work item is
+// The person gate on every work action (ADR-251): a decision on a work item is
 // a signed-in person's, never an API key's or an agent run's, and the person
 // needs a role the action takes in this workspace. The gate runs before any
 // database work, so a refused caller reads nothing.

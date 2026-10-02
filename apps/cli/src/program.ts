@@ -1987,7 +1987,7 @@ export function buildProgram(): Command {
       if (!(await handleAgentDetect(opts))) process.exitCode = 1;
     });
 
-  // ── work: work orders sent to this machine's agents (ADR-250) ──────────────
+  // ── work: work orders sent to this machine's agents (ADR-251) ──────────────
   //
   // A person sends an approved brief to an agent in the app. The agent's
   // host keeps the work order until the person at the machine starts it

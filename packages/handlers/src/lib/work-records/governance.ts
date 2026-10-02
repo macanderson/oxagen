@@ -1,5 +1,5 @@
 // governance.ts: the workspace governance mode a send's duty check reads
-// (P1-04, ADR-250).
+// (P1-04, ADR-251).
 //
 // In a regulated workspace the person who approved a brief cannot send it
 // (`checkSendDuties` in @oxagen/work/records). The mode lives in the

@@ -15,7 +15,7 @@ const input = {
   ],
 };
 
-// save_work_brief (agent-work-phase-1.html, Data contract; P1-04, ADR-250).
+// save_work_brief (agent-work-phase-1.html, Data contract; P1-04, ADR-251).
 describe("save_work_brief contract", () => {
   it("registers a person's work action on the API surface alone", () => {
     expect(contract.name).toBe("save_work_brief");

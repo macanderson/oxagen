@@ -335,7 +335,7 @@ describe("run show", () => {
   });
 });
 
-// ADR-250: a work order waits on the agent's host until the person at the
+// ADR-251: a work order waits on the agent's host until the person at the
 // machine starts it, so `oxagen work` lists the waiting orders and starts one
 // by its id.
 describe("work", () => {

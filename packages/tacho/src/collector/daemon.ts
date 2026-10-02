@@ -1934,7 +1934,7 @@ async function initializeDaemon(
               log(`host suspended by operator: ${reason}`);
             },
             // A work order waits in the agent's `work-orders` directory for
-            // the person at the machine (ADR-250). A redelivery of the same
+            // the person at the machine (ADR-251). A redelivery of the same
             // command writes nothing and logs nothing.
             keepWorkOrder: (order) => {
               if (!keepPendingWorkOrder(paths, order)) return;

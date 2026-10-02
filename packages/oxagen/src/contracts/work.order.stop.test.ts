@@ -12,7 +12,7 @@ const input = {
   reason: "The run used the wrong base branch.",
 };
 
-// stop_work_order (agent-work-phase-1.html, Delivery and review; P1-04, ADR-250).
+// stop_work_order (agent-work-phase-1.html, Delivery and review; P1-04, ADR-251).
 describe("stop_work_order contract", () => {
   it("registers a person's work action on the API surface alone", () => {
     expect(contract.name).toBe("stop_work_order");

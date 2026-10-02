@@ -1,6 +1,6 @@
 // work-order-results-runner.ts: the seam between the durable work order
 // result functions (functions/work.order-results.ts) and the code that
-// records them (ADR-250).
+// records them (ADR-251).
 //
 // Recording a run's end or a pull request on a work order writes work
 // records and reads GitHub through `@oxagen/handlers`, and `@oxagen/handlers`

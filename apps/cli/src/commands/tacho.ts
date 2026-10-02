@@ -367,7 +367,7 @@ export async function handleWorkList(
 /**
  * `oxagen work start <wo>`: claim a work order, then start the agent's
  * harness in this directory with the order's first prompt (`workStart` in
- * the recorder, ADR-250). The harness gets the terminal's signals itself.
+ * the recorder, ADR-251). The harness gets the terminal's signals itself.
  */
 export async function handleWorkStart(
   workOrderId: string,

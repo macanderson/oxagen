@@ -7,7 +7,7 @@ import type { AppEnv } from "../../app";
 
 /**
  * Send a work item's approved brief to an agent the person operates
- * (`send_work_order`, ADR-250).
+ * (`send_work_order`, ADR-251).
  *
  * It answers 200. Mounted on the org-scoped router. The handler refuses an
  * API key and an agent run, so only a signed-in person decides work.

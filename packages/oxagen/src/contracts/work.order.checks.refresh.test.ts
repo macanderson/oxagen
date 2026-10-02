@@ -7,7 +7,7 @@ const HEAD = "a1".repeat(20);
 const ITEM_AFTER = { id: ITEM, state: "ready", revision: 1, version: 4 };
 const input = { item_id: ITEM, work_order_id: ORDER };
 
-// refresh_work_order_checks (agent-work-phase-1.html, Delivery and review; P1-04, ADR-250).
+// refresh_work_order_checks (agent-work-phase-1.html, Delivery and review; P1-04, ADR-251).
 describe("refresh_work_order_checks contract", () => {
   it("registers a person's work action on the API surface alone", () => {
     expect(contract.name).toBe("refresh_work_order_checks");

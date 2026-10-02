@@ -1,5 +1,5 @@
 /**
- * Shared schemas for the Phase 1 work actions (P1-04, ADR-250).
+ * Shared schemas for the Phase 1 work actions (P1-04, ADR-251).
  *
  * A person approves a work item's brief, sends it to an agent, and reviews
  * the pull request the run opened (agent-work-phase-1.html, Work lifecycle).
@@ -9,9 +9,10 @@
  * on. A handler test holds the two copies equal.
  */
 import { z } from "zod";
+import { workItemIdSchema } from "./work.intake.shared";
 
-/** A work item's public id. */
-export const workItemIdSchema = z.string().regex(/^wi_[0-9a-z]+$/, "a work item id starts with wi_");
+/** A work item's public id: the one intake and triage use (P1-03). */
+export { workItemIdSchema };
 
 /** A work order's public id. */
 export const workOrderIdSchema = z.string().regex(/^wo_[0-9a-z]+$/, "a work order id starts with wo_");

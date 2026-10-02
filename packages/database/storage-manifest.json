@@ -547,6 +547,16 @@
       "writes": []
     },
     {
+      "domain": "work",
+      "name": "create_work_item",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "workspace",
       "name": "create_workspace",
       "reads": [],
@@ -2030,6 +2040,16 @@
       "writes": []
     },
     {
+      "domain": "work",
+      "name": "get_work_priorities",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "context",
       "name": "get_workspace_memory",
       "reads": [],
@@ -2929,6 +2949,16 @@
       "writes": []
     },
     {
+      "domain": "work",
+      "name": "list_work_collectors",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "repository",
       "name": "list_working_copies",
       "reads": [],
@@ -3634,6 +3664,16 @@
     },
     {
       "domain": "work",
+      "name": "retry_work_triage",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "work",
       "name": "return_work_order",
       "reads": [],
       "surfaces": [
@@ -3658,6 +3698,16 @@
       "surfaces": [
         "agent",
         "api"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "work",
+      "name": "revise_work_triage",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
       ],
       "writes": []
     },
@@ -4260,6 +4310,16 @@
       "writes": []
     },
     {
+      "domain": "work",
+      "name": "set_work_collector",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "schema",
       "name": "setup_schema",
       "reads": [],
@@ -4428,6 +4488,16 @@
         "agent",
         "api",
         "cli",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "work",
+      "name": "sync_work_collector",
+      "reads": [],
+      "surfaces": [
+        "api",
         "mcp"
       ],
       "writes": []

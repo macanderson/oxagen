@@ -46,4 +46,4 @@ A refusal answers with a code:
 - `forbidden` (403): the key is not this enrollment's host key, the host is unknown, revoked, or expired, the key's creator is no longer an org Owner or Admin, or the order was sent to another host, runtime, or agent.
 - A body that does not match the input answers 400 before the handler runs.
 
-See [ADR-250](../adr/ADR-250-a-work-order-reaches-its-runtime-on-the-command-channel-and-the-runtime-claims-it.md) for the work actions. [reject_work_order](work.order.reject.md) refuses an order the host cannot start.
+See [ADR-251](../adr/ADR-251-a-work-order-reaches-its-runtime-on-the-command-channel-and-the-runtime-claims-it.md) for the work actions. [reject_work_order](work.order.reject.md) refuses an order the host cannot start.

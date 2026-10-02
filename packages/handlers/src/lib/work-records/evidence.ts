@@ -1,5 +1,5 @@
 // evidence.ts: a send's pull request, head commit, and checks, read from
-// GitHub and recorded as provider facts (P1-04, ADR-250).
+// GitHub and recorded as provider facts (P1-04, ADR-251).
 //
 // The review gate reads only facts (`reviewGate` in @oxagen/work/records), so
 // everything Accept rests on is first written here, from GitHub's own answer:

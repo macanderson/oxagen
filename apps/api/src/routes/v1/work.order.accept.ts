@@ -7,7 +7,7 @@ import type { AppEnv } from "../../app";
 
 /**
  * Accept a send's result on the pull request's head commit
- * (`accept_work_order`, ADR-250).
+ * (`accept_work_order`, ADR-251).
  *
  * It answers 200. Mounted on the org-scoped router. The handler refuses an
  * API key and an agent run, so only a signed-in person decides work.

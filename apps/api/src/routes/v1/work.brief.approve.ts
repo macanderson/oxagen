@@ -7,7 +7,7 @@ import type { AppEnv } from "../../app";
 
 /**
  * Approve the latest acceptance brief for a work item's current revision
- * (`approve_work_brief`, ADR-250).
+ * (`approve_work_brief`, ADR-251).
  *
  * It answers 200. Mounted on the org-scoped router. The handler refuses an
  * API key and an agent run, so only a signed-in person decides work.

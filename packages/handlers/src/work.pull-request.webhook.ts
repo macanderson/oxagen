@@ -1,5 +1,5 @@
 // work.pull-request.webhook.ts: a GitHub `pull_request` delivery, recorded on
-// every work order whose run linked the pull request (P1-04, ADR-250).
+// every work order whose run linked the pull request (P1-04, ADR-251).
 //
 // The GitHub App webhook route calls this beside `recordGithubPullRequestState`
 // once per verified delivery, and never lets it fail the delivery. It writes

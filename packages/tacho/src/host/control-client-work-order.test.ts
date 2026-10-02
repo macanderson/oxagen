@@ -1,5 +1,5 @@
 /**
- * The host's two work order calls (P1-04, ADR-250): `claimWorkOrder` and
+ * The host's two work order calls (P1-04, ADR-251): `claimWorkOrder` and
  * `rejectWorkOrder`, against a fake control plane.
  */
 import { describe, expect, it } from "vitest";

@@ -1,6 +1,6 @@
 /**
  * reject_work_order: an enrolled host refuses a work order it cannot start,
- * with the reason, such as a harness that is signed out (P1-04, ADR-250).
+ * with the reason, such as a harness that is signed out (P1-04, ADR-251).
  *
  * The send ends as rejected, the agent is free again, and the work item goes
  * back to ready so a person can send it again or close it. A host can reject

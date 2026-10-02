@@ -26,7 +26,6 @@ import {
   type TrainingSetInput,
   exportTrainingSet,
 } from "./training/export-training-set";
-import { type TriageInput, triageItem } from "./triage/triage-item";
 import {
   AUTONOMY_CAUSES,
   AUTONOMY_EVIDENCE_CHECK,
@@ -45,7 +44,6 @@ import {
 } from "./types";
 
 const NOW = "2026-09-29T12:00:00Z";
-const DIGEST = "sha256:0e5a9c2d7b41f83e6a0c9d1b5f27e4a8c3d60b9f1e2a7c54d8b0f3e6a19c2d7b" as const;
 
 const claim: Claim = {
   repo: "aintel/billing-service",
@@ -55,26 +53,6 @@ const claim: Claim = {
 };
 
 describe("stubs", () => {
-  it("triageItem rejects", async () => {
-    const input: TriageInput = {
-      item: {
-        id: "wi_01K5ZQ4M8T2DXW",
-        collector: "support-zendesk",
-        title: "Invoice export fails",
-        body: "The export button returns an error.",
-        labels: ["Bug"],
-      },
-      priorities: { lineage: "aintel.work.priorities", hash: DIGEST, body: "1. Paying customers first." },
-      openWork: [],
-      fileTrees: [{ repo: "aintel/billing-service", paths: ["src/export.ts"] }],
-      model: {
-        complete: () => Promise.reject(new Error("The stub must not call the model.")),
-      },
-    };
-    await expect(triageItem(input)).rejects.toBeInstanceOf(NotBuiltError);
-    await expect(triageItem(input)).rejects.toThrow("triageItem is not built");
-  });
-
   it("planWorkOrders throws", () => {
     const input: PlanInput = {
       tasks: [{ item: "wi_01K5ZQ4M8T2DXW", number: 481, priority: "P1", estimateMinutes: 45, claims: [claim] }],

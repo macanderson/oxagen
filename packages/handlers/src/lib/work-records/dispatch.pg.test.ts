@@ -1,4 +1,4 @@
-// Work order dispatch against a real Postgres (P1-04, #5100, ADR-250).
+// Work order dispatch against a real Postgres (P1-04, #5100, ADR-251).
 //
 // These cases prove the lane's completion evidence on the code the handlers
 // call, with the database's own indexes and row locks in play:

@@ -9,7 +9,7 @@ import type { AppEnv } from "../../app";
 /**
  * Claim a work order for the calling enrolled host before it starts a run,
  * and read the first prompt the run starts with (`claim_work_order`,
- * ADR-250).
+ * ADR-251).
  *
  * Machine-to-machine: the host's API key carries its org and workspace, so
  * this route lives on the static /v1/tacho router and refuses anything but an

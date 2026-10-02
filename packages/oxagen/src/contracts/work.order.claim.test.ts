@@ -7,7 +7,7 @@ const AGENT = "agt_6g7h8j";
 const HOST = "tch_0123456789abcdefghjkmn";
 const input = { host_enrollment_id: HOST, work_order_id: ORDER };
 
-// claim_work_order: an enrolled host's claim before it starts a run (P1-04, ADR-250).
+// claim_work_order: an enrolled host's claim before it starts a run (P1-04, ADR-251).
 describe("claim_work_order contract", () => {
   it("registers a host's call on the API surface alone", () => {
     expect(contract.name).toBe("claim_work_order");

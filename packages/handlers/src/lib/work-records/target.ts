@@ -15,7 +15,7 @@
 //     validity started last. Null when it has none. A work item adds no
 //     authority, so the mandate is recorded, never widened.
 //   - The runtime tier at send, a forecast from what the control plane itself
-//     observed of the host (ADR-250): `contained` when the runtime requires the
+//     observed of the host (ADR-251): `contained` when the runtime requires the
 //     contained launcher, `observe` when the host is in observe mode,
 //     `gateway` when the control plane has authorized a gateway call on the
 //     host's own credential, and `harness` otherwise. The run's own tier is

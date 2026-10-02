@@ -6,7 +6,7 @@ import { capabilityContext } from "../../lib/context";
 import type { AppEnv } from "../../app";
 
 /**
- * Reopen a closed or done work item (`reopen_work_item`, ADR-250).
+ * Reopen a closed or done work item (`reopen_work_item`, ADR-251).
  *
  * It answers 200. Mounted on the org-scoped router. The handler refuses an
  * API key and an agent run, so only a signed-in person decides work.

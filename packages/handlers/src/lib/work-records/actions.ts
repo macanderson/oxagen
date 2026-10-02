@@ -237,7 +237,7 @@ async function openAndQueue(
     runtimeId: target.runtimeId,
     runtimeTier: target.runtimeTier,
     mandateId: target.mandateId,
-    // Nothing reserves budget at send (ADR-250): the gateway holds it before
+    // Nothing reserves budget at send (ADR-251): the gateway holds it before
     // each model call on the gateway and contained tiers, and spend is
     // recorded after the run on the harness and observe tiers.
     budgetReservationId: null,

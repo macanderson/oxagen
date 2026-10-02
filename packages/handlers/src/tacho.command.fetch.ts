@@ -146,7 +146,7 @@ export function createTachoCommandFetchHandler(
         }
       }
       // A work order's command the host took is `send_delivered`, and a
-      // stop's `cancel` it applied is `stopped` (ADR-250). They are recorded
+      // stop's `cancel` it applied is `stopped` (ADR-251). They are recorded
       // in a savepoint: a work record that refuses them must not undo the
       // acknowledgements, or the host would send them again on every poll.
       if (moved.some((row) => row.command === "work_order" || row.command === "cancel")) {

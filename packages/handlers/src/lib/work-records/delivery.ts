@@ -1,4 +1,4 @@
-// delivery.ts: a work order on the existing command channel (P1-04, ADR-250).
+// delivery.ts: a work order on the existing command channel (P1-04, ADR-251).
 //
 // A send reaches its runtime as one `work_order` row in
 // `tacho.control_commands`, addressed to the target's enrolled host. The

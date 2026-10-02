@@ -55,7 +55,7 @@ export interface InboxDeps {
   handled?: HandledCommands;
   /**
    * Keep a work order the control plane sent this host until the person at
-   * the machine starts it (ADR-250). Synchronous, because every seal after
+   * the machine starts it (ADR-251). Synchronous, because every seal after
    * the bundle refresh runs in one stretch. It throws when the order cannot
    * be written. Absent, a `work_order` command fails: this host has nowhere
    * to keep it.
@@ -421,7 +421,7 @@ function changedSession(result: {
 }
 
 /**
- * A `work_order` command (ADR-250): keep the order for the person at the
+ * A `work_order` command (ADR-251): keep the order for the person at the
  * machine and acknowledge `received`. Nothing starts here, and nothing is
  * sealed. The run starts when the person runs `oxagen work start`, which
  * claims the order first. A payload that does not name an order, a key, and

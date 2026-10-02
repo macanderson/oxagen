@@ -20,7 +20,7 @@ const linkedSchema = z.object({
 
 /**
  * `cost/run.sealed` → record `run_ended` on every work order the run is
- * linked to (ADR-250). Both seal paths send the event: the host's own
+ * linked to (ADR-251). Both seal paths send the event: the host's own
  * `agent_stop` and the idle close. A run linked to no work order records
  * nothing. The runner is installed by `@oxagen/handlers/register`.
  */
@@ -42,7 +42,7 @@ export const [workOrderRunEnded] = createFunction(
 /**
  * `run/pull-request.linked` → when the run is linked to a work order whose
  * brief changes that repository, record the pull request on the send and read
- * its head, required checks, and check results from GitHub (ADR-250). At most
+ * its head, required checks, and check results from GitHub (ADR-251). At most
  * two reads run at once per workspace, like the pull request backfill, so a
  * batch of links does not spend the workspace's GitHub rate limit at once.
  */

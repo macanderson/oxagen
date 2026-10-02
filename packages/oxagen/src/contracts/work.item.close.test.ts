@@ -10,7 +10,7 @@ const input = {
   reason: "The same fix is in another item.",
 };
 
-// close_work_item (agent-work-phase-1.html, Work lifecycle; P1-04, ADR-250).
+// close_work_item (agent-work-phase-1.html, Work lifecycle; P1-04, ADR-251).
 describe("close_work_item contract", () => {
   it("registers a person's work action on the API surface alone", () => {
     expect(contract.name).toBe("close_work_item");

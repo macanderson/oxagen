@@ -36,6 +36,8 @@
             "run.read",
             "run.control",
             "run.approve",
+            "work.control",
+            "work.approve",
             "agent.read",
             "agent.register",
             "agent.roles.assign",

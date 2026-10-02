@@ -1,4 +1,4 @@
-// results.ts: a send's results, recorded as they arrive (P1-04, ADR-250).
+// results.ts: a send's results, recorded as they arrive (P1-04, ADR-251).
 //
 // Three arrivals reach a send after its run is linked:
 //

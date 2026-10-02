@@ -1,5 +1,5 @@
 /**
- * `oxagen work list` and `oxagen work start <wo>` (P1-04, ADR-250).
+ * `oxagen work list` and `oxagen work start <wo>` (P1-04, ADR-251).
  *
  * A person sends an approved brief to an agent, and the control plane sends
  * the agent's host a `work_order` command. The daemon keeps it in the

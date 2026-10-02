@@ -12,7 +12,7 @@ const input = {
   brief_digest: DIGEST,
 };
 
-// approve_work_brief (agent-work-phase-1.html, Work lifecycle; P1-04, ADR-250).
+// approve_work_brief (agent-work-phase-1.html, Work lifecycle; P1-04, ADR-251).
 describe("approve_work_brief contract", () => {
   it("registers a person's work action on the API surface alone", () => {
     expect(contract.name).toBe("approve_work_brief");

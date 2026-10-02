@@ -5,7 +5,7 @@ const ITEM = "wi_0a1b2c";
 const ITEM_AFTER = { id: ITEM, state: "ready", revision: 1, version: 4 };
 const input = { item_id: ITEM, version: 8, reason: "The fix broke the export." };
 
-// reopen_work_item (agent-work-phase-1.html, Work lifecycle; P1-04, ADR-250).
+// reopen_work_item (agent-work-phase-1.html, Work lifecycle; P1-04, ADR-251).
 describe("reopen_work_item contract", () => {
   it("registers a person's work action on the API surface alone", () => {
     expect(contract.name).toBe("reopen_work_item");

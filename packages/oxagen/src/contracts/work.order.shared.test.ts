@@ -15,7 +15,7 @@ import {
   workRevisionSchema,
 } from "./work.order.shared";
 
-// The schemas every Phase 1 work action shares (P1-04, ADR-250).
+// The schemas every Phase 1 work action shares (P1-04, ADR-251).
 describe("work action shared schemas", () => {
   it("takes each public id by its own prefix and refuses another", () => {
     expect(workItemIdSchema.safeParse("wi_0a1b2c").success).toBe(true);

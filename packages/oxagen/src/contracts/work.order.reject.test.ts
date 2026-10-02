@@ -5,7 +5,7 @@ const ORDER = "wo_3d4e5f";
 const HOST = "tch_0123456789abcdefghjkmn";
 const input = { host_enrollment_id: HOST, work_order_id: ORDER, reason: "Claude Code is signed out on this machine." };
 
-// reject_work_order: an enrolled host refuses an order it cannot start (P1-04, ADR-250).
+// reject_work_order: an enrolled host refuses an order it cannot start (P1-04, ADR-251).
 describe("reject_work_order contract", () => {
   it("registers a host's call on the API surface alone", () => {
     expect(contract.name).toBe("reject_work_order");

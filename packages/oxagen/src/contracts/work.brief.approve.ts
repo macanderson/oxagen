@@ -6,7 +6,7 @@
  * approval changes nothing. A person decides it, signed in to Oxagen: an API
  * key or an agent run is refused, so an agent cannot decide its own work. The
  * action names the item version the person read, and the store refuses it when
- * the item changed since (ADR-244, ADR-250).
+ * the item changed since (ADR-244, ADR-251).
  */
 import { z } from "zod";
 import { registerCapability } from "../registry";

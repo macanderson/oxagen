@@ -7,7 +7,7 @@ import type { AppEnv } from "../../app";
 
 /**
  * Return a send's result to the agent with a reason (`return_work_order`,
- * ADR-250).
+ * ADR-251).
  *
  * It answers 200. Mounted on the org-scoped router. The handler refuses an
  * API key and an agent run, so only a signed-in person decides work.

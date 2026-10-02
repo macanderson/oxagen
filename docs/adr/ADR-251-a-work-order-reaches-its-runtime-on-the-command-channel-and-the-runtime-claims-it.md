@@ -1,4 +1,4 @@
-# ADR-250: A work order reaches its runtime on the command channel, and the runtime claims it
+# ADR-251: A work order reaches its runtime on the command channel, and the runtime claims it
 
 - **Status:** Accepted
 - **Date:** 2026-10-02

@@ -4,7 +4,7 @@
 // holding a role the action takes in this workspace). The action then runs
 // in one tenant transaction through the work record store, and a work record
 // refusal reaches the caller as a conflict, not found, forbidden, or invalid
-// input (lib/work-records/errors.ts). See ADR-250.
+// input (lib/work-records/errors.ts). See ADR-251.
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { workBriefSave } from "@oxagen/oxagen/contracts/work.brief.save";
 import { type Tx, withTenantDb } from "@oxagen/database";

@@ -1,4 +1,4 @@
-// A send's pull request evidence as provider facts (ADR-250). The cases that
+// A send's pull request evidence as provider facts (ADR-251). The cases that
 // matter most: a failed required-checks read never yields "none required", and
 // a re-read records nothing new while a real change does.
 import { describe, expect, it } from "vitest";

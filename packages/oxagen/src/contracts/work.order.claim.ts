@@ -1,6 +1,6 @@
 /**
  * claim_work_order: an enrolled host claims a work order before it starts a
- * run for it (P1-04, ADR-250).
+ * run for it (P1-04, ADR-251).
  *
  * The host received the order as a `work_order` command. The claim is the
  * handshake before anything starts: it binds the order to this host, and its

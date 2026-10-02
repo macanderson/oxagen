@@ -7,7 +7,7 @@ import type { AppEnv } from "../../app";
 
 /**
  * Read again from GitHub the checks a send's pull request needs on its head
- * commit (`refresh_work_order_checks`, ADR-250).
+ * commit (`refresh_work_order_checks`, ADR-251).
  *
  * It answers 200. Mounted on the org-scoped router. The handler refuses an
  * API key and an agent run, so only a signed-in person decides work.

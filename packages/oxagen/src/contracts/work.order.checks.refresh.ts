@@ -1,7 +1,7 @@
 /**
  * refresh_work_order_checks: Oxagen reads again, from GitHub, the checks a
  * send's pull request needs on its current head commit, and records what it
- * read (P1-04, ADR-250).
+ * read (P1-04, ADR-251).
  *
  * It reads the checks the base branch requires (branch protection and
  * rulesets) and each check's latest conclusion on the head. A required list

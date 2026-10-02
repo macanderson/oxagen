@@ -2513,7 +2513,7 @@ const ingestBatch = async (
         });
         // A run `oxagen work start` launched names its work order on its
         // frames. The send binds the run only when this host claimed it, and
-        // the first run to link wins (ADR-250). A refusal never fails ingest.
+        // the first run to link wins (ADR-251). A refusal never fails ingest.
         try {
           const linked = await linkRunFromIngest(
             tx as never,

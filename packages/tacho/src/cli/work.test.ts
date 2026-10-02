@@ -1,5 +1,5 @@
 /**
- * `oxagen work list` and `oxagen work start` (P1-04, ADR-250). The control
+ * `oxagen work list` and `oxagen work start` (P1-04, ADR-251). The control
  * plane and the spawn are stand-ins, so nothing here starts a process or
  * sends a request.
  */

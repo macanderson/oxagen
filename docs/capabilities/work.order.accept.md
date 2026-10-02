@@ -50,4 +50,4 @@ A refusal answers with a code:
 - `forbidden` (403): the caller is not a signed-in person, is an agent run, or holds no role the action takes.
 - A body that does not match the input answers 400 before the handler runs.
 
-[refresh_work_order_checks](work.order.checks.refresh.md) makes the same read without accepting. See [ADR-250](../adr/ADR-250-a-work-order-reaches-its-runtime-on-the-command-channel-and-the-runtime-claims-it.md) and oxageninc/roadmap#279.
+[refresh_work_order_checks](work.order.checks.refresh.md) makes the same read without accepting. See [ADR-251](../adr/ADR-251-a-work-order-reaches-its-runtime-on-the-command-channel-and-the-runtime-claims-it.md) and oxageninc/roadmap#279.

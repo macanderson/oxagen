@@ -432,7 +432,7 @@ While an elevation is pending, the collector shows it in `oxagen tacho status` a
 
 *Amended 2026-09-14 (issue #2953, ADR-056): `steer` joins the set with a delivery mode, the status vocabulary is the Mission Control spec's §7.4 set, and the control channel is `tacho.commands.v2`.*
 
-*Amended 2026-10-02 (issue #5100, ADR-250): `work_order` joins the set as a host command, with `oxagen work list` and `oxagen work start` on the host.*
+*Amended 2026-10-02 (issue #5100, ADR-251): `work_order` joins the set as a host command, with `oxagen work list` and `oxagen work start` on the host.*
 
 `dispatch_command` writes one `tacho.control_commands` row per recipient run (one run, every live run of an agent, or every live run in the workspace); `revoke_tacho_enrollment` writes the host-level `revoke`. The collector receives commands in the next ingest response or, when idle, from the long-poll `fetch_commands` (`POST /v1/tacho/commands`, body `schema: "tacho.commands.v2"`). Effects:
 
