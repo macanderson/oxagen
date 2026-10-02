@@ -47,20 +47,23 @@ warm_pool = {
 }
 
 # The most runners each pool holds at once, idle and busy together (#5070).
-# The account has 300 spot and 300 on-demand vCPUs. Spot fills first, and on
-# a spot shortfall the CI pools fail over to on-demand. The deploy pool and
-# production run on on-demand only, so the CI pools must leave them room:
+# The account has 300 spot and 300 on-demand vCPUs. The deploy pool and
+# production run on on-demand only. The large pools never use on-demand
+# (`on_demand` in runners.tf), so only the small pools can compete with them:
 #
-#   600 vCPUs in both quotas
-#   - 96 for the deploy pool (6 runners x 16 vCPUs)
-#   -  8 for production (the oxagen-app node and the NAT instance)
-#   = 496 for CI: 22 large (352) + 36 small (144)
+#   300 on-demand vCPUs
+#   - 144 for the small pools at most (36 runners x 4 vCPUs)
+#   -  96 for the deploy pool (6 runners x 16 vCPUs)
+#   -   6 for production (the oxagen-app node and the NAT instance)
+#   =  54 spare, enough to replace a production node
 #
-# On 2026-10-02, before these caps, CI held both quotas full, and the deploy
-# pool's scale-up failed with VcpuLimitExceeded 161 times in four hours.
-# Raise these when AWS approves the open quota requests (2,400 spot and
-# 1,000 on-demand). Each arm64 pool gets the same cap as its x64 twin,
-# because CI_RUNNER_ARCH sends every job to one or the other.
+# The large cap of 22 (352 vCPUs) sits above the 300-vCPU spot quota, so
+# spot limits the large pool first. On 2026-10-02, with both pools falling
+# back to on-demand, CI held both quotas full, and the deploy pool's
+# scale-up failed with VcpuLimitExceeded 161 times in four hours. Raise
+# these when AWS approves the open quota requests (2,400 spot and 1,000
+# on-demand). Each arm64 pool gets the same cap as its x64 twin, because
+# CI_RUNNER_ARCH sends every job to one or the other.
 max_runners = {
   "oxagen-large-arm64" = 22
   "oxagen-large-x64"   = 22

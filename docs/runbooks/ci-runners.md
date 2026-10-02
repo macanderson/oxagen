@@ -44,20 +44,18 @@ GitHub-hosted runner.
 On 2026-10-01 AWS approved 300 spot and 300 on-demand vCPUs, with the cases
 for 2,400 and 1,000 still open. That holds about 37 large runners or 150
 small ones at once. Mac chose speed over concurrency, so the heavy jobs use
-the large pool. When a burst needs more runners than the quota holds, the
-fleet fails over from spot to on-demand and then queues, and the queue-age
-and vCPU alarms fire. To trade speed for concurrency during a crunch, set
+the large pool. When a burst needs more runners than the spot quota holds,
+the small pools fail over to on-demand and the large pools queue, and the
+queue-age and vCPU alarms fire. To trade speed for concurrency during a crunch, set
 `CI_HEAVY_POOL=small`, and delete it afterwards.
 
-The deploy pool and production run on on-demand only. `max_runners` caps the
-CI pools at 496 vCPUs. While spot is at its quota, as it is during a
-backlog, that leaves 104 on-demand vCPUs: 96 for the deploy pool's 6 runners
-and 8 for production. When spot capacity runs short instead, the CI pools
-fail over to on-demand and can take up to all 496 there, so the reserve
-shrinks. If deploys wait for a runner while spot capacity errors fill the
-CI scale-up logs, lower the CI caps. `terraform.tfvars` shows the
-arithmetic. When AWS raises a quota, raise the caps by the same number of
-vCPUs, or the new quota sits unused.
+The deploy pool and production run on on-demand only. The large pools never
+fall back to on-demand, so they wait for spot when the spot quota is full.
+The small pools do fall back, but all 36 small runners take at most 144
+on-demand vCPUs. That always leaves 96 for the deploy pool's 6 runners, 6
+for production, and 54 to replace a production node. `max_runners` in
+`terraform.tfvars` caps each pool and shows the arithmetic. When AWS raises
+a quota, raise the caps to match, or the new quota sits unused.
 
 ## Roll back to GitHub-hosted runners
 
