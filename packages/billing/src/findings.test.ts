@@ -1,5 +1,4 @@
 import { FINDING_KINDS } from "@oxagen/database/schema";
-import { FINDINGS_LIST_MAX } from "@oxagen/oxagen/contracts/finding.list";
 import {
   findingEvidenceSchema,
   findingRunCitationSchema,
@@ -18,7 +17,6 @@ import {
   detectFindings,
   EVIDENCE_RUNS,
   FINDING_FRAMES_PER_RUN,
-  FINDINGS_MAX,
   FINDINGS_PER_KIND,
   findingFingerprint,
   microsOf,
@@ -1585,10 +1583,6 @@ describe("countClaims", () => {
 });
 
 describe("the limits the contracts carry", () => {
-  it("keeps every open finding inside one list_findings answer", () => {
-    expect(FINDINGS_MAX).toBeLessThanOrEqual(FINDINGS_LIST_MAX);
-  });
-
   it("itemises exactly as many runs as the evidence contract accepts", () => {
     const money = { micros: "0", currency: "USD" };
     const evidence = (runs: number) => ({

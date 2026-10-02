@@ -446,6 +446,7 @@ describe("the findings the Spend page leads with", () => {
         annualised: savingCost,
         counts: { findings: 1, high: 1, medium: 0, operators: 2 },
         findings: [listedFinding],
+        truncated: false,
       }),
     );
     const read = await spend.findings(ctx);
@@ -585,6 +586,7 @@ describe("the findings the Spend page leads with", () => {
         annualised: null,
         counts: { findings: 1, high: 1, medium: 0, operators: 1 },
         findings: [{ ...listedFinding, id: "01k5rtgh" }],
+        truncated: false,
       }),
     );
     expect(await spend.findings(ctx)).toEqual(

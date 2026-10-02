@@ -12,7 +12,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { FindingEvidence as StoredEvidence } from "@oxagen/billing";
 import { schema } from "@oxagen/database";
 import { findingEvidenceGet } from "@oxagen/oxagen/contracts/finding.evidence.get";
-import { findingList } from "@oxagen/oxagen/contracts/finding.list";
+import {
+  FINDINGS_LIST_MAX,
+  findingList,
+} from "@oxagen/oxagen/contracts/finding.list";
 import { drizzle } from "drizzle-orm/postgres-js";
 
 const mocks = vi.hoisted(() => ({ withTenantDb: vi.fn() }));
@@ -33,7 +36,9 @@ import { createFindingListHandler } from "./finding.list";
 import {
   type FindingDecisionDeps,
   type FindingRow,
+  type FindingTotalRow,
   readFindingRows,
+  readFindingTotals,
 } from "./finding.shared";
 import { makeCTX } from "./test-utils/fixtures";
 
@@ -133,10 +138,41 @@ function findingRow(over: Partial<FindingRow> = {}): FindingRow {
   };
 }
 
+/** One finding as the totals read answers it: its figures and its operators. */
+function totalOf(row: FindingRow): FindingTotalRow {
+  return {
+    confidence: row.confidence,
+    estimatedSavingMicros: row.estimatedSavingMicros,
+    currency: row.currency,
+    savingBasis: row.savingBasis,
+    windowStart: row.windowStart,
+    windowEnd: row.windowEnd,
+    operatorKeys: (row.citedFrames as StoredEvidence).operatorKeys,
+  };
+}
+
+type ListDeps = Parameters<typeof createFindingListHandler>[0];
+
+/**
+ * The list handler. Unless a test gives its own totals read, the totals read
+ * answers every row the list read does, as in a workspace whose findings all
+ * fit one answer.
+ */
+function listHandler(
+  deps: Omit<ListDeps, "readFindingTotals"> &
+    Partial<Pick<ListDeps, "readFindingTotals">>,
+) {
+  return createFindingListHandler({
+    readFindingTotals: async (scope, filter) =>
+      (await deps.readFindings(scope, filter)).map(totalOf),
+    ...deps,
+  });
+}
+
 describe("list_findings", () => {
   it("answers nulls and zero counts, without reading spend, when nothing is listed", async () => {
     const readPricedSpend = vi.fn();
-    const handler = createFindingListHandler({
+    const handler = listHandler({
       readFindings: async () => [],
       readPricedSpend,
     });
@@ -150,6 +186,7 @@ describe("list_findings", () => {
       annualised: null,
       counts: { findings: 0, high: 0, medium: 0, operators: 0 },
       findings: [],
+      truncated: false,
     });
     expect(readPricedSpend).not.toHaveBeenCalled();
   });
@@ -178,7 +215,7 @@ describe("list_findings", () => {
       currency: "USD",
       basis: "gateway_observed" as const,
     }));
-    const handler = createFindingListHandler({ readFindings, readPricedSpend });
+    const handler = listHandler({ readFindings, readPricedSpend });
     const out = await handler({ status: "open" }, ctx());
 
     expect(readFindings).toHaveBeenCalledWith(
@@ -224,6 +261,7 @@ describe("list_findings", () => {
       FINDING_ID,
       "fnd_bbbbbbbbbbbbbbbbbbbbbb",
     ]);
+    expect(out.truncated).toBe(false);
     expect(out.findings[0]).toMatchObject({
       saving: { micros: "60000", currency: "USD", basis: "gateway_observed" },
       runs: 1,
@@ -234,7 +272,7 @@ describe("list_findings", () => {
 
   it("annualises a finding decided minutes ago over seven days, so its saving does not scale minutes to a year", async () => {
     const fiveMinutes = 5 * 60_000;
-    const handler = createFindingListHandler({
+    const handler = listHandler({
       readFindings: async () => [
         findingRow(),
         findingRow({
@@ -264,7 +302,7 @@ describe("list_findings", () => {
 
   it("scales the spend of a span shorter than seven days by the same minimum as the saving", async () => {
     const hour = 3_600_000;
-    const handler = createFindingListHandler({
+    const handler = listHandler({
       readFindings: async () => [
         findingRow({
           windowStart: new Date(END.getTime() - hour),
@@ -286,7 +324,7 @@ describe("list_findings", () => {
   });
 
   it("answers no share when nothing in the span was priced", async () => {
-    const handler = createFindingListHandler({
+    const handler = listHandler({
       readFindings: async () => [findingRow()],
       readPricedSpend: async () => null,
     });
@@ -294,6 +332,132 @@ describe("list_findings", () => {
     expect(out.spend).toBeNull();
     expect(out.share).toBeNull();
     expect(out.saving).not.toBeNull();
+  });
+});
+
+describe("list_findings past one answer (#5262)", () => {
+  /** `n` open findings, the i-th saving 10,000 + i micros under its own operator. */
+  const many = (n: number): FindingRow[] =>
+    Array.from({ length: n }, (_, i) =>
+      findingRow({
+        id: `0192d4a8-7c1e-7a00-8000-${String(i).padStart(12, "0")}`,
+        publicId: `fnd_${String(i).padStart(22, "0")}`,
+        estimatedSavingMicros: 10_000n + BigInt(i),
+        confidence: i % 2 === 0 ? "high" : "medium",
+        citedFrames: evidence({
+          operatorKeys: [`prn_${String(i).padStart(22, "0")}`],
+        }),
+      }),
+    );
+  const spend = async () => ({
+    micros: 900_000n,
+    currency: "USD",
+    basis: "gateway_observed" as const,
+  });
+
+  it("counts and totals every matched finding, and answers truncated when the list holds fewer", async () => {
+    const all = many(FINDINGS_LIST_MAX + 12);
+    const listed = all.slice(0, FINDINGS_LIST_MAX);
+    const readFindingTotals = vi.fn(async () => all.map(totalOf));
+    const handler = listHandler({
+      readFindings: async () => listed,
+      readFindingTotals,
+      readPricedSpend: spend,
+    });
+    const out = await handler({ status: "open" }, ctx());
+
+    expect(readFindingTotals).toHaveBeenCalledWith(
+      { orgId: ORG, workspaceId: WS },
+      { status: "open" },
+    );
+    expect(out.truncated).toBe(true);
+    expect(out.findings).toHaveLength(FINDINGS_LIST_MAX);
+    expect(out.counts).toEqual({
+      findings: FINDINGS_LIST_MAX + 12,
+      high: (FINDINGS_LIST_MAX + 12) / 2,
+      medium: (FINDINGS_LIST_MAX + 12) / 2,
+      operators: FINDINGS_LIST_MAX + 12,
+    });
+    // The saving sums all 62 findings, not only the 50 listed.
+    const sum = all.reduce((total, r) => total + r.estimatedSavingMicros, 0n);
+    expect(out.saving?.micros).toBe(sum.toString());
+    expect(() => findingList.output.parse(out)).not.toThrow();
+  });
+
+  it("answers truncated false when the list holds every matched finding", async () => {
+    const all = many(FINDINGS_LIST_MAX);
+    const handler = listHandler({
+      readFindings: async () => all,
+      readPricedSpend: spend,
+    });
+    const out = await handler({ status: "open" }, ctx());
+    expect(out.truncated).toBe(false);
+    expect(out.counts.findings).toBe(FINDINGS_LIST_MAX);
+  });
+
+  it("reads the totals with the list's filter and order, and no limit", async () => {
+    const db = drizzle.mock({ schema });
+    const compiled: { sql: string; params: unknown[] }[] = [];
+    mocks.withTenantDb.mockImplementation(
+      (fn: (tx: unknown) => { toSQL(): { sql: string; params: unknown[] } }) => {
+        compiled.push(fn(db).toSQL());
+        return Promise.resolve([]);
+      },
+    );
+    const run = "tse_0000000000000000000001";
+    await readFindingRows(
+      { orgId: ORG, workspaceId: WS },
+      { status: "open", runId: run },
+    );
+    await readFindingTotals(
+      { orgId: ORG, workspaceId: WS },
+      { status: "open", runId: run },
+    );
+    const [rows, totals] = compiled;
+    const order =
+      /order by "findings"\."estimated_saving_micros" desc, "findings"\."id" asc/;
+    expect(rows?.sql).toMatch(order);
+    expect(rows?.sql).toMatch(/limit \$\d+/);
+    expect(totals?.sql).toMatch(order);
+    expect(totals?.sql).toMatch(/"findings"\."cited_runs" @> \$\d+/);
+    expect(totals?.sql).not.toMatch(/limit/);
+    // The totals read leaves the evidence out, apart from its operators.
+    expect(totals?.sql).toMatch(/\("findings"\."cited_frames" -> 'operatorKeys'\)::text/);
+    expect(totals?.sql).not.toMatch(/"findings"\."why"/);
+  });
+
+  it("parses each finding's operators from the stored evidence", async () => {
+    const at = new Date(START);
+    mocks.withTenantDb.mockImplementation(() =>
+      Promise.resolve([
+        {
+          confidence: "high",
+          estimatedSavingMicros: 60_000n,
+          currency: "USD",
+          savingBasis: "gateway_observed",
+          windowStart: at,
+          windowEnd: END,
+          operatorKeys: '["prn_aaaaaaaaaaaaaaaaaaaaaa", "prn_bbbbbbbbbbbbbbbbbbbbbb"]',
+        },
+        {
+          confidence: "medium",
+          estimatedSavingMicros: 30_000n,
+          currency: "USD",
+          savingBasis: "gateway_observed",
+          windowStart: at,
+          windowEnd: END,
+          operatorKeys: null,
+        },
+      ]),
+    );
+    const totals = await readFindingTotals(
+      { orgId: ORG, workspaceId: WS },
+      { status: "open" },
+    );
+    expect(totals.map((t) => t.operatorKeys)).toEqual([
+      ["prn_aaaaaaaaaaaaaaaaaaaaaa", "prn_bbbbbbbbbbbbbbbbbbbbbb"],
+      [],
+    ]);
   });
 });
 
@@ -324,7 +488,7 @@ describe("list_findings for one run (#4001)", () => {
         }),
       }),
     ]);
-    const handler = createFindingListHandler({
+    const handler = listHandler({
       readFindings,
       readPricedSpend: spend,
     });
@@ -347,7 +511,7 @@ describe("list_findings for one run (#4001)", () => {
   });
 
   it("answers an empty list, with nulls and zero counts, for a run no finding cites", async () => {
-    const handler = createFindingListHandler({
+    const handler = listHandler({
       readFindings: async () => [],
       readPricedSpend: spend,
     });
@@ -370,7 +534,7 @@ describe("list_findings for one run (#4001)", () => {
   ] as const)(
     "cites the whole run for a %s finding, pinning no frame",
     async (kind) => {
-      const handler = createFindingListHandler({
+      const handler = listHandler({
         readFindings: async () => [
           findingRow({
             kind,
@@ -413,7 +577,7 @@ describe("list_findings for one run (#4001)", () => {
   });
 
   it("answers null frames for a finding written before frames were stored, with its calls as the total", async () => {
-    const handler = createFindingListHandler({
+    const handler = listHandler({
       readFindings: async () => [findingRow()],
       readPricedSpend: spend,
     });
@@ -431,7 +595,7 @@ describe("list_findings for one run (#4001)", () => {
     // The evidence itemises ten runs. The eleventh is cited but uncounted,
     // and its calls are not known to be zero.
     const eleventh = "tse_0000000000000000000011";
-    const handler = createFindingListHandler({
+    const handler = listHandler({
       readFindings: async () => [
         findingRow({ citedRuns: ["tse_0000000000000000000001", eleventh] }),
       ],

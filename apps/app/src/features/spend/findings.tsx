@@ -8,6 +8,10 @@
 // and pages the findings; Evidence opens one finding's arithmetic in a dialog
 // and Fix opens the change that removes it. Each card's share of the spend is
 // divided through the micros seam and printed as a ratio (INV-09, INV-10).
+// list_findings lists at most 50 findings, and a workspace can hold more,
+// since the findings job never caps a finding the headline counts (#5262).
+// The counts cover every open finding, and when the list is cut a line above
+// the cards says how many it shows of how many in all.
 import { useLocale, useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import type {
@@ -223,13 +227,26 @@ export function FindingsSection({
           <p className="text-sm text-muted-foreground">{t("empty")}</p>
         </section>
       ) : (
-        <FindingsList
-          findings={findings.findings}
-          spend={findings.spend}
-          names={names}
-          harnesses={harnesses}
-          at={at}
-        />
+        <>
+          {findings.truncated ? (
+            <p
+              data-testid="spend-findings-truncated"
+              className="text-[12.5px] text-muted-foreground"
+            >
+              {t("truncated", {
+                shown: formatCount(findings.findings.length, locale),
+                total: formatCount(findings.counts.findings, locale),
+              })}
+            </p>
+          ) : null}
+          <FindingsList
+            findings={findings.findings}
+            spend={findings.spend}
+            names={names}
+            harnesses={harnesses}
+            at={at}
+          />
+        </>
       )}
       <div className="flex flex-col gap-2 border-l-2 border-gold py-1 pl-3 text-[12.5px] text-muted-foreground">
         <p>{t("note")}</p>

@@ -30,13 +30,16 @@ The workspace's costed findings ranked by the money at stake, with the totals th
 | Field | Type | Description |
 |---|---|---|
 | `status` | enum | as asked |
-| `window` | object or null | `{ from, to }`, the span the listed findings cover; null when none is listed |
-| `saving` | cost or null | the listed findings' savings summed, with the fold of their bases |
+| `window` | object or null | `{ from, to }`, the span every matched finding covers; null when none matches |
+| `saving` | cost or null | every matched finding's saving summed, with the fold of their bases |
 | `spend` | cost or null | the workspace's priced spend on runs that started in `window`; null when nothing in it was priced |
 | `share` | number or null | `annualised` over `spend` scaled from `window` to 365 days, at most 1; a `window` shorter than 7 days scales as 7 days |
-| `annualised` | cost or null | each listed finding's saving scaled from its own window to 365 days, summed; a window shorter than 7 days scales as 7 days, so a finding re-proven minutes after a decision is not scaled from minutes to a year |
-| `counts` | object | `{ findings, high, medium, operators }`; `operators` counts the distinct operators whose runs the listed findings cite |
-| `findings` | object[] | at most 50; open findings largest saving first, decided findings most recent decision first |
+| `annualised` | cost or null | each matched finding's saving scaled from its own window to 365 days, summed; a window shorter than 7 days scales as 7 days, so a finding re-proven minutes after a decision is not scaled from minutes to a year |
+| `counts` | object | `{ findings, high, medium, operators }` over every matched finding, listed or not; `operators` counts the distinct operators whose runs those findings cite |
+| `findings` | object[] | at most 50; open findings largest saving first, decided findings most recent decision first, ties by id |
+| `truncated` | boolean | true when the read matches more findings than `findings` lists, so `counts.findings` is larger than the list |
+
+A matched finding is one in the asked status, and with `runId` one that cites the run. The findings job writes every finding that counts toward the unproductive spend headline, however many there are (ADR-208, #5262), so a workspace can hold more open findings than one answer lists. The counts and totals still cover all of them. Paging past the first 50 is not built yet.
 
 Each finding carries `id` (`fnd_…`), `kind`, `level`, `subject`, `saving` (cost), `confidence` (`high` or `medium`), `window`, `why`, `fix`, `runs` and `calls` (what it cites), `status`, `detectedAt`, `decidedAt` and `appliedActionId`. A finding whose fix names a setting also carries `recommendation`: the `setting`, the proposed `value`, and the `current` value when the findings job read one. A finding also carries `values`, its kind's figures that the Spend card fills its text from, such as a spin loop's tool and how many times in a row it ran, or the retention mode that decides the Needs prompt text badge. `values.kind` names the shape. A finding the job wrote before it stored values has none, and neither do `duplicate_tool_calls` and `repeated_shell_commands`, whose text needs only `runs`, `calls`, and `saving`.
 

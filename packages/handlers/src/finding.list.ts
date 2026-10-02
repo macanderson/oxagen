@@ -1,7 +1,7 @@
 // audit-exempt: read-only — answers the workspace's findings from cost.findings and the priced spend from cost.run_totals; mutates nothing. The kernel capability.invoke_* audit covers access.
 //
 // `list_findings` (ADR-062): the findings in one status with the totals the
-// Spend page leads with. The saving is the sum of the listed findings' own
+// Spend page leads with. The saving is the sum of the matched findings' own
 // figures. The annualised figure scales each finding's saving from its own
 // window to 365 days and sums them, since a finding decided once cites only
 // runs after the decision and covers a shorter window than the others. The
@@ -15,6 +15,12 @@
 // Given a run (#4001), it lists only the findings that cite that run, the
 // totals cover those, and each finding answers what it cites there: the
 // frames the Run page pins it to, or the run as a whole.
+//
+// The list holds at most FINDINGS_LIST_MAX findings. A workspace can hold
+// more, because the findings job never caps a finding that counts toward the
+// unproductive spend headline (#5262). So the counts and totals read every
+// finding the filter matches, through a second read that leaves the evidence
+// out, and `truncated` says when the list holds fewer.
 import { type CostBasis, divideHalfEven, foldBasis } from "@oxagen/billing";
 import { schema, withTenantDb } from "@oxagen/database";
 import type { CapabilityHandler } from "@oxagen/oxagen";
@@ -30,8 +36,9 @@ import {
   findingScope,
   type FindingRow,
   type FindingScope,
-  operatorKeysOf,
+  type FindingTotalRow,
   readFindingRows,
+  readFindingTotals,
   toFinding,
 } from "./finding.shared";
 
@@ -48,10 +55,16 @@ const annualisedOver = (from: Date, to: Date): bigint => {
 type PricedSpend = { micros: bigint; currency: string; basis: CostBasis };
 
 type FindingListDeps = {
+  /** The listed findings, in list order, at most FINDINGS_LIST_MAX. */
   readFindings: (
     scope: FindingScope,
     filter: FindingFilter,
   ) => Promise<FindingRow[]>;
+  /** Every finding the filter matches, in list order, as the counts and totals read it. */
+  readFindingTotals: (
+    scope: FindingScope,
+    filter: FindingFilter,
+  ) => Promise<FindingTotalRow[]>;
   /** The priced spend of runs that started in [start, end); null when nothing was priced. */
   readPricedSpend: (
     scope: FindingScope,
@@ -104,17 +117,17 @@ export function createFindingListHandler(
   return async (input, ctx): Promise<FindingListOutput> => {
     const scope = findingScope(ctx);
     const { runId } = input;
-    const rows = await deps.readFindings(
-      scope,
+    const filter: FindingFilter =
       runId === undefined
         ? { status: input.status }
-        : { status: input.status, runId },
-    );
+        : { status: input.status, runId };
+    const rows = await deps.readFindings(scope, filter);
+    const all = await deps.readFindingTotals(scope, filter);
     const counts = {
-      findings: rows.length,
-      high: rows.filter((r) => r.confidence === "high").length,
-      medium: rows.filter((r) => r.confidence === "medium").length,
-      operators: new Set(rows.flatMap((r) => operatorKeysOf(r))).size,
+      findings: all.length,
+      high: all.filter((r) => r.confidence === "high").length,
+      medium: all.filter((r) => r.confidence === "medium").length,
+      operators: new Set(all.flatMap((r) => r.operatorKeys)).size,
     };
     // A citation answers exactly when the read names a run.
     const findings = rows.map((row) =>
@@ -122,7 +135,8 @@ export function createFindingListHandler(
         ? toFinding(row)
         : { ...toFinding(row), citation: citationOf(row, runId) },
     );
-    if (rows.length === 0)
+    const truncated = counts.findings > findings.length;
+    if (all.length === 0)
       return {
         status: input.status,
         window: null,
@@ -132,14 +146,15 @@ export function createFindingListHandler(
         annualised: null,
         counts,
         findings,
+        truncated,
       };
 
-    let start = rows[0]!.windowStart;
-    let end = rows[0]!.windowEnd;
+    let start = all[0]!.windowStart;
+    let end = all[0]!.windowEnd;
     let savingMicros = 0n;
     let annualisedMicros = 0n;
     let basis: CostBasis | null = null;
-    for (const r of rows) {
+    for (const r of all) {
       if (r.windowStart < start) start = r.windowStart;
       if (r.windowEnd > end) end = r.windowEnd;
       savingMicros += r.estimatedSavingMicros;
@@ -149,7 +164,7 @@ export function createFindingListHandler(
       );
       basis = foldBasis(basis, r.savingBasis as CostBasis);
     }
-    const currency = rows[0]!.currency;
+    const currency = all[0]!.currency;
     const spend = await deps.readPricedSpend(scope, { start, end });
     const spanMs = annualisedOver(start, end);
 
@@ -180,11 +195,13 @@ export function createFindingListHandler(
       },
       counts,
       findings,
+      truncated,
     };
   };
 }
 
 export const findingListHandler = createFindingListHandler({
   readFindings: readFindingRows,
+  readFindingTotals,
   readPricedSpend,
 });

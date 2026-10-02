@@ -197,9 +197,9 @@ function closedUnmerged(r: RunTotalsRecord): OutcomeRow {
 }
 
 /**
- * One more recurring job than `FINDINGS_PER_KIND` keeps, one agent each.
- * Agent i's frames cost i + 1 turns, so agent 0's group ranks last, and only
- * agent 0's runs opened a pull request that closed unmerged (#5050).
+ * One more recurring job than `FINDINGS_PER_KIND`, one agent each. Agent i's
+ * frames cost i + 1 turns, so agent 0's group ranks last, and only agent 0's
+ * runs opened a pull request that closed unmerged (#5050, #5262).
  */
 function pastTheKindCap(): {
   input: DetectReads;
@@ -749,29 +749,27 @@ describe("recurring runs", () => {
     expect(findings[0]!.claims).toHaveLength(15);
   });
 
-  // #5050: detector 7 claimed the frames of a group the per-kind cap cut.
-  // The pass never stored them, and detector 8 skipped them, so their spend
-  // left the headline.
-  it(`frees the frames of a group past ${FINDINGS_PER_KIND} of its kind for spend with no outcome`, () => {
+  // #5262: the per-kind cap cut the 11th group, and its frames went to
+  // detector 8. A counting finding is never cut now, so detector 7 keeps
+  // every group and claims every frame of the 55 runs.
+  it(`keeps every group past ${FINDINGS_PER_KIND} of its kind, with its claims under detector 7`, () => {
     const { input, frames, last } = pastTheKindCap();
     const findings = detectFindings(input);
 
     const kept = recurring(findings);
-    expect(kept).toHaveLength(FINDINGS_PER_KIND);
-    expect(kept.map((f) => f.subject)).not.toContain(last);
+    expect(kept).toHaveLength(FINDINGS_PER_KIND + 1);
+    expect(kept.map((f) => f.subject)).toContain(last);
     expect(kept.flatMap((f) => f.claims!.map((c) => c.detector))).toEqual(
-      Array<number>(FINDINGS_PER_KIND * 15).fill(7),
+      Array<number>((FINDINGS_PER_KIND + 1) * 15).fill(7),
     );
-    const noOutcome = findings.filter(
-      (f) => f.kind === "spend_with_no_outcome",
-    );
-    expect(noOutcome.map((f) => f.subject)).toEqual([last]);
-    expect(noOutcome[0]!.claims!.map((c) => c.detector)).toEqual(
-      Array<number>(15).fill(8),
-    );
+    // Agent 0's runs closed unmerged, but detector 7 claimed their frames
+    // first, so detector 8 writes nothing.
+    expect(
+      findings.filter((f) => f.kind === "spend_with_no_outcome"),
+    ).toEqual([]);
 
-    // Every frame of the 55 runs is claimed once, under detector 7 or 8, so
-    // the headline adds every one of them once.
+    // Every frame of the 55 runs is claimed once, so the headline adds every
+    // one of them once.
     const claims = findings.flatMap((f) => f.claims ?? []);
     const read = [...frames].flatMap(([runId, list]) =>
       list.map((f) => ({ runId, key: f.key, cost: f.costMicros! })),
@@ -785,7 +783,7 @@ describe("recurring runs", () => {
     );
   });
 
-  it("replays the claims of a pass that cut a group past its kind's cap", () => {
+  it(`replays the claims of every group past ${FINDINGS_PER_KIND} of its kind`, () => {
     const { input, last } = pastTheKindCap();
     const findings = detectFindings(input);
     const replayed = replayClaims(input, new Set());
@@ -794,22 +792,36 @@ describe("recurring runs", () => {
       new Map(findings.map((f) => [f.fingerprint, f.claims!])),
     );
     expect(
-      replayed.has(findingFingerprint("recurring_runs", "agent", last)),
-    ).toBe(false);
+      replayed
+        .get(findingFingerprint("recurring_runs", "agent", last))!
+        .map((c) => c.detector),
+    ).toEqual(Array<number>(15).fill(7));
   });
 
-  it("keeps a released group past its kind's cap, with its claims", () => {
+  it("gives a released group its claims under detector 7, and the other groups the claims the pass gave them", () => {
     const { input, last } = pastTheKindCap();
     const released = findingFingerprint("recurring_runs", "agent", last);
-    const replayed = replayClaims(input, new Set([released]));
-    // An applied finding keeps its frames under detector 7, so detector 8
-    // claims none of them.
+    // Agent 0's finding was applied after its runs started, so a pass cites
+    // none of them, and detector 8 claims their frames instead.
+    const decided: DetectReads = {
+      ...input,
+      decidedSince: new Map([[released, FIXTURE_WINDOW_END]]),
+    };
+    const pass = detectFindings(decided);
+    expect(pass.map((f) => f.fingerprint)).not.toContain(released);
+    const noOutcome = findingFingerprint("spend_with_no_outcome", "agent", last);
+    expect(pass.map((f) => f.fingerprint)).toContain(noOutcome);
+
+    // The replay sets the decision aside, so detector 7 claims those frames
+    // again and detector 8 claims none of them.
+    const replayed = replayClaims(decided, new Set([released]));
     expect(replayed.get(released)!.map((c) => c.detector)).toEqual(
       Array<number>(15).fill(7),
     );
-    expect(
-      replayed.has(findingFingerprint("spend_with_no_outcome", "agent", last)),
-    ).toBe(false);
+    expect(replayed.has(noOutcome)).toBe(false);
+    // Every other group keeps the claims the pass gave it.
+    for (const f of recurring(pass))
+      expect(replayed.get(f.fingerprint)).toEqual(f.claims);
   });
 
   // #4607: the fix promised half price on any provider.
