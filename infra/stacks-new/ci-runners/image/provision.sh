@@ -7,8 +7,8 @@
 #   provision.sh validate <dir>   check the image before Image Builder snapshots it
 #
 # <dir> holds the files Terraform uploaded beside this script: config.json,
-# start-runner.sh, daemon.json, and the ci-start-runner, ci-local-disk, and
-# ci-volume-warm units and scripts.
+# start-runner.sh, daemon.json, and the ci-start-runner and ci-local-disk
+# units and scripts.
 #
 # The image carries what a job would otherwise download first: the runner
 # agent, Docker, the host tools our workflows call, Node in the runner's tool
@@ -131,10 +131,15 @@ EOF
   tar -xJf "$tmp/node.tar.xz" -C "$node_dir" --strip-components=1
   touch "$node_dir.complete"
   chown -R runner:runner /opt/hostedtoolcache
+  # Also on the PATH, as on GitHub's image: host-level steps call node, npm,
+  # npx, and corepack without actions/setup-node.
+  for bin in node npm npx corepack; do
+    ln -sf "$node_dir/bin/$bin" "/usr/local/bin/$bin"
+  done
 
   # The module's start script reads its settings from the instance's tags and
   # Parameter Store, registers, and runs one job. A systemd unit starts it as
-  # soon as the network and Docker are up, about 20 seconds into boot. The
+  # soon as the network is up, about 15 seconds into boot. The
   # module's own images use cloud-init's per-boot directory, which runs it at
   # about 57 seconds, and which Image Builder's end-of-build cleanup empties.
   install -m 0755 "$dir/start-runner.sh" /usr/local/sbin/ci-start-runner
@@ -146,13 +151,6 @@ EOF
   install -m 0755 "$dir/ci-local-disk.sh" /usr/local/sbin/ci-local-disk
   install -m 0644 "$dir/ci-local-disk.service" /etc/systemd/system/ci-local-disk.service
   systemctl enable ci-local-disk.service
-
-  # The root volume comes from the AMI's snapshot and loads lazily. This reads
-  # it once at boot, in the background, so the images and the store are local
-  # before a job needs them.
-  install -m 0755 "$dir/ci-volume-warm.sh" /usr/local/sbin/ci-volume-warm
-  install -m 0644 "$dir/ci-volume-warm.service" /etc/systemd/system/ci-volume-warm.service
-  systemctl enable ci-volume-warm.service
 
   # --- Container images ----------------------------------------------------
   # Every image a CI job starts, for this architecture. The runner still asks
@@ -197,9 +195,8 @@ validate() {
   test -x /usr/local/sbin/ci-start-runner
   systemctl is-enabled ci-start-runner.service
   "/opt/hostedtoolcache/node/$node_version/$runner_arch/bin/node" --version
+  [ "$(command -v node)" = /usr/local/bin/node ] && node --version && npx --version
   systemctl is-enabled ci-local-disk.service
-  systemctl is-enabled ci-volume-warm.service
-  fio --version
   id runner
   jq -r '.images[]' "$config" | while read -r image; do
     docker image inspect "$image" >/dev/null 2>&1 || echo "not baked: $image"
