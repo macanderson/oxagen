@@ -38,7 +38,7 @@ describe("list_work_collectors contract", () => {
   });
 
   it("reads only, and lets a workspace viewer read", () => {
-    expect(contract.mutates).not.toBe(true);
+    expect("mutates" in contract).toBe(false);
     expect(contract.defaultRoles.workspace.Viewer).toBe("allow");
   });
 });
