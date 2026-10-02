@@ -23,7 +23,8 @@
  *
  * Every figure names its metric, whose definition the answer carries in
  * `definitions`, and cites the work orders and runs behind it. The answer
- * names operators, so it has the ranking's readers: an org Owner or Admin.
+ * names operators, so it has the ranking's org readers: an org Owner or
+ * Admin. The ranking also admits the workspace's Owner (#5182); this does not.
  * With the workspace's pseudonym setting on, a pseudonym replaces each name,
  * and the operator rows drop their evidence, both shares, and their
  * unassigned spend, any of which could match a pseudonym to a name.
@@ -357,7 +358,7 @@ export const spendWorkOrderMetrics = registerCapability({
   mutates: false,
   sensitivity: "medium",
   defaultEffect: "deny",
-  // The operator ranking's readers: the answer names operators.
+  // The operator ranking's org readers: the answer names operators.
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow" },
     workspace: {},

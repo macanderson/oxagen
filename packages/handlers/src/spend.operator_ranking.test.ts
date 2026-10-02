@@ -370,22 +370,22 @@ describe("get_operator_ranking roles", () => {
     ["an org Owner", { org: "Owner" }],
     ["an org Admin", { org: "Admin" }],
     ["an org Admin who is a workspace Member", { org: "Admin", workspace: "Member" }],
+    // #5182: a workspace's creator holds the workspace Owner role in IAM, so
+    // the ranking admits the Owner of the workspace the call is scoped to.
+    ["a workspace Owner who is an org Member", { org: "Member", workspace: "Owner" }],
+    ["a workspace Owner with no org role", { org: null, workspace: "Owner" }],
   ])("lets %s read the ranking", async (_label, roles) => {
     roleGate.roles = roles;
     const out = await harness(claims).handler({ period: PERIOD }, ctx());
     expect(out.operators).toHaveLength(1);
   });
 
-  // No person holds a workspace IAM role yet (#3198), so in an Enterprise
-  // org the kernel refuses a workspace Owner before the handler runs. The
-  // ranking names org roles only, and refuses the same people on every tier.
   it.each<[string, RoleFixture]>([
     ["an org Member", { org: "Member" }],
     ["an org Billing member", { org: "Billing" }],
     ["a workspace Member", { org: null, workspace: "Member" }],
-    ["a workspace Owner who is an org Member", { org: "Member", workspace: "Owner" }],
-    ["a workspace Owner with no org role", { org: null, workspace: "Owner" }],
     ["a workspace Admin who is an org Member", { org: "Member", workspace: "Admin" }],
+    ["a workspace Viewer who is an org Member", { org: "Member", workspace: "Viewer" }],
   ])("denies %s before reading anything", async (_label, roles) => {
     roleGate.roles = roles;
     const h = harness(claims);

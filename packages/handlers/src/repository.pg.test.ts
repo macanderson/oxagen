@@ -597,6 +597,15 @@ describe.skipIf(!enabled)("workspace repositories against Postgres", () => {
           isSystemDefault: true,
         })
         .returning({ id: schema.roles.id });
+      // The workspace Owner role bootstrapOrgIAM seeds for every org.
+      // create_workspace gives the creator that role on the new workspace
+      // (#5182), so the bootstrap refuses an org without it.
+      await tx.insert(schema.roles).values({
+        orgId,
+        scopeKind: "workspace",
+        name: "Owner",
+        isSystemDefault: true,
+      });
       if (!principal || !role)
         throw new Error("fixture insert returned no row");
       await tx.insert(schema.principalRoleAssignments).values({
