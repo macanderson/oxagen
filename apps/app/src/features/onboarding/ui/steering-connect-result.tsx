@@ -8,6 +8,11 @@
 //
 // The copy is the same for an unknown organization and one the viewer can't
 // open, and it never names the organization.
+//
+// The API's callback also sends a state it couldn't use straight here:
+// `state_expired` when the link ran out before the install finished, and
+// `state_invalid` when it couldn't read the link at all. Those aren't about
+// the account, so they say to start again and offer only the way home.
 import type { ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import { routes } from "@/shared/safe-path";
@@ -60,6 +65,21 @@ export function SteeringConnectResult({
         actions={next}
       >
         <p>{t("connectedBody")}</p>
+      </OutcomePanel>
+    );
+  if (result.code === "state_expired" || result.code === "state_invalid")
+    return (
+      <OutcomePanel
+        tone="neutral"
+        testId="steering-connect-error"
+        title={t("errorTitle")}
+        actions={home}
+      >
+        <p>
+          {result.code === "state_expired"
+            ? t("stateExpired")
+            : t("stateInvalid")}
+        </p>
       </OutcomePanel>
     );
   return (

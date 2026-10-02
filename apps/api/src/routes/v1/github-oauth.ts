@@ -39,7 +39,6 @@ import {
   parseReturnTo,
   verifyInstallState,
   type GithubInstallState,
-  type GithubInstallStateError,
 } from "@oxagen/github";
 import { encrypt, decrypt, createIngestionCryptoAdapter } from "@oxagen/crypto";
 import { and, desc, eq, isNull, notInArray } from "drizzle-orm";
@@ -305,19 +304,6 @@ function buildManageInstallationsUrl(
 }
 
 /**
- * The callback's wording for each way a state fails to verify. The verifier
- * returns a reason rather than a message so this route keeps the exact strings
- * its clients and tests already read.
- */
-const STATE_ERROR_MESSAGES: Record<GithubInstallStateError, string> = {
-  invalid_format: "Invalid state format",
-  invalid_encoding: "Invalid state encoding",
-  invalid_signature: "Invalid state signature",
-  invalid_json: "Invalid state JSON",
-  expired: "OAuth state has expired — please start the OAuth flow again",
-};
-
-/**
  * The org roles that may start a SETTINGS-level GitHub connect.
  *
  * The same pair `attach_github_installation`, `get_main_repository` and
@@ -524,6 +510,25 @@ function steeringLandingUrl(
   url.searchParams.set("return_to", returnTo);
   for (const [key, value] of Object.entries(params))
     url.searchParams.set(key, value);
+  return url.toString();
+}
+
+/** Why the callback could not use the state GitHub sent back (#5151). */
+type StateFailureCode = "state_expired" | "state_invalid";
+
+/**
+ * The app's GitHub connection result page, `/github/steering/result`, with a
+ * failure `code`. The callback sends a state it can't use here instead of
+ * answering JSON, so an install never ends on a raw error. No `return_to`
+ * rides along: a state that didn't verify isn't trusted to say where the
+ * person came from.
+ */
+function stateFailureUrl(appBaseUrl: string, code: StateFailureCode): string {
+  const url = new URL(
+    `${appBaseUrl.replace(/\/+$/, "")}/github/steering/result`,
+  );
+  url.searchParams.set("steering", "error");
+  url.searchParams.set("code", code);
   return url.toString();
 }
 
@@ -1941,9 +1946,31 @@ githubOauthCallbackRoute.get("/callback", async (c) => {
   // scheme that minted the state. `connectionId` is null for a settings-level
   // connect (1 workspace = 1 app install, no source_connection yet); `returnTo`
   // may be absent on states minted before that field existed → "sources".
+  //
+  // A state that fails ends on the app, never on JSON (#5151). An expired
+  // steering state still names a trusted return_to, because its signature
+  // matched, so it goes through the landing: a member lands back where the
+  // connect started, with the error line. Anything else goes to the result
+  // page with no return_to.
   const verified = verifyInstallState(rawState, stateSecret);
   if (!verified.ok) {
-    return c.json({ error: STATE_ERROR_MESSAGES[verified.error] }, 400);
+    logger.warn(
+      { error: verified.error, setupAction },
+      "GitHub callback state did not verify",
+    );
+    if (verified.error === "expired") {
+      const steering = readPurposeState(verified.state, "steering");
+      return c.redirect(
+        steering === null
+          ? stateFailureUrl(appBaseUrl, "state_expired")
+          : steeringLandingUrl(appBaseUrl, steering.returnTo, {
+              steering: "error",
+              code: "state_expired",
+            }),
+        302,
+      );
+    }
+    return c.redirect(stateFailureUrl(appBaseUrl, "state_invalid"), 302);
   }
   const statePayload: GithubInstallState = verified.state;
 
@@ -1957,13 +1984,11 @@ githubOauthCallbackRoute.get("/callback", async (c) => {
   if (statePurpose(statePayload) !== undefined) {
     const steering = readPurposeState(statePayload, "steering");
     if (steering === null) {
-      return c.json(
-        {
-          error:
-            "This connect was not started for this callback. Start it again from Oxagen.",
-        },
-        400,
+      logger.warn(
+        { error: "unknown_purpose_or_malformed_fields" },
+        "GitHub callback state was signed for no connect this callback finishes",
       );
+      return c.redirect(stateFailureUrl(appBaseUrl, "state_invalid"), 302);
     }
     if (installationId && isSteeringInstallationId(installationId)) {
       await upsertGithubInstallation({

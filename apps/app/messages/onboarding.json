@@ -298,6 +298,8 @@
       "errorTitle": "GitHub connection failed",
       "error": "GitHub didn't connect ({code}). The account you're signed in with can't open the Oxagen organization that started the connection. Sign in with an account in that organization, then connect GitHub again from there.",
       "errorNoCode": "GitHub didn't connect. The account you're signed in with can't open the Oxagen organization that started the connection. Sign in with an account in that organization, then connect GitHub again from there.",
+      "stateExpired": "The link to connect GitHub expired before the install finished, so Oxagen didn't save the connection. GitHub may still list Oxagen Connect as installed. Start the connection again from your organization in Oxagen.",
+      "stateInvalid": "Oxagen couldn't read the link GitHub sent back, so it didn't save the connection. Start the connection again from your organization in Oxagen.",
       "emptyTitle": "No connection result",
       "emptyBody": "This page shows how a GitHub connection ended. Start one from your organization in Oxagen.",
       "home": "Go to Oxagen"

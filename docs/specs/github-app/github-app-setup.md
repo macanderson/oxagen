@@ -603,8 +603,10 @@ Onboarding starts the connect at
   code.
 
 Both carry a state signed with purpose `steering`, and GitHub returns both to the app's one
-callback, `GET /oauth/github/callback`. The callback checks the signature and the purpose, and
-answers 400 to a state signed for anything else. For a steering state it records the installation
+callback, `GET /oauth/github/callback`. The callback checks the signature and the purpose. A state
+it can't use never ends on JSON (#5151). An expired steering state goes through the landing below
+with `code=state_expired`, and any other bad or foreign state goes to the result page with
+`code=state_invalid` and no `return_to`. For a steering state it records the installation
 id in the platform registry, exchanges the code with `GITHUB_APP_CLIENT_ID` and
 `GITHUB_APP_CLIENT_SECRET`, stores the token, and sends the provision event again for each scope
 that waits on a connection. It then redirects to the app's landing, `/github/steering`, with
@@ -797,7 +799,9 @@ one and how to refresh it.
    On GitHub, install Oxagen Connect on `ox-product` with **All repositories**, and authorize it.
    Oxagen returns through `/github/steering`, which sends a member of the organization on to it with
    `steering=connected`. A browser signed in to another Oxagen account gets the GitHub connection
-   result page instead, and the connection is saved all the same. Don't start from Oxagen Connect's
+   result page instead, and the connection is saved all the same. The install link expires 10
+   minutes after it is made. An install that finishes later lands on the result page and saves
+   nothing, so start the connect again. Don't start from Oxagen Connect's
    public install page: the callback refuses an install that carries no steering state. Authorize
    with a GitHub account that owns `ox-product` and no other organization that has Oxagen Connect,
    so the token Oxagen stores sees only the test organization.

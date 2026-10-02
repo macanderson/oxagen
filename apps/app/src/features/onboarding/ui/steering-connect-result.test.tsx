@@ -80,6 +80,36 @@ describe("SteeringConnectResult", () => {
     expect(panel).not.toHaveTextContent("()");
   });
 
+  it.each([
+    {
+      code: "state_expired",
+      body: "The link to connect GitHub expired before the install finished, so Oxagen didn't save the connection.",
+    },
+    {
+      code: "state_invalid",
+      body: "Oxagen couldn't read the link GitHub sent back, so it didn't save the connection.",
+    },
+  ])(
+    "says to start again for $code and offers only the way home",
+    ({ code, body }) => {
+      renderResult({ kind: "error", code });
+      const panel = screen.getByTestId("steering-connect-error");
+      expect(
+        screen.getByRole("heading", { name: "GitHub connection failed" }),
+      ).toBeInTheDocument();
+      expect(panel).toHaveTextContent(body);
+      expect(panel).toHaveTextContent(
+        "Start the connection again from your organization in Oxagen.",
+      );
+      // The link ran out or couldn't be read. That isn't about the account.
+      expect(panel).not.toHaveTextContent("The account you're signed in with");
+      expect(screen.queryByTestId("sign-out-stub")).toBeNull();
+      expect(
+        screen.getByRole("link", { name: "Go to Oxagen" }),
+      ).toHaveAttribute("href", "/");
+    },
+  );
+
   it("says there is no result when the query names none (negative)", () => {
     renderResult(null);
     expect(
@@ -93,6 +123,8 @@ describe("SteeringConnectResult", () => {
     { kind: "connected" },
     { kind: "error", code: "store_failed" },
     { kind: "error", code: null },
+    { kind: "error", code: "state_expired" },
+    { kind: "error", code: "state_invalid" },
     null,
   ] satisfies (SteeringResult | null)[])(
     "never reads as a missing page (%o)",

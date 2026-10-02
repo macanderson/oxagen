@@ -4043,6 +4043,8 @@ type Messages = {
       errorTitle: string;
       error: string;
       errorNoCode: string;
+      stateExpired: string;
+      stateInvalid: string;
       emptyTitle: string;
       emptyBody: string;
       home: string;
