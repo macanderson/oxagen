@@ -56,10 +56,11 @@ A read that names `runId` adds `citation` to each finding: what it cites in that
 | Kind | Level and subject | Counterfactual |
 |---|---|---|
 | `spin_loops` | agent, or the operator when the run names no agent | nothing: each turn that only repeated a call made 20 or more times in a row counts at its own priced cost |
+| `retry_loops` | agent, or the operator when the run names no agent | nothing: each turn that only retried a call that failed with the same error 3 or more times in a row, with no write or file change between the tries, counts at its own priced cost |
 | `repeated_shell_commands` | tool `Bash` | nothing: each turn that only re-ran shell commands with an identical earlier result counts at its own priced cost |
 | `duplicate_tool_calls` | agent, or the operator when the run names no agent | nothing: each turn that only repeated calls with an identical earlier result counts at its own priced cost |
 | `cache_writes_never_read` | operator (`prn_…`), or the agent when the run names no operator | the written prefix sent uncached |
 | `unpaged_results` | tool | the same result capped at 4,000 tokens |
 | `repeated_instructions` | the agent or operator every run it reached names, or the workspace when those runs name more than one | a steering record in place of the paste: each later prompt that repeats it counts at the priced cost of the turns it answered, an upper bound. It claims no frame and adds nothing to the unproductive spend headline |
 
-A turn counts only when every tool call it made is a repeat. Its whole cost counts once, and `calls` counts turns for these three kinds. A run whose model calls the job did not read has its repeats cited with no price. ADR-208 has the rules, and ADR-062's detector table has the rollup and frame fields each kind reads.
+A turn counts only when every tool call it made is a repeat, or for `retry_loops` a retry. Its whole cost counts once, and `calls` counts turns for these four kinds. A run whose model calls the job did not read has its repeats and retries cited with no price. ADR-208 has the rules, and ADR-062's detector table has the rollup and frame fields each kind reads.

@@ -905,12 +905,27 @@ export interface ToolCallObservationRow {
   at: string;
   seq: number;
   tool: string;
+  /**
+   * Empty when the hook recorded no input. Such a call is kept: it may have
+   * done new work, so the request that made it must not read as all repeats
+   * (#4506).
+   */
   inputDigest: string;
   /** Empty when the hook recorded no output. */
   outputDigest: string;
   isMutating: boolean | null;
   /** The result tokens the OTel tool span recorded for the same tool use; null when none did. */
   resultTokens: number | null;
+  /**
+   * `tool_status` when it is `ok`, `error` or `rejected`, as
+   * {@link ToolCallFrameRow} reads it; null for any other value.
+   */
+  status: ToolCallFrameRow["status"];
+  /**
+   * `tool_error_class`, the first line of the error the hook recorded for a
+   * failed call; null when it recorded none.
+   */
+  errorClass: string | null;
 }
 
 /** ClickHouse DateTime64 params want a space-separated, Z-less string. */
@@ -921,10 +936,11 @@ function chDateTime(at: Date): string {
 /**
  * A workspace's tool calls over [from, to), newest first, at most `limit`
  * (Mission Control spec §12.8; ADR-062). The hook source carries a call once
- * with its input and output digests and the classifier's mutating flag; the
- * OTel tool span of the same tool use carries its result tokens, joined on
- * `tool_use_id`. Throws on a degraded store: the findings job retries rather
- * than detecting over missing frames.
+ * with its input and output digests, the classifier's mutating flag, its
+ * status, and the error class of a failed call; the OTel tool span of the
+ * same tool use carries its result tokens, joined on `tool_use_id`. A call
+ * the hook recorded no input for is read too (#4506). Throws on a degraded
+ * store: the findings job retries rather than detecting over missing frames.
  */
 export async function readTachoToolCallObservations(args: {
   orgId: string;
@@ -945,11 +961,13 @@ export async function readTachoToolCallObservations(args: {
         h.tool_input_digest                                            AS input_digest,
         h.tool_output_digest                                           AS output_digest,
         h.tool_is_mutating                                             AS is_mutating,
-        r.result_tokens                                                AS result_tokens
+        r.result_tokens                                                AS result_tokens,
+        h.tool_status                                                  AS status,
+        h.tool_error_class                                             AS error_class
       FROM (
         SELECT root_session_uuid, session_uuid, ts, seq, tool_name,
                tool_input_digest, tool_output_digest, tool_is_mutating,
-               tool_use_id
+               tool_use_id, tool_status, tool_error_class
         FROM tacho_events FINAL
         WHERE org_id = {orgId:UUID}
           AND workspace_id = {workspaceId:UUID}
@@ -959,7 +977,6 @@ export async function readTachoToolCallObservations(args: {
           AND ts < {to:DateTime64(3)}
           AND ${receivedFrom("from")}
           AND tool_name != ''
-          AND tool_input_digest != ''
         ORDER BY ts DESC, seq DESC
         LIMIT {limit:UInt32}
       ) AS h
@@ -998,6 +1015,8 @@ export async function readTachoToolCallObservations(args: {
     output_digest: string;
     is_mutating: boolean | null;
     result_tokens: string | number | null;
+    status: string;
+    error_class: string;
   };
   const rows = (await result.json()) as Row[];
   return rows.map((r) => ({
@@ -1010,6 +1029,74 @@ export async function readTachoToolCallObservations(args: {
     outputDigest: r.output_digest,
     isMutating: r.is_mutating,
     resultTokens: r.result_tokens === null ? null : Number(r.result_tokens),
+    status: toolFrameStatus(r.status),
+    errorClass: r.error_class === "" ? null : r.error_class,
+  }));
+}
+
+/** One `oxagen:file_changed` frame of a wrapped run, as the findings job reads it. */
+export interface FileChangeRow {
+  rootSessionUuid: string;
+  /** The chain the frame was recorded on; equal to `rootSessionUuid` on the root's own chain. */
+  sessionUuid: string;
+  /** RFC 3339, to the microsecond the store printed. */
+  at: string;
+  seq: number;
+}
+
+/**
+ * A workspace's `oxagen:file_changed` frames over [from, to), newest first,
+ * at most `limit`. A harness writes one when a file it watches changes on
+ * disk, whoever changed it. The findings job reads them to tell whether a
+ * file changed between two identical failing calls, since the second call
+ * may then fail for a new reason. Throws on a degraded store.
+ */
+export async function readTachoFileChanges(args: {
+  orgId: string;
+  workspaceId: string;
+  from: Date;
+  to: Date;
+  limit: number;
+}): Promise<FileChangeRow[]> {
+  const ch = clickhouse();
+  const result = await ch.query({
+    query: `
+      SELECT
+        toString(root_session_uuid)                                  AS root_session_uuid,
+        toString(session_uuid)                                       AS session_uuid,
+        formatDateTime(ts, '%Y-%m-%dT%H:%i:%S.%fZ', 'UTC')           AS at,
+        seq                                                          AS seq
+      FROM tacho_events FINAL
+      WHERE org_id = {orgId:UUID}
+        AND workspace_id = {workspaceId:UUID}
+        AND kind = 'oxagen:file_changed'
+        AND ts >= {from:DateTime64(3)}
+        AND ts < {to:DateTime64(3)}
+        AND ${receivedFrom("from")}
+      ORDER BY ts DESC, seq DESC
+      LIMIT {limit:UInt32}
+    `,
+    query_params: {
+      orgId: args.orgId,
+      workspaceId: args.workspaceId,
+      from: chDateTime(args.from),
+      to: chDateTime(args.to),
+      limit: args.limit,
+    },
+    format: "JSONEachRow",
+  });
+  type Row = {
+    root_session_uuid: string;
+    session_uuid: string;
+    at: string;
+    seq: string | number;
+  };
+  const rows = (await result.json()) as Row[];
+  return rows.map((r) => ({
+    rootSessionUuid: r.root_session_uuid,
+    sessionUuid: r.session_uuid,
+    at: r.at,
+    seq: Number(r.seq),
   }));
 }
 

@@ -8,8 +8,8 @@
  * A request of shell repeats alone is a repeated shell command, cited at the
  * Bash tool. Any other is a duplicate tool call, cited at the run's agent, or
  * its operator when it names no agent. Both claim the request's frame as
- * detector 1, after spin loops. A run whose frames were not read has each
- * repeat cited, and nothing prices it.
+ * detector 1, after spin loops and retry loops. A run whose frames were not
+ * read has each repeat cited, and nothing prices it.
  *
  * The repeat rule is the rollup's (../step-grade.ts, ADR-199), so a request
  * this job counts is one whose steps the run's productive ratio counts as not

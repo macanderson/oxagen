@@ -17,7 +17,9 @@ import { recurringRuns } from "./recurring-runs";
 import { buildRunViews } from "./requests";
 import { repeatedInstructions } from "./repeated-instructions";
 import { repeats } from "./repeats";
+import { retryLoops } from "./retry-loops";
 import {
+  findingFingerprint,
   FINDINGS_MAX,
   FINDINGS_PER_KIND,
   Groups,
@@ -25,6 +27,7 @@ import {
   type DetectContext,
   type Detector,
   type DetectInput,
+  type FindingClaim,
   type FindingDraft,
   type Prose,
 } from "./shared";
@@ -42,6 +45,7 @@ export {
   type ViewCall,
 } from "./requests";
 export { SPIN_LOOP_REPEATS, spinCalls } from "./spin-loops";
+export { RETRY_LOOP_CALLS, retryCalls, runsWithRetries } from "./retry-loops";
 export {
   instructionProposals,
   MIN_INSTRUCTION_RUNS,
@@ -63,6 +67,7 @@ export {
 /** Every detector a pass runs, in the order it runs them. */
 export const DETECTORS: readonly Detector[] = [
   spinLoops,
+  retryLoops,
   repeats,
   recurringRuns,
   spendWithNoOutcome,
@@ -120,4 +125,39 @@ export function detectFindings(input: DetectInput): FindingDraft[] {
     .flatMap((list) => list.sort(bySaving).slice(0, FINDINGS_PER_KIND))
     .sort(bySaving)
     .slice(0, FINDINGS_MAX);
+}
+
+/**
+ * The frames each fingerprint's finding claims when the decisions on the
+ * `released` fingerprints are set aside, so a pass can give an applied
+ * finding with no claim rows the frames it priced (#4506). Only the counting
+ * detectors run, in counting order, so a frame is claimed under the first
+ * detector that claims it, as in a pass. No cap applies: an applied finding
+ * keeps its claims whatever the open findings rank.
+ */
+export function replayClaims(
+  input: DetectInput,
+  released: ReadonlySet<string>,
+): Map<string, FindingClaim[]> {
+  const decidedSince = new Map(
+    [...input.decidedSince].filter(([fp]) => !released.has(fp)),
+  );
+  const replay: DetectInput = { ...input, decidedSince };
+  const runs = new Map(input.runs.map((r) => [r.runId, r]));
+  const ctx: DetectContext = {
+    groups: new Groups(decidedSince),
+    runs,
+    views: buildRunViews(replay, runs),
+    claimed: new Set(),
+    taken: new Set(),
+  };
+  for (const d of DETECTORS) if (d.counting !== null) d.detect(replay, ctx);
+  const out = new Map<string, FindingClaim[]>();
+  for (const group of ctx.groups.values())
+    if (group.claims.length > 0)
+      out.set(
+        findingFingerprint(group.kind, group.level, group.subject),
+        group.claims,
+      );
+  return out;
 }
