@@ -299,6 +299,7 @@ export function onboardingSource(reads: Reads): {
       findingEvidence: refuse("spend.findingEvidence"),
       priceBook: refuse("spend.priceBook"),
       operatorRanking: refuse("spend.operatorRanking"),
+      perMergedPr: refuse("spend.perMergedPr"),
       unpricedModels: refuse("spend.unpricedModels"),
     },
     audit: {

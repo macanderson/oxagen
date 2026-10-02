@@ -294,6 +294,7 @@ export function fleetSource(reads: FleetReads) {
       findingEvidence: refuse,
       priceBook: refuse,
       operatorRanking: refuse,
+      perMergedPr: refuse,
       unpricedModels: refuse,
     },
     onboarding: { state: refuse, firstFrame: refuse },

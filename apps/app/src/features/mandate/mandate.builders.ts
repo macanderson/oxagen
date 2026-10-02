@@ -64,6 +64,7 @@ export function mandateSource(read: Read<MandateDetail> | undefined) {
       findingEvidence: refuse,
       priceBook: refuse,
       operatorRanking: refuse,
+      perMergedPr: refuse,
       unpricedModels: refuse,
     },
     onboarding: { state: refuse, firstFrame: refuse },

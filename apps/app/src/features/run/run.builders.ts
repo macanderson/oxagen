@@ -1098,6 +1098,7 @@ export function runSource(reads: RunReads) {
           : Promise.resolve(reads.priceBook);
       },
       operatorRanking: refuse,
+      perMergedPr: refuse,
       unpricedModels: refuse,
     },
     onboarding: { state: refuse, firstFrame: refuse },

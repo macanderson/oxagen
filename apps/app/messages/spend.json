@@ -768,6 +768,29 @@
         "share": "Share",
         "cost": "Cost",
         "total": "Total"
+      },
+      "perMergedPr": {
+        "column": "Per merged PR",
+        "figure": "{merged, plural, one {# merged PR} other {# merged PRs}} from {runs, plural, one {# run} other {# runs}}",
+        "absent": "Absent",
+        "absence": {
+          "no_merged_pr": "No merged PR from {runs, plural, one {# run} other {# runs}}",
+          "mixed_currency": "Runs priced in more than one currency",
+          "not_priced": "No run with a PR was priced",
+          "no_bounded_run": "No run opened a PR"
+        },
+        "unpriced": "{count, plural, one {# run not priced} other {# runs not priced}}",
+        "show": "Runs behind spend per merged PR for {name}",
+        "runsTitle": "Runs with a PR",
+        "runsNote": "Spend on these runs divided by their PRs that merged and were not reverted within 14 days.",
+        "moreRuns": "{count, plural, one {# more run} other {# more runs}}",
+        "state": {
+          "merged": "Merged",
+          "reverted": "Reverted",
+          "closed": "Closed",
+          "open": "Open",
+          "unread": "Not read"
+        }
       }
     }
   }

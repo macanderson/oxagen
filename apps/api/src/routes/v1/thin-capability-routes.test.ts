@@ -161,6 +161,7 @@ import { ORG_ONLY_WORKSPACE_ID } from "@oxagen/oxagen/contracts/audit.log.query"
 import { spendWasteList } from "@oxagen/oxagen/contracts/spend.waste";
 import { spendOperatorRanking } from "@oxagen/oxagen/contracts/spend.operator_ranking";
 import { spendOperatorPseudonymsSet } from "@oxagen/oxagen/contracts/spend.operator_pseudonyms.set";
+import { spendPerMergedPr } from "@oxagen/oxagen/contracts/spend.per_merged_pr";
 import { findingDismiss } from "@oxagen/oxagen/contracts/finding.dismiss";
 import { findingEvidenceGet } from "@oxagen/oxagen/contracts/finding.evidence.get";
 import { findingFixRecord } from "@oxagen/oxagen/contracts/finding.fix.record";
@@ -287,6 +288,7 @@ import { auditEventsExportRoute } from "./audit.events.export";
 import { spendWasteListRoute } from "./spend.waste";
 import { spendOperatorRankingRoute } from "./spend.operator_ranking";
 import { spendOperatorPseudonymsSetRoute } from "./spend.operator_pseudonyms.set";
+import { spendPerMergedPrRoute } from "./spend.per_merged_pr";
 import { findingDismissRoute } from "./finding.dismiss";
 import { findingEvidenceGetRoute } from "./finding.evidence.get";
 import { findingFixRecordRoute } from "./finding.fix.record";
@@ -1803,6 +1805,16 @@ const ROUTES: ThinRoute[] = [
     route: spendOperatorRankingRoute as unknown as Hono<never>,
     method: "POST",
     capability: spendOperatorRanking.name,
+    body: { period: { from: "2026-09-01", to: "2026-09-30" } },
+    invalidBody: { period: { from: "2026-09-30", to: "2026-09-01" } },
+    jsonGuard: true,
+    status: 200,
+  },
+  {
+    file: "spend.per_merged_pr",
+    route: spendPerMergedPrRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: spendPerMergedPr.name,
     body: { period: { from: "2026-09-01", to: "2026-09-30" } },
     invalidBody: { period: { from: "2026-09-30", to: "2026-09-01" } },
     jsonGuard: true,

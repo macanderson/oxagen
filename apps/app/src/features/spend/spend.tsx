@@ -226,10 +226,22 @@ async function body({
   failure: Omit<Parameters<typeof SpendReadFailure>[0], "read">;
 }): Promise<ReactNode> {
   switch (view.tab) {
-    case "month":
+    case "month": {
+      // Spend per merged PR sits on the agent rows alone (F26).
+      const perMergedPr =
+        view.by === "agent"
+          ? await source.spend.perMergedPr(ctx, period)
+          : null;
       return (
-        <MonthSection report={month} budgets={budgets} by={view.by} at={at} />
+        <MonthSection
+          report={month}
+          budgets={budgets}
+          by={view.by}
+          at={at}
+          perMergedPr={perMergedPr}
+        />
       );
+    }
     case "findings": {
       if (!findings.ok)
         return <SpendReadFailure read={findings} {...failure} />;

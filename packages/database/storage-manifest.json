@@ -1766,6 +1766,16 @@
       "writes": []
     },
     {
+      "domain": "spend",
+      "name": "get_spend_per_merged_pr",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api"
+      ],
+      "writes": []
+    },
+    {
       "domain": "context",
       "name": "get_steering_deliveries",
       "reads": [],

@@ -22,6 +22,7 @@ import type {
   SpendFindingEvidence,
   SpendFindings,
   SpendGroupKind,
+  SpendPerMergedPr,
   SpendReport,
   SpendWaste,
 } from "@/data/contracts/spend";
@@ -131,6 +132,7 @@ const findingEvidence = vi.fn<DataSource["spend"]["findingEvidence"]>();
 const priceBook = vi.fn<DataSource["spend"]["priceBook"]>();
 const unpricedModels = vi.fn<DataSource["spend"]["unpricedModels"]>();
 const operatorRanking = vi.fn<DataSource["spend"]["operatorRanking"]>();
+const perMergedPr = vi.fn<DataSource["spend"]["perMergedPr"]>();
 const source: DataSource = {
   runtimes: { list: vi.fn(), agents: vi.fn(), named: vi.fn() },
   conversations: { latest: vi.fn(), list: vi.fn(), byId: vi.fn() },
@@ -179,6 +181,7 @@ const source: DataSource = {
     drill,
     waste,
     operatorRanking,
+    perMergedPr,
     budgets,
     gatewayPolicy,
     findings,
@@ -401,6 +404,9 @@ function loaded(
   waste.mockResolvedValue(readOk(wasteRead));
   budgets.mockResolvedValue(readOk(budgetRows));
   gatewayPolicy.mockResolvedValue(readError("gateway_down", 503));
+  // The Month tab draws its per-merged-PR column only when this read answers;
+  // the tests of that column answer it themselves.
+  perMergedPr.mockResolvedValue(readError("per_merged_pr_down", 503));
 }
 
 beforeEach(() => {
@@ -414,6 +420,7 @@ beforeEach(() => {
   priceBook.mockReset();
   unpricedModels.mockReset();
   operatorRanking.mockReset();
+  perMergedPr.mockReset();
 });
 
 afterEach(async () => {
@@ -963,6 +970,160 @@ describe("Spend › Month", () => {
         name: "Try again",
       }),
     ).toHaveAttribute("href", "/acme/core-platform/spend?by=model");
+  });
+
+  describe("spend per merged PR (F26)", () => {
+    const boundedRun = (
+      n: number,
+      micros: string,
+      state: SpendPerMergedPr["agents"][number]["runs"][number]["pullRequests"][number]["state"],
+    ) => ({
+      runId: `tse_0000000000000000000${String(n)}`,
+      startedAt: "2026-09-10T09:00:00.000Z",
+      cost: cost(micros),
+      pullRequests: [
+        {
+          prKey: `github:acme/core#${String(n)}`,
+          url: `https://github.com/acme/core/pull/${String(n)}`,
+          state,
+        },
+      ],
+    });
+
+    /** $40 on 4 bounded runs, 2 PRs merged, 1 reverted within 14 days, 1 closed. */
+    const triageFigure: SpendPerMergedPr["agents"][number] = {
+      agentKey: "acme.core.triage",
+      boundedRuns: 4,
+      unpricedRuns: 0,
+      spend: cost("40000000"),
+      mergedPrs: 2,
+      perMergedPr: cost("20000000"),
+      absence: null,
+      runs: [
+        boundedRun(1, "10000000", "merged"),
+        boundedRun(2, "10000000", "merged"),
+        boundedRun(3, "10000000", "reverted"),
+        boundedRun(4, "10000000", "closed"),
+      ],
+    };
+
+    function answered(agents: SpendPerMergedPr["agents"]) {
+      loadedMonth();
+      perMergedPr.mockResolvedValue(readOk({ period: PERIOD, agents }));
+    }
+
+    function cellOf(key: string): HTMLElement {
+      const hit = rowOf(key).querySelector<HTMLElement>("[data-per-merged-pr]");
+      if (hit === null) throw new Error(`no per-merged-PR cell on ${key}`);
+      return hit;
+    }
+
+    it("shows $20 per merged PR for $40 on 4 bounded runs and 2 merged PRs", async () => {
+      answered([triageFigure]);
+      await renderSpend();
+      expect(perMergedPr).toHaveBeenCalledExactlyOnceWith(ctx, PERIOD);
+      const table = screen.getByRole("table", { name: "By agent" });
+      expect(headers(table)).toEqual([
+        "Agent",
+        "Runs",
+        "Share",
+        "Cost",
+        "Per merged PR",
+      ]);
+      const triage = cellOf("acme.core.triage");
+      expect(triage).toHaveAttribute("data-per-merged-pr", "figure");
+      expect(triage).toHaveTextContent("$20.00");
+      expect(triage).toHaveTextContent("2 merged PRs from 4 runs");
+    });
+
+    it("lists the runs behind the figure, each linked to its run, with what its PR became", async () => {
+      answered([triageFigure]);
+      await renderSpend();
+      const figure = within(rowOf("acme.core.triage")).getByRole("button", {
+        name: /Runs behind spend per merged PR for acme\.core\.triage/,
+      });
+      expect(figure).toHaveAttribute("aria-expanded", "false");
+      await userEvent.click(figure);
+      expect(figure).toHaveAttribute("aria-expanded", "true");
+      const behind = screen.getByTestId("spend-month-per-merged-pr-runs");
+      const runs = within(behind).getAllByRole("link");
+      expect(runs.map((link) => link.getAttribute("href"))).toEqual([
+        "/acme/core-platform/runs/tse_00000000000000000001",
+        "/acme/core-platform/runs/tse_00000000000000000002",
+        "/acme/core-platform/runs/tse_00000000000000000003",
+        "/acme/core-platform/runs/tse_00000000000000000004",
+      ]);
+      // The reverted PR shows as reverted and is not one of the two merged.
+      expect(
+        behind.querySelectorAll('[data-pr-state="merged"]'),
+      ).toHaveLength(2);
+      const reverted = behind.querySelector('[data-pr-state="reverted"]');
+      expect(reverted).toHaveTextContent("acme/core#3");
+      expect(reverted).toHaveTextContent("Reverted");
+    });
+
+    it("shows absent for an agent with no merged PR, and for one with no run that opened a PR (negative)", async () => {
+      answered([
+        triageFigure,
+        {
+          agentKey: "acme.core.review",
+          boundedRuns: 2,
+          unpricedRuns: 0,
+          spend: cost("6000000"),
+          mergedPrs: 0,
+          perMergedPr: null,
+          absence: "no_merged_pr",
+          runs: [
+            boundedRun(5, "3000000", "closed"),
+            boundedRun(6, "3000000", "reverted"),
+          ],
+        },
+      ]);
+      await renderSpend();
+      const review = cellOf("acme.core.review");
+      expect(review).toHaveAttribute("data-per-merged-pr", "absent");
+      expect(review).toHaveTextContent("Absent");
+      expect(review).toHaveTextContent("No merged PR from 2 runs");
+      expect(review).not.toHaveTextContent("$0.00");
+    });
+
+    it("shows absent for an agent the answer does not name (negative)", async () => {
+      answered([triageFigure]);
+      await renderSpend();
+      const review = cellOf("acme.core.review");
+      expect(review).toHaveAttribute("data-per-merged-pr", "absent");
+      expect(review).toHaveTextContent("No run opened a PR");
+      expect(within(rowOf("acme.core.review")).queryByRole("button")).toBeNull();
+    });
+
+    it("is read only on the agent grouping (negative)", async () => {
+      loadedMonth(() =>
+        month([
+          row("prn_marcusbell", {
+            cost: cost("12345678"),
+            operator: MARCUS,
+            topRuns: [triage],
+          }),
+        ]),
+      );
+      await renderSpend([], undefined, ctx, "operator");
+      expect(perMergedPr).not.toHaveBeenCalled();
+      expect(
+        headers(screen.getByRole("table", { name: "By operator" })),
+      ).toEqual(["Operator", "Runs", "Share", "Cost"]);
+    });
+
+    it("draws no column when the read does not answer (negative)", async () => {
+      loadedMonth();
+      await renderSpend();
+      expect(perMergedPr).toHaveBeenCalledOnce();
+      expect(headers(screen.getByRole("table", { name: "By agent" }))).toEqual([
+        "Agent",
+        "Runs",
+        "Share",
+        "Cost",
+      ]);
+    });
   });
 });
 

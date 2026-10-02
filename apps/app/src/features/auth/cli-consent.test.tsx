@@ -78,6 +78,7 @@ const source = {
     findingEvidence: vi.fn(),
     priceBook: vi.fn(),
     operatorRanking: vi.fn(),
+    perMergedPr: vi.fn(),
     unpricedModels: vi.fn(),
   },
   onboarding: { state: vi.fn(), firstFrame: vi.fn() },
