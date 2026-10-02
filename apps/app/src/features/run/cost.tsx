@@ -36,6 +36,7 @@ import { type Read, readOk } from "@/data/read";
 import { FindingEvidence } from "@/features/spend";
 import { routes } from "@/shared/safe-path";
 import type { RunTabProps } from "./tab-props";
+import { BackfillCostNote, isBackfilled } from "./backfill";
 import { classPrices, ledgerOf } from "./cost-figures";
 import { Instruments } from "./instruments";
 import { turnFigures } from "./metrics";
@@ -119,6 +120,8 @@ function CostSections({
   const estimate = rollup !== null && metrics.costIsEstimate;
   return (
     <div data-testid="cost-tab" className="flex flex-col gap-3.5">
+      {/* A rebuilt run's figures are the price book's estimate (ADR-161). */}
+      {isBackfilled(run) ? <BackfillCostNote /> : null}
       {estimate ? <CostEstimate /> : null}
       {/* The panel draws the reading get_run stored (ADR-201). */}
       <ModelFitPanel run={run} />
