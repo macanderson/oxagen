@@ -272,8 +272,16 @@
       "description": "Replace a person's photo.",
       "inputSchema": {
         "properties": {
-          "file": {
-            "contentMediaType": "application/octet-stream"
+          "body": {
+            "properties": {
+              "file": {
+                "contentMediaType": "application/octet-stream"
+              }
+            },
+            "required": [
+              "file"
+            ],
+            "type": "object"
           },
           "userId": {
             "type": "string"
@@ -287,11 +295,9 @@
       "name": "upload_avatar",
       "request": {
         "body": {
-          "in": "spread",
+          "in": "property",
           "media_type": "multipart/form-data",
-          "properties": [
-            "file"
-          ],
+          "property": "body",
           "required": false
         },
         "kind": "http",

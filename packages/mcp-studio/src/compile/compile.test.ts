@@ -1059,3 +1059,65 @@ describe("toManifestServer", () => {
     expect(named.environments.default?.url).toBe("https://api.githubcopilot.com/mcp/");
   });
 });
+
+describe("compile drops the parameter the API key supplies (#4613, finding 1)", () => {
+  const listThings = httpTool("listThings", {
+    inputSchema: {
+      type: "object",
+      properties: { key: { type: "string" }, x_acme_key: { type: "string" }, limit: { type: "integer" } },
+      required: ["key", "x_acme_key"],
+    },
+    request: {
+      kind: "http",
+      operation: "listThings",
+      method: "GET",
+      path: "/things",
+      parameters: [
+        { name: "x-acme-key", in: "header", property: "key", required: true },
+        { name: "X-Acme-Key", in: "query", property: "x_acme_key", required: true },
+        { name: "limit", in: "query", property: "limit", required: false },
+      ],
+    },
+  });
+
+  function withAuth(auth: Record<string, unknown>): CompileInput {
+    return input({
+      server: server({ ...definitionServer("openapi"), auth }),
+      tools: tools({ things: { ...IRREVERSIBLE, operation: "listThings" } }),
+      upstream: [listThings],
+      security_schemes: {
+        acme_key: { type: "api_key", in: "header", name: "X-Acme-Key" },
+        acme_bearer: { type: "http_bearer" },
+      },
+    });
+  }
+
+  it("takes the header the scheme names, in any case, out of the input and the request, and keeps the upstream", () => {
+    const tool = compile(withAuth({ mode: "service", scheme: "acme_key", credential: "oxagen:credential/acme" })).tools.things;
+    expect(tool?.definition.inputSchema).toStrictEqual({
+      type: "object",
+      properties: { x_acme_key: { type: "string" }, limit: { type: "integer" } },
+      required: ["x_acme_key"],
+    });
+    expect(tool?.request).toStrictEqual({
+      kind: "http",
+      operation: "listThings",
+      method: "GET",
+      path: "/things",
+      parameters: [
+        { name: "X-Acme-Key", in: "query", property: "x_acme_key", required: true },
+        { name: "limit", in: "query", property: "limit", required: false },
+      ],
+    });
+    expect(tool?.upstream).toBe(listThings);
+  });
+
+  it.each([
+    ["auth is off", { mode: "none" }],
+    ["auth uses another scheme", { mode: "service", scheme: "acme_bearer", credential: "oxagen:credential/acme" }],
+  ])("keeps every parameter when %s, so a caller can still send it", (_, auth) => {
+    const tool = compile(withAuth(auth)).tools.things;
+    expect(tool?.definition.inputSchema).toBe(listThings.inputSchema);
+    expect(tool?.request).toBe(listThings.request);
+  });
+});

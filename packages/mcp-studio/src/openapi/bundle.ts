@@ -1,20 +1,22 @@
 // bundle.ts: a document split across files, as one document.
 //
-// The walk starts at the entry and copies it. Each $ref to another file is
-// replaced by the value it points at, the first time import meets it. Every
-// later $ref to the same value points at that first copy, so a cycle across
-// files ends at a local $ref instead of recursing. A $ref with other keys
-// beside it merges them into its copy, so only a copy made at a bare $ref is
-// reused: a later $ref must not inherit another site's keys. A $ref into the
-// entry becomes a local `#/` ref. Import never reads a disk or fetches a URL:
-// ref-path.ts resolves every ref against the files it was given.
+// The walk starts at the entry and copies it. For OpenAPI 3.x, each value
+// another file holds is copied once, the first time a $ref names it, to
+// components["x-oxagen-bundled"], and every $ref to it, the first included,
+// points there. An overlay applies after the bundle, so an action that edits
+// or removes one $ref site must not change what another site reads: no site
+// holds a copy another site points into. A $ref keeps the keys beside it, and
+// the resolver applies them to the target. A cycle across files ends at the
+// bundled copy, because the copy's place is known before its walk starts. A
+// $ref into the entry becomes a local `#/` ref. Import never reads a disk or
+// fetches a URL: ref-path.ts resolves every ref against the files it was given.
 //
 // A Swagger 2.0 document is converted after the bundle, and the converter
 // moves values: a body parameter becomes a requestBody, and a response's
 // schema moves under content. A local $ref into a moved value would point at
-// nothing. So for 2.0 the bundle copies a value again at each later $ref,
-// and writes a local $ref only to close a cycle, where the target is a
-// schema the converter leaves in place.
+// nothing. So for 2.0 the bundle copies a value again at each $ref, and
+// writes a local $ref only to close a cycle, where the target is a schema the
+// converter leaves in place.
 import { stringify as stringifyYaml } from "yaml";
 import { OpenApiImportError } from "./errors";
 import { NodeBudget, copyJson, depthError, isRecord, pointerFragment, valueAt, type JsonRecord } from "./json";
@@ -95,18 +97,21 @@ export interface Bundle {
   inlined: boolean;
 }
 
+/** Where a 3.x bundle keeps each value it copied from another file, under `components`. */
+const BUNDLED_KEY = "x-oxagen-bundled";
+
 class Bundler {
   private readonly budget = new NodeBudget(PARSED_NODES_MAX, "The bundled document");
-  /** Where each value's first copy made at a bare $ref sits, so a later $ref can point at it. */
+  /** OpenAPI 3.x only: where each value from another file was copied, so every $ref to it points there. */
   private readonly placed = new Map<string, string>();
-  /** Where each value the walk is copying at a $ref with other keys sits, for a cycle with no bare copy to end at. */
-  private readonly decorated = new Map<string, string>();
-  /** Values the walk is inside now. A $ref to one of them closes a cycle. */
+  /** OpenAPI 3.x only: each copied value, by its name under components[BUNDLED_KEY]. */
+  private readonly bundled = new Map<string, unknown>();
+  /** Swagger 2.0 only: values the walk is inside now. A $ref to one of them closes a cycle. */
   private readonly active = new Set<string>();
-  private readonly path: string[] = [];
   private readonly paths: ReadonlySet<string>;
-  /** Swagger 2.0 only: each cycle's value, by the name it takes under `definitions`. */
-  private readonly cycleNames = new Map<string, string>();
+  /** Each copied value's name: under components[BUNDLED_KEY] for 3.x, or under `definitions` for a 2.0 cycle. */
+  private readonly names = new Map<string, string>();
+  /** Swagger 2.0 only: each cycle's value, by its name under `definitions`. */
   private readonly definitions = new Map<string, unknown>();
   private readonly taken = new Set<string>();
   inlined = false;
@@ -119,7 +124,7 @@ class Bundler {
     this.paths = files.paths;
   }
 
-  /** Names the entry's own `definitions` already holds, so a cycle's name never replaces one. */
+  /** Names the entry already holds where copies go, so a copy's name never replaces one. */
   reserve(names: readonly string[]): void {
     for (const name of names) this.taken.add(name);
   }
@@ -127,21 +132,10 @@ class Bundler {
   walk(value: unknown, file: string, nameMap: boolean, depth: number): unknown {
     this.budget.spend();
     if (depth > DEPTH_MAX) throw depthError("The bundled document");
-    if (Array.isArray(value)) {
-      return value.map((item, index) => this.child(String(index), item, file, false, depth));
-    }
+    if (Array.isArray(value)) return value.map((item) => this.walk(item, file, false, depth + 1));
     if (!isRecord(value)) return value;
     if (!nameMap && typeof value.$ref === "string") return this.ref(value, value.$ref, file, depth);
     return this.fields(value, file, nameMap, depth);
-  }
-
-  private child(key: string, value: unknown, file: string, nameMap: boolean, depth: number): unknown {
-    this.path.push(key);
-    try {
-      return this.walk(value, file, nameMap, depth + 1);
-    } finally {
-      this.path.pop();
-    }
   }
 
   private fields(record: JsonRecord, file: string, nameMap: boolean, depth: number, skip?: string): JsonRecord {
@@ -151,7 +145,7 @@ class Bundler {
       if (!nameMap && isDataKey(key, item)) {
         entries.push([key, copyJson(item, this.budget, "The bundled document", depth + 1)]);
       } else {
-        entries.push([key, this.child(key, item, file, !nameMap && isNameMapKey(key, item), depth)]);
+        entries.push([key, this.walk(item, file, !nameMap && isNameMapKey(key, item), depth + 1)]);
       }
     }
     return Object.fromEntries(entries);
@@ -166,19 +160,26 @@ class Bundler {
     if (target.file === this.entry) return { $ref: fragment, ...siblings };
 
     const key = `${target.file}${fragment}`;
-    const bare = Object.keys(siblings).length === 0;
-    if (this.reuse) {
-      const placed = this.placed.get(key);
-      if (placed !== undefined) return { $ref: placed, ...siblings };
-      // A cycle back into a copy with other keys. A bare $ref copies the value
-      // again below and becomes the copy later $refs reuse. A $ref with keys of
-      // its own would copy forever, so it points at the outer copy, keys and all.
-      const outer = this.decorated.get(key);
-      if (outer !== undefined && !bare) return { $ref: outer, ...siblings };
-    } else if (this.active.has(key)) {
-      return { $ref: pointerFragment(["definitions", this.cycleName(key, target.tokens, target.file)]), ...siblings };
+    if (this.reuse) return { $ref: this.placed.get(key) ?? this.place(key, ref, file, target, depth), ...siblings };
+    if (this.active.has(key)) {
+      return { $ref: pointerFragment(["definitions", this.nameFor(key, target.tokens, target.file)]), ...siblings };
     }
 
+    const value = this.targetValue(ref, file, target);
+    this.inlined = true;
+    this.active.add(key);
+    let copy: unknown;
+    try {
+      copy = this.walk(value, target.file, false, depth);
+    } finally {
+      this.active.delete(key);
+    }
+    const name = this.names.get(key);
+    if (name !== undefined && !this.definitions.has(name)) this.definitions.set(name, copy);
+    return isRecord(copy) ? { ...copy, ...siblings } : copy;
+  }
+
+  private targetValue(ref: string, file: string, target: { file: string; tokens: readonly string[] }): unknown {
     const found = valueAt(this.files.get(target.file), target.tokens);
     if (!found.found) {
       throw new OpenApiImportError(
@@ -187,59 +188,75 @@ class Bundler {
         { ref },
       );
     }
-    const here = pointerFragment(this.path);
-    const opened = this.reuse && !bare;
-    if (this.reuse && bare) this.placed.set(key, here);
-    if (opened) this.decorated.set(key, here);
-    this.inlined = true;
-    this.active.add(key);
-    let copy: unknown;
-    try {
-      copy = this.walk(found.value, target.file, false, depth);
-    } finally {
-      this.active.delete(key);
-      if (opened) this.decorated.delete(key);
-    }
-    const name = this.cycleNames.get(key);
-    if (name !== undefined && !this.definitions.has(name)) this.definitions.set(name, copy);
-    return isRecord(copy) ? { ...copy, ...siblings } : copy;
+    return found.value;
   }
 
   /**
-   * The name a Swagger 2.0 cycle's value takes under `definitions`. The
-   * converter moves `definitions` to components.schemas and rewrites each
-   * `#/definitions/` $ref, so the cycle's $ref stays valid after the upgrade.
+   * Copies a value from another file to components[BUNDLED_KEY], and returns
+   * the local $ref to the copy. The copy's place is recorded before its walk,
+   * so a cycle back into it ends at a $ref to the copy.
    */
-  private cycleName(key: string, tokens: readonly string[], file: string): string {
-    const known = this.cycleNames.get(key);
+  private place(key: string, ref: string, file: string, target: { file: string; tokens: readonly string[] }, depth: number): string {
+    const value = this.targetValue(ref, file, target);
+    const name = this.nameFor(key, target.tokens, target.file);
+    const pointer = pointerFragment(["components", BUNDLED_KEY, name]);
+    this.placed.set(key, pointer);
+    // The name takes its place now, so the copies keep the order of their first $ref.
+    this.bundled.set(name, undefined);
+    this.inlined = true;
+    this.bundled.set(name, this.walk(value, target.file, false, depth));
+    return pointer;
+  }
+
+  /**
+   * The name a copied value takes: the last token of its pointer, or the
+   * file's path without its extension for a whole file, with any character
+   * outside letters, digits, _, ., and - written as _. For a Swagger 2.0
+   * cycle, the converter moves `definitions` to components.schemas and
+   * rewrites each `#/definitions/` $ref, so the cycle's $ref stays valid
+   * after the upgrade.
+   */
+  private nameFor(key: string, tokens: readonly string[], file: string): string {
+    const known = this.names.get(key);
     if (known !== undefined) return known;
-    const last = tokens[tokens.length - 1] ?? file.replace(/^.*\//, "").replace(/\.[^.]*$/, "");
+    const last = tokens[tokens.length - 1] ?? file.replace(/\.[^./]*$/, "");
     const base = last.replace(/[^A-Za-z0-9_.-]/g, "_") || "Schema";
     let name = base;
     for (let n = 2; this.taken.has(name); n += 1) name = `${base}_${n}`;
     this.taken.add(name);
-    this.cycleNames.set(key, name);
+    this.names.set(key, name);
     return name;
   }
 
-  /** The document with each cycle's value added under `definitions`. */
+  /** The document with each copy added: under components[BUNDLED_KEY] for 3.x, or under `definitions` for a 2.0 cycle. */
   finish(document: unknown): unknown {
-    if (this.definitions.size === 0 || !isRecord(document)) return document;
+    if (!isRecord(document)) return document;
+    if (this.bundled.size > 0) {
+      const components = isRecord(document.components) ? document.components : {};
+      const existing = isRecord(components[BUNDLED_KEY]) ? components[BUNDLED_KEY] : {};
+      const copies = { ...existing, ...Object.fromEntries(this.bundled) };
+      return { ...document, components: { ...components, [BUNDLED_KEY]: copies } };
+    }
+    if (this.definitions.size === 0) return document;
     const existing = isRecord(document.definitions) ? document.definitions : {};
     return { ...document, definitions: { ...existing, ...Object.fromEntries(this.definitions) } };
   }
 }
 
 /**
- * The entry with every value from another file copied in. With `reuse`, a
- * later $ref to a value points at its first copy made at a bare $ref.
- * Without it, the value is copied again, and a $ref that closes a cycle
- * points at a copy under `definitions`.
+ * The entry with every value from another file copied in. With `reuse`
+ * (OpenAPI 3.x), each value is copied once under components[BUNDLED_KEY],
+ * and every $ref to it points there. Without it (Swagger 2.0), the value is
+ * copied again at each $ref, and a $ref that closes a cycle points at a copy
+ * under `definitions`.
  */
 export function bundle(files: ParsedFiles, entry: string, reuse = true): Bundle {
   const bundler = new Bundler(files, entry, reuse);
   const root = files.get(entry);
-  if (!reuse && isRecord(root) && isRecord(root.definitions)) bundler.reserve(Object.keys(root.definitions));
+  if (isRecord(root)) {
+    const holder = reuse ? (isRecord(root.components) ? root.components[BUNDLED_KEY] : undefined) : root.definitions;
+    if (isRecord(holder)) bundler.reserve(Object.keys(holder));
+  }
   const document = bundler.finish(bundler.walk(root, entry, false, 0));
   return { document, inlined: bundler.inlined };
 }
