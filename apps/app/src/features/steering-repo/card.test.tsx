@@ -27,6 +27,7 @@ const actions = vi.hoisted(() => ({
   retrySteeringRepoProvision: vi.fn(),
   importWorkspaceSteering: vi.fn(),
   repairSteeringRepo: vi.fn(),
+  readSteeringRepoDestinations: vi.fn(),
 }));
 vi.mock("./actions", () => actions);
 
@@ -86,6 +87,11 @@ function card(
 }
 
 beforeEach(() => {
+  // A stopped setup's form reads the places it can move to (#5196).
+  actions.readSteeringRepoDestinations.mockReset().mockResolvedValue({
+    ok: true,
+    value: { destinations: [], default: null, defaultName: null, reauthorize: [] },
+  });
   actions.retrySteeringRepoProvision.mockReset();
   actions.repairSteeringRepo.mockReset();
   read.readSteeringRepo.mockReset();

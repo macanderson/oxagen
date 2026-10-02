@@ -38,6 +38,7 @@ export function steeringRepoView(
     differences: [],
     legacySource: null,
     connection: null,
+    requestedName: null,
     connectionChoices: [],
     importRun: null,
     ...overrides,

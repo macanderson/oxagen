@@ -30,6 +30,7 @@ const actions = vi.hoisted(() => ({
   retrySteeringRepoProvision: vi.fn(),
   importWorkspaceSteering: vi.fn(),
   repairSteeringRepo: vi.fn(),
+  readSteeringRepoDestinations: vi.fn(),
 }));
 vi.mock("./actions", () => actions);
 
@@ -86,6 +87,11 @@ const FAILED = failedSteeringRepo("create_repository", {
 });
 
 beforeEach(() => {
+  // A stopped setup's form reads the places it can move to (#5196).
+  actions.readSteeringRepoDestinations.mockReset().mockResolvedValue({
+    ok: true,
+    value: { destinations: [], default: null, defaultName: null, reauthorize: [] },
+  });
   actions.retrySteeringRepoProvision.mockReset();
   actions.importWorkspaceSteering.mockReset();
   actions.repairSteeringRepo.mockReset();
@@ -604,6 +610,122 @@ describe("the steering repo provisioning", () => {
       cleanup();
       provisioning(REFUSED(), { canAct: false });
       expect(screen.queryByTestId("steering-repo-change-connection")).toBeNull();
+    });
+  });
+
+  describe("a name or place the workspace chose (#5196)", () => {
+    const TAKEN = (overrides: Partial<SteeringRepoView> = {}) =>
+      failedSteeringRepo(
+        "create_repository",
+        {
+          code: "repository_name_taken",
+          message:
+            "acme already has a repository named oxagen-platform that Oxagen did not create for this workspace. Choose another name, then retry.",
+        },
+        { status: "blocked", requestedName: "oxagen-platform", ...overrides },
+      );
+    const UNREACHABLE = failedSteeringRepo(
+      "pick_connection",
+      {
+        code: "unknown_connection",
+        message:
+          "The GitHub organization chosen for this workspace (github 99) is not one Oxagen can reach with the organization's stored authorization. Choose another, then retry.",
+      },
+      { status: "blocked", provider: null },
+    );
+    const PLACES = {
+      destinations: [
+        { provider: "github", id: 12, name: "acme", kind: "organization" },
+        { provider: "github", id: 22, name: "acme-labs", kind: "organization" },
+      ],
+      default: { provider: "github", id: 12, name: "acme", kind: "organization" },
+      defaultName: null,
+      reauthorize: [],
+    };
+
+    beforeEach(() => {
+      actions.retrySteeringRepoProvision.mockResolvedValue({
+        ok: true,
+        value: { status: "provisioning" },
+      });
+    });
+
+    it("starts the name on the one it tried and retries with the new one", async () => {
+      provisioning(TAKEN());
+      const name = screen.getByLabelText("Repository name");
+      expect(name).toHaveValue("oxagen-platform");
+      // A taken name is the name's problem, so the form reads no places.
+      expect(screen.queryByLabelText("Organization")).toBeNull();
+      expect(actions.readSteeringRepoDestinations).not.toHaveBeenCalled();
+      await userEvent.clear(name);
+      await userEvent.type(name, "oxagen-platform-steering");
+      await userEvent.click(screen.getByTestId("steering-repo-retry"));
+      await waitFor(() => {
+        expect(nav.refresh).toHaveBeenCalledTimes(1);
+      });
+      expect(actions.retrySteeringRepoProvision).toHaveBeenCalledWith(
+        "acme",
+        "core-platform",
+        { name: "oxagen-platform-steering" },
+      );
+    });
+
+    it("starts on the default name and sends no name when the person keeps it", async () => {
+      provisioning(TAKEN({ requestedName: null }));
+      expect(screen.getByLabelText("Repository name")).toHaveValue(
+        "oxagen-core-platform",
+      );
+      await userEvent.click(screen.getByTestId("steering-repo-retry"));
+      expect(actions.retrySteeringRepoProvision).toHaveBeenCalledWith(
+        "acme",
+        "core-platform",
+      );
+    });
+
+    it("offers the places when the chosen one is out of reach and retries with the pick", async () => {
+      actions.readSteeringRepoDestinations.mockResolvedValue({
+        ok: true,
+        value: PLACES,
+      });
+      provisioning(UNREACHABLE);
+      // The loading select carries the label too, so wait for the loaded one.
+      const select = await screen.findByTestId(
+        "steering-repo-change-steering-connection",
+      );
+      expect(select).toHaveAccessibleName("Organization");
+      expect(actions.readSteeringRepoDestinations).toHaveBeenCalledWith("acme");
+      // The organization's default is picked to start with.
+      expect(select).toHaveValue("github:12");
+      await userEvent.selectOptions(select, "github:22");
+      await userEvent.click(screen.getByTestId("steering-repo-retry"));
+      expect(actions.retrySteeringRepoProvision).toHaveBeenCalledWith(
+        "acme",
+        "core-platform",
+        { connection: { provider: "github", id: 22 } },
+      );
+    });
+
+    it("names a name the contract refuses and does not retry (negative)", async () => {
+      provisioning(TAKEN());
+      const name = screen.getByLabelText("Repository name");
+      await userEvent.clear(name);
+      await userEvent.type(name, "oxagen--platform");
+      expect(name).toHaveAttribute("aria-invalid", "true");
+      expect(name).toHaveAccessibleDescription(/Use up to 100 letters/);
+      await userEvent.click(screen.getByTestId("steering-repo-retry"));
+      expect(actions.retrySteeringRepoProvision).not.toHaveBeenCalled();
+    });
+
+    it("keeps the plain Retry once the repository exists, or for an organization (negative)", () => {
+      provisioning(TAKEN({ repository: GITHUB_REPOSITORY }));
+      expect(screen.getByTestId("steering-repo-retry")).toHaveTextContent(
+        "Retry",
+      );
+      expect(screen.queryByTestId("steering-repo-change")).toBeNull();
+      cleanup();
+      provisioning(TAKEN(), { ws: null });
+      expect(screen.queryByTestId("steering-repo-change")).toBeNull();
+      expect(screen.queryByLabelText("Repository name")).toBeNull();
     });
   });
 

@@ -3158,6 +3158,18 @@
       "consumes": []
     },
     {
+      "name": "list_steering_repo_destinations",
+      "domain": "repository",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "list_studio_findings",
       "domain": "tool",
       "surfaces": [
@@ -3186,6 +3198,16 @@
         "api",
         "mcp",
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "list_tacho_session_heads",
+      "domain": "tacho",
+      "surfaces": [
+        "api"
       ],
       "component": null,
       "produces": [],

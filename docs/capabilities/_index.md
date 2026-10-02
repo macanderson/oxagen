@@ -480,6 +480,7 @@ after the registered name separately when their contract uses a dotted stem.
 | [list_github_installations](repository.installation.candidates.md) | [repository.installation.candidates.ts](../../packages/oxagen/src/contracts/repository.installation.candidates.ts) | api, mcp, agent |
 | [list_installation_repositories](repository.installation.list.md) | [repository.installation.list.ts](../../packages/oxagen/src/contracts/repository.installation.list.ts) | api, mcp, agent |
 | [list_repositories](repository.list.md) | [repository.list.ts](../../packages/oxagen/src/contracts/repository.list.ts) | api, mcp, agent, cli |
+| [list_steering_repo_destinations](steering_repo.destinations.list.md) | [steering_repo.destinations.list.ts](../../packages/oxagen/src/contracts/steering_repo.destinations.list.ts) | api, mcp, agent |
 | [list_working_copies](repository.working_copy.list.md) | [repository.working_copy.list.ts](../../packages/oxagen/src/contracts/repository.working_copy.list.ts) | api, mcp, agent |
 | [open_init_pr](repository.init_pr.open.md) | [repository.init_pr.open.ts](../../packages/oxagen/src/contracts/repository.init_pr.open.ts) | api, mcp, agent, cli |
 | [promote_instruction_to_steering](repository.instruction.promote.md) | [repository.instruction.promote.ts](../../packages/oxagen/src/contracts/repository.instruction.promote.ts) | api, mcp, cli, agent |
@@ -629,6 +630,7 @@ after the registered name separately when their contract uses a dotted stem.
 | [list_incidents](tacho.incident.list.md) | [tacho.incident.list.ts](../../packages/oxagen/src/contracts/tacho.incident.list.ts) | api, mcp, agent |
 | [list_machine_groups](tacho.machine_group.list.md) | [tacho.machine_group.list.ts](../../packages/oxagen/src/contracts/tacho.machine_group.list.ts) | none |
 | [list_tacho_hosts](tacho.host.list.md) | [tacho.host.list.ts](../../packages/oxagen/src/contracts/tacho.host.list.ts) | api, mcp, agent |
+| [list_tacho_session_heads](tacho.session_heads.list.md) | [tacho.session_heads.list.ts](../../packages/oxagen/src/contracts/tacho.session_heads.list.ts) | api |
 | [list_tacho_sessions](tacho.session.list.md) | [tacho.session.list.ts](../../packages/oxagen/src/contracts/tacho.session.list.ts) | api |
 | [recall_tacho_memories](tacho.memories.recall.md) | [tacho.memories.recall.ts](../../packages/oxagen/src/contracts/tacho.memories.recall.ts) | api |
 | [record_tacho_memory_uses](tacho.memories.uses.record.md) | [tacho.memories.uses.record.ts](../../packages/oxagen/src/contracts/tacho.memories.uses.record.ts) | api |

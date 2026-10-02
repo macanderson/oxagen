@@ -778,6 +778,20 @@
           "legacy": "Oxagen creates a private steering repo for this workspace and opens steering PRs that move the records in {legacy}'s .oxagen/ tree into it. It then opens one cleanup PR on {legacy}. Nothing moves until you merge them.",
           "gitlab": "{legacy} steers this workspace, and it is on GitLab. Oxagen moves steering only out of GitHub repositories."
         }
+      },
+      "destination": {
+        "organization": "Organization",
+        "loading": "Loading organizations",
+        "none": "Oxagen creates the repository in the GitHub organization or GitLab group you connect.",
+        "failed": "The organizations did not load ({code}). Oxagen uses the organization's default.",
+        "reauthorizeGithub": "GitHub refused Oxagen's stored authorization, so its organizations are missing. An owner must authorize Oxagen on GitHub again.",
+        "reauthorizeGitlab": "GitLab refused Oxagen's stored group token, so its groups are missing. An owner must connect the group again.",
+        "optionPersonal": "{name} (personal account)",
+        "optionHost": "{name} ({host})",
+        "optionHostPersonal": "{name} ({host} personal account)",
+        "repoName": "Repository name",
+        "repoNameHint": "Oxagen creates this private repository in the chosen organization.",
+        "repoNameInvalid": "Use up to 100 letters, digits, dots, underscores, and hyphens. Start and end with a letter or digit, put no two symbols in a row, and do not use oxagen-config."
       }
     }
   }

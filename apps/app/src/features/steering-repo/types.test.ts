@@ -14,6 +14,9 @@ import {
   STEERING_NO_CONNECTION,
   STEERING_REAUTHORIZE,
   STEERING_REPO_STEPS,
+  STEERING_REPOSITORY_CREATE_REFUSED,
+  STEERING_REPOSITORY_NAME_TAKEN,
+  STEERING_UNKNOWN_CONNECTION,
 } from "./types";
 
 // Vitest runs from apps/app, as messages/ is read in src/i18n/request.ts.
@@ -64,5 +67,18 @@ describe("the steering repo copies", () => {
     expect(
       platformSource("packages/handlers/src/steering-repo/import-run.ts"),
     ).toContain(`"${STEERING_IMPORT_LEGACY_CONNECTION}"`);
+  });
+
+  it("reads the name and place stops by the codes the job records", () => {
+    const source = platformSource(PROVISION);
+    expect(source).toContain(
+      `export const REPOSITORY_NAME_TAKEN = "${STEERING_REPOSITORY_NAME_TAKEN}";`,
+    );
+    expect(source).toContain(
+      `export const UNKNOWN_CONNECTION = "${STEERING_UNKNOWN_CONNECTION}";`,
+    );
+    expect(source).toContain(
+      `export const REPOSITORY_CREATE_REFUSED = "${STEERING_REPOSITORY_CREATE_REFUSED}";`,
+    );
   });
 });

@@ -41,6 +41,17 @@ describe("retry_steering_repo_provision contract", () => {
     expect(steeringRepoProvisionRetry.input.safeParse({ force: true }).success).toBe(false);
   });
 
+  it("takes a new name for a workspace's repository, under create_workspace's rules", () => {
+    expect(
+      steeringRepoProvisionRetry.input.parse({ name: "acme-support" }),
+    ).toEqual({ name: "acme-support" });
+    for (const name of ["", "-support", "support.git", "oxagen-config"])
+      expect(
+        steeringRepoProvisionRetry.input.safeParse({ name }).success,
+        name,
+      ).toBe(false);
+  });
+
   it("takes resetConnection to clear the stored connection first", () => {
     expect(
       steeringRepoProvisionRetry.input.parse({ resetConnection: true }),

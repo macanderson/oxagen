@@ -1,42 +1,44 @@
 ---
-description: Triage every open issue labelled `TRIAGE`. Assign priority, tier, size, kind, and area, add the signal labels, rewrite the title to `P1 T2 S Bug (Area): Statement`, and strip AI attribution from the body.
+description: Complete every open issue that has no priority label. Assign priority, tier, size, kind, and area, add the signal labels, set the issue type and the filing fields, rewrite the title to `P1 T2 S Bug (Area): Statement`, and strip AI attribution from the body.
 argument-hint: "[--all | issue numbers...] [--dry-run]"
 allowed-tools: Bash, Read, Write, Grep, Glob, Agent
 ---
 
 # /triage-issues $ARGUMENTS
 
-Give each issue in the queue a priority, a model tier, a size, a kind, and an area. Then title it
+Give each issue in scope a priority, a model tier, a size, a kind, and an area. Then title it
 so a reader can understand it from the list without opening it.
 
+Since 2026-10-02 a creator files each issue complete, with no `TRIAGE` label (CLAUDE.md under
+Issues and labels). Two kinds of issue still arrive without a priority: an issue a workflow
+filed, and an older issue that still carries `TRIAGE`. This command completes both.
+
 **Scope:** `$ARGUMENTS`.
-- Blank: every open issue in `oxageninc/product` labelled `TRIAGE`.
+- Blank: every open issue in `oxageninc/product` that has no priority label.
 - Issue numbers: those issues only.
-- `--all`: every open issue, triaged or not. Use it only for a backlog sweep.
+- `--all`: every open issue, with a priority or without. Use it only for a backlog sweep.
 - `--dry-run`: print the plan and write nothing.
 
 Mac set this scheme on 2026-09-30 for oxagen and stella. Every label name is uppercase.
 
 ## Before you start
 
-1. Run `env -u CLICOLOR_FORCE -u FORCE_COLOR gh api user --jq .login`. It must print
-   `macanderson`. `triage-guard.yml` trusts only that login and `triage-bot`. From any other
-   login the guard strips every priority label, re-adds `TRIAGE`, and posts a comment on
-   each issue. If the login is wrong, stop.
-2. Prefix every `gh ... --json` call with `env -u CLICOLOR_FORCE -u FORCE_COLOR`. Forced
+1. Prefix every `gh ... --json` call with `env -u CLICOLOR_FORCE -u FORCE_COLOR`. Forced
    colour corrupts the JSON.
-3. Do not retitle a workflow-owned issue, one that carries `DEPLOYMENT-FAILURE`,
+2. Do not retitle a workflow-owned issue, one that carries `DEPLOYMENT-FAILURE`,
    `MAIN-UNVERIFIED`, `INFRA-DRIFT`, or `STORE-DRIFT`. Its workflow writes the title, and the
    title already names a priority, tier, size, kind, and area. Add whichever of those five
-   labels the issue lacks, so its labels agree with its title and `triage-guard.yml` takes it
-   out of the queue. If an older issue's title has no prefix, copy the title its workflow
-   writes today. `DEPLOYMENT-FAILURE` and `MAIN-UNVERIFIED` issues never enter the queue, so
-   only an `--all` sweep reaches them. For an issue labelled `AGENT-ESCALATED`, retitle it but
-   keep that label, because stella's backlog loop owns it.
+   labels the issue lacks, so its labels agree with its title and it leaves the scope. If an
+   older issue's title has no prefix, copy the title its workflow writes today. A
+   `DEPLOYMENT-FAILURE` issue gets `P0` from its workflow, so only an `--all` sweep reaches it.
+   The other three arrive with no priority, so a blank scope picks them up. For an issue
+   labelled `AGENT-ESCALATED`, retitle it but keep that label, because stella's backlog loop
+   owns it.
 
 ```sh
 env -u CLICOLOR_FORCE -u FORCE_COLOR gh issue list --repo oxageninc/product --state open \
-  --label TRIAGE --limit 500 --json number,title,labels,body,url
+  --search "-label:P0 -label:P1 -label:P2 -label:P3 -label:P4" --limit 500 \
+  --json number,title,labels,body,url
 ```
 
 ## Title format
@@ -66,9 +68,9 @@ Each part copies a label, so the title and the labels always agree:
 | `<Kind>` | the `KIND:` label | `Bug` `Feature` `Improvement` `Chore` `Documentation` `DevOps` |
 | `(<Area>)` | the `AREA:` label | the title name in the area table below |
 
-Before triage, a creator writes `Queued <Kind> (<Area>): <Statement>` and applies only `TRIAGE`.
-The kind and area in that title are the creator's guess. Triage replaces `Queued` with the
-priority, the tier, and the size, and corrects the kind and area.
+A creator writes the full title when filing the issue. An older issue, or one a workflow filed,
+may still carry `Queued <Kind> (<Area>): <Statement>`. The kind and area in that title are a
+guess. Replace `Queued` with the priority, the tier, and the size, and correct the kind and area.
 
 A lane tag such as `[C0]` goes at the start of the statement, after the colon. A residue issue
 keeps its trailing `(residue #<PR>)`. List every PR when it carries more than one.
@@ -99,7 +101,7 @@ before you write it.
 
 ## Labels
 
-Every triaged issue carries exactly one of each of these:
+Every complete issue carries exactly one of each of these:
 
 | Dimension | Labels | How to choose |
 |---|---|---|
@@ -120,8 +122,23 @@ Then add these where they apply:
 | `NEEDS:RIG` | The work needs a rig, a credential, or real spend that only the maintainer can supply. |
 | `BLOCKED` | The work is correct but must not start yet. The body names what it waits on. |
 
-Adding a priority label from the `macanderson` login makes `triage-guard.yml` remove `TRIAGE`.
-Do not remove `TRIAGE` yourself when you add a priority.
+Remove `TRIAGE` in the same edit when the issue carries it. No new issue gets it after
+2026-10-02.
+
+### Issue type and fields
+
+Set the issue type to the kind: Bug, Feature, Improvement, Chore, Documentation, or DevOps.
+Then set the four fields CLAUDE.md marks for filing under Oxagen issue fields:
+
+| Field | Value |
+|---|---|
+| Priority | The `P` label |
+| Model Tier | Lite for `MODEL:T1`, Standard for T2, Pro for T3, Ultra for T4 |
+| Estimated Minutes | Agent minutes, a whole number inside the size band |
+| Area(s) | The `AREA:` label's title name, plus any other area the work changes |
+
+Leave Actual Minutes and the reflection fields to the agent that does the work. Set Blocked to
+Yes, with Blocked Reason as the question, only when you apply `NEEDS:DECISION`.
 
 ### Tiers
 
@@ -198,8 +215,9 @@ built and `KIND:IMPROVEMENT` when part of it is.
 
 Do not apply these, and remove any you find:
 
+- **`TRIAGE`, in either spelling.** Creators stopped applying it on 2026-10-02.
 - **Every lowercase label.** The 2026-09-30 scheme renames each one to its uppercase name:
-  `triage` is `TRIAGE`, `area:runs` is `AREA:RUNS`, and `size/S` is `SIZE:SMALL`. GitHub matches a label
+  `area:runs` is `AREA:RUNS`, and `size/S` is `SIZE:SMALL`. GitHub matches a label
   name without regard to case when you add one, so a lowercase name still adds the uppercase
   label. Write the uppercase name anyway.
 - **`kind:gap`.** Use `KIND:FEATURE` or `KIND:IMPROVEMENT`, as the kind table says.
@@ -225,19 +243,20 @@ You cannot edit it.
 
 ## Procedure
 
-1. List the scope. Handle each workflow-owned issue as step 3 of Before you start says.
+1. List the scope. Handle each workflow-owned issue as step 2 of Before you start says.
 2. For each issue, read the full body and the labels it already has. Decide priority, tier,
-   size, kind, area, job, pillars, `SECURITY`, `BLOCKED`, and the `NEEDS:` labels. Write the
-   statement.
-3. Print the plan as a table: number, old title, new title, labels added, labels removed.
-   With `--dry-run`, stop here.
+   size, kind, area, job, pillars, `SECURITY`, `BLOCKED`, and the `NEEDS:` labels, and the
+   estimated minutes. Write the statement.
+3. Print the plan as a table: number, old title, new title, labels added, labels removed,
+   issue type, and field values. With `--dry-run`, stop here.
 4. Apply each row, one issue at a time, with a one-second pause between writes to stay under
-   GitHub's secondary rate limit:
+   GitHub's secondary rate limit. Set the fields with the commands in CLAUDE.md under Oxagen
+   issue fields:
 
    ```sh
-   gh issue edit <n> --repo oxageninc/product --title "<new title>" \
+   gh issue edit <n> --repo oxageninc/product --title "<new title>" --type Bug \
      --add-label "P2,MODEL:T2,SIZE:SMALL,KIND:BUG,AREA:RUNS,JOB:EXPLAIN,PILLAR:RELIABILITY" \
-     --remove-label "<labels that should go>"
+     --remove-label "<labels that should go, TRIAGE among them when present>"
    ```
 
    For attribution, save the body to a file, delete the attribution lines, show the diff, and
@@ -247,5 +266,6 @@ You cannot edit it.
 5. Read each issue back. Its title must match
    `^P[0-4] T[1-4] (XS|S|M|L|XL) (Bug|Feature|Improvement|Chore|Documentation|DevOps) \([A-Za-z ]+\): `,
    and it must carry one priority, one `MODEL:`, one `SIZE:`, one `KIND:`, one `AREA:`, and no
-   `TRIAGE`. Compare label names without regard to case. Report any issue that failed and the
+   `TRIAGE`. Its issue type must match its `KIND:` label, and its four filing fields must be
+   set. Compare label names without regard to case. Report any issue that failed and the
    reason.

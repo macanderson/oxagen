@@ -238,6 +238,7 @@ import { steeringIndexGetRoute } from "./routes/v1/context.steering.index.get";
 import { steeringRepoGetRoute } from "./routes/v1/steering_repo.get";
 import { steeringRepoRepairRoute } from "./routes/v1/steering_repo.repair";
 import { steeringRepoProvisionRetryRoute } from "./routes/v1/steering_repo.provision.retry";
+import { steeringRepoDestinationsListRoute } from "./routes/v1/steering_repo.destinations.list";
 import { steeringMemoriesListRoute } from "./routes/v1/steering.memories.list";
 import { steeringMemoriesGetRoute } from "./routes/v1/steering.memories.get";
 import { steeringMemoriesPromoteRoute } from "./routes/v1/steering.memories.promote";
@@ -615,15 +616,17 @@ const TACHO_INGEST_PER_MIN = 120;
 // memories on the extra prompts, since the daemon fails open on a 429, and
 // its command poll and bundle refresh keep their own budget.
 const TACHO_RECALL_PER_MIN = 120;
-// Five more buckets of TACHO_HOST_PER_MIN each: the GitHub credential, the
-// contained launch, the memory upload, the memory use report, and the work
-// order claim and rejection, which share one. A memory upload is its own
-// bucket because a daemon's first scan sends every memory file a harness
-// holds, and that burst must not starve the command poll or the bundle
-// refresh. The use report sends a few calls every five minutes, and it must
-// not spend the upload's bucket. A host claims or rejects each work order it
-// receives, and a retry of either must not spend the command poll's bucket.
-const TACHO_OWN_BUCKET_PATHS = 5;
+// Six more buckets of TACHO_HOST_PER_MIN each: the GitHub credential, the
+// contained launch, the memory upload, the memory use report, the work order
+// claim and rejection, which share one, and the backfill's session heads. A
+// memory upload is its own bucket because a daemon's first scan sends every
+// memory file a harness holds, and that burst must not starve the command
+// poll or the bundle refresh. The use report sends a few calls every five
+// minutes, and it must not spend the upload's bucket. A host claims or
+// rejects each work order it receives, and a retry of either must not spend
+// the command poll's bucket. A backfill asks once per 500 sessions, a burst
+// at its start that must not starve the command poll either (ADR-161).
+const TACHO_OWN_BUCKET_PATHS = 6;
 
 // Tacho hosts speak to Oxagen with their enrolled API key, whose scope pins
 // org and workspace, so the machine routes sit on a static path outside the
@@ -816,6 +819,15 @@ tachoScoped.use(
   distributedRateLimiter({
     keyPrefix: "tacho-recall",
     max: TACHO_RECALL_PER_MIN,
+    bucketKey: enrolledMachineBucketKey,
+  }),
+);
+// The backfill's pre-flight (ADR-161).
+tachoScoped.use(
+  "/sessions/heads",
+  distributedRateLimiter({
+    keyPrefix: "tacho-session-heads",
+    max: TACHO_HOST_PER_MIN,
     bucketKey: enrolledMachineBucketKey,
   }),
 );
@@ -1439,6 +1451,9 @@ orgOnlyScoped.route("/onboarding/state", onboardingStateGetRoute);
 // the advertised REST surface unreachable (#3097).
 orgOnlyScoped.route("/audit/events/export", auditEventsExportRoute);
 orgOnlyScoped.route("/connections/steering", steeringConnectionRoute);
+// Where a new workspace's steering repo can go, read before the workspace
+// exists, so it needs an org and no workspace, like POST /workspaces.
+orgOnlyScoped.route("/steering-repo/destinations", steeringRepoDestinationsListRoute);
 app.route("/v1/:org_slug", orgOnlyScoped);
 
 app.route("/v1/:org_slug/:workspace_slug", orgScoped);

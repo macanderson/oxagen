@@ -15,6 +15,7 @@ import { chmodSync, existsSync, statSync, unlinkSync } from "node:fs";
 import { randomBytes } from "node:crypto";
 import { createConnection } from "node:net";
 import type { TachoHarness } from "../wire";
+import type { BackfillReport } from "./backfill";
 import type { ExportFormat } from "./exporters";
 import type { HookReplay } from "./hook-handler";
 import { GUARD_MESSAGES, guardLoopbackRequest } from "./loopback-guard";
@@ -78,6 +79,19 @@ export interface CollectorApi {
    * without the credential seam, in which case `/credential/issue` is a 404.
    */
   issueRunToken?: (input: IssueRunTokenRequest) => IssueRunTokenAnswer;
+  /**
+   * Start a backfill pass (ADR-161). Answers a refusal (a bad request, or a
+   * pass already running) as a status and body, or the pass to run. Absent
+   * on a daemon built without one, in which case `/backfill` is a 404.
+   */
+  startBackfill?: (input: unknown) =>
+    | { status: number; body: unknown }
+    | {
+        run: (
+          progress: (report: BackfillReport) => void,
+          signal: AbortSignal,
+        ) => Promise<BackfillReport>;
+      };
 }
 
 const MAX_BODY_BYTES = 8 * 1024 * 1024;
@@ -296,6 +310,29 @@ export function createRequestHandler(
             // caller already holds the local token, so the reason goes back.
             res.end(`${JSON.stringify({ error: message.slice(0, 1000) })}\n`);
           }
+          return;
+        }
+        if (path === "/backfill") {
+          const started = api.startBackfill?.(parsed);
+          if (started === undefined) {
+            send(res, 404, { error: "this daemon runs no backfill" });
+            return;
+          }
+          if ("status" in started) {
+            send(res, started.status, started.body);
+            return;
+          }
+          // One JSON line per progress report, then the final report. The
+          // client going away stops the pass between slices.
+          const controller = new AbortController();
+          res.on("close", () => {
+            if (!res.writableEnded) controller.abort("cancelled");
+          });
+          res.writeHead(200, { "content-type": "application/x-ndjson" });
+          const report = await started.run((progress) => {
+            if (!res.destroyed) res.write(`${JSON.stringify({ progress })}\n`);
+          }, controller.signal);
+          if (!res.destroyed) res.end(`${JSON.stringify({ report })}\n`);
           return;
         }
         if (path === "/github-lease") {

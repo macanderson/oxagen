@@ -27,6 +27,7 @@ describe("the hidden tacho group", () => {
     const tacho = program.commands.find((c) => c.name() === "tacho");
     expect(tacho, "the group itself must still be registered").toBeDefined();
     expect(tacho?.commands.map((c) => c.name()).sort()).toEqual([
+      "backfill",
       "enroll",
       "export",
       "hosts",
@@ -70,6 +71,7 @@ describe("the agent group after the wrapping commands moved onto it", () => {
   it("carries every wrapping command alongside the governance ones", () => {
     expect(agent, "the group must exist").toBeDefined();
     expect(agent?.commands.map((c) => c.name()).sort()).toEqual([
+      "backfill",
       "detect",
       "enroll",
       "env",

@@ -478,8 +478,9 @@ function tachoBranch(db: IndexDb, scope: RunScope, req: RunIndexRequest) {
     operatorName,
     // The rollup's figure, else what the agent reported, the fallback the
     // Fleet row shows (`shownCost`). A zero total counts only when the
-    // gateway observed it, as `toTachoRunItem` reads `reportedCost`.
-    cost: sql`coalesce(${rollupCost}, case when ${sessions.totalCostMicros} > 0 or ${sessions.costBasis} = ${TACHO_METERING_OBSERVED} then ${sessions.totalCostMicros} end)`,
+    // gateway observed it, and a run a backfill rebuilt has no reported
+    // figure (ADR-161), as `toTachoRunItem` reads `reportedCost`.
+    cost: sql`coalesce(${rollupCost}, case when ${sessions.recordBasis} = ${"live"} and (${sessions.totalCostMicros} > 0 or ${sessions.costBasis} = ${TACHO_METERING_OBSERVED}) then ${sessions.totalCostMicros} end)`,
     searched: [
       sql`${sessions.publicId}`,
       sql`${sessions.harnessTitle}`,

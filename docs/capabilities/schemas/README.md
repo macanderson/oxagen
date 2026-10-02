@@ -401,6 +401,7 @@ capability rewrites, so two such branches always conflicted on it (ADR-216).
 - list_github_installations
 - list_installation_repositories
 - list_repositories
+- list_steering_repo_destinations
 - list_working_copies
 - open_init_pr
 - promote_instruction_to_steering
@@ -540,6 +541,7 @@ capability rewrites, so two such branches always conflicted on it (ADR-216).
 - list_incidents
 - list_machine_groups
 - list_tacho_hosts
+- list_tacho_session_heads
 - list_tacho_sessions
 - recall_tacho_memories
 - record_tacho_memory_uses

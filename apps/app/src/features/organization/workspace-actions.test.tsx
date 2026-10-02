@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 // The Workspaces section's writes: create a workspace from the form this lane
 // adds, rename one, and archive one. Each reloads the page it changed; a
-// refusal is named and nothing navigates. Create asks for a name only, then
-// holds the dialog open to say where the new workspace's steering repo stands
-// and to link to its Repositories page.
+// refusal is named and nothing navigates. Create asks for a name and for the
+// steering repo's place and name (#5196), then holds the dialog open to say
+// where the new workspace's steering repo stands and to link to its
+// Repositories page.
 import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
@@ -12,13 +13,19 @@ import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import { renderToaster } from "@/test/toaster";
 
-const { router, archiveWorkspace, createWorkspace, editWorkspace } =
-  vi.hoisted(() => ({
-    router: { push: vi.fn(), replace: vi.fn(), refresh: vi.fn() },
-    archiveWorkspace: vi.fn(),
-    createWorkspace: vi.fn(),
-    editWorkspace: vi.fn(),
-  }));
+const {
+  router,
+  archiveWorkspace,
+  createWorkspace,
+  editWorkspace,
+  readSteeringRepoDestinations,
+} = vi.hoisted(() => ({
+  router: { push: vi.fn(), replace: vi.fn(), refresh: vi.fn() },
+  archiveWorkspace: vi.fn(),
+  createWorkspace: vi.fn(),
+  editWorkspace: vi.fn(),
+  readSteeringRepoDestinations: vi.fn(),
+}));
 vi.mock("next/link", () => ({
   default: ({ children, ...rest }: { href: string; children: ReactNode }) => (
     <a {...rest}>{children}</a>
@@ -29,7 +36,15 @@ vi.mock("./actions", () => ({
   archiveWorkspace,
   createWorkspace,
   editWorkspace,
+  readSteeringRepoDestinations,
 }));
+
+const NO_PLACES = {
+  destinations: [],
+  default: null,
+  defaultName: null,
+  reauthorize: [],
+};
 
 const { workspaceRow } = await import("./organization.builders");
 const { ArchiveWorkspace, CreateWorkspace, EditWorkspace } = await import(
@@ -44,6 +59,9 @@ beforeEach(() => {
   archiveWorkspace.mockReset();
   createWorkspace.mockReset();
   editWorkspace.mockReset();
+  readSteeringRepoDestinations
+    .mockReset()
+    .mockResolvedValue({ ok: true, value: NO_PLACES });
 });
 
 afterEach(async () => {
@@ -70,7 +88,7 @@ async function create(name = "Research") {
 }
 
 describe("CreateWorkspace", () => {
-  it("asks for the name and nothing else", async () => {
+  it("asks for the name and the steering repo's name, and offers no code repository", async () => {
     render(
       <IntlProvider>
         <CreateWorkspace org="acme" primary />
@@ -81,9 +99,14 @@ describe("CreateWorkspace", () => {
     ).toHaveClass("bg-button-primary-bg");
     const dialog = await open("Create a workspace", "create-workspace");
     expect(within(dialog).getByLabelText("Name")).toBeRequired();
-    // Oxagen makes the steering repo, so the form offers no repository, and
-    // the action makes the slug from the name.
-    expect(within(dialog).getAllByRole("textbox")).toHaveLength(1);
+    // The places load when the dialog opens. With nothing connected there is
+    // no Organization select.
+    expect(readSteeringRepoDestinations).toHaveBeenCalledWith("acme");
+    await within(dialog).findByTestId("create-workspace-steering-connection-none");
+    // Oxagen makes the steering repo, so the form offers no code repository,
+    // and the action makes the slug from the name.
+    expect(within(dialog).getAllByRole("textbox")).toHaveLength(2);
+    expect(within(dialog).getByLabelText("Repository name")).not.toBeRequired();
     expect(within(dialog).queryByRole("combobox")).toBeNull();
     expect(within(dialog).queryByRole("checkbox")).toBeNull();
     for (const gone of [
@@ -100,7 +123,7 @@ describe("CreateWorkspace", () => {
 
   // WL-62: the write answers with the new workspace's slug, and closing the
   // panel lands the operator in it.
-  it("sends the name alone, holds the dialog open on the result, and opens the new workspace's Fleet on Done", async () => {
+  it("sends the name and the repository name, holds the dialog open on the result, and opens the new workspace's Fleet on Done", async () => {
     // The root layout's toaster, where the receipt lands (ADR-221).
     renderToaster();
     createWorkspace.mockResolvedValue({
@@ -108,7 +131,10 @@ describe("CreateWorkspace", () => {
       value: { slug: "research", name: "Research", steeringRepo: "provisioning" },
     });
     const dialog = await create();
-    expect(createWorkspace).toHaveBeenCalledWith("acme", { name: "Research" });
+    expect(createWorkspace).toHaveBeenCalledWith("acme", {
+      name: "Research",
+      steeringRepo: { name: "oxagen-research" },
+    });
     const done = await within(dialog).findByTestId("create-workspace-done");
     expect(within(done).getByTestId("create-workspace-done-name")).toHaveTextContent(
       "Research",
@@ -190,6 +216,99 @@ describe("CreateWorkspace", () => {
     );
     expect(screen.queryByTestId("create-workspace-done")).toBeNull();
     expect(router.replace).not.toHaveBeenCalled();
+  });
+
+  it("starts the Organization select on the default and sends the pick", async () => {
+    readSteeringRepoDestinations.mockResolvedValue({
+      ok: true,
+      value: {
+        destinations: [
+          { provider: "github", id: 12, name: "acme", kind: "organization" },
+          { provider: "github", id: 22, name: "acme-labs", kind: "organization" },
+        ],
+        default: { provider: "github", id: 12, name: "acme", kind: "organization" },
+        defaultName: null,
+        reauthorize: [],
+      },
+    });
+    createWorkspace.mockResolvedValue({
+      ok: true,
+      value: { slug: "research", name: "Research", steeringRepo: "provisioning" },
+    });
+    render(
+      <IntlProvider>
+        <CreateWorkspace org="acme" />
+      </IntlProvider>,
+    );
+    const dialog = await open("Create a workspace", "create-workspace");
+    const select = await within(dialog).findByTestId(
+      "create-workspace-steering-connection",
+    );
+    expect(select).toHaveValue("github:12");
+    await userEvent.selectOptions(select, "github:22");
+    const name = within(dialog).getByLabelText("Name");
+    const repo = within(dialog).getByLabelText("Repository name");
+    await userEvent.type(name, "Research");
+    expect(repo).toHaveValue("oxagen-research");
+    await userEvent.clear(repo);
+    await userEvent.type(repo, "research-steering");
+    await userEvent.type(name, " lab");
+    expect(repo).toHaveValue("research-steering");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Create" }));
+    expect(createWorkspace).toHaveBeenCalledWith("acme", {
+      name: "Research lab",
+      steeringRepo: {
+        name: "research-steering",
+        connection: { provider: "github", id: 22 },
+      },
+    });
+  });
+
+  it("still creates the workspace when the places do not load (negative)", async () => {
+    readSteeringRepoDestinations.mockResolvedValue({
+      ok: false,
+      reason: "denied",
+      code: "list_steering_repo_destinations",
+    });
+    createWorkspace.mockResolvedValue({
+      ok: true,
+      value: { slug: "research", name: "Research", steeringRepo: "provisioning" },
+    });
+    render(
+      <IntlProvider>
+        <CreateWorkspace org="acme" />
+      </IntlProvider>,
+    );
+    const dialog = await open("Create a workspace", "create-workspace");
+    expect(
+      await within(dialog).findByTestId(
+        "create-workspace-steering-connection-failed",
+      ),
+    ).toHaveTextContent("The organizations did not load");
+    await userEvent.type(within(dialog).getByLabelText("Name"), "Research");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Create" }));
+    expect(createWorkspace).toHaveBeenCalledWith("acme", {
+      name: "Research",
+      steeringRepo: { name: "oxagen-research" },
+    });
+  });
+
+  it("names a repository name the contract would refuse under the field (negative)", async () => {
+    render(
+      <IntlProvider>
+        <CreateWorkspace org="acme" />
+      </IntlProvider>,
+    );
+    const dialog = await open("Create a workspace", "create-workspace");
+    await userEvent.type(within(dialog).getByLabelText("Name"), "Research");
+    const repo = within(dialog).getByLabelText("Repository name");
+    await userEvent.clear(repo);
+    await userEvent.type(repo, "-research");
+    expect(repo).toHaveAttribute("aria-invalid", "true");
+    expect(repo).toHaveAccessibleDescription(/Use up to 100 letters/);
+    if (!(repo instanceof HTMLInputElement))
+      throw new Error("the repository name is not an input");
+    expect(repo.validity.valid).toBe(false);
   });
 
   it("names a write that threw and stays on the form (negative)", async () => {

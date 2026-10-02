@@ -29,6 +29,7 @@ const VIEW = {
   ],
   legacySource: null,
   connection: null,
+  requestedName: null,
   connectionChoices: [],
   importRun: null,
 } as const;
@@ -87,10 +88,25 @@ describe("get_steering_repo contract", () => {
         name: "oxageninc-old",
         kind: "organization",
       },
+      requestedName: null,
       connectionChoices: [],
       importRun: null,
     };
     expect(steeringRepoGet.output.parse(none)).toEqual(none);
+  });
+
+  it("answers the name a workspace chose for its steering repo", () => {
+    const named = {
+      ...VIEW,
+      status: "blocked",
+      failedStep: "create_repository",
+      error: { code: "repository_name_taken", message: "Taken." },
+      repository: null,
+      requestedName: "acme-steering",
+    };
+    expect(steeringRepoGet.output.parse(named)).toEqual(named);
+    const { requestedName: _dropped, ...unnamed } = VIEW;
+    expect(steeringRepoGet.output.safeParse(unnamed).success).toBe(false);
   });
 
   it("lists the connections a blocked setup chooses between", () => {

@@ -292,6 +292,16 @@
           }
         ]
       },
+      "requestedName": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
       "connectionChoices": {
         "type": "array",
         "items": {
@@ -488,6 +498,7 @@
       "differences",
       "legacySource",
       "connection",
+      "requestedName",
       "connectionChoices",
       "importRun"
     ],
