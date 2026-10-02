@@ -295,7 +295,11 @@ the draft, the branch, or the PR body.
 - **Wrapped agents.** `get_tacho_bundle` and `recall_tacho_memories` read
   through `TachoPublished`, which `VERSION_STORE_PUBLISHED` binds to the
   Postgres version store (#4550). Recall answers merged memory records only
-  (ADR-238).
+  (ADR-238). The bundle also carries the published Cedar policies for the
+  agents on the host's runtime, compiled the way the cloud gateway compiles
+  them, and the hook decides each tool call with them (#4445). A host gets a
+  bundle without them when its workspace has published nothing, or when the
+  published version does not compile.
 - **Stella.** A reader for this layout is pending in the Stella repository.
 
 ## Workspace migration
