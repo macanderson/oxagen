@@ -3,6 +3,7 @@
  * ships is not working, so the verdict must fail loudly rather than trail
  * the error at the end of the daemon line.
  */
+import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { writeHostFile } from "../host/host-file";
@@ -174,5 +175,86 @@ describe("the shipping line", () => {
     expect(lines.find((l) => l.startsWith("Shipping    "))).toMatch(
       /^Shipping {4}ok: shipping, \d+ events? waiting$/,
     );
+  });
+});
+
+describe("the WAL ceiling lines (ADR-252)", () => {
+  const STALLED = "5c1f0a2e-0000-4000-8000-0000000000a1";
+  const GIB = 1024 ** 3;
+
+  /** What the daemon writes beside the WAL after a check. */
+  function writeCeiling(deps: CliDeps, state: Record<string, unknown>): void {
+    writeFileSync(
+      join(deps.paths.wal, "ceiling.json"),
+      JSON.stringify({
+        schema: "tacho.wal-ceiling.v1",
+        checked_at: ago(1_000),
+        ceiling_bytes: 8 * GIB,
+        stall_grace_ms: 60 * 60_000,
+        stalled_bytes: 3 * GIB,
+        stalled_sessions: 2,
+        drops: [],
+        ...state,
+      }),
+    );
+  }
+
+  const refused = {
+    uptime_s: 5,
+    last_ingest_at: ago(4 * 60 * 60_000),
+    last_error: "ingest failed: 503 store_overloaded",
+  };
+
+  it("names each session whose stored content went over the ceiling", async () => {
+    const { deps, lines } = enrolledHost(refused);
+    writeCeiling(deps, {
+      drops: [
+        {
+          session_uuid: STALLED,
+          bytes: 2.5 * GIB,
+          shipped_through: 40,
+          last_seq: 912,
+          stalled_since: ago(3 * 60 * 60_000),
+          dropped_at: ago(60_000),
+          stalled_bytes: 10 * GIB,
+          ceiling_bytes: 8 * GIB,
+        },
+      ],
+    });
+
+    const report = await status({}, deps);
+
+    expect(report.wal?.ceiling).toMatchObject({
+      stalled_sessions: 2,
+      drops: [{ session_uuid: STALLED, bytes: 2.5 * GIB }],
+    });
+    expect(lines).toContain(
+      "Ceiling     2 sessions have shipped nothing for 60 minutes and hold 3.0 GiB of the 8.0 GiB ceiling",
+    );
+    expect(lines).toContain(
+      `Dropped     session ${STALLED} went over the WAL ceiling at ${ago(60_000)}: 2.5 GiB of stored content removed, events 41 to 912 ship without it`,
+    );
+  });
+
+  it("says OVER while what the stalled sessions hold is past the ceiling", async () => {
+    const { deps, lines } = enrolledHost(refused);
+    writeCeiling(deps, { stalled_sessions: 1, stalled_bytes: 9 * GIB });
+
+    await status({}, deps);
+
+    expect(lines).toContain(
+      "Ceiling     OVER: 1 session has shipped nothing for 60 minutes and holds 9.0 GiB, more than the 8.0 GiB ceiling",
+    );
+  });
+
+  it("prints nothing about the ceiling before a session stalls", async () => {
+    const { deps, lines } = enrolledHost(refused);
+
+    const report = await status({}, deps);
+
+    expect(report.wal?.ceiling).toBeUndefined();
+    expect(
+      lines.some((l) => l.startsWith("Ceiling") || l.startsWith("Dropped")),
+    ).toBe(false);
   });
 });
