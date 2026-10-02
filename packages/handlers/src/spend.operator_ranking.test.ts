@@ -1,4 +1,9 @@
-import type { UnproductiveClaim } from "@oxagen/billing";
+import {
+  assignedFrom,
+  type MetricOrder,
+  type MetricRun,
+  type UnproductiveClaim,
+} from "@oxagen/billing";
 import type { OperatorFacts } from "@oxagen/oxagen/contracts/operator.shared";
 import {
   OPERATOR_RANKING_RUNS_MAX,
@@ -70,6 +75,8 @@ function harness(
     partial?: (string | null)[];
     policy?: { pseudonyms: boolean; salt: string | null };
     readOperatorSpend?: OperatorRankingDeps["readOperatorSpend"];
+    metricRuns?: MetricRun[];
+    orders?: MetricOrder[];
   } = {},
 ) {
   const deps = {
@@ -86,6 +93,9 @@ function harness(
         new Map(ids.map((id) => [id, facts(id)])),
     ),
     readPolicy: vi.fn(async () => over.policy ?? { pseudonyms: false, salt: null }),
+    readRuns: vi.fn(async () => over.metricRuns ?? []),
+    priceSegments: vi.fn(async () => new Map()),
+    readOrders: vi.fn(async () => over.orders ?? []),
   } satisfies OperatorRankingDeps;
   return { deps, handler: createOperatorRankingHandler(deps) };
 }
@@ -474,5 +484,161 @@ describe("runsByOperator", () => {
     ]);
     expect(runs.get(ANA)).toEqual(new Map([[runId(1), 100n]]));
     expect(runs.get(BEN)).toEqual(new Map([[runId(1), 40n]]));
+  });
+});
+
+/**
+ * Done work orders and the unassigned share beside each name (F33): done at
+ * the first passing check run (decision 5), and unassigned spend with the
+ * 24-hour grace window (decision 4), kept out of the unproductive figures
+ * (decision 3).
+ */
+describe("get_operator_ranking done work orders and unassigned share", () => {
+  const HOUR = 60 * 60 * 1000;
+  const claims = [claim(1, "f1", ANA, 700n), claim(2, "f1", BEN, 300n)];
+  const start = new Date("2026-09-10T09:00:00.000Z");
+
+  function metricRun(
+    n: number,
+    operatorKey: string,
+    costMicros: bigint,
+    attachedAfterHours: number | null,
+  ): MetricRun {
+    return {
+      runId: runId(n),
+      operatorKey,
+      agentKey: "acme.web.a",
+      startedAt: start,
+      lastFrameAt: new Date(start.getTime() + HOUR),
+      costMicros,
+      currency: "USD",
+      tokens: 10,
+      assignment: {
+        kind: "direct",
+        from: assignedFrom({
+          openedAt: start,
+          attachedAt:
+            attachedAfterHours === null
+              ? null
+              : new Date(start.getTime() + attachedAfterHours * HOUR),
+        }),
+      },
+      definitionOfDone: false,
+    };
+  }
+
+  function order(
+    publicId: string,
+    operatorKey: string,
+    passedAt: string | null,
+  ): MetricOrder {
+    return {
+      id: `00000000-0000-7000-8000-${publicId.padStart(12, "0").slice(-12)}`,
+      publicId,
+      operatorKey,
+      agentKey: "acme.web.a",
+      dispatchedAt: new Date("2026-09-10T08:00:00.000Z"),
+      closedAt: null,
+      definitionOfDone: true,
+      checks:
+        passedAt === null
+          ? [{ checkedAt: new Date("2026-09-10T10:00:00.000Z"), result: "failed" }]
+          : [{ checkedAt: new Date(passedAt), result: "passed" }],
+      rejections: [],
+      runs: [
+        {
+          runId: runId(9),
+          startedAt: new Date("2026-09-10T09:00:00.000Z"),
+          costMicros: 1n,
+          currency: "USD",
+        },
+      ],
+    };
+  }
+
+  // Ana: run 1 (600) never attached, run 3 (400) attached at 23 hours.
+  // Ben: run 2 (500) attached at 25 hours, run 4 (500) a send.
+  const runs = [
+    metricRun(1, ANA, 600n, null),
+    metricRun(3, ANA, 400n, 23),
+    metricRun(2, BEN, 500n, 25),
+    { ...metricRun(4, BEN, 500n, null), assignment: { kind: "send" as const } },
+  ];
+  const orders = [
+    order("wo_a1", ANA, "2026-09-11T10:00:00.000Z"),
+    order("wo_a2", ANA, "2026-09-12T10:00:00.000Z"),
+    // Passed in August: not done in this period.
+    order("wo_a3", ANA, "2026-08-30T10:00:00.000Z"),
+    // Failed and never passed: not done.
+    order("wo_b1", BEN, null),
+  ];
+
+  it("shows each operator's done work orders, counted at the passing check", async () => {
+    const out = await harness(claims, { metricRuns: runs, orders }).handler(
+      { period: PERIOD },
+      ctx(),
+    );
+    expect(out.operators.map((o) => o.doneWorkOrders)).toEqual([2, 0]);
+    expect(out.operators[0]?.topDoneWorkOrders).toEqual([
+      { workOrderId: "wo_a1", doneAt: "2026-09-11T10:00:00.000Z", runs: [runId(9)] },
+      { workOrderId: "wo_a2", doneAt: "2026-09-12T10:00:00.000Z", runs: [runId(9)] },
+    ]);
+    expect(() => spendOperatorRanking.output.parse(out)).not.toThrow();
+  });
+
+  it("shows each operator's unassigned share with the 24-hour grace window", async () => {
+    const out = await harness(claims, { metricRuns: runs, orders }).handler(
+      { period: PERIOD },
+      ctx(),
+    );
+    // Ana: 600 of 1,000 unassigned; run 3 was attached at 23 hours.
+    // Ben: 500 of 1,000; run 2 was attached at 25 hours, after it ended.
+    expect(out.operators.map((o) => o.unassignedShare)).toEqual([0.6, 0.5]);
+    expect(out.operators[0]?.topUnassignedRuns).toEqual([
+      { runId: runId(1), unassigned: { micros: "600", currency: "USD" } },
+    ]);
+    expect(out.operators[1]?.topUnassignedRuns.map((r) => r.runId)).toEqual([
+      runId(2),
+    ]);
+  });
+
+  it("leaves the unproductive figures and the headline unchanged by unassigned spend", async () => {
+    const without = await harness(claims).handler({ period: PERIOD }, ctx());
+    const withUnassigned = await harness(claims, {
+      metricRuns: runs,
+      orders,
+    }).handler({ period: PERIOD }, ctx());
+    expect(withUnassigned.unproductive).toEqual(without.unproductive);
+    expect(withUnassigned.unproductive.micros).toBe("1000");
+    expect(withUnassigned.operators.map((o) => o.unproductive)).toEqual(
+      without.operators.map((o) => o.unproductive),
+    );
+  });
+
+  it("keeps the done count and drops the share and the evidence under pseudonyms", async () => {
+    const h = harness(claims, {
+      metricRuns: runs,
+      orders,
+      policy: { pseudonyms: true, salt: SALT },
+    });
+    const out = await h.handler({ period: PERIOD }, ctx());
+    expect(out.operators.map((o) => o.doneWorkOrders)).toEqual([2, 0]);
+    expect(out.operators.map((o) => o.unassignedShare)).toEqual([null, null]);
+    expect(out.operators.every((o) => o.topDoneWorkOrders.length === 0)).toBe(true);
+    expect(out.operators.every((o) => o.topUnassignedRuns.length === 0)).toBe(true);
+    expect(h.deps.readRuns).not.toHaveBeenCalled();
+  });
+
+  it("reads the named operators' runs and the period's work orders", async () => {
+    const h = harness(claims, { metricRuns: runs, orders });
+    await h.handler({ period: PERIOD }, ctx());
+    const window = {
+      start: new Date("2026-09-01T00:00:00.000Z"),
+      end: new Date("2026-10-01T00:00:00.000Z"),
+    };
+    expect(h.deps.readRuns).toHaveBeenCalledWith(SCOPE, window, [ANA, BEN]);
+    expect(h.deps.readOrders).toHaveBeenCalledWith(SCOPE, window);
+    // Every run falls inside the period and on one side of its attachment.
+    expect(h.deps.priceSegments).not.toHaveBeenCalled();
   });
 });

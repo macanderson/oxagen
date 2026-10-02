@@ -2020,6 +2020,16 @@
       "writes": []
     },
     {
+      "domain": "spend",
+      "name": "get_work_order_metrics",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api"
+      ],
+      "writes": []
+    },
+    {
       "domain": "context",
       "name": "get_workspace_memory",
       "reads": [],

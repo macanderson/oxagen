@@ -24,10 +24,29 @@
 //
 // A period whose claims hold two currencies is refused. `countClaims` sums
 // micros, and a sum of dollars and euros is no figure.
+//
+// Beside each name are its done work orders and its unassigned share (F33).
+// A work order is done at its first passing check run of its definition of
+// done (decision 5), and counts in the period that check fell in. The
+// unassigned share divides the spend on the operator's runs whose direct
+// work order has no work item, with the 24-hour grace window (decision 4),
+// by the operator's spend, both counted by frame time. Unassigned spend
+// never adds to the unproductive figures (decision 3). Under pseudonyms the
+// done count stays, and the share and the evidence behind both are dropped.
+// The unassigned share takes its spend from the same split as its unassigned
+// part (./lib/work-order-metrics-reads.ts), so a run left unpriced nulls both
+// sides together. That spend equals the unproductive share's whole whenever
+// neither read left a run unpriced.
 import {
   countClaims,
   dayBounds,
+  doneWorkOrders,
+  type MetricOrder,
+  type MetricRun,
   readUnproductiveClaims,
+  type RunWindowSpend,
+  shareOf as shareOfSpend,
+  sumRunSpend,
   type UnproductiveClaim,
 } from "@oxagen/billing";
 import { withTenantDb } from "@oxagen/database";
@@ -46,6 +65,13 @@ import {
   readFrameTimeSpend,
 } from "./lib/frame-time-spend";
 import { readOperatorFacts, type ReadOperatorFacts } from "./lib/operator-facts";
+import {
+  type PriceMetricSegments,
+  priceMetricSegments,
+  readMetricOrders,
+  readMetricRuns,
+  splitMetricSpend,
+} from "./lib/work-order-metrics-reads";
 import {
   operatorPseudonym,
   type PseudonymPolicy,
@@ -71,6 +97,16 @@ export type OperatorRankingDeps = {
   ) => Promise<FrameTimeSpendResult>;
   readOperatorFacts: ReadOperatorFacts;
   readPolicy: (scope: RankingScope) => Promise<PseudonymPolicy>;
+  /** The named operators' runs that may hold a frame in the window, with their work orders. */
+  readRuns: (
+    scope: RankingScope,
+    window: Window,
+    operatorKeys: readonly string[],
+  ) => Promise<MetricRun[]>;
+  /** Prices the frames of the runs that cross the window's edge or their assignment. */
+  priceSegments: PriceMetricSegments;
+  /** The sends closed in the window or with a passing check run in it. */
+  readOrders: (scope: RankingScope, window: Window) => Promise<MetricOrder[]>;
 };
 
 /** Who may read the ranking: the roles the contract's defaultRoles allow. */
@@ -168,14 +204,30 @@ export function createOperatorRankingHandler(
       o.operatorKey === null ? [] : [{ key: o.operatorKey, micros: o.micros }],
     );
     const keys = named.map((o) => o.key);
-    const [spend, facts] = await Promise.all([
+    const [spend, facts, metricRuns, orders] = await Promise.all([
       pseudonyms || keys.length === 0
         ? Promise.resolve<FrameTimeSpendResult>({ rows: [], partial: new Set() })
         : deps.readOperatorSpend(scope, window, keys),
       pseudonyms || keys.length === 0
         ? Promise.resolve(new Map<string, OperatorFacts>())
         : deps.readOperatorFacts(scope, keys),
+      pseudonyms || keys.length === 0
+        ? Promise.resolve<MetricRun[]>([])
+        : deps.readRuns(scope, window, keys),
+      keys.length === 0
+        ? Promise.resolve<MetricOrder[]>([])
+        : deps.readOrders(scope, window),
     ]);
+    // Each named operator's spend in the window and its unassigned part, by
+    // frame time. Read only when the share is shown.
+    const assignment: RunWindowSpend[] =
+      metricRuns.length === 0
+        ? []
+        : ((
+            await splitMetricSpend(deps.priceSegments, scope, metricRuns, [
+              window,
+            ])
+          )[0] ?? []);
     // An operator whose priced spend holds another currency has no share: the
     // part is in one currency and the whole would be in two. Nor has one
     // whose spend misses a run the frame store did not price.
@@ -192,7 +244,7 @@ export function createOperatorRankingHandler(
     for (const key of spend.partial)
       if (key !== null) spendOf.set(key, null);
 
-    const shareOf = (micros: bigint, key: string): number | null => {
+    const unproductiveShareOf = (micros: bigint, key: string): number | null => {
       const whole = spendOf.get(key);
       return whole === null || whole === undefined ? null : ratio(micros, whole);
     };
@@ -206,6 +258,14 @@ export function createOperatorRankingHandler(
             .sort(byMicrosDesc)
             .slice(0, OPERATOR_RANKING_RUNS_MAX)
             .map((r) => ({ runId: r.id, unproductive: money(r.micros) }));
+      const done = doneWorkOrders(
+        orders.filter((order) => order.operatorKey === o.key),
+        window,
+      );
+      const assigned = sumRunSpend(
+        assignment.filter((r) => r.operatorKey === o.key),
+        currency,
+      );
       return {
         rank: i + 1,
         operator: pseudonyms
@@ -216,9 +276,28 @@ export function createOperatorRankingHandler(
           : { kind: "named", key: o.key, facts: facts.get(o.key) ?? null },
         unproductive: money(o.micros),
         shareOfTotal: ratio(o.micros, headline.totalMicros) ?? 0,
-        unproductiveShare: pseudonyms ? null : shareOf(o.micros, o.key),
+        unproductiveShare: pseudonyms ? null : unproductiveShareOf(o.micros, o.key),
         runs: pseudonyms ? null : own.size,
         topRuns,
+        doneWorkOrders: done.length,
+        topDoneWorkOrders: pseudonyms
+          ? []
+          : done.slice(0, OPERATOR_RANKING_RUNS_MAX).map((d) => ({
+              workOrderId: d.order.publicId,
+              doneAt: d.doneAt.toISOString(),
+              runs: d.order.runs
+                .map((r) => r.runId)
+                .sort()
+                .slice(0, OPERATOR_RANKING_RUNS_MAX),
+            })),
+        unassignedShare: pseudonyms
+          ? null
+          : shareOfSpend(assigned.unassigned, assigned.spend),
+        topUnassignedRuns: pseudonyms
+          ? []
+          : assigned.unassignedRuns
+              .slice(0, OPERATOR_RANKING_RUNS_MAX)
+              .map((r) => ({ runId: r.runId, unassigned: money(r.micros) })),
       };
     });
 
@@ -241,4 +320,7 @@ export const spendOperatorRankingHandler = createOperatorRankingHandler({
   readOperatorSpend,
   readOperatorFacts,
   readPolicy: readPseudonymPolicy,
+  readRuns: readMetricRuns,
+  priceSegments: priceMetricSegments,
+  readOrders: readMetricOrders,
 });

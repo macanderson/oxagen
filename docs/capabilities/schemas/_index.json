@@ -2217,6 +2217,17 @@
       "consumes": []
     },
     {
+      "name": "get_work_order_metrics",
+      "domain": "spend",
+      "surfaces": [
+        "api",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "get_workspace_memory",
       "domain": "context",
       "surfaces": [

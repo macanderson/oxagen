@@ -6,6 +6,11 @@
 // read"): the run wrote prompt-cache tokens and read none, so every cache
 // write premium it paid bought nothing. A pattern with a counterfactual saving
 // over the runs it cites is a finding (`list_findings`, ADR-062).
+//
+// A cause covers the runs it cites, so the in-app assistant's runs are left
+// out of every cause: its money, its run count, and its run ids. The share's
+// divisor is the period's priced spend, so it keeps them. The workspace does
+// not monitor the assistant (ADR-235, 2026-10-02 amendment).
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import {
   spendWasteList,
@@ -21,6 +26,7 @@ import {
   cost,
   readRunTotals,
   type RunFilter,
+  type SpendRunRecord,
   type SpendScope,
 } from "./spend.shared";
 
@@ -28,7 +34,7 @@ export type SpendWasteDeps = {
   readRunTotals: (
     scope: SpendScope,
     q: { from: string; to: string; filter: RunFilter },
-  ) => Promise<RunTotalsRecord[]>;
+  ) => Promise<SpendRunRecord[]>;
   /** The session name of each cited run, so the page names it (#4571). */
   readRunNames: typeof readRunNames;
 };
@@ -73,6 +79,7 @@ export function createSpendWasteHandler(
     const currency = runs[0]?.currency ?? "USD";
 
     const hits = runs
+      .filter((run) => run.inApp !== true)
       .flatMap((run) => {
         const waste = cacheWriteNeverRead(run);
         return waste ? [{ runId: run.runId, ...waste }] : [];

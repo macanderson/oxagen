@@ -4,6 +4,12 @@
 // daily series, per-call and per-run averages, the key's share of the
 // workspace's spend over the window, and the tools its runs called. A tool
 // drill carries counts and no money: no frame prices a tool call.
+//
+// A drill leaves the in-app assistant's runs out, so it matches its row on the
+// Spend page, which leaves the assistant's share out too. The share's divisor
+// keeps them, because it is the workspace's whole spend, the figure the page
+// total shows. The assistant's own row opens no drill (ADR-235, 2026-10-02
+// amendment).
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import {
   spendDrill,
@@ -18,6 +24,7 @@ import {
   readUnmeteredRuns,
   runFigure,
   type RunFilter,
+  type SpendRunRecord,
   type SpendScope,
   sumFigures,
 } from "./spend.shared";
@@ -26,7 +33,7 @@ export type SpendDrillDeps = {
   readRunTotals: (
     scope: SpendScope,
     q: { from: string; to: string; filter: RunFilter },
-  ) => Promise<RunTotalsRecord[]>;
+  ) => Promise<SpendRunRecord[]>;
   /** The key's wrapped runs that recorded no usage, by harness (#3304). */
   readUnmeteredRuns: (
     scope: SpendScope,
@@ -60,13 +67,15 @@ export function createSpendDrillHandler(
     const filter: RunFilter = { kind: input.kind, key: input.key };
     const isTool = input.kind === "tool";
     // A tool drill carries no money, so no total of its leaves a cost out.
-    const [runs, everyRun, unmeteredRuns] = await Promise.all([
+    const [keyRuns, everyRun, unmeteredRuns] = await Promise.all([
       deps.readRunTotals(scope, { ...period, filter }),
       deps.readRunTotals(scope, { ...period, filter: { kind: "all" } }),
       isTool
         ? Promise.resolve(null)
         : deps.readUnmeteredRuns(scope, { ...period, filter }),
     ]);
+    // The key's own runs, without the assistant's.
+    const runs = keyRuns.filter((run) => run.inApp !== true);
 
     // A tool drill counts the tool's calls and carries no money.
     const figureOf = (run: RunTotalsRecord) =>

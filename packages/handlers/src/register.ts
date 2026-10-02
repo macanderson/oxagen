@@ -2136,6 +2136,12 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .spendUnproductiveHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "get_work_order_metrics",
+    async () =>
+      (await import("./spend.work_order_metrics"))
+        .spendWorkOrderMetricsHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "get_clone_draft",
     async () =>
       (await import("./configuration.clone.get"))

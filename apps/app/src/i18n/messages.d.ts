@@ -9754,6 +9754,7 @@ type Messages = {
       hidden: string;
       hiddenNote: string;
       runsBehind: string;
+      doneBehind: string;
       definitionsTitle: string;
       columns: {
         rank: string;
@@ -9761,6 +9762,8 @@ type Messages = {
         unproductive: string;
         shareOfTotal: string;
         unproductiveShare: string;
+        doneWorkOrders: string;
+        unassignedShare: string;
         runs: string;
         runsBehind: string;
       };
@@ -9769,6 +9772,8 @@ type Messages = {
         shareOfTotal: string;
         unproductiveShare: string;
         runs: string;
+        doneWorkOrders: string;
+        unassignedShare: string;
       };
       pseudonyms: {
         on: string;
@@ -9801,6 +9806,10 @@ type Messages = {
       empty: string;
       unnamedOperator: string;
       other: {
+        label: string;
+        note: string;
+      };
+      assistant: {
         label: string;
         note: string;
       };

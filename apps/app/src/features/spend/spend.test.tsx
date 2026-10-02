@@ -942,6 +942,35 @@ describe("Spend › Month", () => {
     expect(screen.queryByText("Not grouped")).toBeNull();
   });
 
+  // ADR-235, 2026-10-02 amendment: the in-app assistant's spend is one row of
+  // its own. Oxagen runs the assistant, so the row opens nothing.
+  it("prints the assistant's spend as its own row, with no link and no runs to open", async () => {
+    loadedMonth(() =>
+      month([
+        row("acme.core.triage", {
+          cost: cost("9000000"),
+          runs: 8,
+          topRuns: [triage],
+        }),
+        row("~oxagen_assistant", {
+          cost: cost("1000000"),
+          runs: 2,
+          topRuns: [],
+        }),
+      ]),
+    );
+    await renderSpend([], undefined, ctx, "agent");
+    const assistant = rowOf("~oxagen_assistant");
+    expect(assistant).toHaveTextContent("Oxagen assistant");
+    expect(assistant).toHaveTextContent("Spend on the assistant Oxagen runs");
+    expect(within(assistant).queryByRole("link")).toBeNull();
+    expect(within(assistant).queryByRole("button")).toBeNull();
+    // The workspace's own agent still opens its drill.
+    expect(
+      within(rowOf("acme.core.triage")).queryAllByRole("link").length,
+    ).toBeGreaterThan(0);
+  });
+
   it("adds a Not grouped row for the spend no group carries, so the rows sum to the total", async () => {
     loadedMonth(() =>
       month([
@@ -1609,6 +1638,10 @@ describe("Spend › Findings › Operator ranking", () => {
                 unproductive: { micros: "5000000", currency: "USD" },
               },
             ],
+            doneWorkOrders: 0,
+            topDoneWorkOrders: [],
+            unassignedShare: null,
+            topUnassignedRuns: [],
           },
         ],
       }),
@@ -1657,6 +1690,10 @@ describe("Spend › Findings › Operator ranking", () => {
                 unproductive: { micros: "4000000", currency: "USD" },
               },
             ],
+            doneWorkOrders: 0,
+            topDoneWorkOrders: [],
+            unassignedShare: null,
+            topUnassignedRuns: [],
           },
         ],
       }),
@@ -1693,6 +1730,10 @@ describe("Spend › Findings › Operator ranking", () => {
             unproductiveShare: null,
             runs: 1,
             topRuns: [{ runId: "arun_01", unproductive: HEADLINE.unproductive }],
+            doneWorkOrders: 0,
+            topDoneWorkOrders: [],
+            unassignedShare: null,
+            topUnassignedRuns: [],
           },
         ],
       }),
@@ -2356,6 +2397,10 @@ describe("Spend › a tab's own read failing", () => {
             unproductiveShare: null,
             runs: 1,
             topRuns: [{ runId: "arun_01", unproductive: HEADLINE.unproductive }],
+            doneWorkOrders: 0,
+            topDoneWorkOrders: [],
+            unassignedShare: null,
+            topUnassignedRuns: [],
           },
         ],
       }),
