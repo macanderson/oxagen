@@ -61,6 +61,7 @@ vi.mock("./actions", () => ({
 // The Import Markdown dialog's own states are import/import-markdown.test.tsx.
 vi.mock("./import/actions", () => ({
   parseMarkdownImport: vi.fn(),
+  matchMarkdownImport: vi.fn(),
   commitMarkdownImport: vi.fn(),
 }));
 vi.mock("@/server/session", () => ({

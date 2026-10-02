@@ -49,10 +49,10 @@ export type ParseResult = {
 };
 
 /**
- * Join the answers of the parse calls one import made. Each call compared
- * only its own files, so a duplicate or a conflict between two calls is left
- * for the steering PR's conflicts check, and two rows given one lineage are
- * refused by the commit, which names both.
+ * Join the answers of the parse calls one import made, in order. Each call
+ * compared only its own files, so the dialog then marks the duplicates and
+ * conflicts between calls (`applyMarks`). Two rows given one lineage by two
+ * calls are refused by the commit, which names both.
  */
 export function mergeParses(outputs: readonly ParseOutput[]): ParseResult {
   return {
@@ -61,6 +61,90 @@ export function mergeParses(outputs: readonly ParseOutput[]): ParseResult {
     policies: outputs.flatMap((o) => o.policies),
     max: outputs[0]?.pullRequestFiles.max ?? 0,
   };
+}
+
+/** A record a statement matches: a published one, or another row of the import. */
+type ImportMatch = NonNullable<ImportRecord["duplicate"]>;
+
+/**
+ * What the match across parse calls reads of one row (./reconcile.ts, through
+ * matchMarkdownImport), and the marks the row's own call gave it.
+ */
+export type MatchRow = {
+  lineage: string;
+  kind: string;
+  effect: string | null;
+  statement: string;
+  duplicate: ImportMatch | null;
+  conflict: ImportMatch | null;
+};
+
+/** One row's marks after the match across parse calls. */
+export type RowMarks = {
+  duplicate: ImportMatch | null;
+  conflict: ImportMatch | null;
+};
+
+/** The rows the match across parse calls reads, in order. */
+export function matchRowsOf(records: readonly ImportRecord[]): MatchRow[] {
+  return records.map(
+    ({ lineage, kind, effect, statement, duplicate, conflict }) => ({
+      lineage,
+      kind,
+      effect,
+      statement,
+      duplicate,
+      conflict,
+    }),
+  );
+}
+
+/** True when the rows fit one server action call. */
+export function matchRowsFit(
+  rows: readonly MatchRow[],
+  bytesMax: number = PARSE_CALL_BYTES_MAX,
+): boolean {
+  return new TextEncoder().encode(JSON.stringify(rows)).length <= bytesMax;
+}
+
+function sameMatch(a: ImportMatch | null, b: ImportMatch | null): boolean {
+  if (a === null || b === null) return a === b;
+  return (
+    a.lineage === b.lineage && a.path === b.path && a.published === b.published
+  );
+}
+
+/**
+ * The rows with the marks the match across parse calls gave them, as
+ * `oxagen steering import` applies them. A row whose marks did not change
+ * stays as parse proposed it. A row newly marked a duplicate is skipped, and
+ * one newly marked a conflict waits for a choice.
+ */
+export function applyMarks(
+  records: readonly ImportRecord[],
+  marks: readonly RowMarks[],
+): ImportRecord[] {
+  return records.map((record, index): ImportRecord => {
+    const mark = marks[index];
+    if (
+      mark === undefined ||
+      (sameMatch(mark.duplicate, record.duplicate) &&
+        sameMatch(mark.conflict, record.conflict))
+    ) {
+      return record;
+    }
+    return {
+      ...record,
+      duplicate: mark.duplicate,
+      conflict: mark.conflict,
+      action:
+        mark.conflict !== null
+          ? null
+          : mark.duplicate !== null
+            ? "skip"
+            : record.action,
+    };
+  });
 }
 
 /** What a person changed on one row. */

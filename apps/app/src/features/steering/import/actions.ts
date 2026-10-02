@@ -13,11 +13,45 @@
 // commit_markdown_import opens one steering PR on steering/import-<date>. It
 // refuses a conflict nobody chose for, a policy the early checks failed, and
 // two rows with one lineage or one path, each with its reason as the code.
+//
+// An import larger than one parse call has its rows compared across the
+// calls here (./reconcile.ts), on the server, so the steering check's code
+// stays out of the browser bundle. That pass calls no capability and writes
+// nothing.
 import { steeringMarkdownImportCommit } from "@oxagen/oxagen/contracts/steering.markdown_import.commit";
 import { steeringMarkdownImportParse } from "@oxagen/oxagen/contracts/steering.markdown_import.parse";
+import { z } from "zod";
 import type { ActionResult, ContractOutput } from "@/server/kernel";
 import { kernelWrite } from "@/server/kernel";
 import { requireViewer } from "@/server/viewer";
+import { marksAcrossCalls } from "./reconcile";
+import type { MatchRow, RowMarks } from "./rows";
+
+/** The most rows one import holds: 500 files of 50 statements. */
+const MATCH_ROWS_MAX = 25_000;
+
+const matchSchema = z
+  .object({
+    lineage: z.string().min(1),
+    path: z.string().nullable(),
+    published: z.boolean(),
+  })
+  .strict();
+
+const matchRowsSchema = z
+  .array(
+    z
+      .object({
+        lineage: z.string().min(1),
+        kind: z.string().min(1),
+        effect: z.string().nullable(),
+        statement: z.string(),
+        duplicate: matchSchema.nullable(),
+        conflict: matchSchema.nullable(),
+      })
+      .strict(),
+  )
+  .max(MATCH_ROWS_MAX);
 
 type ParseInput = (typeof steeringMarkdownImportParse)["input"]["_input"];
 type CommitInput = (typeof steeringMarkdownImportCommit)["input"]["_input"];
@@ -63,4 +97,27 @@ export async function commitMarkdownImport(
       skipped,
     },
   };
+}
+
+/**
+ * Compare the rows of every parse call one import made, and answer each
+ * row's marks in the order sent. The workspace viewer must resolve, as for
+ * the calls the rows came from.
+ */
+export async function matchMarkdownImport(
+  org: string,
+  ws: string,
+  rows: MatchRow[],
+): Promise<ActionResult<RowMarks[]>> {
+  await requireViewer(org, ws);
+  const parsed = matchRowsSchema.safeParse(rows);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      reason: "invalid",
+      code: "invalid_input",
+      field: parsed.error.issues[0]?.path.map(String).join("."),
+    };
+  }
+  return { ok: true, value: marksAcrossCalls(parsed.data) };
 }

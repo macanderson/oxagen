@@ -744,6 +744,7 @@
         "statements": "{count, plural, one {# statement} other {# statements}}",
         "rules": "{count, plural, one {# rule} other {# rules}}",
         "empty": "Nothing to review. Go back and give a file a target other than Skip.",
+        "unmatched": "The files went in several calls and are too large to compare with each other here. The steering PR's conflicts check compares them before it merges.",
         "summary": "{records, plural, one {# record} other {# records}} and {policies, plural, one {# policy} other {# policies}}.",
         "out": "{count, plural, one {# statement stays out.} other {# statements stay out.}}",
         "open": "Choose for {count, plural, one {# conflict} other {# conflicts}} before the PR opens.",

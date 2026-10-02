@@ -444,6 +444,11 @@ const PLATFORM_NAMED_ROWS: Readonly<
     "@oxagen/oxagen/steering-repo/record-force": ["clampForce", "forcesFor"],
     "@oxagen/oxagen/steering-repo/record-kind": ["RECORD_KINDS"],
   },
+  // The import compares the rows of several parse calls with the steering
+  // check's own pass, on the server only, as the CLI does (#5030).
+  "src/features/steering/import/reconcile.ts": {
+    "@oxagen/steering-check": ["markImportMatches"],
+  },
   // The On disk panel strips the steering tree's folder from each path, and
   // reads the folder's name from the one module that names every steering
   // path, which imports nothing (lane S0, #4387). A steering repository keeps

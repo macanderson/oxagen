@@ -29,12 +29,28 @@ import {
 /** The rows a commit sent, as far as these tests read them. */
 type SentRows = { records: { lineage: string; action: string | null }[] };
 
-const { parseMarkdownImport, commitMarkdownImport } = vi.hoisted(() => ({
-  parseMarkdownImport: vi.fn(),
-  commitMarkdownImport:
-    vi.fn<(org: string, ws: string, rows: SentRows) => Promise<unknown>>(),
+const { parseMarkdownImport, matchMarkdownImport, commitMarkdownImport } =
+  vi.hoisted(() => ({
+    parseMarkdownImport:
+      vi.fn<
+        (
+          org: string,
+          ws: string,
+          documents: { filename: string }[],
+        ) => Promise<unknown>
+      >(),
+    matchMarkdownImport:
+      vi.fn<
+        (org: string, ws: string, rows: { lineage: string }[]) => Promise<unknown>
+      >(),
+    commitMarkdownImport:
+      vi.fn<(org: string, ws: string, rows: SentRows) => Promise<unknown>>(),
+  }));
+vi.mock("./actions", () => ({
+  parseMarkdownImport,
+  matchMarkdownImport,
+  commitMarkdownImport,
 }));
-vi.mock("./actions", () => ({ parseMarkdownImport, commitMarkdownImport }));
 vi.mock("next/link", () => ({
   default: ({ children, ...rest }: { children: ReactNode; href: string }) => (
     <a {...rest}>{children}</a>
@@ -190,6 +206,7 @@ const sent = (): [string, string | null][] =>
 
 beforeEach(() => {
   parseMarkdownImport.mockReset();
+  matchMarkdownImport.mockReset();
   commitMarkdownImport.mockReset();
 });
 
@@ -284,6 +301,8 @@ describe("the statement grid", () => {
     const dialog = await pickFiles();
     await reviewStatements(dialog);
     expect(parseMarkdownImport).toHaveBeenCalledTimes(1);
+    // One call compared every file, so there is nothing to compare across calls.
+    expect(matchMarkdownImport).not.toHaveBeenCalled();
     expect(parseMarkdownImport).toHaveBeenCalledWith("acme", "core-platform", [
       { filename: "CLAUDE.md", content: CLAUDE, target: "records" },
       { filename: "no-force-push.md", content: CEDAR, target: "policies" },
@@ -459,6 +478,109 @@ describe("the statement grid", () => {
       "core-platform",
       [{ filename: "CLAUDE.md", content: CLAUDE, target: "records" }],
     );
+  });
+});
+
+describe("an import in several parse calls", () => {
+  /** Thirty files, so the review sends two calls: 25 files, then 5. */
+  const many = () =>
+    Array.from(
+      { length: 30 },
+      (_, i) =>
+        new File(
+          [`Use pnpm for every script. Rule ${String(i)}.`],
+          `f${String(i).padStart(2, "0")}.md`,
+        ),
+    );
+  const statement = "Use pnpm for every script in the repository.";
+  const inFirst = importRecord({
+    file: "f00.md",
+    line: 1,
+    lineage: "acme.f00.use-pnpm",
+    statement,
+    kind: "code-rule",
+    force: "must",
+    forceWords: "",
+    effect: null,
+  });
+  const inSecond = importRecord({
+    file: "f25.md",
+    line: 1,
+    lineage: "acme.f25.use-pnpm",
+    statement,
+    kind: "code-rule",
+    force: "must",
+    forceWords: "",
+    effect: null,
+  });
+
+  /** Each call answers for the files it was sent. */
+  function answerEachCall() {
+    parseMarkdownImport.mockImplementation((_org, _ws, documents) => {
+      const records = [inFirst, inSecond].filter((r) =>
+        documents.some((d) => d.filename === r.file),
+      );
+      return Promise.resolve({
+        ok: true,
+        value: parseOutput({
+          files: documents.map((d) =>
+            importFileResult({
+              filename: d.filename,
+              records: records.filter((r) => r.file === d.filename).length,
+            }),
+          ),
+          records,
+        }),
+      });
+    });
+  }
+
+  it("marks a duplicate split across the two calls, and leaves it out", async () => {
+    answerEachCall();
+    matchMarkdownImport.mockResolvedValue({
+      ok: true,
+      value: [
+        { duplicate: null, conflict: null },
+        {
+          duplicate: { lineage: inFirst.lineage, path: null, published: false },
+          conflict: null,
+        },
+      ],
+    });
+    const dialog = await pickFiles(many());
+    await reviewStatements(dialog);
+    expect(
+      parseMarkdownImport.mock.calls.map((call) => call[2].length),
+    ).toEqual([25, 5]);
+    expect(
+      matchMarkdownImport.mock.lastCall?.[2].map((r) => r.lineage),
+    ).toEqual([inFirst.lineage, inSecond.lineage]);
+    const dup = row(dialog, inSecond.lineage);
+    expect(dup).toHaveAttribute("data-action", "skip");
+    expect(dup).toHaveTextContent("Duplicate");
+    expect(dup).toHaveTextContent("Matches line 1 of f00.md");
+    expect(
+      within(dup).getByRole("checkbox", { name: "Import line 1 of f25.md" }),
+    ).not.toBeChecked();
+    expect(row(dialog, inFirst.lineage)).toHaveAttribute("data-action", "add");
+    expect(within(dialog).getByTestId("import-summary")).toHaveTextContent(
+      "1 record and 0 policies. 1 statement stays out.",
+    );
+  });
+
+  it("names a failed match in the dialog and opens no grid (negative)", async () => {
+    answerEachCall();
+    matchMarkdownImport.mockResolvedValue({
+      ok: false,
+      reason: "unavailable",
+      code: "action_failed",
+    });
+    const dialog = await pickFiles(many());
+    fireEvent.click(within(dialog).getByTestId("import-review"));
+    expect(await within(dialog).findByTestId("import-failure")).toHaveTextContent(
+      "The import could not run (action_failed).",
+    );
+    expect(within(dialog).queryByTestId("import-row")).toBeNull();
   });
 });
 

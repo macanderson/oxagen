@@ -33,6 +33,7 @@ import { SheetDialog } from "@/ui/sheet-dialog";
 import {
   commitMarkdownImport,
   type ImportCommitted,
+  matchMarkdownImport,
   parseMarkdownImport,
 } from "./actions";
 import {
@@ -54,8 +55,11 @@ import {
 import { DropZone, FilesTable } from "./files-step";
 import { StatementGrid } from "./review-step";
 import {
+  applyMarks,
   commitPayload,
   groupsOf,
+  matchRowsFit,
+  matchRowsOf,
   mergeParses,
   type ParseOutput,
   type ParseResult,
@@ -103,6 +107,8 @@ function ImportDialog({
   const [parsed, setParsed] = useState<{
     key: string;
     result: ParseResult;
+    /** True when the rows of several calls were too large to compare across the calls. */
+    unmatched: boolean;
   } | null>(null);
   const [edits, setEdits] = useState<ReadonlyMap<string, RowEdit>>(
     () => new Map(),
@@ -197,8 +203,32 @@ function ImportDialog({
       done += batch.length;
       setProgress({ done, total: documents.length });
     }
+    // Each call compared only its own files. One more pass over every
+    // call's rows marks the duplicates and conflicts between calls, so the
+    // steering PR's conflicts check does not fail a valid import.
+    let merged = mergeParses(outputs);
+    let unmatched = false;
+    if (batches.length > 1) {
+      const rowsToMatch = matchRowsOf(merged.records);
+      if (matchRowsFit(rowsToMatch)) {
+        const marks = await matchMarkdownImport(org, ws, rowsToMatch).catch(
+          () => unanswered("action_failed"),
+        );
+        if (!marks.ok) {
+          setProgress(null);
+          setFailed({ failure: marks, file: null });
+          return;
+        }
+        merged = {
+          ...merged,
+          records: applyMarks(merged.records, marks.value),
+        };
+      } else {
+        unmatched = true;
+      }
+    }
     setProgress(null);
-    setParsed({ key, result: mergeParses(outputs) });
+    setParsed({ key, result: merged, unmatched });
     setStep("review");
   };
 
@@ -299,6 +329,14 @@ function ImportDialog({
             data-testid="import-tokens"
           >
             {t("grid.tokens", { count: counts.tokens })}
+          </p>
+        ) : null}
+        {parsed.unmatched ? (
+          <p
+            className="text-[12.5px] text-muted-foreground"
+            data-testid="import-unmatched"
+          >
+            {t("grid.unmatched")}
           </p>
         ) : null}
         {groups.length === 0 ? (

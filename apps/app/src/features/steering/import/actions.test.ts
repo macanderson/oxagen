@@ -3,7 +3,8 @@
 // what the dialog gets back and whether the capability ran: ok, invalid
 // (refused before the kernel), denied and conflict with the handler's reason,
 // and exhausted for an organization with no credit left for the parse's
-// model calls (INV-19).
+// model calls (INV-19). The match across parse calls runs on the server with
+// no capability, so it resolves the viewer and never reaches invoke().
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { importRecord, parseOutput } from "./import.builders";
 
@@ -29,9 +30,8 @@ const kernel =
   await vi.importActual<typeof import("@oxagen/oxagen")>("@oxagen/oxagen");
 const { WsCtx } = await import("@/server/viewer");
 const { unsafeMint } = await import("@/server/viewer.testing");
-const { commitMarkdownImport, parseMarkdownImport } = await import(
-  "./actions"
-);
+const { commitMarkdownImport, matchMarkdownImport, parseMarkdownImport } =
+  await import("./actions");
 
 const ctx = unsafeMint(WsCtx, {
   userId: "7c9e6679-7425-40de-944b-e07fc1f90ae7",
@@ -186,6 +186,53 @@ describe("commitMarkdownImport", () => {
       ok: false,
       reason: "conflict",
       code: "conflict_unresolved",
+    });
+  });
+});
+
+describe("matchMarkdownImport", () => {
+  const row = (lineage: string) => ({
+    lineage,
+    kind: "code-rule",
+    effect: null,
+    statement: "Use pnpm for every script in the repository.",
+    duplicate: null,
+    conflict: null,
+  });
+
+  it("marks a duplicate split across two parse calls for the workspace viewer", async () => {
+    expect(
+      await matchMarkdownImport("acme", "core-platform", [
+        row("acme.api.use-pnpm"),
+        row("acme.web.use-pnpm"),
+      ]),
+    ).toEqual({
+      ok: true,
+      value: [
+        { duplicate: null, conflict: null },
+        {
+          duplicate: {
+            lineage: "acme.api.use-pnpm",
+            path: null,
+            published: false,
+          },
+          conflict: null,
+        },
+      ],
+    });
+    expect(requireViewer).toHaveBeenCalledWith("acme", "core-platform");
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("refuses a row of the wrong shape and names it (negative)", async () => {
+    const result = await matchMarkdownImport("acme", "core-platform", [
+      row("acme.api.use-pnpm"),
+      row(""),
+    ]);
+    expect(result).toMatchObject({
+      ok: false,
+      reason: "invalid",
+      field: "1.lineage",
     });
   });
 });

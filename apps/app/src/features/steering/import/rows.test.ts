@@ -12,6 +12,7 @@ import {
   parseOutput,
 } from "./import.builders";
 import {
+  applyMarks,
   changeEffect,
   changeForce,
   changeKind,
@@ -21,6 +22,8 @@ import {
   groupsOf,
   IMPORT_KINDS,
   initialEdit,
+  matchRowsFit,
+  matchRowsOf,
   mergeParses,
   resolveRows,
   type RowEdit,
@@ -357,5 +360,53 @@ describe("the counts and the commit", () => {
       ["CLAUDE.md", [codeRule.lineage]],
       ["AGENTS.md", [second.lineage]],
     ]);
+  });
+});
+
+describe("the marks between parse calls", () => {
+  const earlier = { lineage: codeRule.lineage, path: null, published: false };
+
+  it("skips a row newly marked a duplicate, and holds one newly marked a conflict for a choice", () => {
+    const [same, dup, open] = applyMarks(
+      [codeRule, fact, importRecord({ lineage: "acme.web.claude.merge" })],
+      [
+        { duplicate: null, conflict: null },
+        { duplicate: earlier, conflict: null },
+        { duplicate: null, conflict: earlier },
+      ],
+    );
+    expect(same).toBe(codeRule);
+    expect(dup).toMatchObject({ duplicate: earlier, action: "skip" });
+    expect(open).toMatchObject({ conflict: earlier, action: null });
+  });
+
+  it("keeps a row whose marks came back unchanged, by value (negative)", () => {
+    const published = {
+      lineage: "acme.core.no-secrets",
+      path: "steering/constraints/acme.core.no-secrets.md",
+      published: true,
+    };
+    const marked = importRecord({ duplicate: published, action: "skip" });
+    const [kept] = applyMarks(
+      [marked],
+      [{ duplicate: { ...published }, conflict: null }],
+    );
+    expect(kept).toBe(marked);
+  });
+
+  it("sends only what the match reads, and says when the rows are too large for one call", () => {
+    const rows = matchRowsOf([codeRule]);
+    expect(rows).toEqual([
+      {
+        lineage: codeRule.lineage,
+        kind: "code-rule",
+        effect: null,
+        statement: codeRule.statement,
+        duplicate: null,
+        conflict: null,
+      },
+    ]);
+    expect(matchRowsFit(rows)).toBe(true);
+    expect(matchRowsFit(rows, 50)).toBe(false);
   });
 });
