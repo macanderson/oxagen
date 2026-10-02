@@ -235,6 +235,7 @@ after the registered name separately when their contract uses a dotted stem.
 | [publish_context_record](context.record.publish.md) | [context.record.publish.ts](../../packages/oxagen/src/contracts/context.record.publish.ts) | api |
 | [read_steering](steering.read.md) | [steering.read.ts](../../packages/oxagen/src/contracts/steering.read.ts) | mcp |
 | [refresh_context_pr](context.pr.refresh.md) | [context.pr.refresh.ts](../../packages/oxagen/src/contracts/context.pr.refresh.ts) | api, agent |
+| [restore_managed_block](context.pr.restore_managed_block.md) | [context.pr.restore_managed_block.ts](../../packages/oxagen/src/contracts/context.pr.restore_managed_block.ts) | api, mcp, cli, agent |
 | [revert_steering_pr](context.pr.revert.md) | [context.pr.revert.ts](../../packages/oxagen/src/contracts/context.pr.revert.ts) | api, mcp, agent, cli |
 | [search_steering](steering.search.md) | [steering.search.ts](../../packages/oxagen/src/contracts/steering.search.ts) | mcp |
 
@@ -475,11 +476,13 @@ after the registered name separately when their contract uses a dotted stem.
 | [get_steering_repo](steering_repo.get.md) | [steering_repo.get.ts](../../packages/oxagen/src/contracts/steering_repo.get.ts) | api, mcp, agent |
 | [import_workspace_steering](steering_repo.import.md) | [steering_repo.import.ts](../../packages/oxagen/src/contracts/steering_repo.import.ts) | api, mcp |
 | [link_repository](repository.link.md) | [repository.link.ts](../../packages/oxagen/src/contracts/repository.link.ts) | api, mcp, agent, cli |
+| [list_code_repository_findings](repository.findings.list.md) | [repository.findings.list.ts](../../packages/oxagen/src/contracts/repository.findings.list.ts) | api, mcp, cli, agent |
 | [list_github_installations](repository.installation.candidates.md) | [repository.installation.candidates.ts](../../packages/oxagen/src/contracts/repository.installation.candidates.ts) | api, mcp, agent |
 | [list_installation_repositories](repository.installation.list.md) | [repository.installation.list.ts](../../packages/oxagen/src/contracts/repository.installation.list.ts) | api, mcp, agent |
 | [list_repositories](repository.list.md) | [repository.list.ts](../../packages/oxagen/src/contracts/repository.list.ts) | api, mcp, agent, cli |
 | [list_working_copies](repository.working_copy.list.md) | [repository.working_copy.list.ts](../../packages/oxagen/src/contracts/repository.working_copy.list.ts) | api, mcp, agent |
 | [open_init_pr](repository.init_pr.open.md) | [repository.init_pr.open.ts](../../packages/oxagen/src/contracts/repository.init_pr.open.ts) | api, mcp, agent, cli |
+| [promote_instruction_to_steering](repository.instruction.promote.md) | [repository.instruction.promote.ts](../../packages/oxagen/src/contracts/repository.instruction.promote.ts) | api, mcp, cli, agent |
 | [record_working_copy](repository.working_copy.record.md) | [repository.working_copy.record.ts](../../packages/oxagen/src/contracts/repository.working_copy.record.ts) | api, cli |
 | [repair_steering_repo](steering_repo.repair.md) | [steering_repo.repair.ts](../../packages/oxagen/src/contracts/steering_repo.repair.ts) | api, mcp, agent |
 | [retry_steering_repo_provision](steering_repo.provision.retry.md) | [steering_repo.provision.retry.ts](../../packages/oxagen/src/contracts/steering_repo.provision.retry.ts) | api, agent |

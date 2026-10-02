@@ -40,13 +40,28 @@ export interface CodeRepoCheckRequest {
   connectionId: string | null;
   /** One check at a time per pull request: `<workspaceId>:<provider>:<repositoryId>:<number>`. */
   key: string;
+  /**
+   * Null for a check of an open pull request. `merged` or `unmerged` when the
+   * pull request closed: the job then settles the stored findings and posts
+   * no check (ADR-263).
+   */
+  closed: CodeRepoPullRequestClose | null;
+  /** The commit a merge made on the default branch, when the host names it. */
+  mergeCommitSha: string | null;
 }
 
-/** What one check posted. */
+/** How a pull request closed. */
+export type CodeRepoPullRequestClose = "merged" | "unmerged";
+
+/** What one check posted, or how a closed pull request's findings settled. */
 export interface CodeRepoCheckOutcome {
-  conclusion: "success" | "neutral" | "failure";
+  /** Null when the pull request closed and no check was posted. */
+  conclusion: "success" | "neutral" | "failure" | null;
+  /** How the pull request closed, when the request was a close. */
+  settled?: CodeRepoPullRequestClose;
   /** Instruction files the pull request changes. */
   files: number;
+  /** Statements flagged, or for a close, stored findings deleted. */
   findings: number;
   /** New lines handed to S6's memory capture, less any it refused. */
   memories: number;

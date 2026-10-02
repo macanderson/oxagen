@@ -236,7 +236,7 @@ is not a backfill of the machine's history, and the two do not overlap:
   the cursor file and asks about the rest.
 - **The row records the normalizer.** `tacho.sessions.backfill_normalizer`
   holds the version from the `agent_start` attr `oxagen.backfill_normalizer`,
-  beside `record_basis`. Migration `20261002170000`.
+  beside `record_basis`. Migration `20261002173000`.
 - **The cursor file is `backfill-cursor.json`** in the agent's directory, as
   the spec renamed it. A pass that stopped partway reads the transcript again
   from byte 0. The frames are deterministic, so the replay drops what the

@@ -195,6 +195,7 @@ capability rewrites, so two such branches always conflicted on it (ADR-216).
 - publish_context_record
 - read_steering
 - refresh_context_pr
+- restore_managed_block
 - revert_steering_pr
 - revise_context_record
 - search_steering
@@ -396,11 +397,13 @@ capability rewrites, so two such branches always conflicted on it (ADR-216).
 - get_steering_repo
 - import_workspace_steering
 - link_repository
+- list_code_repository_findings
 - list_github_installations
 - list_installation_repositories
 - list_repositories
 - list_working_copies
 - open_init_pr
+- promote_instruction_to_steering
 - record_working_copy
 - repair_steering_repo
 - retry_steering_repo_provision
