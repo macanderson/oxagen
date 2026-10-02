@@ -312,6 +312,7 @@ function tabBody({
           runs={runs.ok ? runs.value : []}
           operatorName={operatorName}
           orgRole={ctx.orgRole}
+          wsRole={ctx.wsRole}
           place={place}
         />
       );

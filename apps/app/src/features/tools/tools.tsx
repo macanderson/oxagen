@@ -317,6 +317,7 @@ async function TabBody({
         <Policy
           at={at}
           orgRole={ctx.orgRole}
+          wsRole={ctx.wsRole}
           canWriteRules={admin}
           rules={rules}
           mandates={mandates}
