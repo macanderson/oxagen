@@ -726,7 +726,7 @@ after the registered name separately when their contract uses a dotted stem.
 | [revise_work_triage](work.triage.revise.md) | [work.triage.revise.ts](../../packages/oxagen/src/contracts/work.triage.revise.ts) | api, mcp |
 | [save_work_brief](work.brief.save.md) | [work.brief.save.ts](../../packages/oxagen/src/contracts/work.brief.save.ts) | api |
 | [send_work_order](work.order.send.md) | [work.order.send.ts](../../packages/oxagen/src/contracts/work.order.send.ts) | api |
-| [set_work_collector](work.collector.set.md) | [work.collector.set.ts](../../packages/oxagen/src/contracts/work.collector.set.ts) | api, mcp |
+| [set_work_collector](work.collector.set.md) | [work.collector.set.ts](../../packages/oxagen/src/contracts/work.collector.set.ts) | api |
 | [stop_work_order](work.order.stop.md) | [work.order.stop.ts](../../packages/oxagen/src/contracts/work.order.stop.ts) | api |
 | [sync_work_collector](work.collector.sync.md) | [work.collector.sync.ts](../../packages/oxagen/src/contracts/work.collector.sync.ts) | api, mcp |
 

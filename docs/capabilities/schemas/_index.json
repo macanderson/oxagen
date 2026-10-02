@@ -4913,8 +4913,7 @@
       "name": "set_work_collector",
       "domain": "work",
       "surfaces": [
-        "api",
-        "mcp"
+        "api"
       ],
       "component": null,
       "produces": [],
