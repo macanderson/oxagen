@@ -62,13 +62,13 @@ export const PLATFORM_ALLOWLIST = new Set<string>([
   "NEXT_PHASE",
   // Standard CI signal
   "CI",
-  // Set by the GitHub Actions runner itself, not by operators or env-manager.
+  // Set by the GitHub Actions runner itself, never by an operator.
   // The migration script also reads it before masking a decrypted parameter
   // in the log.
   "GITHUB_ACTIONS",
   // Process-placement knobs for the self-hosted API (apps/api/src/index.ts):
   // supplied by whatever runs the process — Caddy/systemd on the shared
-  // instance — never configured through env-manager. HOSTNAME doubles as the
+  // instance — never kept in Parameter Store. HOSTNAME doubles as the
   // POSIX machine name the OS sets, which is why it can never be a registry
   // entry with a schema.
   "PORT",
@@ -269,7 +269,7 @@ export const PLATFORM_ALLOWLIST = new Set<string>([
 ]);
 
 // ── Schema-exempt keys ────────────────────────────────────────────────────────
-// These are intentionally in ENV_REGISTRY (documented + deployed by env-manager)
+// These are intentionally in ENV_REGISTRY (documented in .env.example and the Atlas)
 // but deliberately NOT promoted to baseEnvSchema. They are CLI-only, dev-tooling,
 // or operator-local vars that never run through loadEnv() validation. Listing
 // them here silences the "promote to schema" warning without polluting the
@@ -305,7 +305,7 @@ export const SCHEMA_EXEMPT = new Set<string>([
   // Dev-tooling signal — set by tools/scripts/dev.ts; services: []
   "OXAGEN_LOCAL_DEV",
   // Operator scripts and build flags (#2823). Registered so `.env.example` and
-  // the env-manager document them, but read straight off process.env by a
+  // the Architecture Atlas document them, but read straight off process.env by a
   // script or a Next config — never through loadEnv(), so a schema entry would
   // validate them for services that never see them.
   "STANDALONE",
@@ -328,7 +328,6 @@ export const SCHEMA_EXEMPT = new Set<string>([
   "PRODUCTION_ANALYTICS_PASSWORD",
   "USER_EMAIL",
   "INNGEST_DEV",
-  "GCP_PROJECT",
   "CONTEXT_GRAPH_PROTOCOL_DIR",
   "MAIN_VERIFIED_WINDOW",
   "SCR_OWNER",

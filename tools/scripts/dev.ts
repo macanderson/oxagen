@@ -265,9 +265,8 @@ function tapStream(
 
 async function turbo(): Promise<void> {
   console.log(kleur.cyan("[dev] starting turbo dev"));
-  // @oxagen/cli is an Ink commander that exits 1 without a subcommand, and
-  // @oxagen/env-manager is an on-demand local tool (`pnpm env:manager`); both
-  // are excluded from the long-running dev set. Invoke the cli ad-hoc via
+  // @oxagen/cli is an Ink commander that exits 1 without a subcommand, so it
+  // is excluded from the long-running dev set. Invoke the cli ad-hoc via
   // `pnpm cli <command>`. Turbo 2 runs `persistent: true` tasks (see turbo.json)
   // in parallel by default — no --parallel flag needed.
   //
@@ -293,7 +292,6 @@ async function turbo(): Promise<void> {
       "dev",
       "--ui=stream",
       "--filter=!@oxagen/cli",
-      "--filter=!@oxagen/env-manager",
       // Not run in dev: it shares port 3000 with the new apps/app and is kept
       // only for the parity gates until the app cutover (ADR-081).
       "--filter=!@oxagen/app-deprecated",

@@ -2648,34 +2648,6 @@ importers:
         specifier: 2.1.9
         version: 2.1.9(@types/node@25.9.8)(jsdom@30.1.1(@noble/hashes@2.2.0))(lightningcss@1.33.0)(supports-color@8.1.1)(terser@5.48.0)
 
-  tools/env-manager:
-    dependencies:
-      '@hono/node-server':
-        specifier: 2.1.1
-        version: 2.1.1(hono@4.13.8)
-      '@oxagen/config':
-        specifier: workspace:*
-        version: link:../../packages/config
-      hono:
-        specifier: 4.13.8
-        version: 4.13.8
-    devDependencies:
-      '@types/node':
-        specifier: 25.9.8
-        version: 25.9.8
-      '@vitest/coverage-v8':
-        specifier: 2.1.9
-        version: 2.1.9(supports-color@8.1.1)(vitest@2.1.9)
-      tsx:
-        specifier: 4.23.5
-        version: 4.23.5
-      typescript:
-        specifier: 6.0.3
-        version: 6.0.3
-      vitest:
-        specifier: 2.1.9
-        version: 2.1.9(@types/node@25.9.8)(jsdom@30.0.1(@noble/hashes@2.2.0))(lightningcss@1.33.0)(supports-color@8.1.1)(terser@5.48.0)
-
   tools/scripts:
     dependencies:
       '@oxagen/agent':
