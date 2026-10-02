@@ -60,6 +60,14 @@ vi.mock("@/server/session", () => ({
   ),
 }));
 vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
+// The diff section is an async server component. Rendered on the client it
+// suspends inside render's act scope, which leaves the page's effects (the
+// refresh on open among them) unflushed. The page tests read no diff; the
+// diff tests below render ContextPrDiffBody directly.
+vi.mock("./context-pr-diff", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./context-pr-diff")>()),
+  ContextPrDiffSection: () => null,
+}));
 
 const { WsCtx } = await import("@/server/viewer");
 const { unsafeMint } = await import("@/server/viewer.testing");
