@@ -92,6 +92,18 @@ memory until one of those two deletes reached it (ADR-238).
     unused. It is not: `recall_tacho_memories` stamps each memory record it
     serves there, the curator's stale and contradiction checks read it, and a
     settled memory PR stamps its lineages there (ADR-238).
+12. **Tacho counts each Stella use as a citation (lane MEM4, #4911).**
+    Stella keeps each workspace's memories, and the turns that used them, in
+    `.stella/private/context.db`. Since its context schema 14 it shows both
+    in two read-only views, `export_memories_v1` and `export_memory_uses_v1`
+    (macanderson/stella#6646). Each live memory becomes a memory with source
+    `stella:<lineage>`. Each use row is a turn that put the memory in the
+    prompt, and the daemon sends it as a `citation` use. Stella names a turn's
+    thread by its start time and process id, and Tacho names a Stella run by
+    its process, so the daemon finds the run in its own registry by the pid
+    and the time the turn finished. A use no run fits is dropped, because
+    Oxagen recorded no run for it. A cursor in the agent's
+    `stella-memory-cursors.json` keeps a restart from counting a use twice.
 
 ## Consequences
 
@@ -107,6 +119,10 @@ memory until one of those two deletes reached it (ADR-238).
   A full scan on one host retires a memory whose file only the other holds.
 - The uses a daemon holds when it stops are lost. They wait at most five
   minutes before they are sent.
+- No scan list goes out for Stella, since a `stella:<lineage>` source names
+  no folder. A memory Stella forgets retires as `unused`, not `deleted`.
+- A Stella turn from before Tacho watched the host, or from a run the
+  registry has forgotten (a week after it ended), counts no use.
 
 ## Alternatives rejected
 

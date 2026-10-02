@@ -9,6 +9,11 @@
  * use. A use whose run Oxagen has not recorded yet comes back in `pending`,
  * and the daemon sends it again with its next report.
  *
+ * A use is a `read` unless it names its signal. Stella records each time a
+ * turn put a memory in the prompt, and the daemon sends each of those as a
+ * `citation`. Its path is the memory's lineage, so its source is
+ * `stella:<lineage>`.
+ *
  * A scan names a folder where a harness keeps its memory files, and every
  * memory file the scan found there. Each waiting or promoted memory of the
  * host's agent from a file under that folder that the scan did not find
@@ -34,8 +39,16 @@ const useSchema = z
   .object({
     /** The harness whose memory folder holds the file. */
     harness: tachoHarnessSchema,
-    /** The memory file's path on the host. With the harness, it is the memory's source. */
+    /**
+     * The memory file's path on the host, or a Stella memory's lineage. With
+     * the harness, it is the memory's source.
+     */
     path: pathSchema,
+    /**
+     * How the run used the memory: `read` (the default) for a file a run
+     * read, or `citation` for a memory Stella put in a turn's prompt.
+     */
+    signal: z.enum(["read", "citation"]).optional(),
     /** The root session of the run that read the file, as the host recorded it. */
     session_uuid: z.string().uuid(),
     /** How many times the run read the file since the host last reported it. */
