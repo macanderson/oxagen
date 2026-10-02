@@ -1,6 +1,6 @@
 /**
  * The Phase 1 work records hold their guarantees in the database, whoever
- * writes (P1-02, #4897; 20261001100000_work_records.sql).
+ * writes (P1-02, #4897; 20261002010000_work_records.sql).
  *
  * work-rls.test.ts proves tenant isolation on every work table. This suite
  * proves the rest against a live database, as the real `oxagen_app` role
