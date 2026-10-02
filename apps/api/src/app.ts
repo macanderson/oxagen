@@ -363,6 +363,7 @@ import { spendDrillRoute } from "./routes/v1/spend.drill";
 import { spendWasteListRoute } from "./routes/v1/spend.waste";
 import { spendOperatorRankingRoute } from "./routes/v1/spend.operator_ranking";
 import { spendOperatorPseudonymsSetRoute } from "./routes/v1/spend.operator_pseudonyms.set";
+import { spendPerMergedPrRoute } from "./routes/v1/spend.per_merged_pr";
 import { spendUnproductiveRoute } from "./routes/v1/spend.unproductive";
 import { skillConfigGetRoute } from "./routes/v1/skill.config.get";
 import { skillConfigUpdateRoute } from "./routes/v1/skill.config.update";
@@ -583,12 +584,13 @@ const TACHO_INGEST_PER_MIN = 120;
 // memories on the extra prompts, since the daemon fails open on a 429, and
 // its command poll and bundle refresh keep their own budget.
 const TACHO_RECALL_PER_MIN = 120;
-// Three more paths each hold a bucket of TACHO_HOST_PER_MIN of their own:
-// the GitHub credential, the contained launch, and the memory upload. A
-// memory upload is its own bucket because a daemon's first scan sends every
-// memory file a harness holds, and that burst must not starve the command
-// poll or the bundle refresh.
-const TACHO_OWN_BUCKET_PATHS = 3;
+// Four more paths each hold a bucket of TACHO_HOST_PER_MIN of their own:
+// the GitHub credential, the contained launch, the memory upload, and the
+// memory use report. A memory upload is its own bucket because a daemon's
+// first scan sends every memory file a harness holds, and that burst must not
+// starve the command poll or the bundle refresh. The use report sends a few
+// calls every five minutes, and it must not spend the upload's bucket.
+const TACHO_OWN_BUCKET_PATHS = 4;
 
 // Tacho hosts speak to Oxagen with their enrolled API key, whose scope pins
 // org and workspace, so the machine routes sit on a static path outside the
@@ -765,8 +767,17 @@ tachoScoped.use(
     bucketKey: enrolledMachineBucketKey,
   }),
 );
-// `/memories` above matches that path alone, so recall never counts against
-// the memory upload's bucket, nor the upload against recall's.
+// `/memories` above matches that path alone, so neither recall nor the use
+// report counts against the memory upload's bucket, nor the upload against
+// theirs.
+tachoScoped.use(
+  "/memories/uses",
+  distributedRateLimiter({
+    keyPrefix: "tacho-memory-uses",
+    max: TACHO_HOST_PER_MIN,
+    bucketKey: enrolledMachineBucketKey,
+  }),
+);
 tachoScoped.use(
   "/memories/recall",
   distributedRateLimiter({
@@ -899,6 +910,8 @@ orgScoped.route("/spend/waste", spendWasteListRoute);
 // pseudonym setting (spend spec, Operator ranking).
 orgScoped.route("/spend/operators", spendOperatorRankingRoute);
 orgScoped.route("/spend/operators/pseudonyms", spendOperatorPseudonymsSetRoute);
+// Spend per merged pull request, per agent (spend spec, detector 8; F26).
+orgScoped.route("/spend/per-merged-pr", spendPerMergedPrRoute);
 orgScoped.route("/spend/unproductive", spendUnproductiveRoute);
 orgScoped.route("/spend/statement/export", spendStatementExportRoute);
 // Cost-center chargeback (ADR-142). The list, create, delete, and statement

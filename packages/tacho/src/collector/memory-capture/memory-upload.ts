@@ -2,8 +2,11 @@
  * The daemon's `send` for the memory reader: one POST per memory to the
  * control plane's `/v1/tacho/memories`, authenticated by the host API key,
  * the way the GitHub broker mints a token. The body names the host, the
- * harness, the file, and its statement (`ingest_tacho_memories`). The API
- * refuses any other field, so an old collector's extra fields answer 400.
+ * harness, the file, and its statement (`ingest_tacho_memories`), plus the
+ * file's `label`, `summary`, and `memory_type` when its frontmatter has them.
+ * The API refuses any other field, so an old collector's extra fields answer
+ * 400. A field the file does not have is left out of the body, never sent
+ * empty.
  *
  * Resolving marks the entry sent, and rejecting leaves it for the next scan.
  * A 404 means the API does not take memories yet. It is logged once, and the
@@ -74,6 +77,11 @@ export function createMemoryUpload(
             harness: entry.harness,
             path: entry.path,
             statement: entry.statement,
+            ...(entry.label !== undefined ? { label: entry.label } : {}),
+            ...(entry.summary !== undefined ? { summary: entry.summary } : {}),
+            ...(entry.memoryType !== undefined
+              ? { memory_type: entry.memoryType }
+              : {}),
           }),
           signal: controller.signal,
         },

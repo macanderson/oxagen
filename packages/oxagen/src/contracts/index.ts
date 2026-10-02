@@ -75,6 +75,7 @@ import { tachoBundleGet } from "./tacho.bundle.get";
 import { tachoGithubTokenIssue } from "./tacho.github_token.issue";
 import { tachoMemoriesIngest } from "./tacho.memories.ingest";
 import { tachoMemoriesRecall } from "./tacho.memories.recall";
+import { tachoMemoryUsesRecord } from "./tacho.memories.uses.record";
 import { tachoCommandDispatch } from "./tacho.command.dispatch";
 import { pauseWorkspaceRuns } from "./tacho.workspace_runs.pause";
 import { tachoMachineGroupAdd } from "./tacho.machine_group.add";
@@ -123,6 +124,7 @@ import { spendDrill } from "./spend.drill";
 import { spendWasteList } from "./spend.waste";
 import { spendOperatorRanking } from "./spend.operator_ranking";
 import { spendOperatorPseudonymsSet } from "./spend.operator_pseudonyms.set";
+import { spendPerMergedPr } from "./spend.per_merged_pr";
 import { spendUnproductive } from "./spend.unproductive";
 import { skillConfigGet } from "./skill.config.get";
 import { skillConfigUpdate } from "./skill.config.update";
@@ -581,6 +583,9 @@ export {
   markdownImportFileCount,
   markdownImportFileSchema,
   markdownImportMatchSchema,
+  markdownImportMemoryMatchReasonSchema,
+  markdownImportMemoryMatchSchema,
+  markdownImportMemorySchema,
   markdownImportOriginSchema,
   markdownImportPolicyIssueSchema,
   markdownImportPolicySchema,
@@ -594,6 +599,8 @@ export type {
   MarkdownImportDocument,
   MarkdownImportFile,
   MarkdownImportMatch,
+  MarkdownImportMemory,
+  MarkdownImportMemoryMatch,
   MarkdownImportPolicy,
   MarkdownImportRecord,
   MarkdownImportTarget,
@@ -856,6 +863,7 @@ export {
   tachoGithubTokenIssue,
   tachoMemoriesIngest,
   tachoMemoriesRecall,
+  tachoMemoryUsesRecord,
   tachoContainedLaunchRegister,
   tachoCommandDispatch,
   pauseWorkspaceRuns,
@@ -928,6 +936,7 @@ export {
   spendWasteList,
   spendOperatorRanking,
   spendOperatorPseudonymsSet,
+  spendPerMergedPr,
   spendUnproductive,
   configurationCloneGet,
   configurationClonePropose,
@@ -1307,6 +1316,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   tachoGithubTokenIssue,
   tachoMemoriesIngest,
   tachoMemoriesRecall,
+  tachoMemoryUsesRecord,
   tachoContainedLaunchRegister,
   tachoCommandDispatch,
   pauseWorkspaceRuns,
@@ -1379,6 +1389,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   spendWasteList,
   spendOperatorRanking,
   spendOperatorPseudonymsSet,
+  spendPerMergedPr,
   spendUnproductive,
   configurationCloneGet,
   configurationClonePropose,

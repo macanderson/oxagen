@@ -1,18 +1,19 @@
 /**
- * `oxagen steering import <paths...> [--as records|policies] [--yes] [--json]`:
+ * `oxagen steering import <paths...> [--as records|policies|memories] [--yes] [--json]`:
  * read Markdown files, and every .md, .markdown, and .mdx file under a
- * folder, into steering records and Cedar policies.
+ * folder, into steering records, Cedar policies, or memories.
  *
  * Without --as, each file takes the target its text implies, which
  * parse_markdown_import decides: a file with a fenced `cedar` block becomes
  * policies, a README or index file is skipped, and the rest become records.
- * --as sets one target for every file. The Memories target arrives with the
- * Memories lane (#4907).
+ * --as sets one target for every file. --as memories splits every file into
+ * statements stored as waiting memories.
  *
- * A bare call previews the rows and writes nothing. --yes opens one steering
- * PR with every row marked add (commit_markdown_import). lib/markdown-import
- * holds the batching, the matching between calls, the preview, and the
- * commit, which `oxagen memory import` shares.
+ * A bare call previews the rows and writes nothing. --yes commits every row
+ * marked add (commit_markdown_import): one steering PR holds the records and
+ * policies, and the memories are stored as waiting memories with capture
+ * `import`. lib/markdown-import holds the batching, the matching between
+ * calls, the preview, and the commit, which `oxagen memory import` shares.
  */
 import { readdir, realpath, stat } from "node:fs/promises";
 import type { Dirent } from "node:fs";
@@ -41,7 +42,9 @@ export const STEERING_IMPORT_CAPABILITIES = [
 export const MARKDOWN_EXTENSIONS: ReadonlySet<string> = new Set([".md", ".markdown", ".mdx"]);
 
 /** The targets --as takes. */
-export type SteeringImportTarget = "records" | "policies";
+export type SteeringImportTarget = "records" | "policies" | "memories";
+
+const TARGETS: readonly SteeringImportTarget[] = ["records", "policies", "memories"];
 
 /** What a walk of the command line's paths found. */
 export interface MarkdownWalk {
@@ -123,21 +126,15 @@ function parseTarget(
   writer: CommandWriter,
 ): SteeringImportTarget | undefined {
   if (value === undefined) return undefined;
-  const target = value.toLowerCase();
-  if (target === "records" || target === "policies") return target;
-  if (target === "memories") {
-    failCommand(
-      "Memories are not an import target yet. Use --as records or --as policies.",
-      writer,
-    );
-  }
-  failCommand(`Invalid --as "${value}". Use records or policies.`, writer);
+  const target = TARGETS.find((t) => t === value.toLowerCase());
+  if (target !== undefined) return target;
+  failCommand(`Invalid --as "${value}". Use records, policies, or memories.`, writer);
 }
 
 export interface SteeringImportCliOptions {
-  /** records or policies for every file. Without it, each file takes the target its text implies. */
+  /** records, policies, or memories for every file. Without it, each file takes the target its text implies. */
   as?: string;
-  /** Open the steering PR. Without it, the command only previews the rows. */
+  /** Open the steering PR and store the memories. Without it, the command only previews the rows. */
   yes?: boolean;
   json?: boolean;
 }
@@ -173,7 +170,7 @@ export async function handleSteeringImport(
   const documents = await readImportDocuments(walk.sources, target, writer);
   await runMarkdownImport(
     documents,
-    { policies: true, yes: opts.yes, json: opts.json },
+    { policies: true, memories: true, yes: opts.yes, json: opts.json },
     writer,
   );
 }

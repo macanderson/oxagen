@@ -177,6 +177,22 @@ export interface HookHandlerDeps {
    * no prompt recalls anything.
    */
   recallMemories?: MemoryRecall;
+  /**
+   * Count the memory files one Claude Code tool call read as uses of those
+   * memories in the call's run (`memoryReadsOf` and `createMemoryUses` in
+   * `./memory-capture/memory-uses`, ADR-248). Called for each `PostToolUse`
+   * of a Claude Code session, with the run's root session, so a subagent's
+   * read counts for the run it belongs to. It queues the reads and never
+   * waits. Absent, as in `tacho-hook`, no read is counted.
+   */
+  noteMemoryReads?: (
+    call: {
+      toolName: string | undefined;
+      toolInput: Record<string, unknown> | undefined;
+      cwd: string | undefined;
+    },
+    run: { sessionUuid: string; at: string },
+  ) => void;
 }
 
 export interface HookReplay {
@@ -1632,6 +1648,20 @@ async function routeHook(
       events.push(...record.recorder.ingestHook(payload, env, at, withReplay));
       if (input.hook_event_name === "PostToolUseFailure")
         noteToolFailure(record, input.tool_name);
+      // A read that ran is a use of the memory file it read, even in a
+      // session the operator has since blocked. A failed call read nothing.
+      else if (
+        deps.noteMemoryReads !== undefined &&
+        (record.harness ?? "claude-code") === "claude-code"
+      )
+        deps.noteMemoryReads(
+          {
+            toolName: input.tool_name,
+            toolInput: input.tool_input,
+            cwd: input.cwd ?? record.cwd,
+          },
+          { sessionUuid: record.recorder.rootSessionUuid, at },
+        );
       if (operatorBlock(view, record) !== undefined)
         return { events, response: {}, record };
       const texts = drainMidTurn(input, record, deps, events, replay);

@@ -6371,6 +6371,23 @@
       }
     },
     {
+      "name": "get_spend_per_merged_pr",
+      "file": "spend.per_merged_pr.ts",
+      "domain": "spend",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
       "name": "export_statement",
       "file": "spend.statement.export.ts",
       "domain": "spend",
@@ -6829,6 +6846,21 @@
     {
       "name": "recall_tacho_memories",
       "file": "tacho.memories.recall.ts",
+      "domain": "tacho",
+      "mode": "sync",
+      "surfaces": [
+        "api"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "record_tacho_memory_uses",
+      "file": "tacho.memories.uses.record.ts",
       "domain": "tacho",
       "mode": "sync",
       "surfaces": [

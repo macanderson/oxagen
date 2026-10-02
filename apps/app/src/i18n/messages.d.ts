@@ -9824,6 +9824,29 @@ type Messages = {
         cost: string;
         total: string;
       };
+      perMergedPr: {
+        column: string;
+        figure: string;
+        absent: string;
+        absence: {
+          no_merged_pr: string;
+          mixed_currency: string;
+          not_priced: string;
+          no_bounded_run: string;
+        };
+        unpriced: string;
+        show: string;
+        runsTitle: string;
+        runsNote: string;
+        moreRuns: string;
+        state: {
+          merged: string;
+          reverted: string;
+          closed: string;
+          open: string;
+          unread: string;
+        };
+      };
     };
   };
   steering: {
@@ -10486,6 +10509,8 @@ type Messages = {
       back: string;
       commit: string;
       commitPending: string;
+      store: string;
+      storePending: string;
       cancel: string;
       close: string;
       drop: {
@@ -10519,11 +10544,11 @@ type Messages = {
         policies: string;
         skip: string;
         memories: string;
-        memoriesHint: string;
       };
       paths: {
         records: string;
         policies: string;
+        memories: string;
         none: string;
       };
       status: {
@@ -10547,6 +10572,7 @@ type Messages = {
       };
       grid: {
         intro: string;
+        memoriesIntro: string;
         tokens: string;
         label: string;
         columns: {
@@ -10569,12 +10595,14 @@ type Messages = {
         quoted: string;
         none: string;
         kept: string;
+        fromTarget: string;
         notRead: string;
         statements: string;
         rules: string;
         empty: string;
         unmatched: string;
         summary: string;
+        memories: string;
         out: string;
         open: string;
         tooMany: string;
@@ -10605,7 +10633,10 @@ type Messages = {
         conflict: string;
         update: string;
         replaced: string;
+        tooLong: string;
         matches: string;
+        waiting: string;
+        rejected: string;
         conflictsWith: string;
         replacedBy: string;
         rowRef: string;
@@ -10619,6 +10650,15 @@ type Messages = {
         opened: string;
         counts: string;
         link: string;
+        stored: string;
+        memoriesNote: string;
+        memoriesLink: string;
+        skip: {
+          waiting: string;
+          rejected: string;
+          import: string;
+          stored: string;
+        };
       };
       failure: {
         denied: string;

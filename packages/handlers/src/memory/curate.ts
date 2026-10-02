@@ -1,14 +1,18 @@
 // What the curator puts in one workspace's next memory PR (ADR-206,
-// decisions 6, 8, and 9).
+// decisions 6, 8, and 9, as ADR-248 amends them).
 //
-// The plan takes six steps, in order. It proposes archiving memory records
-// that a reflection contradicts or that no run recalled. It drops waiting
-// memories that an active steering record already says, or that waited too
-// long. It holds memories an open memory PR already proposes, and rejected
-// statements with no new evidence. It groups the rest by lesson. It writes
-// one steering record per group and cites at most `batch_size` memories.
+// The plan takes seven steps, in order. It proposes archiving memory records
+// that a reflection contradicts or that no run recalled. It links each
+// waiting memory an active steering record already says to that record. It
+// holds memories an open memory PR already proposes, and rejected statements
+// with no new evidence. It leaves waiting every memory no run used yet. It
+// ranks the rest by uses, then the newest use, then the newest capture, and
+// groups them by lesson in that order. It writes one steering record per
+// group and cites at most `batch_size` memories, from the top of the ranking.
 // Last, it fits the PR to 299 changed files and leaves the rest queued. The
-// plan reads no database and no clock. The runner passes `now` in.
+// plan reads no database and no clock. The runner passes `now` in, and the
+// runner retires memories no run used for `retire_after_days` before it
+// plans.
 import { MEMORY_DIR } from "@oxagen/oxagen/steering-repo/paths";
 import type {
   ProvenanceMemory,
@@ -49,7 +53,7 @@ const KEPT_KINDS: ReadonlySet<RecordKind> = new Set<RecordKind>([
   "fact",
 ]);
 
-/** Memories that say the same thing in one shard. The oldest one speaks for the rest. */
+/** Memories that say the same thing in one shard. The highest ranked one speaks for the rest. */
 interface Group {
   representative: StoredMemory;
   members: StoredMemory[];
@@ -128,30 +132,41 @@ function planRetirements(
 }
 
 /**
- * Drop each waiting memory that waited longer than the window, and each one
- * an active steering record already says. Any active record counts, not only
- * a memory record.
+ * Link each waiting memory an active steering record already says to that
+ * record. Any active record counts, not only a memory record. The memory is
+ * then promoted: the record already carries its lesson, so a memory PR would
+ * only propose it twice, and the memory keeps its row and its uses.
  */
-function dropMemories(
-  input: CurateInput,
-  now: number,
-  windowMs: number,
-): { drops: CuratePlan["drops"]; kept: StoredMemory[] } {
-  const said = input.records
-    .filter((record) => record.status === "active")
-    .map((record) => record.statement);
-  const drops: CuratePlan["drops"] = [];
+function sayMemories(input: CurateInput): {
+  said: CuratePlan["said"];
+  kept: StoredMemory[];
+} {
+  const active = input.records.filter((record) => record.status === "active");
+  const said: CuratePlan["said"] = [];
   const kept: StoredMemory[] = [];
   for (const memory of input.waiting) {
-    if (now - memory.createdAt.getTime() > windowMs) {
-      drops.push({ memoryId: memory.id, reason: "expired" });
-    } else if (said.some((statement) => saysSame(memory.statement, statement))) {
-      drops.push({ memoryId: memory.id, reason: "said" });
-    } else {
-      kept.push(memory);
-    }
+    const record = active.find((r) => saysSame(memory.statement, r.statement));
+    if (record !== undefined)
+      said.push({ memoryId: memory.id, lineage: record.lineage });
+    else kept.push(memory);
   }
-  return { drops, kept };
+  return { said, kept };
+}
+
+/**
+ * The curator's order: the most uses first, then the newest use, then the
+ * newest capture. The id breaks a tie, so the order never depends on the
+ * order the store read the rows in.
+ */
+export function rankMemories(memories: readonly StoredMemory[]): StoredMemory[] {
+  const time = (at: Date | null) => (at === null ? -Infinity : at.getTime());
+  return [...memories].sort(
+    (a, b) =>
+      b.useCount - a.useCount ||
+      time(b.lastUsedAt) - time(a.lastUsedAt) ||
+      b.createdAt.getTime() - a.createdAt.getTime() ||
+      (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
+  );
 }
 
 /**
@@ -221,17 +236,15 @@ function sameLesson(a: StoredMemory, b: StoredMemory): boolean {
 }
 
 /**
- * Group memories oldest first. Inside a shard, a memory joins the first group
- * whose representative says the same thing, or starts a group. The groups
- * come back in the order they started.
+ * Group memories in ranking order. Inside a shard, a memory joins the first
+ * group whose representative says the same thing, or starts a group. The
+ * groups come back in the order they started, so the group of the highest
+ * ranked memory comes first.
  */
-function groupMemories(memories: StoredMemory[]): Group[] {
-  const oldestFirst = [...memories].sort(
-    (a, b) => a.createdAt.getTime() - b.createdAt.getTime(),
-  );
+function groupMemories(ranked: StoredMemory[]): Group[] {
   const groups: Group[] = [];
   const byShard = new Map<string, Group[]>();
-  for (const memory of oldestFirst) {
+  for (const memory of ranked) {
     const shard = memoryShard(memory.repos);
     const shardGroups = byShard.get(shard) ?? [];
     byShard.set(shard, shardGroups);
@@ -340,10 +353,16 @@ export function planCuration(input: CurateInput): CuratePlan {
     now,
     windowMs,
   );
-  const { drops, kept } = dropMemories(input, now, windowMs);
+  const { said, kept } = sayMemories(input);
   const { held, ready } = holdMemories(kept, input);
+  // Only a memory a run used enters the batch (ADR-248). A memory with no
+  // use waits, and retires once `retire_after_days` pass with no use.
+  const used = ready.filter((memory) => memory.useCount > 0);
+  const unused = ready
+    .filter((memory) => memory.useCount <= 0)
+    .map((memory) => memory.id);
   const { cited, deferred } = takeBatch(
-    groupMemories(ready),
+    groupMemories(rankMemories(used)),
     input.governance.batch_size,
   );
 
@@ -356,8 +375,9 @@ export function planCuration(input: CurateInput): CuratePlan {
   );
 
   return {
-    drops,
+    said,
     held,
+    unused,
     deferred: [...fit.deferred, ...deferred],
     records,
     retirements: fit.retirements,

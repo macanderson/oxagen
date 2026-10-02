@@ -87,6 +87,29 @@ describe("ingest_tacho_memories", () => {
     expect(memoryIntakeSchema.safeParse(inputs[0]).success).toBe(true);
   });
 
+  it("passes a memory file's frontmatter to the runner", async () => {
+    const { ingest, handler } = handlerWith();
+    await handler(
+      contract.input.parse({
+        host_enrollment_id: HOST,
+        harness: "claude-code",
+        path: "/home/dev/.claude/projects/-p/memory/ledger.md",
+        statement: "Keep the ledger append-only.",
+        label: "Ledger",
+        summary: "The ledger never rewrites a row.",
+        memory_type: "project",
+      }),
+      ctx,
+    );
+    const [, inputs] = ingest.mock.calls[0] as unknown as [unknown, unknown[]];
+    expect(inputs[0]).toMatchObject({
+      label: "Ledger",
+      summary: "The ledger never rewrites a row.",
+      memoryType: "project",
+    });
+    expect(memoryIntakeSchema.safeParse(inputs[0]).success).toBe(true);
+  });
+
   it("answers stored false when the workspace already holds the memory", async () => {
     const { handler } = handlerWith({ written: 0, refused: 0 });
     await expect(handler(input, ctx)).resolves.toEqual({ stored: false });

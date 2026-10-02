@@ -69,13 +69,13 @@ describe("the steering PR file limit", () => {
   });
 
   it("lists the commit's own fields for the MCP tool", () => {
-    expect(Object.keys(markdownImportCommitFields).sort()).toEqual(["policies", "records"]);
+    expect(Object.keys(markdownImportCommitFields).sort()).toEqual(["memories", "policies", "records"]);
   });
 });
 
 describe("commit_markdown_import", () => {
   it("defaults its rows to none", () => {
-    expect(steeringMarkdownImportCommit.input.parse({})).toEqual({ records: [], policies: [] });
+    expect(steeringMarkdownImportCommit.input.parse({})).toEqual({ records: [], policies: [], memories: [] });
   });
 
   it("answers the steering PR and what it holds", () => {
@@ -85,11 +85,53 @@ describe("commit_markdown_import", () => {
       records: 0,
       policies: 1,
       skipped: 0,
+      memories: { stored: 0, skipped: [] },
     };
     expect(steeringMarkdownImportCommit.output.safeParse(out).success).toBe(true);
     expect(
       steeringMarkdownImportCommit.output.safeParse({ ...out, pullRequest: { ...out.pullRequest, number: 0 } }).success,
     ).toBe(false);
+  });
+
+  it("answers no PR for a commit of memories alone, and names each memory it left out", () => {
+    const out = {
+      pullRequest: null,
+      paths: [],
+      records: 0,
+      policies: 0,
+      skipped: 1,
+      memories: {
+        stored: 2,
+        skipped: [
+          { file: "notes.md", line: 4, reason: "waiting", memory: "mem_01" },
+          { file: "notes.md", line: 5, reason: "rejected", memory: null },
+          { file: "notes.md", line: 6, reason: "import", memory: null },
+          { file: "notes.md", line: 7, reason: "stored", memory: null },
+        ],
+      },
+    };
+    expect(steeringMarkdownImportCommit.output.safeParse(out).success).toBe(true);
+    expect(
+      steeringMarkdownImportCommit.output.safeParse({
+        ...out,
+        memories: { stored: 0, skipped: [{ file: "a.md", line: 1, reason: "published", memory: null }] },
+      }).success,
+    ).toBe(false);
+  });
+
+  it("counts no memory against the steering PR's file limit", () => {
+    const memories = Array.from({ length: 400 }, (_, i) => ({
+      file: "notes.md",
+      line: i + 1,
+      label: `Lesson ${i}`,
+      statement: `Lesson ${i}.`,
+      kind: "memory",
+      force: "info",
+      duplicate: null,
+      issue: null,
+      action: "add",
+    }));
+    expect(steeringMarkdownImportCommit.input.safeParse({ memories }).success).toBe(true);
   });
 });
 

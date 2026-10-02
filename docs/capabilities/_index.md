@@ -581,6 +581,7 @@ after the registered name separately when their contract uses a dotted stem.
 | [get_operator_ranking](spend.operator_ranking.md) | [spend.operator_ranking.ts](../../packages/oxagen/src/contracts/spend.operator_ranking.ts) | api, agent |
 | [get_spend](spend.get.md) | [spend.get.ts](../../packages/oxagen/src/contracts/spend.get.ts) | api, mcp, agent |
 | [get_spend_drill](spend.drill.md) | [spend.drill.ts](../../packages/oxagen/src/contracts/spend.drill.ts) | api, mcp, agent |
+| [get_spend_per_merged_pr](spend.per_merged_pr.md) | [spend.per_merged_pr.ts](../../packages/oxagen/src/contracts/spend.per_merged_pr.ts) | api, agent |
 | [get_unproductive_spend](spend.unproductive.md) | [spend.unproductive.ts](../../packages/oxagen/src/contracts/spend.unproductive.ts) | api, agent |
 | [list_cost_centers](cost_center.list.md) | [cost_center.list.ts](../../packages/oxagen/src/contracts/cost_center.list.ts) | api, mcp, agent |
 | [list_findings](finding.list.md) | [finding.list.ts](../../packages/oxagen/src/contracts/finding.list.ts) | api, mcp, agent, cli |
@@ -613,6 +614,7 @@ after the registered name separately when their contract uses a dotted stem.
 | [list_tacho_hosts](tacho.host.list.md) | [tacho.host.list.ts](../../packages/oxagen/src/contracts/tacho.host.list.ts) | api, mcp, agent |
 | [list_tacho_sessions](tacho.session.list.md) | [tacho.session.list.ts](../../packages/oxagen/src/contracts/tacho.session.list.ts) | api |
 | [recall_tacho_memories](tacho.memories.recall.md) | [tacho.memories.recall.ts](../../packages/oxagen/src/contracts/tacho.memories.recall.ts) | api |
+| [record_tacho_memory_uses](tacho.memories.uses.record.md) | [tacho.memories.uses.record.ts](../../packages/oxagen/src/contracts/tacho.memories.uses.record.ts) | api |
 | [remove_group_machine](tacho.machine_group.remove.md) | [tacho.machine_group.remove.ts](../../packages/oxagen/src/contracts/tacho.machine_group.remove.ts) | none |
 | [revoke_tacho_enrollment](tacho.enrollment.revoke.md) | [tacho.enrollment.revoke.ts](../../packages/oxagen/src/contracts/tacho.enrollment.revoke.ts) | api, agent |
 

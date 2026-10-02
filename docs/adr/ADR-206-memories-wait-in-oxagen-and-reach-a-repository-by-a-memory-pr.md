@@ -2,6 +2,8 @@
 
 - **Status:** Accepted. Superseded in part by ADR-238 (2026-09-30): decision
   10's recall of unreviewed memories, and the last sentence of decision 11.
+  Superseded in part by ADR-248 (2026-10-01): decision 7's purge, and the age
+  drop in decision 6 step 3.
 - **Date:** 2026-09-26
 - **Owners:** steering, tacho
 - **Related:** issue #4458 (lane S6), issue #4434 (the steering repo),
@@ -87,6 +89,13 @@ record leaves them as they are.
    memory the PR cited. A record that did not merge leaves the hash of each
    statement it cited in `memory_rejections`. The hash is the sha256 of the
    statement in lowercase, with punctuation removed and whitespace collapsed.
+
+   *Superseded in part by
+   [ADR-248](./ADR-248-memories-keep-their-rows-and-rank-by-use.md) on
+   2026-10-01.* No memory is deleted. A merged record promotes its memories,
+   a record that did not merge sends them back to waiting, and an active
+   record that already says a waiting memory links it. A memory no run used
+   for `retire_after_days` retires.
 8. **A rejected statement needs new evidence.** The curator proposes a
    rejected statement again only when memories with its hash came from at
    least 2 runs after the rejection. One agent repeating itself in one run is

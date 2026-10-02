@@ -14,7 +14,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { request } from "node:http";
-import { join } from "node:path";
+import { join, sep } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { verifyChain } from "../chain";
 import { digestText } from "../claude-code/context";
@@ -39,6 +39,7 @@ import {
 } from "../wire";
 import { type DaemonHandle, startDaemon } from "./daemon";
 import { MEMORY_UPLOAD_PATH } from "./memory-capture/memory-upload";
+import { MEMORY_USES_PATH } from "./memory-capture/memory-uses";
 import { HOOK_ID_REPLAY_WINDOW_MS } from "./registry";
 
 // The command test's session reports pid 59942, which is not running here, so
@@ -1895,14 +1896,27 @@ describe("tachod", () => {
     );
   });
 
-  /** A fetch that answers memory uploads with 201 and passes the rest to the plane. */
+  /**
+   * A fetch that answers memory uploads with 201 and memory use reports with
+   * 200, and passes the rest to the plane.
+   */
   function recordingMemoryUploads(plane: ReturnType<typeof fakeControlPlane>) {
     const uploads: Array<{
       url: string;
       authorization: string | undefined;
       body: unknown;
     }> = [];
+    const reports: unknown[] = [];
     const fetch: FetchLike = async (url, init) => {
+      if (url.endsWith(MEMORY_USES_PATH)) {
+        reports.push(JSON.parse(init.body ?? "null"));
+        return {
+          ok: true,
+          status: 200,
+          text: async () =>
+            JSON.stringify({ recorded: 0, unknown: 0, pending: [], retired: 0 }),
+        };
+      }
       if (!url.endsWith(MEMORY_UPLOAD_PATH)) return plane.fetch(url, init);
       uploads.push({
         url,
@@ -1911,7 +1925,7 @@ describe("tachod", () => {
       });
       return { ok: true, status: 201, text: async () => "{}" };
     };
-    return { fetch, uploads };
+    return { fetch, uploads, reports };
   }
 
   /** Writes a Claude Code memory file and its index, and returns the file's path. */
@@ -1939,7 +1953,8 @@ describe("tachod", () => {
     await vi.waitFor(() => expect(recorded.uploads).toHaveLength(1), {
       timeout: 2_000,
     });
-    // The index file is not a memory, and the frontmatter is not sent.
+    // The index file is not a memory. The frontmatter stays out of the
+    // statement, and its name travels as the label.
     expect(recorded.uploads).toEqual([
       {
         url: `${host.api_url}${MEMORY_UPLOAD_PATH}`,
@@ -1949,7 +1964,33 @@ describe("tachod", () => {
           harness: "claude-code",
           path: file,
           statement: "Use pnpm, not npm.",
+          label: "use-pnpm",
         },
+      },
+    ]);
+  });
+
+  it("reports the memory files its first scan found", async () => {
+    const plane = fakeControlPlane("etag-3");
+    const recorded = recordingMemoryUploads(plane);
+    const paths = scratchPaths();
+    const file = writeClaudeMemory(paths, "Use pnpm, not npm.\n");
+    const { host } = await boot(plane, paths, { fetch: recorded.fetch });
+    // No run read a memory yet, so the report holds the scan alone, and the
+    // index file is not listed.
+    await vi.waitFor(() => expect(recorded.reports).toHaveLength(1), {
+      timeout: 2_000,
+    });
+    expect(recorded.reports).toEqual([
+      {
+        host_enrollment_id: host.host_enrollment_id,
+        scans: [
+          {
+            harness: "claude-code",
+            root: `${paths.claudeProjects}${sep}`,
+            paths: [file],
+          },
+        ],
       },
     ]);
   });

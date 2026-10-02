@@ -105,7 +105,7 @@
     "commit_markdown_import": {
       "route": "/[org]/[ws]/steering",
       "page": "apps/app/src/app/[org]/[ws]/steering/page.tsx",
-      "entry": "Steering \u203a Import Markdown \u203a Review statements \u203a Open steering PR: the statement grid's commit, which opens one steering PR on steering/import-<date> and links to it (features/steering/import/import-markdown.tsx, features/steering/import/actions.ts)",
+      "entry": "Steering \u203a Import Markdown \u203a Review statements \u203a Open steering PR or Store memories: the statement grid's commit, which opens one steering PR on steering/import-<date> and links to it, and stores the memories as waiting memories and links to the Memories tab (features/steering/import/import-markdown.tsx, features/steering/import/actions.ts)",
       "testid": "import-commit",
       "proof": "apps/app/src/features/steering/import/import-markdown.test.tsx",
       "verifiedAt": "2026-10-01",
@@ -646,6 +646,14 @@
       "proof": "apps/app/src/features/spend/spend.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
+    },
+    "get_spend_per_merged_pr": {
+      "route": "/[org]/[ws]/spend",
+      "page": "apps/app/src/app/[org]/[ws]/spend/[[...tab]]/page.tsx",
+      "entry": "Spend › Month, grouped by agent › Per merged PR: each agent's spend on runs that opened a PR, divided by its PRs that merged and were not reverted within 14 days, with the runs behind it in the agent's open row (features/spend/month.tsx, data/live/spend.ts, data/live/mappers/spend.ts)",
+      "proof": "apps/app/src/features/spend/month.test.tsx",
+      "verifiedAt": "2026-10-02",
+      "verifiedBy": "session-3867219c-spend-f26"
     },
     "get_subscription": {
       "route": "/[org]/billing",

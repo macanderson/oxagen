@@ -1,7 +1,6 @@
 /**
  * findings-prompts.ts — the reads behind detector 6, prompt habits
- * (./findings/repeated-instructions.ts), and the call that opens a steering
- * record proposal for each instruction it finds.
+ * (./findings/repeated-instructions.ts).
  *
  * A prompt is the `turn_start` the `UserPromptSubmit` hook seals on the run's
  * own chain. The frame carries `prompt_digest` whatever the workspace keeps.
@@ -22,16 +21,13 @@ import { readLatestRetentionPolicy, withSystemDb } from "@oxagen/database";
 import { chSelect, type FrameRunRef } from "@oxagen/telemetry";
 import { runInTenantScope } from "@oxagen/tenancy";
 import {
-  instructionProposalOpener,
   microsOf,
   promptRunsToPrice,
-  type InstructionProposal,
   type PricedRequestFrame,
   type PromptRead,
   type PromptTextMode,
   type RunPrompt,
 } from "./findings";
-import { logger } from "./logger";
 
 type Scope = { orgId: string; workspaceId: string };
 
@@ -253,33 +249,4 @@ export async function readRunPrompts(
           }),
         );
   return { mode, prompts, frames };
-}
-
-/**
- * Open a steering record proposal for each repeated instruction through the
- * opener the handlers install. A pass in a process without the handlers, or
- * a failed open, writes its findings all the same: the next pass opens the
- * proposals again, and a lineage that already has one is left alone.
- */
-export async function openInstructionProposals(
-  scope: Scope,
-  proposals: readonly InstructionProposal[],
-): Promise<void> {
-  if (proposals.length === 0) return;
-  const open = instructionProposalOpener();
-  if (open === null) {
-    logger.warn(
-      { ...scope, proposals: proposals.length },
-      "findings: no steering record proposal opener installed",
-    );
-    return;
-  }
-  try {
-    await open(scope, proposals);
-  } catch (err) {
-    logger.error(
-      { ...scope, proposals: proposals.length, err },
-      "findings: opening steering record proposals failed",
-    );
-  }
 }
