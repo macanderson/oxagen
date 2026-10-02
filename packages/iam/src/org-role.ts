@@ -10,13 +10,23 @@
 // @oxagen/oxagen so the API middleware maps it to 403 and the app's kernel
 // seam to `denied` without either depending on this package.
 //
+// A workspace's Owner and Admin pass every such gate for a capability that
+// acts inside their workspace, whatever roles the handler names (#5228). The
+// rule lives in `@oxagen/oxagen/iam` (workspace-authority.ts); this gate
+// applies it last, after the roles the handler named.
+//
 // This module lives in @oxagen/iam rather than @oxagen/handlers so that
 // packages/agent, which depends on @oxagen/iam and not on @oxagen/handlers,
 // can run the same check. `packages/handlers/src/lib/api-key-authz.ts`
 // re-exports `resolveActorOrgRole` for its existing callers.
 
 import { schema, withOrgDb, type Tx } from "@oxagen/database";
-import { HandlerError } from "@oxagen/oxagen";
+import { getCapability, HandlerError } from "@oxagen/oxagen";
+import {
+  actsInWorkspace,
+  isRealWorkspaceId,
+  workspaceFullAccessRole,
+} from "@oxagen/oxagen/iam";
 import { and, eq, gt, isNull, or } from "drizzle-orm";
 
 /** Which assignments a role lookup reads: org-wide, or one workspace's. */
@@ -256,9 +266,24 @@ export async function resolveActingUserId(
 /** The fields of a `CapabilityContext` the role gate reads. */
 export interface OrgRoleActor {
   readonly orgId: string;
-  /** The workspace the call is scoped to; read only when `workspace` roles are required. */
+  /**
+   * The workspace the call is scoped to. Read when the handler names
+   * `workspace` roles, and by the workspace Owner and Admin rule.
+   */
   readonly workspaceId?: string;
   readonly userId: string | null;
+  /**
+   * The capability the kernel checked this call for
+   * (`CheckedContext.invokedCapability`). The workspace Owner and Admin rule
+   * admits a caller only when this names a registered capability that acts
+   * inside the workspace. A handler passes it by spreading its context:
+   * `{ ...ctx, userId }`. An actor without it gets no workspace rule.
+   */
+  readonly invokedCapability?: string;
+  /** Present on an agent run. The workspace rule never admits an agent run. */
+  readonly agentRun?: unknown;
+  /** Present on a deployed agent's pre-run call; treated as an agent run. */
+  readonly deployedAgentInvocation?: unknown;
 }
 
 /** The roles a handler accepts, by IAM role name (`iam.roles.name`). */
@@ -267,6 +292,60 @@ export interface OrgRoleRequirement {
   readonly org: readonly string[];
   /** Roles on `ctx.workspaceId` that satisfy it as well; absent for org-only gates. */
   readonly workspace?: readonly string[];
+  /**
+   * True when only the roles named here pass, and the workspace Owner and
+   * Admin rule does not apply (#5228). Set it where a workspace capability's
+   * handler guards a step outside the call's workspace: a write to another
+   * workspace named in the input, an org-wide target, or a list of
+   * approvers a customer configured.
+   */
+  readonly namedRolesOnly?: boolean;
+}
+
+/**
+ * Whether the workspace Owner and Admin rule may admit this call (#5228): the
+ * handler did not ask for its named roles only, the call is no agent's, it
+ * names a real workspace, and the kernel checked it for a registered
+ * capability that acts inside that workspace. Every condition fails closed:
+ * an actor the kernel did not stamp, an unknown capability name, and the
+ * org-only workspace id each turn the rule off.
+ */
+function workspaceRuleApplies(
+  ctx: OrgRoleActor,
+  required: OrgRoleRequirement,
+): boolean {
+  if (required.namedRolesOnly === true) return false;
+  if (ctx.agentRun != null || ctx.deployedAgentInvocation != null) {
+    return false;
+  }
+  if (!isRealWorkspaceId(ctx.workspaceId)) return false;
+  if (!ctx.invokedCapability) return false;
+  const capability = getCapability(ctx.invokedCapability);
+  return capability !== undefined && actsInWorkspace(capability);
+}
+
+/**
+ * The workspace Owner or Admin role that admits `userId` under the workspace
+ * rule (#5228), or null. For a gate that reads the org role itself rather
+ * than through `assertOrgRole`, such as the operator gates in
+ * packages/handlers/src/lib/api-key-authz.ts: it asks the same question
+ * `assertOrgRole` asks, so the rule stays in one place. Reads nothing when
+ * the rule cannot apply.
+ */
+export async function workspaceAuthorityRole(
+  ctx: OrgRoleActor,
+  userId: string,
+  transaction?: Tx,
+): Promise<string | null> {
+  if (!workspaceRuleApplies(ctx, { org: [] }) || !ctx.workspaceId) return null;
+  return workspaceFullAccessRole(
+    await resolveActorWorkspaceRoles(
+      ctx.orgId,
+      ctx.workspaceId,
+      userId,
+      transaction,
+    ),
+  );
 }
 
 /**
@@ -293,6 +372,12 @@ export interface OrgRoleRequirement {
  * passed: a user holding both Admin and Billing resolves to Admin, which is
  * outside `{Owner, Billing}`, so `purchase_credits` refused a billing member
  * for holding one role too many.
+ *
+ * Last, a workspace's Owner or Admin passes whatever `required` names, when
+ * the capability acts inside that workspace (#5228; see `workspaceRuleApplies`
+ * for the conditions, and `namedRolesOnly` for the opt-out). Workspace roles
+ * are matched by name. A custom role cannot take either name: `create_role`
+ * accepts lower-case names only, and binds a custom role to agents alone.
  */
 export async function assertOrgRole(
   ctx: OrgRoleActor,
@@ -316,18 +401,25 @@ export async function assertOrgRole(
   );
   if (orgMatch !== null) return orgMatch;
 
-  if (required.workspace && ctx.workspaceId) {
-    const acceptedOnWorkspace = required.workspace;
+  const workspaceRule = workspaceRuleApplies(ctx, required);
+  if ((required.workspace || workspaceRule) && ctx.workspaceId) {
     const wsRoles = await resolveActorWorkspaceRoles(
       ctx.orgId,
       ctx.workspaceId,
       ctx.userId,
       transaction,
     );
-    const wsMatch = mostPrivileged(
-      wsRoles.filter((name) => acceptedOnWorkspace.includes(name)),
-    );
-    if (wsMatch !== null) return wsMatch;
+    if (required.workspace) {
+      const acceptedOnWorkspace = required.workspace;
+      const wsMatch = mostPrivileged(
+        wsRoles.filter((name) => acceptedOnWorkspace.includes(name)),
+      );
+      if (wsMatch !== null) return wsMatch;
+    }
+    if (workspaceRule) {
+      const fullAccess = workspaceFullAccessRole(wsRoles);
+      if (fullAccess !== null) return fullAccess;
+    }
   }
 
   const accepted = [

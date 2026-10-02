@@ -178,6 +178,7 @@ async function renderStudio({
   serverId = STRIPE,
   tab = "tools",
   orgRole = "owner",
+  wsRole = "member",
   reads = {},
   record = recordOf,
   findings = () => Promise.resolve(findingsAnswer()),
@@ -187,12 +188,13 @@ async function renderStudio({
   serverId?: string;
   tab?: StudioTab;
   orgRole?: OrgRole;
+  wsRole?: WsRole;
   reads?: Reads;
   record?: (serverId: string) => StudioRecord | null;
   findings?: FindingsCall;
   toolsList?: ToolsListCall;
 } = {}) {
-  const ctx = viewer(orgRole);
+  const ctx = viewer(orgRole, wsRole);
   const { source, calls } = studioSource(reads);
   const readRecord = vi.fn<RecordReader>((_ctx, server) =>
     Promise.resolve(record(server.id)),
@@ -677,9 +679,54 @@ describe("StudioServer tool switches", () => {
     ).toBeInTheDocument();
     expect(
       screen.getByText(
-        "Only an organization owner or admin can import tools or change their classification.",
+        "Only an organization owner or admin, or a workspace owner or admin, can import tools or change their classification.",
       ),
     ).toBeInTheDocument();
+  });
+});
+
+// The Definition of done of #5228: MCP Studio shows every workspace action to
+// the workspace's Owner and Admin, whatever their org role. The actions are
+// the off switches on the server and its tools and the import checkboxes on
+// Tools, the credential form on Connection, and Open steering PR on Changes.
+// A workspace Member whose org role is Member is offered none of them.
+describe("StudioServer workspace Owner or Admin (#5228)", () => {
+  /** Which workspace actions the Tools, Connection and Changes tabs offer. */
+  async function offered(orgRole: OrgRole, wsRole: WsRole) {
+    await renderStudio({ orgRole, wsRole });
+    const tools = {
+      switches: screen.queryAllByRole("switch").length,
+      importTool: screen.queryByTestId("studio-import-create_payment") !== null,
+    };
+    cleanup();
+    await renderStudio({ tab: "connection", orgRole, wsRole });
+    const credential = screen.queryByTestId("studio-credential-form") !== null;
+    cleanup();
+    await renderStudio({ tab: "changes", orgRole, wsRole });
+    const openPr = screen.queryByTestId("studio-pr-open") !== null;
+    return { ...tools, credential, openPr };
+  }
+
+  it.each(["owner", "admin"] as const)(
+    "offers every workspace action to the workspace's %s whose org role is Member",
+    async (wsRole) => {
+      expect(await offered("member", wsRole)).toEqual({
+        // The server's switch and create_payment's, as an org Owner gets.
+        switches: 2,
+        importTool: true,
+        credential: true,
+        openPr: true,
+      });
+    },
+  );
+
+  it("offers none of them to a workspace Member whose org role is Member (negative)", async () => {
+    expect(await offered("member", "member")).toEqual({
+      switches: 0,
+      importTool: false,
+      credential: false,
+      openPr: false,
+    });
   });
 });
 

@@ -109,6 +109,15 @@ export async function agentRoleAssignHandler(
     const principalId = agent.principalId;
 
     const role = await resolveRoleByName(tx, ctx.orgId, input.roleName);
+    // An org-scoped role is assigned org-wide, outside this workspace, so the
+    // workspace Owner and Admin rule does not reach it (#5228).
+    if (role.scopeKind === "org") {
+      await assertOrgRole(
+        { ...ctx, userId: await resolveActingUserId(ctx) },
+        { org: ["Owner", "Admin"], namedRolesOnly: true },
+        tx,
+      );
+    }
 
     // System roles: only the agent system roles are agent-assignable — human
     // org roles (Owner is a resolver super-user via rule 7.5) never are.

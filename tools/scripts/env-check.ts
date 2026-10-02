@@ -123,11 +123,6 @@ export const PLATFORM_ALLOWLIST = new Set<string>([
   "USER",
   "SHELL",
   "BASH_SOURCE",
-  // Bash sets these for every script. The CI runner's vendored start script
-  // (infra/stacks-new/ci-runners/image/vendor/start-runner.sh) reads them in
-  // its error trap.
-  "LINENO",
-  "BASH_LINENO",
   // Windows' equivalents, set by the OS for every process: the home
   // directory, the two application-data roots, and the machine-wide
   // program root that tacho's harness lookup checks for `claude` /

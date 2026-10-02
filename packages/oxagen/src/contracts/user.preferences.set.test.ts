@@ -18,6 +18,7 @@ const EVERY_ORG_ROLE: Record<SystemOrgRole, true> = {
 };
 const EVERY_WORKSPACE_ROLE: Record<SystemWorkspaceRole, true> = {
   Owner: true,
+  Admin: true,
   Member: true,
   Viewer: true,
 };

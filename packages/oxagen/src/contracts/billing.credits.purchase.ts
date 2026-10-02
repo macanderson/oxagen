@@ -51,6 +51,7 @@ export const billingCreditsPurchase = registerCapability({
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "e2e", "docs", "app"],
   scoped: true,
+  orgLevel: true,
   agent: { requiresApproval: true, riskLevel: "medium", category: "billing" },
   sensitivity: "high",
   // Opens a Stripe Checkout session, and creates the org's Stripe customer

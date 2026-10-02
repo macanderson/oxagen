@@ -10,6 +10,7 @@ export const privacyDataErase = registerCapability({
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs"],
   scoped: true,
+  orgLevel: true,
   agent: { requiresApproval: true, riskLevel: "high", category: "privacy" },
   sensitivity: "destructive",
   mutates: true,

@@ -61,6 +61,7 @@ export const costPriceEntryRemove = registerCapability({
   surfaces: ["api", "mcp", "agent", "cli"],
   layers: ["schema", "api", "mcp", "cli", "app", "unit", "docs"],
   scoped: true,
+  orgLevel: true,
   // Returning to list pricing must never be refused for being over budget, and
   // it consumes no AI credits.
   noBillingGate: true,

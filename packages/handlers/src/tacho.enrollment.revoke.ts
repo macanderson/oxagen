@@ -10,6 +10,7 @@ import {
   resolveActorOrgRole as resolveActorRole,
   resolveOperatorUserId,
 } from "./lib/api-key-authz";
+import { workspaceAuthorityRole } from "@oxagen/iam/org-role";
 import {
   retireEnrollmentKeys,
   revokeHostEnrollment,
@@ -39,18 +40,31 @@ export const tachoEnrollmentRevokeHandler: CapabilityHandler<
   const operatorUserId = await resolveOperatorUserId(ctx);
   if (!operatorUserId) throw denied(noOperatorMessage(ctx));
   const actorRole = await resolveActorRole(ctx.orgId, operatorUserId);
-  if (!actorRole || !AUTHORIZED_ROLES.has(actorRole)) {
+  // A workspace's Owner or Admin revokes that workspace's hosts too (#5228).
+  // The host lookup below is pinned to the call's workspace, so the rule
+  // reaches no other workspace's host.
+  if (
+    (!actorRole || !AUTHORIZED_ROLES.has(actorRole)) &&
+    (await workspaceAuthorityRole(
+      { ...ctx, userId: operatorUserId },
+      operatorUserId,
+    )) === null
+  ) {
     throw denied(
-      "Forbidden: only org Owners and Admins can revoke Tacho hosts",
+      "Forbidden: only org Owners and Admins, or the workspace's Owner or Admin, can revoke Tacho hosts",
     );
   }
 
   const now = new Date();
   const result = await withTenantDb(async (tx) => {
     const host = await tx.query.tachoHosts.findFirst({
+      // Pinned to the call's workspace, not left to row level security alone:
+      // a workspace's Owner or Admin passes the gate above for their own
+      // workspace only (#5228).
       where: and(
         eq(schema.tachoHosts.publicId, input.hostEnrollmentId),
         eq(schema.tachoHosts.orgId, ctx.orgId),
+        eq(schema.tachoHosts.workspaceId, ctx.workspaceId),
       ),
       // Revoking a host has nothing to do with the gateway tier, and must not
       // start failing because the column it never reads is not there yet.

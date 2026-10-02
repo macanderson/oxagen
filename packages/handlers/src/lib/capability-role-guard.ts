@@ -26,12 +26,21 @@
 // reads the IAM role assignments the assistant's own gate reads, acts as an
 // API key's creator (apps/app/ARCHITECTURE.md §9, 2026-09-15), and refuses
 // with `HandlerError { code: "forbidden" }`, which the API maps to 403.
+//
+// Both admit a workspace's Owner and Admin for a capability that acts inside
+// that workspace, whatever the contract's `defaultRoles` names (#5228,
+// `@oxagen/oxagen/iam` workspace-authority.ts).
 
 import {
   HandlerError,
   type CapabilityContext,
   type CapabilityDeclaration,
 } from "@oxagen/oxagen";
+import {
+  actsInWorkspace,
+  isRealWorkspaceId,
+  membershipFullAccessRole,
+} from "@oxagen/oxagen/iam";
 import { schema, withSystemDb } from "@oxagen/database";
 import {
   assertOrgRole,
@@ -40,11 +49,12 @@ import {
 } from "@oxagen/iam/org-role";
 import { and, eq } from "drizzle-orm";
 
-/** The two fields of a contract this guard reads. */
+/** The fields of a contract this guard reads. */
 export type RoleGatedCapability = Pick<
   CapabilityDeclaration,
   "name" | "defaultRoles"
->;
+> &
+  Partial<Pick<CapabilityDeclaration, "orgLevel" | "platformOnly">>;
 
 /** Role names a contract grants, lowercased for comparison. */
 export interface PermittedRoles {
@@ -187,9 +197,20 @@ export async function assertCallerRole(
     if (role !== null && permitted.org.has(role)) return;
   }
 
-  if (permitted.workspace.size > 0 && ctx.workspaceId) {
+  // The workspace Owner and Admin rule (#5228): the membership column stands
+  // in for the IAM role here, as it does for the contract's own workspace
+  // roles above. Never for an agent run, an org-level contract, or a call
+  // with no real workspace.
+  const workspaceRule =
+    ctx.agentRun == null &&
+    ctx.deployedAgentInvocation == null &&
+    isRealWorkspaceId(ctx.workspaceId) &&
+    actsInWorkspace(capability);
+
+  if ((permitted.workspace.size > 0 || workspaceRule) && ctx.workspaceId) {
     const role = await workspaceRole(ctx.workspaceId, ctx.userId);
     if (role !== null && permitted.workspace.has(role)) return;
+    if (workspaceRule && membershipFullAccessRole(role) !== null) return;
   }
 
   throw new Error(denial);

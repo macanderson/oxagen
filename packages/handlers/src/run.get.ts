@@ -18,6 +18,12 @@
 // header can name the repository while the work read is pending or after it
 // failed.
 //
+// A wrapped run also answers the pull requests its frames name, each with the
+// state a forge last reported (ADR-192). It is the read `list_runs` makes for a
+// page of rows, made for this one run, so the Run header and the Fleet row
+// name the same state. Without it the header had only the live GitHub read,
+// and every pull request that read did not reach said "status unknown".
+//
 // `waitMs` is the handler-side long poll (ARCHITECTURE.md §3.5): with no event
 // past the cursor, the handler sleeps POLL_INTERVAL_MS at a time inside the
 // tenant scope until one lands or the budget runs out. The gates and the audit
@@ -52,7 +58,10 @@ import {
   type RunGetInput,
   type RunGetOutput,
 } from "@oxagen/oxagen/contracts/run.get";
-import type { RunPause } from "@oxagen/oxagen/contracts/run.list";
+import type {
+  RunPause,
+  RunPullRequest,
+} from "@oxagen/oxagen/contracts/run.list";
 import type { RunFrame, SubagentChainRow } from "@oxagen/run-ledger";
 import { selectTachoChainHeads } from "@oxagen/telemetry";
 import {
@@ -62,6 +71,10 @@ import {
   type RunScope,
 } from "./run.list";
 import { readStoredFit, storedFitOf } from "./lib/run-fit";
+import {
+  type ReadRunPullRequests,
+  readRunPullRequests,
+} from "./lib/run-list-work";
 import {
   connectedRunRepositories,
   readSessionConfig,
@@ -449,7 +462,40 @@ export type RunGetDeps = RunReadDeps & {
    * field, which a reader takes as not read.
    */
   pause?: RunPauseDeps;
+  /**
+   * The pull requests a wrapped session's frames name, each with its stored
+   * state, as `list_runs` reads them. Absent, the read answers no
+   * `pullRequests` field, which a reader takes as not read.
+   */
+  pullRequests?: ReadRunPullRequests;
 };
+
+/**
+ * The pull requests a wrapped run's frames name, with their stored states. A
+ * ledger run records none this way. A read that fails leaves the field out,
+ * which the page reads as not read, rather than failing the page.
+ */
+export function readRunPulls(
+  deps: Pick<RunGetDeps, "pullRequests">,
+  run: ResolvedRun,
+): Promise<RunPullRequest[] | undefined> {
+  const read = deps.pullRequests;
+  if (read === undefined || run.source !== "tacho")
+    return Promise.resolve(undefined);
+  const session = run.sessionUuid;
+  return Promise.resolve()
+    .then(() => read([session]))
+    .then(
+      (found) => found.get(session) ?? [],
+      (err: unknown) => {
+        logger.warn(
+          { err, runId: run.item.id },
+          "get_run: the run's pull requests could not be read; the page reads them as not read",
+        );
+        return undefined;
+      },
+    );
+}
 
 /**
  * The pause in force on a live run (#3972); a sealed run holds none. A read
@@ -559,6 +605,7 @@ export function createRunGetHandler(
     // the frames are, since neither needs the other. So is the repository.
     const repository = placeRepository(deps, runScope(ctx), run, input.runId);
     const pause = readPause(deps, runScope(ctx), run);
+    const pulls = readRunPulls(deps, run);
     const header =
       run.source === "tacho"
         ? Promise.all([
@@ -636,14 +683,16 @@ export function createRunGetHandler(
         : moved === undefined
           ? watch.read()
           : polled.then(() => watch.latest());
-    const [[title, config], reading, read, named, chains, paused] = await Promise.all([
-      header,
-      fit,
-      polled,
-      repository,
-      heads,
-      pause,
-    ]);
+    const [[title, config], reading, read, named, chains, paused, pullRequests] =
+      await Promise.all([
+        header,
+        fit,
+        polled,
+        repository,
+        heads,
+        pause,
+        pulls,
+      ]);
     const { batch } = read;
     const frames = batch.slice(0, frameLimit);
     const last = frames.at(-1);
@@ -671,6 +720,7 @@ export function createRunGetHandler(
         recordBasis:
           run.source === "tacho" ? recordBasisOf(run.row.session) : "live",
         ...(paused === undefined ? {} : { pause: paused }),
+        ...(pullRequests === undefined ? {} : { pullRequests }),
       },
       frames: {
         frames: frames.map(toFrame),
@@ -708,6 +758,7 @@ export function defaultRunGetDeps(): RunGetDeps {
       pauseCommands: postgresPauseCommands,
       pausePosition: clickhousePausePosition,
     },
+    pullRequests: readRunPullRequests,
   };
 }
 

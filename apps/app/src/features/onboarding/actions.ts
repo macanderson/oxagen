@@ -3,8 +3,9 @@
 // agent (#2967, ADR-065, lane S7 #4518), each through the kernel seam for the
 // viewer the URL names. Every contract here is role-checked in its handler
 // (INV-29): `create_workspace`, `register_agent`, `create_enrollment_token`
-// and `advance_onboarding` admit an org Owner or Admin, and a refusal comes
-// back as `denied` with nothing written.
+// and `advance_onboarding` admit an org Owner or Admin. `register_agent` and
+// `create_enrollment_token` act inside the workspace, so its Owner and Admin
+// pass too (#5228). A refusal comes back as `denied` with nothing written.
 import { agentRegister } from "@oxagen/oxagen/contracts/agent.register";
 import { onboardingAdvance } from "@oxagen/oxagen/contracts/onboarding.advance";
 import {

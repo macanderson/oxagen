@@ -7,8 +7,8 @@
 // Both pickers are option cards. On the move, a runtime that already runs a
 // live agent with this agent's harness stays in the list, disabled, with a
 // popover naming the agent that holds it, and the runtime the agent is on now
-// says so. A viewer the handlers would refuse (not an org Owner or Admin) sees
-// the current binding and who can change it, and no control.
+// says so. A viewer the handlers would refuse (not an org or workspace Owner
+// or Admin) sees the current binding and who can change it, and no control.
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 import type {
@@ -41,7 +41,7 @@ export function ToolbeltChoice({
   /** The belt the agent carries now; null only before the workspace has one. */
   current: ToolbeltRef | null;
   belts: Read<ToolbeltList>;
-  /** Whether the viewer may change it (an org Owner or Admin). */
+  /** Whether the viewer may change it (an org or workspace Owner or Admin). */
   canChange: boolean;
 }) {
   const t = useTranslations("agents.detail.binding.toolbelt");
@@ -160,7 +160,7 @@ export function RuntimeMove({
   /** The runtime the agent runs on now; null when it runs on no named one. */
   current: RuntimeRef | null;
   runtimes: Read<NamedRuntimeList>;
-  /** Whether the viewer may move it (an org Owner or Admin). */
+  /** Whether the viewer may move it (an org or workspace Owner or Admin). */
   canMove: boolean;
 }) {
   const t = useTranslations("agents.detail.binding.runtime");

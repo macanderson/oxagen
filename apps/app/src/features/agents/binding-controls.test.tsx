@@ -123,7 +123,9 @@ describe("ToolbeltChoice", () => {
     );
     expect(screen.queryByRole("radiogroup")).toBeNull();
     expect(
-      screen.getByText("An organization owner or admin can change it."),
+      screen.getByText(
+        "An organization or workspace owner or admin can change it.",
+      ),
     ).toBeInTheDocument();
   });
 

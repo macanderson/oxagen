@@ -14,7 +14,7 @@
 // a triage field correction, and a collector change accept an API key's
 // creator on the MCP surface, as P1-03 built them, but the page never acts
 // that way. The flags decide nothing: each action checks again on the server.
-import type { CapabilityContext } from "@oxagen/oxagen";
+import type { CheckedContext } from "@oxagen/oxagen";
 import { isHandlerError } from "@oxagen/oxagen/handler-error";
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { workActionRoles } from "@oxagen/work/records";
@@ -39,15 +39,23 @@ async function passes(check: Promise<string>): Promise<boolean> {
 }
 
 /** The viewer flags for the caller of a Work read. */
-export async function workViewer(ctx: CapabilityContext): Promise<WorkViewer> {
+export async function workViewer(ctx: CheckedContext): Promise<WorkViewer> {
   if (ctx.apiKeyId || ctx.agentRun) return NOTHING;
   const userId = await resolveActingUserId(ctx);
   if (userId === null) return NOTHING;
+  // The invoked capability lets the gate admit the workspace's Owner or Admin
+  // (#5228), as each Work action's own check does.
   const canControl = await passes(
-    assertOrgRole({ orgId: ctx.orgId, workspaceId: ctx.workspaceId, userId }, workActionRoles("send")),
+    assertOrgRole(
+      { orgId: ctx.orgId, workspaceId: ctx.workspaceId, userId, invokedCapability: ctx.invokedCapability },
+      workActionRoles("send"),
+    ),
   );
   const canApprove = await passes(
-    assertOrgRole({ orgId: ctx.orgId, workspaceId: ctx.workspaceId, userId }, workActionRoles("accept")),
+    assertOrgRole(
+      { orgId: ctx.orgId, workspaceId: ctx.workspaceId, userId, invokedCapability: ctx.invokedCapability },
+      workActionRoles("accept"),
+    ),
   );
   return { can_control: canControl, can_approve: canApprove };
 }

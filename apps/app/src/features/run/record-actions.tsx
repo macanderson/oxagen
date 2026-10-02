@@ -7,7 +7,7 @@
 // cannot see yet. Summarize is offered on a sealed run with no summary, and
 // again once one exists, because a run can be re-read after its bodies change
 // hands; the label says which of the two it is. Each is drawn disabled, with
-// the reason, for a viewer whose org role its handler would refuse. Re-reading
+// the reason, for a viewer whose roles its handler would refuse. Re-reading
 // the run refreshes the route the person is on, so their tab stays put.
 //
 // An export is the one write whose result this dialog can follow: once
@@ -23,7 +23,7 @@ import {
   useState,
 } from "react";
 import type { ActionResult } from "@/server/kernel";
-import type { OrgRole } from "@/server/viewer";
+import type { OrgRole, WsRole } from "@/server/viewer";
 import { UNANSWERED, useActionFailure } from "@/ui/command-failure";
 import { buttonSecondary, mono } from "@/ui/control-styles";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
@@ -31,6 +31,7 @@ import { useFormatter } from "@/ui/formatter";
 import { formatByteSize } from "@/ui/money-format";
 import { RunExportDownloadLink, useNavigate } from "@/ui/navigation";
 import { parseRunExportDownloadUrl } from "@/shared/run-export-download-url";
+import { mayActInWorkspace } from "@/shared/workspace-authority";
 import { SheetDialog } from "@/ui/sheet-dialog";
 import {
   exportRun,
@@ -426,6 +427,12 @@ function RecordDialog<O>({
   );
 }
 
+/** The org roles `summarize_run` names. */
+const SUMMARIZING_ORG_ROLES: readonly OrgRole[] = ["owner", "admin", "member"];
+
+/** The org roles `export_run` names. */
+const EXPORTING_ORG_ROLES: readonly OrgRole[] = ["owner", "admin"];
+
 /**
  * Summarize or re-summarize (`summarize_run`), in the Summary panel. Offered
  * on a sealed run: the handler refuses a live one, whose summary the
@@ -440,6 +447,7 @@ export function SummarizeAction({
   hasSummary,
   summarizable,
   orgRole,
+  wsRole,
 }: {
   org: string;
   ws: string;
@@ -452,13 +460,16 @@ export function SummarizeAction({
    * answers it, so the button and the handler read one rule (#3285).
    */
   summarizable: boolean;
-  /** `summarize_run` admits an org Owner, Admin or Member. */
+  /**
+   * `summarize_run` admits an org Owner, Admin or Member, or the workspace's
+   * Owner or Admin (#5228).
+   */
   orgRole: OrgRole;
+  wsRole: WsRole;
 }) {
   const t = useTranslations("run.record");
   if (!sealed) return null;
-  const hasRole =
-    orgRole === "owner" || orgRole === "admin" || orgRole === "member";
+  const hasRole = mayActInWorkspace(orgRole, wsRole, SUMMARIZING_ORG_ROLES);
   const canSummarize = hasRole && summarizable;
   const action = hasSummary ? "resummarize" : "summarize";
   if (canSummarize)
@@ -492,8 +503,8 @@ export function SummarizeAction({
  * Export (`export_run`), always the header's last action (pages/run.md), and
  * the Chain tab's "Export the bundle". A signed bundle is built from a sealed
  * record, so a live run draws it disabled with that reason; a viewer the
- * handler would refuse (it admits an org Owner or Admin) sees it disabled
- * with the role it needs.
+ * handler would refuse (it admits an org Owner or Admin, or the workspace's
+ * Owner or Admin) sees it disabled with the role it needs.
  */
 export function ExportAction({
   org,
@@ -502,6 +513,7 @@ export function ExportAction({
   sealed,
   closedIdle = false,
   orgRole,
+  wsRole,
   label,
   testId = "run-export",
 }: {
@@ -516,13 +528,14 @@ export function ExportAction({
    */
   closedIdle?: boolean;
   orgRole: OrgRole;
+  wsRole: WsRole;
   /** The button's words where they are not the header's "Export". */
   label?: string;
   testId?: string;
 }) {
   const t = useTranslations("run.record");
   const reasonId = useId();
-  const canExport = orgRole === "owner" || orgRole === "admin";
+  const canExport = mayActInWorkspace(orgRole, wsRole, EXPORTING_ORG_ROLES);
   const text = label ?? t("export.open");
   if (sealed && !closedIdle && canExport)
     return (

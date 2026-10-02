@@ -107,13 +107,30 @@ describe("import_workspace_steering handler", () => {
     });
     expect(mocks.orgRole).toHaveBeenCalledWith(
       expect.objectContaining({ orgId: "org_1", userId: "u_1" }),
-      { org: ["Owner", "Admin"] },
+      { org: ["Owner", "Admin"], namedRolesOnly: true },
     );
     expect(mocks.reset).not.toHaveBeenCalled();
     expect(mocks.run).not.toHaveBeenCalled();
     mocks.orgRole.mockClear();
     await run();
     expect(mocks.orgRole).not.toHaveBeenCalled();
+  });
+
+  it("lets only an org Owner or Admin pick the organization's connection (#5228)", async () => {
+    // A pick stores the org's connection when it has none. A workspace Owner
+    // or Admin who holds no org role is refused it, and nothing is stored.
+    mocks.orgRole.mockRejectedValue(
+      new HandlerError({ code: "forbidden", reason: "org_role_required" }),
+    );
+    await expect(
+      run({ connection: { provider: "github", id: 11 } }),
+    ).rejects.toMatchObject({ reason: "org_role_required" });
+    expect(mocks.orgRole).toHaveBeenCalledWith(
+      expect.objectContaining({ orgId: "org_1", userId: "u_1" }),
+      { org: ["Owner", "Admin"], namedRolesOnly: true },
+    );
+    expect(mocks.pick).not.toHaveBeenCalled();
+    expect(mocks.run).not.toHaveBeenCalled();
   });
 
   it("runs nothing when the picked connection is refused", async () => {

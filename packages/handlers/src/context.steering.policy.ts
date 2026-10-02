@@ -3,6 +3,7 @@
 // reads the file and the caller's roles, this decides.
 import { parse } from "smol-toml";
 import type { GovernanceMode } from "@oxagen/oxagen/contracts/context.steering.shared";
+import { workspaceFullAccessRole } from "@oxagen/oxagen/iam";
 import { LEGACY_GOVERNANCE_PATH } from "@oxagen/oxagen/steering-repo/paths";
 
 export const GOVERNANCE_PATH = LEGACY_GOVERNANCE_PATH;
@@ -47,7 +48,7 @@ interface MergeActor {
 /** What each mode asks of the merger, for the page's "What merge will do". */
 export const REVIEW_BY_MODE: Record<GovernanceMode, string> = {
   solo: "solo: any workspace member merges, the author included",
-  team: "team: an org Owner or Admin, or a workspace Owner, other than the author merges",
+  team: "team: an org Owner or Admin, or a workspace Owner or Admin, other than the author merges",
   regulated:
     "regulated: an org Owner or Admin other than the author merges, recorded as the accountable approver",
 };
@@ -55,6 +56,11 @@ export const REVIEW_BY_MODE: Record<GovernanceMode, string> = {
 /**
  * The merge gate per mode. Returns null when the actor may merge, else the
  * reason code the handler refuses with.
+ *
+ * A workspace Admin counts as the workspace's Owner does (#5228). The
+ * `regulated` mode is the one place a workspace's Owner and Admin do not
+ * pass: a workspace that chose it asked for an org Owner or Admin as the
+ * accountable approver of every merge.
  */
 export function mergeRefusal(
   mode: GovernanceMode,
@@ -63,7 +69,9 @@ export function mergeRefusal(
 ): "no_principal" | "org_role_required" | "separation_of_duties" | null {
   if (!actor.userId) return "no_principal";
   const orgAdmin = actor.orgRole === "Owner" || actor.orgRole === "Admin";
-  const wsOwner = actor.workspaceRole === "Owner";
+  const wsOwner =
+    actor.workspaceRole !== null &&
+    workspaceFullAccessRole([actor.workspaceRole]) !== null;
   const wsMember = wsOwner || actor.workspaceRole === "Member";
   const isAuthor = authorUserId !== null && authorUserId === actor.userId;
   switch (mode) {

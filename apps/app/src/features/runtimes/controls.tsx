@@ -444,8 +444,8 @@ type ContainmentFailure = Exclude<
  * only under the contained launcher. It shows the value the record holds and
  * moves when the page reads the record again, so it never shows a setting the
  * record does not carry. A refusal leaves it where it was and names the
- * reason. Rendered only for an org Owner or Admin; the handler checks the
- * role again.
+ * reason. Rendered only for an org or workspace Owner or Admin; the handler
+ * checks the role again.
  */
 export function ContainmentSwitch({
   org,

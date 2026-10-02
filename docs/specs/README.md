@@ -13,6 +13,7 @@ Find design intent here before changing a capability, data boundary, or product 
 | Governed-action billing | [Metering spec](governed-action-metering.md) |
 | Organization data isolation | [Tenancy and RLS](tenancy-rls/spec.md) |
 | Repository binding | [Repository binding](repository-binding/README.md) |
+| Agent work Phase 1 release gates | [Release gates](work/release-gates.md) |
 | Capability naming migration | [Historical name ledger](adr025-naming-mapping.md) |
 
 ## Write one document per purpose

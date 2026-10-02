@@ -85,7 +85,7 @@ type TabProps = ComponentProps<typeof ToolsTab>;
  */
 const COPY = {
   readOnly:
-    "Only an organization owner or admin can import tools or change their classification.",
+    "Only an organization owner or admin, or a workspace owner or admin, can import tools or change their classification.",
   refused:
     "The draft cannot hold that edit, so it was not kept. Remove an edit on the Changes tab or discard the draft first.",
   missing:

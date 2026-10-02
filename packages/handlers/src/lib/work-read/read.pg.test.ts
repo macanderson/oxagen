@@ -10,7 +10,9 @@
 //     nothing for another workspace's item or a deleted one
 //   - the viewer flags follow the same role check the actions make
 //   - list_work_targets names why each agent cannot take a send
-//   - get_work_outcomes counts a done item and a closed one
+//   - get_work_outcomes counts a done item and a closed one, and the pilot
+//     measures: each send's delivery bucket, the claim time, and each week's
+//     intake and full flow
 //
 // Runs wherever DATABASE_URL points at a migrated database: CI's unit
 // (handlers) lane migrates Postgres with Atlas first. On CI a missing
@@ -692,5 +694,27 @@ describe.skipIf(!enabled)("the Work reads against Postgres", { timeout: 60_000 }
     expect(outcomes.cost).toEqual({ runs: 1, known_runs: 0, total: null });
     expect(outcomes.reopens).toEqual({ cohort: 0, reopened: 0, waiting: 1 });
     expect(outcomes.weeks.reduce((sum, week) => sum + week.accepted_merged, 0)).toBe(1);
+  });
+
+  it("counts the pilot measures: each send's delivery, the claim time, and each week's intake", async () => {
+    const outcomes = workOutcomesGet.output.parse(await scoped(() => readWorkOutcomes(scope, 30, new Date())));
+    expect(outcomes.truncated).toBe(false);
+    // Four sends went out: to the sent, running, review, and done items. A
+    // runtime claimed the last three, and the first still waits.
+    expect(outcomes.delivery).toMatchObject({ sends: 4, claimed: 3, rejected: 0, withdrawn: 0, waiting: 1 });
+    expect(outcomes.delivery.claim_minutes.sample).toBe(3);
+    expect(outcomes.delivery.claim_minutes.median).toBeGreaterThanOrEqual(0);
+    expect(outcomes.delivery.claim_minutes.p90).toBeGreaterThanOrEqual(0);
+    // Sum across the weeks: a run just after midnight on a Monday puts the
+    // items' collection and their sends in different weeks.
+    const total = (key: "entered" | "sent") => outcomes.weeks.reduce((sum, week) => sum + week[key], 0);
+    // The eight live items entered Work. The deleted item and the other
+    // workspace's item do not count.
+    expect(total("entered")).toBe(8);
+    expect(total("sent")).toBe(4);
+    // Only the week the done item finished in used the full flow.
+    const fullFlow = outcomes.weeks.filter((week) => week.full_flow);
+    expect(fullFlow).toHaveLength(1);
+    expect(fullFlow[0]?.accepted_merged).toBe(1);
   });
 });
