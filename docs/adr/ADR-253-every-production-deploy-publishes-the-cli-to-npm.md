@@ -80,6 +80,14 @@ move forward.
 - A build of main is a prerelease in semver terms. A range such as
   `^2.1.3` does not match `2.1.4-12`. Only a global install or an exact
   version reads it, which is how the CLI is installed.
+- npm's reads trail its writes. After the first publish on 2026-10-02, the
+  package list and the `latest` tag took about four minutes to show
+  `2.1.4-363`, while the version's own tarball was served at once. So
+  `npm.yml` checks the published CLI from its tarball URL, and it treats
+  npm's refusal to publish a version twice as proof that another run
+  published it. While reads lag, two overlapping runs can still leave
+  `latest` on the older version. The next run, or the daily one, moves it
+  forward.
 - An expired or revoked token fails `npm.yml` on every deploy and every day
   until it is replaced. Nothing else alerts. Mac's rotation routine is the
   control, and checking the next `npm.yml` run is its last step.

@@ -1,0 +1,137 @@
+{
+  "name": "search_steering",
+  "domain": "context",
+  "description": "Find the steering records and skills in the workspace's and the organization's published steering that match words, a kind, or a code repository. Returns one index line per hit, and marks the records every request on that repository already receives. Read a hit's body with read_steering. Finds no tools.",
+  "mode": "sync",
+  "surfaces": [
+    "mcp"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "context"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "query": {
+        "type": "string",
+        "maxLength": 500
+      },
+      "kind": {
+        "type": "string",
+        "enum": [
+          "business-rule",
+          "code-rule",
+          "constraint",
+          "procedure",
+          "skill",
+          "fact",
+          "preference",
+          "memory"
+        ]
+      },
+      "repository": {
+        "type": "string"
+      },
+      "limit": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 50
+      }
+    },
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "workspace_version": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "organization_version": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "hits": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "lineage": {
+              "type": "string"
+            },
+            "label": {
+              "type": "string"
+            },
+            "description": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string"
+            },
+            "force": {
+              "type": "string"
+            },
+            "always_on": {
+              "type": "boolean"
+            },
+            "source": {
+              "type": "string",
+              "enum": [
+                "workspace",
+                "organization"
+              ]
+            },
+            "line": {
+              "type": "string",
+              "description": "The record's index line."
+            }
+          },
+          "required": [
+            "lineage",
+            "label",
+            "kind",
+            "force",
+            "always_on",
+            "source",
+            "line"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "total": {
+        "type": "integer",
+        "minimum": 0
+      }
+    },
+    "required": [
+      "workspace_version",
+      "organization_version",
+      "hits",
+      "total"
+    ],
+    "additionalProperties": false
+  }
+}

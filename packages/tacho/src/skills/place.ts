@@ -19,8 +19,8 @@
 //   - Claude Code: `$CLAUDE_CONFIG_DIR/skills`, else `~/.claude/skills`.
 //   - Codex: `$CODEX_HOME/skills`, else `~/.agents/skills`.
 //   - Stella: `$STELLA_HOME/skills`, else `~/.stella/skills`.
-//   - Cursor: none. Cursor reads steering through steering_search and
-//     steering_read, so session start writes nothing for it.
+//   - Cursor: none. Cursor reads steering through search_steering and
+//     read_steering, so session start writes nothing for it.
 //   - Claude Desktop: none. It is connected, not wrapped (ADR-078), and runs
 //     no session hooks.
 //

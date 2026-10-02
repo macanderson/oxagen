@@ -20,6 +20,11 @@ import { redactText } from "../evidence/redaction";
 import { WORK_ORDER_ATTR, WORK_ORDER_ENV, workOrderIdOf } from "../wire";
 import { contextFactsFromEnv, digestText, hostFactsFromEnv } from "./context";
 import {
+  backgroundTasksOf,
+  promptOriginOf,
+  sessionCronsOf,
+} from "./payload-members";
+import {
   classifyTool,
   type EffectKind,
   issueAttrs,
@@ -546,7 +551,8 @@ export function normalizeHook(
       // source past the envelope's 512-character bound is junk, and it is
       // left out rather than have the envelope refuse the whole event.
       const promptSource = str(input["prompt_source"]);
-      const promptOrigin = input["prompt_origin"];
+      // Kept to who sent the prompt, as the transcript's copy is (#4969).
+      const promptOrigin = promptOriginOf(input["prompt_origin"]);
       const body: BodyOf<"turn_start"> = {
         ...(prompt !== undefined
           ? { prompt_digest: digestText(prompt), prompt_length: prompt.length }
@@ -554,7 +560,7 @@ export function normalizeHook(
         ...(promptSource !== undefined && promptSource.length <= 512
           ? { prompt_source: promptSource }
           : {}),
-        ...(isRecord(promptOrigin) ? { prompt_origin: promptOrigin } : {}),
+        ...(promptOrigin !== undefined ? { prompt_origin: promptOrigin } : {}),
         ...(str(input["command_name"]) !== undefined
           ? { command_name: str(input["command_name"]) }
           : {}),
@@ -732,6 +738,11 @@ export function normalizeHook(
     case "Stop":
     case "SubagentStop": {
       const last = str(input["last_assistant_message"]);
+      // Pending work, kept to each entry's identity and state. A task's
+      // description and command, and a cron's prompt, are free text that
+      // would ship unredacted (#4969).
+      const backgroundTasks = backgroundTasksOf(input["background_tasks"]);
+      const sessionCrons = sessionCronsOf(input["session_crons"]);
       const common: Record<string, unknown> = {
         ...(last !== undefined
           ? { last_assistant_message_digest: digestText(last) }
@@ -739,12 +750,10 @@ export function normalizeHook(
         ...(bool(input["stop_hook_active"]) !== undefined
           ? { stop_hook_active: bool(input["stop_hook_active"]) }
           : {}),
-        ...(input["background_tasks"] !== undefined
-          ? { background_tasks: input["background_tasks"] }
+        ...(backgroundTasks !== undefined
+          ? { background_tasks: backgroundTasks }
           : {}),
-        ...(input["session_crons"] !== undefined
-          ? { session_crons: input["session_crons"] }
-          : {}),
+        ...(sessionCrons !== undefined ? { session_crons: sessionCrons } : {}),
       };
       if (input.hook_event_name === "Stop") {
         return [

@@ -1013,7 +1013,10 @@ describe("the loopback model proxy", () => {
     expect(request["messages"]).toHaveLength(2);
   });
 
-  it("gives a refusal's seq to the next frame when its frame never reached the WAL", async () => {
+  // The refusal's frame is rolled back, so its seq is never skipped. The
+  // agent was answered 502 gateway_error, so ADR-256 seals the call's
+  // not-forwarded error frame at that seq once the WAL takes writes again.
+  it("gives a refusal's seq to the call's error frame when the refusal never reached the WAL", async () => {
     const fake = await vendor(streamingAnthropic(1));
     const { handle, port, session, frames } = await boot(fake.url, {
       bundle: {
@@ -1053,13 +1056,23 @@ describe("the loopback model proxy", () => {
       });
     expect((await ask()).status).toBe(502);
     expect(failed).toBe(1);
+    const [lost] = frames(uuid, "error");
+    expect(lost!.seq).toBe(before.seq);
+    expect(lost!.attrs["oxagen.not_forwarded"]).toBe("gateway_error");
+    expect(lost!.body).toEqual(
+      expect.objectContaining({
+        api_status_code: 502,
+        api_error_class: "gateway_error",
+      }),
+    );
     expect(
-      handle.registry.get("sess-lost-refusal")!.recorder.chainCursor,
-    ).toEqual(before);
+      handle.registry.get("sess-lost-refusal")!.recorder.chainCursor.seq,
+    ).toBe(before.seq + 1);
     expect((await ask()).status).toBe(403);
     fault.mockRestore();
     const [decision] = frames(uuid, "policy_decision");
-    expect(decision!.seq).toBe(before.seq);
+    expect(decision!.seq).toBe(before.seq + 1);
+    expect(frames(uuid, "error")).toHaveLength(1);
     expect(verifyChain(handle.wal.read(uuid))).toMatchObject({ ok: true });
     expect(fake.requests).toHaveLength(0);
   });

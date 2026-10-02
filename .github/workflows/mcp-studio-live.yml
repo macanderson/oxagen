@@ -1,0 +1,233 @@
+# The MCP Studio live test (lane M17, #5139).
+#
+# One job proves MCP Studio end to end against production Oxagen and the
+# steering live test's GitHub test organization:
+#   1. Start sample MCP, OpenAPI, GraphQL, and gRPC servers from M0's fixtures,
+#      a public tunnel to the first three, and a relay in front of the gRPC one.
+#   2. Import two tools from each server, classify them, open the steering PRs,
+#      merge them through Oxagen, and wait for the new published version.
+#   3. Call each tool as an enrolled test agent: a shaped result, an approval
+#      park for an irreversible tool, and a Cedar denial.
+#   4. Change a description on the sample MCP server, and expect a sync PR
+#      with the locked description still served.
+#   5. Revoke the relay, so the broker stops signing for it, and expect the
+#      next call through it to fail.
+#
+# It calls production and creates real repositories, so it never runs on
+# pull_request or push. The suite lives in apps/app/live/ with its own
+# Playwright config, and no unit, integration, or e2e lane picks it up.
+#
+# The "MCP Studio live test" section of docs/specs/github-app/github-app-setup.md
+# is the runbook. The job reads the same secrets and variables as
+# steering-live.yml, in the same `steering-live` environment, and needs no
+# other. It makes the upstream token and the tunnel for each run.
+name: MCP Studio live test
+
+on:
+  schedule:
+    - cron: "47 9 * * *"
+  workflow_dispatch:
+
+# One live run at a time across both live workflows. They share the test
+# organization and the test Oxagen organization, so a dispatch waits for the
+# other suite's run instead of sharing them with it.
+concurrency:
+  group: steering-live
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  STEERING_LIVE_API_URL: https://api.oxagen.sh
+  STEERING_LIVE_APP_URL: https://app.oxagen.sh
+  MCP_STUDIO_LIVE_MCP_URL: https://mcp.oxagen.sh/mcp
+  MCP_STUDIO_LIVE_CONTROL_URL: http://127.0.0.1:8788
+  # The tunnel to the sample servers. Production refuses a private address,
+  # so the runner's servers need a public URL. A quick tunnel needs no account.
+  CLOUDFLARED_VERSION: "2026.9.3"
+  CLOUDFLARED_SHA256_AMD64: 77e26d8d900e0b8469f416239d14b5f296525fdf79fee6f511ef55609e3fbac2
+  CLOUDFLARED_SHA256_ARM64: aaeb2d7d0da3614634c7e03ab13487a1522c2e79165ed2929cfe23d5e95b326d
+
+jobs:
+  live:
+    name: MCP Studio live test
+    if: github.event_name == 'workflow_dispatch' || vars.STEERING_LIVE_ENABLED == 'true'
+    runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-small-{0}', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
+    environment: steering-live
+    timeout-minutes: 90
+    steps:
+      # First, before any install: a run with a missing value fails in seconds
+      # and names each one. The step reads only whether each value is set.
+      - name: Check secrets and variables
+        env:
+          STEERING_LIVE_OXAGEN_EMAIL: ${{ secrets.STEERING_LIVE_OXAGEN_EMAIL != '' }}
+          STEERING_LIVE_OXAGEN_PASSWORD: ${{ secrets.STEERING_LIVE_OXAGEN_PASSWORD != '' }}
+          STEERING_LIVE_GITHUB_APP_PRIVATE_KEY: ${{ secrets.STEERING_LIVE_GITHUB_APP_PRIVATE_KEY != '' }}
+          STEERING_LIVE_GITHUB_APP_ID: ${{ vars.STEERING_LIVE_GITHUB_APP_ID != '' }}
+          STEERING_LIVE_GITHUB_ORG: ${{ vars.STEERING_LIVE_GITHUB_ORG != '' }}
+          STEERING_LIVE_OXAGEN_ORG: ${{ vars.STEERING_LIVE_OXAGEN_ORG != '' }}
+        run: |
+          missing=0
+          for name in \
+            STEERING_LIVE_OXAGEN_EMAIL \
+            STEERING_LIVE_OXAGEN_PASSWORD \
+            STEERING_LIVE_GITHUB_APP_PRIVATE_KEY \
+            STEERING_LIVE_GITHUB_APP_ID \
+            STEERING_LIVE_GITHUB_ORG \
+            STEERING_LIVE_OXAGEN_ORG; do
+            if [ "${!name}" != "true" ]; then
+              echo "::error::$name is not set. The MCP Studio live test section of docs/specs/github-app/github-app-setup.md says where to set it."
+              missing=1
+            fi
+          done
+          exit "$missing"
+
+      - uses: actions/checkout@v5
+
+      - name: Install
+        id: install
+        uses: ./.github/actions/pnpm-install
+
+      # The relay runs as the bundle a customer's image runs.
+      - name: Build the relay
+        run: pnpm --filter @oxagen/relay build
+
+      # A one-hour installation token from the rig app. It approves the
+      # steering PRs, reads check runs, and deletes the test repository.
+      - name: Mint the rig token
+        id: rig-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.STEERING_LIVE_GITHUB_APP_ID }}
+          private-key: ${{ secrets.STEERING_LIVE_GITHUB_APP_PRIVATE_KEY }}
+          owner: ${{ vars.STEERING_LIVE_GITHUB_ORG }}
+
+      - name: Sweep what earlier runs left
+        working-directory: apps/app
+        env:
+          STEERING_LIVE_OXAGEN_EMAIL: ${{ secrets.STEERING_LIVE_OXAGEN_EMAIL }}
+          STEERING_LIVE_OXAGEN_PASSWORD: ${{ secrets.STEERING_LIVE_OXAGEN_PASSWORD }}
+          STEERING_LIVE_OXAGEN_ORG: ${{ vars.STEERING_LIVE_OXAGEN_ORG }}
+          STEERING_LIVE_GITHUB_ORG: ${{ vars.STEERING_LIVE_GITHUB_ORG }}
+          STEERING_LIVE_GITHUB_TOKEN: ${{ steps.rig-token.outputs.token }}
+        run: pnpm exec tsx live/steering-cleanup.ts sweep mcp-studio
+
+      # The upstreams require a bearer token made for this run alone. The
+      # suite stores it as the workspace credential server.toml names. The
+      # servers keep running in the background until the job ends.
+      - name: Start the sample servers
+        working-directory: apps/app
+        run: |
+          token="$(openssl rand -hex 32)"
+          echo "::add-mask::$token"
+          echo "MCP_STUDIO_LIVE_UPSTREAM_TOKEN=$token" >> "$GITHUB_ENV"
+          MCP_STUDIO_LIVE_UPSTREAM_TOKEN="$token" \
+            nohup pnpm exec tsx live/mcp-studio-servers.ts > "$RUNNER_TEMP/sample-servers.log" 2>&1 &
+          for _ in $(seq 1 60); do
+            if curl -fsS "$MCP_STUDIO_LIVE_CONTROL_URL/status" > /dev/null 2>&1; then
+              cat "$RUNNER_TEMP/sample-servers.log"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::The sample servers did not answer on their control port within 60 seconds."
+          cat "$RUNNER_TEMP/sample-servers.log"
+          exit 1
+
+      - name: Open a tunnel to the sample servers
+        run: |
+          case "$(uname -m)" in
+            x86_64) arch=amd64; sum="$CLOUDFLARED_SHA256_AMD64" ;;
+            aarch64 | arm64) arch=arm64; sum="$CLOUDFLARED_SHA256_ARM64" ;;
+            *) echo "::error::No cloudflared build is pinned for $(uname -m)."; exit 1 ;;
+          esac
+          bin="$RUNNER_TEMP/cloudflared"
+          curl -fsSL -o "$bin" "https://github.com/cloudflare/cloudflared/releases/download/$CLOUDFLARED_VERSION/cloudflared-linux-$arch"
+          echo "$sum  $bin" | sha256sum --check --strict -
+          chmod +x "$bin"
+          nohup "$bin" tunnel --no-autoupdate --url http://127.0.0.1:8787 > "$RUNNER_TEMP/tunnel.log" 2>&1 &
+
+          url=""
+          for _ in $(seq 1 60); do
+            url="$(grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' "$RUNNER_TEMP/tunnel.log" | head -n 1 || true)"
+            [ -n "$url" ] && break
+            sleep 1
+          done
+          if [ -z "$url" ]; then
+            echo "::error::cloudflared printed no tunnel URL within 60 seconds."
+            cat "$RUNNER_TEMP/tunnel.log"
+            exit 1
+          fi
+
+          # A new tunnel's name takes a few seconds to resolve. Wait until a
+          # ping through it reaches the sample MCP server.
+          for _ in $(seq 1 60); do
+            code="$(curl -s -o /dev/null -w '%{http_code}' -X POST "$url/mcp" \
+              -H "Authorization: Bearer $MCP_STUDIO_LIVE_UPSTREAM_TOKEN" \
+              -H 'Content-Type: application/json' \
+              -d '{"jsonrpc":"2.0","id":1,"method":"ping"}' || true)"
+            if [ "$code" = "200" ]; then
+              echo "MCP_STUDIO_LIVE_TUNNEL_URL=$url" >> "$GITHUB_ENV"
+              echo "The tunnel reaches the sample servers at $url."
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::The tunnel at $url did not reach the sample MCP server within two minutes. The last answer was $code."
+          cat "$RUNNER_TEMP/tunnel.log"
+          exit 1
+
+      - name: Run the live suite
+        working-directory: apps/app
+        env:
+          STEERING_LIVE_OXAGEN_EMAIL: ${{ secrets.STEERING_LIVE_OXAGEN_EMAIL }}
+          STEERING_LIVE_OXAGEN_PASSWORD: ${{ secrets.STEERING_LIVE_OXAGEN_PASSWORD }}
+          STEERING_LIVE_OXAGEN_ORG: ${{ vars.STEERING_LIVE_OXAGEN_ORG }}
+          STEERING_LIVE_GITHUB_ORG: ${{ vars.STEERING_LIVE_GITHUB_ORG }}
+          STEERING_LIVE_GITHUB_TOKEN: ${{ steps.rig-token.outputs.token }}
+        run: pnpm exec playwright test -c playwright.mcp-studio-live.config.ts
+
+      # The sample servers and the relay log no token. These logs say what
+      # each upstream received and why the relay refused or closed.
+      - name: Show the sample servers' and tunnel's logs
+        if: failure()
+        run: |
+          echo "== sample servers"
+          cat "$RUNNER_TEMP/sample-servers.log" 2>/dev/null || echo "No sample servers log."
+          echo "== tunnel"
+          cat "$RUNNER_TEMP/tunnel.log" 2>/dev/null || echo "No tunnel log."
+          echo "== control status"
+          curl -fsS "$MCP_STUDIO_LIVE_CONTROL_URL/status" || echo "The control port did not answer."
+
+      # The suite's teardown already cleaned up. This pass covers a teardown
+      # that never ran, and finds nothing when it did. It mints a fresh token,
+      # because a slow run can outlast the first one.
+      - name: Mint a cleanup token
+        id: cleanup-token
+        if: always() && steps.install.outcome == 'success' && steps.rig-token.outcome == 'success'
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.STEERING_LIVE_GITHUB_APP_ID }}
+          private-key: ${{ secrets.STEERING_LIVE_GITHUB_APP_PRIVATE_KEY }}
+          owner: ${{ vars.STEERING_LIVE_GITHUB_ORG }}
+
+      - name: Archive this run's workspace and delete its repository
+        if: always() && steps.cleanup-token.outcome == 'success'
+        working-directory: apps/app
+        env:
+          STEERING_LIVE_OXAGEN_EMAIL: ${{ secrets.STEERING_LIVE_OXAGEN_EMAIL }}
+          STEERING_LIVE_OXAGEN_PASSWORD: ${{ secrets.STEERING_LIVE_OXAGEN_PASSWORD }}
+          STEERING_LIVE_OXAGEN_ORG: ${{ vars.STEERING_LIVE_OXAGEN_ORG }}
+          STEERING_LIVE_GITHUB_ORG: ${{ vars.STEERING_LIVE_GITHUB_ORG }}
+          STEERING_LIVE_GITHUB_TOKEN: ${{ steps.cleanup-token.outputs.token }}
+        run: pnpm exec tsx live/steering-cleanup.ts run mcp-studio
+
+      - name: Upload the report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mcp-studio-live-report-${{ github.run_id }}-${{ github.run_attempt }}
+          path: apps/app/playwright-report/mcp-studio-live
+          if-no-files-found: ignore
+          retention-days: 14
