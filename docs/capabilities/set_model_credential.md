@@ -115,8 +115,8 @@ there is no read-back path anywhere.
 
 1. **Encrypt first.** The key is envelope-encrypted with the `@oxagen/crypto`
    KMS envelope (the same envelope the data planes and the plugin credential
-   vault use) before anything touches a column. If `AUTH_TOKEN_ENCRYPTION_KEY`
-   is unset the call is **refused**: a plaintext vendor key must never reach
+   vault use) before anything touches a column. If the deployment holds no
+   credential vault key ([`AUTH_TOKEN_ENCRYPTION_KEY`](../../packages/config/src/registry.ts)), the call is **refused**: a plaintext vendor key must never reach
    Postgres, not even transiently.
 2. **Upsert the organisation's `model_credentials` row** with the ciphertext,
    the key id, and a SHA-256 digest of the key. The digest is the provider
@@ -133,7 +133,7 @@ there is no read-back path anywhere.
 
 ## Errors
 
-- `AUTH_TOKEN_ENCRYPTION_KEY` unset — refused rather than stored in plaintext.
+- No credential vault key ([`AUTH_TOKEN_ENCRYPTION_KEY`](../../packages/config/src/registry.ts)): refused rather than stored in plaintext.
 - Contract validation (`invalid_input`): an unknown `provider`; an `apiKey`
   shorter than 8 or longer than 512 characters; a `baseUrl` missing on
   `openai_compatible` or present on any other provider; a `baseUrl` that is

@@ -12,7 +12,8 @@ describe("Panel", () => {
     expect(html).toContain("<section");
     expect(html).toContain("Body content");
     expect(html).toContain("bg-card");
-    expect(html).toContain("rounded-xl");
+    expect(html).toContain("rounded-2xl");
+    expect(html).not.toMatch(/\bshadow/);
   });
 
   it("omits the header entirely when no title/eyebrow/actions are passed", () => {

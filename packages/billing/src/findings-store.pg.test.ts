@@ -2,7 +2,9 @@
 // replaces the workspace's open findings and keeps a proven finding's public
 // id, a decision that commits while a pass is writing stays decided, a
 // workspace whose runs stopped is still visited until its open findings go,
-// and the headline counts a frame two findings claim once (ADR-208). Runs wherever DATABASE_URL points at
+// the headline counts a frame two findings claim once (ADR-208), and an
+// applied finding with no claim rows gets its replayed claims once (#4506).
+// Runs wherever DATABASE_URL points at
 // a migrated database — CI's `test` job migrates Postgres with Atlas before
 // `turbo run build test:unit` and carries DATABASE_URL in turbo's globalEnv;
 // a local run without one is skipped, not red. Every row it writes is removed
@@ -16,9 +18,13 @@ import {
   type FindingDraft,
 } from "./findings";
 import {
+  claimBackfill,
+  CLAIMING_KINDS,
   listWorkspacesForFindings,
+  readUnclaimedApplied,
   readUnproductiveSpend,
   runFindingsPass,
+  writeClaimBackfill,
   writeFindings,
 } from "./findings-store";
 
@@ -276,6 +282,117 @@ describe.skipIf(!enabled)("writeFindings against Postgres", () => {
           }),
         ),
       ).toEqual({ totalMicros: 0n, operators: [] });
+    } finally {
+      await withSystemDb((tx) =>
+        tx.delete(findings).where(eq(findings.workspaceId, own.workspaceId)),
+      );
+    }
+  });
+
+  it("gives an applied finding with no claim rows the claims a replay found, once, and the headline counts its frame once (#4506)", async () => {
+    const own = {
+      orgId: crypto.randomUUID(),
+      workspaceId: crypto.randomUUID(),
+    };
+    const RUN_A = "tse_0000000000000000000001";
+    const frameKey = "2026-09-10T10:00:00.500000Z#0";
+    const frameAt = new Date("2026-09-10T10:00:00.500Z");
+    const fingerprint = findingFingerprint(
+      "duplicate_tool_calls",
+      "agent",
+      "backfill",
+    );
+    const replayed: FindingClaim = {
+      detector: 1,
+      runId: RUN_A,
+      frameKey,
+      frameAt,
+      operatorKey: "prn_a",
+      costMicros: 20_000n,
+    };
+    const window = { start: windowStart, end: windowEnd };
+    const read = () =>
+      withSystemDb((tx) => readUnproductiveSpend(tx, own, window));
+    try {
+      // A finding applied before claims were stored: it holds no claim row.
+      await writeFindings(own, windowEnd, none, [
+        {
+          ...draft("backfill"),
+          kind: "duplicate_tool_calls",
+          level: "agent",
+          fingerprint,
+          citedRuns: [RUN_A],
+        },
+      ]);
+      await withSystemDb((tx) =>
+        tx
+          .update(findings)
+          .set({
+            status: "applied",
+            decidedAt: new Date(),
+            appliedActionId: "req_backfill",
+          })
+          .where(
+            and(
+              eq(findings.workspaceId, own.workspaceId),
+              eq(findings.fingerprint, fingerprint),
+            ),
+          ),
+      );
+      expect(await read()).toEqual({ totalMicros: 0n, operators: [] });
+
+      const unclaimed = await readUnclaimedApplied(
+        own,
+        CLAIMING_KINDS,
+        windowStart,
+      );
+      expect(unclaimed).toEqual([
+        {
+          id: expect.any(String),
+          fingerprint,
+          citedRuns: [RUN_A],
+          currency: "USD",
+        },
+      ]);
+      // A finding whose window ended before the pass's window is left out.
+      expect(
+        await readUnclaimedApplied(
+          own,
+          CLAIMING_KINDS,
+          new Date(windowEnd.getTime() + 1),
+        ),
+      ).toEqual([]);
+
+      const backfill = claimBackfill(
+        unclaimed,
+        new Map([[fingerprint, [replayed]]]),
+      );
+      await writeClaimBackfill(own, backfill);
+      // Written again, it adds nothing, and the finding no longer reads as
+      // unclaimed.
+      await writeClaimBackfill(own, backfill);
+      expect(
+        await readUnclaimedApplied(own, CLAIMING_KINDS, windowStart),
+      ).toEqual([]);
+
+      // An open finding of a later detector claims the same frame.
+      await writeFindings(own, windowEnd, none, [
+        {
+          ...draft("backfill-recurring"),
+          kind: "recurring_runs",
+          level: "agent",
+          fingerprint: findingFingerprint(
+            "recurring_runs",
+            "agent",
+            "backfill-recurring",
+          ),
+          claims: [{ ...replayed, detector: 7 }],
+        },
+      ]);
+      expect(await read()).toEqual({
+        totalMicros: 20_000n,
+        operators: [{ operatorKey: "prn_a", micros: 20_000n }],
+      });
     } finally {
       await withSystemDb((tx) =>
         tx.delete(findings).where(eq(findings.workspaceId, own.workspaceId)),

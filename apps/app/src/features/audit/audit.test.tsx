@@ -418,8 +418,8 @@ describe("Events", () => {
       "Events3",
     );
     expect(screen.getByRole("tab", { name: /Events/ })).toHaveAttribute(
-      "aria-current",
-      "page",
+      "aria-selected",
+      "true",
     );
   });
 
@@ -916,10 +916,9 @@ describe("tabs", () => {
     answer({ window: recordOf([event()]) });
     await renderAudit({}, { tab: "keys" });
 
-    const nav = screen.getByRole("navigation", { name: "Audit sections" });
-    // The design's tab semantics (audit.audit-prompt.md check 12): a tablist
-    // of tabs with aria-selected, each still a link to its own segment.
-    const list = within(nav).getByRole("tablist", { name: "Audit sections" });
+    // A tab row is a tab widget (ADR-243): a tablist of
+    // tabs with aria-selected, each still a link to its own segment.
+    const list = screen.getByRole("tablist", { name: "Audit sections" });
     expect(
       within(list)
         .getAllByRole("tab")
@@ -936,10 +935,13 @@ describe("tabs", () => {
       ["Keys", "/acme/audit/keys", "true"],
       ["Retention", "/acme/audit/retention", "false"],
     ]);
-    expect(within(nav).getByRole("tab", { name: "Keys" })).toHaveAttribute(
-      "aria-current",
-      "page",
-    );
+    // The selected tab is the one tab stop and names the panel, and the
+    // panel takes it as its label.
+    const keys = within(list).getByRole("tab", { name: "Keys" });
+    expect(keys).toHaveAttribute("tabindex", "0");
+    expect(keys).not.toHaveAttribute("aria-current");
+    const panel = screen.getByRole("tabpanel", { name: "Keys" });
+    expect(keys).toHaveAttribute("aria-controls", panel.id);
     // Only Events reads a page of the table.
     expect(events).toHaveBeenCalledTimes(1);
   });
@@ -1390,7 +1392,7 @@ describe("states", () => {
     expect(empty).toHaveAttribute("data-audit-state", "empty");
     expect(empty.querySelector("[data-state-icon] svg")).not.toBeNull();
     expect(
-      screen.queryByRole("navigation", { name: "Audit sections" }),
+      screen.queryByRole("tablist", { name: "Audit sections" }),
     ).toBeNull();
   });
 

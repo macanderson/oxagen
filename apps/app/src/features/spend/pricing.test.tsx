@@ -308,9 +308,9 @@ describe("Pricing › Models the book cannot price", () => {
 
     expect(priceBook).toHaveBeenCalledExactlyOnceWith(ctx);
     expect(unpricedModels).toHaveBeenCalledExactlyOnceWith(ctx);
-    expect(screen.getByRole("link", { name: "Pricing" })).toHaveAttribute(
-      "aria-current",
-      "page",
+    expect(screen.getByRole("tab", { name: "Pricing" })).toHaveAttribute(
+      "aria-selected",
+      "true",
     );
 
     const row = rowOf(panelOf("spend-unpriced"), "acme-internal-7b");

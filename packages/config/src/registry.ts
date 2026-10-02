@@ -555,6 +555,8 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     description:
       "Base64 256-bit KEK that wraps OAuth token encryption keys. Required in " +
       "preview+production (enforced by the auth startup guard); blank locally disables it. " +
+      "Unset, every capability that seals a secret with it refuses rather than store the " +
+      "secret in plaintext. " +
       "Generate with `openssl rand -base64 32`.",
     secret: true,
     clientExposed: false,
@@ -831,7 +833,8 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   OXAGEN_TACHO_GITHUB_BROKER: {
     group: "github",
     description:
-      "Set to 1 to let enrolled hosts request repository-scoped GitHub credentials for the local Git proxy.",
+      "Set to 1 to let enrolled hosts request repository-scoped GitHub credentials for the local Git proxy. " +
+      "Any other value refuses each request (github_broker_disabled).",
     secret: false,
     clientExposed: false,
     services: ["api"],
@@ -1287,7 +1290,8 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
       "cached bundle offline and fails closed on one it cannot verify, and into every export " +
       "bundle so its verifier runs offline. The MCP service signs relay envelopes and local " +
       "server calls with it. Unset means enrollment, bundle, export, relay calls, and local " +
-      "calls refuse.",
+      "calls refuse. A run chain's seal is written unsigned instead, and still commits " +
+      "(ADR-195).",
     secret: true,
     clientExposed: false,
     services: ["api", "mcp"],
@@ -1762,7 +1766,8 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   SLACK_APP_ID: {
     group: "Slack app",
     description:
-      "Oxagen Slack app id. The callback rejects an oauth.v2.access answer for another app.",
+      "Oxagen Slack app id. The callback rejects an oauth.v2.access answer for another app. " +
+      "Unset, the callback checks no app id.",
     secret: false,
     clientExposed: false,
     services: ["app"],
@@ -2104,7 +2109,8 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
       "HMAC-SHA256 secret for signing audit-log export tokens, so exported files " +
       "can be verified as untampered. OPTIONAL: baseEnvSchema declares it " +
       "`.optional()` and the audit export route falls back to " +
-      "BETTER_AUTH_SECRET when it is unset. Setting a dedicated value changes " +
+      "BETTER_AUTH_SECRET when it is unset. A value shorter than 16 characters " +
+      "counts as unset. Setting a dedicated value changes " +
       "the signing key and invalidates outstanding export download URLs. " +
       "Generate with `openssl rand -base64 32`.",
     secret: true,
@@ -2328,7 +2334,8 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   PRIVACY_ERASURE_GRACE_DAYS: {
     group: "Privacy",
     description:
-      "Grace period in days before a hard-delete erasure job runs (GDPR Art.17). Set to 0 for immediate erasure in test envs.",
+      "Grace period in days before a hard-delete erasure job runs (GDPR Art.17). Defaults to 30 " +
+      "when unset. Set to 0 for immediate erasure in test envs.",
     secret: false,
     clientExposed: false,
     services: ["api"],

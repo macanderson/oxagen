@@ -8,7 +8,7 @@ import {
 } from "@oxagen/database";
 import { emitSecurityEventAsync } from "@oxagen/database/security";
 import { eq } from "drizzle-orm";
-import { grantSignupCredits } from "@oxagen/billing";
+import { grantSignupCredits, issueSignupGrant } from "@oxagen/billing";
 import { recordOrgGraphDatabase } from "@oxagen/database/data-plane";
 import { provisionOrgGraph } from "@oxagen/ontology/provision";
 import { logger } from "./logger";
@@ -202,6 +202,10 @@ export const organizationCreateHandler: CapabilityHandler<
       // back rather than leaving an org whose first assistant turn the credit
       // gate refuses.
       await grantSignupCredits(tx, org.id);
+      // The one-time governed-action grant (ADR-241, signup grant): sized and
+      // timed by the Free plan row as it stands now, and committed with the
+      // org so no organisation exists without it.
+      await issueSignupGrant(tx, org.id, org.createdAt);
 
       await openOnboardingGate(tx, {
         orgId: org.id,

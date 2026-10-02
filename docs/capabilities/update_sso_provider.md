@@ -45,8 +45,8 @@ protocol cannot change either.
    `create_sso_provider`. An unchanged issuer keeps the stored endpoints.
 2. A new groups claim is written to the row and to
    `mapping.extraFields.groups` in the stored config.
-3. Secrets are sealed and checked as on create. `AUTH_TOKEN_ENCRYPTION_KEY`
-   is needed only when `config` is sent.
+3. Secrets are sealed and checked as on create. The credential vault key
+   ([`AUTH_TOKEN_ENCRYPTION_KEY`](../../packages/config/src/registry.ts)) is needed only when `config` is sent.
 4. **Audit** an `sso.provider_updated` event with `changedFields`
    (`displayName`, `groupsClaim`, `config`). A call that changes nothing
    writes nothing and emits nothing.

@@ -72,7 +72,7 @@ When the steering PR merges, the push to the production branch triggers the stee
 
 The reason codes that name `main_repo` keep their names because the contract fixes them. They refer to the steering repository.
 
-`main_repo_claimed` is deliberate. A linked repository receives this workspace's Context PRs, and another workspace's steering repository holds that workspace's steering record. Linking it here would hand this workspace a door into that record. The refusal names neither the organization nor the workspace holding the claim, because the read that finds it crosses tenants. The store's trigger `repository_binding_heads_exclusive_main` checks it a second time when the sync writes the head.
+`main_repo_claimed` is deliberate. Another workspace's steering repository holds that workspace's steering records. Linking it here would hand this workspace a door into those records. A linked code repository receives no Context PR, because every record lives in the steering repository (ADR-212). The refusal names neither the organization nor the workspace holding the claim, because the read that finds it crosses tenants. The store's trigger `repository_binding_heads_exclusive_main` checks it a second time when the sync writes the head.
 
 ## What this write does not do
 

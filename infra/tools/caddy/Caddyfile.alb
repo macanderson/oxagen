@@ -93,9 +93,11 @@
 # `header_up` rather than appended to.
 #
 # The application reads `X-Oxagen-Client-Ip` (`extractTrustedClientIp`,
-# packages/oxagen/src/client-ip.ts) — but only once an operator has set
-# `TRUST_EDGE_CLIENT_IP_HEADER=true`, which is step 2 of the rollout and comes
-# AFTER this file is uploaded and reloaded. The flag exists because the previous
+# packages/oxagen/src/client-ip.ts), but only once the deployment trusts that
+# header, which is step 2 of the rollout and comes AFTER this file is uploaded
+# and reloaded. This file names no value for that setting: its registry entry,
+# TRUST_EDGE_CLIENT_IP_HEADER in packages/config/src/registry.ts, is the one
+# place that says which value turns it on. The flag exists because the previous
 # version of this file has no rule for that header name and forwards a
 # caller-supplied copy straight through; a reader that trusted it on sight would
 # be handed a forged address by name. Until the flag is set the application
@@ -138,9 +140,10 @@
 #
 # ## After this deploys
 #
-# One application-side value finishes the rollout, and it is a deliberate act:
-# `TRUST_EDGE_CLIENT_IP_HEADER=true` for apps/api, apps/app and apps/mcp, which
-# is what makes `X-Oxagen-Client-Ip` believable. Until then the application
+# One application-side setting finishes the rollout, and it is a deliberate act:
+# the one that tells apps/api, apps/app and apps/mcp to believe
+# `X-Oxagen-Client-Ip`. Read its registry entry, TRUST_EDGE_CLIENT_IP_HEADER in
+# packages/config/src/registry.ts, for the value. Until then the application
 # ignores that header entirely and attributes NO client address at all. There is
 # no hop-count walk to fall back to — that form was deleted in #3205, not
 # deprecated — and the rewrite below leaves a single entry that is the client's
@@ -149,12 +152,12 @@
 # closed: IAM `ip_ranges` mandates deny and the pre-authentication ceilings skip.
 # That is the safe direction and the reason the flag is a separate step.
 #
-# Do NOT set `TRUSTED_PROXY_CIDRS` for this shape either, for the reason just
-# given: it is the identity walk, and after the rewrite below there is no proxy
-# entry left for it to vouch with. Setting it here attributes nothing rather
-# than restoring anything. The variable belongs to the PRE-rewrite shape, where
-# the ALB's own address is still in the chain. ADR-083's "The attribution order,
-# stated once" has the sequencing; #3167 tracks the ceilings.
+# The identity walk's proxy list does not belong to this shape either, for the
+# reason just given: after the rewrite below there is no proxy entry left for
+# the walk to vouch with. Its registry entry, TRUSTED_PROXY_CIDRS in
+# packages/config/src/registry.ts, says which shape it belongs to. ADR-083's
+# "The attribution order, stated once" has the sequencing; #3167 tracks the
+# ceilings.
 {
 	servers {
 		# Substituted by infra/tools/install-node-scripts.sh; see "Why the list

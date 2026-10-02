@@ -198,8 +198,9 @@ Actions, Release, Run workflow, then pick `patch`, `minor` or `major`. That run:
 When the PR merges, the `tag` job tags `v<version>` and `desktop-v<version>`,
 opens the GitHub release with the notes, publishes `@oxagen/cli` to npm, and
 the `desktop-v` tag starts `.github/workflows/desktop.yml`, which builds the
-app on four runners and publishes the installers, their checksums and the
-listing page to https://downloads.oxagen.sh/. The docs page is live at
+app on four runners and publishes the installers, the bare executables, the
+updater files, their checksums, the listing page, and the in-app update feed
+to https://downloads.oxagen.sh/ (ADR-247). The docs page is live at
 https://docs.oxagen.sh/docs/releases/v<version> once main deploys.
 
 The workflow needs the `RELEASE_TOKEN` secret: a fine-grained personal
