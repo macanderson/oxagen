@@ -681,7 +681,37 @@ export const routes = {
    */
   steeringMemories: (org: string, ws: string): SafePath =>
     pathOf(org, ws, "steering", "memories"),
+  /**
+   * Work (roadmap mockups/pages/work.md). `tab` picks Running, Review or Done,
+   * and is left off for the Inbox.
+   */
+  work: (org: string, ws: string, tab?: WorkPageTab): SafePath =>
+    withQuery(pathOf(org, ws, "work"), {
+      tab: tab === undefined || tab === "inbox" ? undefined : tab,
+    }),
+  /** One work item, by the workspace's number for it (WI-12). */
+  workItem: (org: string, ws: string, number: string): SafePath =>
+    pathOf(org, ws, "work", number),
+  /**
+   * Work setup (roadmap mockups/pages/work-setup.md). `tab` picks Priorities or
+   * Runtimes, and is left off for Collectors.
+   */
+  workSetup: (org: string, ws: string, tab?: WorkSetupTab): SafePath =>
+    withQuery(pathOf(org, ws, "work", "setup"), {
+      tab: tab === undefined || tab === "collectors" ? undefined : tab,
+    }),
+  /** Outcomes (roadmap mockups/pages/work-outcomes.md). */
+  workOutcomes: (org: string, ws: string): SafePath =>
+    pathOf(org, ws, "work", "outcomes"),
 };
+
+/** The Work page's tabs, in the order the strip draws them. */
+export const WORK_PAGE_TABS = ["inbox", "running", "review", "done"] as const;
+export type WorkPageTab = (typeof WORK_PAGE_TABS)[number];
+
+/** Work setup's tabs, in the order the strip draws them. */
+export const WORK_SETUP_TABS = ["collectors", "priorities", "runtimes"] as const;
+export type WorkSetupTab = (typeof WORK_SETUP_TABS)[number];
 
 /**
  * `raw` as a same-origin path (with its query and hash) when it is safe to

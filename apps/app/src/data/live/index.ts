@@ -19,6 +19,7 @@ import { spend } from "./spend";
 import { steering } from "./steering";
 import { steeringRepo } from "./steering-repo";
 import { tools } from "./tools";
+import { work } from "./work";
 
 export const liveSource: DataSource = {
   pretenant,
@@ -39,4 +40,5 @@ export const liveSource: DataSource = {
   steeringRepo,
   tools,
   runtimes,
+  work,
 };

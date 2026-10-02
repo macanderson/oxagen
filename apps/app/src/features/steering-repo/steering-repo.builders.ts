@@ -138,6 +138,14 @@ export function steeringRepoSource(read: Read<SteeringRepoView>) {
   const refuse = () => Promise.reject(new Error("not a steering repo read"));
   const source: DataSource = {
     runtimes: { list: refuse, agents: refuse, named: refuse },
+    work: {
+      list: refuse,
+      get: refuse,
+      targets: refuse,
+      outcomes: refuse,
+      collectors: refuse,
+      priorities: refuse,
+    },
     conversations: { latest: refuse, list: refuse, byId: refuse },
     pretenant: { orgs: refuse, workspaces: refuse },
     shell: {
