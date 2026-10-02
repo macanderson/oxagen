@@ -13,10 +13,7 @@ import { contextPrMergeWithoutReview } from "@oxagen/oxagen/contracts/context.pr
 import { contextPrOpen } from "@oxagen/oxagen/contracts/context.pr.open";
 import { contextPrRefresh } from "@oxagen/oxagen/contracts/context.pr.refresh";
 import { contextPrRevert } from "@oxagen/oxagen/contracts/context.pr.revert";
-import {
-  contextPrRestoreManagedBlock,
-  type MANAGED_BLOCK_PATHS,
-} from "@oxagen/oxagen/contracts/context.pr.restore_managed_block";
+import { contextPrRestoreManagedBlock } from "@oxagen/oxagen/contracts/context.pr.restore_managed_block";
 import { contextProposalDismiss } from "@oxagen/oxagen/contracts/context.proposal.dismiss";
 import { governanceModeSchema } from "@oxagen/oxagen/contracts/context.steering.shared";
 import { workspaceSettingsWrite } from "@oxagen/oxagen/contracts/workspace.settings.write";
@@ -292,9 +289,6 @@ export async function forgetMemory(
 // merge_pr_without_review's did (#4528) and restore_managed_block's did.
 const PROPOSAL_ID = z.string().regex(/^prp_[0-9A-Za-z]+$/);
 
-/** A file that holds a managed block. */
-type ManagedBlockPath = (typeof MANAGED_BLOCK_PATHS)[number];
-
 const approveContextPrContract = {
   name: "approve_context_pr",
   input: z.object({ proposalId: PROPOSAL_ID }).strict(),
@@ -385,10 +379,16 @@ export async function restoreManagedBlock(
   path: string,
 ): Promise<ActionResult<{ commitSha: string }>> {
   const ctx = await requireViewer(org, ws);
+  // Only AGENTS.md, CLAUDE.md, and README.md hold a managed block. The
+  // contract's own enum reads the path, and any other is refused here as the
+  // seam refuses invalid input.
+  const file = contextPrRestoreManagedBlock.input.shape.path.safeParse(path);
+  if (!file.success) {
+    return { ok: false, reason: "invalid", code: "invalid_input", field: "path" };
+  }
   const result = await kernelWrite(ctx, contextPrRestoreManagedBlock, {
     proposalId,
-    // The contract's enum refuses any other path as invalid input.
-    path: path as ManagedBlockPath,
+    path: file.data,
   });
   return result.ok
     ? { ok: true, value: { commitSha: result.value.commit_sha } }
