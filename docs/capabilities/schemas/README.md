@@ -592,6 +592,21 @@ capability rewrites, so two such branches always conflicted on it (ADR-216).
 - update_user_budget
 - update_workspace_user_preferences
 
+## work
+
+- accept_work_order
+- approve_work_brief
+- cancel_work_order
+- claim_work_order
+- close_work_item
+- refresh_work_order_checks
+- reject_work_order
+- reopen_work_item
+- return_work_order
+- save_work_brief
+- send_work_order
+- stop_work_order
+
 ## workspace
 
 - archive_workspace

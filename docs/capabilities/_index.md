@@ -689,6 +689,23 @@ after the registered name separately when their contract uses a dotted stem.
 | [update_user_budget](budget.policy.write.md) | [budget.policy.write.ts](../../packages/oxagen/src/contracts/budget.policy.write.ts) | api, mcp, agent |
 | [update_workspace_user_preferences](update_workspace_user_preferences.md) | [user.workspace_preferences.write.ts](../../packages/oxagen/src/contracts/user.workspace_preferences.write.ts) | api |
 
+## Work
+
+| Capability | Contract | Declared surfaces |
+| --- | --- | --- |
+| [accept_work_order](work.order.accept.md) | [work.order.accept.ts](../../packages/oxagen/src/contracts/work.order.accept.ts) | api |
+| [approve_work_brief](work.brief.approve.md) | [work.brief.approve.ts](../../packages/oxagen/src/contracts/work.brief.approve.ts) | api |
+| [cancel_work_order](work.order.cancel.md) | [work.order.cancel.ts](../../packages/oxagen/src/contracts/work.order.cancel.ts) | api |
+| [claim_work_order](work.order.claim.md) | [work.order.claim.ts](../../packages/oxagen/src/contracts/work.order.claim.ts) | api |
+| [close_work_item](work.item.close.md) | [work.item.close.ts](../../packages/oxagen/src/contracts/work.item.close.ts) | api |
+| [refresh_work_order_checks](work.order.checks.refresh.md) | [work.order.checks.refresh.ts](../../packages/oxagen/src/contracts/work.order.checks.refresh.ts) | api |
+| [reject_work_order](work.order.reject.md) | [work.order.reject.ts](../../packages/oxagen/src/contracts/work.order.reject.ts) | api |
+| [reopen_work_item](work.item.reopen.md) | [work.item.reopen.ts](../../packages/oxagen/src/contracts/work.item.reopen.ts) | api |
+| [return_work_order](work.order.return.md) | [work.order.return.ts](../../packages/oxagen/src/contracts/work.order.return.ts) | api |
+| [save_work_brief](work.brief.save.md) | [work.brief.save.ts](../../packages/oxagen/src/contracts/work.brief.save.ts) | api |
+| [send_work_order](work.order.send.md) | [work.order.send.ts](../../packages/oxagen/src/contracts/work.order.send.ts) | api |
+| [stop_work_order](work.order.stop.md) | [work.order.stop.ts](../../packages/oxagen/src/contracts/work.order.stop.ts) | api |
+
 ## Workspace
 
 | Capability | Contract | Declared surfaces |
