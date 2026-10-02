@@ -12,6 +12,15 @@
       "writes": []
     },
     {
+      "domain": "work",
+      "name": "accept_work_order",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
       "domain": "conversation",
       "name": "add_conversation_attachment",
       "reads": [],
@@ -79,6 +88,15 @@
         "agent",
         "api",
         "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "work",
+      "name": "approve_work_brief",
+      "reads": [],
+      "surfaces": [
+        "api"
       ],
       "writes": []
     },
@@ -249,6 +267,15 @@
       "writes": []
     },
     {
+      "domain": "work",
+      "name": "cancel_work_order",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
       "domain": "org",
       "name": "change_member_role",
       "reads": [],
@@ -280,6 +307,15 @@
       "writes": []
     },
     {
+      "domain": "work",
+      "name": "claim_work_order",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
       "domain": "toolbelt",
       "name": "clone_toolbelt",
       "reads": [],
@@ -287,6 +323,15 @@
         "agent",
         "api",
         "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "work",
+      "name": "close_work_item",
+      "reads": [],
+      "surfaces": [
+        "api"
       ],
       "writes": []
     },
@@ -3359,6 +3404,15 @@
       "writes": []
     },
     {
+      "domain": "work",
+      "name": "refresh_work_order_checks",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
       "domain": "agent",
       "name": "register_agent",
       "reads": [],
@@ -3384,6 +3438,15 @@
       "surfaces": [
         "api",
         "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "work",
+      "name": "reject_work_order",
+      "reads": [],
+      "surfaces": [
+        "api"
       ],
       "writes": []
     },
@@ -3453,6 +3516,15 @@
       "reads": [],
       "surfaces": [
         "agent"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "work",
+      "name": "reopen_work_item",
+      "reads": [],
+      "surfaces": [
+        "api"
       ],
       "writes": []
     },
@@ -3546,6 +3618,15 @@
       "reads": [],
       "surfaces": [
         "agent",
+        "api"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "work",
+      "name": "return_work_order",
+      "reads": [],
+      "surfaces": [
         "api"
       ],
       "writes": []
@@ -3715,6 +3796,15 @@
       "writes": []
     },
     {
+      "domain": "work",
+      "name": "save_work_brief",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
       "domain": "run",
       "name": "seal_run",
       "reads": [],
@@ -3799,6 +3889,15 @@
       "surfaces": [
         "api",
         "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "work",
+      "name": "send_work_order",
+      "reads": [],
+      "surfaces": [
+        "api"
       ],
       "writes": []
     },
@@ -4216,6 +4315,15 @@
         "agent",
         "api",
         "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "work",
+      "name": "stop_work_order",
+      "reads": [],
+      "surfaces": [
+        "api"
       ],
       "writes": []
     },
@@ -23996,6 +24104,12 @@
         },
         {
           "name": "outcome_detail",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "idempotency_key",
           "nullable": true,
           "primaryKey": false,
           "type": "text"
