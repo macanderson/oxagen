@@ -145,22 +145,22 @@ describe("withOntologyReads — the per-run opt-in", () => {
   });
 
   it("returns the caller's own set untouched when the run did not opt in", () => {
-    const declared = new Set(["get_budget_policy"]);
+    const declared = new Set(["get_spend_budget"]);
     expect(withOntologyReads(declared, false)).toBe(declared);
   });
 
   it("unions the reads into a narrowed run that opted in", () => {
-    const widened = withOntologyReads(new Set(["get_budget_policy"]), true);
-    expect(widened?.has("get_budget_policy")).toBe(true);
+    const widened = withOntologyReads(new Set(["get_spend_budget"]), true);
+    expect(widened?.has("get_spend_budget")).toBe(true);
     for (const name of ONTOLOGY_READ_CAPABILITIES) {
       expect(widened?.has(name)).toBe(true);
     }
   });
 
   it("does not mutate the allowlist it was given", () => {
-    const declared = new Set(["get_budget_policy"]);
+    const declared = new Set(["get_spend_budget"]);
     withOntologyReads(declared, true);
-    expect([...declared]).toEqual(["get_budget_policy"]);
+    expect([...declared]).toEqual(["get_spend_budget"]);
   });
 });
 

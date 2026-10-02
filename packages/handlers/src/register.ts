@@ -659,18 +659,6 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .userWorkspacePreferencesWriteHandler as CapabilityHandlerFn,
   );
   registerHandler(
-    "get_user_budget",
-    async () =>
-      (await import("./budget.policy.read"))
-        .budgetPolicyReadHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "update_user_budget",
-    async () =>
-      (await import("./budget.policy.write"))
-        .budgetPolicyWriteHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
     "get_spend_budget",
     async () =>
       (await import("./billing.budget.get"))
@@ -1056,18 +1044,6 @@ registerHandlersOnce("@oxagen/handlers", () => {
     async () =>
       (await import("./workspace.member.list"))
         .listMembersHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "get_budget_policy",
-    async () =>
-      (await import("./workspace.budget_policy.read"))
-        .workspaceBudgetPolicyReadHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "update_budget_policy",
-    async () =>
-      (await import("./workspace.budget_policy.write"))
-        .workspaceBudgetPolicyWriteHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "send_workspace_invite",

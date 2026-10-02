@@ -442,3 +442,12 @@ not carry a copy.
   carry the schema. `migration-gate` also applies the pending migrations on
   merge (decided 2026-09-23, #3653), so the label is the only thing a
   schema-changing PR adds. Write no apply steps and apply nothing by hand.
+- **SCR-007 — Infrastructure
+  changes:** Mac reviews every infrastructure change before it merges
+  (decided 2026-10-02). An infrastructure change edits `infra/`,
+  `.github/workflows/`, `.github/actions/`, `.github/docker/`, or a
+  Dockerfile, or it adds, removes, or moves a hosted service, a vendor, or a
+  cloud resource. Open it as usual, request Mac's review with
+  `gh pr edit <n> --add-reviewer macanderson`, and do not merge it until Mac
+  approves. No host or vendor is ruled out. The old rule that nothing
+  may depend on Vercel is lifted.

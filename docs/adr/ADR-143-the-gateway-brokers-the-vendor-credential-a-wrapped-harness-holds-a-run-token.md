@@ -1,6 +1,6 @@
 # ADR-143: The gateway brokers the vendor credential: a wrapped harness holds a run token
 
-- **Status:** Accepted
+- **Status:** Accepted. Amended by ADR-187, accepted 2026-10-02: the vendor key moves from the machine to the vault or the customer's KMS, and the run token stays
 - **Date:** 2026-09-22
 - **Owners:** platform, desktop
 - **Decided by:** the maintainer, 2026-09-22, asking for the part of the plan

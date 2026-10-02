@@ -132,7 +132,7 @@ const ROLE_CHECKED_CONTRACTS = [
   // A file attached to an assistant message (#4690) takes the contract's
   // roles, which are ask_assistant's, so a person who cannot ask cannot store.
   "upload_assistant_attachment",
-  // Thirty agent-surface contracts that granted only narrow roles while their
+  // Agent-surface contracts that granted only narrow roles while their
   // handlers checked none (#4194). A workspace Member could reach each one
   // over the API, over MCP, and through stella's search_tools and
   // load_tools. Each now calls assertContractRole with its own contract.
@@ -153,7 +153,6 @@ const ROLE_CHECKED_CONTRACTS = [
   "get_auth_alerts",
   "update_org_settings",
   "update_prompt_settings",
-  "update_budget_policy",
   "update_model_settings",
   "update_memory_policy",
   "set_connection_mappings",

@@ -3,8 +3,8 @@
  * agent-defaults-tabs.test.tsx — component tests for AgentDefaultsTabs.
  *
  * Covers:
- *   (a) Renders all four sub-tabs ("Models", "Budget", "Prompts",
- *       "Memory Policy") and the initial panel.
+ *   (a) Renders all three sub-tabs ("Models", "Prompts", "Memory Policy")
+ *       and the initial panel.
  *   (b) initialTab controls which panel renders first.
  *   (c) Clicking a non-default sub-tab updates the URL with `?tab=<value>`.
  *   (d) Clicking back to "Models" (the default) clears the query param.
@@ -30,12 +30,11 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-function renderTabs(initialTab: "models" | "budget" | "prompts" | "memory") {
+function renderTabs(initialTab: "models" | "prompts" | "memory") {
   return render(
     <AgentDefaultsTabs
       initialTab={initialTab}
       modelsPanel={<p>Models panel content</p>}
-      budgetPanel={<p>Budget panel content</p>}
       promptsPanel={<p>Prompts panel content</p>}
       memoryPanel={<p>Memory panel content</p>}
     />,
@@ -43,9 +42,8 @@ function renderTabs(initialTab: "models" | "budget" | "prompts" | "memory") {
 }
 
 describe("isAgentDefaultsTab", () => {
-  it("accepts the four known tab values", () => {
+  it("accepts the three known tab values", () => {
     expect(isAgentDefaultsTab("models")).toBe(true);
-    expect(isAgentDefaultsTab("budget")).toBe(true);
     expect(isAgentDefaultsTab("prompts")).toBe(true);
     expect(isAgentDefaultsTab("memory")).toBe(true);
   });
@@ -54,13 +52,17 @@ describe("isAgentDefaultsTab", () => {
     expect(isAgentDefaultsTab("bogus")).toBe(false);
     expect(isAgentDefaultsTab(undefined)).toBe(false);
   });
+
+  it("rejects the retired budget tab (ADR-235)", () => {
+    expect(isAgentDefaultsTab("budget")).toBe(false);
+  });
 });
 
 describe("AgentDefaultsTabs", () => {
-  it("renders all four sub-tabs and the Models panel by default", () => {
+  it("renders all three sub-tabs and the Models panel by default", () => {
     renderTabs("models");
     expect(screen.getByRole("tab", { name: "Models" })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "Budget" })).toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: "Budget" })).toBeNull();
     expect(screen.getByRole("tab", { name: "Prompts" })).toBeInTheDocument();
     expect(
       screen.getByRole("tab", { name: "Memory Policy" }),
@@ -71,16 +73,6 @@ describe("AgentDefaultsTabs", () => {
   it("renders the Memory Policy panel first when initialTab is 'memory'", () => {
     renderTabs("memory");
     expect(screen.getByText("Memory panel content")).toBeInTheDocument();
-  });
-
-  it("switches to Budget and updates the URL with ?tab=budget", async () => {
-    renderTabs("models");
-    await userEvent.click(screen.getByRole("tab", { name: "Budget" }));
-    expect(screen.getByText("Budget panel content")).toBeInTheDocument();
-    expect(mockReplace).toHaveBeenCalledWith(
-      "/acme/prod/settings/agent-defaults?tab=budget",
-      { scroll: false },
-    );
   });
 
   it("switches to Prompts and updates the URL with ?tab=prompts", async () => {
@@ -94,7 +86,7 @@ describe("AgentDefaultsTabs", () => {
   });
 
   it("switching back to Models clears the query param", async () => {
-    renderTabs("budget");
+    renderTabs("prompts");
     await userEvent.click(screen.getByRole("tab", { name: "Models" }));
     expect(screen.getByText("Models panel content")).toBeInTheDocument();
     expect(mockReplace).toHaveBeenCalledWith(

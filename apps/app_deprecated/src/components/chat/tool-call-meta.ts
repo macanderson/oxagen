@@ -61,7 +61,6 @@ const CURATED: Record<string, { label: string; Icon?: LucideIcon }> = {
   resolve_approval: { label: "Resolve approval", Icon: ShieldCheck },
   // Metering + billing
   get_usage_breakdown: { label: "Read usage breakdown", Icon: CreditCard },
-  get_budget_policy: { label: "Read budget policy", Icon: CreditCard },
   read_subscription: { label: "Read subscription", Icon: CreditCard },
   // Memory
   recall_memory: { label: "Recall memory" },

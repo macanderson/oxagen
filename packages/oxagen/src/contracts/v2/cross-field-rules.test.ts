@@ -290,11 +290,11 @@ describe("set_budget input", () => {
     ).toBe(true);
   });
 
-  it("applies the windowDays rule to the new daily and turn periods", () => {
+  it("applies the windowDays rule to the new daily period", () => {
     expect(
       messagesAt(
         setBudget.input,
-        { ...base, scope: "org", period: "turn", windowDays: 1 },
+        { ...base, scope: "org", period: "daily", windowDays: 1 },
         "windowDays",
       ),
     ).toHaveLength(1);
@@ -302,6 +302,15 @@ describe("set_budget input", () => {
       setBudget.input.safeParse({ ...base, scope: "org", period: "daily" })
         .success,
     ).toBe(true);
+  });
+
+  // ADR-277: no customer sets a per-turn budget for the in-app assistant, so
+  // set_budget has no turn period.
+  it("refuses a turn period", () => {
+    expect(
+      setBudget.input.safeParse({ ...base, scope: "org", period: "turn" })
+        .success,
+    ).toBe(false);
   });
 
   it("requires a non-empty scopeId for operator and agent budgets", () => {

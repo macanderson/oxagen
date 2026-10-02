@@ -6,24 +6,16 @@ import { resolveOrg, resolveWorkspace } from "@/lib/resolve-org";
 import { getSessionOrRedirect } from "@/lib/session";
 import { firstNameOf } from "@/lib/utils";
 import { ChatShell, type ChatMessage } from "@/components/chat/chat-shell";
-import { invoke } from "@oxagen/oxagen";
 import type { CapabilityContext } from "@oxagen/oxagen";
 import { loadEffectiveModelDefaults } from "@oxagen/ai";
 import { isLowBalance } from "@oxagen/billing";
 import { buildSeededModelState } from "@/components/chat/model-state";
-import type { WorkspaceBudgetGovernance } from "@/components/chat/model-state";
 import type { McpServerSummary } from "@/components/chat/mcp-types";
 import { loadAgentOptions } from "./agent-options-data";
 import { userPreferencesReadHandler } from "@oxagen/handlers/user.preferences.read";
 import { userWorkspacePreferencesReadHandler } from "@oxagen/handlers/user.workspace_preferences.read";
-import { budgetPolicyReadHandler } from "@oxagen/handlers/budget.policy.read";
 import { conversationListHandler } from "@oxagen/handlers/conversation.list";
 import { logger } from "@oxagen/handlers/logger";
-// Side-effect import: bind every foundation handler into the shared kernel so
-// invoke("get_budget_policy", …) below can resolve its handler.
-// Without this the call silently throws "No handler registered" (see CLAUDE.md
-// gotcha) — caught below and treated as fail-open null governance regardless.
-import "@oxagen/handlers/register";
 import { ConversationNav } from "@/components/conversations/conversation-nav";
 import type { ConversationNavActions } from "@/components/conversations/types";
 import {
@@ -224,8 +216,6 @@ export async function ConversationPage({
     effectiveModelDefaults,
     initialConversations,
     availableMcpServers,
-    budgetDefault,
-    workspaceBudgetGovernance,
     availableAgents,
     workspacePrefs,
     walletBalance,
@@ -308,52 +298,6 @@ export async function ConversationPage({
       .catch((err: unknown) =>
         logAndFallback(err, "mcp-servers read", [] as McpServerSummary[]),
       ),
-    // Per-turn budget default (OXA — turn-budget): read the user's saved
-    // budget.policy so the composer's BudgetControl opens pre-filled with
-    // their last-saved preference rather than always defaulting to off.
-    // Direct handler call (not invoke()) — same pattern as
-    // userPreferencesReadHandler above; budget.policy is user-scoped
-    // (scoped: false) so it needs no IAM bootstrap.
-    budgetPolicyReadHandler({}, userCtx).catch((err: unknown) =>
-      logAndFallback(err, "budget-policy read", {
-        enabled: false as const,
-        limitUsd: null,
-        mode: "prompt" as const,
-        graceOveragePct: 0.25,
-      }),
-    ),
-    // Workspace-level budget governance: resolved via invoke()
-    // (Owner/Admin-managed governance state, not a user preference row) so
-    // the composer can surface an enforced ceiling / seed a soft default.
-    // { surface: "agent" } — the contract's `surfaces` does not include
-    // "app". FAIL-OPEN: any error (unregistered handler, down DB, denied
-    // check) degrades to `null` (no governance) so a broken governance row
-    // never blocks the chat page from rendering.
-    runInTenantScope({ orgId: tenant.id, workspaceId: workspace.id }, () =>
-      invoke("get_budget_policy", {}, userCtx, { surface: "agent" }),
-    )
-      .then((raw): WorkspaceBudgetGovernance => {
-        const read = raw as {
-          enabled: boolean;
-          limitUsd: number | null;
-          mode: "grace" | "prompt" | "enforce";
-          enforcement: "default" | "ceiling";
-        };
-        return {
-          enabled: read.enabled,
-          limitUsd: read.limitUsd ?? 0,
-          mode: read.mode,
-          enforcement: read.enforcement,
-        };
-      })
-      .catch((err: unknown) =>
-        logAndFallback(err, "workspace-budget-governance read", {
-          enabled: false as const,
-          limitUsd: 0,
-          mode: "prompt" as const,
-          enforcement: "ceiling" as const,
-        }),
-      ),
     // Selectable agents for the composer's agent picker. loadAgentOptions
     // never throws (degrades to an empty list internally), so no .catch here.
     loadAgentOptions(tenant.id, workspace.id, userCtx),
@@ -402,7 +346,6 @@ export async function ConversationPage({
     ? buildSeededModelState({
         textModel: effectiveModelDefaults.text.model,
         textTier: effectiveModelDefaults.text.tier,
-        budget: budgetDefault,
       })
     : undefined;
 
@@ -443,7 +386,6 @@ export async function ConversationPage({
             availableAgents={availableAgents}
             defaultAgentId={workspacePrefs.defaultAgentId}
             setDefaultAgentAction={setDefaultAgentAction.bind(null, navCtx)}
-            workspaceBudgetGovernance={workspaceBudgetGovernance}
             agentId={boundAgentId ?? null}
             walletBalanceCents={walletBalance?.balanceCents ?? null}
             userFirstName={firstNameOf(session.user.name)}

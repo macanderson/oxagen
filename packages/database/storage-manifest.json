@@ -1105,17 +1105,6 @@
       "writes": []
     },
     {
-      "domain": "workspace",
-      "name": "get_budget_policy",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
       "domain": "capability",
       "name": "get_capability_registry",
       "reads": [],
@@ -2010,17 +1999,6 @@
     {
       "domain": "billing",
       "name": "get_usage_breakdown",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "user",
-      "name": "get_user_budget",
       "reads": [],
       "surfaces": [
         "agent",
@@ -4729,17 +4707,6 @@
       "writes": []
     },
     {
-      "domain": "workspace",
-      "name": "update_budget_policy",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
       "domain": "connection",
       "name": "update_connection",
       "reads": [],
@@ -4881,17 +4848,6 @@
     {
       "domain": "toolbelt",
       "name": "update_toolbelt",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "user",
-      "name": "update_user_budget",
       "reads": [],
       "surfaces": [
         "agent",
@@ -5535,7 +5491,6 @@
         "postgres:workspace.operator_ranking_policy",
         "postgres:workspace.routing_policy",
         "postgres:workspace.tacho_session_policy",
-        "postgres:workspace.workspace_budget_policy",
         "postgres:workspace.workspace_memory_policy",
         "postgres:workspace.workspace_slug_history",
         "postgres:workspace.workspace_users",
@@ -12518,30 +12473,6 @@
           "nullable": false,
           "primaryKey": false,
           "type": "jsonb"
-        },
-        {
-          "name": "per_turn_budget_enabled",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "boolean"
-        },
-        {
-          "name": "per_turn_budget_usd",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "real"
-        },
-        {
-          "name": "per_turn_budget_mode",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "per_turn_budget_grace_pct",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "real"
         }
       ],
       "domain": "auth",
@@ -29217,76 +29148,6 @@
       "domain": "workspace",
       "id": "postgres:workspace.tacho_session_policy",
       "name": "tacho_session_policy",
-      "rls": "standard",
-      "store": "postgres",
-      "tenantScoped": true
-    },
-    {
-      "columns": [
-        {
-          "name": "id",
-          "nullable": false,
-          "primaryKey": true,
-          "type": "uuid"
-        },
-        {
-          "name": "org_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "workspace_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "uuid"
-        },
-        {
-          "name": "enabled",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "boolean"
-        },
-        {
-          "name": "limit_usd",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "numeric(12, 2)"
-        },
-        {
-          "name": "mode",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "grace_overage_pct",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "real"
-        },
-        {
-          "name": "enforcement",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "text"
-        },
-        {
-          "name": "created_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        },
-        {
-          "name": "updated_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "timestamp with time zone"
-        }
-      ],
-      "domain": "workspace",
-      "id": "postgres:workspace.workspace_budget_policy",
-      "name": "workspace_budget_policy",
       "rls": "standard",
       "store": "postgres",
       "tenantScoped": true

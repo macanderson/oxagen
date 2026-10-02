@@ -201,10 +201,6 @@
           "file": "agent.memory_policy.write.ts"
         },
         {
-          "name": "update_budget_policy",
-          "file": "workspace.budget_policy.write.ts"
-        },
-        {
           "name": "set_routing_policy",
           "file": "router.policy.set.ts"
         }
@@ -2316,18 +2312,6 @@
         {
           "name": "get_spend_budget",
           "file": "billing.budget.get.ts"
-        },
-        {
-          "name": "update_user_budget",
-          "file": "budget.policy.write.ts"
-        },
-        {
-          "name": "get_user_budget",
-          "file": "budget.policy.read.ts"
-        },
-        {
-          "name": "get_budget_policy",
-          "file": "workspace.budget_policy.read.ts"
         }
       ],
       "unresolved": [],

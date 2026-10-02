@@ -2,18 +2,24 @@ import { z } from "zod";
 import { defineTool } from "./_define";
 import { workspaceSettingsWrite } from "../workspace.settings.write";
 import { agentMemoryPolicyWrite } from "../agent.memory_policy.write";
-import { workspaceBudgetPolicyWrite } from "../workspace.budget_policy.write";
 import { routerPolicySet } from "../router.policy.set";
 
 /**
  * Appendix E: `update_workspace` — "governance mode, retention mode, promotion
  * thresholds, budgets, model routes". Absorbs `update_workspace_settings`,
- * `update_memory_policy`, `update_budget_policy` and `set_routing_policy`.
+ * `update_memory_policy` and `set_routing_policy`.
  *
- * Four contracts that all wrote one row (or one policy hanging off it) become
+ * Appendix E also folded in `update_budget_policy`, a workspace's per-turn
+ * budget for Oxagen's in-app assistant. Mac ruled on 2026-10-02 that no
+ * customer sets a budget for the assistant (ADR-235), and ADR-277 deleted it,
+ * so this tool carries no `budget` block. A workspace's spend ceiling is
+ * `set_budget`. Appendix E in oxageninc/roadmap still lists the source, and
+ * the fixtures here no longer do.
+ *
+ * Three contracts that all wrote one row (or one policy hanging off it) become
  * one partial update, because the operator's question is "how is this workspace
- * governed", not "which of four settings tools do I want". Every field stays
- * omit = unchanged, value = set, null = clear, as all four sources were.
+ * governed", not "which of three settings tools do I want". Every field stays
+ * omit = unchanged, value = set, null = clear, as all three sources were.
  *
  * Three judgment calls a reviewer should check:
  *
@@ -23,15 +29,14 @@ import { routerPolicySet } from "../router.policy.set";
  *    absorbs column — is name, slug, description and avatar. Dropping them
  *    would leave no tool anywhere in Appendix E that can rename a workspace.
  *
- * 2. **The nesting is by policy, not flat.** `mode` means three different
- *    things across these sources (budget enforcement, router mode, governance
- *    mode). Flattening would force two of them to be renamed, which breaks the
- *    by-import carry; nesting keeps each field's name and message intact.
+ * 2. **The nesting is by policy, not flat.** `mode` means the router mode in
+ *    one source and the governance mode in another, and the memory policy's
+ *    thresholds would collide by meaning with the router's. Flattening would
+ *    force renames, which breaks the by-import carry; nesting keeps each
+ *    field's name and message intact.
  *
  * 3. **`scope` does not carry.** See `drops`.
  */
-const budgetInput = workspaceBudgetPolicyWrite.input.shape;
-const budgetOutput = workspaceBudgetPolicyWrite.output.shape;
 const routingInput = routerPolicySet.input.shape;
 const routingOutput = routerPolicySet.output.shape;
 
@@ -39,7 +44,7 @@ export const updateWorkspace = defineTool({
   name: "update_workspace",
   domain: "workspace",
   description:
-    "Update a workspace (partial): identity, the consequence-role map that decides who may grant a mandate, governance mode, retention mode, promotion thresholds, the memory decay policy, the per-turn dollar budget, and the market-router policy. Only the fields supplied change.",
+    "Update a workspace (partial): identity, the consequence-role map that decides who may grant a mandate, governance mode, retention mode, promotion thresholds, the memory decay policy, and the market-router policy. Only the fields supplied change.",
   mode: "sync",
   surfaces: ["api", "mcp", "cli", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
@@ -48,7 +53,6 @@ export const updateWorkspace = defineTool({
   absorbs: [
     "update_workspace_settings",
     "update_memory_policy",
-    "update_budget_policy",
     "set_routing_policy",
   ],
   drops: [
@@ -65,21 +69,20 @@ export const updateWorkspace = defineTool({
   ],
 
   /**
-   * Every risk field takes the strictest of the four, and all four strictest
+   * Every risk field takes the strictest of the three, and all three strictest
    * values come from `set_routing_policy` — which is right, because turning the
    * market router to `enforce` changes what the platform spends on models, and
    * that is the largest consequence in the merged surface.
    *
-   * (`update_workspace_settings`, `update_memory_policy` and
-   * `update_budget_policy` were requiresApproval: false / riskLevel
-   * medium|low|medium / sensitivity medium.)
+   * (`update_workspace_settings` and `update_memory_policy` were
+   * requiresApproval: false / riskLevel medium|low / sensitivity medium.)
    */
   agent: { requiresApproval: true, riskLevel: "high", category: "workspace" },
   sensitivity: "high", // set_routing_policy
   defaultEffect: "deny",
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow" },
-    // Strict intersection of the four: settings/budget/routing allowed
+    // Strict intersection of the three: settings/routing allowed
     // workspace Owner (and an "Admin" that was not a `SystemWorkspaceRole`
     // until #5228), `update_memory_policy` allowed Owner alone.
     workspace: { Owner: "allow" },
@@ -89,8 +92,8 @@ export const updateWorkspace = defineTool({
    * kept rather than dropped as the "strict" reading would suggest. Its reason
    * generalizes to the whole merged surface: governing a workspace is not AI
    * usage. It also closes a trap — with the gate on, an organization that has
-   * run out of credit could not turn its budget DOWN, because the call that
-   * lowers spend would itself be refused for lack of credit.
+   * run out of credit could not turn the market router down, because the call
+   * that lowers spend would itself be refused for lack of credit.
    */
   noBillingGate: true,
   mutates: true,
@@ -188,23 +191,6 @@ export const updateWorkspace = defineTool({
      */
     memory: agentMemoryPolicyWrite.input.optional(),
 
-    // ---- budget policy (update_budget_policy) -----------------------------
-    /**
-     * §12.5. Carried field by field so `limitUsd`'s nullable-to-clear encoding
-     * and `graceOveragePct`'s 0–10 bound survive, and so does `enforcement`'s
-     * distinction between a soft `default` that seeds members and a hard
-     * `ceiling` that clamps them.
-     */
-    budget: z
-      .object({
-        enabled: budgetInput.enabled,
-        limitUsd: budgetInput.limitUsd,
-        mode: budgetInput.mode,
-        graceOveragePct: budgetInput.graceOveragePct,
-        enforcement: budgetInput.enforcement,
-      })
-      .optional(),
-
     // ---- market router policy (set_routing_policy, minus `scope`) ---------
     /**
      * §4.5. `mode` is the field that matters: `off` is deterministic routing,
@@ -260,14 +246,6 @@ export const updateWorkspace = defineTool({
     // Carried whole from `update_memory_policy`, whose output is the full
     // (non-partial) memoryPolicySchema.
     memory: agentMemoryPolicyWrite.output,
-
-    budget: z.object({
-      enabled: budgetOutput.enabled,
-      limitUsd: budgetOutput.limitUsd,
-      mode: budgetOutput.mode,
-      graceOveragePct: budgetOutput.graceOveragePct,
-      enforcement: budgetOutput.enforcement,
-    }),
 
     routing: z.object({
       mode: routingOutput.mode,

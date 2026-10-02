@@ -1,9 +1,9 @@
 # ADR-187: Two gateways carry every customer agent's traffic, and Oxagen holds the keys
 
-- **Status:** Accepted in part on 2026-10-02: key custody for MCP, and proposals 4, 5, and 6. The rest is Proposed. The Acceptance section lists each part
+- **Status:** Accepted on 2026-10-02. The maintainer first accepted the parts MCP Studio depends on, then the whole record the same day. Three design questions stay open (see Open for acceptance)
 - **Date:** 2026-09-25
 - **Owners:** platform, gateway
-- **Decided by:** the maintainer set the direction on 2026-09-25. On 2026-10-02 the maintainer accepted the parts MCP Studio depends on (#5138). The rest awaits acceptance
+- **Decided by:** the maintainer set the direction on 2026-09-25. On 2026-10-02 the maintainer accepted the parts MCP Studio depends on (#5138), then the whole record
 - **Related:** ADR-094 (the gateway on the laptop), ADR-143 (credential custody on the laptop), ADR-122 (external tools need a person), ADR-078 (one tool builder), ADR-056 and ADR-163 (run commands), ADR-095 (the tier ladder), ADR-096 and ADR-152 (the contained tier), ADR-165 (the governed action is billed), #3299, #4310
 - **Detail:** `docs/gateway-plan.md` in `oxageninc/roadmap` holds the waste reason codes, the per-harness setup, and the build order
 
@@ -165,7 +165,7 @@ Every agent connects to the cloud gateway, so agents message and start one anoth
 
 ## Proposals
 
-These are design choices this record makes. The maintainer accepted proposals 4, 5, and 6 on 2026-10-02 (see Acceptance). Each of the others needs the maintainer's yes before it is built:
+These are design choices this record makes. The maintainer accepted all twelve on 2026-10-02 (see Acceptance):
 
 1. The cloud gateway is the meter of record. The metering and budget code in `model-proxy.ts` moves there.
 2. Screening is a workspace setting: off, flag, strip, or reject.
@@ -182,22 +182,19 @@ These are design choices this record makes. The maintainer accepted proposals 4,
 
 ## Acceptance
 
-On 2026-10-02 the maintainer accepted the parts of this record that MCP Studio depends on (#5138). Everything else stays Proposed.
-
-Accepted:
+On 2026-10-02 the maintainer accepted the parts of this record that MCP Studio depends on (#5138):
 
 - **Key custody for MCP.** The vault holds MCP credentials, or the customer's KMS (key management service) holds them on a customer-hosted cloud gateway. No MCP credential sits on an enrolled machine.
 - **Proposal 4.** MCP calls go through the local gateway too.
 - **Proposal 5.** Each MCP server keeps its own endpoint and its registered name.
 - **Proposal 6.** Enrollment imports each harness's existing MCP servers into the toolbelt and moves their credentials into custody.
 
-Two passages cover vendor keys and MCP credentials together: the first bullet under Keys and runs, and "Keys leave the machine" under Consequences. Only the MCP credential half of each is accepted. The vendor key half stays Proposed.
+Later the same day the maintainer accepted the rest of the record:
 
-Still Proposed:
+- **Key custody for vendor model keys.** Vendor keys move off the machine to the vault, or to the customer's KMS on a customer-hosted cloud gateway. The cloud gateway attaches the key on the last hop. The local gateway holds a run token and no key. This holds on an enrolled machine and in a contained runtime, where the local gateway runs inside the sandbox.
+- **Proposals 1 to 3 and 7 to 12.**
 
-- The other nine proposals: 1 to 3 and 7 to 12. These include the cloud gateway as the meter of record (1) and screening for sensitive data (2 and 3).
-- Vendor model keys moving off the machine to the vault or the customer's KMS.
-- The four items under Open for acceptance.
+Three questions stay open, and the work that depends on each one waits for it: the sensitive-data detection design, how a Codex whole-run token is revoked when the harness restarts, and the first regions for the Oxagen-hosted cloud gateway.
 
 ## Consequences
 
@@ -226,6 +223,5 @@ Still Proposed:
 ## Open for acceptance
 
 1. The sensitive-data detection design.
-2. Proposals 1 to 3 and 7 to 12 above. Proposals 4, 5, and 6 were accepted on 2026-10-02.
-3. How a Codex whole-run token is revoked when the harness restarts.
-4. The first regions for the Oxagen-hosted cloud gateway.
+2. How a Codex whole-run token is revoked when the harness restarts.
+3. The first regions for the Oxagen-hosted cloud gateway.
