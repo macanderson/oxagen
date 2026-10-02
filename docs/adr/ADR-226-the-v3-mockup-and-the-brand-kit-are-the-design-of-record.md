@@ -49,7 +49,7 @@ UI, and Monaspace Neon for code, and the app loads the kit's faces.
 The mockup is read at one commit:
 
 ```
-macanderson/oxagen-roadmap @ 4eedf94560e05ed6574f44ae56d803f77f9094ce, path mockups/
+oxageninc/roadmap @ 4eedf94560e05ed6574f44ae56d803f77f9094ce, path mockups/
 ```
 
 This is the last `main` commit that touched `mockups/` (roadmap #293,
@@ -88,7 +88,7 @@ kit 2.5.0 (#301).
 
 To read a file at the pin, run
 `git -C ../oxagen-roadmap show 4eedf94560e05ed6574f44ae56d803f77f9094ce:mockups/README.md`,
-or open `https://github.com/macanderson/oxagen-roadmap/tree/4eedf94560e05ed6574f44ae56d803f77f9094ce/mockups`.
+or open `https://github.com/oxageninc/roadmap/tree/4eedf94560e05ed6574f44ae56d803f77f9094ce/mockups`.
 
 Moving the pin is a permitted amendment to this ADR. A pull request changes the
 SHA and the date on the pin line, and names the mockup changes the new commit

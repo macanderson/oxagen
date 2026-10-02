@@ -6,13 +6,13 @@ ARP does not launch an agent. You review the prepared files and start the destin
 
 ## Build on CGP
 
-CGP already defines `ContextFrame`, `FrameId`, provenance, token costs, fidelity, and the `full`, `compact`, and `reference` representations. ARP reuses those concepts. It introduces neither a replacement context frame nor another journal schema. See [CGP's frame representation decision](https://github.com/macanderson/context-graph-protocol/blob/main/docs/adr/0005-frame-representations.md).
+CGP already defines `ContextFrame`, `FrameId`, provenance, token costs, fidelity, and the `full`, `compact`, and `reference` representations. ARP reuses those concepts. It introduces neither a replacement context frame nor another journal schema. See [CGP's frame representation decision](https://github.com/oxageninc/context-graph-protocol/blob/main/docs/adr/0005-frame-representations.md).
 
 The local handoff carries the operator summary as a CGP `episode` frame in the `full` representation. Its content is the complete supplied summary. This does not mean the summary reproduces the complete source conversation. The compatibility report records that loss separately. A future adapter carrying compact or referenced context must follow CGP's existing fidelity and resolution rules.
 
 CGP content identity and a source record boundary answer different questions. A `FrameId` identifies context content. ARP's source locator identifies a position in a particular evidence stream by format, issuer, stream identifier, sequence, and digest. The checkpoint binds that exact boundary to the restorable file selection.
 
-The existing [`contextgraph-trace`](https://github.com/macanderson/context-graph-protocol/blob/main/contextgraph-trace/README.md) vocabulary covers prompt assemblies, tool pairing, side effects, crashes, and resumes. Tacho already ports its [types](../../packages/tacho/src/trace/types.ts), [projection](../../packages/tacho/src/trace/project.ts), and [replay checks](../../packages/tacho/src/trace/oracles.ts). ARP evidence checks reuse that projection and those checks. A skipped check means the source supplied insufficient evidence for that check, not that the property held.
+The existing [`contextgraph-trace`](https://github.com/oxageninc/context-graph-protocol/blob/main/contextgraph-trace/README.md) vocabulary covers prompt assemblies, tool pairing, side effects, crashes, and resumes. Tacho already ports its [types](../../packages/tacho/src/trace/types.ts), [projection](../../packages/tacho/src/trace/project.ts), and [replay checks](../../packages/tacho/src/trace/oracles.ts). ARP evidence checks reuse that projection and those checks. A skipped check means the source supplied insufficient evidence for that check, not that the property held.
 
 `contextgraph-trace` remains a sketch outside core `contextgraph/1.0`. Consumers must pin and check the explicit journal format, currently `contextgraph-trace/0.1-sketch`, through Tacho's `TRACE_FORMAT`. A crate or package version does not establish journal compatibility. The signed source evidence retains its own `tacho/1.0` format.
 

@@ -423,6 +423,7 @@ export function toolsSource(reads: ToolsReads) {
       priceBook: refuse,
       operatorRanking: refuse,
       unpricedModels: refuse,
+      unproductive: refuse,
     },
     onboarding: { state: refuse, firstFrame: refuse },
     org: {

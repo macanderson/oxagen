@@ -10,7 +10,7 @@
  *
  * The findings pass prices a run's re-reads with `standingReadPrice`, from
  * the costs the rollup recorded on the run. The tool and steering pages print
- * a weekly price per 1,000 tokens with `weeklyPriceFromBook`, from the book
+ * a weekly price per 1,000 tokens with `weeklyPriceOfTally`, from the book
  * rates in force at each of the workspace's requests of the last 7 days. Both
  * price a re-read at the cache read rate, or at the input rate when the
  * request read nothing from the cache.
@@ -78,10 +78,8 @@ export interface WeeklyContextPrice {
   /** Micros a week for each 1,000 tokens of standing context. */
   perThousandMicros: bigint;
   currency: string;
-  /** The workspace's requests of the week the book priced. */
+  /** The workspace's requests of the week. The book priced every one. */
   requests: number;
-  /** Its requests the book had no rate for; the price leaves them out. */
-  unpricedRequests: number;
   /** The start of the week the price reads. */
   since: Date;
 }
@@ -93,49 +91,61 @@ export const WEEKLY_PRICE_TOKEN_CLASSES = [
 ] as const satisfies readonly PriceTokenClass[];
 
 /**
- * One model's week as the class-bucket read reports it (`readObservedModels`
- * in @oxagen/telemetry): its calls, and its calls by class and by price
- * boundary bucket.
+ * One model's week as the call-bucket read reports it (`readObservedModels`
+ * with `callBuckets` in @oxagen/telemetry): its calls, and its calls in each
+ * price-boundary bucket with how many of them read the cache.
  */
 export interface WeekOfModel {
   model: string;
   /** Model calls in the week. */
   calls: number;
-  /** The model's last call in the week. */
-  lastSeen: Date | string;
-  classes: readonly {
-    tokenClass: string;
-    /** Calls in the bucket that used the class. */
+  buckets: readonly {
+    /** Calls in the bucket. */
     calls: number;
+    /** Of those calls, the ones that read the cache. */
+    cacheReadCalls: number;
     /** Any instant inside the bucket. */
     firstSeen: Date | string;
   }[];
 }
 
 /**
- * The weekly price per 1,000 tokens of standing context, priced from the
- * book request by request. Each request re-reads the prefix once, so the
- * week costs, per 1,000 tokens:
- *
- *   Σ over cache-read buckets: calls × 1,000 × the bucket's cache_read rate
- *   + each model's other calls × 1,000 × its input_uncached rate
- *
- * A request that read the cache paid the read rate in force when it ran. A
- * request that read nothing from the cache sent the prefix uncached, priced
- * at the input rate in force at the model's last call of the week. A request
- * that wrote the prefix to the cache paid the higher write rate, so the
- * quote is a floor for such a week. Each model's requests carry its own
- * rates, so a week split across models is weighted by each model's requests.
- *
- * A request the book has no rate for adds nothing and is counted in
- * `unpricedRequests`, so a week with one is a floor as well. Null when no
- * request was priced, or when the rates name more than one currency.
+ * A week's requests priced so far, summed over the pages of the read. Each
+ * page adds its models with `tallyWeek`, and `weeklyPriceOfTally` rounds
+ * the sum once at the end.
  */
-export function weeklyPriceFromBook(args: {
-  observed: readonly WeekOfModel[];
-  book: PriceBook;
-  orgId: string;
-}): Omit<WeeklyContextPrice, "since"> | null {
+export interface WeekTally {
+  /**
+   * Each priced request's rate in micros per million tokens, summed: a
+   * million times the micros the week paid for one token of the prefix.
+   */
+  scaled: bigint;
+  requests: number;
+  unpricedRequests: number;
+  currencies: Set<string>;
+}
+
+/** A tally with no request in it yet. */
+export function emptyWeekTally(): WeekTally {
+  return {
+    scaled: 0n,
+    requests: 0,
+    unpricedRequests: 0,
+    currencies: new Set(),
+  };
+}
+
+/**
+ * Adds one page of models to a week's tally, pricing each request's re-read
+ * of the prefix at the rate in force in its own bucket. A request that read
+ * the cache pays the cache read rate. A request that read nothing from the
+ * cache sent the prefix uncached and pays the input rate. A request the book
+ * has no rate for, or a call no bucket holds, counts as unpriced.
+ */
+export function tallyWeek(
+  tally: WeekTally,
+  args: { observed: readonly WeekOfModel[]; book: PriceBook; orgId: string },
+): WeekTally {
   const byClass = indexPriceBookByClass(args.book);
   const rate = (
     tokenClass: (typeof WEEKLY_PRICE_TOKEN_CLASSES)[number],
@@ -147,43 +157,77 @@ export function weeklyPriceFromBook(args: {
       modelId,
       at: new Date(at),
     });
-  let scaled = 0n;
-  let requests = 0;
-  let unpricedRequests = 0;
-  const currencies = new Set<string>();
   const add = (entry: PriceEntry | null, calls: number): void => {
     if (calls <= 0) return;
     if (entry === null) {
-      unpricedRequests += calls;
+      tally.unpricedRequests += calls;
       return;
     }
-    scaled += BigInt(calls) * entry.microsPerMillion;
-    requests += calls;
-    currencies.add(entry.currency);
+    tally.scaled += BigInt(calls) * entry.microsPerMillion;
+    tally.requests += calls;
+    tally.currencies.add(entry.currency);
   };
   for (const model of args.observed) {
-    let reads = 0;
-    for (const bucket of model.classes) {
-      if (bucket.tokenClass !== "cache_read" || bucket.calls <= 0) continue;
-      add(rate("cache_read", model.model, bucket.firstSeen), bucket.calls);
-      reads += bucket.calls;
+    let placed = 0;
+    for (const bucket of model.buckets) {
+      const reads = Math.min(bucket.cacheReadCalls, bucket.calls);
+      add(rate("cache_read", model.model, bucket.firstSeen), reads);
+      add(
+        rate("input_uncached", model.model, bucket.firstSeen),
+        bucket.calls - reads,
+      );
+      placed += bucket.calls;
     }
-    const misses = model.calls - reads;
-    if (misses > 0)
-      add(rate("input_uncached", model.model, model.lastSeen), misses);
+    // A call the buckets do not hold has no instant to price it at.
+    if (model.calls > placed) tally.unpricedRequests += model.calls - placed;
   }
-  const [currency, ...others] = currencies;
-  if (requests === 0 || currency === undefined || others.length > 0)
+  return tally;
+}
+
+/**
+ * The weekly price per 1,000 tokens a tally adds up to. Each request re-reads
+ * the prefix once, so the week costs, per 1,000 tokens:
+ *
+ *   Σ over buckets: cache reads × 1,000 × the bucket's cache_read rate
+ *     + other calls × 1,000 × the bucket's input_uncached rate
+ *
+ * A request that wrote the prefix to the cache paid the higher write rate, so
+ * the quote is a floor for such a week. Each model's requests carry its own
+ * rates, so a week split across models is weighted by each model's requests.
+ *
+ * Null when any request has no rate in the book. The quote would leave that
+ * request out and read low, and the tool and steering pages would print the
+ * floor as the price. Null as well when no request ran, or when the rates
+ * name more than one currency.
+ */
+export function weeklyPriceOfTally(
+  tally: WeekTally,
+): Omit<WeeklyContextPrice, "since"> | null {
+  const [currency, ...others] = tally.currencies;
+  if (
+    tally.unpricedRequests > 0 ||
+    tally.requests === 0 ||
+    currency === undefined ||
+    others.length > 0
+  )
     return null;
   return {
     perThousandMicros: divideHalfEven(
-      scaled * BigInt(WEEKLY_PRICE_TOKENS),
+      tally.scaled * BigInt(WEEKLY_PRICE_TOKENS),
       1_000_000n,
     ),
     currency,
-    requests,
-    unpricedRequests,
+    requests: tally.requests,
   };
+}
+
+/** The weekly price of one page of models; see `weeklyPriceOfTally`. */
+export function weeklyPriceFromBook(args: {
+  observed: readonly WeekOfModel[];
+  book: PriceBook;
+  orgId: string;
+}): Omit<WeeklyContextPrice, "since"> | null {
+  return weeklyPriceOfTally(tallyWeek(emptyWeekTally(), args));
 }
 
 /**

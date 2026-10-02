@@ -1,6 +1,6 @@
 # House typefaces
 
-The [Oxagen house brand system](https://github.com/macanderson/oxagen-house-brand)
+The [Oxagen house brand system](https://github.com/oxageninc/brand)
 sets type in three faces, each with one job:
 
 | Face | Token | Sets |

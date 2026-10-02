@@ -26,7 +26,7 @@ CGP export). The build plan (`plan.md`, with its recorded hook latency figures)
 and the designs for work not yet built (approval tokens, trust scoring, the
 insurer API, `adr-0003` Biscuit tokens, `adr-0004` the Cedar policy engine, and
 the SDK examples) moved to the roadmap repository on 2026-09-23 (#3895). They are
-at `docs/oxagen/specs/tacho/` in https://github.com/macanderson/oxagen-roadmap,
+at `docs/oxagen/specs/tacho/` in https://github.com/oxageninc/roadmap,
 and this directory cites them as `oxagen-roadmap:docs/oxagen/specs/tacho/<file>`.
 
 ## The names that are still moving

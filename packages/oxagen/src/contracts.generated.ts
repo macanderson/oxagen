@@ -380,6 +380,7 @@ import "./contracts/spend.operator_pseudonyms.set";
 import "./contracts/spend.operator_ranking";
 import "./contracts/spend.shared";
 import "./contracts/spend.statement.export";
+import "./contracts/spend.unproductive";
 import "./contracts/spend.waste";
 import "./contracts/steering.markdown_import.commit";
 import "./contracts/steering.markdown_import.parse";

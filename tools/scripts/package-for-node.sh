@@ -343,7 +343,7 @@ case $SERVICE in
     printf '%s\n' \
       "This release is a manifest only. stella-serve runs from the published" \
       "image named in oxagen-run.json; nothing here is executed. See" \
-      "tools/scripts/package-for-node.sh in macanderson/oxagen." \
+      "tools/scripts/package-for-node.sh in oxageninc/product." \
       > "$OUT/README.txt"
     WRITE_MANIFEST_IMAGE="$engine_image" \
       write_manifest "$(port_for stella-serve)" 384m "/healthz" \

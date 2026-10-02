@@ -3,11 +3,11 @@
 Workforce management for autonomous agents. Every agent gets its own identity and a mandate (its authority, budget, tools, and skills), set by the teams accountable for it and enforced on the actions routed through Oxagen, the agent control plane.
 
 <p align="center">
-  <a href="https://github.com/macanderson/oxagen/actions/workflows/pipeline.yml">
-    <img alt="CI Status" src="https://github.com/macanderson/oxagen/actions/workflows/pipeline.yml/badge.svg?branch=main" />
+  <a href="https://github.com/oxageninc/product/actions/workflows/pipeline.yml">
+    <img alt="CI Status" src="https://github.com/oxageninc/product/actions/workflows/pipeline.yml/badge.svg?branch=main" />
   </a>
-  <a href="https://github.com/macanderson/oxagen/actions/workflows/vision-gate.yml">
-    <img alt="Vision Gate" src="https://github.com/macanderson/oxagen/actions/workflows/vision-gate.yml/badge.svg?branch=main" />
+  <a href="https://github.com/oxageninc/product/actions/workflows/vision-gate.yml">
+    <img alt="Vision Gate" src="https://github.com/oxageninc/product/actions/workflows/vision-gate.yml/badge.svg?branch=main" />
   </a>
   <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-6.x-3178C6?logo=typescript" />
   <img alt="Node.js" src="https://img.shields.io/badge/Node.js-24%20LTS-339933?logo=node.js" />
@@ -177,7 +177,7 @@ ClickHouse migrations require `DATABASE_URL` for a shared Postgres advisory lock
 ### Setup
 
 ```bash
-git clone https://github.com/macanderson/oxagen.git
+git clone https://github.com/oxageninc/product.git
 cd oxagen
 
 cp .env.example .env.local    # fill in required values
@@ -344,7 +344,7 @@ tools/scripts/package-for-node.sh api
   `.next/standalone` and nothing to package.
 - **`environment: production` is load-bearing.** Both deploy jobs exchange a
   GitHub OIDC token for a session on `gha-deploy-oxagen-platform`, which trusts
-  exactly `repo:macanderson/oxagen:environment:production`. Removing the
+  exactly `repo:oxageninc/product:environment:production`. Removing the
   line breaks the deploy rather than loosening it.
 - **`deploy-web` syncs with `--delete`.** This repository is the source of truth
   for that bucket. Anything added to it out of band is removed on the next

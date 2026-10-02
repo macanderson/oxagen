@@ -5,7 +5,7 @@
 - **Owners:** platform, gateway
 - **Decided by:** the maintainer set the direction on 2026-09-25. This record awaits acceptance
 - **Related:** ADR-094 (the gateway on the laptop), ADR-143 (credential custody on the laptop), ADR-122 (external tools need a person), ADR-078 (one tool builder), ADR-056 and ADR-163 (run commands), ADR-095 (the tier ladder), ADR-096 and ADR-152 (the contained tier), ADR-165 (the governed action is billed), #3299, #4310
-- **Detail:** `docs/gateway-plan.md` in `macanderson/oxagen-roadmap` holds the waste reason codes, the per-harness setup, and the build order
+- **Detail:** `docs/gateway-plan.md` in `oxageninc/roadmap` holds the waste reason codes, the per-harness setup, and the build order
 
 ## Terms
 
@@ -82,7 +82,7 @@ An operator signs in to Oxagen and acts on the agents they control, whatever run
 
 The hooks carry the same commands to the harness's own tools: they refuse the next tool call and prompt of a paused or cancelled run. For an agent whose model calls do not pass through the cloud gateway, the hooks are the only way in: a steer lands at the next hook, an interrupt becomes a refusal of the next tool call, and pause and cancel refuse the next tool call and prompt.
 
-Commands reach a run at every tier (ADR-163). Who may command which agents, and who may command all of them at once, follows the grants in `mission-control-spec.md` §7.6 in `macanderson/oxagen-roadmap`.
+Commands reach a run at every tier (ADR-163). Who may command which agents, and who may command all of them at once, follows the grants in `mission-control-spec.md` §7.6 in `oxageninc/roadmap`.
 
 ### Steering records
 
@@ -106,7 +106,7 @@ Each event is appended to its run's hash chain and signed by the gateway that sa
 
 ### Done
 
-A run is done when its model says it is done. Many runs have no issue and no definition of done, so this stays the rule. Verifying done against checks written before the run, and a person's acceptance on top of it, are future state and not built (`dod-spec.md` in `macanderson/oxagen-roadmap`). When they exist, spend on runs that fail verification becomes waste too.
+A run is done when its model says it is done. Many runs have no issue and no definition of done, so this stays the rule. Verifying done against checks written before the run, and a person's acceptance on top of it, are future state and not built (`dod-spec.md` in `oxageninc/roadmap`). When they exist, spend on runs that fail verification becomes waste too.
 
 ### Live run view
 
@@ -126,7 +126,7 @@ The page reads the run's record as it is written, so nothing waits for the run t
 
 An operator selects one or more work items (issues and tasks), chooses **Send To...**, and picks the harness, the runtime, and the toolbelt the work runs with, or any existing agent in the workspace that fixes all three. The operator's role is the only limit on which agents they can send to. Oxagen creates a work order and launches the agent to do the work, with no step on the operator's machine.
 
-- **The work order stays.** It carries the work items, the definition of done, the brief, the repositories the run may change, and the spend cap, as `work-backlog.md` and `work-in-flight-spec.md` §9 in `macanderson/oxagen-roadmap` already design. What this adds is the harness, runtime, and toolbelt choice, and the automatic launch.
+- **The work order stays.** It carries the work items, the definition of done, the brief, the repositories the run may change, and the spend cap, as `work-backlog.md` and `work-in-flight-spec.md` §9 in `oxageninc/roadmap` already design. What this adds is the harness, runtime, and toolbelt choice, and the automatic launch.
 - **The launch goes to the chosen runtime.** An enrolled machine's local gateway starts the harness headless. A contained runner starts it on a CI runner (ADR-152). A customer-hosted runner starts it in the customer's network. Oxagen starts a process the customer chose and runs no turn itself (ADR-043, ADR-096).
 - **The run is bound to its work order.** Its record carries the work order, so the live run view, the work record, and verification all read from it.
 

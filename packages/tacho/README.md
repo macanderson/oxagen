@@ -488,7 +488,7 @@ runtime package.
 Approved on 2026-09-18 (`docs/audits/2026-09-18-steering-graph-gateway-review.md`;
 the design is in `docs/mission-control-spec.md` §7 and §10.5, the phases in
 `docs/implementation-plan.md` §8, both in
-[oxagen-roadmap](https://github.com/macanderson/oxagen-roadmap)):
+[oxagen-roadmap](https://github.com/oxageninc/roadmap)):
 
 - **Phase 0**, merged as PR #3289 on 2026-09-18 (ADR-091, issue #2592). The
   server compiles active `must` and `should` records into the bundle's
@@ -567,7 +567,7 @@ and the daemon end-to-end test (real socket and port, fake control plane,
 commands, daemon-down spool and replay, restart). `src/bench/` prints the
 latency figures recorded in the tacho build plan, now
 `docs/oxagen/specs/tacho/plan.md` in
-[oxagen-roadmap](https://github.com/macanderson/oxagen-roadmap).
+[oxagen-roadmap](https://github.com/oxageninc/roadmap).
 
 ## Building the executables
 

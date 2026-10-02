@@ -76,7 +76,7 @@ it.
 ### 1. A branch need not be up to date with `main` before it merges
 
 **In effect:** main's ruleset sets `strict_required_status_checks_policy: false`.
-Read it with `gh api repos/macanderson/oxagen/rules/branches/main`. The classic
+Read it with `gh api repos/oxageninc/product/rules/branches/main`. The classic
 branch-protection endpoint returns 404, which does not mean the branch is
 unprotected.
 

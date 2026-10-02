@@ -24,6 +24,7 @@ import type {
   SpendGroupKind,
   SpendReport,
   SpendWaste,
+  UnproductiveSpend,
 } from "@/data/contracts/spend";
 import type { DataSource } from "@/data/ports";
 import { type Read, readError, readOk } from "@/data/read";
@@ -49,8 +50,6 @@ vi.mock("./actions", () => ({
   setPriceEntryAction: vi.fn(),
   removePriceEntryAction: vi.fn(),
   setGatewayPolicyAction: vi.fn(),
-}));
-vi.mock("./operator-ranking-actions", () => ({
   setOperatorPseudonymsAction: vi.fn(),
 }));
 vi.mock("next/navigation", () => ({
@@ -80,6 +79,20 @@ const ctx = ctxAs("member");
 
 const TODAY = new Date("2026-09-15T12:00:00.000Z");
 const PERIOD = { from: "2026-09-01", to: "2026-09-15" };
+
+/** The month's headline: $5.00 unproductive of $20.00 spent, 25%. */
+const HEADLINE: UnproductiveSpend = {
+  period: PERIOD,
+  unproductive: { micros: "5000000", currency: "USD" },
+  spend: { micros: "20000000", currency: "USD" },
+  share: 0.25,
+  parts: [
+    { detector: 2, saving: { micros: "1000000", currency: "USD" }, findings: 1 },
+    { detector: 3, saving: { micros: "0", currency: "USD" }, findings: 0 },
+    { detector: 5, saving: { micros: "984600000", currency: "USD" }, findings: 1 },
+  ],
+  estimate: { saving: { micros: "300000", currency: "USD" }, findings: 1 },
+};
 
 const cost = (micros: string, basis: Cost["basis"] = "gateway_observed") => ({
   micros,
@@ -132,6 +145,7 @@ const findingEvidence = vi.fn<DataSource["spend"]["findingEvidence"]>();
 const priceBook = vi.fn<DataSource["spend"]["priceBook"]>();
 const unpricedModels = vi.fn<DataSource["spend"]["unpricedModels"]>();
 const operatorRanking = vi.fn<DataSource["spend"]["operatorRanking"]>();
+const unproductive = vi.fn<DataSource["spend"]["unproductive"]>();
 const agentsList = vi.fn<DataSource["agents"]["list"]>();
 const source: DataSource = {
   runtimes: { list: vi.fn(), agents: vi.fn(), named: vi.fn() },
@@ -181,6 +195,7 @@ const source: DataSource = {
     drill,
     waste,
     operatorRanking,
+    unproductive,
     budgets,
     gatewayPolicy,
     findings,
@@ -434,6 +449,7 @@ beforeEach(() => {
   priceBook.mockReset();
   unpricedModels.mockReset();
   operatorRanking.mockReset();
+  unproductive.mockReset().mockResolvedValue(readOk(HEADLINE));
   agentsList.mockReset();
   agentsList.mockResolvedValue(readOk(registry));
 });
@@ -1062,21 +1078,27 @@ describe("Spend › Month", () => {
 });
 
 describe("Spend › Findings", () => {
-  it("leads with the savings identified, the share strip, the legend and the four facts", async () => {
+  it("leads with the month's unproductive spend beside its share, the parts and the estimate beside them, and the four facts", async () => {
     loaded({ operator: report([row("prn_marcusbell", { operator: MARCUS })]) });
     await renderSpend(["findings"]);
+    expect(unproductive).toHaveBeenCalledWith(ctx, PERIOD);
     const hero = screen.getByTestId("spend-findings-hero");
-    expect(within(hero).getByRole("heading")).toHaveTextContent(
-      "Savings identified",
-    );
-    expect(hero).toHaveTextContent("$1,670.80");
-    expect(hero).toHaveTextContent("64% of");
-    expect(hero).toHaveTextContent("About $17,649.60 a year at this run rate.");
     expect(
-      within(hero).getByRole("img", {
-        name: "Share of the identified savings by finding",
-      }),
+      within(hero).getByRole("heading", { name: "Unproductive spend" }),
     ).toBeInTheDocument();
+    expect(within(hero).getByTestId("spend-headline")).toHaveTextContent(
+      "$5.00",
+    );
+    expect(within(hero).getByTestId("spend-headline-share")).toHaveTextContent(
+      "25%",
+    );
+    expect(hero).toHaveTextContent("of $20.00 spent this month.");
+    // The listed findings' savings summed across kinds is not the headline.
+    expect(hero).not.toHaveTextContent("$1,670.80");
+    expect(hero).not.toHaveTextContent("a year at this run rate");
+    const parts = within(hero).getByTestId("spend-headline-parts");
+    expect(parts).toHaveTextContent("Context carry$984.60");
+    expect(parts).toHaveTextContent("Model class fit Estimated$0.30");
     expect(hero).toHaveTextContent("3 findings");
     expect(hero).toHaveTextContent("3 operators involved");
     expect(hero).toHaveTextContent("2 high confidence 1 medium");
@@ -1177,6 +1199,14 @@ describe("Spend › Findings", () => {
           findings: [],
         }),
       ),
+    );
+    unproductive.mockResolvedValue(
+      readOk({
+        ...HEADLINE,
+        unproductive: { micros: "0", currency: "USD" },
+        spend: null,
+        share: null,
+      }),
     );
     await renderSpend(["findings"]);
     expect(screen.getByText("No finding is open")).toBeInTheDocument();
@@ -1435,8 +1465,7 @@ describe("Spend › Findings › Operator ranking", () => {
     ).toBeInTheDocument();
   });
 
-  it("reads the ranking for the workspace Owner and hides the pseudonym switch an org role sets", async () => {
-    const wsOwner = ctxAs("owner");
+  it("prints the same total in the hero and in the ranking's Total row", async () => {
     loaded({
       operator: report([row("prn_marcusbell", { operator: MARCUS })]),
     });
@@ -1444,18 +1473,89 @@ describe("Spend › Findings › Operator ranking", () => {
       readOk({
         period: PERIOD,
         pseudonyms: false,
-        unproductive: { micros: "0", currency: "USD" },
+        unproductive: HEADLINE.unproductive,
+        unattributed: {
+          unproductive: { micros: "1000000", currency: "USD" },
+          runs: 1,
+        },
+        operators: [
+          {
+            rank: 1,
+            operator: { kind: "named", key: "prn_marcusbell", facts: MARCUS },
+            unproductive: { micros: "4000000", currency: "USD" },
+            shareOfTotal: 0.8,
+            unproductiveShare: 0.4,
+            runs: 1,
+            topRuns: [
+              {
+                runId: "arun_01",
+                unproductive: { micros: "4000000", currency: "USD" },
+              },
+            ],
+          },
+        ],
+      }),
+    );
+    await renderSpend(["findings"], undefined, owner);
+    expect(unproductive).toHaveBeenCalledWith(owner, PERIOD);
+    expect(operatorRanking).toHaveBeenCalledWith(owner, PERIOD);
+    const total = document.querySelector('tr[data-row="total"]');
+    if (total === null) throw new Error("no Total row");
+    const headline = screen.getByTestId("spend-headline").textContent;
+    expect(headline).toBe("$5.00");
+    expect(total).toHaveTextContent(headline);
+  });
+
+  // #4574: the operator rollup and the ranking are read apart, so a rollup
+  // that fails names nobody on the cards and leaves the ranking whole.
+  it("keeps the ranking and its pseudonym switch when the operator rollup fails", async () => {
+    loaded({ operator: readError("rollup_unavailable", 503) });
+    operatorRanking.mockResolvedValue(
+      readOk({
+        period: PERIOD,
+        pseudonyms: false,
+        unproductive: HEADLINE.unproductive,
         unattributed: {
           unproductive: { micros: "0", currency: "USD" },
           runs: 0,
         },
-        operators: [],
+        operators: [
+          {
+            rank: 1,
+            operator: { kind: "named", key: "prn_marcusbell", facts: MARCUS },
+            unproductive: HEADLINE.unproductive,
+            shareOfTotal: 1,
+            unproductiveShare: null,
+            runs: 1,
+            topRuns: [{ runId: "arun_01", unproductive: HEADLINE.unproductive }],
+          },
+        ],
       }),
     );
-    await renderSpend(["findings"], undefined, wsOwner);
-    expect(operatorRanking).toHaveBeenCalledWith(wsOwner, PERIOD);
+    await renderSpend(["findings"], undefined, owner);
     expect(
-      screen.getByText("No run has unproductive spend in this period."),
+      screen.getByRole("table", { name: "Operator ranking" }),
+    ).toHaveTextContent("Marcus Bell");
+    expect(
+      screen.getByRole("button", { name: "Turn on pseudonyms" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("list", { name: "Findings ranked by savings" }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole("heading", { name: "Operator names" }),
+    ).toBeInTheDocument();
+  });
+
+  it("asks no ranking for a workspace Owner who holds no org manager role (negative)", async () => {
+    const wsOwner = ctxAs("owner");
+    loaded({
+      operator: report([row("prn_marcusbell", { operator: MARCUS })]),
+    });
+    await renderSpend(["findings"], undefined, wsOwner);
+    expect(operatorRanking).not.toHaveBeenCalled();
+    expect(
+      screen.getByText(/An org Owner or Admin can read the operator ranking/),
     ).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /pseudonyms/ })).toBeNull();
   });
@@ -1470,7 +1570,7 @@ describe("Spend › Findings › Operator ranking", () => {
       screen.queryByRole("table", { name: "Operator ranking" }),
     ).toBeNull();
     expect(
-      screen.getByText(/or the workspace Owner, can read the operator ranking/),
+      screen.getByText(/An org Owner or Admin can read the operator ranking/),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("list", { name: "Findings ranked by savings" }),
@@ -2053,17 +2153,71 @@ describe("Spend › a tab's own read failing", () => {
     );
   });
 
-  it("still lists findings, naming nobody, when the operator rollup read fails", async () => {
+  // #4574: the operator rollup fails on its own. Its section says so beside
+  // the ranking that loaded, and the findings stay, naming nobody.
+  it("shows the operator rollup's own failure beside the findings and the ranking", async () => {
+    const orgOwner = unsafeMint(WsCtx, {
+      userId: "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+      orgId: "7a000000-0000-4000-8000-0000000000a1",
+      orgSlug: "acme",
+      orgName: "Acme Robotics",
+      orgRole: "owner",
+      workspaceId: "7b000000-0000-4000-8000-000000000001",
+      wsSlug: "core-platform",
+      wsName: "Core platform",
+      wsRole: "member",
+    });
     loaded();
     byGroup.mockImplementation((_ctx, groupBy) =>
       Promise.resolve(
         groupBy === "model" ? monthByModel() : readError("rollup_down", 503),
       ),
     );
-    await renderSpend(["findings"]);
+    operatorRanking.mockResolvedValue(
+      readOk({
+        period: PERIOD,
+        pseudonyms: false,
+        unproductive: HEADLINE.unproductive,
+        unattributed: {
+          unproductive: { micros: "0", currency: "USD" },
+          runs: 0,
+        },
+        operators: [
+          {
+            rank: 1,
+            operator: { kind: "named", key: "prn_marcusbell", facts: MARCUS },
+            unproductive: HEADLINE.unproductive,
+            shareOfTotal: 1,
+            unproductiveShare: null,
+            runs: 1,
+            topRuns: [{ runId: "arun_01", unproductive: HEADLINE.unproductive }],
+          },
+        ],
+      }),
+    );
+    await renderSpend(["findings"], undefined, orgOwner);
+
+    const failure = screen
+      .getByRole("heading", { name: "Operator names" })
+      .closest("section");
+    if (failure === null) throw new Error("no operator rollup section");
+    expect(failure).toHaveAttribute("data-state", "error");
+    expect(failure).toHaveTextContent("503 rollup_down");
+    // The rollup's failure is its own panel, not the page's.
+    expect(screen.queryByTestId("spend-error")).toBeNull();
+
+    // The findings stay, naming the operator by key alone.
     expect(
       document.querySelector('li[data-finding="fnd_01k5rtop"]')?.textContent,
     ).toContain("prn_marcusbell");
+
+    // The ranking that loaded sits after the failure, whole.
+    const ranking = screen.getByRole("table", { name: "Operator ranking" });
+    expect(ranking).toHaveTextContent("Marcus Bell");
+    expect(
+      failure.compareDocumentPosition(ranking) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 
   it("offers a workspace owner the gateway policy form under the budgets", async () => {

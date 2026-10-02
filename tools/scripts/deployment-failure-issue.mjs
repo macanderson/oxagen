@@ -43,7 +43,7 @@
  * Invoked by .github/workflows/deployment-failure.yml with DEPLOYMENT_FAILURE_RUN_ID set.
  */
 
-const REPO = process.env.GITHUB_REPOSITORY ?? "macanderson/oxagen";
+const REPO = process.env.GITHUB_REPOSITORY ?? "oxageninc/product";
 const TOKEN = process.env.GITHUB_TOKEN;
 const WORKFLOW = "pipeline.yml";
 
