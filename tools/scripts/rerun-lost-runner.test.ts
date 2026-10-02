@@ -37,6 +37,7 @@ const run = (extra: Record<string, unknown> = {}) => ({
   id: 37027349832,
   conclusion: "failure",
   run_attempt: 1,
+  event: "push",
   head_branch: "main",
   head_sha: SHA,
   ...extra,
@@ -177,12 +178,38 @@ describe("decide", () => {
     ).toBe("none");
   });
 
-  it("leaves a run whose branch has moved on or is gone", () => {
+  it("leaves a pull request run whose branch has moved on or is gone", () => {
+    const pr = run({ event: "pull_request", head_branch: "fix/thing" });
     expect(
-      decide({ run: run(), branchHead: "7c5242fd30", lost: [checks] }).action,
+      decide({ run: pr, branchHead: "7c5242fd30", lost: [checks] }).action,
     ).toBe("none");
-    expect(decide({ run: run(), branchHead: null, lost: [checks] }).action).toBe(
+    expect(decide({ run: pr, branchHead: null, lost: [checks] }).action).toBe(
       "none",
     );
+  });
+
+  it("reruns a main run after main has moved on (#5180)", () => {
+    // checks queued for 42 minutes, so main was 5 commits ahead when it died.
+    expect(
+      decide({ run: run(), branchHead: "7c5242fd30", lost: [checks] }).action,
+    ).toBe("job");
+  });
+
+  it("treats only pushes to the default branch as main", () => {
+    expect(
+      decide({
+        run: run({ head_branch: "release" }),
+        branchHead: "7c5242fd30",
+        lost: [checks],
+      }).action,
+    ).toBe("none");
+    expect(
+      decide({
+        run: run({ head_branch: "trunk" }),
+        branchHead: "7c5242fd30",
+        defaultBranch: "trunk",
+        lost: [checks],
+      }).action,
+    ).toBe("job");
   });
 });

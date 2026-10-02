@@ -232,9 +232,10 @@ job carries no annotation.
    the out-of-memory kills in #4990, is a real fault.
 2. Do nothing for a reclaim. `rerun-lost-runner.yml` reruns the lost job and
    the jobs that depend on it once the CI run finishes. It reruns a run at
-   most twice, and only while the run is on its branch's head commit. On
-   `main`, `deployment-failure.yml` still files the P0 and marks the job, and
-   the green rerun closes it.
+   most twice. On a pull request it skips a run whose branch has moved on.
+   On `main` it reruns every run, because `main` has usually moved on by the
+   time a queued job dies. `deployment-failure.yml` still files the `main` P0
+   and marks the job, and the green rerun closes it.
 3. If the workflow missed a run, dispatch it with the run id. It applies the
    same rules:
    `gh workflow run rerun-lost-runner.yml --repo oxageninc/product -f run_id=<run id>`.

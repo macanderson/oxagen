@@ -24,18 +24,22 @@
  *
  * The lost jobs and the jobs that depend on them, not the whole run. A job
  * that failed because a lost job never finished (the `test` aggregator after
- * a lost `unit` lane) reruns as a dependent. A job that failed on its own
- * keeps its failure, so a draft pull request's deliberate `test` failure is
- * not retried for nothing. One lost job uses the per-job rerun. Several use
- * "rerun failed jobs", because GitHub refuses a second per-job rerun while
- * the first attempt is running.
+ * a lost `unit` lane) reruns as a dependent. With one lost job, a job that
+ * failed on its own keeps its failure, so a draft pull request's deliberate
+ * `test` failure is not retried for nothing. Several lost jobs use "rerun
+ * failed jobs", which retries every failed job, because GitHub refuses a
+ * second per-job rerun while the first attempt is running.
  *
  * ## Limits
  *
  * - At most two automatic reruns per run (MAX_RUN_ATTEMPT). A third loss in a
  *   row points at the runner pool, not at bad luck, and stays red for a person.
- * - Only the run on the branch's current head. A newer commit's run is the
- *   one that matters, and rerunning an old one spends a runner on nothing.
+ * - On a pull request, only the run on the branch's current head. A newer
+ *   commit's run is the one that matters there.
+ * - On the default branch, every run. Large-pool jobs can wait 30 to 50
+ *   minutes for a runner, so by the time a lost job's run ends, `main` has
+ *   usually moved on (it had in #5180). The rerun is what closes the P0, and
+ *   check-deploy-tip.mjs keeps an older commit from deploying backwards.
  *
  * Invoked by .github/workflows/rerun-lost-runner.yml with RERUN_RUN_ID set.
  */
@@ -88,11 +92,12 @@ export function lostRunner({ log, annotations = [] }) {
  * What to do with a concluded CI run.
  *
  * `run` is the workflow run, `branchHead` the SHA its branch points at now
- * (null when the branch is gone), and `lost` the failed jobs that lost their
- * runner. Returns `{ action, reason }`, where action is `none`, `job` (rerun
- * `jobId` and its dependents) or `failed-jobs`.
+ * (null when the branch is gone), `defaultBranch` the repository's default
+ * branch, and `lost` the failed jobs that lost their runner. Returns
+ * `{ action, reason }`, where action is `none`, `job` (rerun `jobId` and its
+ * dependents) or `failed-jobs`.
  */
-export function decide({ run, branchHead, lost }) {
+export function decide({ run, branchHead, defaultBranch = "main", lost }) {
   if (run.conclusion !== "failure") {
     return { action: "none", reason: `the run concluded ${run.conclusion}` };
   }
@@ -106,7 +111,9 @@ export function decide({ run, branchHead, lost }) {
       reason: `${names} lost its runner on attempt ${run.run_attempt}, and ${MAX_RUN_ATTEMPT} is the limit`,
     };
   }
-  if (branchHead !== run.head_sha) {
+  const onDefaultBranch =
+    run.event === "push" && run.head_branch === defaultBranch;
+  if (!onDefaultBranch && branchHead !== run.head_sha) {
     return {
       action: "none",
       reason: `${names} lost its runner, but ${run.head_branch} has moved past ${run.head_sha.slice(0, 7)}`,
@@ -201,7 +208,8 @@ async function main() {
     { allow404: true },
   );
   const branchHead = branch?.commit?.sha ?? null;
-  const verdict = decide({ run, branchHead, lost });
+  const defaultBranch = process.env.DEFAULT_BRANCH || "main";
+  const verdict = decide({ run, branchHead, defaultBranch, lost });
 
   if (verdict.action === "job") {
     await api(`/repos/${REPO}/actions/jobs/${verdict.jobId}/rerun`, {

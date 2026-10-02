@@ -530,8 +530,11 @@ Measured from 00:00Z to 16:35Z on 2026-10-02, across 478 `CI` runs:
 
 Decision: `rerun-lost-runner.yml` runs when a `CI` run fails. It reads each
 failed job's log and annotations. If a job lost its runner, the workflow
-reruns that job and the jobs that depend on it, at most twice per run, and
-only while the run is on its branch's head commit.
+reruns that job and the jobs that depend on it, at most twice per run. On a
+pull request it skips a run whose branch has moved on. On `main` it reruns
+every run, because large-pool jobs can wait 30 to 50 minutes for a runner and
+`main` has usually moved on by then. `check-deploy-tip.mjs` keeps an older
+commit from deploying backwards.
 `deployment-failure.yml` still files the `main` P0, because `main` is red
 until the rerun passes, but it marks the lost job so nobody hunts for a code
 fix. The rules and their tests are in `tools/scripts/rerun-lost-runner.mjs`.

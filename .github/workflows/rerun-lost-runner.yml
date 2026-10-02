@@ -6,7 +6,7 @@
 # the PR's watcher reran them by hand.
 #
 # The rules (what counts as a lost runner, which jobs rerun, the attempt
-# limit, skipping a branch that moved on) live in
+# limit, skipping a pull request whose branch moved on) live in
 # tools/scripts/rerun-lost-runner.mjs, where they are tested.
 #
 # ## Why workflow_run
@@ -65,4 +65,5 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RERUN_RUN_ID: ${{ github.event_name == 'workflow_dispatch' && inputs.run_id || github.event.workflow_run.id }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: node tools/scripts/rerun-lost-runner.mjs
