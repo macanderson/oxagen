@@ -23,7 +23,7 @@ The handler first asks the IAM resolver whether the caller holds `merge_pr_witho
 A holder then runs the `merge_steering_pr` handler. Every other refusal still applies:
 
 - Every check must have passed.
-- The governance mode must let the caller merge. In `team` mode that is an org Owner or Admin, or a workspace Owner, other than the author. A workspace Member who holds this capability is still refused `org_role_required`.
+- The governance mode must let the caller merge. In `team` mode that is an org Owner or Admin, or a workspace Owner or Admin, other than the author. A workspace Member who holds this capability is still refused `org_role_required`.
 - The repository must be healthy.
 - The head must be the commit the checks ran on.
 - On GitLab, the project must reset approvals on push. Otherwise the merge is refused `approvals_not_head_bound`, holders included. An approval counts for the newest diff version GitLab recorded before it, as [`merge_steering_pr`](steering.pr.merge.md) describes.

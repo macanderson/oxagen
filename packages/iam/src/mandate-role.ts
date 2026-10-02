@@ -128,7 +128,13 @@ export async function assertApprover(
     .map((a) => a.slice(ROLE_PREFIX.length));
   if (roles.length > 0) {
     try {
-      await assertOrgRole({ ...ctx, userId }, { org: roles });
+      // The approvers a mandate names are a list someone chose on purpose, so
+      // only those roles answer. A workspace's Owner or Admin passes other
+      // gates by holding that role (#5228), but not this one.
+      await assertOrgRole(
+        { ...ctx, userId },
+        { org: roles, namedRolesOnly: true },
+      );
       return;
     } catch (err) {
       if (!isHandlerError(err) || err.code !== "forbidden") throw err;

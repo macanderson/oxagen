@@ -40,7 +40,11 @@ export const routerPolicySetHandler: CapabilityHandler<
     { ...ctx, userId: await resolveActingUserId(ctx) },
     {
       org: ["Owner", "Admin"],
-      ...(scope === "workspace" ? { workspace: ["Owner", "Admin"] } : {}),
+      // The org default row reaches every workspace, so only the org roles
+      // write it, and the workspace Owner and Admin rule stays off (#5228).
+      ...(scope === "workspace"
+        ? { workspace: ["Owner", "Admin"] }
+        : { namedRolesOnly: true }),
     },
   );
 

@@ -62,6 +62,15 @@ export async function agentRoleRevokeHandler(
     const principalId = agent.principalId;
 
     const role = await resolveRoleByName(tx, ctx.orgId, input.roleName);
+    // An org-scoped role was assigned org-wide, outside this workspace, so the
+    // workspace Owner and Admin rule does not reach it (#5228).
+    if (role.scopeKind === "org") {
+      await assertOrgRole(
+        { ...ctx, userId: await resolveActingUserId(ctx) },
+        { org: ["Owner", "Admin"], namedRolesOnly: true },
+        tx,
+      );
+    }
 
     const revoke = (tx: Tx) =>
       tx

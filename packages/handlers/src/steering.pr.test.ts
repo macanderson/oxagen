@@ -335,7 +335,7 @@ describe("open_steering_pr", () => {
       publishes: { lineageId: LINEAGE, path: PATH },
       bundleVersion: { current: 0, afterMerge: 1 },
       review:
-        "team: an org Owner or Admin, or a workspace Owner, other than the author merges",
+        "team: an org Owner or Admin, or a workspace Owner or Admin, other than the author merges",
     });
     expect(() => steeringPrOpen.output.parse(out)).not.toThrow();
   });

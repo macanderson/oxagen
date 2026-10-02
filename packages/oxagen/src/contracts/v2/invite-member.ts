@@ -132,8 +132,8 @@ export const inviteMember = defineTool({
      * that org membership is not a workspace concept. That distinction is now
      * the `scope` argument, so it is enforced where it belongs: the handler
      * rejects `scope: "org"` from a principal holding only a workspace role.
-     * v1's workspace "Admin" grant is not reproduced — there is no such system
-     * role (`SystemWorkspaceRole` is Owner | Member | Viewer).
+     * v1's workspace "Admin" grant is not reproduced: there was no such
+     * system role when this was written. The role exists since #5228.
      */
     workspace: { Owner: "allow" },
   },

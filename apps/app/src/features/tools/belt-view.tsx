@@ -7,9 +7,9 @@
 //   off. A tool an admin made unavailable shows as such and cannot be turned
 //   on. A belt no live agent carries can be deleted.
 // - The All tools belt is derived from the workspace's tool settings and is
-//   never edited directly. An org Owner or Admin sets each tool's availability
-//   and default here through `set_tool_state`, per tool or per server; anyone
-//   else reads it.
+//   never edited directly. An org or workspace Owner or Admin sets each
+//   tool's availability and default here through `set_tool_state`, per tool
+//   or per server; anyone else reads it.
 //
 // A belt narrows what an agent is shown and grants nothing, so every control
 // here changes what agents see, never what they may do.
@@ -385,7 +385,7 @@ export function BeltView({
 }: {
   at: ToolsAt;
   detail: ToolbeltDetail;
-  /** An org Owner or Admin: who the four toolbelt writes admit. */
+  /** An org or workspace Owner or Admin: who the four toolbelt writes admit. */
   canEdit: boolean;
   /** Each agent's registered harness by slug, for the badge on a carrier's avatar (#4871). */
   agentHarnesses?: Readonly<Record<string, string>>;

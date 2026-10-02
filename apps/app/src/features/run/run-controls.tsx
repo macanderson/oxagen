@@ -28,8 +28,8 @@
 // disabled with the reason. The handler refuses the steer either way.
 //
 // A viewer `dispatch_command` would refuse (neither an org Owner or Admin nor
-// a workspace Owner or Member) sees them disabled with that reason, not a
-// button that ends in `org_role_required`.
+// a workspace Owner, Admin or Member) sees them disabled with that reason, not
+// a button that ends in `org_role_required`.
 //
 // Pause and Resume share one slot, enabled or disabled: a running run offers
 // Pause and a paused one offers Resume, never both (#4112). `ingressPaused`

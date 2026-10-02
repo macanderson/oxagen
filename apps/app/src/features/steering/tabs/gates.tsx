@@ -21,6 +21,7 @@ import type { DataSource } from "@/data/ports";
 import type { Read } from "@/data/read";
 import type { WsCtx } from "@/server/viewer";
 import { routes } from "@/shared/safe-path";
+import { mayActInWorkspace } from "@/shared/workspace-authority";
 import { Badge } from "@/ui/badge";
 import { buttonSecondary, panelBody } from "@/ui/control-styles";
 import { ListTable, type ListRow } from "@/ui/faceted-list-table";
@@ -40,8 +41,7 @@ import type { SteeringAt } from "../view";
  * checkbox that would come back `denied`.
  */
 function canEditGates(ctx: WsCtx): boolean {
-  const admin = (role: string) => role === "owner" || role === "admin";
-  return admin(ctx.orgRole) || admin(ctx.wsRole);
+  return mayActInWorkspace(ctx.orgRole, ctx.wsRole, ["owner", "admin"]);
 }
 
 /** The switches that refuse right now: a cleared switch reaches no agent. */

@@ -322,7 +322,7 @@ describe("Permissions › containment (ADR-204)", () => {
       "/acme/core-platform/agents?tab=runtimes&runtime=rtm_buildbox",
     );
     expect(containment).toHaveTextContent(
-      "An organization Owner or Admin changes it on the Runtimes tab. The change applies to every agent on that runtime and reaches each host on its next bundle fetch.",
+      "An organization or workspace Owner or Admin changes it on the Runtimes tab. The change applies to every agent on that runtime and reaches each host on its next bundle fetch.",
     );
   });
 

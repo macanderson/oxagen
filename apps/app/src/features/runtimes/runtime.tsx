@@ -5,8 +5,9 @@
 // - A host enrollment (`tch_…`): the host, the agents on it, and how to roll
 //   it back, because the enrollment is the row the record holds for a machine.
 // - A named runtime (`rtm_…`, ADR-198): the slot hosts enroll against, its
-//   agents, and its containment (ADR-204). An org Owner or Admin changes
-//   containment here with a switch; everyone else reads the value.
+//   agents, and its containment (ADR-204). An org or workspace Owner or
+//   Admin changes containment here with a switch; everyone else reads the
+//   value.
 //
 // An id the workspace does not hold opens the drawer on a sentence that says
 // so, and the tab stays behind it.
@@ -506,8 +507,8 @@ function NamedFactsPanel({ runtime }: { runtime: NamedRuntime }) {
 
 /**
  * Containment (ADR-204): whether every agent on this runtime runs only under
- * the contained launcher. An org Owner or Admin gets the switch; everyone
- * else reads the value and who can change it.
+ * the contained launcher. An org or workspace Owner or Admin gets the
+ * switch; everyone else reads the value and who can change it.
  */
 function ContainmentPanel({
   runtime,

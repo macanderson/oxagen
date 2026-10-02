@@ -14,7 +14,7 @@ import { useLocale, useTranslations } from "next-intl";
 import type { AgentDetail } from "@/data/contracts/agents";
 import type { RunRow } from "@/data/contracts/runs";
 import type { Read } from "@/data/read";
-import type { OrgRole } from "@/server/viewer";
+import type { OrgRole, WsRole } from "@/server/viewer";
 import { routes } from "@/shared/safe-path";
 import { AgentCard } from "@/ui/agent-card";
 import { Avatar } from "@/ui/avatar";
@@ -177,12 +177,14 @@ export function SummaryPanel({
   agent,
   place,
   orgRole,
+  wsRole,
   canEditEnrichment,
 }: {
   run: RunRow;
   agent: Read<AgentDetail> | null;
   place: Place;
   orgRole: OrgRole;
+  wsRole: WsRole;
   /** An org or workspace Owner or Admin may turn automatic summaries on or off. */
   canEditEnrichment: boolean;
 }) {
@@ -252,6 +254,7 @@ export function SummaryPanel({
           hasSummary={run.summary !== null}
           summarizable={run.canSummarize}
           orgRole={orgRole}
+          wsRole={wsRole}
         />
         <SafeLink
           to={routes.run(place.org, place.ws, run.id, { tab: "actions" })}

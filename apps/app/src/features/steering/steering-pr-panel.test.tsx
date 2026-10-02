@@ -198,7 +198,7 @@ describe("once every check passed", () => {
       "Publish .oxagen/rules/ctx.release.no-reread-changelog.toml as a record in force",
       "Take the workspace's promotion ledger from 41 entries to 42",
       "Write the promotion event to the ledger and a steering_published audit event",
-      "Merge rule: team: an org Owner or Admin, or a workspace Owner, other than the author merges",
+      "Merge rule: team: an org Owner or Admin, or a workspace Owner or Admin, other than the author merges",
     ]);
     // The re-run stays offered after the checks pass: when the head moves,
     // merge_steering_pr refuses with `head_moved` and running the checks again
@@ -423,7 +423,7 @@ describe("a steering PR proposal (#5122)", () => {
       "Run the steering checks on the pull request's latest commit",
       "Merge the pull request's files into the production branch",
       "Publish the next steering version",
-      "Merge rule: team: an org Owner or Admin, or a workspace Owner, other than the author merges",
+      "Merge rule: team: an org Owner or Admin, or a workspace Owner or Admin, other than the author merges",
     ]);
     expect(panel.querySelector("[data-on-merge]")).not.toHaveTextContent(
       "promotion",
@@ -437,7 +437,7 @@ describe("a steering PR proposal (#5122)", () => {
       "Merge the pull request's files into the production branch",
       "Retire each record whose file the revert deletes",
       "Publish the next steering version",
-      "Merge rule: team: an org Owner or Admin, or a workspace Owner, other than the author merges",
+      "Merge rule: team: an org Owner or Admin, or a workspace Owner or Admin, other than the author merges",
     ]);
   });
 

@@ -19,6 +19,7 @@ export const orgSlackConnectionGet = registerCapability({
   surfaces: [],
   layers: ["schema", "app", "unit", "docs"],
   scoped: false,
+  orgLevel: true,
   noBillingGate: true,
   // A pure read. Declared so the app's `kernelRead` accepts it.
   mutates: false,

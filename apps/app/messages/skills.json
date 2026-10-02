@@ -67,7 +67,7 @@
       "enabled": "On",
       "disabled": "Off",
       "configLead": "Configuration changes start in .oxagen/skills.toml. Opening a proposal does not change the published version.",
-      "readOnly": "An organization owner or admin can propose, import, and publish configuration.",
+      "readOnly": "An organization or workspace owner or admin can propose, import, and publish configuration.",
       "import": "Import repository configuration",
       "toml": "Proposed TOML",
       "normalized": "This draft reconstructs the published settings. Review the pull request diff, including comments, before merging.",
@@ -85,7 +85,7 @@
       "imported": "Repository import",
       "pr": "PR #{number}",
       "failure": {
-        "denied": "Your role does not allow this action. Ask an organization owner or admin for access.",
+        "denied": "Your role does not allow this action. Ask an organization or workspace owner or admin for access.",
         "pending": "Access request {id} is waiting for approval.",
         "invalid": "Check the configuration, version, and query, then try again.",
         "refused": "The action did not complete ({code}). Your draft is still here.",

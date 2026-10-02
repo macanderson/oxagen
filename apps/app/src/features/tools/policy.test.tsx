@@ -521,8 +521,9 @@ describe("Tools › mandates ledger", () => {
 
 // Grant a mandate (#2957). `grant_mandate` asserts an org role the workspace
 // names for every tag, and every such role is Owner, Admin, Billing or
-// Compliance, so the control is drawn for those four and for nobody else. The
-// agents read the picker needs is made only for them.
+// Compliance. The workspace's Owner and Admin pass that gate too (#5228). So
+// the control is drawn for those and for nobody else, and the agents read the
+// picker needs is made only for them.
 describe("Tools › mandates ledger › grant", () => {
   const draft = (over: Parameters<typeof mandateRow>[0] = {}) =>
     mandateRow({
@@ -559,6 +560,27 @@ describe("Tools › mandates ledger › grant", () => {
       [viewer(as), { cursor: null, includeRetired: true }],
     ]);
   });
+
+  it.each([["owner" as const], ["admin" as const]])(
+    "offers the workspace's %s the grant, whose org role is only Member (#5228)",
+    async (wsRole) => {
+      const ctx = viewer("member", wsRole);
+      const { calls } = await renderPolicy(
+        {
+          mandates: mandateList([mandateRow()]),
+          agents: readOk(agentPage([agentPageRow("invoice-bot")])),
+        },
+        ctx,
+      );
+      expect(
+        within(ledger()).getByRole("button", { name: "Grant a mandate" }),
+      ).toBeInTheDocument();
+      expect(calls.agents).toEqual([
+        [ctx, { cursor: null }],
+        [ctx, { cursor: null, includeRetired: true }],
+      ]);
+    },
+  );
 
   it.each([["member" as const], ["viewer" as const]])(
     "offers a %s no grant and makes no picker read (negative)",
@@ -878,8 +900,9 @@ describe("Tools › auto-approvals", () => {
     ).not.toBeInTheDocument();
   });
 
-  // Each write control against the contract it invokes, for every org role:
-  // a gate that drifts from `defaultRoles` in either direction fails here.
+  // Each write control against the contract it invokes, for every org role
+  // held beside a workspace Member: a gate that drifts from `defaultRoles` in
+  // either direction fails here.
   it.each([
     ["owner" as const],
     ["admin" as const],
@@ -890,7 +913,7 @@ describe("Tools › auto-approvals", () => {
   ])(
     "offers an org %s exactly the rule writes its contracts grant",
     async (role) => {
-      await renderRules(readOk(approvalRuleSet()), viewer(role, "owner"));
+      await renderRules(readOk(approvalRuleSet()), viewer(role, "member"));
       expect({
         set_approval_rules:
           screen.queryByTestId("rule-create-open") !== null &&
@@ -904,6 +927,23 @@ describe("Tools › auto-approvals", () => {
         set_approval_rule_enabled: orgGrants(approvalRuleEnabledSet, role),
         delete_approval_rule: orgGrants(approvalRuleDelete, role),
       });
+    },
+  );
+
+  // The three rule writes act inside the workspace, so its Owner and Admin
+  // pass their gates whatever their org role (#5228).
+  it.each([["owner" as const], ["admin" as const]])(
+    "offers the workspace's %s every rule write, whose org role is only Member",
+    async (wsRole) => {
+      await renderRules(readOk(approvalRuleSet()), viewer("member", wsRole));
+      expect(screen.getByTestId("rule-create-open")).toBeInTheDocument();
+      expect(screen.getByTestId("rule-edit-small-refunds")).toBeInTheDocument();
+      expect(
+        screen.getByTestId("rule-toggle-small-refunds"),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByTestId("rule-delete-small-refunds"),
+      ).toBeInTheDocument();
     },
   );
 

@@ -47,10 +47,12 @@ function renderChain(
   {
     run = runRow(),
     orgRole = "owner",
+    wsRole = "member",
     fromSeq = null,
   }: {
     run?: RunRow;
     orgRole?: "owner" | "admin" | "member" | "viewer";
+    wsRole?: "owner" | "admin" | "member" | "viewer";
     fromSeq?: string | null;
   } = {},
 ) {
@@ -61,6 +63,7 @@ function renderChain(
         run={run}
         place={PLACE}
         orgRole={orgRole}
+        wsRole={wsRole}
         fromSeq={fromSeq}
       />
     </IntlProvider>,
@@ -539,18 +542,32 @@ describe("ChainSection", () => {
   });
 
   it("draws the fork disabled for an organization Viewer on a run that could be forked, with the role as the reason (negative)", async () => {
-    // fork_run checks the organization role alone, so the Viewer's workspace
-    // role cannot let the call through, and the button says so.
+    // fork_run admits an organization Owner, Admin or Member, or the
+    // workspace's Owner or Admin. A Viewer who is only a workspace Member
+    // holds none of those, and the button says so.
     const { container } = renderChain(readOk(runChain()), {
       run: runRow({ source: "ledger", replayGrade: "fork" }),
       orgRole: "viewer",
     });
     expect(screen.getByTestId("chain-fork")).toBeDisabled();
     expect(screen.getByTestId("chain-fork-refused")).toHaveTextContent(
-      "Forking needs an organization Owner, Admin or Member role.",
+      "Forking needs an organization Owner, Admin or Member role, or the workspace Owner or Admin role.",
     );
     await expectNoAxe(container);
   });
+
+  it.each(["owner", "admin"] as const)(
+    "offers Fork and Export to the workspace's %s whose organization role is only Viewer (#5228)",
+    (wsRole) => {
+      renderChain(readOk(runChain()), {
+        run: runRow({ source: "ledger", replayGrade: "fork" }),
+        orgRole: "viewer",
+        wsRole,
+      });
+      expect(screen.getByTestId("chain-fork")).toBeEnabled();
+      expect(screen.getByTestId("chain-export")).toBeEnabled();
+    },
+  );
 
   it("offers no bisect on a live run (negative)", () => {
     renderChain(readOk(runChain({ seals: [] })), {

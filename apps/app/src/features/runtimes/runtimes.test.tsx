@@ -1139,7 +1139,7 @@ describe("One runtime, in the drawer", () => {
   it.each([
     [
       { ok: false, reason: "denied", code: "authz_denied" },
-      "Your roles do not let you unenroll a host. An organization Owner or Admin can. Nothing was changed.",
+      "Your roles do not let you unenroll a host. An organization or workspace Owner or Admin can. Nothing was changed.",
     ],
     [
       { ok: false, reason: "not_found", code: "not_found" },
@@ -1456,7 +1456,7 @@ describe("A named runtime's drawer and its containment (ADR-204)", () => {
     expect(
       await screen.findByTestId("runtime-containment-failure"),
     ).toHaveTextContent(
-      "Your roles do not let you change containment. An organization Owner or Admin can. Nothing was changed.",
+      "Your roles do not let you change containment. An organization or workspace Owner or Admin can. Nothing was changed.",
     );
     expect(containmentSwitch()).not.toBeChecked();
     expect(refresh).not.toHaveBeenCalled();
@@ -1498,7 +1498,7 @@ describe("A named runtime's drawer and its containment (ADR-204)", () => {
     const value = screen.getByTestId("runtime-containment-value");
     expect(value).toHaveTextContent(/^Required/);
     expect(value).toHaveTextContent(
-      "An organization Owner or Admin can change it.",
+      "An organization or workspace Owner or Admin can change it.",
     );
     expect(screen.queryByTestId("runtimes-add")).toBeNull();
     cleanup();

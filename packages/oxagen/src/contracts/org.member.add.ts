@@ -13,6 +13,7 @@ export const orgMemberAdd = registerCapability({
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "e2e", "docs"],
   scoped: true,
+  orgLevel: true,
   agent: {
     requiresApproval: true,
     riskLevel: "medium",

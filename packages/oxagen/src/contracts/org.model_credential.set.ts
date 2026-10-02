@@ -61,6 +61,7 @@ export const orgModelCredentialSet = registerCapability({
   surfaces: ["api", "mcp"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: false,
+  orgLevel: true,
   sensitivity: "high",
   defaultEffect: "deny",
   // Organisation-level governance: org Owner/Admin only. `workspace: {}` is

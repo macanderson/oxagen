@@ -2,9 +2,16 @@ import { HandlerError } from "@oxagen/oxagen";
 import { steeringRepoProvisionRetry } from "@oxagen/oxagen/contracts/steering_repo.provision.retry";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ role: vi.fn(async () => "Owner") }));
+const mocks = vi.hoisted(() => ({
+  role: vi.fn(async () => "Owner"),
+  orgRole: vi.fn(async (_actor: unknown, _required: unknown) => "Owner"),
+}));
 
 vi.mock("./lib/capability-role-guard", () => ({ assertContractRole: mocks.role }));
+vi.mock("@oxagen/iam/org-role", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@oxagen/iam/org-role")>()),
+  assertOrgRole: mocks.orgRole,
+}));
 vi.mock("./logger", () => ({ logger: { error: vi.fn(), info: vi.fn(), warn: vi.fn() } }));
 
 import {
@@ -126,6 +133,8 @@ function harness(initial: SteeringRepoState | null): Harness {
 beforeEach(() => {
   mocks.role.mockReset();
   mocks.role.mockImplementation(async () => "Owner");
+  mocks.orgRole.mockReset();
+  mocks.orgRole.mockImplementation(async () => "Owner");
 });
 
 describe("retry_steering_repo_provision handler", () => {
@@ -338,6 +347,42 @@ describe("retry_steering_repo_provision handler", () => {
       });
       expect(h.resets).toEqual(["org_1"]);
       expect(h.sends).toHaveLength(1);
+    });
+
+    it("lets only an org Owner or Admin clear or pick the organization's connection (#5228)", async () => {
+      // A workspace Owner or Admin passes the contract's gate on their own
+      // workspace, but the connection is the organization's.
+      mocks.orgRole.mockImplementation(async () => {
+        throw new HandlerError({
+          code: "forbidden",
+          reason: "org_role_required",
+          message: "Requires one of the org roles Owner, Admin",
+        });
+      });
+      const blocked = harness(
+        failedState({
+          status: "blocked",
+          failed_step: "create_repository",
+          error: { code: "repository_create_refused", message: "Due to policy." },
+          repository: null,
+        }),
+      );
+      await expect(
+        retry(blocked, { resetConnection: true }),
+      ).rejects.toMatchObject({ reason: "org_role_required" });
+      expect(blocked.resets).toEqual([]);
+      expect(blocked.sends).toEqual([]);
+
+      const picking = harness(choosing());
+      await expect(
+        retry(picking, { connection: { provider: "github", id: 12 } }),
+      ).rejects.toMatchObject({ reason: "org_role_required" });
+      expect(picking.connections).toEqual([]);
+      expect(picking.sends).toEqual([]);
+      expect(mocks.orgRole).toHaveBeenCalledWith(
+        expect.objectContaining({ orgId: "org_1", userId: TEST_CTX.userId }),
+        { org: ["Owner", "Admin"], namedRolesOnly: true },
+      );
     });
 
     it("changes nothing when the reset is refused because a repo exists there", async () => {
