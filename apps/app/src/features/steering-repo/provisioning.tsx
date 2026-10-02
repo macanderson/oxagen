@@ -137,7 +137,7 @@ function ConnectionChooser({
       data-testid="steering-repo-choose"
       className="flex w-full flex-col items-start gap-2"
     >
-      <p className="text-[12.5px] font-medium text-foreground">
+      <p className="text-sm font-medium text-foreground">
         {t("choose.label")}
       </p>
       <ChoiceGroup
@@ -255,7 +255,7 @@ function ConnectGithub({
       data-testid="steering-repo-connect"
       className="flex flex-col items-start gap-2"
     >
-      <p className="text-[12.5px] text-muted-foreground">{t("body")}</p>
+      <p className="text-sm text-muted-foreground">{t("body")}</p>
       <div className="flex flex-wrap gap-2">
         <a
           // eslint-disable-next-line no-restricted-syntax -- a same-origin API route that redirects to GitHub, as ReauthorizeLink does (#4518)
@@ -305,7 +305,7 @@ function GitlabSourceNote({ view }: { view: SteeringRepoView }) {
   return (
     <p
       data-testid="steering-repo-gitlab-source"
-      className="text-[12.5px] text-muted-foreground"
+      className="text-sm text-muted-foreground"
     >
       {t("gitlabSource", { legacy: view.legacySource?.fullName ?? "" })}
     </p>
@@ -321,7 +321,7 @@ function ImportOutcome({ outcome }: { outcome: SteeringRepoImportOutput }) {
       role="status"
       data-testid="steering-repo-import-outcome"
       data-outcome={outcome.outcome}
-      className="flex flex-col gap-1.5 text-[13px] text-foreground"
+      className="flex flex-col gap-1.5 text-sm text-foreground"
     >
       <p>
         {outcome.outcome === "imported"
@@ -339,7 +339,7 @@ function ImportOutcome({ outcome }: { outcome: SteeringRepoImportOutput }) {
                 })}
       </p>
       {outcome.pullRequests.length === 0 && outcome.cleanup === null ? null : (
-        <ol className="ml-4 list-decimal text-[12.5px]">
+        <ol className="ml-4 list-decimal text-sm">
           {outcome.pullRequests.map((pr) => (
             <li key={pr.number}>
               <PullRequestLink url={pr.url}>
@@ -507,7 +507,7 @@ export function SteeringRepoProvisioning({
             data-step={step}
             data-state={state}
             aria-current={state === "running" ? "step" : undefined}
-            className="flex flex-col gap-1.5 text-[13px]"
+            className="flex flex-col gap-1.5 text-sm"
           >
             <span className="flex items-center gap-2">
               <StepIcon state={state} />
@@ -520,7 +520,7 @@ export function SteeringRepoProvisioning({
               >
                 {t(`steps.${step}`)}
               </span>
-              <span className="text-[12px] text-muted-foreground">
+              <span className="text-sm text-muted-foreground">
                 {t(`state.${state}`)}
               </span>
             </span>
@@ -529,7 +529,7 @@ export function SteeringRepoProvisioning({
                 <p
                   data-testid="steering-repo-connection"
                   data-kind={place ?? undefined}
-                  className="text-[12.5px] text-muted-foreground"
+                  className="text-sm text-muted-foreground"
                 >
                   {t(`connection.${place ?? "organization"}`, {
                     name: view.connection.name,
@@ -560,7 +560,7 @@ export function SteeringRepoProvisioning({
               <div className="ml-[22px] flex flex-col items-start gap-2">
                 <p
                   data-testid="steering-repo-step-error"
-                  className="text-[12.5px] text-muted-foreground"
+                  className="text-sm text-muted-foreground"
                 >
                   {view.error.message}
                 </p>
@@ -636,7 +636,7 @@ export function SteeringRepoProvisioning({
                 ? t("create")
                 : t("moveSteering")}
           </button>
-          <p className="text-[12px] text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             {pending ? t("startingNote") : t("startNote")}
           </p>
         </div>
@@ -649,7 +649,7 @@ export function SteeringRepoProvisioning({
           data-testid="steering-repo-fresh"
           className="flex flex-col items-start gap-2"
         >
-          <p className="text-[12.5px] text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             {t("fresh.body")}
           </p>
           <button
@@ -675,7 +675,7 @@ export function SteeringRepoProvisioning({
           data-testid="steering-repo-finish-move"
           className="flex flex-col items-start gap-2"
         >
-          <p className="text-[12.5px] text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             {t("finishMove.body", { legacy: moving.fullName })}
           </p>
           <button
@@ -696,7 +696,7 @@ export function SteeringRepoProvisioning({
       {ready === null ? null : (
         <p
           data-testid="steering-repo-ready"
-          className="flex flex-wrap items-baseline gap-x-1.5 text-[13px] text-foreground"
+          className="flex flex-wrap items-baseline gap-x-1.5 text-sm text-foreground"
         >
           <span>{t("ready")}</span>{" "}
           <SteeringRepositoryLink

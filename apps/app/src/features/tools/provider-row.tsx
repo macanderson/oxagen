@@ -70,7 +70,7 @@ function ProviderWeeklyPrice({ server }: { server: McpServer }) {
         className="flex flex-col items-end gap-0.5 text-xs text-muted-foreground"
       >
         <span title={t("weeklyUnpricedTitle")}>{t("weeklyUnpriced")}</span>
-        <span className="text-[10.5px]">
+        <span className="text-sm">
           {t("weeklyTokenCount", { tokens: count })}
         </span>
       </span>
@@ -83,7 +83,7 @@ function ProviderWeeklyPrice({ server }: { server: McpServer }) {
       title={t("weeklyTitle", { tokens: count })}
     >
       <Money value={weeklyPrice} precision="exact" />
-      <span className="text-[10.5px] text-muted-foreground">
+      <span className="text-sm text-muted-foreground">
         {t("weeklyTokens", { tokens: count })}
       </span>
     </span>
@@ -139,12 +139,12 @@ export function ProviderRow({
       <td className={cell}>
         <span className="flex flex-col gap-1">
           <span
-            className={`${mono} w-fit rounded border border-border px-1.5 py-0.5 text-[11px]`}
+            className={`${mono} w-fit rounded border border-border px-1.5 py-0.5 text-sm`}
           >
             {t("transportMcp")}
           </span>
           <span
-            className={`${mono} text-[10.5px] text-muted-foreground md:truncate`}
+            className={`${mono} text-sm text-muted-foreground md:truncate`}
           >
             {t("wireLine", {
               wire: server.transportType,
@@ -160,7 +160,7 @@ export function ProviderRow({
               ? formatCount(versions.length, locale)
               : t("atLeast", { count: versions.length })}
           </span>
-          <span className="text-[10.5px] text-muted-foreground">
+          <span className="text-sm text-muted-foreground">
             {t("pinned", { count: server.toolCount })}
           </span>
         </span>

@@ -35,7 +35,7 @@ export function SourcePanel({ detail }: { detail: WorkItemDetail }) {
     <section
       aria-labelledby="work-source-heading"
       data-testid="work-panel-source"
-      className="min-w-0 text-[13px]"
+      className="min-w-0 text-sm"
     >
       <div className="mb-2.5 flex items-baseline gap-2.5">
         <h2 id="work-source-heading" className="text-xs font-semibold text-muted-foreground">
@@ -190,7 +190,7 @@ export function TriagePanel({ detail, at }: { detail: WorkItemDetail; at: At }) 
               <dt className={kvTerm}>{t("paths")}</dt>
               <dd className={`${kvValue} flex flex-wrap gap-1.5`}>
                 {paths.map((path) => (
-                  <code key={path} className="font-mono text-[0.92em]">
+                  <code key={path} className="font-mono">
                     {path}
                   </code>
                 ))}
@@ -256,7 +256,7 @@ export function TriagePanel({ detail, at }: { detail: WorkItemDetail; at: At }) 
     <section
       aria-labelledby="work-triage-heading"
       data-testid="work-panel-triage"
-      className="min-w-0 text-[13px] max-md:mt-4 max-md:border-t max-md:border-border max-md:pt-4 md:border-l md:border-border md:pl-7"
+      className="min-w-0 text-sm max-md:mt-4 max-md:border-t max-md:border-border max-md:pt-4 md:border-l md:border-border md:pl-7"
     >
       <div className="mb-2.5 flex items-center gap-2.5">
         <h2 id="work-triage-heading" className="text-xs font-semibold text-muted-foreground">

@@ -348,7 +348,7 @@ export function ProviderDialog({
         ) : undefined
       }
     >
-      <div className="flex flex-col gap-4 text-[13px]">
+      <div className="flex flex-col gap-4 text-sm">
         {server.healthStatus === "degraded" ||
         server.healthStatus === "unreachable" ? (
           <p
@@ -407,7 +407,7 @@ export function ProviderDialog({
           aria-labelledby="provider-auth"
           className="flex flex-col gap-2"
         >
-          <h3 id="provider-auth" className="text-[13.5px] font-semibold">
+          <h3 id="provider-auth" className="text-sm font-semibold">
             {t("authTitle")}
           </h3>
           <div
@@ -444,7 +444,7 @@ export function ProviderDialog({
           className="flex flex-col gap-2"
         >
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <h3 id="provider-tools" className="text-[13.5px] font-semibold">
+            <h3 id="provider-tools" className="text-sm font-semibold">
               {t("toolsTitle", { name: server.name })}
             </h3>
           </div>

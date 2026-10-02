@@ -186,7 +186,7 @@ function Surface({
     <Section title={t("title")} testId="studio-changes-surface">
       <p
         data-testid="studio-changes-tokens"
-        className="flex flex-wrap items-baseline gap-1.5 text-[13px] text-muted-foreground"
+        className="flex flex-wrap items-baseline gap-1.5 text-sm text-muted-foreground"
       >
         <span>{t("tokens")}</span>
         <span className={`${mono} text-foreground`}>{tokens(before)}</span>
@@ -197,7 +197,7 @@ function Surface({
       {exposure === null ? null : (
         <p
           data-testid="studio-changes-exposure"
-          className="flex flex-wrap items-baseline gap-1.5 text-[13px] text-muted-foreground"
+          className="flex flex-wrap items-baseline gap-1.5 text-sm text-muted-foreground"
         >
           <span>{t("exposure")}</span>
           {exposure.from === null ? null : (
@@ -212,7 +212,7 @@ function Surface({
       )}
       {lines.length === 0 ? (
         exposure === null ? (
-          <p className="text-[13px] text-muted-foreground">{t("none")}</p>
+          <p className="text-sm text-muted-foreground">{t("none")}</p>
         ) : null
       ) : (
         <Table
@@ -261,7 +261,7 @@ function Findings({
       ) : findings.length === 0 ? (
         <p
           data-testid="studio-findings-none"
-          className="text-[13px] text-muted-foreground"
+          className="text-sm text-muted-foreground"
         >
           {t("none")}
         </p>
@@ -292,7 +292,7 @@ function Findings({
               <td className={`${cell} ${mono}`}>
                 {finding.tool ?? t("server")}
                 {finding.field === null ? null : (
-                  <span className="block text-[11.5px] text-muted-foreground">
+                  <span className="block text-sm text-muted-foreground">
                     {finding.field}
                   </span>
                 )}
@@ -369,7 +369,7 @@ function Opened({ outcome }: { outcome: Outcome }) {
             role="status"
             data-testid="studio-pr-opened"
             data-updated={outcome.updated || undefined}
-            className="text-[13px]"
+            className="text-sm"
           >
             {url === null ? (
               label
@@ -586,7 +586,7 @@ export function ChangesTab({
                   // tests of one tool are two edits.
                   key={`${op.kind}:${opTool(op) ?? ""}:${String(index)}`}
                   data-testid={`studio-edit-${String(index)}`}
-                  className="flex flex-wrap items-center justify-between gap-2 py-2 text-[13px]"
+                  className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm"
                 >
                   <span className="min-w-0 [overflow-wrap:anywhere]">
                     <OpLabel op={op} />
@@ -614,7 +614,7 @@ export function ChangesTab({
             </ul>
           </Section>
           <Section title={t("files.title")} testId="studio-changes-files">
-            <ul className="flex flex-col gap-1 text-[13px]">
+            <ul className="flex flex-col gap-1 text-sm">
               {files.map((file) => (
                 <li key={file} className={mono}>
                   {record === null ? file : `${record.folder}/${file}`}
@@ -631,11 +631,11 @@ export function ChangesTab({
       )}
       <Findings findings={shown} />
       <Section title={t("pr.title")} testId="studio-changes-pr">
-        <p className="text-[13px] text-muted-foreground">{t("pr.body")}</p>
+        <p className="text-sm text-muted-foreground">{t("pr.body")}</p>
         {overBudget !== null && !empty ? (
           <p
             data-testid="studio-pr-over-budget"
-            className="flex flex-wrap items-center gap-2 text-[13px] text-foreground"
+            className="flex flex-wrap items-center gap-2 text-sm text-foreground"
           >
             <Badge tone="denied">{t("pr.overBudgetBadge")}</Badge>
             <span>
@@ -675,7 +675,7 @@ export function ChangesTab({
             </button>
           </div>
         ) : (
-          <p className="text-[13px] text-muted-foreground">{t("pr.readOnly")}</p>
+          <p className="text-sm text-muted-foreground">{t("pr.readOnly")}</p>
         )}
         {canEdit && serverName === null ? (
           <StudioNotRecorded gap="record" testId="studio-pr-no-server">

@@ -61,10 +61,10 @@ export function LineagePanel({
         <h2 id="record-lineage" className={panelTitle}>
           {t("title")}
         </h2>
-        <span className="font-mono text-[11px] text-dim">{t("badge")}</span>
+        <span className="font-mono text-sm text-dim">{t("badge")}</span>
       </div>
       <dl
-        className={`${panelBody} grid grid-cols-[max-content_minmax(0,1fr)] gap-x-4 gap-y-2 text-[13px] [&>dd]:min-w-0 [&>dd]:break-words [&>dd]:text-foreground [&>dt]:text-muted-foreground`}
+        className={`${panelBody} grid grid-cols-[max-content_minmax(0,1fr)] gap-x-4 gap-y-2 text-sm [&>dd]:min-w-0 [&>dd]:break-words [&>dd]:text-foreground [&>dt]:text-muted-foreground`}
       >
         <dt>{t("lineage")}</dt>
         <dd data-fact="lineage" className={mono}>

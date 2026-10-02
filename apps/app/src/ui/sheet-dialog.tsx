@@ -166,7 +166,7 @@ export function SheetDialog({
             {footerNote === undefined ? null : (
               <span
                 data-footer-note=""
-                className="min-w-0 grow text-[12.5px] text-muted-foreground"
+                className="min-w-0 grow text-sm text-muted-foreground"
               >
                 {footerNote}
               </span>

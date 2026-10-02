@@ -107,7 +107,7 @@ function PickCard({
       >
         <span
           aria-hidden="true"
-          className={`mt-0.5 flex size-4 flex-none items-center justify-center rounded border text-[10px] leading-none ${picked ? "border-gold bg-gold text-button-primary-fg" : "border-border"}`}
+          className={`mt-0.5 flex size-4 flex-none items-center justify-center rounded border text-sm leading-none ${picked ? "border-gold bg-gold text-button-primary-fg" : "border-border"}`}
         >
           {picked ? "✓" : null}
         </span>
@@ -398,7 +398,7 @@ export function InterjectionAnswer({
         <span
           id={hintId}
           data-testid="interjection-send-hint"
-          className={`${mono} text-[11px] text-muted-foreground`}
+          className={`${mono} text-sm text-muted-foreground`}
         >
           {blocked ?? t("answersAs")}
         </span>

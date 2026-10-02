@@ -167,12 +167,12 @@ export function SwitcherDialog({
                         <b className="block truncate text-sm font-semibold">
                           {choice.name}
                         </b>
-                        <span className="block truncate font-mono text-[11px] text-muted-foreground">
+                        <span className="block truncate font-mono text-sm text-muted-foreground">
                           {choice.slug}
                         </span>
                       </span>
                       {isCurrent ? (
-                        <span className="font-mono text-[11px] text-muted-foreground">
+                        <span className="font-mono text-sm text-muted-foreground">
                           {t("current")}
                         </span>
                       ) : null}
@@ -190,7 +190,7 @@ export function SwitcherDialog({
             {kind === "org" ? t("orgMetaNotBacked") : t("wsMetaNotBacked")}
           </p>
           {kind === "org" ? (
-            <p className="mt-3 border-l-2 border-gold px-3 py-1 text-[12.5px] leading-relaxed text-muted-foreground">
+            <p className="mt-3 border-l-2 border-gold px-3 py-1 text-sm leading-relaxed text-muted-foreground">
               {t("orgNote", { count: choices.value.length })}
             </p>
           ) : createHref === undefined ? null : (
@@ -323,8 +323,8 @@ export function OrgSwitcher({ data }: { data: ShellData }) {
         testId="org-switcher-avatar"
       />
       <span className="min-w-0 flex-1">
-        <b className="block truncate text-[13px] font-semibold">{org.name}</b>
-        <span className="block truncate font-mono text-[11px] text-muted-foreground">
+        <b className="block truncate text-sm font-semibold">{org.name}</b>
+        <span className="block truncate font-mono text-sm text-muted-foreground">
           {org.slug}
         </span>
       </span>
@@ -362,8 +362,8 @@ export function WorkspaceSwitcher({
         testId="workspace-switcher-avatar"
       />
       <span className="min-w-0 flex-1">
-        <b className="block truncate text-[13px] font-semibold">{name}</b>
-        <span className="block truncate font-mono text-[11px] text-muted-foreground">
+        <b className="block truncate text-sm font-semibold">{name}</b>
+        <span className="block truncate font-mono text-sm text-muted-foreground">
           {data.org.slug}/{ws}
         </span>
       </span>

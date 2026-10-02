@@ -69,7 +69,7 @@ function PolicyVersions({ canDraft }: { canDraft: boolean }) {
         </h2>
         <div className="flex flex-wrap items-center gap-2">
           <span
-            className={`${mono} rounded border border-border px-1.5 py-0.5 text-[10.5px] text-muted-foreground`}
+            className={`${mono} rounded border border-border px-1.5 py-0.5 text-sm text-muted-foreground`}
           >
             {t("versionsTable")}
           </span>
@@ -99,7 +99,7 @@ function PolicyVersions({ canDraft }: { canDraft: boolean }) {
         <NotBacked gap="policy" testId="tools-policy-versions-not-backed">
           {t("versions.notBacked")}
         </NotBacked>
-        <p className="max-w-prose border-l-2 border-gold pl-3 text-[13px] text-muted-foreground">
+        <p className="max-w-prose border-l-2 border-gold pl-3 text-sm text-muted-foreground">
           {t("versions.note")}
         </p>
       </div>
@@ -120,7 +120,7 @@ function WhereAVersionLives() {
         </div>
       </div>
       <dl
-        className={`${panelBody} grid gap-x-6 gap-y-2 text-[13px] sm:grid-cols-[minmax(0,9rem)_minmax(0,1fr)]`}
+        className={`${panelBody} grid gap-x-6 gap-y-2 text-sm sm:grid-cols-[minmax(0,9rem)_minmax(0,1fr)]`}
       >
         {WHERE.map((key) => (
           <div key={key} data-fact={key} className="contents">
@@ -154,7 +154,7 @@ function Conditions() {
         {CONDITIONS.map((key) => (
           <li
             key={key}
-            className="rounded border border-border px-1.5 py-0.5 text-[10.5px] font-medium text-muted-foreground"
+            className="rounded border border-border px-1.5 py-0.5 text-sm font-medium text-muted-foreground"
           >
             {t(`items.${key}`)}
           </li>
@@ -177,7 +177,7 @@ function SequenceRule() {
       >
         {t("title")}
       </h2>
-      <p className="text-[13px] text-muted-foreground">{t("plain")}</p>
+      <p className="text-sm text-muted-foreground">{t("plain")}</p>
       <pre
         className={`${mono} overflow-x-auto rounded-xl border border-border bg-card px-4 py-3 text-xs leading-relaxed text-foreground`}
       >

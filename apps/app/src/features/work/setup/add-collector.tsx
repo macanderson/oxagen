@@ -271,7 +271,7 @@ export function AddCollector({
               className={`${textareaBase} font-mono`}
             />
           </FieldRow>
-          <p className="text-[12.5px] text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             {t("writeBack")}
           </p>
           {failure === null ? null : (

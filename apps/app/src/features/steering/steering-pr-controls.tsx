@@ -205,7 +205,7 @@ export function CloneCommands({
           <p className="text-sm text-foreground">{t("lead")}</p>
           <pre
             data-testid="clone-commands"
-            className="overflow-x-auto rounded-[10px] border border-border bg-code-bg px-3.5 py-3 font-mono text-[12px] leading-[1.6] text-foreground"
+            className="overflow-x-auto rounded-[10px] border border-border bg-code-bg px-3.5 py-3 font-mono text-sm leading-[1.6] text-foreground"
           >
             {commands.join("\n")}
           </pre>
@@ -214,7 +214,7 @@ export function CloneCommands({
               <p className="text-sm text-foreground">{t("ghLead")}</p>
               <pre
                 data-testid="clone-gh"
-                className="overflow-x-auto rounded-[10px] border border-border bg-code-bg px-3.5 py-3 font-mono text-[12px] leading-[1.6] text-foreground"
+                className="overflow-x-auto rounded-[10px] border border-border bg-code-bg px-3.5 py-3 font-mono text-sm leading-[1.6] text-foreground"
               >
                 {gh}
               </pre>

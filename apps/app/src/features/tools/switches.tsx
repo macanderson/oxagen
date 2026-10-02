@@ -171,13 +171,13 @@ function Card({
               />
             )}
             <h3
-              className={`text-[13.5px] font-semibold text-foreground ${heading.mono ? `${mono} break-all` : ""}`}
+              className={`text-sm font-semibold text-foreground ${heading.mono ? `${mono} break-all` : ""}`}
             >
               {heading.title}
             </h3>
           </div>
           <p className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-            <span className="rounded border border-border px-1.5 py-0.5 text-[10.5px] font-medium">
+            <span className="rounded border border-border px-1.5 py-0.5 text-sm font-medium">
               {t(`kinds.${kind}`)}
             </span>
             <span>{t(`reach.${kind}`)}</span>
@@ -280,11 +280,11 @@ function UnbackedClassCard({ which }: { which: "irreversible" | "egress" }) {
       className={`${panel} flex flex-col`}
     >
       <div className="flex flex-col gap-1 border-b border-border px-4 py-3">
-        <h3 className="text-[13.5px] font-semibold text-foreground">
+        <h3 className="text-sm font-semibold text-foreground">
           {t(`unbacked.${which}`)}
         </h3>
         <p className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-          <span className="rounded border border-border px-1.5 py-0.5 text-[10.5px] font-medium">
+          <span className="rounded border border-border px-1.5 py-0.5 text-sm font-medium">
             {t("kinds.class")}
           </span>
           <span>{t("reach.class")}</span>
@@ -436,7 +436,7 @@ export function Switches({
           </h2>
           <span
             data-testid="tools-deny-generation"
-            className={`${mono} rounded border border-border px-1.5 py-0.5 text-[10.5px] uppercase text-muted-foreground`}
+            className={`${mono} rounded border border-border px-1.5 py-0.5 text-sm uppercase text-muted-foreground`}
           >
             {t("generationBadge", { generation: denyGeneration.org })}
           </span>

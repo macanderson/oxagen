@@ -62,7 +62,7 @@ import { SPEND_MONTH_BY, type SpendAt, type SpendMonthBy } from "./view";
 
 type Row = SpendReport["rows"][number];
 
-const chip = `${buttonSecondary} min-h-7 px-2.5 py-1 text-[12.5px] aria-pressed:border-rule aria-pressed:bg-hl aria-pressed:text-foreground`;
+const chip = `${buttonSecondary} min-h-7 px-2.5 py-1 text-sm aria-pressed:border-rule aria-pressed:bg-hl aria-pressed:text-foreground`;
 
 /** A UTC calendar day as a date, for the formatter. */
 function dayDate(day: string): Date {

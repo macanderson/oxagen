@@ -48,7 +48,7 @@ function CheckRows({
   rows: readonly { key: string; name: string; what: ReactNode }[];
 }) {
   return (
-    <ul className="grid gap-2 text-[13px]">
+    <ul className="grid gap-2 text-sm">
       {rows.map((row) => (
         <li
           key={row.key}
@@ -167,14 +167,14 @@ export function ProposeDialog({
     >
       {opened === null ? (
         <div className="flex flex-col gap-3.5">
-          <p className="text-[13px] text-foreground">{t("lead")}</p>
+          <p className="text-sm text-foreground">{t("lead")}</p>
           {failure === null ? null : (
             <FormAlert testId="record-propose-failure">{failure}</FormAlert>
           )}
           {pendingBranch === null ? null : (
             <p
               data-testid="record-propose-pending"
-              className="border-l-2 border-info pl-3 text-[12.5px] text-muted-foreground"
+              className="border-l-2 border-info pl-3 text-sm text-muted-foreground"
             >
               {t.rich("pendingOpen", { branch: pendingBranch, code })}
             </p>
@@ -182,7 +182,7 @@ export function ProposeDialog({
           {canWrite ? null : (
             <p
               data-testid="record-propose-read-only"
-              className="border-l-2 border-warning pl-3 text-[12.5px] text-muted-foreground"
+              className="border-l-2 border-warning pl-3 text-sm text-muted-foreground"
             >
               {t("readOnly")}
             </p>
@@ -243,7 +243,7 @@ export function ProposeDialog({
                 ))}
               </div>
             ) : (
-              <p className="px-4 py-3.5 text-[13px] text-dim">
+              <p className="px-4 py-3.5 text-sm text-dim">
                 {t("nothingChanged")}
               </p>
             )}
@@ -254,7 +254,7 @@ export function ProposeDialog({
           >
             <h3
               id="record-propose-checks"
-              className="text-[12px] font-semibold text-muted-foreground"
+              className="text-sm font-semibold text-muted-foreground"
             >
               {t("checksLabel")}
             </h3>
@@ -265,7 +265,7 @@ export function ProposeDialog({
         <div
           role="status"
           data-testid="record-propose-done"
-          className="flex flex-col gap-2 text-[13px]"
+          className="flex flex-col gap-2 text-sm"
         >
           <p className="text-foreground">
             {opened.prNumber === null

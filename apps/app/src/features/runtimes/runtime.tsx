@@ -122,7 +122,7 @@ function HostPanel({
       // otherwise not recorded (#3818).
       value: hooksReadBack(host) ? (
         <>
-          <span className={`${mono} text-[11.5px]`}>{COMMAND_HOOKS}</span>
+          <span className={`${mono} text-sm`}>{COMMAND_HOOKS}</span>
           <Sub>{t("detail.hooksFive")}</Sub>
         </>
       ) : (
@@ -406,7 +406,7 @@ function RollbackPanel({
         >
           {t("command", { agent, id: host.id })}
         </pre>
-        <p className="border-l-2 border-accent-text pl-3 text-[13px] text-muted-foreground">
+        <p className="border-l-2 border-accent-text pl-3 text-sm text-muted-foreground">
           {t.rich("note", { code })}
         </p>
         <div className="flex flex-wrap gap-2">

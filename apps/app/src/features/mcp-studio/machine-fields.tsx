@@ -287,7 +287,7 @@ function MachineServerFlow({
     const label = t("opened", { number: String(stage.review.number) });
     return (
       <div className="flex flex-col gap-3" data-testid={`${testId}-opened`}>
-        <p role="status" className="text-[13px]">
+        <p role="status" className="text-sm">
           {url === null ? (
             label
           ) : (
@@ -315,7 +315,7 @@ function MachineServerFlow({
         className="flex flex-col gap-3"
         noValidate
       >
-        <p className="text-[13px] text-muted-foreground">{intro}</p>
+        <p className="text-sm text-muted-foreground">{intro}</p>
         <fieldset
           disabled={listing !== null}
           className="flex min-w-0 flex-col gap-3"
@@ -474,7 +474,7 @@ function ListingProgress({
         {t("title")}
       </p>
       {view.kind === "loading" ? (
-        <p role="status" className="text-[13px] text-muted-foreground">
+        <p role="status" className="text-sm text-muted-foreground">
           {t("loading")}
         </p>
       ) : view.kind === "failed" ? (
@@ -499,12 +499,12 @@ function ListingProgress({
       ) : listing === null ? (
         <p
           data-testid="studio-listing-none"
-          className="text-[13px] text-muted-foreground"
+          className="text-sm text-muted-foreground"
         >
           {t("none")}
         </p>
       ) : (
-        <div className="flex flex-col gap-1.5 text-[13px]">
+        <div className="flex flex-col gap-1.5 text-sm">
           <p role="status" className="flex flex-wrap items-center gap-2">
             <Badge
               tone={LISTING_TONE[listing.status]}
@@ -661,7 +661,7 @@ function ClassifyTools({
       <p id={`${id}-title`} className="text-sm font-medium text-foreground">
         {t("title")}
       </p>
-      <p className="text-[13px] text-muted-foreground">
+      <p className="text-sm text-muted-foreground">
         {t("intro", { count: tools.length })}
       </p>
       <ul aria-labelledby={`${id}-title`} className="flex flex-col gap-3">
@@ -676,7 +676,7 @@ function ClassifyTools({
               data-tool={tool.name}
               className="flex flex-col gap-2 rounded-lg border border-border px-3 py-2.5"
             >
-              <label className="flex items-start gap-2 text-[13px]">
+              <label className="flex items-start gap-2 text-sm">
                 <input
                   type="checkbox"
                   checked={choice.imported}
@@ -704,7 +704,7 @@ function ClassifyTools({
               </label>
               {choice.imported ? (
                 <div className="grid gap-2 sm:grid-cols-3">
-                  <label className="flex flex-col gap-1 text-[12.5px] text-muted-foreground">
+                  <label className="flex flex-col gap-1 text-sm text-muted-foreground">
                     {tPanel("risk")}
                     <select
                       value={choice.risk}
@@ -723,7 +723,7 @@ function ClassifyTools({
                       ))}
                     </select>
                   </label>
-                  <label className="flex flex-col gap-1 text-[12.5px] text-muted-foreground">
+                  <label className="flex flex-col gap-1 text-sm text-muted-foreground">
                     {tPanel("sideEffect")}
                     <select
                       value={choice.sideEffect}
@@ -744,7 +744,7 @@ function ClassifyTools({
                       ))}
                     </select>
                   </label>
-                  <label className="flex flex-col gap-1 text-[12.5px] text-muted-foreground">
+                  <label className="flex flex-col gap-1 text-sm text-muted-foreground">
                     {tPanel("egress")}
                     <select
                       value={choice.egress}
@@ -1028,7 +1028,7 @@ export function RegistryPackageFields({
     return (
       <p
         data-testid="studio-add-package-unpinned"
-        className="text-[13px] text-muted-foreground"
+        className="text-sm text-muted-foreground"
       >
         {packages.length === 0
           ? t("noPackage")
@@ -1115,7 +1115,7 @@ export function RegistryPackageFields({
                   <p
                     key={fieldId}
                     data-testid="studio-add-package-secret"
-                    className="text-[13px]"
+                    className="text-sm"
                   >
                     <span className={mono}>{key}</span>{" "}
                     <span className="text-muted-foreground">
@@ -1150,7 +1150,7 @@ export function RegistryPackageFields({
                 {variables.map((name) => (
                   <li
                     key={name}
-                    className={`${mono} rounded border border-border px-1.5 py-0.5 text-[11px] text-foreground`}
+                    className={`${mono} rounded border border-border px-1.5 py-0.5 text-sm text-foreground`}
                   >
                     {name}
                   </li>

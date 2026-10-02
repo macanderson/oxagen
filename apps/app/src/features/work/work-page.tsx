@@ -128,7 +128,7 @@ function CollectorBanner({
   return (
     <div
       data-testid="work-collector-banner"
-      className="flex flex-wrap items-start gap-x-3 gap-y-2 rounded-[10px] border border-error/40 bg-error/10 px-3.5 py-[11px] text-[12.5px] text-foreground"
+      className="flex flex-wrap items-start gap-x-3 gap-y-2 rounded-[10px] border border-error/40 bg-error/10 px-3.5 py-[11px] text-sm text-foreground"
     >
       <div className="flex min-w-0 grow flex-col gap-1">
         {failing.map((collector) => (

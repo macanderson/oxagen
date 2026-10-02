@@ -1281,7 +1281,7 @@ function SecurityTab({
                   <p className={listTitle}>
                     {describeAgent(s.userAgent, t("unknownDevice"))}
                     {s.current ? (
-                      <span className="rounded-md border border-success/45 bg-success/10 px-1.5 py-px text-[10.5px] font-semibold text-success">
+                      <span className="rounded-md border border-success/45 bg-success/10 px-1.5 py-px text-sm font-semibold text-success">
                         {t("thisDevice")}
                       </span>
                     ) : null}

@@ -138,7 +138,7 @@ export function OpenIncident({
               <li key={item}>
                 {/* Not the mono badge: it lowercases, and the instant ends in Z. */}
                 <Badge tone="quiet" dot={false}>
-                  <span className="font-mono text-[11px]">{item}</span>
+                  <span className="font-mono text-sm">{item}</span>
                 </Badge>
               </li>
             ))}

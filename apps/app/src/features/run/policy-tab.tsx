@@ -105,7 +105,7 @@ function DecidedBy({ source }: { source: string | null }) {
   return (
     <span
       data-testid="policy-decided-by"
-      className="max-w-full text-[11px] text-dim md:truncate"
+      className="max-w-full text-sm text-dim md:truncate"
     >
       {source === null
         ? t("decidedByUnrecorded")
@@ -122,7 +122,7 @@ function Unrecorded() {
   return (
     <span
       title={t("unrecorded")}
-      className="whitespace-nowrap font-sans text-[12px]"
+      className="whitespace-nowrap font-sans text-sm"
     >
       <NoValue />
     </span>
@@ -164,7 +164,7 @@ function Listed({
   const t = useTranslations("run.policy");
   if (items.length === 0)
     return (
-      <span data-testid={testId} className="text-[12px] text-muted-foreground">
+      <span data-testid={testId} className="text-sm text-muted-foreground">
         {t("none")}
       </span>
     );
@@ -218,7 +218,7 @@ function row(entry: TranscriptEntry, place: Place): ListRow {
         ) : (
           <span className={`${mono} text-foreground md:truncate`}>{call}</span>
         )}
-        <span className={`${mono} text-[11px] text-dim md:truncate`}>
+        <span className={`${mono} text-sm text-dim md:truncate`}>
           {decision?.type ?? entry.type}
         </span>
       </span>,

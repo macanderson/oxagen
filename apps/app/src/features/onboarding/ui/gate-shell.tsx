@@ -25,7 +25,7 @@ const GATE_STEPS = [
 export type GateStepId = (typeof GATE_STEPS)[number];
 
 const railItem =
-  "flex min-h-11 min-w-0 flex-1 items-center gap-2.5 px-3 py-2.5 text-[13px] max-sm:justify-center sm:px-3.5";
+  "flex min-h-11 min-w-0 flex-1 items-center gap-2.5 px-3 py-2.5 text-sm max-sm:justify-center sm:px-3.5";
 
 function Mark({ n, state }: { n: number; state: "done" | "current" | "todo" }) {
   const tone =
@@ -37,7 +37,7 @@ function Mark({ n, state }: { n: number; state: "done" | "current" | "todo" }) {
   return (
     <span
       aria-hidden="true"
-      className={`inline-flex size-[22px] flex-none items-center justify-center rounded-full border text-[11px] ${tone}`}
+      className={`inline-flex size-[22px] flex-none items-center justify-center rounded-full border text-sm ${tone}`}
     >
       {state === "done" ? "✓" : n}
     </span>
@@ -153,7 +153,7 @@ export function GateShell({
             {email === null ? null : (
               <span
                 data-testid="gate-email"
-                className="truncate font-mono text-[11.5px] text-muted-foreground max-sm:hidden"
+                className="truncate font-mono text-sm text-muted-foreground max-sm:hidden"
               >
                 {email}
               </span>
@@ -194,11 +194,11 @@ export function GateHeader({
   return (
     <div className="flex flex-col gap-2 pt-2">
       {eyebrow === undefined ? null : (
-        <p className="text-[12px] font-semibold uppercase tracking-[0.14em] text-accent-text">
+        <p className="text-sm font-semibold uppercase tracking-[0.14em] text-accent-text">
           {eyebrow}
         </p>
       )}
-      <h1 className="text-[23px] font-bold tracking-tight text-foreground">
+      <h1 className="text-2xl font-bold tracking-tight text-foreground">
         {title}
       </h1>
       <p className="max-w-[560px] text-sm leading-relaxed text-muted-foreground">

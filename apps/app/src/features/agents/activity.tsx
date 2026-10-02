@@ -60,7 +60,7 @@ function Runs({
   if (runs.value.length === 0) {
     return (
       <Panel id="agent-runs" title={t("title")} testId="runs-empty">
-        <p className="text-[12.5px] text-muted-foreground">
+        <p className="text-sm text-muted-foreground">
           {row === null
             ? t("emptyNoRollup")
             : t("empty", { count: formatCount(row.runs, locale) })}
@@ -79,7 +79,7 @@ function Runs({
       id="agent-runs"
       title={t("title")}
       aside={
-        <span className={`${mono} text-[11px] text-dim`}>
+        <span className={`${mono} text-sm text-dim`}>
           {t("shown", { count: formatCount(runs.value.length, locale) })}
         </span>
       }
@@ -109,7 +109,7 @@ function Runs({
               </SafeLink>
               <span
                 data-testid="agent-run-id"
-                className={`${mono} block truncate text-[11px] text-dim`}
+                className={`${mono} block truncate text-sm text-dim`}
               >
                 {run.id}
               </span>
@@ -162,7 +162,7 @@ function Accounting({
       title={t("title")}
       lead={t("lead")}
       aside={
-        <span className={`${mono} text-[11px] text-dim`}>{t("window")}</span>
+        <span className={`${mono} text-sm text-dim`}>{t("window")}</span>
       }
     >
       {spend !== null && !spend.ok ? (
@@ -324,7 +324,7 @@ function Last30({
               className="flex flex-col gap-2 rounded-lg border border-border px-3 py-2.5"
             >
               <p className="flex flex-wrap items-center justify-between gap-2">
-                <b className="text-[13px]">{t(`kinds.${finding.kind}`)}</b>
+                <b className="text-sm">{t(`kinds.${finding.kind}`)}</b>
                 <Badge tone="approval" dot={false}>
                   <Money value={finding.saving} /> {t("atStake")}
                 </Badge>
@@ -402,7 +402,7 @@ function Incidents({
         testId="incidents-empty"
         aside={<Badge tone="allowed">{t("empty.badge")}</Badge>}
       >
-        <p className="text-[12.5px]">
+        <p className="text-sm">
           {t("empty.body", { kinds: TAMPER_INCIDENT_KINDS.join(", ") })}
         </p>
         <SafeLink

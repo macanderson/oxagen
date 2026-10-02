@@ -79,18 +79,18 @@ const chartText = "text-sm";
 const barFill = "fill-info opacity-80";
 /** The chart's legend: `.row { gap:14px; margin-top:10px; font-size:11.5px; color:var(--muted) }`. */
 const chartLegend =
-  "mt-2.5 flex flex-wrap items-center gap-3.5 text-[11.5px] text-muted-foreground";
+  "mt-2.5 flex flex-wrap items-center gap-3.5 text-sm text-muted-foreground";
 /** The turn-cost swatch, `width:9px; height:9px; border-radius:2px; background:var(--st-approval)`. */
 const swatch = "inline-block size-[9px] rounded-[2px] bg-info";
 /** The cost-so-far key, `width:14px; border-top:2px dashed var(--fg)`. */
 const dashKey = "inline-block w-3.5 border-t-2 border-dashed border-foreground";
 /** `p.muted { font-size:11.5px; margin:10px 0 0 }`: how to read the chart. */
-const caption = "mb-0 mt-2.5 text-[11.5px] text-muted-foreground";
+const caption = "mb-0 mt-2.5 text-sm text-muted-foreground";
 /** A finding's diamond, `.pin { background:var(--st-denied) }`, in the legend and the Pinned cell. */
 const pinKey = "inline-block size-[7px] flex-none rotate-45 bg-warning";
 /** A Pinned cell's finding links, one per line. */
 const pinList = "m-0 grid list-none gap-1 p-0";
-const pinLink = `${linkText} inline-flex items-center gap-1.5 whitespace-nowrap text-[11.5px]`;
+const pinLink = `${linkText} inline-flex items-center gap-1.5 whitespace-nowrap text-sm`;
 /** Where a turn's diamonds sit: in the band above the tallest bar's label. */
 const PIN_Y = 14;
 const PIN_R = 4.5;
@@ -553,7 +553,7 @@ function WaterfallBody({
         {ledger.cost === null ? (
           <p
             data-testid="waterfall-unpriced"
-            className="m-0 max-w-prose text-[12.5px] text-muted-foreground"
+            className="m-0 max-w-prose text-sm text-muted-foreground"
           >
             {/* No total means either no turn carried a cost, or the turns
                 carry more than one currency and no sum spans them. The rows
@@ -625,7 +625,7 @@ function WaterfallBody({
         <PanelBody rule>
           <p
             data-testid="waterfall-cut"
-            className="m-0 max-w-prose text-[11.5px] text-muted-foreground"
+            className="m-0 max-w-prose text-sm text-muted-foreground"
           >
             {t("cut", { count: ledger.rows.length })}
           </p>

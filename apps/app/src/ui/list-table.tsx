@@ -153,7 +153,7 @@ function compare(a: string, b: string, numeric: boolean): number {
  * (`size="sm"`), so its list opens on the translucent menu surface. These keep
  * the old 12px text, and make the trigger 44px tall with 16px text on a phone.
  */
-export const listSelect = "text-[12px] max-md:min-h-11 max-md:text-base";
+export const listSelect = "text-sm max-md:min-h-11 max-md:text-base";
 
 /** What each row in a body renders, by the row's key, whitespace collapsed. */
 function readTexts(
@@ -339,7 +339,7 @@ export function ListTable({
             setPage(1);
           }}
           data-touch-target=""
-          className="min-w-[140px] flex-[1_1_200px] rounded-lg border border-input-border bg-input-bg px-2.5 py-1.5 text-[12.5px] text-input-fg placeholder:text-dim focus-visible:border-input-border-focus focus-visible:outline-none max-md:basis-full max-md:text-base"
+          className="min-w-[140px] flex-[1_1_200px] rounded-lg border border-input-border bg-input-bg px-2.5 py-1.5 text-sm text-input-fg placeholder:text-dim focus-visible:border-input-border-focus focus-visible:outline-none max-md:basis-full max-md:text-base"
         />
         {filters}
         {facets.map(({ column, values }) => {
@@ -367,7 +367,7 @@ export function ListTable({
       <div className="min-w-0 overflow-x-auto">
         <table
           aria-label={label}
-          className="w-full min-w-[560px] border-collapse text-[13px]"
+          className="w-full min-w-[560px] border-collapse text-sm"
         >
           <thead>
             <tr className="border-b border-border">
@@ -403,7 +403,7 @@ export function ListTable({
                         toggle(i);
                       }}
                       data-sort={state}
-                      className="inline-flex cursor-pointer select-none items-center uppercase tracking-[inherit] hover:text-muted-foreground data-[sort=ascending]:text-foreground data-[sort=descending]:text-foreground after:ml-[5px] after:text-[10px] after:text-rule after:content-['↕'] data-[sort=ascending]:after:text-accent-text data-[sort=ascending]:after:content-['↑'] data-[sort=descending]:after:text-accent-text data-[sort=descending]:after:content-['↓']"
+                      className="inline-flex cursor-pointer select-none items-center uppercase tracking-[inherit] hover:text-muted-foreground data-[sort=ascending]:text-foreground data-[sort=descending]:text-foreground after:ml-[5px] after:text-sm after:text-rule after:content-['↕'] data-[sort=ascending]:after:text-accent-text data-[sort=ascending]:after:content-['↑'] data-[sort=descending]:after:text-accent-text data-[sort=descending]:after:content-['↓']"
                     >
                       {column.label}
                     </button>

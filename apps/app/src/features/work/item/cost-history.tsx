@@ -180,7 +180,7 @@ export function HistoryPanel({ detail }: { detail: WorkItemDetail }) {
         </span>
       </div>
       {entries.length === 0 ? (
-        <p className="px-4 py-3.5 text-[13px] text-muted-foreground">{t("empty")}</p>
+        <p className="px-4 py-3.5 text-sm text-muted-foreground">{t("empty")}</p>
       ) : (
         <ol className="divide-y divide-border">
           {entries.map(({ entry, index }) => (
@@ -188,7 +188,7 @@ export function HistoryPanel({ detail }: { detail: WorkItemDetail }) {
               key={`${entry.at}-${String(index)}`}
               data-testid="work-history-entry"
               data-kind={entry.kind}
-              className="flex flex-col gap-0.5 px-4 py-2.5 text-[13px] sm:flex-row sm:gap-4"
+              className="flex flex-col gap-0.5 px-4 py-2.5 text-sm sm:flex-row sm:gap-4"
             >
               <time dateTime={entry.at} className="shrink-0 text-xs text-muted-foreground sm:w-36">
                 {when(entry.at)}

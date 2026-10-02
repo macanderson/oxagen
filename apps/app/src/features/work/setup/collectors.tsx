@@ -65,7 +65,7 @@ function CollectorRows({
         <td className={cell}>
           <span className="flex flex-col">
             <span className="font-medium">{collector.name}</span>
-            <span className="text-[12px] text-muted-foreground">
+            <span className="text-sm text-muted-foreground">
               {t("github")}
             </span>
           </span>
@@ -96,7 +96,7 @@ function CollectorRows({
         <tr data-collector-failure={collector.name}>
           <td colSpan={4} className={cell}>
             <div className="flex flex-wrap items-start gap-3">
-              <div className="flex min-w-0 grow basis-72 flex-col gap-1 text-[12.5px] text-muted-foreground">
+              <div className="flex min-w-0 grow basis-72 flex-col gap-1 text-sm text-muted-foreground">
                 <p>
                   {collector.lastSuccessAt === null
                     ? t("neverGood")
@@ -170,7 +170,7 @@ export function CollectorsTab({
       {collectors.length === 0 ? (
         <p
           data-testid="work-collectors-empty"
-          className={`${panelBody} text-[12.5px] text-muted-foreground`}
+          className={`${panelBody} text-sm text-muted-foreground`}
         >
           {t("collectors.empty")}
         </p>
@@ -207,7 +207,7 @@ export function CollectorsTab({
       <div className={`${panelBody} border-t border-border`}>
         <p
           data-testid="work-write-back"
-          className="text-[12.5px] text-muted-foreground"
+          className="text-sm text-muted-foreground"
         >
           {t("collectors.writeBack")}
         </p>

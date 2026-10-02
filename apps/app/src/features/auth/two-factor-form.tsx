@@ -64,7 +64,7 @@ function ExpiryClock() {
   return (
     <span
       data-testid="two-factor-expiry"
-      className="font-mono text-[11.5px] text-dim"
+      className="font-mono text-sm text-dim"
     >
       {t("expires", { time: `0:${String(left).padStart(2, "0")}` })}
     </span>
@@ -191,7 +191,7 @@ export function TwoFactorForm({
             label={t("twoFactor.submit")}
             pendingLabel={t("twoFactor.pending")}
           />
-          <div className="flex items-center justify-between gap-3 text-[13px]">
+          <div className="flex items-center justify-between gap-3 text-sm">
             <button
               type="button"
               className={authLinkButton}

@@ -35,7 +35,7 @@ import { Fact, Facts, Meter, NoValue, Note, Panel, PanelBody } from "./parts";
 const pair =
   "grid gap-3.5 [grid-template-columns:repeat(auto-fit,minmax(320px,1fr))]";
 /** `table.narrow { min-width:0 }`: a table that fits a half-width panel. */
-const narrowTable = "w-full min-w-0 border-collapse text-[13px]";
+const narrowTable = "w-full min-w-0 border-collapse text-sm";
 
 /** The book's class for web searches, which are priced per request (#3721). */
 const SEARCH_CLASS = "server_tool_request";
@@ -77,7 +77,7 @@ function TokenClasses({
       flush
       aside={
         tokens === null ? undefined : (
-          <span className="font-mono text-[11px] text-dim">
+          <span className="font-mono text-sm text-dim">
             {t("classes.tally", { count: count(tokens.total) })}
           </span>
         )
@@ -91,7 +91,7 @@ function TokenClasses({
         <PanelBody>
           <p
             data-testid="cost-not-rolled-up"
-            className="m-0 max-w-prose text-[12.5px] text-muted-foreground"
+            className="m-0 max-w-prose text-sm text-muted-foreground"
           >
             {t("notRolledUp")}
           </p>
@@ -258,7 +258,7 @@ function PromptComposition({
       testId="prompt-composition"
       aside={
         perModelCall === null ? undefined : (
-          <span className="font-mono text-[11px] text-dim">
+          <span className="font-mono text-sm text-dim">
             {t("tally", { count: formatCount(perModelCall, locale) })}
           </span>
         )
@@ -276,7 +276,7 @@ function PromptComposition({
           </div>
         ))}
       </div>
-      <p className="mb-0 mt-2.5 text-[11.5px] text-muted-foreground">
+      <p className="mb-0 mt-2.5 text-sm text-muted-foreground">
         {t("partsNote")}
       </p>
       <hr className={rule} />

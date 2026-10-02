@@ -101,7 +101,7 @@ function Gaps({ gaps }: { gaps: RunChain["gaps"] }) {
           {t("missingFrames", {
             count: formatCount(gaps.missingFrameCount, locale),
           })}{" "}
-          <span className={`${mono} text-[11.5px]`}>
+          <span className={`${mono} text-sm`}>
             {gaps.missingSequences
               .map((gap) =>
                 gap.from === gap.to ? gap.from : `${gap.from}-${gap.to}`,
@@ -160,10 +160,10 @@ function HashChain({ chain }: { chain: RunChain }) {
               })}
         </Fact>
         <Fact label={t("rule")}>
-          <span className={`${mono} block text-[11.5px]`}>
+          <span className={`${mono} block text-sm`}>
             {t(`rules.${rule}`)}
           </span>
-          <span className={`${mono} block text-[11px] text-dim`}>
+          <span className={`${mono} block text-sm text-dim`}>
             {chain.hashRule}
           </span>
         </Fact>
@@ -234,7 +234,7 @@ function Attestation({ seal }: { seal: Seal }) {
             keyRef: attestation.keyRef,
           })}
         </span>
-        <span className="block text-[11px] text-muted-foreground">
+        <span className="block text-sm text-muted-foreground">
           {attestation.sig}
         </span>
       </Fact>
@@ -305,7 +305,7 @@ function SealPanel({
       {latest === undefined ? (
         <p
           data-testid="chain-unsealed"
-          className="m-0 text-[13px] text-muted-foreground"
+          className="m-0 text-sm text-muted-foreground"
         >
           {t("unsealed")}
         </p>
@@ -352,7 +352,7 @@ function SealPanel({
                   key={`${seal.sealedAt}-${String(i)}`}
                   data-testid="chain-attempt"
                 >
-                  <h4 className="mb-2 text-[12.5px] font-semibold">
+                  <h4 className="mb-2 text-sm font-semibold">
                     {t("attempt", { n: i + 1 })}
                   </h4>
                   <Facts>
@@ -433,7 +433,7 @@ function ReplayGrade({
                   {rung.met ? t("met") : t("unmet")}
                 </span>
                 <span
-                  className={`${mono} block text-[11px] text-dim md:truncate`}
+                  className={`${mono} block text-sm text-dim md:truncate`}
                 >
                   {rung.reason}
                 </span>
@@ -486,7 +486,7 @@ function Checkpoints({ chain, place }: { chain: RunChain; place: Place }) {
       testId="chain-checkpoints"
       flush
       aside={
-        <span className="font-mono text-[11px] text-dim">
+        <span className="font-mono text-sm text-dim">
           {t("count", { count: formatCount(chain.checkpoints.length, locale) })}
         </span>
       }
@@ -495,7 +495,7 @@ function Checkpoints({ chain, place }: { chain: RunChain; place: Place }) {
         <PanelBody>
           <p
             data-testid="chain-no-checkpoints"
-            className="m-0 text-[12.5px] text-muted-foreground"
+            className="m-0 text-sm text-muted-foreground"
           >
             {t(`none.${rule}`)}
           </p>
@@ -540,7 +540,7 @@ function CheckpointRow({
         <FrameLink seq={checkpoint.seq} chainRef={undefined} place={place} />
       </td>
       <td
-        className={`${cell} ${mono} whitespace-nowrap text-[11px]`}
+        className={`${cell} ${mono} whitespace-nowrap text-sm`}
         data-truncate={checkpoint.chainHead}
       >
         {shortDigest(checkpoint.chainHead)}
@@ -559,14 +559,14 @@ function CheckpointRow({
           ) : (
             <Badge tone="allowed">{t("countersigned")}</Badge>
           )}
-          <span className="max-w-full text-[11px] text-dim md:truncate">
+          <span className="max-w-full text-sm text-dim md:truncate">
             {t("signed")} <When at={checkpoint.signedAt} />
             <span className={`${mono} block md:truncate`}>
               {checkpoint.deviceKeyFingerprint}
             </span>
           </span>
           {checkpoint.countersignedAt === null ? null : (
-            <span className="max-w-full text-[11px] text-dim md:truncate">
+            <span className="max-w-full text-sm text-dim md:truncate">
               {t("countersignedAt")} <When at={checkpoint.countersignedAt} />
               {checkpoint.platformKey === null ? null : (
                 <span className={`${mono} block md:truncate`}>
@@ -577,7 +577,7 @@ function CheckpointRow({
           )}
           {checkpoint.anchorRoot === null ? null : (
             <span
-              className={`${mono} max-w-full text-[11px] text-dim md:truncate`}
+              className={`${mono} max-w-full text-sm text-dim md:truncate`}
             >
               {t("anchored", { root: checkpoint.anchorRoot })}
             </span>

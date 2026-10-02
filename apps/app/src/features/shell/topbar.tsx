@@ -59,7 +59,7 @@ function Breadcrumbs({ data }: { data: ShellData }) {
                 </li>
               ) : null}
               <li
-                className={`truncate ${i < crumbs.length - 1 ? "hidden md:block" : ""} ${mono ? "font-mono text-[13px]" : ""}`}
+                className={`truncate ${i < crumbs.length - 1 ? "hidden md:block" : ""} ${mono ? "font-mono text-sm" : ""}`}
               >
                 {crumb.href === null ? (
                   <span
@@ -136,13 +136,13 @@ export function Topbar({ data }: { data: ShellData }) {
         aria-keyshortcuts="Meta+K Control+K"
         aria-label={t("search")}
         data-touch-target=""
-        className="flex items-center gap-2 rounded-[9px] border border-border bg-card px-2.5 py-1.5 text-[12.5px] text-muted-foreground transition-colors hover:border-rule hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring lg:min-w-[190px]"
+        className="flex items-center gap-2 rounded-[9px] border border-border bg-card px-2.5 py-1.5 text-sm text-muted-foreground transition-colors hover:border-rule hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring lg:min-w-[190px]"
       >
         <MagnifyingGlassIcon aria-hidden="true" className="size-3.5" />
         <span className="hidden lg:inline">{t("search")}</span>
         <kbd
           aria-hidden="true"
-          className="ml-auto hidden rounded border border-border bg-hl px-[5px] font-mono text-[10.5px] text-muted-foreground sm:inline"
+          className="ml-auto hidden rounded border border-border bg-hl px-[5px] font-mono text-sm text-muted-foreground sm:inline"
         >
           {t("searchShortcut")}
         </kbd>
@@ -193,7 +193,7 @@ export function Topbar({ data }: { data: ShellData }) {
           <span
             aria-hidden="true"
             data-testid="approvals-count"
-            className="absolute -right-1.5 -top-1.5 min-w-[18px] rounded-full border border-app-topbar-bg bg-info px-1 text-center font-mono text-[10px] font-semibold leading-4 text-info-foreground"
+            className="absolute -right-1.5 -top-1.5 min-w-[18px] rounded-full border border-app-topbar-bg bg-info px-1 text-center font-mono text-sm font-semibold leading-4 text-info-foreground"
           >
             {waitingText(waiting)}
           </span>

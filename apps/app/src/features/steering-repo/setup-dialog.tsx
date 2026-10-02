@@ -85,7 +85,7 @@ export function SteeringRepoSetup({
           <Badge tone={TONE[status]} dot={status === "provisioning" ? "pulse" : true}>
             {status === "ready" ? t("status.movePending") : t(`status.${status}`)}
           </Badge>
-          <p className="min-w-0 flex-1 text-[13px] text-muted-foreground">
+          <p className="min-w-0 flex-1 text-sm text-muted-foreground">
             {lead}
           </p>
           <button
@@ -116,7 +116,7 @@ export function SteeringRepoSetup({
         <div className="flex flex-col gap-4">
           <p
             data-testid="steering-repo-setup-intro"
-            className="text-[13px] text-muted-foreground"
+            className="text-sm text-muted-foreground"
           >
             {legacy === null
               ? t("intro.create")

@@ -114,15 +114,15 @@ function DenialChain({ agentKey }: { agentKey: string | null }) {
         >
           <span
             aria-hidden="true"
-            className="grid size-5 shrink-0 place-items-center rounded-full border border-border text-[11px] text-dim"
+            className="grid size-5 shrink-0 place-items-center rounded-full border border-border text-sm text-dim"
           >
             {index + 1}
           </span>
           <span className="flex min-w-0 flex-col">
-            <span className="text-[10.5px] font-semibold uppercase tracking-[0.09em] text-dim">
+            <span className="text-sm font-semibold uppercase tracking-[0.09em] text-dim">
               {t(step.key)}
             </span>
-            <span className="text-[13px]">
+            <span className="text-sm">
               {step.key === "decision" ? (
                 <>
                   <Badge tone="denied">{t("denied")}</Badge>{" "}

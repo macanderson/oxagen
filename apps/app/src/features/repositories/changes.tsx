@@ -116,7 +116,7 @@ export function Changes({
           <p
             role="status"
             data-testid="changes-loading"
-            className="px-4 py-3.5 text-[13px] text-muted-foreground"
+            className="px-4 py-3.5 text-sm text-muted-foreground"
           >
             {t("loading")}
           </p>
@@ -143,7 +143,7 @@ export function Changes({
       </Panel>
       <Panel id="changes-auto" testId="changes-auto" title={t("autoTitle")}>
         <PanelBody>
-          <dl className="grid grid-cols-[max-content_minmax(0,1fr)] gap-x-5 gap-y-2.5 text-[13px] leading-relaxed max-sm:grid-cols-1">
+          <dl className="grid grid-cols-[max-content_minmax(0,1fr)] gap-x-5 gap-y-2.5 text-sm leading-relaxed max-sm:grid-cols-1">
             {(["promoter", "reconciler", "person"] as const).map((who) => (
               <div key={who} className="contents" data-opener={who}>
                 <dt className="text-dim">{t(`auto.${who}.name`)}</dt>
@@ -215,7 +215,7 @@ function ChangeTable({
         <table
           aria-label={t("label")}
           data-testid="changes-table"
-          className="w-full min-w-[760px] border-collapse text-[13px]"
+          className="w-full min-w-[760px] border-collapse text-sm"
         >
           <thead>
             <tr className="border-b border-border">
@@ -313,7 +313,7 @@ function ChangeRow({
           </b>
         </span>
         <span
-          className={`${mono} mt-0.5 block text-[11px] text-dim md:truncate`}
+          className={`${mono} mt-0.5 block text-sm text-dim md:truncate`}
         >
           {row.pullRequest.branch}
         </span>
@@ -345,7 +345,7 @@ function ChangeRow({
         <span className="flex min-w-0 items-center gap-2">
           <CiLight status={row.status} />
           <span
-            className={`${mono} min-w-0 text-[11.5px] text-muted-foreground md:truncate`}
+            className={`${mono} min-w-0 text-sm text-muted-foreground md:truncate`}
           >
             {row.checks === null
               ? t("ci.queued")

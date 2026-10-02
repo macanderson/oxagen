@@ -54,7 +54,7 @@ export function SidebarNav({
         <div key={section.key} className="mb-3">
           <p
             id={`${labelId}-${section.key}`}
-            className="px-2 pb-1.5 pt-3 text-[10.5px] font-semibold uppercase tracking-[0.13em] text-sidebar-nav-label-fg"
+            className="px-2 pb-1.5 pt-3 text-sm font-semibold uppercase tracking-[0.13em] text-sidebar-nav-label-fg"
           >
             {t(`sidebar.sections.${section.key}`)}
           </p>
@@ -72,7 +72,7 @@ export function SidebarNav({
                     aria-current={current ? "page" : undefined}
                     data-nav={item.key}
                     onClick={onNavigate}
-                    className={`mb-px flex items-center gap-2.5 rounded-lg px-[9px] py-[7px] text-[13.5px] font-medium transition-colors focus-visible:outline-2 focus-visible:outline-ring ${
+                    className={`mb-px flex items-center gap-2.5 rounded-lg px-[9px] py-[7px] text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-ring ${
                       current
                         ? "bg-sidebar-nav-link-active-bg text-sidebar-nav-link-active-fg shadow-[inset_2px_0_0_var(--gold)]"
                         : "text-sidebar-nav-link-fg hover:bg-sidebar-nav-link-hover-bg hover:text-sidebar-nav-link-hover-fg"
@@ -88,7 +88,7 @@ export function SidebarNav({
                         data-count={item.key}
                         data-count-unrecorded=""
                         title={t("sidebar.countNotRecorded")}
-                        className="rounded-[5px] border border-dashed border-border bg-card px-[5px] font-mono text-[10.5px] text-sidebar-nav-label-fg"
+                        className="rounded-[5px] border border-dashed border-border bg-card px-[5px] font-mono text-sm text-sidebar-nav-label-fg"
                       >
                         <span aria-hidden="true">?</span>
                         <span className="sr-only">
@@ -98,7 +98,7 @@ export function SidebarNav({
                     ) : (
                       <span
                         data-count={item.key}
-                        className={`rounded-[5px] border bg-card px-[5px] font-mono text-[10.5px] ${
+                        className={`rounded-[5px] border bg-card px-[5px] font-mono text-sm ${
                           waiting.hot
                             ? "border-info/40 text-info"
                             : "border-border text-sidebar-nav-label-fg"

@@ -39,7 +39,7 @@ type Mode = (typeof MODES)[number];
 
 /** The note under a heading: the gold rule on the left, muted ink. */
 const note =
-  "border-l-2 border-gold py-0.5 pl-3 text-[12.5px] text-muted-foreground";
+  "border-l-2 border-gold py-0.5 pl-3 text-sm text-muted-foreground";
 
 type Outcome =
   | { ok: true; value: GovernanceChanged }
@@ -150,7 +150,7 @@ export function GovernanceChip({
         onClick={openDialog}
         className={buttonSecondary}
       >
-        {t("chip")} <span className="font-mono text-[12px]">{shown}</span>
+        {t("chip")} <span className="font-mono text-sm">{shown}</span>
       </button>
       <SheetDialog
         open={open}
@@ -199,7 +199,7 @@ export function GovernanceChip({
                   onClick={() => {
                     setPicked(mode);
                   }}
-                  className="flex min-h-11 flex-col items-start gap-0.5 rounded-lg border border-border bg-card px-3.5 py-3 text-left text-[13px] hover:bg-hl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring aria-checked:border-gold aria-checked:bg-hl"
+                  className="flex min-h-11 flex-col items-start gap-0.5 rounded-lg border border-border bg-card px-3.5 py-3 text-left text-sm hover:bg-hl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring aria-checked:border-gold aria-checked:bg-hl"
                 >
                   <span className="font-semibold text-foreground">
                     {mode}
@@ -215,7 +215,7 @@ export function GovernanceChip({
             </div>
             <pre
               data-testid="governance-toml"
-              className="overflow-x-auto rounded-lg border border-border bg-hl px-3 py-2.5 font-mono text-[12px] leading-relaxed text-foreground"
+              className="overflow-x-auto rounded-lg border border-border bg-hl px-3 py-2.5 font-mono text-sm leading-relaxed text-foreground"
             >
               {governanceToml(t("tomlHeader", { path }), picked)}
             </pre>
@@ -223,7 +223,7 @@ export function GovernanceChip({
               {t("note")}
             </p>
             <p
-              className="text-[12.5px] text-muted-foreground"
+              className="text-sm text-muted-foreground"
               data-testid="governance-gap"
               data-not-backed=""
               data-issue={String(STEERING_GAPS.governance)}
@@ -251,7 +251,7 @@ function GovernanceResult({
       ? null
       : parsePullRequestUrl(value.pullRequest.htmlUrl);
   return (
-    <div role="status" className="flex flex-col gap-2 text-[13px]">
+    <div role="status" className="flex flex-col gap-2 text-sm">
       <p>
         {value.outcome === "proposed"
           ? t("proposed", {
@@ -327,7 +327,7 @@ function GovernanceFailure({
     <p
       role="alert"
       data-reason={failure.reason}
-      className="text-[13px] text-error-ink"
+      className="text-sm text-error-ink"
     >
       {text}
     </p>

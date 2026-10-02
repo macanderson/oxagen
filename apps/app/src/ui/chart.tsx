@@ -254,7 +254,7 @@ export function ChartTable({
 }) {
   const t = useTranslations("ui.chart");
   return (
-    <details data-slot="chart-table" className="text-[12.5px]">
+    <details data-slot="chart-table" className="text-sm">
       <summary className="cursor-pointer px-4 py-2 text-muted-foreground select-none hover:text-foreground">
         {t("table")}
       </summary>

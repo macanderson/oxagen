@@ -193,7 +193,7 @@ function WeeklyTrend({ weeks }: { weeks: WorkOutcomes["weeks"] }) {
         </span>
       </div>
       {weeks.length === 0 ? (
-        <p className={`${panelBody} text-[12.5px] text-muted-foreground`}>
+        <p className={`${panelBody} text-sm text-muted-foreground`}>
           {t("weeks.empty")}
         </p>
       ) : (
@@ -289,7 +289,7 @@ function CostCoverage({
           {t("title")}
         </h2>
       </div>
-      <div className={`${panelBody} flex flex-col gap-2 text-[13px]`}>
+      <div className={`${panelBody} flex flex-col gap-2 text-sm`}>
         <p>
           {cost.runs === 0
             ? t("noRuns")
@@ -301,7 +301,7 @@ function CostCoverage({
                   money: () => <Money value={total} />,
                 })}
         </p>
-        <p className="text-[12.5px] text-muted-foreground">
+        <p className="text-sm text-muted-foreground">
           {t.rich("note", {
             billing: (chunks) => (
               <SafeLink to={routes.billing(org)} className={linkText}>
@@ -329,7 +329,7 @@ function Reopens({ reopens }: { reopens: WorkOutcomes["reopens"] }) {
           {t("title")}
         </h2>
       </div>
-      <div className={`${panelBody} flex flex-col gap-3 text-[13px]`}>
+      <div className={`${panelBody} flex flex-col gap-3 text-sm`}>
         <dl className={kvList}>
           <dt className={kvTerm}>{t("cohort")}</dt>
           <dd className={kvValue} data-figure="cohort">
@@ -340,10 +340,10 @@ function Reopens({ reopens }: { reopens: WorkOutcomes["reopens"] }) {
             {formatCount(reopens.reopened, locale)}
           </dd>
         </dl>
-        <p className="text-[12.5px] text-muted-foreground">
+        <p className="text-sm text-muted-foreground">
           {t("waiting", { count: reopens.waiting })}
         </p>
-        <p className="text-[12.5px] text-muted-foreground">{t("reverts")}</p>
+        <p className="text-sm text-muted-foreground">{t("reverts")}</p>
       </div>
     </section>
   );

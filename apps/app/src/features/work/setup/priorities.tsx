@@ -99,7 +99,7 @@ export function PrioritiesTab({
             problem === null ? undefined : (
               <p
                 data-testid="work-priorities-problem"
-                className="mx-auto max-w-[52ch] text-[12.5px] text-muted-foreground [overflow-wrap:anywhere]"
+                className="mx-auto max-w-[52ch] text-sm text-muted-foreground [overflow-wrap:anywhere]"
               >
                 {problem}
               </p>
@@ -158,13 +158,13 @@ export function PrioritiesTab({
         <div className={`${panelBody} flex flex-col gap-2`}>
           <h3 className={eyebrowQuiet}>{t("priorities.rulesTitle")}</h3>
           {rules.length === 0 ? (
-            <p className="text-[12.5px] text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               {t("priorities.noRules")}
             </p>
           ) : (
             <ol
               data-testid="work-priorities-rules"
-              className="flex flex-col gap-2 text-[13px]"
+              className="flex flex-col gap-2 text-sm"
             >
               {rules.map((rule) => (
                 <li

@@ -148,7 +148,7 @@ export function Providers({
           </Table>
         )}
         <div className={`${panelBody} flex flex-col gap-3`}>
-          <p className="max-w-prose border-l-2 border-gold pl-3 text-[13px] text-muted-foreground">
+          <p className="max-w-prose border-l-2 border-gold pl-3 text-sm text-muted-foreground">
             {t("transportNote")}
           </p>
           <ProvidersAttention servers={servers.value.servers} />
