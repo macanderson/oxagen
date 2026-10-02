@@ -84,7 +84,7 @@ describe("computeOutcomes", () => {
     ["tse_c1run", usd(1_000_000n)],
     ["tse_c2run", usd(null)],
   ]);
-  const out = workOutcomesGet.output.parse(computeOutcomes({ now: NOW, days: 7, items, runs }));
+  const out = workOutcomesGet.output.parse({ ...computeOutcomes({ now: NOW, days: 7, items, runs }), truncated: false });
 
   it("counts accepted and merged, returned, and closed apart", () => {
     expect(out.days).toBe(7);
@@ -132,7 +132,7 @@ describe("computeOutcomes", () => {
   });
 
   it("answers an empty window with no rates", () => {
-    const result = workOutcomesGet.output.parse(computeOutcomes({ now: NOW, days: 30, items: [], runs: new Map() }));
+    const result = workOutcomesGet.output.parse({ ...computeOutcomes({ now: NOW, days: 30, items: [], runs: new Map() }), truncated: false });
     expect(result.accepted_merged).toBe(0);
     expect(result.touches.per_item).toBeNull();
     expect(result.cost).toEqual({ runs: 0, known_runs: 0, total: null });

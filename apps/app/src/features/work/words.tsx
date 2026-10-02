@@ -103,7 +103,7 @@ export function PriorityCell({ priority }: { priority: WorkPriority }) {
       <Badge tone={PRIORITY_TONE[priority.label]} dot={false}>
         {priority.label}
       </Badge>
-      <span className="text-[11.5px] text-muted-foreground">
+      <span className="text-[11.5px] text-muted-foreground" data-wrap="">
         {priority.by === "person" && priority.setBy !== null ? `${t("setBy", { name: priority.setBy })} ` : null}
         {priority.reason}
         {priority.cites.map((cite) => (
@@ -260,7 +260,9 @@ export function WaitLine({ wait }: { wait: WorkWait }) {
       break;
   }
   return (
-    <span className="text-[12.5px] text-muted-foreground" data-wait={wait.kind}>
+    // The line says what the item waits for, so it wraps in a table cell
+    // rather than end in an ellipsis (globals.css, data-wrap, #4674).
+    <span className="text-[12.5px] text-muted-foreground" data-wait={wait.kind} data-wrap="">
       {text}
     </span>
   );
