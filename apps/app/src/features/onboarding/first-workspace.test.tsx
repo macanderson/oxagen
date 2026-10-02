@@ -110,6 +110,7 @@ const PROVISIONING: SteeringRepoRead = {
     differences: [],
     legacySource: null,
     connection: null,
+    requestedName: null,
     connectionChoices: [],
     importRun: null,
   },

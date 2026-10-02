@@ -234,6 +234,8 @@ class Harness {
   readonly connections = new Map<string, SteeringConnection>();
   readonly saves: SteeringRepoState[] = [];
   readonly savedConnections: SteeringConnection[] = [];
+  /** Every connection keepConnection was asked to store, stored or not. */
+  readonly keptConnections: SteeringConnection[] = [];
   readonly binds: {
     scope: SteeringRepoScope;
     connection: SteeringConnection;
@@ -290,13 +292,15 @@ class Harness {
             ),
           );
         const state = this.states.get(keyOf(scope));
-        const connection = this.connections.get(scope.orgId);
+        // As the production load does: a workspace's own connection comes
+        // before the organization's.
+        const connection =
+          state?.connection ?? this.connections.get(scope.orgId) ?? null;
         return Promise.resolve({
           target:
             scope.kind === "workspace" ? this.workspaceTarget : ORG_TARGET,
           state: state === undefined ? null : structuredClone(state),
-          connection:
-            connection === undefined ? null : structuredClone(connection),
+          connection: connection === null ? null : structuredClone(connection),
         });
       },
       saveState: (scope, state) => {
@@ -307,6 +311,13 @@ class Harness {
       saveConnection: (scope, connection) => {
         this.connections.set(scope.orgId, structuredClone(connection));
         this.savedConnections.push(structuredClone(connection));
+        return Promise.resolve();
+      },
+      // Set-if-absent, as keepSteeringConnection is.
+      keepConnection: (scope, connection) => {
+        this.keptConnections.push(structuredClone(connection));
+        if (!this.connections.has(scope.orgId))
+          this.connections.set(scope.orgId, structuredClone(connection));
         return Promise.resolve();
       },
       github: () => {
@@ -452,7 +463,25 @@ describe("initialSteeringRepoState", () => {
       deployment_id: null,
       binding_id: null,
       connection_choices: [],
+      requested_name: null,
+      requested_connection: null,
+      connection: null,
       updated_at: "2026-09-26T12:00:00.000Z",
+    });
+  });
+
+  it("carries what a person chose for the name and the place, and resolves no place", () => {
+    expect(
+      initialSteeringRepoState(NOW, {
+        name: "acme-support",
+        connection: { provider: "gitlab", id: 42 },
+      }),
+    ).toMatchObject({
+      status: "provisioning",
+      attempt: 1,
+      requested_name: "acme-support",
+      requested_connection: { provider: "gitlab", id: 42 },
+      connection: null,
     });
   });
 });
@@ -503,6 +532,43 @@ describe("the settings readers", () => {
       }),
     ).toBeNull();
     expect(readSteeringConnection(null)).toBeNull();
+  });
+
+  it("keeps a workspace's own valid connection and drops a malformed one", () => {
+    expect(
+      readSteeringRepoState({
+        steering_repo: { status: "provisioning", connection: GITLAB_CONNECTION },
+      })?.connection,
+    ).toEqual(GITLAB_CONNECTION);
+    expect(
+      readSteeringRepoState({
+        steering_repo: {
+          status: "provisioning",
+          connection: { provider: "github", installation_id: "77" },
+        },
+      })?.connection,
+    ).toBeNull();
+    expect(
+      readSteeringRepoState({
+        steering_repo: { status: "provisioning", connection: "acme" },
+      })?.connection,
+    ).toBeNull();
+  });
+
+  it("keeps what a person chose across a read", () => {
+    expect(
+      readSteeringRepoState({
+        steering_repo: {
+          status: "blocked",
+          requested_name: "acme-support",
+          requested_connection: { provider: "github", id: 77 },
+        },
+      }),
+    ).toMatchObject({
+      requested_name: "acme-support",
+      requested_connection: { provider: "github", id: 77 },
+      connection: null,
+    });
   });
 });
 
@@ -612,6 +678,9 @@ describe("a GitHub workspace", () => {
       deployment_id: expect.any(Number),
       binding_id: BINDING_ID,
       connection_choices: [],
+      requested_name: null,
+      requested_connection: null,
+      connection: null,
       updated_at: NOW.toISOString(),
     });
     expect(h.notified).toEqual([]);
@@ -857,6 +926,9 @@ describe("a GitLab workspace", () => {
       deployment_id: 1,
       binding_id: BINDING_ID,
       connection_choices: [],
+      requested_name: null,
+      requested_connection: null,
+      connection: null,
       updated_at: NOW.toISOString(),
     });
   });
@@ -1272,6 +1344,266 @@ describe("pick_connection", () => {
     expect(h.state(WS)?.provider).toBe("gitlab");
     expect(h.savedConnections).toEqual([]);
     expect(hub.calls).toEqual([]);
+  });
+});
+
+// ── A workspace's own choice ─────────────────────────────────────────────────
+
+/** A workspace whose create named a place, a name, or both. */
+function chose(
+  h: Harness,
+  request: Parameters<typeof initialSteeringRepoState>[1],
+): void {
+  h.states.set(keyOf(WS), initialSteeringRepoState(NOW, request));
+}
+
+describe("a workspace that chose its place", () => {
+  it("creates the repository on the GitLab group it chose, though the organization stores a GitHub organization", async () => {
+    const hub = githubFake();
+    const lab = gitlabFake();
+    const h = new Harness(hub, lab);
+    h.connections.set("org_1", GITHUB_CONNECTION);
+    chose(h, { connection: { provider: "gitlab", id: GROUP.id } });
+
+    expect(await provisionSteeringRepo(h.deps(), WS)).toBe("ready");
+
+    expect(h.state(WS)).toMatchObject({
+      status: "ready",
+      provider: "gitlab",
+      requested_connection: { provider: "gitlab", id: GROUP.id },
+      connection: GITLAB_CONNECTION,
+      repository: GITLAB_REPOSITORY,
+    });
+    expect(lab.snapshot().projects["acme/oxagen-support"]?.description).toBe(
+      WORKSPACE_DESCRIPTION,
+    );
+    // Nothing reached the organization's GitHub organization.
+    expect(githubRepo(hub, "oxagen-support")).toBeUndefined();
+    expect(hub.writes()).toEqual([]);
+    expect(h.binds).toEqual([
+      {
+        scope: WS,
+        connection: GITLAB_CONNECTION,
+        repository: GITLAB_REPOSITORY,
+        default_branch: "main",
+      },
+    ]);
+    // The organization keeps its own stored connection.
+    expect(h.connections.get("org_1")).toEqual(GITHUB_CONNECTION);
+    expect(h.keptConnections).toEqual([GITLAB_CONNECTION]);
+    expect(h.savedConnections).toEqual([]);
+  });
+
+  it("creates the repository on the GitHub organization it chose, though the organization stores a GitLab group", async () => {
+    const hub = githubFake();
+    const lab = gitlabFake();
+    const h = new Harness(hub, lab);
+    h.connections.set("org_1", GITLAB_CONNECTION);
+    chose(h, { connection: { provider: "github", id: 77 } });
+
+    expect(await provisionSteeringRepo(h.deps(), WS)).toBe("ready");
+
+    expect(h.state(WS)).toMatchObject({
+      provider: "github",
+      connection: GITHUB_CONNECTION,
+      repository: GITHUB_REPOSITORY,
+    });
+    expect(githubRepo(hub, "oxagen-support")?.description).toBe(
+      WORKSPACE_DESCRIPTION,
+    );
+    expect(Object.keys(lab.snapshot().projects)).toEqual([]);
+    expect(h.connections.get("org_1")).toEqual(GITLAB_CONNECTION);
+  });
+
+  it("settles two places without a choose_connection stop, and makes the choice the organization's default", async () => {
+    const h = new Harness(githubFake(), gitlabFake());
+    chose(h, { connection: { provider: "gitlab", id: GROUP.id } });
+
+    expect(await runSteeringRepoStep(h.deps(), WS, "pick_connection")).toEqual(
+      { step: "pick_connection", status: "provisioning", ran: true },
+    );
+    expect(h.state(WS)).toMatchObject({
+      status: "provisioning",
+      provider: "gitlab",
+      connection: GITLAB_CONNECTION,
+      connection_choices: [],
+      error: null,
+    });
+    expect(h.connections.get("org_1")).toEqual(GITLAB_CONNECTION);
+    expect(h.keptConnections).toEqual([GITLAB_CONNECTION]);
+    // The unconditional store is for a lone candidate, not a choice.
+    expect(h.savedConnections).toEqual([]);
+  });
+
+  it("does not list the hosts again once the choice is resolved", async () => {
+    const hub = githubFake();
+    const h = new Harness(hub, null);
+    chose(h, { connection: { provider: "github", id: 77 } });
+    const listings = () =>
+      hub.calls.filter((c) => c.path.startsWith("/user/installations")).length;
+
+    await runSteeringRepoStep(h.deps(), WS, "pick_connection");
+    expect(listings()).toBe(1);
+    await runSteeringRepoStep(h.deps(), WS, "pick_connection");
+    expect(listings()).toBe(1);
+    expect(h.keptConnections).toEqual([GITHUB_CONNECTION]);
+    expect(h.state(WS)?.connection).toEqual(GITHUB_CONNECTION);
+  });
+
+  it("blocks with unknown_connection before anything is made when the stored tokens do not reach the choice", async () => {
+    const hub = githubFake();
+    const h = new Harness(hub, null);
+    // The organization's own connection would work. The job must not fall
+    // back to it.
+    h.connections.set("org_1", GITHUB_CONNECTION);
+    chose(h, { connection: { provider: "github", id: 999 } });
+
+    const err = await runUntilStopped(h.deps(), WS);
+
+    expect(err).toBeInstanceOf(SteeringProvisionBlockedError);
+    expect(err).toMatchObject({
+      code: "unknown_connection",
+      isNonRetriable: true,
+    });
+    expect((err as Error).message).toContain("github 999");
+    expect(h.state(WS)).toMatchObject({
+      status: "blocked",
+      step: null,
+      failed_step: "pick_connection",
+      error: { code: "unknown_connection" },
+      connection: null,
+      repository: null,
+    });
+    expect(hub.writes()).toEqual([]);
+    expect(h.keptConnections).toEqual([]);
+    expect(h.binds).toEqual([]);
+  });
+
+  it("leaves the organization repo on the organization's connection", async () => {
+    const hub = githubFake();
+    const lab = gitlabFake();
+    const h = new Harness(hub, lab);
+    h.connections.set("org_1", GITHUB_CONNECTION);
+    h.states.set(
+      keyOf(ORG_SCOPE),
+      initialSteeringRepoState(NOW, {
+        name: "custom-config",
+        connection: { provider: "gitlab", id: GROUP.id },
+      }),
+    );
+
+    expect(await provisionSteeringRepo(h.deps(), ORG_SCOPE)).toBe("ready");
+
+    expect(h.state(ORG_SCOPE)).toMatchObject({
+      provider: "github",
+      connection: null,
+      repository: { name: "oxagen-config", full_name: "acme/oxagen-config" },
+    });
+    expect(Object.keys(lab.snapshot().projects)).toEqual([]);
+    expect(h.keptConnections).toEqual([]);
+  });
+});
+
+describe("a workspace that chose its name", () => {
+  const NAME = "acme-support-rules";
+  const TAKEN = `acme already has a repository named ${NAME} that Oxagen did not create for this workspace. Choose another name, then retry.`;
+
+  it("creates exactly that name on GitHub, on one attempt", async () => {
+    const hub = githubFake();
+    const h = new Harness(hub, null);
+    h.connections.set("org_1", GITHUB_CONNECTION);
+    chose(h, { name: NAME });
+
+    expect(await provisionSteeringRepo(h.deps(), WS)).toBe("ready");
+
+    expect(h.state(WS)).toMatchObject({
+      attempt: 1,
+      candidate: NAME,
+      repository: { owner: ORG, name: NAME, full_name: `acme/${NAME}` },
+    });
+    expect(githubRepo(hub, NAME)?.description).toBe(WORKSPACE_DESCRIPTION);
+    expect(githubRepo(hub, "oxagen-support")).toBeUndefined();
+  });
+
+  it("starts the chosen name at its first attempt, whatever an earlier run counted", async () => {
+    const hub = githubFake();
+    const h = new Harness(hub, null);
+    h.connections.set("org_1", GITHUB_CONNECTION);
+    h.states.set(keyOf(WS), {
+      ...initialSteeringRepoState(NOW, { name: NAME }),
+      attempt: 5,
+    });
+
+    expect(await provisionSteeringRepo(h.deps(), WS)).toBe("ready");
+    expect(h.state(WS)).toMatchObject({ attempt: 1, candidate: NAME });
+    expect(githubRepo(hub, `${NAME}-5`)).toBeUndefined();
+  });
+
+  it("stops with repository_name_taken on GitHub and takes no -2", async () => {
+    const hub = githubFake();
+    hub.seedRepository({ name: NAME, description: "Another team's repository." });
+    const h = new Harness(hub, null);
+    h.connections.set("org_1", GITHUB_CONNECTION);
+    chose(h, { name: NAME });
+
+    const err = await runUntilStopped(h.deps(), WS);
+
+    expect(err).toBeInstanceOf(SteeringProvisionBlockedError);
+    expect(err).toMatchObject({ code: "repository_name_taken", message: TAKEN });
+    expect(h.state(WS)).toMatchObject({
+      status: "blocked",
+      failed_step: "create_repository",
+      error: { code: "repository_name_taken", message: TAKEN },
+      repository: null,
+    });
+    expect(
+      hub.writes().filter((c) => c.method === "POST" && c.path === "/orgs/acme/repos"),
+    ).toHaveLength(1);
+    expect(githubRepo(hub, `${NAME}-2`)).toBeUndefined();
+  });
+
+  it("stops with repository_name_taken on GitLab and takes no -2", async () => {
+    const lab = gitlabFake();
+    lab.seedProject({ name: NAME, description: "Another team's project." });
+    const h = new Harness(null, lab);
+    h.connections.set("org_1", GITLAB_CONNECTION);
+    chose(h, { name: NAME });
+
+    const err = await runUntilStopped(h.deps(), WS);
+
+    expect(err).toMatchObject({ code: "repository_name_taken", message: TAKEN });
+    expect(lab.snapshot().projects[`acme/${NAME}-2`]).toBeUndefined();
+  });
+
+  it("adopts the chosen name when its repository carries this workspace's marker", async () => {
+    const hub = githubFake();
+    const seeded = hub.seedRepository({
+      name: NAME,
+      description: WORKSPACE_DESCRIPTION,
+    });
+    const h = new Harness(hub, null);
+    h.connections.set("org_1", GITHUB_CONNECTION);
+    chose(h, { name: NAME });
+
+    expect(await provisionSteeringRepo(h.deps(), WS)).toBe("ready");
+    expect(h.state(WS)?.repository).toMatchObject({ id: seeded, name: NAME });
+  });
+
+  it("puts the chosen name in the chosen place", async () => {
+    const hub = githubFake();
+    const lab = gitlabFake();
+    const h = new Harness(hub, lab);
+    h.connections.set("org_1", GITHUB_CONNECTION);
+    chose(h, { name: NAME, connection: { provider: "gitlab", id: GROUP.id } });
+
+    expect(await provisionSteeringRepo(h.deps(), WS)).toBe("ready");
+    expect(h.state(WS)?.repository).toMatchObject({
+      owner: ORG,
+      name: NAME,
+      full_name: `acme/${NAME}`,
+    });
+    expect(lab.snapshot().projects[`acme/${NAME}`]).toBeDefined();
+    expect(githubRepo(hub, NAME)).toBeUndefined();
   });
 });
 
@@ -2170,6 +2502,40 @@ describe("planConnectionReset", () => {
           NOW,
         ),
       ).toMatchObject({ kind: "refuse", reason: "connection_in_use" });
+  });
+
+  it("neither waits on nor releases a workspace that chose its own connection", () => {
+    const own = at({
+      connection: GITHUB_CONNECTION,
+      repository: made(ORG),
+      failed_step: "apply_settings",
+    });
+    expect(
+      planConnectionReset(GITHUB_CONNECTION, [{ key: "ws_1", state: own }], NOW),
+    ).toEqual({ kind: "clear", release: [] });
+    expect(
+      planConnectionReset(
+        GITHUB_CONNECTION,
+        [
+          {
+            key: "ws_1",
+            state: at({
+              connection: GITHUB_CONNECTION,
+              status: "provisioning",
+              updated_at: NOW.toISOString(),
+            }),
+          },
+        ],
+        NOW,
+      ),
+    ).toEqual({ kind: "clear", release: [] });
+    expect(
+      planConnectionReset(
+        GITHUB_CONNECTION,
+        [{ key: "ws_1", state: at({ connection: GITHUB_CONNECTION, repository: made(ORG), status: "ready" }) }],
+        NOW,
+      ),
+    ).toEqual({ kind: "clear", release: [] });
   });
 
   it("releases a setup that stopped before publishing its repo there", () => {

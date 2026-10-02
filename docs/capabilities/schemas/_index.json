@@ -3145,6 +3145,18 @@
       "consumes": []
     },
     {
+      "name": "list_steering_repo_destinations",
+      "domain": "repository",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "list_studio_findings",
       "domain": "tool",
       "surfaces": [

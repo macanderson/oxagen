@@ -7,11 +7,18 @@
 // above the steps.
 //
 // The way on depends on why the step stopped (#4875):
-//   choose_connection   pick one of the GitHub organizations or GitLab groups
-//                       the setup found, then go on with it
-//   no_connection       install the Oxagen app on a GitHub organization, or
-//                       authorize it where it is installed, then retry
-//   anything else       Retry
+//   choose_connection          pick one of the GitHub organizations or GitLab
+//                              groups the setup found, then go on with it
+//   no_connection              install the Oxagen app on a GitHub organization,
+//                              or authorize it where it is installed, then retry
+//   repository_name_taken      enter another repository name, then retry
+//   unknown_connection,        pick another organization or group, and another
+//   repository_create_refused  name if needed, then retry
+//   anything else              Retry
+//
+// The last three apply to a workspace whose setup has not created its
+// repository yet (#5196). The name field starts on the name the setup tried,
+// and the retry sends only what the person changed.
 //
 // The Host connection step names where steering repos go. Until Oxagen has
 // created a repo there, an owner can switch to a different organization, which
@@ -47,7 +54,17 @@ import { ChoiceGroup } from "@/ui/choice-group";
 import { buttonPrimary, buttonSecondary } from "@/ui/control-styles";
 import { FormAlert } from "@/ui/form-feedback";
 import { GitHubLink, GitLabLink, useNavigate } from "@/ui/navigation";
-import { importWorkspaceSteering, retrySteeringRepoProvision } from "./actions";
+import {
+  importWorkspaceSteering,
+  readSteeringRepoDestinations,
+  retrySteeringRepoProvision,
+} from "./actions";
+import {
+  defaultRepoNameForSlug,
+  repoNameAccepted,
+  steeringRepoDraftOf,
+} from "./destination";
+import { SteeringRepoDestinationFields } from "./destination-fields";
 import { UNANSWERED, useSteeringRepoFailure } from "./failure";
 import { steeringGithubHref } from "./hrefs";
 import { ReauthorizeNotice } from "./reauthorize";
@@ -58,6 +75,9 @@ import {
   STEERING_IMPORT_LEGACY_CONNECTION,
   STEERING_NO_CONNECTION,
   STEERING_REAUTHORIZE,
+  STEERING_REPOSITORY_CREATE_REFUSED,
+  STEERING_REPOSITORY_NAME_TAKEN,
+  STEERING_UNKNOWN_CONNECTION,
   pendingMove,
   type SteeringConnectionPick,
   type SteeringRepoView,
@@ -147,6 +167,77 @@ function ConnectionChooser({
         {pending ? pendingLabel : t("choose.action")}
       </button>
     </div>
+  );
+}
+
+/** What a retry changes about a workspace's steering repo before it exists. */
+type RepoChanges = { name?: string; connection?: SteeringConnectionPick };
+
+/**
+ * A setup that stopped on the name or the place the workspace chose, before
+ * Oxagen created anything (#5196): the Repository name, starting on the name
+ * the setup tried, and, when the place is the problem, the Organization
+ * select. Retry sends the name only when the person changed it.
+ */
+function RetryWithChanges({
+  org,
+  ws,
+  view,
+  withPlaces,
+  pending,
+  pendingLabel,
+  onRetry,
+}: {
+  org: string;
+  ws: string;
+  view: SteeringRepoView;
+  /** Draw the Organization select too. */
+  withPlaces: boolean;
+  pending: boolean;
+  pendingLabel: string;
+  onRetry: (changes: RepoChanges) => void;
+}) {
+  const t = useTranslations("repositories.steeringRepo.provisioning");
+  const tried = view.requestedName ?? defaultRepoNameForSlug(ws);
+  return (
+    <form
+      noValidate
+      data-testid="steering-repo-change"
+      aria-label={t("retry")}
+      className="flex w-full flex-col items-start gap-3"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (pending || !repoNameAccepted(event.currentTarget)) return;
+        const draft = steeringRepoDraftOf(new FormData(event.currentTarget));
+        const name =
+          draft?.name !== undefined && draft.name !== tried
+            ? draft.name
+            : undefined;
+        onRetry({
+          ...(name === undefined ? {} : { name }),
+          ...(draft?.connection === undefined
+            ? {}
+            : { connection: draft.connection }),
+        });
+      }}
+    >
+      <SteeringRepoDestinationFields
+        org={org}
+        load={readSteeringRepoDestinations}
+        defaultName={tried}
+        idPrefix="steering-repo-change"
+        places={withPlaces}
+      />
+      <button
+        type="submit"
+        data-testid="steering-repo-retry"
+        data-touch-target=""
+        disabled={pending}
+        className={buttonSecondary}
+      >
+        {pending ? pendingLabel : t("retry")}
+      </button>
+    </form>
   );
 }
 
@@ -316,12 +407,13 @@ export function SteeringRepoProvisioning({
       connection?: SteeringConnectionPick;
       startFresh?: true;
       resetConnection?: true;
+      name?: string;
     } = {},
   ) {
     if (pending) return;
     setPending(true);
     setFailure(null);
-    const { connection, resetConnection } = options;
+    const { connection, resetConnection, name } = options;
     const capability = importing ? IMPORT_CAPABILITY : RETRY_CAPABILITY;
     const bare = Object.keys(options).length === 0;
     try {
@@ -343,11 +435,14 @@ export function SteeringRepoProvisioning({
         navigate.refresh();
       } else {
         const result =
-          connection === undefined && resetConnection === undefined
+          connection === undefined &&
+          resetConnection === undefined &&
+          name === undefined
             ? await retrySteeringRepoProvision(org, ws)
             : await retrySteeringRepoProvision(org, ws, {
                 ...(connection === undefined ? {} : { connection }),
                 ...(resetConnection === undefined ? {} : { resetConnection }),
+                ...(name === undefined ? {} : { name }),
               });
         if (result.ok) navigate.refresh();
         else setFailure(failureText(result, capability));
@@ -363,6 +458,17 @@ export function SteeringRepoProvisioning({
   const code = view.error?.code ?? null;
   const choosing =
     code === STEERING_CHOOSE_CONNECTION && view.connectionChoices.length > 0;
+  // A workspace setup that stopped on its name or its place before Oxagen
+  // created anything takes a new name, and a new place where the place is the
+  // problem (#5196).
+  const placeStopped =
+    code === STEERING_UNKNOWN_CONNECTION ||
+    code === STEERING_REPOSITORY_CREATE_REFUSED;
+  const renaming =
+    ws !== null &&
+    !importing &&
+    view.repository === null &&
+    (code === STEERING_REPOSITORY_NAME_TAKEN || placeStopped);
   // An owner may switch organizations until Oxagen has created a repo in the
   // stored one (Mac, 2026-10-01). A repo whose setup stopped before its first
   // version, such as on a plan that cannot protect its branches, does not
@@ -467,6 +573,18 @@ export function SteeringRepoProvisioning({
                     pendingLabel={pendingLabel}
                     onPick={(pick) => {
                       void goOn({ connection: pick });
+                    }}
+                  />
+                ) : renaming && ws !== null ? (
+                  <RetryWithChanges
+                    org={org}
+                    ws={ws}
+                    view={view}
+                    withPlaces={placeStopped}
+                    pending={pending}
+                    pendingLabel={pendingLabel}
+                    onRetry={(changes) => {
+                      void goOn(changes);
                     }}
                   />
                 ) : (

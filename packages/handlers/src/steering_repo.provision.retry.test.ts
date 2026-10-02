@@ -41,10 +41,34 @@ function failedState(overrides: Partial<SteeringRepoState> = {}): SteeringRepoSt
     deployment_id: 9,
     binding_id: "rpb_1",
     connection_choices: [],
+    requested_name: null,
+    requested_connection: null,
+    connection: null,
     updated_at: "2026-09-28T00:00:00.000Z",
     ...overrides,
   };
 }
+
+/** A workspace setup that stopped before it created a repository. */
+function stoppedBeforeRepo(overrides: Partial<SteeringRepoState> = {}): SteeringRepoState {
+  return failedState({
+    status: "blocked",
+    step: "pick_connection",
+    failed_step: "create_repository",
+    error: { code: "repository_name_taken", message: "acme already has it." },
+    attempt: 4,
+    candidate: "oxagen-acme-4",
+    repository: null,
+    commit_sha: null,
+    deployment_id: null,
+    binding_id: null,
+    ...overrides,
+  });
+}
+
+const ORG_ONLY_CTX = makeCTX({
+  workspaceId: "00000000-0000-0000-0000-000000000000",
+});
 
 type SendImpl = (data: SteeringRepoProvisionRequest, eventId: string) => Promise<void>;
 
@@ -348,15 +372,145 @@ describe("retry_steering_repo_provision handler", () => {
       expect(h.sends).toEqual([]);
     });
 
-    it("refuses a connection the setup did not find, and changes nothing", async () => {
+    it("refuses, for the organization's own setup, a connection the setup did not find, before any reset", async () => {
+      const h = harness(null);
+      h.states.set("org_1", choosing());
+      const handler = createRetrySteeringRepoProvisionHandler(h.deps);
+      await expect(
+        handler(
+          steeringRepoProvisionRetry.input.parse({
+            connection: { provider: "github", id: 99 },
+            resetConnection: true,
+          }),
+          ORG_ONLY_CTX,
+        ),
+      ).rejects.toMatchObject({ code: "conflict", reason: "unknown_connection" });
+      expect(h.resets).toEqual([]);
+      expect(h.connections).toEqual([]);
+      expect(h.saves).toEqual([]);
+      expect(h.sends).toEqual([]);
+    });
+
+    it("takes, for a workspace, a connection the setup did not record as the workspace's own request", async () => {
       const h = harness(choosing());
       await expect(
-        retry(h, { connection: { provider: "github", id: 99 } }),
-      ).rejects.toMatchObject({ code: "conflict", reason: "unknown_connection" });
-      await expect(
-        retry(h, { connection: { provider: "gitlab", id: 11 } }),
-      ).rejects.toBeInstanceOf(HandlerError);
+        retry(h, { connection: { provider: "gitlab", id: 42 } }),
+      ).resolves.toEqual({ status: "provisioning" });
+      // The job checks the place. The organization's connection is untouched.
       expect(h.connections).toEqual([]);
+      expect(h.states.get("ws_1")).toMatchObject({
+        status: "provisioning",
+        error: null,
+        requested_connection: { provider: "gitlab", id: 42 },
+        connection: null,
+        connection_choices: [],
+      });
+      expect(h.sends).toHaveLength(1);
+    });
+  });
+
+  describe("with a new name or place before the repository exists", () => {
+    const retry = (h: Harness, input: unknown, ctx = TEST_CTX) =>
+      createRetrySteeringRepoProvisionHandler(h.deps)(
+        steeringRepoProvisionRetry.input.parse(input),
+        ctx,
+      );
+
+    it("takes a new name and starts the name over at its first attempt", async () => {
+      const h = harness(stoppedBeforeRepo());
+      await expect(retry(h, { name: "acme-steering" })).resolves.toEqual({
+        status: "provisioning",
+      });
+      expect(h.saves).toHaveLength(1);
+      expect(h.saves[0]?.state).toMatchObject({
+        status: "provisioning",
+        error: null,
+        requested_name: "acme-steering",
+        attempt: 1,
+        candidate: null,
+        // A name alone leaves the place as it was.
+        requested_connection: null,
+      });
+      expect(h.connections).toEqual([]);
+      expect(h.sends).toHaveLength(1);
+      expect(h.sends[0]?.data).toEqual({
+        orgId: "org_1",
+        workspaceId: "ws_1",
+        actorUserId: "u_1",
+      });
+    });
+
+    it("takes a new place, drops the place the last run resolved, and stores nothing on the organization", async () => {
+      const resolved: SteeringConnection = {
+        provider: "github",
+        installation_id: 11,
+        account_login: "acme",
+      };
+      const h = harness(
+        stoppedBeforeRepo({
+          error: { code: "repository_create_refused", message: "Due to policy." },
+          requested_connection: { provider: "github", id: 11 },
+          connection: resolved,
+        }),
+      );
+      await expect(
+        retry(h, { connection: { provider: "gitlab", id: 42 } }),
+      ).resolves.toEqual({ status: "provisioning" });
+      expect(h.saves[0]?.state).toMatchObject({
+        requested_connection: { provider: "gitlab", id: 42 },
+        connection: null,
+        connection_choices: [],
+        // A place alone leaves the name and its count as they were.
+        requested_name: null,
+        attempt: 4,
+      });
+      expect(h.connections).toEqual([]);
+      expect(h.sends).toHaveLength(1);
+    });
+
+    it("takes a name and a place together", async () => {
+      const h = harness(stoppedBeforeRepo());
+      await retry(h, {
+        name: "acme-steering",
+        connection: { provider: "gitlab", id: 42 },
+      });
+      expect(h.saves[0]?.state).toMatchObject({
+        requested_name: "acme-steering",
+        requested_connection: { provider: "gitlab", id: 42 },
+        connection: null,
+        attempt: 1,
+      });
+    });
+
+    it("refuses a new name once the repository exists, and changes nothing", async () => {
+      const h = harness(failedState({ status: "blocked" }));
+      await expect(retry(h, { name: "acme-steering" })).rejects.toMatchObject({
+        code: "conflict",
+        reason: "repository_exists",
+      });
+      await expect(
+        retry(h, { connection: { provider: "gitlab", id: 42 } }),
+      ).rejects.toMatchObject({ reason: "repository_exists" });
+      expect(h.saves).toEqual([]);
+      expect(h.sends).toEqual([]);
+    });
+
+    it("refuses a new name while the setup is still running, and changes nothing", async () => {
+      const h = harness(stoppedBeforeRepo({ status: "provisioning", error: null }));
+      await expect(retry(h, { name: "acme-steering" })).rejects.toMatchObject({
+        code: "conflict",
+        reason: "setup_running",
+      });
+      expect(h.saves).toEqual([]);
+      expect(h.sends).toEqual([]);
+    });
+
+    it("refuses a name for the organization's own setup, which is always oxagen-config", async () => {
+      const h = harness(null);
+      h.states.set("org_1", stoppedBeforeRepo());
+      await expect(
+        retry(h, { name: "acme-config" }, ORG_ONLY_CTX),
+      ).rejects.toMatchObject({ code: "conflict", reason: "organization_repo_fixed" });
       expect(h.saves).toEqual([]);
       expect(h.sends).toEqual([]);
     });

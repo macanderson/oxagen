@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
-// The first workspace's name form as an operator drives it: the one field,
-// the re-read once `create_workspace` answers, and every refusal the action
-// can give: the name errors under the field, a denial and a failure above the
-// form. Axe runs after every test.
+// The first workspace's name form as an operator drives it: the name, the
+// steering repo's Organization and Repository name (#5196), the re-read once
+// `create_workspace` answers, and every refusal the action can give: the name
+// errors under the field, a denial and a failure above the form. Axe runs
+// after every test.
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
@@ -19,7 +20,33 @@ vi.mock("next/link", () => ({
 }));
 const createFirstWorkspace =
   vi.fn<typeof import("../actions").createFirstWorkspace>();
-vi.mock("../actions", () => ({ createFirstWorkspace }));
+const readFirstWorkspaceDestinations =
+  vi.fn<typeof import("../actions").readFirstWorkspaceDestinations>();
+vi.mock("../actions", () => ({
+  createFirstWorkspace,
+  readFirstWorkspaceDestinations,
+}));
+
+const NO_PLACES = {
+  destinations: [],
+  default: null,
+  defaultName: null,
+  reauthorize: [],
+};
+const PLACES = {
+  destinations: [
+    { provider: "github" as const, id: 12, name: "acme", kind: "organization" as const },
+    { provider: "github" as const, id: 22, name: "acme-labs", kind: "organization" as const },
+  ],
+  default: {
+    provider: "github" as const,
+    id: 22,
+    name: "acme-labs",
+    kind: "organization" as const,
+  },
+  defaultName: null,
+  reauthorize: [],
+};
 
 const { FirstWorkspaceForm } = await import("./first-workspace-form");
 
@@ -39,6 +66,9 @@ async function create(name = "Core platform") {
 beforeEach(() => {
   router.refresh.mockReset();
   createFirstWorkspace.mockReset();
+  readFirstWorkspaceDestinations
+    .mockReset()
+    .mockResolvedValue({ ok: true, value: NO_PLACES });
 });
 afterEach(async () => {
   try {
@@ -49,15 +79,27 @@ afterEach(async () => {
 });
 
 describe("FirstWorkspaceForm", () => {
-  it("asks for the name alone, creates the workspace, and re-reads the page", async () => {
+  it("asks for the name and the repository name, creates the workspace, and re-reads the page", async () => {
     createFirstWorkspace.mockResolvedValueOnce({
       ok: true,
       value: { slug: "core-platform" },
     });
     renderForm();
-    expect(screen.getAllByRole("textbox")).toHaveLength(1);
+    expect(screen.getAllByRole("textbox")).toHaveLength(2);
+    // With nothing connected yet there is no Organization select, and the
+    // form sends no place, so the job takes the organization's default.
+    expect(
+      await screen.findByTestId("ob-workspace-steering-connection-none"),
+    ).toHaveTextContent(
+      "Oxagen creates the repository in the GitHub organization or GitLab group you connect.",
+    );
+    expect(screen.queryByLabelText("Organization")).toBeNull();
     await create();
-    expect(createFirstWorkspace).toHaveBeenCalledWith("acme", "Core platform");
+    expect(createFirstWorkspace).toHaveBeenCalledWith(
+      "acme",
+      "Core platform",
+      { name: "oxagen-core-platform" },
+    );
     expect(router.refresh).toHaveBeenCalledTimes(1);
     expect(screen.queryByTestId("first-workspace-refused")).toBeNull();
     expect(screen.getByLabelText("Workspace name")).not.toHaveAttribute(
@@ -95,6 +137,119 @@ describe("FirstWorkspaceForm", () => {
       expect(screen.queryByTestId("first-workspace-refused")).toBeNull();
     },
   );
+
+  it("follows the workspace name with the repository name until the person edits it", async () => {
+    renderForm();
+    const workspace = screen.getByLabelText("Workspace name");
+    const repo = screen.getByLabelText("Repository name");
+    expect(repo).toHaveValue("");
+    await userEvent.type(workspace, "Core");
+    expect(repo).toHaveValue("oxagen-core");
+    await userEvent.type(workspace, " platform");
+    expect(repo).toHaveValue("oxagen-core-platform");
+    await userEvent.clear(repo);
+    await userEvent.type(repo, "steering-core");
+    await userEvent.type(workspace, " EU");
+    expect(repo).toHaveValue("steering-core");
+  });
+
+  it("starts the Organization select on the default and sends the pick with the name", async () => {
+    readFirstWorkspaceDestinations.mockResolvedValue({
+      ok: true,
+      value: PLACES,
+    });
+    createFirstWorkspace.mockResolvedValueOnce({
+      ok: true,
+      value: { slug: "core-platform" },
+    });
+    renderForm();
+    expect(readFirstWorkspaceDestinations).toHaveBeenCalledWith("acme");
+    const select = await screen.findByTestId("ob-workspace-steering-connection");
+    expect(select).toHaveAccessibleName("Organization");
+    expect(select).toHaveValue("github:22");
+    await userEvent.selectOptions(select, "github:12");
+    await create();
+    expect(createFirstWorkspace).toHaveBeenCalledWith("acme", "Core platform", {
+      name: "oxagen-core-platform",
+      connection: { provider: "github", id: 12 },
+    });
+  });
+
+  it("marks a personal account, and names the host when GitHub and GitLab both appear", async () => {
+    readFirstWorkspaceDestinations.mockResolvedValue({
+      ok: true,
+      value: {
+        destinations: [
+          { provider: "github", id: 13, name: "mac", kind: "user" },
+          { provider: "gitlab", id: 42, name: "acme/platform", kind: "organization" },
+        ],
+        default: null,
+        defaultName: null,
+        reauthorize: ["github"],
+      },
+    });
+    renderForm();
+    const select = await screen.findByTestId("ob-workspace-steering-connection");
+    expect(
+      [...select.querySelectorAll("option")].map((o) => o.textContent),
+    ).toEqual(["mac (GitHub personal account)", "acme/platform (GitLab)"]);
+    // No default is stored, so the first place starts picked.
+    expect(select).toHaveValue("github:13");
+    expect(screen.getByTestId("ob-workspace-steering-repo")).toHaveTextContent(
+      "GitHub refused Oxagen's stored authorization",
+    );
+  });
+
+  it("still creates the workspace when the places do not load, and sends no place (negative)", async () => {
+    readFirstWorkspaceDestinations.mockResolvedValue({
+      ok: false,
+      reason: "unavailable",
+      code: "github_unreachable",
+    });
+    createFirstWorkspace.mockResolvedValueOnce({
+      ok: true,
+      value: { slug: "core-platform" },
+    });
+    renderForm();
+    expect(
+      await screen.findByTestId("ob-workspace-steering-connection-failed"),
+    ).toHaveTextContent(
+      "The organizations did not load (github_unreachable). Oxagen uses the organization's default.",
+    );
+    await create();
+    expect(createFirstWorkspace).toHaveBeenCalledWith("acme", "Core platform", {
+      name: "oxagen-core-platform",
+    });
+  });
+
+  it("refuses a repository name the contract would refuse before it sends anything (negative)", async () => {
+    renderForm();
+    await userEvent.type(screen.getByLabelText("Workspace name"), "Core platform");
+    const repo = screen.getByLabelText("Repository name");
+    await userEvent.clear(repo);
+    await userEvent.type(repo, "oxagen-config");
+    expect(repo).toHaveAttribute("aria-invalid", "true");
+    await userEvent.click(screen.getByRole("button", { name: "Create" }));
+    expect(createFirstWorkspace).not.toHaveBeenCalled();
+  });
+
+  it("puts the server's refusal of the repository name under that field (negative)", async () => {
+    createFirstWorkspace.mockResolvedValueOnce({
+      ok: false,
+      reason: "invalid",
+      code: "invalid_input",
+      field: "steeringRepo.name",
+    });
+    renderForm();
+    await create();
+    const repo = screen.getByLabelText("Repository name");
+    expect(repo).toHaveAttribute("aria-invalid", "true");
+    expect(repo).toHaveAccessibleDescription(/Use up to 100 letters/);
+    expect(screen.getByLabelText("Workspace name")).not.toHaveAttribute(
+      "aria-invalid",
+    );
+    expect(screen.queryByTestId("first-workspace-refused")).toBeNull();
+  });
 
   it("says the role cannot create a workspace when the kernel denies it (negative)", async () => {
     createFirstWorkspace.mockResolvedValueOnce({

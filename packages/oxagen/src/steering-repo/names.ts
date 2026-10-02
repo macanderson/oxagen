@@ -41,6 +41,38 @@ export function steeringRepoName(workspaceSlug: string, n = 1): string {
   return n === 1 ? base : `${base}-${n}`;
 }
 
+/**
+ * The name a new workspace's steering repo gets unless a person changes it:
+ * `oxagen-<slug>`, or `oxagen-config-2` for the `config` workspace, whose
+ * first name is the organization's own repository.
+ */
+export function defaultSteeringRepoName(workspaceSlug: string): string {
+  const first = steeringRepoName(workspaceSlug);
+  return first === ORGANIZATION_REPO_NAME
+    ? steeringRepoName(workspaceSlug, 2)
+    : first;
+}
+
+/**
+ * A steering repo name a person chooses. It fits GitHub and GitLab both: up to
+ * 100 letters, digits, `.`, `_`, and `-`, starting and ending with a letter or
+ * digit, with no two symbols in a row, and not ending in `.git` or `.atom`.
+ */
+export const STEERING_REPO_NAME_PATTERN =
+  /^(?!.*\.(?:git|atom)$)(?=.{1,100}$)[A-Za-z0-9]+(?:[._-][A-Za-z0-9]+)*$/;
+
+/**
+ * Whether a person may give a workspace's steering repo this name. The
+ * organization's `oxagen-config` is reserved, in any letter case, because
+ * GitHub and GitLab compare names that way.
+ */
+export function isWorkspaceSteeringRepoName(name: string): boolean {
+  return (
+    STEERING_REPO_NAME_PATTERN.test(name) &&
+    name.toLowerCase() !== ORGANIZATION_REPO_NAME
+  );
+}
+
 // ── Branches ─────────────────────────────────────────────────────────────────
 
 /**

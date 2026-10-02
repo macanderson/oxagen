@@ -6471,6 +6471,20 @@ type Messages = {
           gitlab: string;
         };
       };
+      destination: {
+        organization: string;
+        loading: string;
+        none: string;
+        failed: string;
+        reauthorizeGithub: string;
+        reauthorizeGitlab: string;
+        optionPersonal: string;
+        optionHost: string;
+        optionHostPersonal: string;
+        repoName: string;
+        repoNameHint: string;
+        repoNameInvalid: string;
+      };
     };
   };
   run: {
