@@ -4,7 +4,13 @@
  * the database and are covered in auto-approval.pg.test.ts.
  */
 import { describe, expect, it } from "vitest";
-import { inputDigest, UndigestibleInputError } from "./call-facts";
+import { drizzle } from "drizzle-orm/pg-proxy";
+import { schema, type Tx } from "@oxagen/database";
+import {
+  inputDigest,
+  lastHumanApprovalOf,
+  UndigestibleInputError,
+} from "./call-facts";
 
 describe("inputDigest", () => {
   it("is stable across key order and sensitive to every value", () => {
@@ -190,5 +196,40 @@ describe("inputDigest", () => {
     const bare = Object.create(null) as Record<string, unknown>;
     bare.a = 1;
     expect(inputDigest(bare)).toBe(inputDigest({ a: 1 }));
+  });
+});
+
+describe("lastHumanApprovalOf", () => {
+  // The rows are proven in approval-in-app.pg.test.ts. This pins the
+  // statement on every run: a person's answer to an approval the in-app
+  // assistant parked is not a standing approval for a workspace rule
+  // (ADR-235, ruled on 2026-10-01).
+  it("reads a person's approval of this exact call, less any in-app approval", async () => {
+    const statements: Array<{ sql: string; params: unknown[] }> = [];
+    const db = drizzle(
+      async (sql, params) => {
+        statements.push({ sql, params });
+        return { rows: [] };
+      },
+      { schema },
+    );
+    await expect(
+      lastHumanApprovalOf(
+        db as unknown as Tx,
+        "0192d4a8-7c1e-7a00-8000-0000000000f2",
+        "archive_thing",
+        "digest",
+      ),
+    ).resolves.toBeNull();
+    const [{ sql, params }] = statements as [(typeof statements)[number]];
+    expect(sql).toMatch(/"approval_requests"\."capability_name" = \$\d+/);
+    expect(sql).toMatch(/"approval_requests"\."input_digest" = \$\d+/);
+    expect(sql).toMatch(/"approval_requests"\."resolved_by_user_id" is not null/);
+    expect(sql).toMatch(
+      /not exists \(select 1 from "agent"\."agent_runs" as "in_app_run"/,
+    );
+    expect(params).toEqual(
+      expect.arrayContaining(["archive_thing", "digest", "chat", "api-chat"]),
+    );
   });
 });

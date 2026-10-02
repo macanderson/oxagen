@@ -132,6 +132,11 @@ describe.skipIf(!process.env.DATABASE_URL)(
     const wsA2 = crypto.randomUUID();
     const wsB1 = crypto.randomUUID();
     const requesterId = crypto.randomUUID();
+    // A second member of the workspace, who did not ask the assistant.
+    const otherMemberId = crypto.randomUUID();
+    // The in-app assistant's turn: a run on the `chat` surface (ADR-235).
+    const inAppRunId = crypto.randomUUID();
+    let inAppRunPublicId = "";
     const conversationId = crypto.randomUUID();
     const messageId = crypto.randomUUID();
     const orphanMessageId = crypto.randomUUID();
@@ -140,10 +145,14 @@ describe.skipIf(!process.env.DATABASE_URL)(
     let requesterPublicId = "";
     const ids: Record<string, string> = {};
 
-    const ctx = (orgId: string, workspaceId: string) => ({
+    const ctx = (
+      orgId: string,
+      workspaceId: string,
+      userId: string | null = null,
+    ) => ({
       orgId,
       workspaceId,
-      userId: null,
+      userId,
       apiKeyId: null,
       requestId: `req_${tag}`,
       surface: "api" as const,
@@ -158,11 +167,12 @@ describe.skipIf(!process.env.DATABASE_URL)(
       orgId: string,
       workspaceId: string,
       input: Parameters<typeof agentApprovalList.input.parse>[0] = {},
+      userId: string | null = null,
     ) =>
       runInTenantScope({ orgId, workspaceId }, () =>
         agentApprovalListHandler(
           agentApprovalList.input.parse(input),
-          ctx(orgId, workspaceId),
+          ctx(orgId, workspaceId, userId),
         ),
       );
 
@@ -177,6 +187,22 @@ describe.skipIf(!process.env.DATABASE_URL)(
           })
           .returning({ publicId: schema.users.publicId });
         requesterPublicId = user!.publicId;
+        await tx.insert(schema.users).values({
+          id: otherMemberId,
+          email: `approvals-other-${tag}@list.test`,
+          status: "active",
+        });
+        const [inAppRun] = await tx
+          .insert(schema.agentRuns)
+          .values({
+            id: inAppRunId,
+            orgId: orgA,
+            workspaceId: wsA1,
+            surface: "chat",
+            spec: {},
+          })
+          .returning({ publicId: schema.agentRuns.publicId });
+        inAppRunPublicId = inAppRun!.publicId;
         await tx.insert(schema.conversations).values({
           id: conversationId,
           orgId: orgA,
@@ -261,6 +287,18 @@ describe.skipIf(!process.env.DATABASE_URL)(
               runPublicId: RUN_ID,
               expiresAt: inMinutes(20),
             },
+            // Pending, parked by the in-app assistant in the requester's
+            // turn: it belongs to the requester alone (ADR-235).
+            {
+              orgId: orgA,
+              workspaceId: wsA1,
+              messageId,
+              capabilityName: "in_app_call",
+              inputPreview: {},
+              riskLevel: "high",
+              runPublicId: inAppRunPublicId,
+              expiresAt: inMinutes(3),
+            },
             // Pending in the org's other workspace.
             {
               orgId: orgA,
@@ -301,7 +339,12 @@ describe.skipIf(!process.env.DATABASE_URL)(
         await tx
           .delete(schema.conversations)
           .where(eq(schema.conversations.id, conversationId));
-        await tx.delete(schema.users).where(eq(schema.users.id, requesterId));
+        await tx
+          .delete(schema.agentRuns)
+          .where(eq(schema.agentRuns.id, inAppRunId));
+        await tx
+          .delete(schema.users)
+          .where(inArray(schema.users.id, [requesterId, otherMemberId]));
       });
     });
 
@@ -385,6 +428,40 @@ describe.skipIf(!process.env.DATABASE_URL)(
     it("does not leak another workspace's run-scoped approval (negative)", async () => {
       const out = await list(orgA, wsA2, { runId: RUN_ID });
       expect(out.items).toEqual([]);
+    });
+
+    // ADR-235, ruled on 2026-10-01: an approval the in-app assistant parked
+    // goes only to the person who asked. The run-scoped cases above name a
+    // run with no `agent_runs` row, which is not in-app, and stay as they were.
+    it("leaves the in-app assistant's approval off the workspace's queue, for everyone", async () => {
+      for (const userId of [null, requesterId, otherMemberId]) {
+        const out = await list(orgA, wsA1, {}, userId);
+        expect(out.items.map((i) => i.tool)).not.toContain("in_app_call");
+      }
+    });
+
+    it("shows the person who asked their in-app approval under its run", async () => {
+      const out = await list(
+        orgA,
+        wsA1,
+        { runId: inAppRunPublicId },
+        requesterId,
+      );
+      expect(out.items.map((i) => i.id)).toEqual([ids["in_app_call"]]);
+      expect(out.items[0]!.requester).toBe(requesterPublicId);
+      expect(out.items[0]!.runId).toBe(inAppRunPublicId);
+    });
+
+    it("shows another member nothing under that run, and a caller with no user nothing (negative)", async () => {
+      const other = await list(
+        orgA,
+        wsA1,
+        { runId: inAppRunPublicId },
+        otherMemberId,
+      );
+      expect(other).toEqual({ items: [], nextCursor: null });
+      const nobody = await list(orgA, wsA1, { runId: inAppRunPublicId });
+      expect(nobody).toEqual({ items: [], nextCursor: null });
     });
   },
 );

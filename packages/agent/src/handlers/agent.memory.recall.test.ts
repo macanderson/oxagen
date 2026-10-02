@@ -5,6 +5,8 @@ const mocks = vi.hoisted(() => ({
   recallMemoriesMock: vi.fn(),
   // reinforceMemory is called fire-and-forget after each recall; must be in the mock.
   reinforceMemoryMock: vi.fn(),
+  recordExecutionMock: vi.fn(),
+  recordCitationMock: vi.fn(),
   isKnowledgeGraphEnabledMock: vi.fn(),
   insertMemoryChangeMock: vi.fn(),
 }));
@@ -36,6 +38,8 @@ vi.mock("../memory/embed", () => ({ embedText: mocks.embedTextMock }));
 vi.mock("../memory/neo4j", () => ({
   recallMemories: mocks.recallMemoriesMock,
   reinforceMemory: mocks.reinforceMemoryMock,
+  recordExecution: mocks.recordExecutionMock,
+  recordCitation: mocks.recordCitationMock,
 }));
 vi.mock("../runtime/knowledge-graph", () => ({
   isKnowledgeGraphEnabled: mocks.isKnowledgeGraphEnabledMock,
@@ -51,6 +55,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { TEST_CTX as CTX, makeCTX } from "../test-utils/fixtures";
+import { createOxagenAssistantBinding } from "@oxagen/oxagen/oxagen-assistant";
 
 describe("agent.memory.recall handler", () => {
   beforeEach(() => {
@@ -59,6 +64,10 @@ describe("agent.memory.recall handler", () => {
     mocks.reinforceMemoryMock.mockClear();
     mocks.isKnowledgeGraphEnabledMock.mockClear();
     mocks.insertMemoryChangeMock.mockClear();
+    mocks.recordExecutionMock.mockClear();
+    mocks.recordCitationMock.mockClear();
+    mocks.recordExecutionMock.mockResolvedValue({ executionId: "ex_1" });
+    mocks.recordCitationMock.mockResolvedValue(undefined);
     // Default back to enabled for each test.
     mocks.isKnowledgeGraphEnabledMock.mockReturnValue(true);
   });
@@ -148,6 +157,39 @@ describe("agent.memory.recall handler", () => {
       memoryId: "m_1",
       reinforcementAmount: 5,
     });
+  });
+
+  // ADR-235, item 9 of Mac's ruling: a recall the in-app assistant makes
+  // reads the memories and changes nothing. Reinforcement and citations shape
+  // what the workspace promotes into steering.
+  it("neither reinforces nor cites a memory the assistant recalls", async () => {
+    const assistantCtx = {
+      ...CTX,
+      oxagenAssistant: createOxagenAssistantBinding({ requestId: "r_turn" }),
+    };
+    const res = await agentMemoryRecallHandler(
+      { query: "find me", limit: 5, executionRef: "msg_turn" },
+      assistantCtx,
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(res.memories.map((m) => m.id)).toEqual(["m_1"]);
+    expect(mocks.reinforceMemoryMock).not.toHaveBeenCalled();
+    expect(mocks.insertMemoryChangeMock).not.toHaveBeenCalled();
+    expect(mocks.recordExecutionMock).not.toHaveBeenCalled();
+    expect(mocks.recordCitationMock).not.toHaveBeenCalled();
+  });
+
+  it("reinforces and cites a memory any other caller recalls (negative)", async () => {
+    await agentMemoryRecallHandler(
+      { query: "find me", limit: 5, executionRef: "msg_turn" },
+      CTX,
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(mocks.reinforceMemoryMock).toHaveBeenCalledOnce();
+    expect(mocks.insertMemoryChangeMock).toHaveBeenCalledOnce();
+    expect(mocks.recordExecutionMock).toHaveBeenCalledOnce();
   });
 
   it("returns { memories: [] } immediately when knowledge graph is disabled", async () => {

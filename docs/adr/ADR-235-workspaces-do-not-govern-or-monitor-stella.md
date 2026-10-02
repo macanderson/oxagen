@@ -1,6 +1,8 @@
 # ADR-235: Workspaces do not govern or monitor Stella
 
-- **Status:** Accepted
+- **Status:** Accepted. Amended 2026-10-01 with the maintainer's ruling on
+  every limit §5 listed, and on the Stella CLI. Amended 2026-10-02 with the
+  maintainer's ruling on the assistant's spend and on controls.
 - **Date:** 2026-09-30
 - **Owners:** platform
 - **Decided by:** the maintainer, 2026-09-30, answering #4310: "the in app
@@ -13,6 +15,12 @@
   `packages/oxagen/src/kernel.ts` (the decision-rules gate),
   `packages/agent/src/runtime/assistant-turn.ts`,
   `packages/agent/src/runtime/approval-resume.ts`.
+
+> **Amended 2026-10-01 and 2026-10-02.** The maintainer ruled on the
+> thirteen open items this ADR first left for him, on the Stella CLI, and then
+> on the assistant's spend and on controls. The amendments at the end state
+> each ruling and what the code does under it. Where they and §5 disagree, the
+> amendments hold.
 
 ## Context
 
@@ -166,3 +174,121 @@ pinned to two producers by a test.
 - `createApprovalRequest` still accepts `ruleIds` and `ruleDigest`, and no
   production caller passes them now. Rows parked before this ADR keep theirs,
   and `list_approvals` still shows the rule that parked them.
+
+## Amendment of 2026-10-01: the full ruling
+
+### The ruling
+
+The maintainer ruled on 2026-10-01, in two halves.
+
+- **Oxagen's in-app assistant.** Customers must never be able to configure
+  governance or budgets against the assistant, from any entry point: the web
+  app, an API key, or MCP. The assistant feeds no workspace monitoring.
+- **The Stella CLI.** The open-source Stella coding agent a customer runs as a
+  CLI to build their own product is a customer agent. It registers and is
+  governed exactly like Claude Code and Codex.
+
+The two share a name, so nothing in the exemption keys on the word "stella".
+It keys on the kernel-minted binding, on the `inAppAssistant` contract flag,
+and on the in-app run surfaces `chat` and `api-chat`. Tests pin both halves:
+`src/test/oxagen-assistant-field.test.ts` prints the exemption code without
+comments and finds no "stella" in it, and the tacho policy, host bundle, run
+list, and runtime tests give the Stella CLI the same answers as Claude Code and
+Codex.
+
+### What each item does now
+
+1. **Every turn carries the binding.** A turn an API key starts gets one too.
+   `assistantBindingFor` mints it for every adapter.
+2. **The assistant's own contracts skip the rules on every surface.** A
+   contract declares `inAppAssistant: true`, and the kernel skips the
+   decision-rules gate for it whatever the caller carries. That covers the
+   call that starts a turn, which an adapter makes before the turn mints a
+   binding. An arch test pins the sixteen contracts that carry the flag: the
+   `assistant.*` contracts and the conversations the assistant keeps.
+3. **Customer kill switches do not reach the assistant.** A Stella call
+   answers only to a switch on the assistant's own agent
+   (`assistantOwnSwitches`, used by the per-call gate and the belt).
+   `set_kill_switch` refuses to turn a switch on or off against the managed
+   assistant agent. Oxagen's own switch is the platform-only
+   `set_assistant_switch`, run from `pnpm assistant:switch`. It writes the same
+   `agent` deny row, and `readAssistantAgentState` enforces it. No such switch
+   existed before. This ADR chose that shape under SCR-002: it reuses the
+   switch row the turn already reads, and the platform-operator binding
+   (INV-31) keeps it out of every customer surface. A switch a customer turned
+   on before this amendment still stops the assistant until Oxagen turns it
+   off with `set_assistant_switch`, which clears every `agent` switch on the
+   assistant agent.
+4. **Parked approvals reach only the person who asked.** An approval whose run
+   is on an in-app surface stays off Fleet, the nav count, and approver
+   notifications. Only the person who asked can answer it, and anyone else
+   gets the answer for an unknown id. A person's approval
+   of a Stella row never opens a workspace rule's standing window for a
+   customer agent's identical call.
+5. **The assistant's runs stay off workspace lists.** A single-run read of an
+   in-app run answers as not found for anyone but the person who asked.
+6. **Run enrichment skips assistant runs.** The sweep leaves out the in-app
+   surfaces, so no paid summary is made for a Stella turn.
+7. **The execution record stays internal.** Workspace-facing execution reads
+   leave out the assistant's executions. A call carrying the binding reads
+   only those of the person it acts for, so the assistant reads that person's
+   history and no one else's.
+8. **The security event stays, tagged.** Each security event of a Stella call
+   carries `detail.oxagenAssistant: true`. The event is the person's own action
+   on customer data and the SOC 2 record of it.
+9. **No workspace memory.** The turn injects no recalled memory, and a recall
+   the assistant makes reinforces and cites nothing.
+10. **No customer-configured budget.** The turn reads neither the person's turn
+    budget nor the workspace's, the kernel skips the customer's spend ceilings
+    for a Stella call and for the assistant's own contracts on every surface,
+    and the approval resume no longer checks them. The
+    credit gate, the assistant spend cap, the billing admission gate, and
+    invoice billing are Oxagen's and still apply. The SSE route accepts a
+    `budget` field and ignores it.
+11. **The titler uses Oxagen's prompt only.** The workspace's
+    `conversation.title` override and its instructions no longer reach it.
+12. **The assistant keeps its own retention policy.** Its
+    `retention_policy_versions` rows carry `subject = 'oxagen_assistant'`, and
+    every workspace reader reads `subject = 'workspace'` alone.
+13. **The assistant is not listed as the customer's agent.** The Agents list,
+    its tiles, `get_agent`, `search_tools`, and the command menu leave out the
+    managed assistant agent and its `oxagen.assistant` principal. Assigning a
+    role or granting a mandate to it is refused.
+
+### What stays as accounting
+
+The assistant's platform-paid tokens still land in `billing.spend_counters`,
+so they count toward the customer's spend ceilings for the customer's own
+agents. That is accounting of what the organisation spent, not a budget
+against the assistant. It is listed for the maintainer in the PR that ships
+this amendment.
+
+## Amendment of 2026-10-02: spend and controls
+
+### The ruling
+
+The maintainer ruled on 2026-10-02, in two parts.
+
+1. **The assistant's spend is its own line on the Spend page.** The totals
+   include it, so they still match the daily rows and the statements. The
+   line names no run and offers no drill-down, findings, or model analysis.
+2. **The Oxagen app never controls the assistant.** No customer role gets a
+   budget, cap, toggle, switch, setting, or approval control for the
+   assistant, on any app page or through any API. Oxagen's own operator
+   switch, `set_assistant_switch`, is platform-only and stays.
+
+### What the code does
+
+- **Spend.** `get_spend` returns one row keyed `ASSISTANT_SPEND_KEY` in every
+  grouping when the period has an assistant run. The customer rows leave the
+  assistant's share out, so the rows still sum to the total. The row lists no
+  runs, and the page renders it with no link. `spend.drill` on a customer key
+  leaves the assistant's runs out. The waste list names none of them, run
+  names come back for none of them, and the cost rollup asks for no findings
+  pass or Model fit reading for them. The findings pass reads no assistant
+  run.
+- **Controls.** `set_kill_switch` refuses the managed assistant agent, on and
+  off, for every customer role (`kill_switch.set.ts`), and so do
+  `agent.suspend` and `agent.retire`. The PR that ships this amendment lists
+  every other control it found and what it did with each.
+

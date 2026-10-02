@@ -220,6 +220,18 @@ export interface CapabilityDeclaration<
    */
   platformOnly?: boolean;
   /**
+   * When true, the capability is part of Oxagen's in-app assistant itself:
+   * asking it, stopping a turn, reading a reply, and the conversations it
+   * keeps. The workspace's decision rules never gate it, on any surface
+   * (ADR-235), so a customer cannot write a rule that decides who may use
+   * the assistant. The person's own IAM check still runs.
+   *
+   * A call the assistant's turn makes is exempt through its kernel-minted
+   * `oxagenAssistant` binding instead. This flag covers the call that starts
+   * the turn, which an adapter makes before the turn mints a binding.
+   */
+  inAppAssistant?: boolean;
+  /**
    * Sensitivity classification for this capability. Required — the IAM
    * resolver uses it for logging and the seed migration uses it for default
    * role-grant decisions.

@@ -199,6 +199,11 @@ describe("ADR-235: the exemption never keys on the name stella", () => {
     ["packages/oxagen/src/kernel.ts", "forgedBinding"],
     ["packages/agent/src/runtime/assistant-turn.ts", "assistantBindingFor"],
     ["packages/agent/src/handlers/_agent-identity.ts", "runFiguresByAgent"],
+    ["packages/agent/src/handlers/_agent-identity.ts", "listAgentIdentities"],
+    ["packages/agent/src/runtime/kill-switch-gate.ts", "assistantOwnSwitches"],
+    ["packages/agent/src/handlers/agent.execution.list.ts", "assistantExecutionsHidden"],
+    ["packages/rules/src/approval-in-app.ts", "inAppApproval"],
+    ["packages/handlers/src/lib/run-read.ts", "inAppRunReadable"],
   ])("%s `%s` names no stella", (path, name) => {
     const code = functionNamed(path, name);
     // The walk found real code, so the assertion below proves something.
@@ -214,5 +219,45 @@ describe("ADR-235: the exemption never keys on the name stella", () => {
 
   it("excludes exactly the two in-app run surfaces, neither a harness name", () => {
     expect([...IN_APP_AGENT_SURFACES]).toEqual(["chat", "api-chat"]);
+  });
+});
+
+/**
+ * The contracts that carry `inAppAssistant: true` skip the workspace's
+ * decision rules on every surface (ADR-235). Marking a business action that
+ * way would take it out of the customer's governance for every caller, so
+ * the list is pinned here: the assistant's own contracts and the
+ * conversations it keeps, and nothing else.
+ */
+describe("ADR-235: only the assistant's own contracts are inAppAssistant", () => {
+  const CONTRACTS = join(REPO_ROOT, "packages/oxagen/src/contracts");
+  const flagged = readdirSync(CONTRACTS)
+    .filter((file) => file.endsWith(".ts") && !file.endsWith(".test.ts"))
+    .filter((file) =>
+      /\binAppAssistant:\s*true\b/.test(
+        readFileSync(join(CONTRACTS, file), "utf8"),
+      ),
+    )
+    .sort();
+
+  it("flags exactly the assistant's contracts and its conversations", () => {
+    expect(flagged).toEqual([
+      "assistant.ask.ts",
+      "assistant.attachment.upload.ts",
+      "assistant.chart.render.ts",
+      "assistant.engine.get.ts",
+      "assistant.reply.get.ts",
+      "assistant.reply_feedback.record.ts",
+      "assistant.turn.cancel.ts",
+      "conversation.archive.ts",
+      "conversation.attachment.add.ts",
+      "conversation.delete.ts",
+      "conversation.export.ts",
+      "conversation.files.list.ts",
+      "conversation.get.ts",
+      "conversation.list.ts",
+      "conversation.purge.ts",
+      "conversation.rename.ts",
+    ]);
   });
 });

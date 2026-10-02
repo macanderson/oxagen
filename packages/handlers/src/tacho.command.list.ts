@@ -40,6 +40,7 @@ import {
   type RunScope,
   runScope,
 } from "./run.list";
+import { ledgerRunReadable } from "./lib/run-read";
 
 export type CommandRow = Pick<
   typeof schema.tachoControlCommands.$inferSelect,
@@ -174,8 +175,11 @@ export function createListCommandsHandler(
     } else {
       const summary = await deps.store.getRunByPublicId(runId);
       if (!summary) throw runNotFound();
-      if (!(await deps.queries.ledgerIdentity(scope, summary.runId)))
-        throw runNotFound();
+      const row = await deps.queries.ledgerIdentity(scope, summary.runId);
+      if (!row) throw runNotFound();
+      // Another person's in-app assistant run answers as an unknown one
+      // (ADR-235), as every run read does.
+      if (!(await ledgerRunReadable(ctx, row))) throw runNotFound();
     }
     const now = deps.now();
     const rows = await deps.commandsForRun(scope, runId, input.limit);

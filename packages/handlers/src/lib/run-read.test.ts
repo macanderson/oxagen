@@ -37,15 +37,31 @@ import {
 } from "@oxagen/run-ledger";
 import { buildArchiveSegment } from "@oxagen/recorder";
 import {
+  canReadRunId,
   defaultRunReadDeps,
+  inAppRunReadable,
   readFrameAt,
   readFrames,
   type ResolvedRun,
+  resolveRun,
   runChainReads,
   runChainWindowReads,
   type RunReadDeps,
 } from "./run-read";
-import { memorySubagentFrames, tachoRow } from "../run.test-support";
+import {
+  ctx,
+  inAppLedgerRun,
+  keyCtx,
+  type LedgerFixture,
+  ledgerRun,
+  memoryEvents,
+  memoryStores,
+  memorySubagentFrames,
+  memoryTachoFrames,
+  roleTx,
+  summary,
+  tachoRow,
+} from "../run.test-support";
 
 const UUID_RUN = "33333333-3333-4333-8333-333333333333";
 const UUID_ATTEMPT = "44444444-4444-4444-8444-444444444444";
@@ -495,5 +511,126 @@ describe("runChainWindowReads", () => {
     expect(reads?.chains).toBeNull();
     await reads?.own("12", 10);
     expect(readAttemptEventsSince).toHaveBeenCalledWith(UUID_RUN, "11", 11);
+  });
+});
+
+describe("the in-app read rule (ADR-235, item 5)", () => {
+  const ASKER = ctx().userId as string;
+  const OTHER = "0192d4a8-7c1e-7a00-8000-0000000000e2";
+  const RUN_ID = summary().publicId;
+  const RUN_UUID = summary().runId;
+  const asUser = (userId: string) => ({ ...ctx(), userId });
+
+  function deps(
+    ledger: LedgerFixture[],
+    actingUserId?: RunReadDeps["actingUserId"],
+  ): RunReadDeps {
+    const stores = memoryStores(ledger, []);
+    return {
+      queries: stores.queries,
+      store: {
+        getRunByPublicId: (publicId) =>
+          Promise.resolve(publicId === RUN_ID ? summary() : null),
+        readAttemptEventsSince: memoryEvents([]),
+      },
+      readRunRollups: stores.readRunRollups,
+      readWitnessFor: stores.readWitnessFor,
+      tachoFrames: memoryTachoFrames(ROOT, []),
+      ...(actingUserId === undefined ? {} : { actingUserId }),
+    };
+  }
+
+  const turn = (
+    over: Partial<LedgerFixture> = {},
+    asker: string | null = ASKER,
+  ) => inAppLedgerRun({ publicId: RUN_ID, runId: RUN_UUID, ...over }, asker);
+
+  it("lets the person who asked read their in-app run, on either in-app surface", async () => {
+    for (const surface of ["chat", "api-chat"]) {
+      const run = await resolveRun(deps([turn({ surface })]), ctx(), RUN_ID);
+      expect(run.item.id).toBe(RUN_ID);
+    }
+  });
+
+  it("answers another member not_found, the answer an unknown id gets (negative)", async () => {
+    const hidden = resolveRun(deps([turn()]), asUser(OTHER), RUN_ID);
+    await expect(hidden).rejects.toMatchObject({
+      code: "not_found",
+      reason: "run_not_found",
+    });
+    const unknown = resolveRun(
+      deps([turn()]),
+      asUser(OTHER),
+      "arun_0000000000000000000000",
+    );
+    await expect(unknown).rejects.toMatchObject({
+      code: "not_found",
+      reason: "run_not_found",
+    });
+  });
+
+  it("reads a run on any other surface as before, without resolving the caller", async () => {
+    const actingUserId = vi.fn(async () => null);
+    const run = await resolveRun(
+      deps(
+        [ledgerRun({ publicId: RUN_ID, runId: RUN_UUID, surface: "a2a" })],
+        actingUserId,
+      ),
+      asUser(OTHER),
+      RUN_ID,
+    );
+    expect(run.item.id).toBe(RUN_ID);
+    expect(actingUserId).not.toHaveBeenCalled();
+  });
+
+  it("reads the run for an API key the asker created, and not for another person's key", async () => {
+    // `resolveActingUserId` runs for real: an API-key call acts as the key's
+    // creator, read from `auth.api_keys`.
+    mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => unknown) =>
+      Promise.resolve(fn(roleTx(null, ASKER))),
+    );
+    const own = await resolveRun(deps([turn()]), keyCtx(), RUN_ID);
+    expect(own.item.id).toBe(RUN_ID);
+
+    mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => unknown) =>
+      Promise.resolve(fn(roleTx(null, OTHER))),
+    );
+    await expect(
+      resolveRun(deps([turn()]), keyCtx(), RUN_ID),
+    ).rejects.toMatchObject({ code: "not_found", reason: "run_not_found" });
+  });
+
+  it("reads nothing of an in-app run with no person behind it, nor for a call that acts as no user (negative)", () => {
+    expect(inAppRunReadable(turn({}, null), null)).toBe(false);
+    expect(inAppRunReadable(turn({}, null), ASKER)).toBe(false);
+    expect(inAppRunReadable(turn(), null)).toBe(false);
+    expect(inAppRunReadable(turn(), ASKER)).toBe(true);
+    expect(
+      inAppRunReadable(ledgerRun({ publicId: RUN_ID, runId: RUN_UUID }), null),
+    ).toBe(true);
+  });
+
+  it("canReadRunId: hides an in-app run from another member and leaves every other answer to the reader", async () => {
+    const readLedgerRun = vi.fn(async (_scope: unknown, publicId: string) =>
+      publicId === RUN_ID ? turn() : null,
+    );
+    expect(await canReadRunId(ctx(), RUN_ID, { readLedgerRun })).toBe(true);
+    expect(await canReadRunId(asUser(OTHER), RUN_ID, { readLedgerRun })).toBe(
+      false,
+    );
+    // An id no ledger run holds is the reader's own not-found to answer.
+    expect(
+      await canReadRunId(asUser(OTHER), "arun_0000000000000000000000", {
+        readLedgerRun,
+      }),
+    ).toBe(true);
+    // A wrapped session is never in-app, so nothing is read for it.
+    readLedgerRun.mockClear();
+    expect(
+      await canReadRunId(asUser(OTHER), "tse_4q8r1t6v3x5z0b2d7h2k9m", {
+        readLedgerRun,
+      }),
+    ).toBe(true);
+    expect(readLedgerRun).not.toHaveBeenCalled();
   });
 });

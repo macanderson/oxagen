@@ -13,7 +13,9 @@ first, with keyset pagination on `created_at`. Only root executions
 (`parent_execution_id IS NULL`) are returned — one row per run. Expand a run
 into its steps, tool calls, and child executions with
 [agent.trace.get](agent.trace.get.md). Backs the in-app Activity list and is
-callable from the agent, MCP, and API surfaces.
+callable from the agent, MCP, and API surfaces. The list leaves out the in-app
+assistant's executions for every caller except the assistant itself
+([ADR-235](../adr/ADR-235-workspaces-do-not-govern-or-monitor-stella.md)).
 
 ## Input
 

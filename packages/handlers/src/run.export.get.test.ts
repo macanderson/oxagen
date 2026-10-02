@@ -27,7 +27,14 @@ import {
   runExportDownloadUrl,
   verifyRunExportDownloadToken,
 } from "./lib/run-export-download";
-import { ctx, roleTx } from "./run.test-support";
+import type { LedgerRunRow } from "./run.list";
+import {
+  ctx,
+  inAppLedgerRun,
+  KEY_CREATOR,
+  keyCtx,
+  roleTx,
+} from "./run.test-support";
 
 const SECRET = "a-test-secret-of-some-length";
 const NOW = new Date("2026-09-22T12:00:00.000Z");
@@ -50,20 +57,33 @@ function row(over: Partial<RunExportRow> = {}): RunExportRow {
   };
 }
 
-function harness(role: string | null, found: RunExportRow | null = row()) {
+/**
+ * `ledger` is the run the export is of, as the identity select reads it. Null
+ * reads as a run on no in-app surface, which every Owner and Admin may read.
+ */
+function harness(
+  role: string | null,
+  found: RunExportRow | null = row(),
+  ledger: LedgerRunRow | null = null,
+) {
   mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => unknown) =>
     Promise.resolve(fn(roleTx(role))),
   );
   const readExport = vi.fn<RunExportGetDeps["readExport"]>(() =>
     Promise.resolve(found),
   );
+  const readLedgerRun = vi.fn<NonNullable<RunExportGetDeps["readLedgerRun"]>>(
+    () => Promise.resolve(ledger),
+  );
   return {
     handler: createRunExportGetHandler({
       readExport,
+      readLedgerRun,
       secret: () => SECRET,
       now: () => NOW,
     }),
     readExport,
+    readLedgerRun,
   };
 }
 
@@ -138,6 +158,52 @@ describe("get_run_export", () => {
         e.code === "not_found" &&
         e.reason === "run_export_not_found",
     );
+  });
+
+  // ADR-235, item 5: an export of an in-app run is the asking person's own.
+  describe("of an in-app run (ADR-235)", () => {
+    const OTHER = "0192d4a8-7c1e-7a00-8000-0000000000e2";
+    const turn = (asker: string) =>
+      inAppLedgerRun(
+        {
+          publicId: row().runPublicId,
+          runId: "0192d4a8-7c1e-7a00-8000-0000000000a1",
+        },
+        asker,
+      );
+    const notFound = (e: unknown) =>
+      isHandlerError(e) &&
+      e.code === "not_found" &&
+      e.reason === "run_export_not_found";
+
+    it("answers the person who asked", async () => {
+      const h = harness("Owner", row(), turn(ctx().userId as string));
+      const out = await h.handler({ exportId: EXPORT_ID }, ctx());
+      expect(out.status).toBe("ready");
+      expect(h.readLedgerRun).toHaveBeenCalledWith(
+        { orgId: ctx().orgId, workspaceId: ctx().workspaceId },
+        row().runPublicId,
+      );
+    });
+
+    it("answers another Owner as an export id it does not know (negative)", async () => {
+      const h = harness("Owner", row(), turn(OTHER));
+      await expect(
+        h.handler({ exportId: EXPORT_ID }, ctx()),
+      ).rejects.toSatisfy(notFound);
+    });
+
+    it("answers an API key the asker created, and not another person's key", async () => {
+      // `resolveActingUserId` runs for real: the key acts as `KEY_CREATOR`.
+      const own = harness("Owner", row(), turn(KEY_CREATOR));
+      await expect(
+        own.handler({ exportId: EXPORT_ID }, keyCtx()),
+      ).resolves.toMatchObject({ status: "ready" });
+      const other = harness("Owner", row(), turn(OTHER));
+      await expect(
+        other.handler({ exportId: EXPORT_ID }, keyCtx()),
+      ).rejects.toSatisfy(notFound);
+    });
   });
 
   it("refuses a Member before reading anything (negative)", async () => {

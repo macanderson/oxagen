@@ -3846,6 +3846,13 @@
       "writes": []
     },
     {
+      "domain": "assistant",
+      "name": "set_assistant_switch",
+      "reads": [],
+      "surfaces": [],
+      "writes": []
+    },
+    {
       "domain": "plugin",
       "name": "set_auth_alerts",
       "reads": [],
@@ -16950,6 +16957,12 @@
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
+        },
+        {
+          "name": "subject",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
         },
         {
           "name": "version",

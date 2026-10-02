@@ -123,6 +123,7 @@ export const assistantChartRender = registerCapability({
     "Returns `block`: paste it into your reply unchanged where the chart belongs.",
   mode: "sync",
   surfaces: ["agent"] as const,
+  inAppAssistant: true,
   layers: ["schema", "unit", "docs", "app"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "read" },

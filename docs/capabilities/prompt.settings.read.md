@@ -21,7 +21,7 @@ None (no input fields).
 | Field | Type | Notes |
 | --- | --- | --- |
 | additionalInstructions | string? | Workspace-level appended instructions (nullable) |
-| overrides | object | Partial overrides for: "conversation.title", "svg.generate", "image.analyze" |
+| overrides | object | Partial overrides for: "conversation.title", "svg.generate", "image.analyze". The in-app assistant's conversation titler no longer reads "conversation.title" (ADR-235). |
 | autoImprovePrompts | boolean | Auto-improve-prompts toggle setting |
 
 ## Side effects

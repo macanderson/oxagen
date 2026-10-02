@@ -4,10 +4,7 @@ import {
   resolveActorOrgRoles,
   resolveActorWorkspaceRoles,
 } from "@oxagen/iam/org-role";
-import {
-  bootstrapBillingRuntime,
-  getSpendBudgetStatuses,
-} from "@oxagen/billing";
+import { bootstrapBillingRuntime } from "@oxagen/billing";
 import { bootstrapEntitlementRuntime } from "@oxagen/plugins";
 import {
   bootstrapDecisionRulesRuntime,
@@ -305,9 +302,9 @@ export async function resumeApprovedCall(
             switched ? "kill_switch_active" : "tool_authorization_changed",
           );
         }
-        const budgets = await getSpendBudgetStatuses({ orgId: ctx.orgId });
-        if (budgets.some((status) => status.budget.enabled && status.overLimit))
-          throw new ApprovalResumeError("budget_exhausted");
+        // No customer spend ceiling holds this call back: none applies to the
+        // assistant (ADR-235). The kernel's credit and billing gates still
+        // judge it at invoke.
         run = await openAssistantRun({
           orgId: ref.orgId,
           workspaceId: ref.workspaceId,

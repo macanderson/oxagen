@@ -25,6 +25,8 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 });
 
 import { createRunProofHandler, type RunProofDeps } from "./run.proof.get";
+import type { LedgerRunRow } from "./run.list";
+import { inAppLedgerRun, ledgerRun } from "./run.test-support";
 import { makeCTX } from "./test-utils/fixtures";
 
 const ORG = "0192d4a8-7c1e-7a00-8000-00000000ac3e";
@@ -353,5 +355,54 @@ describe("get_run_proof", () => {
       grain: "L0",
     });
     await expect(get({ runId: RUN }, ctx())).rejects.toThrow(RangeError);
+  });
+});
+
+// ADR-235, item 5: an in-app run is the asking person's own record. Every
+// other member reads it as a run no witness reported on, which is what an
+// unknown id answers.
+describe("get_run_proof on an in-app run (ADR-235)", () => {
+  const TURN = "arun_5f0c2e9a1b7d4c3e8f6a02";
+  const TURN_UUID = "0192d4a8-7c1e-7a00-8000-0000000000a1";
+  const OTHER = "0192d4a8-7c1e-7a00-8000-0000000000e2";
+  const record: ProofRecord = {
+    attempts: [attemptRow({ runId: TURN })],
+    witnesses: [witnessRow()],
+    grain: "L0",
+  };
+  const turn = inAppLedgerRun({ publicId: TURN, runId: TURN_UUID }, USER);
+
+  function inApp(ledger: LedgerRunRow) {
+    return createRunProofHandler({
+      readRunProof: async () => record,
+      readRunTotalsByIds: async () => new Map(),
+      readLedgerRun: async (_scope, publicId) =>
+        publicId === TURN ? ledger : null,
+    });
+  }
+
+  it("answers the person who asked with the turn's witnesses", async () => {
+    const out = await inApp(turn)({ runId: TURN }, ctx());
+    expect(out.witnesses.map((w) => w.witnessId)).toEqual(["wit_A"]);
+  });
+
+  it("answers another member as it answers a run no witness reported on (negative)", async () => {
+    const out = await inApp(turn)({ runId: TURN }, ctx({ userId: OTHER }));
+    expect(out).toEqual({
+      runId: TURN,
+      verdict: null,
+      witnesses: [],
+      witnessRuns: [],
+      disclosureGrain: "L0",
+    });
+  });
+
+  it("answers a ledger run on any other surface to every member, as before", async () => {
+    const external = ledgerRun({ publicId: TURN, runId: TURN_UUID });
+    const out = await inApp({
+      run: { ...external.run, surface: "a2a" },
+      identity: external.identity,
+    })({ runId: TURN }, ctx({ userId: OTHER }));
+    expect(out.witnesses).toHaveLength(1);
   });
 });

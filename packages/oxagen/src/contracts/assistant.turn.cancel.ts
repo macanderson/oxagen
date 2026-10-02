@@ -36,6 +36,7 @@ export const assistantTurnCancel = registerCapability({
     "Stop a running in-app agent turn that you asked, named by the turnId passed to ask_assistant. The turn keeps the reply written so far and its run is sealed cancelled. Idempotent.",
   mode: "sync",
   surfaces: ["api"],
+  inAppAssistant: true,
   layers: ["schema", "api", "unit", "docs", "app"],
   scoped: true,
   mutates: true,

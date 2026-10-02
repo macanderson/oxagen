@@ -14,6 +14,7 @@ import type {
   AgentDebugTraceOutput,
 } from "@oxagen/oxagen/contracts/agent.debug.trace";
 import { ExecutionNotFoundError } from "./execution-errors";
+import { assistantExecutionsHidden } from "./agent.execution.list";
 import { agentTraceGetHandler } from "./agent.trace.get";
 import {
   parseStackFrames,
@@ -81,6 +82,10 @@ const DIAGNOSIS_SYSTEM =
  *   4. the failing execution's tool-call arguments → suspect-file signal.
  * Suspect files are ranked by a pure function (no model). The optional model call
  * (diagnosis) runs ONLY when input.summarize === true.
+ *
+ * An execution of the in-app assistant answers as not found, unless the
+ * assistant asks for one of the turns of the person it acts for
+ * (`assistantExecutionsHidden`, ADR-235).
  */
 export async function agentDebugTraceHandler(
   input: AgentDebugTraceInput,
@@ -105,6 +110,7 @@ export async function agentDebugTraceHandler(
             : eq(schema.agentExecutions.publicId, input.executionId),
           eq(schema.agentExecutions.orgId, ctx.orgId),
           eq(schema.agentExecutions.workspaceId, ctx.workspaceId),
+          assistantExecutionsHidden(ctx),
         ),
       )
       .limit(1);

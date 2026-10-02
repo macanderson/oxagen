@@ -27,7 +27,9 @@
 // tacho ingest does when a host seals a run.
 //
 // A ledger run (`arun_…`) is refused: its producer seals it, and
-// `dispatch_command` cancel stops its ingress.
+// `dispatch_command` cancel stops its ingress. To everyone but the person who
+// asked, an in-app run is `not_found` instead (ADR-235, item 5), so the
+// refusal does not say the run exists.
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { HandlerError } from "@oxagen/oxagen/handler-error";
 import { runSeal, type SealRunOutput } from "@oxagen/oxagen/contracts/run.seal";
@@ -45,8 +47,14 @@ import {
 } from "@oxagen/inngest-functions/tacho-idle-close";
 import { and, asc, eq, isNull, or } from "drizzle-orm";
 import { eventClient } from "./event-client";
+import { inAppRunReadable } from "./lib/run-read";
 import { logger } from "./logger";
-import { type RunScope, runScope } from "./run.list";
+import {
+  ledgerByPublicIdsQuery,
+  type LedgerRunRow,
+  type RunScope,
+  runScope,
+} from "./run.list";
 import {
   addressOf,
   type CommandStore,
@@ -73,8 +81,9 @@ export type SealableChain = SealableSession & {
 export type OperatorSealColumns = ReturnType<typeof operatorSealColumns>;
 
 /** The reads and writes one seal makes, all inside one tenant transaction. */
-export interface SealStore
-  extends Pick<CommandStore, "ledgerRunExists" | "insert" | "supersede"> {
+export interface SealStore extends Pick<CommandStore, "insert" | "supersede"> {
+  /** The ledger run behind an `arun_…` id in the scope, or null. */
+  ledgerRun(scope: RunScope, publicId: string): Promise<LedgerRunRow | null>;
   /** The root session by its `tse_…` id in the scope, locked for this transaction. */
   lockRoot(scope: RunScope, publicId: string): Promise<SealRoot | null>;
   /** The run's chains that are open or idle-closed, root included, locked. */
@@ -146,7 +155,8 @@ export function createSealRunHandler(
 
     const result = await deps.withStore(async (store) => {
       if (input.runId.startsWith("arun_")) {
-        if (!(await store.ledgerRunExists(scope, input.runId)))
+        const ledger = await store.ledgerRun(scope, input.runId);
+        if (!ledger || !inAppRunReadable(ledger, actingUserId))
           throw notFound("run_not_found");
         throw refused(
           "ledger_run",
@@ -267,7 +277,10 @@ const openOrIdleClosed = () =>
 export function postgresSealStore(tx: Tx): SealStore {
   const commands = postgresCommandStore(tx);
   return {
-    ledgerRunExists: commands.ledgerRunExists,
+    ledgerRun: async (scope, publicId) => {
+      const [row] = await ledgerByPublicIdsQuery(tx, scope, [publicId]);
+      return row ?? null;
+    },
     insert: commands.insert,
     supersede: commands.supersede,
     lockRoot: async (scope, publicId) => {

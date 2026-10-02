@@ -11,6 +11,7 @@ export const conversationExport = registerCapability({
     "Export an entire conversation (active branch) as a Markdown document or a formatted PDF",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
+  inAppAssistant: true,
   layers: ["schema", "api", "mcp", "unit", "docs"],
   scoped: true,
   // Exporting is a cheap read/serialize — it does not consume AI tokens, so the

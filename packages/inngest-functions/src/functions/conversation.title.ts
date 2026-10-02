@@ -5,9 +5,7 @@ import {
   CREDIT_REASONS,
   conversationTitlePrompt,
   generateObjectFor,
-  loadWorkspacePromptConfigSafe,
   resolveModelFundingSource,
-  resolvePrompt,
   selectModelFromFunding,
 } from "@oxagen/ai";
 import { evaluateTurnCreditGate } from "@oxagen/billing";
@@ -111,6 +109,12 @@ async function readQuestion(
  * One fast-tier call that names the conversation. It runs outside any
  * database transaction, and only after the credit gate admits it.
  *
+ * The conversation belongs to Oxagen's in-app assistant, which the workspace
+ * does not configure (ADR-235). So the call sends Oxagen's own title prompt
+ * and reads no workspace prompt settings. The `conversation.title` override
+ * and the additional instructions `update_prompt_settings` stores no longer
+ * reach this call.
+ *
  * The funding resolver and the credit gate read inside the tenant scope. An
  * Inngest step runs on its own, so both reads meet a cold cache: outside the
  * scope the credential read throws `TenantScopeError` and the gate's read
@@ -131,9 +135,6 @@ async function nameQuestion(
     return gate.ok ? chosen : null;
   });
   if (selection === null) return { title: null, outcome: "credit_refused" };
-  const config = await runInTenantScope(scope, () =>
-    loadWorkspacePromptConfigSafe(scope.workspaceId),
-  );
   try {
     const { object } = await runInTenantScope(scope, () =>
       generateObjectFor({
@@ -142,11 +143,7 @@ async function nameQuestion(
         // against the assistant spend cap with the turn's completions.
         chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
         schema: titleSchema,
-        system: resolvePrompt({
-          key: "conversation.title",
-          baseline: conversationTitlePrompt(),
-          config,
-        }),
+        system: conversationTitlePrompt(),
         prompt: question.slice(0, QUESTION_MAX_CHARS),
         temperature: 0.3,
         abortSignal: AbortSignal.timeout(30_000),

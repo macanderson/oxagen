@@ -23,6 +23,10 @@ export interface RetentionPolicy {
  * The workspace's latest `evidence.retention_policy_versions` row; undefined
  * when it has pinned none, which retains bodies of every class. Names the
  * organization and workspace beside RLS.
+ *
+ * Reads only subject `workspace`. The in-app assistant pins its own policy
+ * under subject `oxagen_assistant` (ADR-235), and that row is not the
+ * workspace's policy.
  */
 export async function readLatestRetentionPolicy(
   tx: Tx | RetentionPolicyTx,
@@ -37,6 +41,7 @@ export async function readLatestRetentionPolicy(
     where: and(
       eq(retentionPolicyVersions.orgId, orgId),
       eq(retentionPolicyVersions.workspaceId, workspaceId),
+      eq(retentionPolicyVersions.subject, "workspace"),
     ),
     orderBy: [desc(retentionPolicyVersions.version)],
     columns: { mode: true, retainedContentClasses: true },

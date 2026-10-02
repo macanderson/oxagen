@@ -18,6 +18,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     let other: import("./_agent-identity.test-support").SeededTenant;
     let alpha: import("./_agent-identity.test-support").SeededAgent;
     let bare: import("./_agent-identity.test-support").SeededAgent;
+    let assistant: import("./_agent-identity.test-support").SeededAgent;
     let hostPublicId = "";
     let laptop: Awaited<ReturnType<typeof support.seedRuntime>>;
     let cloud: Awaited<ReturnType<typeof support.seedRuntime>>;
@@ -146,6 +147,12 @@ describe.skipIf(!process.env.DATABASE_URL)(
         cacheKeepAlive: false,
       });
       await support.seedAgent(other, { slug: "alpha" });
+      // The workspace's managed assistant agent (ADR-235, item 13).
+      assistant = await support.seedAgent(tenant, {
+        slug: "qa-chat",
+        agentType: "interactive_chat",
+        status: "active",
+      });
     });
 
     afterAll(async () => {
@@ -295,6 +302,16 @@ describe.skipIf(!process.env.DATABASE_URL)(
         containmentRequired: false,
         invalid: false,
       });
+    });
+
+    it("answers the managed assistant agent not found, by slug and by public id, as an unknown agent (negative)", async () => {
+      const notFound = (err: unknown) =>
+        isHandlerError(err) &&
+        err.code === "not_found" &&
+        err.reason === "agent_not_found";
+      await expect(get(tenant, "qa-chat")).rejects.toSatisfy(notFound);
+      await expect(get(tenant, assistant.publicId)).rejects.toSatisfy(notFound);
+      await expect(get(tenant, "no-such-agent")).rejects.toSatisfy(notFound);
     });
 
     it("another org's agent of the same slug is not found from this workspace", async () => {

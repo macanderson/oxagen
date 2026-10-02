@@ -139,7 +139,10 @@ describe.skipIf(!process.env.DATABASE_URL)(
             id: runId,
             orgId,
             workspaceId,
-            surface: "api-chat",
+            // A customer agent's run. "chat" and "api-chat" are the in-app
+            // assistant's surfaces, and only the person who asked sees an
+            // approval parked on one of those runs (ADR-235).
+            surface: "external",
             spec: {},
           })
           .returning({ publicId: schema.agentRuns.publicId });

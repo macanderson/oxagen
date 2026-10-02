@@ -52,6 +52,8 @@ interface AgentRef {
   principalId: string;
   createdById: string | null;
   status: string;
+  /** `agent.agents.agent_type`; `grant_mandate` refuses a managed agent by it. */
+  agentType: string;
 }
 
 /** The agent an `agt_…` id names in this workspace, with its delegated principal.
@@ -88,6 +90,7 @@ export async function resolveAgent(
       principalId: schema.agents.principalId,
       createdById: schema.agents.createdById,
       status: schema.agents.status,
+      agentType: schema.agents.agentType,
     })
     .from(schema.agents)
     .where(

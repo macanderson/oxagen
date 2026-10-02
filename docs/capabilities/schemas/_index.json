@@ -4223,6 +4223,14 @@
       "consumes": []
     },
     {
+      "name": "set_assistant_switch",
+      "domain": "assistant",
+      "surfaces": [],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "set_auth_alerts",
       "domain": "plugin",
       "surfaces": [

@@ -9,6 +9,10 @@
  * kernel, the contracts, `materializeTools`, `createApprovalRequest` and the
  * resolve_approval handler are real. The stores are doubles: one approval row,
  * the run it names, and the rows the role gate reads.
+ *
+ * The turn's run is on the `chat` surface, so the row it parks is an in-app
+ * approval. ADR-235 (ruled on 2026-10-01) gives that row to the person who
+ * asked: they alone are told about it and they alone answer it.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -16,6 +20,8 @@ import { PgDialect } from "drizzle-orm/pg-core";
 import { getTableColumns, type SQL } from "drizzle-orm";
 import { schema } from "@oxagen/database";
 import { isHandlerError } from "@oxagen/oxagen";
+import { IN_APP_AGENT_SURFACES } from "@oxagen/oxagen/contracts/run.list";
+import { notifyApprovalRequested } from "@oxagen/rules/approval-notify";
 import {
   clearBillingAdmissionGate,
   clearHandlersForTests,
@@ -73,6 +79,8 @@ import {
 const ORG_ID = "0192d4a8-0000-7000-8000-000000000001";
 const WORKSPACE_ID = "0192d4a8-0000-7000-8000-000000000002";
 const USER_ID = "0192d4a8-0000-7000-8000-000000000003";
+/** Another Owner of the org, who did not ask the assistant. */
+const OTHER_USER_ID = "0192d4a8-0000-7000-8000-00000000000b";
 const PRINCIPAL_ID = "0192d4a8-0000-7000-8000-000000000004";
 const MESSAGE_ID = "0192d4a8-0000-7000-8000-000000000005";
 const CONVERSATION_ID = "0192d4a8-0000-7000-8000-000000000006";
@@ -106,7 +114,17 @@ const dialect = new PgDialect();
 const params = (q: SQL | null) => (q ? dialect.sqlToQuery(q).params : []);
 
 type Row = Record<string, unknown>;
-const store: { row: Row | null } = { row: null };
+const store: {
+  row: Row | null;
+  /** The surface of the run the row names: `chat` for the turn's run. */
+  runSurface: string;
+  notifications: Row[];
+} = { row: null, runSurface: "chat", notifications: [] };
+
+/** What `inAppApproval()` answers for the row: its run is on an in-app surface. */
+const inApp = (row: Row) =>
+  row.runPublicId === RUN_PUBLIC_ID &&
+  (IN_APP_AGENT_SURFACES as readonly string[]).includes(store.runSurface);
 
 /** The row's values for a projection `{ alias: column }`, read by column. */
 function project(table: unknown, row: Row, fields: Row): Row {
@@ -128,7 +146,10 @@ const pending = (): Row | null => {
 function rowsFor(table: unknown, fields: Row, where: SQL | null): Row[] {
   if (table === schema.approvalRequests) {
     const row = pending();
-    return row ? [project(table, row, fields)] : [];
+    if (!row) return [];
+    const projected = project(table, row, fields);
+    // The in-app fact is a subquery, not a column, so the double answers it.
+    return ["inApp" in fields ? { ...projected, inApp: inApp(row) } : projected];
   }
   if (table === schema.agentRuns) {
     return params(where).includes(RUN_ID) ? [{ publicId: RUN_PUBLIC_ID }] : [];
@@ -182,6 +203,15 @@ function makeTx() {
     }),
     insert: (table: unknown) => ({
       values: (values: Row) => ({
+        // The approval.resolved row a resolver writes for the requester. It
+        // is the only insert this file awaits without `.returning()`, so any
+        // other table awaited this way throws, and a new write needs a branch.
+        then: (resolve: (v: unknown) => unknown) => {
+          if (table !== schema.notifications)
+            throw new Error("unexpected table");
+          store.notifications.push(values);
+          return resolve(undefined);
+        },
         returning: async (fields: Row) => {
           if (table !== schema.approvalRequests)
             throw new Error("unexpected table");
@@ -276,6 +306,8 @@ beforeEach(() => {
     Buffer.alloc(32, 7).toString("base64"),
   );
   store.row = null;
+  store.runSurface = "chat";
+  store.notifications = [];
   db.withTenantDb.mockImplementation((fn: (tx: unknown) => unknown) =>
     Promise.resolve(fn(makeTx())),
   );
@@ -339,6 +371,16 @@ describe("resolve_approval: a turn answering its own parked write", () => {
     });
   });
 
+  it("tells only the person who asked that the write is waiting (ADR-235)", async () => {
+    const turn = await openTurn();
+    await parkWrite(turn);
+    expect(vi.mocked(notifyApprovalRequested)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(notifyApprovalRequested)).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ capabilityName: WRITE, recipients: [USER_ID] }),
+    );
+  });
+
   it("gives the turn's model no resolve_approval tool, and the kernel refuses it the agent surface", async () => {
     const turn = await openTurn();
     const approvalId = await parkWrite(turn);
@@ -370,14 +412,16 @@ describe("resolve_approval: a turn answering its own parked write", () => {
         err.code === "forbidden" &&
         err.reason === "run_cannot_resolve_own_approval",
     ).toBe(true);
-    expect((err as Error).message).toMatch(/on Fleet\.$/);
+    // An in-app row is answered in the assistant, never on Fleet (ADR-235).
+    expect((err as Error).message).toMatch(/in the assistant\.$/);
+    expect((err as Error).message).not.toMatch(/Fleet/);
     expect(store.row).toMatchObject({
       resolution: null,
       resolvedByUserId: null,
     });
   });
 
-  it("lets the person resolve the same approval from Fleet after the run was refused", async () => {
+  it("lets the person who asked resolve the same approval after the run was refused", async () => {
     const turn = await openTurn();
     const approvalId = await parkWrite(turn);
     await expect(
@@ -389,7 +433,8 @@ describe("resolve_approval: a turn answering its own parked write", () => {
       ),
     ).rejects.toSatisfy(isHandlerError);
     // The app's kernel seam: the person's context, no message, no run, and
-    // no surface named (apps/app/src/server/kernel.ts).
+    // no surface named (apps/app/src/server/kernel.ts). The flyout's card
+    // writes through it as the person signed in.
     const fleet: CapabilityContext = {
       orgId: ORG_ID,
       workspaceId: WORKSPACE_ID,
@@ -419,6 +464,66 @@ describe("resolve_approval: a turn answering its own parked write", () => {
       resolvedByUserId: USER_ID,
       resumeStatus: "queued",
     });
+    // The person who asked is the one answering, so nobody else is told.
+    expect(store.notifications).toEqual([]);
+  });
+
+  /** Another Owner of the org, signed in to the app. */
+  const otherOwner: CapabilityContext = {
+    orgId: ORG_ID,
+    workspaceId: WORKSPACE_ID,
+    userId: OTHER_USER_ID,
+    apiKeyId: null,
+    requestId: "req_other",
+    surface: "app",
+    messageId: null,
+  };
+
+  it("refuses another Owner the approval the turn parked, and leaves the row unchanged (ADR-235)", async () => {
+    const turn = await openTurn();
+    await parkWrite(turn);
+    const err = await invoke(
+      RESOLVE,
+      { approvalId: APPROVAL_PUBLIC_ID, decision: "approved" },
+      otherOwner,
+    ).catch((e: unknown) => e);
+    // The same answer as an unknown id: the workspace's readers hide the row.
+    expect(
+      isHandlerError(err) &&
+        err.code === "conflict" &&
+        err.reason === "approval_expired",
+    ).toBe(true);
+    expect(store.row).toMatchObject({
+      resolution: null,
+      resolvedByUserId: null,
+      resumeStatus: "waiting",
+    });
+    expect(store.notifications).toEqual([]);
+  });
+
+  it("lets another Owner answer a row whose run is not in-app, as before (negative)", async () => {
+    // The same row, named on a run a customer's agent recorded.
+    store.runSurface = "external";
+    const turn = await openTurn();
+    await parkWrite(turn);
+    await expect(
+      invoke(
+        RESOLVE,
+        { approvalId: APPROVAL_PUBLIC_ID, decision: "denied" },
+        otherOwner,
+      ),
+    ).resolves.toMatchObject({ resolution: "denied" });
+    expect(store.row).toMatchObject({
+      resolution: "denied",
+      resolvedByUserId: OTHER_USER_ID,
+    });
+    // The person whose message parked the call hears the decision.
+    expect(store.notifications).toEqual([
+      expect.objectContaining({
+        userId: USER_ID,
+        event: "approval.resolved",
+      }),
+    ]);
   });
 });
 

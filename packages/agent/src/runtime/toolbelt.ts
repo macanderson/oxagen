@@ -238,8 +238,10 @@ export function decideCapabilityForBelt(
   // switched tool stayed on the assistant's belt and the per-call gate
   // refused every call to it (R4, #3370 finding 9). With no run, a person's
   // own turn has no principal ids, so only a deny that names no principal
-  // matches. The assistant's turn also answers to the agent it runs as: a
-  // deny naming that agent's principal, or an `agent` switch on it.
+  // matches. The assistant's turn reaches this point with one possible deny:
+  // the `agent` switch on its own agent, which only Oxagen sets with
+  // `set_assistant_switch`. materialize-tools.ts drops every other row
+  // before the listing (`assistantOwnSwitches`, ADR-235).
   //
   // A `resource_scope` deny matches on the same digests the per-call gate
   // builds (`callScopeDigests`): the org, the workspace, the operator, the
