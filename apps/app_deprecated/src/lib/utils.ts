@@ -1,5 +1,9 @@
+import { houseTypeMerge } from "@oxagen/ui/lib/house-type-merge";
 import { clsx, type ClassValue } from "clsx";
-import { twMerge } from "tailwind-merge";
+import { extendTailwindMerge } from "tailwind-merge";
+
+/** tailwind-merge that files the house type utilities as font sizes (#5185). */
+const twMerge = extendTailwindMerge(houseTypeMerge);
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
