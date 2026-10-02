@@ -6485,6 +6485,99 @@
       }
     },
     {
+      "name": "dismiss_memories",
+      "file": "steering.memories.dismiss.ts",
+      "domain": "context",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "cli": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "get_workspace_memory",
+      "file": "steering.memories.get.ts",
+      "domain": "context",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "cli": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "list_workspace_memories",
+      "file": "steering.memories.list.ts",
+      "domain": "context",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "cli": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "promote_memories",
+      "file": "steering.memories.promote.ts",
+      "domain": "context",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "cli": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "list_memory_pr_records",
+      "file": "steering.memory_pr_records.list.ts",
+      "domain": "context",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "get_steering_repo",
       "file": "steering_repo.get.ts",
       "domain": "repository",

@@ -82,11 +82,7 @@ MCP — tool `get_citation_stats`:
 { "days": 7, "limit": 10 }
 ```
 
-CLI — compact summary in the terminal:
-
-```bash
-oxagen memory citations --days 30 --limit 10
-```
+CLI: `oxagen memory` reads workspace memories, not this store, so no CLI command calls this capability (#4912).
 
 App: **Knowledge → Citations** renders this capability as the dashboard (period
 switcher = `days` 7/30/90).

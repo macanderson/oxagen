@@ -1,13 +1,11 @@
 /**
- * `oxagen memory …` / `oxagen remember` handlers — pins the wire contract of
- * every subcommand through the apiPostOrThrow seam (exact route + body,
- * including the client-side defaults: list limit 100, show's 200-item lookup
- * page, stats days 30 / limit 10, candidates limit 3, dismiss restore false),
- * the argument validation that rejects before any request leaves the process,
- * show's list-then-resolve lookup (full id, publicId, short-id prefix),
- * import's read → parse_markdown_import → preview or commit_markdown_import
- * phases with per-file failure collection, the human/JSON output written through the CommandWriter, and the
- * one-shot path's stderr + exit(1) contract.
+ * `oxagen memory` handlers: pins the wire contract of list, show, promote,
+ * and dismiss through the apiPostOrThrow seam (the exact route and body,
+ * with the server's defaults left to the server), the argument checks that
+ * refuse before any request leaves the process, the human and JSON output
+ * written through the CommandWriter, and the one-shot path's stderr and
+ * exit(1) contract. The import tests read files through a mocked readFile and pin the
+ * parse_markdown_import and commit_markdown_import calls.
  */
 import { describe, expect, it, vi } from "vitest";
 
@@ -31,644 +29,418 @@ vi.mock("../lib/api.js", () => ({ apiPostOrThrow, ApiError: MockApiError }));
 vi.mock("node:fs/promises", () => ({ readFile }));
 
 import { captureWriter } from "../lib/capture-writer";
-import type { MemoryRecord } from "../lib/memory-client";
 import {
-  handleMemoryList,
-  handleMemoryShow,
-  handleMemoryEdit,
-  handleMemorySalience,
-  handleMemoryPromote,
-  handleMemoryDemote,
   handleMemoryDismiss,
-  handleMemoryCitations,
-  handleMemoryCandidates,
-  handleMemoryRemove,
   handleMemoryImport,
-  handleRemember,
+  handleMemoryList,
+  handleMemoryPromote,
+  handleMemoryShow,
+  MEMORY_COMMAND_CAPABILITIES,
 } from "./memory";
 
-function record(over: Partial<MemoryRecord> = {}): MemoryRecord {
+/** A Claude Code memory file's memory, as list_workspace_memories answers it. */
+function memory(over: Record<string, unknown> = {}) {
   return {
-    id: "mem_0123456789abcdef",
-    publicId: "M-1",
-    nodeRef: "app:web",
-    memoryClass: "RULE",
-    memoryKind: "gotcha",
-    lesson: "Never run vitest in watch mode on CI",
-    source: "user",
-    confidenceScore: 82.4,
-    enforcementScore: 70,
-    status: "ACTIVE",
-    subjectHint: "",
-    halfLifeDays: 90,
-    decayFloor: 20,
-    lastEvidenceAt: null,
-    citationCount: 3,
-    influenceCount: 2,
-    violationCount: 0,
-    createdByKind: "USER",
-    createdById: null,
-    confirmedByKind: null,
-    confirmedById: null,
-    createdAt: "2026-08-01T00:00:00.000Z",
-    lastReinforcedAt: null,
+    id: "mem_0a1b2c",
+    label: "Use pnpm",
+    summary: "The repo installs with pnpm.",
+    statement: "Use pnpm, never npm, in this repository.",
+    state: "waiting",
+    capture: "local_gateway",
+    harness: "claude-code",
+    agent: "agt.laptop",
+    source: "claude-code:/home/dev/.claude/projects/-proj/memory/use-pnpm.md",
+    repos: null,
+    memory_type: "feedback",
+    kind: "memory",
+    use_count: 3,
+    use_signal: true,
+    last_used_at: new Date(Date.now() - 3 * 3_600_000).toISOString(),
+    created_at: "2026-09-30T10:00:00.000Z",
+    promoted_lineage: null,
+    memory_pr: null,
     ...over,
   };
 }
 
-describe("memory list", () => {
-  it("maps every CLI filter onto the list body — class upper-cased, ints parsed, citations sort renamed", async () => {
-    apiPostOrThrow.mockResolvedValue({ memories: [record()], total: 1 });
-    const captured = captureWriter();
-    await handleMemoryList(
-      {
-        class: "rule",
-        kind: "gotcha",
-        minEnforcement: "50",
-        minCitations: "2",
-        sort: "citations",
-        node: "app:web",
-        limit: "10",
-        offset: "5",
-      },
-      captured.writer,
-    );
-    expect(apiPostOrThrow).toHaveBeenCalledWith("agent/memory/list", {
-      memoryClass: "RULE",
-      memoryKind: "gotcha",
-      minEnforcement: 50,
-      minCitations: 2,
-      sort: "citationCount",
-      nodeRef: "app:web",
-      limit: 10,
-      offset: 5,
-    });
-    const lines = captured.output().split("\n");
-    expect(lines[0]).toMatch(/^id\s+class\/kind\s+conf\s+enf\s+lesson$/);
-    expect(lines[1]).toContain("mem_0123");
-    expect(lines[1]).toContain("RULE/gotcha");
-    expect(lines[1]).toContain("82.4");
-    expect(lines[1]).toContain("Never run vitest in watch mode on CI");
-    expect(lines[2]).toBe("1 memory.");
-  });
+function listResult(groups: ReturnType<typeof memory>[][], over = {}) {
+  return {
+    groups: groups.map((members) => ({
+      memory: members[0],
+      members,
+      use_count: members.reduce((sum, m) => sum + (m.use_count as number), 0),
+      last_used_at: members[0]?.last_used_at ?? null,
+    })),
+    total_groups: groups.length,
+    total_memories: groups.flat().length,
+    truncated: false,
+    waiting: groups.flat().length,
+    ...over,
+  };
+}
 
-  it("defaults to limit 100 / offset 0 and prints the empty-state hint when there are no memories", async () => {
-    apiPostOrThrow.mockResolvedValue({ memories: [], total: 0 });
+describe("the capabilities the commands name", () => {
+  it("names the four workspace memory capabilities by their registered names", () => {
+    expect(MEMORY_COMMAND_CAPABILITIES).toEqual([
+      "list_workspace_memories",
+      "get_workspace_memory",
+      "promote_memories",
+      "dismiss_memories",
+    ]);
+  });
+});
+
+describe("memory list", () => {
+  it("sends only the filters given, so the server's defaults apply", async () => {
+    apiPostOrThrow.mockResolvedValue(listResult([]));
     const captured = captureWriter();
     await handleMemoryList({}, captured.writer);
-    expect(apiPostOrThrow).toHaveBeenCalledWith("agent/memory/list", {
-      limit: 100,
-      offset: 0,
-    });
+    expect(apiPostOrThrow).toHaveBeenCalledWith(
+      "context/steering/memories/list",
+      {},
+    );
     expect(captured.output()).toBe(
-      'No memories yet. Capture one with `/remember <text>` (or `oxagen remember "…"`).',
+      "No memories yet. Oxagen collects them from enrolled hosts every five minutes.",
     );
   });
 
-  it("passes a createdAt sort through unrenamed", async () => {
-    apiPostOrThrow.mockResolvedValue({ memories: [], total: 0 });
-    const captured = captureWriter();
-    await handleMemoryList({ sort: "createdAt" }, captured.writer);
-    expect(apiPostOrThrow).toHaveBeenCalledWith("agent/memory/list", {
-      sort: "createdAt",
-      limit: 100,
-      offset: 0,
-    });
+  it("maps every filter onto the body, with states split on commas and numbers parsed", async () => {
+    apiPostOrThrow.mockResolvedValue(listResult([]));
+    await handleMemoryList(
+      {
+        state: "waiting,promoted",
+        harness: "codex",
+        agent: "agt.laptop",
+        repository: "github.com/acme/api",
+        type: "feedback",
+        limit: "10",
+        offset: "20",
+      },
+      captureWriter().writer,
+    );
+    expect(apiPostOrThrow).toHaveBeenCalledWith(
+      "context/steering/memories/list",
+      {
+        states: ["waiting", "promoted"],
+        harness: "codex",
+        agent: "agt.laptop",
+        repository: "github.com/acme/api",
+        type: "feedback",
+        limit: 10,
+        offset: 20,
+      },
+    );
   });
 
-  it("--json emits the raw list result and skips the table", async () => {
-    const result = { memories: [record()], total: 1 };
+  it("prints one row per group, ranked as the server sent them, with same-text counts", async () => {
+    const first = memory();
+    const twin = memory({ id: "mem_3d4e5f", use_count: 1 });
+    const codex = memory({
+      id: "mem_6g7h8j",
+      label: null,
+      statement: "Run the migration check\nbefore the build.",
+      harness: "codex",
+      use_count: 0,
+      last_used_at: null,
+      state: "in_pr",
+    });
+    apiPostOrThrow.mockResolvedValue(listResult([[first, twin], [codex]], { waiting: 5 }));
+    const captured = captureWriter();
+    await handleMemoryList({}, captured.writer);
+    const lines = captured.output().split("\n");
+    expect(lines[0]).toMatch(/^ID\s+Uses\s+Last used\s+Harness\s+State\s+Memory$/);
+    expect(lines[1]).toMatch(/^mem_0a1b2c\s+4\s+3h ago\s+claude-code\s+Waiting\s+Use pnpm \(\+1 same\)$/);
+    expect(lines[2]).toMatch(/^mem_6g7h8j\s+0\s+Never\s+codex\s+In PR\s+Run the migration check$/);
+    expect(lines).toContain("2 groups.");
+    expect(lines).toContain("5 memories wait in this workspace.");
+  });
+
+  it("shows No signal for a harness that reports no uses", async () => {
+    apiPostOrThrow.mockResolvedValue(
+      listResult([[memory({ harness: null, capture: "remember", use_count: 0, use_signal: false })]]),
+    );
+    const captured = captureWriter();
+    await handleMemoryList({}, captured.writer);
+    expect(captured.output().split("\n")[1]).toMatch(/^mem_0a1b2c\s+No signal\s+/);
+  });
+
+  it("says how to page, and when the list grouped only the top memories", async () => {
+    apiPostOrThrow.mockResolvedValue(
+      listResult([[memory()]], { total_groups: 3, total_memories: 2000, truncated: true }),
+    );
+    const captured = captureWriter();
+    await handleMemoryList({ limit: "1" }, captured.writer);
+    const out = captured.output();
+    expect(out).toContain("Showing 1 of 3 groups. Use --limit and --offset to page.");
+    expect(out).toContain(
+      "More than 2000 memories matched, and the list groups the top 2000. Narrow the filters to see the rest.",
+    );
+  });
+
+  it("refuses an unknown state before any request", async () => {
+    const captured = captureWriter();
+    await expect(
+      handleMemoryList({ state: "waiting,archived" }, captured.writer),
+    ).rejects.toThrow(
+      'Invalid --state "archived". Use one of: waiting, in_pr, promoted, dismissed, retired.',
+    );
+    expect(apiPostOrThrow).not.toHaveBeenCalled();
+  });
+
+  it("refuses an unknown harness before any request", async () => {
+    await expect(
+      handleMemoryList({ harness: "gemini" }, captureWriter().writer),
+    ).rejects.toThrow('Invalid --harness "gemini".');
+    expect(apiPostOrThrow).not.toHaveBeenCalled();
+  });
+
+  it("--json writes the raw result", async () => {
+    const result = listResult([[memory()]]);
     apiPostOrThrow.mockResolvedValue(result);
     const captured = captureWriter();
     await handleMemoryList({ json: true }, captured.writer);
     expect(JSON.parse(captured.output())).toEqual(result);
   });
 
-  it("rejects an unknown --class before any request is made", async () => {
+  it("writes the API's message and fails when the call is refused", async () => {
+    apiPostOrThrow.mockRejectedValue(new MockApiError("Forbidden", 403));
     const captured = captureWriter();
-    await expect(
-      handleMemoryList({ class: "bogus" }, captured.writer),
-    ).rejects.toThrow(
-      'Invalid class "bogus". Use one of: OBSERVATION, RULE, FACT.',
-    );
-    expect(apiPostOrThrow).not.toHaveBeenCalled();
-    expect(captured.output()).toContain('Invalid class "bogus"');
-  });
-
-  it("rejects a non-integer --min-enforcement", async () => {
-    const captured = captureWriter();
-    await expect(
-      handleMemoryList({ minEnforcement: "abc" }, captured.writer),
-    ).rejects.toThrow('Invalid --min-enforcement "abc". Use an integer.');
-    expect(apiPostOrThrow).not.toHaveBeenCalled();
-  });
-
-  it("rejects an unknown --sort", async () => {
-    const captured = captureWriter();
-    await expect(
-      handleMemoryList({ sort: "zap" }, captured.writer),
-    ).rejects.toThrow('Invalid --sort "zap". Use "createdAt" or "citations".');
-    expect(apiPostOrThrow).not.toHaveBeenCalled();
-  });
-
-  it("surfaces an ApiError's message through the writer and rethrows", async () => {
-    apiPostOrThrow.mockRejectedValue(
-      new MockApiError("Error 401 from agent/memory/list: unauthorized", 401),
-    );
-    const captured = captureWriter();
-    await expect(handleMemoryList({}, captured.writer)).rejects.toThrow(
-      "Error 401 from agent/memory/list: unauthorized",
-    );
-    expect(captured.output()).toContain(
-      "Error 401 from agent/memory/list: unauthorized",
-    );
-  });
-
-  it("stringifies a non-Error rejection", async () => {
-    apiPostOrThrow.mockRejectedValue("socket hangup");
-    const captured = captureWriter();
-    await expect(handleMemoryList({}, captured.writer)).rejects.toThrow(
-      "socket hangup",
-    );
+    await expect(handleMemoryList({}, captured.writer)).rejects.toThrow("Forbidden");
+    expect(captured.output()).toBe("Forbidden");
   });
 });
 
 describe("memory show", () => {
-  it("fetches one 200-item page and resolves by exact id, printing the detail block", async () => {
-    apiPostOrThrow.mockResolvedValue({
-      memories: [
-        record({ id: "mem_other0000000000", publicId: "M-2" }),
-        record(),
-      ],
-      total: 2,
-    });
+  const shown = {
+    memory: {
+      ...memory({ state: "in_pr", memory_pr: { number: 7, url: "https://github.com/acme/steering/pull/7", status: "open" } }),
+      run: null,
+      evidence: [],
+      applies_to: null,
+      tools: null,
+      retired_at: null,
+      retired_reason: null,
+    },
+    uses: [
+      { run: "tse_a1b2c3", signal: "read", count: 2, used_at: "2026-10-01T10:00:00.000Z" },
+    ],
+    uses_total: 4,
+    memory_pr: {
+      id: "mpr_0a1b2c",
+      number: 7,
+      url: "https://github.com/acme/steering/pull/7",
+      repository: "acme/steering",
+      branch: "memory/2026-10-01",
+      status: "open",
+      opened_at: "2026-10-01T09:00:00.000Z",
+      settled_at: null,
+    },
+  };
+
+  it("reads the memory by id and prints its text, source, uses, and memory PR", async () => {
+    apiPostOrThrow.mockResolvedValue(shown);
     const captured = captureWriter();
-    await handleMemoryShow("mem_0123456789abcdef", {}, captured.writer);
-    expect(apiPostOrThrow).toHaveBeenCalledWith("agent/memory/list", {
-      limit: 200,
-      offset: 0,
-    });
+    await handleMemoryShow("mem_0a1b2c", {}, captured.writer);
+    expect(apiPostOrThrow).toHaveBeenCalledWith(
+      "context/steering/memories/get",
+      { memory_id: "mem_0a1b2c" },
+    );
     const out = captured.output();
-    expect(out).toContain("Memory mem_0123456789abcdef");
-    expect(out).toContain(
-      "  lesson:      Never run vitest in watch mode on CI",
-    );
-    expect(out).toContain("  enforcement: 70");
-    expect(out).toContain("  nodeRef:     app:web");
+    expect(out).toContain("Memory mem_0a1b2c");
+    expect(out).toContain("  State:      In PR");
+    expect(out).toContain(`  Source:     ${shown.memory.source}`);
+    expect(out).toContain("  Memory PR:  #7 (open) https://github.com/acme/steering/pull/7");
+    expect(out).toContain("Use pnpm, never npm, in this repository.");
+    expect(out).toContain("Uses (1 of 4):");
+    expect(out).toContain("  2026-10-01T10:00:00.000Z  read  tse_a1b2c3  x2");
   });
 
-  it("resolves by publicId, and by short-id prefix when no exact match exists", async () => {
-    apiPostOrThrow.mockResolvedValue({
-      memories: [
-        record({ id: "mem_other0000000000", publicId: "M-2" }),
-        record(),
-      ],
-      total: 2,
-    });
-    const byPublicId = captureWriter();
-    await handleMemoryShow("M-2", {}, byPublicId.writer);
-    expect(byPublicId.output()).toContain("Memory mem_other0000000000");
-
-    const byPrefix = captureWriter();
-    await handleMemoryShow("mem_01", {}, byPrefix.writer);
-    expect(byPrefix.output()).toContain("Memory mem_0123456789abcdef");
-  });
-
-  it("--json emits the matched record", async () => {
-    const m = record();
-    apiPostOrThrow.mockResolvedValue({ memories: [m], total: 1 });
+  it("--json writes the raw result", async () => {
+    apiPostOrThrow.mockResolvedValue(shown);
     const captured = captureWriter();
-    await handleMemoryShow("M-1", { json: true }, captured.writer);
-    expect(JSON.parse(captured.output())).toEqual(m);
+    await handleMemoryShow("mem_0a1b2c", { json: true }, captured.writer);
+    expect(JSON.parse(captured.output())).toEqual(shown);
   });
 
-  it("fails when nothing in the page matches", async () => {
-    apiPostOrThrow.mockResolvedValue({ memories: [record()], total: 1 });
-    const captured = captureWriter();
-    await expect(handleMemoryShow("nope", {}, captured.writer)).rejects.toThrow(
-      'No memory matching "nope" in this workspace (searched the latest 200).',
-    );
-  });
-});
-
-describe("memory edit", () => {
-  it("refuses an empty edit without calling the API", async () => {
-    const captured = captureWriter();
-    await expect(
-      handleMemoryEdit("mem_x", {}, captured.writer),
-    ).rejects.toThrow(
-      "Nothing to edit. Pass at least one of --lesson, --kind, or --source.",
-    );
-    expect(apiPostOrThrow).not.toHaveBeenCalled();
-  });
-
-  it("sends the changed fields and echoes the updated detail", async () => {
-    apiPostOrThrow.mockResolvedValue(record({ lesson: "L2" }));
-    const captured = captureWriter();
-    await handleMemoryEdit(
-      "mem_x",
-      { lesson: "L2", kind: "style", source: "audit" },
-      captured.writer,
-    );
-    expect(apiPostOrThrow).toHaveBeenCalledWith("agent/memory/update", {
-      memoryId: "mem_x",
-      lesson: "L2",
-      memoryKind: "style",
-      source: "audit",
-    });
-    const lines = captured.output().split("\n");
-    expect(lines[0]).toBe("✓ Updated memory mem_0123456789abcdef.");
-    expect(captured.output()).toContain("  lesson:      L2");
-  });
-
-  it("--json emits the updated record", async () => {
-    const updated = record({ lesson: "L2" });
-    apiPostOrThrow.mockResolvedValue(updated);
-    const captured = captureWriter();
-    await handleMemoryEdit(
-      "mem_x",
-      { lesson: "L2", json: true },
-      captured.writer,
-    );
-    expect(JSON.parse(captured.output())).toEqual(updated);
-  });
-});
-
-describe("memory salience", () => {
-  it("refuses when no flag is given", async () => {
-    const captured = captureWriter();
-    await expect(
-      handleMemorySalience("mem_x", {}, captured.writer),
-    ).rejects.toThrow(
-      "Nothing to update. Pass at least one of --confidence, --enforcement, or --status.",
-    );
-    expect(apiPostOrThrow).not.toHaveBeenCalled();
-  });
-
-  it("rejects an out-of-range --confidence", async () => {
-    const captured = captureWriter();
-    await expect(
-      handleMemorySalience("mem_x", { confidence: "150" }, captured.writer),
-    ).rejects.toThrow(
-      'Invalid --confidence "150". Use a number between 0 and 100.',
-    );
-  });
-
-  it("rejects a non-integer --enforcement", async () => {
-    const captured = captureWriter();
-    await expect(
-      handleMemorySalience("mem_x", { enforcement: "7.5" }, captured.writer),
-    ).rejects.toThrow(
-      'Invalid --enforcement "7.5". Use an integer between 1 and 100.',
-    );
-  });
-
-  it("rejects an unknown --status", async () => {
-    const captured = captureWriter();
-    await expect(
-      handleMemorySalience("mem_x", { status: "weird" }, captured.writer),
-    ).rejects.toThrow(
-      'Invalid status "weird". Use one of: ACTIVE, SUPERSEDED, RETRACTED, ARCHIVED.',
-    );
-  });
-
-  it("sends parsed scores plus the upper-cased status and reports the new salience", async () => {
-    apiPostOrThrow.mockResolvedValue(record());
-    const captured = captureWriter();
-    await handleMemorySalience(
-      "mem_x",
-      { confidence: "55.5", enforcement: "60", status: "active" },
-      captured.writer,
-    );
-    expect(apiPostOrThrow).toHaveBeenCalledWith("agent/memory/update", {
-      memoryId: "mem_x",
-      confidenceScore: 55.5,
-      enforcementScore: 60,
-      status: "ACTIVE",
-    });
-    expect(captured.output()).toBe(
-      "✓ Salience updated — class RULE, confidence 82.4, enforcement 70 (mem_0123456789abcdef).",
-    );
-  });
-
-  it("renders a null enforcement as — on a status-only update", async () => {
-    apiPostOrThrow.mockResolvedValue(
-      record({ memoryClass: "OBSERVATION", enforcementScore: null }),
+  it("fails with the API's message for a memory the workspace does not hold", async () => {
+    apiPostOrThrow.mockRejectedValue(
+      new MockApiError("This workspace holds no memory mem_zz.", 404),
     );
     const captured = captureWriter();
-    await handleMemorySalience(
-      "mem_x",
-      { status: "archived" },
-      captured.writer,
+    await expect(handleMemoryShow("mem_zz", {}, captured.writer)).rejects.toThrow(
+      "This workspace holds no memory mem_zz.",
     );
-    expect(apiPostOrThrow).toHaveBeenCalledWith("agent/memory/update", {
-      memoryId: "mem_x",
-      status: "ARCHIVED",
-    });
-    expect(captured.output()).toContain("enforcement —");
-  });
-
-  it("--json emits the updated record", async () => {
-    const updated = record();
-    apiPostOrThrow.mockResolvedValue(updated);
-    const captured = captureWriter();
-    await handleMemorySalience(
-      "mem_x",
-      { confidence: "50", json: true },
-      captured.writer,
-    );
-    expect(JSON.parse(captured.output())).toEqual(updated);
   });
 });
 
 describe("memory promote", () => {
-  it("requires --to", async () => {
-    const captured = captureWriter();
-    await expect(
-      handleMemoryPromote("mem_x", {}, captured.writer),
-    ).rejects.toThrow("Missing --to. Use `--to rule` or `--to fact`.");
-    expect(apiPostOrThrow).not.toHaveBeenCalled();
+  const opened = {
+    pull_request: {
+      number: 7,
+      url: "https://github.com/acme/steering/pull/7",
+      branch: "memory/2026-10-01",
+      opened: true,
+    },
+    records: [
+      {
+        path: "steering/code-rules/pnpm-never-npm-repository.md",
+        lineage: "pnpm-never-npm-repository",
+        kind: "code-rule",
+        force: "should",
+        effect: null,
+        memory_ids: ["mem_0a1b2c", "mem_3d4e5f"],
+      },
+    ],
+    skipped: [{ memory_id: "mem_9z8y7x", reason: "not_waiting" }],
+  };
+
+  it("sends one draft per id, citing same-text memories, by default", async () => {
+    apiPostOrThrow.mockResolvedValue(opened);
+    await handleMemoryPromote(["mem_0a1b2c", "mem_9z8y7x"], {}, captureWriter().writer);
+    expect(apiPostOrThrow).toHaveBeenCalledWith(
+      "context/steering/memories/promote",
+      {
+        drafts: [{ memory_ids: ["mem_0a1b2c"] }, { memory_ids: ["mem_9z8y7x"] }],
+        same_text: true,
+      },
+    );
   });
 
-  it("rejects a --to outside rule|fact", async () => {
-    const captured = captureWriter();
-    await expect(
-      handleMemoryPromote("mem_x", { to: "observation" }, captured.writer),
-    ).rejects.toThrow('Invalid --to "observation". Use "rule" or "fact".');
+  it("sends one draft citing every id with --one-record, with the kind, force, statement, and repos", async () => {
+    apiPostOrThrow.mockResolvedValue(opened);
+    await handleMemoryPromote(
+      ["mem_0a1b2c", "mem_3d4e5f"],
+      {
+        oneRecord: true,
+        statement: "Install with pnpm.",
+        kind: "code-rule",
+        force: "must",
+        repo: ["github.com/acme/api,github.com/acme/web"],
+        sameText: false,
+      },
+      captureWriter().writer,
+    );
+    expect(apiPostOrThrow).toHaveBeenCalledWith(
+      "context/steering/memories/promote",
+      {
+        drafts: [
+          {
+            memory_ids: ["mem_0a1b2c", "mem_3d4e5f"],
+            statement: "Install with pnpm.",
+            kind: "code-rule",
+            force: "must",
+            repos: ["github.com/acme/api", "github.com/acme/web"],
+          },
+        ],
+        same_text: false,
+      },
+    );
   });
 
-  it("rejects an out-of-range --enforcement", async () => {
+  it("prints the memory PR, each record, and each memory it left out", async () => {
+    apiPostOrThrow.mockResolvedValue(opened);
     const captured = captureWriter();
+    await handleMemoryPromote(["mem_0a1b2c"], {}, captured.writer);
+    expect(captured.output()).toBe(
+      [
+        "Opened memory PR #7 on memory/2026-10-01: https://github.com/acme/steering/pull/7",
+        "  steering/code-rules/pnpm-never-npm-repository.md (code-rule, should) cites mem_0a1b2c, mem_3d4e5f",
+        "Nothing steers until a person merges the PR.",
+        "Skipped mem_9z8y7x: the memory is not waiting.",
+      ].join("\n"),
+    );
+  });
+
+  it("says so when no memory could be promoted", async () => {
+    apiPostOrThrow.mockResolvedValue({
+      pull_request: null,
+      records: [],
+      skipped: [{ memory_id: "mem_9z8y7x", reason: "already_proposed" }],
+    });
+    const captured = captureWriter();
+    await handleMemoryPromote(["mem_9z8y7x"], {}, captured.writer);
+    expect(captured.output()).toBe(
+      [
+        "No record was added, because no memory you named can be promoted.",
+        "Skipped mem_9z8y7x: an open memory PR already proposes its statement.",
+      ].join("\n"),
+    );
+  });
+
+  it("refuses --statement for more than one record before any request", async () => {
     await expect(
       handleMemoryPromote(
-        "mem_x",
-        { to: "rule", enforcement: "0" },
-        captured.writer,
+        ["mem_0a1b2c", "mem_3d4e5f"],
+        { statement: "Install with pnpm." },
+        captureWriter().writer,
       ),
-    ).rejects.toThrow(
-      'Invalid --enforcement "0". Use an integer between 1 and 100.',
-    );
-  });
-
-  it("promotes with enforcement and rationale and prints the promote summary", async () => {
-    apiPostOrThrow.mockResolvedValue(
-      record({ memoryClass: "FACT", enforcementScore: 100 }),
-    );
-    const captured = captureWriter();
-    await handleMemoryPromote(
-      "mem_x",
-      { to: "fact", enforcement: "90", rationale: "well cited" },
-      captured.writer,
-    );
-    expect(apiPostOrThrow).toHaveBeenCalledWith("agent/memory/promote", {
-      memoryId: "mem_x",
-      toClass: "FACT",
-      enforcementScore: 90,
-      rationale: "well cited",
-    });
-    expect(captured.output()).toBe(
-      "✓ Promoted to FACT — enforcement 100 (mem_0123456789abcdef).\n" +
-        "  Never run vitest in watch mode on CI",
-    );
-  });
-
-  it("--json emits the promoted record", async () => {
-    const promoted = record({ memoryClass: "FACT", enforcementScore: 100 });
-    apiPostOrThrow.mockResolvedValue(promoted);
-    const captured = captureWriter();
-    await handleMemoryPromote(
-      "mem_x",
-      { to: "fact", json: true },
-      captured.writer,
-    );
-    expect(JSON.parse(captured.output())).toEqual(promoted);
-  });
-});
-
-describe("memory demote", () => {
-  it("requires --to", async () => {
-    const captured = captureWriter();
-    await expect(
-      handleMemoryDemote("mem_x", {}, captured.writer),
-    ).rejects.toThrow("Missing --to. Use `--to rule` or `--to observation`.");
+    ).rejects.toThrow("--statement sets one record's body.");
     expect(apiPostOrThrow).not.toHaveBeenCalled();
   });
 
-  it("rejects a --to outside rule|observation", async () => {
-    const captured = captureWriter();
+  it("refuses an unknown kind, force, or effect before any request", async () => {
     await expect(
-      handleMemoryDemote("mem_x", { to: "fact" }, captured.writer),
-    ).rejects.toThrow('Invalid --to "fact". Use "rule" or "observation".');
-  });
-
-  it("rejects a non-integer --enforcement", async () => {
-    const captured = captureWriter();
+      handleMemoryPromote(["mem_0a1b2c"], { kind: "skill" }, captureWriter().writer),
+    ).rejects.toThrow('Invalid --kind "skill".');
     await expect(
-      handleMemoryDemote(
-        "mem_x",
-        { to: "rule", enforcement: "1.5" },
-        captured.writer,
-      ),
-    ).rejects.toThrow(
-      'Invalid --enforcement "1.5". Use an integer between 1 and 100.',
-    );
-  });
-
-  it("demotes to OBSERVATION and renders the cleared enforcement as —", async () => {
-    apiPostOrThrow.mockResolvedValue(
-      record({ memoryClass: "OBSERVATION", enforcementScore: null }),
-    );
-    const captured = captureWriter();
-    await handleMemoryDemote(
-      "mem_x",
-      { to: "observation", rationale: "too broad" },
-      captured.writer,
-    );
-    expect(apiPostOrThrow).toHaveBeenCalledWith("agent/memory/demote", {
-      memoryId: "mem_x",
-      toClass: "OBSERVATION",
-      rationale: "too broad",
-    });
-    expect(captured.output()).toBe(
-      "✓ Demoted to OBSERVATION — enforcement — (mem_0123456789abcdef).\n" +
-        "  Never run vitest in watch mode on CI",
-    );
+      handleMemoryPromote(["mem_0a1b2c"], { force: "always" }, captureWriter().writer),
+    ).rejects.toThrow('Invalid --force "always".');
+    await expect(
+      handleMemoryPromote(["mem_0a1b2c"], { effect: "allow" }, captureWriter().writer),
+    ).rejects.toThrow('Invalid --effect "allow".');
+    expect(apiPostOrThrow).not.toHaveBeenCalled();
   });
 });
 
 describe("memory dismiss", () => {
-  it("dismisses with restore defaulted to false", async () => {
-    apiPostOrThrow.mockResolvedValue({ memoryId: "mem_x", dismissed: true });
-    const captured = captureWriter();
-    await handleMemoryDismiss("mem_x", {}, captured.writer);
-    expect(apiPostOrThrow).toHaveBeenCalledWith(
-      "agent/memory/promotion/dismiss",
-      { memoryId: "mem_x", restore: false },
-    );
-    expect(captured.output()).toBe(
-      "✓ Dismissed mem_x from the promotion queue.",
-    );
-  });
-
-  it("--restore restores the candidate and reports it", async () => {
-    apiPostOrThrow.mockResolvedValue({ memoryId: "mem_x", dismissed: false });
-    const captured = captureWriter();
-    await handleMemoryDismiss("mem_x", { restore: true }, captured.writer);
-    expect(apiPostOrThrow).toHaveBeenCalledWith(
-      "agent/memory/promotion/dismiss",
-      { memoryId: "mem_x", restore: true },
-    );
-    expect(captured.output()).toBe("✓ Restored mem_x to the promotion queue.");
-  });
-});
-
-const stats = {
-  totals: { citations: 12, executions: 4, memoriesCited: 3, nodesCited: 2 },
-  byInfluence: { DECISIVE: 5, IGNORED: 1 },
-  byCompliance: { COMPLIED: 6 },
-  daily: [],
-  topMemories: [
-    {
-      memoryId: "mem_aaaa11112222",
-      publicId: "M-2",
-      lesson: "Lint before push",
-      memoryClass: "RULE",
-      memoryKind: "gotcha",
-      citationCount: 5,
-      decisiveCount: 2,
-      contributingCount: 1,
-      consideredCount: 1,
-      ignoredCount: 1,
-      violationCount: 0,
-    },
-  ],
-  leastUsefulMemories: [],
-  mostViolatedRules: [],
-  topNodes: [
-    {
-      node: { id: "n1", label: "App", displayName: "web", properties: {} },
-      citationCount: 4,
-      decisiveCount: 1,
-    },
-  ],
-};
-
-describe("memory citations", () => {
-  it("applies the client defaults (30 days, top 10) and renders the rollup sections", async () => {
-    apiPostOrThrow.mockResolvedValue(stats);
-    const captured = captureWriter();
-    await handleMemoryCitations({}, captured.writer);
-    expect(apiPostOrThrow).toHaveBeenCalledWith(
-      "agent/memory/citations/stats",
-      { days: 30, limit: 10 },
-    );
-    const out = captured.output();
-    expect(out).toContain(
-      "Citations: 12 across 4 executions — 3 memories, 2 nodes cited.",
-    );
-    expect(out).toContain("  influence: DECISIVE 5, IGNORED 1");
-    expect(out).toContain("  compliance: COMPLIED 6");
-    expect(out).toContain("Most-cited memories:");
-    expect(out).toContain(
-      "mem_aaaa  cites:  5 dec:  2 viol:  0  Lint before push",
-    );
-    expect(out).toContain("web [App]  cites:  4 dec:  1");
-    expect(out).not.toContain("Least-useful");
-  });
-
-  it("passes parsed --days and --limit through", async () => {
-    apiPostOrThrow.mockResolvedValue(stats);
-    const captured = captureWriter();
-    await handleMemoryCitations({ days: "7", limit: "5" }, captured.writer);
-    expect(apiPostOrThrow).toHaveBeenCalledWith(
-      "agent/memory/citations/stats",
-      { days: 7, limit: 5 },
-    );
-  });
-
-  it("rejects a non-integer --days", async () => {
-    const captured = captureWriter();
-    await expect(
-      handleMemoryCitations({ days: "soon" }, captured.writer),
-    ).rejects.toThrow('Invalid --days "soon". Use an integer.');
-    expect(apiPostOrThrow).not.toHaveBeenCalled();
-  });
-
-  it("--json emits the raw rollup", async () => {
-    apiPostOrThrow.mockResolvedValue(stats);
-    const captured = captureWriter();
-    await handleMemoryCitations({ json: true }, captured.writer);
-    expect(JSON.parse(captured.output())).toEqual(stats);
-  });
-});
-
-describe("memory candidates", () => {
-  it("defaults limit 3 and prints the empty-queue message", async () => {
-    apiPostOrThrow.mockResolvedValue({ candidates: [] });
-    const captured = captureWriter();
-    await handleMemoryCandidates({}, captured.writer);
-    expect(apiPostOrThrow).toHaveBeenCalledWith(
-      "agent/memory/promotion/candidates",
-      { limit: 3 },
-    );
-    expect(captured.output()).toBe(
-      "No promotion candidates right now — no OBSERVATIONs have enough citation pressure yet.",
-    );
-  });
-
-  it("parses --limit and renders a row per candidate", async () => {
+  it("dismisses the ids and says the curator holds their statements", async () => {
     apiPostOrThrow.mockResolvedValue({
-      candidates: [
-        {
-          id: "cand_0000abcd",
-          publicId: "M-3",
-          lesson: "Use captureWriter in the REPL",
-          memoryKind: "convention-deviation",
-          citationCount: 9,
-          influenceCount: 4,
-          confidenceScore: 71.2,
-        },
-      ],
+      changed: ["mem_0a1b2c"],
+      skipped: [{ memory_id: "mem_9z8y7x", state: "promoted" }],
+      rejections: 1,
     });
     const captured = captureWriter();
-    await handleMemoryCandidates({ limit: "2" }, captured.writer);
+    await handleMemoryDismiss(["mem_0a1b2c", "mem_9z8y7x"], {}, captured.writer);
     expect(apiPostOrThrow).toHaveBeenCalledWith(
-      "agent/memory/promotion/candidates",
-      { limit: 2 },
+      "context/steering/memories/dismiss",
+      { memory_ids: ["mem_0a1b2c", "mem_9z8y7x"], restore: false },
     );
-    const out = captured.output();
-    expect(out).toContain("cand_000");
-    expect(out).toContain("convention-deviation");
-    expect(out).toContain("cites:  9");
-    expect(out).toContain("Use captureWriter in the REPL");
+    expect(captured.output()).toBe(
+      [
+        "Dismissed 1 memory: mem_0a1b2c.",
+        "The curator proposes their statements again only after memories from 2 more runs repeat them.",
+        "Skipped mem_9z8y7x: a steering record carries it.",
+      ].join("\n"),
+    );
   });
 
-  it("rejects a non-integer --limit", async () => {
-    const captured = captureWriter();
-    await expect(
-      handleMemoryCandidates({ limit: "many" }, captured.writer),
-    ).rejects.toThrow('Invalid --limit "many". Use an integer.');
-    expect(apiPostOrThrow).not.toHaveBeenCalled();
-  });
-});
-
-describe("memory rm", () => {
-  it("deletes the memory and confirms", async () => {
-    apiPostOrThrow.mockResolvedValue({ deleted: true, memoryId: "mem_x" });
-    const captured = captureWriter();
-    await handleMemoryRemove("mem_x", captured.writer);
-    expect(apiPostOrThrow).toHaveBeenCalledWith("agent/memory/delete", {
-      memoryId: "mem_x",
+  it("restores with --restore", async () => {
+    apiPostOrThrow.mockResolvedValue({
+      changed: [],
+      skipped: [{ memory_id: "mem_0a1b2c", state: "waiting" }, { memory_id: "mem_zz", state: null }],
+      rejections: 0,
     });
-    expect(captured.output()).toBe("✓ Deleted memory mem_x.");
+    const captured = captureWriter();
+    await handleMemoryDismiss(["mem_0a1b2c", "mem_zz"], { restore: true }, captured.writer);
+    expect(apiPostOrThrow).toHaveBeenCalledWith(
+      "context/steering/memories/dismiss",
+      { memory_ids: ["mem_0a1b2c", "mem_zz"], restore: true },
+    );
+    expect(captured.output()).toBe(
+      [
+        "No memory was restored.",
+        "Skipped mem_0a1b2c: it is waiting.",
+        "Skipped mem_zz: this workspace holds no such memory.",
+      ].join("\n"),
+    );
   });
 
-  it("fails when the server reports nothing deleted", async () => {
-    apiPostOrThrow.mockResolvedValue({ deleted: false, memoryId: "mem_x" });
+  it("--json writes the raw result", async () => {
+    const result = { changed: ["mem_0a1b2c"], skipped: [], rejections: 1 };
+    apiPostOrThrow.mockResolvedValue(result);
     const captured = captureWriter();
-    await expect(handleMemoryRemove("mem_x", captured.writer)).rejects.toThrow(
-      "No memory mem_x found in this workspace.",
-    );
+    await handleMemoryDismiss(["mem_0a1b2c"], { json: true }, captured.writer);
+    expect(JSON.parse(captured.output())).toEqual(result);
   });
 });
 
@@ -903,80 +675,6 @@ describe("memory import", () => {
   });
 });
 
-describe("remember", () => {
-  it("refuses blank text", async () => {
-    const captured = captureWriter();
-    await expect(handleRemember("   ", {}, captured.writer)).rejects.toThrow(
-      'Nothing to remember. Pass the memory text, e.g. `oxagen remember "…"`.',
-    );
-    expect(apiPostOrThrow).not.toHaveBeenCalled();
-  });
-
-  it("rejects an out-of-range --enforcement", async () => {
-    const captured = captureWriter();
-    await expect(
-      handleRemember("lesson", { enforcement: "101" }, captured.writer),
-    ).rejects.toThrow(
-      'Invalid --enforcement "101". Use an integer between 1 and 100.',
-    );
-  });
-
-  it("rejects an unknown --class before calling the API", async () => {
-    const captured = captureWriter();
-    await expect(
-      handleRemember("lesson", { class: "hunch" }, captured.writer),
-    ).rejects.toThrow(
-      'Invalid class "hunch". Use one of: OBSERVATION, RULE, FACT.',
-    );
-    expect(apiPostOrThrow).not.toHaveBeenCalled();
-  });
-
-  it("trims the text, pins class/kind, and prints the capture summary", async () => {
-    apiPostOrThrow.mockResolvedValue({
-      memory: record(),
-      inferred: {
-        memoryClass: "OBSERVATION",
-        memoryKind: "gotcha",
-        classified: false,
-      },
-    });
-    const captured = captureWriter();
-    await handleRemember(
-      "  always use rg  ",
-      {
-        class: "observation",
-        kind: "gotcha",
-        enforcement: "40",
-        node: "app:web",
-      },
-      captured.writer,
-    );
-    expect(apiPostOrThrow).toHaveBeenCalledWith("agent/memory/remember", {
-      text: "always use rg",
-      memoryClass: "OBSERVATION",
-      memoryKind: "gotcha",
-      enforcementScore: 40,
-      nodeRef: "app:web",
-    });
-    expect(captured.output()).toBe(
-      "✓ Remembered — class OBSERVATION, kind gotcha (set).\n" +
-        "  id: mem_0123456789abcdef\n" +
-        "  Never run vitest in watch mode on CI",
-    );
-  });
-
-  it("--json emits the raw remember result", async () => {
-    const result = {
-      memory: record(),
-      inferred: { memoryClass: "RULE", memoryKind: "gotcha", classified: true },
-    };
-    apiPostOrThrow.mockResolvedValue(result);
-    const captured = captureWriter();
-    await handleRemember("always use rg", { json: true }, captured.writer);
-    expect(JSON.parse(captured.output())).toEqual(result);
-  });
-});
-
 describe("one-shot failure contract", () => {
   it("with the default writer a validation failure writes stderr and exits 1", async () => {
     const exit = vi.spyOn(process, "exit").mockImplementation(() => {
@@ -986,12 +684,12 @@ describe("one-shot failure contract", () => {
       .spyOn(process.stderr, "write")
       .mockImplementation(() => true);
     try {
-      await expect(handleMemoryEdit("mem_x", {})).rejects.toThrow(
+      await expect(handleMemoryPromote([], {})).rejects.toThrow(
         "process.exit(1)",
       );
       expect(exit).toHaveBeenCalledWith(1);
       expect(errWrite).toHaveBeenCalledWith(
-        "Nothing to edit. Pass at least one of --lesson, --kind, or --source.\n",
+        "Nothing to promote. Pass one or more memory ids, such as `oxagen memory promote mem_…`.\n",
       );
     } finally {
       exit.mockRestore();

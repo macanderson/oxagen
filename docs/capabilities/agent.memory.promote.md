@@ -64,12 +64,7 @@ curl -X POST "https://api.oxagen.sh/v1/{org_slug}/{workspace_slug}/agent/memory/
   -d '{"memoryId": "mem_01H…", "toClass": "FACT", "rationale": "confirmed by finance", "basedOnEvidenceIds": ["ev_01H…"]}'
 ```
 
-CLI (rationale flag now optional):
-
-```bash
-oxagen memory promote mem_01H… --to rule --enforcement 80
-oxagen memory promote mem_01H… --to fact --rationale "confirmed by finance"
-```
+CLI: `oxagen memory` reads workspace memories, not this store, so no CLI command calls this capability (#4912).
 
 ## SPEC references
 

@@ -64,27 +64,20 @@ oxagen graph search -q "<text>" [-l <labels>] [-n <limit>] [--json] [--quiet]
 
 Bounded semantic (vector) search across the workspace context graph. `-l/--labels` takes a comma-separated list of domain labels (for example `Person,Company`). `-n/--limit` accepts 1–50 (default 10). See [Knowledge graph from the CLI](/docs/cli/knowledge-graph).
 
-## oxagen memory & remember: agent memory
+## oxagen memory: workspace memories
 
 ```bash
-oxagen remember "<lesson>" [--class <class>] [--kind <kind>] [--enforcement <n>] [--node <ref>]
-oxagen memory list|show|edit|salience|promote|demote|dismiss|candidates|citations|rm|import
+oxagen memory list|show|promote|dismiss|import
 ```
 
-The workspace's memory of what agents learned. `remember` captures a lesson and infers its class and kind. The `memory` subcommands curate them. See [Memory from the CLI](/docs/cli/memory).
+The memories agents wrote in their harnesses, which Oxagen collects from enrolled hosts. See [Memory from the CLI](/docs/cli/memory).
 
 | Subcommand | Description |
 |---|---|
-| `list` | List memories, filtered by `--class`, `--kind`, `--min-enforcement`, `--min-citations`, or `--node`, and sorted by `--sort`. |
-| `show <id>` | One memory in full detail (id or publicId). |
-| `edit <id>` | Change a memory's `--lesson`, `--kind`, or `--source`. |
-| `salience <id>` | Adjust `--confidence`, `--enforcement`, or lifecycle `--status`. |
-| `promote <id> --to <class>` | Raise to RULE or FACT and record an audit event. FACT requires human confirmation. |
-| `demote <id> --to <class>` | Lower to RULE or OBSERVATION and record an audit event. |
-| `dismiss <id>` | Remove from the promotion candidate queue (`--restore` puts it back). |
-| `candidates` | Top OBSERVATION memories by citation pressure, ripe for promotion. |
-| `citations` | Workspace citation analytics over `--days`: influence, compliance, most-cited, least-useful, and most-violated. |
-| `rm <id>` | Delete a memory permanently. |
+| `list` | Memories ranked by uses, one row per group that says the same thing. Filter by `--state`, `--harness`, `--agent`, `--repository`, or `--type`. |
+| `show <id>` | One memory with its text, source, uses, and memory PR. |
+| `promote <ids...>` | Draft steering records on the open memory PR, or a new one. Set `--kind`, `--force`, `--effect`, `--statement`, or `--repo`. |
+| `dismiss <ids...>` | Set memories aside so the curator does not propose them again. `--restore` brings them back. |
 | `import <files...>` | Read Markdown rule docs into steering records with a kind and a force for each statement. Previews unless `--yes`, which opens one steering PR. |
 
 ## oxagen init: link a project

@@ -170,8 +170,7 @@ oxagen logs                         # tail the CLI's own debug log
 
 ```bash
 oxagen graph search -q "…"
-oxagen memory list|show|edit|salience|promote|demote|candidates|citations|import|rm
-oxagen remember "<lesson>" --class RULE --enforcement 90
+oxagen memory list|show|promote|dismiss|import   # the memories agents wrote in their harnesses
 ```
 
 **Govern** — workspace, agents, credentials

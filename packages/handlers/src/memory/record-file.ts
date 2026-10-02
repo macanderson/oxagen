@@ -4,14 +4,18 @@
 // Both are pure. The runner reads and writes the steering repo. A new record
 // is `steering-record/v1` with `force: info`, `status: active`, and
 // `origin: inferred`. Its provenance copies each memory it cites, with a null
-// agent or run kept as null. A retirement changes one line, `status`, and
-// leaves every other byte of the file as it was.
+// agent or run kept as null. A record a person promotes (promote_memories)
+// keeps the kind, force, and effect the person chose, and its origin is
+// `user`. A retirement changes one line, `status`, and leaves every other
+// byte of the file as it was.
 import { stringify } from "yaml";
 import {
   parseFrontmatter,
   readSteeringRecord,
   splitRecordFile,
   STEERING_RECORD_FIELDS,
+  type RecordEffect,
+  type RecordForce,
   type RecordKind,
 } from "@oxagen/oxagen/steering-repo/record";
 import { memoryDescription, memoryLabel } from "./naming";
@@ -56,6 +60,48 @@ function unreadable(
  * such as for a draft that cites no memory.
  */
 export function renderMemoryRecord(draft: MemoryRecordDraft): string {
+  return renderRecord(draft, {
+    kind: memoryRecordKind(draft.kind),
+    force: "info",
+    effect: null,
+    origin: "inferred",
+  });
+}
+
+/** A record a person promotes from memories, with the kind, force, and effect they chose. */
+export interface PromotedRecordDraft extends MemoryRecordDraft {
+  force: RecordForce;
+  /** A constraint's effect. Null for every other kind. */
+  effect: RecordEffect | null;
+}
+
+/**
+ * A record file for promote_memories. It differs from the curator's in three
+ * fields: the kind is the person's, so a constraint or a procedure stays one,
+ * the force and the effect are the person's, and the origin is `user`, since
+ * a person chose and checked it. The body, the scope, the targets, and the
+ * provenance are written as the curator writes them. Throws when the file
+ * would not read as a steering record, such as a constraint with no effect
+ * or a force the kind does not allow.
+ */
+export function renderPromotedRecord(draft: PromotedRecordDraft): string {
+  return renderRecord(draft, {
+    kind: draft.kind,
+    force: draft.force,
+    effect: draft.effect,
+    origin: "user",
+  });
+}
+
+function renderRecord(
+  draft: MemoryRecordDraft,
+  chosen: {
+    kind: RecordKind;
+    force: RecordForce;
+    effect: RecordEffect | null;
+    origin: "user" | "inferred";
+  },
+): string {
   const statement = draft.statement.replace(/\r\n?/g, "\n").trim();
   const repos = listField(draft.repos);
   const fields: Record<string, unknown> = {
@@ -63,14 +109,15 @@ export function renderMemoryRecord(draft: MemoryRecordDraft): string {
     lineage: draft.lineage,
     label: memoryLabel(statement),
     description: memoryDescription(statement),
-    kind: memoryRecordKind(draft.kind),
-    force: "info",
+    kind: chosen.kind,
+    effect: chosen.effect ?? undefined,
+    force: chosen.force,
     scope: repos === undefined ? "workspace" : "repository",
     repos,
     tools: listField(draft.tools),
     applies_to: listField(draft.appliesTo),
     status: "active",
-    origin: "inferred",
+    origin: chosen.origin,
     provenance: {
       source: "run",
       uri: draft.uri,
