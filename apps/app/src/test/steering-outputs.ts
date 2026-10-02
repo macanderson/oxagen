@@ -43,6 +43,9 @@ export function recordOutput(
     path: RECORD_PATH,
     publishedAt: AT,
     updatedAt: AT,
+    // The line's tokens at 48,000 micros a week per 1,000 (#4572).
+    contextTokens: 22,
+    weeklyPrice: { micros: "1056", currency: "USD", basis: "estimated" },
     ...overrides,
   };
 }

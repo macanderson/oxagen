@@ -117,6 +117,103 @@ describe("list_records", () => {
     );
     expect(other).toEqual({ records: [], total: 0 });
   });
+
+  // #4572 item 1: a record carried no price, so the card could not show one.
+  // list_mcp_servers prices a provider's 5,200 tokens at 48,000 micros per
+  // 1,000 as 249,600 micros (agent.mcp.list.test.ts). A record of the same
+  // size costs the same.
+  describe("the weekly price", () => {
+    const PRICE = {
+      perThousandMicros: 48_000n,
+      currency: "USD",
+      requests: 400,
+      since: new Date("2026-09-20T00:00:00Z"),
+    };
+
+    /** A record whose line is 20,800 bytes: 5,200 tokens. */
+    async function withLargeRecord() {
+      const h = harness();
+      await publish(h, "ctx.a.rule", "rule");
+      h.store.records.push({
+        ...h.store.records[0]!,
+        id: "large",
+        publicId: "ctr_large000000000000000000",
+        slug: "ctx.big",
+        kind: "memory",
+        force: "info",
+        constraintEffect: null,
+        // `- ` and ` (memory; ctx.big)` add 20 bytes.
+        statement: "a".repeat(20_780),
+      });
+      return h;
+    }
+
+    it("prices each record's line at the workspace's weekly price, as list_mcp_servers prices a provider", async () => {
+      const h = await withLargeRecord();
+      const weeklyPrice = vi.fn(async () => PRICE);
+      const list = createListRecordsHandler({ ...h, weeklyPrice });
+      const out = await list(contextRecordsList.input.parse({}), ctx());
+      expect(weeklyPrice).toHaveBeenCalledOnce();
+      expect(weeklyPrice).toHaveBeenCalledWith({
+        orgId: SCOPE.orgId,
+        workspaceId: SCOPE.workspaceId,
+      });
+      const big = out.records.find((r) => r.lineageId === "ctx.big");
+      expect(big).toMatchObject({
+        contextTokens: 5_200,
+        weeklyPrice: { micros: "249600", currency: "USD", basis: "estimated" },
+      });
+      // `- About ctx.a.rule. (rule; ctx.a.rule)` is 38 bytes: 10 tokens.
+      const rule = out.records.find((r) => r.lineageId === "ctx.a.rule");
+      expect(rule).toMatchObject({
+        contextTokens: 10,
+        weeklyPrice: { micros: "480", currency: "USD", basis: "estimated" },
+      });
+      expect(() => contextRecordsList.output.parse(out)).not.toThrow();
+    });
+
+    it("leaves a record the assembler drops with no tokens and no price (negative)", async () => {
+      const h = await withLargeRecord();
+      h.store.records.push({
+        ...h.store.records[0]!,
+        id: "unclassified",
+        publicId: "ctr_unclassified000000000000",
+        slug: "ctx.unclassified",
+        force: null,
+        statement: null,
+      });
+      const weeklyPrice = async () => PRICE;
+      const list = createListRecordsHandler({ ...h, weeklyPrice });
+      const out = await list(contextRecordsList.input.parse({}), ctx());
+      const dropped = out.records.find(
+        (r) => r.lineageId === "ctx.unclassified",
+      );
+      expect(dropped).toMatchObject({ contextTokens: null, weeklyPrice: null });
+    });
+
+    it("lists every record with its tokens and no price when the week has none or the read fails (negative)", async () => {
+      const h = await withLargeRecord();
+      for (const weeklyPrice of [
+        async () => null,
+        async () => {
+          throw new Error("price book down");
+        },
+      ]) {
+        const list = createListRecordsHandler({ ...h, weeklyPrice });
+        const out = await list(contextRecordsList.input.parse({}), ctx());
+        expect(out.total).toBe(2);
+        const rows = out.records.map((r) => [
+          r.lineageId,
+          r.contextTokens,
+          r.weeklyPrice,
+        ]);
+        expect(rows).toEqual([
+          ["ctx.a.rule", 10, null],
+          ["ctx.big", 5_200, null],
+        ]);
+      }
+    });
+  });
 });
 
 describe("get_record", () => {

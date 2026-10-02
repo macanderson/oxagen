@@ -178,6 +178,13 @@ export interface ModelBreakdown {
    * otherwise-priced model group (#3271 residue G2).
    */
   hasUnpriced: boolean;
+  /**
+   * The tokens of the calls the rollup priced, by class: {@link tokens} less
+   * the unpriced calls'. A rate divides a class's cost by these, since the
+   * cost counts only the priced calls (#4572). Absent on a row rolled up
+   * before they were kept.
+   */
+  pricedTokens?: TokenCounts;
 }
 
 /**
@@ -222,6 +229,28 @@ export interface RunBreakdown {
    * had a class.
    */
   stepClasses?: StepClasses | null;
+  /**
+   * Each standing context source's tokens on the run's model calls after its
+   * first, split by whether the call read the prompt cache (#4572). The store
+   * measures it on the frames beside the source sums, and it is null for a
+   * source no call reported. Absent on a row rolled up before it was kept.
+   */
+  standing?: RunStandingResent;
+}
+
+/** One standing context source's tokens on the calls after a run's first. */
+export interface ResentSourceTokens {
+  /** On the calls that read anything from the prompt cache. */
+  cached: number;
+  /** On the calls that read nothing from it, which sent the prefix uncached. */
+  uncached: number;
+}
+
+/** The three standing context sources the recorder measures, re-sent. */
+export interface RunStandingResent {
+  toolDefinitionTokens: ResentSourceTokens | null;
+  contextFrameTokens: ResentSourceTokens | null;
+  steeringTokens: ResentSourceTokens | null;
 }
 
 /** The `cost.run_totals` row, as the store writes it. */
@@ -428,6 +457,12 @@ export interface InputPrice {
  * priced its input. A run whose cost is `estimated`, or has none, has no
  * price: a figure built on it would be a guess priced from a guess.
  *
+ * The cost counts only the calls the book priced, so the ratio divides it by
+ * those calls' tokens ({@link ModelBreakdown.pricedTokens}). A row rolled up
+ * before those were kept counts every call's tokens, so a model there with an
+ * unpriced call would read low, and such a run has no price (#4572). A zero
+ * price is a price: the book can price input at nothing.
+ *
  * The findings job prices a result the run could have left out with this,
  * and the rollup prices each tool's result tokens with it (ADR-199), so the
  * two agree on what one token of the run cost.
@@ -440,11 +475,32 @@ export function runInputPrice(run: {
   let micros = 0n;
   let tokens = 0n;
   for (const m of run.breakdown.models) {
+    const priced = pricedTokensOf(m, "input_uncached");
+    if (priced === null) return null;
     micros += m.costByClass.input_uncached;
-    tokens += BigInt(m.tokens.input_uncached);
+    tokens += BigInt(priced);
   }
-  if (tokens === 0n || micros === 0n) return null;
+  if (tokens === 0n) return null;
   return { micros, tokens };
+}
+
+/**
+ * A model's tokens of one class on the calls the rollup priced. A row rolled
+ * up before those were kept gives every call's tokens when no call went
+ * unpriced, and null when one did and the class has tokens, since the priced
+ * share is then unknown. A model whose `costMicros` is null priced nothing.
+ */
+export function pricedTokensOf(
+  m: Pick<
+    ModelBreakdown,
+    "tokens" | "pricedTokens" | "hasUnpriced" | "costMicros"
+  >,
+  tokenClass: TokenClass,
+): number | null {
+  if (m.pricedTokens !== undefined) return m.pricedTokens[tokenClass];
+  if (m.costMicros === null) return 0;
+  if (m.hasUnpriced && m.tokens[tokenClass] > 0) return null;
+  return m.tokens[tokenClass];
 }
 
 /** `tokens` at a run's input price, rounded half to even to whole micros. */
@@ -506,6 +562,8 @@ export function createRunRollup(
       cacheSaving: bigint | null;
       basis: CostBasis | null;
       hasUnpriced: boolean;
+      /** The tokens of the frames that priced. */
+      pricedTokens: TokenCounts;
     }
   >();
   let cacheWeighted = 0;
@@ -557,6 +615,7 @@ export function createRunRollup(
       cacheSaving: 0n,
       basis: null,
       hasUnpriced: false,
+      pricedTokens: { ...ZERO_TOKENS },
     };
     group.calls += 1;
     // Folded before the unpriced branch below: an unpriced frame that read
@@ -579,6 +638,7 @@ export function createRunRollup(
     }
     scaledTotal = (scaledTotal ?? 0n) + p.scaled;
     basis = foldBasis(basis, p.basis);
+    addTokens(group.pricedTokens, frame.tokens);
     group.scaled = (group.scaled ?? 0n) + p.scaled;
     for (const c of TOKEN_CLASSES) group.scaledByClass[c] += p.scaledByClass[c];
     group.basis = foldBasis(group.basis, p.basis);
@@ -650,6 +710,7 @@ export function createRunRollup(
           g.cacheSaving === null ? null : divideHalfEven(g.cacheSaving, MILLION),
         basis: g.scaled === null ? null : g.basis,
         hasUnpriced: g.hasUnpriced,
+        pricedTokens: g.pricedTokens,
       }))
       .sort((a, b) => (a.model < b.model ? -1 : a.model > b.model ? 1 : 0));
     // Each tool's result tokens at the run's own input price (ADR-199): the

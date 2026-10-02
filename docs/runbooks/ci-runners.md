@@ -50,10 +50,14 @@ and vCPU alarms fire. To trade speed for concurrency during a crunch, set
 `CI_HEAVY_POOL=small`, and delete it afterwards.
 
 The deploy pool and production run on on-demand only. `max_runners` caps the
-CI pools at 496 vCPUs, so they never take the last 104 on-demand vCPUs: 96
-for the deploy pool's 6 runners and 8 for production. `terraform.tfvars`
-shows the arithmetic. When AWS raises a quota, raise the caps by the same
-number of vCPUs, or the new quota sits unused.
+CI pools at 496 vCPUs. While spot is at its quota, as it is during a
+backlog, that leaves 104 on-demand vCPUs: 96 for the deploy pool's 6 runners
+and 8 for production. When spot capacity runs short instead, the CI pools
+fail over to on-demand and can take up to all 496 there, so the reserve
+shrinks. If deploys wait for a runner while spot capacity errors fill the
+CI scale-up logs, lower the CI caps. `terraform.tfvars` shows the
+arithmetic. When AWS raises a quota, raise the caps by the same number of
+vCPUs, or the new quota sits unused.
 
 ## Roll back to GitHub-hosted runners
 

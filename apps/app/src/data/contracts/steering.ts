@@ -6,6 +6,7 @@
 // not in this release.
 import { z } from "zod";
 import { PublicId } from "./common";
+import { Cost } from "./money";
 
 const Count = z.number().int().nonnegative();
 const Instant = z.iso.datetime({ offset: true });
@@ -75,8 +76,23 @@ const PublishedRecord = z.object({
   publishedAt: Instant.nullable(),
 });
 
+/**
+ * A listed record, with what its line costs (#4572). Only list_records
+ * prices a record, so the record page's view model does not carry these.
+ */
+const ListedRecord = PublishedRecord.extend({
+  /** The tokens of the record's line in the signed bundle; null for a record the assembler drops. */
+  contextTokens: Count.nullable().optional(),
+  /**
+   * What those tokens cost the workspace over the last 7 days, an estimate
+   * the server priced at the weekly price the tool providers use (ADR-060).
+   * Null when the tokens are null or the week has no price.
+   */
+  weeklyPrice: Cost.nullable().optional(),
+});
+
 export const RecordPage = z.object({
-  records: z.array(PublishedRecord),
+  records: z.array(ListedRecord),
   /** Every record in force of the kind asked for, ignoring the page. */
   total: Count,
 });
