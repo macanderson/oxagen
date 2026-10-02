@@ -1103,10 +1103,7 @@ fn keep_versioned_copy(
 }
 
 /// `keep_versioned_copy`, with what it created written to `desktop.json`.
-fn keep_versioned_copy_recorded(
-    env: &InstallEnv,
-    skipped: &mut Vec<String>,
-) -> Result<PathBuf, String> {
+fn keep_versioned_copy_recorded(env: &InstallEnv, skipped: &mut Vec<String>) -> Result<PathBuf, String> {
     let mut created = Vec::new();
     let kept = keep_versioned_copy(env, &mut created, skipped);
     record_created(&env.roots, &created)?;
@@ -3018,7 +3015,9 @@ mod tests {
         assert!(has_both_sidecars(&kept));
         assert_eq!(fs::read(kept.join(exe("tacho"))).unwrap(), b"tacho 2.1.4");
         assert!(
-            skipped.iter().any(|note| note.starts_with("could not record what was written")),
+            skipped
+                .iter()
+                .any(|note| note.starts_with("could not record what was written")),
             "{skipped:?}"
         );
     }
