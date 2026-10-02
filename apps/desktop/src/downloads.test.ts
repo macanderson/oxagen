@@ -743,7 +743,7 @@ describe("page helpers", () => {
     expect(html).toContain(
       'href="https://docs.oxagen.sh/docs/releases/v2.1.1"',
     );
-    // The repository is private and has moved more than once (ADR-245).
+    // The repository is private and has moved more than once (ADR-247).
     expect(html).not.toContain("github.com");
   });
 

@@ -3,7 +3,7 @@ import { findReleaseLinks, scansForReleaseLinks } from "./release-hosting";
 
 describe("findReleaseLinks", () => {
   it("finds every shape a GitHub release link has taken here", () => {
-    // Each line is one this repository carried before ADR-245.
+    // Each line is one this repository carried before ADR-247.
     const text = [
       '"https://github.com/macanderson/oxagen/releases/download/desktop-latest/latest.json"',
       "githubRelease: `https://github.com/macanderson/oxagen/releases/tag/desktop-v${v}`,",

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Point the GitHub update feed at release $TAG.
 #
-# Apps built before ADR-245 (2.1.3, and builds of main before it) poll the
+# Apps built before ADR-247 (2.1.3, and builds of main before it) poll the
 # `desktop-latest` release's latest.json, so this copies the just-published
 # release's latest.json there. Its platform URLs point at the versioned
 # release's assets, which stay put. A release built without the updater key

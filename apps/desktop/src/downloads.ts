@@ -588,7 +588,7 @@ export const FONT_FILES = [
  * its notes are the next release's, so it links the release index instead
  * of a page that does not exist. Nothing here names a GitHub release. The
  * repository is private and has changed owner more than once, so every file
- * a release ships is on the downloads host instead (ADR-245).
+ * a release ships is on the downloads host instead (ADR-247).
  */
 export function releaseLinks(version: string): {
   notes: string;

@@ -13,7 +13,7 @@
  *
  * Nothing here links a GitHub release. The repository is private and has
  * changed owner more than once, so every file a release ships is on the
- * downloads host (ADR-245). `release-hosting.tree.test.ts` in tools/scripts
+ * downloads host (ADR-247). `release-hosting.tree.test.ts` in tools/scripts
  * fails if a GitHub release link comes back.
  */
 

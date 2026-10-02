@@ -1,4 +1,4 @@
-# ADR-245: Every desktop release file is served from downloads.oxagen.sh
+# ADR-247: Every desktop release file is served from downloads.oxagen.sh
 
 - **Status:** Accepted. Mac decided on 2026-10-01.
 - **Date:** 2026-10-01

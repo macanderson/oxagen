@@ -13,7 +13,7 @@
 
 // No GitHub repository is named here. The repository is private and has
 // changed owner more than once, so every link in the notes points at the
-// downloads host (ADR-245).
+// downloads host (ADR-247).
 export const DOWNLOADS_HOST = "downloads.oxagen.sh";
 export const NPM_CLI_PACKAGE = "@oxagen/cli";
 

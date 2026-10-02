@@ -149,7 +149,7 @@ and opens the GitHub release as a mirror for people with repository access.
 Nothing below is needed for that path. Every file a person or an installed
 app downloads comes from downloads.oxagen.sh, never from a GitHub release,
 because the repository is private and has changed owner more than once
-(ADR-245).
+(ADR-247).
 
 Builds of main publish too (ADR-158). Once `deploy-node` has shipped,
 `publish-installers` in `pipeline.yml` dispatches `desktop.yml` with
@@ -287,10 +287,10 @@ not every deploy.
 
 ### Apps installed before the move
 
-Until ADR-245, the app polled the `latest.json` on the `desktop-latest`
+Until ADR-247, the app polled the `latest.json` on the `desktop-latest`
 GitHub release. The repository is now private, so that feed answers 404, and
 an app cannot learn a new feed address from a feed it cannot read. Every app installed
-before the move (2.1.3 and older, and builds of main before ADR-245) needs one
+before the move (2.1.3 and older, and builds of main before ADR-247) needs one
 manual reinstall from https://downloads.oxagen.sh/. After that it updates
 from the downloads host on its own.
 

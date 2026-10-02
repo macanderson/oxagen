@@ -4,7 +4,7 @@
 # machines enrolled before #4879. Each is a Node single-executable the Desktop
 # workflow builds per OS (tools/sea/compile.mjs) and publishes to
 # downloads.oxagen.sh/desktop/<version>/ next to a `<asset>.sha256` file.
-# Nothing here reads a GitHub release: the repository is private (ADR-245).
+# Nothing here reads a GitHub release: the repository is private (ADR-247).
 #
 # This is a template until a tap exists. A formula cannot say
 # `sha256 :no_check` (that stanza is cask-only), so every digest below is a

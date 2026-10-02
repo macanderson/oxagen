@@ -2,7 +2,7 @@
  * Links that send a download to a GitHub release. The repository is private
  * and has changed owner more than once, so a release asset URL answers 404 to
  * anyone outside the organization, an installed app included. Every file a
- * release ships is served from downloads.oxagen.sh instead (ADR-245).
+ * release ships is served from downloads.oxagen.sh instead (ADR-247).
  * `release-hosting.tree.test.ts` runs this over the tracked tree, so a link
  * like that cannot come back into an app, the docs, or the packaging
  * templates.

@@ -166,7 +166,7 @@ describe("stamp", () => {
       "https://downloads.oxagen.sh/desktop/2.1.1/tacho-x86_64-pc-windows-msvc.exe",
     );
     // Every template installs from the downloads host, never a GitHub
-    // release, which is private (ADR-245).
+    // release, which is private (ADR-247).
     for (const file of written)
       expect(readFileSync(file, "utf8"), file).not.toContain("github.com");
     expect(manifest.architecture["64bit"].hash).toEqual([

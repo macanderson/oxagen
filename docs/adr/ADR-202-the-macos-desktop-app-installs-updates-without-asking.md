@@ -1,6 +1,6 @@
 # ADR-202: The macOS desktop app installs updates without asking
 
-- **Status:** Accepted. Amended by ADR-245 (2026-10-01): the app reads its
+- **Status:** Accepted. Amended by ADR-247 (2026-10-01): the app reads its
   feed from `https://downloads.oxagen.sh/updater/latest.json`, not
   `desktop-latest/latest.json` on the GitHub release.
 - **Date:** 2026-09-26

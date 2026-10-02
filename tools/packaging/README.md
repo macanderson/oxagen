@@ -68,7 +68,7 @@ tap job will run, not one that runs today. Spec for the app and the binaries:
 
 Every file comes from `https://downloads.oxagen.sh/desktop/<version>/`, never
 from a GitHub release: the repository is private and has changed owner more
-than once (ADR-245). The desktop app on Windows and Linux is the `.msi` /
+than once (ADR-247). The desktop app on Windows and Linux is the `.msi` /
 `-setup.exe` and the `.deb` / `.rpm` / `.AppImage` there; there is no winget,
 apt or dnf entry. The cask, the formula, and the Scoop manifest read the
 newest version from the update feed, `https://downloads.oxagen.sh/updater/latest.json`,

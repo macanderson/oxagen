@@ -33,13 +33,13 @@ name: Desktop
 #            "public key found but no private key", and the feed is left as it
 #            was; installed apps then report "up to date".
 #
-# The update feed (ADR-245): installed apps poll
+# The update feed (ADR-247): installed apps poll
 # https://downloads.oxagen.sh/updater/latest.json (tauri.conf.json
 # plugins.updater.endpoints). The `publish` job writes it for a release, from
 # the .sig files the build legs upload, and never for a deploy build. It
 # names the files under desktop/<version>/ on the same host, so no repository
 # owner or visibility stands between an installed app and its update. Apps
-# built before ADR-245 (2.1.3, and builds of main before it) poll the
+# built before ADR-247 (2.1.3, and builds of main before it) poll the
 # `desktop-latest` GitHub release instead. That feed is still moved, by the
 # `feed` job and the publish job's GitHub feed step, but while the repository
 # is private it answers them 404, and each needs one manual reinstall from
@@ -685,7 +685,7 @@ jobs:
           exit 1
 
       # A release built with the updater key moves the update feed that every
-      # app built since ADR-245 polls. The feed names this release or a newer
+      # app built since ADR-247 polls. The feed names this release or a newer
       # one. A build without the key carries no signatures and leaves the
       # feed as it was.
       - name: Confirm the update feed names this release
@@ -742,7 +742,7 @@ jobs:
           gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" \
             --title "Oxagen $v" --notes-file notes.md --draft=false --latest=false
 
-      # The GitHub feed that apps built before ADR-245 poll. A release
+      # The GitHub feed that apps built before ADR-247 poll. A release
       # published with the workflow's own token raises no `release` event, so
       # the feed job below does not run for it; move that feed here.
       - name: Point the GitHub update feed at this release
@@ -772,7 +772,7 @@ jobs:
             GITHUB_SHA="$SHA" node tools/scripts/check-deploy-tip.mjs --record
           fi
 
-  # The GitHub update feed, which apps built before ADR-245 poll at
+  # The GitHub update feed, which apps built before ADR-247 poll at
   # releases/download/desktop-latest/latest.json. This copies the just-
   # published desktop release's latest.json there (its platform URLs point at
   # the versioned release's assets, which stay put). A release built without

@@ -35,7 +35,7 @@
  *   6. Check that every file the notes link to is on the GitHub release, the
  *      mirror for people with repository access, set the release's notes,
  *      and publish it. Publishing moves the GitHub feed that apps built
- *      before ADR-245 poll (`desktop.yml`, job `feed`).
+ *      before ADR-247 poll (`desktop.yml`, job `feed`).
  *
  * Steps 5 and 6 are also what `desktop.yml`'s `publish` job does on the tag,
  * so on a healthy run this script finds both already done and says so. It

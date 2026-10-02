@@ -10,7 +10,7 @@
 # files sit in the same prefix. The in-app update feed is
 # `updater/latest.json`, outside `desktop/` because it changes with every
 # release; it carries a five-minute Cache-Control, which the default cache
-# behavior honors (ADR-245). Nothing a person or an installed app downloads
+# behavior honors (ADR-247). Nothing a person or an installed app downloads
 # comes from a GitHub release, because the repository is private. The same static-site
 # module the marketing site uses: a private bucket reached only through an
 # Origin Access Control, security headers, and TLS on the branded hostname.

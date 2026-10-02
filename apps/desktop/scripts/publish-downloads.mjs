@@ -28,7 +28,7 @@
  * links backwards (ADR-158).
  *
  * The in-app update feed, `updater/latest.json`, follows releases only
- * (ADR-245). A release (`X.Y.Z`) built with the updater key rewrites it from
+ * (ADR-247). A release (`X.Y.Z`) built with the updater key rewrites it from
  * the `.sig` files when it is at least as new as the version the feed names.
  * A deploy build never touches it, and neither does a build without
  * signatures.
@@ -499,7 +499,7 @@ function advanceLatest(dir, entries, executables, publishedAt) {
 /**
  * Rewrite the in-app update feed for this version, from the signature of
  * each signed file; returns whether it wrote. Only a release at least as new
- * as the one the feed names writes it (ADR-245), and only after every file
+ * as the one the feed names writes it (ADR-247), and only after every file
  * the feed names is under `desktop/<version>/`. A build made without the
  * updater key has no signatures and leaves the feed as it is, as a deploy
  * build always does.

@@ -6,7 +6,7 @@
     "windows-latest and publishes to downloads.oxagen.sh/desktop/<version>/",
     "next to an <asset>.sha256 file. The desktop app itself is the .msi /",
     "-setup.exe in the same place. Nothing here reads a GitHub release: the",
-    "repository is private (ADR-245). This is a template until a bucket",
+    "repository is private (ADR-247). This is a template until a bucket",
     "exists; tools/packaging/stamp.mjs fills the version and the digests from",
     "the version's SHA256SUMS.txt (tools/packaging/README.md)."
   ],

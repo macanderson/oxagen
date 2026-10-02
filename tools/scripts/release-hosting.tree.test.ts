@@ -3,7 +3,7 @@
 // in the checks job, outside turbo's cached `test:unit` task (#4664 item 2).
 //
 // Every file a desktop release ships is served from downloads.oxagen.sh
-// (ADR-245). The repository is private and has changed owner more than once,
+// (ADR-247). The repository is private and has changed owner more than once,
 // so a GitHub release link in an app, the docs, or a packaging template is a
 // 404 for the reader and, in the updater endpoint, for every installed app.
 import { execFileSync } from "node:child_process";
@@ -52,7 +52,7 @@ describe("release hosting", () => {
     );
     expect(
       found,
-      "Serve the file from https://downloads.oxagen.sh/ instead (ADR-245).",
+      "Serve the file from https://downloads.oxagen.sh/ instead (ADR-247).",
     ).toEqual([]);
   });
 

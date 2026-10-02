@@ -7,7 +7,7 @@
  * The desktop workflow's publish job runs this against
  * https://downloads.oxagen.sh/latest.json after an upload, and against the
  * update feed, https://downloads.oxagen.sh/updater/latest.json, after a
- * release (ADR-245). Newer is a pass: a release and a deploy build can finish
+ * release (ADR-247). Newer is a pass: a release and a deploy build can finish
  * in either order, and the older one leaves `latest/` where it is (ADR-158).
  * `name` is what the messages call the file.
  */

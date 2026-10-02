@@ -1,6 +1,6 @@
 # Homebrew cask for the Oxagen desktop app (apps/desktop): the .dmg the
 # Desktop workflow publishes to downloads.oxagen.sh/desktop/<version>/.
-# Nothing here reads a GitHub release: the repository is private (ADR-245).
+# Nothing here reads a GitHub release: the repository is private (ADR-247).
 #
 # This is a template until a tap exists. `tools/packaging/stamp.mjs` fills
 # the version and the `# stamp:` line from the version's SHA256SUMS.txt; see

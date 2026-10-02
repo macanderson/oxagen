@@ -96,7 +96,7 @@ describe("installSection", () => {
     }
     expect(section).toContain("npm install -g @oxagen/cli@2.2.0");
     expect(section).toContain("desktop/2.2.0/SHA256SUMS.txt");
-    // The repository is private, so the notes link no GitHub release (ADR-245).
+    // The repository is private, so the notes link no GitHub release (ADR-247).
     expect(section).not.toContain("github.com");
     expect(section).toContain(
       "[oxagen-aarch64-apple-darwin](https://downloads.oxagen.sh/desktop/2.2.0/oxagen-aarch64-apple-darwin)",
