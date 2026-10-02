@@ -6371,6 +6371,23 @@
       }
     },
     {
+      "name": "get_spend_per_merged_pr",
+      "file": "spend.per_merged_pr.ts",
+      "domain": "spend",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": false,
+        "unit": true,
+        "docs": false,
+        "app": true
+      }
+    },
+    {
       "name": "export_statement",
       "file": "spend.statement.export.ts",
       "domain": "spend",

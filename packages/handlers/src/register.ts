@@ -1967,6 +1967,12 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .spendOperatorRankingHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "get_spend_per_merged_pr",
+    async () =>
+      (await import("./spend.per_merged_pr"))
+        .spendPerMergedPrHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "set_operator_pseudonyms",
     async () =>
       (await import("./spend.operator_pseudonyms.set"))
