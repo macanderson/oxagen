@@ -28,9 +28,9 @@
  * submodule, a detached head, or a host with no git at all. Every one of
  * those returns undefined or an empty list. The collector loses a fact; it
  * does not lose the session. The exception is `readRepositoryRemote`, which
- * rejects when git could not answer at all. Its caller keeps the answer for
- * the rest of the session, so it has to tell a failure, which it reads
- * again later, from a directory with no `origin` (#4458).
+ * rejects when git could not answer at all. Its caller keeps a "no `origin`"
+ * answer for the rest of the session, and reads again after a failure, so
+ * the two must not look the same (#4458).
  *
  * Nothing is unbounded. Output is truncated before it is parsed, so a
  * generated directory of a hundred thousand untracked files costs a fixed
@@ -289,15 +289,15 @@ type OriginRead =
 
 function originRead(result: ExecResult): OriginRead {
   const stderr = result.stderr ?? "";
-  if (result.status === 0) {
-    const url = firstLine(result.stdout);
-    return url === undefined ? { kind: "none" } : { kind: "found", url };
-  }
+  const url = result.status === 0 ? firstLine(result.stdout) : undefined;
+  if (url !== undefined) return { kind: "found", url };
   if (result.status === NO_SUCH_REMOTE) return { kind: "none" };
   if (result.status === GIT_FATAL && stderr.includes(NOT_A_REPOSITORY))
     return { kind: "none" };
   // Anything else is git not answering: a timeout, a spawn that failed, a
-  // daemon that is stopping, or a fatal error such as dubious ownership.
+  // daemon that is stopping, or a fatal error such as dubious ownership. A
+  // success that prints no URL counts too, because a real `origin` always
+  // has one.
   return {
     kind: "failed",
     reason:
