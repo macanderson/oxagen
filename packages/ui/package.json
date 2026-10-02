@@ -15,6 +15,7 @@
     "./lib/motion": "./src/lib/motion.ts",
     "./lib/splash-screens": "./src/lib/splash-screens.ts",
     "./lib/house-grounds": "./src/lib/house-grounds.ts",
+    "./lib/utils": "./src/lib/utils.ts",
     "./components/*": "./src/components/*.tsx"
   },
   "scripts": {

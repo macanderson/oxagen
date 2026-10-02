@@ -42,7 +42,6 @@
     "@shadcn/react": "0.3.1",
     "@streamdown/code": "1.1.1",
     "class-variance-authority": "0.7.1",
-    "clsx": "2.1.1",
     "drizzle-orm": "0.45.3",
     "next": "16.3.6",
     "next-intl": "4.14.6",
@@ -51,7 +50,6 @@
     "recharts": "3.8.0",
     "server-only": "0.0.1",
     "streamdown": "2.6.0",
-    "tailwind-merge": "3.7.0",
     "zod": "4.6.5"
   },
   "devDependencies": {

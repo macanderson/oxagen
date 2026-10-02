@@ -177,7 +177,7 @@ Import from `@oxagen/ui` (barrel) or `@/components/ui/<file>` (app proxy).
 | `ThemeProvider`, `useTheme`, `THEME_COOKIE_NAME`, `parseTheme`, `themeClass` | `theme-provider.tsx`, `theme-config.ts` | self-hosted, cookie-based, no-flash theming. |
 | `MotionProvider` | `motion-provider.tsx` | motion config provider. |
 | `GlobalErrorPage`, `NotFoundPage` | `global-error.tsx`, `not-found.tsx` | full-page templates. |
-| `cn` | `lib/utils.ts` | `clsx` + `tailwind-merge`. |
+| `cn` | `lib/utils.ts` | `clsx` + `tailwind-merge`. It files `text-a-*` and `text-m-*` as font sizes, so a text colour beside one keeps both. The apps re-export it from `@oxagen/ui/lib/utils`. |
 
 ## Styling
 

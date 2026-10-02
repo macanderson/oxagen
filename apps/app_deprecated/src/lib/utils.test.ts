@@ -55,6 +55,15 @@ describe("cn", () => {
   it("handles undefined and null gracefully", () => {
     expect(cn(undefined, null, "real")).toBe("real");
   });
+
+  it("keeps a house type size beside a text colour (#5185)", () => {
+    expect(cn("text-a-h3", "text-foreground")).toBe("text-a-h3 text-foreground");
+    expect(cn("text-m-body text-muted-foreground")).toBe("text-m-body text-muted-foreground");
+  });
+
+  it("lets a later house size override an earlier one", () => {
+    expect(cn("text-a-h3 text-foreground", "text-a-h1")).toBe("text-foreground text-a-h1");
+  });
 });
 
 // ---------------------------------------------------------------------------

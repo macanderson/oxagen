@@ -54,7 +54,6 @@
     "@uiw/react-codemirror": "^4.25.11",
     "ai": "7.0.111",
     "better-auth": "1.6.33",
-    "clsx": "2.1.1",
     "drizzle-orm": "0.45.3",
     "lucide-react": "1.47.0",
     "motion": "13.4.1",
@@ -70,7 +69,6 @@
     "shiki": "4.4.3",
     "streamdown": "2.6.0",
     "stripe": "17.7.0",
-    "tailwind-merge": "3.7.0",
     "zod": "3.25.76"
   },
   "devDependencies": {

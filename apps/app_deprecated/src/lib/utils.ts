@@ -1,9 +1,9 @@
-import { clsx, type ClassValue } from "clsx";
-import { twMerge } from "tailwind-merge";
-
-export function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs));
-}
+/**
+ * The class-name helper every app shares. It files the house type utilities
+ * (`text-a-*`, `text-m-*`) as font sizes, so a text colour beside one keeps
+ * both (#5185).
+ */
+export { cn } from "@oxagen/ui/lib/utils";
 
 export function formatCents(cents: number, currency = "USD"): string {
   return new Intl.NumberFormat("en-US", {
