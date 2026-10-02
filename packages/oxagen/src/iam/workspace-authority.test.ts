@@ -84,13 +84,19 @@ describe("isRealWorkspaceId", () => {
 
 describe("actsInWorkspace", () => {
   it("is true unless the contract says otherwise", () => {
-    expect(actsInWorkspace({})).toBe(true);
-    expect(actsInWorkspace({ orgLevel: false })).toBe(true);
+    expect(actsInWorkspace({ name: "import_tools" })).toBe(true);
+    expect(actsInWorkspace({ name: "import_tools", orgLevel: false })).toBe(
+      true,
+    );
   });
 
   it("is false for an org-level or platform-only contract (negative)", () => {
-    expect(actsInWorkspace({ orgLevel: true })).toBe(false);
-    expect(actsInWorkspace({ platformOnly: true })).toBe(false);
+    expect(actsInWorkspace({ name: "purchase_credits", orgLevel: true })).toBe(
+      false,
+    );
+    expect(
+      actsInWorkspace({ name: "set_contract_terms", platformOnly: true }),
+    ).toBe(false);
   });
 });
 

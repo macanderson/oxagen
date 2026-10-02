@@ -73,7 +73,10 @@ export function isRealWorkspaceId(
  * reaches.
  */
 export function actsInWorkspace(
-  capability: Pick<CapabilityDeclaration, "orgLevel" | "platformOnly">,
+  // `name` is required so a contract's own literal type, which declares
+  // neither flag, is accepted: a type of optional fields alone is a "weak"
+  // type, and TypeScript refuses an argument that shares no field with it.
+  capability: Pick<CapabilityDeclaration, "name" | "orgLevel" | "platformOnly">,
 ): boolean {
   return capability.orgLevel !== true && capability.platformOnly !== true;
 }
