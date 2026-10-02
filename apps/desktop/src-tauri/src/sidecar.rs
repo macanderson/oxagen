@@ -1,4 +1,4 @@
-//! The only way the webview starts `tacho` or `oxagen`.
+//! The only way the webview starts the bundled `oxagen` sidecar.
 //!
 //! The webview used to spawn both sidecars through the shell plugin, with a
 //! capability that allowed any arguments and passed any environment the page
@@ -13,9 +13,14 @@
 //! holds the allowlist: each subcommand the app runs, the flags it passes to
 //! it, and what each flag's value may be. The environment is the app's own
 //! plus what `cli_install::sidecar_env` adds (`TACHO_BIN_DIR` and
-//! `OXAGEN_DESKTOP_SIDECAR`), and nothing from the page. `src/commands.ts` builds every argv the app sends, and
-//! `sidecar-calls.json`, which its test keeps in step with those builders,
-//! lists one of each for the test below.
+//! `OXAGEN_DESKTOP_SIDECAR`), and nothing from the page. `src/commands.ts`
+//! builds every argv the app sends, and `sidecar-calls.json`, which its test
+//! keeps in step with those builders, lists one of each for the test below.
+//!
+//! Every recorder command runs as `oxagen agent <verb>`, the command a person
+//! types (#4891). The page cannot start the bundled `tacho` at all: it stays
+//! in the bundle only so the per-user copy still carries it for machines
+//! enrolled before #4879, whose hooks run it until they move.
 
 use crate::activity::Activity;
 use serde::{Deserialize, Serialize};
@@ -26,18 +31,17 @@ use tauri::Manager;
 use tauri_plugin_shell::process::{CommandChild, CommandEvent};
 use tauri_plugin_shell::ShellExt;
 
-/// The two bundled binaries.
+/// The bundled binary the page may start. `tacho` is not one: a page that
+/// names it fails to deserialize before `check_call` runs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Sidecar {
-    Tacho,
     Oxagen,
 }
 
 impl Sidecar {
     fn name(self) -> &'static str {
         match self {
-            Sidecar::Tacho => "tacho",
             Sidecar::Oxagen => "oxagen",
         }
     }
@@ -69,7 +73,7 @@ struct Allowed {
     writes: bool,
 }
 
-/// The harnesses `tacho` wraps, as `src/commands.ts` names them.
+/// The harnesses the recorder wraps, as `src/commands.ts` names them.
 const HARNESSES: [&str; 5] = ["claude-code", "codex", "cursor", "stella", "claude-desktop"];
 
 fn is_harness(value: &str) -> bool {
@@ -103,55 +107,68 @@ const TARGET_FLAGS: [Flag; 3] = [
 
 /// Every command the app runs, and nothing else.
 const ALLOWED: &[Allowed] = &[
-    // `tacho status --json`, the poll's read of hooks and service.
+    // `oxagen agent status --json`, the poll's read of hooks and service. On
+    // a machine whose hooks still run `tacho`, the first one moves them to
+    // `oxagen hook` and `oxagen daemon`. It holds no close: holding a Quit
+    // on every poll costs more than a move cut short, which leaves each hook
+    // on a name that still works, and the next poll finishes the move.
     Allowed {
-        sidecar: Sidecar::Tacho,
-        command: &["status"],
+        sidecar: Sidecar::Oxagen,
+        command: &["agent", "status"],
         flags: &[Flag::Switch("--json")],
         required: &["--json"],
         writes: false,
     },
-    // `tacho detect --json`, the wizard's scan.
+    // `oxagen agent detect --json`, the wizard's scan.
     Allowed {
-        sidecar: Sidecar::Tacho,
-        command: &["detect"],
+        sidecar: Sidecar::Oxagen,
+        command: &["agent", "detect"],
         flags: &[Flag::Switch("--json")],
         required: &["--json"],
         writes: false,
     },
-    // `tacho verify --harness <h> --json`, a first run. It drives one
+    // `oxagen agent verify --harness <h> --json`, a first run. It drives one
     // headless turn and reads the daemon's answer, and writes no file of its
     // own, so it holds no close. It can take four minutes.
     Allowed {
-        sidecar: Sidecar::Tacho,
-        command: &["verify"],
+        sidecar: Sidecar::Oxagen,
+        command: &["agent", "verify"],
         flags: &[Flag::Value("--harness", is_harness), Flag::Switch("--json")],
         required: &["--harness", "--json"],
         writes: false,
     },
-    // `tacho enroll`: the wizard's register step, which names the harnesses,
-    // and Re-apply, which sends it bare. On an enrolled host a bare enroll
-    // keeps the enrolled list and writes the hooks and the collector again.
+    // `oxagen agent enroll`: the wizard's register step, which names the
+    // harnesses, and Re-apply, which sends it bare. On an enrolled host a
+    // bare enroll keeps the enrolled list and writes the hooks and the
+    // collector again as `oxagen hook` and `oxagen daemon`.
     Allowed {
-        sidecar: Sidecar::Tacho,
-        command: &["enroll"],
+        sidecar: Sidecar::Oxagen,
+        command: &["agent", "enroll"],
         flags: &TARGET_FLAGS,
         required: &[],
         writes: true,
     },
-    // `tacho reassign`: a workspace change, adding or removing a harness.
+    // `oxagen agent reassign`: a workspace change, adding or removing a
+    // harness. `--default` also makes the new pair the CLI's default.
     Allowed {
-        sidecar: Sidecar::Tacho,
-        command: &["reassign"],
-        flags: &TARGET_FLAGS,
+        sidecar: Sidecar::Oxagen,
+        command: &["agent", "reassign"],
+        flags: &[
+            Flag::Value("--org", is_slug),
+            Flag::Value("--workspace", is_slug),
+            Flag::Value("--harness", is_harness_list),
+            Flag::Switch("--default"),
+        ],
         required: &[],
         writes: true,
     },
-    // `tacho unenroll`: the last de-register names its one harness, and
-    // Uninstall passes `--all` for every agent on the machine (ADR-203).
+    // `oxagen agent unenroll`: the last de-register names its one harness,
+    // and Uninstall passes `--all` for every agent on the machine (ADR-203).
+    // Never an agent argument: that form revokes a registered agent's hosts
+    // on the server.
     Allowed {
-        sidecar: Sidecar::Tacho,
-        command: &["unenroll"],
+        sidecar: Sidecar::Oxagen,
+        command: &["agent", "unenroll"],
         flags: &[
             Flag::Switch("--purge"),
             Flag::Switch("--all"),
@@ -176,20 +193,6 @@ const ALLOWED: &[Allowed] = &[
         command: &["logout"],
         flags: &[],
         required: &[],
-        writes: true,
-    },
-    // `oxagen tacho reassign ... --default`, a workspace change that also
-    // becomes the CLI's default.
-    Allowed {
-        sidecar: Sidecar::Oxagen,
-        command: &["tacho", "reassign"],
-        flags: &[
-            Flag::Value("--org", is_slug),
-            Flag::Value("--workspace", is_slug),
-            Flag::Value("--harness", is_harness_list),
-            Flag::Switch("--default"),
-        ],
-        required: &["--default"],
         writes: true,
     },
 ];
@@ -361,65 +364,110 @@ mod tests {
 
     #[test]
     fn a_command_the_app_does_not_send_is_refused() {
-        use Sidecar::{Oxagen, Tacho};
-        for (sidecar, args) in [
-            // Subcommands the app never runs.
-            (Tacho, vec!["daemon"]),
-            (Tacho, vec!["hook"]),
-            (Tacho, vec!["credential", "issue", "--harness", "claude-code"]),
-            (Tacho, vec!["mcp-stdio"]),
-            (Oxagen, vec!["tacho", "unenroll", "--purge"]),
-            (Oxagen, vec!["api", "post", "/v1/anything"]),
-            (Tacho, vec![]),
+        use Sidecar::Oxagen;
+        for args in [
+            // Machine commands the app never runs.
+            vec!["daemon"],
+            vec!["hook"],
+            vec!["credential", "issue", "--harness", "claude-code"],
+            vec!["mcp-stdio"],
+            vec!["agent", "run", "--name", "x"],
+            vec!["agent", "export", "--list"],
+            vec!["api", "post", "/v1/anything"],
+            vec![],
+            vec!["agent"],
+            // The old spelling, which the app no longer sends.
+            vec!["tacho", "reassign", "--workspace", "core", "--default"],
+            vec!["tacho", "status", "--json"],
+            // A recorder verb without its `agent` group.
+            vec!["status", "--json"],
+            vec!["enroll"],
+            // An agent argument: the server-scoped forms of status and
+            // unenroll, which the app never runs.
+            vec!["agent", "status", "some-agent", "--json"],
+            vec!["agent", "unenroll", "agt_x"],
             // A known command with a flag it never passes.
-            (Tacho, vec!["status", "--json", "--api-url", "https://evil.example"]),
-            (
-                Tacho,
-                vec!["enroll", "--harness", "codex", "--credentials", "passthrough"],
-            ),
-            (Oxagen, vec!["login", "--browser", "--token", "x"]),
+            vec!["agent", "status", "--json", "--api-url", "https://evil.example"],
+            vec!["agent", "enroll", "--harness", "codex", "--credentials", "passthrough"],
+            vec!["agent", "enroll", "--token", "oxe_1time_x"],
+            vec!["agent", "reassign", "--token", "x", "--workspace", "core"],
+            vec!["agent", "unenroll", "--all", "--token", "x"],
+            vec!["login", "--browser", "--token", "x"],
             // A required flag missing.
-            (Tacho, vec!["status"]),
-            (Tacho, vec!["verify", "--json"]),
-            (Oxagen, vec!["login"]),
-            (Oxagen, vec!["tacho", "reassign", "--workspace", "core"]),
+            vec!["agent", "status"],
+            vec!["agent", "verify", "--json"],
+            vec!["login"],
             // A value that could be read as a flag or smuggle one in.
-            (Tacho, vec!["verify", "--harness", "x,--purge", "--json"]),
-            (Tacho, vec!["verify", "--harness", "claude-code,codex", "--json"]),
-            (Tacho, vec!["enroll", "--harness", ""]),
-            (Tacho, vec!["enroll", "--harness", "codex,"]),
-            (Tacho, vec!["reassign", "--org", "--purge"]),
-            (Tacho, vec!["reassign", "--workspace", "core space"]),
-            (Tacho, vec!["reassign", "--workspace", "a=b"]),
-            (Tacho, vec!["reassign", "--workspace"]),
+            vec!["agent", "verify", "--harness", "x,--purge", "--json"],
+            vec!["agent", "verify", "--harness", "claude-code,codex", "--json"],
+            vec!["agent", "enroll", "--harness", ""],
+            vec!["agent", "enroll", "--harness", "codex,"],
+            vec!["agent", "reassign", "--org", "--purge"],
+            vec!["agent", "reassign", "--workspace", "core space"],
+            vec!["agent", "reassign", "--workspace", "a=b"],
+            vec!["agent", "reassign", "--workspace"],
             // A flag twice, and a positional argument.
-            (Tacho, vec!["unenroll", "--purge", "--purge"]),
-            (Tacho, vec!["unenroll", "extra"]),
+            vec!["agent", "unenroll", "--purge", "--purge"],
+            vec!["agent", "unenroll", "extra"],
             // Unenroll names one agent, by one harness.
-            (Tacho, vec!["unenroll", "--harness", "claude-code,codex"]),
-            (Tacho, vec!["unenroll", "--harness", "--purge"]),
-            // The wrong sidecar for the command.
-            (Oxagen, vec!["status", "--json"]),
-            (Tacho, vec!["login", "--browser"]),
+            vec!["agent", "unenroll", "--harness", "claude-code,codex"],
+            vec!["agent", "unenroll", "--harness", "--purge"],
         ] {
-            assert!(call(sidecar, &args).is_err(), "{sidecar:?} {args:?} was allowed");
+            assert!(call(Oxagen, &args).is_err(), "{args:?} was allowed");
         }
     }
 
-    /// Re-apply sends `tacho enroll` with no flags. The allowlist once
+    /// The page names the sidecar, and `tacho` is not one it may name: the
+    /// call fails to deserialize before the allowlist is read.
+    #[test]
+    fn the_page_cannot_start_tacho() {
+        assert!(serde_json::from_str::<Sidecar>("\"tacho\"").is_err());
+        assert_eq!(serde_json::from_str::<Sidecar>("\"oxagen\"").unwrap(), Sidecar::Oxagen);
+        let calls: Vec<Call> = serde_json::from_str(include_str!("../sidecar-calls.json")).unwrap();
+        assert!(
+            calls
+                .iter()
+                .all(|call| call.args.first().map(String::as_str) != Some("tacho")),
+            "a call still runs the old `oxagen tacho` spelling"
+        );
+    }
+
+    /// Re-apply sends `oxagen agent enroll` with no flags. The allowlist once
     /// required `--harness`, so the button failed with "--harness is
     /// missing".
     #[test]
     fn re_apply_runs_a_bare_enroll() {
-        assert_eq!(call(Sidecar::Tacho, &["enroll"]), Ok(true));
+        assert_eq!(call(Sidecar::Oxagen, &["agent", "enroll"]), Ok(true));
     }
 
     #[test]
     fn flags_may_come_in_any_order() {
-        assert!(call(Sidecar::Tacho, &["verify", "--json", "--harness", "codex"]).is_ok());
+        assert!(call(Sidecar::Oxagen, &["agent", "verify", "--json", "--harness", "codex"]).is_ok());
         assert!(call(
-            Sidecar::Tacho,
-            &["enroll", "--harness", "codex", "--workspace", "core", "--org", "acme"]
+            Sidecar::Oxagen,
+            &[
+                "agent",
+                "enroll",
+                "--harness",
+                "codex",
+                "--workspace",
+                "core",
+                "--org",
+                "acme"
+            ]
+        )
+        .is_ok());
+        assert!(call(
+            Sidecar::Oxagen,
+            &[
+                "agent",
+                "reassign",
+                "--default",
+                "--workspace",
+                "ops",
+                "--org",
+                "globex"
+            ]
         )
         .is_ok());
     }
@@ -430,28 +478,36 @@ mod tests {
     /// them kept the app running for up to five minutes after a Quit.
     #[test]
     fn only_a_command_that_writes_files_holds_a_close() {
-        assert_eq!(call(Sidecar::Tacho, &["status", "--json"]), Ok(false));
-        assert_eq!(call(Sidecar::Tacho, &["detect", "--json"]), Ok(false));
+        use Sidecar::Oxagen;
+        assert_eq!(call(Oxagen, &["agent", "status", "--json"]), Ok(false));
+        assert_eq!(call(Oxagen, &["agent", "detect", "--json"]), Ok(false));
         assert_eq!(
-            call(Sidecar::Tacho, &["verify", "--harness", "codex", "--json"]),
+            call(Oxagen, &["agent", "verify", "--harness", "codex", "--json"]),
             Ok(false)
         );
-        assert_eq!(call(Sidecar::Oxagen, &["login", "--browser"]), Ok(false));
-        assert_eq!(call(Sidecar::Oxagen, &["login", "--browser", "--signup"]), Ok(false));
-        assert_eq!(call(Sidecar::Tacho, &["enroll", "--harness", "codex"]), Ok(true));
-        assert_eq!(call(Sidecar::Tacho, &["enroll"]), Ok(true));
-        assert_eq!(call(Sidecar::Tacho, &["reassign", "--workspace", "core"]), Ok(true));
-        assert_eq!(call(Sidecar::Tacho, &["unenroll", "--purge"]), Ok(true));
-        assert_eq!(call(Sidecar::Tacho, &["unenroll", "--all", "--purge"]), Ok(true));
-        assert_eq!(call(Sidecar::Tacho, &["unenroll", "--harness", "codex"]), Ok(true));
-        assert_eq!(call(Sidecar::Oxagen, &["logout"]), Ok(true));
+        assert_eq!(call(Oxagen, &["login", "--browser"]), Ok(false));
+        assert_eq!(call(Oxagen, &["login", "--browser", "--signup"]), Ok(false));
+        assert_eq!(call(Oxagen, &["agent", "enroll", "--harness", "codex"]), Ok(true));
+        assert_eq!(call(Oxagen, &["agent", "enroll"]), Ok(true));
+        assert_eq!(call(Oxagen, &["agent", "reassign", "--workspace", "core"]), Ok(true));
+        assert_eq!(
+            call(Oxagen, &["agent", "reassign", "--workspace", "core", "--default"]),
+            Ok(true)
+        );
+        assert_eq!(call(Oxagen, &["agent", "unenroll", "--purge"]), Ok(true));
+        assert_eq!(call(Oxagen, &["agent", "unenroll", "--all", "--purge"]), Ok(true));
+        assert_eq!(call(Oxagen, &["agent", "unenroll", "--harness", "codex"]), Ok(true));
+        assert_eq!(call(Oxagen, &["logout"]), Ok(true));
     }
 
     #[test]
     fn the_refusal_names_the_command_and_why() {
-        let error = call(Sidecar::Tacho, &["daemon"]).unwrap_err();
-        assert_eq!(error, "Oxagen does not run `tacho daemon`: not a command the app sends");
-        let error = call(Sidecar::Tacho, &["status", "--json", "--x"]).unwrap_err();
+        let error = call(Sidecar::Oxagen, &["daemon"]).unwrap_err();
+        assert_eq!(
+            error,
+            "Oxagen does not run `oxagen daemon`: not a command the app sends"
+        );
+        let error = call(Sidecar::Oxagen, &["agent", "status", "--json", "--x"]).unwrap_err();
         assert!(error.ends_with("--x is not a flag it passes"), "{error}");
     }
 

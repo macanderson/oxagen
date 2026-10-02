@@ -1,7 +1,7 @@
 /**
  * The app's only two ways to touch the machine: the Rust commands in
  * src-tauri/src/lib.rs (reads, the two user-scoped API calls, PATH install)
- * and the bundled `tacho` / `oxagen` sidecars for every action that changes
+ * and the bundled `oxagen` sidecar for every action that changes
  * state. The page starts a sidecar through the Rust shell's `run_sidecar`,
  * which runs only the commands on its allowlist (src-tauri/src/sidecar.rs).
  * Nothing here keeps state of its own.
@@ -146,7 +146,7 @@ export interface DesktopState {
   /**
    * The directory hooks and the service may reference: this version's
    * per-user copy of the sidecars, which the app makes on every launch
-   * (ADR-230). Null until that copy exists, and tacho refuses to enroll
+   * (ADR-230). Null until that copy exists, and the CLI refuses to enroll
    * until it does.
    */
   bin_dir: string | null;
@@ -188,7 +188,7 @@ export const logTail = (lines = 120) => invoke<string>("log_tail", { lines });
 /**
  * Tell the Rust shell whether an action is running. While one is, closing
  * the window or choosing Quit hides the window, and the app exits once the
- * action ends, rather than killing `tacho` between two file writes. A shell
+ * action ends, rather than killing the CLI between two file writes. A shell
  * that predates the command answers with an error, which changes nothing.
  */
 export async function reportBusy(busy: boolean): Promise<void> {
@@ -277,7 +277,7 @@ export type SessionCheck =
 
 /**
  * Whether the saved session still works, asked of the control plane right
- * before an action that needs it. `tacho reassign` revokes the enrollment
+ * before an action that needs it. `oxagen agent reassign` revokes the enrollment
  * first and enrolls again with the session; with a dead token it revoked,
  * stripped the hooks, failed to enroll and removed the service, so a harness
  * or workspace change unenrolled the machine. `logged_in` in config.json
@@ -321,7 +321,12 @@ export interface RunResult {
   stderr: string;
 }
 
-export type Sidecar = "tacho" | "oxagen";
+/**
+ * The one sidecar the page may start. Every recorder command runs as
+ * `oxagen agent <verb>` (#4891); the bundled `tacho` stays only for the
+ * per-user copy that machines enrolled before #4879 still run.
+ */
+export type Sidecar = "oxagen";
 
 /** What `run_sidecar` streams back: one line at a time, then the exit. */
 export type SidecarEvent =
@@ -384,13 +389,9 @@ export async function runSidecar(
         if (options.timeoutMs === undefined || settled) return;
         timer = setTimeout(() => {
           void invoke("kill_sidecar", { id }).catch(() => undefined);
-          // The recorder's argv is not a command a person types any more
-          // (#4879), so the message names the recorder, not `tacho <verb>`.
-          const what =
-            name === "tacho" ? "The recorder" : `oxagen ${args.join(" ")}`;
           fail(
             new Error(
-              `${what} did not finish within ${Math.round(options.timeoutMs! / 1000)}s`,
+              `${name} ${args.join(" ")} did not finish within ${Math.round(options.timeoutMs! / 1000)}s`,
             ),
           );
         }, options.timeoutMs);
@@ -404,15 +405,16 @@ export async function runSidecar(
 export type { TachoStatus } from "./tacho-status";
 
 /**
- * `tacho status --json`, the same document the CLI prints. `status` exits 1
- * when the machine is not enrolled but still prints the document, so the
- * exit code alone means nothing; a run that printed no document and either
+ * `oxagen agent status --json`, the same document `tacho status` printed.
+ * `status` exits 1 when the machine is not enrolled but still prints the
+ * document, so the exit code alone means nothing; a run that printed no
+ * document and either
  * failed or wrote to stderr (a host.json this build cannot parse, a service
  * probe that threw) is an error the caller must show, not a silent null.
  * Null is reserved for a clean run that printed nothing.
  */
 export async function tachoStatus(): Promise<TachoStatus | null> {
-  const result = await runSidecar("tacho", statusArgs(), undefined, {
+  const result = await runSidecar("oxagen", statusArgs(), undefined, {
     timeoutMs: 20_000,
   });
   const status = parseTachoStatus(result.stdout);
@@ -426,7 +428,7 @@ export async function tachoStatus(): Promise<TachoStatus | null> {
   return null;
 }
 
-/** `tacho detect --json`: which harnesses the machine has and which are hooked. */
+/** `oxagen agent detect --json`: which harnesses the machine has and which are hooked. */
 export interface DetectedHarness {
   harness: Harness;
   label: string;
@@ -456,7 +458,7 @@ export interface DetectReport {
 
 /**
  * Four harnesses, each up to two login-shell lookups and a `--version` call,
- * every one bounded to 10 s in tacho: 120 s when every shell profile is at
+ * every one bounded to 10 s in the recorder: 120 s when every shell profile is at
  * its slowest. 45 s cut a slow but working scan short.
  */
 export const DETECT_TIMEOUT_MS = 150_000;
@@ -467,7 +469,7 @@ export const DETECT_TIMEOUT_MS = 150_000;
  * installed beside the error that said the scan had not worked.
  */
 export async function detectHarnesses(): Promise<DetectReport> {
-  const result = await runSidecar("tacho", detectArgs(), undefined, {
+  const result = await runSidecar("oxagen", detectArgs(), undefined, {
     timeoutMs: DETECT_TIMEOUT_MS,
   });
   const report = parseDetect(result.stdout);
@@ -488,7 +490,7 @@ export function parseDetect(stdout: string): DetectReport | null {
   }
 }
 
-/** `tacho verify --harness <h> --json`: one recorded turn on that harness. */
+/** `oxagen agent verify --harness <h> --json`: one recorded turn on that harness. */
 export interface ConnectResult {
   ok: boolean;
   sessionId?: string;
@@ -525,7 +527,7 @@ export function parseConnect(result: RunResult): ConnectResult {
  * One headless agent turn plus the wait for its chain to seal. Generous, and
  * bounded: with no bound at all a harness that hung left the Connect button
  * spinning for as long as the app stayed open, with nothing to click and no
- * reason given. `tacho verify` gives up well inside this on its own, so
+ * reason given. `oxagen agent verify` gives up well inside this on its own, so
  * reaching it means the harness never returned.
  */
 const CONNECT_TIMEOUT_MS = 240_000;
@@ -534,7 +536,7 @@ export async function connectRun(
   harness: Harness,
   onLine?: (line: string, stream: "stdout" | "stderr") => void,
 ): Promise<ConnectResult> {
-  const result = await runSidecar("tacho", verifyArgs(harness), onLine, {
+  const result = await runSidecar("oxagen", verifyArgs(harness), onLine, {
     timeoutMs: CONNECT_TIMEOUT_MS,
   });
   return parseConnect(result);
