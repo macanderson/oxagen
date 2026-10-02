@@ -475,6 +475,29 @@ describe("receiveDelivery with no raw store", () => {
   });
 });
 
+describe("a record the provider closed before Oxagen stored it", () => {
+  it("is skipped on the first read, and an item Oxagen holds still takes its closing", async () => {
+    const s = setup();
+    putRecord(s.fake, { id: "301", status: "closed", updatedAt: s.ago(40) });
+    putRecord(s.fake, { id: "302", updatedAt: s.ago(39) });
+    const first = finished(await reconcileCollector(s.h.ports, COLLECTOR_ID));
+    expect(first.summary).toMatchObject({ ok: true, handled: 2, missed: 0 });
+    expect(first.changes.map((change) => change.change)).toEqual(["new"]);
+    expect(s.h.store.items).toHaveLength(1);
+
+    // The open item closes later, and the stored item takes the closing.
+    putRecord(s.fake, { id: "302", status: "closed", updatedAt: s.ago(2) });
+    await s.deliverAndProcess(["302"]);
+    expect(s.h.store.items).toHaveLength(1);
+    expect(at(s.h.store.items, 0).input.statusCategory).toBe("closed");
+
+    // A delivery for the never-stored closed record writes nothing.
+    const skipped = await s.deliverAndProcess(["301"]);
+    expect(skipped).toEqual({ kind: "collected", changes: [] });
+    expect(s.h.store.items).toHaveLength(1);
+  });
+});
+
 describe("one provider item is one work item in a workspace", () => {
   it("stores an item a second collector hears as the same work item", async () => {
     const s = setup();
