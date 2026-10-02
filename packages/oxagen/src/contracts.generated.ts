@@ -450,6 +450,7 @@ import "./contracts/tool.studio.findings.list";
 import "./contracts/tool.studio.listing.get";
 import "./contracts/tool.studio.listing.start";
 import "./contracts/tool.studio.review.open";
+import "./contracts/tool.studio.selection.run";
 import "./contracts/tool.studio.server.get";
 import "./contracts/tool.studio.tools.list";
 import "./contracts/tool.studio.try";

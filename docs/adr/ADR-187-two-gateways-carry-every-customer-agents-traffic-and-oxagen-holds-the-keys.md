@@ -1,9 +1,9 @@
 # ADR-187: Two gateways carry every customer agent's traffic, and Oxagen holds the keys
 
-- **Status:** Proposed
+- **Status:** Accepted in part on 2026-10-02: key custody for MCP, and proposals 4, 5, and 6. The rest is Proposed. The Acceptance section lists each part
 - **Date:** 2026-09-25
 - **Owners:** platform, gateway
-- **Decided by:** the maintainer set the direction on 2026-09-25. This record awaits acceptance
+- **Decided by:** the maintainer set the direction on 2026-09-25. On 2026-10-02 the maintainer accepted the parts MCP Studio depends on (#5138). The rest awaits acceptance
 - **Related:** ADR-094 (the gateway on the laptop), ADR-143 (credential custody on the laptop), ADR-122 (external tools need a person), ADR-078 (one tool builder), ADR-056 and ADR-163 (run commands), ADR-095 (the tier ladder), ADR-096 and ADR-152 (the contained tier), ADR-165 (the governed action is billed), #3299, #4310
 - **Detail:** `docs/gateway-plan.md` in `oxageninc/roadmap` holds the waste reason codes, the per-harness setup, and the build order
 
@@ -134,15 +134,15 @@ An operator selects one or more work items (issues and tasks), chooses **Send To
 
 Every run records where its work happened and what it produced: the repository by name, the branch, the local directory, the files it changed, its pull request, the CI status on that pull request, and the issues, tasks, and work orders it relates to. Each change lands on the run's record, so the audit trail holds it.
 
-On `main`, `get_run_work` (`packages/oxagen/src/contracts/run.work.get.ts`) already returns most of this. The gaps:
+On `main`, `get_run_work` (`packages/oxagen/src/contracts/run.work.get.ts`) already returns most of this. The gaps are below. The pull request and CI status rows were checked again at `main` `e67cb2af47` on 2026-10-02 (#4725). The other rows date from `22902576f`.
 
 | What | On `main` | Gap |
 |---|---|---|
 | Repository | Named when the workspace has connected it. Otherwise the session stores only a digest of the remote URL (`git_remote_digest`) | The name, for every repository |
 | Branch and directory | Recorded: `git_branch`, `cwd`, `project_dir`, and the worktree | None |
 | Files changed | The diff between the run's start and end commits, where the workspace retains it | #4309 fixes the count |
-| Pull request | Found by a recorded link, the head commit, or the branch, and read from GitHub when someone opens the run | Recorded on the run as it opens and changes |
-| CI status | Read from GitHub when someone opens the run | Recorded on the run as it changes. The GitHub webhook route has no `pull_request` handler today |
+| Pull request | Found by a recorded link, the head commit, or the branch, and read from GitHub when someone opens the run (`lib/run-work-prs.ts`). `tacho.run_pull_requests` holds the state GitHub last reported, kept current by the GitHub App's `pull_request` deliveries (`github.pull-request.webhook.ts`, #4129, ADR-192) | Each change appended to the run's record. The table keeps only the latest state |
+| CI status | Read from GitHub when someone opens the run (`lib/ci-status.ts`). The hourly `cost.run_pr_outcomes` refresh also reads it for 30 days after a run seals (#4491) | Recorded on the run as it changes. No handler writes CI jobs (`check_run`, `check_suite`, `workflow_job`) or review threads (`pull_request_review`, `pull_request_review_comment`, `pull_request_review_thread`) to a run |
 | Issues and tasks | The issues the pull request closes, read from GitHub | The issue, task, or work order the run started from (ADR-162, not built), and trackers beyond GitHub |
 
 ### Agents on other runtimes
@@ -165,7 +165,7 @@ Every agent connects to the cloud gateway, so agents message and start one anoth
 
 ## Proposals
 
-These are design choices this record makes. Each needs the maintainer's yes before it is built:
+These are design choices this record makes. The maintainer accepted proposals 4, 5, and 6 on 2026-10-02 (see Acceptance). Each of the others needs the maintainer's yes before it is built:
 
 1. The cloud gateway is the meter of record. The metering and budget code in `model-proxy.ts` moves there.
 2. Screening is a workspace setting: off, flag, strip, or reject.
@@ -177,8 +177,27 @@ These are design choices this record makes. Each needs the maintainer's yes befo
 8. On managed devices, Oxagen turns off the tools a vendor runs.
 9. One encryption key per organization in the vault.
 10. Starting another agent needs a grant naming both agents.
-11. Pull request and CI changes arrive by GitHub webhook and are appended to the run's record.
+11. Pull request, check, and review changes arrive by GitHub webhook and are appended to the run's record.
 12. A send that picks a harness, runtime, and toolbelt creates a new version of an agent for that combination, so every run still belongs to one agent with one runtime.
+
+## Acceptance
+
+On 2026-10-02 the maintainer accepted the parts of this record that MCP Studio depends on (#5138). Everything else stays Proposed.
+
+Accepted:
+
+- **Key custody for MCP.** The vault holds MCP credentials, or the customer's KMS (key management service) holds them on a customer-hosted cloud gateway. No MCP credential sits on an enrolled machine.
+- **Proposal 4.** MCP calls go through the local gateway too.
+- **Proposal 5.** Each MCP server keeps its own endpoint and its registered name.
+- **Proposal 6.** Enrollment imports each harness's existing MCP servers into the toolbelt and moves their credentials into custody.
+
+Two passages cover vendor keys and MCP credentials together: the first bullet under Keys and runs, and "Keys leave the machine" under Consequences. Only the MCP credential half of each is accepted. The vendor key half stays Proposed.
+
+Still Proposed:
+
+- The other nine proposals: 1 to 3 and 7 to 12. These include the cloud gateway as the meter of record (1) and screening for sensitive data (2 and 3).
+- Vendor model keys moving off the machine to the vault or the customer's KMS.
+- The four items under Open for acceptance.
 
 ## Consequences
 
@@ -207,6 +226,6 @@ These are design choices this record makes. Each needs the maintainer's yes befo
 ## Open for acceptance
 
 1. The sensitive-data detection design.
-2. The twelve proposals above.
+2. Proposals 1 to 3 and 7 to 12 above. Proposals 4, 5, and 6 were accepted on 2026-10-02.
 3. How a Codex whole-run token is revoked when the harness restarts.
 4. The first regions for the Oxagen-hosted cloud gateway.
