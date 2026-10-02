@@ -2,9 +2,10 @@
 // and the kernel's invoke() are the only fakes, so each case shows what the
 // person gets back and whether the capability ran: ok, invalid (refused
 // before the kernel), and denied and conflict with the handler's reason
-// (INV-19). The three writes Oxagen has not registered yet (#4518) answer
+// (INV-19). The two writes Oxagen has not registered yet (#4518) answer
 // `tool_not_registered` and never reach invoke(). When the platform
-// registers one, its case here fails and moves to the ok path.
+// registers one, its case here fails and moves to the ok path, as
+// restore_managed_block's did.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { contextPrOutput } from "@/test/steering-outputs";
 
@@ -267,10 +268,6 @@ describe("the steering PR writes Oxagen has not registered yet", () => {
       "dropMemoryRecord",
       () => dropMemoryRecord("acme", "core-platform", BRANCH, RECORD_PATH),
     ],
-    [
-      "restoreManagedBlock",
-      () => restoreManagedBlock("acme", "core-platform", ID, "AGENTS.md"),
-    ],
   ])("%s answers tool_not_registered (negative)", async (_name, run) => {
     expect(await run()).toEqual({
       ok: false,
@@ -278,6 +275,44 @@ describe("the steering PR writes Oxagen has not registered yet", () => {
       code: "tool_not_registered",
     });
     expect(requireViewer).toHaveBeenCalledWith("acme", "core-platform");
+    expect(invoke).not.toHaveBeenCalled();
+  });
+});
+
+describe("restoreManagedBlock", () => {
+  it("restores the block through restore_managed_block and returns the commit", async () => {
+    invoke.mockResolvedValue({ commit_sha: "7c1d2e3f", status: "checks_passed" });
+    expect(
+      await restoreManagedBlock("acme", "core-platform", ID, "AGENTS.md"),
+    ).toEqual({ ok: true, value: { commitSha: "7c1d2e3f" } });
+    expect(invoke).toHaveBeenCalledWith(
+      "restore_managed_block",
+      { proposalId: ID, path: "AGENTS.md" },
+      expect.objectContaining(TENANT),
+    );
+  });
+
+  it("returns a block that already matches the production branch as a conflict (negative)", async () => {
+    invoke.mockRejectedValue(refused("conflict", "block_intact"));
+    expect(
+      await restoreManagedBlock("acme", "core-platform", ID, "CLAUDE.md"),
+    ).toEqual({ ok: false, reason: "conflict", code: "block_intact" });
+  });
+
+  it("refuses a file that holds no managed block before the kernel runs (negative)", async () => {
+    expect(
+      await restoreManagedBlock(
+        "acme",
+        "core-platform",
+        ID,
+        "steering/constraints/acme.md",
+      ),
+    ).toEqual({
+      ok: false,
+      reason: "invalid",
+      code: "invalid_input",
+      field: "path",
+    });
     expect(invoke).not.toHaveBeenCalled();
   });
 });

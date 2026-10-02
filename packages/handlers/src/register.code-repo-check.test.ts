@@ -29,6 +29,8 @@ const request: CodeRepoCheckRequest = {
   installationId: 61200044,
   connectionId: null,
   key: "0192d4a8-7c1e-7a00-8000-0000000c0e01:github:771020341:318",
+  closed: null,
+  mergeCommitSha: null,
 };
 
 describe("the handler registrations", () => {

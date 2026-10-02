@@ -69,6 +69,15 @@ export function useActionFailure(): (failure: ActionFailure) => string {
             return t("productionBranchMoving");
           case "checks_failed":
             return t("checksFailed");
+          // restore_managed_block (#4518).
+          case "block_intact":
+            return t("blockIntact");
+          case "no_managed_block":
+            return t("noManagedBlock");
+          case "no_managed_blocks":
+            return t("noManagedBlocks");
+          case "pr_not_open":
+            return t("prNotOpen");
           default:
             // The status writes refuse with proposal_<status> when another
             // call moved the proposal first.

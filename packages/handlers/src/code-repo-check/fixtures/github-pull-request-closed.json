@@ -6,6 +6,7 @@
     "number": 318,
     "state": "closed",
     "merged": true,
+    "merge_commit_sha": "5c4b3a2918f7e6d5c4b3a2918f7e6d5c4b3a2918",
     "title": "Write down the deploy notes in CLAUDE.md",
     "html_url": "https://github.com/a-intel/platform/pull/318",
     "updated_at": "2026-10-02T16:03:30Z",

@@ -3,8 +3,8 @@
 // every reason `get_main_repository`, `list_installation_repositories`,
 // `list_github_installations`, `attach_github_installation`,
 // `list_repositories`, `link_repository`, `unlink_repository`,
-// `get_repository_tree`, `set_production_branch` and `open_init_pr` can give
-// has its own sentence, and any other code is printed as recorded rather than
+// `get_repository_tree`, `set_production_branch`, `open_init_pr` and
+// `promote_instruction_to_steering` can give has its own sentence, and any other code is printed as recorded rather than
 // collapsed into "something went wrong". Link and unlink still answer with
 // most `main_repo_*` codes. No handler has raised `main_repo_bound` since
 // #4616 removed the bind, and its sentence stays until that code is retired.
@@ -83,6 +83,21 @@ export function useRepositoriesFailure(): (
             return t("gitlabNotConnected");
           case "repository_host_unsupported":
             return t("repositoryHostUnsupported");
+          // promote_instruction_to_steering (#4518, ADR-253).
+          case "finding_not_found":
+            return t("findingNotFound");
+          case "finding_resolved":
+            return t("findingResolved");
+          case "already_in_steering":
+            return t("alreadyInSteering");
+          case "already_proposed":
+            return t("alreadyProposed");
+          case "statement_too_long":
+            return t("statementTooLong");
+          case "lineage_pr_open":
+            return t("lineagePrOpen");
+          case "record_not_proposable":
+            return t("recordNotProposable");
           default:
             return t("refused", { code: failure.code });
         }

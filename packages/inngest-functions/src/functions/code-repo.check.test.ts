@@ -39,6 +39,8 @@ const GITHUB_REQUEST: CodeRepoCheckRequest = {
   installationId: 61200044,
   connectionId: null,
   key: "0192d4a8-7c1e-7a00-8000-0000000c0e01:github:771020341:318",
+  closed: null,
+  mergeCommitSha: null,
 };
 
 const GITLAB_REQUEST: CodeRepoCheckRequest = {
@@ -147,6 +149,26 @@ describe("codeRepoCheckRequestOf", () => {
     expect(
       codeRepoCheckRequestOf({ ...GITLAB_REQUEST, connectionId: null }),
     ).toBeNull();
+  });
+
+  it("reads a closed pull request, and an event sent before closes were routed as a check (ADR-253)", () => {
+    const merged = {
+      ...GITHUB_REQUEST,
+      closed: "merged" as const,
+      mergeCommitSha: "5c4b3a2918f7e6d5c4b3a2918f7e6d5c4b3a2918",
+    };
+    expect(codeRepoCheckRequestOf(merged)).toEqual(merged);
+    expect(
+      codeRepoCheckRequestOf({ ...GITHUB_REQUEST, closed: "unmerged" }),
+    ).toEqual({ ...GITHUB_REQUEST, closed: "unmerged" });
+    const older: Record<string, unknown> = { ...GITHUB_REQUEST };
+    delete older.closed;
+    delete older.mergeCommitSha;
+    expect(codeRepoCheckRequestOf(older)).toEqual(GITHUB_REQUEST);
+    // An unknown close reads as a check, never as a deletion.
+    expect(
+      codeRepoCheckRequestOf({ ...GITHUB_REQUEST, closed: "abandoned" }),
+    ).toEqual(GITHUB_REQUEST);
   });
 
   it("refuses an unknown host, a missing head, and a pull request number that is not a whole number", () => {

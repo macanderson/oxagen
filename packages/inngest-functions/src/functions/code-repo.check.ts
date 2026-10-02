@@ -27,6 +27,9 @@ export function codeRepoCheckRequestOf(
   const installationId =
     typeof d.installationId === "number" && Number.isInteger(d.installationId) ? d.installationId : null;
   const connectionId = str(d.connectionId);
+  // An event sent before closes were routed carries neither field, and is a check.
+  const closed = d.closed === "merged" || d.closed === "unmerged" ? d.closed : null;
+  const mergeCommitSha = str(d.mergeCommitSha);
   if (
     !orgId ||
     !workspaceId ||
@@ -57,6 +60,8 @@ export function codeRepoCheckRequestOf(
     installationId,
     connectionId,
     key,
+    closed,
+    mergeCommitSha,
   };
 }
 
@@ -69,7 +74,9 @@ export function codeRepoCheckRequestOf(
  * with an event id per head commit, so a redelivery runs once. The runner
  * reads the instruction files the pull request changes, compares what they
  * add with the workspace's published steering records, hands new lines to
- * S6's memory capture, and posts the check. One check runs at a time per pull
+ * S6's memory capture, stores the statements it flags (ADR-253), and posts
+ * the check. A closed pull request's event settles those stored statements
+ * and posts nothing. One check runs at a time per pull
  * request and workspace, so two pushes in a row cannot post out of order. A
  * host error throws, and Inngest retries the check.
  */
@@ -96,11 +103,14 @@ export const [codeRepoCheck] = createFunction(
         repositoryId: request.repositoryId,
         number: request.number,
         conclusion: outcome.conclusion,
+        settled: outcome.settled,
         files: outcome.files,
         findings: outcome.findings,
         memories: outcome.memories,
       },
-      "code-repo.check: posted the Oxagen check",
+      outcome.settled === undefined
+        ? "code-repo.check: posted the Oxagen check"
+        : "code-repo.check: settled the stored findings of a closed pull request",
     );
     return outcome;
   },

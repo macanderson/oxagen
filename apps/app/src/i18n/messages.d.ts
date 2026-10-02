@@ -5761,6 +5761,13 @@ type Messages = {
       gitlabNotConnected: string;
       repositoryHostUnsupported: string;
       toolNotRegistered: string;
+      findingNotFound: string;
+      findingResolved: string;
+      alreadyInSteering: string;
+      alreadyProposed: string;
+      statementTooLong: string;
+      lineagePrOpen: string;
+      recordNotProposable: string;
     };
     page: {
       title: string;
@@ -6298,11 +6305,15 @@ type Messages = {
     };
     drift: {
       heading: string;
-      notBacked: string;
-      detected: string;
+      location: string;
+      contradiction: string;
+      repeat: string;
+      openPullRequest: string;
+      mergedPullRequest: string;
       promote: string;
       promoting: string;
       promoted: string;
+      proposed: string;
     };
     steeringRepo: {
       heading: string;
@@ -10506,6 +10517,10 @@ type Messages = {
         productionBranchMoving: string;
         checksFailed: string;
         toolNotRegistered: string;
+        blockIntact: string;
+        noManagedBlock: string;
+        noManagedBlocks: string;
+        prNotOpen: string;
       };
       approve: {
         confirm: string;

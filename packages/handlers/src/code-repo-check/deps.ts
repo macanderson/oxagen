@@ -9,6 +9,8 @@
 //   steering version, read the way try_studio_tool reads the published
 //   version (`mcp-studio/import/tool.try.ports.ts`).
 // - captureMemories: S6's `ingestMemories`.
+// - findings: agent.code_repository_findings, where the check stores what it
+//   flags (ADR-253).
 import { schema, withTenantDb } from "@oxagen/database";
 import { createGitHubClient } from "@oxagen/github";
 import { createGitLabClient } from "@oxagen/gitlab";
@@ -29,6 +31,7 @@ import { postgresVersionStore } from "../steering-repo/version-store";
 import { toolsSteeringHost } from "../tools.pr.open";
 import { githubCodeHost, gitlabCodeHost, type CodeHost } from "./host";
 import type { CheckScope, CodeRepoCheckDeps } from "./run";
+import { postgresCodeRepoFindingStore } from "./store";
 
 /** The GitLab project and token a connection holds. */
 async function gitlabConnection(
@@ -160,5 +163,6 @@ export const codeRepoCheckDeps: CodeRepoCheckDeps = {
   blockMerge: readBlockMerge,
   captureMemories: (scope, memories) =>
     ingestMemories(postgresMemoryStore, scope, memories),
+  findings: postgresCodeRepoFindingStore,
   now: () => new Date(),
 };

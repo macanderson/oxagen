@@ -34,6 +34,12 @@ export interface CodeHost {
    * the merge base of `base` and `head`.
    */
   changedFiles(base: string, head: string): Promise<ChangedFile[]>;
+  /**
+   * Every path the pull request touches, from the merge base of `base` and
+   * `head`: removed files and both paths of a rename included. A merge reads
+   * the files it touched to settle the stored findings (ADR-253).
+   */
+  touchedPaths(base: string, head: string): Promise<string[]>;
   /** A file's text at `ref`, or null when the ref has no such file. */
   readFile(path: string, ref: string): Promise<string | null>;
   postCheck(check: PostedCheck): Promise<void>;
@@ -60,6 +66,12 @@ export function githubCodeHost(
           path: f.path,
           previousPath: f.status === "renamed" ? f.previousPath : null,
         }));
+    },
+    async touchedPaths(base, head) {
+      const files = await gh.compareCommits({ owner, repo, base, head });
+      return files.flatMap((f) =>
+        f.status === "renamed" && f.previousPath ? [f.previousPath, f.path] : [f.path],
+      );
     },
     readFile: (path, ref) => gh.getFileContent({ owner, repo, path, ref }),
     async postCheck(check) {
@@ -91,6 +103,12 @@ export function gitlabCodeHost(
       return changes
         .filter((c) => !c.deleted)
         .map((c) => ({ path: c.newPath, previousPath: c.renamed ? c.oldPath : null }));
+    },
+    async touchedPaths(base, head) {
+      const changes = await gl.compare({ project: projectId, from: base, to: head });
+      return changes.flatMap((c) =>
+        c.oldPath !== c.newPath ? [c.oldPath, c.newPath] : [c.newPath],
+      );
     },
     readFile: (path, ref) => gl.getFileRaw({ project: projectId, path, ref }),
     async postCheck(check) {

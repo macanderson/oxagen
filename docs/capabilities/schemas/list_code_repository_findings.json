@@ -1,0 +1,216 @@
+{
+  "name": "list_code_repository_findings",
+  "domain": "repository",
+  "description": "List the instruction-file statements in the workspace's linked code repositories that repeat or contradict an active steering record. The Oxagen check on each pull request stores the statements it flags, and this read compares them with today's records, so a statement that no longer matches any record is left out. Each finding names its file, line, pull request, and the record it matches.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "cli"
+  ],
+  "sensitivity": "low",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {},
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "repositories": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "repository_id": {
+              "type": "string",
+              "description": "The workspace's binding of the repository (rpb_…)"
+            },
+            "provider": {
+              "type": "string",
+              "enum": [
+                "github",
+                "gitlab"
+              ]
+            },
+            "full_name": {
+              "type": "string",
+              "description": "owner/name on the host"
+            },
+            "findings": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "description": "The finding's id, which promote_instruction_to_steering takes"
+                  },
+                  "path": {
+                    "type": "string",
+                    "description": "The instruction file, such as AGENTS.md"
+                  },
+                  "line": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "The line the statement starts on, at the commit the check read"
+                  },
+                  "statement": {
+                    "type": "string",
+                    "description": "The statement's text"
+                  },
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "repeat",
+                      "contradiction"
+                    ],
+                    "description": "repeat when it says what the record says, contradiction when it says the opposite"
+                  },
+                  "record": {
+                    "type": "object",
+                    "properties": {
+                      "lineage": {
+                        "type": "string"
+                      },
+                      "label": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "path": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "lineage",
+                      "label",
+                      "path"
+                    ],
+                    "additionalProperties": false,
+                    "description": "The steering record the statement repeats or contradicts"
+                  },
+                  "pull_request": {
+                    "type": "object",
+                    "properties": {
+                      "number": {
+                        "type": "integer",
+                        "exclusiveMinimum": 0
+                      },
+                      "url": {
+                        "type": "string"
+                      },
+                      "state": {
+                        "type": "string",
+                        "enum": [
+                          "open",
+                          "merged"
+                        ],
+                        "description": "merged once the line reached the default branch"
+                      },
+                      "head_sha": {
+                        "type": "string",
+                        "description": "The commit the check read"
+                      }
+                    },
+                    "required": [
+                      "number",
+                      "url",
+                      "state",
+                      "head_sha"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "file_url": {
+                    "type": "string",
+                    "description": "The line on the host, at that commit"
+                  },
+                  "checked_at": {
+                    "type": "string"
+                  },
+                  "proposal": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "proposed",
+                              "pr_open",
+                              "checks_running",
+                              "checks_passed",
+                              "checks_failed",
+                              "merged",
+                              "rejected"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "status"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "path",
+                  "line",
+                  "statement",
+                  "kind",
+                  "record",
+                  "pull_request",
+                  "file_url",
+                  "checked_at",
+                  "proposal"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "repository_id",
+            "provider",
+            "full_name",
+            "findings"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "repositories"
+    ],
+    "additionalProperties": false
+  }
+}

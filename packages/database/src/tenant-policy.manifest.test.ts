@@ -293,7 +293,9 @@ describe("tenant policy manifest", () => {
     // 169 adds agent.memory_uses (MEM2, #4908, ADR-248, 2026-10-01).
     // 171 adds work.direct_orders and work.done_checks (F13, #4638,
     // 2026-10-02).
-    expect(POLICY_MANIFEST.length).toBe(171);
+    // 172 adds agent.code_repository_findings (S7, #4518, ADR-253,
+    // 2026-10-02).
+    expect(POLICY_MANIFEST.length).toBe(172);
   });
 
   it("covers the ADR-055 GAU tables as org_only (WL-24)", () => {

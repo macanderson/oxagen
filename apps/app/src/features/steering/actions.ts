@@ -10,6 +10,10 @@ import { contextGovernanceModeSet } from "@oxagen/oxagen/contracts/context.gover
 import { contextPrMerge } from "@oxagen/oxagen/contracts/context.pr.merge";
 import { contextPrMergeWithoutReview } from "@oxagen/oxagen/contracts/context.pr.merge_without_review";
 import { contextPrOpen } from "@oxagen/oxagen/contracts/context.pr.open";
+import {
+  contextPrRestoreManagedBlock,
+  type MANAGED_BLOCK_PATHS,
+} from "@oxagen/oxagen/contracts/context.pr.restore_managed_block";
 import { contextProposalDismiss } from "@oxagen/oxagen/contracts/context.proposal.dismiss";
 import { governanceModeSchema } from "@oxagen/oxagen/contracts/context.steering.shared";
 import { workspaceSettingsWrite } from "@oxagen/oxagen/contracts/workspace.settings.write";
@@ -208,13 +212,16 @@ export async function forgetMemory(
 }
 
 // The steering PR writes the platform has not registered yet (#4518):
-// approve_context_pr, drop_memory_record and restore_managed_block. Each one
-// is a local contract under the name the platform will register, so the
-// kernel answers `unavailable` with code `tool_not_registered` today, and the
-// same call reaches the handler, unchanged, once the capability lands. The
-// schemas are the proposed shapes. The platform contract replaces each one,
-// as merge_pr_without_review's did (#4528).
+// approve_context_pr and drop_memory_record. Each one is a local contract
+// under the name the platform will register, so the kernel answers
+// `unavailable` with code `tool_not_registered` today, and the same call
+// reaches the handler, unchanged, once the capability lands. The schemas are
+// the proposed shapes. The platform contract replaces each one, as
+// merge_pr_without_review's did (#4528) and restore_managed_block's did.
 const PROPOSAL_ID = z.string().regex(/^prp_[0-9A-Za-z]+$/);
+
+/** A file that holds a managed block. */
+type ManagedBlockPath = (typeof MANAGED_BLOCK_PATHS)[number];
 
 const approveContextPrContract = {
   name: "approve_context_pr",
@@ -231,14 +238,6 @@ const dropMemoryRecordContract = {
     })
     .strict(),
   output: z.object({ commit_sha: z.string(), rejection_id: z.string() }),
-};
-
-const restoreManagedBlockContract = {
-  name: "restore_managed_block",
-  input: z
-    .object({ proposalId: PROPOSAL_ID, path: z.string().min(1) })
-    .strict(),
-  output: z.object({ commit_sha: z.string() }),
 };
 
 /**
@@ -302,7 +301,10 @@ export async function dropMemoryRecord(
 
 /**
  * Restore the Oxagen managed block in one file of a steering PR, as a commit
- * on the pull request's branch. The answer is that commit.
+ * on the pull request's branch (`restore_managed_block`). The six checks run
+ * again on that commit. The answer is the commit. A file that holds no
+ * managed block is refused as invalid before the kernel runs, and a block
+ * that already matches the production branch as `block_intact`.
  */
 export async function restoreManagedBlock(
   org: string,
@@ -311,9 +313,10 @@ export async function restoreManagedBlock(
   path: string,
 ): Promise<ActionResult<{ commitSha: string }>> {
   const ctx = await requireViewer(org, ws);
-  const result = await kernelWrite(ctx, restoreManagedBlockContract, {
+  const result = await kernelWrite(ctx, contextPrRestoreManagedBlock, {
     proposalId,
-    path,
+    // The contract's enum refuses any other path as invalid input.
+    path: path as ManagedBlockPath,
   });
   return result.ok
     ? { ok: true, value: { commitSha: result.value.commit_sha } }

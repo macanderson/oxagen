@@ -166,6 +166,10 @@ const ACTIONS = new Set([
   // baseline Oxagen applied. Not "reconcile" or "sync": those move records,
   // and this writes one repository's settings.
   "repair",
+  // restore_managed_block: put the production branch's managed block back in
+  // one file of a steering PR (#4518). Not "repair": that writes a steering
+  // repo's settings, and this writes one file on one branch.
+  "restore",
   "approve",
   // authorize_cli — the CLI consent mint (apps/app/ARCHITECTURE.md §3.7).
   "authorize",

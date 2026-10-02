@@ -12,8 +12,16 @@
 //    evidence. A memory waits for the curator and a person, as every memory
 //    does. Capture runs before the check posts, so a capture that throws
 //    retries the whole job and the check never claims lines it lost.
-// 5. Post the check. It warns unless the published workspace.toml sets
+// 5. Store the statements it flagged (ADR-253), replacing the pull request's
+//    earlier ones, so the Repositories page and list_code_repository_findings
+//    read them.
+// 6. Post the check. It warns unless the published workspace.toml sets
 //    `[code_checks] block_merge = true`.
+//
+// A closed pull request posts nothing. Closed without merging, its stored
+// statements go. Merged, they stay, and every merged statement another pull
+// request left on a file this merge touched is read again at the merge
+// commit, and goes when the file no longer holds it.
 //
 // The caller runs this inside the workspace's tenant scope.
 import type {
@@ -26,6 +34,11 @@ import { splitFullName, type CodeHost } from "./host";
 import { appliesToOf, isInstructionFile } from "./instruction-files";
 import { buildReport } from "./report";
 import { addedStatements, type AddedStatement } from "./statements";
+import type {
+  CheckedPullRequest,
+  CodeRepoFindingStore,
+  PullRequestKey,
+} from "./store";
 
 /** The most instruction files one check reads. */
 export const INSTRUCTION_FILES_MAX = 20;
@@ -71,7 +84,24 @@ export interface CodeRepoCheckDeps {
     scope: CheckScope,
     memories: PullRequestMemory[],
   ): Promise<{ written: number; refused: number }>;
+  /** The stored findings (ADR-253). */
+  findings: Pick<
+    CodeRepoFindingStore,
+    "replacePullRequest" | "clearPullRequest" | "markMerged" | "mergedElsewhere" | "remove"
+  >;
   now(): Date;
+}
+
+/** The pull request a request names, as the store keys it. */
+function pullRequestOf(request: CodeRepoCheckRequest): CheckedPullRequest {
+  return {
+    provider: request.provider,
+    providerRepositoryId: request.repositoryId,
+    number: request.number,
+    repository: request.fullName,
+    url: request.url,
+    headSha: request.headSha,
+  };
 }
 
 /** The repository as records name it, or null when its name does not read as one. */
@@ -88,8 +118,8 @@ function repositoryRefOf(request: CodeRepoCheckRequest): string | null {
 
 /** The web page of a file's line at the head commit. */
 export function fileLineUrl(
-  request: CodeRepoCheckRequest,
-  statement: AddedStatement,
+  request: Pick<CodeRepoCheckRequest, "provider" | "fullName" | "headSha">,
+  statement: Pick<AddedStatement, "path" | "line">,
 ): string {
   const path = statement.path.split("/").map(encodeURIComponent).join("/");
   if (request.provider === "gitlab")
@@ -132,11 +162,55 @@ export function pullRequestMemories(
   return memories;
 }
 
-/** Run the check and post it. */
+/**
+ * Settle a closed pull request's stored findings. Closed without merging,
+ * they go. Merged, they stay, and the merged findings other pull requests
+ * left on the files this one touched are read again at the merge commit.
+ */
+export async function settleClosedPullRequest(
+  deps: CodeRepoCheckDeps,
+  request: CodeRepoCheckRequest & { closed: NonNullable<CodeRepoCheckRequest["closed"]> },
+): Promise<CodeRepoCheckOutcome> {
+  const scope = { orgId: request.orgId, workspaceId: request.workspaceId };
+  const pr: PullRequestKey = pullRequestOf(request);
+  const settled = { conclusion: null, settled: request.closed, memories: 0 } as const;
+  if (request.closed === "unmerged") {
+    const gone = await deps.findings.clearPullRequest(scope, pr);
+    return { ...settled, files: 0, findings: gone };
+  }
+  await deps.findings.markMerged(scope, pr, request.headSha);
+  const held = await deps.findings.mergedElsewhere(scope, pr);
+  // A merge the host names no commit for, such as a fast-forward on GitLab,
+  // leaves the earlier findings as they are.
+  if (held.length === 0 || request.mergeCommitSha === null)
+    return { ...settled, files: 0, findings: 0 };
+  const host = await deps.host(request);
+  const touched = new Set(await host.touchedPaths(request.base, request.headSha));
+  const paths = [...new Set(held.map((row) => row.path))]
+    .filter((path) => touched.has(path))
+    .sort()
+    .slice(0, INSTRUCTION_FILES_MAX);
+  const gone: string[] = [];
+  for (const path of paths) {
+    const text = await host.readFile(path, request.mergeCommitSha);
+    // The statements the file holds at the merge, read as the check reads them.
+    const kept = new Set(
+      text === null ? [] : addedStatements(path, null, text).map((s) => s.text),
+    );
+    for (const row of held)
+      if (row.path === path && !kept.has(row.statement)) gone.push(row.publicId);
+  }
+  await deps.findings.remove(scope, gone);
+  return { ...settled, files: paths.length, findings: gone.length };
+}
+
+/** Run the check and post it, or settle a closed pull request's findings. */
 export async function runCodeRepoCheck(
   deps: CodeRepoCheckDeps,
   request: CodeRepoCheckRequest,
 ): Promise<CodeRepoCheckOutcome> {
+  if (request.closed !== null)
+    return settleClosedPullRequest(deps, { ...request, closed: request.closed });
   const scope = { orgId: request.orgId, workspaceId: request.workspaceId };
   const startedAt = deps.now().toISOString();
   const host = await deps.host(request);
@@ -175,6 +249,19 @@ export async function runCodeRepoCheck(
       memories = inputs.length - captured.refused;
     }
   }
+  // Stored before the check posts, so a write that throws retries the job
+  // and the check never shows a finding the page cannot. A push that
+  // removed every flagged line clears the earlier ones.
+  await deps.findings.replacePullRequest(
+    scope,
+    pullRequestOf(request),
+    findings.map(({ statement }) => ({
+      path: statement.path,
+      line: statement.line,
+      text: statement.text,
+    })),
+    deps.now(),
+  );
 
   const report = buildReport({ workspace, files, findings, blockMerge, memories });
   await host.postCheck({

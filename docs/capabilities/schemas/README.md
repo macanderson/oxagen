@@ -191,6 +191,7 @@ capability rewrites, so two such branches always conflicted on it (ADR-216).
 - promote_memories
 - propose_record
 - publish_context_record
+- restore_managed_block
 - revise_context_record
 
 ## control
@@ -390,11 +391,13 @@ capability rewrites, so two such branches always conflicted on it (ADR-216).
 - get_steering_repo
 - import_workspace_steering
 - link_repository
+- list_code_repository_findings
 - list_github_installations
 - list_installation_repositories
 - list_repositories
 - list_working_copies
 - open_init_pr
+- promote_instruction_to_steering
 - record_working_copy
 - repair_steering_repo
 - retry_steering_repo_provision

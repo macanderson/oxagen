@@ -626,7 +626,11 @@
         "productionBranchMissing": "The repository has no production branch to merge into. Nothing was merged.",
         "productionBranchMoving": "The production branch kept moving while Oxagen was merging. Merge again.",
         "checksFailed": "The production branch moved, and the checks failed after Oxagen brought the branch up to date. Fix the branch and run the checks again.",
-        "toolNotRegistered": "Oxagen has not registered this action yet."
+        "toolNotRegistered": "Oxagen has not registered this action yet.",
+        "blockIntact": "The managed block already matches the production branch. Nothing was changed.",
+        "noManagedBlock": "The production branch holds no managed block in this file, so there is nothing to restore.",
+        "noManagedBlocks": "This repository keeps its steering under .oxagen/, which holds no managed blocks.",
+        "prNotOpen": "This proposal has no open steering PR. Open it first."
       },
       "approve": {
         "confirm": "Approve",

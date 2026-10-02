@@ -354,6 +354,11 @@ import { contextPrOpen } from "./context.pr.open";
 import { contextPrGet } from "./context.pr.get";
 import { contextPrMerge } from "./context.pr.merge";
 import { contextPrMergeWithoutReview } from "./context.pr.merge_without_review";
+// Instruction files in linked code repositories, and the managed blocks of a
+// steering PR (#4518, ADR-253).
+import { codeRepositoryFindingsList } from "./repository.findings.list";
+import { instructionPromote } from "./repository.instruction.promote";
+import { contextPrRestoreManagedBlock } from "./context.pr.restore_managed_block";
 import { contextSteeringDeliveries } from "./context.steering.deliveries";
 import { steeringRepoGet } from "./steering_repo.get";
 import { steeringRepoRepair } from "./steering_repo.repair";
@@ -1156,6 +1161,9 @@ export {
   contextPrGet,
   contextPrMerge,
   contextPrMergeWithoutReview,
+  codeRepositoryFindingsList,
+  instructionPromote,
+  contextPrRestoreManagedBlock,
   contextGovernanceModeSet,
   connectionList,
   connectionCreate,
@@ -1623,6 +1631,9 @@ export const contracts: readonly CapabilityDeclaration[] = [
   contextPrGet,
   contextPrMerge,
   contextPrMergeWithoutReview,
+  codeRepositoryFindingsList,
+  instructionPromote,
+  contextPrRestoreManagedBlock,
   contextGovernanceModeSet,
   agentExecutionList,
   agentExecutionRecord,

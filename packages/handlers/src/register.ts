@@ -1352,6 +1352,26 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./context.pr.merge_without_review"))
         .mergePrWithoutReviewHandler as CapabilityHandlerFn,
   );
+  // Restore the managed block on a steering PR's branch, and list or promote
+  // the instruction-file statements the Oxagen check stores (#4518, ADR-253).
+  registerHandler(
+    "restore_managed_block",
+    async () =>
+      (await import("./context.pr.restore_managed_block"))
+        .restoreManagedBlockHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "list_code_repository_findings",
+    async () =>
+      (await import("./code-repo-check/handlers"))
+        .listCodeRepositoryFindingsHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "promote_instruction_to_steering",
+    async () =>
+      (await import("./code-repo-check/handlers"))
+        .promoteInstructionHandler as CapabilityHandlerFn,
+  );
   registerHandler(
     "set_governance_mode",
     async () =>
