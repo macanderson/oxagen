@@ -1,6 +1,7 @@
 // The no-progress store against a real Postgres (#4490): the limit reads from
-// `workspace.no_progress_policy`, and `cost.no_progress_hits` keeps one row
-// per loop whose count only rises. Runs wherever DATABASE_URL points at a
+// `workspace.no_progress_policy`, with the default for a workspace that has no
+// row, and `cost.no_progress_hits` keeps one row per loop whose count only
+// rises. Runs wherever DATABASE_URL points at a
 // migrated database, as CI's `test` job does. A local run without one is
 // skipped. Every row it writes is removed in afterAll.
 import { closeDatabase, schema, withSystemDb } from "@oxagen/database";
@@ -36,6 +37,7 @@ describe.skipIf(!enabled)("the no-progress store against Postgres", () => {
     limitRepeats: 20,
     mode: "enforced",
     outcome: "paused",
+    pauseBlock: null,
   };
 
   afterAll(async () => {
@@ -46,8 +48,11 @@ describe.skipIf(!enabled)("the no-progress store against Postgres", () => {
     await closeDatabase();
   });
 
-  it("reads no limit for a workspace with no row, and none for a row with no count", async () => {
-    expect(await readNoProgressLimit(run)).toBeNull();
+  it("reads the default for a workspace with no row, and none for a row with no count", async () => {
+    expect(await readNoProgressLimit(run)).toEqual({
+      repeats: 20,
+      mode: "observe",
+    });
     await withSystemDb((tx) =>
       tx.insert(policy).values({
         orgId: run.orgId,
@@ -104,6 +109,7 @@ describe.skipIf(!enabled)("the no-progress store against Postgres", () => {
       limitRepeats: 20,
       mode: "enforced",
       outcome: "paused",
+      pauseBlock: null,
       detectedAt: first,
       updatedAt: later,
     });
@@ -115,6 +121,53 @@ describe.skipIf(!enabled)("the no-progress store against Postgres", () => {
       writeNoProgressHits(
         run,
         [{ ...hit, loop: 2, mode: "observe", outcome: "paused" }],
+        new Date(),
+      ),
+    ).rejects.toThrow();
+  });
+
+  it("keeps the reason an enforced limit could not pause the run", async () => {
+    await writeNoProgressHits(
+      run,
+      [
+        {
+          ...hit,
+          loop: 3,
+          outcome: "would_pause",
+          pauseBlock: "host_offline",
+        },
+      ],
+      new Date(),
+    );
+    const rows = await withSystemDb((tx) =>
+      tx.select().from(hits).where(eq(hits.workspaceId, run.workspaceId)),
+    );
+    expect(rows.find((r) => r.loop === 3)?.pauseBlock).toBe("host_offline");
+  });
+
+  it("refuses a reason on a hit that paused the run", async () => {
+    await expect(
+      writeNoProgressHits(
+        run,
+        [{ ...hit, loop: 4, outcome: "paused", pauseBlock: "host_offline" }],
+        new Date(),
+      ),
+    ).rejects.toThrow();
+  });
+
+  it("refuses a reason under an observe limit", async () => {
+    await expect(
+      writeNoProgressHits(
+        run,
+        [
+          {
+            ...hit,
+            loop: 5,
+            mode: "observe",
+            outcome: "would_pause",
+            pauseBlock: "no_host",
+          },
+        ],
         new Date(),
       ),
     ).rejects.toThrow();

@@ -174,6 +174,9 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "cost.run_pr_outcomes", policyClass: "standard" },
   // The reverts kept until their outcome rows exist (#4491); org_id + workspace_id NOT NULL.
   { table: "cost.run_pr_reverts", policyClass: "standard" },
+  // Where the outcome refresh stands in each ledger run's receipts (#4511);
+  // org_id + workspace_id NOT NULL.
+  { table: "cost.run_pr_receipt_walks", policyClass: "standard" },
   // The loops that reached a workspace's no-progress limit (spend spec,
   // detector 1); org_id + workspace_id NOT NULL.
   { table: "cost.no_progress_hits", policyClass: "standard" },
@@ -447,4 +450,11 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "work.autonomy_events", policyClass: "standard" },
   // An export of training examples.
   { table: "work.training_exports", policyClass: "standard" },
+  // The Phase 1 work records (agent-work-phase-1.html, Data contract; P1-02,
+  // #4897). One revision of an acceptance brief. Append only.
+  { table: "work.briefs", policyClass: "standard" },
+  // A work order: one send of one approved brief to one agent and runtime.
+  { table: "work.orders", policyClass: "standard" },
+  // One fact in a work item's history. Append only.
+  { table: "work.item_facts", policyClass: "standard" },
 ];

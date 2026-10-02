@@ -211,6 +211,7 @@ import { toolStudioFindingsListRoute } from "./routes/v1/tool.studio.findings.li
 import { toolStudioDescriptionDraftRoute } from "./routes/v1/tool.studio.description.draft";
 import { toolStudioTryRoute } from "./routes/v1/tool.studio.try";
 import { toolStudioDiscoveryStartRoute } from "./routes/v1/tool.studio.discovery.start";
+import { toolSteeringMigrateRoute } from "./routes/v1/tool.steering.migrate";
 import { toolStudioListingGetRoute } from "./routes/v1/tool.studio.listing.get";
 import { toolStudioListingStartRoute } from "./routes/v1/tool.studio.listing.start";
 import { toolStudioDiscoveryGetRoute } from "./routes/v1/tool.studio.discovery.get";
@@ -1251,6 +1252,8 @@ orgScoped.route("/tools/studio/server/get", toolStudioServerGetRoute);
 orgScoped.route("/tools/studio/listing/start", toolStudioListingStartRoute);
 orgScoped.route("/tools/studio/listing/get", toolStudioListingGetRoute);
 // Relays (lane M12, #4685): register and revoke a relay for a private network.
+// The move of the workspace's MCP servers into its steering repo (ADR-245, #4948).
+orgScoped.route("/tools/steering/migrate", toolSteeringMigrateRoute);
 orgScoped.route("/tools/relays", toolRelayCreateRoute);
 orgScoped.route("/tools/relays/revoke", toolRelayRevokeRoute);
 orgScoped.route("/credential-grants", credentialGrantListRoute);

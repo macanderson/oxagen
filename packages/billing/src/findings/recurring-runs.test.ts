@@ -20,6 +20,7 @@ import {
   type ToolCallObservation,
 } from "./index";
 import {
+  originKind,
   RECURRING_RUNS_MIN,
   recurringRuns,
   runChange,
@@ -263,6 +264,89 @@ describe("recurring runs", () => {
     expect(detectFindings(input)).toEqual([]);
   });
 
+  // #5011: a person sends a prompt from Claude Desktop's Code tab with source
+  // `sdk`, and while the agent is busy with source `queued`. Only the origin
+  // kind tells a person from a task there.
+  it.each([
+    {
+      name: "queued with a human origin",
+      source: "queued",
+      origin: '{"kind":"human"}',
+    },
+    {
+      name: "sdk with a human origin",
+      source: "sdk",
+      origin: '{"kind":"human"}',
+    },
+    {
+      name: "typed with no origin",
+      source: "typed",
+      origin: null,
+    },
+    {
+      name: "queued with no origin",
+      source: "queued",
+      origin: null,
+    },
+    {
+      name: "typed with an origin that does not parse",
+      source: "typed",
+      origin: "human",
+    },
+  ])("never groups a prompt a person sent: $name", ({ source, origin }) => {
+    const runs = job(5);
+    const input = withPrompt(reads({ [DIGEST]: runs }), runs, {
+      source,
+      origin,
+    });
+    expect(detectFindings(input)).toEqual([]);
+  });
+
+  it.each([
+    {
+      name: "sdk with a task-notification origin",
+      source: "sdk",
+      origin: '{"kind":"task-notification"}',
+    },
+    {
+      name: "queued with a task-notification origin",
+      source: "queued",
+      origin: '{"kind":"task-notification"}',
+    },
+    {
+      name: "sdk with a peer origin",
+      source: "sdk",
+      origin: '{"kind":"peer","from":"agent-2"}',
+    },
+    {
+      name: "sdk with an origin that does not parse",
+      source: "sdk",
+      origin: "human",
+    },
+  ])("groups a prompt no person sent: $name", ({ source, origin }) => {
+    const runs = job(5);
+    const input = withPrompt(reads({ [DIGEST]: runs }), runs, {
+      source,
+      origin,
+    });
+    const found = recurring(detectFindings(input));
+    expect(found).toHaveLength(1);
+    expect(found[0]!.citedRuns).toHaveLength(5);
+  });
+
+  it("reads an origin's kind, and no kind from text that is not an object with one", () => {
+    expect(originKind('{"kind":"human"}')).toBe("human");
+    expect(originKind('{"kind":"task-notification","taskId":"t1"}')).toBe(
+      "task-notification",
+    );
+    expect(originKind(null)).toBeNull();
+    expect(originKind("human")).toBeNull();
+    expect(originKind('"human"')).toBeNull();
+    expect(originKind("{}")).toBeNull();
+    expect(originKind('{"kind":""}')).toBeNull();
+    expect(originKind('{"kind":7}')).toBeNull();
+  });
+
   it("does not cite a run that changed a file or made a mutating call", () => {
     const quiet = job(5);
     const wrote = run();
@@ -356,7 +440,8 @@ describe("recurring runs", () => {
       );
       expect(rest).toEqual([]);
       expect(finding!.citedRuns).toContain(unknown.runId);
-      expect(finding!.evidence).toMatchObject({ calls: 16, coveredCalls: 15 });
+      // Each of the unknown run's 3 model calls is cited, and none is priced.
+      expect(finding!.evidence).toMatchObject({ calls: 18, coveredCalls: 15 });
       expect(finding!.savingMicros).toBe(5n * 3n * TURN_MICROS);
       expect(
         finding!.claims!.filter((claim) => claim.runId === unknown.runId),
@@ -396,10 +481,56 @@ describe("recurring runs", () => {
     frames.delete(unread.runId);
     const [finding] = detectFindings({ ...input, frames });
     expect(finding!.citedRuns).toContain(unread.runId);
-    expect(finding!.evidence).toMatchObject({ calls: 16, coveredCalls: 15 });
+    // Each of the unread run's 3 model calls is cited, and none is priced.
+    expect(finding!.evidence).toMatchObject({ calls: 18, coveredCalls: 15 });
     expect(finding!.why).toBe(
       `6 runs started with the same prompt in the last 30 days. 6 of them changed nothing. ${WHY_TAIL}`,
     );
+  });
+
+  // #4607: one unpriced item stood in for a run of many calls, so a group
+  // could pass the coverage gate on a small share of its calls.
+  it("weighs a run whose change is unknown by its model calls, and writes nothing under half", () => {
+    const quiet = job(5, { modelCalls: 1 });
+    const unknown = run({ modelCalls: 100, sealedAt: null });
+    const input = reads({ [DIGEST]: [...quiet, unknown] });
+    const frames = new Map(input.frames);
+    for (const r of quiet) frames.set(r.runId, [frameAt(r, 1_000)]);
+    frames.delete(unknown.runId);
+    // 5 of 105 calls are priced, under the half the coverage gate asks for.
+    expect(recurring(detectFindings({ ...input, frames }))).toEqual([]);
+    const ctx: DetectContext = {
+      groups: new Groups(new Map()),
+      runs: new Map([...quiet, unknown].map((r) => [r.runId, r])),
+      views: [],
+      claimed: new Set(),
+      taken: new Set(),
+    };
+    recurringRuns.detect({ ...input, frames }, ctx);
+    const [group] = [...ctx.groups.values()];
+    expect(group).toMatchObject({ calls: 105, covered: 5 });
+  });
+
+  it("cites each call of an unknown run whose frames were read, and prices none", () => {
+    const quiet = job(5);
+    const unknown = run({ modelCalls: 4, sealedAt: null });
+    const input = reads({ [DIGEST]: [...quiet, unknown] });
+    // The read returned 3 of the run's 4 calls.
+    const [finding] = recurring(detectFindings(input));
+    expect(finding!.evidence).toMatchObject({ calls: 19, coveredCalls: 15 });
+    expect(
+      finding!.claims!.filter((c) => c.runId === unknown.runId),
+    ).toEqual([]);
+  });
+
+  it("cites each call a short read missed in a run that changed nothing", () => {
+    const runs = job(5);
+    const short = run({ modelCalls: 10 });
+    const input = reads({ [DIGEST]: [...runs, short] });
+    const [finding] = recurring(detectFindings(input));
+    // The short run's 3 frames are priced, and its other 7 calls are not.
+    expect(finding!.evidence).toMatchObject({ calls: 25, coveredCalls: 18 });
+    expect(finding!.savingMicros).toBe(6n * 3n * TURN_MICROS);
   });
 
   it("leaves out a run whose rollup counted no model call", () => {
@@ -507,6 +638,141 @@ describe("recurring runs", () => {
     // run no recurring prompt started.
     expect(noOutcome!.citedRuns).toEqual([lone.runId]);
     expect(noOutcome!.claims!.map((c) => c.detector)).toEqual([8, 8, 8]);
+  });
+
+  // #4607: detector 7 claimed frames before `toDraft` dropped its group, and
+  // detector 8 skipped them, so their spend left the headline.
+  it("frees the frames of a group the pass does not write for spend with no outcome", () => {
+    const runs = job(5);
+    const [priced] = runs;
+    const input = reads({ [DIGEST]: runs });
+    // Only one run's frames were read, so 3 of the group's 15 calls are
+    // priced and the group is not written.
+    const frames = new Map([[priced!.runId, framesOf(priced!)]]);
+    const closed: OutcomeRow = {
+      ...blankOutcome(priced!.runId, "tacho", {
+        provider: "github",
+        repository: "acme/core",
+        number: 1,
+        url: null,
+      }),
+      prState: "closed",
+      closedAt: new Date(priced!.startedAt.getTime() + DAY_MS),
+      prStateReadAt: FIXTURE_WINDOW_END,
+    };
+    const outcomes = new Map([[priced!.runId, [closed]]]);
+    const findings = detectFindings({ ...input, frames, outcomes });
+    expect(findings.map((f) => f.kind)).toEqual(["spend_with_no_outcome"]);
+    const [noOutcome] = findings;
+    expect(noOutcome!.citedRuns).toEqual([priced!.runId]);
+    expect(noOutcome!.savingMicros).toBe(3n * TURN_MICROS);
+    expect(noOutcome!.claims!.map((c) => [c.detector, c.frameKey])).toEqual(
+      framesOf(priced!).map((f) => [8, f.key]),
+    );
+  });
+
+  it("keeps the claims of a group the pass writes", () => {
+    const runs = job(5);
+    const input = reads({ [DIGEST]: runs });
+    const ctx: DetectContext = {
+      groups: new Groups(new Map()),
+      runs: new Map(runs.map((r) => [r.runId, r])),
+      views: [],
+      claimed: new Set(),
+      taken: new Set(),
+    };
+    recurringRuns.detect(input, ctx);
+    const [group] = [...ctx.groups.values()];
+    expect(group!.claimedFrames).toHaveLength(15);
+    const findings = detectFindings(input);
+    expect(findings).toHaveLength(1);
+    expect(findings[0]!.claims).toHaveLength(15);
+  });
+
+  // #4607: the fix promised half price on any provider.
+  it("names the half-price batch only when every priced frame's provider has one", () => {
+    const fixFor = (providers: (string | null | undefined)[]) => {
+      const runs = job(5);
+      const input = reads({ [DIGEST]: runs });
+      const frames = new Map(
+        runs.map((r, i) => [
+          r.runId,
+          framesOf(r).map((f) => {
+            const provider = providers[i % providers.length];
+            return provider === undefined ? f : { ...f, provider };
+          }),
+        ]),
+      );
+      const [finding] = recurring(detectFindings({ ...input, frames }));
+      return finding!.fix;
+    };
+    expect(fixFor(["anthropic"])).toContain(
+      "send it as a batch at half price.",
+    );
+    expect(fixFor(["anthropic", "openai"])).toContain("at half price");
+    for (const providers of [
+      ["openai_compatible"],
+      ["anthropic", "openai_compatible"],
+      [null],
+      [undefined],
+      ["openrouter"],
+    ]) {
+      const fix = fixFor(providers);
+      expect(fix).not.toContain("half price");
+      expect(fix).toContain(
+        "send it as a batch, if its provider offers a batch API.",
+      );
+    }
+  });
+
+  // #4607: a later run from another agent moved the key to the workspace,
+  // where no decision stood, and brought back the runs a dismissal covered.
+  it("keeps runs a decision covered out of a later finding under another key", () => {
+    const before = job(5);
+    const decided = new Date(before[4]!.startedAt.getTime() + 60_000);
+    const other = run({ agentKey: "acme.core.review" });
+    const decidedSince = new Map([[`recurring_runs|agent|${AGENT}`, decided]]);
+    expect(
+      detectFindings(reads({ [DIGEST]: [...before, other] }, { decidedSince })),
+    ).toEqual([]);
+
+    // Five more runs after the decision reopen it, citing only those runs and
+    // the other agent's, under the workspace they now share.
+    const after = job(5);
+    const [finding, ...rest] = detectFindings(
+      reads({ [DIGEST]: [...before, other, ...after] }, { decidedSince }),
+    );
+    expect(rest).toEqual([]);
+    expect(finding).toMatchObject({ level: "workspace", subject: WS });
+    expect([...finding!.citedRuns].sort()).toEqual(
+      [other, ...after].map((r) => r.runId).sort(),
+    );
+    expect(finding!.why).toBe(
+      `6 runs started with the same prompt in the last 30 days. 6 of them changed nothing. ${WHY_TAIL}`,
+    );
+  });
+
+  it("keeps a decision on the workspace from covering another job keyed by its agent", () => {
+    const mixed = [...job(3), ...job(2, { agentKey: "acme.core.review" })];
+    const decided = new Date(mixed[4]!.startedAt.getTime() + 60_000);
+    // The agent's own job started before the decision, which was on the
+    // mixed job's workspace finding.
+    const agentJob = Array.from({ length: 5 }, (_, i) => {
+      const startedAt = new Date(
+        FIXTURE_WINDOW_START.getTime() + DAY_MS + i * HOUR_MS,
+      );
+      return run({
+        startedAt,
+        sealedAt: new Date(startedAt.getTime() + 10 * 60_000),
+      });
+    });
+    const decidedSince = new Map([[`recurring_runs|workspace|${WS}`, decided]]);
+    const findings = detectFindings(
+      reads({ [DIGEST]: mixed, "sha256:agent": agentJob }, { decidedSince }),
+    );
+    expect(findings.map((f) => [f.level, f.subject])).toEqual([
+      ["agent", AGENT],
+    ]);
   });
 
   it("reports under the agent every run names, else the operator, else the workspace", () => {

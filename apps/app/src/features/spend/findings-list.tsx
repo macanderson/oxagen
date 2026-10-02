@@ -7,7 +7,8 @@
 // place in that list and never changes with a filter. Each card is the one
 // the spend spec draws for its kind (./finding-card.tsx): its amount and its
 // share of the workspace's spend first, then its finding text, what it cites,
-// Evidence and Fix.
+// Evidence and Fix. A finding about an agent draws the agent's avatar with its
+// registered harness (#4871).
 import { useLocale, useTranslations } from "next-intl";
 import { useState } from "react";
 import { byMicrosDescending, type Cost } from "@/data/contracts/money";
@@ -16,6 +17,7 @@ import { panel } from "@/ui/control-styles";
 import { ListSelect } from "@/ui/list-select";
 import { formatCount } from "@/ui/money-format";
 import { RowsPager } from "@/ui/pagination";
+import type { AgentHarnesses } from "./agent-mark";
 import { FindingCard } from "./finding-card";
 import type { SpendAt } from "./view";
 
@@ -67,6 +69,7 @@ export function FindingsList({
   findings,
   spend,
   names,
+  harnesses = {},
   at,
 }: {
   findings: readonly SpendFinding[];
@@ -74,6 +77,8 @@ export function FindingsList({
   spend: Cost | null;
   /** An operator finding's subject is a `prn_…` id; this is the person's name for it. */
   names: Readonly<Record<string, string>>;
+  /** An agent finding's subject is an agent key; this is its harness by key. */
+  harnesses?: AgentHarnesses;
   at: SpendAt;
 }) {
   const t = useTranslations("spend.findings");
@@ -168,6 +173,7 @@ export function FindingsList({
               finding={item.finding}
               rank={item.rank}
               names={names}
+              harnesses={harnesses}
               spend={spend}
               at={at}
             />

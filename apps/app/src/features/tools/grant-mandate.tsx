@@ -61,7 +61,13 @@ const IMPACTS = STARTER_IMPACTS;
 const TAG_OPTIONS = IMPACTS.map((tag) => ({ value: tag, label: tag }));
 
 /** An agent the picker offers: a retired identity is never one (see `grantableAgents` in tools.tsx). */
-type GrantableAgent = { id: string; slug: string; name: string };
+type GrantableAgent = {
+  id: string;
+  slug: string;
+  name: string;
+  /** The harness it registered, for the badge on its avatar. */
+  harness: string;
+};
 
 /** What the picker has to offer, and whether that is every agent. */
 export type AgentChoices =
@@ -398,6 +404,7 @@ export function GrantMandate({
                         value: agent.id,
                         label: agent.name,
                         detail: agent.slug,
+                        icon: { agent: agent.slug, harness: agent.harness },
                       })),
                     })}
               />

@@ -20,7 +20,9 @@
  * Observe mode records each hit and lets the run continue. Enforced mode
  * pauses the run at the next checkpoint, on governed calls, when the check
  * can reach the pause path, and records `would_pause` when it cannot.
- * No count means no check: the limit ships without a default.
+ * A workspace with no limit of its own gets the store's default, 20 in
+ * observe mode (./no-progress-store.ts). A limit with no count means the
+ * team cleared it, so no check runs.
  */
 import type { ToolCallFrame } from "./cost-rollup";
 import { RepeatedCalls, repeatKindOf } from "./step-grade";

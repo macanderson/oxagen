@@ -198,6 +198,7 @@ export function Policy({
   rules,
   mandates,
   grant,
+  agentHarnesses,
 }: {
   at: ToolsAt;
   orgRole: OrgRole;
@@ -207,6 +208,8 @@ export function Policy({
   mandates: Read<MandateList>;
   /** Null for a reader no consequence role can name, who is offered no grant. */
   grant: LedgerGrant | null;
+  /** Each agent's registered harness by slug, for the mandates ledger's badges. */
+  agentHarnesses: Readonly<Record<string, string>>;
 }) {
   return (
     <div className="flex flex-col gap-5">
@@ -217,7 +220,13 @@ export function Policy({
         canWrite={canWriteRules}
         read={rules}
       />
-      <MandatesLedger read={mandates} orgRole={orgRole} at={at} grant={grant} />
+      <MandatesLedger
+        read={mandates}
+        orgRole={orgRole}
+        at={at}
+        grant={grant}
+        agentHarnesses={agentHarnesses}
+      />
       <WhereAVersionLives />
       <Conditions />
       <SequenceRule />

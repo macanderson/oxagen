@@ -208,6 +208,31 @@ describe("Tools › mandates ledger", () => {
     expect(ledger()).toBeVisible();
   });
 
+  it("badges a row's agent with the harness it registered, and draws none for an agent the index lacks (#4871)", async () => {
+    await renderPolicy(
+      {
+        mandates: mandateList([
+          mandateRow(),
+          mandateRow({
+            id: "mnd_91b37e",
+            agentId: "agt_gonebot",
+            agentSlug: "gone-bot",
+          }),
+        ]),
+        agents: readOk(
+          agentPage([{ ...agentPageRow("invoice-bot"), harness: "codex" }]),
+        ),
+      },
+      viewer("member"),
+    );
+    const [known, unknown] = within(ledger()).getAllByTestId("mandate");
+    expect(
+      known?.querySelector('[data-agent-avatar] [data-harness-badge="codex"]'),
+    ).not.toBeNull();
+    expect(unknown?.querySelector("[data-agent-avatar]")).not.toBeNull();
+    expect(unknown?.querySelector("[data-harness-badge]")).toBeNull();
+  });
+
   it("prints the grant and what the ledger has settled, reserved and left", async () => {
     await renderLedger(mandateList([mandateRow()]));
     const row = within(ledger()).getByTestId("mandate");
@@ -528,11 +553,15 @@ describe("Tools › mandates ledger › grant", () => {
     expect(
       within(ledger()).getByRole("button", { name: "Grant a mandate" }),
     ).toBeInTheDocument();
-    expect(calls.agents).toEqual([[viewer(as), { cursor: null }]]);
+    // The picker's page, then the harness index the ledger's badges read.
+    expect(calls.agents).toEqual([
+      [viewer(as), { cursor: null }],
+      [viewer(as), { cursor: null, includeRetired: true }],
+    ]);
   });
 
   it.each([["member" as const], ["viewer" as const]])(
-    "offers a %s no grant and makes no agents read (negative)",
+    "offers a %s no grant and makes no picker read (negative)",
     async (as) => {
       const { calls } = await renderGrant(
         as,
@@ -541,7 +570,10 @@ describe("Tools › mandates ledger › grant", () => {
       expect(
         within(ledger()).queryByRole("button", { name: /^Grant/ }),
       ).toBeNull();
-      expect(calls.agents).toEqual([]);
+      // Only the harness index, which every reader's ledger badges from.
+      expect(calls.agents).toEqual([
+        [viewer(as), { cursor: null, includeRetired: true }],
+      ]);
     },
   );
 

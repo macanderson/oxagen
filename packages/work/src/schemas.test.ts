@@ -10,6 +10,19 @@ import Ajv2020 from "ajv/dist/2020";
 import addFormats from "ajv-formats";
 import { parse as parseToml } from "smol-toml";
 import { describe, expect, it } from "vitest";
+import {
+  BRIEF_CRITERION_TAGS,
+  BRIEF_INTENTS,
+  BRIEF_PROVENANCES,
+  CRITERION_ID_PATTERN,
+  MAX_BRIEF_CRITERIA,
+  REPOSITORY_PATTERN,
+  WORK_BRIEF_SCHEMA,
+  type WorkBrief,
+  briefDigest,
+  buildBrief,
+  parseWorkBrief,
+} from "./records/brief";
 import { WORK_SCHEMA_IDS, type WorkSchemaId, schemaUrl, workSchemaPath, workSchemasDir } from "./schemas";
 import {
   ACCEPT_BY,
@@ -56,6 +69,7 @@ const docs = {
   workflow: readSchema(WORKFLOW_SCHEMA),
   triage: readSchema(TRIAGE_SCHEMA),
   training: readSchema(TRAINING_EXAMPLE_SCHEMA),
+  brief: readSchema(WORK_BRIEF_SCHEMA),
 };
 
 const validators = {
@@ -64,6 +78,7 @@ const validators = {
   workflow: ajv.compile(docs.workflow),
   triage: ajv.compile(docs.triage),
   training: ajv.compile(docs.training),
+  brief: ajv.compile(docs.brief),
 };
 
 /** Validate, and name the errors in the failure message. */
@@ -236,7 +251,7 @@ describe("schema files", () => {
     }
   });
 
-  it("holds exactly the five schema files", () => {
+  it("holds exactly the six schema files", () => {
     expect(readdirSync(workSchemasDir()).sort()).toEqual(WORK_SCHEMA_IDS.map(schemaFileName).sort());
   });
 });
@@ -536,5 +551,78 @@ describe("constants", () => {
     expect(at(docs.triage, "properties", "priority", "properties", "label", "enum")).toEqual([...PRIORITY_LABELS]);
     expect(at(docs.training, "properties", "label", "enum")).toEqual([...TRAINING_LABELS]);
     expect(at(docs.training, "properties", "stage", "enum")).toEqual([...STAGE_KINDS]);
+  });
+});
+
+describe("work-brief/v1", () => {
+  const validate = validators.brief;
+  const example: WorkBrief = {
+    schema: "work-brief/v1",
+    item: "wi_01k6aintelplatform612",
+    item_revision: 2,
+    repository: "aintel/platform",
+    source: {
+      url: "https://github.com/aintel/platform/issues/612",
+      digest: "sha256:3f1c9a2e7b4d6085a1c3e5f7092b4d6e8a0c2e4f6081a3c5e7f9b1d3f5a7c9e1",
+    },
+    criteria: [
+      {
+        id: "c1",
+        text: "An expired invite link shows the expiry message instead of a server error.",
+        tag: "code",
+        intent: "check",
+        evidence: "invite.expired.test.ts passes",
+        provenance: "source",
+      },
+      {
+        id: "c3",
+        text: "The invite page copy follows the house voice.",
+        tag: "review",
+        intent: "review",
+        evidence: "",
+        provenance: "person",
+      },
+    ],
+  };
+
+  it("validates the example, which matches its fixture and reads back unchanged", () => {
+    expect(json("work-brief.json")).toEqual(example);
+    expectValid(validate, example);
+    expect(parseWorkBrief(json("work-brief.json"))).toEqual(example);
+    expect(briefDigest(parseWorkBrief(json("work-brief.json")))).toBe(briefDigest(example));
+  });
+
+  it("validates every brief buildBrief writes", () => {
+    const brief = buildBrief({
+      item: "wi_01k6x",
+      itemRevision: 1,
+      source: { url: null, digest: null },
+      draft: {
+        repository: "aintel/platform",
+        criteria: [{ text: "Docs name the new flag.", tag: "docs", intent: "review", provenance: "triage" }],
+      },
+      issuedIds: [],
+    });
+    expectValid(validate, brief);
+  });
+
+  it("rejects a verdict, a missing id, and an extra field", () => {
+    expectInvalid(validate, { ...example, verdict: "held" });
+    expectInvalid(validate, { ...example, criteria: [{ ...example.criteria[0], id: undefined }] });
+    expectInvalid(validate, { ...example, criteria: [{ ...example.criteria[0], oracle: { class: "example" } }] });
+    expectInvalid(validate, { ...example, criteria: [] });
+    expectInvalid(validate, { ...example, repository: "platform" });
+  });
+
+  it("matches the constants the record code uses", () => {
+    const criterion = at(docs.brief, "$defs", "criterion", "properties");
+    expect(at(criterion, "tag", "enum")).toEqual([...BRIEF_CRITERION_TAGS]);
+    expect(at(criterion, "intent", "enum")).toEqual([...BRIEF_INTENTS]);
+    expect(at(criterion, "provenance", "enum")).toEqual([...BRIEF_PROVENANCES]);
+    expect(at(criterion, "id", "pattern")).toBe(CRITERION_ID_PATTERN.source);
+    expect(at(docs.brief, "properties", "repository", "pattern")).toBe(REPOSITORY_PATTERN.source);
+    expect(at(docs.brief, "properties", "criteria", "maxItems")).toBe(MAX_BRIEF_CRITERIA);
+    // The brief's tags are the criterion tags a workflow stage owns.
+    expect([...BRIEF_CRITERION_TAGS]).toEqual([...CRITERION_TAGS]);
   });
 });
