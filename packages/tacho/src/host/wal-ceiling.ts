@@ -27,7 +27,8 @@
  *
  * The daemon seals a frame on its own chain for each drop, and this module
  * keeps the recent drops in `ceiling.json` beside the WAL, which
- * `oxagen agent status` reads.
+ * `oxagen agent status` reads. The same file keeps each stall clock, so a
+ * restarted daemon resumes it rather than starting it again.
  */
 import { statfsSync } from "node:fs";
 import { join } from "node:path";
@@ -53,8 +54,7 @@ export interface WalCeilingPolicy {
  *   start that imported old transcripts on 2026-10-02 (1.0 GB) fits eight
  *   times over.
  * - One hour without a moved cursor is far past a healthy drain, which ships
- *   a live session within seconds. It also gives a restarted daemon an hour
- *   before it drops anything, because the clock lives in memory.
+ *   a live session within seconds.
  * - A minute between checks costs a `stat` of each waiting session's files.
  */
 export const DEFAULT_WAL_CEILING: WalCeilingPolicy = {
@@ -98,6 +98,15 @@ export interface WalCeilingDrop {
   ceiling_bytes: number;
 }
 
+/**
+ * One session's stall clock: where its shipped cursor stands, and when a
+ * check first saw it there.
+ */
+export interface WalStallClock {
+  shipped_through: number;
+  since: string;
+}
+
 /** What `ceiling.json` holds. */
 export interface WalCeilingState {
   schema: typeof STATE_SCHEMA;
@@ -109,10 +118,63 @@ export interface WalCeilingState {
   stalled_sessions: number;
   /** The most recent drops, oldest first. */
   drops: WalCeilingDrop[];
+  /**
+   * The clock of each session whose cursor stood still between two checks,
+   * by session. A restarted daemon reads these and resumes each clock.
+   */
+  stall_clocks: Record<string, WalStallClock>;
 }
 
 function isCount(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value) && value >= 0;
+}
+
+function isClock(value: unknown): value is WalStallClock {
+  if (typeof value !== "object" || value === null) return false;
+  const clock = value as Record<string, unknown>;
+  const since = clock["since"];
+  return (
+    Number.isSafeInteger(clock["shipped_through"]) &&
+    typeof since === "string" &&
+    Number.isFinite(Date.parse(since))
+  );
+}
+
+/**
+ * The clocks in a `stall_clocks` value. A value that is not an object reads
+ * as no clocks, and an entry that does not read as a clock is skipped, so a
+ * bad clock never hides the drops `oxagen agent status` shows.
+ */
+function clocksFrom(value: unknown): Record<string, WalStallClock> {
+  const clocks: Record<string, WalStallClock> = {};
+  if (typeof value !== "object" || value === null || Array.isArray(value))
+    return clocks;
+  for (const [session, clock] of Object.entries(value))
+    if (isClock(clock))
+      clocks[session] = {
+        shipped_through: clock.shipped_through,
+        since: clock.since,
+      };
+  return clocks;
+}
+
+/** Whether two sets of clocks say the same thing. */
+function sameClocks(
+  a: Readonly<Record<string, WalStallClock>>,
+  b: Readonly<Record<string, WalStallClock>>,
+): boolean {
+  const keys = Object.keys(a);
+  if (keys.length !== Object.keys(b).length) return false;
+  return keys.every((session) => {
+    const other = b[session];
+    const clock = a[session];
+    return (
+      other !== undefined &&
+      clock !== undefined &&
+      other.shipped_through === clock.shipped_through &&
+      other.since === clock.since
+    );
+  });
 }
 
 function isDrop(value: unknown): value is WalCeilingDrop {
@@ -170,6 +232,7 @@ export function readWalCeilingState(
     stalled_bytes: stalledBytes,
     stalled_sessions: stalledSessions,
     drops: (drops as unknown[]).filter(isDrop),
+    stall_clocks: clocksFrom(state["stall_clocks"]),
   };
 }
 
@@ -199,8 +262,14 @@ function ceilingFor(
 export class WalCeiling {
   /**
    * Each waiting session's shipped cursor as the last check saw it, and when
-   * it was first seen there. Held in memory only, so a restarted daemon
-   * starts every clock again and drops nothing for `stallGraceMs`.
+   * it was first seen there.
+   *
+   * A clock whose cursor stood still between two checks is also written to
+   * `ceiling.json`, and the constructor reads it back, so a restarted daemon
+   * resumes the clock. A daemon that restarted more often than `stallGraceMs`
+   * used to start every clock again each time, and never dropped anything.
+   * A clock first seen by the last check before a restart is not written yet,
+   * so a restart costs it at most one `checkEveryMs`.
    */
   private readonly progress = new Map<
     string,
@@ -220,6 +289,13 @@ export class WalCeiling {
     private readonly log: (line: string) => void,
   ) {
     this.state = readWalCeilingState(walDir);
+    for (const [session, clock] of Object.entries(
+      this.state?.stall_clocks ?? {},
+    ))
+      this.progress.set(session, {
+        through: clock.shipped_through,
+        since: Date.parse(clock.since),
+      });
   }
 
   /** Whether a check is due at `now`. */
@@ -242,14 +318,24 @@ export class WalCeiling {
     this.lastCheckAt = now;
     const holdings = this.wal.holdings();
     const waiting = new Set<string>();
+    // The clocks whose cursor stood still since the last check, or since
+    // before a restart. Only these go to `ceiling.json`: a session that is
+    // shipping moves its cursor between checks, so it costs no write.
+    const clocks: Record<string, WalStallClock> = {};
     for (const holding of holdings) {
       waiting.add(holding.sessionUuid);
       const known = this.progress.get(holding.sessionUuid);
-      if (known === undefined || known.through !== holding.shippedThrough)
+      if (known === undefined || known.through !== holding.shippedThrough) {
         this.progress.set(holding.sessionUuid, {
           through: holding.shippedThrough,
           since: now,
         });
+        continue;
+      }
+      clocks[holding.sessionUuid] = {
+        shipped_through: known.through,
+        since: new Date(known.since).toISOString(),
+      };
     }
     // A session that shipped everything, or that `compact` removed, is no
     // longer waiting. Its clock starts again if it waits again.
@@ -306,14 +392,14 @@ export class WalCeiling {
         }
       }
     }
-    this.remember(now, ceiling, held, stalled.length, drops);
+    this.remember(now, ceiling, held, stalled.length, drops, clocks);
     return drops;
   }
 
   /**
    * Write what this check saw to `ceiling.json`, when it says something the
-   * file does not. A host with nothing stalled and nothing dropped writes no
-   * file at all.
+   * file does not. A host where no cursor stood still between two checks,
+   * and nothing was dropped, writes no file at all.
    */
   private remember(
     now: number,
@@ -321,12 +407,18 @@ export class WalCeiling {
     held: number,
     stalledSessions: number,
     drops: readonly WalCeilingDrop[],
+    clocks: Record<string, WalStallClock>,
   ): void {
     const prior = this.state;
     const kept = [...(prior?.drops ?? []), ...drops]
       .filter((drop) => now - Date.parse(drop.dropped_at) < this.keepDropsMs)
       .slice(-DROPS_KEPT);
-    if (prior === undefined && stalledSessions === 0 && kept.length === 0)
+    if (
+      prior === undefined &&
+      stalledSessions === 0 &&
+      kept.length === 0 &&
+      Object.keys(clocks).length === 0
+    )
       return;
     const next: WalCeilingState = {
       schema: STATE_SCHEMA,
@@ -336,6 +428,7 @@ export class WalCeiling {
       stalled_bytes: held,
       stalled_sessions: stalledSessions,
       drops: kept,
+      stall_clocks: clocks,
     };
     const changed =
       this.unsaved ||
@@ -343,6 +436,7 @@ export class WalCeiling {
       prior.stalled_sessions !== next.stalled_sessions ||
       prior.drops.length !== next.drops.length ||
       prior.drops.at(-1)?.dropped_at !== next.drops.at(-1)?.dropped_at ||
+      !sameClocks(prior.stall_clocks, next.stall_clocks) ||
       (next.stalled_sessions > 0 &&
         (prior.stalled_bytes !== next.stalled_bytes ||
           prior.ceiling_bytes !== next.ceiling_bytes));

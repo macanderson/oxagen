@@ -199,7 +199,8 @@ describe("the WAL ceiling", () => {
     first.check(T0, ignore);
     expect(first.check(T0 + GRACE, ignore)).toHaveLength(1);
 
-    // A restarted daemon starts every clock again, and keeps the history.
+    // A restarted daemon keeps the history. It resumes the session's clock,
+    // and the session has no bodies left to drop.
     const second = new WalCeiling(wal, dir, policy(), WEEK, ignore);
     expect(second.check(T0 + GRACE + MINUTE, ignore)).toEqual([]);
     expect(readWalCeilingState(dir)?.drops).toMatchObject([
@@ -208,6 +209,102 @@ describe("the WAL ceiling", () => {
 
     second.check(T0 + GRACE + WEEK, ignore);
     expect(readWalCeilingState(dir)?.drops).toEqual([]);
+  });
+
+  it("resumes a session's stall clock after a restart, so the stall still counts", () => {
+    const dir = scratchPaths().wal;
+    const wal = new Wal(dir);
+    seed(wal, OLDER, "2026-10-02T09:00:00.000Z");
+    const first = new WalCeiling(wal, dir, policy(), WEEK, ignore);
+
+    // Two checks see the cursor stand still, so the clock is written down.
+    expect(first.check(T0, ignore)).toEqual([]);
+    expect(first.check(T0 + MINUTE, ignore)).toEqual([]);
+    expect(readWalCeilingState(dir)?.stall_clocks).toEqual({
+      [OLDER]: { shipped_through: -1, since: new Date(T0).toISOString() },
+    });
+
+    // The daemon restarts before the grace runs out. Its first check counts
+    // the stall from T0, not from the restart.
+    const second = new WalCeiling(wal, dir, policy(), WEEK, ignore);
+    const drops = second.check(T0 + GRACE, ignore);
+    expect(drops).toMatchObject([
+      {
+        session_uuid: OLDER,
+        shipped_through: -1,
+        stalled_since: new Date(T0).toISOString(),
+        dropped_at: new Date(T0 + GRACE).toISOString(),
+      },
+    ]);
+    expect(existsSync(join(dir, `${OLDER}.bodies.jsonl`))).toBe(false);
+  });
+
+  it("starts the clock again for a cursor that moved across a restart", () => {
+    const dir = scratchPaths().wal;
+    const wal = new Wal(dir);
+    seed(wal, OLDER, "2026-10-02T09:00:00.000Z");
+    const first = new WalCeiling(wal, dir, policy(), WEEK, ignore);
+    first.check(T0, ignore);
+    first.check(T0 + MINUTE, ignore);
+
+    // Events shipped while the daemon restarted.
+    wal.markShipped(OLDER, 1);
+    const second = new WalCeiling(wal, dir, policy(), WEEK, ignore);
+    expect(second.check(T0 + GRACE, ignore)).toEqual([]);
+    expect(readWalCeilingState(dir)?.stall_clocks).toEqual({});
+
+    // The grace runs from the check that saw the cursor at 1.
+    expect(second.check(T0 + 2 * GRACE, ignore)).toMatchObject([
+      {
+        session_uuid: OLDER,
+        shipped_through: 1,
+        stalled_since: new Date(T0 + GRACE).toISOString(),
+      },
+    ]);
+  });
+
+  it("reads the drops of a ceiling.json whose stall clocks do not read", () => {
+    const dir = scratchPaths().wal;
+    mkdirSync(dir, { recursive: true });
+    const drop: WalCeilingDrop = {
+      session_uuid: OLDER,
+      bytes: 4096,
+      shipped_through: -1,
+      last_seq: 3,
+      stalled_since: new Date(T0).toISOString(),
+      dropped_at: new Date(T0 + GRACE).toISOString(),
+      stalled_bytes: 8192,
+      ceiling_bytes: 1,
+    };
+    const state = {
+      schema: "tacho.wal-ceiling.v1",
+      checked_at: new Date(T0 + GRACE).toISOString(),
+      ceiling_bytes: 1,
+      stall_grace_ms: GRACE,
+      stalled_bytes: 0,
+      stalled_sessions: 0,
+      drops: [drop],
+    };
+    const file = join(dir, "ceiling.json");
+
+    writeFileSync(file, JSON.stringify({ ...state, stall_clocks: "soon" }));
+    const read = readWalCeilingState(dir);
+    expect(read?.drops).toEqual([drop]);
+    expect(read?.stall_clocks).toEqual({});
+
+    writeFileSync(
+      file,
+      JSON.stringify({
+        ...state,
+        stall_clocks: {
+          [OLDER]: { shipped_through: 2, since: "not a time" },
+          [NEWER]: { shipped_through: 5, since: new Date(T0).toISOString() },
+        },
+      }),
+    );
+    expect(readWalCeilingState(dir)?.stall_clocks).toEqual({
+      [NEWER]: { shipped_through: 5, since: new Date(T0).toISOString() },
+    });
   });
 
   it("reads a missing or foreign ceiling.json as nothing", () => {

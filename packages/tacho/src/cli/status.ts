@@ -134,9 +134,10 @@ export interface StatusReport {
     oldest_unshipped_at?: string;
     /**
      * What the WAL ceiling last saw and did (ADR-261), as the daemon wrote it
-     * to `ceiling.json`. Absent until a session first stalls.
+     * to `ceiling.json`. Absent until a session's shipped cursor first stands
+     * still between two checks. The stall clocks stay in the file.
      */
-    ceiling?: Omit<WalCeilingState, "schema">;
+    ceiling?: Omit<WalCeilingState, "schema" | "stall_clocks">;
   };
   /**
    * Whether recorded events are reaching Oxagen. Absent for a host that is

@@ -67,10 +67,17 @@ files. A long healthy session can hold gigabytes of bodies that already
 shipped, and nothing cheap says where its unshipped bodies start: the body
 index maps event ids to offsets and does not record seqs.
 
-The clock lives in the daemon's memory. A restarted daemon starts every clock
-again, so it drops nothing for its first hour. At the measured rate that lets
-the WAL pass the ceiling by under a gigabyte after a restart, and it keeps
-`cursor.json` in the format every build reads.
+The daemon keeps each clock in `wal/ceiling.json`, so a restart resumes it.
+A clock held only in memory started again with every restart, so a daemon
+that restarted more often than once an hour never dropped anything, and the
+WAL had no ceiling at all. A clock is written once a check has seen its
+cursor stand still, which is the second check after the cursor last moved. A
+session that is shipping moves its cursor between checks, so it costs no
+write. A restart in the minute after a cursor stops loses that one minute of
+the clock. `cursor.json` keeps the format every build reads.
+
+The clock counts wall time, as it does while the daemon runs. Time asleep
+counted already, and time the daemon was stopped now counts too.
 
 ### The ceiling
 
@@ -162,9 +169,10 @@ mark and its WAL write.
 ### What a person sees
 
 The daemon keeps what the last check saw in `wal/ceiling.json`: the ceiling,
-what the stalled sessions hold, how many there are, and the drops of the last
-`walRetainMs`, up to twenty. It writes the file only when one of those
-changes, and a host where nothing stalled has no file. `oxagen agent status`
+what the stalled sessions hold, how many there are, the drops of the last
+`walRetainMs`, up to twenty, and the stall clocks. It writes the file only
+when one of those changes. A host where no cursor stood still between two
+checks, and nothing was dropped, has no file. `oxagen agent status`
 reads the file, so it works while the daemon is down. It prints what the
 stalled sessions hold against the ceiling, says OVER when they hold more, and
 names each session whose content went, with the bytes and the events that
@@ -185,6 +193,12 @@ daemon's health report, which is a wire type, is unchanged.
   events past `shipped_through`, and the host no longer has it.
 - The seven-day window for `tacho export` and incident review shrinks for a
   session that was dropped, because its local copies of shipped bodies go too.
+- A daemon that was stopped for more than an hour with sessions stalled can
+  drop on its first check after it starts again, because the stall clock
+  counts the time it was down. The first drain runs before that check, so a
+  session it ships moves its cursor and starts its clock again. A stalled
+  session the first drain does not reach can lose its content, but only
+  while the stalled sessions hold more than the ceiling.
 - A journaled terminal batch that retries after a drop writes its own few
   bodies again, because `appendRecovered` finds no stored body to skip.
 - `Shipper` still calls `Wal.dropBodies` on the drain path when a proven
