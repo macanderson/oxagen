@@ -83,6 +83,59 @@ export const steeringRepoDifference = z.object({
     .describe("When the host says the change happened, as ISO 8601, or null."),
 });
 
+/**
+ * The steps of `import_workspace_steering`, in the order the run takes them.
+ * A contract cannot import a handler, so this copies `IMPORT_STEPS` from
+ * packages/handlers/src/steering-repo/import-run.ts, and the read's test pins
+ * the two lists equal.
+ */
+export const STEERING_IMPORT_STEP_NAMES = [
+  "record_source",
+  "demote",
+  "provision",
+  "import",
+  "cleanup",
+] as const;
+
+/**
+ * A pull request the import opened, which a person merges. `url` is what the
+ * host answered, as `import_workspace_steering` returns it. The health banner
+ * reads this on every workspace page, so the read checks no more than the
+ * import does.
+ */
+const steeringImportPullRequest = z.object({
+  number: z.number().int().positive(),
+  url: z.string(),
+});
+
+/**
+ * The workspace's last `import_workspace_steering` run, from its
+ * `steering_import` setting (#5082).
+ */
+export const steeringImportRun = z.object({
+  status: z.enum(["running", "waiting", "done", "failed"]),
+  step: z
+    .enum(STEERING_IMPORT_STEP_NAMES)
+    .nullable()
+    .describe("The last step that finished, or null before the first."),
+  source: z
+    .object({ fullName: z.string(), url: z.string().url() })
+    .nullable()
+    .describe(
+      "The repository whose .oxagen/ tree the run moves, or null when the workspace had none.",
+    ),
+  pullRequests: z
+    .array(steeringImportPullRequest.extend({ branch: z.string() }))
+    .describe("The import steering PRs, in the order a person merges them."),
+  cleanup: steeringImportPullRequest
+    .nullable()
+    .describe("The cleanup PR on the old repository, or null before the run opens it."),
+  error: z
+    .object({ code: z.string(), message: z.string() })
+    .nullable()
+    .describe("Why the run stopped, or null."),
+});
+
 export const steeringRepoView = z.object({
   status: steeringRepoReadStatus,
   step: steeringRepoStep
@@ -133,6 +186,11 @@ export const steeringRepoView = z.object({
     .describe(
       "The GitHub organizations and GitLab groups to choose from when setup stopped with choose_connection. Empty otherwise.",
     ),
+  importRun: steeringImportRun
+    .nullable()
+    .describe(
+      "The last import_workspace_steering run, or null when none ran. A run with a source that finished demote but is not done left that repository linked with its .oxagen/ tree unmoved, even when the steering repo is ready. Call import_workspace_steering again to finish it.",
+    ),
 });
 
 /**
@@ -149,7 +207,9 @@ export const steeringRepoView = z.object({
  * `not_started` with every other provisioning field null and no differences,
  * so every page that shows the banner keeps rendering and no page draws a
  * step as running that no job runs. `legacySource` names the code repository
- * that still steers a workspace made before steering repos existed.
+ * that still steers a workspace made before steering repos existed, and
+ * `importRun` is the run that moves it, which can stop after the old
+ * repository stopped steering.
  */
 export const steeringRepoGet = registerCapability({
   name: "get_steering_repo",
@@ -181,3 +241,4 @@ export const steeringRepoGet = registerCapability({
 
 export type SteeringRepoGetOutput = z.output<typeof steeringRepoGet.output>;
 export type SteeringRepoDifference = z.output<typeof steeringRepoDifference>;
+export type SteeringImportRunView = z.output<typeof steeringImportRun>;

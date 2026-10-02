@@ -97,6 +97,33 @@ describe("the Repositories table", () => {
     expect(screen.getByTestId("repository-add-acme/docs")).toBeTruthy();
   });
 
+  it("offers the main repository no Add Oxagen when it carries no .oxagen/ (#5082)", () => {
+    render(
+      <IntlProvider>
+        <RepositoriesTab
+          rows={[
+            row(
+              "oxagen-steering",
+              { kind: "ready", value: { ...TREE, role: "main" } },
+              { role: "main" },
+            ),
+            ...ROWS,
+          ]}
+          reachableUnread={false}
+          truncated={false}
+          onOpen={vi.fn()}
+          onAddOxagen={vi.fn()}
+        />
+      </IntlProvider>,
+    );
+    expect(screen.getByTestId("repository-tree-acme/oxagen-steering")).toHaveAttribute(
+      "data-tree",
+      "absent",
+    );
+    expect(screen.queryByTestId("repository-add-acme/oxagen-steering")).toBeNull();
+    expect(screen.getByTestId("repository-add-acme/docs")).toBeTruthy();
+  });
+
   it("names every ungoverned linked repository in the banner, whose Add Oxagen opens on the first", async () => {
     const user = userEvent.setup();
     const onAddOxagen = tab();

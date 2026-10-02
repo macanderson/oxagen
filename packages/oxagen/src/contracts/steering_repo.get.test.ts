@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { REPO_HEALTH_STATES } from "../steering-repo/health";
-import { STEERING_REPO_STEP_NAMES, steeringRepoGet } from "./steering_repo.get";
+import {
+  STEERING_IMPORT_STEP_NAMES,
+  STEERING_REPO_STEP_NAMES,
+  steeringRepoGet,
+} from "./steering_repo.get";
 
 const VIEW = {
   status: "ready",
@@ -26,6 +30,7 @@ const VIEW = {
   legacySource: null,
   connection: null,
   connectionChoices: [],
+  importRun: null,
 } as const;
 
 describe("get_steering_repo contract", () => {
@@ -83,6 +88,7 @@ describe("get_steering_repo contract", () => {
         kind: "organization",
       },
       connectionChoices: [],
+      importRun: null,
     };
     expect(steeringRepoGet.output.parse(none)).toEqual(none);
   });
@@ -112,6 +118,39 @@ describe("get_steering_repo contract", () => {
         connectionChoices: [
           { provider: "github", id: 0, name: "acme", kind: "organization" },
         ],
+      }).success,
+    ).toBe(false);
+  });
+
+  it("answers an import run that stopped after the old repository stopped steering (#5082)", () => {
+    const stopped = {
+      ...VIEW,
+      health: "healthy",
+      differences: [],
+      importRun: {
+        status: "failed",
+        step: "demote",
+        source: {
+          fullName: "acme/platform",
+          url: "https://github.com/acme/platform",
+        },
+        pullRequests: [],
+        cleanup: null,
+        error: { code: "steering_repo_provision_failed", message: "The bind failed." },
+      },
+    };
+    expect(steeringRepoGet.output.parse(stopped)).toEqual(stopped);
+    for (const step of STEERING_IMPORT_STEP_NAMES)
+      expect(
+        steeringRepoGet.output.safeParse({
+          ...stopped,
+          importRun: { ...stopped.importRun, step },
+        }).success,
+      ).toBe(true);
+    expect(
+      steeringRepoGet.output.safeParse({
+        ...stopped,
+        importRun: { ...stopped.importRun, step: "bind" },
       }).success,
     ).toBe(false);
   });

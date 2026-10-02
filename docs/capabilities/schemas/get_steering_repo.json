@@ -331,6 +331,149 @@
           "additionalProperties": false
         },
         "description": "The GitHub organizations and GitLab groups to choose from when setup stopped with choose_connection. Empty otherwise."
+      },
+      "importRun": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": [
+                  "running",
+                  "waiting",
+                  "done",
+                  "failed"
+                ]
+              },
+              "step": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "record_source",
+                      "demote",
+                      "provision",
+                      "import",
+                      "cleanup"
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "source": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "fullName": {
+                        "type": "string"
+                      },
+                      "url": {
+                        "type": "string",
+                        "format": "uri"
+                      }
+                    },
+                    "required": [
+                      "fullName",
+                      "url"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "pullRequests": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "number": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0
+                    },
+                    "url": {
+                      "type": "string"
+                    },
+                    "branch": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "number",
+                    "url",
+                    "branch"
+                  ],
+                  "additionalProperties": false
+                },
+                "description": "The import steering PRs, in the order a person merges them."
+              },
+              "cleanup": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "number": {
+                        "type": "integer",
+                        "exclusiveMinimum": 0
+                      },
+                      "url": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "number",
+                      "url"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "error": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "code": {
+                        "type": "string"
+                      },
+                      "message": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "code",
+                      "message"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "status",
+              "step",
+              "source",
+              "pullRequests",
+              "cleanup",
+              "error"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "null"
+          }
+        ]
       }
     },
     "required": [
@@ -345,7 +488,8 @@
       "differences",
       "legacySource",
       "connection",
-      "connectionChoices"
+      "connectionChoices",
+      "importRun"
     ],
     "additionalProperties": false
   }
