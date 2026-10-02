@@ -689,9 +689,17 @@ export const routes = {
     withQuery(pathOf(org, ws, "work"), {
       tab: tab === undefined || tab === "inbox" ? undefined : tab,
     }),
-  /** One work item, by the workspace's number for it (WI-12). */
-  workItem: (org: string, ws: string, number: string): SafePath =>
-    pathOf(org, ws, "work", number),
+  /**
+   * One work item, by the workspace's number for it (WI-12). `dialog` opens
+   * one of the item's dialogs on arrival, such as Send from the Work page.
+   */
+  workItem: (
+    org: string,
+    ws: string,
+    number: string,
+    q?: { dialog?: "send" },
+  ): SafePath =>
+    withQuery(pathOf(org, ws, "work", number), { dialog: q?.dialog }),
   /**
    * Work setup (roadmap mockups/pages/work-setup.md). `tab` picks Priorities or
    * Runtimes, and is left off for Collectors.
