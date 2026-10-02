@@ -306,7 +306,9 @@ describe("CreateWorkspace", () => {
     await userEvent.type(repo, "-research");
     expect(repo).toHaveAttribute("aria-invalid", "true");
     expect(repo).toHaveAccessibleDescription(/Use up to 100 letters/);
-    expect((repo as HTMLInputElement).validity.valid).toBe(false);
+    if (!(repo instanceof HTMLInputElement))
+      throw new Error("the repository name is not an input");
+    expect(repo.validity.valid).toBe(false);
   });
 
   it("names a write that threw and stays on the form (negative)", async () => {

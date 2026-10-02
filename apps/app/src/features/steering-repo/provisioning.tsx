@@ -575,7 +575,7 @@ export function SteeringRepoProvisioning({
                       void goOn({ connection: pick });
                     }}
                   />
-                ) : renaming && ws !== null ? (
+                ) : renaming ? (
                   <RetryWithChanges
                     org={org}
                     ws={ws}

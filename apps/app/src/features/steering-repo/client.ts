@@ -8,14 +8,9 @@
 // The create-workspace forms on onboarding and on the Organization page draw
 // the steering repo's Organization and Repository name fields from here
 // (#5196).
-export {
-  type LoadDestinations,
-  SteeringRepoDestinationFields,
-} from "./destination-fields";
+export { SteeringRepoDestinationFields } from "./destination-fields";
 export {
   defaultRepoName,
   repoNameAccepted,
-  type SteeringRepoDestinations,
-  type SteeringRepoDraft,
   steeringRepoDraftOf,
 } from "./destination";

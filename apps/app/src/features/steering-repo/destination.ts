@@ -35,7 +35,7 @@ export function connectionValue(
 }
 
 /** The place an option value names, or null for a value that names none. */
-export function parseConnectionValue(
+function parseConnectionValue(
   value: string,
 ): SteeringRepoDraft["connection"] | null {
   const match = /^(github|gitlab):([1-9][0-9]{0,15})$/.exec(value);

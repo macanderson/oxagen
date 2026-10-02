@@ -2865,6 +2865,17 @@
       "writes": []
     },
     {
+      "domain": "repository",
+      "name": "list_steering_repo_destinations",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "tool",
       "name": "list_studio_findings",
       "reads": [],
