@@ -215,7 +215,9 @@ jobs:
               core.info(`commented on #${existing.number}`)
             } else {
               const created = await github.rest.issues.create({
-                owner, repo, title, body, labels: [LABEL, 'TRIAGE'],
+                // No priority label, which is what puts the issue in the
+                // `/triage-issues` sweep.
+                owner, repo, title, body, labels: [LABEL],
               })
               core.info(`opened #${created.data.number}`)
             }
