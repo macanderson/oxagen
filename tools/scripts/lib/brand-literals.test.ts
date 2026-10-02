@@ -209,8 +209,9 @@ describe("naming the token", () => {
     expect(sizes.get("--ox-radius-card")).toBeCloseTo(12.96);
   });
 
-  it("reads no step without the base it multiplies", () => {
+  it("reads no step without the base it multiplies, and no alias of an unknown token", () => {
     expect(tokenSizes("--ox-radius-lg: calc(var(--ox-radius-base) * 1);").size).toBe(0);
+    expect(tokenSizes("--ox-radius-card: var(--ox-radius-2xl);").size).toBe(0);
   });
 
   it("names the nearest step of the surface's own scale", () => {
@@ -233,6 +234,10 @@ describe("naming the token", () => {
     const none = new Map<string, number>();
     expect(suggestion("border-radius", "8px", "a", none)).toBe("a --ox-radius-* step");
     expect(suggestion("font-size", "15px", "m", none)).toBe("an --ox-m-* step");
+  });
+
+  it("falls back to the family name when the literal has no size to compare", () => {
+    expect(suggestion("font-size", "0px", "m", sizes)).toBe("an --ox-m-* step");
   });
 
   it("names the shadow by where it sits, and the wrap by its token", () => {

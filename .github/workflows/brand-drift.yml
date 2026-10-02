@@ -83,5 +83,5 @@ jobs:
             fi
             echo "::error::This pull request changes $touched, and the brand files differ from oxageninc/brand main."
           fi
-          echo "::error::Run node tools/scripts/sync-brand-assets.mjs --brand <oxageninc/brand checkout> and commit the result. If the desktop icons are stale, also run pnpm --filter @oxagen/desktop icons."
+          echo "::error::Run node tools/scripts/sync-brand-assets.mjs --brand <oxageninc/brand checkout> and commit the result. If the desktop icons are stale, also run pnpm --filter @oxagen/desktop icons. For a literal, write the token its line names, or keep it in KEEP in tools/scripts/lib/brand-literals.mjs with its reason."
           exit 1
