@@ -1,7 +1,7 @@
 /**
  * Workspace Admin role (#5228)
  *
- * Replays 20261003020000_workspace_admin_role.sql against three orgs created
+ * Replays 20261003030000_workspace_admin_role.sql against three orgs created
  * after the migration ran, and proves it:
  *
  *   - gives an org with no workspace Admin role one, system-default, with the
@@ -54,7 +54,7 @@ type RoleRow = {
 it("gives every org the workspace Admin role once, and keeps a role that holds the name", async () => {
   const migration = readFileSync(
     new URL(
-      "../atlas/migrations/20261003020000_workspace_admin_role.sql",
+      "../atlas/migrations/20261003030000_workspace_admin_role.sql",
       import.meta.url,
     ),
     "utf8",

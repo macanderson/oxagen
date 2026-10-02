@@ -2,15 +2,17 @@
 
 Create or change a GitHub work collector by name, or pause and resume one (lane P1-03, #5103).
 
-**Surfaces:** api, mcp
+**Surfaces:** api
 
 ## Surface
 
 - API: `POST /v1/:org_slug/:workspace_slug/work/collectors/set`, returns 200
-- MCP: `set_work_collector`
-- Authentication: org Owner or Admin, or workspace Owner, checked by the handler
+- Not on the MCP, CLI, or agent surface.
+- Authentication: A signed-in session. An API key or an agent run is refused before anything is written.
+- Roles: org Owner or Admin, or workspace Owner, checked by the handler
 - Billing: `noBillingGate: true`
-- Not on the agent surface.
+
+A collector decides what the workspace takes in, so only a person changes one ([ADR-250](../adr/ADR-250-phase-1-work-intake-reads-github-through-the-github-app-and-triage-cites-a-steering-record.md), #5181). An agent on its operator's machine can read the operator's `oxagen login` key, so every API key is refused. An agent can still file a work item with `create_work_item`.
 
 ## Input
 
@@ -35,4 +37,4 @@ A change keeps whatever the input leaves out.
 
 The connection must belong to the workspace and be connected. A collector that gains a repository, or moves to another connection, reads every repository from the start again, because its cursor is a time and the new repository's older issues were never read. Issues GitHub had already closed when a collector first reads them do not become work items. Each repository must be one the Oxagen GitHub App can read, and a reconcile fails until it can. The row stores the fields of a `collector/v1` document with every write-back switch off, and the SHA-256 of that document ([ADR-250](../adr/ADR-250-phase-1-work-intake-reads-github-through-the-github-app-and-triage-cites-a-steering-record.md)). Oxagen reads GitHub and writes nothing back to an issue. Pausing keeps each webhook delivery and fetches nothing until a person resumes the collector.
 
-Errors: 400 for a new collector with no connection or repositories, 404 for a connection the workspace does not hold, 409 for a connection that is not connected or a name another collector type holds.
+Errors: 400 for a new collector with no connection or repositories, 403 for an API key or an agent run (`person_required` or `agent_run`) and for a caller without the role, 404 for a connection the workspace does not hold, 409 for a connection that is not connected or a name another collector type holds.
