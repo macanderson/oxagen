@@ -10,7 +10,7 @@
 
 ## Intent
 
-You have staged edits to one server folder in Studio and saved them as a draft. Review turns that draft into one steering PR on the branch `tools/<server>`. The PR writes server.toml, tools.toml, tools.lock.json, the vendored definition, and `tests/calls.jsonl` under `tools/servers/<server>/`. Its body lists every imported, removed, and reclassified tool, the definition token total against the budget, and the tool checks' findings.
+You have staged edits to one server folder in Studio and saved them as a draft. Review turns that draft into one steering PR on the branch `tools/<server>`. The PR writes server.toml, tools.toml, tools.lock.json, the vendored definition, and `tests/calls.jsonl` under `tools/servers/<server>/`. Its body lists every imported, removed, and reclassified tool, the definition token total against the budget, and the tool checks' findings. The steering checks accept the tools.lock.json Review writes and refuse a lock a person edits by hand ([ADR-278](../adr/ADR-278-a-steering-pr-may-change-a-servers-lock-when-oxagen-wrote-it.md)).
 
 Review refuses while a tool the draft imports has no risk, side effect, or egress, and while the folder does not compile or lock. A second Review adds a commit to the steering PR already open on the branch. The decision record is [ADR-224](../adr/ADR-224-studio-keeps-a-draft-and-review-opens-a-steering-pr-for-one-server-folder.md).
 

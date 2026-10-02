@@ -278,6 +278,17 @@ export interface MergeActor {
   workspaceRole: string | null;
 }
 
+/**
+ * An approval a person gave in Oxagen (approve_steering_pr, ADR-267), at the
+ * head they approved. The Oxagen GitHub App opens every steering PR, and
+ * GitHub refuses an app's approving review of a pull request it opened, so
+ * this approval lives in Oxagen and not on the host.
+ */
+export interface OxagenApproval {
+  userId: string;
+  commitSha: string;
+}
+
 /** Who approved a merge, or that its merger merged without review. */
 export interface MergeApproval {
   /** Oxagen user ids, in the order the host listed them. */
@@ -302,6 +313,11 @@ export interface ApprovalInput {
   heads: readonly string[];
   authorUserId: string | null;
   merger: MergeActor;
+  /**
+   * The approvals given in Oxagen on this PR (ADR-267). Read on every call,
+   * like the host's, because the queue asks again after each update.
+   */
+  oxagenApprovals: () => Promise<readonly OxagenApproval[]>;
   /** True when the user holds a role in the workspace or its organization. */
   isMember: (userId: string) => Promise<boolean>;
   /** True when the merger holds merge_pr_without_review (ADR-213). */
@@ -312,11 +328,13 @@ export interface ApprovalInput {
  * The approvals a merge carries, or `approval_required`.
  *
  * In solo mode no approval is needed and the merger is the approver. In team
- * and regulated mode the PR needs an approval on the host, at one of
- * `heads`, by a workspace member other than the author whose host account is
- * linked to an Oxagen user. Without one, an owner of the organization or
- * workspace, or a member holding merge_pr_without_review, may still merge,
- * and the ledger and trailers record that nobody reviewed it.
+ * and regulated mode the PR needs an approval at one of `heads`, by a
+ * workspace member other than the author. The approval is either a review
+ * on the host by an account linked to an Oxagen user, or one given in Oxagen
+ * (approve_steering_pr, ADR-267). Both pass the same rule, and a person
+ * counts once. Without one, an owner of the organization or workspace, or a
+ * member holding merge_pr_without_review, may still merge, and the ledger
+ * and trailers record that nobody reviewed it.
  */
 export async function mergeApproval(
   input: ApprovalInput,
@@ -325,10 +343,11 @@ export async function mergeApproval(
     return { approvedBy: [input.merger.userId], withoutReview: false };
   }
   const approvedBy: string[] = [];
-  for (const approval of await input.host.listApprovals(
-    input.repo,
-    input.number,
-  )) {
+  const [hosted, given] = await Promise.all([
+    input.host.listApprovals(input.repo, input.number),
+    input.oxagenApprovals(),
+  ]);
+  for (const approval of [...hosted, ...given]) {
     const userId = approval.userId;
     if (userId === null || approvedBy.includes(userId)) continue;
     if (

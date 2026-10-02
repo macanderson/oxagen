@@ -288,6 +288,9 @@ describe("the repository dialog", () => {
     expect(linked).toHaveTextContent(
       "Steering PR #43 adds acme/docs-site to workspace.toml.",
     );
+    expect(within(root).getByTestId("repository-dialog-issues")).toHaveTextContent(
+      "Once the link merges, turn on Issues in this repository's row to collect its open issues as work items.",
+    );
     expect(linked).toHaveTextContent(
       "Merge the steering PR to finish linking.",
     );

@@ -14,10 +14,12 @@
 // runChecks. runChecksWithServers runs the other checks and adds these
 // findings to the compile result.
 //
-// A steering PR cannot change the lock: the owned check refuses any edit. So
-// the lock here is the production branch's, and a tools.toml change that
-// alters a definition leaves its definition_hash behind. That is a warning:
-// Oxagen writes the new lock when it syncs the server after the merge.
+// Only Oxagen writes the lock. Studio's Review and a sync write a new lock
+// into the steering PR they open, and lockOutcome tells the owned check
+// whether the head's lock is one Oxagen writes (SERVER_READERS.lock). A
+// person's tools.toml change that alters a definition leaves its
+// definition_hash behind. That is a warning: Oxagen writes the new lock when
+// it syncs the server after the merge.
 import {
   compile,
   CompileError,
@@ -62,6 +64,7 @@ import type {
   CheckReport,
   CheckResult,
   Finding,
+  LockOutcome,
   ServerFileOutcome,
   ServerReaders,
   SteeringTree,
@@ -96,10 +99,14 @@ function outcomeOf<T>(read: ReadResult<T>): ServerFileOutcome {
   return read.ok ? { ok: true } : { ok: false, issues: read.issues };
 }
 
-/** MCP Studio's readers for server.toml and tools.toml, for the schema check. */
+/**
+ * MCP Studio's readers: server.toml and tools.toml for the schema check, and
+ * the lock a steering PR writes for the owned check.
+ */
 export const SERVER_READERS: ServerReaders = {
   server: (text) => outcomeOf(parseServerToml(text)),
   tools: (text) => outcomeOf(parseToolsToml(text)),
+  lock: (name, head, base) => lockOutcome(name, head, base),
 };
 
 // ── The lock ─────────────────────────────────────────────────────────────────
@@ -196,6 +203,92 @@ function lockFindings(name: string, text: string, lock: McpToolsLock): Finding[]
     );
   }
   return findings;
+}
+
+/** The part of a lock entry its version follows. */
+interface Versioned {
+  definition_hash: string;
+  version: number;
+}
+
+/** What is wrong with a tool's version against the production lock, or null when it is the version lock() sets. */
+function versionProblem(name: string, key: string, entry: Versioned, before: Versioned | undefined): string | null {
+  const tool = `${name}__${key}`;
+  if (before === undefined) {
+    return entry.version === 1 ? null : `${tool} is at version ${entry.version}, and a tool new to the lock starts at version 1.`;
+  }
+  if (before.definition_hash === entry.definition_hash) {
+    return entry.version === before.version
+      ? null
+      : `${tool} is at version ${entry.version}. Its definition_hash is the production lock's, so its version stays ${before.version}.`;
+  }
+  return entry.version === before.version + 1
+    ? null
+    : `${tool} is at version ${entry.version}. Its definition_hash differs from the production lock's, so its version is ${before.version + 1}.`;
+}
+
+/**
+ * Whether the lock of server `name` at the head is one Oxagen writes for the
+ * folder against the base (ADR-278). Studio's Review and a sync write the lock with
+ * MCP Studio's lock() and formatJson(), so a lock Oxagen wrote:
+ *
+ * 1. is in the form formatJson() writes, which parseLock() reads,
+ * 2. records the source type server.toml names,
+ * 3. holds an entry only for a tool tools.toml imports, and
+ * 4. gives each tool the production lock's version while its
+ *    definition_hash is unchanged, one more when it changed, and 1 when the
+ *    production lock has no entry for it.
+ *
+ * lockFindings reports a lock for another server and an upstream_hash that
+ * does not match. The compile reports a definition_hash that tools.toml no
+ * longer compiles to, as a warning, so a person may still edit tools.toml on
+ * the PR. No check without the network can tell an upstream Oxagen read from
+ * one a person rewrote and hashed the way Oxagen does. Discovery compares the
+ * server's live tools with the lock and opens a sync PR when they differ.
+ */
+function lockOutcome(name: string, head: SteeringTree, base: SteeringTree): LockOutcome {
+  const path = toolsLockPath(name);
+  const text = head.get(path);
+  if (text === undefined) return { ok: false, problems: [`The steering PR holds no ${path}.`] };
+  const read = parseLock(text);
+  if (!read.ok) {
+    const problems = read.issues.map((issue) =>
+      closed(issue.field === null ? issue.message : `${issue.field}: ${issue.message}`),
+    );
+    return { ok: false, problems };
+  }
+  const pinned = read.value;
+  const problems: string[] = [];
+
+  // The schema check reports a server.toml or a tools.toml that does not parse.
+  const serverText = head.get(serverTomlPath(name));
+  const server = serverText === undefined ? undefined : parseServerToml(serverText);
+  if (server?.ok === true && server.value.source.type !== pinned.source.type) {
+    problems.push(`The lock's source is ${pinned.source.type}, and server.toml's source is ${server.value.source.type}.`);
+  }
+  const toolsText = head.get(toolsTomlPath(name));
+  const tools = toolsText === undefined ? undefined : parseToolsToml(toolsText);
+  if (tools?.ok === true) {
+    const imported = tools.value.tools ?? {};
+    for (const key of Object.keys(pinned.tools)) {
+      if (!Object.hasOwn(imported, key)) {
+        problems.push(`The lock holds ${name}__${key}, and tools.toml imports no tool keyed ${key}.`);
+      }
+    }
+  }
+
+  // A production lock that does not read gives no versions to compare.
+  const baseText = base.get(path);
+  const previous = baseText === undefined ? null : readLock(baseText);
+  if (previous === null || previous.ok) {
+    const prior: Readonly<Record<string, Versioned>> = previous === null ? {} : previous.lock.tools;
+    const entries: [string, Versioned][] = Object.entries(pinned.tools);
+    for (const [key, entry] of entries) {
+      const problem = versionProblem(name, key, entry, Object.hasOwn(prior, key) ? prior[key] : undefined);
+      if (problem !== null) problems.push(problem);
+    }
+  }
+  return problems.length === 0 ? { ok: true } : { ok: false, problems };
 }
 
 // ── Tool checks ──────────────────────────────────────────────────────────────

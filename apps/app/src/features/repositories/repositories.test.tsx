@@ -53,6 +53,8 @@ const actions = vi.hoisted(() => ({
   closeRepositoryChange: vi.fn(),
   readWorkingCopies: vi.fn(),
   promoteInstructionToSteering: vi.fn(),
+  readIssueCollection: vi.fn(),
+  setIssueCollection: vi.fn(),
 }));
 vi.mock("./actions", () => actions);
 
@@ -290,6 +292,7 @@ beforeEach(() => {
       }),
   );
   actions.readRepositoryChanges.mockResolvedValue({ ok: true, value: CHANGES });
+  actions.readIssueCollection.mockResolvedValue({ ok: true, value: { collected: [] } });
   actions.readWorkingCopies.mockResolvedValue({
     ok: true,
     value: { workingCopies: [] },

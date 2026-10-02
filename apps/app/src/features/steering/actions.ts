@@ -8,6 +8,8 @@
 // the handler's reason as its code, and nothing changed.
 import { agentMemoryUpdate } from "@oxagen/oxagen/contracts/agent.memory.update";
 import { contextGovernanceModeSet } from "@oxagen/oxagen/contracts/context.governance_mode.set";
+import { steeringMemoryPrRecordDrop } from "@oxagen/oxagen/contracts/steering.memory_pr_records.drop";
+import { steeringPrApprove } from "@oxagen/oxagen/contracts/steering.pr.approve";
 import { steeringPrMerge } from "@oxagen/oxagen/contracts/steering.pr.merge";
 import { steeringPrMergeWithoutReview } from "@oxagen/oxagen/contracts/steering.pr.merge_without_review";
 import { steeringPrOpen } from "@oxagen/oxagen/contracts/steering.pr.open";
@@ -17,7 +19,6 @@ import { steeringPrRestoreManagedBlock } from "@oxagen/oxagen/contracts/steering
 import { steeringProposalDismiss } from "@oxagen/oxagen/contracts/steering.proposal.dismiss";
 import { governanceModeSchema } from "@oxagen/oxagen/contracts/context.steering.shared";
 import { workspaceSettingsWrite } from "@oxagen/oxagen/contracts/workspace.settings.write";
-import { z } from "zod";
 import type { ActionResult, ContractOutput } from "@/server/kernel";
 import { kernelWrite } from "@/server/kernel";
 import { requireViewer } from "@/server/viewer";
@@ -292,36 +293,14 @@ export async function forgetMemory(
     : result;
 }
 
-// The steering PR writes the platform has not registered yet (#4518):
-// approve_steering_pr and drop_memory_record. Each one is a local contract
-// under the name the platform will register, so the kernel answers
-// `unavailable` with code `tool_not_registered` today, and the same call
-// reaches the handler, unchanged, once the capability lands. The schemas are
-// the proposed shapes. The platform contract replaces each one, as
-// merge_pr_without_review's did (#4528) and restore_managed_block's did.
-const PROPOSAL_ID = z.string().regex(/^prp_[0-9A-Za-z]+$/);
-
-const approveSteeringPrContract = {
-  name: "approve_steering_pr",
-  input: z.object({ proposalId: PROPOSAL_ID }).strict(),
-  output: z.object({ approvals: z.number().int().nonnegative() }),
-};
-
-const dropMemoryRecordContract = {
-  name: "drop_memory_record",
-  input: z
-    .object({
-      branch: z.string().startsWith("memory/"),
-      path: z.string().min(1),
-    })
-    .strict(),
-  output: z.object({ commit_sha: z.string(), rejection_id: z.string() }),
-};
-
 /**
- * Approve the steering PR. Under the team and regulated modes the merge
- * queue refuses a merge with `approval_required` until a member other than
- * the author approves. The answer is the approval count after this one.
+ * Approve the steering PR at its head (#4518, ADR-267). Under the team and
+ * regulated modes the merge queue refuses a merge with `approval_required`
+ * until a member other than the author approves. The approval is stored in
+ * Oxagen, because GitHub refuses the Oxagen App's review of a pull request
+ * it opened. The handler refuses the author (`author_cannot_approve`) and a
+ * head that moved after the checks ran (`head_moved`). The answer is how
+ * many people approved the head in Oxagen.
  */
 export async function approveSteeringPr(
   org: string,
@@ -329,7 +308,10 @@ export async function approveSteeringPr(
   proposalId: string,
 ): Promise<ActionResult<{ approvals: number }>> {
   const ctx = await requireViewer(org, ws);
-  return kernelWrite(ctx, approveSteeringPrContract, { proposalId });
+  const result = await kernelWrite(ctx, steeringPrApprove, { proposalId });
+  return result.ok
+    ? { ok: true, value: { approvals: result.value.approvals } }
+    : result;
 }
 
 /**
@@ -352,28 +334,25 @@ export async function mergePrWithoutReview(
 }
 
 /**
- * Drop one proposed steering record from a memory PR. The handler commits
- * the file's removal to the memory branch and records the rejection.
+ * Drop one proposed steering record from a memory PR, named by its number
+ * (#4518). The handler commits the file's removal to the memory PR's branch.
+ * When the PR merges, its settlement rejects the record's statements and its
+ * memories wait again. A record already dropped answers the commit that
+ * dropped it.
  */
 export async function dropMemoryRecord(
   org: string,
   ws: string,
-  branch: string,
+  number: number,
   path: string,
-): Promise<ActionResult<{ commitSha: string; rejectionId: string }>> {
+): Promise<ActionResult<{ commitSha: string }>> {
   const ctx = await requireViewer(org, ws);
-  const result = await kernelWrite(ctx, dropMemoryRecordContract, {
-    branch,
+  const result = await kernelWrite(ctx, steeringMemoryPrRecordDrop, {
+    number,
     path,
   });
   return result.ok
-    ? {
-        ok: true,
-        value: {
-          commitSha: result.value.commit_sha,
-          rejectionId: result.value.rejection_id,
-        },
-      }
+    ? { ok: true, value: { commitSha: result.value.commit_sha } }
     : result;
 }
 

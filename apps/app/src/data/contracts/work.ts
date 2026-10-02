@@ -641,6 +641,11 @@ export type WorkCollector = z.infer<typeof WorkCollector>;
 
 export const WorkCollectorList = z.object({
   collectors: z.array(WorkCollector),
+  /**
+   * The GitHub repositories linked to the workspace (list_repositories), as
+   * owner/name. A collector reads only these. Null when they could not be read.
+   */
+  linked: z.array(z.string()).nullable(),
 });
 export type WorkCollectorList = z.infer<typeof WorkCollectorList>;
 

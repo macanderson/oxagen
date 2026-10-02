@@ -199,22 +199,45 @@ const SESSION_COOKIE = /^(?:__Secure-)?oxagen\.session_token=/;
 const authError = z.object({ code: z.string() });
 
 /**
- * Signs in with email and password and keeps the session cookie for the API.
- * A failure names the status and the better-auth error code, never the body.
+ * How long a refused sign-in waits before its one retry. Production allows
+ * five sign-ins a minute from one address, and better-auth counts the minute
+ * from the last sign-in, so a wait past one minute always clears it.
  */
-export async function signIn(settings: Settings): Promise<Oxagen> {
-  const res = await fetch(`${settings.appUrl}/api/auth/sign-in/email`, {
+const SIGN_IN_LIMIT_WAIT_MS = 61 * SECOND;
+
+function postSignIn(settings: Settings): Promise<Response> {
+  return fetch(`${settings.appUrl}/api/auth/sign-in/email`, {
     method: "POST",
     headers: { "content-type": "application/json", origin: settings.appUrl },
     body: JSON.stringify({ email: settings.email, password: settings.password }),
   });
+}
+
+/**
+ * Signs in with email and password and keeps the session cookie for the API.
+ * A failure names the status and the better-auth error code, never the body.
+ *
+ * Playwright starts a new worker after each failed test, and each worker
+ * signs in again, so a run with several failures can reach the sign-in
+ * limit. A sign-in the limit refuses waits a minute and tries once more.
+ */
+export async function signIn(settings: Settings): Promise<Oxagen> {
+  let res = await postSignIn(settings);
+  if (res.status === 429) {
+    await sleep(SIGN_IN_LIMIT_WAIT_MS);
+    res = await postSignIn(settings);
+  }
   if (!res.ok) {
     // An error body that is not JSON names no code.
     const json: unknown = await res.json().catch(() => null);
     const parsed = authError.safeParse(json);
     const code = parsed.success ? parsed.data.code : null;
+    const check =
+      res.status === 429
+        ? "Production limits sign-ins to five a minute from one address, so wait a minute before the next run."
+        : "Check STEERING_LIVE_OXAGEN_EMAIL and STEERING_LIVE_OXAGEN_PASSWORD.";
     throw new Error(
-      `Sign-in as the test Oxagen user answered ${String(res.status)}${code === null ? "" : ` (${code})`}. Check STEERING_LIVE_OXAGEN_EMAIL and STEERING_LIVE_OXAGEN_PASSWORD.`,
+      `Sign-in as the test Oxagen user answered ${String(res.status)}${code === null ? "" : ` (${code})`}. ${check}`,
     );
   }
   const cookie = res.headers

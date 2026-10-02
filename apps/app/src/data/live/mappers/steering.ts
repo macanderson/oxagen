@@ -233,6 +233,13 @@ export function toSteeringPr(
             byName: out.closed.byName,
             onHost: out.closed.onHost,
           },
+    findings: out.findings.map((finding) => ({
+      rule: finding.rule,
+      path: finding.path,
+      line: finding.line,
+      message: finding.message,
+    })),
+    approvals: out.approvals,
   };
 }
 

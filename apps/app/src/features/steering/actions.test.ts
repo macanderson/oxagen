@@ -2,12 +2,9 @@
 // and the kernel's invoke() are the only fakes, so each case shows what the
 // person gets back and whether the capability ran: ok, invalid (refused
 // before the kernel), and denied and conflict with the handler's reason
-// (INV-19). The two writes Oxagen has not registered yet (#4518) answer
-// `tool_not_registered` and never reach invoke(). When the platform
-// registers one, its case here fails and moves to the ok path, as
-// restore_managed_block's did.
+// (INV-19).
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { steeringPrOutput } from "@/test/steering-outputs";
+import { steeringPrOpenOutput } from "@/test/steering-outputs";
 
 const { invoke, requireViewer } = vi.hoisted(() => ({
   invoke: vi.fn<typeof import("@oxagen/oxagen").invoke>(),
@@ -58,8 +55,8 @@ const ctx = unsafeMint(WsCtx, {
 });
 
 const ID = "prp_01k5ru4a";
-const BRANCH = "memory/2026-09-27-release-lessons";
-const RECORD_PATH = ".oxagen/memory/release.no-reread-changelog.toml";
+const MEMORY_PR = 12;
+const RECORD_PATH = "steering/memory/workspace/general/no-reread-changelog.md";
 /** The CapabilityContext every write reaches the kernel with. */
 const TENANT = {
   orgId: ctx.orgId,
@@ -77,7 +74,7 @@ beforeEach(() => {
 
 describe("openSteeringPr", () => {
   it("opens the pull request for the workspace viewer and returns where the machine stopped", async () => {
-    invoke.mockResolvedValue(steeringPrOutput({ status: "checks_failed" }));
+    invoke.mockResolvedValue(steeringPrOpenOutput({ status: "checks_failed" }));
     expect(await openSteeringPr("acme", "core-platform", ID)).toEqual({
       ok: true,
       value: { status: "checks_failed" },
@@ -395,7 +392,7 @@ describe("a person the workspace refuses", () => {
     ["revertSteeringPr", () => revertSteeringPr("acme", "x", ID)],
     [
       "dropMemoryRecord",
-      () => dropMemoryRecord("acme", "x", BRANCH, RECORD_PATH),
+      () => dropMemoryRecord("acme", "x", MEMORY_PR, RECORD_PATH),
     ],
     [
       "restoreManagedBlock",
@@ -408,20 +405,92 @@ describe("a person the workspace refuses", () => {
   });
 });
 
-describe("the steering PR writes Oxagen has not registered yet", () => {
-  it.each([
-    ["approveSteeringPr", () => approveSteeringPr("acme", "core-platform", ID)],
-    [
-      "dropMemoryRecord",
-      () => dropMemoryRecord("acme", "core-platform", BRANCH, RECORD_PATH),
-    ],
-  ])("%s answers tool_not_registered (negative)", async (_name, run) => {
-    expect(await run()).toEqual({
-      ok: false,
-      reason: "unavailable",
-      code: "tool_not_registered",
+describe("approveSteeringPr", () => {
+  it("approves the head and returns how many people approved it", async () => {
+    invoke.mockResolvedValue({
+      proposalId: ID,
+      headSha: "4d5e6f7a8b9c",
+      approvals: 2,
     });
-    expect(requireViewer).toHaveBeenCalledWith("acme", "core-platform");
+    expect(await approveSteeringPr("acme", "core-platform", ID)).toEqual({
+      ok: true,
+      value: { approvals: 2 },
+    });
+    expect(invoke).toHaveBeenCalledWith(
+      "approve_steering_pr",
+      { proposalId: ID },
+      expect.objectContaining(TENANT),
+    );
+  });
+
+  it("returns the author's own approval as denied with its reason (negative)", async () => {
+    invoke.mockRejectedValue(refused("forbidden", "author_cannot_approve"));
+    expect(await approveSteeringPr("acme", "core-platform", ID)).toMatchObject({
+      ok: false,
+      reason: "denied",
+      code: "author_cannot_approve",
+    });
+  });
+
+  it("returns a head that moved after the checks as a conflict (negative)", async () => {
+    invoke.mockRejectedValue(refused("conflict", "head_moved"));
+    expect(await approveSteeringPr("acme", "core-platform", ID)).toEqual({
+      ok: false,
+      reason: "conflict",
+      code: "head_moved",
+    });
+  });
+
+  it("refuses a malformed proposal id before the kernel runs (negative)", async () => {
+    expect(await approveSteeringPr("acme", "core-platform", "ctr_1")).toEqual({
+      ok: false,
+      reason: "invalid",
+      code: "invalid_input",
+      field: "proposalId",
+    });
+    expect(invoke).not.toHaveBeenCalled();
+  });
+});
+
+describe("dropMemoryRecord", () => {
+  it("drops the record by the memory PR's number and returns the commit", async () => {
+    invoke.mockResolvedValue({
+      pull_request: {
+        number: MEMORY_PR,
+        url: "https://github.com/acme/steering/pull/12",
+        branch: "memory/2026-09-27",
+      },
+      path: RECORD_PATH,
+      lineage: "no-reread-changelog",
+      commit_sha: "9a8b7c6d5e4f",
+      already_dropped: false,
+    });
+    expect(
+      await dropMemoryRecord("acme", "core-platform", MEMORY_PR, RECORD_PATH),
+    ).toEqual({ ok: true, value: { commitSha: "9a8b7c6d5e4f" } });
+    expect(invoke).toHaveBeenCalledWith(
+      "drop_memory_record",
+      { number: MEMORY_PR, path: RECORD_PATH },
+      expect.objectContaining(TENANT),
+    );
+  });
+
+  it("returns a settled memory PR as a conflict (negative)", async () => {
+    invoke.mockRejectedValue(refused("conflict", "memory_pr_settled"));
+    expect(
+      await dropMemoryRecord("acme", "core-platform", MEMORY_PR, RECORD_PATH),
+    ).toEqual({ ok: false, reason: "conflict", code: "memory_pr_settled" });
+  });
+
+  it("refuses a number that names no pull request before the kernel runs (negative)", async () => {
+    expect(
+      await dropMemoryRecord("acme", "core-platform", 0, RECORD_PATH),
+    ).toEqual({
+      ok: false,
+      reason: "invalid",
+      code: "invalid_input",
+      field: "number",
+    });
     expect(invoke).not.toHaveBeenCalled();
   });
 });
