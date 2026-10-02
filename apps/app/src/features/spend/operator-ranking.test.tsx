@@ -178,16 +178,35 @@ function microsIn(row: HTMLElement): bigint {
 
 describe("canReadOperatorRanking", () => {
   it("admits an org Owner or Admin", () => {
-    expect(canReadOperatorRanking({ orgRole: "owner" })).toBe(true);
-    expect(canReadOperatorRanking({ orgRole: "admin" })).toBe(true);
+    expect(canReadOperatorRanking({ orgRole: "owner", wsRole: "member" })).toBe(
+      true,
+    );
+    expect(canReadOperatorRanking({ orgRole: "admin", wsRole: "member" })).toBe(
+      true,
+    );
   });
 
-  // No person holds a workspace IAM role yet (#3198), so the kernel cannot
-  // admit a workspace Owner in an Enterprise org, and the ranking names org
-  // roles only (#4574).
-  it("refuses every other org role, a workspace Owner's included (negative)", () => {
-    expect(canReadOperatorRanking({ orgRole: "member" })).toBe(false);
-    expect(canReadOperatorRanking({ orgRole: "billing" })).toBe(false);
+  // #5182: a workspace's creator holds the workspace Owner role in IAM, and
+  // the ranking admits that Owner on every tier.
+  it("admits the workspace's Owner who holds no org manager role", () => {
+    expect(canReadOperatorRanking({ orgRole: "member", wsRole: "owner" })).toBe(
+      true,
+    );
+  });
+
+  it("refuses every other org and workspace role (negative)", () => {
+    expect(
+      canReadOperatorRanking({ orgRole: "member", wsRole: "member" }),
+    ).toBe(false);
+    expect(
+      canReadOperatorRanking({ orgRole: "billing", wsRole: "member" }),
+    ).toBe(false);
+    expect(canReadOperatorRanking({ orgRole: "member", wsRole: "admin" })).toBe(
+      false,
+    );
+    expect(
+      canReadOperatorRanking({ orgRole: "member", wsRole: "viewer" }),
+    ).toBe(false);
   });
 });
 
@@ -335,7 +354,9 @@ describe("Operator ranking", () => {
       screen.getByRole("heading", { name: "Operator ranking" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(/An org Owner or Admin can read the operator ranking/),
+      screen.getByText(
+        /An org Owner or Admin, or this workspace's Owner, can read the operator ranking/,
+      ),
     ).toBeInTheDocument();
     expect(screen.queryByRole("table")).toBeNull();
     expect(screen.queryByTestId("money")).toBeNull();

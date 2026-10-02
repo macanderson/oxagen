@@ -53,7 +53,7 @@ describe("get_operator_ranking contract", () => {
     expect(spendOperatorRanking.noBillingGate).toBe(true);
     expect(spendOperatorRanking.defaultRoles).toEqual({
       org: { Owner: "allow", Admin: "allow" },
-      workspace: {},
+      workspace: { Owner: "allow" },
     });
     expect(
       spendOperatorRanking.input.safeParse({

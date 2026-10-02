@@ -9,6 +9,8 @@
  *
  * It is a regex pass over a fixed list of files, with no build and no CSS
  * parser, so `sync-brand-assets.mjs --check` can run it on a bare runner.
+ * The docs chrome's markup has a pass of its own (GUARDED_MARKUP, at the end
+ * of this file), which reads the classes a component writes.
  *
  * What passes without an entry:
  *
@@ -163,7 +165,10 @@ export function declarations(css) {
 /**
  * The property group a declaration belongs to, or null when the guard does
  * not read it. A custom property joins a group by its name, so an alias
- * such as `--r-lg: 12px` is read as the corner it is.
+ * such as `--r-lg: 12px` is read as the corner it is. Tailwind's size for a
+ * text class, such as `--text-sm`, is a font size: the docs set it so
+ * Fumadocs' text classes read the app scale. Its `--text-sm--line-height`
+ * twin is a ratio and is left alone.
  *
  * @param {string} prop
  * @returns {"border-radius" | "box-shadow" | "font-size" | "width" | null}
@@ -173,6 +178,7 @@ export function groupOf(prop) {
     if (/radius|^--r(-[a-z]+)?$/.test(prop)) return "border-radius";
     if (/shadow/.test(prop)) return "box-shadow";
     if (/wrap/.test(prop)) return "width";
+    if (/^--text-[a-z0-9]+$/.test(prop)) return "font-size";
     return null;
   }
   if (/^border(-[a-z]+)*-radius$/.test(prop)) return "border-radius";
@@ -398,4 +404,120 @@ export function literalDrift(files, { tokens = "", guarded = GUARDED, keep = KEE
     }
   }
   return { hits, stale };
+}
+
+/* ── the docs markup ─────────────────────────────────────────────────────── */
+
+/**
+ * The docs chrome this app renders itself, held to the app scale.
+ *
+ * A Tailwind size class such as `text-sm` reads Tailwind's fixed size, so a
+ * theme change in the kit reaches it only where a stylesheet maps that size
+ * to a token. These components size their text with the kit's `text-a-*`
+ * classes, which read the `--ox-a-*` tokens. The guard reads each file and
+ * lists:
+ *
+ * - a Tailwind size class, from `text-xs` to `text-9xl`;
+ * - a class on the other scale, such as `text-m-body` in an app-scale file;
+ * - a size, corner, or shadow in square brackets that writes a length, such
+ *   as `text-[15px]` or `rounded-[8px]`. These pass on the same terms as a
+ *   stylesheet: a size in em or percent, a pill, a ring, and a token.
+ *
+ * A named `rounded-*` or `shadow-*` class passes, because @oxagen/ui maps
+ * each one to a kit token. The pass is a regex over the source with its
+ * comments blanked, the way Tailwind finds classes: it scans the text for
+ * words shaped like a class and never runs the code.
+ *
+ * @type {readonly { path: string, scale: Scale }[]}
+ */
+export const GUARDED_MARKUP = [
+  { path: "apps/docs/src/app/docs/[[...slug]]/page.tsx", scale: "a" },
+  { path: "apps/docs/src/components/docs/page-actions.tsx", scale: "a" },
+  { path: "apps/docs/src/mdx-components.tsx", scale: "a" },
+];
+
+/** The size in px of each Tailwind size class, from Tailwind's default theme. */
+const TAILWIND_TEXT_PX = {
+  xs: 12,
+  sm: 14,
+  base: 16,
+  lg: 18,
+  xl: 20,
+  "2xl": 24,
+  "3xl": 30,
+  "4xl": 36,
+  "5xl": 48,
+  "6xl": 60,
+  "7xl": 72,
+  "8xl": 96,
+  "9xl": 128,
+};
+
+/**
+ * `src` with each comment blanked out, newlines kept. A line comment counts
+ * only after a space or a bracket, so the `//` in `https://` is not one.
+ */
+export function stripMarkupComments(src) {
+  const blank = (comment) => comment.replace(/[^\n]/g, " ");
+  return src
+    .replace(/\/\*[\s\S]*?\*\//g, blank)
+    .replace(/(^|[\s;{}(),])(\/\/[^\n]*)/gm, (_, lead, comment) => lead + blank(comment));
+}
+
+/**
+ * The `text-<scale>-<step>` class nearest `px` on `scale`, with its size, or
+ * the class family when the kit's sizes are unknown.
+ */
+function typeClass(px, scale, sizes) {
+  let best = null;
+  for (const step of TYPE_STEPS) {
+    const size = sizes.get(`--ox-${scale}-${step}`);
+    if (size === undefined) continue;
+    if (!best || Math.abs(size - px) < Math.abs(best.size - px)) best = { step, size };
+  }
+  if (!best) return `a text-${scale}-* class`;
+  return `text-${scale}-${best.step} (${Number(best.size.toFixed(2))}px)`;
+}
+
+/**
+ * Every class in the guarded markup that sets a size, corner, or shadow by
+ * hand, or that takes the other scale, as `{ path, line, prop, value, use }`.
+ * `prop` is `class` and `value` is the class as written. A file whose text
+ * is null is skipped: the tree test checks that each guarded file exists.
+ *
+ * @param {ReadonlyMap<string, string | null>} files repo path to text
+ * @param {{ tokens?: string, guarded?: typeof GUARDED_MARKUP }} [options]
+ * @returns {{ path: string, line: number, prop: string, value: string, use: string }[]}
+ */
+export function markupDrift(files, { tokens = "", guarded = GUARDED_MARKUP } = {}) {
+  const sizes = tokenSizes(tokens);
+  const hits = [];
+  for (const { path, scale } of guarded) {
+    const text = files.get(path);
+    if (text === null || text === undefined) continue;
+    const src = stripMarkupComments(text);
+    const lineOf = (at) => src.slice(0, at).split("\n").length;
+    const hit = (match, use) =>
+      hits.push({ path, line: lineOf(match.index), prop: "class", value: match[0], use });
+
+    for (const m of src.matchAll(/(?<![\w-])text-(xs|sm|base|lg|xl|[2-9]xl)(?![\w-])/g)) {
+      hit(m, typeClass(TAILWIND_TEXT_PX[m[1]], scale, sizes));
+    }
+    const other = scale === "a" ? "m" : "a";
+    for (const m of src.matchAll(
+      new RegExp(`(?<![\\w-])text-${other}-(h[1-4]|body|micro)(?![\\w-])`, "g"),
+    )) {
+      hit(m, `text-${scale}-${m[1]}, on this surface's own scale`);
+    }
+    // A value in square brackets. Tailwind writes a space there as `_`.
+    for (const m of src.matchAll(
+      /(?<![\w-])(text|shadow|rounded(?:-(?:tl|tr|br|bl|ss|se|es|ee|[trblse]))?)-\[([^\]\s]+)\]/g,
+    )) {
+      const value = m[2].replace(/_/g, " ").replace(/^(?:length|size):/, "");
+      const group = m[1] === "text" ? "font-size" : m[1] === "shadow" ? "box-shadow" : "border-radius";
+      if (!isLiteral(group, value)) continue;
+      hit(m, suggestion(group, value, scale, sizes));
+    }
+  }
+  return hits;
 }
