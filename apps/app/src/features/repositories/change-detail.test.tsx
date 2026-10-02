@@ -374,10 +374,8 @@ describe("a steering PR (#5122)", () => {
     });
     expect(screen.getByTestId("change-merge")).toBeEnabled();
     expect(screen.getByText("steering PR")).toBeInTheDocument();
-    // The folder the PR changes, in the state line and in the files list.
-    expect(
-      within(screen.getByTestId("change-state")).getByText("tools/servers/billing"),
-    ).toBeInTheDocument();
+    // The folder the PR changes, beside its kind and in the files list.
+    expect(screen.getAllByText("tools/servers/billing")).toHaveLength(2);
     expect(
       within(screen.getByTestId("change-files")).getByText("tools/servers/billing"),
     ).toBeInTheDocument();
