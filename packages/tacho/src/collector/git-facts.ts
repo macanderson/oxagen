@@ -23,11 +23,14 @@
  *
  * Three rules hold for everything in this file.
  *
- * Nothing throws. A worktree is an operator's machine, and it can be a
- * directory that is not a repo, a repo with no commits, a submodule, a
- * detached head, or a host with no git at all. Every one of those returns
- * undefined or an empty list. The collector loses a fact; it does not lose
- * the session.
+ * Nothing throws, with one exception. A worktree is an operator's machine,
+ * and it can be a directory that is not a repo, a repo with no commits, a
+ * submodule, a detached head, or a host with no git at all. Every one of
+ * those returns undefined or an empty list. The collector loses a fact; it
+ * does not lose the session. The exception is `readRepositoryRemote`, which
+ * rejects when git could not answer at all. Its caller keeps the answer for
+ * the rest of the session, so it has to tell a failure, which it reads
+ * again later, from a directory with no `origin` (#4458).
  *
  * Nothing is unbounded. Output is truncated before it is parsed, so a
  * generated directory of a hundred thousand untracked files costs a fixed
@@ -146,9 +149,27 @@ export async function git(
   args: string[],
   okStatus: readonly number[] = [0],
 ): Promise<string | undefined> {
-  let result: ExecResult;
+  const result = await runGit(exec, cwd, args);
+  if (result.status === null || !okStatus.includes(result.status))
+    return undefined;
+  const stdout = result.stdout ?? "";
+  return stdout.length > MAX_STDOUT_BYTES
+    ? stdout.slice(0, MAX_STDOUT_BYTES)
+    : stdout;
+}
+
+/**
+ * Run one git command in `cwd` the way `git` does, and return the whole
+ * result, so a caller can read the exit status and stderr. A spawn that
+ * threw answers with no status and the error's message as its stderr.
+ */
+async function runGit(
+  exec: ExecAsync,
+  cwd: string,
+  args: string[],
+): Promise<ExecResult> {
   try {
-    result = await exec("git", [
+    return await exec("git", [
       "-C",
       cwd,
       "--no-optional-locks",
@@ -156,15 +177,13 @@ export async function git(
       "core.quotePath=false",
       ...args,
     ]);
-  } catch {
-    return undefined;
+  } catch (error) {
+    return {
+      status: null,
+      stdout: "",
+      stderr: error instanceof Error ? error.message : String(error),
+    };
   }
-  if (result.status === null || !okStatus.includes(result.status))
-    return undefined;
-  const stdout = result.stdout ?? "";
-  return stdout.length > MAX_STDOUT_BYTES
-    ? stdout.slice(0, MAX_STDOUT_BYTES)
-    : stdout;
 }
 
 export function firstLine(value: string | undefined): string | undefined {
@@ -244,23 +263,72 @@ export interface RepositoryRemote {
   root?: string;
 }
 
+/** Git's exit status when `remote get-url` names a remote the repo lacks. */
+const NO_SUCH_REMOTE = 2;
+
+/** Git's exit status for a fatal error, a directory outside any repo among them. */
+const GIT_FATAL = 128;
+
+/**
+ * What git prints for a directory in no repository. Git translates its
+ * messages, so this matches only the English one. A translated message reads
+ * as a failure, which costs one more read later and never keeps a wrong
+ * answer.
+ */
+const NOT_A_REPOSITORY = "not a git repository";
+
+/**
+ * What `remote get-url origin` says about a directory (#4458): the URL, that
+ * the directory has no `origin`, or nothing, because git failed before it
+ * could say. A directory in no repository has no `origin` either.
+ */
+type OriginRead =
+  | { kind: "found"; url: string }
+  | { kind: "none" }
+  | { kind: "failed"; reason: string };
+
+function originRead(result: ExecResult): OriginRead {
+  const stderr = result.stderr ?? "";
+  if (result.status === 0) {
+    const url = firstLine(result.stdout);
+    return url === undefined ? { kind: "none" } : { kind: "found", url };
+  }
+  if (result.status === NO_SUCH_REMOTE) return { kind: "none" };
+  if (result.status === GIT_FATAL && stderr.includes(NOT_A_REPOSITORY))
+    return { kind: "none" };
+  // Anything else is git not answering: a timeout, a spawn that failed, a
+  // daemon that is stopping, or a fatal error such as dubious ownership.
+  return {
+    kind: "failed",
+    reason:
+      firstLine(stderr) ??
+      (result.status === null ? "no exit status" : `exit ${result.status}`),
+  };
+}
+
 /**
  * The digests of the `origin` remote, its repository's name, and the
  * worktree's top, or undefined when the directory is in no repository or has
  * no `origin`. The three reads answer independent questions, so they are
  * asked at once: this runs while a harness waits on its first prompt.
+ *
+ * It rejects when git could not say whether `origin` exists, so the caller
+ * can read again later instead of keeping a failure as the answer (#4458).
+ * This is the one reader in this file that throws.
  */
 export async function readRepositoryRemote(
   exec: ExecAsync,
   cwd: string,
 ): Promise<RepositoryRemote | undefined> {
-  const [remote, head, root] = await Promise.all([
-    git(exec, cwd, ["remote", "get-url", "origin"]).then(firstLine),
+  const [origin, head, root] = await Promise.all([
+    runGit(exec, cwd, ["remote", "get-url", "origin"]).then(originRead),
     git(exec, cwd, ["rev-parse", "HEAD"]).then(firstLine),
     git(exec, cwd, ["rev-parse", "--show-toplevel"]).then(firstLine),
   ]);
-  if (remote === undefined) return undefined;
-  const canonical = canonicalRemote(remote);
+  if (origin.kind === "failed")
+    throw new Error(`git could not read the origin remote: ${origin.reason}`);
+  if (origin.kind === "none") return undefined;
+  const canonical = canonicalRemote(origin.url);
   const slash = canonical.lastIndexOf("/");
   const name = slash === -1 ? "" : canonical.slice(slash + 1);
   return {
