@@ -4,8 +4,10 @@
 // Flow:
 //   1. The bound repository by its binding id (`not_found:
 //      repository_not_linked`), then the role gate for its role: the main
-//      repository's branch is where steering lives, so an org Owner or Admin;
-//      a linked one also admits the workspace Owner (INV-29).
+//      repository's branch is where steering lives, so the gate names an org
+//      Owner or Admin; a linked one also names the workspace Owner (INV-29).
+//      The gate admits the workspace's Owner and Admin for both, because the
+//      main repository is the workspace's own (#5228).
 //   2. The same branch the binding records: nothing is written and the
 //      answer says `changed: false`. Confirming is not an event.
 //   3. GitHub, through the workspace's installation: the repository must

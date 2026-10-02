@@ -42,7 +42,7 @@ env:
 
 jobs:
   drift:
-    runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-small-{0}', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v5
@@ -85,10 +85,10 @@ jobs:
           for stack in $(find infra/stacks-new -mindepth 1 -maxdepth 1 -type d -printf '%f\n' \
                           | grep -vx bootstrap | sort); do
             echo "::group::$stack"
-            # A stack that vendors files it does not commit (ci-runners'
-            # Lambda packages) fetches them in prepare.sh, as infra.yml does
-            # before its plan. Inside the subshell -e stops at the first
-            # failing command and returns its code.
+            # A stack that vendors files it does not commit fetches them in
+            # prepare.sh, as infra.yml does before its plan. Inside the
+            # subshell -e stops at the first failing command and returns its
+            # code.
             (
               set -e
               cd "infra/stacks-new/$stack"

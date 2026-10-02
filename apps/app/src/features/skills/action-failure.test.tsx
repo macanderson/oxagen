@@ -107,7 +107,7 @@ describe("useSkillFailure", () => {
 
   it("answers every role refusal with one sentence, even when the code is a skill reason", () => {
     const text =
-      "Your role does not allow this action. Ask an organization owner or admin for access.";
+      "Your role does not allow this action. Ask an organization or workspace owner or admin for access.";
     expect(sentence({ ok: false, reason: "denied", code: "forbidden" })).toBe(
       text,
     );

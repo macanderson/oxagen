@@ -10,6 +10,7 @@ export const billingSubscriptionRead = registerCapability({
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "e2e", "docs", "app"],
   scoped: true,
+  orgLevel: true,
   agent: {
     requiresApproval: false,
     riskLevel: "low",

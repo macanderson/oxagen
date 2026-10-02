@@ -33,7 +33,7 @@ The full org settings object (same shape as `org.settings.read`).
 
 ## Roles
 
-An org Owner or Admin, or a workspace Owner or Admin. The handler checks the contract's roles and refuses anyone else with `forbidden` (`org_role_required`).
+An org Owner or Admin. The handler checks the contract's roles and refuses anyone else with `forbidden` (`org_role_required`), a workspace Owner or Admin included: the org's settings are not a workspace's.
 
 ## Side effects
 

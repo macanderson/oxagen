@@ -407,7 +407,7 @@ export function ToolsTab({
   serverId: string;
   record: StudioRecord | null;
   tools: readonly StudioTool[];
-  /** An org Owner or Admin, who can stage edits and turn tools off. */
+  /** An org or workspace Owner or Admin: who edits and turns tools off. */
   canEdit: boolean;
   /** Each imported tool's off switch toggle, by tool name, drawn on the server. */
   off: Readonly<Record<string, ReactNode>>;

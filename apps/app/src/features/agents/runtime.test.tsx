@@ -244,7 +244,7 @@ describe("Runtime › organization role", () => {
       screen.queryByRole("button", { name: "Unenroll build-01" }),
     ).toBeNull();
     expect(screen.getByTestId("runtime-needs-role")).toHaveTextContent(
-      "Enrolling and unenrolling a host needs an organization Owner or Admin role.",
+      "Enrolling and unenrolling a host needs an organization Owner or Admin role, or the workspace Owner or Admin role.",
     );
   });
 

@@ -51,6 +51,13 @@ export interface RegistryCapability {
     org: Readonly<Record<string, string | undefined>>;
     workspace: Readonly<Record<string, string | undefined>>;
   };
+  /**
+   * Mirrors `CapabilityDeclaration.orgLevel` (#5228): an org-level
+   * capability admits no workspace Owner or Admin by that role alone.
+   */
+  orgLevel?: boolean;
+  /** Mirrors `CapabilityDeclaration.platformOnly`. */
+  platformOnly?: boolean;
   /** Zod schema or equivalent — typed as unknown to avoid coupling. */
   input?: unknown;
   /** Mirrors `CapabilitySurface` (packages/oxagen/src/types.ts). */

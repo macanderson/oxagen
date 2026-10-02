@@ -389,8 +389,13 @@ export type MandateBlindSpot = "reader_scope" | "truncated";
 export function blindSpotOf(
   list: MandateList,
   role: OrgRole,
+  /**
+   * True when the reader is the workspace's Owner or Admin, whom
+   * `list_mandates` shows every mandate whatever their org role (#5228).
+   */
+  workspaceAuthority = false,
 ): MandateBlindSpot | null {
-  if (!readsEveryMandate(role)) return "reader_scope";
+  if (!workspaceAuthority && !readsEveryMandate(role)) return "reader_scope";
   if (list.truncatedAt !== null) return "truncated";
   return null;
 }

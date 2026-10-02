@@ -194,6 +194,7 @@ function SequenceRule() {
 export function Policy({
   at,
   orgRole,
+  wsRole,
   canWriteRules,
   rules,
   mandates,
@@ -202,6 +203,8 @@ export function Policy({
 }: {
   at: ToolsAt;
   orgRole: OrgRole;
+  /** The reader's workspace role, for the mandates ledger (#5228). */
+  wsRole?: string;
   /** An org Owner or Admin: the three auto-approval writes' role, and who would draft a version. */
   canWriteRules: boolean;
   rules: Read<ApprovalRuleSet>;
@@ -223,6 +226,7 @@ export function Policy({
       <MandatesLedger
         read={mandates}
         orgRole={orgRole}
+        wsRole={wsRole}
         at={at}
         grant={grant}
         agentHarnesses={agentHarnesses}

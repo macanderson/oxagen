@@ -616,7 +616,7 @@ describe("sending an answer", () => {
     {
       name: "a role the handler refuses",
       failure: { ok: false, reason: "denied", code: "org_role_required" },
-      text: "Your role cannot answer this question. An organization Owner or Admin, or the workspace Owner, can.",
+      text: "Your role cannot answer this question. An organization Owner or Admin, or the workspace Owner or Admin, can.",
     },
     {
       name: "a repository GitHub cannot see",
@@ -722,7 +722,7 @@ describe("who can answer", () => {
     for (const path of ["link", "create"] as const)
       expect(screen.getByTestId(`interjection-pick-${path}`)).toBeDisabled();
     const reason =
-      "Answering needs an organization Owner or Admin role, or the workspace Owner role.";
+      "Answering needs an organization Owner or Admin role, or the workspace Owner or Admin role.";
     const send = screen.getByTestId("interjection-send");
     expect(send).toBeDisabled();
     expect(send).toHaveAttribute("title", reason);

@@ -79,6 +79,7 @@ export const iamRoleList = registerCapability({
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
+  orgLevel: true,
   // Governance-posture reads must never be blocked by a zero credit balance.
   noBillingGate: true,
   agent: {

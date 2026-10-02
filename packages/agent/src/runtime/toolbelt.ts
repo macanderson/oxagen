@@ -28,7 +28,9 @@
 import type { ActiveEmergencyDeny } from "@oxagen/iam";
 import { matchEmergencyDeny, resourceScopeDigestOf } from "@oxagen/iam";
 import {
+  actsInWorkspace,
   resolveAgentRunCapability,
+  workspaceFullAccessRole,
   type AgentRunIAMContext,
   type AgentRunIAMResolution,
   type EffectiveMcpScope,
@@ -115,11 +117,19 @@ export interface CallerRoles {
  * workspace side. This is the question the handler's role gate asks
  * (`assertOrgRole` over the contract's allowed roles), so the belt offers a
  * tool exactly when the handler would run it for this person.
+ *
+ * A workspace's Owner or Admin is offered every capability that acts inside
+ * the workspace, whatever the map names, because the handler's gate admits
+ * them (#5228). `roles.workspace` holds the roles on the turn's own
+ * workspace, and none on an org-only turn.
  */
 export function contractGrantsCaller(
   cap: RegistryCapability,
   roles: CallerRoles,
 ): boolean {
+  if (actsInWorkspace(cap) && workspaceFullAccessRole(roles.workspace)) {
+    return true;
+  }
   const grants = cap.defaultRoles;
   if (!grants) return false;
   return (

@@ -29,6 +29,7 @@ export const orgDataPlaneGet = registerCapability({
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: false,
+  orgLevel: true,
   // A read: the app's read path binds only a contract that declares it
   // (`capabilityMutates` treats an absent flag as mutating), and the
   // Organization › Data plane tab reads the Postgres binding through it.

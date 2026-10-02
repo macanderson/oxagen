@@ -193,7 +193,7 @@ export function AutoApprovals({
 }: {
   at: ToolsAt;
   orgRole: OrgRole;
-  /** An org Owner or Admin: the roles all three rule writes assert. */
+  /** An org or workspace Owner or Admin: who all three rule writes admit. */
   canWrite: boolean;
   read: Read<ApprovalRuleSet>;
 }) {

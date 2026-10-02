@@ -35,6 +35,7 @@ export const scimRequest = registerCapability({
   surfaces: [],
   layers: ["schema", "unit", "docs"],
   scoped: false,
+  orgLevel: true,
   sensitivity: "high",
   mutates: true,
   defaultEffect: "allow",

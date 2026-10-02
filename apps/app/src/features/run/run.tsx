@@ -28,6 +28,7 @@ import {
 import { PAGE_FAILURES, readError } from "@/data/read";
 import { PageRecord } from "@/features/shell";
 import type { WsCtx } from "@/server/viewer";
+import { mayActInWorkspace } from "@/shared/workspace-authority";
 import { Money } from "@/ui/money";
 import { RouteTabPanel } from "@/ui/route-tabs";
 import { GovernedActionsTab } from "./actions-tab";
@@ -409,10 +410,11 @@ export async function Run({
             agent={agent}
             place={place}
             orgRole={ctx.orgRole}
-            canEditEnrichment={
-              ["owner", "admin"].includes(ctx.orgRole) ||
-              ["owner", "admin"].includes(ctx.wsRole)
-            }
+            wsRole={ctx.wsRole}
+            canEditEnrichment={mayActInWorkspace(ctx.orgRole, ctx.wsRole, [
+              "owner",
+              "admin",
+            ])}
           />
           <StatRow run={run} metrics={metrics} />
           <Tabs props={props} parked={parked} selected={selected} />

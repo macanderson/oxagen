@@ -61,6 +61,7 @@ export const billingStatementExport = registerCapability({
   surfaces: ["api", "mcp", "agent", "cli"],
   layers: ["schema", "api", "mcp", "cli", "unit", "docs", "app"],
   scoped: true,
+  orgLevel: true,
   noBillingGate: true,
   mutates: false,
   sensitivity: "medium",

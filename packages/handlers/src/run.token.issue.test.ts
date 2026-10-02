@@ -8,7 +8,6 @@ const mocks = vi.hoisted(() => ({
   attempt: vi.fn(),
   seal: vi.fn(),
   insert: vi.fn(),
-  orgRoles: vi.fn(),
   /** `agent_runs` principal columns for the locked run. */
   runPrincipals: vi.fn(),
   /** The caller's active `iam.principals` rows in the org. */
@@ -32,9 +31,9 @@ vi.mock("./run.list", async (original) => ({
 vi.mock("@oxagen/iam/org-role", () => ({
   assertOrgRole: mocks.role,
   resolveActingUserId: mocks.actor,
-  resolveActorOrgRoles: mocks.orgRoles,
 }));
 import { schema } from "@oxagen/database";
+import { HandlerError } from "@oxagen/oxagen/handler-error";
 import { runTokenIssueHandler } from "./run.token.issue";
 import { inAppLedgerRun, ledgerRun } from "./run.test-support";
 import { clearDataPlaneResolver, setDataPlaneResolver } from "@oxagen/tenancy";
@@ -75,7 +74,6 @@ beforeEach(() => {
   // A V1 row: no principal on the run, so the role gate is the boundary.
   mocks.runPrincipals.mockResolvedValue([{ initiating: null, agent: null }]);
   mocks.ownPrincipals.mockResolvedValue([{ id: "caller-principal" }]);
-  mocks.orgRoles.mockResolvedValue([]);
   // A run on no in-app surface: the party and role rules below decide it.
   mocks.ledgerRow.mockResolvedValue([
     ledgerRun({ publicId: input.runId, runId: "run-uuid" }),
@@ -174,10 +172,31 @@ describe("run credential issuance", () => {
 });
 
 describe("run credential issuance — the run's principals", () => {
+  /**
+   * The role gate's calls that decide the run-party question: the ones made
+   * on the handler's transaction. The handler's own gate runs before it opens
+   * one.
+   */
+  const partyGateCalls = () =>
+    mocks.role.mock.calls.filter((call: unknown[]) => call[2] === tx);
+  /** The party gate refuses; the handler's own gate still passes. */
+  const refuseOnTransaction = () =>
+    mocks.role.mockImplementation(
+      async (_actor: unknown, _required: unknown, transaction: unknown) => {
+        if (transaction === tx) {
+          throw new HandlerError({
+            code: "forbidden",
+            reason: "org_role_required",
+          });
+        }
+        return "Member";
+      },
+    );
+
   it("keeps the role gate as the whole boundary for a run with no principal", async () => {
     await runTokenIssueHandler(input, ctx);
     expect(mocks.ownPrincipals).not.toHaveBeenCalled();
-    expect(mocks.orgRoles).not.toHaveBeenCalled();
+    expect(partyGateCalls()).toHaveLength(0);
     expect(mocks.insert).toHaveBeenCalledTimes(1);
   });
   it("issues to the initiating principal", async () => {
@@ -186,7 +205,7 @@ describe("run credential issuance — the run's principals", () => {
     ]);
     mocks.ownPrincipals.mockResolvedValue([{ id: INITIATOR }]);
     await runTokenIssueHandler(input, ctx);
-    expect(mocks.orgRoles).not.toHaveBeenCalled();
+    expect(partyGateCalls()).toHaveLength(0);
     expect(mocks.insert).toHaveBeenCalledTimes(1);
   });
   it("issues to the run's agent principal", async () => {
@@ -195,28 +214,47 @@ describe("run credential issuance — the run's principals", () => {
     ]);
     mocks.ownPrincipals.mockResolvedValue([{ id: AGENT }]);
     await runTokenIssueHandler(input, ctx);
-    expect(mocks.orgRoles).not.toHaveBeenCalled();
+    expect(partyGateCalls()).toHaveLength(0);
     expect(mocks.insert).toHaveBeenCalledTimes(1);
   });
-  it("issues to an org Owner or Admin who is neither, read through the same transaction", async () => {
+  it("asks the role gate, on the same transaction, whether a caller who is neither may issue", async () => {
+    // An org Owner or Admin passes it, and so does the workspace's Owner or
+    // Admin through the gate's workspace rule (#5228), which reads the
+    // invoked capability off the context the handler passes.
     mocks.runPrincipals.mockResolvedValue([
       { initiating: INITIATOR, agent: null },
     ]);
-    mocks.orgRoles.mockResolvedValue(["Admin"]);
     await runTokenIssueHandler(input, ctx);
-    expect(mocks.orgRoles).toHaveBeenCalledWith(ctx.orgId, ctx.userId, tx);
+    expect(partyGateCalls()).toEqual([
+      [{ ...ctx, userId: ctx.userId }, { org: ["Owner", "Admin"] }, tx],
+    ]);
     expect(mocks.insert).toHaveBeenCalledTimes(1);
   });
   it("refuses a workspace Member with no part in the run before reading the attempt", async () => {
     mocks.runPrincipals.mockResolvedValue([
       { initiating: INITIATOR, agent: AGENT },
     ]);
-    mocks.orgRoles.mockResolvedValue(["Billing"]);
+    refuseOnTransaction();
     await expect(runTokenIssueHandler(input, ctx)).rejects.toMatchObject({
       code: "forbidden",
       reason: "not_run_principal",
     });
     expect(mocks.attempt).not.toHaveBeenCalled();
+    expect(mocks.insert).not.toHaveBeenCalled();
+  });
+  it("passes on an error from the role gate that is not a refusal", async () => {
+    mocks.runPrincipals.mockResolvedValue([
+      { initiating: INITIATOR, agent: AGENT },
+    ]);
+    mocks.role.mockImplementation(
+      async (_actor: unknown, _required: unknown, transaction: unknown) => {
+        if (transaction === tx) throw new Error("connection lost");
+        return "Member";
+      },
+    );
+    await expect(runTokenIssueHandler(input, ctx)).rejects.toThrow(
+      "connection lost",
+    );
     expect(mocks.insert).not.toHaveBeenCalled();
   });
 });
@@ -246,7 +284,7 @@ describe("run credential issuance: an in-app run", () => {
 
   it("answers an org Owner who did not ask not_found, before the run's status or parties (negative)", async () => {
     mocks.ledgerRow.mockResolvedValue([turn(OTHER)]);
-    mocks.orgRoles.mockResolvedValue(["Owner"]);
+    mocks.role.mockResolvedValue("Owner");
     mocks.lock.mockResolvedValue({
       id: "run-uuid",
       status: "completed",

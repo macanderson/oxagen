@@ -20,6 +20,7 @@ export const orgMemberRemove = registerCapability({
   surfaces: ["api", "mcp", "agent"],
   layers: ["api", "docs", "mcp", "unit", "app"],
   scoped: true,
+  orgLevel: true,
   // Membership is never a charge (ADR-052 exclusion 2): the billing gate and
   // the governed-action recorder both skip this contract.
   noBillingGate: true,

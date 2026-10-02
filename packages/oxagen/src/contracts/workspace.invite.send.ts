@@ -10,12 +10,16 @@ export const workspaceInviteSend = registerCapability({
   mutates: true,
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
+  orgLevel: true,
   agent: { requiresApproval: true, riskLevel: "medium", category: "workspace" },
   sensitivity: "low",
   defaultEffect: "deny",
+  // An invitation joins the organization, so only the org roles send one.
+  // The handler always asked for them; the workspace grants here admitted
+  // nobody and are gone (#5228).
   defaultRoles: {
     org: { Owner: "allow", Admin: "allow" },
-    workspace: { Owner: "allow", Admin: "allow" },
+    workspace: {},
   },
   input: z.object({
     email: z.string().email(),

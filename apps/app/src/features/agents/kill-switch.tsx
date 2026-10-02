@@ -13,7 +13,8 @@
 // a run the harness has already stopped taking pause commands from.
 import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useState } from "react";
-import type { OrgRole } from "@/server/viewer";
+import type { OrgRole, WsRole } from "@/server/viewer";
+import { mayActInWorkspace } from "@/shared/workspace-authority";
 import type { AgentPauseOutcome } from "./actions";
 import { pauseAgent } from "./actions";
 import { UNANSWERED, useActionFailure } from "./action-failure";
@@ -60,6 +61,7 @@ export function AgentKillSwitch({
   agentKey,
   name,
   orgRole,
+  wsRole,
 }: {
   org: string;
   ws: string;
@@ -67,12 +69,15 @@ export function AgentKillSwitch({
   agentKey: string | null;
   name: string;
   /**
-   * The viewer's organization role. `set_kill_switch` asserts an Owner or
-   * Admin (INV-29), so a viewer it would refuse sees the button disabled with
-   * the reason, the way the Run page's record writes do, not a dialog that
-   * ends in `org_role_required`.
+   * The viewer's organization role. `set_kill_switch` asserts an org Owner or
+   * Admin, or the workspace's Owner or Admin for an agent switch (INV-29,
+   * #5228), so a viewer it would refuse sees the button disabled with the
+   * reason, the way the Run page's record writes do, not a dialog that ends
+   * in `org_role_required`.
    */
   orgRole: OrgRole;
+  /** The viewer's workspace role. */
+  wsRole: WsRole;
 }) {
   const t = useTranslations("agents.actions.killSwitch");
   const failureText = useActionFailure();
@@ -121,7 +126,7 @@ export function AgentKillSwitch({
     }
   }
 
-  if (orgRole !== "owner" && orgRole !== "admin") {
+  if (!mayActInWorkspace(orgRole, wsRole, ["owner", "admin"])) {
     return (
       <span className="flex flex-col gap-1">
         <button

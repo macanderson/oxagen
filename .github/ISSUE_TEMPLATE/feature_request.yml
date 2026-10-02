@@ -4,9 +4,9 @@ body:
   - type: markdown
     attributes:
       value: |
-        File the issue complete. Title it `<Priority> <Tier> <Size> Feature (<Area>): <what a person will be able to do>`. Apply one priority label, one `MODEL:` tier, one `SIZE:`, `KIND:FEATURE`, and one `AREA:`, then `JOB:` and one or two `PILLAR:` labels where they apply. Set the issue type to Feature, and set the Priority, Model Tier, Minutes Estimated, and Area(s) fields. Apply `MIGRATION-REQUIRED` once you know the work changes a schema. CLAUDE.md has the rules under Issue titles and Oxagen issue fields.
+        File the issue complete. Title it `<Priority> <Tier> <Size> Feature (<Domain>): <what a person will be able to do>`. Apply one priority label, one `MODEL:` tier, one `SIZE:`, `KIND:FEATURE`, and one `DOMAIN:`, then `JOB:` and one or two `PILLAR:` labels where they apply. Set the issue type to Feature, and set the Priority, Model Tier, Minutes Estimated, and Area(s) fields. Apply `MIGRATION-REQUIRED` once you know the work changes a schema. CLAUDE.md has the rules under Issue titles and Oxagen issue fields.
 
-        `KIND:FEATURE` is for a capability that does not exist in any form. If the spec or the mockup already shows it and the built app has part of it, that is an improvement (`KIND:IMPROVEMENT`). Use the Task template, title it `<Priority> <Tier> <Size> Improvement (<Area>): <what a person will be able to do>`, and describe the whole page or slice, backend included, so one issue carries the full weight of the change.
+        `KIND:FEATURE` is for a capability that does not exist in any form. If the spec or the mockup already shows it and the built app has part of it, that is an improvement (`KIND:IMPROVEMENT`). Use the Task template, title it `<Priority> <Tier> <Size> Improvement (<Domain>): <what a person will be able to do>`, and describe the whole page or slice, backend included, so one issue carries the full weight of the change.
   - type: textarea
     id: problem
     attributes:

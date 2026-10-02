@@ -10,6 +10,7 @@ import type {
 } from "./types";
 import type { AuthorizationDecisionRef } from "./iam/agent-run";
 import { getSurfaces, ORG_ONLY_WORKSPACE_ID } from "./types";
+import { actsInWorkspace } from "./iam/workspace-authority";
 import {
   isKernelIssuedOxagenAssistant,
   isOxagenAssistantCall,
@@ -482,7 +483,8 @@ export interface KernelIAMCheckResult {
    * The IAM step that decided the outcome, as the resolver's rule id
    * (`ResolveResult.trace.decidedBy.rule`): `1:workspace_deny`,
    * `2:org_enforced_deny`, `5:workspace_require_approval`, `6:org_grant`,
-   * `7:role_grant`, `8:default`, `tier_gate`, `agent_ceiling:<outcome>`, or
+   * `7:role_grant`, `7.5:org_owner_superuser`, `7.6:workspace_full_access`,
+   * `8:default`, `tier_gate`, `agent_ceiling:<outcome>`, or
    * `machine_key_scope` for a machine-key denial (#3841). Never the step's
    * description, which embeds internal role ids. Null when the check ran on a
    * path that records no rule. Absent when the runtime does not report it.
@@ -502,6 +504,14 @@ export type KernelIAMCheckFn = (args: {
    * audit target or the input field is absent/non-string.
    */
   target?: { kind: string; id: string } | null;
+  /**
+   * Whether the capability acts inside the call's workspace, from its
+   * contract (`actsInWorkspace` in ./iam/workspace-authority.ts, #5228). The
+   * IAM check admits the workspace's Owner or Admin only when this is true.
+   * `invoke` always sets it; the external-tool check, which reads no
+   * contract, leaves it out.
+   */
+  actsInWorkspace?: boolean;
 }) => Promise<KernelIAMCheckResult>;
 
 export type KernelAuditEmitFn = (args: {
@@ -1478,6 +1488,7 @@ async function _invokeCoreInner(
           defaultEffect,
           rawInputJson,
           target: auditTarget,
+          actsInWorkspace: actsInWorkspace(cap),
         }).catch((err: unknown) => {
           // IAM check failure is a critical incident — the check could not be
           // evaluated at all (DB down, migration missing, resolver bug). This
@@ -1820,6 +1831,11 @@ async function _invokeCoreInner(
         ...(opts?.surface !== undefined || "invokeSurface" in ctx
           ? { invokeSurface: opts?.surface }
           : {}),
+        // The capability this context was checked for (#5228). Set after the
+        // spread, so a nested invoke never carries its caller's name. The
+        // handler's role gate reads it to decide whether a workspace's Owner
+        // or Admin passes (`assertOrgRole`).
+        invokedCapability: canonical,
       };
       const attribution =
         resolvedPrincipal !== null && isUuid(resolvedPrincipal.id)

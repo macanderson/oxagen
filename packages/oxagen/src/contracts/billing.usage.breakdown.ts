@@ -83,6 +83,7 @@ export const billingUsageBreakdown = registerCapability({
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "e2e", "docs"],
   scoped: true,
+  orgLevel: true,
   // Reading your own usage must never consume credits — see file header.
   noBillingGate: true,
   agent: {

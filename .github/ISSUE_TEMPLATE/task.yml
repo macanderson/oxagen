@@ -4,7 +4,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        File the issue complete. Title it `<Priority> <Tier> <Size> <Kind> (<Area>): <Statement>`. Apply one priority label, one `MODEL:` tier, one `SIZE:`, one `KIND:` (`BUG`, `FEATURE`, `IMPROVEMENT`, `CHORE`, `DOCUMENTATION`, or `DEVOPS`), and one `AREA:`, then `JOB:`, `PILLAR:`, and `NEEDS:DECISION` or `NEEDS:RIG` where they apply. Set the issue type to the kind, and set the Priority, Model Tier, Minutes Estimated, and Area(s) fields. Apply `MIGRATION-REQUIRED` once you know the work changes a schema. CLAUDE.md has the rules under Issue titles and Oxagen issue fields, and `/triage-issues` has the tier, size, kind, and area tables.
+        File the issue complete. Title it `<Priority> <Tier> <Size> <Kind> (<Domain>): <Statement>`. Apply one priority label, one `MODEL:` tier, one `SIZE:`, one `KIND:` (`BUG`, `FEATURE`, `IMPROVEMENT`, `CHORE`, `DOCUMENTATION`, or `DEVOPS`), and one `DOMAIN:`, then `JOB:`, `PILLAR:`, and `NEEDS:DECISION` or `NEEDS:RIG` where they apply. Set the issue type to the kind, and set the Priority, Model Tier, Minutes Estimated, and Area(s) fields. Apply `MIGRATION-REQUIRED` once you know the work changes a schema. CLAUDE.md has the rules under Issue titles and Oxagen issue fields, and `/triage-issues` has the tier, size, kind, and area tables.
 
         Fix over file (SCR-004): a defect noticed during a task is fixed in that task's PR. File only when the fix needs a maintainer decision, a rig, a credential or real spend, or is larger than one session, and say which. One issue carries the full weight of the change; use checklist items in the definition of done rather than sub-issues.
   - type: textarea
