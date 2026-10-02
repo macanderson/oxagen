@@ -33,6 +33,8 @@ import "../contracts.generated";
 const OFF_AGENT: Readonly<Record<string, string>> = {
   answer_interjection:
     "An agent paused to ask a person this question, so the answer has to come from a person.",
+  approve_steering_pr:
+    "A steering PR approval is a person's review of a change, and the merge counts it as one (ADR-267), so an agent must not give it.",
   ask_assistant:
     "It starts a Stella turn, so Stella calling it would run a turn inside its own turn.",
   attach_github_installation:
@@ -63,6 +65,8 @@ const OFF_AGENT: Readonly<Record<string, string>> = {
     "A finding grades agents' runs, and the agent surface also serves registered agents, so an agent must not dismiss one.",
   dismiss_memories:
     "Mac ruled on 2026-09-25 that the in-app agent never receives workspace memories, so it neither reads nor dismisses them.",
+  drop_memory_record:
+    "It decides which memories a memory PR rejects, and Mac ruled on 2026-09-25 that the in-app agent never receives workspace memories.",
   export_audit_events:
     "It returns a signed file of up to 50,000 events for a person to download and verify. Stella reads the same events through query_audit_log.",
   get_assistant_engine:
