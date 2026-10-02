@@ -31,6 +31,7 @@ import {
   prepareContent,
 } from "../evidence/frame-body";
 import { newEventId, sessionUuid } from "../ids";
+import { normalizeRolloutLine, type TranscriptCarry } from "../codex/rollout";
 import {
   LLM_CALL_DUPLICATE_OF_ATTR,
   LlmCallLedger,
@@ -64,6 +65,7 @@ import { inventoryFromInit, totalsFromResult } from "./result";
 import {
   normalizeTranscriptLine,
   type SessionTitleSource,
+  type TranscriptNormalized,
   type TranscriptTotals,
 } from "./transcript";
 
@@ -1952,23 +1954,61 @@ export class SessionRecorder {
     return event;
   }
 
-  /** Ingest one transcript line (parent transcript or a subagent's). */
-  ingestTranscriptLine(line: string, subagentId?: string): TachoEvent[] {
-    return this.everySealed(() => this.sealTranscriptLine(line, subagentId));
+  /**
+   * Ingest one transcript line (parent transcript or a subagent's). `carry`
+   * is what the reader keeps between the lines of one file: the tailer
+   * passes the file's cursor, so the state persists with the offset. Claude
+   * Code's reader keeps none. Codex's holds a response's text until the
+   * record that closes the response arrives (`codex/rollout.ts`).
+   */
+  ingestTranscriptLine(
+    line: string,
+    subagentId?: string,
+    carry?: TranscriptCarry,
+  ): TachoEvent[] {
+    return this.everySealed(() =>
+      this.sealTranscriptLine(line, subagentId, carry),
+    );
   }
 
-  private sealTranscriptLine(line: string, subagentId?: string): TachoEvent[] {
+  /**
+   * One Codex rollout line, read against the state its file's cursor
+   * carries. The state moves on before anything seals, whatever the seal
+   * does: the tailer moves the cursor past a line the envelope refuses too,
+   * and the two persist together, so a restart reads on from a state that
+   * matches the offset.
+   */
+  private normalizeCodexLine(
+    line: string,
+    carry: TranscriptCarry | undefined,
+  ): TranscriptNormalized {
+    const { normalized, state } = normalizeRolloutLine(
+      line,
+      carry?.codex,
+      this.now(),
+    );
+    if (carry !== undefined) carry.codex = state;
+    return normalized;
+  }
+
+  private sealTranscriptLine(
+    line: string,
+    subagentId?: string,
+    carry?: TranscriptCarry,
+  ): TachoEvent[] {
     if (subagentId !== undefined && !this.options.parent) {
       const child = this.child(subagentId, undefined, undefined);
       return [
         ...this.pendingChildGenesis.splice(0),
-        ...child.ingestTranscriptLine(line),
+        ...child.ingestTranscriptLine(line, undefined, carry),
       ];
     }
-    const { drafts, totals, title, interrupted } = normalizeTranscriptLine(
-      line,
-      this.now(),
-    );
+    // The tailed session's harness picks the reader. Every other harness
+    // the tailer reads writes Claude Code's JSONL.
+    const codex = this.options.context.agent.harness === "codex";
+    const { drafts, totals, title, interrupted } = codex
+      ? this.normalizeCodexLine(line, carry)
+      : normalizeTranscriptLine(line, this.now());
     // The title is kept once its frame seals; see `sessionTitleSighting`.
     const { session_title: _title, ...facts } = totals;
     Object.assign(this.totals, facts);
@@ -2000,6 +2040,14 @@ export class SessionRecorder {
         continue;
       }
       if (duplicate === undefined) {
+        // A Codex response is one record, so a call the rollout already
+        // reported is the same record read again (a cursor restored from
+        // before its last seal, or a subagent's copy of its parent's
+        // history). It seals nothing.
+        if (codex) {
+          sighting.commit();
+          continue;
+        }
         body = withoutUsage(body);
         duplicate = { [LLM_CALL_DUPLICATE_OF_ATTR]: "transcript" };
       }

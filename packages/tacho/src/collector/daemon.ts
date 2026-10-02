@@ -2083,8 +2083,10 @@ async function initializeDaemon(
    * drains the session's transcript so the turn's model calls sit on the
    * chain before the frame that closes it, and `SessionEnd` drains its
    * subagents' too. A `SubagentStop` feeds the rest of the subagent's
-   * transcript to the child chain before that chain is finalized. Each runs
-   * inside the hook's own session queue and holds no other session's.
+   * transcript to the child chain before that chain is finalized. Any other
+   * hook a Codex subagent fires names the subagent's rollout, and the tailer
+   * opens a cursor on it. Each runs inside the hook's own session queue and
+   * holds no other session's.
    */
   async function tailBeforeHook(payload: unknown): Promise<void> {
     if (payload === null || typeof payload !== "object") return;
@@ -2105,6 +2107,13 @@ async function initializeDaemon(
           if (fed === undefined)
             log(`subagent transcript ${path} was not there to read`);
         }
+      } else {
+        // A Codex subagent's hooks name its own rollout. Only the cursor
+        // opens here; the tick reads the file.
+        const agentId = input["agent_id"];
+        const path = input["transcript_path"];
+        if (typeof agentId === "string" && typeof path === "string")
+          transcriptTailer.noteSubagentTranscript(sessionId, agentId, path);
       }
       if (hookName === "Stop" || hookName === "SessionEnd")
         await transcriptTailer.drain(sessionId, hookName);
