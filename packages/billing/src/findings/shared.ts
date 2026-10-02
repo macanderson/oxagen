@@ -103,6 +103,14 @@ export interface ToolCallObservation {
    * names the two together.
    */
   sessionUuid: string | null;
+  /**
+   * The fields below are optional so a call literal that predates them still
+   * types. The findings store sets both on each call it reads.
+   */
+  /** `ok`, `error`, or `rejected`; null for any other status the hook wrote. */
+  status?: "ok" | "error" | "rejected" | null;
+  /** The first line of a failed call's error; null when the hook recorded none. */
+  errorClass?: string | null;
 }
 
 /**
@@ -371,6 +379,18 @@ export interface DetectInput {
    * run is never here.
    */
   fileChanges?: ReadonlyMap<string, boolean>;
+  /**
+   * When each wrapped run's files changed on disk, from its
+   * `oxagen:file_changed` frames on every chain: microseconds since the
+   * epoch, ascending, by run public id. A run with no change is absent. The
+   * read covers `from` to the window's end, and `from` is later than the
+   * window's start when the read hit its cap, so a detector does not read a
+   * stretch the read missed as one with no change.
+   */
+  fileChangeTimes?: {
+    from: Date;
+    byRun: ReadonlyMap<string, readonly number[]>;
+  };
   /**
    * Each wrapped run's compactions in time order, by run public id, on every
    * chain of the run. A run with none is absent. A ledger run is never here.
