@@ -3,6 +3,7 @@ import {
   type OutcomeRow,
   type OutcomeRun,
   prKeyOf,
+  type PrStateRead,
   type RevertEvidence,
   type RunPrCiState,
   type RunPrState,
@@ -76,6 +77,7 @@ const link = (runId: string, number: number, over: Partial<TachoPrLink> = {}): T
 interface ForgeOpts {
   headSha?: string;
   headRef?: string;
+  baseRef?: string;
   mergedAt?: Date;
   updatedAt?: Date;
   body?: string | null;
@@ -96,7 +98,7 @@ function forge(state: RunPrState, opts: ForgeOpts = {}): ForgeOutcomeRead {
       closedAt: null,
       mergedAt,
       mergeCommitSha: merged ? (opts.mergeCommitSha ?? "c".repeat(40)) : null,
-      baseRef: "main",
+      baseRef: opts.baseRef ?? "main",
       headRef: opts.headRef ?? "feat/x",
       headSha,
       sourceUpdatedAt: opts.updatedAt ?? mergedAt ?? hoursAgo(3),
@@ -125,6 +127,8 @@ interface FakeInput {
   forge?: Record<string, ForgeOutcome | Error>;
   /** Reverts already kept, as a GitHub delivery or an earlier pass keeps them. */
   reverts?: RevertEvidence[];
+  /** The newest state a GitHub delivery kept for each pull request, by pr key. */
+  delivered?: Record<string, PrStateRead>;
 }
 
 const sameRevert = (a: RevertEvidence, b: RevertEvidence) =>
@@ -151,6 +155,7 @@ function fake(input: FakeInput) {
   const reverts: RevertEvidence[] = [...(input.reverts ?? [])];
   const revertsAsked: Date[] = [];
   const writes: string[] = [];
+  const deliveredAsked: string[][] = [];
   const control = { failSaveRows: false, now: NOW };
   const deps: OutcomeRefreshDeps = {
     now: () => control.now,
@@ -205,6 +210,15 @@ function fake(input: FakeInput) {
       const found = input.forge?.[key] ?? "unreadable";
       return found instanceof Error ? Promise.reject(found) : Promise.resolve(found);
     },
+    deliveredStates: (_scope, keys) => {
+      deliveredAsked.push([...keys]);
+      return Promise.resolve(
+        keys.flatMap((prKey) => {
+          const state = input.delivered?.[prKey];
+          return state ? [{ prKey, state }] : [];
+        }),
+      );
+    },
     readReverts: (_scope, since) => {
       revertsAsked.push(since);
       return Promise.resolve(
@@ -243,6 +257,7 @@ function fake(input: FakeInput) {
     reverts,
     revertsAsked,
     writes,
+    deliveredAsked,
     control,
   };
 }
@@ -345,7 +360,7 @@ describe("refreshRunPrOutcomes", () => {
         repository: "acme/app",
         number: 5,
         mergeCommitSha: null,
-        branch: null,
+        branch: "main",
         mark: { by: "github:acme/app#9", at: hoursAgo(2), readAt: NOW },
       },
     ]);
@@ -401,7 +416,7 @@ describe("refreshRunPrOutcomes", () => {
           repository: "acme/app",
           number: 5,
           mergeCommitSha: null,
-          branch: null,
+          branch: "main",
           mark: { by: "github:acme/app#9", at: hoursAgo(4), readAt: hoursAgo(4) },
         },
       ],
@@ -454,6 +469,156 @@ describe("refreshRunPrOutcomes", () => {
     });
     expect(rowOf(t.rows, "tse_b2", "github:acme/app#6")?.reverted).toBe(false);
     expect(out.reverted).toBe(1);
+  });
+
+  it("marks a pull request reverted only by a revert that merged into the same branch", async () => {
+    // #9 merged into release and says it reverts #5, which merged into main.
+    const intoRelease = fake({
+      runs: [run("tse_a1"), run("tse_b2")],
+      links: [link("tse_a1", 5), link("tse_b2", 9)],
+      forge: {
+        "github:acme/app#5": forge("merged", { mergedAt: hoursAgo(5) }),
+        "github:acme/app#9": forge("merged", {
+          mergedAt: hoursAgo(2),
+          baseRef: "release",
+          body: "Reverts acme/app#5",
+        }),
+      },
+    });
+    const out = await refreshRunPrOutcomes(intoRelease.deps, SCOPE);
+    expect(rowOf(intoRelease.rows, "tse_a1", "github:acme/app#5")?.reverted).toBe(false);
+    expect(out.reverted).toBe(0);
+    expect(intoRelease.reverts).toMatchObject([{ number: 5, branch: "release" }]);
+
+    // The same revert merged into main marks it.
+    const intoMain = fake({
+      runs: [run("tse_a1"), run("tse_b2")],
+      links: [link("tse_a1", 5), link("tse_b2", 9)],
+      forge: {
+        "github:acme/app#5": forge("merged", { mergedAt: hoursAgo(5) }),
+        "github:acme/app#9": forge("merged", {
+          mergedAt: hoursAgo(2),
+          body: "Reverts acme/app#5",
+        }),
+      },
+    });
+    expect((await refreshRunPrOutcomes(intoMain.deps, SCOPE)).reverted).toBe(1);
+    expect(rowOf(intoMain.rows, "tse_a1", "github:acme/app#5")).toMatchObject({
+      reverted: true,
+      revertedBy: "github:acme/app#9",
+    });
+  });
+
+  it("keeps no revert of a pull request in another repository", async () => {
+    const t = fake({
+      runs: [run("tse_b2")],
+      links: [link("tse_b2", 9)],
+      forge: {
+        "github:acme/app#9": forge("merged", { body: "Reverts acme/lib#3" }),
+      },
+    });
+    await refreshRunPrOutcomes(t.deps, SCOPE);
+    expect(t.reverts).toEqual([]);
+  });
+
+  it("does not mark a release pull request by a kept merge commit revert with no branch", async () => {
+    const t = fake({
+      runs: [run("tse_a1")],
+      links: [link("tse_a1", 5)],
+      forge: {
+        "github:acme/app#5": forge("merged", {
+          baseRef: "release",
+          mergeCommitSha: "c".repeat(40),
+        }),
+      },
+      reverts: [
+        {
+          repository: "acme/app",
+          number: null,
+          mergeCommitSha: "c".repeat(40),
+          branch: null,
+          mark: { by: `github:acme/app@${"e".repeat(40)}`, at: hoursAgo(2), readAt: hoursAgo(2) },
+        },
+      ],
+    });
+    const out = await refreshRunPrOutcomes(t.deps, SCOPE);
+    expect(rowOf(t.rows, "tse_a1", "github:acme/app#5")?.reverted).toBe(false);
+    expect(out.reverted).toBe(0);
+  });
+
+  it("writes a run's first row open when a delivery kept a reopen newer than the GitHub read", async () => {
+    // The pass read #12 closed. #12 reopened a minute later, and its delivery
+    // landed before the pass wrote the run's first row, so it found no row.
+    const reopenedAt = new Date(NOW.getTime() + 60_000);
+    const t = fake({
+      runs: [run("arun_d4", "ledger")],
+      ledger: {
+        arun_d4: [
+          {
+            provider: "github",
+            repository: "acme/app",
+            number: 12,
+            url: "https://github.com/acme/app/pull/12",
+            headSha: "b".repeat(40),
+          },
+        ],
+      },
+      forge: {
+        "github:acme/app#12": forge("closed", {
+          headSha: "b".repeat(40),
+          updatedAt: hoursAgo(2),
+          ci: "failed",
+        }),
+      },
+      delivered: {
+        "github:acme/app#12": {
+          state: "open",
+          readAt: new Date(reopenedAt.getTime() + 2_000),
+          closedAt: null,
+          mergedAt: null,
+          mergeCommitSha: null,
+          baseRef: "main",
+          headRef: "feat/x",
+          headSha: "b".repeat(40),
+          sourceUpdatedAt: reopenedAt,
+        },
+      },
+    });
+    await refreshRunPrOutcomes(t.deps, SCOPE);
+    expect(t.deliveredAsked).toEqual([["github:acme/app#12"]]);
+    expect(rowOf(t.rows, "arun_d4", "github:acme/app#12")).toMatchObject({
+      prState: "open",
+      closedAt: null,
+      sourceUpdatedAt: reopenedAt,
+    });
+  });
+
+  it("keeps the GitHub read when the delivery kept for the pull request is older", async () => {
+    const t = fake({
+      runs: [run("tse_a1")],
+      links: [link("tse_a1", 7)],
+      forge: {
+        "github:acme/app#7": forge("closed", { updatedAt: hoursAgo(2) }),
+      },
+      delivered: {
+        "github:acme/app#7": {
+          state: "open",
+          readAt: hoursAgo(5),
+          closedAt: null,
+          mergedAt: null,
+          mergeCommitSha: null,
+          baseRef: "main",
+          headRef: "feat/x",
+          headSha: "a".repeat(40),
+          sourceUpdatedAt: hoursAgo(5),
+        },
+      },
+    });
+    await refreshRunPrOutcomes(t.deps, SCOPE);
+    expect(rowOf(t.rows, "tse_a1", "github:acme/app#7")).toMatchObject({
+      prState: "closed",
+      closedAt: hoursAgo(2),
+    });
   });
 
   it("records a pull request closed without merging, with its close time", async () => {
@@ -812,6 +977,35 @@ describe("readGithubOutcome", () => {
       ci: { state: "none" },
       headBranch: { exists: true },
     });
+  });
+
+  it("reads a fork pull request's head branch in the fork", async () => {
+    client.getPullRequest.mockResolvedValue(
+      pull({ state: "open", merged: false, headRepository: "forker/app-fork" }),
+    );
+    client.listCiChecks.mockResolvedValue(passing);
+    client.getBranch.mockResolvedValue({ name: "feat/x", sha: "a".repeat(40) });
+    const out = await readGithubOutcome(asClient, pr, () => NOW);
+    expect(client.getBranch).toHaveBeenCalledWith({
+      owner: "forker",
+      repo: "app-fork",
+      branch: "feat/x",
+    });
+    // The checks of the head commit are read in the base repository.
+    expect(client.listCiChecks).toHaveBeenCalledWith({
+      owner: "acme",
+      repo: "app",
+      ref: "a".repeat(40),
+    });
+    expect(out).toMatchObject({ headBranch: { exists: true, readAt: NOW } });
+  });
+
+  it("reads the head branch as gone when the fork it came from was deleted", async () => {
+    client.getPullRequest.mockResolvedValue(pull({ headRepository: null }));
+    client.listCiChecks.mockResolvedValue(passing);
+    const out = await readGithubOutcome(asClient, pr, () => NOW);
+    expect(client.getBranch).not.toHaveBeenCalled();
+    expect(out).toMatchObject({ headBranch: { exists: false, readAt: NOW } });
   });
 
   it("answers unreadable when GitHub hides the pull request", async () => {

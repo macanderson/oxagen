@@ -294,7 +294,9 @@ describe("tenant policy manifest", () => {
     // 171 adds work.direct_orders and work.done_checks (F13, #4638,
     // 2026-10-02).
     // 172 adds work.send_backs (R3, #5108, 2026-10-02).
-    expect(POLICY_MANIFEST.length).toBe(172);
+    // 173 adds cost.run_pr_delivered_states, the newest state a GitHub
+    // delivery carried for each pull request (R2, #4511, 2026-10-02).
+    expect(POLICY_MANIFEST.length).toBe(173);
   });
 
   it("covers the ADR-055 GAU tables as org_only (WL-24)", () => {

@@ -392,6 +392,7 @@ import "./contracts/steering.pr.revert";
 import "./contracts/steering.proposal.create";
 import "./contracts/steering.proposal.dismiss";
 import "./contracts/steering.proposal.list";
+import "./contracts/steering.propose";
 import "./contracts/steering.read";
 import "./contracts/steering.record.list";
 import "./contracts/steering.record.promote";

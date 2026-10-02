@@ -6565,6 +6565,21 @@
       }
     },
     {
+      "name": "propose_steering",
+      "file": "steering.propose.ts",
+      "domain": "context",
+      "mode": "sync",
+      "surfaces": [
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "read_steering",
       "file": "steering.read.ts",
       "domain": "context",

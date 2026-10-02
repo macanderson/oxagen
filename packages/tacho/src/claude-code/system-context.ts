@@ -23,6 +23,28 @@
  * `budgetTokens`, the UTF-8 byte count over four, the unit the steering
  * assembler already budgets in. Each count carries its basis beside it.
  *
+ * What each path can measure (ADR-062, amendment of 2026-10-02):
+ *
+ * - The loopback proxy records the request, so a proxied call carries the
+ *   tool definition count, the steering count, the system context digest,
+ *   and its parts ({@link SystemContextTracker.measure}).
+ * - An OTel `api_request` record and a transcript `assistant` record carry
+ *   usage and ids, never the request. On a session the proxy did not carry,
+ *   the counted row of a call carries the steering count alone
+ *   ({@link SystemContextTracker.measureUnseen}). The manifest says what
+ *   steering the session was delivered, whichever path saw the call. The
+ *   tool definitions and the system context stay absent. A digest over the
+ *   steering parts alone would read as the whole context, and a change to a
+ *   tool would look like no change.
+ *
+ * Only a call that carries the session's conversation carries its steering.
+ * Claude Code also makes side calls, such as a session title or a check of a
+ * Bash command's prefix, and those send a short prompt of their own without
+ * the `SessionStart` context. A side call takes no steering count and no
+ * steering parts. The proxy reads a request that declares no tools as a side
+ * call (see `measure`). The recorder reads OTel's `query_source` for the
+ * same question (`recorder.ts`).
+ *
  * The proxy stores a request with the part its session's prior holds cut
  * out (`request-prefix.ts`). A cut request names the call that holds the cut
  * fields by that call's full digest, so this module remembers what each
@@ -501,6 +523,21 @@ export function steeringContext(
   };
 }
 
+/**
+ * The steering count and its basis, or nothing when there is no steering to
+ * count: before a manifest seals, or on a side call. A fresh object each time,
+ * since `measure` adds members to it.
+ */
+function steeringFactsOf(
+  steering: SteeringContext | undefined,
+): TokenSourceFacts {
+  if (steering === undefined) return {};
+  return {
+    steering_tokens: steering.tokens,
+    steering_tokens_basis: "estimated",
+  };
+}
+
 /** What a tracker carries over a restart. */
 export interface SystemContextState {
   /** The latest manifest's steering parts. Absent until a manifest seals. */
@@ -574,19 +611,17 @@ export class SystemContextTracker {
     attrs: Record<string, string> | undefined,
     turn: string,
   ): SystemContextMeasure {
-    const facts: TokenSourceFacts = {};
-    const steering = this.steering;
-    if (steering !== undefined) {
-      facts.steering_tokens = steering.tokens;
-      facts.steering_tokens_basis = "estimated";
-    }
     const recorded = requestOf(content);
     const resolved =
       recorded === undefined
         ? undefined
         : resolveRequest(recorded.request, this.memory);
+    // A request the tracker cannot read or resolve keeps the steering count.
+    // Its tools are out of sight, so the side call rule below cannot apply.
+    // The usual cause is a request too large for the proxy to hold, and a
+    // side call's short prompt is never that large.
     if (recorded === undefined || resolved === undefined)
-      return this.checked(facts, {}, () => {});
+      return this.checked(steeringFactsOf(this.steering), {}, () => {});
 
     // Remembered under the digest a later cut request names: the proxy's
     // attr, or for a request stored whole, the digest of its own text, which
@@ -599,6 +634,16 @@ export class SystemContextTracker {
         : undefined;
     if (key !== undefined) this.memory.set(key, resolved);
 
+    // A request that declares no tools reads as a side call. Claude Code's
+    // main thread sends the session's tools on every call. A side call, such
+    // as a session title, sends a short prompt of its own without them, and
+    // without the conversation the steering rode in on. So it takes no
+    // steering count, and its parts name no steering. The rule only ever
+    // takes steering away. It misses two cases: a session run with every
+    // tool turned off loses its count, and a subagent's proxied call, which
+    // declares tools, keeps the root session's count.
+    const steering = resolved.tools.length > 0 ? this.steering : undefined;
+    const facts = steeringFactsOf(steering);
     const parts: SystemContextPart[] = [
       ...resolved.system,
       ...resolved.instructions,
@@ -628,6 +673,19 @@ export class SystemContextTracker {
       this.listed.push(digest);
       if (this.listed.length > LISTED_PER_TURN) this.listed.shift();
     });
+  }
+
+  /**
+   * The token sources of a model call whose request the recorder never saw:
+   * the counted OTel or transcript row of a call the proxy did not carry
+   * (#4493). Only the steering count is known without the request. The tool
+   * definition count, the context frame count, and the system context stay
+   * absent, never zero. Nothing changes on the tracker, so there is nothing
+   * to commit. The caller asks only for a call that carries the session's
+   * conversation, since a side call carries no steering.
+   */
+  measureUnseen(): TokenSourceFacts {
+    return this.checked(steeringFactsOf(this.steering), {}, () => {}).facts;
   }
 
   /**

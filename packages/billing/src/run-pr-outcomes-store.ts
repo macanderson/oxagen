@@ -7,7 +7,17 @@
  * the delivery function run outside a request's tenant scope.
  */
 import { schema, withSystemDb } from "@oxagen/database";
-import { and, desc, eq, gte, inArray, isNotNull, lt, sql } from "drizzle-orm";
+import {
+  type AnyColumn,
+  and,
+  desc,
+  eq,
+  gte,
+  inArray,
+  isNotNull,
+  lt,
+  sql,
+} from "drizzle-orm";
 import {
   NO_PR_KEY,
   type OutcomeDelivery,
@@ -16,6 +26,8 @@ import {
   type OutcomeScope,
   OUTCOME_WINDOW_DAYS,
   type PrRef,
+  type PrStateRead,
+  prKeyOf,
   type RevertEvidence,
   type RevertMark,
   type RunPrCiState,
@@ -30,6 +42,7 @@ import {
 
 const outcomes = schema.runPrOutcomes;
 const reverts = schema.runPrReverts;
+const delivered = schema.runPrDeliveredStates;
 const totals = schema.runTotals;
 const sessions = schema.tachoSessions;
 const links = schema.tachoRunPullRequests;
@@ -299,16 +312,28 @@ function valuesOf(row: OutcomeRow) {
 }
 
 /**
- * Whether the row a write carries may replace the stored row. A state GitHub
- * dated wins over an undated one, and the later `updated_at` wins between two
- * dated states. Between two undated states, the later read wins. An undated
- * write never replaces a dated row, so a pass that read no GitHub time cannot
- * undo a delivery that carried one. `isStaleRead` holds the same order for a
- * read the refresh folds into a row in memory. It is built per write, not at
- * import, so a module that mocks the schema can still import this one.
+ * Whether the state a write carries may replace the stored state. A state
+ * GitHub dated wins over an undated one, and the later `updated_at` wins
+ * between two dated states. GitHub counts `updated_at` in whole seconds, so
+ * two states can carry the same one, and then the later read wins, as it does
+ * between two undated states. An equal read time replaces too, so the refresh
+ * can write a row whose state did not change. An undated write never replaces
+ * a dated row, so a pass that read no GitHub time cannot undo a delivery that
+ * carried one. `isStaleRead` holds the same order for a read folded into a
+ * row in memory.
+ *
+ * `storedUpdated` and `storedReadAt` are the stored row's columns, and
+ * `readAtColumn` names the write's read-time column. It is built per write,
+ * not at import, so a module that mocks the schema can still import this one.
  */
-function replacesStored() {
-  return sql`(excluded.source_updated_at IS NOT NULL AND (${outcomes.sourceUpdatedAt} IS NULL OR excluded.source_updated_at >= ${outcomes.sourceUpdatedAt})) OR (excluded.source_updated_at IS NULL AND ${outcomes.sourceUpdatedAt} IS NULL AND (${outcomes.prStateReadAt} IS NULL OR excluded.pr_state_read_at >= ${outcomes.prStateReadAt}))`;
+function replacesStored(
+  storedUpdated: AnyColumn,
+  storedReadAt: AnyColumn,
+  readAtColumn: "pr_state_read_at" | "read_at",
+) {
+  const readAt = sql.raw(`excluded.${readAtColumn}`);
+  const laterRead = sql`(${storedReadAt} IS NULL OR ${readAt} >= ${storedReadAt})`;
+  return sql`(excluded.source_updated_at IS NOT NULL AND (${storedUpdated} IS NULL OR excluded.source_updated_at > ${storedUpdated} OR (excluded.source_updated_at = ${storedUpdated} AND ${laterRead}))) OR (excluded.source_updated_at IS NULL AND ${storedUpdated} IS NULL AND ${laterRead})`;
 }
 
 /**
@@ -351,7 +376,7 @@ export async function saveOutcomeRows(
             revertedReadAt: sql`CASE WHEN ${outcomes.reverted} THEN ${outcomes.revertedReadAt} ELSE excluded.reverted_read_at END`,
             updatedAt: sql`now()`,
           },
-          setWhere: sql`${outcomes.orgId} = ${scope.orgId} AND ${outcomes.workspaceId} = ${scope.workspaceId} AND (${replacesStored()})`,
+          setWhere: sql`${outcomes.orgId} = ${scope.orgId} AND ${outcomes.workspaceId} = ${scope.workspaceId} AND (${replacesStored(outcomes.sourceUpdatedAt, outcomes.prStateReadAt, "pr_state_read_at")})`,
         })
         .returning({ id: outcomes.id });
       written += result.length;
@@ -381,12 +406,17 @@ function revertSet(mark: RevertMark) {
   };
 }
 
-/** Mark the rows of the named pull requests reverted. A row already reverted keeps its first revert. */
+/**
+ * Mark reverted the rows of the named pull requests that merged into the
+ * branch the reverting pull request merged into, as `evidenceReverts` matches
+ * them. A row already reverted keeps its first revert.
+ */
 export async function markPullRequestsReverted(
   scope: OutcomeScope,
-  targets: readonly PrRef[],
+  plan: { targets: readonly PrRef[]; branch: string },
   mark: RevertMark,
 ): Promise<number> {
+  const { targets, branch } = plan;
   if (targets.length === 0) return 0;
   // tenancy: webhook delivery outside a tenant scope; each update is filtered by orgId and workspaceId.
   return withSystemDb(async (tx) => {
@@ -402,6 +432,7 @@ export async function markPullRequestsReverted(
             eq(outcomes.provider, "github"),
             eq(outcomes.repository, target.repository.toLowerCase()),
             eq(outcomes.number, target.number),
+            eq(outcomes.baseRef, branch),
             eq(outcomes.reverted, false),
           ),
         )
@@ -413,13 +444,12 @@ export async function markPullRequestsReverted(
 }
 
 /**
- * Mark reverted the rows whose merge commit a pushed commit reverts. A
- * revert counts on the branch the pull request merged into. A commit whose
- * branch the connector did not record matches any branch.
+ * Mark reverted the rows whose merge commit a pushed commit reverts, when the
+ * pull request merged into the branch the commit was pushed to.
  */
 export async function markMergeCommitsReverted(
   scope: OutcomeScope,
-  plan: { repository: string; shas: readonly string[]; branch: string | null },
+  plan: { repository: string; shas: readonly string[]; branch: string },
   mark: RevertMark,
 ): Promise<number> {
   if (plan.shas.length === 0) return 0;
@@ -436,7 +466,7 @@ export async function markMergeCommitsReverted(
           eq(outcomes.repository, plan.repository.toLowerCase()),
           inArray(outcomes.mergeCommitSha, [...plan.shas]),
           eq(outcomes.reverted, false),
-          plan.branch === null ? undefined : eq(outcomes.baseRef, plan.branch),
+          eq(outcomes.baseRef, plan.branch),
         ),
       )
       .returning({ id: outcomes.id }),
@@ -444,18 +474,59 @@ export async function markMergeCommitsReverted(
   return rows.length;
 }
 
+/** The state columns of a `cost.run_pr_delivered_states` row. */
+function deliveredValuesOf(read: PrStateRead) {
+  return {
+    prState: read.state,
+    readAt: read.readAt,
+    closedAt: read.closedAt,
+    mergedAt: read.mergedAt,
+    mergeCommitSha: read.mergeCommitSha,
+    baseRef: read.baseRef,
+    headRef: read.headRef,
+    headSha: read.headSha,
+    sourceUpdatedAt: read.sourceUpdatedAt,
+  };
+}
+
 /**
  * Fold a GitHub pull request delivery into the rows of that pull request,
- * under newer-wins, and lock them while it does. A delivery for a pull
- * request no run opened finds no row and writes nothing: the hourly refresh
- * creates the rows.
+ * under newer-wins, and lock them while it does. The delivery's state is also
+ * kept in `cost.run_pr_delivered_states` under the same order, whether or not
+ * a row exists yet. A delivery that lands before the refresh writes a run's
+ * first row finds no row here, and the refresh folds the kept state into the
+ * row it writes. The same write deletes the workspace's kept states read more
+ * than 31 days ago.
  */
 async function applyPullRequestState(
   scope: OutcomeScope,
   delivery: Extract<OutcomeDelivery, { kind: "pull_request" }>,
 ): Promise<number> {
-  // tenancy: webhook delivery outside a tenant scope; the read and each update are filtered by orgId and workspaceId.
+  const values = deliveredValuesOf(delivery);
+  // tenancy: webhook delivery outside a tenant scope; every row it writes carries the orgId and workspaceId, and the read, each update, and the prune are filtered by them.
   return withSystemDb(async (tx) => {
+    await tx
+      .insert(delivered)
+      .values({
+        orgId: scope.orgId,
+        workspaceId: scope.workspaceId,
+        prKey: prKeyOf("github", delivery.repository, delivery.number),
+        ...values,
+      })
+      .onConflictDoUpdate({
+        target: [delivered.orgId, delivered.workspaceId, delivered.prKey],
+        set: { ...values, updatedAt: sql`now()` },
+        setWhere: sql`${delivered.orgId} = ${scope.orgId} AND ${delivered.workspaceId} = ${scope.workspaceId} AND (${replacesStored(delivered.sourceUpdatedAt, delivered.readAt, "read_at")})`,
+      });
+    await tx
+      .delete(delivered)
+      .where(
+        and(
+          eq(delivered.orgId, scope.orgId),
+          eq(delivered.workspaceId, scope.workspaceId),
+          lt(delivered.readAt, sql`now() - interval '31 days'`),
+        ),
+      );
     const found = await tx
       .select()
       .from(outcomes)
@@ -488,6 +559,54 @@ async function applyPullRequestState(
     }
     return written;
   });
+}
+
+/** The newest state a GitHub delivery carried for a pull request. */
+export interface DeliveredPrState {
+  /** `github:owner/repo#N`, as `prKeyOf` writes it. */
+  prKey: string;
+  state: PrStateRead;
+}
+
+/** The kept delivery states of the named pull requests. */
+export async function readDeliveredStates(
+  scope: OutcomeScope,
+  prKeys: readonly string[],
+): Promise<DeliveredPrState[]> {
+  if (prKeys.length === 0) return [];
+  // tenancy: scheduled refresh outside a tenant scope; the read is filtered by orgId and workspaceId.
+  const rows = await withSystemDb((tx) =>
+    tx
+      .select()
+      .from(delivered)
+      .where(
+        and(
+          eq(delivered.orgId, scope.orgId),
+          eq(delivered.workspaceId, scope.workspaceId),
+          inArray(delivered.prKey, [...prKeys]),
+        ),
+      ),
+  );
+  return rows.flatMap((r) =>
+    r.prState === "open" || r.prState === "closed" || r.prState === "merged"
+      ? [
+          {
+            prKey: r.prKey,
+            state: {
+              state: r.prState,
+              readAt: r.readAt,
+              closedAt: r.closedAt,
+              mergedAt: r.mergedAt,
+              mergeCommitSha: r.mergeCommitSha,
+              baseRef: r.baseRef,
+              headRef: r.headRef,
+              headSha: r.headSha,
+              sourceUpdatedAt: r.sourceUpdatedAt,
+            },
+          },
+        ]
+      : [],
+  );
 }
 
 /**
@@ -584,7 +703,7 @@ export async function applyOutcomeDelivery(
   if (plan === null) return { rows, reverted: 0 };
   const reverted =
     plan.kind === "pull_requests"
-      ? await markPullRequestsReverted(scope, plan.targets, plan.mark)
+      ? await markPullRequestsReverted(scope, plan, plan.mark)
       : await markMergeCommitsReverted(scope, plan, plan.mark);
   return { rows, reverted };
 }
