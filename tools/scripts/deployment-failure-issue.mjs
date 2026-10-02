@@ -40,8 +40,18 @@
  * run cannot reopen a recovered incident and a late green run cannot close a
  * live one.
  *
+ * ## A job that lost its runner
+ *
+ * AWS can reclaim the spot instance a job runs on (ADR-246). The issue still
+ * files, because main is red and nothing deploys, but it marks each job that
+ * lost its runner. rerun-lost-runner.yml reruns those jobs, and a green
+ * attempt closes the issue. The mark tells whoever picks the issue up that
+ * there is probably no code to fix (#5180).
+ *
  * Invoked by .github/workflows/deployment-failure.yml with DEPLOYMENT_FAILURE_RUN_ID set.
  */
+
+import { jobLostRunner } from "./rerun-lost-runner.mjs";
 
 const REPO = process.env.GITHUB_REPOSITORY ?? "oxageninc/product";
 const TOKEN = process.env.GITHUB_TOKEN;
@@ -138,13 +148,24 @@ export function titleFor(kind, jobs) {
     : `P0 T3 S DevOps (CI): Main is red: ${shown || "the pipeline failed"}`;
 }
 
-function jobLines(jobs) {
+const LOST_RUNNER_NOTE =
+  "One or more jobs above lost their runner, usually because AWS reclaimed a spot instance. `rerun-lost-runner.yml` reruns them, and a green attempt closes this issue. Look for a code fix only if the rerun fails too.";
+
+/** `lost` holds the ids of the jobs that lost their runner. */
+function jobLines(jobs, lost = new Set()) {
   return jobs
     .map((j) => {
+      if (lost.has(j.id)) {
+        return `- [${j.name}](${j.html_url}) ${j.conclusion}: its runner shut down mid-job`;
+      }
       const step = (j.steps ?? []).find((s) => FAILED.has(s.conclusion));
       return `- [${j.name}](${j.html_url}) ${j.conclusion}${step ? ` at step "${step.name}"` : ""}`;
     })
     .join("\n");
+}
+
+function lostNote(jobs, lost) {
+  return jobs.some((j) => lost.has(j.id)) ? `\n\n${LOST_RUNNER_NOTE}` : "";
 }
 
 function commitLine(run) {
@@ -154,7 +175,7 @@ function commitLine(run) {
   return `\`${sha}\` ${subject}${pr ? ` (from #${pr})` : ""}`;
 }
 
-export function bodyFor(kind, run, jobs) {
+export function bodyFor(kind, run, jobs, lost = new Set()) {
   const what =
     kind === "deploy"
       ? "A job that writes to production failed on `main`. The checks passed, so this commit and every commit after it are merged but not live until a deploy succeeds."
@@ -168,7 +189,7 @@ ${what}
 
 ## Failed jobs
 
-${jobLines(jobs)}
+${jobLines(jobs, lost)}${lostNote(jobs, lost)}
 
 ## What happens next
 
@@ -266,8 +287,20 @@ async function comment(number, body) {
   });
 }
 
+/** The ids of the failed jobs that lost their runner. */
+async function lostRunnerIds(failed) {
+  const lost = new Set();
+  for (const j of failed) {
+    if (j.conclusion === "failure" && (await jobLostRunner(j.id))) {
+      lost.add(j.id);
+    }
+  }
+  return lost;
+}
+
 async function recordFailure(kind, run, jobs) {
   const failed = failedJobs(jobs);
+  const lost = await lostRunnerIds(failed);
   const open = await openIssues(kind);
   if (open.length > 0) {
     const issue = open[0];
@@ -281,7 +314,7 @@ async function recordFailure(kind, run, jobs) {
     }
     await comment(
       issue.number,
-      `Still failing at ${commitLine(run)}.\n\n**Run:** ${run.html_url}\n\n${jobLines(failed)}`,
+      `Still failing at ${commitLine(run)}.\n\n**Run:** ${run.html_url}\n\n${jobLines(failed, lost)}${lostNote(failed, lost)}`,
     );
     return console.log(`  commented on #${issue.number}`);
   }
@@ -290,7 +323,7 @@ async function recordFailure(kind, run, jobs) {
     method: "POST",
     body: JSON.stringify({
       title: titleFor(kind, failed),
-      body: bodyFor(kind, run, failed),
+      body: bodyFor(kind, run, failed, lost),
       labels: ["P0", LABEL, KIND_LABEL[kind]],
     }),
   });
