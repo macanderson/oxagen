@@ -42,6 +42,16 @@
  *   5. **The injection seam.** `beforeForward` sees each request before it
  *      leaves and may return a changed one. It is a no-op until the Phase 1
  *      assembler exists.
+ *   6. **The cache keep-alive** (lane F32, `cache-keep-alive.ts`). While a
+ *      parent waits on a subagent, the proxy resends the parent's last
+ *      Anthropic request with `max_tokens: 0` so its cached prompt does not
+ *      expire, when the bundle turns the keep-alive on for the agent. Each
+ *      one seals an observed `llm_call` frame of its own.
+ *
+ * The keep-alive is the one place the proxy keeps a request past its call:
+ * the last request of each waiting parent, with the headers it went out
+ * with, the caller's credential among them, in memory only, for at most one
+ * TTL past the parent's last request. It is never written or logged.
  *
  * ## What fails open and what fails closed
  *
@@ -122,6 +132,7 @@ import {
   REQUEST_BODY_OMITTED_ATTR,
   RESPONSE_BODY_OMITTED_ATTR,
 } from "../evidence/replay-grade";
+import { cacheKeepAliveFinding } from "../host/bundle";
 import type { HeldCredential } from "../host/credential-store";
 import {
   looksLikeRunToken,
@@ -147,6 +158,18 @@ import {
   type TachoHarness,
   defaultHarnessForProvider,
 } from "../wire";
+import {
+  CacheKeepAlive,
+  conversationOf,
+  KEEP_ALIVE_ATTR,
+  KEEP_ALIVE_COUNT_ATTR,
+  KEEP_ALIVE_FINDING_ATTR,
+  KEEP_ALIVE_TICK_MS,
+  KEEP_ALIVE_TTL_ATTR,
+  type KeepAliveOutcome,
+  keepAliveRequestOf,
+  type KeepAliveSnapshot,
+} from "./cache-keep-alive";
 import { GUARD_MESSAGES, guardLoopbackRequest } from "./loopback-guard";
 import {
   createDaySpend,
@@ -158,10 +181,11 @@ import { modelVerdict } from "./model-allowlist";
 import {
   callCeilingMicros,
   priceObservedUsage,
+  resolveModelPrice,
   resolveModelPriceMatch,
   usdToMicros,
 } from "./model-pricing";
-import { RequestPrefixMemory } from "./request-prefix";
+import { RequestPrefixMemory, type RequestShape } from "./request-prefix";
 import {
   type AttachedCredential,
   CREDENTIAL_HEADERS,
@@ -178,6 +202,7 @@ import {
 import {
   decoderFor,
   estimateCutUsage,
+  foldUsageDocument,
   hasTokenCounts,
   type ModelApi,
   type ModelProvider,
@@ -302,6 +327,8 @@ export interface ModelProxyDeps {
   upstreamIdleMs?: number;
   /** Answer 504 when no connection to the vendor is open this long after the call. */
   upstreamConnectMs?: number;
+  /** How often the cache keep-alive checks for a keep-alive that is due. */
+  keepAliveTickMs?: number;
   /** The port the listener answers on, for the loopback guard. */
   port: () => number | undefined;
   log: (line: string) => void;
@@ -329,6 +356,11 @@ export interface ModelProxy {
   ) => number;
   /** Model calls observed for a session since the daemon started. */
   callsObservedFor: (sessionUuid: string) => number;
+  /**
+   * Send every cache keep-alive that is due now. The proxy runs this on its
+   * own timer (`keepAliveTickMs`); a test runs it with the clock it chose.
+   */
+  keepAliveTick: () => Promise<void>;
   stats: () => ModelProxyStats;
   close: () => void;
 }
@@ -344,6 +376,51 @@ const DEFAULT_UPSTREAM_CONNECT_MS = 30_000;
  * has just closed is what turns a healthy call into an `ECONNRESET`.
  */
 const FREE_SOCKET_TIMEOUT_MS = 30_000;
+/**
+ * How long a cache keep-alive may take. It asks for no output and reads a
+ * cached prefix, so it answers in seconds when the prefix is still there.
+ */
+const KEEP_ALIVE_TIMEOUT_MS = 60_000;
+/** The most of a keep-alive's answer the proxy holds: a usage block and no content. */
+const KEEP_ALIVE_MAX_RESPONSE_BYTES = 1024 * 1024;
+
+/**
+ * What the proxy keeps of a parent's last request so it can send the cache
+ * keep-alive (`cache-keep-alive.ts`). It holds the caller's credential, so it
+ * never reaches a frame, the WAL, or a log line.
+ */
+interface KeepAlivePayload {
+  /** The keep-alive request: the parent's, with `max_tokens: 0` and no `stream`. */
+  body: Buffer;
+  /** The upstream headers the parent's call went out with, for this body. */
+  headers: string[];
+  target: URL;
+  basis: TachoCredentialBasis;
+  /** The run token the parent's call presented, by id. */
+  runTokenId?: string;
+  /**
+   * The shape of the parent's request, when the parent's frame stored that
+   * request. The keep-alive's body then stores only what differs from it.
+   */
+  priorShape?: RequestShape;
+}
+
+/**
+ * The keep-alive a request would leave behind: the conversation it belongs
+ * to and the request to resend. Undefined when the request is not a JSON
+ * object, or names a setting `max_tokens: 0` refuses.
+ */
+function keepAliveCandidateOf(
+  request: Record<string, unknown>,
+  conversation: string,
+): { conversation: string; body: Buffer } | undefined {
+  const keep = keepAliveRequestOf(request);
+  if (keep === undefined) return undefined;
+  return {
+    conversation,
+    body: Buffer.from(JSON.stringify(keep), "utf8"),
+  };
+}
 
 /**
  * Why a cut call may be retried. `daemon_stopping`: the service manager
@@ -714,6 +791,30 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
     deps.upstreamConnectMs ?? DEFAULT_UPSTREAM_CONNECT_MS;
 
   const HOST_KEY = "host";
+
+  // The cache keep-alive (lane F32). The module decides when; the proxy
+  // sends, because the request it repeats carries the caller's credential.
+  const keepAlive = new CacheKeepAlive<SessionRecord, KeepAlivePayload>({
+    now: deps.now,
+    live: (record) => !record.sealed && record.pendingTerminal !== true,
+    // A parent waits while one of its subagents is open: the hooks open a
+    // subagent's chain at `SubagentStart` and close it at `SubagentStop`.
+    waiting: (record) => record.recorder.openChildren.size > 0,
+    finding: () => cacheKeepAliveFinding(deps.policy().bundle),
+    price: (model) =>
+      resolveModelPrice(deps.policy().bundle.model_prices, "anthropic", model),
+    send: (record, snapshot, count, finding) =>
+      sendKeepAlive(record, snapshot, count, finding),
+    log: deps.log,
+  });
+  const keepAliveTimer = setInterval(() => {
+    keepAlive.tick().catch((error: unknown) => {
+      deps.log(
+        `model proxy: the cache keep-alive check failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    });
+  }, deps.keepAliveTickMs ?? KEEP_ALIVE_TICK_MS);
+  keepAliveTimer.unref();
 
   function spendFor(sessionUuid: string): number {
     let value = spent.get(sessionUuid);
@@ -1192,6 +1293,376 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
     }
   }
 
+  /**
+   * Send one cache keep-alive for a waiting parent and seal its frame.
+   *
+   * The keep-alive answers to the operator's decisions as the parent's own
+   * call would: a paused or cancelled session, a host that is not active, a
+   * model the workspace refuses, or a budget at its limit sends nothing.
+   * What it costs is added to the session's and the day's observed spend, and
+   * the frame is an observed `llm_call` like any other, so Spend counts it.
+   */
+  function sendKeepAlive(
+    record: SessionRecord,
+    snapshot: KeepAliveSnapshot<KeepAlivePayload>,
+    count: number,
+    finding: string,
+  ): Promise<KeepAliveOutcome> {
+    const refusal = refusalFor(record, snapshot.model, false, true);
+    if (refusal !== undefined)
+      return Promise.resolve({
+        sent: false,
+        reason: `the proxy would refuse the parent's call (${refusal.code})`,
+      });
+    const payload = snapshot.payload;
+    const target = payload.target;
+    const secure = target.protocol === "https:";
+    const sessionKey = record.recorder.sessionUuid;
+    const startedAt = deps.now();
+    return new Promise<KeepAliveOutcome>((resolve) => {
+      let done = false;
+      let upstream: ClientRequest | undefined;
+      // In flight like any call, so a pause, cancel or interrupt, and the
+      // daemon stopping, cut it.
+      const entry: InFlight = {
+        reserved: 0,
+        abort: (reason) => upstream?.destroy(new Error(reason)),
+      };
+      const calls = inFlight.get(sessionKey) ?? new Set<InFlight>();
+      calls.add(entry);
+      inFlight.set(sessionKey, calls);
+      const finish = (outcome: KeepAliveOutcome): void => {
+        if (done) return;
+        done = true;
+        if (
+          calls.delete(entry) &&
+          calls.size === 0 &&
+          inFlight.get(sessionKey) === calls
+        )
+          inFlight.delete(sessionKey);
+        resolve(outcome);
+      };
+      try {
+        upstream = (secure ? httpsRequest : httpRequest)({
+          protocol: target.protocol,
+          hostname: target.hostname,
+          port:
+            target.port.length > 0 ? Number(target.port) : secure ? 443 : 80,
+          method: "POST",
+          path: `${target.pathname}${target.search}`,
+          headers: payload.headers,
+          agent: secure ? httpsAgent : httpAgent,
+        });
+      } catch (error) {
+        finish({
+          sent: false,
+          reason: error instanceof Error ? error.message : String(error),
+        });
+        return;
+      }
+      const sent = upstream;
+      sent.setTimeout(KEEP_ALIVE_TIMEOUT_MS, () => {
+        sent.destroy(new Error("the keep-alive timed out"));
+      });
+      sent.on("error", (error) => {
+        finish({
+          sent: false,
+          reason: `${target.host} failed the keep-alive: ${error.message}`,
+        });
+      });
+      sent.on("response", (response) => {
+        const status = response.statusCode ?? 502;
+        const firstByteAt = deps.now();
+        const chunks: Buffer[] = [];
+        const hash = createHash("sha256");
+        let bytes = 0;
+        let over = false;
+        response.on("data", (chunk: Buffer) => {
+          if (done) return;
+          bytes += chunk.length;
+          hash.update(chunk);
+          if (over) return;
+          if (bytes > KEEP_ALIVE_MAX_RESPONSE_BYTES) {
+            over = true;
+            chunks.length = 0;
+            return;
+          }
+          chunks.push(chunk);
+        });
+        const end = (errorClass: string | undefined): void => {
+          if (done) return;
+          const encoding = response.headers["content-encoding"];
+          const text = over
+            ? undefined
+            : readableBody(
+                Buffer.concat(chunks),
+                typeof encoding === "string" ? encoding : undefined,
+                KEEP_ALIVE_MAX_RESPONSE_BYTES,
+              )?.toString("utf8");
+          const contentType = response.headers["content-type"];
+          const requestId =
+            response.headers["request-id"] ??
+            response.headers["x-request-id"];
+          let readTokens = 0;
+          try {
+            readTokens = sealKeepAlive(record, snapshot, count, finding, {
+              startedAt,
+              firstByteAt,
+              status,
+              errorClass,
+              responseText: text,
+              responseTooLarge: over,
+              responseBytes: bytes,
+              responseDigest: `sha256:${hash.digest("hex")}`,
+              ...(typeof contentType === "string"
+                ? { responseType: contentType.slice(0, 96) }
+                : {}),
+              ...(typeof requestId === "string"
+                ? { requestId: requestId.slice(0, 512) }
+                : {}),
+            });
+          } catch (error) {
+            // This runs inside a response listener, where a throw would take
+            // the daemon down.
+            deps.log(
+              `model proxy: a cache keep-alive's answer could not be recorded: ${error instanceof Error ? error.message : String(error)}`,
+            );
+          }
+          finish({
+            sent: true,
+            startedAt,
+            ok: status < 300 && errorClass === undefined,
+            readTokens,
+          });
+        };
+        response.on("end", () => end(undefined));
+        response.on("error", () => end("upstream_reset"));
+        response.on("close", () => {
+          if (!response.complete) end("upstream_reset");
+        });
+      });
+      sent.end(payload.body);
+    });
+  }
+
+  /**
+   * Seal a keep-alive's `llm_call` frame and count what it cost. Returns the
+   * cached tokens the vendor reported reading back.
+   */
+  function sealKeepAlive(
+    record: SessionRecord,
+    snapshot: KeepAliveSnapshot<KeepAlivePayload>,
+    count: number,
+    finding: string,
+    answer: {
+      startedAt: number;
+      firstByteAt: number;
+      status: number;
+      errorClass: string | undefined;
+      responseText: string | undefined;
+      responseTooLarge: boolean;
+      responseBytes: number;
+      responseDigest: string;
+      responseType?: string;
+      requestId?: string;
+    },
+  ): number {
+    const payload = snapshot.payload;
+    const usage: ObservedUsage = {};
+    if (answer.responseText !== undefined) {
+      try {
+        foldUsageDocument(
+          usage,
+          "anthropic.messages",
+          JSON.parse(answer.responseText),
+        );
+      } catch {
+        // An error page or a body that is not JSON carries no usage.
+      }
+    }
+    const model = usage.model ?? snapshot.model;
+    const prices = deps.policy().bundle.model_prices;
+    const priced = hasTokenCounts(usage)
+      ? priceObservedUsage(prices, "anthropic", { ...usage, model })
+      : undefined;
+    const familyPriced =
+      priced !== undefined &&
+      resolveModelPriceMatch(prices, "anthropic", model)?.family === true;
+    const settledAt = deps.now();
+    const sessionKey = record.recorder.sessionUuid;
+    if (priced !== undefined) {
+      spent.set(sessionKey, spendFor(sessionKey) + priced);
+      daySpend.add(utcDay(settledAt), priced);
+    }
+    callsObserved += 1;
+    observed.set(sessionKey, (observed.get(sessionKey) ?? 0) + 1);
+    // The request is stored against the parent's when the parent's frame
+    // stored that request: the messages, system prompt and tools are the
+    // parent's, so only the changed members ship.
+    const requestText = payload.body.toString("utf8");
+    const memory = new RequestPrefixMemory();
+    if (payload.priorShape !== undefined)
+      memory.remember("parent", {
+        text: "",
+        fullDigest: payload.priorShape.requestDigest,
+        fullBytes: 0,
+        storedBytes: 0,
+        prior: undefined,
+        shape: payload.priorShape,
+        priorPayload: undefined,
+      });
+    const fold = memory.fold("parent", requestText);
+    let requestContent =
+      fold.storedBytes > TACHO_MAX_BODY_BYTES ? undefined : fold.text;
+    let responseContent = answer.responseText;
+    // The same shared cap `settleMetered` holds an exchange to: the response
+    // is dropped first, then the request if it alone is still too large.
+    if (requestContent !== undefined && responseContent !== undefined) {
+      const both = Buffer.byteLength(
+        jcs({ request: requestContent, response: responseContent }),
+        "utf8",
+      );
+      if (both > TACHO_MAX_BODY_BYTES) {
+        responseContent = undefined;
+        const alone = Buffer.byteLength(
+          jcs({ request: requestContent, response: undefined }),
+          "utf8",
+        );
+        if (alone > TACHO_MAX_BODY_BYTES) requestContent = undefined;
+      }
+    }
+    const responseOmitted = answer.responseTooLarge
+      ? "too_large"
+      : answer.responseText === undefined && answer.responseBytes > 0
+        ? "not_decoded"
+        : responseContent === undefined && answer.responseText !== undefined
+          ? "too_large"
+          : undefined;
+    const exchange = exchangeContent(requestContent, responseContent);
+    const failed =
+      answer.errorClass ??
+      (answer.status >= 400 ? `http_${answer.status}` : undefined);
+    const closed = record.sealed || record.pendingTerminal === true;
+    const chain = closed ? deps.hostRecorder() : record.recorder;
+    const callBody: Record<string, unknown> = {
+      provider: "anthropic",
+      model,
+      ...(usage.inputTokens !== undefined
+        ? { input_tokens: usage.inputTokens }
+        : {}),
+      ...(usage.outputTokens !== undefined
+        ? { output_tokens: usage.outputTokens }
+        : {}),
+      ...(usage.cacheReadTokens !== undefined
+        ? { cache_read_tokens: usage.cacheReadTokens }
+        : {}),
+      ...(usage.cacheCreationTokens !== undefined
+        ? { cache_creation_tokens: usage.cacheCreationTokens }
+        : {}),
+      ...(usage.cacheCreation5mTokens !== undefined
+        ? { cache_creation_5m_tokens: usage.cacheCreation5mTokens }
+        : {}),
+      ...(usage.cacheCreation1hTokens !== undefined
+        ? { cache_creation_1h_tokens: usage.cacheCreation1hTokens }
+        : {}),
+      ...(priced !== undefined ? { cost_usd_micros: priced } : {}),
+      cost_basis:
+        priced !== undefined
+          ? familyPriced
+            ? "estimated"
+            : "observed"
+          : hasTokenCounts(usage)
+            ? "observed_unpriced"
+            : "observed_no_usage",
+      ...(usage.stopReason !== undefined
+        ? { stop_reason: usage.stopReason }
+        : {}),
+      ttft_ms: Math.max(0, answer.firstByteAt - answer.startedAt),
+      api_duration_ms: Math.max(0, settledAt - answer.startedAt),
+      api_status_code: answer.status,
+      ...(failed !== undefined || usage.streamError !== undefined
+        ? { api_error_class: failed ?? `stream_${usage.streamError}` }
+        : {}),
+      ...(answer.requestId !== undefined
+        ? { request_id: answer.requestId }
+        : {}),
+      ...(usage.responseId !== undefined
+        ? { message_id: usage.responseId }
+        : {}),
+    };
+    const mark = chain.markChain();
+    try {
+      deps.record(
+        [
+          chain.sealCollectorEvent("llm_call", callBody, {
+            ts: toProtocolTimestamp(settledAt),
+            fidelity: "proxy",
+            ...(exchange !== undefined ? { content: exchange } : {}),
+            attrs: {
+              [TACHO_ENFORCEMENT_TIER_ATTR]: TACHO_GATEWAY_TIER,
+              "oxagen.model_api": "anthropic.messages",
+              "oxagen.correlation": "cache_keep_alive",
+              ...(closed
+                ? { "oxagen.session_uuid": record.recorder.sessionUuid }
+                : {}),
+              [TACHO_CREDENTIAL_BASIS_ATTR]: payload.basis,
+              ...(payload.runTokenId !== undefined
+                ? { [TACHO_RUN_TOKEN_ATTR]: payload.runTokenId }
+                : {}),
+              [TACHO_METERING_ATTR]: TACHO_METERING_OBSERVED,
+              [KEEP_ALIVE_ATTR]: "1",
+              [KEEP_ALIVE_FINDING_ATTR]: finding,
+              [KEEP_ALIVE_COUNT_ATTR]: String(count),
+              [KEEP_ALIVE_TTL_ATTR]: snapshot.ttl,
+              "oxagen.request_digest": digestBytes(payload.body),
+              "oxagen.request_bytes": String(payload.body.length),
+              "oxagen.request_full_digest": fold.fullDigest,
+              "oxagen.request_full_bytes": String(fold.fullBytes),
+              "oxagen.request_stored_bytes": String(fold.storedBytes),
+              ...(fold.prior !== undefined
+                ? {
+                    "oxagen.request_prior_digest": fold.prior.unchanged_from,
+                    "oxagen.request_prior_messages": String(
+                      fold.prior.messages,
+                    ),
+                    "oxagen.request_prior_fields": fold.prior.fields.join(","),
+                  }
+                : {}),
+              ...(requestContent === undefined
+                ? { [REQUEST_BODY_OMITTED_ATTR]: "too_large" }
+                : {}),
+              ...(responseOmitted !== undefined
+                ? { [RESPONSE_BODY_OMITTED_ATTR]: responseOmitted }
+                : {}),
+              "oxagen.response_digest": answer.responseDigest,
+              "oxagen.response_bytes": String(answer.responseBytes),
+              "oxagen.stream": "0",
+              "oxagen.upstream_host": payload.target.host,
+              ...(answer.responseType !== undefined
+                ? { "oxagen.response_content_type": answer.responseType }
+                : {}),
+            },
+          }),
+        ],
+        chain.takeBodies(),
+      );
+    } catch (error) {
+      // As in `settle`: a write that fails takes the frame's seq back with
+      // it. The keep-alive itself reached the vendor, so its outcome stands.
+      try {
+        chain.rollbackChain(mark);
+      } catch (rollbackError) {
+        deps.log(
+          `model proxy: rolling the chain back after a failed keep-alive frame failed too: ${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}`,
+        );
+      }
+      deps.log(
+        `model proxy: sealing a cache keep-alive's frame failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+    return usage.cacheReadTokens ?? 0;
+  }
+
   async function forward(
     req: IncomingMessage,
     res: ServerResponse,
@@ -1459,6 +1930,31 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
           injectedJson === undefined ? undefined : json(),
         )
       : null;
+    // The keep-alive this call would leave behind, built now because the
+    // parsed body is released below: the request the vendor reads, so the
+    // injected one when `beforeForward` changed it. Only for a governed
+    // Anthropic call of a session, while the bundle turns the keep-alive on.
+    // While a subagent is open, a call outside the parent's conversation is
+    // the subagent's, so its body is never built.
+    const keepAliveCandidate = ((): ReturnType<typeof keepAliveCandidateOf> => {
+      if (
+        !metered ||
+        route.api !== "anthropic.messages" ||
+        record === undefined ||
+        requestModel === undefined ||
+        !keepAlive.enabled()
+      )
+        return undefined;
+      const request = injectedJson ?? json();
+      if (request === undefined) return undefined;
+      const conversation = conversationOf(request, requestModel);
+      if (
+        record.recorder.openChildren.size > 0 &&
+        keepAlive.conversationFor(sessionKey) !== conversation
+      )
+        return undefined;
+      return keepAliveCandidateOf(request, conversation);
+    })();
     // Nothing else of the request is kept past this point but its bytes to send.
     decoded = undefined;
     parsed = undefined;
@@ -1481,6 +1977,9 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
     const responseHash = createHash("sha256");
     const responseBody = new BodyCapture();
     let meter: UsageMeter | undefined;
+    // The usage the vendor reported in full, for the keep-alive; undefined
+    // for a call cut short, whose count is an estimate.
+    let settledUsage: ObservedUsage | undefined;
 
     const headers = upstreamRequestHeaders(
       req.rawHeaders,
@@ -1537,6 +2036,50 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
           fold,
           SHARED_SYSTEM_CONTEXT_MEMORY.get(fold.fullDigest),
         );
+      // A call that landed whole with a cached prefix may become the request
+      // the keep-alive repeats. The module decides whether it is the parent's.
+      if (
+        keepAliveCandidate !== undefined &&
+        record !== undefined &&
+        requestModel !== undefined &&
+        settledUsage !== undefined &&
+        errorClass === undefined &&
+        status !== undefined &&
+        status < 300
+      ) {
+        try {
+          keepAlive.observe(sessionKey, record, {
+            conversation: keepAliveCandidate.conversation,
+            model: requestModel,
+            startedAt,
+            usage: settledUsage,
+            payload: {
+              body: keepAliveCandidate.body,
+              headers: upstreamRequestHeaders(
+                req.rawHeaders,
+                target.host,
+                keepAliveCandidate.body.length,
+                true,
+                credential.attach,
+              ),
+              target,
+              basis: credential.basis,
+              ...(credential.claims !== undefined
+                ? { runTokenId: credential.claims.tid }
+                : {}),
+              ...(landed && fold?.shape !== undefined
+                ? { priorShape: fold.shape }
+                : {}),
+            },
+          });
+        } catch (error) {
+          // Like the seal above, this runs inside a response listener, where
+          // a throw would take the daemon down. The call is unaffected.
+          deps.log(
+            `model proxy: the cache keep-alive could not take this call: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        }
+      }
     };
 
     /**
@@ -1560,6 +2103,7 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
           usage,
           estimateCutUsage(usage, meter?.contentBytes ?? 0, requestTextBytes),
         );
+      else settledUsage = usage;
       const prices = deps.policy().bundle.model_prices;
       const priced = hasTokenCounts(usage)
         ? priceObservedUsage(prices, route.provider, {
@@ -2123,12 +2667,17 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
       return calls.length;
     },
     callsObservedFor: (sessionUuid) => observed.get(sessionUuid) ?? 0,
+    keepAliveTick: () => keepAlive.tick(),
     stats: () => {
       let open = 0;
       for (const calls of inFlight.values()) open += calls.size;
       return { callsObserved, refused, inFlight: open };
     },
     close: () => {
+      clearInterval(keepAliveTimer);
+      // The requests held for keep-alives carry credentials: none outlives
+      // the proxy.
+      keepAlive.clear();
       for (const calls of inFlight.values())
         for (const call of [...calls])
           call.abort("the daemon is stopping", "daemon_stopping");

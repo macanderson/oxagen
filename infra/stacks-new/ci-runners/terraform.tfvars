@@ -33,16 +33,40 @@ private_repositories = [
 github_app_ready = true
 
 # Idle runners per pool. Mac chose speed over concurrency on 2026-10-01, so
-# the heavy pipeline jobs run on oxagen-large-x64 and ten of those wait warm,
-# enough for one pull request's heavy lanes to start at once. Ten small
-# runners carry the light jobs and housekeeping. The account holds 300 spot
-# and 300 on-demand vCPUs, so the warm pools hold 216 of them idle.
+# the heavy pipeline jobs run on oxagen-large-x64, and six of those wait warm.
+# Six is one pull request's large jobs once #5056 moves rls-integration and
+# rds-compatibility to the small pool: checks, e2e, and the four unit lanes
+# (#5070). Ten small runners carry the build lanes, the light jobs, and
+# housekeeping. The warm pools hold 152 vCPUs idle.
 warm_pool = {
   "oxagen-large-arm64" = 0
-  "oxagen-large-x64"   = 10
+  "oxagen-large-x64"   = 6
   "oxagen-small-arm64" = 0
   "oxagen-small-x64"   = 10
   "oxagen-deploy"      = 1
+}
+
+# The most runners each pool holds at once, idle and busy together (#5070).
+# The account has 300 spot and 300 on-demand vCPUs. Spot fills first, and on
+# a spot shortfall the CI pools fail over to on-demand. The deploy pool and
+# production run on on-demand only, so the CI pools must leave them room:
+#
+#   600 vCPUs in both quotas
+#   - 96 for the deploy pool (6 runners x 16 vCPUs)
+#   -  8 for production (the oxagen-app node and the NAT instance)
+#   = 496 for CI: 22 large (352) + 36 small (144)
+#
+# On 2026-10-02, before these caps, CI held both quotas full, and the deploy
+# pool's scale-up failed with VcpuLimitExceeded 161 times in four hours.
+# Raise these when AWS approves the open quota requests (2,400 spot and
+# 1,000 on-demand). Each arm64 pool gets the same cap as its x64 twin,
+# because CI_RUNNER_ARCH sends every job to one or the other.
+max_runners = {
+  "oxagen-large-arm64" = 22
+  "oxagen-large-x64"   = 22
+  "oxagen-small-arm64" = 36
+  "oxagen-small-x64"   = 36
+  "oxagen-deploy"      = 6
 }
 
 alarm_email        = "mac@oxagen.sh"

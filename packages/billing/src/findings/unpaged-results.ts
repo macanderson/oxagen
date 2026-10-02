@@ -18,26 +18,40 @@
  * {@link carriesOf} ends the carry at the chain's first compaction after the
  * call, or earlier where the frames show the input context shrank by at least
  * the result's size.
+ *
+ * A result a later step quoted was used (decision 7, ./result-use.ts). Its
+ * re-reads stay cited, priced against themselves, so they add nothing to the
+ * saving, and the prose shows them apart. A result with no verdict counts in
+ * full, as every result did before the signal: on a `digest_only` workspace,
+ * where a body did not read back, or where the store read no signal. The
+ * prose labels that part an upper bound.
  */
 import {
   priceInputTokens,
   type InputPrice,
   type RunTotalsRecord,
 } from "../cost-rollup";
+import { currencyOf, formatMicros } from "./cache-steps";
 import type { ViewCall } from "./requests";
+import { resultUseKey, type ResultUseRead } from "./result-use";
 import {
+  findingFingerprint,
   PAGE_TOKENS,
   plural,
   resultMeasure,
   timeOf,
   UNPAGED_RESULT_TOKENS,
+  type CallFrame,
   type DetectContext,
   type Detector,
   type DetectInput,
   type FindingKey,
+  type FindingResultUse,
+  type Group,
   type Measure,
   type PricedRequestFrame,
   type RunCompaction,
+  type ToolCallObservation,
 } from "./shared";
 
 /** A result above this many tokens is priced for every request that re-reads it. */
@@ -45,6 +59,79 @@ export const CARRY_RESULT_TOKENS = 5_000;
 
 /** A price book entry is in micro-units per million tokens. */
 const MILLION = 1_000_000n;
+
+/**
+ * The calls whose results this detector can price, so the store checks only
+ * them for a quote: a result over `CARRY_RESULT_TOKENS` on a run whose frames
+ * were read, and a result over `UNPAGED_RESULT_TOKENS` on any run.
+ */
+export function resultsToCheck(
+  calls: readonly ToolCallObservation[],
+  frames: ReadonlyMap<string, unknown>,
+): ToolCallObservation[] {
+  return calls.filter(
+    (c) =>
+      c.resultTokens !== null &&
+      (c.resultTokens > UNPAGED_RESULT_TOKENS ||
+        (c.resultTokens > CARRY_RESULT_TOKENS && frames.has(c.runId))),
+  );
+}
+
+/** A large result's side of the split: a later step quoted it, none did, or it has no verdict. */
+type ResultSide = "used" | "unused" | "unchecked";
+
+function sideOf(
+  read: ResultUseRead | undefined,
+  call: ToolCallObservation,
+): ResultSide {
+  if (read === undefined || read.mode !== "content_exact") return "unchecked";
+  return read.verdicts.get(resultUseKey(call)) ?? "unchecked";
+}
+
+interface SideTally {
+  results: number;
+  reads: number;
+  pageSavingMicros: bigint;
+}
+
+type Split = Record<ResultSide, SideTally>;
+
+function emptySplit(): Split {
+  const side = (): SideTally => ({
+    results: 0,
+    reads: 0,
+    pageSavingMicros: 0n,
+  });
+  return { used: side(), unused: side(), unchecked: side() };
+}
+
+/** Each finding's split, for its prose. */
+const splitOf = new WeakMap<Group, FindingResultUse>();
+
+/**
+ * A used result's re-read: cited at what it cost, against that same cost,
+ * so it saves nothing.
+ */
+function usedMeasure(measure: Measure): Measure {
+  return {
+    ...measure,
+    counterfactualTokens: measure.measuredTokens,
+    micros:
+      measure.micros === null
+        ? null
+        : {
+            measured: measure.micros.measured,
+            counterfactual: measure.micros.measured,
+          },
+  };
+}
+
+/** What paging a re-read would save; zero when no price covers it. */
+function pageSaving(measure: Measure): bigint {
+  return measure.micros === null
+    ? 0n
+    : measure.micros.measured - measure.micros.counterfactual;
+}
 
 /** Whether a repeat finding can cite the call: a shell repeat, or a read-only repeat on a run that names an agent or operator. */
 function citableRepeat(c: ViewCall, run: RunTotalsRecord): boolean {
@@ -216,6 +303,34 @@ function carryMeasure(
 }
 
 function detect(input: DetectInput, ctx: DetectContext): void {
+  const splits = new Map<string, Split>();
+  /** Add one re-read of a result on its side of the split. */
+  const addRead = (
+    key: FindingKey,
+    run: RunTotalsRecord,
+    measure: Measure,
+    frames: readonly CallFrame[],
+    side: ResultSide,
+    first: boolean,
+  ) => {
+    ctx.groups.add(
+      key,
+      input.toolWindowStart,
+      run,
+      side === "used" ? usedMeasure(measure) : measure,
+      frames,
+    );
+    const fingerprint = findingFingerprint(key.kind, key.level, key.subject);
+    const split = splits.get(fingerprint) ?? emptySplit();
+    splits.set(fingerprint, split);
+    const tally = split[side];
+    if (first) tally.results += 1;
+    tally.reads += 1;
+    // The same rule as `Groups.add`: a re-read counts toward the figure only
+    // when a price and a basis cover it.
+    const basis = measure.basis === undefined ? run.costBasis : measure.basis;
+    if (basis !== null) tally.pageSavingMicros += pageSaving(measure);
+  };
   for (const view of ctx.views) {
     const chains = chainsOf(input.frames?.get(view.run.runId));
     const compactions = compactionsByChain(
@@ -231,6 +346,7 @@ function detect(input: DetectInput, ctx: DetectContext): void {
         subject: c.call.tool,
       };
       if (!ctx.groups.admits(key, view.run)) continue;
+      const side = sideOf(input.resultUse, c.call);
       const chainKey = c.call.sessionUuid ?? "";
       const chain = chains?.get(chainKey);
       if (chain === undefined) {
@@ -238,12 +354,13 @@ function detect(input: DetectInput, ctx: DetectContext): void {
         // The run's input price is its priced input cost over every input
         // token, so a run with an unpriced call reads low and is not covered.
         const measure = resultMeasure(view.run, tokens, () => PAGE_TOKENS);
-        ctx.groups.add(
+        addRead(
           key,
-          input.toolWindowStart,
           view.run,
           partlyPriced(view.run) ? { ...measure, micros: null } : measure,
           [c.frame],
+          side,
+          true,
         );
         continue;
       }
@@ -255,15 +372,70 @@ function detect(input: DetectInput, ctx: DetectContext): void {
         c.call.seq,
       );
       for (let i = 0; i < carries.length; i += 1)
-        ctx.groups.add(
+        addRead(
           key,
-          input.toolWindowStart,
           view.run,
           carryMeasure(carries[i]!, view.run.currency, tokens),
           i === 0 ? [c.frame] : [],
+          side,
+          i === 0,
         );
     }
   }
+  const mode = input.resultUse?.mode ?? null;
+  for (const group of ctx.groups.values()) {
+    if (group.kind !== "unpaged_results") continue;
+    const split = splits.get(
+      findingFingerprint(group.kind, group.level, group.subject),
+    );
+    if (split === undefined) continue;
+    const tally = (t: SideTally) => ({
+      results: t.results,
+      reads: t.reads,
+      pageSavingMicros: t.pageSavingMicros.toString(),
+    });
+    const resultUse: FindingResultUse = {
+      mode,
+      used: tally(split.used),
+      unused: tally(split.unused),
+      unchecked: tally(split.unchecked),
+    };
+    group.resultUse = resultUse;
+    splitOf.set(group, resultUse);
+  }
+}
+
+/** Its or their, for a count of results. */
+function their(n: number): string {
+  return n === 1 ? "its" : "their";
+}
+
+/**
+ * The sentences after the spec's finding text: which results a later step
+ * quoted, which no step did, and which part is an upper bound. On a
+ * `content_exact` workspace a used result is named apart, with what paging it
+ * would have saved, since that figure is left out of the amount.
+ */
+function useLines(split: FindingResultUse, currency: string): string {
+  if (split.mode !== "content_exact")
+    return split.mode === "digest_only"
+      ? " Upper bound: Oxagen checks for a quote only where a workspace keeps both tool call and model call text, and this one does not. This figure counts every re-read."
+      : " Upper bound: no later step was checked for a quote of these results. This figure counts every re-read.";
+  const { used, unused, unchecked } = split;
+  const lines: string[] = [];
+  if (unused.results > 0)
+    lines.push(
+      `No later step quoted ${plural(unused.results, "result", "results")}, which later requests read ${plural(unused.reads, "time", "times")}.`,
+    );
+  if (used.results > 0)
+    lines.push(
+      `A later step quoted ${plural(used.results, "result", "results")}. This figure leaves out ${their(used.results)} ${plural(used.reads, "re-read", "re-reads")}, which paging would have cut by ${formatMicros(BigInt(used.pageSavingMicros), currency)}.`,
+    );
+  if (unchecked.results > 0)
+    lines.push(
+      `Upper bound: ${plural(unchecked.results, "result", "results")} could not be checked for a quote, so this figure counts ${their(unchecked.results)} ${plural(unchecked.reads, "re-read", "re-reads")} in full.`,
+    );
+  return lines.length === 0 ? "" : ` ${lines.join(" ")}`;
 }
 
 export const unpagedResults: Detector = {
@@ -274,11 +446,17 @@ export const unpagedResults: Detector = {
     let results = 0;
     for (const cited of Object.values(evidence.frames ?? {}))
       results += cited.total;
+    const split = splitOf.get(group);
     // The request right after a call is the first to read its result, so
     // the prose says "read": a result priced without frames counts that one.
+    const why = `${group.subject} returned ${plural(results, "result", "results")} over ${CARRY_RESULT_TOKENS.toLocaleString("en-US")} tokens on ${plural(group.runs.size, "run", "runs")}. Later requests read ${results === 1 ? "it" : "them"} ${plural(evidence.calls, "time", "times")}.`;
+    const fix = `Page ${group.subject}'s results at ${PAGE_TOKENS.toLocaleString("en-US")} tokens and fetch the rest on demand. A step that needs a large result once can run in a subagent, so the result stays out of the run's own context.`;
     return {
-      why: `${group.subject} returned ${plural(results, "result", "results")} over ${CARRY_RESULT_TOKENS.toLocaleString("en-US")} tokens on ${plural(group.runs.size, "run", "runs")}. Later requests read ${results === 1 ? "it" : "them"} ${plural(evidence.calls, "time", "times")}.`,
-      fix: `Page ${group.subject}'s results at ${PAGE_TOKENS.toLocaleString("en-US")} tokens and fetch the rest on demand. A step that needs a large result once can run in a subagent, so the result stays out of the run's own context.`,
+      why: split === undefined ? why : why + useLines(split, currencyOf(group)),
+      fix:
+        split?.mode === "digest_only"
+          ? `${fix} To leave out the results a later step quoted, keep tool call and model call text in the workspace's retention policy.`
+          : fix,
     };
   },
 };

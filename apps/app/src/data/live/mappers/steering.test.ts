@@ -17,7 +17,7 @@ import { repositoryTreeGet } from "@oxagen/oxagen/contracts/repository.tree.get"
 import { toContextPr, toOxagenTree, toProposalPage, toRecordPage } from "./steering";
 
 describe("toRecordPage", () => {
-  it("keeps each record's classification, commit and file, and the total", () => {
+  it("keeps each record's classification, commit, file, tokens and weekly price, and the total", () => {
     const view = RecordPage.parse(toRecordPage(recordsOutput(undefined, 7)));
     expect(view.total).toBe(7);
     expect(view.records).toEqual([
@@ -34,8 +34,25 @@ describe("toRecordPage", () => {
         commit: "4d5e6f7a8b9c",
         path: RECORD_PATH,
         publishedAt: "2026-09-15T09:16:40.000Z",
+        // The server's figures, carried as they are (#4572, ADR-060).
+        contextTokens: 22,
+        weeklyPrice: { micros: "1056", currency: "USD", basis: "estimated" },
       },
     ]);
+  });
+
+  it("keeps a record the server did not price as null, never a zero", () => {
+    const view = RecordPage.parse(
+      toRecordPage(
+        recordsOutput([
+          recordOutput({ contextTokens: null, weeklyPrice: null }),
+        ]),
+      ),
+    );
+    expect(view.records[0]).toMatchObject({
+      contextTokens: null,
+      weeklyPrice: null,
+    });
   });
 
   it("keeps the nulls of a record publish_context_record wrote, never inventing a kind or a commit", () => {

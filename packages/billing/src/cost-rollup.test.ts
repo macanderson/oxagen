@@ -667,6 +667,69 @@ describe("each tool's result cost (#3892, ADR-199)", () => {
     });
   });
 
+  // #4572 item 7: the input rate divided the priced call's cost by every
+  // call's tokens. Two calls of 10,000 tokens, one with no rate, read $1.50 a
+  // million, so 1,200 result tokens cost 1,800 micros instead of 3,600.
+  it("prices results at the rate of the calls the book priced when a call went unpriced", () => {
+    const early = new Date("2025-12-31T00:00:00.000Z");
+    const record = rollupRun({
+      meta,
+      book: BOOK,
+      modelCalls: [
+        priced,
+        // Before the book's rows begin, with no figure of its own: unpriced.
+        { ...priced, at: early, reportedCostMicros: null },
+      ],
+      toolCalls: [tool("Read", { resultTokens: 1_200 })],
+    });
+    const sonnet = record.breakdown.models[0]!;
+    expect(sonnet.hasUnpriced).toBe(true);
+    expect(sonnet.tokens.input_uncached).toBe(20_000);
+    expect(sonnet.pricedTokens?.input_uncached).toBe(10_000);
+    expect(runInputPrice(record)).toEqual({ micros: 30_000n, tokens: 10_000n });
+    expect(record.breakdown.tools[0]?.costMicros).toBe(3_600n);
+  });
+
+  it("has no input rate for a row rolled up before the priced tokens were kept, when a model has an unpriced call", () => {
+    const record = rollupRun({
+      meta,
+      book: BOOK,
+      modelCalls: [
+        priced,
+        {
+          ...priced,
+          at: new Date("2025-12-31T00:00:00.000Z"),
+          reportedCostMicros: null,
+        },
+      ],
+      toolCalls: [],
+    });
+    const { pricedTokens, ...legacy } = record.breakdown.models[0]!;
+    void pricedTokens;
+    expect(
+      runInputPrice({ ...record, breakdown: { models: [legacy] } }),
+    ).toBeNull();
+  });
+
+  it("is a zero rate, not no rate, for input the book priced at nothing", () => {
+    const free = [
+      ...BOOK.filter((e) => e.tokenClass !== "input_uncached"),
+      entry({
+        id: "pe_in_free",
+        tokenClass: "input_uncached",
+        microsPerMillion: 0n,
+      }),
+    ];
+    const record = rollupRun({
+      meta,
+      book: free,
+      modelCalls: [{ ...priced, reportedCostMicros: null }],
+      toolCalls: [tool("Read", { resultTokens: 1_200 })],
+    });
+    expect(runInputPrice(record)).toEqual({ micros: 0n, tokens: 10_000n });
+    expect(record.breakdown.tools[0]?.costMicros).toBe(0n);
+  });
+
   it("prices one token by the rule the findings job uses", () => {
     const record = rollupRun({
       meta,

@@ -163,19 +163,22 @@ The command exits 0 when no finding is an error and 1 when at least one is. It e
 ## oxagen steering import: Markdown files into steering
 
 ```bash
-oxagen steering import <paths...> [--as records|policies] [--yes] [--json]
+oxagen steering import <paths...> [--as records|policies|memories] [--yes] [--json]
 ```
 
-Reads Markdown files into steering records and Cedar policies. Pass files, folders, or both. The command searches a folder for `.md`, `.markdown`, and `.mdx` files, and skips `node_modules` and every folder whose name starts with a dot. It takes a file you name as given.
+Reads Markdown files into steering records, Cedar policies, or memories. Pass files, folders, or both. The command searches a folder for `.md`, `.markdown`, and `.mdx` files, and skips `node_modules` and every folder whose name starts with a dot. It takes a file you name as given.
 
-Without `--as`, each file takes the target its text implies. A file with a fenced `cedar` block becomes a policy file at `policy/<file-name>.cedar`, the import skips a README or index file, and it splits any other file into records. `--as records` or `--as policies` sets one target for every file.
+Without `--as`, each file takes the target its text implies. A file with a fenced `cedar` block becomes a policy file at `policy/<file-name>.cedar`, the import skips a README or index file, and it splits any other file into records. `--as records`, `--as policies`, or `--as memories` sets one target for every file. `--as memories` splits each file into statements the same way, and each statement becomes a memory.
 
 ```bash
-oxagen steering import AGENTS.md docs          # preview
-oxagen steering import AGENTS.md docs --yes    # open the steering PR
+oxagen steering import AGENTS.md docs                    # preview
+oxagen steering import AGENTS.md docs --yes              # open the steering PR
+oxagen steering import notes --as memories --yes         # store the memories
 ```
 
-The preview lists each record with its kind, its force, its source line, and any duplicate or conflict with a published record, then each policy file with its statements and any issue. It writes nothing. `--yes` opens one steering PR on `steering/import-<date>` with every row marked add. It leaves out a record that conflicts with a published record and a policy file with an issue, and names each one. Nothing steers an agent until the PR merges.
+The preview lists each record with its kind, its force, its source line, and any duplicate or conflict with a published record, then each policy file with its statements and any issue, then each memory with its source line. It writes nothing. `--yes` opens one steering PR on `steering/import-<date>` with every record and policy marked add. It leaves out a record that conflicts with a published record and a policy file with an issue, and names each one. Nothing steers an agent until the PR merges.
+
+`--yes` stores every memory marked add as a waiting memory, with `import:<file>#L<line>` as its source. It names no agent, because a person imported it. It leaves out a memory that repeats a waiting memory or a statement a person rejected, and names each one. A memory steers no agent until a person promotes it into a steering record. An import of memories alone opens no PR.
 
 The command sends files in calls of 25 and then compares the rows of every call. A statement two calls both hold is marked a duplicate, and when two files in different calls become the same policy file, the later one is skipped. The command skips a file over 100,000 characters. One steering PR holds at most 299 records and policy files, so `--yes` refuses an import that marks more add. The command calls `parse_markdown_import` and `commit_markdown_import`.
 

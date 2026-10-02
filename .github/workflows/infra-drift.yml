@@ -69,6 +69,11 @@ jobs:
       - name: Plan every stack
         id: plan
         run: |
+          # The step's shell runs with -e, and `set -uo pipefail` does not clear
+          # it. Without `set +e`, the first stack whose plan exits 2 (drift)
+          # ended the step before `code=$?`, so later stacks were never planned
+          # and no issue was filed (run 36908386507).
+          set +e
           set -uo pipefail
           drifted=""
           failed=""
@@ -80,8 +85,14 @@ jobs:
           for stack in $(find infra/stacks-new -mindepth 1 -maxdepth 1 -type d -printf '%f\n' \
                           | grep -vx bootstrap | sort); do
             echo "::group::$stack"
+            # A stack that vendors files it does not commit (ci-runners'
+            # Lambda packages) fetches them in prepare.sh, as infra.yml does
+            # before its plan. Inside the subshell -e stops at the first
+            # failing command and returns its code.
             (
+              set -e
               cd "infra/stacks-new/$stack"
+              if [ -x prepare.sh ]; then ./prepare.sh; fi
               tofu init -input=false -no-color
               tofu plan -input=false -no-color -lock-timeout=5m -detailed-exitcode
             ) > "/tmp/plan-$stack.txt" 2>&1

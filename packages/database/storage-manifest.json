@@ -3814,6 +3814,16 @@
       "writes": []
     },
     {
+      "domain": "agent",
+      "name": "set_agent_cache_keep_alive",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "approval_rule",
       "name": "set_approval_rule_enabled",
       "reads": [],
@@ -8927,6 +8937,12 @@
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
+        },
+        {
+          "name": "cache_keep_alive",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "boolean"
         }
       ],
       "domain": "agent",

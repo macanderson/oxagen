@@ -3,13 +3,15 @@
  * re-sends, priced as `standing_tokens × read_price × (requests − 1)` per run
  * and split by source (spec detector 2). The sources are the run-totals
  * columns F3 writes (#4493): tool definitions, context frames, and steering.
- * Each column holds a sum over the run's model calls, so one call's share is
- * the sum over the calls, and every call after the first re-sent it.
+ * The rollup keeps each source's tokens on the calls after the run's first,
+ * split by whether the call read the prompt cache (#4572), and
+ * `standingContextBySource` prices that split. A row rolled up before then
+ * holds only each source's sum, and the split is estimated from it.
  *
- * The price is the run's prompt-cache read price, since a re-sent prefix is a
- * cache read. A run that read nothing from the cache sent its prefix
- * uncached, so it falls back to the run's input price. A run with neither
- * price is cited and left out of the tokens, the split, and the saving.
+ * A re-sent token on a call that read the cache is priced at the run's cache
+ * read price, and one on a call that read nothing at its input price, since
+ * that call sent the prefix uncached. A run with no price for a side it
+ * needs is cited and left out of the tokens, the split, and the saving.
  *
  * The fix moves a rarely called tool provider to Searchable and holds the
  * steering prefix to its budget. It does not change the context frames, so
@@ -23,13 +25,12 @@
  * of each request, so it claims no frame (ADR-208, counting rule 2). It is
  * cited at the run's agent, or at its operator when it names no agent.
  */
-import { priceInputTokens } from "../cost-rollup";
+import type { RunTotalsRecord } from "../cost-rollup";
 import {
-  resentStandingTokens,
-  resentTokens,
-  standingReadPrice,
+  STANDING_SOURCES,
+  standingContextBySource,
   standingSourcesOf as sourcesOf,
-  type StandingContextSources,
+  type StandingSource,
 } from "../standing-context-price";
 import {
   agentOrOperator,
@@ -40,20 +41,32 @@ import {
   type Group,
 } from "./shared";
 
+/** A run's re-sent standing context by source, priced; null when no source reported. */
+function bySourceOf(run: RunTotalsRecord) {
+  return standingContextBySource(run, sourcesOf(run));
+}
+
 function detect(input: DetectInput, ctx: DetectContext): void {
   for (const run of input.runs) {
-    const sources = sourcesOf(run);
-    const resent = resentStandingTokens(sources, run.modelCalls);
-    if (resent === null) continue;
-    // The context frames the fix leaves in place; 0 when none were reported.
-    const kept =
-      sources.contextFrameTokens === null
-        ? 0
-        : resentTokens(sources.contextFrameTokens, run.modelCalls);
+    const bySource = bySourceOf(run);
+    if (bySource === null) continue;
+    const parts = STANDING_SOURCES.flatMap((source) => {
+      const part = bySource[source];
+      return part === null ? [] : [part];
+    });
+    const resent = parts.reduce((sum, part) => sum + part.resentTokens, 0);
+    // The context frames the fix leaves in place; none when none were reported.
+    const frames = bySource.contextFrameTokens;
+    const kept = frames?.resentTokens ?? 0;
     if (resent - kept <= 0) continue;
     const key = agentOrOperator("standing_context", run);
     if (key === null || !ctx.groups.admits(key, run)) continue;
-    const price = standingReadPrice(run);
+    let measured: bigint | null = 0n;
+    for (const part of parts)
+      measured =
+        measured === null || part.micros === null
+          ? null
+          : measured + part.micros;
     ctx.groups.add(
       key,
       input.window.start,
@@ -62,12 +75,9 @@ function detect(input: DetectInput, ctx: DetectContext): void {
         measuredTokens: resent,
         counterfactualTokens: kept,
         micros:
-          price === null
+          measured === null
             ? null
-            : {
-                measured: priceInputTokens(price, resent),
-                counterfactual: priceInputTokens(price, kept),
-              },
+            : { measured, counterfactual: frames?.micros ?? 0n },
         basis: "estimated",
       },
       // The finding is about each run's prefix as a whole, not a call.
@@ -87,15 +97,11 @@ function pricedRuns(group: Group) {
 }
 
 /** The re-sent tokens of one source over a group's priced runs; null when none reported it. */
-function resentOf(
-  group: Group,
-  source: keyof StandingContextSources,
-): number | null {
+function resentOf(group: Group, source: StandingSource): number | null {
   let total: number | null = null;
   for (const { run } of pricedRuns(group)) {
-    const tokens = sourcesOf(run)[source];
-    if (tokens !== null)
-      total = (total ?? 0) + resentTokens(tokens, run.modelCalls);
+    const part = bySourceOf(run)?.[source] ?? null;
+    if (part !== null) total = (total ?? 0) + part.resentTokens;
   }
   return total;
 }

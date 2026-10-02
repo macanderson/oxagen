@@ -651,6 +651,13 @@ export const routes = {
    */
   steeringRecord: (org: string, ws: string, lineage: string): SafePath =>
     pathOf(org, ws, "steering", "records", lineage),
+  /**
+   * The Steering page's Memories tab (memory-collection spec, Memories tab;
+   * #4914), where the Markdown import's waiting memories land. The design's
+   * `steering?tab=memories` redirects here.
+   */
+  steeringMemories: (org: string, ws: string): SafePath =>
+    pathOf(org, ws, "steering", "memories"),
 };
 
 /**

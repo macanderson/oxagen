@@ -59,6 +59,24 @@
       }
     },
     {
+      "name": "set_agent_cache_keep_alive",
+      "file": "agent.cache_keep_alive.set.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
       "name": "rotate_agent_credential",
       "file": "agent.credential.rotate.ts",
       "domain": "agent",

@@ -669,6 +669,19 @@ type Messages = {
             open: string;
             rest: string;
           };
+          keepAlive: {
+            term: string;
+            on: string;
+            off: string;
+            onSub: string;
+            offSub: string;
+            turnOff: string;
+            turnOn: string;
+            turningOff: string;
+            turningOn: string;
+            denied: string;
+            failed: string;
+          };
         };
         composition: {
           title: string;
@@ -10269,6 +10282,8 @@ type Messages = {
       effectTitle: string;
       tokensTitle: string;
       tokens: string;
+      weeklyPriceTitle: string;
+      weeklyPrice: string;
       compilesTitle: string;
       compilesNotRecorded: string;
       newTitle: string;
@@ -10509,6 +10524,8 @@ type Messages = {
       back: string;
       commit: string;
       commitPending: string;
+      store: string;
+      storePending: string;
       cancel: string;
       close: string;
       drop: {
@@ -10542,11 +10559,11 @@ type Messages = {
         policies: string;
         skip: string;
         memories: string;
-        memoriesHint: string;
       };
       paths: {
         records: string;
         policies: string;
+        memories: string;
         none: string;
       };
       status: {
@@ -10570,6 +10587,7 @@ type Messages = {
       };
       grid: {
         intro: string;
+        memoriesIntro: string;
         tokens: string;
         label: string;
         columns: {
@@ -10592,12 +10610,14 @@ type Messages = {
         quoted: string;
         none: string;
         kept: string;
+        fromTarget: string;
         notRead: string;
         statements: string;
         rules: string;
         empty: string;
         unmatched: string;
         summary: string;
+        memories: string;
         out: string;
         open: string;
         tooMany: string;
@@ -10628,7 +10648,10 @@ type Messages = {
         conflict: string;
         update: string;
         replaced: string;
+        tooLong: string;
         matches: string;
+        waiting: string;
+        rejected: string;
         conflictsWith: string;
         replacedBy: string;
         rowRef: string;
@@ -10642,6 +10665,15 @@ type Messages = {
         opened: string;
         counts: string;
         link: string;
+        stored: string;
+        memoriesNote: string;
+        memoriesLink: string;
+        skip: {
+          waiting: string;
+          rejected: string;
+          import: string;
+          stored: string;
+        };
       };
       failure: {
         denied: string;

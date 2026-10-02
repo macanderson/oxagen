@@ -1,4 +1,4 @@
-// audit-exempt: opening the steering PR publishes nothing (nothing steers until it merges); the kernel's capability.invoke_* audit records the call, and the merge records its own events.
+// audit-exempt: opening the steering PR publishes nothing (nothing steers until it merges), and a waiting memory steers nothing until a person promotes it into a record (ADR-238); the kernel's capability.invoke_* audit records the call, and the merge records its own events.
 //
 // markdown-import/commit.ts: commit_markdown_import (memory-collection spec,
 // Bulk import; discussions spec, Markdown import).
@@ -11,19 +11,35 @@
 //      is published is written where it lives now, so the import revises it.
 //   3. Take the first free branch of the day: steering/import-<date>, then
 //      -2, -3, and so on.
-//   4. Open one steering PR with every file through the steering PR opener
+//   4. Store each memory row marked add as a waiting memory with capture
+//      `import` (memories.ts). A row whose statement a waiting memory holds,
+//      a person rejected, or an earlier row holds is left out and named, and
+//      so is one an earlier import stored from the same line.
+//   5. Open one steering PR with every file through the steering PR opener
 //      (opener.ts). It runs the steering checks on the new head and reports
-//      them as the "Oxagen steering" check.
+//      them as the "Oxagen steering" check. A commit with no record or policy
+//      marked add opens none.
+//
+// Every refusal comes before the first write. The memories are stored before
+// the PR opens: a retry after a failed PR names each memory as waiting and
+// stores none twice, while a retry after a failed memory write would open a
+// second PR.
 import { HandlerError, type CapabilityHandler } from "@oxagen/oxagen";
-import { steeringMarkdownImportCommit } from "@oxagen/oxagen/contracts/steering.markdown_import.commit";
+import {
+  steeringMarkdownImportCommit,
+  type SteeringMarkdownImportCommitOutput,
+} from "@oxagen/oxagen/contracts/steering.markdown_import.commit";
 import type {
+  MarkdownImportMemory,
   MarkdownImportPolicy,
   MarkdownImportRecord,
 } from "@oxagen/oxagen/contracts/steering.markdown_import.shared";
 import { assertContractRole } from "../lib/capability-role-guard";
+import type { MemoryDraft } from "../memory/types";
 import { markdownImportBranch } from "../steering-repo/stamp";
 import type { ToolsPullRequestFile } from "../tools.pr.open";
-import type { MarkdownImportDeps } from "./deps";
+import type { ImportScope, MarkdownImportDeps } from "./deps";
+import { memoryDraftOf, memoryMatcher } from "./memories";
 import { importRecordPath, renderImportRecord } from "./render";
 
 /** The most branch numbers one day takes before the import gives up. */
@@ -79,6 +95,47 @@ export function importPullRequestBody(args: {
   return `${lines.join("\n")}\n`;
 }
 
+type MemorySkip = SteeringMarkdownImportCommitOutput["memories"]["skipped"][number];
+
+/**
+ * Store the memory rows marked add. Each one is checked again against the
+ * waiting memories, the rejected statements, and the rows before it, since
+ * parse ran. A row that matches is left out and named, and so is a row whose
+ * dedupe key an earlier import of the same line already holds.
+ */
+async function storeMemories(
+  deps: MarkdownImportDeps,
+  scope: ImportScope,
+  rows: readonly MarkdownImportMemory[],
+): Promise<{ stored: number; skipped: MemorySkip[] }> {
+  if (rows.length === 0) return { stored: 0, skipped: [] };
+  const find = memoryMatcher(await deps.memories.held(scope));
+  const skipped: MemorySkip[] = [];
+  const drafts: { row: MarkdownImportMemory; draft: MemoryDraft }[] = [];
+  for (const row of rows) {
+    const match = find(row);
+    if (match !== null) {
+      skipped.push({ file: row.file, line: row.line, reason: match.reason, memory: match.memory });
+    } else {
+      drafts.push({ row, draft: memoryDraftOf(row) });
+    }
+  }
+  const written = new Set(
+    drafts.length === 0
+      ? []
+      : await deps.memories.store(
+          scope,
+          drafts.map(({ draft }) => draft),
+        ),
+  );
+  for (const { row, draft } of drafts) {
+    if (!written.has(draft.dedupeKey)) {
+      skipped.push({ file: row.file, line: row.line, reason: "stored", memory: null });
+    }
+  }
+  return { stored: written.size, skipped };
+}
+
 export function createCommitMarkdownImportHandler(
   deps: MarkdownImportDeps,
 ): CapabilityHandler<typeof steeringMarkdownImportCommit> {
@@ -87,6 +144,7 @@ export function createCommitMarkdownImportHandler(
     const scope = { orgId: ctx.orgId, workspaceId: ctx.workspaceId };
     const records = input.records;
     const policies = input.policies;
+    const memories = input.memories;
 
     const undecided = records.find((row) => row.action === null);
     if (undecided) {
@@ -107,14 +165,19 @@ export function createCommitMarkdownImportHandler(
 
     const keptRecords = records.filter((row) => row.action === "add");
     const keptPolicies = policies.filter((policy) => policy.action === "add");
+    const keptMemories = memories.filter((row) => row.action === "add");
     const skipped =
-      records.length - keptRecords.length + (policies.length - keptPolicies.length);
-    if (keptRecords.length + keptPolicies.length === 0) {
+      records.length -
+      keptRecords.length +
+      (policies.length - keptPolicies.length) +
+      (memories.length - keptMemories.length);
+    if (keptRecords.length + keptPolicies.length + keptMemories.length === 0) {
       throw refuse(
         "nothing_to_import",
-        "Every row is marked skip, so there is nothing to put in a steering PR. Mark at least one record or policy add.",
+        "Every row is marked skip, so there is nothing to import. Mark at least one record, policy, or memory add.",
       );
     }
+    const opensPullRequest = keptRecords.length + keptPolicies.length > 0;
 
     const lineages = new Map<string, MarkdownImportRecord>();
     for (const row of keptRecords) {
@@ -128,7 +191,8 @@ export function createCommitMarkdownImportHandler(
       lineages.set(row.lineage, row);
     }
 
-    const published = await deps.publishedRecords(scope);
+    // A memories-only commit reads nothing from the registry or the steering repo.
+    const published = opensPullRequest ? await deps.publishedRecords(scope) : [];
     const heldPath = new Map(published.map((record) => [record.lineage, record.path]));
     const files: ToolsPullRequestFile[] = [];
     const placed: { row: MarkdownImportRecord; path: string }[] = [];
@@ -157,18 +221,32 @@ export function createCommitMarkdownImportHandler(
 
     const now = deps.now();
     let branch: string | null = null;
-    for (let n = 1; n <= BRANCHES_PER_DAY_MAX; n += 1) {
-      const candidate = markdownImportBranch(now, n);
-      if (!(await deps.branchTaken(scope, candidate))) {
-        branch = candidate;
-        break;
+    if (opensPullRequest) {
+      for (let n = 1; n <= BRANCHES_PER_DAY_MAX; n += 1) {
+        const candidate = markdownImportBranch(now, n);
+        if (!(await deps.branchTaken(scope, candidate))) {
+          branch = candidate;
+          break;
+        }
+      }
+      if (branch === null) {
+        throw refuse(
+          "import_branches_exhausted",
+          `The steering repo already has ${BRANCHES_PER_DAY_MAX} Markdown import branches for ${markdownImportBranch(now)}. Merge or delete some of them, then try again.`,
+        );
       }
     }
+
+    const storedMemories = await storeMemories(deps, scope, keptMemories);
     if (branch === null) {
-      throw refuse(
-        "import_branches_exhausted",
-        `The steering repo already has ${BRANCHES_PER_DAY_MAX} Markdown import branches for ${markdownImportBranch(now)}. Merge or delete some of them, then try again.`,
-      );
+      return {
+        pullRequest: null,
+        paths: [],
+        records: 0,
+        policies: 0,
+        skipped,
+        memories: storedMemories,
+      };
     }
 
     const counts = [
@@ -185,7 +263,13 @@ export function createCommitMarkdownImportHandler(
     const opened = await deps.opener.open(scope, {
       branch,
       title,
-      body: importPullRequestBody({ records: placed, policies: keptPolicies, skipped }),
+      body: importPullRequestBody({
+        records: placed,
+        policies: keptPolicies,
+        // The PR body counts the record and policy rows left out of it.
+        skipped:
+          records.length - keptRecords.length + (policies.length - keptPolicies.length),
+      }),
       commitMessage: `steering: import ${counts} from Markdown`,
       files,
     });
@@ -200,6 +284,7 @@ export function createCommitMarkdownImportHandler(
       records: keptRecords.length,
       policies: keptPolicies.length,
       skipped,
+      memories: storedMemories,
     };
   };
 }

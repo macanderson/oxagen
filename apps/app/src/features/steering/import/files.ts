@@ -9,10 +9,9 @@
 // sent with none (packages/handlers/src/markdown-import/parse.ts,
 // `detectTarget`), so the Files step shows the target the server would pick.
 // The dialog then sends that target explicitly. Two more rules are the
-// dialog's own: a Claude Code memory file starts at Skip, because the Memories
-// target arrives with memory collection (#4984), and a file the contract
-// refuses (empty, too long, or a path past its limit) stays out with its
-// reason rather than failing the whole call.
+// dialog's own: a Claude Code memory file starts at Memories, and a file the
+// contract refuses (empty, too long, or a path past its limit) stays out with
+// its reason rather than failing the whole call.
 import {
   MARKDOWN_IMPORT_FILE_CHARS_MAX,
   MARKDOWN_IMPORT_FILES_MAX,
@@ -31,8 +30,8 @@ export const IMPORT_PATH_MAX = 256;
  */
 export const PARSE_CALL_BYTES_MAX = 800_000;
 
-/** The targets a file can take. Memories is drawn, closed, until #4984. */
-export type ImportTarget = "records" | "policies" | "skip";
+/** The targets a file can take. */
+export type ImportTarget = "records" | "policies" | "memories" | "skip";
 
 /** Why a file starts at its target. */
 export type TargetReason =
@@ -279,7 +278,7 @@ export function detectTarget(
   if (onlyHeadingsAndLinks(content))
     return { target: "skip", reason: "links", locked: false };
   if (isMemoryFile(content))
-    return { target: "skip", reason: "memory", locked: false };
+    return { target: "memories", reason: "memory", locked: false };
   return { target: "records", reason: "prose", locked: false };
 }
 

@@ -48,6 +48,7 @@ import {
   type DailyTotalsRecord,
   type ModelCallFrame,
   type RunMeta,
+  type RunStandingResent,
   type RunTotalsRecord,
   type TokenCounts,
   type ToolCallFrame,
@@ -549,6 +550,36 @@ export function sumTokenSources(
   return sums;
 }
 
+/**
+ * Each source's tokens on a run's model calls after its first, split by
+ * whether the call read the prompt cache (#4572). The first call sent the
+ * prefix first, so the calls after it re-sent it: a call that read the cache
+ * re-read the prefix at the read rate, and a call that read nothing sent it
+ * uncached at the input rate. A source is null when no call reported it, as
+ * its sum is. Feed it the calls in the order the run made them.
+ */
+export function createStandingSplit() {
+  let first = true;
+  const split: RunStandingResent = {
+    toolDefinitionTokens: null,
+    contextFrameTokens: null,
+    steeringTokens: null,
+  };
+  const add = (call: PricedModelCall): void => {
+    const sentFirst = first;
+    first = false;
+    for (const member of SOURCE_MEMBERS) {
+      const tokens = call.sources?.[member];
+      if (tokens === null || tokens === undefined) continue;
+      const into = (split[member] ??= { cached: 0, uncached: 0 });
+      if (sentFirst) continue;
+      if (call.tokens.cache_read > 0) into.cached += tokens;
+      else into.uncached += tokens;
+    }
+  };
+  return { add, finish: (): RunStandingResent => split };
+}
+
 function toFrame(row: ModelCallFrameRow): PricedModelCall {
   return {
     at: new Date(row.at),
@@ -733,6 +764,8 @@ export function reviveBreakdown(value: unknown): RunTotalsRecord["breakdown"] {
     steps?: RunTotalsRecord["breakdown"]["steps"];
     /** Absent on a row rolled up before steps had a class (F17). */
     stepClasses?: RunTotalsRecord["breakdown"]["stepClasses"];
+    /** Absent on a row rolled up before the re-sent split was kept (#4572). */
+    standing?: RunTotalsRecord["breakdown"]["standing"];
   };
   return {
     models: raw.models.map((m) => ({
@@ -760,6 +793,11 @@ export function reviveBreakdown(value: unknown): RunTotalsRecord["breakdown"] {
       // priced, so that is the fallback (never a mixed group, since a mixed
       // group was impossible before this PR seeded the first price book).
       hasUnpriced: m.hasUnpriced ?? m.costMicros === null,
+      // A row rolled up before the priced tokens were kept carries no key,
+      // and a rate then reads every call's tokens or none (#4572).
+      ...(m.pricedTokens === undefined
+        ? {}
+        : { pricedTokens: { ...ZERO_TOKENS, ...m.pricedTokens } }),
     })),
     // A row rolled up before result tokens were recorded carries neither
     // figure, so both read as not recorded until the run's next rollup.
@@ -777,6 +815,9 @@ export function reviveBreakdown(value: unknown): RunTotalsRecord["breakdown"] {
     // A row rolled up before steps had a class keeps no key, and a reader
     // takes the absent key as not recorded until the run's next rollup.
     ...(raw.stepClasses === undefined ? {} : { stepClasses: raw.stepClasses }),
+    // Likewise the re-sent split: a reader without it estimates the re-sent
+    // share from the source sums.
+    ...(raw.standing === undefined ? {} : { standing: raw.standing }),
   };
 }
 
@@ -804,6 +845,9 @@ export function serializeBreakdown(breakdown: RunTotalsRecord["breakdown"]) {
     ...(breakdown.stepClasses === undefined
       ? {}
       : { stepClasses: breakdown.stepClasses }),
+    ...(breakdown.standing === undefined
+      ? {}
+      : { standing: breakdown.standing }),
   };
 }
 
@@ -1111,6 +1155,7 @@ export async function rebuildRunTotals(
     deps.readFileChanged?.(source) ?? false,
   ]);
   const sources: RunTokenSources = { ...NO_RUN_TOKEN_SOURCES };
+  const standing = createStandingSplit();
   // A witness run is a run of its own whose cost belongs to the worker's
   // operator (spec §8.5 "Stamping"), so its row names that operator, and is
   // charged back to the worker's cost center for the same reason.
@@ -1131,7 +1176,10 @@ export async function rebuildRunTotals(
   const readModels = async (load: RunRollupDeps["loadPriceBook"]) => {
     const consumeModels = async (calls: PricedModelCall[]) => {
       const book = await load(runPriceSlice(source.meta.orgId, calls));
-      for (const call of calls) accumulator.addModel(call, book);
+      for (const call of calls) {
+        accumulator.addModel(call, book);
+        standing.add(call);
+      }
       const batchSources = sumTokenSources(calls);
       for (const member of SOURCE_MEMBERS) {
         const value = batchSources[member];
@@ -1149,7 +1197,11 @@ export async function rebuildRunTotals(
   };
   if (deps.streamToolCalls) await deps.streamToolCalls(source, consumeTools);
   else await consumeTools(await deps.readToolCalls(source));
-  const record = accumulator.finish();
+  const built = accumulator.finish();
+  const record: RunTotalsRecord = {
+    ...built,
+    breakdown: { ...built.breakdown, standing: standing.finish() },
+  };
   await deps.write(record, deps.now(), sources);
   return record;
 }

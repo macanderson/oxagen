@@ -105,7 +105,7 @@
     "commit_markdown_import": {
       "route": "/[org]/[ws]/steering",
       "page": "apps/app/src/app/[org]/[ws]/steering/page.tsx",
-      "entry": "Steering \u203a Import Markdown \u203a Review statements \u203a Open steering PR: the statement grid's commit, which opens one steering PR on steering/import-<date> and links to it (features/steering/import/import-markdown.tsx, features/steering/import/actions.ts)",
+      "entry": "Steering \u203a Import Markdown \u203a Review statements \u203a Open steering PR or Store memories: the statement grid's commit, which opens one steering PR on steering/import-<date> and links to it, and stores the memories as waiting memories and links to the Memories tab (features/steering/import/import-markdown.tsx, features/steering/import/actions.ts)",
       "testid": "import-commit",
       "proof": "apps/app/src/features/steering/import/import-markdown.test.tsx",
       "verifiedAt": "2026-10-01",
@@ -1775,6 +1775,15 @@
       "proof": "apps/app/src/features/spend/dialogs.test.tsx",
       "verifiedAt": "2026-09-22",
       "verifiedBy": "session-1a3727fe-cost-centers"
+    },
+    "set_agent_cache_keep_alive": {
+      "route": "/[org]/[ws]/agents/[agent]",
+      "page": "apps/app/src/app/[org]/[ws]/agents/[agent]/page.tsx",
+      "entry": "/[org]/[ws]/agents/[agent] Overview tab, Coaching panel, the Cache keep-alive row's Turn off or Turn on button (features/agents/cache-keep-alive-controls.tsx, features/agents/actions.ts)",
+      "testid": "agent-keep-alive-change",
+      "proof": "apps/app/src/features/agents/cache-keep-alive-controls.test.tsx",
+      "verifiedAt": "2026-10-01",
+      "verifiedBy": "spend-f32-keep-alive (lane F32)"
     },
     "get_nav_counts": {
       "route": "/[org]/[ws]",

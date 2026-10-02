@@ -143,6 +143,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         slug: "bare",
         principalStatus: null,
         operatorUserId: null,
+        cacheKeepAlive: false,
       });
       await support.seedAgent(other, { slug: "alpha" });
     });
@@ -163,6 +164,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
         operatorId: tenant.userPublicId,
         status: "enrolled",
         costCenter: "ENG-1001",
+        // On by default (lane F32).
+        cacheKeepAlive: true,
       });
       // The earliest run either store recorded, the window ignored.
       expect(out.identity.firstFrameAt).not.toBeNull();
@@ -278,6 +281,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(out.identity.status).toBe("unenrolled");
       expect(out.identity.firstFrameAt).toBeNull();
       expect(out.identity.costCenter).toBeNull();
+      // Seeded with the keep-alive off: the read carries the stored value.
+      expect(out.identity.cacheKeepAlive).toBe(false);
       expect(out.roles).toEqual([]);
       expect(out.runtime).toBeNull();
       expect(out.versions).toEqual([]);

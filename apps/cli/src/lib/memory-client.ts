@@ -17,6 +17,7 @@
  *   - enforcementScore (1-100, null for OBSERVATION) — how strongly it SHOULD be followed.
  */
 import type {
+  MarkdownImportMemory,
   MarkdownImportPolicy,
   MarkdownImportRecord,
   MarkdownImportTarget,
@@ -654,16 +655,24 @@ export async function parseMarkdownImport(
 }
 
 /**
- * Call `commit_markdown_import`: open one steering PR with every row marked
- * add. Nothing steers until the PR merges.
+ * Call `commit_markdown_import`: open one steering PR with every record and
+ * policy row marked add, and store every memory row marked add as a waiting
+ * memory. Nothing steers until the PR merges, and a memory steers nothing
+ * until a person promotes it.
  */
 export async function commitMarkdownImport(input: {
   records: MarkdownImportRecord[];
   policies?: MarkdownImportPolicy[];
+  memories?: MarkdownImportMemory[];
 }): Promise<SteeringMarkdownImportCommitOutput> {
   return apiPostOrThrow<SteeringMarkdownImportCommitOutput>(
     "context/steering/import/commit",
-    { records: input.records, policies: input.policies ?? [] },
+    {
+      records: input.records,
+      policies: input.policies ?? [],
+      // Sent only when the caller carries memories. The contract defaults it to none.
+      ...(input.memories ? { memories: input.memories } : {}),
+    },
   );
 }
 
@@ -739,24 +748,82 @@ export function formatImportPolicies(policies: MarkdownImportPolicy[]): string {
   );
 }
 
-/** The commit result: the steering PR, and what it holds. */
+/** What a memory row's mark column shows: what it repeats, why it cannot be stored, or nothing. */
+function memoryMark(row: MarkdownImportMemory): string {
+  const match = row.duplicate;
+  if (match?.reason === "waiting") return `repeats waiting memory ${match.memory ?? "with the same statement"}`;
+  if (match?.reason === "rejected") return "repeats a statement a person rejected";
+  if (match?.reason === "import") return `repeats ${match.file ?? "a file"}:${match.line ?? 1}`;
+  return row.issue ?? "";
+}
+
+/**
+ * The proposed memories as a numbered table: source, the action, and the
+ * statement. Under a row goes what it repeats, or why it cannot be stored.
+ */
+export function formatImportMemories(rows: MarkdownImportMemory[]): string {
+  if (rows.length === 0) return "No memories were proposed.";
+  const header = `${"#".padEnd(4)}  ${"source".padEnd(24)} ${"action".padEnd(7)} statement`;
+  const lines = rows.map((row, i) => {
+    const source = truncate(`${row.file}:${row.line}`, 24).padEnd(24);
+    const mark = memoryMark(row);
+    return (
+      `${String(i + 1).padEnd(4)}  ${source} ${row.action.padEnd(7)} ${truncate(row.statement, 60)}` +
+      (mark ? `\n      ${mark}` : "")
+    );
+  });
+  const count = rows.length;
+  return (
+    [header, ...lines].join("\n") +
+    `\n${count} proposed ${count === 1 ? "memory" : "memories"}. Each one marked add is stored as a waiting memory, and none steers an agent until a person promotes it.`
+  );
+}
+
+/** Why the commit left out a memory row marked add. */
+function memorySkipNote(
+  skip: SteeringMarkdownImportCommitOutput["memories"]["skipped"][number],
+): string {
+  const where = `${skip.file}:${skip.line}`;
+  switch (skip.reason) {
+    case "waiting":
+      return `Left out ${where}: it repeats waiting memory ${skip.memory ?? "with the same statement"}.`;
+    case "rejected":
+      return `Left out ${where}: it repeats a statement a person rejected.`;
+    case "import":
+      return `Left out ${where}: it repeats an earlier statement of this import.`;
+    case "stored":
+      return `Left out ${where}: an earlier import stored it from the same line.`;
+  }
+}
+
+/** The commit result: the steering PR and what it holds, and the memories stored. */
 export function formatImportPullRequest(
   output: SteeringMarkdownImportCommitOutput,
 ): string {
-  const holds: string[] = [];
-  if (output.records > 0 || output.policies === 0) {
-    holds.push(`${output.records} ${output.records === 1 ? "record" : "records"}`);
+  const lines: string[] = [];
+  const pr = output.pullRequest;
+  if (pr !== null) {
+    const holds: string[] = [];
+    if (output.records > 0 || output.policies === 0) {
+      holds.push(`${output.records} ${output.records === 1 ? "record" : "records"}`);
+    }
+    if (output.policies > 0) {
+      holds.push(`${output.policies} ${output.policies === 1 ? "policy file" : "policy files"}`);
+    }
+    lines.push(
+      `Opened steering PR #${pr.number} on ${pr.branch} with ${holds.join(" and ")}.`,
+      pr.url,
+    );
   }
-  if (output.policies > 0) {
-    holds.push(`${output.policies} ${output.policies === 1 ? "policy file" : "policy files"}`);
+  const { stored, skipped: left } = output.memories;
+  if (stored > 0 || left.length > 0) {
+    lines.push(`Stored ${stored} waiting ${stored === 1 ? "memory" : "memories"}.`);
+    for (const skip of left) lines.push(`  ${memorySkipNote(skip)}`);
   }
-  const lines = [
-    `Opened steering PR #${output.pullRequest.number} on ${output.pullRequest.branch} with ${holds.join(" and ")}.`,
-    output.pullRequest.url,
-  ];
   if (output.skipped > 0) {
     lines.push(`${output.skipped} ${output.skipped === 1 ? "row was" : "rows were"} left out.`);
   }
-  lines.push("Nothing steers an agent until the PR merges.");
+  if (pr !== null) lines.push("Nothing steers an agent until the PR merges.");
+  if (stored > 0) lines.push("A memory steers no agent until a person promotes it into a steering record.");
   return lines.join("\n");
 }

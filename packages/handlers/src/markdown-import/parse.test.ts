@@ -17,7 +17,9 @@ vi.mock("@oxagen/ai", () => ({
 import type { CapabilityContext } from "@oxagen/oxagen";
 import { steeringMarkdownImportParse } from "@oxagen/oxagen/contracts/steering.markdown_import.parse";
 import { forceAllowed } from "@oxagen/oxagen/steering-repo/record-force";
+import { statementHash } from "../memory/statement";
 import type { MarkdownImportDeps } from "./deps";
+import type { HeldMemories } from "./memories";
 import { createParseMarkdownImportHandler, detectTarget } from "./parse";
 import type { SplitModel, SplitOutput } from "./split";
 
@@ -120,6 +122,10 @@ function deps(over: Partial<MarkdownImportDeps> = {}): MarkdownImportDeps {
     split: vi.fn<SplitModel>().mockResolvedValue(SPLIT),
     branchTaken: async () => false,
     opener: { open: vi.fn() },
+    memories: {
+      held: vi.fn<(scope: unknown) => Promise<HeldMemories>>().mockResolvedValue({ waiting: [], rejected: [] }),
+      store: vi.fn().mockResolvedValue([]),
+    },
     now: () => new Date("2026-09-30T12:00:00Z"),
     ...over,
   };
@@ -403,5 +409,113 @@ describe("parse_markdown_import", () => {
     expect(out.files[0]?.error).toBe("The model found no durable guidance in the file.");
     expect(out.files[1]?.error).toContain("does not read as a record");
     expect(out.records).toEqual([]);
+  });
+
+  it("reads the store only when a file is imported as memories", async () => {
+    const d = deps();
+    const out = await run(d, [{ filename: "CLAUDE.md", content: CLAUDE_MD }]);
+    expect(d.memories.held).not.toHaveBeenCalled();
+    expect(out.memories).toEqual([]);
+    expect(out.files[0]?.memories).toBe(0);
+  });
+});
+
+describe("parse_markdown_import with the memories target", () => {
+  it("splits the file the same way and gives every row kind memory and force info", async () => {
+    const d = deps();
+    const out = await run(d, [{ filename: "CLAUDE.md", content: CLAUDE_MD, target: "memories" }]);
+    expect(d.split).toHaveBeenCalledTimes(1);
+    expect(d.memories.held).toHaveBeenCalledWith({ orgId: ctx.orgId, workspaceId: ctx.workspaceId });
+    expect(out.files).toEqual([
+      expect.objectContaining({ filename: "CLAUDE.md", target: "memories", records: 0, policies: 0, memories: 4, error: null }),
+    ]);
+    // The model proposed four kinds. A memory row is a memory with force info.
+    expect(out.memories.map((m) => [m.line, m.label, m.statement, m.kind, m.force, m.action])).toEqual([
+      [3, "No push to main", "Never push to main.", "memory", "info", "add"],
+      [4, "Prefer rg", "Prefer rg over grep.", "memory", "info", "add"],
+      [5, "CI on push", "CI runs on every push.", "memory", "info", "add"],
+      [6, "Pull request per change", "Open every change as a pull request from a branch named for the work.", "memory", "info", "add"],
+    ]);
+    expect(out.records).toEqual([]);
+    // Memories go to no steering PR.
+    expect(out.pullRequestFiles).toEqual({ count: 0, max: 299, message: null });
+    expect(steeringMarkdownImportParse.output.safeParse(out).success).toBe(true);
+  });
+
+  it("skips a statement a waiting memory holds or a person rejected, and names each match", async () => {
+    const held: HeldMemories = {
+      waiting: [{ publicId: "mem_01waiting", statementHash: statementHash("never push to MAIN") }],
+      rejected: [statementHash("Prefer rg over grep.")],
+    };
+    const d = deps({ memories: { held: vi.fn().mockResolvedValue(held), store: vi.fn() } });
+    const out = await run(d, [{ filename: "CLAUDE.md", content: CLAUDE_MD, target: "memories" }]);
+    expect(out.memories.map((m) => [m.line, m.duplicate, m.action])).toEqual([
+      [3, { reason: "waiting", memory: "mem_01waiting", file: null, line: null }, "skip"],
+      [4, { reason: "rejected", memory: null, file: null, line: null }, "skip"],
+      [5, null, "add"],
+      [6, null, "add"],
+    ]);
+  });
+
+  it("skips the second of two files that hold the same statement and names the first", async () => {
+    const out = await run(deps(), [
+      { filename: "a/CLAUDE.md", content: CLAUDE_MD, target: "memories" },
+      { filename: "b/CLAUDE.md", content: CLAUDE_MD, target: "memories" },
+    ]);
+    expect(out.memories).toHaveLength(8);
+    expect(out.memories.slice(0, 4).every((m) => m.action === "add")).toBe(true);
+    expect(out.memories[4]).toMatchObject({
+      file: "b/CLAUDE.md",
+      line: 3,
+      duplicate: { reason: "import", memory: null, file: "a/CLAUDE.md", line: 3 },
+      action: "skip",
+    });
+  });
+
+  it("skips a statement too long for a memory and says why (negative)", async () => {
+    const long = `Keep these steps. ${"Step. ".repeat(400)}`.trim();
+    const split = vi.fn<SplitModel>().mockResolvedValue({
+      statements: [
+        { statement: long, label: "Long steps", line: 1, kind: "procedure", kindReason: "Steps.", force: "should", forceWords: "", effect: null },
+      ],
+    });
+    const out = await run(deps({ split }), [{ filename: "steps.md", content: "Keep these steps.", target: "memories" }]);
+    expect(long.length).toBeGreaterThan(2000);
+    expect(out.memories[0]).toMatchObject({ action: "skip", duplicate: null });
+    expect(out.memories[0]?.issue).toContain("A memory holds at most 2,000 characters");
+    expect(steeringMarkdownImportParse.output.safeParse(out).success).toBe(true);
+  });
+
+  it("keeps a steering-record/v1 file as one memory of its body and calls no model", async () => {
+    const d = deps();
+    const out = await run(d, [{ filename: "release.md", content: FRONTMATTER_RECORD, target: "memories" }]);
+    expect(d.split).not.toHaveBeenCalled();
+    expect(out.memories).toEqual([
+      expect.objectContaining({ file: "release.md", label: "Release steps", statement: "1. Tag the release.", kind: "memory", force: "info", action: "add" }),
+    ]);
+  });
+
+  it("reports a memories file the model fails on and reads the others (negative)", async () => {
+    const split = vi
+      .fn<SplitModel>()
+      .mockRejectedValueOnce(new Error("gateway down"))
+      .mockResolvedValueOnce(SPLIT);
+    const out = await run(deps({ split }), [
+      { filename: "broken.md", content: CLAUDE_MD, target: "memories" },
+      { filename: "CLAUDE.md", content: CLAUDE_MD, target: "memories" },
+    ]);
+    expect(out.files[0]).toMatchObject({ memories: 0, error: "The model could not split the file: gateway down" });
+    expect(out.memories).toHaveLength(4);
+  });
+
+  it("carries records, policies, and memories from one call", async () => {
+    const out = await run(deps(), [
+      { filename: "CLAUDE.md", content: CLAUDE_MD },
+      { filename: "no-branch-delete.md", content: POLICY_MD },
+      { filename: "notes.md", content: CLAUDE_MD, target: "memories" },
+    ]);
+    expect([out.records.length, out.policies.length, out.memories.length]).toEqual([4, 1, 4]);
+    expect(out.pullRequestFiles.count).toBe(5);
+    expect(steeringMarkdownImportParse.output.safeParse(out).success).toBe(true);
   });
 });

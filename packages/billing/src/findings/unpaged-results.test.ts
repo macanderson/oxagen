@@ -19,10 +19,17 @@ import {
   type ToolCallObservation,
 } from "./index";
 import {
+  resultUseKey,
+  type ResultTextMode,
+  type ResultUseRead,
+  type ResultVerdict,
+} from "./result-use";
+import {
   CARRY_RESULT_TOKENS,
   carriesOf,
   frameReadPrice,
   inputContextOf,
+  resultsToCheck,
 } from "./unpaged-results";
 
 const ORG = "00000000-0000-4000-8000-000000000001";
@@ -33,6 +40,9 @@ const AGENT = "acme.core.triage";
 const TOOL = "mcp__docs__search";
 const MODEL = "claude-sonnet-5";
 const SUBAGENT = "00000000-0000-4000-8000-0000000000bb";
+/** The label a finding carries when the store read no result use signal. */
+const NO_SIGNAL =
+  " Upper bound: no later step was checked for a quote of these results. This figure counts every re-read.";
 
 let seq = 0;
 
@@ -293,7 +303,7 @@ describe("context carry", () => {
     });
     expect(finding!.claims).toBeUndefined();
     expect(finding!.why).toBe(
-      `${TOOL} returned 1 result over 5,000 tokens on 1 run. Later requests read it 3 times.`,
+      `${TOOL} returned 1 result over 5,000 tokens on 1 run. Later requests read it 3 times.${NO_SIGNAL}`,
     );
   });
 
@@ -392,7 +402,7 @@ describe("context carry", () => {
     });
     expect(finding!.evidence.frames?.[r.runId]?.total).toBe(2);
     expect(finding!.why).toBe(
-      `${TOOL} returned 2 results over 5,000 tokens on 1 run. Later requests read them 5 times.`,
+      `${TOOL} returned 2 results over 5,000 tokens on 1 run. Later requests read them 5 times.${NO_SIGNAL}`,
     );
   });
 
@@ -769,5 +779,167 @@ describe("carriesOf", () => {
       frame(r, 2, 10_000, { bare: true }),
     ];
     expect(carriesOf(chain, at(1), 6_000)).toEqual([chain[1]]);
+  });
+});
+
+describe("result use (decision 7)", () => {
+  // Two results on one chain, at 3 micros a token. The 10,000-token result
+  // at 1s rides three requests, and the 8,000-token result at 3s rides two.
+  // Paging the first would save 3 × 6,000 × 3 = 54,000 micros, and paging
+  // the second 2 × 4,000 × 3 = 24,000.
+  function input() {
+    const r = run();
+    const quoted = call(r, 1, 10_000);
+    const ignored = call(r, 3, 8_000);
+    const over: Partial<DetectReads> = {
+      runs: [r],
+      toolCalls: [quoted, ignored],
+      frames: new Map([
+        [
+          r.runId,
+          [
+            frame(r, 0.5, 40_000),
+            frame(r, 2, 51_000),
+            frame(r, 4, 60_000),
+            frame(r, 5, 61_000),
+          ],
+        ],
+      ]),
+    };
+    return { r, quoted, ignored, over };
+  }
+
+  function read(
+    mode: ResultTextMode,
+    verdicts: [ToolCallObservation, ResultVerdict][],
+  ): ResultUseRead {
+    return {
+      mode,
+      verdicts: new Map(verdicts.map(([c, v]) => [resultUseKey(c), v])),
+    };
+  }
+
+  it("shows a result a later step quoted apart from one no step read, and prices only the second", () => {
+    const { r, quoted, ignored, over } = input();
+    const [finding, ...rest] = detect({
+      ...over,
+      resultUse: read("content_exact", [
+        [quoted, "used"],
+        [ignored, "unused"],
+      ]),
+    });
+    expect(rest).toEqual([]);
+    expect(finding!.savingMicros).toBe(24_000n);
+    // Every re-read stays cited, and the used result's re-reads save nothing.
+    expect(finding!.evidence).toMatchObject({
+      calls: 5,
+      coveredCalls: 5,
+      measuredTokens: 10_000 * 3 + 8_000 * 2,
+      counterfactualTokens: 10_000 * 3 + PAGE_TOKENS * 2,
+      resultUse: {
+        mode: "content_exact",
+        used: { results: 1, reads: 3, pageSavingMicros: "54000" },
+        unused: { results: 1, reads: 2, pageSavingMicros: "24000" },
+        unchecked: { results: 0, reads: 0, pageSavingMicros: "0" },
+      },
+    });
+    expect(finding!.evidence.frames?.[r.runId]?.total).toBe(2);
+    expect(finding!.why).toBe(
+      `${TOOL} returned 2 results over 5,000 tokens on 1 run. Later requests read them 5 times. No later step quoted 1 result, which later requests read 2 times. A later step quoted 1 result. This figure leaves out its 3 re-reads, which paging would have cut by $0.05.`,
+    );
+    expect(finding!.claims).toBeUndefined();
+  });
+
+  it("writes no finding when a later step quoted every result", () => {
+    const { quoted, ignored, over } = input();
+    expect(
+      detect({
+        ...over,
+        resultUse: read("content_exact", [
+          [quoted, "used"],
+          [ignored, "used"],
+        ]),
+      }),
+    ).toEqual([]);
+  });
+
+  it("keeps the upper bound and says so when the store read no signal", () => {
+    const { over } = input();
+    const [finding] = detect(over);
+    expect(finding!.savingMicros).toBe(54_000n + 24_000n);
+    expect(finding!.evidence.resultUse).toEqual({
+      mode: null,
+      used: { results: 0, reads: 0, pageSavingMicros: "0" },
+      unused: { results: 0, reads: 0, pageSavingMicros: "0" },
+      unchecked: { results: 2, reads: 5, pageSavingMicros: "78000" },
+    });
+    expect(finding!.why).toBe(
+      `${TOOL} returned 2 results over 5,000 tokens on 1 run. Later requests read them 5 times.${NO_SIGNAL}`,
+    );
+  });
+
+  it("keeps the upper bound on a digest_only workspace, whatever verdicts it is handed, and names the retention setting", () => {
+    const { quoted, ignored, over } = input();
+    const [finding] = detect({
+      ...over,
+      resultUse: read("digest_only", [
+        [quoted, "used"],
+        [ignored, "used"],
+      ]),
+    });
+    expect(finding!.savingMicros).toBe(54_000n + 24_000n);
+    expect(finding!.evidence.resultUse?.mode).toBe("digest_only");
+    expect(finding!.why).toBe(
+      `${TOOL} returned 2 results over 5,000 tokens on 1 run. Later requests read them 5 times. Upper bound: Oxagen checks for a quote only where a workspace keeps both tool call and model call text, and this one does not. This figure counts every re-read.`,
+    );
+    expect(finding!.fix).toContain(
+      "keep tool call and model call text in the workspace's retention policy",
+    );
+  });
+
+  it("counts a result with no verdict in full on a content_exact workspace, and labels that part an upper bound", () => {
+    const { ignored, over } = input();
+    const [finding] = detect({
+      ...over,
+      resultUse: read("content_exact", [[ignored, "unused"]]),
+    });
+    expect(finding!.savingMicros).toBe(54_000n + 24_000n);
+    expect(finding!.evidence.resultUse).toMatchObject({
+      unused: { results: 1, reads: 2 },
+      unchecked: { results: 1, reads: 3 },
+    });
+    expect(finding!.why).toBe(
+      `${TOOL} returned 2 results over 5,000 tokens on 1 run. Later requests read them 5 times. No later step quoted 1 result, which later requests read 2 times. Upper bound: 1 result could not be checked for a quote, so this figure counts its 3 re-reads in full.`,
+    );
+    expect(finding!.fix).not.toContain("retention policy");
+  });
+
+  it("leaves a quoted result over 20,000 tokens out of the figure when its chain has no frames", () => {
+    const r = run();
+    const big = call(r, 1, 25_000, { sessionUuid: SUBAGENT });
+    expect(
+      detect({
+        runs: [r],
+        toolCalls: [big],
+        frames: new Map([[r.runId, [frame(r, 0.5, 40_000, { chain: null })]]]),
+        resultUse: read("content_exact", [[big, "used"]]),
+      }),
+    ).toEqual([]);
+  });
+
+  it("names for the store only the results the detector can price", () => {
+    const r = run();
+    const s = run();
+    const small = call(r, 1, CARRY_RESULT_TOKENS);
+    const carried = call(r, 2, 6_000);
+    const unread = call(s, 1, 6_000);
+    const unpaged = call(s, 2, 25_000);
+    const none = call(s, 3, 0, { resultTokens: null });
+    expect(
+      resultsToCheck(
+        [small, carried, unread, unpaged, none],
+        new Map([[r.runId, []]]),
+      ),
+    ).toEqual([carried, unpaged]);
   });
 });

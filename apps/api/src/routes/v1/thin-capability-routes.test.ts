@@ -60,6 +60,7 @@ import { agentMemoryPromotionRationales } from "@oxagen/oxagen/contracts/agent.m
 import { agentRegister } from "@oxagen/oxagen/contracts/agent.register";
 import { agentMove } from "@oxagen/oxagen/contracts/agent.move";
 import { agentToolbeltAssign } from "@oxagen/oxagen/contracts/agent.toolbelt.assign";
+import { agentCacheKeepAliveSet } from "@oxagen/oxagen/contracts/agent.cache_keep_alive.set";
 import { runtimeCreate } from "@oxagen/oxagen/contracts/runtime.create";
 import { runtimeList } from "@oxagen/oxagen/contracts/runtime.list";
 import { runtimeUpdate } from "@oxagen/oxagen/contracts/runtime.update";
@@ -221,6 +222,7 @@ import { agentSuspendRoute } from "./agent.suspend";
 import { agentToolbeltGetRoute } from "./agent.toolbelt.get";
 import { agentMoveRoute } from "./agent.move";
 import { agentToolbeltAssignRoute } from "./agent.toolbelt.assign";
+import { agentCacheKeepAliveSetRoute } from "./agent.cache_keep_alive.set";
 import { runtimeCreateRoute } from "./runtime.create";
 import { runtimeListRoute } from "./runtime.list";
 import { runtimeUpdateRoute } from "./runtime.update";
@@ -685,6 +687,16 @@ const ROUTES: ThinRoute[] = [
     capability: agentToolbeltAssign.name,
     body: { agentId: "agt_1", toolbeltId: "tbt_0123456789abcdefghjkmn" },
     invalidBody: { agentId: "agt_1" },
+    status: 200,
+  },
+  {
+    file: "agent.cache_keep_alive.set",
+    route: agentCacheKeepAliveSetRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: agentCacheKeepAliveSet.name,
+    body: { agent: "release-bot", cacheKeepAlive: false },
+    invalidBody: { agent: "release-bot", cacheKeepAlive: "off" },
+    jsonGuard: true,
     status: 200,
   },
   {
@@ -2503,6 +2515,7 @@ const ROUTES: ThinRoute[] = [
         },
       ],
       policies: [],
+      memories: [],
     },
     // A fact is held to info, so must is refused before invoke.
     invalidBody: {

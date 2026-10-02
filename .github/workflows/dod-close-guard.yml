@@ -34,6 +34,10 @@ on:
     types: [closed]
 
 permissions:
+  # The checkout below reads tools/scripts from this private repository, so
+  # the token needs contents as well as issues. With issues alone every run
+  # failed at the checkout with "repository not found" (run 36957057827).
+  contents: read
   issues: write
 
 jobs:
