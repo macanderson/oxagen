@@ -10,7 +10,7 @@
   - The governed turn (`runGovernedTurn` in `src/runtime/governed-turn.ts`): one bounded, metered model turn over the materialised tools, run on the `stella-serve` engine (ADR-053).
   - The assistant turn and its SSE stream (`src/runtime/assistant-turn.ts`, `src/runtime/assistant-stream.ts`) and approval resume (`src/runtime/approval-resume.ts`).
   - The assistant turn's steering (`src/runtime/assistant-steering.ts`): none from the workspace (ADR-235). The turn records a `steering.manifest` frame that names no item, and its system prompt is Oxagen's baseline alone.
-  - The published context-record read and the record adapter (`src/runtime/published-steering.ts`), which a wrapped agent's policy bundle (`packages/handlers/src/lib/tacho-steering.ts`) reads steering through.
+  - The published steering-record read and the record adapter (`src/runtime/published-steering.ts`), which a wrapped agent's policy bundle (`packages/handlers/src/lib/tacho-steering.ts`) reads steering through.
   - The plugin-type contributor registry and the MCP server contributors (`src/runtime/plugin-type.ts`, `src/runtime/plugin-types/`).
   - The MCP client and the Neo4j projection of invoked tools (`src/dispatch/`), and agent memory in Neo4j (`src/memory/`).
   - The `agent.*` handlers (`src/handlers/`): approvals, the MCP registry and consent ledger, memory, agent definitions and roles, executions, traces, and error clustering. `src/register.ts` registers them.

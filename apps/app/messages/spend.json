@@ -122,9 +122,9 @@
           "refused": "The decision was refused: {code}. Nothing was changed.",
           "unavailable": "The decision could not be recorded: {code}. Nothing was changed."
         },
-        "contextTitle": "Context PR",
-        "contextBody": "For an instruction or workflow change, review the finding and recommendation in the context-record wizard. Nothing is published until you review and merge its pull request.",
-        "contextAction": "Draft a context PR",
+        "contextTitle": "Steering PR",
+        "contextBody": "For an instruction or workflow change, review the finding and recommendation in the steering-record wizard. Nothing is published until you review and merge its pull request.",
+        "contextAction": "Draft a steering PR",
         "codeTitle": "Code PR",
         "codeBody": "Review a request for stella to inspect the finding and plan a harness hook, custom tool, or code change. Opening a pull request depends on the repository tools and access available to stella.",
         "effort": "Implementation cost is not estimated. Potential savings exclude the cost of making the change.",

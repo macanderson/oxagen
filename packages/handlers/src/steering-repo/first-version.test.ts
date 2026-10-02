@@ -1,5 +1,5 @@
 // first-version.test.ts: what bind_repository does with each answer of the
-// first publish (#4732). context.pr.test.ts runs the step and a merge after
+// first publish (#4732). steering.pr.test.ts runs the step and a merge after
 // it; this file covers each answer on its own.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { SyncPublished } from "../context.steering.sync";

@@ -8,7 +8,7 @@ Oxagen's slice of its context (ADR-093, ADR-144).
 - **Owns:** ranking steering candidates by force and recency, fitting them to
   a token budget, and the manifest that names every candidate as `included`
   or `cut` with its reason.
-- **Does not own:** reading context records from a store
+- **Does not own:** reading steering records from a store
   ([`@oxagen/agent`](../agent/README.md),
   `packages/agent/src/runtime/published-steering.ts`); building the policy
   bundle ([`@oxagen/handlers`](../handlers/README.md),
@@ -33,7 +33,7 @@ Oxagen's slice of its context (ADR-093, ADR-144).
 | Seam | Kind | Source | Wired by |
 |---|---|---|---|
 | `assembleSteering(run, budgetTokens)` | export | `packages/steering-assembler/src/assemble.ts` | `packages/handlers/src/lib/tacho-steering.ts` and `packages/agent/src/runtime/assistant-steering.ts` |
-| `SteeringCandidate`, `SteeringManifest` types | port | `packages/steering-assembler/src/assemble.ts` | `packages/agent/src/runtime/published-steering.ts` maps context records to candidates; `assistant-steering.ts` can add a workspace's instructions as an `instruction` candidate, and no production turn hands it any (ADR-235) |
+| `SteeringCandidate`, `SteeringManifest` types | port | `packages/steering-assembler/src/assemble.ts` | `packages/agent/src/runtime/published-steering.ts` maps steering records to candidates; `assistant-steering.ts` can add a workspace's instructions as an `instruction` candidate, and no production turn hands it any (ADR-235) |
 | `STEERING_MANIFEST_SCHEMA` (`oxagen.steering.manifest/1`) | boundary | `packages/steering-assembler/src/assemble.ts` | Copied, not imported, as the same constant in `packages/tacho/src/wire.ts` |
 
 ## Entry points
@@ -83,7 +83,7 @@ about 2,500 tokens in Codex. Past that limit the agent reads a file path and
 a preview, not the records. `HARNESS_CONTEXT_MAX_CHARS` lists each limit and
 its source.
 
-`candidates` are context records, operator steer commands and, later, skill
+`candidates` are steering records, operator steer commands and, later, skill
 descriptions, each with
 an id, a kind, a force (`must`, `should`, `may`, `info`), a body and the
 instant it took effect. The assembler ranks them by tier and then by recency,

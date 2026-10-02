@@ -2,7 +2,7 @@
  * `oxagen steering` — is this checkout running on the records that are in
  * force, and what should happen when it is not.
  *
- * A Context PR merges a record onto the repository's production branch
+ * A steering PR merges a record onto the repository's production branch
  * (ADR-061; `docs/specs/steering/README.md`). A developer on a feature
  * branch keeps whatever `.oxagen/` their branch point had, so the longer the
  * branch lives the more likely their agent is steering on records nobody
@@ -749,7 +749,7 @@ export async function resolveContext(
     // The gates were imported and `defaultBranch` was dropped, so the checker
     // fell back to resolving the remote's own default — and a workspace that
     // approved `release` while `origin/HEAD` still says `main` was compared
-    // against the wrong branch entirely. A Context PR merged into `release`
+    // against the wrong branch entirely. A steering PR merged into `release`
     // left an enforced checkout reported as `current`, which is the failure
     // this feature exists to prevent, arriving silently.
     //

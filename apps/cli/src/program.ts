@@ -569,7 +569,7 @@ export function buildProgram(): Command {
   contextCmd
     .command("propose")
     .description(
-      "Record a proposal (the record it should become, why); its Context PR is opened and merged in Oxagen",
+      "Record a proposal (the record it should become, why); its steering PR is opened and merged in Oxagen",
     )
     .requiredOption(
       "--lineage <id>",
@@ -708,7 +708,7 @@ export function buildProgram(): Command {
   repoCmd
     .command("governance")
     .description(
-      "Set the steering governance mode: who may merge a Context PR in this workspace",
+      "Set the steering governance mode: who may merge a steering PR in this workspace",
     )
     .requiredOption("--mode <mode>", "solo | team | regulated")
     .option(

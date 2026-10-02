@@ -233,7 +233,7 @@ export function createMainRepositoryGetHandler(
               eq(schema.repositoryBindingHeads.workspaceId, scope.workspaceId),
               // Only the steering head steers. Its role is 'steering', and
               // 'linked' marks a code repository the workspace's agents work in,
-              // which receives no Context PR, because every record lives in the
+              // which receives no steering PR, because every record lives in the
               // steering repository (ADR-212). A reader
               // that ignores the column goes on resolving through a linked
               // head, so the cross-workspace steering collision the index

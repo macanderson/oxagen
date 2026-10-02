@@ -1,7 +1,7 @@
 // priorities.ts: the priorities record triage reads (P1-03, #5103).
 //
 // The priorities record is a steering record, so a person edits it the way
-// they edit any record: a Context PR (open_context_pr), merged under the
+// they edit any record: a steering PR (open_steering_pr), merged under the
 // workspace's steering rules. Each merge publishes a new version with its own
 // checksum, and triage names the version and the hash it read on every
 // decision (agent-work-phase-1.html, Data contract).
@@ -23,8 +23,8 @@ import { priorityCites } from "@oxagen/work";
 import { and, eq, ilike, isNull, or } from "drizzle-orm";
 import type { WorkScope } from "../work-records/store";
 
-const records = schema.contextRecords;
-const versions = schema.contextRecordVersions;
+const records = schema.steeringRecords;
+const versions = schema.steeringRecordVersions;
 
 /** The lineage of a workspace's priorities record, or the end of it. */
 export const PRIORITIES_LINEAGE = "work.priorities";

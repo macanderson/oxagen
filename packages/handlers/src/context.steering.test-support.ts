@@ -7,7 +7,7 @@
 // reaches GitHub — never the shape of a fixture.
 import type { CapabilityContext } from "@oxagen/oxagen";
 import type { SecurityEventInput } from "@oxagen/telemetry";
-import { contextRecordLabel } from "@oxagen/oxagen/context-record-label";
+import { steeringRecordLabel } from "@oxagen/oxagen/steering-record-label";
 import { gitBlobId } from "@oxagen/steering-bundle";
 import type { SteeringDeps } from "./context.steering.deps";
 import {
@@ -303,7 +303,7 @@ export class MemoryStore implements SteeringStore {
           OPEN.has(p.status),
       )
     ) {
-      throw new Error("context_proposals_open_pr_idx: one open PR per lineage");
+      throw new Error("steering_proposals_open_pr_idx: one open PR per lineage");
     }
     this.proposals[i] = next;
     return next;
@@ -393,7 +393,7 @@ export class MemoryStore implements SteeringStore {
         scope.workspaceId,
     ).length;
   }
-  /** The newest record in this workspace that a Context PR actually merged. */
+  /** The newest record in this workspace that a steering PR actually merged. */
   async latestPublication(scope: { workspaceId: string }) {
     // Newest publication wins. Publications that share an instant (GitHub
     // reports `merged_at` to the second) are all returned: the store cannot
@@ -470,7 +470,7 @@ export class MemoryStore implements SteeringStore {
         readRecordFile(input.body)?.label ??
         proposal.label ??
         existing?.label ??
-        contextRecordLabel(proposal.lineageId),
+        steeringRecordLabel(proposal.lineageId),
       status: "active",
       kind: proposal.kind,
       force: proposal.force,
@@ -1403,7 +1403,7 @@ export function harness(files: Record<string, string> = {}): Harness {
 
 /**
  * The repository sync's store (ADR-184) over a `MemoryStore`'s own arrays, so
- * a test can run `merge_context_pr` and the sync against one registry and see
+ * a test can run `merge_steering_pr` and the sync against one registry and see
  * whether they agree. `apply` writes versions and ledger links the way the
  * Postgres store does: one version per publication, the chain digest over the
  * same canonical fields, and a `retire` link with no version.
@@ -1516,7 +1516,7 @@ export class MemorySyncStore implements SyncStore {
           workspaceId: scope.workspaceId,
           slug: p.lineageId,
           title: p.content.statement,
-          label: p.content.label ?? contextRecordLabel(p.lineageId),
+          label: p.content.label ?? steeringRecordLabel(p.lineageId),
           status: "active",
           kind: p.content.kind,
           force: p.content.force,

@@ -1,25 +1,25 @@
 // Contract-output samples for the steering mapper, adapter and action tests
-// (ARCHITECTURE.md §5): what list_records, list_proposals and get_context_pr
+// (ARCHITECTURE.md §5): what list_records, list_proposals and get_steering_pr
 // answer for a workspace with one published constraint and one proposal whose
-// Context PR passed its checks, and what the workspace memory reads answer for
+// steering PR passed its checks, and what the workspace memory reads answer for
 // one waiting memory and one memory PR. Test support only: src/test is never in a
 // production bundle.
-import type { contextPrGet } from "@oxagen/oxagen/contracts/context.pr.get";
-import type { contextProposalList } from "@oxagen/oxagen/contracts/context.proposal.list";
-import type { contextRecordsGet } from "@oxagen/oxagen/contracts/context.records.get";
-import type { contextRecordsList } from "@oxagen/oxagen/contracts/context.records.list";
+import type { steeringPrGet } from "@oxagen/oxagen/contracts/steering.pr.get";
+import type { steeringProposalList } from "@oxagen/oxagen/contracts/steering.proposal.list";
+import type { steeringRecordsGet } from "@oxagen/oxagen/contracts/steering.records.get";
+import type { steeringRecordsList } from "@oxagen/oxagen/contracts/steering.records.list";
 import type { steeringMemoriesGet } from "@oxagen/oxagen/contracts/steering.memories.get";
 import type { steeringMemoriesList } from "@oxagen/oxagen/contracts/steering.memories.list";
 import type { steeringMemoryPrRecordsList } from "@oxagen/oxagen/contracts/steering.memory_pr_records.list";
 import type { ContractOutput } from "@/server/kernel";
 
-type RecordsOutput = ContractOutput<typeof contextRecordsList>;
+type RecordsOutput = ContractOutput<typeof steeringRecordsList>;
 type RecordOutput = RecordsOutput["records"][number];
-type ProposalsOutput = ContractOutput<typeof contextProposalList>;
+type ProposalsOutput = ContractOutput<typeof steeringProposalList>;
 type ProposalOutput = ProposalsOutput["proposals"][number];
-type ContextPrOutput = ContractOutput<typeof contextPrGet>;
+type SteeringPrOutput = ContractOutput<typeof steeringPrGet>;
 type RecordGetOutput = Extract<
-  ContractOutput<typeof contextRecordsGet>,
+  ContractOutput<typeof steeringRecordsGet>,
   { source: "published" }
 >;
 
@@ -139,9 +139,9 @@ const CHECK_NAMES = [
   "constraint_effect",
 ] as const;
 
-export function contextPrOutput(
-  overrides: Partial<ContextPrOutput> = {},
-): ContextPrOutput {
+export function steeringPrOutput(
+  overrides: Partial<SteeringPrOutput> = {},
+): SteeringPrOutput {
   return {
     proposalId: "prp_01k5ru4a",
     lineageId: LINEAGE,
@@ -184,7 +184,7 @@ export function contextPrOutput(
       },
       at: "2026-09-15T09:00:00.000Z",
     },
-    body: `## Context PR · \`${LINEAGE}\``,
+    body: `## Steering PR · \`${LINEAGE}\``,
     checks: CHECK_NAMES.map((name) => ({
       name,
       status: "passed" as const,

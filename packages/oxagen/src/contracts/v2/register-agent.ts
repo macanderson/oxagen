@@ -5,7 +5,7 @@ import { agentRegister } from "../agent.register";
 /**
  * Appendix E: `register_agent`. ADR-198 replaced the job Appendix E gave it.
  *
- * Appendix E had this tool open a Context PR adding `.oxagen/agents/<slug>.toml`
+ * Appendix E had this tool open a steering PR adding `.oxagen/agents/<slug>.toml`
  * and create the identity on merge, absorbing `create_agent_def`,
  * `suggest_agent_def` and `summarize_agent_def`. ADR-198 retired that model and
  * deleted all three contracts:

@@ -1,5 +1,5 @@
 import type { FindingDraft } from "@oxagen/billing/proposal-opener";
-import { contextProposalCreate } from "@oxagen/oxagen/contracts/context.proposal.create";
+import { steeringProposalCreate } from "@oxagen/oxagen/contracts/steering.proposal.create";
 import { describe, expect, it } from "vitest";
 import { modelClassFitProposals, READ_ONLY_EFFORT } from "./model-class-fit";
 import { agentLineage, proposalSource } from "./shared";
@@ -98,7 +98,7 @@ describe("modelClassFitProposals", () => {
 
   it("builds a proposal the propose_record contract accepts", () => {
     const [proposal] = build(classDraft(AGENT));
-    const parsed = contextProposalCreate.input.safeParse({
+    const parsed = steeringProposalCreate.input.safeParse({
       record: {
         lineageId: proposal!.lineageId,
         title: proposal!.title,

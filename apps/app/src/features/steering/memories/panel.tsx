@@ -12,7 +12,7 @@
 //
 // No memory steers from here. Promote adds draft records to the memory PR,
 // and only its merge changes steering. The bar's Promote is not gold, because
-// the header's Write a context record stays the screen's one primary.
+// the header's Write a steering record stays the screen's one primary.
 import { useTranslations } from "next-intl";
 import { type ReactNode, useState } from "react";
 import type {

@@ -89,7 +89,7 @@ export {
   type ColumnRef,
   type ProbeTx,
 } from "./column-probe";
-export { CONTEXT_VERSION_CLASSIFICATION_COLUMN } from "./schema/agent";
+export { STEERING_VERSION_CLASSIFICATION_COLUMN } from "./schema/agent";
 export {
   CONTAINED_LAUNCH_COLUMN,
   GATEWAY_CHAIN_COLUMN,

@@ -6,7 +6,7 @@
 // The rest pins the seam's GitLab-specific behaviour one call at a time.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { HandlerError } from "@oxagen/oxagen";
-import { contextProposalCreate } from "@oxagen/oxagen/contracts/context.proposal.create";
+import { steeringProposalCreate } from "@oxagen/oxagen/contracts/steering.proposal.create";
 import { gitBlobId } from "@oxagen/steering-bundle";
 
 const gate = vi.hoisted(() => ({ refuse: false }));
@@ -25,10 +25,10 @@ vi.mock("./logger", () => ({
   logger: { warn: log.warn, info: log.info, error: vi.fn(), debug: vi.fn() },
 }));
 
-import { createOpenContextPrHandler } from "./context.pr.open";
-import { createMergeContextPrHandler } from "./context.pr.merge";
-import { createDismissProposalHandler } from "./context.proposal.dismiss";
-import { createProposeRecordHandler } from "./context.proposal.create";
+import { createOpenSteeringPrHandler } from "./steering.pr.open";
+import { createMergeSteeringPrHandler } from "./steering.pr.merge";
+import { createDismissProposalHandler } from "./steering.proposal.dismiss";
+import { createProposeRecordHandler } from "./steering.proposal.create";
 import type {
   SteeringHost,
   SteeringRepository,
@@ -115,7 +115,7 @@ function gitlabHarness(files: Record<string, string> = {}) {
 }
 
 async function propose(h: Harness) {
-  const input = contextProposalCreate.input.parse({
+  const input = steeringProposalCreate.input.parse({
     record: {
       lineageId: LINEAGE,
       kind: "rule",
@@ -140,12 +140,12 @@ beforeEach(() => {
   log.warn.mockClear();
 });
 
-describe("a context record published through a GitLab merge request", () => {
+describe("a steering record published through a GitLab merge request", () => {
   it("opens a merge request, reports one commit status for the six checks, then squash-merges the checked head and publishes", async () => {
     const { api, h } = gitlabHarness();
     const proposalId = await propose(h);
 
-    const opened = await createOpenContextPrHandler(h)({ proposalId }, ctx());
+    const opened = await createOpenSteeringPrHandler(h)({ proposalId }, ctx());
 
     expect(opened.status).toBe("checks_passed");
     expect(opened.pr).toMatchObject({
@@ -160,7 +160,7 @@ describe("a context record published through a GitLab merge request", () => {
     expect(mr).toMatchObject({
       sourceBranch: BRANCH,
       targetBranch: "main",
-      title: `Context PR: ${LINEAGE}`,
+      title: `Steering PR: ${LINEAGE}`,
     });
     expect(mr!.description).toContain(proposalId);
     const head = api.branches.get(BRANCH)!;
@@ -181,7 +181,7 @@ describe("a context record published through a GitLab merge request", () => {
       prNumber: 1,
     });
 
-    const merged = await createMergeContextPrHandler(h)(
+    const merged = await createMergeSteeringPrHandler(h)(
       { proposalId },
       ctx({ userId: REVIEWER }),
     );
@@ -218,11 +218,11 @@ describe("a context record published through a GitLab merge request", () => {
   it("refuses the merge when the merge request's head moved after the checks", async () => {
     const { api, h } = gitlabHarness();
     const proposalId = await propose(h);
-    await createOpenContextPrHandler(h)({ proposalId }, ctx());
+    await createOpenSteeringPrHandler(h)({ proposalId }, ctx());
     api.commit(BRANCH, "README.md", "pushed after the checks\n");
 
     await expect(
-      createMergeContextPrHandler(h)({ proposalId }, ctx({ userId: REVIEWER })),
+      createMergeSteeringPrHandler(h)({ proposalId }, ctx({ userId: REVIEWER })),
     ).rejects.toMatchObject({ code: "conflict", reason: "head_moved" });
     expect(api.merges).toHaveLength(0);
     expect(h.store.records).toHaveLength(0);
@@ -236,11 +236,11 @@ describe("a context record published through a GitLab merge request", () => {
     async (_case, reset) => {
       const { api, h } = gitlabHarness();
       const proposalId = await propose(h);
-      await createOpenContextPrHandler(h)({ proposalId }, ctx());
+      await createOpenSteeringPrHandler(h)({ proposalId }, ctx());
       api.resetApprovalsOnPush = reset;
 
       await expect(
-        createMergeContextPrHandler(h)(
+        createMergeSteeringPrHandler(h)(
           { proposalId },
           ctx({ userId: REVIEWER }),
         ),
@@ -256,10 +256,10 @@ describe("a context record published through a GitLab merge request", () => {
   it("asks the reviewer to approve again after Oxagen rebases the merge request, because GitLab keeps the old approval", async () => {
     const { api, h } = gitlabHarness();
     const proposalId = await propose(h);
-    await createOpenContextPrHandler(h)({ proposalId }, ctx());
+    await createOpenSteeringPrHandler(h)({ proposalId }, ctx());
     const checked = api.branches.get(BRANCH)!;
     api.commit("main", "other.md", "x\n");
-    const merge = createMergeContextPrHandler(h);
+    const merge = createMergeSteeringPrHandler(h);
 
     await expect(
       merge({ proposalId }, ctx({ userId: REVIEWER })),
@@ -288,7 +288,7 @@ describe("a context record published through a GitLab merge request", () => {
   it("fails a check when the branch changes another file, so nothing merges", async () => {
     const { api, h } = gitlabHarness();
     const proposalId = await propose(h);
-    const open = createOpenContextPrHandler(h);
+    const open = createOpenSteeringPrHandler(h);
     await open({ proposalId }, ctx());
     api.commit(BRANCH, ".oxagen/rules/governance.toml", 'mode = "solo"\n');
 
@@ -300,7 +300,7 @@ describe("a context record published through a GitLab merge request", () => {
       api.statuses.some((s) => s.sha === latest && s.state === "failed"),
     ).toBe(true);
     await expect(
-      createMergeContextPrHandler(h)({ proposalId }, ctx({ userId: REVIEWER })),
+      createMergeSteeringPrHandler(h)({ proposalId }, ctx({ userId: REVIEWER })),
     ).rejects.toMatchObject({ reason: "checks_not_passed" });
     expect(api.merges).toHaveLength(0);
   });
@@ -308,7 +308,7 @@ describe("a context record published through a GitLab merge request", () => {
   it("closes the merge request and deletes the branch on dismiss", async () => {
     const { api, h } = gitlabHarness();
     const proposalId = await propose(h);
-    await createOpenContextPrHandler(h)({ proposalId }, ctx());
+    await createOpenSteeringPrHandler(h)({ proposalId }, ctx());
 
     await createDismissProposalHandler(h)(
       { proposalId, reason: "superseded" },
@@ -322,15 +322,15 @@ describe("a context record published through a GitLab merge request", () => {
   it("refuses to read a GitHub PR number back through GitLab", async () => {
     const { h } = gitlabHarness();
     const proposalId = await propose(h);
-    await createOpenContextPrHandler(h)({ proposalId }, ctx());
+    await createOpenSteeringPrHandler(h)({ proposalId }, ctx());
     // The row as a GitHub-era open would have left it.
     h.store.proposals[0]!.provider = "github";
 
     await expect(
-      createMergeContextPrHandler(h)({ proposalId }, ctx({ userId: REVIEWER })),
+      createMergeSteeringPrHandler(h)({ proposalId }, ctx({ userId: REVIEWER })),
     ).rejects.toMatchObject({ reason: "repository_host_changed" });
     await expect(
-      createOpenContextPrHandler(h)({ proposalId }, ctx()),
+      createOpenSteeringPrHandler(h)({ proposalId }, ctx()),
     ).rejects.toMatchObject({ reason: "repository_host_changed" });
   });
 });
@@ -339,7 +339,7 @@ describe("a proposal whose PR was opened on the other host", () => {
   it("is dismissed without closing anything by its number on GitLab", async () => {
     const { api, h } = gitlabHarness();
     const proposalId = await propose(h);
-    await createOpenContextPrHandler(h)({ proposalId }, ctx());
+    await createOpenSteeringPrHandler(h)({ proposalId }, ctx());
     // The row as a GitHub-era open left it: `!1` on GitLab is not its PR.
     h.store.proposals[0]!.provider = "github";
 
@@ -680,12 +680,12 @@ describe("the GitLab seam", () => {
     await expect(
       seam.updatePullRequest(repo, {
         number: mr.number,
-        title: "Context PR: renamed",
+        title: "Steering PR: renamed",
         body: "new body",
       }),
     ).resolves.toEqual({ number: 1, htmlUrl: mr.htmlUrl });
     expect(api.mergeRequests[0]).toMatchObject({
-      title: "Context PR: renamed",
+      title: "Steering PR: renamed",
       description: "new body",
     });
   });

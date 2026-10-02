@@ -179,7 +179,7 @@ function ofPullRequest(scope: FindingScope, pr: PullRequestKey) {
 
 const heads = schema.repositoryBindingHeads;
 const bindings = schema.repositoryBindings;
-const proposals = schema.contextProposals;
+const proposals = schema.steeringProposals;
 
 async function selectLinked(
   scope: FindingScope,

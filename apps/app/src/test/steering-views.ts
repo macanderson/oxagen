@@ -1,6 +1,6 @@
 // Typed steering values for the component tests of the two pages that read the
 // steering port (ARCHITECTURE.md §5): a published record, one record's page, a
-// proposal, a Context PR in each state of its machine (a steering PR
+// proposal, a steering PR in each state of its machine (a steering PR
 // proposal's among them), the freshness panel's
 // read, a workspace memory with its page and its drawer read, a memory PR's
 // records, and a DataSource that answers every steering read with what a test
@@ -15,8 +15,8 @@ import type { AgentPage } from "@/data/contracts/agents";
 import type { KillSwitchBoard } from "@/data/contracts/tools";
 import type { DataSource } from "@/data/ports";
 import type {
-  ContextPr,
-  ContextPrDiff,
+  SteeringPr,
+  SteeringPrDiff,
   MemoryPage,
   MemoryPrRecords,
   OxagenTree,
@@ -44,7 +44,7 @@ export const RECORD_PATH = `.oxagen/rules/${LINEAGE}.toml`;
 export const PR_URL = "https://github.com/acme/core-platform/pull/519";
 
 type PublishedRecord = RecordPage["records"][number];
-type Check = ContextPr["checks"][number];
+type Check = SteeringPr["checks"][number];
 
 export function publishedRecord(
   overrides: Partial<PublishedRecord> = {},
@@ -180,11 +180,11 @@ const CHECKS: Record<ProposalStatus, Check[]> = {
   rejected: PASSED,
 };
 
-/** A Context PR at `status`, with the checks, pull request and merge that state carries. */
-export function contextPr(
+/** A steering PR at `status`, with the checks, pull request and merge that state carries. */
+export function steeringPr(
   status: ProposalStatus,
-  overrides: Partial<ContextPr> = {},
-): ContextPr {
+  overrides: Partial<SteeringPr> = {},
+): SteeringPr {
   const opened = status !== "proposed";
   return {
     proposalId: PROPOSAL_ID,
@@ -220,7 +220,7 @@ export function contextPr(
       },
       at: "2026-09-15T09:00:00.000Z",
     },
-    body: opened ? `## Context PR · ${LINEAGE}` : null,
+    body: opened ? `## Steering PR · ${LINEAGE}` : null,
     checks: CHECKS[status],
     onMerge: {
       path: RECORD_PATH,
@@ -251,7 +251,7 @@ export function contextPr(
 }
 
 /** The six steering PR kinds (#5122): every proposal kind that is no record kind and no governance change. */
-type SteeringPrKind = Exclude<ContextPr["kind"], RecordKind | "governance">;
+type SteeringPrKind = Exclude<SteeringPr["kind"], RecordKind | "governance">;
 
 /** The branch and the folder of each steering PR kind's fixture PR. */
 const STEERING_PR: Record<SteeringPrKind, { branch: string; folder: string }> =
@@ -269,18 +269,18 @@ const STEERING_PR: Record<SteeringPrKind, { branch: string; folder: string }> =
   };
 
 /**
- * A steering PR proposal's Context PR at `status` (#5122). Its lineage is its
+ * A steering PR proposal's steering PR at `status` (#5122). Its lineage is its
  * branch, and merge lands the files under one folder. It carries no record
  * checks and no body, and its merge appends no promotion event and publishes
  * no single record, so the ledger keeps its length.
  */
-export function steeringPrContextPr(
+export function steeringPrSteeringPr(
   kind: SteeringPrKind,
   status: ProposalStatus,
-  overrides: Partial<ContextPr> = {},
-): ContextPr {
+  overrides: Partial<SteeringPr> = {},
+): SteeringPr {
   const { branch, folder } = STEERING_PR[kind];
-  const base = contextPr(status);
+  const base = steeringPr(status);
   return {
     ...base,
     kind,
@@ -297,10 +297,10 @@ export function steeringPrContextPr(
   };
 }
 
-/** The diff of the Context PR `contextPr()` opens: the one record file it adds. */
-export function contextPrDiff(
-  overrides: Partial<ContextPrDiff> = {},
-): ContextPrDiff {
+/** The diff of the steering PR `steeringPr()` opens: the one record file it adds. */
+export function steeringPrDiff(
+  overrides: Partial<SteeringPrDiff> = {},
+): SteeringPrDiff {
   return {
     state: "diff",
     baseRef: "main",
@@ -330,9 +330,9 @@ export type SteeringReads = {
     | ((q: { kind: RecordKind | null; offset: number }) => Read<RecordPage>);
   record: Read<RecordDetail>;
   proposals: Read<ProposalPage>;
-  contextPr: Read<ContextPr>;
-  /** The Context PR page's diff; not recorded in `calls`, so the hub's call tables stay as they were. */
-  contextPrDiff: Read<ContextPrDiff>;
+  steeringPr: Read<SteeringPr>;
+  /** The steering PR page's diff; not recorded in `calls`, so the hub's call tables stay as they were. */
+  steeringPrDiff: Read<SteeringPrDiff>;
   freshness: Read<SteeringFreshness>;
   /** The main repository's layout; legacy unless a test sets it, so a record without a path keeps its `.oxagen/rules/` file. */
   layout: Read<SteeringLayout>;
@@ -574,8 +574,8 @@ export function steeringSource(overrides: Partial<SteeringReads> = {}) {
     records: readOk({ records: [publishedRecord()], total: 1 }),
     record: readOk(recordDetail()),
     proposals: readOk({ proposals: [proposal()], total: 1 }),
-    contextPr: readOk(contextPr("checks_passed")),
-    contextPrDiff: readOk(contextPrDiff()),
+    steeringPr: readOk(steeringPr("checks_passed")),
+    steeringPrDiff: readOk(steeringPrDiff()),
     freshness: readOk(steeringFreshness()),
     layout: readOk({ layout: "legacy" }),
     hub: readOk(steeringHub()),
@@ -600,13 +600,13 @@ export function steeringSource(overrides: Partial<SteeringReads> = {}) {
     ...overrides,
   };
   const calls: Record<
-    Exclude<keyof SteeringReads, "agents" | "killSwitches" | "contextPrDiff">,
+    Exclude<keyof SteeringReads, "agents" | "killSwitches" | "steeringPrDiff">,
     unknown[][]
   > = {
     records: [],
     record: [],
     proposals: [],
-    contextPr: [],
+    steeringPr: [],
     freshness: [],
     layout: [],
     hub: [],
@@ -724,11 +724,11 @@ export function steeringSource(overrides: Partial<SteeringReads> = {}) {
         calls.proposals.push(args);
         return Promise.resolve(reads.proposals);
       },
-      contextPr: (...args) => {
-        calls.contextPr.push(args);
-        return Promise.resolve(reads.contextPr);
+      steeringPr: (...args) => {
+        calls.steeringPr.push(args);
+        return Promise.resolve(reads.steeringPr);
       },
-      contextPrDiff: () => Promise.resolve(reads.contextPrDiff),
+      steeringPrDiff: () => Promise.resolve(reads.steeringPrDiff),
       freshness: (...args) => {
         calls.freshness.push(args);
         return Promise.resolve(reads.freshness);

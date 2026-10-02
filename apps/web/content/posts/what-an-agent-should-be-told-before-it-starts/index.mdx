@@ -1,6 +1,6 @@
 ---
 title: "What an agent should be told before it starts"
-description: "A prompt file has no owner, no date, no scope, and no record that the agent read it. So it is a poor place for a standing rule. Context records give each rule those things."
+description: "A prompt file has no owner, no date, no scope, and no record that the agent read it. So it is a poor place for a standing rule. Steering records give each rule those things."
 date: 2026-09-16
 authors:
   - Oxagen Research
@@ -10,7 +10,7 @@ pillars:
 tags:
   - context
   - memory
-  - context-records
+  - steering-records
   - prompting
   - provenance
 draft: false
@@ -60,7 +60,7 @@ Go through the file line by line. For each line, ask what it would need to count
 
 It needs an owner, so that someone answers for it. It needs a scope, because a rule about the staging database is not a rule for every repository in the organisation. It needs a start date and a way to end, because much of the file describes systems that no longer exist. It needs a source, because the incident that caused a rule is often the most useful thing to know about it. Last, it needs a way to take effect that is more than one person editing a line. If an agent could rewrite a rule, the rule would not bind the agent.
 
-In Oxagen, that object is a **context record**. A record holds one thing that an agent or a person states, learns, proposes, or decides. Once written, a record never changes. Oxagen computes a hash, a short fingerprint of the content, from a standard form of the record. So two copies are either the same record or visibly different records. Each record has a scope, from one user up to the whole organisation. Each record also points back to the frame, the recorded event in a run, where it was learned. So the rule and the incident behind it are one link apart.
+In Oxagen, that object is a **steering record**. A record holds one thing that an agent or a person states, learns, proposes, or decides. Once written, a record never changes. Oxagen computes a hash, a short fingerprint of the content, from a standard form of the record. So two copies are either the same record or visibly different records. Each record has a scope, from one user up to the whole organisation. Each record also points back to the frame, the recorded event in a run, where it was learned. So the rule and the incident behind it are one link apart.
 
 <Timeline
   title="Three records over the same repository, read as of today"
@@ -99,7 +99,7 @@ A workspace keeps its records as files in its linked repository. A record takes 
     { label: "Promote", detail: "Oxagen writes a promotion event to a ledger. Each entry carries the hash of the entry before it." },
     { label: "Deliver", detail: "Oxagen adds the record to the context of the next run." },
   ]}
-  caption="The Context PR path. Without the review step, a record would be only a note an agent wrote to itself."
+  caption="The steering PR path. Without the review step, a record would be only a note an agent wrote to itself."
 />
 
 The review step answers a problem this pillar keeps returning to. It is the self-conditioning problem, where an agent builds on its own earlier mistakes. If an agent could write its own standing rules, one wrong conclusion at hour three would become a rule for every later run. The merge requirement does not make the agent's proposals better. It lets a person review them while they are still proposals.
@@ -118,7 +118,7 @@ Two limits follow. First, delivering a record does not make the model obey it. N
 
 ## Where this meets Oxagen
 
-Oxagen is workforce management for autonomous agents. Context records belong to the equipment clause of an agent's mandate. That clause covers the business context the agent may read and the steering it runs under. The engineers accountable for the agent set it. The scope on a record and the scope in the mandate use the same mechanism. So an agent gets what its work needs, not everything the organisation knows.
+Oxagen is workforce management for autonomous agents. Steering records belong to the equipment clause of an agent's mandate. That clause covers the business context the agent may read and the steering it runs under. The engineers accountable for the agent set it. The scope on a record and the scope in the mandate use the same mechanism. So an agent gets what its work needs, not everything the organisation knows.
 
 For an operator, this means "what was this agent told" has an answer. When a run goes wrong, the answer is a set of records. Each one has an owner, a scope, a hash, and the commit that made it active. Without records, the answer is a file edited over time by whoever was on call. When an agent learns something worth keeping, it proposes a record and does not decide alone. When a rule turns out to be wrong, you retract it with a pull request, so the retraction has a date too.
 

@@ -456,7 +456,7 @@ hooks for MDM-managed machines; the record is still labelled `client_attested`.
 ## What the daemon is today, and what it grows into
 
 The signed bundle carries the workspace's steering and, on governed calls, the
-agent's own mandate. The server compiles its active `must` and `should` context
+agent's own mandate. The server compiles its active `must` and `should` steering
 records into `context.system` (`packages/handlers/src/lib/tacho-steering.ts`,
 ADR-091), which `SessionStart` delivers. `permissions.{allow,deny,ask}` are
 mapped from the agent's tool RBAC (`packages/iam`'s `resourceScope.mcp` rules)

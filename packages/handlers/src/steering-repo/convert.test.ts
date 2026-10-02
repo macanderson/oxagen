@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { LEGACY_RECORD_SCHEMA } from "@oxagen/oxagen/steering-repo/paths";
 import {
   FIXTURE_ROOT,
   readFixtureTree,
@@ -86,7 +87,7 @@ function replacesOf(branch: ImportBranch): Map<string, string> | null {
 function legacyFact(n: number): [string, string] {
   const slug = `fact-${String(n).padStart(3, "0")}`;
   const text = [
-    'schema = "context-record/v0.1"',
+    `schema = "${LEGACY_RECORD_SCHEMA}"`,
     'set_id = "a-intel.core-platform"',
     "",
     "[[record]]",

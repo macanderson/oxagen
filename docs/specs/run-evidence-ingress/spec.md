@@ -53,7 +53,7 @@ The current seams and the corrections the enterprise claim requires:
 | Stella's current `ContextRecall` event carries frame id, citation, source, and token cost | It cannot prove the exact authorized bytes framed into a model call | Capture frame and rendered-content digests at the `ContextRecallPort`/compiler boundary |
 | ADR-028 `record-v1` is a local session sidecar containing cwd, prompts, tool I/O, and filesystem layers | It is not tenant-scoped, IAM-bound, retention-aware cloud evidence | Reuse its content-addressing and integrity patterns, not its envelope as the platform contract |
 
-Importing Stella before these corrections would put Stella behind an ambiguous run and context record. The evidence seam makes the later engine change transport-only: TS and Stella engines must emit the same platform receipts.
+Importing Stella before these corrections would put Stella behind an ambiguous run and steering record. The evidence seam makes the later engine change transport-only: TS and Stella engines must emit the same platform receipts.
 
 ## First success case
 

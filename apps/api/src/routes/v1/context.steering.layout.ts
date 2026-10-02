@@ -9,7 +9,7 @@ import type { AppEnv } from "../../app";
  * Which layout the workspace's bound repository uses, steering or legacy
  * (#4765). Mounted on the org-scoped router behind session auth (ADR-061).
  *
- * A client reads it to preview the path and branch `open_context_pr` will
+ * A client reads it to preview the path and branch `open_steering_pr` will
  * write, so it stays a plain read with no per-route logic.
  */
 export const contextSteeringLayoutRoute = new Hono<AppEnv>();

@@ -19,7 +19,7 @@ export async function generateMetadata(): Promise<Metadata> {
 
 // Repositories (mockups/pages/repositories.md; MC spec §10.1, §10.2; mockup
 // route `repositories[/<tab>]`): the four tabs are path segments on this one
-// route, `changes/<id>` is one Context PR, and a segment that names neither is
+// route, `changes/<id>` is one steering PR, and a segment that names neither is
 // a 404 rather than a page that guesses. The page reads on demand through its
 // own server actions, which resolve the viewer again (§3.3).
 //

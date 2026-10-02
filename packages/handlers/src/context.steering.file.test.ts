@@ -7,6 +7,7 @@ import {
   lineageSlug,
   parseRecordFile,
   readRecordFile,
+  RECORD_SCHEMA_TAG,
   recordFilePath,
   reviseRecordStatement,
   serializeRecordFile,
@@ -60,7 +61,7 @@ describe("record file", () => {
       setId: "a-intel.platform",
     });
     const text = serializeRecordFile(file);
-    expect(text).toContain('schema = "context-record/v0.1"');
+    expect(text).toContain(`schema = "${RECORD_SCHEMA_TAG}"`);
     expect(text).toContain("[[record]]");
     expect(text).toContain("[record.provenance]");
     expect(text).toContain('force = "should"');

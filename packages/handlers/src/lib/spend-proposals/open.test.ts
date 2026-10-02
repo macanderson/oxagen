@@ -1,7 +1,7 @@
 import type { SpendProposalInput } from "@oxagen/billing/proposal-opener";
 import { HandlerError } from "@oxagen/oxagen";
 import { describe, expect, it, vi } from "vitest";
-import { createProposal } from "../../context.proposal.shared";
+import { createProposal } from "../../steering.proposal.shared";
 import type { SteeringStore } from "../../context.steering.store";
 import { openSpendProposalsFor } from "./index";
 import { buildSpendProposals, openProposals } from "./open";

@@ -5,7 +5,7 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { codeRepositoryFindingsList } from "@oxagen/oxagen/contracts/repository.findings.list";
 import { instructionPromote } from "@oxagen/oxagen/contracts/repository.instruction.promote";
-import { openContextPrHandler } from "../context.pr.open";
+import { openSteeringPrHandler } from "../steering.pr.open";
 import { postgresSteeringStore } from "../context.steering.store";
 import { assertContractRole } from "../lib/capability-role-guard";
 import { codeRepoCheckDeps } from "./deps";
@@ -30,7 +30,7 @@ export const promoteInstructionHandler: CapabilityHandler<
   findings: postgresCodeRepoFindingStore,
   publishedRecords: codeRepoCheckDeps.publishedRecords,
   steering: postgresSteeringStore,
-  openPr: (input, ctx) => openContextPrHandler(input, ctx),
+  openPr: (input, ctx) => openSteeringPrHandler(input, ctx),
   assertRole: async (ctx) => {
     await assertContractRole(instructionPromote, ctx);
   },

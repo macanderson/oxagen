@@ -8,7 +8,7 @@ time. Four jobs:
    truth (ADR-036).
 2. **Canonicalize and digest** any JSON value using RFC 8785 (JCS), so the same
    value always produces the same `sha256:` digest.
-3. **Hash a context record** the way Stella does (`recordHash`,
+3. **Hash a steering record** the way Stella does (`recordHash`,
    `src/record-hash.ts`), so a record in `.oxagen/rules/` verifies in both.
 4. **Define the proof vocabulary**: the `proof.observed` frame body, the
    verdict, oracle, disclosure-grain, and tamper word lists, and the one
@@ -19,7 +19,7 @@ time. Four jobs:
 
 - **Owns:** JCS canonical bytes and `sha256:` digests (`src/digest.ts`), CGP
   frame and query normalization (`src/contextgraph.ts`, `src/json-wire.ts`),
-  the context-record hash (`src/record-hash.ts`), the proof vocabulary and
+  the steering-record hash (`src/record-hash.ts`), the proof vocabulary and
   verdict rollup (`src/proof.ts`), the published envelope limits
   (`src/limits.ts`), and the vendored CGP golden fixtures (`fixtures/`).
 - **Does not own:**
@@ -38,7 +38,7 @@ time. Four jobs:
 | Seam | Kind | Source | Wired by |
 |---|---|---|---|
 | `digestJcs` | export | `packages/run-evidence/src/digest.ts` | `packages/iam/src/authorization-snapshot.ts`, `packages/iam/src/check-iam.ts`, `packages/agent/src/runtime/assistant-run.ts`, `packages/agent/src/runtime/assistant-steering.ts` |
-| `recordHash` | export | `packages/run-evidence/src/record-hash.ts` | `packages/handlers/src/context.records.append.ts`, `packages/handlers/src/context.steering.file.ts` |
+| `recordHash` | export | `packages/run-evidence/src/record-hash.ts` | `packages/handlers/src/steering.records.append.ts`, `packages/handlers/src/context.steering.file.ts` |
 | `PROOF_VERDICTS` / `DISCLOSURE_GRAINS` / `proofObservedBodySchema` | export | `packages/run-evidence/src/proof.ts` | Contracts in `packages/oxagen/src/contracts/` (`run.list.ts`, `run.proof.get.ts`, `tacho.events.ingest.ts`, `evidence.disclosure_grain.set.ts`), `packages/database/src/schema/cost.ts`, and `packages/database/src/schema/run-evidence-foundation.ts` |
 | `aggregateRunVerdict` | export | `packages/run-evidence/src/proof.ts` | `packages/database/src/proof.ts`, `packages/handlers/src/run.proof.get.ts` |
 | Vendored CGP fixtures | boundary | `packages/run-evidence/fixtures/contextgraph/` | `pnpm check:contextgraph-fixtures` |

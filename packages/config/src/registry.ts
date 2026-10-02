@@ -2497,7 +2497,7 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     group: "Operator scripts",
     description:
       "A gitlab.com project access token that `tools/scripts/gitlab-steering-exercise.ts` " +
-      "publishes one context record with, as recorded evidence for #3762. Set it in the " +
+      "publishes one steering record with, as recorded evidence for #3762. Set it in the " +
       "shell for one run only; the platform never reads it, and workspaces store their own " +
       "tokens through attach_gitlab_project.",
     secret: true,

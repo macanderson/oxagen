@@ -15,9 +15,9 @@ export const STEERING_GAPS = {
   gates: 3880,
   /** The outcome, citing frame and record of each run a proposal cites, and the promoter's confidence (#3881). */
   support: 3881,
-  /** A Context PR's record file, code owner, closing comment and promotion event, read from GitHub (#3882). */
-  contextPr: 3882,
-  /** A governance change as a Context PR in every mode, and an org-owner approval and security event for a lowering (#3859). */
+  /** A steering PR's record file, code owner, closing comment and promotion event, read from GitHub (#3882). */
+  steeringPr: 3882,
+  /** A governance change as a steering PR in every mode, and an org-owner approval and security event for a lowering (#3859). */
   governance: 3859,
   /** The policy that decided a refused read, carried on the denial (#3846). */
   denial: 3846,

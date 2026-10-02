@@ -87,8 +87,8 @@ afterEach(async () => {
   }
 });
 
-// `revise_context_record` refuses on its own two reasons and then hands the
-// proposal to `open_context_pr`, so every reason that call throws reaches the
+// `revise_steering_record` refuses on its own two reasons and then hands the
+// proposal to `open_steering_pr`, so every reason that call throws reaches the
 // editor too. Each one has to name what the reader can do next.
 describe("useReviseFailure › the reason the write gives", () => {
   it.each(REFUSALS)("names what %j means", (failure, sentence) => {
@@ -210,7 +210,7 @@ describe("Related › a read that did not answer", () => {
     );
   });
 
-  // A record no Context PR classified carries no statement, so the card falls
+  // A record no steering PR classified carries no statement, so the card falls
   // back to the title. Without the fallback the card would draw an empty line.
   it("falls back to the title on a record with no statement", () => {
     render(

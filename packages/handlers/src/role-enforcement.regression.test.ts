@@ -92,8 +92,8 @@ vi.mock("@oxagen/telemetry", () => ({ captureError: vi.fn() }));
 
 import { checkIAM } from "@oxagen/iam/check-iam";
 import { connectionPreviewHandler } from "./connection.preview";
-import { contextRecordPublishHandler } from "./context.record.publish";
-import { contextRecordPromoteHandler } from "./context.record.promote";
+import { steeringRecordPublishHandler } from "./steering.record.publish";
+import { steeringRecordPromoteHandler } from "./steering.record.promote";
 import { handler as revokeCredential } from "./plugin.credential.revoke";
 import { routerPolicySetHandler } from "./router.policy.set";
 import { schemaToggleHandler } from "./schema.toggle";
@@ -123,14 +123,14 @@ const cases = [
     callerGuard: true,
   },
   {
-    name: "publish_context_record",
-    handler: contextRecordPublishHandler,
+    name: "publish_steering_record",
+    handler: steeringRecordPublishHandler,
     input: { record_id: "rule", body: "Require approval" },
     workspace: ["Owner", "Admin"],
   },
   {
-    name: "promote_context_record",
-    handler: contextRecordPromoteHandler,
+    name: "promote_steering_record",
+    handler: steeringRecordPromoteHandler,
     input: {},
     workspace: ["Owner", "Admin"],
   },

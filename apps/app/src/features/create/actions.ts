@@ -6,11 +6,11 @@
 // every wizard's pull request targets. The writes are the pull requests
 // themselves. Nothing here writes the thing being created: each write cuts a
 // branch in the workspace's main repository and opens a pull request, and the
-// thing exists when a person merges it. The one row is the context record's
-// proposal, which is the Context PR's own state machine (MC spec §10.3) and
+// thing exists when a person merges it. The one row is the steering record's
+// proposal, which is the steering PR's own state machine (MC spec §10.3) and
 // steers nothing.
-import { contextPrOpen } from "@oxagen/oxagen/contracts/context.pr.open";
-import { contextProposalCreate } from "@oxagen/oxagen/contracts/context.proposal.create";
+import { steeringPrOpen } from "@oxagen/oxagen/contracts/steering.pr.open";
+import { steeringProposalCreate } from "@oxagen/oxagen/contracts/steering.proposal.create";
 import { contextSteeringFreshness } from "@oxagen/oxagen/contracts/context.steering.freshness";
 import { contextSteeringLayout } from "@oxagen/oxagen/contracts/context.steering.layout";
 import { skillPropose } from "@oxagen/oxagen/contracts/skill.propose";
@@ -24,7 +24,7 @@ import type { RecordChoice, RepoLayout } from "./record-file";
  * production branch carries (#4765): `steering` when it holds
  * `steering/governance.toml`, `legacy` otherwise, null while the layout read
  * failed. The wizard's preview needs this to show the path and branch
- * open_context_pr will actually write, because the two layouts disagree on
+ * open_steering_pr will actually write, because the two layouts disagree on
  * both. Null while the workspace binds no repository.
  */
 type MainRepository = {
@@ -123,13 +123,13 @@ export async function proposeSkill(
   };
 }
 
-// ── The context-record wizard (roadmap creation-spec §5; MC spec §10) ────────
+// ── The steering-record wizard (roadmap creation-spec §5; MC spec §10) ────────
 
 /**
- * The context-record wizard's first write: propose_record stores the record
+ * The steering-record wizard's first write: propose_record stores the record
  * the operator chose as a proposal on its lineage, with the description as the
  * rationale the pull request carries. A proposal steers nothing (MC spec
- * §10.3). It is the Context PR's state, not the record: the record exists
+ * §10.3). It is the steering PR's state, not the record: the record exists
  * when the pull request merges.
  */
 export async function proposeRecord(
@@ -144,7 +144,7 @@ export async function proposeRecord(
   // A create never revises: a label need not be unique, so a new record can
   // derive a slug another record holds, and createOnly refuses it rather than
   // proposing a new version of that record (ADR-178).
-  const result = await kernelWrite(ctx, contextProposalCreate, {
+  const result = await kernelWrite(ctx, steeringProposalCreate, {
     record: input.record,
     rationale: input.rationale.trim(),
     support: {},
@@ -164,7 +164,7 @@ export async function proposeRecord(
 export type OpenedRecord = {
   proposalId: string;
   lineageId: string;
-  status: ContractOutput<typeof contextPrOpen>["status"];
+  status: ContractOutput<typeof steeringPrOpen>["status"];
   pr: {
     number: number;
     url: string;
@@ -176,7 +176,7 @@ export type OpenedRecord = {
 };
 
 /**
- * The wizard's last write: open_context_pr cuts a branch from the main
+ * The wizard's last write: open_steering_pr cuts a branch from the main
  * repository's production branch, commits the one record file at the path
  * its layout uses, opens the pull request, and runs the six checks. It
  * answers with where the checks stopped, and with the path and branch it
@@ -189,7 +189,7 @@ export async function openRecordPr(
   proposalId: string,
 ): Promise<ActionResult<OpenedRecord>> {
   const ctx = await requireViewer(org, ws);
-  const result = await kernelWrite(ctx, contextPrOpen, { proposalId });
+  const result = await kernelWrite(ctx, steeringPrOpen, { proposalId });
   if (!result.ok) return result;
   const out = result.value;
   return {

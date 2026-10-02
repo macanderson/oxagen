@@ -169,4 +169,11 @@ describe("the catalogs in messages/", () => {
       [],
     );
   });
+
+  // A steering record and its steering PR have one name (#4325). The words
+  // before the rename stay out of every string a person reads.
+  it.each(files)("%s names steering records and steering PRs", (file) => {
+    const text = readFileSync(path.join(dir, file), "utf8");
+    expect(text).not.toMatch(/\bcontext[\s_-]+(?:records?|PRs?)\b/i);
+  });
 });

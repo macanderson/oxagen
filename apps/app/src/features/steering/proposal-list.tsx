@@ -1,10 +1,10 @@
 // The Proposals list (#5077): one row per proposal in the state the filter
-// names, newest first. The whole row is a link to the proposal's Context PR
+// names, newest first. The whole row is a link to the proposal's steering PR
 // page: the lineage is a real anchor stretched over the row (the Runtimes
 // table's pattern), so a click anywhere on the row, a cmd/ctrl-click, a
 // middle-click and Enter on the focused link all behave as a link does. The
 // link out to the pull request on the host sits above the stretched anchor,
-// so following it never opens the Context PR page.
+// so following it never opens the steering PR page.
 import { useLocale, useTranslations } from "next-intl";
 import {
   type Proposal,

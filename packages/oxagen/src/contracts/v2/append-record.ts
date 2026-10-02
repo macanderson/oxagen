@@ -12,7 +12,7 @@ import { referenceCite } from "../reference.cite";
  * `evidence`, `record_proposal`, `context_use`, `context_use_feedback`.
  *
  * `directive` is deliberately absent. §9: "An agent may only *propose* a
- * `directive`. It becomes active only through a Context PR (§10)." Leaving it
+ * `directive`. It becomes active only through a steering PR (§10)." Leaving it
  * out of the enum is what makes that a schema guarantee rather than a handler
  * check — an agent cannot append a rule that steers the next run.
  * `promotion_event` is absent for the same class of reason: "The promoter
@@ -21,7 +21,7 @@ import { referenceCite } from "../reference.cite";
  * Exported because `list_records` filters on the same closed set and the two
  * must not drift.
  */
-export const contextRecordKindSchema = z.enum([
+export const steeringRecordKindSchema = z.enum([
   "observation",
   "memory",
   "knowledge",
@@ -48,9 +48,9 @@ export const contextRecordKindSchema = z.enum([
  * call in the batch.** v1 had `memoryClass` (OBSERVATION → RULE → FACT) and
  * `enforcementScore` on the append itself, so an agent could write a rule with
  * enforcement 100 in one call. §9 forbids exactly that: a directive is
- * proposed, never appended, and becomes active only on a Context PR merge
+ * proposed, never appended, and becomes active only on a steering PR merge
  * (§10.3). The class ladder therefore moves out of the append and into
- * `propose_record` + `open_context_pr`, and what an agent appends is always an
+ * `propose_record` + `open_steering_pr`, and what an agent appends is always an
  * observation-grade record. `memoryKind` (the content-domain axis) goes with
  * it, superseded by the protocol's `kind`.
  *
@@ -65,7 +65,7 @@ export const appendRecord = defineTool({
   name: "append_record",
   domain: "context",
   description:
-    "Append one context record to the workspace's lineage graph — an observation, a memory, a knowledge claim, evidence, or a record of context being used. Canonically hashed per §9. An agent cannot append a directive; that is propose_record.",
+    "Append one steering record to the workspace's lineage graph — an observation, a memory, a knowledge claim, evidence, or a record of context being used. Canonically hashed per §9. An agent cannot append a directive; that is propose_record.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "e2e", "docs", "app"],
@@ -120,7 +120,7 @@ export const appendRecord = defineTool({
     {
       field: "memoryClass",
       from: "write_memory",
-      why: "§9: an agent may only propose a directive, and it becomes active only through a Context PR (§10.3). Letting an append name RULE or FACT is the exact thing that rule forbids — the class ladder moves to propose_record",
+      why: "§9: an agent may only propose a directive, and it becomes active only through a steering PR (§10.3). Letting an append name RULE or FACT is the exact thing that rule forbids — the class ladder moves to propose_record",
     },
     {
       field: "memoryClass",
@@ -206,7 +206,7 @@ export const appendRecord = defineTool({
   mutates: true,
 
   input: z.object({
-    kind: contextRecordKindSchema,
+    kind: steeringRecordKindSchema,
 
     /**
      * The record body. Carried by reference from `write_memory` — 1–2000
@@ -235,7 +235,7 @@ export const appendRecord = defineTool({
      * §10.2: a record with `sharing_scope = "repository"` steers only runs on
      * that repo and is published to the linked repo's own `.oxagen/rules/`.
      * New — v1 memories were implicitly workspace-wide — and it has to be
-     * declared at append time because it decides which repo a later Context PR
+     * declared at append time because it decides which repo a later steering PR
      * targets (§10.3 step 1).
      */
     sharingScope: z.enum(["workspace", "repository"]).default("workspace"),
@@ -302,7 +302,7 @@ export const appendRecord = defineTool({
     /** §9: "`record_id` is derived from the content." */
     recordId: z.string(),
     lineageId: z.string(),
-    kind: contextRecordKindSchema,
+    kind: steeringRecordKindSchema,
 
     /**
      * §9: SHA-256 over the RFC 8785 canonical bytes with the hash member

@@ -1,13 +1,13 @@
 // The Steering hub header's one gold action (roadmap pages/steering.md and
 // creation-spec §1, the entry-point table): "Add a skill" on the Skills shelf,
-// "Write a context record" everywhere else. Each opens its wizard over the
+// "Write a steering record" everywhere else. Each opens its wizard over the
 // page. The empty state carries the gold instead, so the header renders none
 // there (./steering.tsx).
 //
 // A view whose body holds its own primary action takes the gold from the
 // header (the design's `tabPrimary`): the Skills shelf's Search and Versions
 // views, whose submit buttons are. There the header button is drawn
-// secondary, so the screen still carries exactly one gold. A Context PR's
+// secondary, so the screen still carries exactly one gold. A steering PR's
 // Merge is gold on its own page (#5077), outside this hub.
 import { useTranslations } from "next-intl";
 import { CreateButton } from "@/ui/create-button";

@@ -25,7 +25,7 @@ export function RecordCard({
   badge,
   children,
 }: {
-  /** Null on a record no Context PR classified. */
+  /** Null on a record no steering PR classified. */
   /**
    * A record kind, `governance` on a governance proposal (#4795), or a
    * steering PR kind on a steering PR proposal (#5122).

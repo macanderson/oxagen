@@ -6,7 +6,7 @@ import { agentRetire } from "../agent.retire";
  * Appendix E: `retire_agent`, "principal retired, never deleted". ADR-198 kept
  * the outcome and replaced the mechanism.
  *
- * Appendix E had it open a Context PR removing `.oxagen/agents/<slug>.toml`,
+ * Appendix E had it open a steering PR removing `.oxagen/agents/<slug>.toml`,
  * absorbing `delete_agent_def`. ADR-198 deleted that contract with the
  * definition file: an agent carries no file to remove. Retirement is one write
  * that archives the agent, suspends its principal, and revokes its

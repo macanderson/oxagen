@@ -9,10 +9,9 @@
 // fontkit 2.0.4 can't instance a weight from the WOFF2 itself: getVariation
 // reads the file again as a plain TrueType font, which finds no cmap, and
 // fontkit never applies a weight to the outlines it decodes from a WOFF2.
-// When the kit's WOFF2 changes, unpack it again with the kit's fontTools:
-//
-//   f = TTFont("apps/web/fonts/aeonik-wght.woff2"); f.flavor = None
-//   f.save("apps/web/scripts/fonts/aeonik-wght.ttf")
+// When the brand sync changes the site's WOFF2, unpack it again with
+// `node apps/web/scripts/unpack-aeonik.mjs`. Until someone does,
+// `pnpm check:contracts` fails (lib/aeonik-ttf.mjs).
 
 import path from "node:path";
 import { fileURLToPath } from "node:url";

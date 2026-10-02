@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { makeCTX } from "./test-utils/fixtures";
+import { LEGACY_RECORD_SCHEMA } from "@oxagen/oxagen/steering-repo/paths";
 import { createConfigurationCloneGetHandler } from "./configuration.clone.get";
 import {
   configurationSourceDigest,
@@ -100,7 +101,7 @@ describe("get_clone_draft", () => {
       slug: "ctx.core.review",
       name: "Review every changed file before merge",
       source: [
-        'schema = "context-record/v0.1"',
+        `schema = "${LEGACY_RECORD_SCHEMA}"`,
         "[[record]]",
         'lineage_id = "ctx.core.review"',
         'label = "Review every changed file before merge"',
