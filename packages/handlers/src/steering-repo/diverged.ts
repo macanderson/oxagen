@@ -2,7 +2,8 @@
 // request that puts main back at the published commit.
 //
 // GitHub provenance comes from the host's merged pull request records. Commit
-// messages and authors cannot prove who merged a change. Equal tree hashes
+// messages and authors cannot prove who merged a change. A `(#N)` at the end
+// of a title only says which pull request record to read. Equal tree hashes
 // prove restoration to published files. GitLab retains its protected-branch
 // trailer checks.
 //
@@ -15,6 +16,7 @@ import type {
   SteeringApp,
 } from "@oxagen/github/provision";
 import type { GitlabRest, SteeringBot } from "@oxagen/gitlab/provision";
+import { HandlerError } from "@oxagen/oxagen";
 import {
   REQUIRED_CHECK_NAME,
   STEERING_DEFAULT_BRANCH,
@@ -246,21 +248,7 @@ export interface GithubHistoryTarget {
   repo: RepoAddress & { id?: number };
   app: SteeringApp;
   defaultBranch?: string;
-  /** Waits between reads while GitHub links a new merge commit to its pull request. Defaults to a timer. */
-  sleep?: (ms: number) => Promise<void>;
 }
-
-/**
- * GitHub links a merge commit to its pull request a moment after the merge,
- * so `commits/<sha>/pulls` can list nothing for a commit merged seconds ago.
- * The merge handler checks its own merge straight away, and on 2026-10-02 it
- * refused Oxagen's merge 720e225 as one "Oxagen did not merge" two seconds
- * after GitHub merged it (#5157). Accepting an exact commit therefore reads
- * the link again, at most LINK_READS times LINK_INTERVAL_MS apart, before it
- * decides the commit has no pull request.
- */
-const LINK_READS = 8;
-const LINK_INTERVAL_MS = 1_000;
 
 interface GithubDeployment {
   sha: string;
@@ -385,54 +373,47 @@ interface GithubMergedPull {
   merged_by?: { type?: string; login?: string } | null;
 }
 
-/**
- * The pull requests GitHub links to `sha`. With `settle`, an empty list is
- * read again until GitHub links one or LINK_READS reads pass.
- */
-async function githubCommitPulls(
-  t: GithubHistoryTarget,
-  sha: string,
-  settle: boolean,
-): Promise<{ number: number }[]> {
-  const read = async () =>
-    need(
-      (
-        await t.rest.request<{ number: number }[]>(
-          "GET",
-          `${githubRoot(t)}/commits/${seg(sha)}/pulls?per_page=100`,
-        )
-      ).data,
-      "GitHub commit pull requests",
-    );
-  let listed = await read();
-  const sleep =
-    t.sleep ??
-    ((ms: number) => new Promise<void>((done) => setTimeout(done, ms)));
-  for (
-    let reads = 1;
-    settle && listed.length === 0 && reads < LINK_READS;
-    reads += 1
-  ) {
-    await sleep(LINK_INTERVAL_MS);
-    listed = await read();
-  }
-  return listed;
+/** `Title (#12)`: the pull request number GitHub and Oxagen put on a squash title. */
+const TITLE_PULL = /\(#(\d+)\)[ \t]*\r?$/;
+
+/** The pull request number at the end of the message's first line, or null. */
+function titlePull(message: string): number | null {
+  const title = message.split("\n", 1)[0] ?? "";
+  const number = parseVersion(TITLE_PULL.exec(title)?.[1]);
+  return number !== null && number > 0 ? number : null;
 }
 
 /**
  * Authenticate the merge against the full pull request returned by GitHub.
- * `settle` waits for GitHub to link a commit merged moments ago.
+ *
+ * GitHub fills in a commit's list of pull requests a few seconds after the
+ * merge, so a read just after Oxagen merges finds none (#5157). Every merge
+ * Oxagen makes ends its title with `(#N)`, so when the list does not prove
+ * the merge, pull request N is read as well. The title only says which pull
+ * request to read. The proof is the pull request itself: GitHub must say the
+ * app merged it into this repository's production branch as exactly this
+ * commit. A forged title can name a real pull request, but that pull
+ * request's merge commit is another commit, so the forged one still fails.
  */
 async function githubAuthenticatedMerge(
   t: GithubHistoryTarget,
   sha: string,
-  settle = false,
+  message: string,
 ): Promise<boolean> {
   const root = githubRoot(t);
-  for (const summary of await githubCommitPulls(t, sha, settle)) {
+  const listed = await t.rest.request<{ number: number }[]>(
+    "GET",
+    `${root}/commits/${seg(sha)}/pulls?per_page=100`,
+  );
+  const numbers = need(listed.data, "GitHub commit pull requests").map(
+    (summary) => summary.number,
+  );
+  const named = titlePull(message);
+  if (named !== null && !numbers.includes(named)) numbers.push(named);
+  for (const number of numbers) {
     const response = await t.rest.request<GithubMergedPull>(
       "GET",
-      `${root}/pulls/${seg(summary.number)}`,
+      `${root}/pulls/${seg(number)}`,
     );
     const pull = need(response.data, "GitHub pull request");
     const repo = pull.base?.repo;
@@ -509,15 +490,9 @@ export async function githubDiverged(
       parents: commit.parents.map((parent) => parent.sha),
       message: commit.commit.message,
       // A restored tree discards earlier changes. Every later commit needs proof.
-      // Only the exact commit a caller asked about may be a merge so new that
-      // GitHub has not linked it yet, so only it waits for the link.
       authenticated:
         compare.status === "ahead" && !truncated && index > restored_at
-          ? await githubAuthenticatedMerge(
-              t,
-              commit.sha,
-              commit.sha === candidateSha,
-            )
+          ? await githubAuthenticatedMerge(t, commit.sha, commit.commit.message)
           : false,
     });
   }
@@ -530,21 +505,29 @@ export async function githubDiverged(
   });
 }
 
-/** Refuse an exact commit unless it descends safely from an app deployment. */
+/**
+ * Refuse an exact commit unless it descends safely from an app deployment.
+ * Both refusals are `conflict`s the caller can show, not a server error: a
+ * repository Oxagen cannot vouch for is a state of the repository (#5157).
+ */
 export async function assertGithubSteeringCommit(
   t: GithubHistoryTarget,
   commit: string,
 ): Promise<void> {
   const published = await githubPublished(t);
   if (published === null)
-    throw new Error(
-      "No authenticated Oxagen steering deployment anchors this repository.",
-    );
+    throw new HandlerError({
+      code: "conflict",
+      reason: "steering_publication_missing",
+      message: `Oxagen found no steering version its GitHub App published in ${t.repo.owner}/${t.repo.name}, so it cannot check who merged steering commit ${short(commit)}. Oxagen publishes nothing from that commit.`,
+    });
   const divergence = await githubDiverged(t, published, commit);
   if (divergence !== null)
-    throw new Error(
-      `Oxagen cannot accept steering commit ${short(commit)}: ${divergence.reason}.`,
-    );
+    throw new HandlerError({
+      code: "conflict",
+      reason: "steering_commit_unproven",
+      message: `Oxagen cannot accept steering commit ${short(commit)}: ${divergence.reason}. Oxagen publishes nothing from that commit. Check the steering repo's health in Oxagen before you merge again.`,
+    });
 }
 
 /**
