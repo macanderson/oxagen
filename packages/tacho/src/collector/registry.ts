@@ -549,6 +549,16 @@ export interface RegistryOptions {
     | ReadonlyMap<number, string>
     | undefined
     | PromiseLike<ReadonlyMap<number, string> | undefined>;
+  /**
+   * Where a chain a backfill sealed ends, by session uuid (ADR-161). A
+   * session the registry does not hold, whose chain neither a tombstone nor
+   * the WAL places, continues from here when it resumes: the WAL drops a
+   * shipped session after a week, and a resume after that would otherwise
+   * start the chain again at seq 0 on a session the control plane holds.
+   */
+  adoptedChain?: (
+    sessionUuid: string,
+  ) => { cursor: ChainCursor; turnSeq: number } | undefined;
 }
 
 function isPromiseLike<T>(value: unknown): value is PromiseLike<T> {
@@ -623,6 +633,18 @@ export class SessionRegistry {
    * so a caller that knows which agent it is goes through `ensure`, which
    * never crosses from one agent's record to another's.
    */
+  /**
+   * Whether this registry places a chain for the session: it holds the
+   * session, or a tombstone for it. A backfill leaves such a session to the
+   * live path (ADR-161).
+   */
+  holdsChain(harnessSessionId: string): boolean {
+    return (
+      this.get(harnessSessionId) !== undefined ||
+      this.tombstones.has(sessionMapKey(harnessSessionId))
+    );
+  }
+
   get(harnessSessionId: string): SessionRecord | undefined {
     let best: SessionRecord | undefined;
     for (const record of this.sessions.values()) {
@@ -973,15 +995,24 @@ export class SessionRegistry {
     const recorder = new SessionRecorder(options);
     const key = this.key(harnessSessionId, facts);
     const tombstone = this.tombstones.get(key);
-    if (tombstone === undefined) return recorder;
-    this.tombstones.delete(key);
-    if (tombstone.sessionUuid !== recorder.sessionUuid) return recorder;
+    if (tombstone !== undefined) this.tombstones.delete(key);
+    // A tombstone places the chain first, then the WAL (the recorder's own
+    // `continueFromDisk`), then a backfill's cursor file.
+    const adopted =
+      tombstone === undefined && !recorder.bornOnDisk
+        ? this.options.adoptedChain?.(recorder.sessionUuid)
+        : undefined;
+    const head =
+      tombstone !== undefined && tombstone.sessionUuid === recorder.sessionUuid
+        ? { cursor: tombstone.cursor, turnSeq: tombstone.turnSeq }
+        : adopted;
+    if (head === undefined) return recorder;
     return new SessionRecorder({
       ...options,
       restore: {
-        sessionUuid: tombstone.sessionUuid,
-        cursor: { ...tombstone.cursor },
-        turnSeq: tombstone.turnSeq,
+        sessionUuid: recorder.sessionUuid,
+        cursor: { ...head.cursor },
+        turnSeq: head.turnSeq,
         turnOpen: false,
         // The chain opened long ago, so the next SessionStart is sealed as
         // the resume it is.

@@ -1,3 +1,4 @@
+export * from "./backfill";
 export * from "./credential";
 export * from "./deps";
 export * from "./detect";
