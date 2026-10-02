@@ -55,6 +55,11 @@ Oxagen as a reverse request, and Oxagen answers it.
   entitlement, approval and billing gates like every other call, and it
   writes an audit record. Under ADR-052 each one is a governed action and
   bills as one. The engine sees a tool result, never a credential.
+
+  > **Amended 2026-09-30 by ADR-235.** A tool call a person's turn makes
+  > skips the workspace's decision-rules gate, because the workspace does
+  > not govern Stella. The IAM, entitlement, approval and billing gates above
+  > still apply. A turn an API key starts keeps the rules.
 - **A completion is answered through `@oxagen/ai`.** The key stays in
   Oxagen. The engine sees text.
 - **The engine holds no authority.** Its only configuration is a bearer

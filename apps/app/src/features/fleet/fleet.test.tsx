@@ -285,7 +285,10 @@ describe("Fleet reads", () => {
     expect(calls.approvals).toEqual([[ctx, { runId: null }]]);
     // The open questions, for the waiting tile (#3839).
     expect(calls.interjections).toEqual([[ctx, { runId: null }]]);
-    expect(calls.agents).toEqual([[ctx, { cursor: null }]]);
+    // Retired agents come too, for their old runs' harness badge.
+    expect(calls.agents).toEqual([
+      [ctx, { cursor: null, includeRetired: true }],
+    ]);
   });
 
   it("reads every page of the workspace's agents, so Steer lists all of them", async () => {
@@ -305,8 +308,8 @@ describe("Fleet reads", () => {
       agents: (cursor) => pages[cursor ?? "first"] ?? readError("x", 500),
     });
     expect(calls.agents).toEqual([
-      [ctx, { cursor: null }],
-      [ctx, { cursor: "a2" }],
+      [ctx, { cursor: null, includeRetired: true }],
+      [ctx, { cursor: "a2", includeRetired: true }],
     ]);
     const user = userEvent.setup();
     await user.click(screen.getByTestId("fleet-steer"));
@@ -676,6 +679,47 @@ describe("the Runs panel", () => {
       within(row("arun_halted")).getByTestId("row-tokens"),
     ).toHaveAttribute("data-recorded", "false");
     expect(row("arun_halted")).toHaveTextContent("not recorded");
+  });
+
+  it("badges a ledger run's agent with the harness the agent registered, since the run recorded none", async () => {
+    await renderFleet({
+      runs: runPage([
+        runRow({ id: "arun_known" }),
+        runRow({ id: "arun_stranger", agentKey: "acme.core.stranger" }),
+      ]),
+      approvals: NO_APPROVALS,
+      agents: agentPage(["acme.core.release-bot"]),
+    });
+    expect(
+      row("arun_known").querySelector("[data-harness-badge]"),
+    ).toHaveAttribute("data-harness-badge", "claude-code");
+    // The sub-line still names where the run came from.
+    expect(row("arun_known")).toHaveTextContent("evidence ledger");
+    // An agent the roster does not hold has no harness to show (negative).
+    expect(
+      row("arun_stranger").querySelector("[data-harness-badge]"),
+    ).toBeNull();
+  });
+
+  it("badges a retired agent's old run with the harness it registered", async () => {
+    const page = pageValue(
+      ["acme.core.release-bot", "acme.core.gone"],
+      1,
+      null,
+    );
+    const retired = page.agents.map((agent) =>
+      agent.agentKey === "acme.core.gone"
+        ? { ...agent, status: "retired" as const, harness: "codex" as const }
+        : agent,
+    );
+    await renderFleet({
+      runs: runPage([runRow({ id: "arun_old", agentKey: "acme.core.gone" })]),
+      approvals: NO_APPROVALS,
+      agents: { ok: true, value: { ...page, agents: retired } },
+    });
+    expect(
+      row("arun_old").querySelector("[data-harness-badge]"),
+    ).toHaveAttribute("data-harness-badge", "codex");
   });
 
   it("draws the operator's avatar when they set one, and their initials when they did not", async () => {

@@ -295,11 +295,56 @@ describe("Runtimes tab, loaded", () => {
       "#3818",
     );
     expect(cells[2]).toHaveTextContent(/^not recorded$/);
-    expect(cells[3]).toHaveTextContent(/^acme\.core\.release-manager$/);
+    // The agent's avatar carries the harness the agent registered.
+    expect(cells[3]).toHaveTextContent(/acme\.core\.release-manager$/);
+    expect(
+      nth(cells, 3, "cell").querySelector("[data-harness-badge]"),
+    ).toHaveAttribute("data-harness-badge", "claude-code");
     expect(nth(cells, 4, "cell").querySelector("time")).toHaveAttribute(
       "datetime",
       seen,
     );
+  });
+
+  it("badges a host row's agent with the harness it registered, not the one the machine detected", async () => {
+    const calls = await renderList({
+      list: runtimeList([
+        enrollment({ harnesses: ["claude-code"] }),
+        enrollment({
+          id: "tch_strangeraaaaaaaaaaaaaa",
+          agentKey: "acme.core.stranger",
+        }),
+        enrollment({ id: "tch_noagentaaaaaaaaaaaaaa", agentKey: "" }),
+      ]),
+      agents: readOk({ agents: [runtimeAgent({ harness: "custom" })] }),
+    });
+    // One read for the agents the rows name, each key once.
+    expect(calls.agents).toEqual([
+      ["acme.core.release-manager", "acme.core.stranger"],
+    ]);
+    const agentCell = (id: string) =>
+      nth(within(rowOf(id)).getAllByRole("cell"), 3, "cell");
+    expect(
+      agentCell("tch_mbellmbp16aaaaaaaaaaaaa").querySelector(
+        "[data-harness-badge]",
+      ),
+    ).toHaveAttribute("data-harness-badge", "custom");
+    // An agent the read did not return names no badge (negative).
+    expect(
+      agentCell("tch_strangeraaaaaaaaaaaaaa").querySelector(
+        "[data-harness-badge]",
+      ),
+    ).toBeNull();
+  });
+
+  it("keeps the table and draws no badge when the agents read fails (negative)", async () => {
+    await renderList({
+      list: runtimeList([enrollment()]),
+      agents: readError("iam_principals_unavailable", 503),
+    });
+    const row = screen.getByTestId("runtime-row");
+    expect(row).toHaveTextContent("acme.core.release-manager");
+    expect(row.querySelector("[data-harness-badge]")).toBeNull();
   });
 
   it("reads each health word the record backs", async () => {
@@ -384,6 +429,10 @@ describe("Runtimes tab, loaded", () => {
     ).toHaveAttribute("data-gap", "#3816");
     expect(healthOf("rtm_macslaptop")).toEqual(["not_recorded"]);
     expect(cells[3]).toHaveTextContent("mac-claudeClaude Code");
+    expect(cells[3]?.querySelector("[data-harness-badge]")).toHaveAttribute(
+      "data-harness-badge",
+      "claude-code",
+    );
 
     const gpu = rowOf("rtm_gpubox");
     expect(gpu).toHaveTextContent("No host enrolled");

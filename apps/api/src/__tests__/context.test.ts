@@ -505,3 +505,37 @@ describe("capabilityContext and the platform-operator binding", () => {
     expect(body.hasKey).toBe(false);
   });
 });
+
+// ── ADR-235: no surface builds a Stella binding ──────────────────────────────
+//
+// Stella's calls skip the workspace's decision rules because they carry a
+// binding only Stella's own turn mints (packages/oxagen/src/oxagen-assistant.ts).
+// An API caller must not be able to claim it, so the builder puts no such key
+// on the context, whatever the request sends.
+
+describe("capabilityContext and the Stella binding", () => {
+  it("builds no oxagenAssistant key, even when the request names one", async () => {
+    const res = await withContext(
+      { "x-oxagen-assistant": "true", "x-oxagen-surface": "assistant" },
+      (c) => ({ hasKey: "oxagenAssistant" in capabilityContext(c) }),
+      { orgId: "o1", workspaceId: "w1", userId: "u1", apiKeyId: "k1" },
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { hasKey: boolean };
+    expect(body.hasKey).toBe(false);
+  });
+
+  it("builds no oxagenAssistant key on the bootstrap shape either", async () => {
+    const res = await withContext(
+      {},
+      (c) => ({
+        hasKey:
+          "oxagenAssistant" in capabilityContext(c, { requireOrg: false }),
+      }),
+      { orgId: null, workspaceId: null, userId: null, apiKeyId: null },
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { hasKey: boolean };
+    expect(body.hasKey).toBe(false);
+  });
+});
