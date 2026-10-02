@@ -2216,11 +2216,31 @@
       "consumes": []
     },
     {
+      "name": "get_work_item",
+      "domain": "work",
+      "surfaces": [
+        "api"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "get_work_order_metrics",
       "domain": "spend",
       "surfaces": [
         "api",
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "get_work_outcomes",
+      "domain": "work",
+      "surfaces": [
+        "api"
       ],
       "component": null,
       "produces": [],
@@ -2506,6 +2526,19 @@
       "surfaces": [
         "api",
         "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "list_code_repository_findings",
+      "domain": "repository",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli",
         "agent"
       ],
       "component": null,
@@ -3121,6 +3154,18 @@
       "consumes": []
     },
     {
+      "name": "list_steering_repo_destinations",
+      "domain": "repository",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "list_studio_findings",
       "domain": "tool",
       "surfaces": [
@@ -3149,6 +3194,16 @@
         "api",
         "mcp",
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "list_tacho_session_heads",
+      "domain": "tacho",
+      "surfaces": [
+        "api"
       ],
       "component": null,
       "produces": [],
@@ -3230,6 +3285,26 @@
       "surfaces": [
         "api",
         "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "list_work_items",
+      "domain": "work",
+      "surfaces": [
+        "api"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "list_work_targets",
+      "domain": "work",
+      "surfaces": [
+        "api"
       ],
       "component": null,
       "produces": [],
@@ -3509,6 +3584,19 @@
       "domain": "context",
       "surfaces": [
         "api"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "promote_instruction_to_steering",
+      "domain": "repository",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -3998,6 +4086,19 @@
       "domain": "agent",
       "surfaces": [
         "api"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "restore_managed_block",
+      "domain": "context",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli",
+        "agent"
       ],
       "component": null,
       "produces": [],

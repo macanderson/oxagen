@@ -23,6 +23,12 @@
 // `resetConnection` clears the organization's stored connection first, so the
 // job lists the candidates again (#4899). The reset is refused once Oxagen has
 // created a steering repo in the stored organization.
+//
+// A workspace with no repository yet can change where it goes and what it is
+// called (#5196). A `connection` that is not one of the recorded choices, and
+// a `name`, become the state's `requested_connection` and `requested_name`.
+// The job's pick_connection checks the place against the stored tokens, so
+// this handler calls no host.
 import { schema, withSystemDb } from "@oxagen/database";
 import { resolveActingUserId } from "@oxagen/iam/org-role";
 import { HandlerError, type CapabilityContext, type CapabilityHandler } from "@oxagen/oxagen";
@@ -91,6 +97,43 @@ export function createRetrySteeringRepoProvisionHandler(
       });
     }
 
+    const recorded =
+      input.connection === undefined
+        ? null
+        : pickSteeringConnection(current, input.connection);
+    // A connection the setup did not record, or a new name, changes the
+    // workspace's own request. Both need a workspace with no repository and
+    // no run in flight.
+    const newPlace = input.connection !== undefined && recorded === null;
+    if (input.name !== undefined || newPlace) {
+      if (scope.kind !== "workspace" && newPlace)
+        throw new HandlerError({
+          code: "conflict",
+          reason: "unknown_connection",
+          message: `retry_steering_repo_provision: ${input.connection?.provider} ${input.connection?.id} is not one of the connections this setup found. Read get_steering_repo for its connectionChoices.`,
+        });
+      if (scope.kind !== "workspace")
+        throw new HandlerError({
+          code: "conflict",
+          reason: "organization_repo_fixed",
+          message:
+            "retry_steering_repo_provision: the organization's steering repo is always oxagen-config, so it takes no name.",
+        });
+      if (current.repository !== null)
+        throw new HandlerError({
+          code: "conflict",
+          reason: "repository_exists",
+          message: `retry_steering_repo_provision: Oxagen already created ${current.repository.full_name}, so its name and place stay as they are.`,
+        });
+      if (current.status !== "failed" && current.status !== "blocked")
+        throw new HandlerError({
+          code: "conflict",
+          reason: "setup_running",
+          message:
+            "retry_steering_repo_provision: the steering repo setup is still running. Wait for it to stop, then change the name or the place.",
+        });
+    }
+
     if (current.status !== "failed" && current.status !== "blocked") {
       return { status: current.status };
     }
@@ -109,24 +152,30 @@ export function createRetrySteeringRepoProvisionHandler(
 
     if (input.resetConnection === true) await deps.resetConnection(ctx.orgId);
 
-    let chosen: SteeringConnection | null = null;
-    if (input.connection !== undefined) {
-      chosen = pickSteeringConnection(current, input.connection);
-      if (chosen === null)
-        throw new HandlerError({
-          code: "conflict",
-          reason: "unknown_connection",
-          message: `retry_steering_repo_provision: ${input.connection.provider} ${input.connection.id} is not one of the connections this setup found. Read get_steering_repo for its connectionChoices.`,
-        });
-      await deps.saveConnection(ctx.orgId, chosen);
-    }
+    if (recorded !== null) await deps.saveConnection(ctx.orgId, recorded);
+
+    // A new request starts the name over at its first attempt, and a new
+    // place drops the connection the last run resolved.
+    const requested: Partial<SteeringRepoState> = {
+      ...(input.name === undefined
+        ? {}
+        : { requested_name: input.name, attempt: 1, candidate: null }),
+      ...(newPlace
+        ? {
+            requested_connection: input.connection,
+            connection: null,
+            connection_choices: [],
+          }
+        : {}),
+    };
 
     const now = deps.now();
     const retrying: SteeringRepoState = {
       ...current,
+      ...requested,
       status: "provisioning",
       error: null,
-      ...(chosen === null ? {} : { connection_choices: [] }),
+      ...(recorded === null ? {} : { connection_choices: [] }),
       updated_at: now.toISOString(),
     };
     await deps.saveState(scope, retrying);

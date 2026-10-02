@@ -1,5 +1,6 @@
 /**
- * Tails Claude Code session transcripts into their recorders.
+ * Tails Claude Code session transcripts, and Codex rollouts, into their
+ * recorders.
  *
  * The transcript (`~/.claude/projects/<project>/<session>.jsonl`) is the one
  * source that carries a model call's full usage: the 5m/1h cache split, the
@@ -43,7 +44,14 @@
  *
  * Cursors are persisted next to the daemon state. Without that a restart
  * would re-read every open transcript from byte 0 and seal every message a
- * second time onto a chain that already holds it.
+ * second time onto a chain that already holds it. A reader that keeps state
+ * between lines keeps it on the cursor too (`FileCursor.codex`), so the
+ * state and the offset are always written together.
+ *
+ * A Codex subagent's rollout is tailed on a subagent cursor as well, but
+ * Codex writes it beside the parent's rollout, so the daemon opens that
+ * cursor from the subagent's hooks (`noteSubagentTranscript`) rather than
+ * from a directory listing.
  *
  * A cursor outlives its session in the registry. `forgetSealed` drops a
  * sealed session a week after it was last seen and keeps a chain tombstone
@@ -64,6 +72,7 @@
 import { promises as fs } from "node:fs";
 import { basename, join } from "node:path";
 import type { SessionRecorder } from "../claude-code/recorder";
+import type { CodexRolloutState } from "../codex/rollout";
 import type { TachoEvent } from "../envelope";
 import type { FrameBody } from "../evidence/frame-body";
 import { readJsonStateFile, writeSensitiveFileAtomic } from "../host/fs";
@@ -89,25 +98,27 @@ export const DEFAULT_TICK_BUDGET_BYTES = 16 * 1024 * 1024;
 export const SEAL_SLICE_BYTES = 256 * 1024;
 
 /**
- * Harnesses whose transcript `transcript.ts` can normalize. Only Claude
- * Code's JSONL shape has a normalizer; a session whose harness is
- * `undefined` speaks Claude Code's own hook shape too (customAgent sessions
- * and legacy records both default this way) and is tailed the same. Codex
- * and Cursor sessions can carry a `transcript_path` (Codex's hook payload
- * has the field; Cursor's does not, but a session can inherit one from an
- * earlier Claude Code identity), and tailing one fed every line through a
- * normalizer that does not understand it: nothing sealed, and — once a
- * refused line seals a `telemetry_gap` instead of silently failing (see
- * `advance`) — a gap frame every pass, forever, for a transcript this reader
- * was never going to make sense of. Skipping it here is a smaller change
- * than adding the normalizer neither harness has yet; that stays a
- * follow-up.
+ * Harnesses whose transcript the recorder has a reader for. Claude Code's
+ * JSONL goes through `claude-code/transcript.ts`, and a session whose
+ * harness is `undefined` speaks Claude Code's own hook shape too (custom
+ * agent sessions and legacy records both default this way) and is tailed
+ * the same. Codex's rollout goes through `codex/rollout.ts`; the recorder
+ * picks the reader by the session's harness (ADR-262).
+ *
+ * A Cursor session can carry a `transcript_path` too: Cursor's hook payload
+ * has none, but a session can inherit one from an earlier Claude Code
+ * identity. Nothing reads Cursor's transcript shape yet, and tailing it fed
+ * every line through a reader that does not understand it: nothing sealed,
+ * and once a refused line seals a `telemetry_gap` (see `advance`), a gap
+ * frame every pass for a transcript this reader was never going to make
+ * sense of. So Cursor stays out of this set until it has a reader.
  */
 const TRANSCRIPT_NORMALIZED_HARNESSES: ReadonlySet<TachoHarness> = new Set([
   "claude-code",
+  "codex",
 ]);
 
-/** Whether `transcript.ts` has a normalizer for this session's harness. */
+/** Whether the recorder has a transcript reader for this session's harness. */
 function hasTranscriptNormalizer(
   session: Pick<TailedSession, "harness">,
 ): boolean {
@@ -179,6 +190,27 @@ export interface TranscriptTailerOptions {
   now?: () => number;
   /** How long a sealed session's transcript may sit unchanged before its cursor drains; see `DEFAULT_SEALED_TAIL_IDLE_MS`. */
   sealedIdleMs?: number;
+  /**
+   * Where a backfill stopped reading a transcript (ADR-161), for a session
+   * this tailer holds no cursor for. A session the backfill sealed that
+   * resumes live is then read from the first byte the backfill did not
+   * read, and its finished subagents are not read again. A file whose inode
+   * or head changed since is read from byte 0, as any cursor's is.
+   */
+  adoptedCursor?: (
+    harnessSessionId: string,
+    path: string,
+  ) => AdoptedTranscriptCursor | undefined;
+}
+
+/** Where a backfill left a transcript; see `adoptedCursor`. */
+export interface AdoptedTranscriptCursor {
+  offset: number;
+  ino: number;
+  /** The file's first bytes, base64, as `HEAD_BYTES` fingerprints them. */
+  head: string;
+  /** The subagents whose transcripts the backfill read to the end. */
+  subagents: string[];
 }
 
 /**
@@ -215,6 +247,14 @@ interface FileCursor {
    * pass is carried to the next one rather than lost.
    */
   refused?: { count: number; detail: string };
+  /**
+   * What the Codex rollout reader keeps from one line to the next: the
+   * thread's model and provider, and the text of a response whose usage
+   * record has not arrived yet. It sits beside the offset and persists with
+   * it, so a restart between a response's text and its record reads on with
+   * the text in hand. Absent for every other harness.
+   */
+  codex?: CodexRolloutState;
 }
 
 interface Cursor extends FileCursor {
@@ -414,6 +454,15 @@ export class TranscriptTailer {
     }
   }
 
+  /**
+   * Whether this tailer keeps a cursor for the session, live or kept after
+   * the registry forgot it. A backfill leaves such a session to the live
+   * path (ADR-161).
+   */
+  holdsCursor(harnessSessionId: string): boolean {
+    return this.cursors.has(sessionMapKey(harnessSessionId));
+  }
+
   /** The cursors, for persistence and for tests. */
   state(): PersistedTailState {
     return {
@@ -446,6 +495,22 @@ export class TranscriptTailer {
     // A drained cursor is final whatever path the session reports now.
     if (existing?.drained) return existing;
     if (existing !== undefined && existing.path === path) return existing;
+    const adopted =
+      existing === undefined
+        ? this.options.adoptedCursor?.(session.harnessSessionId, path)
+        : undefined;
+    if (adopted !== undefined) {
+      const cursor: Cursor = {
+        path,
+        offset: adopted.offset,
+        ino: adopted.ino,
+        head: adopted.head,
+        subagents: [...adopted.subagents],
+      };
+      this.cursors.set(key, cursor);
+      this.dirty = true;
+      return cursor;
+    }
     // A session that reports a different transcript path (a resume that
     // moved projects) starts over on the new file; the old one is done.
     const cursor: Cursor = {
@@ -497,6 +562,8 @@ export class TranscriptTailer {
       ...(cursor.agents !== undefined ? { agents: cursor.agents } : {}),
       // Lines already passed that no gap names yet: still owed to the chain.
       ...(cursor.refused !== undefined ? { refused: cursor.refused } : {}),
+      // The reader's state belongs to the offset, so it reopens with it.
+      ...(cursor.codex !== undefined ? { codex: cursor.codex } : {}),
     });
     this.dirty = true;
   }
@@ -887,6 +954,33 @@ export class TranscriptTailer {
   }
 
   /**
+   * Start tailing a Codex subagent's rollout on a cursor of its own, fed
+   * with the subagent id so the child chain receives it. Codex sends the
+   * subagent's rollout as `transcript_path` on every hook a spawned subagent
+   * fires except `SubagentStop`, under the root session's id, and writes the
+   * file beside the parent's rollout, where `findSubagents` does not look.
+   * A hook calls this from inside its session's queue, so it opens the
+   * cursor and reads nothing: the tick reads the file, and `SubagentStop`
+   * drains it (`ingestSubagentTranscript`).
+   */
+  noteSubagentTranscript(
+    harnessSessionId: string,
+    subagentId: string,
+    path: string,
+  ): void {
+    const session = this.options.session(harnessSessionId);
+    if (session?.harness !== "codex") return;
+    const own = session.transcriptPath;
+    if (own === undefined || path === own) return;
+    const cursor = this.cursorFor(session, own);
+    if (cursor.drained) return;
+    if (cursor.subagents.includes(subagentId)) return;
+    if (cursor.agents?.[subagentId] !== undefined) return;
+    cursor.agents = { ...cursor.agents, [subagentId]: { path, offset: 0 } };
+    this.dirty = true;
+  }
+
+  /**
    * Open a cursor for every subagent transcript under the session's
    * `subagents/` directory that has none and is not finished.
    */
@@ -894,6 +988,9 @@ export class TranscriptTailer {
     session: TailedSession,
     cursor: Cursor,
   ): Promise<void> {
+    // Codex writes a subagent's rollout beside its parent's, not under a
+    // `subagents/` directory. Its hooks name it (`noteSubagentTranscript`).
+    if (session.harness === "codex") return;
     const dir =
       session.transcriptPath === undefined
         ? undefined
@@ -1000,12 +1097,15 @@ export class TranscriptTailer {
   private feedLine(
     session: TailedSession,
     line: string,
+    cursor: FileCursor,
     subagentId?: string,
   ): unknown {
     const recorder = session.recorder;
     const mark = recorder.markChain();
     try {
-      const events = recorder.ingestTranscriptLine(line, subagentId);
+      // The cursor carries the reader's state, which moves past the line
+      // whether or not the line seals, as the offset does.
+      const events = recorder.ingestTranscriptLine(line, subagentId, cursor);
       this.options.record(events, recorder.takeBodies());
       return undefined;
     } catch (error) {
@@ -1151,9 +1251,11 @@ export class TranscriptTailer {
       if (!sealer.current() || cursor.offset !== at || cursor.ino !== knownIno)
         return false;
       if (replaced) {
-        // Truncated or replaced: what the cursor pointed into is gone.
+        // Truncated or replaced: what the cursor pointed into is gone, and
+        // so is what the reader kept from it.
         cursor.offset = 0;
         delete cursor.head;
+        delete cursor.codex;
         this.dirty = true;
       }
       cursor.ino = ino;
@@ -1244,7 +1346,12 @@ export class TranscriptTailer {
           if (!standsAt(sliceFrom)) return false;
           for (const { line, bytes: lineBytes } of slice) {
             if (line.length > 0) {
-              const refusal = this.feedLine(session, line, subagentId);
+              const refusal = this.feedLine(
+                session,
+                line,
+                cursor,
+                subagentId,
+              );
               fed += 1;
               if (refusal !== undefined)
                 cursor.refused = {

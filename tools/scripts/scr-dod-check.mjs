@@ -670,8 +670,8 @@ export function formatVerdict(result) {
     ...result.reasons.map((reason) => `- ${reason}`),
     "",
     "An issue closes only when every DoD item is satisfied *and verified*. Tick the",
-    "boxes once each item is genuinely done, or split the remainder into a new issue",
-    "(`triage` label only, SCR-004).",
+    "boxes once each item is genuinely done, or split the remainder into a new issue,",
+    "filed as this repository's issue rules say (SCR-004).",
     "",
     // oxagen#2638: ticking a box edits the issue, not the PR, so this check
     // cannot hear it. `dod-recheck.yml` listens for the issue edit and re-runs

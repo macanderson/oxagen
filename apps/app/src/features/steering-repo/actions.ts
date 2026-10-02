@@ -3,14 +3,20 @@
 // `repair_steering_repo` (lane S2, #4560), retry calls
 // `retry_steering_repo_provision` (#4750), and the setup of a workspace made
 // before steering repos existed calls `import_workspace_steering` (#4875).
+// The one read, `list_steering_repo_destinations`, lists the places a stopped
+// setup can move to before Oxagen creates anything (#5196).
 import {
   steeringRepoImport,
   type SteeringRepoImportOutput,
 } from "@oxagen/oxagen/contracts/steering_repo.import";
 import { steeringRepoRepair } from "@oxagen/oxagen/contracts/steering_repo.repair";
+import {
+  type SteeringRepoDestinationsListOutput,
+  steeringRepoDestinationsList,
+} from "@oxagen/oxagen/contracts/steering_repo.destinations.list";
 import { steeringRepoProvisionRetry } from "@oxagen/oxagen/contracts/steering_repo.provision.retry";
 import type { ActionResult } from "@/server/kernel";
-import { kernelWrite } from "@/server/kernel";
+import { kernelRead, kernelWrite, readToActionResult } from "@/server/kernel";
 import { requireViewer } from "@/server/viewer";
 import type { RepoHealth, SteeringConnectionPick } from "./types";
 
@@ -20,11 +26,19 @@ import type { RepoHealth, SteeringConnectionPick } from "./types";
  * organization, so the call runs as the organization viewer. `connection` is
  * the one a person picked after setup stopped with `choose_connection`, and
  * `resetConnection` clears the stored one first so the job asks again.
+ *
+ * A workspace whose setup stopped before Oxagen created its repository can
+ * also move it (#5196): `name` is a new repository name, and `connection`
+ * may be any place `list_steering_repo_destinations` lists.
  */
 export async function retrySteeringRepoProvision(
   org: string,
   ws: string | null,
-  input: { connection?: SteeringConnectionPick; resetConnection?: true } = {},
+  input: {
+    connection?: SteeringConnectionPick;
+    resetConnection?: true;
+    name?: string;
+  } = {},
 ): Promise<
   ActionResult<{ status: "provisioning" | "ready" | "failed" | "blocked" }>
 > {
@@ -33,7 +47,26 @@ export async function retrySteeringRepoProvision(
   return kernelWrite(ctx, steeringRepoProvisionRetry, {
     ...(input.connection === undefined ? {} : { connection: input.connection }),
     ...(input.resetConnection === true ? { resetConnection: true } : {}),
+    ...(input.name === undefined ? {} : { name: input.name }),
   });
+}
+
+/**
+ * Where a stopped setup's steering repo can move: every GitHub organization
+ * and GitLab group the organization's stored tokens reach, and the
+ * organization's default. The card reads it when its form opens.
+ */
+export async function readSteeringRepoDestinations(
+  org: string,
+): Promise<ActionResult<SteeringRepoDestinationsListOutput>> {
+  const ctx = await requireViewer(org);
+  return readToActionResult(
+    await kernelRead(ctx, {
+      contract: steeringRepoDestinationsList,
+      input: {},
+      page: "repositories",
+    }),
+  );
 }
 
 /**

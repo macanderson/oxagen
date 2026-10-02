@@ -6,6 +6,8 @@ import {
   workItemCreate,
   type WorkItemCreateOutput,
 } from "@oxagen/oxagen/contracts/work.item.create";
+import { HandlerError } from "@oxagen/oxagen/handler-error";
+import { resolveActingUserId } from "@oxagen/iam/org-role";
 import { assertContractRole } from "./lib/capability-role-guard";
 import type { EnterItemInput, EnteredItem } from "./lib/work-intake/actions";
 import { type WorkEvent, sendWorkEvents, workRefusal } from "./lib/work-intake/handler-support";
@@ -26,7 +28,18 @@ export const defaultWorkItemCreateDeps: WorkItemCreateDeps = {
 
 export function createWorkItemCreateHandler(deps: WorkItemCreateDeps): CapabilityHandler<typeof workItemCreate> {
   return async (input, ctx): Promise<WorkItemCreateOutput> => {
-    const actorUserId = await assertContractRole(workItemCreate, ctx);
+    await assertContractRole(workItemCreate, ctx);
+    // assertContractRole answers the role that passed, not who acted. The
+    // actor is the person the call acts as, which the record stores as a
+    // user id.
+    const actorUserId = await resolveActingUserId(ctx);
+    if (actorUserId === null) {
+      throw new HandlerError({
+        code: "forbidden",
+        reason: "person_required",
+        message: "Sign in to Oxagen to enter a work item. The call names no person to record as the actor.",
+      });
+    }
     const scope = { orgId: ctx.orgId, workspaceId: ctx.workspaceId };
     let item: EnteredItem;
     try {

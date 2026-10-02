@@ -166,14 +166,14 @@ jobs:
               await github.rest.issues.update({ ...context.repo, issue_number: number, body })
               core.notice(`Updated existing drift issue #${number}`)
             } else {
-              // `TRIAGE` only (SCR-005): the filer applies no priority label.
-              // The title is the queued form CLAUDE.md sets under Issue
-              // titles. The triage pass adds the priority, tier, and size.
+              // No labels. This job cannot judge the priority, so it applies
+              // none. `/triage-issues` sweeps every open issue that has no
+              // priority label, and it adds the priority, tier, size, and
+              // labels and replaces `Queued` in the title.
               const created = await github.rest.issues.create({
                 ...context.repo,
                 title: 'Queued Chore (Docs): An org repository still carries the retired SCR corpus',
                 body,
-                labels: ['TRIAGE'],
               })
               core.notice(`Filed drift issue #${created.data.number}`)
             }

@@ -235,6 +235,7 @@ after the registered name separately when their contract uses a dotted stem.
 | [publish_context_record](context.record.publish.md) | [context.record.publish.ts](../../packages/oxagen/src/contracts/context.record.publish.ts) | api |
 | [read_steering](steering.read.md) | [steering.read.ts](../../packages/oxagen/src/contracts/steering.read.ts) | mcp |
 | [refresh_context_pr](context.pr.refresh.md) | [context.pr.refresh.ts](../../packages/oxagen/src/contracts/context.pr.refresh.ts) | api, agent |
+| [restore_managed_block](context.pr.restore_managed_block.md) | [context.pr.restore_managed_block.ts](../../packages/oxagen/src/contracts/context.pr.restore_managed_block.ts) | api, mcp, cli, agent |
 | [revert_steering_pr](context.pr.revert.md) | [context.pr.revert.ts](../../packages/oxagen/src/contracts/context.pr.revert.ts) | api, mcp, agent, cli |
 | [search_steering](steering.search.md) | [steering.search.ts](../../packages/oxagen/src/contracts/steering.search.ts) | mcp |
 
@@ -475,11 +476,14 @@ after the registered name separately when their contract uses a dotted stem.
 | [get_steering_repo](steering_repo.get.md) | [steering_repo.get.ts](../../packages/oxagen/src/contracts/steering_repo.get.ts) | api, mcp, agent |
 | [import_workspace_steering](steering_repo.import.md) | [steering_repo.import.ts](../../packages/oxagen/src/contracts/steering_repo.import.ts) | api, mcp |
 | [link_repository](repository.link.md) | [repository.link.ts](../../packages/oxagen/src/contracts/repository.link.ts) | api, mcp, agent, cli |
+| [list_code_repository_findings](repository.findings.list.md) | [repository.findings.list.ts](../../packages/oxagen/src/contracts/repository.findings.list.ts) | api, mcp, cli, agent |
 | [list_github_installations](repository.installation.candidates.md) | [repository.installation.candidates.ts](../../packages/oxagen/src/contracts/repository.installation.candidates.ts) | api, mcp, agent |
 | [list_installation_repositories](repository.installation.list.md) | [repository.installation.list.ts](../../packages/oxagen/src/contracts/repository.installation.list.ts) | api, mcp, agent |
 | [list_repositories](repository.list.md) | [repository.list.ts](../../packages/oxagen/src/contracts/repository.list.ts) | api, mcp, agent, cli |
+| [list_steering_repo_destinations](steering_repo.destinations.list.md) | [steering_repo.destinations.list.ts](../../packages/oxagen/src/contracts/steering_repo.destinations.list.ts) | api, mcp, agent |
 | [list_working_copies](repository.working_copy.list.md) | [repository.working_copy.list.ts](../../packages/oxagen/src/contracts/repository.working_copy.list.ts) | api, mcp, agent |
 | [open_init_pr](repository.init_pr.open.md) | [repository.init_pr.open.ts](../../packages/oxagen/src/contracts/repository.init_pr.open.ts) | api, mcp, agent, cli |
+| [promote_instruction_to_steering](repository.instruction.promote.md) | [repository.instruction.promote.ts](../../packages/oxagen/src/contracts/repository.instruction.promote.ts) | api, mcp, cli, agent |
 | [record_working_copy](repository.working_copy.record.md) | [repository.working_copy.record.ts](../../packages/oxagen/src/contracts/repository.working_copy.record.ts) | api, cli |
 | [repair_steering_repo](steering_repo.repair.md) | [steering_repo.repair.ts](../../packages/oxagen/src/contracts/steering_repo.repair.ts) | api, mcp, agent |
 | [retry_steering_repo_provision](steering_repo.provision.retry.md) | [steering_repo.provision.retry.ts](../../packages/oxagen/src/contracts/steering_repo.provision.retry.ts) | api, agent |
@@ -626,6 +630,7 @@ after the registered name separately when their contract uses a dotted stem.
 | [list_incidents](tacho.incident.list.md) | [tacho.incident.list.ts](../../packages/oxagen/src/contracts/tacho.incident.list.ts) | api, mcp, agent |
 | [list_machine_groups](tacho.machine_group.list.md) | [tacho.machine_group.list.ts](../../packages/oxagen/src/contracts/tacho.machine_group.list.ts) | none |
 | [list_tacho_hosts](tacho.host.list.md) | [tacho.host.list.ts](../../packages/oxagen/src/contracts/tacho.host.list.ts) | api, mcp, agent |
+| [list_tacho_session_heads](tacho.session_heads.list.md) | [tacho.session_heads.list.ts](../../packages/oxagen/src/contracts/tacho.session_heads.list.ts) | api |
 | [list_tacho_sessions](tacho.session.list.md) | [tacho.session.list.ts](../../packages/oxagen/src/contracts/tacho.session.list.ts) | api |
 | [recall_tacho_memories](tacho.memories.recall.md) | [tacho.memories.recall.ts](../../packages/oxagen/src/contracts/tacho.memories.recall.ts) | api |
 | [record_tacho_memory_uses](tacho.memories.uses.record.md) | [tacho.memories.uses.record.ts](../../packages/oxagen/src/contracts/tacho.memories.uses.record.ts) | api |
@@ -705,8 +710,12 @@ after the registered name separately when their contract uses a dotted stem.
 | [claim_work_order](work.order.claim.md) | [work.order.claim.ts](../../packages/oxagen/src/contracts/work.order.claim.ts) | api |
 | [close_work_item](work.item.close.md) | [work.item.close.ts](../../packages/oxagen/src/contracts/work.item.close.ts) | api |
 | [create_work_item](work.item.create.md) | [work.item.create.ts](../../packages/oxagen/src/contracts/work.item.create.ts) | api, mcp |
+| [get_work_item](work.item.get.md) | [work.item.get.ts](../../packages/oxagen/src/contracts/work.item.get.ts) | api |
+| [get_work_outcomes](work.outcomes.get.md) | [work.outcomes.get.ts](../../packages/oxagen/src/contracts/work.outcomes.get.ts) | api |
 | [get_work_priorities](work.priorities.get.md) | [work.priorities.get.ts](../../packages/oxagen/src/contracts/work.priorities.get.ts) | api, mcp |
 | [list_work_collectors](work.collectors.list.md) | [work.collectors.list.ts](../../packages/oxagen/src/contracts/work.collectors.list.ts) | api, mcp |
+| [list_work_items](work.items.list.md) | [work.items.list.ts](../../packages/oxagen/src/contracts/work.items.list.ts) | api |
+| [list_work_targets](work.targets.list.md) | [work.targets.list.ts](../../packages/oxagen/src/contracts/work.targets.list.ts) | api |
 | [refresh_work_order_checks](work.order.checks.refresh.md) | [work.order.checks.refresh.ts](../../packages/oxagen/src/contracts/work.order.checks.refresh.ts) | api |
 | [reject_work_order](work.order.reject.md) | [work.order.reject.ts](../../packages/oxagen/src/contracts/work.order.reject.ts) | api |
 | [reopen_work_item](work.item.reopen.md) | [work.item.reopen.ts](../../packages/oxagen/src/contracts/work.item.reopen.ts) | api |

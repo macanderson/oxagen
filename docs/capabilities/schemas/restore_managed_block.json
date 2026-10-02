@@ -1,0 +1,76 @@
+{
+  "name": "restore_managed_block",
+  "domain": "context",
+  "description": "Restore the Oxagen managed block in AGENTS.md, CLAUDE.md, or README.md on an open steering PR's branch, as one commit, from the production branch, keeping every line outside the block. Runs the six checks again on the new commit. Refused when the block already matches the production branch.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "cli",
+    "agent"
+  ],
+  "sensitivity": "medium",
+  "agent": {
+    "requiresApproval": true,
+    "riskLevel": "medium",
+    "category": "governance"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "proposalId": {
+        "type": "string",
+        "description": "The proposal whose steering PR holds the file"
+      },
+      "path": {
+        "type": "string",
+        "enum": [
+          "AGENTS.md",
+          "CLAUDE.md",
+          "README.md"
+        ],
+        "description": "The file whose managed block to restore"
+      }
+    },
+    "required": [
+      "proposalId",
+      "path"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "commit_sha": {
+        "type": "string",
+        "description": "The commit that restored the block"
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "proposed",
+          "pr_open",
+          "checks_running",
+          "checks_passed",
+          "checks_failed",
+          "merged",
+          "rejected"
+        ],
+        "description": "Where the checks stopped on that commit"
+      }
+    },
+    "required": [
+      "commit_sha",
+      "status"
+    ],
+    "additionalProperties": false
+  }
+}

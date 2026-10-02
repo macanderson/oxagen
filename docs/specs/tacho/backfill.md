@@ -1,6 +1,6 @@
 # Run backfill from local transcripts
 
-**Status:** Proposed, 2026-09-23. Implements ADR-161 (PR #4017). Implementation issue #4028.
+**Status:** Proposed, 2026-09-23. Implements ADR-161 (PR #4017). Implementation issue #4028. The first build (2026-10-02) changed some details; ADR-161's amendment of that date lists them and supersedes this file where they differ.
 
 The Run page starts when a host's recorder began shipping. Claude Code keeps a transcript of every session it ran before then, and of every session it ran while the recorder was broken. This spec turns those transcripts into the frames the live recorder would have sealed, marks them as reconstructed, and ships them through the path live frames already use.
 

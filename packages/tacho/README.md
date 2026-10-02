@@ -640,14 +640,20 @@ PATH link names it.
 To uninstall without the app, run the copy's own `oxagen`:
 
 ```
-"$HOME/Library/Application Support/oxagen/bin/<version>/oxagen" agent unenroll --all --purge
+"$HOME/Library/Application Support/oxagen/bin/<version>/oxagen" agent uninstall
 ```
 
-It removes what enrollment wrote: the harness files from their receipts
-(`install-receipts.json`, `host/harness-file.ts`), the service, and the agent
-state. The copy itself,
-the PATH links, and the shell profile block are the app's, and its
-**Uninstall** removes them.
+It runs `unenroll --all --purge` first, which removes what enrollment wrote:
+the harness files from their receipts (`install-receipts.json`,
+`host/harness-file.ts`), the service, and the agent state. It stops there if
+any enrollment is left, because a hook that still names the copy would fail
+to spawn once the copy is gone. Then it removes what the app recorded
+writing, from the `journal` list the app keeps in `~/.config/oxagen/desktop.json`
+(`src/cli/uninstall.ts`): each PATH link while it still points at the copy,
+each Windows shim while its text is unchanged, the shell profile block, the
+fish file, and the Windows user PATH entry. Last go the per-user copies, the
+directories the app created once they are empty, and `~/.config/oxagen`, the
+same set the app's **Uninstall** removes (ADR-230, amendment of 2026-10-02).
 
 A Cursor or Stella hook blocks the action when it cannot run: Cursor's veto
 hooks carry `failClosed`, and Stella reads a non-zero exit as a deny. So on

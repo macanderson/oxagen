@@ -34,6 +34,7 @@ import { Money } from "@/ui/money";
 import { formatCount, formatDuration, formatRatio } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
 import { OperatorName } from "@/ui/operator";
+import { isBackfilled } from "./backfill";
 import { EnrichmentSwitch } from "./enrichment-switch";
 import { useHarness } from "./header";
 import { provisionalCost, type RunMetrics } from "./metrics";
@@ -369,9 +370,13 @@ export function StatRow({
             <span className="font-mono text-[10.5px] text-dim">
               {metrics.cost === null
                 ? t("provisional")
-                : metrics.costIsEstimate
-                  ? t("estimate")
-                  : (metrics.cost.basis ?? t("basisNotRecorded"))}
+                : // A rebuilt run's cost is the rollup's price-book
+                  // estimate, sealed or not (ADR-161).
+                  isBackfilled(run)
+                  ? t("estimated")
+                  : metrics.costIsEstimate
+                    ? t("estimate")
+                    : (metrics.cost.basis ?? t("basisNotRecorded"))}
             </span>
           )
         }

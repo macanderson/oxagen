@@ -1,13 +1,12 @@
 name: Feature request
-description: A new capability, none of it built yet (the triage pass adds KIND:FEATURE)
-labels: ["TRIAGE"]
+description: A new capability, none of it built yet (KIND:FEATURE)
 body:
   - type: markdown
     attributes:
       value: |
-        Creators apply exactly one label, `TRIAGE` (SCR-005). The triage pass (`/triage-issues`) replaces it with one priority label, one `MODEL:` tier, one `SIZE:`, `KIND:FEATURE`, and one `AREA:`, then adds `JOB:` and one or two `PILLAR:` labels. Do not add those yourself. Title it `Queued Feature (<Area>): <what a person will be able to do>`.
+        File the issue complete. Title it `<Priority> <Tier> <Size> Feature (<Area>): <what a person will be able to do>`. Apply one priority label, one `MODEL:` tier, one `SIZE:`, `KIND:FEATURE`, and one `AREA:`, then `JOB:` and one or two `PILLAR:` labels where they apply. Set the issue type to Feature, and set the Priority, Model Tier, Minutes Estimated, and Area(s) fields. Apply `MIGRATION-REQUIRED` once you know the work changes a schema. CLAUDE.md has the rules under Issue titles and Oxagen issue fields.
 
-        `KIND:FEATURE` is for a capability that does not exist in any form. If the spec or the mockup already shows it and the built app has part of it, that is an improvement (`KIND:IMPROVEMENT`). Use the Task template, title it `Queued Improvement (<Area>): <what a person will be able to do>`, and describe the whole page or slice, backend included, so one issue carries the full weight of the change.
+        `KIND:FEATURE` is for a capability that does not exist in any form. If the spec or the mockup already shows it and the built app has part of it, that is an improvement (`KIND:IMPROVEMENT`). Use the Task template, title it `<Priority> <Tier> <Size> Improvement (<Area>): <what a person will be able to do>`, and describe the whole page or slice, backend included, so one issue carries the full weight of the change.
   - type: textarea
     id: problem
     attributes:
@@ -42,6 +41,6 @@ body:
         - [ ] Contract registered with API, MCP, CLI and UI parity (`pnpm check:manifest` clean)
         - [ ] Scoped tests added and passing; user-facing changes have E2E coverage
         - [ ] `docs/capabilities/` and code comments updated; an ADR for any architectural choice (SCR-002)
-        - [ ] Residue fixed in the same PR, or filed with the `TRIAGE` label only
+        - [ ] Residue fixed in the same PR, or filed as a complete issue
     validations:
       required: true

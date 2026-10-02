@@ -2211,6 +2211,27 @@
       }
     },
     {
+      "name": "restore_managed_block",
+      "file": "context.pr.restore_managed_block.ts",
+      "domain": "context",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "cli": true,
+        "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
       "name": "revert_steering_pr",
       "file": "context.pr.revert.ts",
       "domain": "context",
@@ -4836,6 +4857,27 @@
       }
     },
     {
+      "name": "list_code_repository_findings",
+      "file": "repository.findings.list.ts",
+      "domain": "repository",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "cli": true,
+        "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
       "name": "attach_gitlab_project",
       "file": "repository.gitlab.attach.ts",
       "domain": "repository",
@@ -4919,6 +4961,27 @@
         "schema": true,
         "api": true,
         "mcp": true,
+        "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
+      "name": "promote_instruction_to_steering",
+      "file": "repository.instruction.promote.ts",
+      "domain": "repository",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "cli": true,
         "unit": true,
         "docs": true,
         "app": true
@@ -6695,6 +6758,25 @@
       }
     },
     {
+      "name": "list_steering_repo_destinations",
+      "file": "steering_repo.destinations.list.ts",
+      "domain": "repository",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
       "name": "get_steering_repo",
       "file": "steering_repo.get.ts",
       "domain": "repository",
@@ -7101,6 +7183,21 @@
     {
       "name": "list_tacho_sessions",
       "file": "tacho.session.list.ts",
+      "domain": "tacho",
+      "mode": "sync",
+      "surfaces": [
+        "api"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "list_tacho_session_heads",
+      "file": "tacho.session_heads.list.ts",
       "domain": "tacho",
       "mode": "sync",
       "surfaces": [
@@ -7952,6 +8049,22 @@
       }
     },
     {
+      "name": "get_work_item",
+      "file": "work.item.get.ts",
+      "domain": "work",
+      "mode": "sync",
+      "surfaces": [
+        "api"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
       "name": "reopen_work_item",
       "file": "work.item.reopen.ts",
       "domain": "work",
@@ -7964,6 +8077,22 @@
         "api": true,
         "unit": true,
         "docs": true
+      }
+    },
+    {
+      "name": "list_work_items",
+      "file": "work.items.list.ts",
+      "domain": "work",
+      "mode": "sync",
+      "surfaces": [
+        "api"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "unit": true,
+        "docs": true,
+        "app": true
       }
     },
     {
@@ -8087,6 +8216,22 @@
       }
     },
     {
+      "name": "get_work_outcomes",
+      "file": "work.outcomes.get.ts",
+      "domain": "work",
+      "mode": "sync",
+      "surfaces": [
+        "api"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
       "name": "get_work_priorities",
       "file": "work.priorities.get.ts",
       "domain": "work",
@@ -8101,6 +8246,22 @@
         "mcp": true,
         "unit": true,
         "docs": true
+      }
+    },
+    {
+      "name": "list_work_targets",
+      "file": "work.targets.list.ts",
+      "domain": "work",
+      "mode": "sync",
+      "surfaces": [
+        "api"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "unit": true,
+        "docs": true,
+        "app": true
       }
     },
     {

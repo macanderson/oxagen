@@ -55,6 +55,21 @@ describe("cn", () => {
   it("handles undefined and null gracefully", () => {
     expect(cn(undefined, null, "real")).toBe("real");
   });
+
+  // A house type utility sets a font size, so a text colour beside it must not
+  // drop it (#5185).
+  it.each(["text-a-h1", "text-a-h3", "text-a-micro", "text-m-h1", "text-m-body"])(
+    "keeps %s beside a text colour",
+    (size) => {
+      expect(cn(size, "text-foreground")).toBe(`${size} text-foreground`);
+      expect(cn("text-muted-foreground", size)).toBe(`text-muted-foreground ${size}`);
+    },
+  );
+
+  it("lets a later size override a house size", () => {
+    expect(cn("text-a-h3", "text-sm")).toBe("text-sm");
+    expect(cn("text-a-h3", "text-a-h1")).toBe("text-a-h1");
+  });
 });
 
 // ---------------------------------------------------------------------------

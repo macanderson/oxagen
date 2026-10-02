@@ -148,11 +148,12 @@ Load `clear-prose` before you write any of these strings. `apps/app/src/test/arc
 
 ## Type
 
-Mac set this on 2026-09-29. The app uses Geist for every heading and every line of text. Space Grotesk sets the Oxagen and stella wordmarks and, on oxagen.sh, the first line of a hero. It sets nothing else.
+Mac set this on 2026-10-02, replacing the rule of 2026-09-29. Aeonik is the house sans. It sets every heading and every line of text in the app and the docs site, and all running text on oxagen.sh. Space Grotesk sets the Oxagen and stella wordmarks and, on oxagen.sh only, every h1, h2, and h3 and every hero line. The gold accent in an oxagen.sh headline shimmers with the kit's sheen. Monaspace Neon sets code. Aeonik Mono and Aeonik Fono load as faces, and no role uses them yet. Geist is retired.
 
-- The kit's `packages/ui/src/styles/house-tailwind.css` sets `--font-display` and `--font-sans` to Geist, so every heading and the `text-m-h*` and `text-a-h*` utilities draw in Geist. Space Grotesk reaches the page only through `--font-wordmark`, the `.ox-wordmark` class, and the kit's `hero-line-1` class on a marketing hero.
-- Do not write `--ox-font-display`, `--font-wordmark`, or "Space Grotesk" in app source outside a comment. `apps/app/src/test/arch/design-record.test.ts` fails on each of them.
-- The brand kit (`oxageninc/brand`) has set every heading in Geist since 2.4.0 (#27), so `globals.css` carries no font override. The files the sync writes into `packages/ui/src/styles/` stay byte-identical to the kit.
+- The brand kit (`oxageninc/brand`) owns the faces. Its `house-tailwind.css`, synced into `packages/ui/src/styles/`, sets `--font-display` and `--font-sans` to Aeonik, so every app heading and the `text-m-h*` and `text-a-h*` utilities draw in Aeonik. The files the sync writes there stay byte-identical to the kit.
+- In the app, Space Grotesk reaches the page only through `--font-wordmark` and the `.ox-wordmark` class. Do not write `--ox-font-display`, `--font-wordmark`, or "Space Grotesk" in app source outside a comment. `apps/app/src/test/arch/design-record.test.ts` fails on each of them.
+- On oxagen.sh, `apps/web/assets/oxagen.css` sets h1 to h3 from `--font-hero` (the kit's `--ox-font-display`) and everything else from `--font-sans`. Its sizes come from the kit's marketing scale through the site's own ramp (`--fs-small`, `--fs-ui`, `--fs-nav`, `--fs-sec`), so no running text sits below 15px except captions and figure labels.
+- docs.oxagen.sh reads the app scale one step up (`--docs-step`, 8/7), so its body is 16px.
 
 ## Runtime checks that matter
 
@@ -168,9 +169,9 @@ Mac set this on 2026-09-29. The app uses Geist for every heading and every line 
 
 ## Issue titles
 
-Mac set this format on 2026-09-30 for oxagen and stella. After triage, an issue title
-gives its priority, model tier, size, kind, and area, then the problem in plain words, so
-a person can read the backlog without opening an issue:
+Mac set this format on 2026-09-30 for oxagen and stella. An issue title gives its
+priority, model tier, size, kind, and area, then the problem in plain words, so a person
+can read the backlog without opening an issue:
 
 ```
 <Priority> <Tier> <Size> <Kind> (<Area>): <Statement>
@@ -178,11 +179,12 @@ P0 T3 XS Bug (CI): Main stays red because the coverage step reads a stale lockfi
 P1 T3 L Feature (Steering): Bulk import memories from Markdown files
 ```
 
-Before triage, use `Queued <Kind> (<Area>): <Statement>` and apply only `TRIAGE`. The
-kind and area in that title are the creator's guess. The triage pass (`/triage-issues`)
-replaces `Queued` with the priority, the tier, and the size, and corrects the kind and
-area. The 2026-09-30 format replaced `P<n> <Kind> <Size> (<Area>)`, which carried no tier
-and put the kind before the size. That shape had replaced `P<n> · <area>/<surface> ·
+The creator writes the full title when filing the issue. Mac set this on 2026-10-02: a
+new issue carries no `TRIAGE` label and no `Queued <Kind> (<Area>): <Statement>` title.
+An older issue may still carry both, and a workflow may file an issue with no priority.
+`/triage-issues` finds each of these by its missing priority label and completes it. The
+2026-09-30 format replaced `P<n> <Kind> <Size> (<Area>)`, which carried no tier and put
+the kind before the size. That shape had replaced `P<n> · <area>/<surface> ·
 <statement>` on 2026-09-25.
 
 - **Each prefix part copies a label.** The label is the source of truth. The title is
@@ -203,14 +205,14 @@ and put the kind before the size. That shape had replaced `P<n> · <area>/<surfa
   keeps that title and adds the labels it names.
 
 `.claude/commands/triage-issues.md` holds the full rules: the tier, size, kind, and area
-tables, how to choose each label, and the procedure. Run `/triage-issues` to work the
-`TRIAGE` queue.
+tables, how to choose each label, and the procedure. Read it before you file an issue.
+Run `/triage-issues` to complete every open issue that has no priority label.
 
 ## Issues and labels
 
-Track work in GitHub issues on `oxageninc/product`. Follow SCR-003, SCR-004, and SCR-005 in the standing decisions at the end of `AGENTS.md`.
+Track work in GitHub issues on `oxageninc/product`. Follow SCR-003 and SCR-004 in the standing decisions at the end of `AGENTS.md`.
 
-**Assigned work carries an issue.** When you are asked to change functional code, tests, or documentation and no issue covers it, open one before the PR, apply only `TRIAGE`, and cite it in the PR body with `Closes #N` or `Refs #N`. A chore needs none: an edit to rules or agent instructions, a dependency or lockfile bump, formatting, or release bookkeeping. Mac set this on 2026-09-23. SCR-004 below covers a different case, a defect you notice along the way: fix it in the PR, and file it only when it cannot ride.
+**Assigned work carries an issue.** When you are asked to change functional code, tests, or documentation and no issue covers it, open one before the PR, file it complete as the bullets below say, and cite it in the PR body with `Closes #N` or `Refs #N`. A chore needs none: an edit to rules or agent instructions, a dependency or lockfile bump, formatting, or release bookkeeping. Mac set this on 2026-09-23. SCR-004 below covers a different case, a defect you notice along the way: fix it in the PR, and file it only when it cannot ride.
 
 Fix defects in the task's PR when the fix can responsibly ride it. File an issue only when the work needs a maintainer decision, a rig, credentials, real spend, or more work than the session can carry. State that constraint and the maintainability, stability, reliability, innovation, efficiency, or performance benefit.
 
@@ -219,25 +221,29 @@ One issue carries one full change. Include context, paths, reproduction steps wh
 - A PR uses `Closes #N` only when it finishes every item in that issue's definition of done. Otherwise use `Refs #N`.
 - A PR that closes no issue, such as a chore, uses `NO-ISSUE` for a trivial change or `CLOSES-NOTHING` for a substantial change. These are PR labels, not substitute text in the body.
 - A PR that changes a schema carries `MIGRATION-REQUIRED` (SCR-006). `migration-label.yml` applies it from the diff. Add it yourself only if the workflow has not, and never remove it while the diff still changes a schema, because the workflow puts it back. Nothing else about the PR changes: `migration-gate` applies the migration on merge.
-- Apply only `TRIAGE` to an issue you create. The triage identity applies priority, tier, size, and descriptive labels. Never apply workflow-owned labels manually.
+- File every issue you create complete. Write the full title from Issue titles above. Apply one priority, one `MODEL:`, one `SIZE:`, one `KIND:`, and one `AREA:` label, plus the labels below that apply. Set the issue type to the kind (`gh issue create --type Bug`), and set the fields Oxagen issue fields marks for filing. Do not apply `TRIAGE`. Mac set this on 2026-10-02. Never apply workflow-owned labels manually.
 - Add no attribution to an issue, an issue comment, or a PR: no "Generated with Claude Code" footer, no `claude.ai/code` session link, and no co-author line. Mac had them stripped from every issue on 2026-09-25.
-- CI files a `P0` issue labelled `DEPLOYMENT-FAILURE` when `main` goes red or a production deploy fails, and closes it when a later run recovers (`.github/workflows/deployment-failure.yml`). This is the one priority label a workflow applies, and `triage-guard.yml` exempts it. Record the root cause and the fixing commit (it lands straight on `main`, per AGENTS.md under Git Workflow) in a comment, and leave the open and close to CI, because the time between them is the recovery-time statistic.
+- CI files a `P0` issue labelled `DEPLOYMENT-FAILURE` when `main` goes red or a production deploy fails, and closes it when a later run recovers (`.github/workflows/deployment-failure.yml`). This is the one priority label a workflow applies. Record the root cause and the fixing commit (it lands straight on `main`, per AGENTS.md under Git Workflow) in a comment, and leave the open and close to CI, because the time between them is the recovery-time statistic.
 - Close an issue as completed only with verification. Use not planned with an explanation for duplicates, superseded work, or a decision not to proceed.
 - Follow the review severity and three-round residue rules in `AGENTS.md` under Git Workflow. That file owns the rule, including the fourth-round P1 exception and the P0 block. On a PR labelled `AGENT-MONITORED-PR`, the pass rule replaces the round rule.
 
-Three issue fields carry what a label cannot. When these fields are available in GitHub,
-set them when you open an issue and correct them when you learn better. Until they are
-provisioned, add an `Issue metadata` section to the issue body with each field name and
-its value. Keep those values current, then copy them into the fields when available:
+Two facts have no label and no issue field. Record them in an `Issue metadata` section of
+the issue body, with each name and its value, when you open the issue. Correct them when
+you learn better:
 
-| Field | Type | What it records |
+| Entry | Type | What it records |
 |---|---|---|
-| Impacts schema | Yes / No | The change alters a Postgres, ClickHouse or Neo4j schema and needs a migration. |
 | Breaking change | Yes / No | The change alters a capability contract, an API response, a CLI flag, a hook payload or a stored format that a consumer already depends on. |
 | Customer reported | Yes / No | A customer or prospect reported the problem. An audit, a reviewer, CI or telemetry did not. |
 
+An issue whose work alters a Postgres, ClickHouse or Neo4j schema carries the
+`MIGRATION-REQUIRED` label, the one its pull request gets from `migration-label.yml`. Apply
+it once you know, at the latest when your run ends. Mac set this on 2026-10-02. It replaced
+the `Impacts schema` body entry and, later that day, the Requires Migration and Schema
+Changes issue fields.
+
 Mac set this label scheme on 2026-09-30 for oxagen and stella, and every label name is
-uppercase. A triaged issue carries exactly one priority, one `MODEL:`, one `SIZE:`, one
+uppercase. A complete issue carries exactly one priority, one `MODEL:`, one `SIZE:`, one
 `KIND:`, and one `AREA:` label:
 
 | Dimension | Values |
@@ -259,9 +265,8 @@ Add these where they apply:
 
 A `SIZE:` label is the band of agent minutes the work should take to reach a merge-ready
 pull request: XS is 30 or fewer, S is 31 to 90, M is 91 to 240, L is 241 to 480, and XL
-is more than 480. Move up one size for high risk or a wide blast radius. `agent_mins_est`
-on the `All issues` board holds the same estimate as a number (see Issue fields and
-reflection below).
+is more than 480. Move up one size for high risk or a wide blast radius. The Estimated
+Minutes issue field holds the same estimate as a number (see Oxagen issue fields below).
 
 The area names where a person meets the problem, not the package that holds the code. Add `SECURITY` when the issue involves credentials, secrets, tenant isolation, access control, or personal data.
 
@@ -279,31 +284,32 @@ Keep active instructions close to their source. Use `docs/README.md` to navigate
 
 Do not copy package counts, dependency versions, route lists, or old gap counts into additional documents. Link to the manifest, route oracle, check output, or owning source instead. Preserve useful decisions and incident records with their dates. Remove duplicate copies and repair their inbound links.
 
-## Issue fields and reflection
+## Oxagen issue fields
 
-Mac set this on 2026-09-28 for every repository. Every issue in Mac's repositories belongs on the `All issues` project board in the `macanderson` account. The board carries six fields. Keep all six correct on every issue you work on.
+Mac set this on 2026-10-02 for every repository in an Oxagen organization (`oxageninc`, `ox-product`, and any later one). Each of these organizations carries the same issue fields, and they hold what a label cannot. The reference is `issue-management.html` in `oxageninc/roadmap`, built from `issue-management/issue-fields.json` there. It holds every field's options, including the grading scale. Each field has a label, which GitHub shows, and a snake_case name, which docs and code use.
 
-| Field | Values | Meaning |
+| Label | Name | Set |
 |---|---|---|
-| Prompt | Text | The prompt that starts an agent on the work |
-| Model Tier | T1, T2, T3, T4 (formerly Lite, Standard, Pro, Ultra) | The model tier the work needs, the same tier as the issue's `MODEL:` label |
-| Size | XS, S, M, L, XL | The size of the change |
-| `agent_mins_est` | Number | Agent minutes the work should take |
-| `agent_mins` | Number | Agent minutes the work took |
-| Resolution | Shipped, Won't ship, Duplicate | How the issue closed |
+| Priority | `priority` | Filing. It matches the `P` label |
+| Model Tier | `model_tier` | Filing. Lite is T1, Standard T2, Pro T3, and Ultra T4 |
+| Area(s) | `areas` | Filing. One or more names from the `AREA:` labels |
+| Minutes Estimated | `minutes_estimated` | Filing |
+| Minutes Actual | `minutes_actual` | Run end. Add your minutes to the value already there |
+| Blocked | `blocked` | Yes while the work waits on a maintainer decision |
+| Blocked Reason | `blocked_reason` | With Blocked set to Yes. Each open decision as a question |
+| Agent Self Reflection | `agent_self_reflection` | Reflection |
+| Agent Self Grade | `agent_self_grade` | Reflection. A to F |
 
-- **Add the issue to the board when you file it.** Set Prompt, Model Tier, and `agent_mins_est` at the same time. Set Size too, unless a triage rule in this repository gives sizing to the triage agent.
-- **Stamp your minutes when your run ends.** Add the minutes your run spent on the issue to `agent_mins`. Add to the value already there, because several runs can share one issue.
-- **Write a reflection when your run ends.** Post it as a comment on the issue. Give your run's minutes, say what shipped, compare `agent_mins` with `agent_mins_est`, and say what the next agent should know. The reflections are the record of minutes. If two runs write `agent_mins` at once and one value is lost, rebuild the sum from the reflections.
-- **Set Resolution when the issue closes.**
+- **Minutes are plain integers.** Count the agent minutes spent building the change or watching its PR, up to the point where the PR is ready for review with CI green. Do not count the wait for review or merge.
+- **An issue shows the fields in the table's order.** Every issue type pins them that way. `tools/sync-issue-fields.mjs` in oxageninc/roadmap lists a type that drifts, and the order is set on the organization's issue types settings page, because no API sets it.
+- **Record the reflection when your run ends.** In one pass, add your minutes to Minutes Actual and set Agent Self Reflection and Agent Self Grade. If the work changed a schema and the issue lacks `MIGRATION-REQUIRED`, apply it then.
+- **Blocked is the roadmap's list of decisions.** The roadmap app lists every open issue with Blocked set to Yes as a decision for Mac. Set it back to No and clear Blocked Reason once the decision is made. Keep applying `NEEDS:DECISION` as well.
+- **The `All issues` board keeps Prompt and Resolution.** The board is a project in the `macanderson` account (`gh project list --owner macanderson`). Put the issue on it, set Prompt when you file the issue, and set Resolution when it closes. Do not write the board's Model Tier, Size, `agent_mins_est`, or `agent_mins`, and do not post the reflection as a comment.
 - **Fix any field you find wrong** on any issue you touch.
-- **Use the reflection until the board exists.** If `gh project list` shows no `All issues` board, or your token lacks the `project` scope, write the six values in the reflection instead. Copy them to the board once it exists.
-
-These commands find the board and set a field:
 
 ```sh
-gh project list --owner macanderson                                  # the board titled "All issues"
-gh project field-list <number> --owner macanderson --format json     # field and option ids
-gh project item-add <number> --owner macanderson --url <issue-url> --format json --jq .id   # the item id
-gh project item-edit --project-id <project-id> --id <item-id> --field-id <field-id> --number 42
+gh api orgs/oxageninc/issue-fields --jq '.[] | "\(.id) \(.name)"'                    # field ids
+gh api repos/oxageninc/product/issues/<n>/issue-field-values --input values.json     # set fields
 ```
+
+`values.json` holds `{"issue_field_values": [{"field_id": 123, "value": "Yes"}, {"field_id": 456, "value": ["Runs", "CI"]}]}`.

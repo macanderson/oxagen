@@ -245,9 +245,19 @@ and hands at most 50 memories to capture. GitHub lists at most 300 changed
 files, so an instruction file past that is not read. On GitHub the base text
 is read at the base branch's commit that the delivery names, not at the
 merge base. So a line the base branch removed after the pull request
-branched, which the head still holds, reads as added. The findings are not
-stored, so `list_code_repository_findings`, which the Repositories page asks
-for, has nothing to answer yet.
+branched, which the head still holds, reads as added.
+
+**Stored findings (ADR-263).** The check stores each statement it flags in
+`agent.code_repository_findings`: the repository, the pull request, the
+commit it read, the file, the line, and the text. Each run replaces its pull
+request's rows. A pull request closed without merging deletes them. A merged
+one keeps them, and its merge deletes the merged rows of earlier pull requests
+whose statement the files it touched no longer hold at the merge commit.
+`list_code_repository_findings` compares the stored statements with the
+workspace's active records on every read, so a record revised or retired since
+the check ran changes the answer. `promote_instruction_to_steering` turns a
+contradiction into a proposal for the record it contradicts and opens that
+proposal's steering PR.
 
 ## 4. `.oxagen/` in a code checkout
 
@@ -289,6 +299,8 @@ nothing.
 | `create_github_token` | api | Refuses the steering repo with `steering_repo_propose_only` (§2.2). |
 | `open_init_pr` | api, mcp, cli | Retired. It refuses with `conflict: init_pr_retired`. |
 | `attach_gitlab_project` | api | Attaches a GitLab project with a project access token (#3762). |
+| `list_code_repository_findings` | api, mcp, cli | The stored instruction-file statements that repeat or contradict a record today (§3.5, ADR-263). The CLI command is `oxagen steering findings`. |
+| `promote_instruction_to_steering` | api, mcp, cli | Proposes a contradicted record with the statement as its text, and opens its steering PR (§3.5). The CLI command is `oxagen steering promote`. |
 
 `link_repository` and `unlink_repository` take an org Owner or Admin, or the
 workspace's Owner. Each capability follows ADR-025's verb-first snake_case

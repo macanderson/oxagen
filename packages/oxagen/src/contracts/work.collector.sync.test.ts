@@ -5,9 +5,11 @@ import { workCollectorSync as contract } from "./work.collector.sync";
 describe("sync_work_collector contract", () => {
   const id = "00000000-0000-4000-8000-000000000001";
 
-  it("takes a collector id", () => {
+  it("takes a collector id or a collector name", () => {
     expect(contract.input.parse({ collector_id: id })).toEqual({ collector_id: id });
     expect(contract.input.safeParse({ collector_id: "github" }).success).toBe(false);
+    expect(contract.input.parse({ name: "github" })).toEqual({ name: "github" });
+    expect(contract.input.safeParse({ name: "" }).success).toBe(false);
   });
 
   it("answers that the reconcile was queued", () => {

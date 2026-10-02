@@ -1,0 +1,277 @@
+{
+  "name": "get_work_outcomes",
+  "domain": "work",
+  "description": "Count the workspace's work accepted and merged, returned, and closed in a window of days, with lead time, review touches, cost coverage, and reopens.",
+  "mode": "sync",
+  "surfaces": [
+    "api"
+  ],
+  "sensitivity": "low",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "days": {
+        "type": "integer",
+        "minimum": 7,
+        "maximum": 90,
+        "default": 30
+      }
+    },
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "days": {
+        "type": "integer",
+        "exclusiveMinimum": 0
+      },
+      "since": {
+        "type": "string"
+      },
+      "accepted_merged": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "returned": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "closed": {
+        "type": "object",
+        "properties": {
+          "cancelled": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "declined": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "duplicate": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "cancelled",
+          "declined",
+          "duplicate"
+        ],
+        "additionalProperties": false
+      },
+      "lead_time": {
+        "type": "object",
+        "properties": {
+          "median_hours": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "p90_hours": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sample": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "median_hours",
+          "p90_hours",
+          "sample"
+        ],
+        "additionalProperties": false
+      },
+      "touches": {
+        "type": "object",
+        "properties": {
+          "per_item": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "brief_approvals": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "acceptances": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "returns": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "triage_overrides": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "triage_corrections": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "per_item",
+          "brief_approvals",
+          "acceptances",
+          "returns",
+          "triage_overrides",
+          "triage_corrections"
+        ],
+        "additionalProperties": false
+      },
+      "cost": {
+        "type": "object",
+        "properties": {
+          "runs": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "known_runs": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "micros": {
+                    "type": "string"
+                  },
+                  "currency": {
+                    "type": "string",
+                    "minLength": 3,
+                    "maxLength": 3
+                  }
+                },
+                "required": [
+                  "micros",
+                  "currency"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "runs",
+          "known_runs",
+          "total"
+        ],
+        "additionalProperties": false
+      },
+      "reopens": {
+        "type": "object",
+        "properties": {
+          "cohort": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "reopened": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "waiting": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "cohort",
+          "reopened",
+          "waiting"
+        ],
+        "additionalProperties": false
+      },
+      "truncated": {
+        "type": "boolean"
+      },
+      "weeks": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "week": {
+              "type": "string"
+            },
+            "accepted_merged": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "returned": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "median_lead_hours": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "week",
+            "accepted_merged",
+            "returned",
+            "median_lead_hours"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "days",
+      "since",
+      "accepted_merged",
+      "returned",
+      "closed",
+      "lead_time",
+      "touches",
+      "cost",
+      "reopens",
+      "truncated",
+      "weeks"
+    ],
+    "additionalProperties": false
+  }
+}

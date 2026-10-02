@@ -30,7 +30,9 @@ import {
   type FrameBody,
   prepareContent,
 } from "../evidence/frame-body";
-import { newEventId, sessionUuid } from "../ids";
+import { backfillEventId, newEventId, sessionUuid } from "../ids";
+import { RECORD_BASIS_ATTR } from "../record-basis";
+import { normalizeRolloutLine, type TranscriptCarry } from "../codex/rollout";
 import {
   LLM_CALL_DUPLICATE_OF_ATTR,
   LlmCallLedger,
@@ -64,6 +66,7 @@ import { inventoryFromInit, totalsFromResult } from "./result";
 import {
   normalizeTranscriptLine,
   type SessionTitleSource,
+  type TranscriptNormalized,
   type TranscriptTotals,
 } from "./transcript";
 
@@ -93,6 +96,22 @@ interface SightingAttrs {
 
 /** What a row no ledger judges takes part in: nothing. */
 const NO_SIGHTING: SightingAttrs = { attrs: {}, commit: () => {} };
+
+/**
+ * A frame body as a backfill seals it (`RecorderBackfill`): an `agent_start`
+ * without the environment snapshot, and a model call priced as estimated.
+ */
+function backfillBody(
+  kind: TachoKind,
+  body: Record<string, unknown>,
+): Record<string, unknown> {
+  if (kind === "agent_start") {
+    const { env_snapshot: _today, ...rest } = body;
+    return rest;
+  }
+  if (kind === "llm_call") return { ...body, cost_basis: "estimated" };
+  return body;
+}
 
 /**
  * The `query_source` values Claude Code gives a request on the session's own
@@ -144,6 +163,34 @@ export const AFTER_STOP_ATTR = "oxagen.after_stop";
  */
 export const SUBAGENT_TYPE_AMBIGUOUS_ATTR = "oxagen.subagent_type_ambiguous";
 
+/** Where a backfilled frame's git facts came from: the transcript's own lines. */
+const GIT_BASIS_ATTR = "oxagen.git_basis";
+
+/**
+ * Seal a chain from a finished transcript instead of from a live session
+ * (ADR-161, `docs/specs/tacho/backfill.md`). Every field of every frame is
+ * then a function of the transcript bytes, the normalizer version, and the
+ * host's session scope:
+ *
+ * - `event_id` is `backfillEventId(session_uuid, seq, raw_source_digest, ts)`,
+ *   not a random ULID, so a second pass seals byte-identical frames.
+ * - `source` is `transcript` and `fidelity` is `ambient`, whatever path
+ *   sealed the frame. The hook-shaped frames the backfill synthesizes name
+ *   no `hook_event_name`, because no hook ran.
+ * - Every frame carries `oxagen.record_basis = backfill` and
+ *   `oxagen.git_basis = recorded`, and a model call carries
+ *   `cost_basis = estimated`.
+ * - `agent_start` carries no `env_snapshot`: today's environment says
+ *   nothing about the environment then.
+ *
+ * The caller supplies the clock through `context.now`, set to the last
+ * timed line read, so nothing reads the wall clock either.
+ */
+export interface RecorderBackfill {
+  /** The normalizer version the pass ran under, as the cursor file records it. */
+  normalizerVersion: string;
+}
+
 export interface RecorderOptions {
   context: ClaudeCodeContext;
   /** The harness's own session id (Claude Code's UUID). */
@@ -171,6 +218,11 @@ export interface RecorderOptions {
   };
   /** Continue a chain the collector persisted before a restart. */
   restore?: RecorderState;
+  /**
+   * Seal this chain, and every subagent chain under it, as a backfill from a
+   * finished transcript. See `RecorderBackfill`. Live recorders leave it unset.
+   */
+  backfill?: RecorderBackfill;
 }
 
 interface SubagentLink {
@@ -829,6 +881,23 @@ export class SessionRecorder {
   }
 
   /**
+   * Whether a turn is open on this chain: a `turn_start` sealed and no
+   * `turn_end` after it. The backfill reads it to close a turn the
+   * transcript ended without a `turn_duration` record.
+   */
+  get turnIsOpen(): boolean {
+    return this.turnOpen;
+  }
+
+  /**
+   * How many turns this chain has opened. A backfill records it beside the
+   * chain head, so a live resume numbers its turns after them.
+   */
+  get turnCount(): number {
+    return this.turnSeq;
+  }
+
+  /**
    * Drain the bodies of every event sealed on this chain and its children
    * since the last drain. The caller that took the events takes these in the
    * same breath, so a body is written next to its event and never to a WAL
@@ -1200,6 +1269,9 @@ export class SessionRecorder {
         ...(spawnToolUseId !== undefined ? { spawnToolUseId } : {}),
         spawnDepth: (this.options.parent?.spawnDepth ?? 0) + 1,
       },
+      ...(this.options.backfill !== undefined
+        ? { backfill: this.options.backfill }
+        : {}),
     });
     recorder.context = { ...this.context };
     recorder.anthropic = { ...this.anthropic };
@@ -1312,8 +1384,12 @@ export class SessionRecorder {
         : fields.content_digest !== undefined
           ? { digest: fields.content_digest, redactions: [] }
           : undefined;
+    const backfill = this.options.backfill;
     const attrs = {
       ...fields.attrs,
+      ...(backfill !== undefined
+        ? { [RECORD_BASIS_ATTR]: "backfill", [GIT_BASIS_ATTR]: "recorded" }
+        : {}),
       ...(prepared?.omitted !== undefined
         ? { body_omitted: prepared.omitted }
         : {}),
@@ -1330,15 +1406,24 @@ export class SessionRecorder {
     };
     const unsealed = compact({
       v: "tacho/1.0",
-      event_id: newEventId(Date.parse(fields.ts)),
+      event_id:
+        backfill !== undefined
+          ? backfillEventId(
+              this.sessionUuid,
+              this.cursor.seq,
+              fields.raw_source_digest ?? `kind:${kind}`,
+              Date.parse(fields.ts),
+            )
+          : newEventId(Date.parse(fields.ts)),
       session_id: this.harnessSessionId,
       session_uuid: this.sessionUuid,
       root_session_uuid: this.rootSessionUuid,
       parent_session_uuid: parent?.sessionUuid,
       ts: fields.ts,
-      fidelity: fields.fidelity ?? "sdk",
-      source: fields.source,
-      hook_event_name: fields.hook_event_name,
+      fidelity: backfill !== undefined ? "ambient" : (fields.fidelity ?? "sdk"),
+      source: backfill !== undefined ? "transcript" : fields.source,
+      hook_event_name:
+        backfill !== undefined ? undefined : fields.hook_event_name,
       hook_source_kind: fields.hook_source_kind,
       otel_event_name: fields.otel_event_name,
       harness_event_sequence: fields.harness_event_sequence,
@@ -1371,7 +1456,7 @@ export class SessionRecorder {
       content,
       raw_source_digest: fields.raw_source_digest,
       kind,
-      body,
+      body: backfill !== undefined ? backfillBody(kind, body) : body,
     }) as unknown as UnsealedTachoEvent;
     const sealed = sealWithUnknownBodyKeysAsAttrs(unsealed, this.cursor);
     this.cursor = sealed.next;
@@ -1557,10 +1642,12 @@ export class SessionRecorder {
         out.push(...child.finalize("completed", ts));
         const link = this.children.get(subagentId);
         if (link) link.open = false;
+        // `ok` unless the draft names a status: a live `SubagentStop` always
+        // reads `ok`, and a backfill names the status its tool result had.
         out.push(
           this.seal(
             "subagent_stop",
-            { ...first.body, tool_status: "ok" },
+            { tool_status: "ok", ...first.body },
             {
               ts,
               source: "hook",
@@ -2007,23 +2094,61 @@ export class SessionRecorder {
     return event;
   }
 
-  /** Ingest one transcript line (parent transcript or a subagent's). */
-  ingestTranscriptLine(line: string, subagentId?: string): TachoEvent[] {
-    return this.everySealed(() => this.sealTranscriptLine(line, subagentId));
+  /**
+   * Ingest one transcript line (parent transcript or a subagent's). `carry`
+   * is what the reader keeps between the lines of one file: the tailer
+   * passes the file's cursor, so the state persists with the offset. Claude
+   * Code's reader keeps none. Codex's holds a response's text until the
+   * record that closes the response arrives (`codex/rollout.ts`).
+   */
+  ingestTranscriptLine(
+    line: string,
+    subagentId?: string,
+    carry?: TranscriptCarry,
+  ): TachoEvent[] {
+    return this.everySealed(() =>
+      this.sealTranscriptLine(line, subagentId, carry),
+    );
   }
 
-  private sealTranscriptLine(line: string, subagentId?: string): TachoEvent[] {
+  /**
+   * One Codex rollout line, read against the state its file's cursor
+   * carries. The state moves on before anything seals, whatever the seal
+   * does: the tailer moves the cursor past a line the envelope refuses too,
+   * and the two persist together, so a restart reads on from a state that
+   * matches the offset.
+   */
+  private normalizeCodexLine(
+    line: string,
+    carry: TranscriptCarry | undefined,
+  ): TranscriptNormalized {
+    const { normalized, state } = normalizeRolloutLine(
+      line,
+      carry?.codex,
+      this.now(),
+    );
+    if (carry !== undefined) carry.codex = state;
+    return normalized;
+  }
+
+  private sealTranscriptLine(
+    line: string,
+    subagentId?: string,
+    carry?: TranscriptCarry,
+  ): TachoEvent[] {
     if (subagentId !== undefined && !this.options.parent) {
       const child = this.child(subagentId, undefined, undefined);
       return [
         ...this.pendingChildGenesis.splice(0),
-        ...child.ingestTranscriptLine(line),
+        ...child.ingestTranscriptLine(line, undefined, carry),
       ];
     }
-    const { drafts, totals, title, interrupted } = normalizeTranscriptLine(
-      line,
-      this.now(),
-    );
+    // The tailed session's harness picks the reader. Every other harness
+    // the tailer reads writes Claude Code's JSONL.
+    const codex = this.options.context.agent.harness === "codex";
+    const { drafts, totals, title, interrupted } = codex
+      ? this.normalizeCodexLine(line, carry)
+      : normalizeTranscriptLine(line, this.now());
     // The title is kept once its frame seals; see `sessionTitleSighting`.
     const { session_title: _title, ...facts } = totals;
     Object.assign(this.totals, facts);
@@ -2055,6 +2180,14 @@ export class SessionRecorder {
         continue;
       }
       if (duplicate === undefined) {
+        // A Codex response is one record, so a call the rollout already
+        // reported is the same record read again (a cursor restored from
+        // before its last seal, or a subagent's copy of its parent's
+        // history). It seals nothing.
+        if (codex) {
+          sighting.commit();
+          continue;
+        }
         body = withoutUsage(body);
         duplicate = { [LLM_CALL_DUPLICATE_OF_ATTR]: "transcript" };
       }

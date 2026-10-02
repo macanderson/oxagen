@@ -2019,11 +2019,29 @@
       "writes": []
     },
     {
+      "domain": "work",
+      "name": "get_work_item",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
       "domain": "spend",
       "name": "get_work_order_metrics",
       "reads": [],
       "surfaces": [
         "agent",
+        "api"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "work",
+      "name": "get_work_outcomes",
+      "reads": [],
+      "surfaces": [
         "api"
       ],
       "writes": []
@@ -2285,6 +2303,18 @@
       "surfaces": [
         "agent",
         "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "repository",
+      "name": "list_code_repository_findings",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "cli",
         "mcp"
       ],
       "writes": []
@@ -2843,6 +2873,17 @@
       "writes": []
     },
     {
+      "domain": "repository",
+      "name": "list_steering_repo_destinations",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "tool",
       "name": "list_studio_findings",
       "reads": [],
@@ -2870,6 +2911,15 @@
         "agent",
         "api",
         "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "tacho",
+      "name": "list_tacho_session_heads",
+      "reads": [],
+      "surfaces": [
+        "api"
       ],
       "writes": []
     },
@@ -2944,6 +2994,24 @@
       "surfaces": [
         "api",
         "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "work",
+      "name": "list_work_items",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "work",
+      "name": "list_work_targets",
+      "reads": [],
+      "surfaces": [
+        "api"
       ],
       "writes": []
     },
@@ -3199,6 +3267,18 @@
       "reads": [],
       "surfaces": [
         "api"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "repository",
+      "name": "promote_instruction_to_steering",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "cli",
+        "mcp"
       ],
       "writes": []
     },
@@ -3644,6 +3724,18 @@
       "reads": [],
       "surfaces": [
         "api"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "context",
+      "name": "restore_managed_block",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "cli",
+        "mcp"
       ],
       "writes": []
     },
@@ -4955,6 +5047,7 @@
         "postgres:agent.agent_versions",
         "postgres:agent.agents",
         "postgres:agent.approval_requests",
+        "postgres:agent.code_repository_findings",
         "postgres:agent.context_appends",
         "postgres:agent.context_promotions",
         "postgres:agent.context_proposals",
@@ -9392,6 +9485,118 @@
       "domain": "agent",
       "id": "postgres:agent.approval_requests",
       "name": "approval_requests",
+      "rls": "standard",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "public_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "citext"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "provider",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "provider_repository_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "repository",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "pull_request_number",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "pull_request_url",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "pull_request_state",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "head_sha",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "path",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "line",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "statement",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "proposal_public_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "checked_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        }
+      ],
+      "domain": "agent",
+      "id": "postgres:agent.code_repository_findings",
+      "name": "code_repository_findings",
       "rls": "standard",
       "store": "postgres",
       "tenantScoped": true
@@ -26605,6 +26810,18 @@
           "nullable": false,
           "primaryKey": false,
           "type": "bigint"
+        },
+        {
+          "name": "record_basis",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "backfill_normalizer",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
         },
         {
           "name": "title",

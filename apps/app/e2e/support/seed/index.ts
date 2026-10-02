@@ -13,14 +13,18 @@
 //      runtime through the kernel (ADR-198; its delegated principal and its
 //      first version come with it), the
 //      owner's human principal, a pinned authorization snapshot from
-//      @oxagen/iam, and a retention policy version.
+//      @oxagen/iam, and a retention policy version;
+//   4. one work item, WI-1, entered by the owner the way the work intake
+//      library's enterWorkItem enters one (insertManualItem, then
+//      recordSource's `entered` fact), so /{org}/{ws}/work/WI-1 has a title
+//      to load. No triage runs on it, so it stays in triage.
 //
-// Nothing else: no invitation, no billing row. Idempotent — keyed on the
-// email, the org slug, the agent slug and the presence of a V2 run in the
-// workspace — so two runs leave the same row counts. Writes go through
-// package APIs only; the one table no package writes today,
-// evidence.retention_policy_versions, is written through @oxagen/database's
-// typed schema inside the tenant transaction.
+// Nothing else: no invitation, no billing row. It is idempotent, keyed on the
+// email, the org slug, the agent slug, the presence of a V2 run in the
+// workspace, and the work item's title, so two runs leave the same row
+// counts. Writes go through package APIs only; the one table no package
+// writes today, evidence.retention_policy_versions, is written through
+// @oxagen/database's typed schema inside the tenant transaction.
 //
 // Runs under E2E_TEST=true (the package.json script sets it): the sign-in
 // self-check must see the same relaxation the e2e webServer runs with, since
@@ -34,6 +38,11 @@ import { auth } from "@oxagen/auth/server";
 import { schema, withSystemDb, withTenantDb } from "@oxagen/database";
 import { createAgentRunAuthorizationSnapshot } from "@oxagen/iam";
 import type { CapabilityContext } from "@oxagen/oxagen";
+import {
+  insertManualItem,
+  sourceDedupeKey,
+} from "@oxagen/handlers/lib/work-intake/items";
+import { recordSource } from "@oxagen/handlers/lib/work-records/store";
 import { agentRegister } from "@oxagen/oxagen/contracts/agent.register";
 import { organizationCreate } from "@oxagen/oxagen/contracts/org.create";
 import { runtimeCreate } from "@oxagen/oxagen/contracts/runtime.create";
@@ -47,7 +56,7 @@ import {
 } from "@oxagen/run-ledger";
 import { evidenceStore } from "@oxagen/run-ledger/evidence-store";
 import { runInTenantScope } from "@oxagen/tenancy";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { AUTH_DIR, SEED, SEED_RECORD } from "../index";
 
 /** The agent the seeded run is attributed to; registered through the kernel. */
@@ -521,6 +530,71 @@ async function seedRun(scope: Scope, userId: string): Promise<string> {
   return run.publicId;
 }
 
+// ── 4. The work item ───────────────────────────────────────────────────────
+
+/**
+ * The work item page-load opens at /{org}/{ws}/work/WI-1 (e2e/routes.ts). It
+ * is found again by its title. Its number must be WI-1, the number routes.ts
+ * names, or the row would load a not-found page: a database with other work
+ * items in core numbers it later, and the seed says so.
+ *
+ * It makes the two writes enterWorkItem makes, in one transaction: the item
+ * row, then its `entered` fact on revision 1. enterWorkItem itself would load
+ * triage and the model client into this process, which needs neither.
+ */
+async function seedWorkItem(scope: Scope, userId: string): Promise<string> {
+  const items = schema.workItems;
+  const [existing] = await withTenantDb((tx) =>
+    tx
+      .select({ number: items.number })
+      .from(items)
+      .where(
+        and(
+          eq(items.orgId, scope.orgId),
+          eq(items.workspaceId, scope.workspaceId),
+          eq(items.subject, SEED.workItemTitle),
+          isNull(items.deletedAt),
+        ),
+      )
+      .limit(1),
+  );
+  const number =
+    existing?.number ??
+    (await withTenantDb(async (tx) => {
+      const row = await insertManualItem(tx, scope, {
+        subject: SEED.workItemTitle,
+        description: null,
+        labels: [],
+        repository: null,
+        actorUserId: userId,
+        requester: null,
+      });
+      const material = {
+        subject: SEED.workItemTitle,
+        description: null,
+        labels: [],
+      };
+      const occurredAt = new Date().toISOString();
+      await recordSource(tx, scope, {
+        itemId: row.id,
+        material,
+        source: "person",
+        actor: userId,
+        occurredAt,
+        dedupeKey: sourceDedupeKey(material, occurredAt),
+        actorUserId: userId,
+      });
+      return row.number;
+    }));
+  if (number !== SEED.workItemNumber) {
+    throw new SeedError(
+      `the seeded work item is ${number}, and e2e/routes.ts opens ${SEED.workItemNumber}. Seed a fresh database.`,
+    );
+  }
+  log(existing ? "work item already exists" : "work item entered", { number });
+  return number;
+}
+
 // ── Entry ──────────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
@@ -528,6 +602,9 @@ async function main(): Promise<void> {
   const scope = await seedOrg(userId);
   const runPublicId = await runInTenantScope({ ...scope, userId }, () =>
     seedRun(scope, userId),
+  );
+  await runInTenantScope({ ...scope, userId }, () =>
+    seedWorkItem(scope, userId),
   );
   const record = { runPublicId };
   mkdirSync(AUTH_DIR, { recursive: true });

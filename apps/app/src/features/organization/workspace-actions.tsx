@@ -5,9 +5,12 @@
 // makes, and this form, a second one was made through the API, MCP or CLI.
 // Each write reloads the page it changed.
 //
-// The create form asks for a name only. `create_workspace` makes the
-// workspace's private steering repo itself (lane S1, #4450), so the person
-// picks no repository, and the slug is made from the name (`slugFromName`).
+// The create form asks for a name, and for where the workspace's private
+// steering repo goes and what it is called (#5196). `create_workspace` makes
+// that repository itself (lane S1, #4450), so the person picks no code
+// repository, and the slug is made from the name (`slugFromName`). The
+// Organization select loads when the dialog opens, and the Repository name
+// follows the workspace name as `oxagen-<slug>` until the person edits it.
 // The dialog stays open once the write answers, to say where the steering repo
 // stands and to link to the Repositories page, which shows each provisioning
 // step and a retry. The edit form shows the main repository and branch
@@ -17,6 +20,11 @@ import { GOVERNANCE_MODES } from "@oxagen/oxagen/contracts/context.steering.shar
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 import type { Workspace, WorkspaceFacts } from "@/data/contracts/org";
+import {
+  defaultRepoName,
+  SteeringRepoDestinationFields,
+  steeringRepoDraftOf,
+} from "@/features/steering-repo/client";
 import { parsePullRequestUrl } from "@/shared/pull-request-url";
 import { routes } from "@/shared/safe-path";
 import { inputBase } from "@/ui/control-styles";
@@ -28,14 +36,48 @@ import {
   editWorkspace,
   type GovernanceChanged,
   type NewWorkspaceDraft,
+  readSteeringRepoDestinations,
   type WorkspaceCreated,
 } from "./actions";
 import { textValue, WriteDialog } from "./dialog";
 import { note, warn } from "./parts";
 
-/** The create form's draft: the name, which is all the form asks for. */
+/** The create form's draft: the name, and the steering repo's place and name. */
 function newDraftOf(form: FormData): NewWorkspaceDraft {
-  return { name: textValue(form, "name") };
+  const steeringRepo = steeringRepoDraftOf(form);
+  return {
+    name: textValue(form, "name"),
+    ...(steeringRepo === undefined ? {} : { steeringRepo }),
+  };
+}
+
+/**
+ * The create form's fields. The name is held here so the steering repo's name
+ * can follow it as the person types.
+ */
+function NewWorkspaceFields({ org }: { org: string }) {
+  const tf = useTranslations("organization.actions.fields");
+  const [name, setName] = useState("");
+  return (
+    <>
+      <Field
+        id="create-workspace-name"
+        name="name"
+        label={tf("name")}
+        required
+        value={name}
+        onChange={(event) => {
+          setName(event.target.value);
+        }}
+      />
+      <SteeringRepoDestinationFields
+        org={org}
+        load={readSteeringRepoDestinations}
+        defaultName={defaultRepoName(name)}
+        idPrefix="create-workspace"
+      />
+    </>
+  );
 }
 
 /**
@@ -358,7 +400,6 @@ export function CreateWorkspace({
 }) {
   const t = useTranslations("organization.actions");
   const tr = useTranslations("organization.receipts");
-  const tf = useTranslations("organization.actions.fields");
   const navigate = useNavigate();
   return (
     <WriteDialog
@@ -384,12 +425,7 @@ export function CreateWorkspace({
         navigate.replace(routes.fleet(org, created.slug));
       }}
     >
-      <Field
-        id="create-workspace-name"
-        name="name"
-        label={tf("name")}
-        required
-      />
+      <NewWorkspaceFields org={org} />
     </WriteDialog>
   );
 }

@@ -951,6 +951,7 @@ describe("merge_context_pr", () => {
   it("merges on GitHub, publishes the record, appends the promotion event, bumps the steering version and emits steering.published", async () => {
     const h = harness();
     const id = await opened(h);
+    const mainBefore = h.github.heads.get("main");
     const out = await createMergeContextPrHandler(h)(
       { proposalId: id },
       ctx({ userId: REVIEWER }),
@@ -966,6 +967,9 @@ describe("merge_context_pr", () => {
           "Oxagen-Checks: schema,lineage_uniqueness,record_hash,secret_pii_scan,conflict_against_active,constraint_effect",
           "Oxagen-Version: 1",
         ].join("\n"),
+        // The main commit the merge queue checked, so the host retries
+        // "Base branch was modified" only while main is still there (#5157).
+        base: mainBefore,
       },
     ]);
     expect(h.github.deletedBranches).toEqual([BRANCH]);

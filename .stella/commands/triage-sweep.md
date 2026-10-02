@@ -1,5 +1,5 @@
 ---
-description: Sweep a repo's `triage`-labeled backlog — vet every issue against the code, fix the easy ones in one cleanup PR, and label the rest priority → area → descriptors, with epics grouped and ranked. Repo-agnostic: discovers each repo's label taxonomy at runtime.
+description: Sweep a repo's untriaged backlog (open issues with no priority label in an Oxagen organization, `triage`-labeled issues elsewhere) — vet every issue against the code, fix the easy ones in one cleanup PR, and label the rest priority → area → descriptors, with epics grouped and ranked. Repo-agnostic: discovers each repo's label taxonomy at runtime.
 argument-hint: "<owner/repo> [--dry-run] [--no-fix] [--label-only] [--limit N] [--concurrency N] [--no-close]"
 allowed-tools: "Bash(gh:*), Bash(git:*), Bash(rg:*), Bash(fd:*), Bash(jq:*), Bash(mkdir:*), Read, Grep, Glob, Edit, Write, MultiEdit, Agent"
 disable-model-invocation: true
@@ -22,7 +22,12 @@ Target repo: **$ARGUMENTS**
 > There a triaged issue carries exactly one priority, one `MODEL:`, one `SIZE:`,
 > one `KIND:`, and one `AREA:` label, and its title reads
 > `<Priority> <Tier> <Size> <Kind> (<Area>): <Statement>`. Retitle each issue you
-> label to that format.
+> label to that format, and set its issue type and filing fields as that file says.
+>
+> **An Oxagen organization has no `triage` queue.** Since 2026-10-02 a new issue
+> in `oxageninc` or `ox-product` carries no `TRIAGE` label, because its creator
+> files it complete. The backlog there is every open issue with no priority
+> label: issues a workflow filed, and older issues that still carry `TRIAGE`.
 
 
 You are the **triage authority** for this run. Parse `$ARGUMENTS`: the first
@@ -33,7 +38,7 @@ Flags:
 |---|---|
 | `--dry-run` | Plan and report only. Zero writes: no labels, no comments, no commits, no PR. |
 | `--no-fix` / `--label-only` | Skip Phase 4 entirely. Vet, dedup, label, epic — but fix nothing. |
-| `--limit N` | Only process the N oldest `triage` issues. |
+| `--limit N` | Only process the N oldest backlog issues. |
 | `--concurrency N` | Vetting subagents in flight (default 5). |
 | `--no-close` | Never close anything. Duplicates and already-fixed issues get a comment and stay open. |
 
@@ -41,9 +46,12 @@ Flags:
 
 ## The separation-of-duties question — read this first
 
-Several repos in this org carry **SCR-005**
-(the standing decisions in oxagen's `AGENTS.md`), which says the triage agent
-*"never implements anything and never closes issues — it only sizes and orders."*
+Mac retired **SCR-005**, the triage separation of duties in oxagen's
+`AGENTS.md`, on 2026-10-02, and oxagen's `triage-guard.yml` is deleted. In an
+Oxagen organization any identity may set a priority, so the guard check below
+does not apply there. A repo elsewhere may still keep a separation of duties,
+where the triage agent never implements anything or closes issues and only
+sizes and orders.
 
 **This command extends that role, at the maintainer's explicit request** for vet +
 fix + label in one pass. Resolve the tension this way; do not resolve it by
@@ -106,7 +114,15 @@ Do all of this before touching a single issue.
    regard to case when you add, filter, or remove a label, but an issue's `labels`
    array carries the stored spelling, so compare names lowercased.
 3. **Read the guard.** `.github/workflows/triage-guard.yml`, if present (see above).
-4. **Pull the backlog** with everything needed to judge it:
+4. **Pull the backlog** with everything needed to judge it. In an Oxagen
+   organization, pull every open issue with no priority label:
+   ```sh
+   env -u CLICOLOR_FORCE gh issue list -R "$REPO" --state open --limit 500 \
+     --search "-label:P0 -label:P1 -label:P2 -label:P3 -label:P4" \
+     --json number,title,body,labels,createdAt,updatedAt,author,comments,url \
+     > "$WORK/triage-issues.json"
+   ```
+   Elsewhere, pull the `triage`-labeled issues:
    ```sh
    env -u CLICOLOR_FORCE gh issue list -R "$REPO" --label triage --state open --limit 500 \
      --json number,title,body,labels,createdAt,updatedAt,author,comments,url \
@@ -255,7 +271,7 @@ vocabulary — label sprawl is the failure mode this rule exists to prevent.
 
 **No duplicate labels — compute a delta, never a blind add.** For every issue,
 diff your composed set against the labels already on it. Add only what is
-missing, drop `triage` (in the spelling the repo stores) in the same call, and
+missing, drop `triage` (in the spelling the repo stores) in the same call when the issue carries it, and
 leave everything else alone. Do not
 re-add a label that is already present, and do not strip a human's existing label
 just because your set did not include it — `triage` is the only label you remove.
@@ -356,18 +372,19 @@ where the repo uses a `verifications/` convention, and summarize in the terminal
 - **Epics** — created vs reused; each with number, title, priority, members.
 - **Closed** — every closure with the one-line evidence that justified it.
 - **Labels created** — any `pain:*` or other label this run added to the repo.
-- **Left in `triage`** — every issue you could not settle, and what would settle it.
-- **Guard status** — whether the identity was whitelisted, and whether any
-  P-label was stripped and re-queued.
+- **Left in the backlog** — every issue you could not settle, and what would settle it.
+- **Guard status** — whether the repo has a guard, whether the identity was
+  whitelisted, and whether any P-label was stripped and re-queued.
 
-Then file follow-ups: anything you noticed and did not fix becomes a new issue
-carrying only the `triage` label, per the repo's own residue rule.
+Then file follow-ups: anything you noticed and did not fix becomes a new issue,
+filed the way the repo's own residue rule says. In an Oxagen organization that
+is a complete issue. Elsewhere it may carry only the `triage` label.
 
 ---
 
 ## Rules
 
-- **Every open issue ends with a priority label or `triage` — never neither, never both.**
+- **Every backlog issue ends with a priority label, or with `triage` where the repo still keeps a `triage` queue. Never neither, never both.**
 - **Never blind-add a label.** Always diff against what is already on the issue.
 - **Never close on low confidence.** `NEEDS-INFO` is always available.
 - **Never run a whole-repo suite, gate, or build.** Narrowest command only.

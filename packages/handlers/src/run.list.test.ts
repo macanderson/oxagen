@@ -507,6 +507,54 @@ describe("list_runs", () => {
     });
   });
 
+  // ADR-161, #4028: a run a backfill rebuilt is priced from the price book by
+  // the rollup, and that estimate is the one figure it shows.
+  it("reports no cost of its own for a run a backfill rebuilt, resumed live or not", async () => {
+    const { list } = handlerOver(
+      [],
+      [
+        tachoSession({
+          publicId: "tse_backfilled",
+          session: {
+            totalCostMicros: 7_000,
+            costBasis: "estimated",
+            recordBasis: "backfill",
+          },
+        }),
+        tachoSession({
+          publicId: "tse_resumed",
+          session: {
+            startedAt: at("2026-09-11T09:01:00.000Z"),
+            totalCostMicros: 7_000,
+            costBasis: "list",
+            recordBasis: "mixed",
+          },
+        }),
+        tachoSession({
+          publicId: "tse_live",
+          session: {
+            startedAt: at("2026-09-11T09:02:00.000Z"),
+            totalCostMicros: 7_000,
+            costBasis: "list",
+            recordBasis: "live",
+          },
+        }),
+      ],
+    );
+    const out = await list({ limit: 50 }, ctx());
+    expect(runList.output.parse(out)).toEqual(out);
+    const reported = Object.fromEntries(
+      out.runs.map((r) => [r.id, r.reportedCost]),
+    );
+    expect(reported["tse_backfilled"]).toBeNull();
+    expect(reported["tse_resumed"]).toBeNull();
+    expect(reported["tse_live"]).toEqual({
+      micros: "7000",
+      currency: "USD",
+      basis: "client_attested",
+    });
+  });
+
   it("leaves the operator and the agent key null when the row recorded neither", async () => {
     const { list } = handlerOver(
       [

@@ -1,6 +1,9 @@
 import { z } from "zod";
 import { registerCapability } from "../registry";
-import { steeringConnectionPick } from "./steering_repo.get";
+import {
+  steeringConnectionPick,
+  steeringRepoNameInput,
+} from "./steering_repo.shared";
 
 /**
  * retry_steering_repo_provision: re-send a failed or blocked steering repo
@@ -21,6 +24,13 @@ import { steeringConnectionPick } from "./steering_repo.get";
  * `connectionChoices`. The handler stores it as the organization's steering
  * connection before it re-sends the job, and refuses one that is not on the
  * list (conflict `unknown_connection`).
+ *
+ * A workspace whose setup has not created its repository yet also takes
+ * `name` and `connection` to change where the repository goes and what it is
+ * called, such as after `repository_name_taken` or a refused create. The
+ * `connection` must be one `list_steering_repo_destinations` lists, and the
+ * job checks it again. Once the repository exists, both are refused (conflict
+ * `repository_exists`).
  *
  * Org Owners and Admins only, the same as `repair_steering_repo`. Retry is
  * the health banner's other admin button. Stella can run it too, and each
@@ -48,7 +58,12 @@ export const steeringRepoProvisionRetry = registerCapability({
     .object({
       connection: steeringConnectionPick
         .describe(
-          "The GitHub organization or GitLab group to create steering repos in, when setup stopped with choose_connection. One of get_steering_repo's connectionChoices.",
+          "The GitHub organization or GitLab group to create the steering repo in. After choose_connection, one of get_steering_repo's connectionChoices. For a workspace with no repository yet, any of list_steering_repo_destinations' destinations.",
+        )
+        .optional(),
+      name: steeringRepoNameInput
+        .describe(
+          "A new name for the workspace's steering repo, while it has no repository yet. Oxagen creates exactly this name.",
         )
         .optional(),
       resetConnection: z

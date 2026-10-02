@@ -40,7 +40,13 @@ export default async function Page(props: {
   const fileStem = slug.length > 0 ? slug.join("-") : "index";
 
   return (
-    <DocsPage toc={page.data.toc} full={page.data.full}>
+    // `footer.className` lands on Fumadocs' previous and next grid, the hook
+    // src/app/global.css uses to give those links the house card corner.
+    <DocsPage
+      toc={page.data.toc}
+      full={page.data.full}
+      footer={{ className: "ox-page-nav" }}
+    >
       <div className="flex items-start justify-between gap-4">
         <DocsTitle>{page.data.title}</DocsTitle>
         <PageActions markdownUrl={markdownUrl} fileStem={fileStem} />

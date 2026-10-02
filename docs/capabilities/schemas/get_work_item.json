@@ -1,0 +1,3222 @@
+{
+  "name": "get_work_item",
+  "domain": "work",
+  "description": "Read one work item with its source revisions, triage, brief revisions, sends, pull request checks, acceptance, cost, and history.",
+  "mode": "sync",
+  "surfaces": [
+    "api"
+  ],
+  "sensitivity": "low",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "item": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 64
+      }
+    },
+    "required": [
+      "item"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "item": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "number": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "origin": {
+            "type": "string",
+            "enum": [
+              "provider",
+              "email",
+              "slack",
+              "csv",
+              "manual"
+            ]
+          },
+          "source_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "repository": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "requester": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "labels": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "arrived_at": {
+            "type": "string"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "new",
+              "held",
+              "triaged",
+              "needs_info",
+              "changed",
+              "ready",
+              "sent",
+              "running",
+              "review",
+              "done",
+              "closed"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "triaging",
+              "triage_failed",
+              "needs_info",
+              "possible_duplicate",
+              "out_of_scope",
+              "brief_to_approve",
+              "changed",
+              "ready",
+              "send_rejected",
+              "waiting_for_claim",
+              "no_answer",
+              "running",
+              "stopping",
+              "in_review",
+              "accepted",
+              "done",
+              "closed"
+            ]
+          },
+          "tab": {
+            "type": "string",
+            "enum": [
+              "inbox",
+              "running",
+              "review",
+              "done"
+            ]
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "revision": {
+            "type": "integer",
+            "exclusiveMinimum": 0
+          },
+          "priority": {
+            "type": "object",
+            "properties": {
+              "label": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "P0",
+                      "P1",
+                      "P2",
+                      "P3"
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "by": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "oxagen",
+                      "person"
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "reason": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "cites": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "set_by": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "label",
+              "by",
+              "reason",
+              "cites",
+              "set_by"
+            ],
+            "additionalProperties": false
+          },
+          "wait": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "const": "triaging"
+                  }
+                },
+                "required": [
+                  "kind"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "const": "triage_failed"
+                  },
+                  "reason": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "reason"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "const": "needs_info"
+                  },
+                  "question": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "kind",
+                  "question"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "const": "possible_duplicate"
+                  },
+                  "of": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "number": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "number"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "kind",
+                  "of"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "const": "out_of_scope"
+                  }
+                },
+                "required": [
+                  "kind"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "const": "brief_to_approve"
+                  },
+                  "from_triage": {
+                    "type": "boolean"
+                  },
+                  "reopened": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "by": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "at": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "by",
+                          "at",
+                          "reason"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "kind",
+                  "from_triage",
+                  "reopened"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "const": "brief_to_write"
+                  }
+                },
+                "required": [
+                  "kind"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "const": "changed"
+                  },
+                  "cause": {
+                    "type": "string",
+                    "enum": [
+                      "source",
+                      "brief"
+                    ]
+                  },
+                  "at": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "approved_revision": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "exclusiveMinimum": 0
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "kind",
+                  "cause",
+                  "at",
+                  "approved_revision"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "const": "ready"
+                  },
+                  "last_send": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "delivery": {
+                            "type": "string",
+                            "enum": [
+                              "withdrawn",
+                              "stopped",
+                              "returned"
+                            ]
+                          },
+                          "at": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "reason": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "delivery",
+                          "at",
+                          "reason"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "kind",
+                  "last_send"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "const": "send_rejected"
+                  },
+                  "at": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "reason": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "at",
+                  "reason"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "const": "waiting_for_claim"
+                  },
+                  "runtime": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "sent_at": {
+                    "type": "string"
+                  },
+                  "last_poll_at": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "kind",
+                  "runtime",
+                  "sent_at",
+                  "last_poll_at"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "const": "no_answer"
+                  },
+                  "runtime": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "last_poll_at": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "kind",
+                  "runtime",
+                  "last_poll_at"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "const": "running"
+                  },
+                  "changed_since_send": {
+                    "type": "boolean"
+                  },
+                  "changed_at": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "brief_revision": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0
+                  }
+                },
+                "required": [
+                  "kind",
+                  "changed_since_send",
+                  "changed_at",
+                  "brief_revision"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "const": "stopping"
+                  },
+                  "runtime": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "kind",
+                  "runtime"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "const": "ready_for_review"
+                  },
+                  "head": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "head"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "const": "no_required_checks"
+                  },
+                  "head": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "head"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "const": "check_failed"
+                  },
+                  "check": {
+                    "type": "string"
+                  },
+                  "conclusion": {
+                    "type": "string",
+                    "enum": [
+                      "success",
+                      "failure",
+                      "cancelled",
+                      "skipped",
+                      "neutral",
+                      "timed_out",
+                      "action_required",
+                      "stale",
+                      "pending"
+                    ]
+                  },
+                  "head": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "check",
+                  "conclusion",
+                  "head"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "const": "check_missing"
+                  },
+                  "check": {
+                    "type": "string"
+                  },
+                  "head": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "check",
+                  "head"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "const": "checks_running"
+                  },
+                  "head": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "head"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "const": "checks_unread"
+                  },
+                  "head": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "head"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "const": "new_head"
+                  },
+                  "head": {
+                    "type": "string"
+                  },
+                  "earlier": {
+                    "type": "string"
+                  },
+                  "at": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "kind",
+                  "head",
+                  "earlier",
+                  "at"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "const": "no_pull_request"
+                  }
+                },
+                "required": [
+                  "kind"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "const": "no_head"
+                  }
+                },
+                "required": [
+                  "kind"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "const": "pr_closed"
+                  },
+                  "at": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "kind",
+                  "at"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "const": "merged_before_review"
+                  },
+                  "at": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "at"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "const": "brief_out_of_date"
+                  }
+                },
+                "required": [
+                  "kind"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "const": "accepted_waiting_merge"
+                  },
+                  "by": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "head": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "by",
+                  "head"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "const": "done"
+                  },
+                  "accepted": {
+                    "type": "object",
+                    "properties": {
+                      "by": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "at": {
+                        "type": "string"
+                      },
+                      "head": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "by",
+                      "at",
+                      "head"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "merged_at": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "accepted",
+                  "merged_at"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "const": "closed"
+                  },
+                  "resolution": {
+                    "type": "string",
+                    "enum": [
+                      "cancelled",
+                      "declined",
+                      "duplicate"
+                    ]
+                  },
+                  "by": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "at": {
+                    "type": "string"
+                  },
+                  "reason": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "resolution",
+                  "by",
+                  "at",
+                  "reason"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          },
+          "send": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "send": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0
+                  },
+                  "key": {
+                    "type": "string"
+                  },
+                  "delivery": {
+                    "type": "string",
+                    "enum": [
+                      "waiting_for_claim",
+                      "claimed",
+                      "running",
+                      "stopping",
+                      "run_ended",
+                      "stopped",
+                      "returned",
+                      "withdrawn",
+                      "rejected"
+                    ]
+                  },
+                  "no_answer": {
+                    "type": "boolean"
+                  },
+                  "agent": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "name": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "harness": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "name",
+                      "harness"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "runtime": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "tier": {
+                        "type": "string",
+                        "enum": [
+                          "contained",
+                          "gateway",
+                          "harness",
+                          "observe"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "name",
+                      "tier"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "requested_at": {
+                    "type": "string"
+                  },
+                  "pull_request": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "repository": {
+                            "type": "string"
+                          },
+                          "number": {
+                            "type": "integer",
+                            "exclusiveMinimum": 0
+                          },
+                          "url": {
+                            "type": "string"
+                          },
+                          "head": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "repository",
+                          "number",
+                          "url",
+                          "head"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "checks": {
+                    "type": "string",
+                    "enum": [
+                      "passing",
+                      "failing",
+                      "missing",
+                      "running",
+                      "unread",
+                      "none_required",
+                      "no_pull_request",
+                      "pr_closed"
+                    ]
+                  },
+                  "gate": {
+                    "type": "object",
+                    "properties": {
+                      "open": {
+                        "type": "boolean"
+                      },
+                      "block": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "order_closed",
+                              "already_accepted",
+                              "run_active",
+                              "pr_closed",
+                              "no_pull_request",
+                              "no_head",
+                              "brief_out_of_date",
+                              "checks_unknown",
+                              "check_missing",
+                              "check_failed"
+                            ]
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "detail": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "open",
+                      "block",
+                      "detail"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "accepted": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "id",
+                  "send",
+                  "key",
+                  "delivery",
+                  "no_answer",
+                  "agent",
+                  "runtime",
+                  "requested_at",
+                  "pull_request",
+                  "checks",
+                  "gate",
+                  "accepted"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "cost": {
+            "type": "object",
+            "properties": {
+              "runs": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "known_runs": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "total": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "micros": {
+                        "type": "string"
+                      },
+                      "currency": {
+                        "type": "string",
+                        "minLength": 3,
+                        "maxLength": 3
+                      }
+                    },
+                    "required": [
+                      "micros",
+                      "currency"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "runs",
+              "known_runs",
+              "total"
+            ],
+            "additionalProperties": false
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source_revisions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "revision": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0
+                },
+                "at": {
+                  "type": "string"
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "collected",
+                    "entered",
+                    "changed"
+                  ]
+                },
+                "subject": {
+                  "type": "string"
+                },
+                "description": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "labels": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "revision",
+                "at",
+                "kind",
+                "subject",
+                "description",
+                "labels"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "collector": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "health": {
+                    "type": "string",
+                    "enum": [
+                      "healthy",
+                      "lagging",
+                      "failing",
+                      "paused"
+                    ]
+                  }
+                },
+                "required": [
+                  "name",
+                  "health"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "number",
+          "title",
+          "origin",
+          "source_url",
+          "repository",
+          "requester",
+          "labels",
+          "arrived_at",
+          "finished_at",
+          "state",
+          "status",
+          "tab",
+          "version",
+          "revision",
+          "priority",
+          "wait",
+          "send",
+          "cost",
+          "description",
+          "source_revisions",
+          "collector"
+        ],
+        "additionalProperties": false
+      },
+      "triage": {
+        "type": "object",
+        "properties": {
+          "view": {
+            "type": "object",
+            "properties": {
+              "decision": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "priority": {
+                "type": "object",
+                "properties": {
+                  "value": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "P0",
+                          "P1",
+                          "P2",
+                          "P3"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "by": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "oxagen",
+                          "person"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "actor": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "at": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "value",
+                  "by",
+                  "actor",
+                  "at"
+                ],
+                "additionalProperties": false
+              },
+              "priority_reason": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "cites": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "estimate_minutes": {
+                "type": "object",
+                "properties": {
+                  "value": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "by": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "oxagen",
+                          "person"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "actor": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "at": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "value",
+                  "by",
+                  "actor",
+                  "at"
+                ],
+                "additionalProperties": false
+              },
+              "labels": {
+                "type": "object",
+                "properties": {
+                  "value": {
+                    "anyOf": [
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "by": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "oxagen",
+                          "person"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "actor": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "at": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "value",
+                  "by",
+                  "actor",
+                  "at"
+                ],
+                "additionalProperties": false
+              },
+              "claims": {
+                "type": "object",
+                "properties": {
+                  "value": {
+                    "anyOf": [
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "by": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "oxagen",
+                          "person"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "actor": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "at": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "value",
+                  "by",
+                  "actor",
+                  "at"
+                ],
+                "additionalProperties": false
+              },
+              "criteria": {
+                "type": "object",
+                "properties": {
+                  "value": {
+                    "anyOf": [
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "by": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "oxagen",
+                          "person"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "actor": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "at": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "value",
+                  "by",
+                  "actor",
+                  "at"
+                ],
+                "additionalProperties": false
+              },
+              "questions": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "duplicates": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "related": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "conflicts": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "decision",
+              "priority",
+              "priority_reason",
+              "cites",
+              "estimate_minutes",
+              "labels",
+              "claims",
+              "criteria",
+              "questions",
+              "duplicates",
+              "related",
+              "conflicts"
+            ],
+            "additionalProperties": false
+          },
+          "standing": {
+            "type": "object",
+            "properties": {
+              "outcome": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "triaged",
+                      "needs_info",
+                      "duplicate",
+                      "out_of_scope",
+                      "failed"
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "by": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "oxagen",
+                      "person"
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "duplicate_of": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "outcome",
+              "by",
+              "duplicate_of"
+            ],
+            "additionalProperties": false
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "failure": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "reason": {
+                    "type": "string"
+                  },
+                  "at": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "reason",
+                  "at"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "override": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "outcome": {
+                    "type": "string"
+                  },
+                  "reason": {
+                    "type": "string"
+                  },
+                  "by": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "at": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "outcome",
+                  "reason",
+                  "by",
+                  "at"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "corrections": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "field": {
+                  "type": "string",
+                  "enum": [
+                    "priority",
+                    "estimate_minutes",
+                    "labels",
+                    "claims",
+                    "criteria"
+                  ]
+                },
+                "before": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "after": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "by": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "at": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "field",
+                "before",
+                "after",
+                "by",
+                "at"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "view",
+          "standing",
+          "decided_at",
+          "model",
+          "failure",
+          "override",
+          "corrections"
+        ],
+        "additionalProperties": false
+      },
+      "brief": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "none",
+              "triage_draft",
+              "draft",
+              "approved",
+              "out_of_date"
+            ]
+          },
+          "revisions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "revision": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0
+                },
+                "item_revision": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0
+                },
+                "digest": {
+                  "type": "string"
+                },
+                "repository": {
+                  "type": "string"
+                },
+                "author": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "saved_at": {
+                  "type": "string"
+                },
+                "criteria": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "criterion": {
+                        "type": "string"
+                      },
+                      "text": {
+                        "type": "string"
+                      },
+                      "tag": {
+                        "type": "string",
+                        "enum": [
+                          "code",
+                          "test",
+                          "docs",
+                          "review"
+                        ]
+                      },
+                      "intent": {
+                        "type": "string",
+                        "enum": [
+                          "check",
+                          "review"
+                        ]
+                      },
+                      "evidence": {
+                        "type": "string"
+                      },
+                      "provenance": {
+                        "type": "string",
+                        "enum": [
+                          "source",
+                          "triage",
+                          "person"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "criterion",
+                      "text",
+                      "tag",
+                      "intent",
+                      "evidence",
+                      "provenance"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "approved": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "by": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "at": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "by",
+                        "at"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "revision",
+                "item_revision",
+                "digest",
+                "repository",
+                "author",
+                "saved_at",
+                "criteria",
+                "approved"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "triage_criteria": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "repository": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "state",
+          "revisions",
+          "triage_criteria",
+          "repository"
+        ],
+        "additionalProperties": false
+      },
+      "next_send": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "send": {
+                "type": "integer",
+                "exclusiveMinimum": 0
+              },
+              "key": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "send",
+              "key"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "sends": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "send": {
+              "type": "integer",
+              "exclusiveMinimum": 0
+            },
+            "key": {
+              "type": "string"
+            },
+            "delivery": {
+              "type": "string",
+              "enum": [
+                "waiting_for_claim",
+                "claimed",
+                "running",
+                "stopping",
+                "run_ended",
+                "stopped",
+                "returned",
+                "withdrawn",
+                "rejected"
+              ]
+            },
+            "no_answer": {
+              "type": "boolean"
+            },
+            "ended": {
+              "type": "boolean"
+            },
+            "item_revision": {
+              "type": "integer",
+              "exclusiveMinimum": 0
+            },
+            "brief_revision": {
+              "type": "integer",
+              "exclusiveMinimum": 0
+            },
+            "brief_digest": {
+              "type": "string"
+            },
+            "agent": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "name": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "harness": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "harness"
+              ],
+              "additionalProperties": false
+            },
+            "runtime": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "tier": {
+                  "type": "string",
+                  "enum": [
+                    "contained",
+                    "gateway",
+                    "harness",
+                    "observe"
+                  ]
+                }
+              },
+              "required": [
+                "name",
+                "tier"
+              ],
+              "additionalProperties": false
+            },
+            "host": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "last_poll_at": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "last_poll_at"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "operator": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "mandate_id": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "requested_at": {
+              "type": "string"
+            },
+            "delivered_at": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "claimed_at": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "first_run_at": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "run_ended_at": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "rejected": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "reason": {
+                      "type": "string"
+                    },
+                    "at": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "reason",
+                    "at"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "withdrawn": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "reason": {
+                      "type": "string"
+                    },
+                    "by": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "at": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "reason",
+                    "by",
+                    "at"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "stop_requested": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "reason": {
+                      "type": "string"
+                    },
+                    "by": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "at": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "reason",
+                    "by",
+                    "at"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "stopped_at": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "returned": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "reason": {
+                      "type": "string"
+                    },
+                    "by": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "at": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "reason",
+                    "by",
+                    "at"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "runs": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "cost": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "micros": {
+                            "type": "string"
+                          },
+                          "currency": {
+                            "type": "string",
+                            "minLength": 3,
+                            "maxLength": 3
+                          }
+                        },
+                        "required": [
+                          "micros",
+                          "currency"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "basis": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "tier": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "cost",
+                  "basis",
+                  "tier"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "cost": {
+              "type": "object",
+              "properties": {
+                "runs": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "known_runs": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "total": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "micros": {
+                          "type": "string"
+                        },
+                        "currency": {
+                          "type": "string",
+                          "minLength": 3,
+                          "maxLength": 3
+                        }
+                      },
+                      "required": [
+                        "micros",
+                        "currency"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "runs",
+                "known_runs",
+                "total"
+              ],
+              "additionalProperties": false
+            },
+            "pull_request": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "repository": {
+                      "type": "string"
+                    },
+                    "number": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0
+                    },
+                    "url": {
+                      "type": "string"
+                    },
+                    "head": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "head_at": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "merged": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "at": {
+                              "type": "string"
+                            },
+                            "merge_commit": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "at",
+                            "merge_commit"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "closed_at": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "repository",
+                    "number",
+                    "url",
+                    "head",
+                    "head_at",
+                    "merged",
+                    "closed_at"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "required_checks": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "checks": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "conclusion": {
+                    "type": "string",
+                    "enum": [
+                      "success",
+                      "failure",
+                      "cancelled",
+                      "skipped",
+                      "neutral",
+                      "timed_out",
+                      "action_required",
+                      "stale",
+                      "pending"
+                    ]
+                  },
+                  "required": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "name",
+                  "conclusion",
+                  "required"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "earlier_checks": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "head": {
+                      "type": "string"
+                    },
+                    "checks": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "conclusion": {
+                            "type": "string",
+                            "enum": [
+                              "success",
+                              "failure",
+                              "cancelled",
+                              "skipped",
+                              "neutral",
+                              "timed_out",
+                              "action_required",
+                              "stale",
+                              "pending"
+                            ]
+                          },
+                          "required": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "conclusion",
+                          "required"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "head",
+                    "checks"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "checks_word": {
+              "type": "string",
+              "enum": [
+                "passing",
+                "failing",
+                "missing",
+                "running",
+                "unread",
+                "none_required",
+                "no_pull_request",
+                "pr_closed"
+              ]
+            },
+            "gate": {
+              "type": "object",
+              "properties": {
+                "open": {
+                  "type": "boolean"
+                },
+                "block": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "enum": [
+                        "order_closed",
+                        "already_accepted",
+                        "run_active",
+                        "pr_closed",
+                        "no_pull_request",
+                        "no_head",
+                        "brief_out_of_date",
+                        "checks_unknown",
+                        "check_missing",
+                        "check_failed"
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "detail": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "open",
+                "block",
+                "detail"
+              ],
+              "additionalProperties": false
+            },
+            "acceptance": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "head": {
+                      "type": "string"
+                    },
+                    "by": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "at": {
+                      "type": "string"
+                    },
+                    "criteria": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "required_checks": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "head",
+                    "by",
+                    "at",
+                    "criteria",
+                    "required_checks"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "stale_acceptance": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "head": {
+                      "type": "string"
+                    },
+                    "by": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "at": {
+                      "type": "string"
+                    },
+                    "criteria": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "required_checks": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "head",
+                    "by",
+                    "at",
+                    "criteria",
+                    "required_checks"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "claims": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "criterion": {
+                    "type": "string"
+                  },
+                  "text": {
+                    "type": "string"
+                  },
+                  "head": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "current": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "criterion",
+                  "text",
+                  "head",
+                  "current"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "id",
+            "send",
+            "key",
+            "delivery",
+            "no_answer",
+            "ended",
+            "item_revision",
+            "brief_revision",
+            "brief_digest",
+            "agent",
+            "runtime",
+            "host",
+            "operator",
+            "mandate_id",
+            "requested_at",
+            "delivered_at",
+            "claimed_at",
+            "first_run_at",
+            "run_ended_at",
+            "rejected",
+            "withdrawn",
+            "stop_requested",
+            "stopped_at",
+            "returned",
+            "runs",
+            "cost",
+            "pull_request",
+            "required_checks",
+            "checks",
+            "earlier_checks",
+            "checks_word",
+            "gate",
+            "acceptance",
+            "stale_acceptance",
+            "claims"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "history": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string"
+            },
+            "source": {
+              "type": "string",
+              "enum": [
+                "provider",
+                "runtime",
+                "agent",
+                "person",
+                "oxagen"
+              ]
+            },
+            "actor": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "at": {
+              "type": "string"
+            },
+            "item_revision": {
+              "type": "integer",
+              "exclusiveMinimum": 0
+            },
+            "send": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "exclusiveMinimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "reason": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "resolution": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "outcome": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "head": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "check": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "conclusion": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "pull_request": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "merge_commit": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "brief_revision": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "exclusiveMinimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "source",
+            "actor",
+            "at",
+            "item_revision",
+            "send",
+            "reason",
+            "resolution",
+            "outcome",
+            "head",
+            "check",
+            "conclusion",
+            "pull_request",
+            "merge_commit",
+            "brief_revision"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "viewer": {
+        "type": "object",
+        "properties": {
+          "can_control": {
+            "type": "boolean"
+          },
+          "can_approve": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "can_control",
+          "can_approve"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "required": [
+      "item",
+      "triage",
+      "brief",
+      "next_send",
+      "sends",
+      "history",
+      "viewer"
+    ],
+    "additionalProperties": false
+  }
+}

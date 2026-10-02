@@ -269,7 +269,10 @@ export interface SteeringHost {
   /**
    * Squash-merge, pinned to `sha`: the host refuses when the head moved past
    * it. `commitMessage` is the squash commit's body, where the merge queue
-   * puts the `Oxagen-*` trailers (#4449).
+   * puts the `Oxagen-*` trailers (#4449). `base` is the commit the merge queue
+   * read on the base branch just before the merge. A host that retries a merge
+   * GitHub refused as "Base branch was modified" does so only while the base
+   * branch is still at `base` (#5157).
    */
   mergePullRequest(
     repo: SteeringRepository,
@@ -278,6 +281,7 @@ export interface SteeringHost {
       commitTitle: string;
       sha: string;
       commitMessage?: string;
+      base?: string;
     },
   ): Promise<{ sha: string }>;
   closePullRequest(repo: SteeringRepository, number: number): Promise<void>;
@@ -951,22 +955,32 @@ async function listGitTree(
  * every push. Until it knows, the pull request reads `mergeable: null` and the
  * merge endpoint answers 405 "Pull Request is not mergeable". The merge queue
  * pushes its stamp commit just before it merges, so its first merge met that
- * answer every time (#5157). The merge then reads the pull request until
- * GitHub knows, at most MERGE_SETTLE_READS times MERGE_SETTLE_INTERVAL_MS
- * apart, and merges again once GitHub says it can.
+ * answer every time (#5157). GitHub also gives the same race a second
+ * wording, 405 "Base branch was modified", even when the base did not move:
+ * the steering live test met it on 2026-10-02 (run 37037472622). The merge
+ * then reads the pull request until GitHub knows, at most MERGE_SETTLE_READS
+ * times MERGE_SETTLE_INTERVAL_MS apart, and merges again once GitHub says it
+ * can. Each later retry waits one interval longer first, because after "Base
+ * branch was modified" the pull request can still read `mergeable: true`.
  */
 const MERGE_SETTLE_READS = 15;
 const MERGE_SETTLE_INTERVAL_MS = 1_000;
-/** How many more merges follow a "not mergeable" answer, each after GitHub said it can merge. */
-const MERGE_RETRIES = 2;
+/** How many more merges follow a settling refusal, each after GitHub said it can merge. */
+const MERGE_RETRIES = 3;
 
-/** GitHub's answer to a merge it can't do yet, or can't do at all. */
-function refusedAsNotMergeable(err: unknown): boolean {
-  return (
-    err instanceof GitHubApiError &&
-    err.status === 405 &&
-    /not mergeable/i.test(err.message)
-  );
+/**
+ * Which of GitHub's two "still working out this head" refusals `err` is, or
+ * null for any other answer. "Base branch was modified" can also mean the base
+ * really moved, so the merge retries it only while the base is still the
+ * commit the merge queue checked.
+ */
+function settlingRefusal(
+  err: unknown,
+): "not_mergeable" | "base_modified" | null {
+  if (!(err instanceof GitHubApiError) || err.status !== 405) return null;
+  if (/not mergeable/i.test(err.message)) return "not_mergeable";
+  if (/base branch was modified/i.test(err.message)) return "base_modified";
+  return null;
 }
 
 export function githubRefused(err: unknown): HandlerError {
@@ -1048,37 +1062,55 @@ export function createSteeringGitHub(
   };
   /**
    * Reads the pull request until GitHub knows whether it can merge. True only
-   * when GitHub says it can, at the head the merge is pinned to. Anything else
-   * is false, and the merge keeps GitHub's first refusal: a closed pull
-   * request, a head that moved, a "no" from GitHub, a failed read, or no
-   * answer after MERGE_SETTLE_READS reads.
+   * when GitHub says it can, at the head the merge is pinned to, and, when the
+   * merge names its base, while the base branch is still at that commit.
+   * Anything else is false, and the merge keeps GitHub's first refusal: a
+   * closed pull request, a head that moved, a base that moved, a "no" from
+   * GitHub, a failed read, or no answer after MERGE_SETTLE_READS reads.
    */
   const mergeableOnceChecked = async (
     repo: SteeringRepository,
-    number: number,
-    sha: string,
+    args: { number: number; sha: string; base?: string },
+    retry: number,
   ): Promise<boolean> => {
     const { rest, path } = restFor(repo);
     for (let read = 0; read < MERGE_SETTLE_READS; read += 1) {
-      await sleep(MERGE_SETTLE_INTERVAL_MS);
+      await sleep(MERGE_SETTLE_INTERVAL_MS * (read === 0 ? retry + 1 : 1));
       let pr: {
         state: string;
         mergeable: boolean | null;
         head: { sha: string };
+        base: { ref: string };
       };
       try {
         pr = (
-          await rest.request<typeof pr>("GET", `${path}/pulls/${number}`)
+          await rest.request<typeof pr>("GET", `${path}/pulls/${args.number}`)
         ).data;
       } catch (err) {
         logger.warn(
-          { err: String(err), repo: repo.fullName, number },
+          { err: String(err), repo: repo.fullName, number: args.number },
           "Reading a steering PR's mergeability failed, so the merge keeps GitHub's refusal",
         );
         return false;
       }
-      if (pr.state !== "open" || pr.head.sha !== sha) return false;
-      if (pr.mergeable !== null) return pr.mergeable;
+      if (pr.state !== "open" || pr.head.sha !== args.sha) return false;
+      if (pr.mergeable === false) return false;
+      if (pr.mergeable === true) {
+        if (args.base === undefined) return true;
+        try {
+          const ref = await rest.request<{ object: { sha: string } }>(
+            "GET",
+            `${path}/git/ref/heads/${githubPath(pr.base.ref)}`,
+          );
+          return ref.data.object.sha === args.base;
+        } catch (err) {
+          logger.warn(
+            { err: String(err), repo: repo.fullName, number: args.number },
+            "Reading a steering PR's base branch failed, so the merge keeps GitHub's refusal",
+          );
+          return false;
+        }
+      }
     }
     return false;
   };
@@ -1464,10 +1496,14 @@ export function createSteeringGitHub(
         try {
           return await mergeOnce(repo, args);
         } catch (err) {
+          const settling = settlingRefusal(err);
           if (
             retry >= MERGE_RETRIES ||
-            !refusedAsNotMergeable(err) ||
-            !(await mergeableOnceChecked(repo, args.number, args.sha))
+            settling === null ||
+            // Without the base the merge queue checked, "Base branch was
+            // modified" may be true, so it stands.
+            (settling === "base_modified" && args.base === undefined) ||
+            !(await mergeableOnceChecked(repo, args, retry))
           )
             throw githubRefused(err);
         }

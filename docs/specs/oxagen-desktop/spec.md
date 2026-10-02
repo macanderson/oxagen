@@ -41,7 +41,7 @@ The app owns no state. Every panel reads the files the CLIs already write, and e
 | `~/.config/oxagen/tacho/tachod.log` | the service's stdout and stderr, tailed in the Activity panel. |
 
 <figure>
-<svg viewBox="0 0 960 354" role="img" aria-labelledby="fig1t" font-family="Geist, Helvetica Neue, Arial, sans-serif" font-size="13">
+<svg viewBox="0 0 960 354" role="img" aria-labelledby="fig1t" font-family="Aeonik, Helvetica Neue, Arial, sans-serif" font-size="13">
   <title id="fig1t">The app, its two sidecars, the files they share, and the control plane</title>
   <defs>
     <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">

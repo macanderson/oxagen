@@ -78,6 +78,7 @@ import { tachoGithubTokenIssue } from "./tacho.github_token.issue";
 import { tachoMemoriesIngest } from "./tacho.memories.ingest";
 import { tachoMemoriesRecall } from "./tacho.memories.recall";
 import { tachoMemoryUsesRecord } from "./tacho.memories.uses.record";
+import { tachoSessionHeadsList } from "./tacho.session_heads.list";
 import { tachoCommandDispatch } from "./tacho.command.dispatch";
 import { pauseWorkspaceRuns } from "./tacho.workspace_runs.pause";
 import { tachoMachineGroupAdd } from "./tacho.machine_group.add";
@@ -347,6 +348,10 @@ import { workCollectorsList } from "./work.collectors.list";
 import { workCollectorSet } from "./work.collector.set";
 import { workCollectorSync } from "./work.collector.sync";
 import { workPrioritiesGet } from "./work.priorities.get";
+import { workItemsList } from "./work.items.list";
+import { workItemGet } from "./work.item.get";
+import { workTargetsList } from "./work.targets.list";
+import { workOutcomesGet } from "./work.outcomes.get";
 // The shapes the work intake and triage contracts share (P1-03, #5103).
 // Not a capability, so exported here to satisfy the file-coverage guard.
 export {
@@ -368,11 +373,17 @@ import { contextPrDiffGet } from "./context.pr.diff.get";
 import { contextPrMerge } from "./context.pr.merge";
 import { contextPrMergeWithoutReview } from "./context.pr.merge_without_review";
 import { contextPrRevert } from "./context.pr.revert";
+// Instruction files in linked code repositories, and the managed blocks of a
+// steering PR (#4518, ADR-263).
+import { codeRepositoryFindingsList } from "./repository.findings.list";
+import { instructionPromote } from "./repository.instruction.promote";
+import { contextPrRestoreManagedBlock } from "./context.pr.restore_managed_block";
 import { contextSteeringDeliveries } from "./context.steering.deliveries";
 import { steeringRepoGet } from "./steering_repo.get";
 import { steeringRepoRepair } from "./steering_repo.repair";
 import { steeringRepoImport } from "./steering_repo.import";
 import { steeringRepoProvisionRetry } from "./steering_repo.provision.retry";
+import { steeringRepoDestinationsList } from "./steering_repo.destinations.list";
 // Markdown import: parse files into steering records and Cedar policies, then
 // open one steering PR with the rows a person kept (#4907).
 import { steeringMarkdownImportParse } from "./steering.markdown_import.parse";
@@ -586,6 +597,15 @@ export {
   githubRepositoryNameSchema,
   repositoryBindingIdSchema,
 } from "./repository.shared";
+// Steering repo shapes shared by create_workspace and the steering_repo.*
+// contracts. Not a capability, so exported here to satisfy the file-coverage
+// guard.
+export {
+  defaultSteeringRepoName,
+  steeringConnectionChoice,
+  steeringConnectionPick,
+  steeringRepoNameInput,
+} from "./steering_repo.shared";
 // Steering vocabulary (ADR-061) shared by the context.* contracts. Not a
 // capability, so exported here to satisfy the file-coverage guard.
 export {
@@ -700,6 +720,24 @@ export {
   workRevisionSchema,
   workWriteOutputShape,
 } from "./work.order.shared";
+// The shapes the Work pages' reads share (P1-05, #5163). Not a capability,
+// so exported here to satisfy the check-contracts file-coverage guard.
+export {
+  WORK_CHECKS_WORDS,
+  WORK_ITEM_STATUSES,
+  WORK_TABS,
+  workBriefSchema,
+  workChecksWordSchema,
+  workCostSchema,
+  workItemRowSchema,
+  workItemStatusSchema,
+  workMoneySchema,
+  workSendSummarySchema,
+  workTabSchema,
+  workViewerSchema,
+  workWaitSchema,
+} from "./work.read.shared";
+export type { WorkItemRowOutput, WorkWaitOutput } from "./work.read.shared";
 // Finding vocabulary (ADR-062): a finding, its evidence and the decision
 // input. The shared file is not a capability, so it is exported here to
 // satisfy the check-contracts file-coverage guard.
@@ -951,6 +989,7 @@ export {
   tachoMemoriesIngest,
   tachoMemoriesRecall,
   tachoMemoryUsesRecord,
+  tachoSessionHeadsList,
   tachoContainedLaunchRegister,
   tachoCommandDispatch,
   pauseWorkspaceRuns,
@@ -1169,6 +1208,7 @@ export {
   steeringRepoRepair,
   steeringRepoImport,
   steeringRepoProvisionRetry,
+  steeringRepoDestinationsList,
   steeringMarkdownImportParse,
   steeringMarkdownImportCommit,
   steeringPropose,
@@ -1200,6 +1240,10 @@ export {
   workCollectorSet,
   workCollectorSync,
   workPrioritiesGet,
+  workItemsList,
+  workItemGet,
+  workTargetsList,
+  workOutcomesGet,
   contextPrOpen,
   contextPrGet,
   contextPrRefresh,
@@ -1207,6 +1251,9 @@ export {
   contextPrMerge,
   contextPrMergeWithoutReview,
   contextPrRevert,
+  codeRepositoryFindingsList,
+  instructionPromote,
+  contextPrRestoreManagedBlock,
   contextGovernanceModeSet,
   connectionList,
   connectionCreate,
@@ -1434,6 +1481,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   tachoMemoriesIngest,
   tachoMemoriesRecall,
   tachoMemoryUsesRecord,
+  tachoSessionHeadsList,
   tachoContainedLaunchRegister,
   tachoCommandDispatch,
   pauseWorkspaceRuns,
@@ -1651,6 +1699,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   steeringRepoRepair,
   steeringRepoImport,
   steeringRepoProvisionRetry,
+  steeringRepoDestinationsList,
   steeringMarkdownImportParse,
   steeringMarkdownImportCommit,
   steeringPropose,
@@ -1682,6 +1731,10 @@ export const contracts: readonly CapabilityDeclaration[] = [
   workCollectorSet,
   workCollectorSync,
   workPrioritiesGet,
+  workItemsList,
+  workItemGet,
+  workTargetsList,
+  workOutcomesGet,
   contextPrOpen,
   contextPrGet,
   contextPrRefresh,
@@ -1689,6 +1742,9 @@ export const contracts: readonly CapabilityDeclaration[] = [
   contextPrMerge,
   contextPrMergeWithoutReview,
   contextPrRevert,
+  codeRepositoryFindingsList,
+  instructionPromote,
+  contextPrRestoreManagedBlock,
   contextGovernanceModeSet,
   agentExecutionList,
   agentExecutionRecord,

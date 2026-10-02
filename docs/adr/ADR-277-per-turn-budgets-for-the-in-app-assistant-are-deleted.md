@@ -54,7 +54,7 @@ Delete these files:
   (`budget-control.tsx`, `budget-actions.ts`) and the budget form on the
   agent defaults page (`budget-form.tsx`, `budget-action.ts` and its test).
 
-Drop the storage in one migration, `20261002233000_drop_assistant_turn_budgets.sql`:
+Drop the storage in one migration, `20261002235000_drop_assistant_turn_budgets.sql`:
 the `workspace.workspace_budget_policy` table and the four `per_turn_budget_*`
 columns on `auth.user_preferences`. The four handlers were the only readers.
 

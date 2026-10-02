@@ -767,6 +767,54 @@ describe("steeringRepoProvisionDeps", () => {
       expect(argOf(read, "limit")).toBe(1);
     });
 
+    it("loads a workspace repo with the connection the workspace chose before the organization's", async () => {
+      mocks.results.push(
+        [orgRow({ steering_connection: GITLAB })],
+        [
+          {
+            slug: "platform",
+            name: "Platform",
+            settings: {
+              steering_repo: {
+                status: "provisioning",
+                requested_connection: { provider: "github", id: 55 },
+                connection: GITHUB,
+              },
+            },
+          },
+        ],
+      );
+      await expect(deps().load(WORKSPACE)).resolves.toMatchObject({
+        state: {
+          requested_connection: { provider: "github", id: 55 },
+          connection: GITHUB,
+        },
+        connection: GITHUB,
+      });
+    });
+
+    it("falls back to the organization's connection when the workspace's own is malformed", async () => {
+      mocks.results.push(
+        [orgRow({ steering_connection: GITLAB })],
+        [
+          {
+            slug: "platform",
+            name: "Platform",
+            settings: {
+              steering_repo: {
+                status: "provisioning",
+                connection: { provider: "github", installation_id: "55" },
+              },
+            },
+          },
+        ],
+      );
+      await expect(deps().load(WORKSPACE)).resolves.toMatchObject({
+        state: { connection: null },
+        connection: GITLAB,
+      });
+    });
+
     it("returns no state and no connection when the settings hold none", async () => {
       mocks.results.push(
         [orgRow(null)],
@@ -820,6 +868,20 @@ describe("steeringRepoProvisionDeps", () => {
       expect(render(argOf(write, "where"))).toEqual(
         render(eq(schema.organizations.id, ORG)),
       );
+    });
+  });
+
+  describe("keepConnection", () => {
+    it("stores the connection only on an organization that has none", async () => {
+      mocks.updateResults.push([{ id: ORG }]);
+      await deps().keepConnection?.(WORKSPACE, GITLAB);
+      expect(mocks.dbCalls).toEqual(["system"]);
+      const write = chain(0);
+      expect(argOf(write, "update")).toBe(schema.organizations);
+      expect(savedPatch(write)).toEqual({ steering_connection: GITLAB });
+      const where = render(argOf(write, "where"));
+      expect(where.params).toEqual([ORG, "steering_connection"]);
+      expect(where.sql).toContain("IS NULL");
     });
   });
 

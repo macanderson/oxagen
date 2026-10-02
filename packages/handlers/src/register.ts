@@ -349,6 +349,20 @@ registerHandlersOnce("@oxagen/handlers", () => {
   registerHandler("get_work_priorities", () =>
     import("./work.priorities.get").then((m) => m.workPrioritiesGetHandler as CapabilityHandlerFn),
   );
+  // The Work pages' reads (P1-05, #5163): the item list, one item, the send
+  // targets, and the outcome counts, each reduced from the work records.
+  registerHandler("list_work_items", () =>
+    import("./work.items.list").then((m) => m.workItemsListHandler as CapabilityHandlerFn),
+  );
+  registerHandler("get_work_item", () =>
+    import("./work.item.get").then((m) => m.workItemGetHandler as CapabilityHandlerFn),
+  );
+  registerHandler("list_work_targets", () =>
+    import("./work.targets.list").then((m) => m.workTargetsListHandler as CapabilityHandlerFn),
+  );
+  registerHandler("get_work_outcomes", () =>
+    import("./work.outcomes.get").then((m) => m.workOutcomesGetHandler as CapabilityHandlerFn),
+  );
   registerHandler("get_run_issue_providers", () =>
     import("./run.issue.providers.get").then(
       (m) => m.handler as CapabilityHandlerFn,
@@ -1228,6 +1242,12 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./steering_repo.provision.retry"))
         .retrySteeringRepoProvisionHandler as CapabilityHandlerFn,
   );
+  registerHandler(
+    "list_steering_repo_destinations",
+    async () =>
+      (await import("./steering_repo.destinations.list"))
+        .listSteeringRepoDestinationsHandler as CapabilityHandlerFn,
+  );
   // The Markdown import (#4907): parse files into steering records and Cedar
   // policies, then open one steering PR with the rows a person kept.
   registerHandler(
@@ -1440,6 +1460,26 @@ registerHandlersOnce("@oxagen/handlers", () => {
     async () =>
       (await import("./context.pr.revert"))
         .revertSteeringPrHandler as CapabilityHandlerFn,
+  );
+  // Restore the managed block on a steering PR's branch, and list or promote
+  // the instruction-file statements the Oxagen check stores (#4518, ADR-263).
+  registerHandler(
+    "restore_managed_block",
+    async () =>
+      (await import("./context.pr.restore_managed_block"))
+        .restoreManagedBlockHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "list_code_repository_findings",
+    async () =>
+      (await import("./code-repo-check/handlers"))
+        .listCodeRepositoryFindingsHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "promote_instruction_to_steering",
+    async () =>
+      (await import("./code-repo-check/handlers"))
+        .promoteInstructionHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "set_governance_mode",
@@ -1746,6 +1786,12 @@ registerHandlersOnce("@oxagen/handlers", () => {
     async () =>
       (await import("./tacho.memories.recall"))
         .tachoMemoriesRecallHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "list_tacho_session_heads",
+    async () =>
+      (await import("./tacho.session_heads.list"))
+        .tachoSessionHeadsListHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "record_tacho_memory_uses",
