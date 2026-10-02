@@ -196,9 +196,9 @@
         "constraint_effect": "constraint_effect"
       },
       "passed": "Every check passed. A reviewer can merge it under the workspace’s governance mode.",
-      "failed": "A check failed, so the pull request cannot merge. Fix the file on the branch, or close the pull request from steering PRs. Nothing is in force.",
+      "failed": "A check failed, so the pull request cannot merge. Fix the file on the branch, or close the pull request from Steering PRs. Nothing is in force.",
       "running": "The checks are still running. Steering PRs shows them as they finish.",
-      "onSteeringPrs": "Open the pull request on steering PRs"
+      "onSteeringPrs": "Open the pull request on Steering PRs"
     },
     "failure": {
       "orgRoleRequired": "Opening a steering PR needs Owner or Admin on the organization, or Owner or Member on the workspace. Nothing was written.",
@@ -210,7 +210,7 @@
       "gitlabRefused": "GitLab refused the write. Nothing was published. Check that the project access token still has the api scope and the Developer role, then try again.",
       "gitlabCredentialRejected": "GitLab no longer accepts the access token stored for this project. Nothing was changed. Connect the project again with a new token. If Oxagen created this steering project, an organization owner or admin must connect its group again with a new group access token.",
       "baseMoved": "The production branch moved while the pull request was opening. Try again.",
-      "proposalMoved": "Another change moved this proposal first. Open the pull request on steering PRs to see where it stands.",
+      "proposalMoved": "Another change moved this proposal first. Open the pull request on Steering PRs to see where it stands.",
       "unanswered": "Oxagen did not answer. Try again.",
       "slugTaken": "Another record or proposal already has this slug. Go back to the first step, change the slug, and try again. Nothing was written.",
       "refused": "The pull request was refused ({code}).",

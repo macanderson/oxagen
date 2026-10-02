@@ -159,6 +159,12 @@ const WORD_RULES = [
     re: new RegExp(String.raw`\bCONTEXT(${SEP})(RECORDS?)\b`, "g"),
     to: (_m, sep, rec) => `STEERING${sep}${rec}`,
   },
+  // These name the Steering PRs page, so they keep the page name's capital.
+  {
+    id: "words-pr-page",
+    re: /\b(pull request (?:on|from)|card on|lands on) Context PRs\b/g,
+    to: (_m, lead) => `${lead} Steering PRs`,
+  },
   {
     id: "words-pr",
     re: new RegExp(String.raw`\b([Cc])ontext(${SEP})(PRs?)\b`, "g"),

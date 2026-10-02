@@ -720,7 +720,7 @@ export interface DataSource {
       ctx: WsCtx,
       memoryId: string,
     ): Promise<Read<WorkspaceMemoryDetail>>;
-    /** list_memory_pr_records: the records one memory PR proposes, for the review card on steering PRs. */
+    /** list_memory_pr_records: the records one memory PR proposes, for the review card on Steering PRs. */
     memoryPrRecords(
       ctx: WsCtx,
       prNumber: number,

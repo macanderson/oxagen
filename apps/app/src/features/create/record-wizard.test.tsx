@@ -459,7 +459,7 @@ describe("the steering-record wizard: record path", () => {
 });
 
 describe("the steering-record wizard: pull request", () => {
-  it("proposes the record, opens its steering PR, and lands on steering PRs", async () => {
+  it("proposes the record, opens its steering PR, and lands on Steering PRs", async () => {
     openRecordPr.mockResolvedValue(opened());
     await toPullRequest();
     expect(screen.getByTestId("pr-branch").textContent).toBe(
