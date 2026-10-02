@@ -1266,6 +1266,15 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./markdown-import/index"))
         .commitMarkdownImportHandler as CapabilityHandlerFn,
   );
+  // An agent opens a steering PR over MCP without a clone (#5134). The MCP
+  // server registers the resolver that names the proposing agent
+  // (steering.proposer.ts).
+  registerHandler(
+    "propose_steering",
+    async () =>
+      (await import("./steering.propose"))
+        .steeringProposeHandler as CapabilityHandlerFn,
+  );
   registerHandler(
     "import_workspace_steering",
     async () =>
@@ -2789,6 +2798,18 @@ registerHandlersOnce("@oxagen/handlers", () => {
     async () =>
       (await import("./context.steering.index.get"))
         .steeringIndexGetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "search_steering",
+    async () =>
+      (await import("./steering.search"))
+        .steeringSearchHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "read_steering",
+    async () =>
+      (await import("./steering.read"))
+        .steeringReadHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "set_production_branch",

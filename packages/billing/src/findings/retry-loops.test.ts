@@ -170,8 +170,59 @@ describe("retry loops", () => {
       },
     ]);
     expect(finding?.why).toBe(
-      "On 1 run, a call failed 3 or more times in a row with the same error, and no write or file change came between the attempts. 2 turns made only those retries.",
+      "On 1 run, a call failed 3 or more times in a row with the same error, and no write or file change came between the attempts. 2 calls came from turns that made only those retries.",
     );
+    // #5023: the card names the call and how many times in a row it failed.
+    expect(finding?.evidence.values).toEqual({
+      kind: "retry_loops",
+      tool: "Bash",
+      failures: 3,
+    });
+  });
+
+  // #5023: a turn that made several retries is priced once, and each of its
+  // calls counts, so the card's number matches its calls label.
+  it("prices a turn that made several retries once, and counts each of its calls", () => {
+    const r = run();
+    const toolCalls = [1, 2, 3].map((at) => call(r, { at }));
+    // One request made the attempt, and one more made both retries.
+    const frames = turns(toolCalls.slice(0, 2));
+    const [finding, ...rest] = detect(r, toolCalls, { frames });
+    expect(rest).toEqual([]);
+    expect(finding).toMatchObject({
+      kind: "retry_loops",
+      savingMicros: TURN_MICROS,
+    });
+    expect(finding?.evidence).toMatchObject({
+      calls: 2,
+      coveredCalls: 2,
+      measuredTokens: TURN_TOKENS,
+    });
+    expect(finding?.evidence.frames).toEqual({
+      [r.runId]: { seqs: [{ seq: "2" }, { seq: "3" }], total: 2 },
+    });
+    expect(finding?.claims).toHaveLength(1);
+    expect(finding?.why).toContain(
+      "2 calls came from turns that made only those retries.",
+    );
+  });
+
+  it("stores the longest streak's tool and how many times in a row it failed (#5023)", () => {
+    const r = run();
+    const toolCalls = [
+      ...[1, 2, 3].map((at) => call(r, { at })),
+      // A different call ends the first streak, and a longer one follows.
+      ...[4, 5, 6, 7, 8].map((at) =>
+        call(r, { at, tool: "Read", inputDigest: "read-config" }),
+      ),
+    ];
+    const [finding] = detect(r, toolCalls);
+    expect(finding?.evidence.calls).toBe(6);
+    expect(finding?.evidence.values).toEqual({
+      kind: "retry_loops",
+      tool: "Read",
+      failures: 5,
+    });
   });
 
   it("cites the run's operator when the run names no agent", () => {

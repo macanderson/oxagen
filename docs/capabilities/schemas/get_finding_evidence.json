@@ -162,6 +162,548 @@
             ],
             "additionalProperties": false
           },
+          "values": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "const": "spin_loops"
+                  },
+                  "tool": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "repeats": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0
+                  }
+                },
+                "required": [
+                  "kind",
+                  "tool",
+                  "repeats"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "const": "retry_loops"
+                  },
+                  "tool": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "failures": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0
+                  }
+                },
+                "required": [
+                  "kind",
+                  "tool",
+                  "failures"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "const": "standing_context"
+                  },
+                  "resentTokens": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "toolDefinitionTokens": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "steeringTokens": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "contextFrameTokens": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "provider": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "tokens": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "tools": {
+                            "type": "integer",
+                            "exclusiveMinimum": 0
+                          },
+                          "toolsCalled": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "weeklyPrice": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "micros": {
+                                    "type": "string"
+                                  },
+                                  "currency": {
+                                    "type": "string"
+                                  },
+                                  "basis": {
+                                    "type": "string",
+                                    "enum": [
+                                      "gateway_observed",
+                                      "client_attested",
+                                      "mixed",
+                                      "estimated"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "micros",
+                                  "currency",
+                                  "basis"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "tokens",
+                          "tools",
+                          "toolsCalled",
+                          "weeklyPrice"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "weeklyPricePerThousand": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "micros": {
+                            "type": "string"
+                          },
+                          "currency": {
+                            "type": "string"
+                          },
+                          "basis": {
+                            "type": "string",
+                            "enum": [
+                              "gateway_observed",
+                              "client_attested",
+                              "mixed",
+                              "estimated"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "micros",
+                          "currency",
+                          "basis"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "kind",
+                  "resentTokens",
+                  "toolDefinitionTokens",
+                  "steeringTokens",
+                  "contextFrameTokens",
+                  "provider",
+                  "weeklyPricePerThousand"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "const": "model_class_fit"
+                  },
+                  "model": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "lighterModel": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "unchangedRuns": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "editedRuns": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "kind",
+                  "model",
+                  "lighterModel",
+                  "unchangedRuns",
+                  "editedRuns"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "const": "repeated_instructions"
+                  },
+                  "retention": {
+                    "type": "string",
+                    "enum": [
+                      "content_exact",
+                      "digest_only"
+                    ]
+                  },
+                  "sentence": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "prompts": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0
+                  },
+                  "promptRuns": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0
+                  },
+                  "others": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "kind",
+                  "retention",
+                  "sentence",
+                  "prompts",
+                  "promptRuns",
+                  "others"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "const": "recurring_runs"
+                  },
+                  "groupSize": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0
+                  },
+                  "unchanged": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "otherPrompts": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "kind",
+                  "groupSize",
+                  "unchanged",
+                  "otherPrompts"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "const": "spend_with_no_outcome"
+                  },
+                  "closedUnmerged": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "reverted": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "abandoned": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "kind",
+                  "closedUnmerged",
+                  "reverted",
+                  "abandoned"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "const": "cache_writes_never_read"
+                  },
+                  "writtenTokens": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "kind",
+                  "writtenTokens"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "const": "idle_cache_rewrites"
+                  },
+                  "minWaitMinutes": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "maxWaitMinutes": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "averageTokens": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "keepAlive": {
+                    "type": "object",
+                    "properties": {
+                      "micros": {
+                        "type": "string"
+                      },
+                      "currency": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "micros",
+                      "currency"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "rewrites": {
+                    "type": "object",
+                    "properties": {
+                      "micros": {
+                        "type": "string"
+                      },
+                      "currency": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "micros",
+                      "currency"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "pricedRewrites": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "unknownRewrites": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "kind",
+                  "minWaitMinutes",
+                  "maxWaitMinutes",
+                  "averageTokens",
+                  "keepAlive",
+                  "rewrites",
+                  "pricedRewrites",
+                  "unknownRewrites"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "const": "cache_busts"
+                  },
+                  "firstChange": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "firstChangeBusts": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "exclusiveMinimum": 0
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "pricedBusts": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "unknownBusts": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "kind",
+                  "firstChange",
+                  "firstChangeBusts",
+                  "pricedBusts",
+                  "unknownBusts"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "const": "unpaged_results"
+                  },
+                  "results": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "retention": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "content_exact",
+                          "digest_only"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "quoted": {
+                    "type": "object",
+                    "properties": {
+                      "results": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "reads": {
+                        "type": "integer",
+                        "minimum": 0
+                      }
+                    },
+                    "required": [
+                      "results",
+                      "reads"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "unchecked": {
+                    "type": "object",
+                    "properties": {
+                      "results": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "reads": {
+                        "type": "integer",
+                        "minimum": 0
+                      }
+                    },
+                    "required": [
+                      "results",
+                      "reads"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "kind",
+                  "results",
+                  "retention",
+                  "quoted",
+                  "unchecked"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          },
           "runs": {
             "type": "integer",
             "exclusiveMinimum": 0

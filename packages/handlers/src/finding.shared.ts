@@ -9,10 +9,12 @@
 // as stored (INV-09, INV-10): nothing here re-estimates them.
 import type { FindingEvidence as StoredEvidence } from "@oxagen/billing";
 import { schema, withTenantDb } from "@oxagen/database";
-import type {
-  Finding,
-  FindingEvidence,
-  FindingRunCitation,
+import {
+  findingValuesSchema,
+  type Finding,
+  type FindingEvidence,
+  type FindingRunCitation,
+  type FindingValues,
 } from "@oxagen/oxagen/contracts/finding.shared";
 import { FINDINGS_LIST_MAX } from "@oxagen/oxagen/contracts/finding.list";
 import { HandlerError } from "@oxagen/oxagen/handler-error";
@@ -35,8 +37,25 @@ function money(micros: string, currency: string) {
   return { micros, currency };
 }
 
+/**
+ * The kind's figures as the findings job stored them (#5023). A row written
+ * before the job stored them carries none, and so does a blob that does not
+ * parse or names another kind: the card then shows the detector's own text,
+ * and one bad row cannot fail the whole list.
+ */
+function valuesOf(
+  row: FindingRow,
+  evidence: StoredEvidence,
+): FindingValues | undefined {
+  if (evidence.values === undefined) return undefined;
+  const parsed = findingValuesSchema.safeParse(evidence.values);
+  if (!parsed.success || parsed.data.kind !== row.kind) return undefined;
+  return parsed.data;
+}
+
 export function toFinding(row: FindingRow): Finding {
   const evidence = row.citedFrames as StoredEvidence;
+  const values = valuesOf(row, evidence);
   return {
     id: row.publicId,
     kind: row.kind as Finding["kind"],
@@ -58,6 +77,7 @@ export function toFinding(row: FindingRow): Finding {
     ...(evidence.recommendation === undefined
       ? {}
       : { recommendation: { ...evidence.recommendation } }),
+    ...(values === undefined ? {} : { values }),
     runs: row.citedRuns.length,
     calls: evidence.calls,
     status: row.status as FindingStatus,

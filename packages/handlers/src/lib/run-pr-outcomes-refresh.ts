@@ -11,13 +11,16 @@
 //   2. reads from GitHub the state, head commit CI, and head branch of each
 //      pull request whose row is not settled (`needsForgeRead`), at most 60
 //      per pass, least recently asked first,
-//   3. keeps the reverts a merged pull request's body names
+//   3. folds in the newest state a GitHub delivery carried for each pull
+//      request (`cost.run_pr_delivered_states`), so a delivery that landed
+//      before the run's first row existed is not lost,
+//   4. keeps the reverts a merged pull request's body names
 //      (`Reverts owner/repo#N`) in `cost.run_pr_reverts`,
-//   4. marks each row with the kept reverts that name it: the ones found in
-//      step 3, and the ones the GitHub deliveries and earlier passes kept,
-//   5. writes the rows that changed, with the run's terminal reason on each,
+//   5. marks each row with the kept reverts that name it: the ones found in
+//      step 4, and the ones the GitHub deliveries and earlier passes kept,
+//   6. writes the rows that changed, with the run's terminal reason on each,
 //      and
-//   6. gives a run that opened no pull request one `none` row that carries
+//   7. gives a run that opened no pull request one `none` row that carries
 //      its terminal reason.
 //
 // A revert is kept before any row is written, so a pass that fails after it
@@ -31,7 +34,9 @@ import {
   blankOutcome,
   ciStateOfRead,
   type CiRead,
+  type DeliveredPrState,
   listOutcomeRuns,
+  mergedPullRequestRevertPlan,
   needsForgeRead,
   OUTCOME_FORGE_READS_PER_PASS,
   OUTCOME_WINDOW_DAYS,
@@ -40,13 +45,13 @@ import {
   type OutcomeScope,
   type PrStateRead,
   prKeyOf,
+  readDeliveredStates,
   readOutcomeRows,
   readRevertEvidence,
   readRunTerminalReasons,
   readTachoRunPrLinks,
   type RevertEvidence,
   revertEvidenceOf,
-  revertTargetsOf,
   type RunPr,
   type RunPrState,
   saveOutcomeRows,
@@ -177,6 +182,11 @@ export interface OutcomeRefreshDeps {
     walks: readonly ReceiptWalk[],
   ): Promise<void>;
   readForge(scope: OutcomeScope, pr: RunPr): Promise<ForgeOutcome>;
+  /** The newest state a GitHub delivery carried for each named pull request that has one. */
+  deliveredStates(
+    scope: OutcomeScope,
+    prKeys: readonly string[],
+  ): Promise<DeliveredPrState[]>;
   /** The reverts kept for the workspace that Oxagen saw since the given time. */
   readReverts(scope: OutcomeScope, since: Date): Promise<RevertEvidence[]>;
   /** Keep reverts until their rows exist. A revert already kept is not written again. */
@@ -447,22 +457,17 @@ export async function refreshRunPrOutcomes(
     forgeReads += 1;
     for (const c of item.group) c.row = foldForgeRead(c.row, read);
     if (read.state.state !== "merged") return;
-    const repository = item.pr.repository.toLowerCase();
-    const targets = revertTargetsOf(read.body, repository).filter(
-      (t) => !(t.repository === repository && t.number === item.pr.number),
-    );
-    if (targets.length > 0)
-      foundReverts.push(
-        ...revertEvidenceOf({
-          kind: "pull_requests",
-          targets,
-          mark: {
-            by: item.prKey,
-            at: read.state.mergedAt ?? read.state.closedAt,
-            readAt: read.state.readAt,
-          },
-        }),
-      );
+    const plan = mergedPullRequestRevertPlan({
+      repository: item.pr.repository,
+      number: item.pr.number,
+      baseRef: read.state.baseRef,
+      body: read.body,
+      mark: {
+        at: read.state.mergedAt ?? read.state.closedAt,
+        readAt: read.state.readAt,
+      },
+    });
+    if (plan) foundReverts.push(...revertEvidenceOf(plan));
   };
   const lane = async (): Promise<void> => {
     while (next < order.length && spent < OUTCOME_FORGE_READS_PER_PASS) {
@@ -474,6 +479,29 @@ export async function refreshRunPrOutcomes(
     }
   };
   await Promise.all(Array.from({ length: FORGE_READ_CONCURRENCY }, lane));
+
+  // Fold in the states the GitHub deliveries kept. This read comes after the
+  // GitHub reads, so a delivery that landed during them counts. A delivery
+  // for a pull request with no row yet updated no row, and this fold is how
+  // its state reaches the run's first row. Newer-wins picks between the
+  // delivery and the GitHub read, so a pull request that reopened after this
+  // pass read it closed is written open.
+  const githubKeys = [
+    ...new Set(
+      [...candidates.values()]
+        .filter((c) => c.pr.provider === "github")
+        .map((c) => c.row.prKey),
+    ),
+  ];
+  const deliveredByKey = new Map(
+    (
+      await inBatches(githubKeys, (batch) => deps.deliveredStates(scope, batch))
+    ).map((d) => [d.prKey, d.state]),
+  );
+  for (const c of candidates.values()) {
+    const state = deliveredByKey.get(c.row.prKey);
+    if (state) c.row = withStateRead(c.row, state);
+  }
 
   // Keep this pass's reverts before any row is written. The reverting pull
   // request's row settles in the same write, and the pass does not read a
@@ -571,6 +599,27 @@ function dateOrNull(value: string | null): Date | null {
   return Number.isNaN(at.getTime()) ? null : at;
 }
 
+/**
+ * The pull request's head branch, or null when it could not be read. The
+ * branch lives in the head repository: a fork's for a pull request opened
+ * from a fork. GitHub reports no head repository once the fork is deleted,
+ * and the branch went with it, so that reads as gone with no call. A client
+ * that does not say which repository holds the branch is read in the base
+ * repository.
+ */
+async function readHeadBranch(
+  client: GitHubClient,
+  pull: { headRef: string; headRepository?: string | null },
+  base: { owner: string; repo: string },
+): Promise<{ value: unknown } | null> {
+  if (pull.headRepository === null) return { value: null };
+  const [owner = base.owner, repo = base.repo] =
+    pull.headRepository?.split("/") ?? [];
+  return readable(() =>
+    client.getBranch({ owner, repo, branch: pull.headRef }),
+  );
+}
+
 /** The pull request's state, CI, and head branch, read with one client. */
 export async function readGithubOutcome(
   client: GitHubClient,
@@ -587,13 +636,13 @@ export async function readGithubOutcome(
   const state: RunPrState =
     pull.state === "open" ? "open" : pull.merged ? "merged" : "closed";
   const headSha = pull.headSha;
+  // Checks on a pull request report to the base repository, fork or not, so
+  // the head commit's checks are read there.
   const checks = headSha
     ? await readable(() => client.listCiChecks({ owner, repo, ref: headSha }))
     : null;
   const branch = pull.headRef
-    ? await readable(() =>
-        client.getBranch({ owner, repo, branch: pull.headRef }),
-      )
+    ? await readHeadBranch(client, pull, { owner, repo })
     : null;
   return {
     state: {
@@ -863,6 +912,7 @@ export function defaultOutcomeRefreshDeps(): OutcomeRefreshDeps {
       if (client === null) return "no_connection";
       return readGithubOutcome(client, pr);
     },
+    deliveredStates: readDeliveredStates,
     readReverts: readRevertEvidence,
     saveReverts: saveRevertEvidence,
     saveRows: saveOutcomeRows,

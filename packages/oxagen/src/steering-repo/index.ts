@@ -20,6 +20,7 @@ export * from "./reflection";
 export * from "./schema-ids";
 export * from "./schemas";
 export * from "./settings-baseline";
+export * from "./steering-tools";
 export * from "./templates";
 export * from "./tokens";
 export * from "./toolbelt";

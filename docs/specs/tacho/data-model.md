@@ -207,15 +207,15 @@ OTel `tool_decision` and `tool.blocked_on_user` seal as `harness_permission`, no
 |---|---|---|
 | `prompt_digest`, `prompt_length` | String, UInt32 | hook `prompt` (digested) / OTel `prompt_length` |
 | `prompt_source` | LC | Claude Code: transcript `promptSource` on the `oxagen:message` copy of the prompt (`typed`, `queued` for a prompt typed while the agent worked, `system`, `sdk`). Codex: the same values on the `turn_start`, from `withCodexPromptSource`. Stella: none |
-| `prompt_origin` | String (JSON) | Claude Code: transcript `origin` / result `origin`, `{"kind": …}` with `human`, `task-notification`, `peer`, `coordinator`, or `auto-continuation`. Codex: `human`, `coordinator`, or `heartbeat` on the `turn_start`. Stella: none |
+| `prompt_origin` | String (JSON) | Claude Code: transcript `origin` / result `origin`, `{"kind": …}` with `human`, `task-notification`, `peer`, `coordinator`, or `auto-continuation`. Codex: `human`, `coordinator`, or `heartbeat` on the `turn_start`. Stella: none. Only the sender's members are kept: `kind`, `producer`, `from`, `name`, `msg_id`, `fromSession`, `fromMode`, `senderTaskId`, `verifiedPeerPid`, `hopChain`. A peer message's `body` is dropped (#4969) |
 | `is_meta`, `is_sidechain` | N(Bool) | transcript |
 | `interrupted_message_id` | String | transcript |
 | `response_digest`, `response_length` | String, UInt32 | OTel `assistant_response` |
 | `last_assistant_message_digest` | String | `Stop.last_assistant_message` |
 | `message_index`, `message_final` | N(UInt16), N(Bool) | `MessageDisplay` |
 | `interaction_duration_ms` | N(UInt32) | span |
-| `background_tasks` | String (JSON) | `Stop.background_tasks[]` |
-| `session_crons` | String (JSON) | `Stop.session_crons[]` |
+| `background_tasks` | String (JSON) | `Stop.background_tasks[]`, each entry kept to `id`, `type`, `status`, `agent_type`, `server`, `tool`, `name`. `description` and `command` are dropped (#4969) |
+| `session_crons` | String (JSON) | `Stop.session_crons[]`, each entry kept to `id`, `schedule`, `recurring`. `prompt` is dropped (#4969) |
 | `stop_hook_active` | N(Bool) | `Stop` |
 | `queued_turn_count` | N(UInt16) | result |
 
@@ -276,7 +276,7 @@ OTel `tool_decision` and `tool.blocked_on_user` seal as `harness_permission`, no
 ### 2.13 Gaps, incidents, chain
 | Column | Type | From |
 |---|---|---|
-| `gap_dropped_count`, `gap_duration_ms`, `gap_cause` | N(UInt32), N(UInt32), LC | collector (`buffer_full`, `daemon_down`, `http_hook_failed`, `otel_missing`) |
+| `gap_dropped_count`, `gap_duration_ms`, `gap_cause` | N(UInt32), N(UInt32), LC | collector (`buffer_full`, `daemon_down`, `http_hook_failed`, `otel_missing`, `spool_overflow`, `wal_ceiling`). A `wal_ceiling` gap sits on the daemon's own chain and names, in `incident_evidence`, the session whose stored bodies the WAL ceiling removed, how many bytes, and which events ship without them (ADR-261). Its `gap_duration_ms` is how long that session shipped nothing. |
 | `incident_kind`, `incident_severity` | LC, UInt8 | collector / control plane |
 | `kill_signal`, `kill_outcome` | LC | `oxagen:kill_attempted` |
 | `prev_hash`, `hash` | String | chain |

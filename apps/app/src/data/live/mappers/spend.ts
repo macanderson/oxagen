@@ -236,8 +236,9 @@ type FindingOut = ContractOutput<typeof findingList>["findings"][number];
 
 /**
  * One finding as the page reads it. The saving and its basis are the findings
- * job's, copied whole; the decision fields the contract also carries are not
- * read here, since the section lists open findings alone.
+ * job's, copied whole, and so are the kind's values (#5023); the decision
+ * fields the contract also carries are not read here, since the section lists
+ * open findings alone.
  */
 function toFinding(finding: FindingOut): z.input<typeof SpendFinding> {
   return {
@@ -253,6 +254,7 @@ function toFinding(finding: FindingOut): z.input<typeof SpendFinding> {
     ...(finding.recommendation === undefined
       ? {}
       : { recommendation: finding.recommendation }),
+    ...(finding.values === undefined ? {} : { values: finding.values }),
     runs: finding.runs,
     calls: finding.calls,
   };
