@@ -8,9 +8,14 @@
 #     settings file, an offline revoke, the process dying at each step). It
 #     drives a fake launchctl, systemctl and schtasks, and builds POSIX paths
 #     for every platform branch, so it runs on the Linux and macOS legs only.
+#     `uninstall.test.ts` runs beside it: `oxagen agent uninstall` with the
+#     desktop app already gone, from the journal the app keeps (#4298).
 #   - packages/tacho/src/cli/install-rig-real.test.ts: the same round trip
 #     with launchctl, systemctl, schtasks, tasklist and taskkill run for real,
-#     on every leg (#4317). The unit or task starts a stub daemon.
+#     on every leg (#4317). The unit or task starts a stub daemon. It also
+#     copies a second version beside a running daemon and moves the hooks
+#     and the daemon onto it, which on the Windows leg proves an update needs
+#     no reboot and leaves no version skew (audit D-03, #4298).
 #   - apps/desktop/src-tauri (cargo test): Link into PATH and Uninstall over
 #     injected roots, the same comparison. On the Windows leg it also runs
 #     the user PATH scripts against the runner's real HKCU\Environment and
@@ -69,7 +74,7 @@ jobs:
 
       - name: Tacho rig (enroll and unenroll against a snapshot)
         if: runner.os != 'Windows'
-        run: pnpm --filter @oxagen/recorder exec vitest run src/cli/install-rig.test.ts src/host/install-hardening.test.ts
+        run: pnpm --filter @oxagen/recorder exec vitest run src/cli/install-rig.test.ts src/cli/uninstall.test.ts src/host/install-hardening.test.ts
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable branch

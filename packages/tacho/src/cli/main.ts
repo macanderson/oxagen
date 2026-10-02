@@ -42,6 +42,7 @@ import { reassign } from "./reassign";
 import { runContained } from "./run";
 import { status } from "./status";
 import { unenroll } from "./unenroll";
+import { uninstall } from "./uninstall";
 import { verify } from "./verify";
 
 /**
@@ -378,6 +379,25 @@ export function buildTachoProgram(
           reason: opts["reason"] as string | undefined,
           ...(harness !== undefined ? { harness } : {}),
           ...(opts["all"] === true ? { all: true } : {}),
+        },
+        recordedCliDeps(options.deps),
+      );
+      if (!result.ok) process.exitCode = 1;
+    });
+
+  program
+    .command("uninstall")
+    .description(
+      "Take Oxagen off this machine without the desktop app: unenroll every agent, then remove the app's per-user copy, PATH links, and shell profile lines, and ~/.config/oxagen, which holds your `oxagen login` session",
+    )
+    .option("--token <apiKey>", "Operator token for the server-side revoke")
+    .option("--token-stdin", "Read the operator token from stdin")
+    .option("--reason <text>", "Reason recorded with each revoke")
+    .action(async (opts: Record<string, unknown>) => {
+      const result = await uninstall(
+        {
+          token: tokenOption(opts, deps.err),
+          reason: opts["reason"] as string | undefined,
         },
         recordedCliDeps(options.deps),
       );

@@ -27,6 +27,7 @@ export const OXAGEN_COMMAND_FOR: Readonly<Record<string, string>> = {
   enroll: "oxagen agent enroll",
   status: "oxagen agent status",
   unenroll: "oxagen agent unenroll",
+  uninstall: "oxagen agent uninstall",
   reassign: "oxagen agent reassign",
   export: "oxagen agent export",
   verify: "oxagen agent verify",
