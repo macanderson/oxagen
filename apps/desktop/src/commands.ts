@@ -1,7 +1,12 @@
 /**
- * The app's contract with the CLIs: the argv each panel action hands to a
- * sidecar, as pure functions of UI state. Kept apart from the React tree so
- * the mapping is testable without a webview.
+ * The app's contract with the CLI: the argv each panel action hands to the
+ * `oxagen` sidecar, as pure functions of UI state. Kept apart from the React
+ * tree so the mapping is testable without a webview.
+ *
+ * Every recorder command runs as `oxagen agent <verb>`, the command a person
+ * types (#4879, #4891). The app once ran the same verbs on a bundled `tacho`
+ * sidecar, whose re-apply moved a machine's hooks back to `tacho hook` each
+ * time the CLI had moved them to `oxagen hook`.
  *
  * Every argv the app sends is built here, and nowhere else. The Rust shell
  * runs a sidecar only for the commands on its allowlist
@@ -88,7 +93,7 @@ export function isWrapped(harness: Harness): boolean {
 }
 
 /**
- * The subset of a selection that `tacho verify` can actually run.
+ * The subset of a selection that `oxagen agent verify` can actually run.
  *
  * `verify` drives one headless turn and waits for the hook chain it seals, so
  * it has nothing to do for a connected app — a GUI bundle with no headless
@@ -109,9 +114,10 @@ export function verifiable(harnesses: readonly Harness[]): Harness[] {
 
 /**
  * Whether the scan found this wrapped agent without a command line to prompt.
- * `tacho verify` runs the agent's CLI headless, so a Cursor found only as the
- * editor, or registered although the scan did not find it (`registrable`),
- * has nothing to drive: verify fails with "cursor-agent is not on PATH". Its
+ * `oxagen agent verify` runs the agent's CLI headless, so a Cursor found only
+ * as the editor, or registered although the scan did not find it
+ * (`registrable`), has nothing to drive: verify fails with "cursor-agent is
+ * not on PATH". Its
  * hooks file still records every session the editor runs, so it reports the
  * first time the person uses it. False with no scan to read, after a
  * relaunch: a failed first run then says what is missing.
@@ -139,8 +145,8 @@ export function drivable(
  * Whether the page's busy state holds a close or a Quit until the action
  * ends (see `reportBusy`). An action that changes the machine does. Signing
  * in and a first run do not: `oxagen login` writes one file with a rename and
- * `tacho verify` writes none, so stopping either leaves nothing half written,
- * and a sign-in can wait five minutes for the browser.
+ * `oxagen agent verify` writes none, so stopping either leaves nothing half
+ * written, and a sign-in can wait five minutes for the browser.
  */
 export function busyHoldsClose(busy: string | null): boolean {
   return busy !== null && !["signin", "signup", "connect"].includes(busy);
@@ -238,11 +244,11 @@ export function pendingChange(
 }
 
 /**
- * `tacho enroll` for a machine that is not enrolled yet. `--org` never
- * travels without `--workspace`: tacho would fill the workspace from the
- * CLI's config.json, which names the previously signed-in org's workspace.
+ * `oxagen agent enroll` for a machine that is not enrolled yet. `--org`
+ * never travels without `--workspace`: the CLI would fill the workspace from
+ * its config.json, which names the previously signed-in org's workspace.
  * No agent is picked for the operator: no harness is the default (ADR-101),
- * and an empty pick would reach tacho as `--harness ""`.
+ * and an empty pick would reach the CLI as `--harness ""`.
  */
 export function enrollArgs(picks: Picks): string[] {
   if (picks.org !== null && picks.workspace === null)
@@ -250,6 +256,7 @@ export function enrollArgs(picks: Picks): string[] {
   if (picks.harnesses === null || picks.harnesses.length === 0)
     throw new Error("pick at least one agent to register");
   return [
+    "agent",
     "enroll",
     ...(picks.org ? ["--org", picks.org] : []),
     ...(picks.workspace ? ["--workspace", picks.workspace] : []),
@@ -258,17 +265,26 @@ export function enrollArgs(picks: Picks): string[] {
   ];
 }
 
-/** A sidecar and the argv to hand it. */
+/** The one sidecar the app starts, and the argv to hand it. */
 export interface SidecarCall {
-  sidecar: "tacho" | "oxagen";
+  sidecar: "oxagen";
   args: string[];
 }
 
 /**
- * `tacho reassign` carrying only what differs from the host. With
- * `alsoDefault`, the same command runs through the `oxagen` sidecar as
- * `oxagen tacho reassign … --default`, which also writes the new pair into
- * `config.json`; `config.json` is the CLI's file, so `tacho` alone cannot.
+ * The command an argv runs, without its flags: `oxagen agent enroll` for
+ * `["agent", "enroll", "--harness", "codex"]`. The error banner names it.
+ */
+export function commandName(args: readonly string[]): string {
+  const flag = args.findIndex((arg) => arg.startsWith("-"));
+  const words = flag === -1 ? args : args.slice(0, flag);
+  return ["oxagen", ...words].join(" ");
+}
+
+/**
+ * `oxagen agent reassign` carrying only what differs from the host. With
+ * `alsoDefault`, `--default` also writes the new pair into the CLI's
+ * `config.json`.
  */
 export function reassignArgs(
   host: HostTarget,
@@ -279,37 +295,41 @@ export function reassignArgs(
     throw new Error(`pick a workspace in ${picks.org} first`);
   const change = pendingChange(host, picks);
   const org = picks.org ?? host.org_slug;
-  const args = [
-    "reassign",
-    ...(org !== host.org_slug ? ["--org", org] : []),
-    ...(change.target
-      ? ["--workspace", picks.workspace ?? host.workspace_slug]
-      : []),
-    ...(change.harness && picks.harnesses
-      ? ["--harness", picks.harnesses.join(",")]
-      : []),
-  ];
-  return alsoDefault
-    ? { sidecar: "oxagen", args: ["tacho", ...args, "--default"] }
-    : { sidecar: "tacho", args };
+  return {
+    sidecar: "oxagen",
+    args: [
+      "agent",
+      "reassign",
+      ...(org !== host.org_slug ? ["--org", org] : []),
+      ...(change.target
+        ? ["--workspace", picks.workspace ?? host.workspace_slug]
+        : []),
+      ...(change.harness && picks.harnesses
+        ? ["--harness", picks.harnesses.join(",")]
+        : []),
+      ...(alsoDefault ? ["--default"] : []),
+    ],
+  };
 }
 
 /**
- * `tacho enroll` with no flags: Re-apply, on a machine that is already
- * enrolled. With no `--harness`, tacho keeps the enrolled list and writes
- * the hooks and the collector again from this app's copy.
+ * `oxagen agent enroll` with no flags: Re-apply, on a machine that is
+ * already enrolled. With no `--harness`, the CLI keeps the enrolled list and
+ * writes the hooks and the collector again as `oxagen hook` and `oxagen
+ * daemon`, from this app's per-user copy (`TACHO_BIN_DIR`). It never moves
+ * the host to another workspace.
  */
 export function reapplyArgs(): string[] {
-  return ["enroll"];
+  return ["agent", "enroll"];
 }
 
 /**
- * `tacho unenroll --all`, with `--purge` when the operator also drops the
- * WAL. Every agent on the machine goes (ADR-203): a machine that holds two
- * refuses a bare `unenroll`, which names neither.
+ * `oxagen agent unenroll --all`, with `--purge` when the operator also drops
+ * the WAL. Every agent on the machine goes (ADR-203): a machine that holds
+ * two refuses a bare `unenroll`, which names neither.
  */
 export function unenrollArgs(purge: boolean): string[] {
-  return ["unenroll", "--all", ...(purge ? ["--purge"] : [])];
+  return ["agent", "unenroll", "--all", ...(purge ? ["--purge"] : [])];
 }
 
 /** `oxagen logout`: Sign out. */
@@ -317,32 +337,32 @@ export function logoutArgs(): string[] {
   return ["logout"];
 }
 
-/** `tacho status --json`: the poll's read of the hooks and the service. */
+/** `oxagen agent status --json`: the poll's read of the hooks and the service. */
 export function statusArgs(): string[] {
-  return ["status", "--json"];
+  return ["agent", "status", "--json"];
 }
 
-/** `tacho detect --json`: the wizard's scan for agents. */
+/** `oxagen agent detect --json`: the wizard's scan for agents. */
 export function detectArgs(): string[] {
-  return ["detect", "--json"];
+  return ["agent", "detect", "--json"];
 }
 
-/** `tacho verify --harness <h> --json`: one recorded turn on that agent. */
+/** `oxagen agent verify --harness <h> --json`: one recorded turn on that agent. */
 export function verifyArgs(harness: Harness): string[] {
-  return ["verify", "--harness", harness, "--json"];
+  return ["agent", "verify", "--harness", harness, "--json"];
 }
 
 /**
- * Wrap one more agent: `tacho reassign` with the enrolled list plus this one.
- * Reassign keeps the device key and re-writes every hook.
+ * Wrap one more agent: `oxagen agent reassign` with the enrolled list plus
+ * this one. Reassign keeps the device key and re-writes every hook.
  */
 export function addHarnessArgs(
   enrolled: readonly string[],
   harness: Harness,
 ): SidecarCall {
   return {
-    sidecar: "tacho",
-    args: ["reassign", "--harness", [...enrolled, harness].join(",")],
+    sidecar: "oxagen",
+    args: ["agent", "reassign", "--harness", [...enrolled, harness].join(",")],
   };
 }
 
@@ -382,23 +402,26 @@ export function deregisterArgs(
 ): SidecarCall {
   const remaining = enrolled.filter((h) => h !== harness);
   if (remaining.length === 0)
-    return { sidecar: "tacho", args: ["unenroll", "--harness", harness] };
+    return {
+      sidecar: "oxagen",
+      args: ["agent", "unenroll", "--harness", harness],
+    };
   return {
-    sidecar: "tacho",
-    args: ["reassign", "--harness", remaining.join(",")],
+    sidecar: "oxagen",
+    args: ["agent", "reassign", "--harness", remaining.join(",")],
   };
 }
 
 /**
  * Whether de-registering this harness needs a live sign-in. With others left
- * it is a `tacho reassign`, which revokes and enrolls again with the session;
- * the last one is an `unenroll`, which finishes offline.
+ * it is an `oxagen agent reassign`, which revokes and enrolls again with the
+ * session; the last one is an `unenroll`, which finishes offline.
  */
 export function deregisterNeedsSession(
   enrolled: readonly string[],
   harness: Harness,
 ): boolean {
-  return deregisterArgs(enrolled, harness).args[0] === "reassign";
+  return deregisterArgs(enrolled, harness).args[1] === "reassign";
 }
 
 /**
@@ -476,7 +499,7 @@ export function defaultRegistration(
   return detected.filter((d) => d.installed).map((d) => d.harness);
 }
 
-/** What the wizard reads from one `tacho detect` entry. */
+/** What the wizard reads from one `oxagen agent detect` entry. */
 export interface DetectedRow {
   installed: boolean;
   path?: string;

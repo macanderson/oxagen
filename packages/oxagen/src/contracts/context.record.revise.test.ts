@@ -105,6 +105,17 @@ describe("context.record.revise capability", () => {
         headSha: null,
         path: ".oxagen/rules/ctx.release.no-reread-changelog.toml",
       },
+      raised: {
+        statement: "Do not re-read CHANGELOG.md more than once in a run.",
+        rationale: "Three runs needed it.",
+        source: "user:7a000000-0000-4000-8000-0000000000b1",
+        sourceName: null,
+        force: "should",
+        constraintEffect: null,
+        sharingScope: "workspace",
+        support: { runs: [], agents: [], recordIds: [], evidenceLinks: [] },
+        at: "2026-09-30T08:00:00.000Z",
+      },
       record: null,
       body: null,
       checks: [],
@@ -117,6 +128,7 @@ describe("context.record.revise capability", () => {
         review: null,
       },
       merged: null,
+      closed: null,
     });
     expect(parsed.pr?.number).toBe(412);
   });

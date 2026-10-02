@@ -213,6 +213,111 @@
           }
         ]
       },
+      "raised": {
+        "type": "object",
+        "properties": {
+          "statement": {
+            "type": "string"
+          },
+          "rationale": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "sourceName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "force": {
+            "type": "string",
+            "enum": [
+              "must",
+              "should",
+              "may",
+              "info"
+            ]
+          },
+          "constraintEffect": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "require",
+                  "forbid"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sharingScope": {
+            "type": "string",
+            "enum": [
+              "repository",
+              "workspace"
+            ]
+          },
+          "support": {
+            "type": "object",
+            "properties": {
+              "runs": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "agents": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "recordIds": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "evidenceLinks": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "runs",
+              "agents",
+              "recordIds",
+              "evidenceLinks"
+            ],
+            "additionalProperties": false
+          },
+          "at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "statement",
+          "rationale",
+          "source",
+          "sourceName",
+          "force",
+          "constraintEffect",
+          "sharingScope",
+          "support",
+          "at"
+        ],
+        "additionalProperties": false
+      },
       "body": {
         "anyOf": [
           {
@@ -367,6 +472,19 @@
                   }
                 ]
               },
+              "byName": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "onHost": {
+                "type": "boolean"
+              },
               "promotionEventId": {
                 "anyOf": [
                   {
@@ -392,8 +510,66 @@
               "commit",
               "at",
               "byUserId",
+              "byName",
+              "onHost",
               "promotionEventId",
               "recordId"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "closed": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "at": {
+                "type": "string"
+              },
+              "reason": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "byUserId": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "byName": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "onHost": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "at",
+              "reason",
+              "byUserId",
+              "byName",
+              "onHost"
             ],
             "additionalProperties": false
           },
@@ -411,10 +587,12 @@
       "governanceMode",
       "pr",
       "record",
+      "raised",
       "body",
       "checks",
       "onMerge",
-      "merged"
+      "merged",
+      "closed"
     ],
     "additionalProperties": false
   }

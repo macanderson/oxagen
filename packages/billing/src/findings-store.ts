@@ -10,6 +10,7 @@
  * through withTenantDb in their own modules.
  */
 import { schema, withSystemDb, type Tx } from "@oxagen/database";
+import { runInTenantScope } from "@oxagen/tenancy";
 import {
   readModelCallFrames,
   readTachoFileChanges,
@@ -87,6 +88,8 @@ import {
   type PriceTokenClass,
 } from "./price-book";
 import type { OutcomeRow } from "./run-pr-outcomes";
+import type { WeeklyContextPrice } from "./standing-context-price";
+import { readWeeklyContextPrice } from "./standing-context-price-store";
 
 const totals = schema.runTotals;
 const sessions = schema.tachoSessions;
@@ -154,7 +157,10 @@ interface FindingsPassDeps {
     to: Date;
     limit: number;
   }) => Promise<FileChangeRow[]>;
-  /** Each named run's priced model-call frames in time order, by run public id. */
+  /**
+   * Each named run's priced model-call frames in time order, by run public
+   * id. A `noModel` frame among them goes to the request view alone (#4506).
+   */
   readFrames: (
     scope: FindingsScope,
     runs: readonly FrameRead[],
@@ -241,6 +247,15 @@ interface FindingsPassDeps {
     scope: FindingsScope,
     backfill: readonly ClaimBackfill[],
   ) => Promise<void>;
+  /**
+   * The workspace's weekly price per 1,000 tokens of standing context as of
+   * `now`, which detector 2's values quote (#5023); absent, the pass reads
+   * none and the values carry no price.
+   */
+  readWeeklyPrice?: (
+    scope: FindingsScope,
+    now: Date,
+  ) => Promise<WeeklyContextPrice | null>;
 }
 
 /**
@@ -554,16 +569,54 @@ function rowContent(row: ModelCallFrameRow): string {
 }
 
 /**
+ * A wrapped row's event identity: its chain and its `seq` on that chain. The
+ * store never changes either, so a frame keeps the key built from them
+ * whatever else a later read returns (#4506). Null on a ledger row, which has
+ * neither.
+ */
+function eventIdentity(row: ModelCallFrameRow): string | null {
+  return row.sessionUuid === undefined || row.seq === undefined
+    ? null
+    : `${row.sessionUuid}:${row.seq}`;
+}
+
+/**
+ * The order of one instant's rows: a row with an event identity by its chain
+ * and then its `seq`, ahead of a row without one, and those by content.
+ */
+function byIdentity(
+  a: { row: ModelCallFrameRow; text: string },
+  b: { row: ModelCallFrameRow; text: string },
+): number {
+  const idA = eventIdentity(a.row) !== null;
+  const idB = eventIdentity(b.row) !== null;
+  if (idA !== idB) return idA ? -1 : 1;
+  if (idA) {
+    const chainA = a.row.sessionUuid!;
+    const chainB = b.row.sessionUuid!;
+    if (chainA !== chainB) return chainA < chainB ? -1 : 1;
+    return a.row.seq! - b.row.seq!;
+  }
+  return a.text < b.text ? -1 : a.text > b.text ? 1 : 0;
+}
+
+/**
  * One run's model-call frames, each priced once by the rollup's rule, in time
  * order to the microsecond. A frame's key is its `at` exactly as the store
- * printed it, then `#` and its place among the run's frames at that instant.
- * The store can return two frames of one instant in either order, so the
- * place follows each frame's content, chain included, and a frame keeps its
- * key from one pass to the next. Two frames with the same content on one
- * chain are interchangeable.
+ * printed it, then `#` and the frame's event identity: the chain it was
+ * recorded on and its `seq` there. Neither changes, so a frame keeps its key
+ * from one pass to the next, even when a frame of the same instant that a
+ * later pass reads sorts ahead of it (#4506, ADR-208). A ledger frame has no
+ * chain, so its key ends in its place among the run's ledger frames at that
+ * instant, by content. Two such frames with the same content are
+ * interchangeable.
  *
  * Each frame names its chain as a tool call does: null on `rootSessionUuid`,
  * the chain's uuid otherwise, and absent when the row names none.
+ *
+ * A row that names no model is kept as a `noModel` frame with no price: no
+ * book entry covers it, and a figure the harness reported for it stays out
+ * (#4506).
  *
  * Each frame also carries its model, its tokens and price entry per class,
  * its tool-definition, context-frame, and steering tokens, and its system
@@ -584,30 +637,33 @@ export function pricedFrames(
 ): PricedRequestFrame[] {
   const ordered = rows
     .map((row) => ({ row, micros: microsOf(row.at), text: rowContent(row) }))
-    .sort(
-      (a, b) =>
-        a.micros - b.micros ||
-        (a.text < b.text ? -1 : a.text > b.text ? 1 : 0),
-    );
+    .sort((a, b) => a.micros - b.micros || byIdentity(a, b));
+  // The ledger rows at each instant, so far; a wrapped row's key needs none.
   const atCount = new Map<string, number>();
   const partsByDigest = new Map<string, readonly FrameContextPart[]>();
   const out: PricedRequestFrame[] = [];
   for (const { row, micros } of ordered) {
-    const n = atCount.get(row.at) ?? 0;
-    atCount.set(row.at, n + 1);
+    const identity = eventIdentity(row);
+    let place = identity;
+    if (place === null) {
+      const n = atCount.get(row.at) ?? 0;
+      atCount.set(row.at, n + 1);
+      place = String(n);
+    }
     const frame = toModelCallFrame(row);
-    const priced = priceFrame(book, orgId, frame);
+    const noModel = row.model === "";
+    const priced = noModel ? null : priceFrame(book, orgId, frame);
     const t = frame.tokens;
     const digest = row.systemContextDigest ?? null;
     const listed = toContextParts(row);
     if (digest !== null && listed !== undefined)
       partsByDigest.set(digest, listed);
     out.push({
-      key: `${row.at}#${n}`,
+      key: `${row.at}#${place}`,
       at: frame.at,
       atMicros: micros,
       costMicros:
-        priced.scaled === null
+        priced === null || priced.scaled === null
           ? null
           : divideHalfEven(priced.scaled, 1_000_000n),
       tokens:
@@ -617,7 +673,7 @@ export function pricedFrames(
         t.cache_write_1h +
         t.output +
         t.reasoning,
-      basis: priced.basis,
+      basis: priced === null ? null : priced.basis,
       ...(row.sessionUuid === undefined
         ? {}
         : {
@@ -635,9 +691,33 @@ export function pricedFrames(
       systemContextParts:
         digest === null ? null : (partsByDigest.get(digest) ?? null),
       ...(row.cacheKeepAlive === true ? { cacheKeepAlive: true } : {}),
+      ...(row.seq === undefined ? {} : { seq: row.seq }),
+      ...(noModel ? { noModel: true as const } : {}),
     });
   }
   return out;
+}
+
+/**
+ * A pass's frame reads split in two: the frames the detectors read, and the
+ * `noModel` frames only the request view reads (#4506). Every run read keeps
+ * an entry in the first, so a run whose calls all named no model still reads
+ * as read.
+ */
+function splitModellessFrames(
+  read: ReadonlyMap<string, readonly PricedRequestFrame[]>,
+): {
+  frames: Map<string, PricedRequestFrame[]>;
+  modelless: Map<string, PricedRequestFrame[]>;
+} {
+  const frames = new Map<string, PricedRequestFrame[]>();
+  const modelless = new Map<string, PricedRequestFrame[]>();
+  for (const [runId, list] of read) {
+    frames.set(runId, list.filter((f) => f.noModel !== true));
+    const bounds = list.filter((f) => f.noModel === true);
+    if (bounds.length > 0) modelless.set(runId, bounds);
+  }
+  return { frames, modelless };
 }
 
 /**
@@ -682,6 +762,8 @@ function rowsPriceSlice(
   const models = new Set<string>();
   for (const list of rows)
     for (const row of list) {
+      // A row that names no model is never priced.
+      if (row.model === "") continue;
       models.add(row.model);
       const at = new Date(row.at).getTime();
       if (at < from) from = at;
@@ -699,15 +781,24 @@ function rowsPriceSlice(
  * `cap` frames (#4506). A run left out by the cap is absent from the answer,
  * and the pass counts it as capped. Each run's rows are priced and released
  * in turn, so the pass never holds a second copy of every frame.
+ *
+ * With `keepModelless`, a run's calls that named no model come back too, as
+ * `noModel` frames with no price, and count toward the cap (#4506).
  */
 export async function readPricedFrames(
   scope: FindingsScope,
   runs: readonly FrameRead[],
   cap: number = FRAME_READ_MAX_FRAMES,
+  keepModelless = false,
 ): Promise<Map<string, PricedRequestFrame[]>> {
   const { rows } = await readFrameRows(
     runs,
-    (r) => readModelCallFrames({ ...scope, run: r.ref }),
+    (r) =>
+      readModelCallFrames(
+        keepModelless
+          ? { ...scope, run: r.ref, keepModelless: true }
+          : { ...scope, run: r.ref },
+      ),
     cap,
   );
   const book = await loadPriceBookSlice(
@@ -733,6 +824,14 @@ function readFrames(
   runs: readonly FrameRead[],
 ): Promise<Map<string, PricedRequestFrame[]>> {
   return readPricedFrames(scope, runs);
+}
+
+/** The pass's own frame read: the priced frames and the `noModel` ones (#4506). */
+function readPassFrames(
+  scope: FindingsScope,
+  runs: readonly FrameRead[],
+): Promise<Map<string, PricedRequestFrame[]>> {
+  return readPricedFrames(scope, runs, FRAME_READ_MAX_FRAMES, true);
 }
 
 /**
@@ -1143,7 +1242,7 @@ const productionDeps: FindingsPassDeps = {
   readRootSessions,
   readToolCalls: readTachoToolCallObservations,
   readFileChangeRows: readTachoFileChanges,
-  readFrames,
+  readFrames: readPassFrames,
   readDecisions,
   readRunRefs,
   readFirstPrompts,
@@ -1157,6 +1256,10 @@ const productionDeps: FindingsPassDeps = {
   readPrompts: (scope, window, runIdBySession, runIds) =>
     readRunPrompts(scope, window, runIdBySession, runIds, readFrames),
   openProposals: openSpendProposals,
+  // The price reads the book through the tenant connection, as the tool and
+  // steering pages do, so the card quotes the same price they do.
+  readWeeklyPrice: (scope, now) =>
+    runInTenantScope(scope, () => readWeeklyContextPrice(scope, now)),
 };
 
 /**
@@ -1232,10 +1335,13 @@ export async function runFindingsPass(
     ranked,
     FRAME_RUNS_READ_MAX,
   );
-  const frames =
+  // A call that named no model bounds a request and is priced by nothing, so
+  // only the request view reads it (#4506).
+  const { frames, modelless } = splitModellessFrames(
     reads.length === 0
       ? new Map<string, PricedRequestFrame[]>()
-      : await deps.readFrames(scope, reads);
+      : await deps.readFrames(scope, reads),
+  );
   // A planned run the frame cap left unread is absent from the answer, and
   // counts as capped (#4506).
   const unread = reads.filter((r) => !frames.has(r.runId)).length;
@@ -1259,6 +1365,14 @@ export async function runFindingsPass(
     runIds.size === 0
       ? undefined
       : await deps.readPrompts?.(scope, { start, end }, runIdBySession, runIds);
+  // Detector 2 quotes the week's price per 1,000 tokens (#5023). A workspace
+  // with no runs in the window has no finding to quote it on. A failed read
+  // fails the pass, as every other read does, so the job retries rather than
+  // write a finding whose price reads as not recorded.
+  const weeklyPrice =
+    runIds.size === 0
+      ? undefined
+      : await deps.readWeeklyPrice?.(scope, end);
   const input: DetectReads = {
     window: { start, end },
     toolWindowStart: toolWindowStart(start, rows, TOOL_CALL_READ_MAX),
@@ -1271,9 +1385,21 @@ export async function runFindingsPass(
     compactions,
     outcomes,
     frameCoverage,
+    ...(modelless.size > 0 ? { modellessFrames: modelless } : {}),
     ...(fileChangeTimes ? { fileChangeTimes } : {}),
     ...(prompts ? { prompts } : {}),
     ...(resultUse ? { resultUse } : {}),
+    ...(weeklyPrice === undefined
+      ? {}
+      : {
+          weeklyContextPrice:
+            weeklyPrice === null
+              ? null
+              : {
+                  perThousandMicros: weeklyPrice.perThousandMicros,
+                  currency: weeklyPrice.currency,
+                },
+        }),
   };
   const drafts = detectFindings(input);
   const written = await deps.write(scope, end, decidedSince, drafts);

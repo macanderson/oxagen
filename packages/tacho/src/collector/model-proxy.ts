@@ -69,6 +69,12 @@
  * cancelled session, and a suspended or revoked host. Those are refused with
  * an error in the vendor's own shape and recorded as a `policy_decision`.
  *
+ * Three calls are answered by the proxy itself and never forwarded: a request
+ * over the bytes it holds for one call (413), a request the harness left
+ * before it finished sending, and a call the proxy failed on before it opened
+ * the connection to the vendor (502). Each is recorded as an `error` frame
+ * marked `oxagen.not_forwarded` (ADR-256).
+ *
  * An armed model policy refuses metered requests whose model cannot be read.
  * Non-metered endpoints retain passthrough behavior. Model checks also apply
  * when the request cannot be correlated to a session.
@@ -366,6 +372,50 @@ export interface ModelProxy {
 }
 
 const DEFAULT_MAX_REQUEST_BYTES = 64 * 1024 * 1024;
+
+/**
+ * Why the proxy answered a model call without forwarding it (ADR-256). The
+ * value is the frame's `api_error_class` and its `oxagen.not_forwarded`.
+ *
+ * - `request_too_large`: the request passed the bytes the proxy holds for
+ *   one call, and the harness was answered 413.
+ * - `client_aborted`: the harness left, or its connection broke, before the
+ *   whole request arrived.
+ * - `gateway_error`: the proxy threw before it opened the call to the
+ *   vendor, and the harness was answered 502.
+ */
+type NotForwardedReason =
+  | "request_too_large"
+  | "client_aborted"
+  | "gateway_error";
+
+/** The attr that marks a frame for a call the vendor never received. */
+const NOT_FORWARDED_ATTR = "oxagen.not_forwarded";
+
+/**
+ * How far one model call got (ADR-256). `forward` fills it in as it goes.
+ * When `forward` throws, the request handler reads it to tell a call that
+ * was never forwarded, which still owes a frame, from one whose frame is
+ * sealed or belongs to `settle`.
+ */
+interface CallAttempt {
+  /** Epoch ms the proxy started reading the request. */
+  startedAt: number;
+  /** The request bytes read so far. */
+  bytesRead: number;
+  /** The whole request as it arrived, once it has. */
+  request?: Buffer;
+  /** The model the request asked for, once read. */
+  model?: string;
+  /** The chain the call was attributed to, how, and its frame attrs. */
+  attribution?: {
+    recorder: SessionRecorder;
+    how: string;
+    attrs: Record<string, string>;
+  };
+  /** The call's frame is sealed, or `settle` will seal it. */
+  done: boolean;
+}
 const DEFAULT_UPSTREAM_IDLE_MS = 10 * 60_000;
 const DEFAULT_BEFORE_FORWARD_TIMEOUT_MS = 250;
 const DEFAULT_UPSTREAM_CONNECT_MS = 30_000;
@@ -1198,22 +1248,124 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
     };
   }
 
+  /**
+   * The attrs every frame of a proxied call carries. A call the proxy
+   * answered before it resolved the credential has no basis to name.
+   */
   function attrsFor(
     route: ModelRoute,
     how: string,
-    credential: ResolvedCredential,
+    credential?: ResolvedCredential,
   ): Record<string, string> {
     return {
       [TACHO_ENFORCEMENT_TIER_ATTR]: TACHO_GATEWAY_TIER,
       "oxagen.model_api": route.api,
       "oxagen.correlation": how,
-      [TACHO_CREDENTIAL_BASIS_ATTR]: credential.basis,
+      ...(credential !== undefined
+        ? { [TACHO_CREDENTIAL_BASIS_ATTR]: credential.basis }
+        : {}),
       // The id names the token on the record; the token itself is never
       // written anywhere, and a refused token's id is read off it unverified.
-      ...(credential.claims !== undefined
+      ...(credential?.claims !== undefined
         ? { [TACHO_RUN_TOKEN_ATTR]: credential.claims.tid }
         : {}),
     };
+  }
+
+  /**
+   * The chain a call the proxy did not forward lands on, named from its
+   * headers alone, because its body may never have arrived. A correlation
+   * that throws leaves the call on the host's own chain, unattributed.
+   */
+  function attributeByHeaders(
+    req: IncomingMessage,
+    route: ModelRoute,
+  ): NonNullable<CallAttempt["attribution"]> {
+    let found: { record?: SessionRecord; how: string };
+    try {
+      found = correlate(req, route, () => undefined);
+    } catch {
+      found = { how: "unattributed" };
+    }
+    return {
+      recorder: found.record?.recorder ?? deps.hostRecorder(),
+      how: found.how,
+      attrs: attrsFor(route, found.how),
+    };
+  }
+
+  /**
+   * Seal the frame of a call the proxy answered without forwarding it
+   * (ADR-256). The frame is an `error` on the chain the call was attributed
+   * to, or on the host's own chain when it was attributed to none. Nothing
+   * reached the vendor, so it carries no usage and owes no body, and the
+   * control plane counts it as an API error, not as a model call.
+   *
+   * It seals at most once per call, and never for a call `settle` owns. A
+   * frame that cannot be written is rolled back and logged, because this runs
+   * where a throw has nothing above it to catch it.
+   */
+  function sealNotForwarded(
+    req: IncomingMessage,
+    route: ModelRoute,
+    attempt: CallAttempt,
+    reason: NotForwardedReason,
+    status?: number,
+  ): void {
+    if (attempt.done) return;
+    attempt.done = true;
+    // A call on a path the proxy does not meter seals no frame when it is
+    // forwarded either.
+    if (route.api === "other") return;
+    let recorder: SessionRecorder | undefined;
+    let mark: ReturnType<SessionRecorder["markChain"]> | undefined;
+    try {
+      const attribution = attempt.attribution ?? attributeByHeaders(req, route);
+      const chain = attribution.recorder;
+      recorder = chain;
+      mark = chain.markChain();
+      const at = deps.now();
+      deps.record([
+        chain.sealCollectorEvent(
+          "error",
+          {
+            provider: route.provider,
+            ...(attempt.model !== undefined
+              ? { model: attempt.model.slice(0, 512) }
+              : {}),
+            ...(status !== undefined ? { api_status_code: status } : {}),
+            api_error_class: reason,
+            api_duration_ms: Math.max(0, at - attempt.startedAt),
+          },
+          {
+            ts: toProtocolTimestamp(at),
+            fidelity: "proxy",
+            attrs: {
+              ...attribution.attrs,
+              [NOT_FORWARDED_ATTR]: reason,
+              "oxagen.provider": route.provider,
+              "oxagen.request_bytes_read": String(attempt.bytesRead),
+              ...(attempt.request !== undefined
+                ? { "oxagen.request_digest": digestBytes(attempt.request) }
+                : {}),
+            },
+          },
+        ),
+      ]);
+    } catch (error) {
+      if (recorder !== undefined && mark !== undefined) {
+        try {
+          recorder.rollbackChain(mark);
+        } catch (rollbackError) {
+          deps.log(
+            `model proxy: rolling the chain back after a failed frame failed too: ${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}`,
+          );
+        }
+      }
+      deps.log(
+        `model proxy: sealing the frame of a call it did not forward (${reason}) failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
   }
 
   function sendProviderError(
@@ -1243,7 +1395,10 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
     res.end(error.body);
   }
 
-  function readBody(req: IncomingMessage): Promise<Buffer | "too_large"> {
+  function readBody(
+    req: IncomingMessage,
+    attempt: CallAttempt,
+  ): Promise<Buffer | "too_large"> {
     return new Promise((resolve, reject) => {
       const chunks: Buffer[] = [];
       let size = 0;
@@ -1251,6 +1406,7 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
       req.on("data", (chunk: Buffer) => {
         if (over) return;
         size += chunk.length;
+        attempt.bytesRead = size;
         if (size > maxRequestBytes) {
           over = true;
           chunks.length = 0;
@@ -1668,10 +1824,20 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
     res: ServerResponse,
     route: ModelRoute,
     admitted: { release?: () => void },
+    attempt: CallAttempt,
   ): Promise<void> {
     const startedAt = deps.now();
-    const received = await readBody(req);
+    let received: Buffer | "too_large";
+    try {
+      received = await readBody(req, attempt);
+    } catch (error) {
+      // The harness left, or its connection broke, before the whole request
+      // arrived. Nothing can be forwarded, and the call still gets a frame.
+      sealNotForwarded(req, route, attempt, "client_aborted");
+      throw error;
+    }
     if (received === "too_large") {
+      sealNotForwarded(req, route, attempt, "request_too_large", 413);
       sendProviderError(
         res,
         route,
@@ -1682,6 +1848,7 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
       return;
     }
     let body = received;
+    attempt.request = received;
     const encoding = header(req, "content-encoding");
     let decoded: Buffer | undefined | null = null;
     const readable = (): Buffer | undefined => {
@@ -1700,6 +1867,7 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
     const sessionKey = record?.recorder.sessionUuid ?? HOST_KEY;
     const credential = resolveCredential(req, route);
     const attrs = attrsFor(route, how, credential);
+    attempt.attribution = { recorder, how, attrs };
     const metered = route.api !== "other";
 
     // The model the harness asked for, read before the refusal decision so the
@@ -1710,6 +1878,7 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
       readable,
       json,
     );
+    if (askedModel !== undefined) attempt.model = askedModel;
 
     // The operator's decisions come first: a paused session is told it is
     // paused whatever it presented. Then the credential seam's, which are the
@@ -1771,6 +1940,8 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
         recorder.rollbackChain(mark);
         throw error;
       }
+      // The refusal is the call's frame.
+      attempt.done = true;
       deps.log(
         `model proxy: refused ${route.provider} ${route.api} (${refusal.code})`,
       );
@@ -1991,6 +2162,8 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
     const settle = (errorClass: string | undefined): void => {
       if (settled) return;
       settled = true;
+      // This seals the call's frame, so the request handler must not.
+      attempt.done = true;
       set.delete(entry);
       if (set.size === 0) inFlight.delete(sessionKey);
       // Taken before the seal, so a write that fails takes the frame's seq
@@ -2567,6 +2740,9 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
       return;
     }
     upstreamReq = openUpstream(false);
+    // The request is on its way to the vendor, and `settle` seals its frame
+    // whatever happens to it from here.
+    attempt.done = true;
   }
 
   return {
@@ -2636,13 +2812,20 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
           return;
         }
         const admitted: { release?: () => void } = {};
+        const attempt: CallAttempt = {
+          startedAt: deps.now(),
+          bytesRead: 0,
+          done: false,
+        };
         try {
-          await forward(req, res, route, admitted);
+          await forward(req, res, route, admitted, attempt);
         } catch (error) {
           admitted.release?.();
           deps.log(
             `model proxy: ${req.method ?? "?"} ${route.provider} ${route.api} failed: ${error instanceof Error ? error.message : String(error)}`,
           );
+          // A call that failed before it was forwarded has no frame yet.
+          sealNotForwarded(req, route, attempt, "gateway_error", 502);
           sendProviderError(
             res,
             route,

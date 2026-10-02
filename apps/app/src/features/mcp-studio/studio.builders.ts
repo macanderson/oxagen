@@ -1133,6 +1133,7 @@ export function studioSource(reads: StudioReads = {}) {
       record: refuse,
       proposals: refuse,
       contextPr: refuse,
+      contextPrDiff: refuse,
       freshness: refuse,
       layout: refuse,
       hub: refuse,

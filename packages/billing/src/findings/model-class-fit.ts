@@ -408,9 +408,18 @@ function detectWith(
   }
 }
 
-/** Each model the group's runs moved down a class, as "from to", largest measured cost first. */
-function moves(group: Group): { text: string; lighter: string | null } {
-  const byMove = new Map<string, { lighter: string; micros: bigint }>();
+/**
+ * Each model the group's runs moved down a class, as "from to", largest
+ * measured cost first, and the largest move itself.
+ */
+function moves(group: Group): {
+  text: string;
+  top: { model: string; lighter: string } | null;
+} {
+  const byMove = new Map<
+    string,
+    { model: string; lighter: string; micros: bigint }
+  >();
   for (const { run } of group.runs.values()) {
     const models =
       parts.get(run)?.models ??
@@ -419,7 +428,7 @@ function moves(group: Group): { text: string; lighter: string | null } {
       const lighter = lighterModel(m);
       if (lighter === null) continue;
       const move = `${m.model} to ${lighter}`;
-      const seen = byMove.get(move) ?? { lighter, micros: 0n };
+      const seen = byMove.get(move) ?? { model: m.model, lighter, micros: 0n };
       seen.micros += m.micros;
       byMove.set(move, seen);
     }
@@ -432,7 +441,11 @@ function moves(group: Group): { text: string; lighter: string | null } {
     names.length <= 2
       ? names.join(" and ")
       : `${names.slice(0, 2).join(", ")}, and ${plural(names.length - 2, "more model", "more models")}`;
-  return { text, lighter: ranked[0]?.[1].lighter ?? null };
+  const top = ranked[0]?.[1];
+  return {
+    text,
+    top: top === undefined ? null : { model: top.model, lighter: top.lighter },
+  };
 }
 
 /**
@@ -453,17 +466,31 @@ export function modelClassFitWith(
       const saving = measured - BigInt(evidence.counterfactualMicros);
       const percent =
         measured > 0n ? divideHalfEven(saving * 100n, measured) : 0n;
-      const { text, lighter } = moves(group);
+      const { text, top } = moves(group);
       const runs = group.runs.size;
       let edited = 0;
       for (const { run } of group.runs.values())
         if (parts.get(run)?.edited === true) edited += 1;
       const whole = runs - edited;
-      const target = lighter ?? "a smaller model class";
+      const target = top?.lighter ?? "a smaller model class";
+      // The card names the largest move; with none, it shows this text.
+      const values =
+        top === null
+          ? {}
+          : {
+              values: {
+                kind: "model_class_fit" as const,
+                model: top.model,
+                lighterModel: top.lighter,
+                unchangedRuns: whole,
+                editedRuns: edited,
+              },
+            };
       if (edited === 0)
         return {
           why: `${plural(runs, "run", "runs")} changed no file. Repriced from ${text} at ${prices}, ${runs === 1 ? "it" : "they"} would have cost an estimated ${percent}% less.`,
           fix: `Route tasks that only read to ${target} with a model-route steering record, or lower their effort. Replay a sample on the smaller class to confirm the estimate before you move them.`,
+          ...values,
         };
       const editedRuns = `${plural(edited, "run", "runs")} with edit steps also had steps that only read`;
       const route = `Route the steps that only read, such as searches and file reads, to a subagent on ${target} with a model-route steering record, or lower their effort.`;
@@ -476,6 +503,7 @@ export function modelClassFitWith(
           whole === 0
             ? `${route} The figure stays an estimate, because a replay reruns a whole run and these runs have edit steps.`
             : `${route} Replay a sample of the runs that changed no file to confirm the estimate before you move them.`,
+        ...values,
       };
     },
   };

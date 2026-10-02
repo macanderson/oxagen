@@ -121,9 +121,10 @@ export const CI_REGISTRY: Record<string, CiVarMeta> = {
   },
   NPM_TOKEN: {
     kind: "secret",
-    description: "npm token release.yml publishes the CLI package with.",
+    description:
+      "npm token npm.yml publishes @oxagen/cli with, after every production deploy and every release tag. It expires within 90 days.",
     refresh: {
-      how: "On npmjs.com, open Access Tokens and generate a granular token with publish rights on the CLI package. Delete the old token after the next release publishes.",
+      how: "On npmjs.com, signed in as the account that owns @oxagen, open Access Tokens and generate a granular token with read and write on @oxagen/cli and the longest expiry npm allows (90 days). If the account requires two-factor authentication for writes, let the token bypass it. Save it with `gh secret set NPM_TOKEN`, which reads the value from a prompt. Dispatch npm.yml with no inputs, or wait for the next deploy, and check its run publishes or reports the version already on npm. Then delete the old token. Mac rotates it on a scheduled routine.",
     },
   },
   OPENROUTER_API_KEY: {
@@ -195,7 +196,7 @@ export const CI_REGISTRY: Record<string, CiVarMeta> = {
     kind: "secret",
     environment: "steering-live",
     description:
-      "Private key of the rig GitHub App (STEERING_LIVE_GITHUB_APP_ID). steering-live.yml mints the rig's GitHub token with it.",
+      "Private key of the rig GitHub App (STEERING_LIVE_GITHUB_APP_ID). steering-live.yml and mcp-studio-live.yml mint the rig's GitHub token with it.",
     refresh: {
       how: "On the rig App's settings page, generate a private key and save the .pem. Delete the old key once the next live run passes.",
     },
@@ -203,7 +204,8 @@ export const CI_REGISTRY: Record<string, CiVarMeta> = {
   STEERING_LIVE_OXAGEN_EMAIL: {
     kind: "secret",
     environment: "steering-live",
-    description: "Sign-in email of the Oxagen test account the steering live test uses.",
+    description:
+      "Sign-in email of the Oxagen test account the steering live test and the MCP Studio live test use.",
     refresh: {
       how: "The test account's email. Change it only with STEERING_LIVE_OXAGEN_PASSWORD.",
     },
@@ -211,7 +213,7 @@ export const CI_REGISTRY: Record<string, CiVarMeta> = {
   STEERING_LIVE_OXAGEN_PASSWORD: {
     kind: "secret",
     environment: "steering-live",
-    description: "Password of the steering live test account.",
+    description: "Password of the Oxagen test account the two live tests use.",
     refresh: {
       how: "Set a new password in the Oxagen app while signed in as the test account, then save it here.",
       command: "openssl rand -base64 24",
@@ -351,25 +353,27 @@ export const CI_REGISTRY: Record<string, CiVarMeta> = {
   },
   STEERING_LIVE_ENABLED: {
     kind: "variable",
-    description: "Set to true to run steering-live.yml on its schedule, not only by hand.",
+    description:
+      "Set to true to run steering-live.yml and mcp-studio-live.yml on their schedules, not only by hand.",
     refresh: { how: "A switch. Set it to true or delete it." },
   },
   STEERING_LIVE_GITHUB_APP_ID: {
     kind: "variable",
     description:
-      "Numeric id of the rig GitHub App. The app is installed on STEERING_LIVE_GITHUB_ORG, and steering-live.yml mints the rig's GitHub token from it.",
+      "Numeric id of the rig GitHub App. The app is installed on STEERING_LIVE_GITHUB_ORG, and steering-live.yml and mcp-studio-live.yml mint the rig's GitHub token from it.",
     refresh: {
       how: "Read it on the rig App's settings page. Change it only with STEERING_LIVE_GITHUB_APP_PRIVATE_KEY.",
     },
   },
   STEERING_LIVE_GITHUB_ORG: {
     kind: "variable",
-    description: "The test GitHub organization the steering live test creates repositories in.",
+    description:
+      "The test GitHub organization the steering live test and the MCP Studio live test create repositories in.",
     refresh: { how: "The organization's login. It changes only with the organization." },
   },
   STEERING_LIVE_OXAGEN_ORG: {
     kind: "variable",
-    description: "Oxagen organization slug the steering live test signs in to.",
+    description: "Oxagen organization slug the steering live test and the MCP Studio live test sign in to.",
     refresh: { how: "The test organization's slug in the Oxagen app." },
   },
 };

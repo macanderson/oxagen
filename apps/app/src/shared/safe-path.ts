@@ -152,7 +152,9 @@ const STEERING_SEGMENTS: Readonly<Record<string, readonly string[]>> = {
   settings: ["gates"],
   freshness: ["gates"],
   proposals: ["proposals"],
-  prs: ["proposals", "prs"],
+  // The Context PRs list was a segment of Proposals; it is the one list now
+  // (#5077), and one Context PR is its own page (`routes.steeringProposal`).
+  prs: ["proposals"],
   compiler: ["compiler"],
   preview: ["compiler"],
 };
@@ -583,13 +585,13 @@ export const routes = {
     withQuery(pathOf(org, ws, "agents"), { tab: "runtimes", runtime }),
   /**
    * Steering (roadmap pages/steering.md): the six tabs and the Library
-   * shelves are path segments, `/steering/<tab>` or `/steering/<shelf>`, and
-   * the Context PRs segment of Proposals is `/steering/proposals/prs`. A tab
-   * id written before the rename still maps to where it lives now: `policy`,
-   * `settings` and `freshness` are Gates, `deliveries` is Assignments,
-   * `preview` is the Compiler and `prs` is the Context PRs segment. Filters, a
-   * page offset, the rows a page of proposals holds, a selected proposal, the
-   * memory the Memories drawer opens and a Skills cursor stay query values.
+   * shelves are path segments, `/steering/<tab>` or `/steering/<shelf>`. A
+   * tab id written before the rename still maps to where it lives now:
+   * `policy`, `settings` and `freshness` are Gates, `deliveries` is
+   * Assignments, `preview` is the Compiler, and `prs`, once the Context PRs
+   * segment, is the Proposals list (#5077). Filters, the Proposals state, a
+   * page offset, the rows a page holds, the memory the Memories drawer opens
+   * and a Skills cursor stay query values.
    */
   steering: (
     org: string,
@@ -604,6 +606,11 @@ export const routes = {
       /** A skill whose source `/steering/skills/<skill>/source` opens; only with `tab: "skills"`. */
       skill?: string;
       kind?: string;
+      /**
+       * The list's state, left off at open: open, merged or closed on
+       * Proposals (#5077), a memory state on Memories (#4914).
+       */
+      state?: string;
       /** How many rows a page holds; on Proposals and the Skills shelf (#4693). */
       rows?: string;
       offset?: string;
@@ -611,7 +618,6 @@ export const routes = {
       cursor?: string;
       view?: string;
       /** The Memories filters and the memory its drawer opens (#4914). */
-      state?: string;
       harness?: string;
       repo?: string;
       type?: string;
@@ -630,12 +636,12 @@ export const routes = {
     }
     return withQuery(pathOf(org, ws, "steering", ...segments), {
       kind: q.kind,
+      state: q.state,
       rows: q.rows,
       offset: q.offset,
       proposal: q.proposal,
       cursor: q.cursor,
       view: q.view,
-      state: q.state,
       harness: q.harness,
       agent: segments[0] === "memories" ? q.agent : undefined,
       repo: q.repo,
@@ -643,6 +649,23 @@ export const routes = {
       memory: q.memory,
     });
   },
+  /**
+   * One Context PR, by its proposal id (#5077):
+   * `/steering/proposals/prs/<prp_…>`. The list's state, size and offset ride
+   * along as query values, so the page's way back lands on the list as it
+   * was left.
+   */
+  steeringProposal: (
+    org: string,
+    ws: string,
+    proposalId: string,
+    from: { state?: string; rows?: string; offset?: string } = {},
+  ): SafePath =>
+    withQuery(pathOf(org, ws, "steering", "proposals", "prs", proposalId), {
+      state: from.state,
+      rows: from.rows,
+      offset: from.offset,
+    }),
   /**
    * One published record, by its lineage (#3395). The lineage is a file stem
    * under `.oxagen/rules/`, so it reaches here from the repository rather
@@ -658,7 +681,47 @@ export const routes = {
    */
   steeringMemories: (org: string, ws: string): SafePath =>
     pathOf(org, ws, "steering", "memories"),
+  /**
+   * The steering connect's result page (#5151). The landing at
+   * `/github/steering` sends a person here when they can't open the
+   * organization the connect returns to, so the install never ends on a 404.
+   */
+  steeringConnectResult: (outcome: SteeringOutcome): SafePath =>
+    withQuery(mint("/github/steering/result"), {
+      steering: outcome.steering,
+      code:
+        outcome.steering === "error" && outcome.code !== null
+          ? outcome.code
+          : undefined,
+    }),
 };
+
+/**
+ * What a steering connect's callback reports on the query it returns with:
+ * `steering=connected`, or `steering=error` with a reason `code` when it has
+ * one (#5151).
+ */
+export type SteeringOutcome =
+  | { steering: "connected" }
+  | { steering: "error"; code: string | null };
+
+/**
+ * `path` with a steering connect's outcome set on its query, as the API's
+ * callback sent it before the landing existed (#5151). The path's own query
+ * and hash are kept. A `steering` or `code` already on it is replaced, so a
+ * stale `code` never sits beside `steering=connected`.
+ */
+export function withSteeringOutcome(
+  path: SafePath,
+  outcome: SteeringOutcome,
+): SafePath {
+  const url = new URL(path, SENTINEL_ORIGIN);
+  url.searchParams.set("steering", outcome.steering);
+  if (outcome.steering === "error" && outcome.code !== null)
+    url.searchParams.set("code", outcome.code);
+  else url.searchParams.delete("code");
+  return mint(`${url.pathname}${url.search}${url.hash}`);
+}
 
 /**
  * `raw` as a same-origin path (with its query and hash) when it is safe to

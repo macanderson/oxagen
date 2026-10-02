@@ -307,6 +307,19 @@ export function breadcrumbs(
             ? { kind: "id", text: sub, href: null }
             : { kind: "name", text: label, href: null },
         );
+      } else if (id === "proposals" && sub === "prs" && rest[3] !== undefined) {
+        // One Context PR (#5077) ends the trail on the lineage its page
+        // declared, under Steering's Proposals list; the proposal id stands
+        // in until the page has declared it.
+        const proposal = rest[3];
+        out.push({
+          kind: "nav",
+          key: "steering",
+          href: pathOf(org, ws, "steering", "proposals"),
+        });
+        const label =
+          names.record?.id === proposal ? names.record.label : null;
+        out.push({ kind: "id", text: label ?? proposal, href: null });
       } else out.push({ kind: "nav", key: "steering", href: null });
       break;
     default: {

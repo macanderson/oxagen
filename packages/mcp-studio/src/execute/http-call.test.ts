@@ -1,8 +1,9 @@
-// http-call.ts: the error for a response that is not a success.
+// http-call.ts: the error for a response that is not a success, and how a
+// query pair is encoded.
 import { describe, expect, it } from "vitest";
 import { reply } from "./__tests__/fake-http";
 import { recordHttpResponse } from "./exchange";
-import { upstreamError } from "./http-call";
+import { queryPair, upstreamError } from "./http-call";
 
 const none = new Uint8Array(0);
 
@@ -39,5 +40,17 @@ describe("upstreamError for a redirect", () => {
     expect(upstreamError(reply(307), none).detail).toBe(
       "The upstream answered 307. The gateway does not follow redirects, so set the environment's url to the final address.",
     );
+  });
+});
+
+describe("queryPair", () => {
+  it("percent-encodes every reserved character by default", () => {
+    expect(queryPair("a b", "x/y:z")).toBe("a%20b=x%2Fy%3Az");
+  });
+
+  it("with allowReserved, keeps the reserved characters a query can hold and passes a percent-encoded triple through", () => {
+    expect(queryPair("q", "x/y:z?@$,;", true)).toBe("q=x/y:z?@$,;");
+    expect(queryPair("q", "#[]&=+", true)).toBe("q=%23%5B%5D%26%3D%2B");
+    expect(queryPair("p/q", "%2f and %", true)).toBe("p%2Fq=%2f%20and%20%25");
   });
 });

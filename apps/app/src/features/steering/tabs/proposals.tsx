@@ -1,20 +1,21 @@
-// Proposals: what is proposed but not published (roadmap pages/steering.md;
-// the tab body is pages/steering-proposals.md, which the steering-tabs lane
-// builds). Its two segments are the candidates and their Context PRs, each an
-// address: `/steering/proposals` and `/steering/proposals/prs`. A selected
-// Context PR open on a `memory/` branch is a memory PR, and its records are
-// read by its number (list_memory_pr_records, #4914).
+// Proposals: what is proposed but not published (roadmap pages/steering.md).
+// One list at `/steering/proposals`, filtered by state the way a pull request
+// list is (#5077): Open (a candidate with no pull request yet, or a Context
+// PR still open), Merged and Closed, each with its count. The state is the
+// `?state=` query value, so a reload or a shared link keeps it, and Open is
+// the default. Each row opens that proposal's Context PR page.
 import { useTranslations } from "next-intl";
-import type { ContextPr } from "@/data/contracts/steering";
+import {
+  PROPOSAL_STATES,
+  type ProposalState,
+} from "@/data/contracts/steering";
 import type { DataSource } from "@/data/ports";
-import type { Read } from "@/data/read";
 import type { WsCtx } from "@/server/viewer";
 import { buttonSecondary } from "@/ui/control-styles";
 import { LiveRefresh } from "@/ui/live-refresh";
 import { PressLink } from "@/ui/press-link";
-import { ContextPrs } from "../context-prs";
-import { Proposals } from "../proposals";
-import { type ProposalSegment, type SteeringAt, steeringLink } from "../view";
+import { ProposalList } from "../proposal-list";
+import { type SteeringAt, steeringLink } from "../view";
 
 /** A proposal whose Context PR is open on the repository host. */
 const OPEN_PR_STATUSES: ReadonlySet<string> = new Set([
@@ -24,96 +25,79 @@ const OPEN_PR_STATUSES: ReadonlySet<string> = new Set([
   "checks_failed",
 ]);
 
-const chip = `${buttonSecondary} min-h-7 px-2.5 py-1 text-[12.5px] aria-pressed:border-rule aria-pressed:bg-hl aria-pressed:text-foreground`;
+/** The count beside each state filter. */
+export type ProposalStateCounts = Record<ProposalState, number>;
 
-function Segments({
+const chip = `${buttonSecondary} min-h-7 gap-1.5 px-2.5 py-1 text-[12.5px] aria-pressed:border-rule aria-pressed:bg-hl aria-pressed:text-foreground`;
+
+function StateFilters({
   at,
   rows,
   current,
+  counts,
 }: {
   at: SteeringAt;
-  /** The page size, which both segments keep. */
+  /** The page size, which every filter keeps. */
   rows: number;
-  current: ProposalSegment;
+  current: ProposalState;
+  /** Null when a count failed: each filter then prints no number. */
+  counts: ProposalStateCounts | null;
 }) {
-  const t = useTranslations("steering.tabs");
+  const t = useTranslations("steering.proposals.states");
   return (
     <div
       role="group"
-      aria-label={t("segments")}
+      aria-label={t("label")}
       className="flex flex-wrap gap-1.5"
-      data-testid="proposal-segments"
+      data-testid="proposal-states"
     >
-      <PressLink
-        to={steeringLink(at, { tab: "proposals", rows })}
-        pressed={current === "candidates"}
-        className={chip}
-      >
-        {t("candidates")}
-      </PressLink>
-      <PressLink
-        to={steeringLink(at, { tab: "prs", rows })}
-        pressed={current === "prs"}
-        className={chip}
-      >
-        {t("prs")}
-      </PressLink>
+      {PROPOSAL_STATES.map((state) => (
+        <PressLink
+          key={state}
+          to={steeringLink(at, { tab: "proposals", state, rows })}
+          pressed={state === current}
+          data-state-filter={state}
+          className={chip}
+        >
+          {t(state)}
+          {counts === null ? null : (
+            <span
+              className="font-mono text-[11px] text-dim"
+              data-count={String(counts[state])}
+            >
+              {counts[state]}
+            </span>
+          )}
+        </PressLink>
+      ))}
     </div>
   );
-}
-
-/**
- * Whether the page offers Merge without review: to an org or workspace owner.
- * A member holding `pr.merge_without_review` may merge without review too,
- * but no read carries that permission yet (#4518), so the page offers it to
- * owners alone. The merge queue decides either way.
- */
-function canMergeWithoutReview(ctx: WsCtx): boolean {
-  return ctx.orgRole === "owner" || ctx.wsRole === "owner";
 }
 
 export async function ProposalsTab({
   ctx,
   source,
   at,
-  segment,
+  state,
   offset,
   rows,
-  proposal,
-  pr: preread,
+  counts,
 }: {
   ctx: WsCtx;
   source: DataSource;
   at: SteeringAt;
-  segment: ProposalSegment;
+  state: ProposalState;
   offset: number;
   /** How many proposals a page holds, one of PROPOSAL_ROWS (#4693). */
   rows: number;
-  proposal: string | null;
-  /**
-   * get_context_pr for `proposal`, when the hub already read it to decide
-   * which action is gold; read here otherwise.
-   */
-  pr?: Read<ContextPr> | null;
+  /** The three filter counts from the hub's read; null when one failed. */
+  counts: ProposalStateCounts | null;
 }) {
-  const [read, pr] = await Promise.all([
-    source.steering.proposals(ctx, { offset, limit: rows }),
-    segment === "prs" && proposal !== null
-      ? (preread ?? source.steering.contextPr(ctx, proposal))
-      : null,
-  ]);
-  const memoryPr =
-    pr?.ok === true &&
-    pr.value.pr !== null &&
-    pr.value.pr.branch.startsWith("memory/") &&
-    pr.value.status !== "merged" &&
-    pr.value.status !== "rejected"
-      ? pr.value.pr.number
-      : null;
-  const memoryRecords =
-    memoryPr === null
-      ? null
-      : await source.steering.memoryPrRecords(ctx, memoryPr);
+  const read = await source.steering.proposals(ctx, {
+    offset,
+    limit: rows,
+    state,
+  });
   // A Context PR can merge or close on the repository host at any moment, and
   // the repository sync moves the proposal within seconds (ADR-184). While
   // one is open, the page re-reads itself so the change shows up here.
@@ -122,21 +106,14 @@ export async function ProposalsTab({
   return (
     <div className="flex flex-col gap-4" data-testid="tab-proposals">
       <LiveRefresh active={waiting} intervalMs={10_000} />
-      <Segments at={at} rows={rows} current={segment} />
-      {segment === "prs" ? (
-        <ContextPrs
-          at={at}
-          offset={offset}
-          rows={rows}
-          read={read}
-          selected={proposal}
-          pr={pr}
-          memoryRecords={memoryRecords}
-          canMergeWithoutReview={canMergeWithoutReview(ctx)}
-        />
-      ) : (
-        <Proposals at={at} offset={offset} rows={rows} read={read} />
-      )}
+      <StateFilters at={at} rows={rows} current={state} counts={counts} />
+      <ProposalList
+        at={at}
+        state={state}
+        offset={offset}
+        rows={rows}
+        read={read}
+      />
     </div>
   );
 }

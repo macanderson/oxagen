@@ -398,6 +398,106 @@ const FindingRecommendation = z.object({
   current: z.union([z.string(), z.number()]).optional(),
 });
 
+/** What a workspace keeps of prompt and tool text. */
+const Retention = z.enum(["content_exact", "digest_only"]);
+
+/** Results and the re-reads of them, one side of detector 5's split. */
+const ResultSide = z.object({ results: Count, reads: Count });
+
+const Positive = z.number().int().positive();
+
+/**
+ * Each kind's figures, as the spend spec's finding text names them (#5023).
+ * The card writes its text from these and from the finding's runs, calls,
+ * and saving. A finding written before the job stored them has none, and the
+ * card shows the detector's own text instead. Every figure is the job's: the
+ * page multiplies nothing (ADR-060).
+ */
+const FindingValues = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("spin_loops"),
+    tool: z.string().min(1),
+    repeats: Positive,
+  }),
+  z.object({
+    kind: z.literal("retry_loops"),
+    tool: z.string().min(1),
+    failures: Positive,
+  }),
+  z.object({
+    kind: z.literal("standing_context"),
+    resentTokens: Count,
+    toolDefinitionTokens: Count.nullable(),
+    steeringTokens: Count.nullable(),
+    contextFrameTokens: Count.nullable(),
+    provider: z
+      .object({
+        name: z.string().min(1),
+        tokens: Count,
+        tools: Positive,
+        toolsCalled: Count,
+        weeklyPrice: Cost.nullable(),
+      })
+      .nullable(),
+    weeklyPricePerThousand: Cost.nullable(),
+  }),
+  z.object({
+    kind: z.literal("model_class_fit"),
+    model: z.string().min(1),
+    lighterModel: z.string().min(1),
+    unchangedRuns: Count,
+    editedRuns: Count,
+  }),
+  z.object({
+    kind: z.literal("repeated_instructions"),
+    retention: Retention,
+    sentence: z.string().min(1).nullable(),
+    prompts: Positive,
+    promptRuns: Positive,
+    others: Count,
+  }),
+  z.object({
+    kind: z.literal("recurring_runs"),
+    groupSize: Positive,
+    unchanged: Count,
+    otherPrompts: Count,
+  }),
+  z.object({
+    kind: z.literal("spend_with_no_outcome"),
+    closedUnmerged: Count,
+    reverted: Count,
+    abandoned: Count,
+  }),
+  z.object({
+    kind: z.literal("cache_writes_never_read"),
+    writtenTokens: Count,
+  }),
+  z.object({
+    kind: z.literal("idle_cache_rewrites"),
+    minWaitMinutes: Count,
+    maxWaitMinutes: Count,
+    averageTokens: Count,
+    keepAlive: Money,
+    rewrites: Money,
+    pricedRewrites: Count,
+    unknownRewrites: Count,
+  }),
+  z.object({
+    kind: z.literal("cache_busts"),
+    firstChange: z.string().min(1).nullable(),
+    firstChangeBusts: Positive.nullable(),
+    pricedBusts: Count,
+    unknownBusts: Count,
+  }),
+  z.object({
+    kind: z.literal("unpaged_results"),
+    results: Count,
+    retention: Retention.nullable(),
+    quoted: ResultSide,
+    unchecked: ResultSide,
+  }),
+]);
+
 /**
  * One costed finding (`list_findings`): the saving is the job's figure,
  * measured minus counterfactual over the runs it cites, with the basis those
@@ -417,6 +517,11 @@ export const SpendFinding = z.object({
   fix: z.string().min(1),
   /** The setting the fix names; absent when the fix names none. */
   recommendation: FindingRecommendation.optional(),
+  /**
+   * The kind's figures its finding text names; absent on a finding written
+   * before the job stored them, and on a kind whose text needs none.
+   */
+  values: FindingValues.optional(),
   /** What the finding cites. */
   runs: Count,
   calls: Count,

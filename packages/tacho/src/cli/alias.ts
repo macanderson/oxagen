@@ -9,10 +9,11 @@
  * The notice never goes to stdout: a harness reads the hook's answer there,
  * a connected app reads MCP there, and Claude Code reads its model token
  * there. A command that a harness, git, or a connected app runs prints the
- * notice only when stdin is a terminal, which means a person typed it. The
- * desktop app still drives the old `tacho` sidecar and streams its stderr
- * into the app's log, so a sidecar it starts (`OXAGEN_DESKTOP_SIDECAR=1`,
- * set by `cli_install::sidecar_env_for`) prints nothing.
+ * notice only when stdin is a terminal, which means a person typed it. A
+ * desktop app built before #4891 drives the old `tacho` sidecar and streams
+ * its stderr into the app's log, so a sidecar it starts
+ * (`OXAGEN_DESKTOP_SIDECAR=1`, set by `cli_install::sidecar_env_for`) prints
+ * nothing. The current app runs `oxagen agent` instead.
  *
  * This file is the one place in the recorder allowed to spell the old
  * commands (`tools/scripts/check-tacho-commands.mjs`).

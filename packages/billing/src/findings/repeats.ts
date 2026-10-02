@@ -11,6 +11,10 @@
  * detector 1, after spin loops and retry loops. A run whose frames were not
  * read has each repeat cited, and nothing prices it.
  *
+ * The evidence counts every call a counted request made, so the Spend card's
+ * `calls` figure counts calls, as its label says (#4506). The price stays per
+ * request.
+ *
  * The repeat rule is the rollup's (../step-grade.ts, ADR-199), so a request
  * this job counts is one whose steps the run's productive ratio counts as not
  * advancing it.
@@ -20,6 +24,7 @@ import type { RunTotalsRecord } from "../cost-rollup";
 import {
   claimKey,
   onlyRepeats,
+  type RunRequest,
   type RunView,
   type ViewCall,
 } from "./requests";
@@ -27,10 +32,12 @@ import {
   agentOrOperator,
   plural,
   requestMeasure,
+  type ClaimOf,
   type DetectContext,
   type Detector,
   type DetectInput,
   type FindingKey,
+  type Measure,
 } from "./shared";
 
 function repeatKey(
@@ -44,6 +51,43 @@ function repeatKey(
       subject: SHELL_TOOL,
     };
   return agentOrOperator("duplicate_tool_calls", run);
+}
+
+/**
+ * Add one counted request to its finding as one cited item per call it made
+ * (#4506). The request's whole price and its claim ride the first call. Each
+ * other call adds nothing to the price, on the same basis, so a priced
+ * request covers every call it made and an unpriced one covers none. Spin
+ * loops and retry loops add their requests the same way (#5023).
+ */
+export function addRequest(
+  key: FindingKey,
+  input: DetectInput,
+  run: RunTotalsRecord,
+  request: RunRequest,
+  claim: ClaimOf | null,
+  ctx: DetectContext,
+): void {
+  const [first, ...rest] = request.calls;
+  if (first === undefined) return;
+  const measure = requestMeasure(request.frame);
+  ctx.groups.add(
+    key,
+    input.toolWindowStart,
+    run,
+    measure,
+    [first.frame],
+    claim,
+  );
+  const nothing: Measure = {
+    measuredTokens: 0,
+    counterfactualTokens: 0,
+    micros:
+      measure.micros === null ? null : { measured: 0n, counterfactual: 0n },
+    ...(measure.basis === undefined ? {} : { basis: measure.basis }),
+  };
+  for (const c of rest)
+    ctx.groups.add(key, input.toolWindowStart, run, nothing, [c.frame]);
 }
 
 function detectRun(
@@ -80,13 +124,13 @@ function detectRun(
     }
     for (const c of request.calls) ctx.taken.add(c.call);
     if (!ctx.groups.admits(key, run)) continue;
-    ctx.groups.add(
+    addRequest(
       key,
-      input.toolWindowStart,
+      input,
       run,
-      requestMeasure(request.frame),
-      request.calls.map((c) => c.frame),
+      request,
       request.frame === null ? null : { detector: 1, frame: request.frame },
+      ctx,
     );
   }
 }
@@ -98,15 +142,17 @@ export const repeats: Detector = {
     for (const view of ctx.views) detectRun(view, input, ctx);
   },
   prose: (group, evidence) => {
-    const turns = plural(evidence.calls, "turn", "turns");
+    const one = evidence.calls === 1;
+    const calls = plural(evidence.calls, "call", "calls");
     const runs = plural(group.runs.size, "run", "runs");
+    const turn = `${one ? "It" : "Each"} came from a turn that made no other call.`;
     return group.kind === "repeated_shell_commands"
       ? {
-          why: `${turns} on ${runs} only re-ran shell commands whose identical input had already returned the identical output earlier in the run.`,
+          why: `${calls} on ${runs} re-ran ${one ? "a shell command" : "shell commands"} whose identical input had already returned the identical output earlier in the run. ${turn}`,
           fix: "Serve an identical command from the run's earlier result until a write changes what it reads.",
         }
       : {
-          why: `${turns} on ${runs} only repeated tool calls with an identical input and output digest earlier in the same run.`,
+          why: `${calls} on ${runs} repeated ${one ? "a tool call" : "tool calls"} with an identical input and output digest earlier in the same run. ${turn}`,
           fix: "Tell the agent not to re-read a result it already holds in the run.",
         };
   },

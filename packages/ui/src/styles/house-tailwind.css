@@ -256,7 +256,7 @@
   --radius-xl: calc(var(--radius) + 4px);
 }
 
-/* marketing scale: landing pages, posts, docs read once: large and spaced */
+/* marketing scale: landing pages and posts read once: large and spaced */
 @utility text-m-h1 { font-size: var(--ox-m-h1); line-height: var(--ox-m-h1-leading); font-family: var(--font-display); font-weight: 700; letter-spacing: -0.03em; --font-hero: var(--font-wordmark); }
 @utility text-m-h2 { font-size: var(--ox-m-h2); line-height: var(--ox-m-h2-leading); font-family: var(--font-display); font-weight: 700; letter-spacing: -0.01em; }
 @utility text-m-h3 { font-size: var(--ox-m-h3); line-height: var(--ox-m-h3-leading); font-family: var(--font-display); font-weight: 600; }
@@ -264,7 +264,7 @@
 @utility text-m-body { font-size: var(--ox-m-body); line-height: var(--ox-m-body-leading); font-family: var(--font-sans); font-weight: 400; }
 @utility text-m-micro { font-size: var(--ox-m-micro); line-height: var(--ox-m-micro-leading); font-family: var(--font-mono); font-weight: 400; font-feature-settings: "calt", "liga"; }
 
-/* app scale: dashboards, panels, tables, terminals, logs read all day: dense */
+/* app scale: dashboards, docs, panels, tables, terminals, logs: dense */
 @utility text-a-h1 { font-size: var(--ox-a-h1); line-height: var(--ox-a-h1-leading); font-family: var(--font-display); font-weight: 700; letter-spacing: -0.02em; }
 @utility text-a-h2 { font-size: var(--ox-a-h2); line-height: var(--ox-a-h2-leading); font-family: var(--font-display); font-weight: 600; }
 @utility text-a-h3 { font-size: var(--ox-a-h3); line-height: var(--ox-a-h3-leading); font-family: var(--font-display); font-weight: 600; }

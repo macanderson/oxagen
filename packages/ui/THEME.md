@@ -26,8 +26,9 @@ brand had retired.
 
 The first four are **generated**, not authored. `tools/scripts/sync-brand-assets.mjs`
 copies them byte for byte from the house kit (`oxageninc/brand`), and its
-`--check`, run in CI by `brand-drift.yml` and the pipeline's checks job, fails when
-a copy has drifted from the kit's `main`. Edit the kit, run the sync,
+`--check` fails when a copy has drifted from the kit's `main`. CI runs it in
+`brand-drift.yml`, whose `Brand drift` job a pull request must pass to merge, and as
+an advisory step in the pipeline's checks job. Edit the kit, run the sync,
 commit what it writes. Editing a vendored file by hand is reverted by the next
 sync and caught by the check before that.
 

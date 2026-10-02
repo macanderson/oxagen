@@ -211,6 +211,7 @@ after the registered name separately when their contract uses a dotted stem.
 | [dismiss_proposal](context.proposal.dismiss.md) | [context.proposal.dismiss.ts](../../packages/oxagen/src/contracts/context.proposal.dismiss.ts) | api, agent |
 | [dismiss_memories](steering.memories.dismiss.md) | [steering.memories.dismiss.ts](../../packages/oxagen/src/contracts/steering.memories.dismiss.ts) | api, mcp, cli |
 | [get_context_pr](context.pr.get.md) | [context.pr.get.ts](../../packages/oxagen/src/contracts/context.pr.get.ts) | api, mcp, agent |
+| [get_context_pr_diff](context.pr.diff.get.md) | [context.pr.diff.get.ts](../../packages/oxagen/src/contracts/context.pr.diff.get.ts) | api, mcp, agent |
 | [get_record](context.records.get.md) | [context.records.get.ts](../../packages/oxagen/src/contracts/context.records.get.ts) | api, mcp, agent |
 | [get_published_steering](context.steering.published.get.md) | [context.steering.published.get.ts](../../packages/oxagen/src/contracts/context.steering.published.get.ts) | api, mcp, cli |
 | [get_steering_index](context.steering.index.get.md) | [context.steering.index.get.ts](../../packages/oxagen/src/contracts/context.steering.index.get.ts) | api, cli |
@@ -231,7 +232,10 @@ after the registered name separately when their contract uses a dotted stem.
 | [promote_context_record](context.record.promote.md) | [context.record.promote.ts](../../packages/oxagen/src/contracts/context.record.promote.ts) | api |
 | [propose_record](context.proposal.create.md) | [context.proposal.create.ts](../../packages/oxagen/src/contracts/context.proposal.create.ts) | api, mcp, agent |
 | [publish_context_record](context.record.publish.md) | [context.record.publish.ts](../../packages/oxagen/src/contracts/context.record.publish.ts) | api |
+| [read_steering](steering.read.md) | [steering.read.ts](../../packages/oxagen/src/contracts/steering.read.ts) | mcp |
+| [refresh_context_pr](context.pr.refresh.md) | [context.pr.refresh.ts](../../packages/oxagen/src/contracts/context.pr.refresh.ts) | api, agent |
 | [revert_steering_pr](context.pr.revert.md) | [context.pr.revert.ts](../../packages/oxagen/src/contracts/context.pr.revert.ts) | api, mcp, agent, cli |
+| [search_steering](steering.search.md) | [steering.search.ts](../../packages/oxagen/src/contracts/steering.search.ts) | mcp |
 
 ## Control
 
@@ -654,6 +658,7 @@ after the registered name separately when their contract uses a dotted stem.
 | [open_studio_review](tool.studio.review.open.md) | [tool.studio.review.open.ts](../../packages/oxagen/src/contracts/tool.studio.review.open.ts) | api, mcp |
 | [publish_tool_declaration](tool.declaration.publish.md) | [tool.declaration.publish.ts](../../packages/oxagen/src/contracts/tool.declaration.publish.ts) | api |
 | [revoke_relay](tool.relay.revoke.md) | [tool.relay.revoke.ts](../../packages/oxagen/src/contracts/tool.relay.revoke.ts) | api, mcp |
+| [run_studio_selection](tool.studio.selection.run.md) | [tool.studio.selection.run.ts](../../packages/oxagen/src/contracts/tool.studio.selection.run.ts) | api, mcp |
 | [save_studio_draft](tool.studio.draft.save.md) | [tool.studio.draft.save.ts](../../packages/oxagen/src/contracts/tool.studio.draft.save.ts) | api, mcp |
 | [set_mcp_credential](tool.studio.credential.set.md) | [tool.studio.credential.set.ts](../../packages/oxagen/src/contracts/tool.studio.credential.set.ts) | api, mcp |
 | [set_tool_classification](tool.classification.set.md) | [tool.classification.set.ts](../../packages/oxagen/src/contracts/tool.classification.set.ts) | api, mcp, agent |

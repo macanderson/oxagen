@@ -307,6 +307,26 @@ resource "aws_cloudfront_distribution" "site" {
     }
   }
 
+  # The default behavior without the rewrite function. The rewrite reads a
+  # last segment with no dot as a page, so `/latest/oxagen-aarch64-apple-darwin`
+  # would become `.../oxagen-aarch64-apple-darwin/index.html` and 404. These
+  # paths ask for the object itself.
+  dynamic "ordered_cache_behavior" {
+    for_each = var.raw_path_patterns
+    content {
+      path_pattern           = ordered_cache_behavior.value
+      target_origin_id       = "s3-${aws_s3_bucket.site.id}"
+      viewer_protocol_policy = "redirect-to-https"
+      allowed_methods        = ["GET", "HEAD", "OPTIONS"]
+      cached_methods         = ["GET", "HEAD"]
+      compress               = true
+
+      cache_policy_id            = "658327ea-f89d-4fab-a63d-7e88639e58f6"
+      origin_request_policy_id   = "88a5eaf4-2fd4-4709-b370-b4c650ea3fcf"
+      response_headers_policy_id = aws_cloudfront_response_headers_policy.site.id
+    }
+  }
+
   # A missing object is a missing page: serve the export's own 404 document
   # with a 404 status rather than S3's XML error body. The TTL keeps a burst
   # of requests for one bad URL from becoming a burst of origin requests.

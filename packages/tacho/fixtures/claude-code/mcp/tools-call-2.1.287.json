@@ -1,0 +1,15 @@
+{
+  "method": "tools/call",
+  "params": {
+    "name": "record",
+    "arguments": {
+      "note": "hello"
+    },
+    "_meta": {
+      "claudecode/toolUseId": "toolu_01FixtureCapturedSynthId",
+      "progressToken": 2
+    }
+  },
+  "jsonrpc": "2.0",
+  "id": 2
+}

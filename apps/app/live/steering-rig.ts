@@ -33,6 +33,26 @@ export const HEALTH_CHECK_ID = "oxagen-steering-health";
 /** The merge setting changed by the health drift exercise. */
 export const MERGE_COMMIT_SETTING = "merge.allow_merge_commit";
 
+// ── Suites ───────────────────────────────────────────────────────────────────
+
+/**
+ * A live suite that runs on this rig. Each suite names its workspaces with its
+ * own prefix, and its sweep matches only that prefix, so one suite never
+ * archives another's workspace or deletes another's repository.
+ */
+export interface LiveSuite {
+  /** The first part of each run's workspace slug. */
+  prefix: string;
+  /** The suite's name, as its runbook section and its workspace names spell it. */
+  label: string;
+}
+
+/** The steering repo live test (S11). Its workspaces are `live-<run id>-<attempt>`. */
+export const STEERING_SUITE: LiveSuite = { prefix: "live", label: "Steering live test" };
+
+/** The MCP Studio live test (M17). Its workspaces are `mcp-live-<run id>-<attempt>`. */
+export const MCP_STUDIO_SUITE: LiveSuite = { prefix: "mcp-live", label: "MCP Studio live test" };
+
 // ── Settings ─────────────────────────────────────────────────────────────────
 
 /** Each value the rig reads from the environment. The workflow's first step checks the same names. */
@@ -56,16 +76,21 @@ export interface Settings {
   githubToken: string;
   apiUrl: string;
   appUrl: string;
-  /** This run's workspace slug, `live-<run id>-<attempt>`. Its steering repo is `oxagen-<slug>`. */
+  /** The suite this run belongs to. */
+  suite: LiveSuite;
+  /** This run's workspace slug, `<suite prefix>-<run id>-<attempt>`. Its steering repo is `oxagen-<slug>`. */
   runSlug: string;
 }
 
 /** Reads the settings and names every missing one in a single error. */
-export function readSettings(env: NodeJS.ProcessEnv = process.env): Settings {
+export function readSettings(
+  env: NodeJS.ProcessEnv = process.env,
+  suite: LiveSuite = STEERING_SUITE,
+): Settings {
   const missing = REQUIRED.filter((name) => (env[name] ?? "") === "");
   if (missing.length > 0) {
     throw new Error(
-      `The steering live test is missing ${missing.join(", ")}. The "Steering live test" section of docs/specs/github-app/github-app-setup.md says where each one comes from.`,
+      `The ${suite.label} is missing ${missing.join(", ")}. The "${suite.label}" section of docs/specs/github-app/github-app-setup.md says where each one comes from.`,
     );
   }
   const value = (name: (typeof REQUIRED)[number]): string => env[name] ?? "";
@@ -82,7 +107,8 @@ export function readSettings(env: NodeJS.ProcessEnv = process.env): Settings {
     githubToken: value("STEERING_LIVE_GITHUB_TOKEN"),
     apiUrl: optional(env, "STEERING_LIVE_API_URL", "https://api.oxagen.sh"),
     appUrl: optional(env, "STEERING_LIVE_APP_URL", "https://app.oxagen.sh"),
-    runSlug: `live-${runId}-${attempt}`,
+    suite,
+    runSlug: `${suite.prefix}-${runId}-${attempt}`,
   };
 }
 
@@ -92,10 +118,15 @@ function optional(env: NodeJS.ProcessEnv, name: string, fallback: string): strin
   return (url === undefined || url === "" ? fallback : url).replace(/\/+$/, "");
 }
 
-/** A workspace some run of this suite created. */
-const RUN_SLUG = /^live-\d+-\d+$/;
-/** A steering repo some run of this suite created, with the `-2` suffix a name collision adds. */
-const RUN_REPO = /^oxagen-live-\d+-\d+(?:-\d+)?$/;
+/** A workspace some run of the suite created. */
+function suiteSlug(suite: LiveSuite): RegExp {
+  return new RegExp(`^${suite.prefix}-\\d+-\\d+$`);
+}
+
+/** A steering repo some run of the suite created, with the `-2` suffix a name collision adds. */
+function suiteRepo(suite: LiveSuite): RegExp {
+  return new RegExp(`^oxagen-${suite.prefix}-\\d+-\\d+(?:-\\d+)?$`);
+}
 
 /** Matches this run's steering repo name, with or without a collision suffix. */
 export function runRepoName(settings: Settings): RegExp {
@@ -124,12 +155,14 @@ export function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-function excerpt(text: string): string {
+/** At most 500 characters of a response body, on one line. */
+export function excerpt(text: string): string {
   const flat = text.replace(/\s+/g, " ").trim();
   return flat.length > 500 ? `${flat.slice(0, 500)}...` : flat;
 }
 
-function parseBody<S extends z.ZodType>(
+/** Parses a JSON body against a local schema, naming the request in any error. */
+export function parseBody<S extends z.ZodType>(
   what: string,
   text: string,
   schema: S,
@@ -360,7 +393,8 @@ function orgPath(settings: Settings): string {
   return `/v1/${encodeURIComponent(settings.oxagenOrg)}`;
 }
 
-function workspacePath(settings: Settings, slug: string, rest: string): string {
+/** A workspace-scoped API path: `/v1/<org>/<workspace><rest>`. */
+export function workspacePath(settings: Settings, slug: string, rest: string): string {
   return `${orgPath(settings)}/${encodeURIComponent(slug)}${rest}`;
 }
 
@@ -368,7 +402,7 @@ export function createWorkspace(ox: Oxagen, settings: Settings) {
   return ox.call(
     "POST",
     `${orgPath(settings)}/workspaces`,
-    { name: `Steering live test ${settings.runSlug}`, slug: settings.runSlug },
+    { name: `${settings.suite.label} ${settings.runSlug}`, slug: settings.runSlug },
     workspaceCreated,
   );
 }
@@ -409,7 +443,7 @@ export function proposeRecord(
         sharingScope: "workspace",
         statement,
       },
-      rationale: `The steering live test run ${settings.runSlug} proposes this steering record. The run deletes its repository when it ends.`,
+      rationale: `The ${settings.suite.label} run ${settings.runSlug} proposes this steering record. The run deletes its repository when it ends.`,
       source: "steering-live-test",
       createOnly: true,
     },
@@ -701,6 +735,27 @@ export function waitForHealth(
   });
 }
 
+/**
+ * Waits up to five minutes for the run's steering repo to finish provisioning.
+ * A failed or blocked provisioning fails at once, with its step and error.
+ */
+export function waitForProvisioned(ox: Oxagen, settings: Settings): Promise<SteeringRepoView> {
+  return poll(
+    `workspace ${settings.runSlug} steering repo provisioned`,
+    { timeoutMs: 5 * MINUTE, intervalMs: 5 * SECOND },
+    async () => {
+      const view = await readSteeringRepo(ox, settings);
+      if (view.status === "failed" || view.status === "blocked") {
+        const why = view.error === null ? "no error" : `${view.error.code}: ${view.error.message}`;
+        throw new Error(
+          `Provisioning stopped with status ${view.status} at step ${view.failedStep ?? "unknown"} (${why}).`,
+        );
+      }
+      return view.status === "ready" ? reached(view) : waiting(describeRepo(view));
+    },
+  );
+}
+
 const SETTLED = new Set(["checks_passed", "checks_failed", "merged", "rejected"]);
 
 /** Waits for a steering PR's checks to finish. Answers the PR whatever the outcome. */
@@ -787,9 +842,10 @@ export async function cleanupRun(
 }
 
 /**
- * Clears what earlier runs left behind. It archives every other active
- * workspace this suite created, since the workflow runs one job at a time.
- * It deletes test repositories older than one day.
+ * Clears what earlier runs of this run's suite left behind. It archives every
+ * other active workspace the suite created, since the live workflows share one
+ * concurrency group and run one job at a time. It deletes the suite's test
+ * repositories older than one day.
  */
 export async function sweepOld(
   ox: Oxagen | null,
@@ -802,8 +858,9 @@ export async function sweepOld(
   if (ox !== null) {
     try {
       const listed = await listWorkspaces(ox, settings);
+      const mine = suiteSlug(settings.suite);
       const leftovers = listed.workspaces.filter(
-        (w) => RUN_SLUG.test(w.slug) && w.slug !== settings.runSlug,
+        (w) => mine.test(w.slug) && w.slug !== settings.runSlug,
       );
       for (const workspace of leftovers) {
         try {
@@ -821,7 +878,8 @@ export async function sweepOld(
   try {
     const cutoff = Date.now() - SWEEP_AGE_MS;
     const repos = await gh.orgRepos(settings.githubOrg);
-    const old = repos.filter((r) => RUN_REPO.test(r.name) && Date.parse(r.created_at) < cutoff);
+    const pattern = suiteRepo(settings.suite);
+    const old = repos.filter((r) => pattern.test(r.name) && Date.parse(r.created_at) < cutoff);
     for (const repo of old) {
       try {
         if (await gh.deleteRepo(repo.full_name)) {
@@ -837,4 +895,20 @@ export async function sweepOld(
 
   if (problems.length > 0) throw summarize(problems);
   return done;
+}
+
+/**
+ * A suite's Playwright global teardown. It archives the run's workspace and
+ * deletes its steering repo, pass or fail. The workflow's always() step runs
+ * the same cleanup again, which covers a teardown that never ran, such as a
+ * job cancelled mid-suite.
+ */
+export async function teardownSuite(suite: LiveSuite): Promise<void> {
+  const settings = readSettings(process.env, suite);
+  const { ox, problem } = await trySignIn(settings);
+  if (problem !== null) {
+    console.error(`Teardown could not sign in, so the workspace stays active: ${problem}`);
+  }
+  const done = await cleanupRun(ox, githubRig(settings.githubToken), settings);
+  for (const line of done) console.log(line);
 }

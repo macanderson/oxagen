@@ -1,7 +1,7 @@
 // studio-capabilities.handlers.test.ts: handler invocation tests for the
 // Studio tools that serve MCP Studio's app screens (#4678):
-// set_mcp_credential, list_studio_findings, draft_studio_description, and
-// try_studio_tool.
+// set_mcp_credential, list_studio_findings, draft_studio_description,
+// try_studio_tool, and run_studio_selection.
 //
 // Pattern: vi.mock the kernel `invoke` and the context seam `buildContext`.
 // Each test asserts buildContext was called, invoke received the contract
@@ -32,6 +32,10 @@ import draftStudioDescription, {
   metadata as draftStudioDescriptionMeta,
   schema as draftStudioDescriptionSchema,
 } from "./tool.studio.description.draft";
+import runStudioSelection, {
+  metadata as runStudioSelectionMeta,
+  schema as runStudioSelectionSchema,
+} from "./tool.studio.selection.run";
 
 const fakeCtx = {
   orgId: "org_test",
@@ -178,5 +182,60 @@ describe("draft_studio_description", () => {
   it("refuses an empty suggestion", async () => {
     mocks.invoke.mockResolvedValue({ server: "billing", tool: "list_charges", description: "" });
     await expect(draftStudioDescription({ server: "billing", tool: "list_charges" })).rejects.toThrow();
+  });
+});
+
+describe("run_studio_selection", () => {
+  it("carries the contract's name, saves nothing, and is not idempotent", () => {
+    expect(runStudioSelectionMeta.name).toBe("run_studio_selection");
+    expect(runStudioSelectionMeta.annotations).toEqual({
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: false,
+    });
+    expect(Object.keys(runStudioSelectionSchema)).toEqual(["server"]);
+  });
+
+  it("invokes with the contract name and returns the run's hits and misses", async () => {
+    const output = {
+      server: "billing",
+      basis: "published",
+      revision: null,
+      model: "fast-model",
+      counts: { total: 2, hits: 1, misses: 1, malformed: 0, skipped: 0 },
+      cases: [
+        {
+          line: 1,
+          task: "Refund $40 of charge ch_3P9.",
+          expected: "billing__create_refund",
+          status: "hit",
+          chosen: "billing__create_refund",
+        },
+        {
+          line: 2,
+          task: "Write a haiku about invoices.",
+          expected: null,
+          status: "miss",
+          chosen: "billing__list_charges",
+        },
+      ],
+    };
+    mocks.invoke.mockResolvedValue(output);
+
+    const result = await runStudioSelection({ server: "billing" });
+
+    expect(mocks.buildContext).toHaveBeenCalledOnce();
+    expect(mocks.invoke).toHaveBeenCalledWith(
+      "run_studio_selection",
+      { server: "billing" },
+      fakeCtx,
+      { surface: "mcp" },
+    );
+    expect(result).toEqual(output);
+  });
+
+  it("refuses an output outside the contract", async () => {
+    mocks.invoke.mockResolvedValue({ server: "billing", basis: "published", hits: 2 });
+    await expect(runStudioSelection({ server: "billing" })).rejects.toThrow();
   });
 });

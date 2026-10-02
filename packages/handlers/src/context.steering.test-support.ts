@@ -219,14 +219,29 @@ export class MemoryStore implements SteeringStore {
       ) ?? null
     );
   }
+  /** Display names by user id; a test sets the ones it reads. */
+  names = new Map<string, string>();
+  async userNames(_scope: { orgId: string }, userIds: readonly string[]) {
+    return new Map(
+      userIds.flatMap((id) => {
+        const name = this.names.get(id);
+        return name === undefined ? [] : [[id, name] as const];
+      }),
+    );
+  }
   async listProposals(
     scope: { workspaceId: string },
-    filter: { status?: string; lineageId?: string },
+    filter: {
+      status?: string;
+      statuses?: readonly string[];
+      lineageId?: string;
+    },
     page: { limit: number; offset: number },
   ) {
     const rows = this.proposals
       .filter((p) => p.workspaceId === scope.workspaceId)
       .filter((p) => !filter.status || p.status === filter.status)
+      .filter((p) => !filter.statuses || filter.statuses.includes(p.status))
       .filter((p) => !filter.lineageId || p.lineageId === filter.lineageId)
       .sort(
         (a, b) =>

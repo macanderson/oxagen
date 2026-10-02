@@ -2358,8 +2358,9 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   NPM_TOKEN: {
     group: "Operator scripts",
     description:
-      "npm automation token used to publish the CLI package. Unset skips the npm " +
-      "publish step of `pnpm release` rather than failing it.",
+      "npm token used to publish the CLI package from a laptop. Unset skips the " +
+      "npm publish step of `pnpm release` rather than failing it. CI publishes " +
+      "with its own copy, the NPM_TOKEN repository secret (ADR-253).",
     secret: true,
     clientExposed: false,
     services: [],
@@ -2367,7 +2368,7 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     valueOrigin: "manual",
     store: "operator",
     refresh: {
-      how: "On npmjs.com, open Access Tokens and generate a granular token with publish rights on the CLI package. Save it here and as the GitHub secret NPM_TOKEN, then delete the old token after the next release publishes.",
+      how: "On npmjs.com, open Access Tokens and generate a granular token with read and write on @oxagen/cli. It expires within 90 days. Save it here and as the GitHub secret NPM_TOKEN, then delete the old token once npm.yml publishes with the new one.",
     },
   },
 
@@ -2420,14 +2421,15 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   OXAGEN_INSTALL_BASE: {
     group: "Operator scripts",
     description:
-      "Base URL the published install.sh downloads CLI release archives from. " +
-      "Set it to install from a staging bucket instead of cli.oxagen.sh.",
+      "Base URL the published install.sh downloads the oxagen-<rust triple> " +
+      "executable and its .sha256 from. Set it to install a pinned version, " +
+      "such as https://downloads.oxagen.sh/desktop/<version>.",
     secret: false,
     clientExposed: false,
     services: [],
     requiredIn: [],
     valueOrigin: "manual",
-    placeholder: "https://cli.oxagen.sh/releases/latest",
+    placeholder: "https://downloads.oxagen.sh/latest",
   },
   OXAGEN_INSTALL_DIR: {
     group: "Operator scripts",

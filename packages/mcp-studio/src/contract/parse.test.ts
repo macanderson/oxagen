@@ -590,6 +590,28 @@ describe("parseSelectionTests", () => {
     expect(parseSelectionTests(jsonLines(tests))).toStrictEqual({ ok: true, value: tests });
   });
 
+  it("reads null as a task that no tool fits", () => {
+    const tests = [
+      { task: "Refund the last charge for Acme.", expect: "stripe__create_refund" },
+      { task: "Write a haiku about invoices.", expect: null },
+    ];
+    expect(parseSelectionTests(jsonLines(tests))).toStrictEqual({ ok: true, value: tests });
+  });
+
+  it("refuses a task with no expect, because null and a missing key mean different things", () => {
+    const result = parseSelectionTests(jsonLines([{ task: "Write a haiku about invoices." }]));
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.issues).toContainEqual(expect.objectContaining({ line: 1, field: "expect" }));
+  });
+
+  it("refuses an empty tool name rather than reading it as none", () => {
+    const result = parseSelectionTests(jsonLines([{ task: "Write a haiku about invoices.", expect: "" }]));
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.issues).toContainEqual(expect.objectContaining({ line: 1, field: "expect" }));
+  });
+
   it("refuses a tool named without its server", () => {
     const result = parseSelectionTests(jsonLines([{ task: "Refund a charge.", expect: "create_refund" }]));
     expect(result.ok).toBe(false);

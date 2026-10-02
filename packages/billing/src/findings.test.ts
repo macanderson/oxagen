@@ -3,6 +3,7 @@ import { FINDINGS_LIST_MAX } from "@oxagen/oxagen/contracts/finding.list";
 import {
   findingEvidenceSchema,
   findingRunCitationSchema,
+  findingValuesSchema,
 } from "@oxagen/oxagen/contracts/finding.shared";
 import { describe, expect, it } from "vitest";
 import {
@@ -382,6 +383,11 @@ describe("cache writes never read", () => {
     });
     // It prices a part of each request, so it claims no frame.
     expect(finding!.claims).toBeUndefined();
+    // #5023: the card names the tokens written.
+    expect(finding!.evidence.values).toEqual({
+      kind: "cache_writes_never_read",
+      writtenTokens: 8_000,
+    });
   });
 
   it("cites the agent when the run names no operator", () => {
@@ -433,7 +439,7 @@ describe("repeated shell commands and duplicate tool calls", () => {
       basis: "gateway_observed",
       confidence: "high",
     });
-    expect(finding!.why).toContain("2 turns on 1 run");
+    expect(finding!.why).toContain("2 calls on 1 run");
     expect(finding!.evidence).toMatchObject({
       calls: 2,
       coveredCalls: 2,
@@ -466,7 +472,9 @@ describe("repeated shell commands and duplicate tool calls", () => {
     ]);
   });
 
-  it("counts a turn that made several repeats once", () => {
+  // #4506 pass 7: the Spend card labels `evidence.calls` as calls, so a
+  // counted turn adds each call it made. Its price still counts once.
+  it("prices a turn that made several repeats once, and counts each of its calls", () => {
     const r = run();
     const toolCalls = [1, 2, 3, 4].map((at) =>
       call(r, { at, tool: "Bash", isMutating: true }),
@@ -478,9 +486,19 @@ describe("repeated shell commands and duplicate tool calls", () => {
       frames: new Map([[r.runId, [request(r, 1), request(r, 2)]]]),
     });
     expect(finding).toMatchObject({ savingMicros: TURN_MICROS });
-    expect(finding!.evidence.calls).toBe(1);
+    expect(finding!.evidence).toMatchObject({
+      calls: 3,
+      coveredCalls: 3,
+      measuredTokens: TURN_TOKENS,
+    });
+    expect(finding!.evidence.runs[0]).toMatchObject({ calls: 3 });
     expect(finding!.evidence.frames?.[r.runId]?.total).toBe(3);
     expect(finding!.claims).toHaveLength(1);
+    expect(finding!.why).toBe(
+      "3 calls on 1 run re-ran shell commands whose identical input had already returned the identical output earlier in the run. Each came from a turn that made no other call.",
+    );
+    // #5023: the text names only the runs, the calls, and the saving.
+    expect(finding!.evidence).not.toHaveProperty("values");
   });
 
   it("does not count a turn that also made a new call", () => {
@@ -564,7 +582,7 @@ describe("repeated shell commands and duplicate tool calls", () => {
       frames: new Map([[r.runId, [request(r, 1), request(r, 2)]]]),
     });
     expect(findings.map((f) => [f.kind, f.evidence.calls])).toEqual([
-      ["duplicate_tool_calls", 1],
+      ["duplicate_tool_calls", 2],
     ]);
   });
 
@@ -804,6 +822,179 @@ describe("repeated shell commands and duplicate tool calls", () => {
       expect(finding!.claims?.map((c) => c.frameKey)).toEqual([later.key]);
     });
   });
+
+  describe("calls and requests of one millisecond (#4506)", () => {
+    const SUBAGENT = "00000000-0000-4000-8000-0000000000bb";
+    const shell = { tool: "Bash", isMutating: true };
+
+    /** A frame on `chain` (null for the run's own) at `ms` into the run, keyed by its chain and seq. */
+    function chainFrame(
+      r: RunTotalsRecord,
+      ms: number,
+      chain: string | null,
+      frameSeq: number,
+      costMicros: bigint | null = TURN_MICROS,
+    ): PricedRequestFrame {
+      const at = new Date(r.startedAt.getTime() + ms);
+      return {
+        ...frameAt(at, costMicros),
+        key: `${at.toISOString()}#${chain ?? "root"}:${frameSeq}`,
+        sessionUuid: chain,
+        seq: frameSeq,
+      };
+    }
+
+    // Pass 4: `tacho_events.ts` keeps milliseconds, so two chains can make
+    // one identical call in one millisecond, each at the same seq on its own
+    // chain. Neither read the other's result.
+    it("judges two chains' identical calls of one millisecond against the calls before them, never against each other", () => {
+      const r = run();
+      const toolCalls = [
+        call(r, { at: 2, seq: 3, ...shell }),
+        call(r, { at: 2, seq: 3, ...shell, sessionUuid: SUBAGENT }),
+      ];
+      const frames = new Map([
+        [
+          r.runId,
+          [
+            chainFrame(r, 1_000, null, 2),
+            chainFrame(r, 1_000, SUBAGENT, 2),
+            chainFrame(r, 2_500, null, 4),
+          ],
+        ],
+      ]);
+      // Whichever of the two the store returns first, neither repeats.
+      expect(detect({ runs: [r], toolCalls, frames })).toEqual([]);
+      expect(
+        detect({ runs: [r], toolCalls: [...toolCalls].reverse(), frames }),
+      ).toEqual([]);
+      // A later identical call still repeats them.
+      const [finding, ...rest] = detect({
+        runs: [r],
+        toolCalls: [...toolCalls, call(r, { at: 3, seq: 5, ...shell })],
+        frames,
+      });
+      expect(rest).toEqual([]);
+      expect(finding).toMatchObject({
+        kind: "repeated_shell_commands",
+        savingMicros: TURN_MICROS,
+      });
+      expect(finding!.claims?.map((c) => c.frameKey)).toEqual([
+        chainFrame(r, 2_500, null, 4).key,
+      ]);
+    });
+
+    // Pass 4: one chain records two model calls in one millisecond. Each
+    // call of that millisecond belongs to the frame before it by seq.
+    it("evaluates and prices two requests of one chain in one millisecond apart, by seq", () => {
+      const r = run();
+      const first = chainFrame(r, 2_000, null, 10, 12_000n);
+      const second = chainFrame(r, 2_000, null, 12, 30_000n);
+      const frames = new Map([
+        [r.runId, [chainFrame(r, 500, null, 1), second, first]],
+      ]);
+      // The first request re-runs a command and the second runs a new one,
+      // so only the first counts.
+      const original = call(r, { at: 1, seq: 2, ...shell });
+      const [one, ...none] = detect({
+        runs: [r],
+        toolCalls: [
+          original,
+          call(r, { at: 2, seq: 11, ...shell }),
+          call(r, { at: 2, seq: 13, ...shell, inputDigest: "in-2" }),
+        ],
+        frames,
+      });
+      expect(none).toEqual([]);
+      expect(one).toMatchObject({
+        kind: "repeated_shell_commands",
+        savingMicros: 12_000n,
+      });
+      expect(one!.claims?.map((c) => c.frameKey)).toEqual([first.key]);
+
+      // When both only repeat, each counts at its own price.
+      const [both] = detect({
+        runs: [r],
+        toolCalls: [
+          original,
+          call(r, { at: 1.5, seq: 3, ...shell, inputDigest: "in-2" }),
+          call(r, { at: 2, seq: 11, ...shell }),
+          call(r, { at: 2, seq: 13, ...shell, inputDigest: "in-2" }),
+        ],
+        frames,
+      });
+      expect(both).toMatchObject({
+        kind: "repeated_shell_commands",
+        savingMicros: 42_000n,
+      });
+      expect(both!.claims?.map((c) => [c.frameKey, c.costMicros])).toEqual([
+        [first.key, 12_000n],
+        [second.key, 30_000n],
+      ]);
+    });
+
+    // Pass 5: the proxy records a subagent's model call on the root chain
+    // (ADR-168), so a root frame later than the subagent's own can be the
+    // subagent's next request.
+    it("gives a subagent's call a root chain request later than its own chain's", () => {
+      const r = run();
+      const own = chainFrame(r, 1_000, SUBAGENT, 1);
+      const proxied = chainFrame(r, 2_000, null, 7);
+      const toolCalls = [
+        call(r, { at: 1.5, seq: 2, ...shell, sessionUuid: SUBAGENT }),
+        call(r, { at: 2.5, seq: 3, ...shell, sessionUuid: SUBAGENT }),
+      ];
+      const [finding, ...rest] = detect({
+        runs: [r],
+        toolCalls,
+        frames: new Map([[r.runId, [own, proxied]]]),
+      });
+      expect(rest).toEqual([]);
+      expect(finding!.claims?.map((c) => c.frameKey)).toEqual([proxied.key]);
+
+      // A later frame on another subagent's chain is not the subagent's.
+      const sibling = chainFrame(r, 2_000, "00000000-0000-4000-8000-0000000000dd", 4);
+      expect(
+        detect({
+          runs: [r],
+          toolCalls,
+          frames: new Map([[r.runId, [own, sibling]]]),
+        }),
+      ).toEqual([]);
+    });
+
+    // Pass 7: a model call that names no model has no price. The repeats it
+    // made form their own request, which nothing prices, so no finding claims
+    // the priced request before it.
+    it("keeps the repeats after a call that named no model out of the priced request before it", () => {
+      const r = run();
+      const made = chainFrame(r, 500, null, 1);
+      const answered = chainFrame(r, 1_500, null, 3);
+      const modelless: PricedRequestFrame = {
+        ...chainFrame(r, 2_500, null, 4, null),
+        model: "",
+        noModel: true,
+      };
+      const toolCalls = [
+        call(r, { at: 1, seq: 2, ...shell }),
+        call(r, { at: 3, seq: 5, ...shell }),
+      ];
+      const frames = new Map([[r.runId, [made, answered]]]);
+      // Without the call that named no model, the repeat joins the request
+      // that only answered in text, and that request's price is claimed.
+      const [merged] = detect({ runs: [r], toolCalls, frames });
+      expect(merged!.claims?.map((c) => c.frameKey)).toEqual([answered.key]);
+
+      expect(
+        detect({
+          runs: [r],
+          toolCalls,
+          frames,
+          modellessFrames: new Map([[r.runId, [modelless]]]),
+        }),
+      ).toEqual([]);
+    });
+  });
 });
 
 describe("spin loops", () => {
@@ -831,7 +1022,9 @@ describe("spin loops", () => {
       confidence: "high",
     });
     expect(finding!.evidence.calls).toBe(SPIN_LOOP_REPEATS);
-    expect(finding!.why).toContain(`${SPIN_LOOP_REPEATS} turns`);
+    expect(finding!.why).toContain(
+      `${SPIN_LOOP_REPEATS} calls came from turns that made only those repeats`,
+    );
     expect(finding!.claims).toHaveLength(SPIN_LOOP_REPEATS);
     expect(finding!.claims![0]).toEqual({
       detector: 1,
@@ -841,6 +1034,61 @@ describe("spin loops", () => {
       operatorKey: OPERATOR,
       costMicros: TURN_MICROS,
     });
+  });
+
+  // #5023: a turn that made several looping calls is priced once, and each
+  // of its calls counts, so the card's number matches its calls label.
+  it("prices a turn that made several looping calls once, and counts each of its calls", () => {
+    const r = run();
+    const toolCalls = same(r, SPIN_LOOP_REPEATS + 1);
+    const [finding] = detect({
+      runs: [r],
+      toolCalls,
+      // One request made the first call, and one more made the other twenty.
+      frames: new Map([[r.runId, [request(r, 1), request(r, 2)]]]),
+    });
+    expect(finding).toMatchObject({
+      kind: "spin_loops",
+      savingMicros: TURN_MICROS,
+    });
+    expect(finding!.evidence).toMatchObject({
+      calls: SPIN_LOOP_REPEATS,
+      coveredCalls: SPIN_LOOP_REPEATS,
+      measuredTokens: TURN_TOKENS,
+    });
+    expect(finding!.evidence.runs[0]).toMatchObject({
+      calls: SPIN_LOOP_REPEATS,
+    });
+    expect(finding!.evidence.frames?.[r.runId]?.total).toBe(
+      SPIN_LOOP_REPEATS,
+    );
+    expect(finding!.claims).toHaveLength(1);
+    expect(finding!.why).toBe(
+      `On 1 run, a call ran ${SPIN_LOOP_REPEATS} or more times in a row and returned the same result each time. ${SPIN_LOOP_REPEATS} calls came from turns that made only those repeats.`,
+    );
+  });
+
+  it("stores the longest loop's tool and how many times in a row it ran (#5023)", () => {
+    const [a, b] = [run(), run()];
+    const toolCalls = [
+      ...same(a!, SPIN_LOOP_REPEATS + 1),
+      ...same(b!, SPIN_LOOP_REPEATS + 9, { tool: "mcp__github__get_pr" }),
+    ];
+    const [finding] = detect({
+      runs: [a!, b!],
+      toolCalls,
+      frames: turns(toolCalls),
+    });
+    expect(finding!.kind).toBe("spin_loops");
+    expect(finding!.evidence.values).toEqual({
+      kind: "spin_loops",
+      tool: "mcp__github__get_pr",
+      repeats: SPIN_LOOP_REPEATS + 9,
+    });
+    // The stored values parse as the contract's own shape.
+    expect(findingValuesSchema.parse(finding!.evidence.values)).toEqual(
+      finding!.evidence.values,
+    );
   });
 
   it(`leaves ${SPIN_LOOP_REPEATS - 1} repeats in a row to the duplicate tool call finding`, () => {

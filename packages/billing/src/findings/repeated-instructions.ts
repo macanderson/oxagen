@@ -21,16 +21,19 @@ import { createHash } from "node:crypto";
 import type { CostBasis } from "@oxagen/database/schema";
 import { foldBasis, type RunTotalsRecord } from "../cost-rollup";
 import type { InstructionProposal } from "./proposal-opener";
-import type { PromptRead, RunPrompt } from "./prompts";
+import type { PromptRead, PromptTextMode, RunPrompt } from "./prompts";
 import {
   agentOrOperator,
+  findingFingerprint,
   FINDINGS_WINDOW_DAYS,
+  Groups,
   plural,
   timeOf,
   type DetectContext,
   type Detector,
   type DetectInput,
   type FindingKey,
+  type FindingValues,
   type Group,
   type Measure,
   type PricedRequestFrame,
@@ -174,16 +177,24 @@ export function repeatsOf(
     for (const s of sentencesOf(p.prompt.text))
       note(sentenceDigest(s.key), s.text, p);
   }
-  const min =
-    read.mode === "digest_only" ? MIN_WHOLE_PROMPT_RUNS : MIN_INSTRUCTION_RUNS;
+  const min = minRuns(read.mode);
   return [...byDigest.values()]
     .filter((r) => r.runs.size >= min)
-    .sort(
-      (a, b) =>
-        b.occurrences.length - a.occurrences.length ||
-        b.runs.size - a.runs.size ||
-        (a.digest < b.digest ? -1 : a.digest > b.digest ? 1 : 0),
-    );
+    .sort(mostRepeated);
+}
+
+/** The runs a repeat needs: sentences on `content_exact`, whole prompts on `digest_only`. */
+function minRuns(mode: PromptRead["mode"]): number {
+  return mode === "digest_only" ? MIN_WHOLE_PROMPT_RUNS : MIN_INSTRUCTION_RUNS;
+}
+
+/** Most prompts first, then most runs, then by digest. */
+function mostRepeated(a: Repeat, b: Repeat): number {
+  return (
+    b.occurrences.length - a.occurrences.length ||
+    b.runs.size - a.runs.size ||
+    (a.digest < b.digest ? -1 : a.digest > b.digest ? 1 : 0)
+  );
 }
 
 /**
@@ -211,14 +222,10 @@ export function promptRunsToPrice(
  * Where a repeat is reported: the agent or operator every run it reached
  * names, or the workspace when those runs name more than one, or none.
  */
-function keyOf(
-  repeat: Repeat,
-  runs: ReadonlyMap<string, RunTotalsRecord>,
-): FindingKey {
+function keyOf(runs: readonly RunTotalsRecord[]): FindingKey {
   let key: FindingKey | null = null;
   let workspaceId = "";
-  for (const runId of repeat.runs) {
-    const run = runs.get(runId)!;
+  for (const run of runs) {
     workspaceId = run.workspaceId;
     const own = agentOrOperator(KIND, run);
     if (
@@ -229,6 +236,91 @@ function keyOf(
     key = own;
   }
   return key ?? { kind: KIND, level: "workspace", subject: workspaceId };
+}
+
+/** One decision on a repeated instructions finding. */
+interface Decision {
+  fingerprint: string;
+  /** When a person applied or dismissed the finding, in milliseconds. */
+  at: number;
+}
+
+/** The pass's decisions on repeated instructions findings, earliest first. */
+function decisionsOf(decidedSince: ReadonlyMap<string, Date>): Decision[] {
+  return [...decidedSince]
+    .filter(([fingerprint]) => fingerprint.startsWith(`${KIND}|`))
+    .map(([fingerprint, at]) => ({ fingerprint, at: at.getTime() }))
+    .sort((a, b) => a.at - b.at);
+}
+
+/**
+ * When the latest decision that covers a repeat's runs was made, in
+ * milliseconds; -Infinity when none covers them. A decision covers the runs
+ * that started at or before it when those runs name its finding's key: the
+ * runs past the previous covering decision, keyed as `keyOf` keys them. The
+ * runs it covers then set no later key, so a run from a second agent cannot
+ * move them to the workspace and bring them back. Recurring runs follow the
+ * same rule.
+ */
+function decidedUntil(
+  runs: readonly RunTotalsRecord[],
+  decisions: readonly Decision[],
+): number {
+  let until = -Infinity;
+  for (const d of decisions) {
+    const before = runs.filter((r) => {
+      const at = r.startedAt.getTime();
+      return at > until && at <= d.at;
+    });
+    if (before.length === 0) continue;
+    const key = keyOf(before);
+    if (findingFingerprint(key.kind, key.level, key.subject) === d.fingerprint)
+      until = d.at;
+  }
+  return until;
+}
+
+/** The part of a repeat no decision covers, and the key it reports under. */
+interface OpenPart {
+  key: FindingKey;
+  repeat: Repeat;
+}
+
+/**
+ * The prompts and runs of a repeat that no decision covers (#4579). The runs
+ * a decision covers drop out and set no key. The rest report under the key
+ * they name, and `admits` drops the runs a decision on that key covers.
+ * Null when fewer than `min` runs are left, so a decided repeat comes back
+ * only once enough later runs repeat it. The finding and the proposal both
+ * read this, so a dismissal holds for both.
+ */
+function openPart(
+  repeat: Repeat,
+  runs: ReadonlyMap<string, RunTotalsRecord>,
+  decisions: readonly Decision[],
+  admits: (key: FindingKey, run: RunTotalsRecord) => boolean,
+  min: number,
+): OpenPart | null {
+  const all = [...repeat.runs].map((runId) => runs.get(runId)!);
+  const until = decidedUntil(all, decisions);
+  const open = all.filter((r) => r.startedAt.getTime() > until);
+  if (open.length === 0) return null;
+  const key = keyOf(open);
+  const admitted = new Set(
+    open.filter((r) => admits(key, r)).map((r) => r.runId),
+  );
+  if (admitted.size < min) return null;
+  return {
+    key,
+    repeat: {
+      digest: repeat.digest,
+      text: repeat.text,
+      occurrences: repeat.occurrences.filter((o) =>
+        admitted.has(o.prompt.runId),
+      ),
+      runs: admitted,
+    },
+  };
 }
 
 const UNCOVERED: Measure = {
@@ -283,6 +375,8 @@ interface Reported {
 
 /** Each written group's repeats, most repeated first, for its prose. */
 const reported = new WeakMap<Group, Reported[]>();
+/** What the workspace kept of the prompts each group's repeats were read from. */
+const retentionOf = new WeakMap<Group, PromptTextMode>();
 
 function detect(input: DetectInput, ctx: DetectContext): void {
   const read = input.prompts;
@@ -291,23 +385,30 @@ function detect(input: DetectInput, ctx: DetectContext): void {
     string,
     { cited: Set<RunPrompt>; repeats: Reported[] }
   >();
-  for (const repeat of repeatsOf(read, ctx.runs)) {
-    const key = keyOf(repeat, ctx.runs);
+  const decisions = decisionsOf(input.decidedSince);
+  const admits = (key: FindingKey, run: RunTotalsRecord) =>
+    ctx.groups.admits(key, run);
+  const min = minRuns(read.mode);
+  for (const whole of repeatsOf(read, ctx.runs)) {
+    const part = openPart(whole, ctx.runs, decisions, admits, min);
+    if (part === null) continue;
+    const { key, repeat } = part;
     const id = `${key.level}|${key.subject}`;
     let entry = byKey.get(id);
     if (!entry) {
       entry = { cited: new Set(), repeats: [] };
       byKey.set(id, entry);
     }
-    const shown: Reported = { repeat, prompts: 0, runs: new Set() };
+    entry.repeats.push({
+      repeat,
+      prompts: repeat.occurrences.length,
+      runs: repeat.runs,
+    });
     for (const o of repeat.occurrences) {
-      const run = ctx.runs.get(o.prompt.runId)!;
-      if (!ctx.groups.admits(key, run)) continue;
-      shown.prompts += 1;
-      shown.runs.add(run.runId);
       // A prompt with two repeated sentences is priced once.
       if (entry.cited.has(o.prompt)) continue;
       entry.cited.add(o.prompt);
+      const run = ctx.runs.get(o.prompt.runId)!;
       ctx.groups.add(
         key,
         input.window.start,
@@ -316,18 +417,18 @@ function detect(input: DetectInput, ctx: DetectContext): void {
         [{ seq: o.prompt.seq, sessionUuid: null }],
       );
     }
-    if (shown.prompts > 0) entry.repeats.push(shown);
   }
   for (const group of ctx.groups.values()) {
     if (group.kind !== KIND) continue;
     const entry = byKey.get(`${group.level}|${group.subject}`);
-    if (entry)
-      reported.set(
-        group,
-        [...entry.repeats].sort(
-          (a, b) => b.prompts - a.prompts || b.runs.size - a.runs.size,
-        ),
-      );
+    if (!entry) continue;
+    reported.set(
+      group,
+      [...entry.repeats].sort(
+        (a, b) => b.prompts - a.prompts || b.runs.size - a.runs.size,
+      ),
+    );
+    retentionOf.set(group, read.mode);
   }
 }
 
@@ -346,7 +447,37 @@ function instructionLine(text: string, prompts: number): string {
   return `Runs received "${quote(text)}" ${plural(prompts, "time", "times")} this month. ${STEERING_LINE}`;
 }
 
-function prose(group: Group): { why: string; fix: string } {
+/**
+ * The figures the card names (#5023): what the workspace keeps of prompt
+ * text, which decides the Needs prompt text badge, and the top repeat.
+ */
+function valuesOf(group: Group): FindingValues | undefined {
+  const top = reported.get(group)?.[0];
+  const retention = retentionOf.get(group);
+  if (top === undefined || retention === undefined) return undefined;
+  return {
+    kind: KIND,
+    retention,
+    sentence: top.repeat.text === null ? null : quote(top.repeat.text),
+    prompts: top.prompts,
+    promptRuns: top.runs.size,
+    others: (reported.get(group)?.length ?? 1) - 1,
+  };
+}
+
+function prose(group: Group): {
+  why: string;
+  fix: string;
+  values?: FindingValues;
+} {
+  const values = valuesOf(group);
+  return {
+    ...words(group),
+    ...(values === undefined ? {} : { values }),
+  };
+}
+
+function words(group: Group): { why: string; fix: string } {
   const repeats = reported.get(group) ?? [];
   const top = repeats[0];
   const others = repeats.length - 1;
@@ -379,19 +510,58 @@ export const repeatedInstructions: Detector = {
   prose,
 };
 
+/** The lineage a repeated instruction's proposal names, from the sentence's digest. */
+export function instructionLineage(digest: string): string {
+  return `ctx.habits.instruction-${digest.slice(0, 12)}`;
+}
+
+/** What a pass knows that limits its instruction proposals. */
+export interface InstructionProposalLimits {
+  /**
+   * The pass's decisions (`DetectInput.decidedSince`). A run that a decision
+   * on the instruction's finding covers supports no proposal, as it adds
+   * nothing to the finding.
+   */
+  decidedSince?: ReadonlyMap<string, Date>;
+  /**
+   * The lineages that already have a record or a proposal. The opener
+   * refuses these, so they are skipped before the per-pass cap.
+   */
+  taken?: ReadonlySet<string>;
+}
+
 /**
  * One steering record proposal per repeated instruction, most repeated
  * first, at most `PROPOSALS_PER_PASS`. A `digest_only` workspace gets none,
  * because the text is not stored. The lineage id is the sentence's digest,
  * so the same instruction names the same lineage on every pass.
+ *
+ * With `limits`, a dismissal holds for the proposal as well as the finding:
+ * an instruction left with fewer than `MIN_INSTRUCTION_RUNS` runs after the
+ * decisions gets no proposal. A taken lineage does not use up the cap, so an
+ * instruction ranked past the first `PROPOSALS_PER_PASS` still gets its
+ * proposal once the ones above it are taken (#4579).
  */
 export function instructionProposals(
   read: PromptRead | undefined,
   runs: readonly RunTotalsRecord[],
+  limits: InstructionProposalLimits = {},
 ): InstructionProposal[] {
   if (read === undefined || read.mode !== "content_exact") return [];
   const byId = new Map(runs.map((r) => [r.runId, r]));
-  return repeatsOf(read, byId)
+  const decidedSince = limits.decidedSince ?? new Map<string, Date>();
+  const decisions = decisionsOf(decidedSince);
+  const groups = new Groups(decidedSince);
+  const admits = (key: FindingKey, run: RunTotalsRecord) =>
+    groups.admits(key, run);
+  const open: Repeat[] = [];
+  for (const whole of repeatsOf(read, byId)) {
+    const part = openPart(whole, byId, decisions, admits, MIN_INSTRUCTION_RUNS);
+    if (part !== null) open.push(part.repeat);
+  }
+  return open
+    .sort(mostRepeated)
+    .filter((repeat) => !limits.taken?.has(instructionLineage(repeat.digest)))
     .slice(0, PROPOSALS_PER_PASS)
     .map((repeat) => {
       const runIds = [...repeat.runs].sort();
@@ -403,7 +573,7 @@ export function instructionProposals(
         ),
       ].sort();
       return {
-        lineageId: `ctx.habits.instruction-${repeat.digest.slice(0, 12)}`,
+        lineageId: instructionLineage(repeat.digest),
         statement: repeat.text!,
         rationale: `Runs received "${quote(repeat.text!)}" ${plural(repeat.occurrences.length, "time", "times")} in the last ${FINDINGS_WINDOW_DAYS} days, across ${plural(repeat.runs.size, "run", "runs")}. ${STEERING_LINE}`,
         runs: runIds.slice(0, PROPOSAL_RUNS_MAX),

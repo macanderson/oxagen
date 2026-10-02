@@ -7,9 +7,13 @@ import {
   FIXTURE_WINDOW_START,
 } from "./detect-input-fixture";
 import {
+  countClaims,
   DETECTORS,
   detectFindings,
+  findingFingerprint,
+  FINDINGS_PER_KIND,
   Groups,
+  replayClaims,
   SPIN_LOOP_REPEATS,
   type DetectContext,
   type DetectInput,
@@ -177,6 +181,55 @@ function recurring(findings: readonly FindingDraft[]): FindingDraft[] {
   return findings.filter((f) => f.kind === "recurring_runs");
 }
 
+/** A pull request the run opened that closed unmerged a day after it started. */
+function closedUnmerged(r: RunTotalsRecord): OutcomeRow {
+  return {
+    ...blankOutcome(r.runId, "tacho", {
+      provider: "github",
+      repository: "acme/core",
+      number: 1,
+      url: null,
+    }),
+    prState: "closed",
+    closedAt: new Date(r.startedAt.getTime() + DAY_MS),
+    prStateReadAt: FIXTURE_WINDOW_END,
+  };
+}
+
+/**
+ * One more recurring job than `FINDINGS_PER_KIND` keeps, one agent each.
+ * Agent i's frames cost i + 1 turns, so agent 0's group ranks last, and only
+ * agent 0's runs opened a pull request that closed unmerged (#5050).
+ */
+function pastTheKindCap(): {
+  input: DetectReads;
+  frames: Map<string, PricedRequestFrame[]>;
+  last: string;
+} {
+  const jobs: Record<string, RunTotalsRecord[]> = {};
+  const frames = new Map<string, PricedRequestFrame[]>();
+  for (let i = 0; i <= FINDINGS_PER_KIND; i += 1) {
+    const runs = job(RECURRING_RUNS_MIN, { agentKey: `acme.job.${i}` });
+    jobs[`sha256:job-${i}`] = runs;
+    for (const r of runs)
+      frames.set(
+        r.runId,
+        framesOf(r).map((f) => ({
+          ...f,
+          costMicros: TURN_MICROS * BigInt(i + 1),
+        })),
+      );
+  }
+  const outcomes = new Map(
+    jobs["sha256:job-0"]!.map((r) => [r.runId, [closedUnmerged(r)]]),
+  );
+  return {
+    input: reads(jobs, { frames, outcomes }),
+    frames,
+    last: "acme.job.0",
+  };
+}
+
 describe("recurring runs", () => {
   it("writes one finding for a prompt that started 5 runs that changed nothing", () => {
     const runs = job(RECURRING_RUNS_MIN);
@@ -192,6 +245,13 @@ describe("recurring runs", () => {
       why: `5 runs started with the same prompt in the last 30 days. 5 of them changed nothing. ${WHY_TAIL}`,
     });
     expect(finding!.fix).toContain("instead of on a clock");
+    // #5023: the card names the group's size and its runs that changed nothing.
+    expect(finding!.evidence.values).toEqual({
+      kind: "recurring_runs",
+      groupSize: 5,
+      unchanged: 5,
+      otherPrompts: 0,
+    });
     expect([...finding!.citedRuns].sort()).toEqual(runs.map((r) => r.runId));
     expect(finding!.evidence).toMatchObject({ calls: 15, coveredCalls: 15 });
     expect(finding!.evidence.frames).toBeUndefined();
@@ -689,6 +749,69 @@ describe("recurring runs", () => {
     expect(findings[0]!.claims).toHaveLength(15);
   });
 
+  // #5050: detector 7 claimed the frames of a group the per-kind cap cut.
+  // The pass never stored them, and detector 8 skipped them, so their spend
+  // left the headline.
+  it(`frees the frames of a group past ${FINDINGS_PER_KIND} of its kind for spend with no outcome`, () => {
+    const { input, frames, last } = pastTheKindCap();
+    const findings = detectFindings(input);
+
+    const kept = recurring(findings);
+    expect(kept).toHaveLength(FINDINGS_PER_KIND);
+    expect(kept.map((f) => f.subject)).not.toContain(last);
+    expect(kept.flatMap((f) => f.claims!.map((c) => c.detector))).toEqual(
+      Array<number>(FINDINGS_PER_KIND * 15).fill(7),
+    );
+    const noOutcome = findings.filter(
+      (f) => f.kind === "spend_with_no_outcome",
+    );
+    expect(noOutcome.map((f) => f.subject)).toEqual([last]);
+    expect(noOutcome[0]!.claims!.map((c) => c.detector)).toEqual(
+      Array<number>(15).fill(8),
+    );
+
+    // Every frame of the 55 runs is claimed once, under detector 7 or 8, so
+    // the headline adds every one of them once.
+    const claims = findings.flatMap((f) => f.claims ?? []);
+    const read = [...frames].flatMap(([runId, list]) =>
+      list.map((f) => ({ runId, key: f.key, cost: f.costMicros! })),
+    );
+    expect(claims).toHaveLength(read.length);
+    expect(new Set(claims.map((c) => claimKey(c.runId, c.frameKey)))).toEqual(
+      new Set(read.map((f) => claimKey(f.runId, f.key))),
+    );
+    expect(countClaims(claims).totalMicros).toBe(
+      read.reduce((sum, f) => sum + f.cost, 0n),
+    );
+  });
+
+  it("replays the claims of a pass that cut a group past its kind's cap", () => {
+    const { input, last } = pastTheKindCap();
+    const findings = detectFindings(input);
+    const replayed = replayClaims(input, new Set());
+    // The replay keys the same frames under the same detectors as the pass.
+    expect(replayed).toEqual(
+      new Map(findings.map((f) => [f.fingerprint, f.claims!])),
+    );
+    expect(
+      replayed.has(findingFingerprint("recurring_runs", "agent", last)),
+    ).toBe(false);
+  });
+
+  it("keeps a released group past its kind's cap, with its claims", () => {
+    const { input, last } = pastTheKindCap();
+    const released = findingFingerprint("recurring_runs", "agent", last);
+    const replayed = replayClaims(input, new Set([released]));
+    // An applied finding keeps its frames under detector 7, so detector 8
+    // claims none of them.
+    expect(replayed.get(released)!.map((c) => c.detector)).toEqual(
+      Array<number>(15).fill(7),
+    );
+    expect(
+      replayed.has(findingFingerprint("spend_with_no_outcome", "agent", last)),
+    ).toBe(false);
+  });
+
   // #4607: the fix promised half price on any provider.
   it("names the half-price batch only when every priced frame's provider has one", () => {
     const fixFor = (providers: (string | null | undefined)[]) => {
@@ -804,6 +927,12 @@ describe("recurring runs", () => {
     expect(findings[0]!.why).toBe(
       `6 runs started with the same prompt in the last 30 days. 6 of them changed nothing. 1 other prompt also started 5 or more runs each, and 5 runs of those changed nothing. ${WHY_TAIL}`,
     );
+    expect(findings[0]!.evidence.values).toEqual({
+      kind: "recurring_runs",
+      groupSize: 6,
+      unchanged: 6,
+      otherPrompts: 1,
+    });
   });
 
   it("adds nothing from a prompt whose runs are all unknown to another prompt's finding", () => {

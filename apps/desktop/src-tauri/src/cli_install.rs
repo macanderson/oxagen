@@ -261,7 +261,9 @@ pub fn sidecar_env() -> std::collections::BTreeMap<String, String> {
 /// `OXAGEN_DESKTOP_SIDECAR` tells the sidecar the app started it. The
 /// recorder's old executable names print one line saying which `oxagen`
 /// command replaced them (#4879), and the app streams a sidecar's stderr into
-/// its log, where the person reading it did not type the command.
+/// its log, where the person reading it did not type the command. The CLI's
+/// usage telemetry sends nothing for these runs either: the status poll alone
+/// would be one event every few seconds (#4891).
 pub fn sidecar_env_for(kept: &Path) -> std::collections::BTreeMap<String, String> {
     let mut env = std::collections::BTreeMap::new();
     env.insert("TACHO_BIN_DIR".to_string(), kept.display().to_string());

@@ -4,44 +4,30 @@ import {
   TypewriterTerminal,
   type TerminalStep,
 } from "@/components/landing/typewriter-terminal";
+import { INSTALL_CMD } from "@/lib/install";
 
 /**
- * HeroTerminal — the home-page animated terminal: installs the Oxagen CLI,
- * verifies the version, and runs a sample agent query — then loops.
- * Rendering + typing animation live in TypewriterTerminal.
+ * HeroTerminal: the home-page animated terminal. It installs the Oxagen CLI
+ * and prints its version, then loops. The lines match what install.sh prints.
+ * The CLI runs no agent turns (they moved to the stella CLI), so the animation
+ * shows none. Rendering and the typing animation live in TypewriterTerminal.
  */
 
 const STEPS: TerminalStep[] = [
   {
-    cmd: "curl -fsSL https://cli.oxagen.sh/install.sh | sh",
+    cmd: INSTALL_CMD,
     out: [
-      { kind: "dim", text: "▸ detecting platform · darwin-arm64" },
-      { kind: "dim", text: "▸ fetching oxagen · verifying checksum" },
-      { kind: "out", text: "install: ~/.local/bin/oxagen" },
-      { kind: "ok", text: "✓ oxagen is on your PATH" },
+      {
+        kind: "dim",
+        text: "▸ downloading https://downloads.oxagen.sh/latest/oxagen-aarch64-apple-darwin",
+      },
+      { kind: "ok", text: "✓ checksum matches" },
+      { kind: "ok", text: "✓ installed ~/.local/bin/oxagen (2.1.4)" },
     ],
   },
   {
     cmd: "oxagen --version",
-    out: [{ kind: "out", text: "oxagen/0.10.0 · node v20.11 · darwin-arm64" }],
-  },
-  {
-    cmd: 'oxagen "where do we enforce tenant isolation?"',
-    out: [
-      {
-        kind: "dim",
-        text: "◇ planning · scanning the workspace knowledge graph",
-      },
-      {
-        kind: "out",
-        text: "→ packages/database/rls.sql: FORCE ROW LEVEL SECURITY on every tenant table",
-      },
-      {
-        kind: "out",
-        text: "→ the oxagen_app role has no BYPASSRLS, so an unscoped query returns zero rows",
-      },
-      { kind: "ok", text: "✓ answered in 4.2s · 1,284 context tokens used" },
-    ],
+    out: [{ kind: "out", text: "2.1.4" }],
   },
 ];
 
