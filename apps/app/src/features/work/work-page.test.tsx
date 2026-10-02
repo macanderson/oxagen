@@ -639,14 +639,17 @@ describe("Work › read failures", () => {
     expect(screen.getByTestId("work-tile-ready")).toBeInTheDocument();
   });
 
-  it("says triage cannot rank work while no priorities record is merged", async () => {
+  it("says triage cannot rank work while no priorities record is merged, and links to writing one", async () => {
     await renderWork({
       list: workList(ALL),
       priorities: priorities({ record: null, problem: "No record is published." }),
     });
-    expect(
-      screen.getByText("Triage cannot rank work until a priorities record is merged."),
-    ).toBeInTheDocument();
+    const link = screen.getByTestId("work-write-priorities");
+    expect(link).toHaveTextContent("Write the priorities record");
+    expect(link).toHaveAttribute("href", "/a-intel/core-platform/work/setup?tab=priorities");
+    expect(link.parentElement).toHaveTextContent(
+      "Triage cannot rank work until a priorities record is merged. Write the priorities record.",
+    );
   });
 });
 

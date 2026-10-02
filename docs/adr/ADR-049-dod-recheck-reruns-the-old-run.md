@@ -95,3 +95,13 @@ deleted or ignored without blocking anything.
 - Four stubs are four things to keep in step, ADR-039's standing cost.
   `check-dod-stub-parity.mjs` makes a partial rollout fail; an unnoticed partial
   rollout is what #2551 cost when the pins went out of step.
+
+## Amendment: the implementation moves to oxageninc/.github (2026-10-02)
+
+The shared `dod-recheck.yml` and the checker it runs moved to the public
+`oxageninc/.github` on 2026-10-02 (#5183, ADR-039's last amendment). Where this
+record says "here" about the implementation, read `oxageninc/.github`. Product
+now carries the same caller stub as the other four, so five repositories
+subscribe to their own issue edits. The rollback deletes the shared file in
+`oxageninc/.github` and the stub in each of the five callers.
+`check-dod-stub-parity.mjs` stays in product and compares all five.

@@ -15,9 +15,11 @@ import {
 import { steeringRecordLabel } from "@oxagen/oxagen/steering-record-label";
 import { readRecordFile } from "./context.steering.file";
 import { HandlerError } from "@oxagen/oxagen";
-import type {
-  CheckResult,
-  ProposalStatus,
+import {
+  checkFindingSchema,
+  type CheckFinding,
+  type CheckResult,
+  type ProposalStatus,
 } from "@oxagen/oxagen/contracts/context.steering.shared";
 import {
   and,
@@ -47,8 +49,27 @@ interface SteeringScope {
 
 export type ProposalRow = Omit<
   typeof schema.steeringProposals.$inferSelect,
-  "checks" | "title" | "label"
-> & { checks: CheckResult[]; title?: string | null; label?: string | null };
+  "checks" | "checkFindings" | "title" | "label"
+> & {
+  checks: CheckResult[];
+  /**
+   * What the latest check run found on the head (#4518, ADR-267). Every row
+   * the store reads carries it; a row built in a test may leave it out, which
+   * reads as none.
+   */
+  checkFindings?: CheckFinding[];
+  title?: string | null;
+  label?: string | null;
+};
+
+/**
+ * One approval a person gave in Oxagen (approve_steering_pr, ADR-267): who,
+ * and the PR head they approved.
+ */
+export interface RecordedApproval {
+  userId: string;
+  commitSha: string;
+}
 
 type ProposalInsert = Pick<
   ProposalRow,
@@ -104,6 +125,7 @@ type ProposalPatch = Partial<
     | "stampedRecordId"
     | "recordHash"
     | "checks"
+    | "checkFindings"
     | "dismissedAt"
     | "dismissedReason"
     | "updatedById"
@@ -415,6 +437,21 @@ export interface SteeringStore {
    * and retires nothing.
    */
   mergeSteeringPr(input: MergeSteeringPrInput): Promise<MergeSteeringPrResult>;
+  /**
+   * Record that `userId` approved the proposal's PR at `commitSha` (ADR-267).
+   * Approving the same head twice writes nothing the second time.
+   */
+  recordApproval(input: {
+    scope: SteeringScope;
+    proposalId: string;
+    userId: string;
+    commitSha: string;
+  }): Promise<void>;
+  /** The approvals given in Oxagen on one proposal, oldest first. */
+  listApprovals(
+    scope: SteeringScope,
+    proposalId: string,
+  ): Promise<RecordedApproval[]>;
 }
 
 /** A guarded proposal write found the proposal at `status`. */
@@ -522,7 +559,24 @@ const asChecks = (v: unknown): CheckResult[] =>
 function toProposal(
   row: typeof schema.steeringProposals.$inferSelect,
 ): ProposalRow {
-  return { ...row, checks: asChecks(row.checks) };
+  return {
+    ...row,
+    checks: asChecks(row.checks),
+    checkFindings: asFindings(row.checkFindings),
+  };
+}
+
+/**
+ * The stored findings, each entry checked against the contract's shape. An
+ * entry that does not read is dropped, so a row written by an older build
+ * never fails the read.
+ */
+export function asFindings(value: unknown): CheckFinding[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((entry) => {
+    const read = checkFindingSchema.safeParse(entry);
+    return read.success ? [read.data] : [];
+  });
 }
 
 function scoped(scope: SteeringScope) {
@@ -1466,5 +1520,43 @@ export const postgresSteeringStore: SteeringStore = {
       if (!row) throw alreadyMerged(proposal.publicId);
       return { proposal: toProposal(row), retired };
     });
+  },
+
+  async recordApproval(input) {
+    await withTenantDb((tx) =>
+      tx
+        .insert(schema.steeringPrApprovals)
+        .values({
+          orgId: input.scope.orgId,
+          workspaceId: input.scope.workspaceId,
+          proposalId: input.proposalId,
+          userId: input.userId,
+          commitSha: input.commitSha,
+        })
+        .onConflictDoNothing({
+          target: [
+            schema.steeringPrApprovals.proposalId,
+            schema.steeringPrApprovals.userId,
+            schema.steeringPrApprovals.commitSha,
+          ],
+        }),
+    );
+  },
+
+  async listApprovals(scope, proposalId) {
+    const t = schema.steeringPrApprovals;
+    return withTenantDb((tx) =>
+      tx
+        .select({ userId: t.userId, commitSha: t.commitSha })
+        .from(t)
+        .where(
+          and(
+            eq(t.orgId, scope.orgId),
+            eq(t.workspaceId, scope.workspaceId),
+            eq(t.proposalId, proposalId),
+          ),
+        )
+        .orderBy(asc(t.createdAt), asc(t.id)),
+    );
   },
 };

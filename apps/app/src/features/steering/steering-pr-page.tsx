@@ -346,9 +346,14 @@ export async function SteeringPrPage({
         }
       />
       <RecordSection pr={value} />
+      {/* The read carries the managed blocks the latest check run found
+          drifted and the approvals given in Oxagen at the checked head, so
+          the panel draws Restore block and the approval count (#4518). */}
       <SteeringPrPanel
         at={at}
         read={read}
+        approvals={value.approvals}
+        findings={value.findings}
         memoryRecords={memoryRecords}
         canMergeWithoutReview={canMergeWithoutReview(ctx)}
       />

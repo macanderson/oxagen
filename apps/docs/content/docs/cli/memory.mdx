@@ -3,7 +3,7 @@ title: Memory from the CLI
 description: "Review the memories your agents wrote in their harnesses, ranked by how often runs used them, and promote the ones worth keeping into steering records."
 ---
 
-Your agents already write down what they learn, each in its own harness: Claude Code in its memory folder, Codex in its memory store, Stella in its context store. Oxagen collects those memories from every enrolled host every five minutes and counts the runs that use each one. `oxagen memory` lists them, shows one in full, promotes the ones worth keeping into steering records, and dismisses the rest.
+Your agents already write down what they learn, each in its own harness: Claude Code in its memory folder, Codex in its memory store, Stella in its context store. Oxagen collects those memories from every enrolled host every five minutes and counts the runs that use each one. `oxagen memory` lists them, shows one in full, promotes the ones worth keeping into steering records, and dismisses the rest. It also drops one record from a memory PR.
 
 A memory steers only the agent that wrote it, and its harness already does that. Oxagen embeds no memory and sends none to another agent. A memory reaches other agents only once you promote it into a steering record and the memory PR merges in git.
 
@@ -68,6 +68,16 @@ oxagen memory dismiss mem_01J8… --restore
 ```
 
 A dismissed memory leaves the default list. The curator proposes its statement again only after memories from 2 more runs repeat it. `--restore` brings a dismissed memory back.
+
+## Drop a record from a memory PR
+
+```bash
+oxagen memory drop 12 steering/memory/workspace/general/use-pnpm.md
+```
+
+Pass the memory PR's number and the path of the record file. The command pushes a commit to the PR's branch that deletes the file, and the other records stay. When the PR merges, the dropped record's statements are rejected and the memories it cited wait again. Running it again on a dropped record names the commit that dropped it.
+
+The command refuses a merged or closed memory PR, a path the PR does not propose, and the PR's last record. To reject every record, close the PR instead. The command calls `drop_memory_record`.
 
 ## Import existing docs
 

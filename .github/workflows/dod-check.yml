@@ -1,52 +1,30 @@
-# DoD merge check (oxagen #1321) — SCR-003 enforcement.
+# DoD merge check (SCR-003) — caller stub.
 #
-# SCR-003: an issue closes only when every definition-of-done item is satisfied
-# and verified. The task issue template makes a DoD exist; this check makes it
-# binding. Three parts:
+# The implementation lives once in oxageninc/.github and is called from here.
+# ADR-039 in oxageninc/product: copying the check into each repo would put
+# five independently-drifting copies of an enforcement rule into an org whose
+# sibling check exists to detect exactly that kind of drift. It lives in
+# oxageninc/.github because that repository is public, so every caller can
+# call it and check out its scripts (oxageninc/product#5183).
 #
-#   1. A pull request must link the issue it closes (escape hatch: the
-#      `no-issue` label, for genuinely trivial changes) — or advance one with
-#      `Refs #N` without claiming to close it (oxagen#2640); a `Refs`-only PR
-#      is not gated on that issue's DoD, because it is not closing it.
-#   2. Every issue a PR *claims to close* must have its DoD checklist fully
-#      ticked before the PR can merge — which is what stops the close from
-#      happening early. `scr-dod-check.mjs`'s `linkedIssues`/`referencedIssues`
-#      hold the full state machine (closing / refs-only / neither).
-#   3. No PR body or commit message may put a negation before a closing
-#      keyword. GitHub ignores the negation and closes the issue anyway
-#      (#3680). Nor may a commit close an issue the PR body names only with
-#      `Refs`, because a squash merge closes it from the commit message.
-#      `check-closing-keywords.mjs` holds both rules.
+# There is deliberately no logic in this file. A change to *what* the check
+# does never touches it; only adding or removing a check does.
 #
-# ## Why this is a reusable workflow rather than five copies
-#
-# SCR-003 applies in all five org repos. Copying this file into each would put
-# five drifting implementations of a rule whose sibling check (scr-corpus-check)
-# exists to police drift. Instead this is a `workflow_call` workflow living once
-# in oxagen; the other four repos carry a ~12-line caller. ADR-039 relied on
-# all five repos being public, so `uses:` resolved with no extra credentials.
-# Since 2026-10-01 this repository is the private `oxageninc/product`, and the
-# callers can no longer reach this file or the tooling checkout below.
-# macanderson/stella#6638 holds the decision on where the shared check lives.
-#
-# ## Why the check runs on the PR, not on the close
-#
-# GitHub closes an issue the instant a PR containing `Closes #N` merges, and no
-# webhook can veto that — an `issues: closed` handler only ever arrives after
-# the fact. Gating the PR inverts the ordering: unchecked boxes fail a required
-# check, the merge is blocked, and the premature close never happens. The
-# `issues: closed` safety net for hand-closed issues lives in dod-close-guard.yml.
+# The ref is a commit SHA, not `@main`: a cross-repo `uses:` resolved
+# through a moving ref both fails `action-pins` and lets another repository
+# change what runs here without a commit in this one. Re-pin when the
+# implementation changes, which is a reviewable one-line diff naming the
+# version it moved to.
+# The decision and what it costs are recorded in oxageninc/product's
+# docs/adr/ADR-045-pin-cross-repo-reusable-workflows.md.
 name: dod-check
 
 on:
-  workflow_call: {}
-  # oxagen runs the check on its own PRs through the same file it exports, so
-  # this implementation can never be stale relative to the callers'.
   pull_request:
-    # oxagen#2638: `ready_for_review` was missing here, so a PR opened as a
-    # draft and later marked ready produced no `dod` run on that transition —
-    # observed live on oxagen#2633/#2634, where marking ready produced a
-    # `vision-gate` run and no `dod` run at all.
+    # `ready_for_review` because a PR opened as a draft and later marked
+    # ready never re-ran the check, so it kept whatever verdict its draft
+    # head got (oxagen#2638). The caller owns this list; the
+    # implementation cannot add an event on our behalf.
     types:
       [opened, edited, reopened, ready_for_review, synchronize, labeled, unlabeled]
 
@@ -55,186 +33,6 @@ permissions:
   pull-requests: write
   issues: read
 
-# One verdict per pull request at a time. Several of this workflow's triggers
-# fire within seconds of each other — automation that opens a PR and labels it,
-# or a push landing on top of an edit — and two runs then race to publish a
-# status under one check name, where the loser is whichever finishes first
-# rather than whichever read the newer state.
-#
-# Cancelling the older run is the cheap half. The live PR read in the job below
-# is what makes the outcome correct, because a cancellation can arrive too late
-# to stop a run that has already reported. Keyed by repository as well as PR
-# number: this workflow is called by four other repos through `workflow_call`,
-# and their PR numbers collide with each other's and with oxagen's.
-#
-# A bot's edit or label change skips the job (below), so its run gets a group
-# of its own. In the shared group it would cancel a run that is judging the
-# pull request and then judge nothing.
-concurrency:
-  group: >-
-    dod-check-${{ github.repository }}-${{ github.event.pull_request.number || github.ref }}${{
-      (github.event.sender.type == 'Bot' &&
-        contains(fromJSON('["edited","labeled","unlabeled"]'), github.event.action))
-        && format('-bot-{0}', github.run_id) || ''
-    }}
-  cancel-in-progress: true
-
 jobs:
   dod:
-    # Skip a bot's edit or label change (#4918). Review bots such as
-    # cursor[bot] and sourcery-ai[bot] rewrite the description after every
-    # push, and those edits ran 3,249 runner minutes in the week of
-    # 2026-09-23. The verdict reads the issue links and the commits, which a
-    # push or a person's edit re-reads. dod-recheck.yml passes over the
-    # skipped runs this leaves.
-    if: >-
-      !(github.event.sender.type == 'Bot' &&
-        contains(fromJSON('["edited","labeled","unlabeled"]'), github.event.action))
-    # ubuntu-slim: a sparse checkout and a few API calls.
-    runs-on: ubuntu-slim
-    timeout-minutes: 10
-    steps:
-      # A reusable workflow's steps run against the *caller's* repository, so
-      # the checker module is not present in the four consumer repos. Fetch it
-      # from oxagen explicitly.
-      #
-      # The ref is the whole subtlety. When oxagen runs this check on its own
-      # pull request, `github.sha` is that pull request's merge commit and the
-      # module travels in it, so the workflow and the logic it drives are read
-      # from one tree. Pinning `main` here instead made the check unsatisfiable
-      # by the pull request that introduced it: the module does not reach main
-      # until that merge, so every run could only fail with
-      # ERR_MODULE_NOT_FOUND (#1323). Elsewhere `github.repository` is the
-      # calling repo, `github.sha` is a commit oxagen does not have, and main
-      # is both correct and the only ref a caller can rely on. This repository
-      # moved from macanderson/oxagen to oxageninc/product on 2026-10-01.
-      - name: Fetch the SCR tooling
-        uses: actions/checkout@v5
-        with:
-          repository: oxageninc/product
-          ref: ${{ github.repository == 'oxageninc/product' && github.sha || 'main' }}
-          path: .scr-tools
-          sparse-checkout: tools/scripts
-          sparse-checkout-cone-mode: false
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "24.21.0"
-
-      - name: Verify the definition of done
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const { linkedIssues, verdict, composeSummary } = await import(
-              `${process.env.GITHUB_WORKSPACE}/.scr-tools/tools/scripts/scr-dod-check.mjs`)
-            const { checkClosingKeywords, formatClosingKeywords, pullRequestSources } = await import(
-              `${process.env.GITHUB_WORKSPACE}/.scr-tools/tools/scripts/check-closing-keywords.mjs`)
-
-            // Read the pull request live rather than from the event payload.
-            //
-            // A payload is a snapshot taken when the event fired, and two
-            // events on one head routinely disagree about the PR. Release
-            // automation opens a PR and labels it moments later, so the
-            // `opened` payload carries no labels at all: stella#5792 was opened
-            // at 18:29:40, labelled `no-issue` at 18:29:43, and its two runs
-            // reached opposite verdicts on the same commit. The stale one
-            // queued longer and finished last, so `dod / dod` read red on a PR
-            // that plainly carried the waiver, over a sticky comment asking for
-            // the label it already had.
-            //
-            // The issue half below has always read live (`issues.get`), which
-            // is why ticking a DoD box takes effect with no new event. This
-            // makes both halves agree on where truth lives. Ordering then stops
-            // mattering: whichever run publishes last read the same PR.
-            //
-            // The payload is the fallback, not the source: if this read fails
-            // the check still runs on what the event carried rather than
-            // erroring out, since a transient API failure must not be able to
-            // block a merge.
-            const payloadPr = context.payload.pull_request
-            let pr = payloadPr
-            try {
-              const { data } = await github.rest.pulls.get({
-                ...context.repo, pull_number: payloadPr.number })
-              pr = data
-            } catch (error) {
-              core.warning(
-                `Could not re-read the pull request, falling back to the event ` +
-                `payload: ${error.message}`)
-            }
-            const labels = (pr.labels ?? []).map(l => (typeof l === 'string' ? l : l.name))
-
-            // Resolve each linked issue's body. A reference to an issue that
-            // does not exist, or that lives somewhere unreadable, is reported
-            // as a failure rather than skipped — a typo'd `Closes #13221`
-            // must not read as "no DoD problems found".
-            const issues = []
-            for (const link of linkedIssues(pr.body)) {
-              const owner = link.owner ?? context.repo.owner
-              const repo = link.repo ?? context.repo.repo
-              const ref = `${owner}/${repo}#${link.number}`
-              try {
-                const { data } = await github.rest.issues.get({
-                  owner, repo, issue_number: link.number })
-                // A PR is an issue to this endpoint; a PR "closing" a PR is a
-                // stacked branch, not a DoD claim, so it carries no checklist.
-                if (data.pull_request) continue
-                issues.push({ ref, body: data.body })
-              } catch (error) {
-                issues.push({ ref, body: null })
-                core.warning(`Could not read ${ref}: ${error.message}`)
-              }
-            }
-
-            const dodResult = verdict({ body: pr.body, labels }, issues)
-
-            // GitHub closes an issue named after a closing keyword even when
-            // the sentence negates it: "This PR does not close #2972" closed
-            // P0 #2972 on merge (#3680). The DoD verdict above skips that
-            // phrasing, so this second check fails the PR over it instead.
-            // Commit messages count too, because a squash merge can carry
-            // them into the commit that lands on main.
-            // The same check fails a commit that still closes an issue the
-            // description demoted to `Refs`, since the squash closes it anyway.
-            //
-            // When the commits cannot be listed, the check fails and says so
-            // in the summary and the comment. It used to log a warning and
-            // pass on the description alone, which read green with half the
-            // check skipped. Re-running the job reads the commits again.
-            const { sources, commitsError } = await pullRequestSources(pr.body, () =>
-              github.paginate(github.rest.pulls.listCommits, {
-                ...context.repo, pull_number: pr.number, per_page: 100 }))
-            if (commitsError) {
-              core.error(`Could not list the pull request's commits: ${commitsError}`)
-            }
-            const closingResult = checkClosingKeywords(sources, {
-              repository: context.repo, commitsError })
-
-            const result = { ok: dodResult.ok && closingResult.ok }
-            // Failures lead, and the job fails with them alone, so its error
-            // never opens with a passing verdict (#5061).
-            const { failure, comment: summary } = composeSummary(
-              dodResult, formatClosingKeywords(closingResult))
-            core.summary.addRaw(summary).write()
-
-            // One sticky comment, edited in place. A fresh comment per push
-            // would bury the PR under a running commentary of a checklist the
-            // author is actively ticking.
-            const MARKER = '<!-- scr-dod-check -->'
-            const body = `${MARKER}\n${summary}`
-            const { data: comments } = await github.rest.issues.listComments({
-              ...context.repo, issue_number: pr.number, per_page: 100 })
-            const mine = comments.find(c => c.body?.startsWith(MARKER))
-            if (mine) {
-              if (mine.body !== body) {
-                await github.rest.issues.updateComment({
-                  ...context.repo, comment_id: mine.id, body })
-              }
-            } else if (!result.ok) {
-              // Stay silent while passing: a green check needs no comment, and
-              // an unconditional "all good" note on every PR is noise.
-              await github.rest.issues.createComment({
-                ...context.repo, issue_number: pr.number, body })
-            }
-
-            if (!result.ok) core.setFailed(failure)
+    uses: oxageninc/.github/.github/workflows/dod-check.yml@c339971e0ad74bff568bc0ba1363ee980c296733 # oxageninc/.github main, oxageninc/product#5183

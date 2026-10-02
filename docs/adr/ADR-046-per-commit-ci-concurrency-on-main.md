@@ -1,6 +1,6 @@
 # ADR-046: A push to main gets its own CI concurrency group
 
-- **Status:** Accepted
+- **Status:** Superseded by ADR-287 (2026-10-02). The run history for 2026-09-07 shows the shared group finishing and deploying a run about once an hour, so the starvation described below did not happen.
 - **Date:** 2026-09-07
 - **Owners:** platform
 - **Related:** issue #2730 (CI stops checking and deploying main when merges come

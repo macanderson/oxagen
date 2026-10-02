@@ -128,6 +128,12 @@ export interface ImportedTool {
   sideEffect: SideEffect;
   egress: "local" | "org_tenant" | "third_party";
   impacts: string[];
+  /**
+   * The description the suite writes in Studio, for a tool whose source gives
+   * none. The tool checks refuse a tool with no description, as a person in
+   * Studio would find before Review.
+   */
+  description?: string;
 }
 
 export interface StudioServer {
@@ -172,7 +178,15 @@ export const SERVERS: readonly StudioServer[] = [
     kind: "graphql",
     tools: [
       { name: "issue", risk: "low", sideEffect: "read", egress: "third_party", impacts: [] },
-      { name: "create_issue", risk: "medium", sideEffect: "write", egress: "third_party", impacts: [] },
+      {
+        name: "create_issue",
+        risk: "medium",
+        sideEffect: "write",
+        egress: "third_party",
+        impacts: [],
+        // schema.graphql gives createIssue no description.
+        description: "Open an issue in the support desk. Give it a title, and optionally a body, a priority, an assignee, and labels.",
+      },
     ],
   },
   {
@@ -287,7 +301,7 @@ export function studioSource(server: StudioServer, mcpTools: McpListing | null):
   }
 }
 
-/** The draft's edits: import both tools and classify each one. */
+/** The draft's edits: import both tools, classify each one, and describe a tool its source left undescribed. */
 export function draftOps(server: StudioServer): Record<string, unknown>[] {
   return server.tools.flatMap((tool) => [
     { kind: "import", tool: tool.name },
@@ -299,6 +313,7 @@ export function draftOps(server: StudioServer): Record<string, unknown>[] {
       egress: tool.egress,
       impacts: tool.impacts,
     },
+    ...(tool.description === undefined ? [] : [{ kind: "describe", tool: tool.name, description: tool.description }]),
   ]);
 }
 

@@ -393,17 +393,36 @@ describe("Approve", () => {
     );
   });
 
-  it("says the platform has not registered approve yet (negative)", async () => {
+  it("tells the author their approval does not count, and stays on the page (negative)", async () => {
     approveSteeringPr.mockResolvedValue({
       ok: false,
-      reason: "unavailable",
-      code: "tool_not_registered",
+      reason: "denied",
+      code: "author_cannot_approve",
     });
     render(<ApproveSteeringPr {...TARGET} />, { wrapper: intl });
     fireEvent.click(screen.getByRole("button", { name: "Approve" }));
     expect(
       await screen.findByTestId("approve-steering-pr-failure"),
-    ).toHaveTextContent("Oxagen has not registered this action yet.");
+    ).toHaveTextContent(
+      "You raised this proposal, so the merge would not count your approval.",
+    );
+    expect(router.replace).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Approve" })).toBeEnabled();
+  });
+
+  it("asks for the checks again when the head moved (negative)", async () => {
+    approveSteeringPr.mockResolvedValue({
+      ok: false,
+      reason: "conflict",
+      code: "head_moved",
+    });
+    render(<ApproveSteeringPr {...TARGET} />, { wrapper: intl });
+    fireEvent.click(screen.getByRole("button", { name: "Approve" }));
+    expect(
+      await screen.findByTestId("approve-steering-pr-failure"),
+    ).toHaveTextContent(
+      "The pull request changed after the checks ran. Run the checks again.",
+    );
     expect(router.replace).not.toHaveBeenCalled();
   });
 });
@@ -736,6 +755,42 @@ describe("the sentence for each refusal", () => {
     [
       { reason: "conflict", code: "revert_branch_exists" },
       "A revert of this pull request is already open",
+    ],
+    [
+      { reason: "denied", code: "author_cannot_approve" },
+      "Ask another workspace member to approve it.",
+    ],
+    [
+      { reason: "conflict", code: "pr_closed" },
+      "This pull request is merged or closed on the repository host",
+    ],
+    [
+      { reason: "not_found", code: "memory_pr_not_found" },
+      "This workspace has no such memory PR.",
+    ],
+    [
+      { reason: "conflict", code: "memory_pr_settled" },
+      "This memory PR is merged or closed",
+    ],
+    [
+      { reason: "not_found", code: "record_not_in_pr" },
+      "This memory PR holds no such record.",
+    ],
+    [
+      { reason: "conflict", code: "record_not_proposed" },
+      "Only a record the PR proposes can be dropped.",
+    ],
+    [
+      { reason: "conflict", code: "memory_pr_elsewhere" },
+      "a repository the workspace no longer uses",
+    ],
+    [
+      { reason: "conflict", code: "branch_missing" },
+      "The pull request's branch is gone from the repository.",
+    ],
+    [
+      { reason: "conflict", code: "last_record" },
+      "Close the pull request instead",
     ],
     [
       { reason: "conflict", code: "some_new_reason" },

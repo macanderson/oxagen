@@ -462,21 +462,23 @@ export function RestoreManagedBlock({
 }
 
 /**
- * Drop one record from a memory PR. The card stays where it is and shows the
- * commit that dropped it, so the person keeps their place among the others.
- * The cards are keyed by path, so the page's refresh keeps this state.
+ * Drop one record from a memory PR, named by the PR's number. The card stays
+ * where it is and shows the commit that dropped it, so the person keeps their
+ * place among the others. The cards are keyed by path, so the page's refresh
+ * keeps this state.
  */
 export function DropMemoryRecord({
   org,
   ws,
-  branch,
+  number,
   path,
   title,
   dropped,
 }: {
   org: string;
   ws: string;
-  branch: string;
+  /** The memory PR's number in its steering repository. */
+  number: number;
   path: string;
   title: string;
   dropped: { commitSha: string } | null;
@@ -496,7 +498,7 @@ export function DropMemoryRecord({
     setPending(true);
     setFailure(null);
     try {
-      const result = await dropMemoryRecord(org, ws, branch, path);
+      const result = await dropMemoryRecord(org, ws, number, path);
       if (result.ok) setCommit(result.value.commitSha);
       else setFailure(failureText(result));
     } catch {

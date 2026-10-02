@@ -41,10 +41,11 @@ and main never sees it.
   `pull_request`, so a queue run is unfiltered.
 - Deploys and `migration-gate` stay on push to main. A queue run touches no
   production store.
-- `dod` does not run on `merge_group`. `dod-check.yml` is pinned by four other
-  repositories (`check-dod-stub-parity`), and the definition of done belongs to
-  the PR, where it was already judged. Do not mark `dod` as a required check
-  for the queue.
+- `dod` does not run on `merge_group`. `dod-check.yml` here is a caller stub
+  for the shared workflow in `oxageninc/.github`, which five repositories pin
+  (`check-dod-stub-parity`, #5183). The definition of done belongs to the PR,
+  where it was already judged. Do not mark `dod` as a required check for the
+  queue.
 
 ## Repository settings this needs
 

@@ -101,6 +101,16 @@
       "consumes": []
     },
     {
+      "name": "approve_steering_pr",
+      "domain": "context",
+      "surfaces": [
+        "api"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "approve_work_brief",
       "domain": "work",
       "surfaces": [
@@ -956,6 +966,18 @@
       "surfaces": [
         "api",
         "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "drop_memory_record",
+      "domain": "context",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
       ],
       "component": null,
       "produces": [],

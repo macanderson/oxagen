@@ -55,7 +55,8 @@ guard.
 - The `dod` check and `dod-close-guard.yml` are shared with repositories
   outside the Oxagen organizations, where `TRIAGE` is still the rule. Their
   message now says to file the remainder as the repository's issue rules
-  say, and names no label.
+  say, and names no label. Both have lived in `oxageninc/.github` since
+  2026-10-02 (#5183).
 - `.stella/commands/triage-sweep.md` stays repo-agnostic. It sweeps issues
   with no priority label in an Oxagen organization, and `triage`-labeled
   issues elsewhere.

@@ -190,6 +190,23 @@ const PROXIED_FRAMES = [
   frame(1, true, { kind: "llm_call", request_effort: "low" }),
 ].map((row) => ({ ...row, session_uuid: proxied, root_session_uuid: proxied }));
 
+// A session that opened its pull request with `gh pr create`: the `pr_open`
+// effect frame carries the URL the call printed, and no pr_link frame follows.
+// A pr_open frame whose call printed no URL names no pull request.
+const opened = randomUUID();
+const OPENED_PR = "https://github.com/acme/app/pull/77";
+const OPENED_FRAMES = [
+  frame(0, true, {
+    kind: "pr_open",
+    attrs: {
+      "pr.url": OPENED_PR,
+      "pr.number": "77",
+      "pr.repository": "acme/app",
+    },
+  }),
+  frame(1, true, { kind: "pr_open", attrs: {} }),
+].map((row) => ({ ...row, session_uuid: opened, root_session_uuid: opened }));
+
 const read = <T>(fn: () => Promise<T>) => runInTenantScope(scope, fn);
 
 describe.skipIf(!reachable)("run work reads on ClickHouse", () => {
@@ -202,7 +219,13 @@ describe.skipIf(!reachable)("run work reads on ClickHouse", () => {
     await clickhouse().insert({
       table: "tacho_events",
       format: "JSONEachRow",
-      values: [...FRAMES, ...CHAIN_FRAMES, ...BUSY_FRAMES, ...PROXIED_FRAMES],
+      values: [
+        ...FRAMES,
+        ...CHAIN_FRAMES,
+        ...BUSY_FRAMES,
+        ...PROXIED_FRAMES,
+        ...OPENED_FRAMES,
+      ],
     });
   });
   afterAll(async () => {
@@ -230,6 +253,26 @@ describe.skipIf(!reachable)("run work reads on ClickHouse", () => {
         first_ts: "2026-09-24 10:00:16.000",
       },
     ]);
+  });
+
+  it("reads a pull request a pr_open frame names, and skips one that printed no URL", async () => {
+    const links = await read(() => readWorkPrLinks(opened));
+    expect(
+      links.map((row) => ({ ...row, first_seq: String(row.first_seq) })),
+    ).toEqual([
+      {
+        url: OPENED_PR,
+        number: "77",
+        repository: "acme/app",
+        first_seq: "0",
+        first_ts: "2026-09-24 10:00:00.000",
+      },
+    ]);
+  });
+
+  it("reads a pull request a pr_open frame names on the run's spine", async () => {
+    const links = await read(() => readRunPrLinks(opened, []));
+    expect(links.map((row) => row.url)).toEqual([OPENED_PR]);
   });
 
   it("reads the checkouts from before and after the break", async () => {

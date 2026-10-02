@@ -8,8 +8,8 @@ import type { Finding } from "../types";
 const find = finder("secrets");
 
 /**
- * The kinds only Oxagen writes. The owned check refuses any edit to them, and
- * a lock can quote a vendor's own contact address from its API description.
+ * The kinds only Oxagen writes. The owned check refuses a hand edit to them,
+ * and a lock can quote a vendor's own contact address from its API description.
  */
 const OXAGEN_WRITES: ReadonlySet<SteeringRepoFileKind> = new Set<SteeringRepoFileKind>([
   "ledger",
