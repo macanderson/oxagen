@@ -66,6 +66,7 @@ export function toWait(wait: WaitOut): z.input<typeof WorkWait> {
     case "out_of_scope":
     case "brief_to_write":
     case "no_pull_request":
+    case "no_head":
     case "brief_out_of_date":
       return { kind: wait.kind };
     case "triage_failed":

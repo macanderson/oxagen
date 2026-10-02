@@ -66,6 +66,7 @@
       "checks_unread": "oxagen has not read the required checks on {head}. Read the checks again.",
       "new_head": "New commit {head}. Results on {earlier} decide nothing on it.",
       "no_pull_request": "The run ended with no pull request. Return it or close it.",
+      "no_head": "oxagen has not read the pull request's head commit yet. Read the checks again.",
       "pr_closed": "The pull request closed without merging. The item is not done.",
       "merged_before_review": "Merged on {at} before anyone accepted it. It is done once a person accepts it.",
       "brief_out_of_date": "The item changed after its brief was approved. Approve the new brief before you accept.",

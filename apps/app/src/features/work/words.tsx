@@ -232,6 +232,9 @@ export function WaitLine({ wait }: { wait: WorkWait }) {
     case "no_pull_request":
       text = t("no_pull_request");
       break;
+    case "no_head":
+      text = t("no_head");
+      break;
     case "pr_closed":
       text = t("pr_closed");
       break;

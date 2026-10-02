@@ -247,6 +247,8 @@ export const workWaitSchema = z.discriminatedUnion("kind", [
     })
     .strict(),
   z.object({ kind: z.literal("no_pull_request") }).strict(),
+  /** A pull request is linked and Oxagen has not read its head commit yet. */
+  z.object({ kind: z.literal("no_head") }).strict(),
   z.object({ kind: z.literal("pr_closed"), at: z.string().nullable() }).strict(),
   z.object({ kind: z.literal("merged_before_review"), at: z.string() }).strict(),
   z.object({ kind: z.literal("brief_out_of_date") }).strict(),

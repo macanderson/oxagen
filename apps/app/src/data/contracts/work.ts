@@ -233,6 +233,7 @@ export const WorkWait = z.discriminatedUnion("kind", [
     at: Instant.nullable(),
   }),
   z.object({ kind: z.literal("no_pull_request") }),
+  z.object({ kind: z.literal("no_head") }),
   z.object({ kind: z.literal("pr_closed"), at: Instant.nullable() }),
   z.object({ kind: z.literal("merged_before_review"), at: Instant }),
   z.object({ kind: z.literal("brief_out_of_date") }),
