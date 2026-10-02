@@ -75,10 +75,18 @@ export interface StudioSettings extends Settings {
   relayName: string;
 }
 
+/**
+ * A workflow value by name, as the steering rig reads its own: these are
+ * workflow inputs, not deployment settings, so the env registry lists none.
+ */
+function workflowValue(env: NodeJS.ProcessEnv, name: string, fallback: string): string {
+  const value = env[name];
+  return value === undefined || value === "" ? fallback : value;
+}
+
 /** A URL from the environment with no trailing slash: unset or empty means the default. */
 function url(env: NodeJS.ProcessEnv, name: string, fallback: string): string {
-  const value = env[name];
-  return (value === undefined || value === "" ? fallback : value).replace(/\/+$/, "");
+  return workflowValue(env, name, fallback).replace(/\/+$/, "");
 }
 
 /** Reads the steering rig's settings for the MCP Studio suite, plus this run's own values. */
@@ -94,7 +102,7 @@ export function readStudioSettings(env: NodeJS.ProcessEnv = process.env): Studio
   return {
     ...base,
     tunnelUrl: url(env, "MCP_STUDIO_LIVE_TUNNEL_URL", ""),
-    upstreamToken: env.MCP_STUDIO_LIVE_UPSTREAM_TOKEN ?? "",
+    upstreamToken: workflowValue(env, "MCP_STUDIO_LIVE_UPSTREAM_TOKEN", ""),
     controlUrl: url(env, "MCP_STUDIO_LIVE_CONTROL_URL", "http://127.0.0.1:8788"),
     mcpUrl,
     brokerUrl: `wss://${new URL(mcpUrl).host}`,
@@ -392,7 +400,9 @@ const policyRow = z.looseObject({
 const importParsed = z.object({ policies: z.array(policyRow) });
 
 const importCommitted = z.object({
-  pullRequest: z.object({ number: z.number().int(), url: z.string(), branch: z.string(), headSha: z.string() }),
+  pullRequest: z
+    .object({ number: z.number().int(), url: z.string(), branch: z.string(), headSha: z.string() })
+    .nullable(),
 });
 
 type Fits<Contract, Local> = [Contract] extends [Local] ? true : false;
@@ -540,6 +550,9 @@ export async function openPolicyPr(ox: Oxagen, settings: Settings) {
     { records: [], memories: [], policies: parsed.policies.map((row) => ({ ...row, action: "add" })) },
     importCommitted,
   );
+  if (committed.pullRequest === null) {
+    throw new Error("The Markdown import opened no steering PR, though every policy row was marked add.");
+  }
   return committed.pullRequest;
 }
 

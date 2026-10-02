@@ -59,8 +59,8 @@ interface ServerSettings {
 }
 
 function port(env: NodeJS.ProcessEnv, name: string, fallback: number): number {
-  const raw = env[name];
-  if (raw === undefined || raw === "") return fallback;
+  const raw = workflowValue(env, name);
+  if (raw === undefined) return fallback;
   const value = Number(raw);
   if (!Number.isInteger(value) || value < 1 || value > 65_535) {
     throw new Error(`${name} must be a port number from 1 to 65535.`);
@@ -68,8 +68,18 @@ function port(env: NodeJS.ProcessEnv, name: string, fallback: number): number {
   return value;
 }
 
+/**
+ * A value the workflow sets. Like the steering rig, this file reads workflow
+ * values by name from the environment, not as deployment settings, so they
+ * stay out of the env registry.
+ */
+function workflowValue(env: NodeJS.ProcessEnv, name: string): string | undefined {
+  const value = env[name];
+  return value === undefined || value === "" ? undefined : value;
+}
+
 function readServerSettings(env: NodeJS.ProcessEnv = process.env): ServerSettings {
-  const token = env.MCP_STUDIO_LIVE_UPSTREAM_TOKEN ?? "";
+  const token = workflowValue(env, "MCP_STUDIO_LIVE_UPSTREAM_TOKEN") ?? "";
   if (token.length < 16) {
     throw new Error(
       "MCP_STUDIO_LIVE_UPSTREAM_TOKEN must hold at least 16 characters. The workflow generates one for each run.",
@@ -79,7 +89,7 @@ function readServerSettings(env: NodeJS.ProcessEnv = process.env): ServerSetting
     token,
     upstreamPort: port(env, "MCP_STUDIO_LIVE_UPSTREAM_PORT", 8787),
     controlPort: port(env, "MCP_STUDIO_LIVE_CONTROL_PORT", 8788),
-    relayBundle: env.MCP_STUDIO_LIVE_RELAY_BUNDLE ?? DEFAULT_RELAY_BUNDLE,
+    relayBundle: workflowValue(env, "MCP_STUDIO_LIVE_RELAY_BUNDLE") ?? DEFAULT_RELAY_BUNDLE,
   };
 }
 
@@ -214,7 +224,7 @@ async function serveMcp(req: IncomingMessage, res: ServerResponse): Promise<void
     return;
   }
   const id = message.id;
-  const method = String(message.method);
+  const method = message.method;
   const params = isRecord(message.params) ? message.params : {};
   // A notification has no id and gets no answer.
   if (id === undefined) {
@@ -461,6 +471,7 @@ function startRelay(start: RelayStart, ledger: LedgerServer, bundle: string): vo
   relay.exitCode = null;
   const child = spawn(process.execPath, [bundle], {
     env: {
+      NODE_ENV: "production",
       PATH: process.env.PATH ?? "",
       RELAY_BROKER_URL: start.brokerUrl,
       RELAY_TOKEN: start.token,
@@ -497,10 +508,15 @@ function upstreamHandler(settings: ServerSettings) {
       send(res, 401, { message: "The sample servers need the run's bearer token." }, { "www-authenticate": "Bearer" });
       return;
     }
-    if (path === "/mcp") return serveMcp(req, res);
-    if (path === "/graphql") return serveGraphql(req, res);
-    if (path.startsWith("/openapi/")) return serveOpenapi(req, res, path.slice("/openapi".length));
-    send(res, 404, { message: `The sample servers have no ${path}.` });
+    if (path === "/mcp") {
+      await serveMcp(req, res);
+    } else if (path === "/graphql") {
+      await serveGraphql(req, res);
+    } else if (path.startsWith("/openapi/")) {
+      await serveOpenapi(req, res, path.slice("/openapi".length));
+    } else {
+      send(res, 404, { message: `The sample servers have no ${path}.` });
+    }
   };
 }
 
