@@ -622,8 +622,7 @@ export type WorkOutcomes = z.infer<typeof WorkOutcomes>;
 // ---- setup: collectors and priorities ---------------------------------------
 
 export const WorkCollector = z.object({
-  /** The collector's row reference, which sync_work_collector names. Not a public id. */
-  collectorRef: z.string().uuid(),
+  /** The collector's name, unique in the workspace. Reconnect names it. */
   name: z.string(),
   type: z.literal("github"),
   connectionId: PublicId.nullable(),

@@ -406,14 +406,14 @@ export async function setCollector(
   return { ok: true, value: { created: result.value.created, reconcileQueued: result.value.reconcile_queued } };
 }
 
-/** Read a collector's repositories again now, after a failure. */
+/** Read a collector's repositories again now, after a failure. The collector is named by its name. */
 export async function syncCollector(
   org: string,
   ws: string,
-  input: { collectorRef: string },
+  input: { name: string },
 ): Promise<ActionResult<{ queued: boolean }>> {
   const ctx = await requireViewer(org, ws);
-  const result = await kernelWrite(ctx, workCollectorSync, { collector_id: input.collectorRef });
+  const result = await kernelWrite(ctx, workCollectorSync, { name: input.name });
   if (!result.ok) return result;
   return { ok: true, value: { queued: result.value.queued } };
 }

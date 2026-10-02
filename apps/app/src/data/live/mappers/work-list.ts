@@ -274,7 +274,6 @@ export function toWorkCollectorList(
 ): z.input<typeof WorkCollectorList> {
   return {
     collectors: out.collectors.map((collector) => ({
-      collectorRef: collector.collector_id,
       name: collector.name,
       type: collector.type,
       connectionId: collector.connection_id,

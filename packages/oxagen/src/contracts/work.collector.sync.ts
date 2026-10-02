@@ -7,6 +7,10 @@
  * The reconcile reads every issue changed since the collector's cursor. It
  * moves the cursor only after each page of issues is stored, so a read that
  * fails partway loses nothing it can read again.
+ *
+ * Name the collector by its row id or by its name, which is unique in the
+ * workspace (P1-05, #5163: the Work setup page names it, so no row id reaches
+ * a page). A call that names neither, or both, is refused as invalid input.
  */
 import { z } from "zod";
 import { registerCapability } from "../registry";
@@ -28,7 +32,13 @@ export const workCollectorSync = registerCapability({
     org: { Owner: "allow", Admin: "allow" },
     workspace: { Owner: "allow", Member: "allow" },
   },
-  input: z.object({ collector_id: z.string().uuid() }).strict(),
+  input: z
+    .object({
+      collector_id: z.string().uuid().optional(),
+      /** The collector's name, as set_work_collector set it. */
+      name: z.string().trim().min(1).max(64).optional(),
+    })
+    .strict(),
   output: z
     .object({
       collector_id: z.string().uuid(),
