@@ -408,33 +408,6 @@ describe("the GitHub seam", () => {
     });
   });
 
-  it("merges with squash pinned to the head sha and surfaces GitHub's refusal", async () => {
-    const mergePullRequest = vi
-      .fn()
-      .mockResolvedValueOnce({ sha: "m1", merged: true })
-      .mockRejectedValueOnce(
-        new Error(
-          "GitHub API error 405: At least 1 approving review is required",
-        ),
-      );
-    const { gh } = seam(fakeClient({ mergePullRequest }));
-    const repo = await gh.resolveRepository(SCOPE);
-    const args = { number: 519, commitTitle: "t", sha: "head1" };
-    expect(await gh.mergePullRequest(repo, args)).toEqual({ sha: "m1" });
-    expect(mergePullRequest).toHaveBeenCalledWith({
-      owner: "a-intel",
-      repo: "platform",
-      number: 519,
-      mergeMethod: "squash",
-      commitTitle: "t",
-      sha: "head1",
-    });
-    await expect(gh.mergePullRequest(repo, args)).rejects.toMatchObject({
-      reason: "github_refused",
-      message: expect.stringContaining("approving review"),
-    });
-  });
-
   it("reads a PR's base, head and merge commit, and wraps a GitHub refusal", async () => {
     const getPullRequest = vi
       .fn()
@@ -1120,10 +1093,13 @@ describe("the GitHub seam's merge-queue calls", () => {
   /**
    * A seam whose plain REST calls answer from `routes`, keyed by
    * `METHOD path`. A route answers its data, or throws what GitHub would.
+   * `sleep` resolves at once, so a merge that waits on GitHub waits on no
+   * timer, and a test reads how often it paused.
    */
   async function restSeam(
     routes: Record<string, Route>,
     client: GitHubClient = fakeClient(),
+    sleep = vi.fn(async (_ms: number) => {}),
   ) {
     const calls: { method: string; path: string; body?: unknown }[] = [];
     const rest: GitHubRest = {
@@ -1147,41 +1123,84 @@ describe("the GitHub seam's merge-queue calls", () => {
       client: () => client,
       rest: () => rest,
       linkAccount,
+      sleep,
     });
     const repo = await gh.resolveRepository(SCOPE);
-    return { gh, repo, calls, linkAccount };
+    return { gh, repo, calls, linkAccount, sleep };
   }
 
   const refuse = (status: number, message: string): Route => () => {
     throw new GitHubApiError(status, message);
   };
 
+  /** Pull request #7 as GitHub reads it once it has checked the head. */
+  const PULL_READ = `GET ${REPO_PATH}/pulls/7`;
+  const MERGE = `PUT ${REPO_PATH}/pulls/7/merge`;
+  const mergeablePull = (head = "h1"): Route => () => ({
+    state: "open",
+    head: { sha: head },
+    mergeable: true,
+    mergeable_state: "clean",
+  });
+  const NOT_MERGEABLE = "Pull Request is not mergeable";
+
+  /**
+   * GitHub's pull request #7 right after a push to h1, as the steering live
+   * test met it (#5157). It reads `mergeable: null` for the first `checking`
+   * reads and true after them. The merge is refused with 405 "Pull Request
+   * is not mergeable" until GitHub has finished, as GitHub refuses it.
+   */
+  function checkingPull(checking: number): Record<string, Route> {
+    let reads = 0;
+    return {
+      [PULL_READ]: () => {
+        reads += 1;
+        const done = reads > checking;
+        return {
+          state: "open",
+          head: { sha: "h1" },
+          mergeable: done ? true : null,
+          mergeable_state: done ? "clean" : "unknown",
+        };
+      },
+      [MERGE]: () => {
+        if (reads <= checking) throw new GitHubApiError(405, NOT_MERGEABLE);
+        return { sha: "sq1" };
+      },
+    };
+  }
+
+  const STAMPED = {
+    number: 7,
+    commitTitle: "[steering] rule",
+    sha: "h1",
+    commitMessage: "Oxagen-Version: 3",
+  };
+
   it("merges through REST with the trailers in the commit body, pinned to the head", async () => {
     const mergePullRequest = vi.fn();
-    const { gh, repo, calls } = await restSeam(
-      { [`PUT ${REPO_PATH}/pulls/7/merge`]: () => ({ sha: "sq1" }) },
+    const { gh, repo, calls, sleep } = await restSeam(
+      { [PULL_READ]: mergeablePull(), [MERGE]: () => ({ sha: "sq1" }) },
       fakeClient({ mergePullRequest }),
     );
-    await expect(
-      gh.mergePullRequest(repo, {
-        number: 7,
-        commitTitle: "[steering] rule",
-        sha: "h1",
-        commitMessage: "Oxagen-Version: 3",
-      }),
-    ).resolves.toEqual({ sha: "sq1" });
-    expect(calls[0]!.body).toEqual({
+    await expect(gh.mergePullRequest(repo, STAMPED)).resolves.toEqual({
+      sha: "sq1",
+    });
+    expect(calls.map((c) => `${c.method} ${c.path}`)).toEqual([PULL_READ, MERGE]);
+    expect(calls[1]!.body).toEqual({
       merge_method: "squash",
       commit_title: "[steering] rule",
       commit_message: "Oxagen-Version: 3",
       sha: "h1",
     });
     expect(mergePullRequest).not.toHaveBeenCalled();
+    expect(sleep).not.toHaveBeenCalled();
   });
 
   it("wraps a refused REST merge as github_refused", async () => {
-    const { gh, repo } = await restSeam({
-      [`PUT ${REPO_PATH}/pulls/7/merge`]: refuse(405, "Head branch was modified"),
+    const { gh, repo, sleep } = await restSeam({
+      [PULL_READ]: mergeablePull(),
+      [MERGE]: refuse(405, "Head branch was modified"),
     });
     await expect(
       gh.mergePullRequest(repo, {
@@ -1194,6 +1213,135 @@ describe("the GitHub seam's merge-queue calls", () => {
       reason: "github_refused",
       message: expect.stringContaining("Head branch was modified"),
     });
+    expect(sleep).not.toHaveBeenCalled();
+  });
+
+  it("waits for GitHub to finish checking a pushed stamp before it merges (#5157)", async () => {
+    const { gh, repo, calls, sleep } = await restSeam(checkingPull(2));
+    await expect(gh.mergePullRequest(repo, STAMPED)).resolves.toEqual({
+      sha: "sq1",
+    });
+    // Two reads found GitHub still checking, the third found it done, and
+    // only then did the merge go out.
+    expect(calls.map((c) => `${c.method} ${c.path}`)).toEqual([
+      PULL_READ,
+      PULL_READ,
+      PULL_READ,
+      MERGE,
+    ]);
+    expect(sleep.mock.calls).toEqual([[1000], [1000]]);
+  });
+
+  it("waits while the pull request still reads the head before the stamp", async () => {
+    let reads = 0;
+    const { gh, repo, calls, sleep } = await restSeam({
+      [PULL_READ]: () => {
+        reads += 1;
+        return mergeablePull(reads === 1 ? "h0" : "h1")(undefined);
+      },
+      [MERGE]: () => ({ sha: "sq1" }),
+    });
+    await expect(gh.mergePullRequest(repo, STAMPED)).resolves.toEqual({
+      sha: "sq1",
+    });
+    expect(calls.filter((c) => c.method === "PUT")).toHaveLength(1);
+    expect(sleep).toHaveBeenCalledTimes(1);
+  });
+
+  it("retries a 405 GitHub answers just after it reports the pull request mergeable", async () => {
+    let merges = 0;
+    const { gh, repo, calls, sleep } = await restSeam({
+      [PULL_READ]: mergeablePull(),
+      [MERGE]: () => {
+        merges += 1;
+        if (merges === 1) throw new GitHubApiError(405, NOT_MERGEABLE);
+        return { sha: "sq1" };
+      },
+    });
+    await expect(gh.mergePullRequest(repo, STAMPED)).resolves.toEqual({
+      sha: "sq1",
+    });
+    expect(calls.filter((c) => c.method === "PUT")).toHaveLength(2);
+    expect(sleep).toHaveBeenCalledTimes(1);
+  });
+
+  it("refuses mergeability_unknown when GitHub is still checking after ten reads", async () => {
+    const { gh, repo, calls, sleep } = await restSeam(
+      checkingPull(Number.POSITIVE_INFINITY),
+    );
+    await expect(gh.mergePullRequest(repo, STAMPED)).rejects.toMatchObject({
+      code: "conflict",
+      reason: "mergeability_unknown",
+      message: expect.stringContaining("Merge again in a minute"),
+    });
+    // The tenth read sends the merge anyway, and GitHub's 405 ends the wait.
+    expect(calls.filter((c) => c.method === "GET")).toHaveLength(10);
+    expect(calls.filter((c) => c.method === "PUT")).toHaveLength(1);
+    expect(sleep).toHaveBeenCalledTimes(9);
+  });
+
+  it("refuses not_mergeable at once when GitHub reports a conflict", async () => {
+    const { gh, repo, calls, sleep } = await restSeam({
+      [PULL_READ]: () => ({
+        state: "open",
+        head: { sha: "h1" },
+        mergeable: false,
+        mergeable_state: "dirty",
+      }),
+      [MERGE]: () => ({ sha: "sq1" }),
+    });
+    await expect(gh.mergePullRequest(repo, STAMPED)).rejects.toMatchObject({
+      code: "conflict",
+      reason: "not_mergeable",
+      message: expect.stringContaining("mergeable_state dirty"),
+    });
+    expect(calls.filter((c) => c.method === "PUT")).toHaveLength(0);
+    expect(sleep).not.toHaveBeenCalled();
+  });
+
+  it("sends a closed pull request's merge at once and passes GitHub's refusal on", async () => {
+    const { gh, repo, sleep } = await restSeam({
+      [PULL_READ]: () => ({
+        state: "closed",
+        head: { sha: "h1" },
+        mergeable: null,
+        mergeable_state: "unknown",
+      }),
+      [MERGE]: refuse(405, NOT_MERGEABLE),
+    });
+    await expect(gh.mergePullRequest(repo, STAMPED)).rejects.toMatchObject({
+      reason: "github_refused",
+      message: expect.stringContaining(NOT_MERGEABLE),
+    });
+    expect(sleep).not.toHaveBeenCalled();
+  });
+
+  it("merges without trailers through the client, pinned to the head, and refuses a missing review at once", async () => {
+    const mergePullRequest = vi
+      .fn()
+      .mockResolvedValueOnce({ sha: "m1", merged: true })
+      .mockRejectedValueOnce(
+        new GitHubApiError(405, "At least 1 approving review is required"),
+      );
+    const { gh, repo, sleep } = await restSeam(
+      { [PULL_READ]: mergeablePull("head1") },
+      fakeClient({ mergePullRequest }),
+    );
+    const args = { number: 7, commitTitle: "t", sha: "head1" };
+    expect(await gh.mergePullRequest(repo, args)).toEqual({ sha: "m1" });
+    expect(mergePullRequest).toHaveBeenCalledWith({
+      owner: "a-intel",
+      repo: "platform",
+      number: 7,
+      mergeMethod: "squash",
+      commitTitle: "t",
+      sha: "head1",
+    });
+    await expect(gh.mergePullRequest(repo, args)).rejects.toMatchObject({
+      reason: "github_refused",
+      message: expect.stringContaining("approving review"),
+    });
+    expect(sleep).not.toHaveBeenCalled();
   });
 
   it("lists changed files, splitting a rename and counting a copy as an addition", async () => {

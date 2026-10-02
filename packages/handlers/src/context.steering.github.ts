@@ -269,7 +269,10 @@ export interface SteeringHost {
   /**
    * Squash-merge, pinned to `sha`: the host refuses when the head moved past
    * it. `commitMessage` is the squash commit's body, where the merge queue
-   * puts the `Oxagen-*` trailers (#4449).
+   * puts the `Oxagen-*` trailers (#4449). The merge queue pushes the stamp
+   * commit just before it calls this, and a host checks whether a pull
+   * request can merge only after each push. So each host waits for its own
+   * check to finish, briefly, before it merges (#5157).
    */
   mergePullRequest(
     repo: SteeringRepository,
@@ -679,6 +682,8 @@ interface SteeringGitHubDeps {
   rest?: (token: string) => GitHubRest;
   /** The Oxagen user a host account is linked to. Defaults to {@link linkedOxagenUser}. */
   linkAccount?: (providerId: string, accountId: string) => Promise<string | null>;
+  /** The pause between two reads of a pull request's mergeability. Defaults to a timer. */
+  sleep?: (ms: number) => Promise<void>;
 }
 
 /**
@@ -732,6 +737,65 @@ export function standingApprovals<
       latest.set(review.user.id, review);
   }
   return [...latest.values()].filter((r) => r.state === "APPROVED");
+}
+
+/**
+ * How many times a merge reads the pull request while GitHub checks whether
+ * it can merge. GitHub runs that check in the background after every push,
+ * and the pull request reads `mergeable: null` until it finishes. A merge sent
+ * in that window is refused with 405 "Pull Request is not mergeable". The
+ * merge queue pushes the stamp commit a moment before it merges, so without a
+ * wait every steering merge lost that race (#5157). Ten reads one second
+ * apart keep the wait under ten seconds, as the GitLab host's does, because
+ * the merge runs inside an API request.
+ */
+const MERGEABILITY_READS = 10;
+const MERGEABILITY_PAUSE_MS = 1000;
+
+/** The fields of a pull request that say whether GitHub can merge it now. */
+interface GithubMergeability {
+  state: "open" | "closed";
+  head: { sha: string };
+  /** Null while GitHub is still checking the head. */
+  mergeable: boolean | null;
+  /** `clean`, `dirty` (a conflict), `unknown` (still checking), and others. */
+  mergeable_state?: string;
+}
+
+/** GitHub's 405 for a pull request whose mergeability it has not worked out. */
+function isNotMergeable(err: unknown): boolean {
+  return (
+    err instanceof GitHubApiError &&
+    err.status === 405 &&
+    /not mergeable/i.test(err.message)
+  );
+}
+
+/** GitHub reports that the pull request conflicts with its base. */
+function conflictsWithBase(
+  repo: SteeringRepository,
+  number: number,
+  mergeableState: string | undefined,
+): HandlerError {
+  return new HandlerError({
+    code: "conflict",
+    reason: "not_mergeable",
+    message: `GitHub reports that #${number} in ${repo.fullName} cannot merge into ${repo.defaultBranch} (mergeable_state ${mergeableState ?? "unknown"}), so nothing merged. Resolve the conflict on the steering PR, then merge again.`,
+  });
+}
+
+/** GitHub had not finished checking the pull request when the wait ran out. */
+function mergeabilityUnknown(
+  repo: SteeringRepository,
+  number: number,
+  mergeableState: string | undefined,
+): HandlerError {
+  const seconds = ((MERGEABILITY_READS - 1) * MERGEABILITY_PAUSE_MS) / 1000;
+  return new HandlerError({
+    code: "conflict",
+    reason: "mergeability_unknown",
+    message: `GitHub had not finished checking whether #${number} in ${repo.fullName} can merge after ${seconds} seconds (mergeable_state ${mergeableState ?? "unknown"}), so nothing merged. Merge again in a minute.`,
+  });
 }
 
 /** A git ref update that is not a fast forward means the branch moved. */
@@ -863,12 +927,6 @@ export function refuseLongCompare(
 }
 
 /**
- * Wrap a GitHub refusal as `conflict: github_refused` with GitHub's own
- * message. A `HandlerError` passes through unchanged, so a refusal this
- * module already shaped (`proposal_branch_exists`, a missing binding) keeps
- * its reason when a caller wraps a whole GitHub sequence in one try.
- */
-/**
  * Move one branch ref, but only while it points at `beforeOid`. GitHub
  * applies every update in the list or none of them.
  */
@@ -944,6 +1002,12 @@ async function listGitTree(
   return entries;
 }
 
+/**
+ * Wrap a GitHub refusal as `conflict: github_refused` with GitHub's own
+ * message. A `HandlerError` passes through unchanged, so a refusal this
+ * module already shaped (`proposal_branch_exists`, a missing binding) keeps
+ * its reason when a caller wraps a whole GitHub sequence in one try.
+ */
 export function githubRefused(err: unknown): HandlerError {
   if (err instanceof HandlerError) return err;
   return new HandlerError({
@@ -970,6 +1034,9 @@ export function createSteeringGitHub(
   const rests = new WeakMap<SteeringRepository, GitHubRest>();
   const makeRest = deps.rest ?? ((token: string) => githubRest({ token }));
   const linkAccount = deps.linkAccount ?? linkedOxagenUser;
+  const sleep =
+    deps.sleep ??
+    ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
   const clientFor = (repo: SteeringRepository): GitHubClient => {
     const gh = clients.get(repo);
     if (!gh)
@@ -1365,11 +1432,11 @@ export function createSteeringGitHub(
       }
     },
     async mergePullRequest(repo, args) {
-      try {
+      const { rest, path } = restFor(repo);
+      const send = async (): Promise<{ sha: string }> => {
         if (args.commitMessage !== undefined) {
           // The shared client sends no commit body, and the trailers live in
           // the body, so a merge that carries them goes through REST.
-          const { rest, path } = restFor(repo);
           const out = await rest.request<{ sha: string }>(
             "PUT",
             `${path}/pulls/${args.number}/merge`,
@@ -1391,8 +1458,47 @@ export function createSteeringGitHub(
           sha: args.sha,
         });
         return { sha: out.sha };
-      } catch (err) {
-        throw githubRefused(err);
+      };
+      // GitHub checks whether the pull request can merge after each push,
+      // and the merge queue pushed the stamp commit just now. Reading the
+      // pull request also starts that check. Merge once GitHub has checked
+      // `sha`, or once the reads run out (#5157).
+      for (let read = 1; ; read += 1) {
+        let pull: GithubMergeability;
+        try {
+          pull = (
+            await rest.request<GithubMergeability>(
+              "GET",
+              `${path}/pulls/${args.number}`,
+            )
+          ).data;
+        } catch (err) {
+          throw githubRefused(err);
+        }
+        const open = pull.state === "open";
+        const atSha = pull.head.sha === args.sha;
+        if (open && atSha && pull.mergeable === false)
+          throw conflictsWithBase(repo, args.number, pull.mergeable_state);
+        const last = read >= MERGEABILITY_READS;
+        // A closed pull request goes straight to the merge, whose refusal
+        // says why. So does an open one that still reads another head when
+        // the reads run out: GitHub refuses the pinned merge with 409.
+        if (!open || (atSha && pull.mergeable === true) || last) {
+          try {
+            return await send();
+          } catch (err) {
+            if (!open || !isNotMergeable(err)) throw githubRefused(err);
+            if (last)
+              throw mergeabilityUnknown(
+                repo,
+                args.number,
+                pull.mergeable_state,
+              );
+            // GitHub can still answer 405 for a moment after it reports the
+            // pull request mergeable. Read it again and retry.
+          }
+        }
+        await sleep(MERGEABILITY_PAUSE_MS);
       }
     },
     async closePullRequest(repo, number) {
