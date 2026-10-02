@@ -45,7 +45,12 @@ const MEMBERS = [
   { id: DEV, name: null, email: "dev@acme.example" },
 ];
 const AGENTS = [
-  { id: "agt_invoicebot", slug: "invoice-bot", name: "Invoice bot" },
+  {
+    id: "agt_invoicebot",
+    slug: "invoice-bot",
+    name: "Invoice bot",
+    harness: "codex",
+  },
 ];
 
 /** One switch row as `list_kill_switches` returns it, flipped on by Priya. */
@@ -175,6 +180,23 @@ describe("Switches › scoped cards", () => {
     );
     expect(heading("emd_01k5a1")).toHaveTextContent("invoice-bot");
     expect(heading("emd_01k5a2")).toHaveTextContent("agt_retired");
+  });
+
+  it("badges a live agent's heading with the harness it registered, and draws no avatar for an id it cannot name (#4871)", () => {
+    renderSwitches(
+      board([
+        row("emd_01k5a1", { kind: "agent", id: "agt_invoicebot" }),
+        row("emd_01k5a2", { kind: "agent", id: "agt_retired" }),
+        row("emd_01k5o1", { kind: "operator", id: PRIYA }),
+      ]),
+    );
+    expect(
+      card("emd_01k5a1").querySelector(
+        '[data-agent-avatar] [data-harness-badge="codex"]',
+      ),
+    ).not.toBeNull();
+    expect(card("emd_01k5a2").querySelector("[data-agent-avatar]")).toBeNull();
+    expect(card("emd_01k5o1").querySelector("[data-agent-avatar]")).toBeNull();
   });
 
   it("heads a connection switch by its id and says the flip also revoked its grants", () => {

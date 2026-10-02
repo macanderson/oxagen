@@ -45,6 +45,10 @@ import {
   retentionPolicyVersions,
   authorizationSnapshots,
   authorizationDecisions,
+  workBriefs,
+  workItemFacts,
+  workTriageDecisions,
+  workTriageCorrections,
 } from "../schema/index";
 import {
   flattenCheckSql,
@@ -86,6 +90,14 @@ describe("append-only tables: forbidden mutation columns", () => {
     ["retention_policy_versions", retentionPolicyVersions],
     ["authorization_snapshots", authorizationSnapshots],
     ["authorization_decisions", authorizationDecisions],
+    // ── Phase 1 work records (P1-02, #4897) ─────────────────────────────────
+    // Briefs and facts are append only, and triage decisions and corrections
+    // append too. The migration revokes UPDATE and DELETE from oxagen_app, and
+    // integration/work-records.test.ts proves it against a live database.
+    ["work.briefs", workBriefs],
+    ["work.item_facts", workItemFacts],
+    ["work.triage_decisions", workTriageDecisions],
+    ["work.triage_corrections", workTriageCorrections],
   ];
 
   for (const [tableName, table] of appendOnlyTables) {

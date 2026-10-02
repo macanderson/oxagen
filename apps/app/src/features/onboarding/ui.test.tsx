@@ -406,6 +406,15 @@ describe("the name step", () => {
     expect(screen.getByTestId("register-note")).toHaveTextContent(
       "a-intel.core.perf-watch is reserved. Continue opens the wrap step.",
     );
+    expect(
+      reserved.querySelector('[data-agent-avatar] [data-harness-badge="codex"]'),
+    ).not.toBeNull();
+  });
+
+  it("draws no agent avatar before an identity is reserved (negative)", () => {
+    renderForm();
+    expect(document.querySelector("[data-agent-avatar]")).toBeNull();
+    expect(document.querySelector("[data-harness-badge]")).toBeNull();
   });
 
   it("carries exactly one gold action, Continue, beside Cancel", () => {

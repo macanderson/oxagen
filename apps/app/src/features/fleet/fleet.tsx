@@ -191,7 +191,7 @@ export async function Fleet({
     ? agents.value.agents.flatMap((agent) =>
         agent.agentKey === null || agent.status === "retired"
           ? []
-          : [{ agentKey: agent.agentKey }],
+          : [{ agentKey: agent.agentKey, harness: agent.harness }],
       )
     : [];
   const agentHarnesses: Record<string, string> = {};

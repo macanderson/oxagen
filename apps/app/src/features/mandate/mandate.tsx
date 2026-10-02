@@ -2,8 +2,11 @@
 // financial authority an agent holds — its limits, what has been settled and
 // reserved against it, the grant that created it, and the ledger of every draw.
 //
-// The page reads `get_mandate` and nothing else. Every figure on it is the
-// ledger's own accounting (INV-10): `authority` carries, per measure, the
+// The page reads `get_mandate`, then `list_agents` for the one fact a mandate
+// does not carry: the harness its agent registered, which the agent's avatar
+// wears in the header and the grant (#4871). A failed agents read leaves the
+// avatar unbadged and nothing else. Every figure on it is the ledger's own
+// accounting (INV-10): `authority` carries, per measure, the
 // per-call and per-period limits, what the period has settled, what calls in
 // flight have reserved, and what is left. Nothing here sums the table beneath
 // it, which is the point of the rule that a header is a rollup of its rows —
@@ -29,9 +32,11 @@ import type { OrgRole } from "@/data/contracts/common";
 import type { MandateDetail, MandateRow } from "@/data/contracts/mandates";
 import type { DataSource } from "@/data/ports";
 import type { Read } from "@/data/read";
+import { harnessOfSlug, readAgentHarnessIndex } from "@/features/agent-harness";
 import { PageRecord } from "@/features/shell";
 import type { WsCtx } from "@/server/viewer";
 import { routes } from "@/shared/safe-path";
+import { AgentAvatar } from "@/ui/agent-avatar";
 import { eyebrow, linkText, mono, panel } from "@/ui/control-styles";
 import { useFormatter } from "@/ui/formatter";
 import { MandateAuthorityList } from "@/ui/mandate-authority";
@@ -137,10 +142,13 @@ function Tiles({ mandate }: { mandate: MandateRow }) {
 
 function Header({
   mandate,
+  harness,
   at,
   readAt,
 }: {
   mandate: MandateRow;
+  /** The harness the mandate's agent registered, or null when it is not known. */
+  harness: string | null;
   at: MandateAt;
   readAt: Date;
 }) {
@@ -163,16 +171,27 @@ function Header({
               {t("grantedBy", { user: mandate.grantedBy })}
             </span>
           )}
-          <SafeLink
-            // The agent comes from the record, which is the only place that
-            // knows it: the route names the mandate alone.
-            to={routes.agent(at.org, at.ws, mandate.agentSlug, {
-              tab: "mandates",
-            })}
-            className={linkText}
+          <span
+            data-testid="mandate-agent"
+            className="inline-flex items-center gap-1.5"
           >
-            {mandate.agentSlug}
-          </SafeLink>
+            <AgentAvatar
+              value={null}
+              initials={mandate.agentSlug.slice(0, 2).toUpperCase()}
+              harness={harness}
+              size={18}
+            />
+            <SafeLink
+              // The agent comes from the record, which is the only place that
+              // knows it: the route names the mandate alone.
+              to={routes.agent(at.org, at.ws, mandate.agentSlug, {
+                tab: "mandates",
+              })}
+              className={linkText}
+            >
+              {mandate.agentSlug}
+            </SafeLink>
+          </span>
         </div>
         <p className="max-w-prose pt-1 text-sm text-muted-foreground">
           {mandate.purpose}
@@ -271,22 +290,30 @@ export function MandateLoading() {
 
 function Loaded({
   detail,
+  harness,
   at,
   view,
   readAt,
 }: {
   detail: MandateDetail;
+  /** The harness the mandate's agent registered, or null when it is not known. */
+  harness: string | null;
   at: MandateAt;
   view: MandateView;
   readAt: Date;
 }) {
   return (
     <div className="flex flex-col gap-4">
-      <Header mandate={detail.mandate} at={at} readAt={readAt} />
+      <Header
+        mandate={detail.mandate}
+        harness={harness}
+        at={at}
+        readAt={readAt}
+      />
       <Tiles mandate={detail.mandate} />
       <MandateLedger detail={detail} at={at} view={view} />
       <div className="grid gap-4 lg:grid-cols-2">
-        <MandateGrant mandate={detail.mandate} />
+        <MandateGrant mandate={detail.mandate} harness={harness} />
         <Reconciliation at={at} />
       </div>
     </div>
@@ -345,6 +372,14 @@ export async function Mandate({
       />
     );
   }
+  // The agents are read once the mandate is, and only then: a page that
+  // draws no agent has no badge to resolve. A mandate names its agent by slug,
+  // and retirement keeps an agent's mandates, so the index holds retired
+  // agents too.
+  const harness = harnessOfSlug(
+    await readAgentHarnessIndex(ctx, source),
+    read.value.mandate.agentSlug,
+  );
   // The mandate the assistant is asked about. A mandate has no name, so its
   // label is the purpose the header prints under the id.
   return (
@@ -354,7 +389,13 @@ export async function Mandate({
         id={mandate}
         label={read.value.mandate.purpose}
       />
-      <Loaded detail={read.value} at={at} view={view} readAt={readAt} />
+      <Loaded
+        detail={read.value}
+        harness={harness}
+        at={at}
+        view={view}
+        readAt={readAt}
+      />
     </>
   );
 }

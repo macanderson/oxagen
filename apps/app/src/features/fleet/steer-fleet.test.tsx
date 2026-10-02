@@ -458,6 +458,29 @@ describe("Steer the fleet", () => {
     );
   });
 
+  it("badges each agent's avatar with the harness it registered, and draws none without one", () => {
+    renderDialog({
+      agents: [
+        { agentKey: "acme.core.release-bot", harness: "codex" },
+        { agentKey: "acme.core.docs" },
+      ],
+    });
+    fireEvent.focus(box());
+    expect(
+      option("acme.core.release-bot")?.querySelector("[data-harness-badge]"),
+    ).toHaveAttribute("data-harness-badge", "codex");
+    // A roster that carried no harness draws no badge (negative).
+    expect(
+      option("acme.core.docs")?.querySelector("[data-harness-badge]"),
+    ).toBeNull();
+    // The chip keeps the agent's avatar and its badge.
+    expect(
+      picker().querySelector(
+        '[data-chip="acme.core.release-bot"] [data-harness-badge]',
+      ),
+    ).toHaveAttribute("data-harness-badge", "codex");
+  });
+
   it("reads a parked run as parked for approval, not live", () => {
     renderDialog({ parkedRunIds: ["tse_live"] });
     fireEvent.focus(box());
