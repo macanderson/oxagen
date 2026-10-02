@@ -2000,6 +2000,12 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .spendOperatorPseudonymsSetHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "get_unproductive_spend",
+    async () =>
+      (await import("./spend.unproductive"))
+        .spendUnproductiveHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "get_clone_draft",
     async () =>
       (await import("./configuration.clone.get"))

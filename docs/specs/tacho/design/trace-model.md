@@ -1,4 +1,4 @@
-<!-- Re-homed from macanderson/cgp-website docs/design/tacho/trace-model.md (PR #27, 2026-08-31). The Oxagen spec at ../spec.md supersedes this file where they disagree. -->
+<!-- Re-homed from oxageninc/cgp-website docs/design/tacho/trace-model.md (PR #27, 2026-08-31). The Oxagen spec at ../spec.md supersedes this file where they disagree. -->
 
 # Tacho trace model
 
@@ -117,7 +117,7 @@ Redaction must not break the chain and must remain auditable:
   stays valid, the redaction is visible, and an auditor with lawful access to
   retained raw bytes can still verify them against the digest.
 - Insurer-facing artifacts never require raw bytes (digests and aggregates
-  only — see [insurer-api.md](https://github.com/macanderson/oxagen-roadmap/blob/main/docs/oxagen/specs/tacho/design/insurer-api.md)); raw retention is an
+  only — see [insurer-api.md](https://github.com/oxageninc/roadmap/blob/main/docs/oxagen/specs/tacho/design/insurer-api.md)); raw retention is an
   enterprise-local policy choice.
 
 ## 4. OpenTelemetry mapping

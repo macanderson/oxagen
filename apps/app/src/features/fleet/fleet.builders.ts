@@ -296,6 +296,7 @@ export function fleetSource(reads: FleetReads) {
       operatorRanking: refuse,
       perMergedPr: refuse,
       unpricedModels: refuse,
+      unproductive: refuse,
     },
     onboarding: { state: refuse, firstFrame: refuse },
     org: {

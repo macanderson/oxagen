@@ -14,6 +14,7 @@ import type { spendDrill } from "@oxagen/oxagen/contracts/spend.drill";
 import type { spendGet } from "@oxagen/oxagen/contracts/spend.get";
 import type { spendOperatorRanking } from "@oxagen/oxagen/contracts/spend.operator_ranking";
 import type { spendPerMergedPr } from "@oxagen/oxagen/contracts/spend.per_merged_pr";
+import type { spendUnproductive } from "@oxagen/oxagen/contracts/spend.unproductive";
 import type { spendWasteList } from "@oxagen/oxagen/contracts/spend.waste";
 import type { z } from "zod";
 import type {
@@ -30,6 +31,7 @@ import type {
   SpendReport,
   SpendWaste,
   UnpricedModels,
+  UnproductiveSpend,
 } from "@/data/contracts/spend";
 import type { ContractOutput } from "@/server/kernel";
 
@@ -206,6 +208,23 @@ export function toSpendPerMergedPr(
         })),
       })),
     })),
+  };
+}
+
+export function toUnproductiveSpend(
+  out: ContractOutput<typeof spendUnproductive>,
+): z.input<typeof UnproductiveSpend> {
+  return {
+    period: out.period,
+    unproductive: out.unproductive,
+    spend: out.spend,
+    share: out.share,
+    parts: out.parts.map((part) => ({
+      detector: part.detector,
+      saving: part.saving,
+      findings: part.findings,
+    })),
+    estimate: { saving: out.estimate.saving, findings: out.estimate.findings },
   };
 }
 

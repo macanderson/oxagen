@@ -31,7 +31,7 @@ S3. Pointing it at a bucket takes a server that speaks that API.
    and runs it on `127.0.0.1`. No server runs between jobs, so there is
    nothing to patch, nothing on the internet, and no cost while CI is idle.
 3. **The job reaches the bucket through GitHub OIDC.** It assumes
-   `gha-turbo-cache`, which any job in `macanderson/oxagen` can assume and
+   `gha-turbo-cache`, which any job in `oxageninc/product` can assume and
    which can read and write this bucket and nothing else. A fork's pull
    request gets no OIDC token. The credentials go to the server process only.
    The action exports no `AWS_*` variable, so tests and builds do not receive

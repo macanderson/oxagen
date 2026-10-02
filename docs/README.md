@@ -9,7 +9,7 @@ Start with [engineering onboarding](ONBOARDING.md) to find the code and rules fo
 | Repository setup and contribution workflow | [Root README](../README.md), [CONTRIBUTING.md](../CONTRIBUTING.md), and [AGENTS.md](../AGENTS.md) |
 | Current app structure | [App architecture](../apps/app/ARCHITECTURE.md) and [source map](CODEMAPS/architecture.md) |
 | Design intent | [Specs](specs/README.md) |
-| Roadmap, implementation plans, and the rev1 product spec | [oxagen-roadmap](https://github.com/macanderson/oxagen-roadmap) |
+| Roadmap, implementation plans, and the rev1 product spec | [oxagen-roadmap](https://github.com/oxageninc/roadmap) |
 | Why a decision was made | [ADR index](adr/README.md) |
 | Standing decisions | [AGENTS.md](../AGENTS.md#standing-decisions--apply-without-asking) |
 | Capability inputs, outputs, and surfaces | [Capability index](capabilities/_index.md) |
@@ -27,7 +27,7 @@ Update a guide with the code it describes. Link to source files for route lists,
 
 Specs record design intent. A proposed feature is not evidence that the feature ships. Dated audits describe the checkout they examined. Use the current source and CI results to establish implementation status.
 
-Plans, gap inventories, epics, and designs for work not yet started go to [oxagen-roadmap](https://github.com/macanderson/oxagen-roadmap), not to this directory. On 2026-09-23 (#3895) the planning material that sat here moved to `docs/oxagen/` in that repository, at the path it had under `docs/` here, and this repository cites it as `oxagen-roadmap:docs/oxagen/<path>`.
+Plans, gap inventories, epics, and designs for work not yet started go to [oxagen-roadmap](https://github.com/oxageninc/roadmap), not to this directory. On 2026-09-23 (#3895) the planning material that sat here moved to `docs/oxagen/` in that repository, at the path it had under `docs/` here, and this repository cites it as `oxagen-roadmap:docs/oxagen/<path>`.
 
 Generated reports (release audits, eval and audit command output) go to the gitignored `verifications/` directory, not here.
 

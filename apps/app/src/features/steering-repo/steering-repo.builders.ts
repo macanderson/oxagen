@@ -169,6 +169,7 @@ export function steeringRepoSource(read: Read<SteeringRepoView>) {
       operatorRanking: refuse,
       perMergedPr: refuse,
       unpricedModels: refuse,
+      unproductive: refuse,
     },
     onboarding: { state: refuse, firstFrame: refuse },
     org: {

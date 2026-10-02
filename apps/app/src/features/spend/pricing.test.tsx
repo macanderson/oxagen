@@ -113,6 +113,7 @@ const source: DataSource = {
     waste,
     operatorRanking: vi.fn(),
     perMergedPr: vi.fn(),
+    unproductive: vi.fn(),
     budgets,
     gatewayPolicy: vi.fn(),
     findings,

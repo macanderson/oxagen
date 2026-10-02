@@ -1,4 +1,4 @@
-<!-- Re-homed from macanderson/cgp-website docs/design/tacho/threat-model.md (PR #27, 2026-08-31). The Oxagen spec at ../spec.md supersedes this file where they disagree. -->
+<!-- Re-homed from oxageninc/cgp-website docs/design/tacho/threat-model.md (PR #27, 2026-08-31). The Oxagen spec at ../spec.md supersedes this file where they disagree. -->
 
 # Tacho threat model
 

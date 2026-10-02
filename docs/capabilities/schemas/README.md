@@ -496,6 +496,7 @@ capability rewrites, so two such branches always conflicted on it (ADR-216).
 - get_spend
 - get_spend_drill
 - get_spend_per_merged_pr
+- get_unproductive_spend
 - list_cost_centers
 - list_findings
 - list_waste

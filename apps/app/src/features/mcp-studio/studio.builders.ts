@@ -1105,6 +1105,7 @@ export function studioSource(reads: StudioReads = {}) {
       operatorRanking: refuse,
       perMergedPr: refuse,
       unpricedModels: refuse,
+      unproductive: refuse,
     },
     onboarding: { state: refuse, firstFrame: refuse },
     org: {

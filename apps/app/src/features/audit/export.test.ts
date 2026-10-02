@@ -83,6 +83,7 @@ const source: DataSource = {
     operatorRanking: refuse,
     perMergedPr: refuse,
     unpricedModels: refuse,
+    unproductive: refuse,
   },
   org: {
     members: refuse,

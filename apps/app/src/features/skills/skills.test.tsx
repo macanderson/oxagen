@@ -143,6 +143,7 @@ const source: DataSource = {
     operatorRanking: vi.fn(),
     perMergedPr: vi.fn(),
     unpricedModels: vi.fn(),
+    unproductive: vi.fn(),
   },
   onboarding: { state: vi.fn(), firstFrame: vi.fn() },
   org: {

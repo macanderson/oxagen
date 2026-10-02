@@ -364,6 +364,7 @@ import { spendWasteListRoute } from "./routes/v1/spend.waste";
 import { spendOperatorRankingRoute } from "./routes/v1/spend.operator_ranking";
 import { spendOperatorPseudonymsSetRoute } from "./routes/v1/spend.operator_pseudonyms.set";
 import { spendPerMergedPrRoute } from "./routes/v1/spend.per_merged_pr";
+import { spendUnproductiveRoute } from "./routes/v1/spend.unproductive";
 import { skillConfigGetRoute } from "./routes/v1/skill.config.get";
 import { skillConfigUpdateRoute } from "./routes/v1/skill.config.update";
 import { skillSearchPreviewRoute } from "./routes/v1/skill.search.preview";
@@ -901,6 +902,7 @@ orgScoped.route("/spend/operators", spendOperatorRankingRoute);
 orgScoped.route("/spend/operators/pseudonyms", spendOperatorPseudonymsSetRoute);
 // Spend per merged pull request, per agent (spend spec, detector 8; F26).
 orgScoped.route("/spend/per-merged-pr", spendPerMergedPrRoute);
+orgScoped.route("/spend/unproductive", spendUnproductiveRoute);
 orgScoped.route("/spend/statement/export", spendStatementExportRoute);
 // Cost-center chargeback (ADR-142). The list, create, delete, and statement
 // are organization-level (`scoped: false`). Set writes the active workspace or

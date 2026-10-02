@@ -582,6 +582,7 @@ after the registered name separately when their contract uses a dotted stem.
 | [get_spend](spend.get.md) | [spend.get.ts](../../packages/oxagen/src/contracts/spend.get.ts) | api, mcp, agent |
 | [get_spend_drill](spend.drill.md) | [spend.drill.ts](../../packages/oxagen/src/contracts/spend.drill.ts) | api, mcp, agent |
 | [get_spend_per_merged_pr](spend.per_merged_pr.md) | [spend.per_merged_pr.ts](../../packages/oxagen/src/contracts/spend.per_merged_pr.ts) | api, agent |
+| [get_unproductive_spend](spend.unproductive.md) | [spend.unproductive.ts](../../packages/oxagen/src/contracts/spend.unproductive.ts) | api, agent |
 | [list_cost_centers](cost_center.list.md) | [cost_center.list.ts](../../packages/oxagen/src/contracts/cost_center.list.ts) | api, mcp, agent |
 | [list_findings](finding.list.md) | [finding.list.ts](../../packages/oxagen/src/contracts/finding.list.ts) | api, mcp, agent, cli |
 | [list_waste](spend.waste.md) | [spend.waste.ts](../../packages/oxagen/src/contracts/spend.waste.ts) | api, mcp, agent |
