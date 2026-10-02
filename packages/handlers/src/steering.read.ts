@@ -1,4 +1,4 @@
-// steering.read.ts: the steering_read MCP tool (steering-repo-spec, Agent
+// steering.read.ts: the read_steering MCP tool (steering-repo-spec, Agent
 // use).
 //
 // An agent calls it to read one record the run's index listed, or one file
@@ -6,14 +6,16 @@
 // heading with the label, then the body with its @tool: mentions rendered in
 // the version's exposure modes. The frontmatter never comes back. The
 // workspace's record wins over an organization record of the same lineage.
-// A call from a run reads the two versions that run was delivered, so the
-// record matches the index line the run was given (see steering.search.ts).
+// An MCP call reads the versions published now, and a call that names a run
+// is refused until a run's delivered versions are recorded (see
+// steering.search.ts).
 //
 // A lineage neither published version holds refuses as
 // `not_found: steering_record_not_found`. A file the skill's folder does not
 // hold refuses as `not_found: steering_file_not_found`.
 //
-// The handler is a factory, for the same reason as steering.search.ts.
+// The handler is a factory, for the same reason as steering.search.ts, and
+// register.ts loads the instance bound to steering.published.ts.
 import type { CheckedContext } from "@oxagen/oxagen";
 import { HandlerError } from "@oxagen/oxagen";
 import {
@@ -23,6 +25,7 @@ import {
   type SteeringReadMiss,
   type SteeringReadOutput,
 } from "@oxagen/steering-bundle";
+import { STEERING_TOOLS_PUBLISHED } from "./steering.published";
 import { steeringScope, type ReadPublished } from "./steering.search";
 
 export interface SteeringReadDeps {
@@ -46,7 +49,7 @@ export function steeringReadMiss(
     return new HandlerError({
       code: "not_found",
       reason: "steering_record_not_found",
-      message: `No published steering version holds ${lineage}. Find the lineage with steering_search.`,
+      message: `No published steering version holds ${lineage}. Find the lineage with search_steering.`,
     });
   }
   return new HandlerError({
@@ -65,3 +68,7 @@ export function createSteeringReadHandler(deps: SteeringReadDeps): SteeringReadH
     return result.output;
   };
 }
+
+/** The handler register.ts loads for read_steering. */
+export const steeringReadHandler: SteeringReadHandler =
+  createSteeringReadHandler(STEERING_TOOLS_PUBLISHED);

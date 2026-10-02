@@ -7,8 +7,8 @@ describe("CURSOR_DASHBOARD_RULE", () => {
   });
 
   it("names both steering tools", () => {
-    expect(CURSOR_DASHBOARD_RULE).toContain("steering_search");
-    expect(CURSOR_DASHBOARD_RULE).toContain("steering_read");
+    expect(CURSOR_DASHBOARD_RULE).toContain("search_steering");
+    expect(CURSOR_DASHBOARD_RULE).toContain("read_steering");
   });
 
   it("has no em dash", () => {

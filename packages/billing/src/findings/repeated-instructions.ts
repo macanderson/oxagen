@@ -21,7 +21,7 @@ import { createHash } from "node:crypto";
 import type { CostBasis } from "@oxagen/database/schema";
 import { foldBasis, type RunTotalsRecord } from "../cost-rollup";
 import type { InstructionProposal } from "./proposal-opener";
-import type { PromptRead, RunPrompt } from "./prompts";
+import type { PromptRead, PromptTextMode, RunPrompt } from "./prompts";
 import {
   agentOrOperator,
   findingFingerprint,
@@ -33,6 +33,7 @@ import {
   type Detector,
   type DetectInput,
   type FindingKey,
+  type FindingValues,
   type Group,
   type Measure,
   type PricedRequestFrame,
@@ -374,6 +375,8 @@ interface Reported {
 
 /** Each written group's repeats, most repeated first, for its prose. */
 const reported = new WeakMap<Group, Reported[]>();
+/** What the workspace kept of the prompts each group's repeats were read from. */
+const retentionOf = new WeakMap<Group, PromptTextMode>();
 
 function detect(input: DetectInput, ctx: DetectContext): void {
   const read = input.prompts;
@@ -418,13 +421,14 @@ function detect(input: DetectInput, ctx: DetectContext): void {
   for (const group of ctx.groups.values()) {
     if (group.kind !== KIND) continue;
     const entry = byKey.get(`${group.level}|${group.subject}`);
-    if (entry)
-      reported.set(
-        group,
-        [...entry.repeats].sort(
-          (a, b) => b.prompts - a.prompts || b.runs.size - a.runs.size,
-        ),
-      );
+    if (!entry) continue;
+    reported.set(
+      group,
+      [...entry.repeats].sort(
+        (a, b) => b.prompts - a.prompts || b.runs.size - a.runs.size,
+      ),
+    );
+    retentionOf.set(group, read.mode);
   }
 }
 
@@ -443,7 +447,37 @@ function instructionLine(text: string, prompts: number): string {
   return `Runs received "${quote(text)}" ${plural(prompts, "time", "times")} this month. ${STEERING_LINE}`;
 }
 
-function prose(group: Group): { why: string; fix: string } {
+/**
+ * The figures the card names (#5023): what the workspace keeps of prompt
+ * text, which decides the Needs prompt text badge, and the top repeat.
+ */
+function valuesOf(group: Group): FindingValues | undefined {
+  const top = reported.get(group)?.[0];
+  const retention = retentionOf.get(group);
+  if (top === undefined || retention === undefined) return undefined;
+  return {
+    kind: KIND,
+    retention,
+    sentence: top.repeat.text === null ? null : quote(top.repeat.text),
+    prompts: top.prompts,
+    promptRuns: top.runs.size,
+    others: (reported.get(group)?.length ?? 1) - 1,
+  };
+}
+
+function prose(group: Group): {
+  why: string;
+  fix: string;
+  values?: FindingValues;
+} {
+  const values = valuesOf(group);
+  return {
+    ...words(group),
+    ...(values === undefined ? {} : { values }),
+  };
+}
+
+function words(group: Group): { why: string; fix: string } {
   const repeats = reported.get(group) ?? [];
   const top = repeats[0];
   const others = repeats.length - 1;

@@ -4,13 +4,15 @@ import {
   TypewriterTerminal,
   type TerminalStep,
 } from "@/components/landing/typewriter-terminal";
+import { INSTALL_CMD } from "@/lib/install";
 
 /**
  * InstallTerminal — the /install landing-page animated terminal. Types the
  * full install sequence: the Oxagen agent-skills npx package, then the
- * install.sh curl script that fetches the platform binary and places it in
- * `~/.local/bin` (already on PATH per XDG convention), then a verify step.
- * Rendering + typing animation live in TypewriterTerminal.
+ * install.sh curl script, which downloads the executable for the platform,
+ * checks its SHA-256, and installs it to `~/.local/bin`, then a verify step.
+ * The install lines match what install.sh prints. Rendering and the typing
+ * animation live in TypewriterTerminal.
  */
 
 const STEPS: TerminalStep[] = [
@@ -26,20 +28,19 @@ const STEPS: TerminalStep[] = [
     ],
   },
   {
-    cmd: "curl -fsSL https://cli.oxagen.sh/install.sh | sh",
+    cmd: INSTALL_CMD,
     out: [
-      { kind: "dim", text: "▸ detecting platform · darwin-arm64" },
-      { kind: "dim", text: "▸ fetching oxagen v0.10.0 · verifying checksum" },
-      { kind: "out", text: "install: ~/.local/bin/oxagen" },
       {
-        kind: "ok",
-        text: "✓ oxagen is on your PATH. Run `oxagen` to start.",
+        kind: "dim",
+        text: "▸ downloading https://downloads.oxagen.sh/latest/oxagen-aarch64-apple-darwin",
       },
+      { kind: "ok", text: "✓ checksum matches" },
+      { kind: "ok", text: "✓ installed ~/.local/bin/oxagen (2.1.4)" },
     ],
   },
   {
     cmd: "oxagen --version",
-    out: [{ kind: "out", text: "oxagen/0.10.0 · node v20.11 · darwin-arm64" }],
+    out: [{ kind: "out", text: "2.1.4" }],
   },
 ];
 

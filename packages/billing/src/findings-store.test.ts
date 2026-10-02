@@ -1089,6 +1089,77 @@ describe("runFindingsPass", () => {
     });
   });
 
+  // #5023: standing context's values quote the week's price per 1,000 tokens,
+  // the price the tool and steering pages quote.
+  it("reads the week's price per 1,000 tokens as of the pass's end and hands it to the detectors", async () => {
+    const readWeeklyPrice = vi.fn(async () => ({
+      perThousandMicros: 29_110_000n,
+      currency: "USD",
+      requests: 4_200,
+      since: new Date(NOW.getTime() - 7 * 86_400_000),
+    }));
+    const deps = {
+      now: () => NOW,
+      readRuns: async () => [pricedRun()],
+      readRootSessions: async () => new Map([[SESSION, RUN_ID]]),
+      readToolCalls: async () => [],
+      readFrames: async () => new Map<string, PricedRequestFrame[]>(),
+      readDecisions: async () => new Map(),
+      write: async () => 0,
+    };
+    await runFindingsPass(SCOPE, { ...deps, readWeeklyPrice });
+    expect(readWeeklyPrice).toHaveBeenCalledWith(SCOPE, NOW);
+    const seen: DetectInput | undefined =
+      vi.mocked(detectFindings).mock.calls.at(-1)?.[0];
+    expect(seen?.weeklyContextPrice).toEqual({
+      perThousandMicros: 29_110_000n,
+      currency: "USD",
+    });
+
+    // A week the book could not price reaches the detectors as no price.
+    await runFindingsPass(SCOPE, {
+      ...deps,
+      readWeeklyPrice: async () => null,
+    });
+    expect(
+      vi.mocked(detectFindings).mock.calls.at(-1)?.[0].weeklyContextPrice,
+    ).toBeNull();
+
+    // A pass with no price read hands the detectors none at all.
+    await runFindingsPass(SCOPE, deps);
+    expect(
+      vi.mocked(detectFindings).mock.calls.at(-1)?.[0],
+    ).not.toHaveProperty("weeklyContextPrice");
+
+    // A workspace with no runs in the window reads no price.
+    const unread = vi.fn(async () => null);
+    await runFindingsPass(SCOPE, {
+      ...deps,
+      readRuns: async () => [],
+      readWeeklyPrice: unread,
+    });
+    expect(unread).not.toHaveBeenCalled();
+  });
+
+  it("lets a failed weekly price read fail the pass without writing", async () => {
+    const write = vi.fn();
+    await expect(
+      runFindingsPass(SCOPE, {
+        now: () => NOW,
+        readRuns: async () => [pricedRun()],
+        readRootSessions: async () => new Map([[SESSION, RUN_ID]]),
+        readToolCalls: async () => [],
+        readFrames: async () => new Map(),
+        readDecisions: async () => new Map(),
+        readWeeklyPrice: async () => {
+          throw new Error("price book down");
+        },
+        write,
+      }),
+    ).rejects.toThrow("price book down");
+    expect(write).not.toHaveBeenCalled();
+  });
+
   it("lets a degraded store fail the pass without writing", async () => {
     const write = vi.fn();
     await expect(

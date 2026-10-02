@@ -18,7 +18,7 @@ An org Owner or Admin exports. The auditor needs no Oxagen account.
 
 ### Auditor
 
-5. Install the CLI on your machine: `curl -fsSL https://cli.oxagen.sh/install.sh | sh`, or `npm install -g @oxagen/cli` with Node.js 20 or newer. No sign-in is needed for the next steps.
+5. Install the CLI on your machine: `curl -fsSL https://docs.oxagen.sh/install.sh | sh`, or `npm install -g @oxagen/cli` with Node.js 20 or newer. No sign-in is needed for the next steps.
 
 6. If you received a link, download it: `curl -fLo bundle.zip '<link>'`. The response header `X-Bundle-Digest` is the sha256 of the zip.
 
