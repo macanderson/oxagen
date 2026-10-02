@@ -9,8 +9,11 @@ import { workOrderSend } from "@oxagen/oxagen/contracts/work.order.send";
 import { workOrderAccept } from "@oxagen/oxagen/contracts/work.order.accept";
 import { workBriefApprove } from "@oxagen/oxagen/contracts/work.brief.approve";
 
-const mocks = vi.hoisted(() => ({ assertOrgRole: vi.fn() }));
-vi.mock("@oxagen/iam/org-role", () => ({ assertOrgRole: mocks.assertOrgRole }));
+const mocks = vi.hoisted(() => ({
+  assertOrgRole: vi.fn(),
+  resolveActingUserId: vi.fn(async (ctx: { userId: string | null }) => ctx.userId),
+}));
+vi.mock("@oxagen/iam/org-role", () => ({ assertOrgRole: mocks.assertOrgRole, resolveActingUserId: mocks.resolveActingUserId }));
 
 import { createWorkOrderSendHandler } from "./work.order.send";
 import { createWorkOrderAcceptHandler } from "./work.order.accept";
@@ -62,6 +65,7 @@ describe("the person gate on work actions", () => {
     const d = deps();
     await expect(createWorkOrderSendHandler(d)(SEND, apiKey)).rejects.toMatchObject({ code: "forbidden", reason: "person_required" });
     expect(mocks.assertOrgRole).not.toHaveBeenCalled();
+    expect(mocks.resolveActingUserId).not.toHaveBeenCalled();
     expect(d.db).not.toHaveBeenCalled();
     expect(d.governanceMode).not.toHaveBeenCalled();
   });

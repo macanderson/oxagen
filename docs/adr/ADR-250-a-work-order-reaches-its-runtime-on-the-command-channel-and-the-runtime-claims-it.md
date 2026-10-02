@@ -5,7 +5,8 @@
 - **Owners:** work
 - **Related:** issue #5100 (lane P1-04), `agent-work-phase-1.html` in
   `oxageninc/roadmap` (Work lifecycle, Data contract, Delivery and review),
-  ADR-043 and its ADR-096 amendment, ADR-162, ADR-198, ADR-244, migration
+  ADR-043 and its ADR-096 amendment, ADR-162, ADR-198, ADR-244 (amended: the
+  Work permission bundles), migration
   `20261002081300_work_order_delivery.sql`,
   `packages/handlers/src/lib/work-records/`.
 
@@ -137,7 +138,15 @@ Every decision on a work item (save and approve a brief, send, withdraw, stop,
 return, accept, read checks, close, reopen) is a signed-in person's. An API key
 and an agent run are refused, because an agent holding its operator's key could
 otherwise approve, send, or accept its own work. The person also needs a role
-the action takes in the item's own workspace (`workActionRoles`). So these
+the action takes in the item's own workspace (`workActionRoles`).
+
+In the role editor's catalogue, approving a brief, accepting work, and reading
+checks are the `work.approve` permission, and every other action is
+`work.control`. This amends ADR-244, which named `run.approve` and
+`run.control`. A permission reads as held only when every capability in it is
+allowed, so adding the work actions to those would have taken them from every
+custom role that held them. The default roles are unchanged: an org Owner or
+Admin, or a workspace Owner or Member, may act. So these
 capabilities declare only the `api` surface: the app reaches them through the
 kernel with the person's session, and no MCP tool or CLI command is offered. The
 runtime's two calls use the host key and check the host against the order.

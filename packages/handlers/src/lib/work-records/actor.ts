@@ -16,7 +16,7 @@
 // instead: see runtime.ts.
 import type { CapabilityContext } from "@oxagen/oxagen";
 import { HandlerError } from "@oxagen/oxagen/handler-error";
-import { assertOrgRole } from "@oxagen/iam/org-role";
+import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { type WorkItemAction, workActionRoles } from "@oxagen/work/records";
 
 /** The person behind a work decision, after the checks. */
@@ -45,9 +45,12 @@ export async function assertWorkActor(ctx: CapabilityContext, action: WorkItemAc
       message: "Sign in to Oxagen to decide work. An API key cannot approve, send, return, or accept work.",
     });
   }
-  const role = await assertOrgRole(
-    { orgId: ctx.orgId, workspaceId: ctx.workspaceId, userId: ctx.userId },
-    workActionRoles(action),
-  );
-  return { userId: ctx.userId, role };
+  // With the API key refused above, the acting user is the session's own
+  // (INV-29: every role gate acts as the user resolveActingUserId returns).
+  const userId = await resolveActingUserId(ctx);
+  if (userId === null) {
+    throw new HandlerError({ code: "forbidden", reason: "person_required", message: "Sign in to Oxagen to decide work." });
+  }
+  const role = await assertOrgRole({ orgId: ctx.orgId, workspaceId: ctx.workspaceId, userId }, workActionRoles(action));
+  return { userId, role };
 }

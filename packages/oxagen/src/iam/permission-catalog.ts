@@ -55,10 +55,23 @@ export const PERMISSION_CATALOG: readonly Permission[] = [
   {
     id: "run.control",
     group: "Runs",
-    description: "Pause, resume, cancel and steer runs, and send, stop, and return work",
+    description: "Pause, resume, cancel and steer runs",
+    capabilities: ["dispatch_command"],
+  },
+  {
+    id: "run.approve",
+    group: "Runs",
+    description: "Approve or deny a tool call waiting on a person",
+    capabilities: ["resolve_approval"],
+  },
+  // Phase 1 work actions (ADR-244, ADR-250). Their own permissions, so a
+  // role that holds run.control or run.approve keeps it: a permission reads
+  // as held only when every capability it names is allowed.
+  {
+    id: "work.control",
+    group: "Runs",
+    description: "Write a work item's brief, send it to an agent, and stop, withdraw, return, close, or reopen it",
     capabilities: [
-      "dispatch_command",
-      // Phase 1 work actions (ADR-244, ADR-250).
       "save_work_brief",
       "send_work_order",
       "cancel_work_order",
@@ -69,16 +82,10 @@ export const PERMISSION_CATALOG: readonly Permission[] = [
     ],
   },
   {
-    id: "run.approve",
+    id: "work.approve",
     group: "Runs",
-    description: "Approve or deny a tool call waiting on a person, and approve and accept work",
-    capabilities: [
-      "resolve_approval",
-      // Phase 1 work actions (ADR-244, ADR-250). Read checks supports Accept.
-      "approve_work_brief",
-      "accept_work_order",
-      "refresh_work_order_checks",
-    ],
+    description: "Approve a work item's brief and accept its result",
+    capabilities: ["approve_work_brief", "accept_work_order", "refresh_work_order_checks"],
   },
   // ── Agents ───────────────────────────────────────────────────────────────
   {
