@@ -1,8 +1,8 @@
 "use client";
 // One tool's panel on a Studio server (#4678, "Tool panel"): its
-// classification, the description agents see, how the gateway shapes its
-// inputs and result, what the server says about it, what agents' calls said,
-// and its off switch.
+// classification, the description agents see, its result cap and paging, how
+// the gateway shapes its inputs and result, what the server says about it,
+// what agents' calls said, and its off switch.
 //
 // Every edit here is staged in the draft, never written. A suggested
 // classification stays a suggestion until a person confirms or changes it,
@@ -11,6 +11,14 @@
 // studio-calls.ts) and bills as in-app agent spend. Draft names the server by
 // its folder, so it renders disabled with a one-line note until the record
 // names it.
+//
+// The result cap is spend detector 5's lever: a result over 5,000 tokens is
+// paid for again on every later request until the run compacts. tools.toml
+// caps a result in bytes, and the panel takes tokens at 4 bytes a token.
+// Paging reads page after page into one result, up to the cap. Only a tool
+// from an OpenAPI or GraphQL definition can page, so the paging choice shows
+// for those servers alone, and Review refuses it for a tool whose definition
+// has no paging pattern.
 import { useLocale, useTranslations } from "next-intl";
 import { type ReactNode, useId, useState } from "react";
 import {
@@ -34,9 +42,14 @@ import { FormAlert } from "@/ui/form-feedback";
 import { formatCount } from "@/ui/money-format";
 import { SheetDialog } from "@/ui/sheet-dialog";
 import {
+  capBytes,
+  capTokens,
+  DEFAULT_MAX_RESULT_BYTES,
   DESCRIPTION_MAX,
   type DraftOp,
   importedAfter,
+  MAX_RESULT_TOKENS,
+  stagedCap,
   stagedClassification,
   stagedDescription,
 } from "./draft";
@@ -400,6 +413,168 @@ function Description({
   );
 }
 
+type PagingChoice = "keep" | "on" | "off";
+
+function pagingChoiceOf(paging: boolean | undefined): PagingChoice {
+  if (paging === undefined) return "keep";
+  return paging ? "on" : "off";
+}
+
+/** A whole number of tokens the cap takes, or null for anything else. */
+function capTokensOf(text: string): number | null {
+  if (!/^\d+$/.test(text.trim())) return null;
+  const tokens = Number(text.trim());
+  return tokens >= 1 && tokens <= MAX_RESULT_TOKENS ? tokens : null;
+}
+
+function ResultCap({
+  tool,
+  ops,
+  canEdit,
+  pageable,
+  onStage,
+}: {
+  tool: StudioTool;
+  ops: readonly DraftOp[];
+  canEdit: boolean;
+  /** True for a server whose tools can page: one built from an OpenAPI or GraphQL definition. */
+  pageable: boolean;
+  onStage: (op: DraftOp) => void;
+}) {
+  const t = useTranslations("mcpStudio.panel");
+  const locale = useLocale();
+  const id = useId();
+  const staged = stagedCap(tool.name, ops);
+  const [text, setText] = useState(() =>
+    staged === undefined ? "" : String(capTokens(staged.maxResultBytes)),
+  );
+  const [paging, setPaging] = useState<PagingChoice>(() =>
+    pagingChoiceOf(staged?.paging),
+  );
+  const imported = importedAfter(tool, ops);
+  const tokens = capTokensOf(text);
+  const invalid = text.trim() !== "" && tokens === null;
+  /** Staging the cap the draft already holds would change nothing. */
+  const unchanged =
+    staged !== undefined &&
+    tokens !== null &&
+    capBytes(tokens) === staged.maxResultBytes &&
+    paging === pagingChoiceOf(staged.paging);
+  const stageCap = () => {
+    if (tokens === null) return;
+    onStage({
+      kind: "cap",
+      tool: tool.name,
+      maxResultBytes: capBytes(tokens),
+      ...(paging === "keep" || !pageable ? {} : { paging: paging === "on" }),
+    });
+  };
+  return (
+    <section aria-labelledby={`${id}-h`} className={section}>
+      <h3 id={`${id}-h`} className={heading}>
+        {t("cap")}
+      </h3>
+      {staged === undefined ? (
+        <p className="text-[13px] text-muted-foreground">{t("capUnread")}</p>
+      ) : (
+        <>
+          <dl className={kvList} data-testid="studio-panel-cap">
+            <dt className={kvTerm}>{t("capTokens")}</dt>
+            <dd className={kvValue}>
+              {formatCount(capTokens(staged.maxResultBytes), locale)}
+            </dd>
+            {pageable ? (
+              <>
+                <dt className={kvTerm}>{t("paging")}</dt>
+                <dd className={kvValue}>
+                  {t(`pagingChoice.${pagingChoiceOf(staged.paging)}`)}
+                </dd>
+              </>
+            ) : null}
+          </dl>
+          <p className="flex items-center gap-2 text-[12.5px] text-muted-foreground">
+            <Badge tone="approval" data-testid="studio-panel-cap-staged">
+              {t("staged")}
+            </Badge>
+          </p>
+        </>
+      )}
+      {canEdit && !imported ? (
+        <p className={fieldHint}>{t("capImportFirst")}</p>
+      ) : null}
+      {canEdit && imported ? (
+        <div className="flex flex-col gap-3">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="flex flex-col gap-1 text-[12.5px] text-muted-foreground">
+              {t("capTokens")}
+              <input
+                type="number"
+                inputMode="numeric"
+                min={1}
+                max={MAX_RESULT_TOKENS}
+                step={1}
+                value={text}
+                placeholder={String(capTokens(DEFAULT_MAX_RESULT_BYTES))}
+                aria-invalid={invalid || undefined}
+                aria-describedby={`${id}-hint`}
+                onChange={(event) => {
+                  setText(event.target.value);
+                }}
+                className={inputBase}
+                data-testid="studio-panel-cap-tokens"
+              />
+            </label>
+            {pageable ? (
+              <label className="flex flex-col gap-1 text-[12.5px] text-muted-foreground">
+                {t("paging")}
+                <select
+                  value={paging}
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    setPaging(value === "on" || value === "off" ? value : "keep");
+                  }}
+                  className={inputBase}
+                  data-testid="studio-panel-cap-paging"
+                >
+                  {(["keep", "on", "off"] as const).map((value) => (
+                    <option key={value} value={value}>
+                      {t(`pagingChoice.${value}`)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+          </div>
+          <p id={`${id}-hint`} className={fieldHint}>
+            {t("capHint", {
+              tokens: formatCount(capTokens(DEFAULT_MAX_RESULT_BYTES), locale),
+            })}
+          </p>
+          <p className={fieldHint}>
+            {pageable ? t("pagingHint") : t("pagingNone")}
+          </p>
+          {invalid ? (
+            <p role="alert" className={note} data-testid="studio-panel-cap-invalid">
+              {t("capInvalid", { max: formatCount(MAX_RESULT_TOKENS, locale) })}
+            </p>
+          ) : null}
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              className={buttonSecondary}
+              disabled={tokens === null || unchanged}
+              data-testid="studio-panel-stage-cap"
+              onClick={stageCap}
+            >
+              {t("stage")}
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
 function Shaping({ tool }: { tool: StudioTool }) {
   const t = useTranslations("mcpStudio.panel");
   const id = useId();
@@ -558,6 +733,7 @@ export function ToolPanel({
   offFacts,
   open,
   onOpenChange,
+  pageable = false,
   draft = draftStudioDescription,
 }: {
   /** The workspace Draft runs in. */
@@ -575,6 +751,8 @@ export function ToolPanel({
   offFacts: ReactNode;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** True for a server whose tools can page: one built from an OpenAPI or GraphQL definition. */
+  pageable?: boolean;
   /** Draft's capability. A test passes a fake. */
   draft?: DraftStudioDescription;
 }) {
@@ -610,6 +788,13 @@ export function ToolPanel({
           canEdit={canEdit}
           onStage={stage}
           draft={draft}
+        />
+        <ResultCap
+          tool={tool}
+          ops={ops}
+          canEdit={canEdit}
+          pageable={pageable}
+          onStage={stage}
         />
         <Shaping tool={tool} />
         <ServerSays tool={tool} />

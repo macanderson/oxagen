@@ -19,7 +19,7 @@ An org Owner or Admin, or a workspace Owner, can call all three. An API key acts
 
 Each server folder has one draft. The folder name is the server's name under `tools/servers/`.
 
-1. Stage your edits as `ops`. An edit imports a tool, removes one, classifies one, rewrites its description, or saves a test call.
+1. Stage your edits as `ops`. An edit imports a tool, removes one, classifies one, rewrites its description, sets its result cap and paging, or saves a test call. One edit, `expose`, sets the server's exposure mode in `server.toml`.
 2. Send `server.toml` and the source the tools import from, such as an OpenAPI document, a GraphQL schema, `.proto` files, or an MCP server's `tools/list` result. Omit either one to keep the stored copy.
 3. Call `save_studio_draft` with the revision you started from.
 
@@ -63,6 +63,7 @@ Review refuses while any imported tool has no `risk`, `side_effect`, or `egress`
 ## What the PR body shows
 
 - The imported, removed, and reclassified tools, the changed descriptions, and the saved tests.
+- The tools whose result cap or paging changed, and the exposure mode when the draft changes it.
 - The token total of every imported tool's definition against the budget, which is `definition_budget` in `server.toml` or the default.
 - The tool checks' findings, errors first, then warnings, then info.
 
@@ -85,6 +86,7 @@ Each refusal answers `conflict` (409) unless the table says otherwise.
 | `server_toml_missing`, `server_toml_invalid`, `server_name_mismatch` | `server.toml` is absent, does not parse, or names another server | Save a valid `server.toml` for this server |
 | `source_required`, `source_invalid`, `importer_not_built` | Review needs the source, the source does not import, or its importer has not shipped | Save the source again, or wait for the importer |
 | `tool_not_offered`, `tool_not_found`, `tool_key_collision` | The source does not offer an imported tool, an edit names an unknown tool, or two tools make one key | Remove or rename the edit the message names |
+| `tool_paging_missing` | A `cap` edit turns paging on for a tool whose definition has no paging pattern | Leave the tool's paging as it is, save, and Review |
 | `production_branch_missing` | The steering repo has no production branch | Restore the branch, then Review |
 
 ## Add a server that runs on machines

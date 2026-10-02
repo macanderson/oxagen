@@ -41,7 +41,7 @@ function put(root: string, rel: string, content: string | Buffer) {
 
 /**
  * A copy of the repo with just what the script imports and edits in place:
- * the script, its entrypoint helper, apps/web's palette module, and the four
+ * the script, its entrypoint helper, apps/web's palette module, and the six
  * hand-authored pages the sync writes a <head> block into.
  */
 function fixtureRepo(root: string) {
@@ -57,6 +57,8 @@ function fixtureRepo(root: string) {
     "story/index.html",
     "read/index.html",
     "products/oxagen/index.html",
+    "terms/index.html",
+    "privacy/index.html",
   ]) {
     put(
       root,
@@ -256,7 +258,7 @@ describe("a run without a kit", () => {
   });
 });
 
-// The contract every consumer repo meets (macanderson/oxagen-brand
+// The contract every consumer repo meets (oxageninc/brand
 // CHANGING.md): a sync copies the kit byte for byte, a check right after it
 // passes, and a check writes nothing and lists every file out of step.
 describe("a sync and a check against a kit", () => {
@@ -593,7 +595,7 @@ describe("brand-drift.yml", () => {
 
   it("checks out the kit at main into .brand-kit, with no pin", () => {
     const checkout = stepIn(workflow, "Check out the brand kit");
-    expect(checkout).toContain("repository: macanderson/oxagen-brand");
+    expect(checkout).toContain("repository: oxageninc/brand");
     expect(checkout).toMatch(/\n\s+ref: main\n/);
     expect(checkout).toContain("path: .brand-kit");
     expect(checkout).not.toContain("token:");
@@ -628,7 +630,7 @@ describe("the checks job runs the brand check", () => {
   it("checks out the kit at main into .brand-kit", () => {
     const checkout = stepIn(checks, "Check out the brand kit");
     expect(checkout).toContain("uses: actions/checkout@");
-    expect(checkout).toContain("repository: macanderson/oxagen-brand");
+    expect(checkout).toContain("repository: oxageninc/brand");
     expect(checkout).toContain("path: .brand-kit");
     expect(checkout).toMatch(/\n\s+ref: main\n/);
   });

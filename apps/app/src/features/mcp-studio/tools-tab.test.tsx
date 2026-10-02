@@ -731,6 +731,152 @@ describe("ToolsTab discovery", () => {
   });
 });
 
+describe("ToolsTab exposure", () => {
+  const BODY = {
+    direct: "Every request carries the definition of each imported tool.",
+    search:
+      "Every request carries three search tools, and an agent finds a tool before it calls it.",
+  } as const;
+
+  const storedOps = () =>
+    parseStoredDraft(window.sessionStorage.getItem(draftKey("stripe"))).ops;
+
+  it("stages search mode, then drops the edit when a person picks the mode in force", async () => {
+    const user = userEvent.setup();
+    renderTab(propsOf(studioView(STRIPE)));
+    const exposure = within(screen.getByTestId("studio-exposure"));
+    expect(
+      exposure.getByRole("heading", { name: "Tool exposure" }),
+    ).toBeInTheDocument();
+    const full = exposure.getByRole("radio", { name: "Full" });
+    const searchable = exposure.getByRole("radio", { name: "Searchable" });
+    expect(full).toBeChecked();
+    expect(full).toHaveAccessibleDescription(BODY.direct);
+    expect(searchable).toHaveAccessibleDescription(BODY.search);
+    expect(exposure.queryByTestId("studio-exposure-staged")).toBeNull();
+
+    await user.click(searchable);
+    expect(storedOps()).toEqual([{ kind: "expose", mode: "search" }]);
+    await waitFor(() => {
+      expect(searchable).toBeChecked();
+    });
+    expect(exposure.getByTestId("studio-exposure-staged")).toHaveTextContent(
+      "In the draft",
+    );
+
+    await user.click(full);
+    expect(storedOps()).toEqual([]);
+    await waitFor(() => {
+      expect(full).toBeChecked();
+    });
+    expect(exposure.queryByTestId("studio-exposure-staged")).toBeNull();
+  });
+
+  it("shows a staged mode from the stored draft", () => {
+    seedDraft(draftKey("stripe"), {
+      revision: 0,
+      ops: [{ kind: "expose", mode: "search" }],
+    });
+    renderTab(propsOf(studioView(STRIPE)));
+    expect(screen.getByTestId("studio-exposure-search")).toBeChecked();
+    expect(screen.getByTestId("studio-exposure-staged")).toBeInTheDocument();
+  });
+
+  it("shows a server already in search mode as Searchable", () => {
+    renderTab(propsOf(studioView(WAREHOUSE)));
+    expect(screen.getByTestId("studio-exposure-search")).toBeChecked();
+    expect(screen.queryByTestId("studio-exposure-staged")).toBeNull();
+  });
+
+  it("names the mode in force, with no switch, for a person who cannot edit", () => {
+    renderTab(propsOf(studioView(STRIPE), { canEdit: false }));
+    expect(screen.queryByRole("radio")).toBeNull();
+    const mode = screen.getByTestId("studio-exposure-mode");
+    expect(mode).toHaveTextContent("Full");
+    expect(mode).toHaveTextContent(BODY.direct);
+  });
+
+  it("draws neither exposure nor calls when the server has no record", () => {
+    renderTab(propsOf(studioView(STRIPE, null)));
+    expect(screen.queryByTestId("studio-exposure")).toBeNull();
+    expect(screen.queryByTestId("studio-calls")).toBeNull();
+  });
+});
+
+describe("ToolsTab calls", () => {
+  /** An imported tool whose call count over the window is `calls`. */
+  function called(name: string, calls: number): StudioTool {
+    return studioTool(name, {
+      feedback: {
+        counts: { calls, schemaRejections: 0, errorResults: 0, retries: 0 },
+        notes: [],
+      },
+    });
+  }
+
+  it("counts Stripe's called tools and says which imported tool has no count", () => {
+    renderTab(propsOf(studioView(STRIPE)));
+    const calls = within(screen.getByTestId("studio-calls"));
+    expect(calls.getByRole("heading", { name: "Calls" })).toBeInTheDocument();
+    expect(calls.getByTestId("studio-calls-counts")).toHaveTextContent(
+      "Agents called 1 of 1 imported tools in the last 30 days.",
+    );
+    expect(calls.getByTestId("studio-calls-unrecorded")).toHaveTextContent(
+      "1 imported tool has no recorded call count, so it is not counted.",
+    );
+    expect(calls.queryByTestId("studio-calls-uncalled")).toBeNull();
+  });
+
+  it("lists the imported tools no agent called", () => {
+    renderTab(
+      propsOf(studioView(STRIPE), {
+        tools: [
+          called("create_payment", 1_204),
+          called("list_customers", 0),
+          called("list_prices", 0),
+          studioTool("create_coupon", { imported: false }),
+        ],
+      }),
+    );
+    const calls = within(screen.getByTestId("studio-calls"));
+    expect(calls.getByTestId("studio-calls-counts")).toHaveTextContent(
+      "Agents called 1 of 3 imported tools in the last 30 days.",
+    );
+    expect(calls.queryByTestId("studio-calls-unrecorded")).toBeNull();
+    const list = calls.getByRole("list", { name: "Tools with no calls" });
+    expect(
+      within(list)
+        .getAllByRole("listitem")
+        .map((item) => item.textContent),
+    ).toEqual(["list_customers", "list_prices"]);
+  });
+
+  it("says the counts are not recorded when the call store did not answer", () => {
+    renderTab(
+      propsOf(studioView(STRIPE), {
+        tools: [
+          studioTool("create_payment", { feedback: { counts: null, notes: [] } }),
+        ],
+      }),
+    );
+    const missing = screen.getByTestId("studio-calls-missing");
+    expect(missing).toHaveAttribute("data-state", "not-recorded");
+    expect(missing).toHaveTextContent(
+      "Oxagen could not read the call counts for this server's tools.",
+    );
+    expect(screen.queryByTestId("studio-calls-counts")).toBeNull();
+  });
+
+  it("draws no calls section for a server that imports no tool", () => {
+    renderTab(
+      propsOf(studioView(STRIPE), {
+        tools: [studioTool("create_coupon", { imported: false })],
+      }),
+    );
+    expect(screen.queryByTestId("studio-calls")).toBeNull();
+  });
+});
+
 describe("ToolsTab kill switches", () => {
   it("puts each tool's off control in its own row and keeps the facts for the panel", () => {
     renderTab(

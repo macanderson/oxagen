@@ -10,6 +10,10 @@
  */
 import { describe, expect, it, vi } from "vitest";
 
+// The first import of the three modules compiles them cold. On a busy CI
+// runner with coverage on, that passes the 5-second default (#5037).
+vi.setConfig({ testTimeout: 30_000 });
+
 vi.mock("@oxagen/database", () => ({
   schema: {},
   withOrgDb: vi.fn(),

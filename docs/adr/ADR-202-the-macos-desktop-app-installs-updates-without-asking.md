@@ -200,6 +200,8 @@ Recorded here, not built:
   off switch, under Verify, from 2.1.2 on. When Oxagen writes terms of
   service, they carry this sentence: "On macOS, the Oxagen desktop app
   downloads and installs new versions automatically unless you turn
-  automatic updates off."
+  automatic updates off." On 2026-10-01 the terms of service went up at
+  oxagen.sh/terms (`apps/web/terms/index.html`), and the section "Software
+  you install" carries the sentence word for word.
 - This replaces the rule confirmed on #3697 for macOS installs that pass the
   gates. Everywhere else, that rule still holds.

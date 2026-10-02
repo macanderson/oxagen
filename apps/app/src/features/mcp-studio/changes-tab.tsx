@@ -15,7 +15,8 @@
 // M5's checks on the saved draft, or on the folder when no draft is saved. It
 // names the server by the folder the record gives, so until the record names
 // one, the section says findings are not recorded. The PR carries tools.toml,
-// the lock and the saved tests, never a credential.
+// the lock and the saved tests, and server.toml when the draft changes the
+// exposure mode, never a credential.
 import { useLocale, useTranslations } from "next-intl";
 import { type ReactNode, useId, useMemo, useState } from "react";
 import { Badge, type BadgeTone } from "@/ui/badge";
@@ -38,12 +39,16 @@ import { StateWrap } from "@/ui/state-wrap";
 import { cell, Table } from "@/ui/table";
 import { parsePullRequestUrl } from "@/shared/pull-request-url";
 import {
+  capTokens,
   type DraftLine,
   type DraftOp,
+  draftExposure,
   draftFiles,
   draftLines,
   draftTokens,
+  type ExposureMode,
   mergeDrafts,
+  opTool,
   readDraftOps,
   sourceRequired,
 } from "./draft";
@@ -99,6 +104,8 @@ function Section({
 function OpLabel({ op }: { op: DraftOp }) {
   const t = useTranslations("mcpStudio.changes.ops");
   const registry = useTranslations("tools.registry");
+  const modes = useTranslations("mcpStudio.tools.exposure.modes");
+  const locale = useLocale();
   switch (op.kind) {
     case "import":
       return <>{t("import", { tool: op.tool })}</>;
@@ -120,6 +127,19 @@ function OpLabel({ op }: { op: DraftOp }) {
       return (
         <>{t("test", { tool: op.tool, environment: op.environment })}</>
       );
+    case "cap":
+      return (
+        <>
+          {t("cap", {
+            tool: op.tool,
+            tokens: formatCount(capTokens(op.maxResultBytes), locale),
+            paging:
+              op.paging === undefined ? "keep" : op.paging ? "on" : "off",
+          })}
+        </>
+      );
+    case "expose":
+      return <>{t("expose", { mode: modes(op.mode) })}</>;
   }
 }
 
@@ -145,12 +165,16 @@ function Surface({
   lines,
   before,
   after,
+  exposure,
 }: {
   lines: readonly DraftLine[];
   before: number | null;
   after: number | null;
+  /** The exposure mode before and after the draft; null when the draft leaves it. */
+  exposure: { from: ExposureMode | null; to: ExposureMode } | null;
 }) {
   const t = useTranslations("mcpStudio.changes.surface");
+  const modes = useTranslations("mcpStudio.tools.exposure.modes");
   const locale = useLocale();
   const tokens = (value: number | null) =>
     value === null ? (
@@ -170,8 +194,26 @@ function Surface({
         <span className="sr-only">{t("to")}</span>
         <span className={`${mono} text-foreground`}>{tokens(after)}</span>
       </p>
+      {exposure === null ? null : (
+        <p
+          data-testid="studio-changes-exposure"
+          className="flex flex-wrap items-baseline gap-1.5 text-[13px] text-muted-foreground"
+        >
+          <span>{t("exposure")}</span>
+          {exposure.from === null ? null : (
+            <>
+              <span className="text-foreground">{modes(exposure.from)}</span>
+              <span aria-hidden>→</span>
+              <span className="sr-only">{t("to")}</span>
+            </>
+          )}
+          <span className="text-foreground">{modes(exposure.to)}</span>
+        </p>
+      )}
       {lines.length === 0 ? (
-        <p className="text-[13px] text-muted-foreground">{t("none")}</p>
+        exposure === null ? (
+          <p className="text-[13px] text-muted-foreground">{t("none")}</p>
+        ) : null
       ) : (
         <Table
           label={t("title")}
@@ -419,16 +461,22 @@ export function ChangesTab({
   const open = openOverride ?? calls.open;
   const [busy, setBusy] = useState(false);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
-  const view = { tools };
+  const view = { tools, exposure: record?.exposure.mode ?? null };
   const lines = draftLines(view, draft.ops);
+  const exposureTo = draftExposure(view, draft.ops);
+  const exposure =
+    exposureTo === null
+      ? null
+      : { from: record?.exposure.mode ?? null, to: exposureTo };
   const files = draftFiles(view, draft.ops);
   const { before, after } = draftTokens(view, draft.ops);
   const empty = draft.ops.length === 0;
   // Lint flags an over-budget server only when its tools load directly
-  // (over_definition_budget), so the warning follows the same rule.
+  // (over_definition_budget), so the warning follows the same rule, and
+  // takes the mode the draft sets.
   const overBudget =
     record !== null &&
-    record.exposure.mode === "direct" &&
+    (exposureTo ?? record.exposure.mode) === "direct" &&
     after !== null &&
     after > record.exposure.definitionBudget
       ? { tokens: after, budget: record.exposure.definitionBudget }
@@ -524,14 +572,19 @@ export function ChangesTab({
       ) : null}
       {empty ? null : (
         <>
-          <Surface lines={lines} before={before} after={after} />
+          <Surface
+            lines={lines}
+            before={before}
+            after={after}
+            exposure={exposure}
+          />
           <Section title={t("edits.title")} testId="studio-changes-edits">
             <ul className="flex flex-col divide-y divide-border">
               {draft.ops.map((op, index) => (
                 <li
                   // An edit's place in the draft is its identity: two saved
                   // tests of one tool are two edits.
-                  key={`${op.kind}:${op.tool}:${String(index)}`}
+                  key={`${op.kind}:${opTool(op) ?? ""}:${String(index)}`}
                   data-testid={`studio-edit-${String(index)}`}
                   className="flex flex-wrap items-center justify-between gap-2 py-2 text-[13px]"
                 >
@@ -542,7 +595,11 @@ export function ChangesTab({
                     <button
                       type="button"
                       data-testid={`studio-unstage-${String(index)}`}
-                      aria-label={t("edits.unstageNamed", { tool: op.tool })}
+                      aria-label={
+                        op.kind === "expose"
+                          ? t("edits.unstageExposure")
+                          : t("edits.unstageNamed", { tool: op.tool })
+                      }
                       disabled={busy}
                       className={buttonSecondary}
                       onClick={() => {
