@@ -48,6 +48,7 @@ import {
   workBriefs,
   workDoneChecks,
   workItemFacts,
+  workSendBacks,
   workTriageDecisions,
   workTriageCorrections,
 } from "../schema/index";
@@ -103,6 +104,10 @@ describe("append-only tables: forbidden mutation columns", () => {
     // revokes UPDATE and DELETE from oxagen_app, and a trigger refuses any
     // UPDATE.
     ["work.done_checks", workDoneChecks],
+    // Each send-back note Oxagen posted on a work item (R3, #5108). The
+    // migration revokes UPDATE and DELETE from oxagen_app, and a trigger
+    // refuses any UPDATE.
+    ["work.send_backs", workSendBacks],
   ];
 
   for (const [tableName, table] of appendOnlyTables) {

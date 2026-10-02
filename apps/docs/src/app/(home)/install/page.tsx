@@ -5,6 +5,7 @@ import { OxagenIcon } from "@oxagen/ui";
 import { CopyCommand } from "@/components/landing/copy-command";
 import { InstallTerminal } from "@/components/landing/install-terminal";
 import { HexField } from "@/components/ui/hex-field";
+import { INSTALL_CMD } from "@/lib/install";
 
 export const metadata: Metadata = {
   title: "Install the Oxagen CLI",
@@ -12,7 +13,6 @@ export const metadata: Metadata = {
     "The oxagen CLI puts agent fleet management in your terminal. One command detects your platform, verifies the checksum, and installs the binary to ~/.local/bin. Add the skills pack with npx and query your workspace from the terminal.",
 };
 
-const INSTALL_CMD = "curl -fsSL https://cli.oxagen.sh/install.sh | sh";
 const SKILLS_CMD = "npx @oxagen/skills@latest install";
 
 /* The three install steps, in the order the terminal animation plays them. */
@@ -26,7 +26,7 @@ const STEPS = [
   {
     step: "02",
     title: "Install the binary",
-    body: "install.sh detects your platform, fetches the matching oxagen binary, verifies its checksum, and places it in ~/.local/bin. That directory is already on your PATH, so no shell profile needs editing.",
+    body: "install.sh detects your platform, downloads the matching oxagen executable, checks its SHA-256, and installs it to ~/.local/bin. If that directory is not on your PATH, the script prints the line to add to your shell profile.",
     command: INSTALL_CMD,
   },
   {
@@ -94,8 +94,7 @@ export default function InstallPage(): ReactNode {
               <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[0.85em]">
                 invoke()
               </code>{" "}
-              boundary as the app. One command installs it, and no shell profile
-              needs editing.
+              boundary as the app. One command installs it.
             </p>
 
             <div className="mt-8">
@@ -171,22 +170,22 @@ export default function InstallPage(): ReactNode {
       <section className="relative isolate overflow-hidden border-b border-border">
         <div className="relative mx-auto grid w-full max-w-7xl items-center gap-12 px-6 py-20 lg:grid-cols-[1fr_1.1fr] lg:py-28">
           <div>
-            <span className="ox-eyebrow">Under the hood</span>
+            <span className="ox-eyebrow">install.sh</span>
             <h2 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">
-              A boring install script,{" "}
-              <span className="lp-grad-text">on purpose</span>.
+              The install script
             </h2>
             <p className="mt-5 max-w-lg text-base text-muted-foreground">
               <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[0.85em]">
                 install.sh
               </code>{" "}
-              does four things and nothing else. Read it before you run it.
+              downloads one file and checks it before it installs anything.
+              Read it before you run it.
             </p>
             <ul className="mt-7 space-y-3 text-sm">
               {[
                 [
                   "Detects your platform",
-                  "macOS or Linux, arm64 or x64, and fetches the matching prebuilt binary.",
+                  "macOS on Apple silicon or Intel, or Linux on x86_64. The script downloads the matching executable from downloads.oxagen.sh.",
                 ],
                 [
                   "Verifies the checksum",
@@ -194,7 +193,7 @@ export default function InstallPage(): ReactNode {
                 ],
                 [
                   "Installs to ~/.local/bin",
-                  "The XDG user binary directory, already on PATH in current shells, so no profile needs editing.",
+                  "If that directory is not on your PATH, the script prints the line to add to your shell profile.",
                 ],
                 [
                   "Never needs sudo",
@@ -213,26 +212,26 @@ export default function InstallPage(): ReactNode {
           </div>
 
           <div className="rounded-2xl border border-border bg-card/70 p-6 backdrop-blur sm:p-8">
-            <p className="ox-eyebrow">Need a different route?</p>
+            <p className="ox-eyebrow">Other ways to install</p>
             <p className="mt-3 text-sm text-muted-foreground">
-              For a CI runner or an ephemeral container, build the portable
-              single-file bundle: one <code className="font-mono">.mjs</code>{" "}
-              you can copy anywhere and run under plain Node 20.
+              On a CI runner or in a container, download the executable for
+              your platform from downloads.oxagen.sh. It carries its own
+              runtime, so it needs no Node.js.
             </p>
             <div className="mt-5 flex flex-col items-start gap-3">
-              <CopyCommand command="pnpm --filter @oxagen/cli bundle" />
+              <CopyCommand command="curl -fsSLO https://downloads.oxagen.sh/latest/oxagen-x86_64-unknown-linux-gnu" />
             </div>
             <p className="mt-5 text-sm text-muted-foreground">
-              The CLI is on npm too, but a global{" "}
-              <code className="font-mono">npm i -g</code> is not reliably
-              standalone yet. The{" "}
+              The CLI is also on npm as{" "}
+              <code className="font-mono">@oxagen/cli</code>, for Node.js 20 or
+              newer. The{" "}
               <Link
                 href="/docs/cli/installation"
                 className="font-medium text-[var(--ember-ink)] hover:underline"
               >
                 installation guide
               </Link>{" "}
-              covers every option: npm, source builds, and the bundle.
+              covers each way to install.
             </p>
           </div>
         </div>

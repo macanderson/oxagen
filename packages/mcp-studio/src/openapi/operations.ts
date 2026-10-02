@@ -4,9 +4,14 @@
 // Path-level and operation-level parameters merge, and the operation's win.
 // Every parameter and the request body become one inputSchema, except a
 // parameter with content instead of schema, which is skipped with a note.
-// The first 2xx response with a JSON schema becomes the outputSchema, and an
-// array result is wrapped as { items }. Webhooks and callbacks are listed and
-// never become tools.
+// Import keeps a parameter an API key scheme names, because only server.toml
+// says which scheme a call uses. Compile drops it once it knows.
+//
+// The 2xx responses give the outputSchema only when they all share one JSON
+// schema and that schema is an object, or an array, which is wrapped as
+// { items }. An operation or path item with its own servers sends to the
+// first of them. Webhooks and callbacks are listed and never become tools.
+import { httpUrlSchema } from "../contract/primitives";
 import type { ImportNote, ListedEntry } from "../model/import-result";
 import {
   cutDescription,
@@ -18,7 +23,8 @@ import {
   type HttpRequest,
   type UpstreamTool,
 } from "../model/upstream-tool";
-import { isList, isRecord, recordField, setOwn, stringField, type JsonRecord } from "./json";
+import { baseUrlRefusal, expandServerUrl } from "./auth";
+import { deepEqual, isList, isRecord, recordField, setOwn, stringField, type JsonRecord } from "./json";
 import { NameSet, fallbackName, toolKeyFrom } from "./names";
 import { detectPaging } from "./paging";
 import type { Resolver } from "./resolve";
@@ -29,8 +35,16 @@ type Method = (typeof METHODS)[number];
 const LOCATIONS = new Set(["path", "query", "header", "cookie"]);
 type Location = HttpParameter["in"];
 
-const STYLES = new Set(["simple", "label", "matrix", "form", "spaceDelimited", "pipeDelimited", "deepObject"]);
+const STYLES = new Set(["simple", "label", "matrix", "form", "spaceDelimited", "pipeDelimited", "deepObject", "cookie"]);
 type Style = NonNullable<HttpParameter["style"]>;
+
+/**
+ * The keys a body schema may hold and still be spread into the tool's input.
+ * Spreading keeps only the properties and their required list, so any other
+ * keyword, such as minProperties, would be lost. Such a body stays whole under
+ * one input property instead.
+ */
+const SPREAD_KEYS = new Set(["type", "properties", "required", "title", "description", "additionalProperties"]);
 
 /** Headers the gateway sets itself, so a tool never takes them as input. */
 const GATEWAY_HEADERS = new Set(["accept", "content-type", "authorization"]);
@@ -58,20 +72,6 @@ function isJson(media: string): boolean {
   return media === "application/json" || media.endsWith("+json");
 }
 
-/** The parameters an apiKey scheme names. The gateway adds them, so no tool takes them as input. */
-function apiKeyParameters(document: JsonRecord, resolver: Resolver): Set<string> {
-  const keys = new Set<string>();
-  const schemes = recordField(recordField(document, "components") ?? {}, "securitySchemes") ?? {};
-  for (const raw of Object.values(schemes)) {
-    const scheme = resolver.resolveObject(raw);
-    if (!isRecord(scheme) || scheme.type !== "apiKey") continue;
-    const where = stringField(scheme, "in");
-    const name = stringField(scheme, "name");
-    if (where !== undefined && name !== undefined) keys.add(parameterKey(where, name));
-  }
-  return keys;
-}
-
 /** A parameter's identity. Header names match without regard to case. */
 function parameterKey(where: string, name: string): string {
   return `${where}:${where === "header" ? name.toLowerCase() : name}`;
@@ -91,7 +91,6 @@ class ToolBuilder {
     private readonly name: string,
     private readonly resolver: Resolver,
     private readonly notes: ImportNote[],
-    private readonly skipped: ReadonlySet<string>,
   ) {}
 
   private note(message: string): void {
@@ -129,14 +128,13 @@ class ToolBuilder {
         merged.set(parameterKey(where, name), parameter);
       }
     }
-    for (const [key, parameter] of merged) {
+    for (const parameter of merged.values()) {
       const name = parameter.name as string;
       const where = parameter.in as string;
       if (!LOCATIONS.has(where)) {
         this.note(`Import skipped the parameter ${name}, because the gateway does not send a parameter in ${where}.`);
         continue;
       }
-      if (this.skipped.has(key)) continue;
       if (where === "header" && GATEWAY_HEADERS.has(name.toLowerCase())) continue;
       if (this.skipContent(name, where, parameter)) continue;
       this.addParameter(name, where as Location, parameter);
@@ -171,12 +169,21 @@ class ToolBuilder {
     const style = stringField(parameter, "style");
     const effective = style !== undefined && STYLES.has(style) ? (style as Style) : defaultStyle(where);
     if (effective !== defaultStyle(where)) entry.style = effective;
-    const explode = parameter.explode;
-    if (typeof explode === "boolean" && explode !== (effective === "form")) entry.explode = explode;
+    // OpenAPI's explode is true by default for the form and cookie styles.
+    const explodes = effective === "form" || effective === "cookie";
+    const explode = typeof parameter.explode === "boolean" ? parameter.explode : explodes;
+    // A cookie parameter always carries explode, so the executor writes one
+    // cookie per item or member exactly when the document says so.
+    if (where === "cookie" || explode !== explodes) entry.explode = explode;
+    if (where === "query" && parameter.allowReserved === true) entry.allow_reserved = true;
     this.parameters.push(entry);
   }
 
-  /** The media type the body is sent as, by the gateway's preference. */
+  /**
+   * The media type the body is sent as, by the gateway's preference: JSON,
+   * then a form, then text, which the executor can send, and only then
+   * multipart or any other type, which it cannot.
+   */
   private pickMedia(content: JsonRecord): { key: string; media: string } | undefined {
     const candidates = Object.keys(content)
       .map((key) => ({ key, media: normalizeMedia(key) }))
@@ -187,8 +194,8 @@ class ToolBuilder {
       pick((media) => media === "application/json") ??
       pick((media) => media.endsWith("+json")) ??
       pick((media) => media === "application/x-www-form-urlencoded") ??
-      pick((media) => media === "multipart/form-data") ??
       pick((media) => media.startsWith("text/")) ??
+      pick((media) => media === "multipart/form-data") ??
       candidates[0];
     if (chosen === undefined) return undefined;
     const sendable =
@@ -218,18 +225,20 @@ class ToolBuilder {
     const bodyProperties = isRecord(schema.properties) ? schema.properties : {};
     const names = Object.keys(bodyProperties);
     const extra = schema.additionalProperties;
+    const bodyRequired = isList(schema.required) ? schema.required : [];
+    // A spread body's members sit beside the parameters, so the input cannot
+    // say "these are required once any of them is sent". An optional body
+    // with required members therefore stays whole, and so does a body whose
+    // schema holds a keyword spreading would drop.
     const spreadable =
       schema.type === "object" &&
       names.length > 0 &&
-      schema.allOf === undefined &&
-      schema.anyOf === undefined &&
-      schema.oneOf === undefined &&
-      schema.patternProperties === undefined &&
+      Object.keys(schema).every((key) => SPREAD_KEYS.has(key)) &&
       (extra === undefined || extra === false) &&
+      (required || bodyRequired.length === 0) &&
       names.every((name) => !Object.hasOwn(this.properties, name));
 
     if (spreadable) {
-      const bodyRequired = isList(schema.required) ? schema.required : [];
       for (const name of names) {
         this.takeProperty(name, bodyProperties[name], required && bodyRequired.includes(name));
       }
@@ -257,54 +266,111 @@ class ToolBuilder {
   }
 }
 
-/** The response the result comes from, and the outputSchema, when a 2xx response has a JSON schema. */
-function readResponse(
-  responses: JsonRecord,
-  resolver: Resolver,
-): { response: NonNullable<HttpRequest["response"]>; output: JsonRecord | undefined } | undefined {
+type ReadResponse = { response: NonNullable<HttpRequest["response"]>; output: JsonRecord | undefined };
+
+/** One 2xx response: its JSON media type and expanded schema, or neither when it has no JSON schema. */
+interface Success {
+  code: string;
+  media_type: string | undefined;
+  schema: unknown;
+}
+
+function readSuccess(code: string, raw: unknown, resolver: Resolver): Success {
+  const response = resolver.resolveObject(raw);
+  const content = isRecord(response) ? recordField(response, "content") : undefined;
+  if (content === undefined) return { code, media_type: undefined, schema: undefined };
+  const keys = Object.keys(content).filter((key) => {
+    const media = normalizeMedia(key);
+    const entry = content[key];
+    return isJson(media) && MEDIA_TYPE.test(media) && isRecord(entry) && entry.schema !== undefined;
+  });
+  const key = keys.find((item) => normalizeMedia(item) === "application/json") ?? keys[0];
+  if (key === undefined) return { code, media_type: undefined, schema: undefined };
+  const entry = content[key] as JsonRecord;
+  return { code, media_type: normalizeMedia(key), schema: resolver.schema(entry.schema, "output") };
+}
+
+/** "200", "200 and 204", or "200, 201, and 204". */
+function listCodes(codes: readonly string[]): string {
+  if (codes.length <= 2) return codes.join(" and ");
+  return `${codes.slice(0, -1).join(", ")}, and ${codes[codes.length - 1]}`;
+}
+
+/**
+ * The response the result comes from, and the outputSchema. The executor
+ * accepts every 2xx status, so the outputSchema is advertised only when every
+ * declared 2xx response has the same JSON schema. Otherwise a successful call
+ * could return a result that breaks it.
+ */
+function readResponse(responses: JsonRecord, resolver: Resolver, note: (message: string) => void): ReadResponse | undefined {
   const codes = Object.keys(responses)
     .filter((code) => /^2[0-9]{2}$/.test(code))
     .sort();
   if (Object.hasOwn(responses, "2XX")) codes.push("2XX");
-  for (const code of codes) {
-    const response = resolver.resolveObject(responses[code]);
-    const content = isRecord(response) ? recordField(response, "content") : undefined;
-    if (content === undefined) continue;
-    const keys = Object.keys(content).filter((key) => {
-      const media = normalizeMedia(key);
-      const entry = content[key];
-      return isJson(media) && MEDIA_TYPE.test(media) && isRecord(entry) && entry.schema !== undefined;
-    });
-    const key = keys.find((item) => normalizeMedia(item) === "application/json") ?? keys[0];
-    if (key === undefined) continue;
-    const entry = content[key] as JsonRecord;
-    const expanded = resolver.schema(entry.schema, "output");
-    const media_type = normalizeMedia(key);
-    return shapeOutput(code, media_type, expanded);
+  const successes = codes.map((code) => readSuccess(code, responses[code], resolver));
+  const first = successes.find((success) => success.media_type !== undefined);
+  if (first === undefined) return undefined;
+  const read = shapeOutput(first.code, first.media_type as string, first.schema);
+  if (read.output === undefined) {
+    if (nullableContainer(first.schema)) {
+      note(
+        `Import left out this tool's output schema, because the ${first.code} response may be null, and a tool's output schema must describe an object.`,
+      );
+    }
+    return read;
   }
-  return undefined;
+  const differs = successes.some((success) => success !== first && (success.media_type === undefined || !deepEqual(success.schema, first.schema)));
+  if (differs) {
+    note(
+      `Import left out this tool's output schema, because its successful responses (${listCodes(codes)}) do not share one JSON schema.`,
+    );
+    return { response: { status: read.response.status, media_type: read.response.media_type }, output: undefined };
+  }
+  return read;
 }
 
-/** MCP needs an object result. An array result is wrapped as { items }, and a scalar one has no outputSchema. */
-function shapeOutput(
-  status: string,
-  media_type: string,
-  schema: unknown,
-): { response: NonNullable<HttpRequest["response"]>; output: JsonRecord | undefined } {
+/** The schema's type list without "null", when it has "null" beside other types. */
+function nonNullTypes(schema: JsonRecord): unknown[] | undefined {
+  const type = schema.type;
+  if (!isList(type) || !type.includes("null")) return undefined;
+  return type.filter((item) => item !== "null");
+}
+
+/** True for type ["object", "null"] or ["array", "null"]: a result that would have an outputSchema if it could not be null. */
+function nullableContainer(schema: unknown): boolean {
+  const others = isRecord(schema) ? nonNullTypes(schema) : undefined;
+  return others?.length === 1 && (others[0] === "object" || others[0] === "array");
+}
+
+/**
+ * True when every value the schema allows is an object. An untyped schema
+ * counts when each oneOf or anyOf branch is an object, when an allOf part is
+ * one, or when it has properties and no oneOf or anyOf.
+ */
+function objectShaped(schema: unknown): boolean {
+  if (!isRecord(schema)) return false;
+  if (schema.type !== undefined) return schema.type === "object";
+  const branches = [schema.oneOf, schema.anyOf].filter((list) => list !== undefined);
+  if (branches.length > 0) return branches.every((list) => isList(list) && list.length > 0 && list.every(objectShaped));
+  if (isList(schema.allOf) && schema.allOf.some(objectShaped)) return true;
+  return isRecord(schema.properties);
+}
+
+/**
+ * MCP needs an object result. An array result is wrapped as { items }. A
+ * scalar, a value that may be null, and a composition with a branch that is
+ * not an object have no outputSchema. The HTTP interpreter returns those
+ * values unchanged, so an object schema would not describe them.
+ */
+function shapeOutput(status: string, media_type: string, schema: unknown): ReadResponse {
   const response: NonNullable<HttpRequest["response"]> = { status, media_type };
   if (!isRecord(schema)) return { response, output: undefined };
-  const type = schema.type;
-  const nullable = (name: string): boolean =>
-    isList(type) && type.length === 2 && type.includes(name) && type.includes("null");
-  if (type === "object" || nullable("object")) return { response, output: { ...schema, type: "object" } };
-  if (type === "array" || nullable("array")) {
+  if (schema.type === "array") {
+    // The template wraps a result only beside the { items } schema that describes it.
     response.wrap = "items";
     return { response, output: { type: "object", properties: { items: schema }, required: ["items"] } };
   }
-  const composed = schema.allOf !== undefined || schema.anyOf !== undefined || schema.oneOf !== undefined;
-  if (type === undefined && (isRecord(schema.properties) || composed)) {
-    return { response, output: { ...schema, type: "object" } };
-  }
+  if (objectShaped(schema)) return { response, output: { ...schema, type: "object" } };
   return { response, output: undefined };
 }
 
@@ -326,9 +392,30 @@ function firstIssue(error: { issues: readonly { path: readonly (string | number)
   return issue.path.length === 0 ? issue.message : `${issue.path.join(".")}: ${issue.message}`;
 }
 
+/** A servers list's urls, each with its variables' defaults filled in, or undefined for no list or an empty one. */
+function serverUrls(servers: unknown): { raw: string; url: string }[] | undefined {
+  if (!isList(servers)) return undefined;
+  const urls: { raw: string; url: string }[] = [];
+  for (const server of servers) {
+    if (!isRecord(server)) continue;
+    const raw = stringField(server, "url");
+    if (raw !== undefined) urls.push({ raw, url: expandServerUrl(raw, server) });
+  }
+  return urls.length === 0 ? undefined : urls;
+}
+
+/** A server url as two lists compare it: without a trailing slash. */
+function serverKey(url: string): string {
+  return url.replace(/\/+$/, "");
+}
+
+/** The operation's base url, or why a call cannot use its server. */
+type OwnServer = { base_url: string | undefined; note: string | undefined } | { refusal: string };
+
 class OperationReader {
   private readonly names = new NameSet();
-  private readonly skipped: ReadonlySet<string>;
+  /** The document's own servers, which the environments come from. */
+  private readonly rootServers: ReadonlySet<string>;
   readonly tools: UpstreamTool[] = [];
   readonly listed: ListedEntry[] = [];
 
@@ -337,7 +424,31 @@ class OperationReader {
     private readonly resolver: Resolver,
     private readonly notes: ImportNote[],
   ) {
-    this.skipped = apiKeyParameters(document, resolver);
+    this.rootServers = new Set((serverUrls(document.servers) ?? []).map(({ url }) => serverKey(url)));
+  }
+
+  /**
+   * The nearest servers override, from the operation, then its path item. A
+   * list that names the document's servers again is no override, because the
+   * environments already come from them. Any other list overrides them, so
+   * the tool sends to its first url in every environment. A url the executor
+   * cannot use as a base url is refused, so the call never falls back to the
+   * environment's url.
+   */
+  private ownServer(pathServers: unknown, operation: JsonRecord): OwnServer {
+    const own = serverUrls(operation.servers) ?? serverUrls(pathServers);
+    if (own === undefined) return { base_url: undefined, note: undefined };
+    const keys = new Set(own.map(({ url }) => serverKey(url)));
+    if (keys.size === this.rootServers.size && [...keys].every((key) => this.rootServers.has(key))) {
+      return { base_url: undefined, note: undefined };
+    }
+    const [{ raw, url }] = own as [{ raw: string; url: string }];
+    const why = httpUrlSchema.safeParse(url).success
+      ? baseUrlRefusal(url)
+      : "It is not an absolute http or https URL, and import does not know where the document is served.";
+    if (why !== undefined) return { refusal: `its own server "${raw}" cannot be a tool call's base url. ${why}` };
+    const others = own.length > 1 ? ` The document lists ${own.length} servers for it, and import took the first.` : "";
+    return { base_url: url, note: `This tool sends to ${url} in every environment, because the document gives the operation its own server.${others}` };
   }
 
   private note(tool: string | undefined, message: string): void {
@@ -355,7 +466,7 @@ class OperationReader {
       if (!isRecord(item)) continue;
       for (const method of METHODS) {
         const operation = item[method];
-        if (isRecord(operation)) this.readOperation(path, method, item.parameters, operation);
+        if (isRecord(operation)) this.readOperation(path, method, item, operation);
       }
     }
   }
@@ -375,7 +486,7 @@ class OperationReader {
     return { value: Object.keys(parsed.data).length > 0 ? parsed.data : undefined, problem: undefined };
   }
 
-  private readOperation(path: string, method: Method, pathParameters: unknown, operation: JsonRecord): void {
+  private readOperation(path: string, method: Method, item: JsonRecord, operation: JsonRecord): void {
     const METHOD = method.toUpperCase() as HttpRequest["method"];
     const operationId = stringField(operation, "operationId");
     const suggestion = this.suggestion(operation);
@@ -388,13 +499,19 @@ class OperationReader {
     if (suggestion.problem !== undefined) {
       this.note(name, `Import ignored x-oxagen-tool on ${METHOD} ${path}, because it is not valid: ${suggestion.problem}.`);
     }
+    const server = this.ownServer(item.servers, operation);
+    if ("refusal" in server) {
+      this.note(name, `Import skipped ${METHOD} ${path}, because ${server.refusal}`);
+      return;
+    }
+    if (server.note !== undefined) this.note(name, server.note);
     this.resolver.beginTool(name);
 
-    const builder = new ToolBuilder(name, this.resolver, this.notes, this.skipped);
-    builder.addParameters(pathParameters, operation.parameters);
+    const builder = new ToolBuilder(name, this.resolver, this.notes);
+    builder.addParameters(item.parameters, operation.parameters);
     builder.addBody(operation.requestBody);
     const { parameters, body } = builder.build();
-    const read = readResponse(recordField(operation, "responses") ?? {}, this.resolver);
+    const read = readResponse(recordField(operation, "responses") ?? {}, this.resolver, (message) => this.note(name, message));
 
     const request: HttpRequest = {
       kind: "http",
@@ -403,6 +520,7 @@ class OperationReader {
       path,
       parameters,
     };
+    if (server.base_url !== undefined) request.base_url = server.base_url;
     if (body !== undefined) request.body = body;
     if (read !== undefined) request.response = read.response;
     const security = isList(operation.security) ? operation.security : this.document.security;
