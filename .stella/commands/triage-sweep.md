@@ -20,8 +20,8 @@ Target repo: **$ARGUMENTS**
 > `.claude/commands/triage-issues.md` (`/triage-issues`). Read that file in Phase 0
 > when the target repo has it, and follow it wherever it differs from this one.
 > There a triaged issue carries exactly one priority, one `MODEL:`, one `SIZE:`,
-> one `KIND:`, and one `AREA:` label, and its title reads
-> `<Priority> <Tier> <Size> <Kind> (<Area>): <Statement>`. Retitle each issue you
+> one `KIND:`, and one `DOMAIN:` label, and its title reads
+> `<Priority> <Tier> <Size> <Kind> (<Domain>): <Statement>`. Retitle each issue you
 > label to that format, and set its issue type and filing fields as that file says.
 >
 > **An Oxagen organization has no `triage` queue.** Since 2026-10-02 a new issue
@@ -107,8 +107,8 @@ Do all of this before touching a single issue.
    - **pain** — `pain:*` (and `goal:*`)
    - **state** — `triage`, `blocked`, `HOLD`, `in-progress`, `needs-witness`, `size/*`
 
-   Label names may be uppercase: `TRIAGE`, `KIND:BUG`, `AREA:API`, `SIZE:SMALL`,
-   `MODEL:T2`. `KIND:*` is the type bucket and `AREA:*` the area bucket. `MODEL:*`
+   Label names may be uppercase: `TRIAGE`, `KIND:BUG`, `DOMAIN:API`, `SIZE:SMALL`,
+   `MODEL:T2`. `KIND:*` is the type bucket and `DOMAIN:*` (`AREA:*` in stella) the area bucket. `MODEL:*`
    and `SIZE:*` are families of their own, required where the repo's rules require
    them. Write the spelling `gh label list` returns. GitHub matches a name without
    regard to case when you add, filter, or remove a label, but an issue's `labels`
