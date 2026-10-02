@@ -43,14 +43,14 @@ export function RefreshFromHost({
   const [pending, setPending] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
   const [found, setFound] = useState<Found>(null);
-  const ran = useRef(false);
+  const ranRef = useRef(false);
 
   // The refresh on open: once per page, setting no state until the host
   // answers. A viewer whose role cannot refresh still reads the page, so a
   // refusal here stays quiet; pressing the button says why.
   useEffect(() => {
-    if (!auto || ran.current) return;
-    ran.current = true;
+    if (!auto || ranRef.current) return;
+    ranRef.current = true;
     void (async () => {
       try {
         const result = await refreshContextPr(org, ws, proposalId);

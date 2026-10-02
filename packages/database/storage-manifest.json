@@ -1146,6 +1146,17 @@
       "writes": []
     },
     {
+      "domain": "context",
+      "name": "get_context_pr_diff",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "billing",
       "name": "get_contract_rate",
       "reads": [],
@@ -3355,6 +3366,16 @@
       "surfaces": [
         "api",
         "cli"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "context",
+      "name": "refresh_context_pr",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api"
       ],
       "writes": []
     },

@@ -32,7 +32,7 @@ import { SheetDialog } from "@/ui/sheet-dialog";
 import { type GovernanceChanged, setGovernanceMode } from "./actions";
 import { STEERING_GAPS } from "./gaps";
 import { routes } from "@/shared/safe-path";
-import { type SteeringAt, steeringLink } from "./view";
+import type { SteeringAt } from "./view";
 
 const MODES = ["solo", "team", "regulated"] as const;
 type Mode = (typeof MODES)[number];

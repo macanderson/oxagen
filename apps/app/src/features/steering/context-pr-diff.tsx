@@ -112,7 +112,11 @@ function FileDiff({ file }: { file: ContextPrDiff["files"][number] }) {
   );
 }
 
-/** The diff's body for a read, drawn without its own reads so a test renders it whole. */
+/**
+ * The diff's body for a read, drawn without its own reads so a test renders it whole.
+ *
+ * @internal Exported for context-pr-page.test.tsx; the page renders it through ContextPrDiffSection.
+ */
 export function ContextPrDiffBody({
   read,
   prUrl,
