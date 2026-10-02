@@ -510,6 +510,7 @@ describe("the Repositories tab", () => {
       "Role",
       "Production branch",
       ".oxagen/",
+      "Issues",
       "Events",
       "Symbols",
       "Action",

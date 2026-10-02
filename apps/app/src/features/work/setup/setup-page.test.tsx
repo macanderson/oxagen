@@ -337,6 +337,9 @@ describe("Work setup › Collectors", () => {
     );
     await user.clear(within(dialog).getByLabelText("Name"));
     await user.type(within(dialog).getByLabelText("Name"), "github-mobile");
+    // Typing passes through "github", an existing collector, which ticks its
+    // repositories; going past that name clears them again.
+    expect(within(dialog).getByRole("checkbox", { name: "a-intel/platform" })).not.toBeChecked();
     await user.click(submit);
     expect(within(dialog).getByTestId("work-action-failure")).toHaveTextContent(
       "Choose at least one repository.",
