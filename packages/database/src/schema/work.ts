@@ -10,14 +10,16 @@
 // each Phase 1 object to these tables. F13 (#4638, migration
 // 20261002063000_work_direct_orders.sql) adds the direct work order of a run
 // no send covers (work.direct_orders) and each check run of a definition of
-// done (work.done_checks). Every table carries the org mixin and the same
+// done (work.done_checks). R3 (#5108, migration
+// 20261002152000_work_send_backs.sql) adds the send-back notes Oxagen posted
+// (work.send_backs). Every table carries the org mixin and the same
 // row-level security as the rest of the database.
 //
 // Append only: work.briefs, work.item_facts, work.triage_decisions,
-// work.triage_corrections, work.done_verdicts, work.done_checks, and
-// work.autonomy_events. The
+// work.triage_corrections, work.done_verdicts, work.done_checks,
+// work.send_backs, and work.autonomy_events. The
 // migrations revoke UPDATE and DELETE from oxagen_app on each, and a trigger
-// refuses any UPDATE of a brief or a fact. work.items is soft deleted: it
+// refuses any UPDATE of a brief, a fact, a check run, or a send-back note. work.items is soft deleted: it
 // carries deleted_at and deleted_by_id, and oxagen_app has no DELETE on it. A
 // soft-deleted item keeps its number and its provider key, so a collector that
 // hears from the same provider item finds the deleted row.
@@ -943,6 +945,43 @@ export const workDoneChecks = workSchema.table(
     resultCheck: check(
       "done_checks_result_check",
       sql`${t.result} = CASE ${t.verdict} WHEN 'held' THEN 'passed' WHEN 'proven' THEN 'passed' WHEN 'broken' THEN 'failed' ELSE 'pending' END`,
+    ),
+  }),
+);
+
+/**
+ * One send-back note Oxagen posted on a work item (R3, #5108). A work order
+ * goes back to its work item when its last runs each ended with nothing kept
+ * (F34, #5085). A streak is the work order and the newest run in it, so one
+ * row per streak keeps a later pass from posting the same note again, and a
+ * new run starts a new streak. A row is written only once the note is
+ * written. Append only.
+ */
+export const workSendBacks = workSchema.table(
+  "send_backs",
+  {
+    id: uuid("id").primaryKey().default(uuidv7Default),
+    ...orgScopeMixin(),
+    ...appendOnlyAuditMixin(),
+    orderId: uuid("order_id")
+      .notNull()
+      .references(() => workOrders.id),
+    /** The newest run of the streak the note named: `arun_…` or `tse_…`. */
+    lastRunId: text("last_run_id").notNull(),
+  },
+  (t) => ({
+    streakUniq: uniqueIndex("send_backs_streak_uniq").on(
+      t.orderId,
+      t.lastRunId,
+    ),
+    createdIdx: index("send_backs_created_idx").on(
+      t.orgId,
+      t.workspaceId,
+      t.createdAt,
+    ),
+    lastRunIdCheck: check(
+      "send_backs_last_run_id_check",
+      sql`${t.lastRunId} ~ '^(arun|tse)_[0-9a-z]+$'`,
     ),
   }),
 );

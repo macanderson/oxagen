@@ -1594,6 +1594,7 @@ jobs:
               echo
               echo "- Postgres — \`infra/tools/run-db-migrations.sh packages/database --apply\` from a laptop with AWS credentials, on a checkout of origin/main, or the **DB Migrate (manual)** workflow with target production, which runs the same script"
               echo "- ClickHouse / Neo4j — the **Store Migrate (manual)** workflow"
+              echo "- A ClickHouse column a migration dropped that is still there — no apply clears it, because the ledger already lists that migration. Run that migration's \`ALTER TABLE\` statement against the store by hand. The step output names the table, the column and the file."
               echo
               echo "Read the pending list before applying. A store whose ledger was lost reports its"
               echo "whole history as pending, and applying from there is not what you want."

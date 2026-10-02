@@ -1,4 +1,4 @@
-// steering.search.ts: the steering_search MCP tool (steering-repo-spec, Agent
+// steering.search.ts: the search_steering MCP tool (steering-repo-spec, Agent
 // use).
 //
 // An agent calls it to find steering the run's index did not list, or to find
@@ -8,13 +8,15 @@
 // published gets no hits and null versions, not an error, so the agent's
 // next step reads the same either way.
 //
-// A call from a run searches the two versions that run was delivered, so a
-// version that publishes during the run does not change what the run reads.
-// steering_read does the same.
+// The MCP surface sets no run id (apps/mcp/src/context.ts, buildContext), so
+// every call there reads the versions published now. A call from a run would
+// have to read the two versions that run was delivered, so that a version
+// published during the run does not change what the run reads. Nothing
+// records those yet, so steering.published.ts refuses a call that names a
+// run. read_steering does the same.
 //
-// The handler is a factory. Its default instance waits for two things other
-// lanes own: the steering_search contract in packages/oxagen/src/contracts,
-// and the version store `published` reads (#4447).
+// The handler is a factory, so a test can hand it any version. register.ts
+// loads the instance bound to steering.published.ts (#5137).
 import type { CheckedContext } from "@oxagen/oxagen";
 import {
   searchSteering,
@@ -22,6 +24,7 @@ import {
   type Delivery,
   type SteeringSearchOutput,
 } from "@oxagen/steering-bundle";
+import { STEERING_TOOLS_PUBLISHED } from "./steering.published";
 
 /** The workspace a steering read answers for, and the run that asks, if any. */
 export interface SteeringScope {
@@ -64,3 +67,8 @@ export function createSteeringSearchHandler(
     return searchSteering(delivery, parsed);
   };
 }
+
+/** The handler register.ts loads for search_steering. */
+export const steeringSearchHandler: SteeringSearchHandler = createSteeringSearchHandler({
+  published: STEERING_TOOLS_PUBLISHED.published,
+});
