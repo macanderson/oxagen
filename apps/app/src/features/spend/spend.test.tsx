@@ -1417,7 +1417,7 @@ describe("Spend › By tool", () => {
 });
 
 describe("Spend › Wasted spend", () => {
-  it("prints the four tiles, the recorded cause, the six design causes as not recorded, and a card per run with its two links", async () => {
+  it("prints the four tiles, the recorded cause, retry loops from the findings, the five other design causes as not recorded, and a card per run with its two links", async () => {
     loaded();
     await renderSpend(["waste"]);
     const wasted = screen.getAllByText("Wasted", { selector: "dt" });
@@ -1442,8 +1442,14 @@ describe("Spend › Wasted spend", () => {
       expect(causes).toHaveTextContent(cause);
     }
     expect(causes.querySelectorAll('li[data-recorded="false"]')).toHaveLength(
-      6,
+      5,
     );
+    // Retry loops come from the open findings, which answered.
+    expect(
+      causes
+        .querySelector('li[data-cause="retryLoops"]')
+        ?.getAttribute("data-recorded"),
+    ).toBe("true");
     const named = document.querySelector('[data-run="arun_01k5rn8f3j"]');
     if (!(named instanceof HTMLElement)) throw new Error("no named run card");
     expect(named).toHaveTextContent("Repair the login redirect");
