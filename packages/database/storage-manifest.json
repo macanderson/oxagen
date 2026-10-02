@@ -3354,6 +3354,15 @@
       "writes": []
     },
     {
+      "domain": "context",
+      "name": "read_steering",
+      "reads": [],
+      "surfaces": [
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "plugin",
       "name": "reauth_plugin_credential",
       "reads": [],
@@ -3970,6 +3979,15 @@
       "surfaces": [
         "agent",
         "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "context",
+      "name": "search_steering",
+      "reads": [],
+      "surfaces": [
         "mcp"
       ],
       "writes": []

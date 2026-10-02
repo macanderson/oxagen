@@ -42,20 +42,20 @@ describe("spinLoopProposals", () => {
     const [proposal] = build(spinDraft(AGENT));
     expect(proposal!.rationale).toBe(
       `${AGENT} ran in a spin loop between 2026-09-01 and 2026-10-01. ` +
-        "On 2 runs, a call ran 20 or more times in a row and returned the same result each time. 140 turns made only those repeats. " +
-        "Those turns cost $12.40. " +
+        "On 2 runs, a call ran 20 or more times in a row and returned the same result each time. 140 calls came from turns that made only those repeats. " +
+        "Those calls cost $12.40. " +
         "Each poll in a shell loop costs a full request. The harness's own wait and a subagent's result return once, when the work is done.",
     );
   });
 
-  it("prices only the turns a price covers", () => {
+  it("prices only the calls a price covers", () => {
     const draft = spinDraft(AGENT);
     const [proposal] = build({
       ...draft,
       evidence: { ...draft.evidence, coveredCalls: 100 },
     });
     expect(proposal!.rationale).toContain(
-      "100 turns of them have a price, and those cost $12.40.",
+      "100 calls of them have a price, and those cost $12.40.",
     );
   });
 

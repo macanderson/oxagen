@@ -46,6 +46,7 @@ import {
   type Detector,
   type DetectInput,
   type FindingKey,
+  type FindingResultTally,
   type FindingResultUse,
   type Group,
   type Measure,
@@ -451,12 +452,28 @@ export const unpagedResults: Detector = {
     // the prose says "read": a result priced without frames counts that one.
     const why = `${group.subject} returned ${plural(results, "result", "results")} over ${CARRY_RESULT_TOKENS.toLocaleString("en-US")} tokens on ${plural(group.runs.size, "run", "runs")}. Later requests read ${results === 1 ? "it" : "them"} ${plural(evidence.calls, "time", "times")}.`;
     const fix = `Page ${group.subject}'s results at ${PAGE_TOKENS.toLocaleString("en-US")} tokens and fetch the rest on demand. A step that needs a large result once can run in a subagent, so the result stays out of the run's own context.`;
+    const side = (t: FindingResultTally | undefined) => ({
+      results: t?.results ?? 0,
+      reads: t?.reads ?? 0,
+    });
     return {
       why: split === undefined ? why : why + useLines(split, currencyOf(group)),
       fix:
         split?.mode === "digest_only"
           ? `${fix} To leave out the results a later step quoted, keep tool call and model call text in the workspace's retention policy.`
           : fix,
+      // With no split, the pass checked no result for a quote, so every
+      // result counts in full, as the detector text says.
+      values: {
+        kind: "unpaged_results",
+        results,
+        retention: split?.mode ?? null,
+        quoted: side(split?.used),
+        unchecked:
+          split === undefined
+            ? { results, reads: evidence.calls }
+            : side(split.unchecked),
+      },
     };
   },
 };

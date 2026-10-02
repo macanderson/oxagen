@@ -5,16 +5,22 @@
 // price where the detector names one. The finding text, who it is about, the
 // kind's definition, and what it cites follow, then Evidence and Fix.
 //
-// The finding contract carries the subject, the runs, the calls, the saving,
-// and the detector's own text (`why`). Where those figures fill every value a
-// finding text needs, the card writes it from the catalogue. Where the text
-// needs a value the contract does not carry, such as a model name or a
-// repeated sentence, the card shows the detector's own text, which names it.
-// A kind with no entry in CARDS, such as one a later detector adds, draws the
-// generic card: the same figures and the detector's own text. A finding about
-// an agent draws the agent's avatar with its registered harness (#4871).
+// The card writes each kind's finding text from the catalogue, filled from
+// the finding's runs, calls, and saving and from the figures the findings job
+// stored for the kind (`values`, #5023). Every figure is the job's, so the
+// card multiplies nothing (ADR-060). A finding the job wrote before it stored
+// values shows the detector's own text (`why`) instead, never a zero. The
+// repeat kinds need no values: their text names only the runs, the calls,
+// and the saving. A kind with no entry in CARDS, such as one a later detector
+// adds, draws the generic card: the same figures and the detector's own text.
+// A finding about an agent draws the agent's avatar with its registered
+// harness (#4871).
 import { useLocale, useTranslations } from "next-intl";
-import { type Cost, ratioOfMicros } from "@/data/contracts/money";
+import {
+  type Cost,
+  type Money as MoneyValue,
+  ratioOfMicros,
+} from "@/data/contracts/money";
 import type { SpendFinding } from "@/data/contracts/spend";
 import { routes } from "@/shared/safe-path";
 import { Badge } from "@/ui/badge";
@@ -24,32 +30,26 @@ import { Money } from "@/ui/money";
 import { formatCount, formatMoney, formatRatio } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
 import { type AgentHarnesses, AgentMark, harnessIn } from "./agent-mark";
-import { NotRecordedValue } from "./figures";
+import { MoneyFigure, NotRecordedValue } from "./figures";
 import { FixDialog } from "./fix-dialog";
 import type { SpendAt } from "./view";
 
 type FindingKind = SpendFinding["kind"];
-
-/** The kinds whose finding text the contract's own figures fill. */
-type CatalogueText =
-  | "spin_loops"
-  | "duplicate_tool_calls"
-  | "repeated_shell_commands"
-  | "spend_with_no_outcome";
+type FindingValues = NonNullable<SpendFinding["values"]>;
 
 /** How one kind's card differs from the generic card. */
 interface CardSpec {
   /**
-   * Where the finding text comes from: the catalogue key the contract's
-   * figures fill, or `detector` for the detector's own text.
+   * Where the finding text comes from: `figures` fills the catalogue from
+   * the runs, the calls, and the saving; `values` needs the kind's stored
+   * values too, and falls back to the detector's text without them;
+   * `detector` shows the detector's own text.
    */
-  readonly text: CatalogueText | "detector";
+  readonly text: "figures" | "values" | "detector";
   /** Detector 4 is a counterfactual, so its card says estimated (rule 3). */
   readonly estimated?: true;
   /** The per-unit price the detector names, after the amount and the share (rule 5). */
   readonly unit?: "weeklyPerThousandTokens";
-  /** Detector 6 needs prompt text, which a digest_only workspace does not keep (rule 4). */
-  readonly needsPromptText?: true;
 }
 
 /** The card of a kind with no entry below. */
@@ -57,18 +57,19 @@ const GENERIC: CardSpec = { text: "detector" };
 
 /** Each kind's card, as the spec's detector cards word it. */
 const CARDS: { readonly [K in FindingKind]?: CardSpec } = {
-  cache_writes_never_read: GENERIC,
-  duplicate_tool_calls: { text: "duplicate_tool_calls" },
-  repeated_shell_commands: { text: "repeated_shell_commands" },
-  unpaged_results: GENERIC,
-  spin_loops: { text: "spin_loops" },
-  standing_context: { text: "detector", unit: "weeklyPerThousandTokens" },
-  idle_cache_rewrites: GENERIC,
-  cache_busts: GENERIC,
-  model_class_fit: { text: "detector", estimated: true },
-  repeated_instructions: { text: "detector", needsPromptText: true },
-  recurring_runs: GENERIC,
-  spend_with_no_outcome: { text: "spend_with_no_outcome" },
+  cache_writes_never_read: { text: "values" },
+  duplicate_tool_calls: { text: "figures" },
+  repeated_shell_commands: { text: "figures" },
+  unpaged_results: { text: "values" },
+  spin_loops: { text: "values" },
+  standing_context: { text: "values", unit: "weeklyPerThousandTokens" },
+  idle_cache_rewrites: { text: "values" },
+  cache_busts: { text: "values" },
+  model_class_fit: { text: "values", estimated: true },
+  repeated_instructions: { text: "values" },
+  recurring_runs: { text: "values" },
+  spend_with_no_outcome: { text: "values" },
+  retry_loops: { text: "values" },
 };
 
 /** The card a kind draws; the generic card for a kind with no entry. */
@@ -76,20 +77,30 @@ function cardOf(kind: FindingKind): CardSpec {
   return CARDS[kind] ?? GENERIC;
 }
 
-/**
- * The words repeated_instructions writes into its text on a digest_only
- * workspace (packages/billing/src/findings/repeated-instructions.ts), where
- * it can match only whole prompts. The finding contract carries no retention
- * mode, so the card reads the detector's own words.
- */
-const NEEDS_PROMPT_TEXT = "Needs prompt text";
+/** The finding's values, when the job stored them for this kind. */
+function valuesOf(finding: SpendFinding): FindingValues | null {
+  const values = finding.values;
+  return values !== undefined && values.kind === finding.kind ? values : null;
+}
 
-/** Whether a finding's detector could not read prompt text on this workspace. */
+/**
+ * Whether the workspace keeps no prompt text, so prompt habits match whole
+ * prompts alone (rule 4). The retention mode the job stored decides it.
+ */
 function needsPromptText(finding: SpendFinding): boolean {
+  const values = valuesOf(finding);
   return (
-    cardOf(finding.kind).needsPromptText === true &&
-    finding.why.includes(NEEDS_PROMPT_TEXT)
+    values?.kind === "repeated_instructions" &&
+    values.retention === "digest_only"
   );
+}
+
+/** The per-unit price a card names; null when the job recorded none. */
+function unitPrice(finding: SpendFinding): Cost | null {
+  const values = valuesOf(finding);
+  return values?.kind === "standing_context"
+    ? values.weeklyPricePerThousand
+    : null;
 }
 
 /**
@@ -141,8 +152,7 @@ function Figures({
             data-figure="unit"
             className="text-[15px] font-semibold leading-tight"
           >
-            {/* The finding contract carries no per-unit price yet. */}
-            <NotRecordedValue />
+            <MoneyFigure money={unitPrice(finding)} />
           </dd>
         </div>
       )}
@@ -161,20 +171,190 @@ function FindingText({
 }) {
   const t = useTranslations("spend.findings.card.text");
   const locale = useLocale();
-  if (card.text === "detector")
+  const money = (value: MoneyValue) =>
+    formatMoney(value, { locale, precision: "cents" });
+  const amount = money(finding.saving);
+  const { runs, calls } = finding;
+
+  /** The catalogue's text for a kind that writes from its values. */
+  const fromValues = (values: FindingValues): string => {
+    switch (values.kind) {
+      case "spin_loops":
+        return t("spin_loops", {
+          who,
+          tool: values.tool,
+          repeats: values.repeats,
+          calls,
+          runs,
+          amount,
+        });
+      case "retry_loops":
+        return t("retry_loops", {
+          who,
+          tool: values.tool,
+          failures: values.failures,
+          calls,
+          runs,
+          amount,
+        });
+      case "standing_context": {
+        const { provider } = values;
+        const lines = [
+          t("standing_context.resent", { who, resent: values.resentTokens }),
+        ];
+        if (provider !== null) {
+          lines.push(
+            t("standing_context.provider", {
+              provider: provider.name,
+              tokens: provider.tokens,
+              called: provider.toolsCalled,
+              tools: provider.tools,
+            }),
+          );
+          if (provider.weeklyPrice !== null)
+            lines.push(
+              t("standing_context.providerPrice", {
+                weekly: money(provider.weeklyPrice),
+              }),
+            );
+        }
+        if (values.contextFrameTokens !== null && values.contextFrameTokens > 0)
+          lines.push(t("standing_context.contextFrames"));
+        return lines.join(" ");
+      }
+      case "model_class_fit": {
+        const args = {
+          who,
+          model: values.model,
+          lighter: values.lighterModel,
+          amount,
+        };
+        if (values.editedRuns === 0)
+          return t("model_class_fit.unchanged", {
+            ...args,
+            runs: values.unchangedRuns,
+          });
+        if (values.unchangedRuns === 0)
+          return t("model_class_fit.edited", {
+            ...args,
+            edited: values.editedRuns,
+          });
+        return t("model_class_fit.mixed", {
+          ...args,
+          unchanged: values.unchangedRuns,
+          edited: values.editedRuns,
+        });
+      }
+      case "repeated_instructions":
+        return values.sentence === null
+          ? t("repeated_instructions.wholePrompt", {
+              prompts: values.prompts,
+              promptRuns: values.promptRuns,
+              others: values.others,
+            })
+          : t("repeated_instructions.sentence", {
+              sentence: values.sentence,
+              prompts: values.prompts,
+              others: values.others,
+            });
+      case "recurring_runs":
+        return t("recurring_runs", {
+          groupSize: values.groupSize,
+          unchanged: values.unchanged,
+          otherPrompts: values.otherPrompts,
+          amount,
+        });
+      case "spend_with_no_outcome":
+        return t("spend_with_no_outcome", {
+          who,
+          amount,
+          runs,
+          closedUnmerged: values.closedUnmerged,
+          reverted: values.reverted,
+          abandoned: values.abandoned,
+        });
+      case "cache_writes_never_read":
+        return t("cache_writes_never_read", {
+          who,
+          runs,
+          tokens: values.writtenTokens,
+          amount,
+        });
+      case "idle_cache_rewrites":
+        return t("idle_cache_rewrites", {
+          who,
+          span:
+            values.minWaitMinutes === values.maxWaitMinutes ? "same" : "range",
+          min: values.minWaitMinutes,
+          max: values.maxWaitMinutes,
+          calls,
+          average: values.averageTokens,
+          coverage: values.pricedRewrites === calls ? "all" : "some",
+          priced: values.pricedRewrites,
+          keepAlive: money(values.keepAlive),
+          rewrites: money(values.rewrites),
+          unknown: values.unknownRewrites,
+        });
+      case "cache_busts":
+        return t("cache_busts", {
+          who,
+          calls,
+          // The text reads the part and its count only when a bust recorded one.
+          ...(values.firstChange === null || values.firstChangeBusts === null
+            ? { first: "unknown" }
+            : {
+                first: "known",
+                part: values.firstChange,
+                busts: values.firstChangeBusts,
+              }),
+          unknown: values.unknownBusts,
+          coverage: values.pricedBusts === calls ? "all" : "some",
+          priced: values.pricedBusts,
+          amount,
+        });
+      case "unpaged_results":
+        return t("unpaged_results", {
+          who,
+          results: values.results,
+          runs,
+          calls,
+          amount,
+          quoted: values.quoted.results,
+          bound:
+            values.retention === null
+              ? "unread"
+              : values.retention === "digest_only"
+                ? "digestOnly"
+                : values.unchecked.results > 0
+                  ? "partial"
+                  : "none",
+          unchecked: values.unchecked.results,
+        });
+    }
+  };
+
+  const values = valuesOf(finding);
+  if (card.text === "figures" && finding.kind === "duplicate_tool_calls")
     return (
-      <p data-finding-text="detector" className="text-[13px]">
-        {finding.why}
+      <p data-finding-text="catalogue" className="text-[13px]">
+        {t("duplicate_tool_calls", { who, runs, calls, amount })}
+      </p>
+    );
+  if (card.text === "figures" && finding.kind === "repeated_shell_commands")
+    return (
+      <p data-finding-text="catalogue" className="text-[13px]">
+        {t("repeated_shell_commands", { runs, calls, amount })}
+      </p>
+    );
+  if (card.text === "values" && values !== null)
+    return (
+      <p data-finding-text="catalogue" className="text-[13px]">
+        {fromValues(values)}
       </p>
     );
   return (
-    <p data-finding-text="catalogue" className="text-[13px]">
-      {t(card.text, {
-        who,
-        runs: finding.runs,
-        calls: finding.calls,
-        amount: formatMoney(finding.saving, { locale, precision: "cents" }),
-      })}
+    <p data-finding-text="detector" className="text-[13px]">
+      {finding.why}
     </p>
   );
 }

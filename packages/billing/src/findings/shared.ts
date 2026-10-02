@@ -20,7 +20,10 @@ import type {
   FindingKind,
   FindingLevel,
 } from "@oxagen/database/schema";
-import { FINDING_FRAMES_PER_RUN } from "@oxagen/oxagen/contracts/finding.shared";
+import {
+  FINDING_FRAMES_PER_RUN,
+  type FindingValues,
+} from "@oxagen/oxagen/contracts/finding.shared";
 import {
   foldBasis,
   priceInputTokens,
@@ -36,6 +39,8 @@ import type { RunView } from "./requests";
 
 /** The most cited frames a finding stores per run; the contract's own cap (#4001). */
 export { FINDING_FRAMES_PER_RUN };
+/** Each kind's figures its finding text names; the contract's own shape (#5023). */
+export type { FindingValues };
 
 /** The trailing window one pass reads. */
 export const FINDINGS_WINDOW_DAYS = 30;
@@ -380,6 +385,13 @@ export interface FindingEvidence {
   recommendation?: FindingRecommendation;
   /** Detector 5's split by result use; absent on every other kind, and on a row written before it was stored. */
   resultUse?: FindingResultUse;
+  /**
+   * The kind's figures its finding text names, in the contract's shape, so a
+   * reader copies them as stored (#5023). Absent on a row written before
+   * they were stored, and on a kind whose text needs none. A reader then
+   * shows the detector's own text, never a zero.
+   */
+  values?: FindingValues;
 }
 
 export interface FindingDraft {
@@ -470,11 +482,24 @@ export interface DetectInput {
   /** How many of the window's runs had their model-call frames read. */
   frameCoverage?: FrameCoverage;
   /**
+   * What 1,000 tokens sent on every request cost the workspace over the last
+   * 7 days, the price the tool and steering pages quote (spec detector 2).
+   * Null when the book could not price every request of the week. Absent
+   * when the store read none.
+   */
+  weeklyContextPrice?: WeeklyPricePerThousand | null;
+  /**
    * Whether a later step quoted each large tool result, for detector 5
    * (decision 7). Absent when the store read none, and detector 5 then
    * counts every re-read, an upper bound.
    */
   resultUse?: ResultUseRead;
+}
+
+/** A weekly price per 1,000 tokens of standing context, in micros. */
+export interface WeeklyPricePerThousand {
+  perThousandMicros: bigint;
+  currency: string;
 }
 
 /** The input the findings store builds: every read is set. */
@@ -758,10 +783,15 @@ function citedFrames(frames: readonly CallFrame[]): {
   };
 }
 
+/**
+ * A detector's words for one finding, and the figures its finding text names
+ * (#5023). A kind whose text needs no figure past the runs, the calls, and
+ * the saving returns no values.
+ */
 export type Prose = (
   group: Group,
   evidence: FindingEvidence,
-) => { why: string; fix: string };
+) => { why: string; fix: string; values?: FindingValues };
 
 /** What one pass shares between its detectors. */
 export interface DetectContext {
@@ -862,10 +892,16 @@ export function toDraft(
     currency: ranked[0]!.run.currency,
     basis: group.basis,
     confidence: coverage >= HIGH_CONFIDENCE_COVERAGE ? "high" : "medium",
-    ...prose(group, evidence),
+    why: "",
+    fix: "",
     citedRuns: ranked.map((a) => a.run.runId),
     evidence,
   };
+  // The values ride the evidence, which `cost.findings.cited_frames` stores.
+  const { why, fix, values } = prose(group, evidence);
+  draft.why = why;
+  draft.fix = fix;
+  if (values !== undefined) evidence.values = values;
   if (group.claims.length > 0) draft.claims = group.claims;
   if (group.recommendation !== undefined)
     draft.recommendation = { ...group.recommendation };

@@ -6565,6 +6565,21 @@
       }
     },
     {
+      "name": "read_steering",
+      "file": "steering.read.ts",
+      "domain": "context",
+      "mode": "sync",
+      "surfaces": [
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "list_steering_records",
       "file": "steering.record.list.ts",
       "domain": "context",
@@ -6683,6 +6698,21 @@
         "unit": true,
         "docs": true,
         "app": true
+      }
+    },
+    {
+      "name": "search_steering",
+      "file": "steering.search.ts",
+      "domain": "context",
+      "mode": "sync",
+      "surfaces": [
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
       }
     },
     {

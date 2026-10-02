@@ -111,6 +111,21 @@ A hook waits only on its own session's hooks (ADR-231, #4601). `tachod` keeps on
 
 Shipping a batch costs the batch, not the session. Each session's body file carries a byte-offset index beside it, `<session>.bodies.index`, so the 200 bodies of a batch are read at their offsets instead of found by a scan. The index is derived from the body file and rebuilt whenever the two disagree, so a body file already on disk is indexed on its first read and a file the retention sweep rewrites is indexed again. That first scan and the batch's reads both run off the synchronous path, so the daemon answers `/status` and its control-plane fetches while a long session is read. The daemon also remembers the byte each session's shipped cursor sits on in its event file, so `unshipped` and the health probe read the unshipped tail rather than the file. One measured host held a session of 16,436 model bodies in 7.38 GB, re-read all of it for every 200 events, and shipped nothing for nine hours (#3694).
 
+### 3.3 Rate limits on the host routes
+
+*Added 2026-10-02 (#3167).*
+
+A host ships events with `POST /v1/tacho/events` (`ingest_tacho_events`) and polls for commands with `POST /v1/tacho/commands` (`fetch_commands`). `apps/api/src/app.ts` puts two layers of rate limits in front of both. Each limit counts requests in a one-minute window.
+
+1. **Before authentication.** Every request to `/v1/tacho/*` counts against two buckets: one per client address (`tacho-preauth-ip`), and one per credential (`tacho-preauth-credential`, keyed on a digest of the `Authorization` value). The credential ceiling is the sum of the per-host budgets below, so a healthy host never reaches it first.
+2. **After authentication.** Each enrolled host gets its own buckets, keyed on its API key. `/events` has a bucket of its own (`TACHO_INGEST_PER_MIN`), and `/bundle` and `/commands` share one (`TACHO_HOST_PER_MIN`). A retry storm on the command poll therefore cannot slow the evidence path. The other host routes have their own buckets too.
+
+A request over a ceiling gets `429 {"error":"rate_limited"}` with a `Retry-After` header. Each counted response carries `X-RateLimit-Limit`, `X-RateLimit-Remaining` and `X-RateLimit-Reset`.
+
+**When the counter store fails.** The counters live in Postgres, so each ceiling holds across every API instance. When a counter write fails, the two limits before authentication fall back to a counter in that instance's memory, with the same window, ceiling and bucket key (ADR-082). They never answer 503. While they run that way, each instance counts on its own, so with N instances a caller can reach N times the ceiling. The limits after authentication let the request through uncounted, because the caller has already shown a valid credential.
+
+**The client address.** The per-address bucket takes its address from `extractTrustedClientIp`, the one client-address reader in the repository (ADR-083). It believes only a header the edge writes, or an entry in `X-Forwarded-For` that a named proxy vouches for. When nothing names the caller, the per-address limit skips the request rather than counting it in a bucket every unnamed caller shares, because one shared bucket would let a single caller use up the ceiling for every host. The per-credential limit still applies. What the reader believes depends on two deployment settings, [`TRUST_EDGE_CLIENT_IP_HEADER`](../../../packages/config/src/registry.ts) and [`TRUSTED_PROXY_CIDRS`](../../../packages/config/src/registry.ts), and their registry entries say what each one does.
+
 ---
 
 ## 4. Package home and public surface
@@ -505,7 +520,7 @@ Stella runs each hook as `bash -c <command>` and passes no session id, no pid, a
 
 `tacho-hook` finds the Stella process in this order:
 
-1. `STELLA_PID` in the hook's environment, when it names a live process. Stella does not set it yet. This contract asks Stella to export it: the pid of the Stella process that runs the hook, in the environment of every hook it runs. It is the only source that names Stella on macOS when bash forks the hook and `ps` fails.
+1. `STELLA_PID` in the hook's environment, when it names a live process. Stella does not set it yet. This contract asks Stella to export it: the pid of the Stella process that runs the hook, in the environment of every hook it runs. It is the only source that names Stella on macOS when bash forks the hook and `ps` fails. The request is [macanderson/stella#6659](https://github.com/macanderson/stella/issues/6659), opened 2026-10-02 (#4366).
 2. The cached identity under `stella-identity/`, keyed by that pid or by the hook's parent pid. A hook within a minute of the entry's last check takes it with no read, and a later hook confirms it with one start-time read.
 3. The hook's parent. When bash execs the hook, the parent is Stella. When bash forks it, the parent is a shell, and Stella is the shell's parent. On Linux `tacho-hook` reads the parent from `/proc/<pid>/stat` and spawns nothing. Elsewhere it asks `ps`, and when `ps` fails there, the shell's pid stands and that hook lands on a chain of its own (#4358).
 

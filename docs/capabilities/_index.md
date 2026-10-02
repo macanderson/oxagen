@@ -232,8 +232,10 @@ after the registered name separately when their contract uses a dotted stem.
 | [promote_steering_record](steering.record.promote.md) | [steering.record.promote.ts](../../packages/oxagen/src/contracts/steering.record.promote.ts) | api |
 | [propose_record](steering.proposal.create.md) | [steering.proposal.create.ts](../../packages/oxagen/src/contracts/steering.proposal.create.ts) | api, mcp, agent |
 | [publish_steering_record](steering.record.publish.md) | [steering.record.publish.ts](../../packages/oxagen/src/contracts/steering.record.publish.ts) | api |
+| [read_steering](steering.read.md) | [steering.read.ts](../../packages/oxagen/src/contracts/steering.read.ts) | mcp |
 | [refresh_steering_pr](steering.pr.refresh.md) | [steering.pr.refresh.ts](../../packages/oxagen/src/contracts/steering.pr.refresh.ts) | api, agent |
 | [revert_steering_pr](steering.pr.revert.md) | [steering.pr.revert.ts](../../packages/oxagen/src/contracts/steering.pr.revert.ts) | api, mcp, agent, cli |
+| [search_steering](steering.search.md) | [steering.search.ts](../../packages/oxagen/src/contracts/steering.search.ts) | mcp |
 
 ## Control
 

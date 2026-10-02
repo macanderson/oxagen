@@ -2,8 +2,7 @@
   "record": {
     "loading": "Loading the record",
     "header": {
-      "steering": "Steering",
-      "record": "record",
+      "eyebrow": "Steering record",
       "published": "published",
       "archived": "archived",
       "slugTitle": "The slug is the record's file stem under .oxagen/rules/ and stays fixed.",
