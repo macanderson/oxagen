@@ -254,10 +254,6 @@ import { systemInstallInstructions } from "./system.install.instructions";
 import { userPreferencesRead } from "./user.preferences.read";
 import { userWorkspacePreferencesRead } from "./user.workspace_preferences.read";
 import { userWorkspacePreferencesWrite } from "./user.workspace_preferences.write";
-import { budgetPolicyRead } from "./budget.policy.read";
-import { budgetPolicyWrite } from "./budget.policy.write";
-import { workspaceBudgetPolicyRead } from "./workspace.budget_policy.read";
-import { workspaceBudgetPolicyWrite } from "./workspace.budget_policy.write";
 import { billingBudgetGet } from "./billing.budget.get";
 import { billingBudgetSet } from "./billing.budget.set";
 import { workspaceModelSettingsRead } from "./workspace.model_settings.read";
@@ -1101,12 +1097,8 @@ export {
   userPreferencesRead,
   userWorkspacePreferencesRead,
   userWorkspacePreferencesWrite,
-  budgetPolicyRead,
-  budgetPolicyWrite,
   billingBudgetGet,
   billingBudgetSet,
-  workspaceBudgetPolicyRead,
-  workspaceBudgetPolicyWrite,
   workspaceModelSettingsRead,
   workspaceModelSettingsWrite,
   promptSettingsRead,
@@ -1588,12 +1580,8 @@ export const contracts: readonly CapabilityDeclaration[] = [
   userPreferencesRead,
   userWorkspacePreferencesRead,
   userWorkspacePreferencesWrite,
-  budgetPolicyRead,
-  budgetPolicyWrite,
   billingBudgetGet,
   billingBudgetSet,
-  workspaceBudgetPolicyRead,
-  workspaceBudgetPolicyWrite,
   workspaceModelSettingsRead,
   workspaceModelSettingsWrite,
   promptSettingsRead,

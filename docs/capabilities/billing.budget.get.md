@@ -16,7 +16,7 @@ Read the hard **period-to-date spend ceilings** governing the active scope and t
 
 Each carries its current burn so the Billing → Budgets panel can render a live gauge. Reading your own budget is exempt from the budget gate (`noBillingGate`), so being over budget never blocks this read.
 
-This is a different axis from `budget.policy.*` / `workspace.budget_policy.*`, which cap a **single agent turn's** dollar cost. This caps cumulative **period** spend for a whole org or workspace and is enforced in the kernel `invoke()` admission path.
+This caps cumulative **period** spend for a whole org or workspace and is enforced in the kernel `invoke()` admission path.
 
 ## Input
 
