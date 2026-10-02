@@ -96,9 +96,9 @@ env:
   ATLAS_VERSION: "v1.2.2"
   # Where jobs run (ADR-246). With the CI_RUNNERS repository variable set to
   # `aws`, each job's runs-on picks one of our own pools: `oxagen-large-*`
-  # (16 vCPU, 64 GB or more) for checks, build, unit, e2e, rls-integration
-  # and rds-compatibility, `oxagen-small-*` (4 vCPU, 16 GB) for the light
-  # jobs, and `oxagen-deploy` for every job that touches production.
+  # (16 vCPU, 64 GB or more) for checks, unit, e2e, rls-integration and
+  # rds-compatibility, `oxagen-small-*` (4 vCPU, 16 GB) for build and the
+  # light jobs, and `oxagen-deploy` for every job that touches production.
   # CI_RUNNER_ARCH picks x64 (the default) or arm64 for the CI pools.
   # CI_HEAVY_POOL picks the pool the heavy jobs use: `large` (the default) or
   # `small`. While the account's EC2 quota holds 64 vCPUs, `small` runs 16
@@ -500,13 +500,23 @@ jobs:
   # Build lanes carry no service containers. `next build` and `xmcp build`
   # validate the environment at import time and never connect to a store, which
   # is how deploy-node already builds with no database in reach.
+  #
+  # Build lanes run on the small pool (#5070). On a 16-vCPU runner they took
+  # 1.3 to 1.9 minutes, a third of it checkout and install, while unit (app)
+  # took 6.2. On GitHub's 4-vCPU, 16 GB runners they took 2.1 to 3.2 minutes,
+  # so they still finish well inside unit (app). Each moved lane frees 12
+  # vCPUs of the EC2 quota for the jobs that use 16. The rest lane ran all 8
+  # of its builds at once on those runners with no out-of-memory exit, so 4
+  # at once fits.
   build:
     needs: [preflight]
     if: >-
       github.event_name != 'workflow_dispatch' &&
       needs.preflight.outputs.proceed == 'true' &&
       needs.preflight.outputs.heavy != 'false'
-    runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-{0}-{1}', vars.CI_HEAVY_POOL || 'large', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
+    runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-small-{0}', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
+    env:
+      TURBO_CONCURRENCY: ${{ vars.CI_RUNNERS == 'aws' && '4' || '3' }}
     container:
       image: ${{ vars.CI_IMAGE_REGISTRY || 'ghcr.io/macanderson' }}/oxagen-ci-base:latest
       volumes:
@@ -571,8 +581,8 @@ jobs:
           # exclusion from the include set, and with an empty TURBO_FILTER
           # (push to main) it starts from every package. $TURBO_CONCURRENCY:
           # this lane has no 5GB Next heap and no service containers beside
-          # it, and at 2 apps/mcp's build could wait for a slot. Our runners
-          # take 12.
+          # it, and at 2 apps/mcp's build could wait for a slot. The small
+          # pool's runners take 4 (see the job's env).
           if [ "$LANE" = rest ]; then
             pnpm turbo run build --concurrency="$TURBO_CONCURRENCY" $TURBO_FILTER \
               --filter=!@oxagen/app --filter=!@oxagen/app-deprecated

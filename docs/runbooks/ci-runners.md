@@ -11,14 +11,14 @@ A workflow picks a pool by its one label.
 
 | Label | Arch | Size | Warm runners | Max | Network |
 |---|---|---|---|---|---|
-| `oxagen-large-arm64` | arm64 | 16 vCPU, 64 to 128 GB | 0 | 250 | CI VPC |
-| `oxagen-large-x64` | x64 | 16 vCPU, 64 to 128 GB | 10 | 100 | CI VPC |
-| `oxagen-small-arm64` | arm64 | 4 vCPU, 16 GB | 0 | 150 | CI VPC |
-| `oxagen-small-x64` | x64 | 4 vCPU, 16 GB | 10 | 150 | CI VPC |
+| `oxagen-large-arm64` | arm64 | 16 vCPU, 64 to 128 GB | 0 | 22 | CI VPC |
+| `oxagen-large-x64` | x64 | 16 vCPU, 64 to 128 GB | 6 | 22 | CI VPC |
+| `oxagen-small-arm64` | arm64 | 4 vCPU, 16 GB | 0 | 36 | CI VPC |
+| `oxagen-small-x64` | x64 | 4 vCPU, 16 GB | 10 | 36 | CI VPC |
 | `oxagen-deploy` | arm64 | 16 vCPU, 64 GB | 1 | 6 | production VPC |
 
-`pipeline.yml` sends `checks`, `build`, `unit`, `e2e`, `rls-integration`, and
-`rds-compatibility` to `oxagen-large-<arch>`, the light jobs to
+`pipeline.yml` sends `checks`, `unit`, `e2e`, `rls-integration`, and
+`rds-compatibility` to `oxagen-large-<arch>`, `build` and the light jobs to
 `oxagen-small-<arch>`, and every production job to `oxagen-deploy`. The
 repository variables choose: `CI_RUNNERS=aws` turns our runners on,
 `CI_RUNNER_ARCH` picks `x64` (the default) or `arm64`, `CI_HEAVY_POOL=small`
@@ -26,8 +26,9 @@ sends the heavy jobs to the small pool, and `CI_IMAGE_REGISTRY` points the
 toolchain and service images at ECR Public (`public.ecr.aws/z5z6u7g2`).
 
 `locals.pools` in `runners.tf` lists each pool's instance types in priority
-order, and `warm_pool` in `terraform.tfvars` sets the warm sizes. The warm
-pools stay at zero while `github_app_ready` is `false`.
+order. In `terraform.tfvars`, `warm_pool` sets the warm sizes and
+`max_runners` sets the maximums. The warm pools stay at zero while
+`github_app_ready` is `false`.
 
 Only jobs that declare `environment: production` ask for `oxagen-deploy`, and
 the `oxagen-production` runner group admits only the workflows listed in
@@ -47,6 +48,12 @@ the large pool. When a burst needs more runners than the quota holds, the
 fleet fails over from spot to on-demand and then queues, and the queue-age
 and vCPU alarms fire. To trade speed for concurrency during a crunch, set
 `CI_HEAVY_POOL=small`, and delete it afterwards.
+
+The deploy pool and production run on on-demand only. `max_runners` caps the
+CI pools at 496 vCPUs, so they never take the last 104 on-demand vCPUs: 96
+for the deploy pool's 6 runners and 8 for production. `terraform.tfvars`
+shows the arithmetic. When AWS raises a quota, raise the caps by the same
+number of vCPUs, or the new quota sits unused.
 
 ## Roll back to GitHub-hosted runners
 
