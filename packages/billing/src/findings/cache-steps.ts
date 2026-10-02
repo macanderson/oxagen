@@ -1,9 +1,16 @@
 /**
  * The walk that detector 3 (ADR-208) shares between its two kinds: each run's
- * model requests on one chain and one model, in time order, each beside the
- * request before it. A prompt cache belongs to one model, so a run that moves
- * between models keeps one walk per model. Cache expiry (./cache-expiry.ts)
- * and cache busts (./cache-busts.ts) read the same walk.
+ * model requests on one chain, one provider, and one model, in time order,
+ * each beside the request before it. A prompt cache belongs to one model at
+ * one provider, so a run that moves between models, or calls one model
+ * through two providers, keeps one walk for each. Cache expiry
+ * (./cache-expiry.ts) and cache busts (./cache-busts.ts) read the same walk.
+ *
+ * A rewrite within the TTL is a bust: the prefix was still cached, so the
+ * start of the prompt changed. A rewrite past the TTL is idle when both
+ * requests recorded the same system context digest, and a bust when the
+ * digests differ. When either request recorded no digest, its cause is
+ * unknown: the wait or a changed prefix. It is then neither idle nor a bust.
  *
  * A request rewrites the cache when it writes at least half its context and
  * the prefix the request before it had cached is gone: the cached tokens it
@@ -105,7 +112,7 @@ function walkRun(
   for (const f of frames) {
     if (tokensOf(f) === null) continue;
     const chain = f.sessionUuid ?? "";
-    const key = `${chain}\u0000${f.model ?? ""}`;
+    const key = `${chain}\u0000${f.provider ?? ""}\u0000${f.model ?? ""}`;
     const walk = walks.get(key) ?? { chain, frames: [] };
     walk.frames.push(f);
     walks.set(key, walk);
@@ -177,25 +184,44 @@ export function cacheSteps(input: DetectInput): readonly CacheStep[] {
   return out;
 }
 
-/** Whether the step's system context digest differs from the one before it. */
-export function systemChanged(step: CacheStep): boolean {
+/**
+ * How the step's system context compares with the one before it: `same` or
+ * `changed` when both requests recorded a digest, and `unknown` when either
+ * recorded none.
+ */
+export function systemContextOf(
+  step: CacheStep,
+): "same" | "changed" | "unknown" {
   const a = step.prev?.systemContextDigest ?? null;
   const b = step.frame.systemContextDigest ?? null;
-  return a !== null && b !== null && a !== b;
+  if (a === null || b === null) return "unknown";
+  return a === b ? "same" : "changed";
 }
 
-/** Whether a rewrite followed a gap past its TTL with the system context unchanged. */
+/** Whether the step rewrote the cache after a gap past its TTL. */
+function rewroteAfterTtl(step: CacheStep): boolean {
+  return step.rewritten > 0 && step.gapMicros > TTL_MICROS[step.ttl];
+}
+
+/** Whether a rewrite followed a gap past its TTL with the same system context digest on both requests. */
 export function isIdleRewrite(step: CacheStep): boolean {
-  return (
-    step.rewritten > 0 &&
-    step.gapMicros > TTL_MICROS[step.ttl] &&
-    !systemChanged(step)
-  );
+  return rewroteAfterTtl(step) && systemContextOf(step) === "same";
 }
 
-/** Whether a rewrite came inside the TTL, or with a changed system context. */
+/**
+ * Whether a rewrite followed a gap past its TTL while either request
+ * recorded no system context digest. Nothing then tells the wait from a
+ * changed prefix as its cause, so the rewrite is neither idle nor a bust.
+ */
+export function isUnknownRewrite(step: CacheStep): boolean {
+  return rewroteAfterTtl(step) && systemContextOf(step) === "unknown";
+}
+
+/** Whether a rewrite came inside the TTL, or past it with a changed system context digest. */
 export function isBust(step: CacheStep): boolean {
-  return step.rewritten > 0 && !isIdleRewrite(step);
+  if (step.rewritten === 0) return false;
+  if (!rewroteAfterTtl(step)) return true;
+  return systemContextOf(step) === "changed";
 }
 
 /** A class's price at the step's frame in micros per million tokens; null when unpriced or in another currency. */

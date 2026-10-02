@@ -10,10 +10,13 @@ import {
   gapMinutes,
   isBust,
   isIdleRewrite,
+  isUnknownRewrite,
   keepAliveCost,
   keepAlivePings,
   rewritePremium,
   SYSTEM_CONTEXT,
+  systemContextOf,
+  type CacheStep,
 } from "./cache-steps";
 import {
   cacheFrame,
@@ -190,6 +193,123 @@ describe("the walk", () => {
       cacheInput([{ run, frames: [cacheFrame(run, 0, { cache_write_5m: 1 })] }]),
     );
     expect(rewritePremium(step!)).toBeNull();
+  });
+
+  it("walks two providers that serve one model on one chain apart (#4614)", () => {
+    const run = cacheRun();
+    const input = cacheInput([
+      {
+        run,
+        frames: [
+          cacheFrame(
+            run,
+            0,
+            { input_uncached: 100, cache_write_5m: 40_000 },
+            { provider: "anthropic" },
+          ),
+          // Two minutes on, the other provider writes its own cache.
+          cacheFrame(
+            run,
+            120,
+            { input_uncached: 100, cache_write_5m: 40_000 },
+            { provider: "bedrock" },
+          ),
+        ],
+      },
+    ]);
+    const steps = cacheSteps(input);
+    expect(steps).toHaveLength(2);
+    for (const step of steps) {
+      expect(step.prev).toBeNull();
+      expect(step.rewritten).toBe(0);
+      expect(isBust(step)).toBe(false);
+    }
+  });
+});
+
+describe("the cause of a rewrite (#4614)", () => {
+  /**
+   * A 40,000-token prefix written, then written again `gapSeconds` later,
+   * with the system context digests given on the two requests.
+   */
+  function rewrite(
+    gapSeconds: number,
+    before: string | null,
+    after: string | null,
+  ): CacheStep {
+    const run = cacheRun();
+    const steps = cacheSteps(
+      cacheInput([
+        {
+          run,
+          frames: [
+            cacheFrame(
+              run,
+              0,
+              { input_uncached: 100, cache_write_5m: 40_000 },
+              { systemContextDigest: before },
+            ),
+            cacheFrame(
+              run,
+              gapSeconds,
+              { input_uncached: 100, cache_write_5m: 40_000 },
+              { systemContextDigest: after },
+            ),
+          ],
+        },
+      ]),
+    );
+    const step = steps[1]!;
+    expect(step.rewritten).toBe(40_000);
+    return step;
+  }
+
+  it("reads a rewrite past the TTL with a digest missing as neither idle nor a bust", () => {
+    for (const [before, after] of [
+      [null, null],
+      [null, "a"],
+      ["a", null],
+    ] as const) {
+      const step = rewrite(600, before, after);
+      expect(systemContextOf(step)).toBe("unknown");
+      expect(isIdleRewrite(step)).toBe(false);
+      expect(isBust(step)).toBe(false);
+      expect(isUnknownRewrite(step)).toBe(true);
+    }
+  });
+
+  it("reads a digest the frame left undefined as missing", () => {
+    const step = rewrite(600, "a", "a");
+    const missing = {
+      ...step,
+      prev: { ...step.prev!, systemContextDigest: undefined },
+    };
+    expect(isIdleRewrite(missing)).toBe(false);
+    expect(isUnknownRewrite(missing)).toBe(true);
+  });
+
+  it("reads a rewrite past the TTL as idle when the digests match, and as a bust when they differ", () => {
+    const same = rewrite(600, "a", "a");
+    expect(isIdleRewrite(same)).toBe(true);
+    expect(isBust(same)).toBe(false);
+    expect(isUnknownRewrite(same)).toBe(false);
+    const changed = rewrite(600, "a", "b");
+    expect(isIdleRewrite(changed)).toBe(false);
+    expect(isBust(changed)).toBe(true);
+    expect(isUnknownRewrite(changed)).toBe(false);
+  });
+
+  it("keeps a rewrite within the TTL a bust whatever the digests, since the prefix was still cached", () => {
+    for (const [before, after] of [
+      [null, null],
+      ["a", "a"],
+      ["a", "b"],
+    ] as const) {
+      const step = rewrite(120, before, after);
+      expect(isBust(step)).toBe(true);
+      expect(isIdleRewrite(step)).toBe(false);
+      expect(isUnknownRewrite(step)).toBe(false);
+    }
   });
 });
 

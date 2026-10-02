@@ -2,13 +2,16 @@
  * Cache busts (detector 3, ADR-208): a request that wrote its cached prefix
  * again because the start of the prompt changed. The walk and the rewrite
  * rule are in ./cache-steps.ts. A rewrite is a bust when it came within the
- * TTL, so the prefix was still cached, or when the system context digest
- * changed, so no keep-alive would have held it. Every other rewrite waited
- * past the TTL and is an idle rewrite (./cache-expiry.ts).
+ * TTL, so the prefix was still cached, or when it came past the TTL and the
+ * system context digest changed, so no keep-alive would have held it. A
+ * rewrite past the TTL with the same digest on both requests is an idle
+ * rewrite (./cache-expiry.ts). A rewrite past the TTL with a digest missing
+ * on either request has an unknown cause, and this finding leaves it out.
  *
  * Each bust is priced at its premium: the rewritten tokens at the write price
  * less the read price, against nothing, since an unchanged prefix would have
- * been read back. A bust with no price is cited uncovered.
+ * been read back. A bust with no price is cited uncovered, and the prose
+ * then says how many of the busts its cost covers.
  *
  * The finding names, for each bust, the first part of the system context
  * whose digest changed (`changedPart`). A bust whose system context stayed
@@ -136,8 +139,14 @@ export const cacheBusts: Detector = {
       top === null
         ? "Move what changes below the cached prefix"
         : `Move what changes, such as ${top}, below the cached prefix`;
+    // The cost sums only the busts with a price, so the sentence names how
+    // many those are when some had none.
+    const priced =
+      evidence.coveredCalls === evidence.calls
+        ? "The rewrites"
+        : `The ${evidence.coveredCalls.toLocaleString("en-US")} of ${plural(evidence.calls, "rewrite", "rewrites")} with a price`;
     return {
-      why: `${group.subject} rewrote its cache ${plural(evidence.calls, "time", "times")} because the start of the prompt changed. ${whereOf(stats)} The rewrites cost ${premium} more than reading the cache back.`,
+      why: `${group.subject} rewrote its cache ${plural(evidence.calls, "time", "times")} because the start of the prompt changed. ${whereOf(stats)} ${priced} cost ${premium} more than reading the cache back.`,
       fix: `Keep the start of the prompt for ${group.subject} the same from one request to the next. ${move}, or change it between runs.`,
     };
   },
