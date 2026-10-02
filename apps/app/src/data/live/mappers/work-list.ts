@@ -30,7 +30,7 @@ import type {
 import type { ContractOutput } from "@/server/kernel";
 
 type ListOut = ContractOutput<typeof workItemsList>;
-export type RowOut = ListOut["items"][number];
+type RowOut = ListOut["items"][number];
 type WaitOut = RowOut["wait"];
 type SendOut = NonNullable<RowOut["send"]>;
 type CostOut = RowOut["cost"];
@@ -60,7 +60,7 @@ function toPriority(priority: RowOut["priority"]): z.input<typeof WorkPriority> 
 }
 
 /** One wait, renamed. Each kind carries its own facts. */
-export function toWait(wait: WaitOut): z.input<typeof WorkWait> {
+function toWait(wait: WaitOut): z.input<typeof WorkWait> {
   switch (wait.kind) {
     case "triaging":
     case "out_of_scope":
@@ -138,7 +138,7 @@ export function toWait(wait: WaitOut): z.input<typeof WorkWait> {
   }
 }
 
-export function toSendSummary(send: SendOut): z.input<typeof SendSummary> {
+function toSendSummary(send: SendOut): z.input<typeof SendSummary> {
   return {
     id: send.id,
     send: send.send,
