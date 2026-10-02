@@ -2083,6 +2083,38 @@ jobs:
           DEPLOY_SERVICE: desktop
         run: node tools/scripts/check-deploy-tip.mjs --record
 
+  publish-cli:
+    name: publish the CLI to npm
+    # Every production deploy publishes the CLI it shipped to npm, as
+    # `X.Y.(Z+1)-N` after release X.Y.Z (ADR-253). This job only dispatches
+    # npm.yml, the way `publish-installers` dispatches desktop.yml. A failed
+    # publish then fails that run and leaves main green, because the usual
+    # cause is an expired NPM_TOKEN, which only Mac can replace.
+    #
+    # The condition reads `deploy-node`'s result after `!cancelled()` for the
+    # reason `publish-installers` gives: `success()` fails while `staging` is
+    # skipped (#5089). `needs: deploy-node` keeps the CLI on npm from running
+    # ahead of the API it talks to.
+    if: >-
+      !cancelled() &&
+      github.event_name == 'push' && github.ref == 'refs/heads/main' &&
+      needs.deploy-node.result == 'success'
+    needs: [deploy-node]
+    # ubuntu-slim: one API call.
+    runs-on: ${{ vars.CI_RUNNERS == 'aws' && 'oxagen-deploy' || 'ubuntu-slim' }}
+    timeout-minutes: 5
+    permissions:
+      actions: write
+    steps:
+      - name: Dispatch the npm publish for this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh workflow run npm.yml --repo "$GITHUB_REPOSITORY" --ref main \
+            -f sha="$GITHUB_SHA"
+          echo "Dispatched the npm publish of $GITHUB_SHA." >> "$GITHUB_STEP_SUMMARY"
+
   manual-app-deploy:
     name: Manual production app deployment
     # The break-glass path, and the one deploy `migration-gate` does not stand

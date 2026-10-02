@@ -43,6 +43,51 @@ export function buildVersion(
   return `${major}.${minor}.${Number(patch) + 1}-${commitsSinceRelease}`;
 }
 
+const PUBLISHED = /^(\d+)\.(\d+)\.(\d+)(?:-(\d+))?$/;
+
+/**
+ * Semver order for a release `X.Y.Z` and a build `X.Y.Z-N`: negative when `a`
+ * is older, positive when newer, 0 when equal. A release outranks every build
+ * of its own number. Any other shape throws, because a pointer moved on a
+ * comparison it cannot make could move backwards. The downloads host keeps
+ * the same rule for its `latest/` links (`apps/desktop/src/downloads.ts`).
+ */
+export function compareVersions(a: string, b: string): number {
+  const parse = (v: string) => {
+    const match = PUBLISHED.exec(v);
+    if (match === null)
+      throw new Error(`"${v}" is neither a release nor a build version`);
+    return {
+      core: [Number(match[1]), Number(match[2]), Number(match[3])],
+      build: match[4] === undefined ? null : Number(match[4]),
+    };
+  };
+  const x = parse(a);
+  const y = parse(b);
+  for (let i = 0; i < 3; i++) {
+    const d = (x.core[i] ?? 0) - (y.core[i] ?? 0);
+    if (d !== 0) return d;
+  }
+  if (x.build === y.build) return 0;
+  if (x.build === null) return 1;
+  if (y.build === null) return -1;
+  return x.build - y.build;
+}
+
+/**
+ * The newest release or build in `versions`, or null when it holds none.
+ * Versions of any other shape, such as a hand-published `1.0.0-beta.1`, are
+ * left out, so the answer is always a version `compareVersions` can order.
+ */
+export function newestVersion(versions: readonly string[]): string | null {
+  let newest: string | null = null;
+  for (const v of versions) {
+    if (!PUBLISHED.test(v)) continue;
+    if (newest === null || compareVersions(v, newest) > 0) newest = v;
+  }
+  return newest;
+}
+
 /**
  * `git log` arguments that find the commit which set the root package.json
  * to `release`: the one that added the version line, found with the pickaxe
