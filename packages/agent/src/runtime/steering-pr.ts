@@ -125,8 +125,28 @@ export function registerServerFolderWriter(writer: ServerFolderWriter | null): v
 /**
  * The legacy rows a migration would move: live, enabled, legacy, on a remote
  * transport, and, for a plugin row, with an install that is enabled and live.
- * migrate() in @oxagen/handlers selects with the same rule.
+ * migrate() in @oxagen/handlers selects with the same rule. The query joins
+ * plugin.installed_plugins on the row's org_listing_id.
  */
+function movableLegacyServers(scope: WorkspaceScope) {
+  return and(
+    eq(schema.mcpServers.orgId, scope.orgId),
+    eq(schema.mcpServers.workspaceId, scope.workspaceId),
+    eq(schema.mcpServers.origin, "legacy"),
+    eq(schema.mcpServers.enabled, true),
+    isNull(schema.mcpServers.deletedAt),
+    inArray(schema.mcpServers.transportType, [...MOVABLE_TRANSPORTS]),
+    or(
+      isNull(schema.mcpServers.orgListingId),
+      and(
+        eq(schema.pluginInstalledPlugins.enabled, true),
+        isNull(schema.pluginInstalledPlugins.deletedAt),
+      ),
+    ),
+  );
+}
+
+/** How many legacy rows a migration would move. */
 export async function countMovableLegacyServers(
   tx: Tx,
   scope: WorkspaceScope,
@@ -138,24 +158,39 @@ export async function countMovableLegacyServers(
       schema.pluginInstalledPlugins,
       eq(schema.mcpServers.orgListingId, schema.pluginInstalledPlugins.id),
     )
-    .where(
-      and(
-        eq(schema.mcpServers.orgId, scope.orgId),
-        eq(schema.mcpServers.workspaceId, scope.workspaceId),
-        eq(schema.mcpServers.origin, "legacy"),
-        eq(schema.mcpServers.enabled, true),
-        isNull(schema.mcpServers.deletedAt),
-        inArray(schema.mcpServers.transportType, [...MOVABLE_TRANSPORTS]),
-        or(
-          isNull(schema.mcpServers.orgListingId),
-          and(
-            eq(schema.pluginInstalledPlugins.enabled, true),
-            isNull(schema.pluginInstalledPlugins.deletedAt),
-          ),
-        ),
-      ),
-    );
+    .where(movableLegacyServers(scope));
   return Number(rows[0]?.n ?? 0);
+}
+
+/** One legacy row a migration would move. */
+export interface MovableLegacyServer {
+  id: string;
+  name: string;
+  /** The folder a migration PR named for the row, or null before one did. */
+  steeringName: string | null;
+}
+
+/**
+ * The legacy rows a migration would move, the same rows
+ * countMovableLegacyServers counts. migrate_tools_to_steering reads them to
+ * tell a row that waits on a merged PR's publish from a row that cannot move.
+ */
+export async function listMovableLegacyServers(
+  tx: Tx,
+  scope: WorkspaceScope,
+): Promise<MovableLegacyServer[]> {
+  return tx
+    .select({
+      id: schema.mcpServers.id,
+      name: schema.mcpServers.name,
+      steeringName: schema.mcpServers.steeringName,
+    })
+    .from(schema.mcpServers)
+    .leftJoin(
+      schema.pluginInstalledPlugins,
+      eq(schema.mcpServers.orgListingId, schema.pluginInstalledPlugins.id),
+    )
+    .where(movableLegacyServers(scope));
 }
 
 /**

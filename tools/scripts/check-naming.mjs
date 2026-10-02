@@ -78,6 +78,11 @@ const ACTIONS = new Set([
   "clone",
   // move_agent (ADR-198): put an agent on another runtime, same principal.
   "move",
+  // migrate_tools_to_steering (ADR-245): open the steering PR that moves a
+  // workspace's connected MCP servers into its steering repo. Not "move":
+  // move puts an agent on another runtime, and this changes where a whole
+  // registry is written from.
+  "migrate",
   // bisect_runs (#2952): align two recordings and find where they diverge.
   "bisect",
   "rename",

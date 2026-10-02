@@ -3167,6 +3167,18 @@
       "consumes": []
     },
     {
+      "name": "migrate_tools_to_steering",
+      "domain": "tool",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "move_agent",
       "domain": "agent",
       "surfaces": [
