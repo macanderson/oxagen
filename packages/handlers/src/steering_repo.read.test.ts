@@ -128,6 +128,7 @@ describe("get_steering_repo", () => {
       ],
       legacySource: null,
       connection: null,
+      requestedName: null,
       connectionChoices: [],
       importRun: null,
     });
@@ -219,6 +220,70 @@ describe("get_steering_repo", () => {
       name: "octocat",
       kind: "user",
     });
+    expect(steeringRepoGet.output.parse(out)).toEqual(out);
+  });
+
+  it("names the workspace's own connection before the organization's stored one", async () => {
+    const out = await read(
+      deps({
+        readState: vi.fn(async () => ({
+          ...READY,
+          provider: "gitlab" as const,
+          connection: {
+            provider: "gitlab" as const,
+            group_id: 42,
+            group_path: "acme/platform",
+          },
+        })),
+        readConnection: vi.fn(async () => ({
+          provider: "github" as const,
+          installation_id: 77,
+          account_login: "acme",
+          account_type: "Organization" as const,
+        })),
+      }),
+    );
+    expect(out.connection).toEqual({
+      provider: "gitlab",
+      id: 42,
+      name: "acme/platform",
+      kind: "organization",
+    });
+    expect(steeringRepoGet.output.parse(out)).toEqual(out);
+  });
+
+  it("names the organization's stored connection when the workspace chose none", async () => {
+    const out = await read(
+      deps({
+        readConnection: vi.fn(async () => ({
+          provider: "github" as const,
+          installation_id: 77,
+          account_login: "acme",
+          account_type: "Organization" as const,
+        })),
+      }),
+    );
+    expect(out.connection).toEqual({
+      provider: "github",
+      id: 77,
+      name: "acme",
+      kind: "organization",
+    });
+  });
+
+  it("answers the name the workspace chose", async () => {
+    const out = await read(
+      deps({
+        readState: vi.fn(async () => ({
+          ...initialSteeringRepoState(new Date(0), { name: "acme-steering" }),
+          status: "blocked" as const,
+          failed_step: "create_repository" as const,
+          error: { code: "repository_name_taken", message: "Taken." },
+        })),
+        readHealth: vi.fn(async () => null),
+      }),
+    );
+    expect(out.requestedName).toBe("acme-steering");
     expect(steeringRepoGet.output.parse(out)).toEqual(out);
   });
 

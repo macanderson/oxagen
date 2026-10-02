@@ -28,14 +28,22 @@ stored error, and re-sends the provision event with a fresh id, so the same job
 | Field | Type | Description |
 |---|---|---|
 | `resetConnection` | boolean, optional | clear the organization's stored steering connection first, so the job lists the candidates again (#4899). Refused once Oxagen has created a steering repo in the stored account |
-| `connection` | `{ provider, id }`, optional | the GitHub organization or GitLab group to create steering repos in, when setup stopped with `choose_connection`. It must be one of [get_steering_repo](steering_repo.get.md)'s `connectionChoices` |
+| `connection` | `{ provider, id }`, optional | the GitHub organization or GitLab group to create the steering repo in. After `choose_connection`, one of [get_steering_repo](steering_repo.get.md)'s `connectionChoices`. For a workspace with no repository yet, any place [list_steering_repo_destinations](steering_repo.destinations.list.md) lists |
+| `name` | string, optional | a new name for a workspace's steering repo while it has no repository. The rules are `create_workspace`'s `steeringRepo.name` rules |
 
 The org and workspace come from the capability context. A workspace-scoped context names the
 workspace. An organization-only context (the sentinel workspace id) retries the organization's
 own setup.
 
-A `connection` is stored as the organization's steering connection before the job is sent
-again, so `pick_connection` finds it and goes on (#4875).
+A `connection` from `connectionChoices` is stored as the organization's steering connection
+before the job is sent again, so `pick_connection` finds it and goes on (#4875).
+
+A workspace whose setup has not created its repository yet can change where the repository
+goes and what it is called (#5196). A `connection` that is not one of the recorded choices
+becomes the workspace's `requested_connection`, and the job's `pick_connection` checks it
+against the places the stored tokens reach. A `name` becomes `requested_name`, and the job
+creates exactly that name. Use these after `repository_name_taken`, `unknown_connection`, or
+`repository_create_refused`.
 
 ## Output
 
@@ -65,7 +73,9 @@ If the send itself fails, the handler records the failure (`enqueue_failed`) and
 |---|---|---|
 | `forbidden` | `no_principal`, `org_role_required` | no signed-in user; not an org Owner or Admin |
 | `not_found` | `no_steering_repo_state` | the scope has no steering repository setup to retry |
-| `conflict` | `unknown_connection` | `connection` is not one of the connections the setup found. Nothing changed |
+| `conflict` | `unknown_connection` | for the organization's own setup, `connection` is not one of the connections the setup found. Nothing changed |
+| `conflict` | `organization_repo_fixed` | `name` was sent for the organization's own setup, whose repository is always `oxagen-config`. Nothing changed |
+| `conflict` | `repository_exists` | `name` or a new `connection` was sent after Oxagen created the workspace's repository. Nothing changed |
 | `conflict` | `connection_in_use` | `resetConnection` was sent, and a setup of the organization has a repository in the stored account that published a version, was bound, or finished. Nothing changed |
-| `conflict` | `setup_running` | `resetConnection` was sent while a setup of the organization saved as `provisioning` in the last 10 minutes. Nothing changed |
+| `conflict` | `setup_running` | `resetConnection` was sent while a setup of the organization saved as `provisioning` in the last 10 minutes, or `name` or a new `connection` was sent while this setup is not `failed` or `blocked`. Nothing changed |
 | `conflict` | `connection_already_chosen` | the organization already holds a different steering connection, because another setup's pick stored it first. Retry without `connection` to use it |

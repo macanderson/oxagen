@@ -238,6 +238,7 @@ import { steeringIndexGetRoute } from "./routes/v1/context.steering.index.get";
 import { steeringRepoGetRoute } from "./routes/v1/steering_repo.get";
 import { steeringRepoRepairRoute } from "./routes/v1/steering_repo.repair";
 import { steeringRepoProvisionRetryRoute } from "./routes/v1/steering_repo.provision.retry";
+import { steeringRepoDestinationsListRoute } from "./routes/v1/steering_repo.destinations.list";
 import { steeringMemoriesListRoute } from "./routes/v1/steering.memories.list";
 import { steeringMemoriesGetRoute } from "./routes/v1/steering.memories.get";
 import { steeringMemoriesPromoteRoute } from "./routes/v1/steering.memories.promote";
@@ -1450,6 +1451,9 @@ orgOnlyScoped.route("/onboarding/state", onboardingStateGetRoute);
 // the advertised REST surface unreachable (#3097).
 orgOnlyScoped.route("/audit/events/export", auditEventsExportRoute);
 orgOnlyScoped.route("/connections/steering", steeringConnectionRoute);
+// Where a new workspace's steering repo can go, read before the workspace
+// exists, so it needs an org and no workspace, like POST /workspaces.
+orgOnlyScoped.route("/steering-repo/destinations", steeringRepoDestinationsListRoute);
 app.route("/v1/:org_slug", orgOnlyScoped);
 
 app.route("/v1/:org_slug/:workspace_slug", orgScoped);

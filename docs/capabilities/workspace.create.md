@@ -4,7 +4,7 @@ Create a workspace in the caller's organization and start provisioning its steer
 
 A workspace owns its own membership roster, its default tool registry and its slug. The slug is unique within the organization and forms the second segment of every URL (`/:org_slug/:workspace_slug/...`).
 
-Every workspace gets a private steering repo named `oxagen-<slug>` in the organization's GitHub organization or GitLab group. The handler records the workspace with its `steering_repo` setting at `provisioning`, sends the Inngest event `steering-repo/provision.requested`, and returns. A durable job then creates the repository, seeds it, applies the prescribed settings, publishes version 1 of the steering record, and binds the repository with role `steering`. The call returns before the repository exists, so read the workspace's `steering_repo` status to follow the job.
+Every workspace gets a private steering repo. By default it is named `oxagen-<slug>` and lives in the organization's stored GitHub organization or GitLab group. The caller can choose both with `steeringRepo` (see [Choosing the steering repo](#choosing-the-steering-repo)). The handler records the workspace with its `steering_repo` setting at `provisioning`, sends the Inngest event `steering-repo/provision.requested`, and returns. A durable job then creates the repository, seeds it, applies the prescribed settings, publishes version 1 of the steering record, and binds the repository with role `steering`. The call returns before the repository exists, so read the workspace's `steering_repo` status to follow the job.
 
 A workspace no longer takes a main repository. `mainRepo` is deprecated and ignored: the handler still accepts it so older callers keep working, logs a warning, and binds nothing. To connect a code repository, call [`link_repository`](repository.link.md) after the workspace exists.
 
@@ -30,6 +30,17 @@ A workspace no longer takes a main repository. `mainRepo` is deprecated and igno
 | `name` | string | yes | 1 to 120 characters |
 | `slug` | string | yes | the shared workspace-slug shape (`packages/oxagen/src/workspace-slug.ts`): lowercase letters, digits, hyphens; reserved org-route segments refused |
 | `mainRepo` | object | no | deprecated and ignored; still validated, so a malformed value is refused as `invalid_input` |
+| `steeringRepo.connection` | `{ provider, id }` | no | the GitHub organization, personal GitHub account, or GitLab group for the steering repo, from [list_steering_repo_destinations](steering_repo.destinations.list.md) |
+| `steeringRepo.name` | string | no | the steering repo's exact name: up to 100 letters, digits, `.`, `_`, and `-`, starting and ending with a letter or digit, with no two symbols in a row, and not ending in `.git` or `.atom`. `oxagen-config` is refused because it is the organization's own repository |
+
+## Choosing the steering repo
+
+`steeringRepo` is optional, and each of its fields is too. The handler writes the choice into the workspace's `steering_repo` setting as `requested_connection` and `requested_name`, and calls no host. The job acts on it:
+
+1. **Place.** With no `connection`, the job uses the organization's stored connection, as before. With one, the job's `pick_connection` step lists the places the organization's stored tokens reach and looks for it. When the place is found, the job records it on this workspace, and every later step and reader of this steering repo uses it. When the organization has no stored connection yet, the place also becomes the organization's default. When the place is not found, the setup stops as `blocked` with `unknown_connection` before anything is created.
+2. **Name.** With no `name`, the job tries `oxagen-<slug>`, then `-2`, `-3`, and so on, up to 20 names. With one, the job creates exactly that name. When a repository Oxagen did not create for this workspace already has the name, the setup stops as `blocked` with `repository_name_taken`.
+
+A blocked setup can take a new name or place through [retry_steering_repo_provision](steering_repo.provision.retry.md) until the repository exists.
 
 ## Output
 
@@ -69,7 +80,7 @@ One Postgres transaction writes `workspace.workspaces` with its `steering_repo` 
 | `forbidden` | `org_role_required` | the acting user holds none of the accepted roles |
 | `not_found` | `org_not_found` | the org row the context names is missing |
 | `conflict` | `slug_taken` | the slug collides within the org (the pre-check, or the unique index on a race) |
-| `invalid_input` | | the slug, or a deprecated `mainRepo`, fails the contract's validator (kernel) |
+| `invalid_input` | | the slug, a deprecated `mainRepo`, or `steeringRepo` fails the contract's validator (kernel) |
 
 A failure to start the steering repo job is not a refusal. The workspace exists, and its `steering_repo` status reads `failed`.
 

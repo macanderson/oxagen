@@ -1,7 +1,7 @@
 {
   "name": "create_workspace",
   "domain": "workspace",
-  "description": "Create a workspace within the active tenant and start provisioning its private steering repo, oxagen-<slug>, in the organization's GitHub organization or GitLab group. The call returns before the repository exists, and the workspace's steering_repo status shows the progress. You no longer pass a main repository: mainRepo is deprecated and ignored. Refused when the organization already has a workspace with that slug.",
+  "description": "Create a workspace within the active tenant and start provisioning its private steering repo. By default the repo is oxagen-<slug> in the organization's stored GitHub organization or GitLab group. Pass steeringRepo.connection (from list_steering_repo_destinations) to pick the organization or group, and steeringRepo.name to pick the name. The call returns before the repository exists, and the workspace's steering_repo status shows the progress. You no longer pass a main repository: mainRepo is deprecated and ignored. Refused when the organization already has a workspace with that slug.",
   "mode": "sync",
   "surfaces": [
     "api",
@@ -87,6 +87,40 @@
             "additionalProperties": false
           }
         ]
+      },
+      "steeringRepo": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "x-server-validated": true,
+            "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
+          },
+          "connection": {
+            "type": "object",
+            "properties": {
+              "provider": {
+                "type": "string",
+                "enum": [
+                  "github",
+                  "gitlab"
+                ]
+              },
+              "id": {
+                "type": "integer",
+                "exclusiveMinimum": 0
+              }
+            },
+            "required": [
+              "provider",
+              "id"
+            ],
+            "additionalProperties": false,
+            "description": "The GitHub organization, personal GitHub account, or GitLab group to create the steering repo in. One of list_steering_repo_destinations' destinations."
+          }
+        },
+        "additionalProperties": false,
+        "description": "Where to create the workspace's steering repo and what to call it. Leave a field out to take its default."
       }
     },
     "required": [

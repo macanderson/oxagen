@@ -383,6 +383,7 @@ import { steeringRepoGet } from "./steering_repo.get";
 import { steeringRepoRepair } from "./steering_repo.repair";
 import { steeringRepoImport } from "./steering_repo.import";
 import { steeringRepoProvisionRetry } from "./steering_repo.provision.retry";
+import { steeringRepoDestinationsList } from "./steering_repo.destinations.list";
 // Markdown import: parse files into steering records and Cedar policies, then
 // open one steering PR with the rows a person kept (#4907).
 import { steeringMarkdownImportParse } from "./steering.markdown_import.parse";
@@ -596,6 +597,15 @@ export {
   githubRepositoryNameSchema,
   repositoryBindingIdSchema,
 } from "./repository.shared";
+// Steering repo shapes shared by create_workspace and the steering_repo.*
+// contracts. Not a capability, so exported here to satisfy the file-coverage
+// guard.
+export {
+  defaultSteeringRepoName,
+  steeringConnectionChoice,
+  steeringConnectionPick,
+  steeringRepoNameInput,
+} from "./steering_repo.shared";
 // Steering vocabulary (ADR-061) shared by the context.* contracts. Not a
 // capability, so exported here to satisfy the file-coverage guard.
 export {
@@ -1184,6 +1194,7 @@ export {
   steeringRepoRepair,
   steeringRepoImport,
   steeringRepoProvisionRetry,
+  steeringRepoDestinationsList,
   steeringMarkdownImportParse,
   steeringMarkdownImportCommit,
   steeringPropose,
@@ -1674,6 +1685,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   steeringRepoRepair,
   steeringRepoImport,
   steeringRepoProvisionRetry,
+  steeringRepoDestinationsList,
   steeringMarkdownImportParse,
   steeringMarkdownImportCommit,
   steeringPropose,
