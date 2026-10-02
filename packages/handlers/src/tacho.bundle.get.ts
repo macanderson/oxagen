@@ -7,11 +7,13 @@ import {
   readWorkspaceRetention,
   requireBundleSigner,
   resolveEnrolledHost,
+  resolveHostCedar,
   resolveHostMandate,
   servedBundleEtag,
   signBundle,
   unsignedBundle,
 } from "./lib/tacho-host";
+import { hostCedarReader } from "./lib/tacho-host-cedar";
 import { hostSkillsReader } from "./lib/tacho-host-skills";
 import { readWorkspaceSteering } from "./lib/tacho-steering";
 import {
@@ -20,11 +22,11 @@ import {
 } from "./tacho.published";
 
 export interface TachoBundleGetDeps {
-  /** The workspace's and the organization's published steering, for the skills. */
+  /** The workspace's and the organization's published steering, for the skills and the Cedar policies. */
   published: TachoPublished;
 }
 
-/** The skills come from the versions the Postgres version store holds (#4550). */
+/** The skills and the Cedar policies come from the versions the Postgres version store holds (#4550). */
 export const defaultTachoBundleGetDeps: TachoBundleGetDeps = {
   published: VERSION_STORE_PUBLISHED,
 };
@@ -37,23 +39,26 @@ export const defaultTachoBundleGetDeps: TachoBundleGetDeps = {
  * `context.system` carries the workspace's `must` and `should` steering
  * records (ADR-091), which the collector hands the agent at session start.
  * `skills` carries the published skills, which the collector places where
- * the harness reads user skills at session start.
+ * the harness reads user skills at session start. `cedar` carries the
+ * published Cedar policies for the agents on the host's runtime, which the
+ * hook decides each tool call with (lane S12).
  */
 export function createTachoBundleGetHandler(
   deps: TachoBundleGetDeps,
 ): CapabilityHandler<typeof tachoBundleGet> {
   const skillsReader = hostSkillsReader(deps.published);
+  const cedarReader = hostCedarReader(deps.published);
   return async (input, ctx) => {
     const now = new Date();
     const signer = requireBundleSigner("get_tacho_bundle");
-    // The skills are read outside the tenant transaction below. The version
-    // store's port opens tenant transactions of its own and reads the forge,
-    // so a read made inside that transaction would hold one pool connection
-    // while it waits for another, which exhausts the pool under load
-    // (`withTransactionOrgWideRead` in `@oxagen/database` explains). A short
-    // transaction resolves the host first, so only an enrolled host reaches
-    // the skills, and the transaction below resolves it again for the row it
-    // updates.
+    // The skills and the Cedar policies are read outside the tenant
+    // transaction below. The version store's port opens tenant transactions
+    // of its own and reads the forge, so a read made inside that transaction
+    // would hold one pool connection while it waits for another, which
+    // exhausts the pool under load (`withTransactionOrgWideRead` in
+    // `@oxagen/database` explains). A short transaction resolves the host
+    // first, so only an enrolled host reaches them, and the transaction below
+    // resolves it again for the row it updates.
     const caller = await withTenantDb((tx) =>
       resolveEnrolledHost(
         "get_tacho_bundle",
@@ -62,7 +67,11 @@ export function createTachoBundleGetHandler(
         input.host_enrollment_id,
       ),
     );
-    const skills = await skillsReader.read("get_tacho_bundle", ctx, caller);
+    // Both at once, so the production port answers them with one read.
+    const [skills, policy] = await Promise.all([
+      skillsReader.read("get_tacho_bundle", ctx, caller),
+      cedarReader.read("get_tacho_bundle", ctx, caller),
+    ]);
     return withTenantDb(async (tx) => {
       const host = await resolveEnrolledHost(
         "get_tacho_bundle",
@@ -70,18 +79,22 @@ export function createTachoBundleGetHandler(
         tx as never,
         input.host_enrollment_id,
       );
-      const [denyGeneration, retention, steering, mandate] = await Promise.all([
-        readDenyGeneration(tx as never, ctx.orgId, ctx.workspaceId),
-        readWorkspaceRetention(tx as never, ctx.orgId, ctx.workspaceId),
-        readWorkspaceSteering(tx as never, ctx.orgId, ctx.workspaceId),
-        resolveHostMandate(tx as never, ctx, host),
-      ]);
+      const [denyGeneration, retention, steering, mandate, cedar] =
+        await Promise.all([
+          readDenyGeneration(tx as never, ctx.orgId, ctx.workspaceId),
+          readWorkspaceRetention(tx as never, ctx.orgId, ctx.workspaceId),
+          readWorkspaceSteering(tx as never, ctx.orgId, ctx.workspaceId),
+          resolveHostMandate(tx as never, ctx, host),
+          resolveHostCedar(tx as never, host, policy),
+        ]);
+      // The etag `unsignedBundle` gives covers the Cedar part, so a newly
+      // published version reaches a host that polls with its etag.
       const built = unsignedBundle(
         host,
         denyGeneration,
         retention,
         steering,
-        mandate,
+        { ...mandate, ...cedar },
         now,
       );
       // The etag covers the skills too, so a new published version reaches

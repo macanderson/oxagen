@@ -134,6 +134,10 @@ import {
   unstorableBatch,
 } from "./lib/tacho-host";
 import {
+  type HostCedarReader,
+  hostCedarReader,
+} from "./lib/tacho-host-cedar";
+import {
   type HostSkillsReader,
   hostSkillsReader,
 } from "./lib/tacho-host-skills";
@@ -1374,7 +1378,7 @@ export function firstRootPrompts(
 }
 
 export interface TachoEventsIngestDeps {
-  /** The workspace's and the organization's published steering, for the skills the envelope's etag covers. */
+  /** The workspace's and the organization's published steering, for the skills and the Cedar policies the envelope's etag covers. */
   published: TachoPublished;
 }
 
@@ -1387,8 +1391,9 @@ export function createTachoEventsIngestHandler(
   deps: TachoEventsIngestDeps,
 ): CapabilityHandler<typeof tachoEventsIngest> {
   const skillsReader = hostSkillsReader(deps.published);
+  const cedarReader = hostCedarReader(deps.published);
   return (input, ctx) =>
-    ingestBatch(input, ctx, skillsReader).catch((err: unknown) => {
+    ingestBatch(input, ctx, skillsReader, cedarReader).catch((err: unknown) => {
       throw unstorableBatch("ingest_tacho_events", err) ?? err;
     });
 }
@@ -1401,6 +1406,7 @@ const ingestBatch = async (
   input: TachoEventsIngestInput,
   ctx: CheckedContext,
   skillsReader: HostSkillsReader,
+  cedarReader: HostCedarReader,
 ): Promise<TachoEventsIngestOutput> => {
   const now = new Date();
   const capability = "ingest_tacho_events";
@@ -3070,12 +3076,16 @@ const ingestBatch = async (
   // received: a pause or a steer held back for that lease. Drained here, any
   // earlier failure leaves them queued, and the re-sent batch delivers them.
   //
-  // The envelope's etag covers the host's published skills, as the bundle's
-  // does, so they are read first, outside any tenant transaction
-  // (./lib/tacho-host-skills.ts says why).
-  const skills = await skillsReader.read(capability, ctx, result.seen);
+  // The envelope's etag covers the host's published skills and Cedar
+  // policies, as the bundle's does, so they are read first, outside any
+  // tenant transaction (./lib/tacho-host-skills.ts says why). Both at once,
+  // so the production port answers them with one read.
+  const [skills, policy] = await Promise.all([
+    skillsReader.read(capability, ctx, result.seen),
+    cedarReader.read(capability, ctx, result.seen),
+  ]);
   const control = await withTenantDb((tx) =>
-    controlEnvelope(tx as never, ctx, result.seen, new Date(), skills),
+    controlEnvelope(tx as never, ctx, result.seen, new Date(), skills, policy),
   );
 
   return {
