@@ -1,6 +1,6 @@
 // markdown-import/render.ts: the files commit_markdown_import writes.
 //
-// A record goes where open_context_pr puts a new record of its kind
+// A record goes where open_steering_pr puts a new record of its kind
 // (context.steering.record.ts): steering/<kind folder>/<lineage>.md, a skill
 // in its own folder as steering/skills/<lineage>/SKILL.md, and a memory where
 // the curator puts one with no repository, path, or tool. A record whose

@@ -4,7 +4,7 @@
 // installation reaches, the list, link and unlink of every bound repository
 // (§17 M0: "a second repo can be linked and unlinked"), what each one holds
 // under `.oxagen/`, its production branch, the pull request that adds Oxagen
-// to it, the Context PRs Oxagen has open, and the directories the CLI
+// to it, the steering PRs Oxagen has open, and the directories the CLI
 // reported.
 //
 // These are reads made on demand rather than through a DataSource port. Most
@@ -29,16 +29,16 @@ import { repositoryTreeGet } from "@oxagen/oxagen/contracts/repository.tree.get"
 import { workingCopyList } from "@oxagen/oxagen/contracts/repository.working_copy.list";
 import { repositoryProductionBranchSet } from "@oxagen/oxagen/contracts/repository.production_branch.set";
 import { repositoryInitPrOpen } from "@oxagen/oxagen/contracts/repository.init_pr.open";
-import { contextProposalList } from "@oxagen/oxagen/contracts/context.proposal.list";
-import { contextPrGet } from "@oxagen/oxagen/contracts/context.pr.get";
-import { contextPrMerge } from "@oxagen/oxagen/contracts/context.pr.merge";
-import { contextProposalDismiss } from "@oxagen/oxagen/contracts/context.proposal.dismiss";
+import { steeringProposalList } from "@oxagen/oxagen/contracts/steering.proposal.list";
+import { steeringPrGet } from "@oxagen/oxagen/contracts/steering.pr.get";
+import { steeringPrMerge } from "@oxagen/oxagen/contracts/steering.pr.merge";
+import { steeringProposalDismiss } from "@oxagen/oxagen/contracts/steering.proposal.dismiss";
 import {
   codeRepositoryFindingsList,
   type CodeRepositoryFindingsListOutput,
 } from "@oxagen/oxagen/contracts/repository.findings.list";
 import { instructionPromote } from "@oxagen/oxagen/contracts/repository.instruction.promote";
-import { type ContextPr, isSteeringPrKind } from "@/data/contracts/steering";
+import { type SteeringPr, isSteeringPrKind } from "@/data/contracts/steering";
 import type {
   AttachedInstallation,
   GitHubInstallations,
@@ -355,7 +355,7 @@ const CHANGES_LIMIT = 50;
 
 /**
  * The pull requests Oxagen has open or merged on this workspace's
- * repositories, newest first: each context record's Context PR and each
+ * repositories, newest first: each steering record's steering PR and each
  * steering PR Oxagen opened (#5122). A proposal with no pull request yet is
  * not a change on GitHub, so it stays on the Steering page and off this list.
  */
@@ -365,7 +365,7 @@ export async function readRepositoryChanges(
 ): Promise<ActionResult<RepositoryChanges>> {
   const ctx = await requireViewer(org, ws);
   const read = await kernelRead(ctx, {
-    contract: contextProposalList,
+    contract: steeringProposalList,
     input: { limit: CHANGES_LIMIT, offset: 0 },
     page: "repositories",
   });
@@ -378,7 +378,7 @@ export async function readRepositoryChanges(
       lineage: proposal.lineageId,
       statement: proposal.statement,
       why: proposal.rationale,
-      kind: isSteeringPrKind(proposal.kind) ? "steering_pr" : "context_record",
+      kind: isSteeringPrKind(proposal.kind) ? "steering_pr" : "steering_record",
       pullRequest: proposal.pr,
       openedBy: proposal.source,
       status: proposal.status,
@@ -398,19 +398,19 @@ export async function readRepositoryChanges(
 }
 
 /**
- * One change's Context PR, for the detail the Changes tab shows when a row is
+ * One change's steering PR, for the detail the Changes tab shows when a row is
  * selected: its branch and base, each check with its own result, what merge
- * will do, and the merge once it happened. `get_context_pr` is read here
+ * will do, and the merge once it happened. `get_steering_pr` is read here
  * rather than through the Steering port because this page reads on demand.
  */
 export async function readRepositoryChange(
   org: string,
   ws: string,
   proposalId: string,
-): Promise<ActionResult<ContextPr>> {
+): Promise<ActionResult<SteeringPr>> {
   const ctx = await requireViewer(org, ws);
   const read = await kernelRead(ctx, {
-    contract: contextPrGet,
+    contract: steeringPrGet,
     input: { proposalId },
     page: "repositories",
   });
@@ -496,7 +496,7 @@ export async function readRepositoryChange(
 }
 
 /**
- * Merge a change once every check passed. `merge_context_pr` re-reads the
+ * Merge a change once every check passed. `merge_steering_pr` re-reads the
  * governance mode at merge time and gates the signed-in reviewer it names, so
  * a person the mode does not admit is refused there whatever the page drew.
  */
@@ -506,7 +506,7 @@ export async function mergeRepositoryChange(
   proposalId: string,
 ): Promise<ActionResult<{ commit: string }>> {
   const ctx = await requireViewer(org, ws);
-  const result = await kernelWrite(ctx, contextPrMerge, { proposalId });
+  const result = await kernelWrite(ctx, steeringPrMerge, { proposalId });
   return result.ok
     ? { ok: true, value: { commit: result.value.mergedCommit } }
     : result;
@@ -524,7 +524,7 @@ export async function closeRepositoryChange(
   comment: string,
 ): Promise<ActionResult<{ status: "rejected" }>> {
   const ctx = await requireViewer(org, ws);
-  const result = await kernelWrite(ctx, contextProposalDismiss, {
+  const result = await kernelWrite(ctx, steeringProposalDismiss, {
     proposalId,
     reason: comment.trim(),
   });

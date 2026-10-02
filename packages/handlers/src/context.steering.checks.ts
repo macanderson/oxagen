@@ -5,7 +5,7 @@
 // reads the PR's head and base trees through a SteeringTreeHost and passes
 // them to that package's runChecksWithServers(). It adds no rule of its own.
 //
-// A Context PR, which Oxagen opens for one proposal (ADR-061), runs the six
+// A steering PR, which Oxagen opens for one proposal (ADR-061), runs the six
 // §10.3 checks below, the same rules as `stella context validate`: schema,
 // lineage uniqueness, record_hash recomputation, a secret and PII scan,
 // conflict against active records, and constraint_effect. In a legacy repo
@@ -23,7 +23,7 @@ import {
   type ConstraintEffect,
   type RecordKind,
 } from "@oxagen/oxagen/contracts/context.steering.shared";
-import { CONTEXT_RECORD_LABEL_MAX } from "@oxagen/oxagen/context-record-label";
+import { STEERING_RECORD_LABEL_MAX } from "@oxagen/oxagen/steering-record-label";
 import {
   AGENTS_DIR,
   AGENTS_MD_PATH,
@@ -175,11 +175,11 @@ export function parseChecked(fileText: string):
       label !== undefined &&
       (typeof label !== "string" ||
         label.trim().length === 0 ||
-        label.length > CONTEXT_RECORD_LABEL_MAX)
+        label.length > STEERING_RECORD_LABEL_MAX)
     ) {
       return {
         ok: false,
-        reason: `${at}.label is 1 to ${CONTEXT_RECORD_LABEL_MAX} characters`,
+        reason: `${at}.label is 1 to ${STEERING_RECORD_LABEL_MAX} characters`,
       };
     }
     const kind = str("kind");
@@ -270,7 +270,7 @@ function checkSchema(ctx: CheckContext): CheckOutcome {
   if (others.length > 0) {
     return {
       ok: false,
-      summary: `the pull request also changes ${others.join(", ")}; a Context PR changes ${ctx.path} and nothing else`,
+      summary: `the pull request also changes ${others.join(", ")}; a steering PR changes ${ctx.path} and nothing else`,
     };
   }
   const parsed = parseChecked(ctx.fileText);

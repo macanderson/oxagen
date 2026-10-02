@@ -1,0 +1,32 @@
+// audit-exempt: read-only — lists the workspace's proposals; mutates nothing. The kernel capability.invoke_* audit covers access.
+//
+// list_proposals (ADR-061): newest first, with the PR and the check tally
+// once a steering PR is open. `state` narrows to the statuses a pull request
+// list calls open, merged or closed.
+import type { CapabilityHandler } from "@oxagen/oxagen";
+import { steeringProposalList } from "@oxagen/oxagen/contracts/steering.proposal.list";
+import { PROPOSAL_STATE_STATUSES } from "@oxagen/oxagen/contracts/context.steering.shared";
+import { steeringDeps, type SteeringDeps } from "./context.steering.deps";
+import { proposalView } from "./context.steering.view";
+
+export function createListProposalsHandler(
+  deps: Pick<SteeringDeps, "store">,
+): CapabilityHandler<typeof steeringProposalList> {
+  return async (input, ctx) => {
+    const { rows, total } = await deps.store.listProposals(
+      { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+      {
+        status: input.status,
+        statuses:
+          input.state === undefined
+            ? undefined
+            : PROPOSAL_STATE_STATUSES[input.state],
+        lineageId: input.lineageId,
+      },
+      { limit: input.limit, offset: input.offset },
+    );
+    return { proposals: rows.map(proposalView), total };
+  };
+}
+
+export const listProposalsHandler = createListProposalsHandler(steeringDeps());

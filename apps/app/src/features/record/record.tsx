@@ -1,4 +1,4 @@
-// One published context record (#3395; ADR-061; MC spec §10.2;
+// One published steering record (#3395; ADR-061; MC spec §10.2;
 // mockups/pages/record.md), presented by its kind.
 //
 // The label is the headline and the breadcrumb's last step, the slug under it
@@ -42,7 +42,7 @@ const OPEN_STATUSES = new Set([
 
 /**
  * Whether this viewer's role may revise at all. It mirrors the gate
- * `revise_context_record` enforces (INV-29), so the proposal dialog says so
+ * `revise_steering_record` enforces (INV-29), so the proposal dialog says so
  * rather than offering a submit that is refused. The handler remains the
  * authority: this only decides what the page shows.
  */
@@ -186,7 +186,7 @@ export async function Record({
     : null;
   const fresh = valueOf(freshness);
   const repository = fresh?.repository ?? null;
-  // The file and branch open_context_pr writes (#4765). The record's own path
+  // The file and branch open_steering_pr writes (#4765). The record's own path
   // wins. Without one, the layout decides, and an unread layout or an unknown
   // kind leaves both null: the page shows a placeholder rather than a guess.
   const layout = valueOf(layoutRead)?.layout ?? null;

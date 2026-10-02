@@ -13,7 +13,7 @@
 //
 // A promoted memory record goes where the curator puts one, under
 // steering/memory/. Every other kind goes to its kind's folder, as
-// open_context_pr and the Markdown import write it: a promoted code rule is
+// open_steering_pr and the Markdown import write it: a promoted code rule is
 // a steering record like any other, and the curator's stale check, which
 // reads only steering/memory/, never proposes archiving it.
 import { OXAGEN_PR_LABELS } from "@oxagen/github";
@@ -527,7 +527,7 @@ export async function promoteMemories(
     url: pr.htmlUrl,
     records: ledger,
   });
-  // The memory PR's proposal row, so merge_context_pr can land it (#5122).
+  // The memory PR's proposal row, so merge_steering_pr can land it (#5122).
   // No check ran on it: the merge runs the steering checks itself.
   await recordSteeringPrQuietly(
     deps.proposals,

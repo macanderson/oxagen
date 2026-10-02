@@ -1,0 +1,532 @@
+import { describe, expect, it, vi, beforeEach } from "vitest";
+
+// Authorization behavior is exercised with real guards in role-enforcement.regression.test.ts.
+vi.mock("@oxagen/iam/org-role", () => ({
+  assertOrgRole: vi.fn(async () => "Owner"),
+  resolveActingUserId: vi.fn(
+    async (ctx: { userId: string | null }) => ctx.userId,
+  ),
+}));
+import type { CapabilityContext } from "@oxagen/oxagen";
+import { sha256Hex } from "./registry-digest";
+
+// ── hoisted stubs ─────────────────────────────────────────────────────────────
+// Same seam as tool.declaration.publish.test.ts: one queue for every
+// select(...).where(...).limit(1), dedicated spies for the transaction's
+// inserts and updates.
+const mocks = vi.hoisted(() => ({
+  selectResults: [] as Array<() => Promise<unknown>>,
+  insertReturning: [] as Array<() => Promise<unknown>>,
+  insertedValues: [] as Array<Record<string, unknown>>,
+  updateSets: [] as Array<Record<string, unknown>>,
+  /** Whether migration `20260918160000` has run on this database. */
+  classificationColumns: true,
+}));
+
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+
+  const makeTx = () => ({
+    // The deploy-before-migrate column probe (#3486): `hasColumnFresh` reads
+    // presence from the row count, same fixture shape as
+    // steering.record.promote.test.ts's.
+    execute: () =>
+      Promise.resolve(mocks.classificationColumns ? [{ "?column?": 1 }] : []),
+    select: () => ({
+      from: () => ({
+        where: () => ({
+          limit: () => {
+            const next = mocks.selectResults.shift();
+            return next ? next() : Promise.resolve([]);
+          },
+        }),
+      }),
+    }),
+    insert: () => ({
+      values: (vals: unknown) => {
+        mocks.insertedValues.push(vals as Record<string, unknown>);
+        const next = mocks.insertReturning.shift();
+        return {
+          returning: () =>
+            next ? next() : Promise.resolve([{ id: "uuid-generated" }]),
+        };
+      },
+    }),
+    update: () => ({
+      set: (vals: unknown) => {
+        mocks.updateSets.push(vals as Record<string, unknown>);
+        return { where: () => Promise.resolve() };
+      },
+    }),
+  });
+
+  // The org-wide seam is mocked as the SAME function as the tenant
+  // seam (ADR-086): a handler's role gate reads through withOrgDb, and
+  // a suite that counts seam calls must see one identity, not two.
+  const dbMock = {
+    ...real,
+    withTenantDb: async (
+      fn: (tx: ReturnType<typeof makeTx>) => Promise<unknown>,
+    ) => fn(makeTx()),
+  };
+  return { ...dbMock, withOrgDb: dbMock.withTenantDb };
+});
+
+import { isHandlerError } from "@oxagen/oxagen";
+import { resetColumnProbesForTests } from "@oxagen/database";
+import { steeringRecordPublishHandler } from "./steering.record.publish";
+
+const CTX: CapabilityContext = {
+  orgId: "org_1",
+  workspaceId: "ws_1",
+  userId: "u_1",
+  apiKeyId: null,
+  requestId: "req_1",
+  surface: "api",
+  messageId: null,
+};
+
+const INPUT = {
+  record_id: "No-Bare-Unwrap",
+  title: "No bare unwrap on runtime data",
+  body: 'id = "no-bare-unwrap"\n',
+  kind: "rule" as const,
+  force: "must" as const,
+  statement:
+    "Never unwrap a Result on runtime data without handling the error.",
+  provenance: [{ type: "file", uri: ".stella/rules/no-bare-unwrap.toml" }],
+};
+
+const BODY_CHECKSUM = sha256Hex(INPUT.body);
+
+// What the latest version row looks like once this handler has written it:
+// the body checksum plus the classification the caller supplied.
+const LATEST_MATCHING = {
+  id: "v1-uuid",
+  versionNumber: 2,
+  checksum: BODY_CHECKSUM,
+  kind: "rule",
+  force: "must",
+  constraintEffect: null,
+  statement: INPUT.statement,
+};
+
+function queueSelects(...results: unknown[]): void {
+  for (const r of results) {
+    mocks.selectResults.push(() => Promise.resolve(r));
+  }
+}
+
+beforeEach(() => {
+  mocks.selectResults.length = 0;
+  mocks.insertReturning.length = 0;
+  mocks.insertedValues.length = 0;
+  mocks.updateSets.length = 0;
+  mocks.classificationColumns = true;
+  resetColumnProbesForTests();
+});
+
+describe("steering.record.publish handler", () => {
+  it("registers a fresh record as version 1 with the body checksum", async () => {
+    queueSelects([]); // no existing record
+    mocks.insertReturning.push(
+      () =>
+        Promise.resolve([
+          { id: "record-uuid", publicId: "ctr_new", slug: "no-bare-unwrap" },
+        ]),
+      () => Promise.resolve([{ id: "version-uuid" }]),
+    );
+
+    const out = await steeringRecordPublishHandler(INPUT, CTX);
+
+    expect(out).toEqual({
+      publicId: "ctr_new",
+      recordId: "no-bare-unwrap",
+      version: 1,
+      checksum: BODY_CHECKSUM,
+      published: true,
+    });
+    // The record id is lowercased into the slug; provenance rides the version.
+    // Both rows carry the caller's classification (#3302) — a record this
+    // handler writes can never have a NULL kind or force.
+    expect(mocks.insertedValues[0]).toMatchObject({
+      slug: "no-bare-unwrap",
+      status: "active",
+      kind: "rule",
+      force: "must",
+      constraintEffect: null,
+      statement: INPUT.statement,
+    });
+    expect(mocks.insertedValues[1]).toMatchObject({
+      recordId: "record-uuid",
+      versionNumber: 1,
+      isLatest: true,
+      checksum: BODY_CHECKSUM,
+      provenance: INPUT.provenance,
+      kind: "rule",
+      force: "must",
+      constraintEffect: null,
+      statement: INPUT.statement,
+    });
+    expect(mocks.updateSets.at(-1)).toMatchObject({
+      activeVersionId: "version-uuid",
+    });
+  });
+
+  it("is idempotent when the latest version already carries the checksum and classification", async () => {
+    queueSelects(
+      [{ id: "record-uuid", publicId: "ctr_1", slug: "no-bare-unwrap" }],
+      [LATEST_MATCHING],
+    );
+
+    const out = await steeringRecordPublishHandler(INPUT, CTX);
+
+    expect(out).toEqual({
+      publicId: "ctr_1",
+      recordId: "no-bare-unwrap",
+      version: 2,
+      checksum: BODY_CHECKSUM,
+      published: false,
+    });
+    expect(mocks.insertedValues).toHaveLength(0);
+    expect(mocks.updateSets).toEqual([
+      expect.objectContaining({ label: "No Bare Unwrap" }),
+    ]);
+  });
+
+  it("keeps a chosen label on repeat ingestion unless a new label is supplied", async () => {
+    const existing = {
+      id: "record-uuid",
+      publicId: "ctr_1",
+      slug: "no-bare-unwrap",
+      label: "Runtime Error Handling",
+    };
+    queueSelects([existing], [LATEST_MATCHING]);
+    await steeringRecordPublishHandler(INPUT, CTX);
+    expect(mocks.updateSets).toEqual([]);
+    queueSelects([existing], [LATEST_MATCHING]);
+    await steeringRecordPublishHandler(
+      { ...INPUT, label: "Handle Runtime Errors" },
+      CTX,
+    );
+    expect(mocks.updateSets).toEqual([
+      expect.objectContaining({ label: "Handle Runtime Errors" }),
+    ]);
+    expect(mocks.insertedValues).toEqual([]);
+  });
+
+  it("publishes latest+1 when only the classification changed on an unchanged body", async () => {
+    // A record backfilled to memory/info, or one published with the wrong
+    // force: the checksum matches, so before this check the correction was
+    // reported as `published: false` and the record stayed invisible to
+    // `readWorkspaceSteering`.
+    queueSelects(
+      [{ id: "record-uuid", publicId: "ctr_1", slug: "no-bare-unwrap" }],
+      [{ ...LATEST_MATCHING, kind: "memory", force: "should" }],
+    );
+    mocks.insertReturning.push(() => Promise.resolve([{ id: "v3-uuid" }]));
+
+    const out = await steeringRecordPublishHandler(INPUT, CTX);
+
+    expect(out).toMatchObject({ version: 3, published: true });
+    expect(mocks.updateSets[0]).toMatchObject({ isLatest: false });
+    expect(mocks.insertedValues[0]).toMatchObject({
+      versionNumber: 3,
+      parentVersionId: "v1-uuid",
+      checksum: BODY_CHECKSUM,
+      kind: "rule",
+      force: "must",
+      statement: INPUT.statement,
+    });
+    expect(mocks.updateSets.at(-1)).toMatchObject({
+      activeVersionId: "v3-uuid",
+      kind: "rule",
+      force: "must",
+    });
+  });
+
+  it("publishes latest+1 onto a legacy version whose classification is NULL", async () => {
+    // Versions written before #3302 carry no classification at all.
+    queueSelects(
+      [{ id: "record-uuid", publicId: "ctr_1", slug: "no-bare-unwrap" }],
+      [
+        {
+          id: "v1-uuid",
+          versionNumber: 1,
+          checksum: BODY_CHECKSUM,
+          kind: null,
+          force: null,
+          constraintEffect: null,
+          statement: null,
+        },
+      ],
+    );
+    mocks.insertReturning.push(() => Promise.resolve([{ id: "v2-uuid" }]));
+
+    const out = await steeringRecordPublishHandler(INPUT, CTX);
+
+    expect(out).toMatchObject({ version: 2, published: true });
+    expect(mocks.insertedValues[0]).toMatchObject({
+      versionNumber: 2,
+      kind: "rule",
+      force: "must",
+      statement: INPUT.statement,
+    });
+  });
+
+  it("publishes latest+1 when the body changed", async () => {
+    queueSelects(
+      [{ id: "record-uuid", publicId: "ctr_1", slug: "no-bare-unwrap" }],
+      [{ ...LATEST_MATCHING, versionNumber: 1, checksum: "0".repeat(64) }],
+    );
+    mocks.insertReturning.push(() => Promise.resolve([{ id: "v2-uuid" }]));
+
+    const out = await steeringRecordPublishHandler(INPUT, CTX);
+
+    expect(out.version).toBe(2);
+    expect(out.published).toBe(true);
+    expect(mocks.updateSets[0]).toMatchObject({ isLatest: false });
+    expect(mocks.insertedValues[0]).toMatchObject({
+      versionNumber: 2,
+      parentVersionId: "v1-uuid",
+      checksum: BODY_CHECKSUM,
+      kind: "rule",
+      force: "must",
+      statement: INPUT.statement,
+    });
+    // The record row's classification moves with the new version, the same
+    // way `promote_steering_record` and `merge_steering_pr` keep the pin's
+    // classification in sync (#3312).
+    expect(mocks.updateSets.at(-1)).toMatchObject({
+      activeVersionId: "v2-uuid",
+      kind: "rule",
+      force: "must",
+      statement: INPUT.statement,
+    });
+  });
+
+  // Codex P1 on #3486: migration 20260918160000 (which added kind/force/
+  // constraintEffect/statement to steering_record_versions) is applied by a
+  // manual workflow, never automatically alongside a deploy, so this
+  // handler's code can run before those columns exist on a given database.
+  describe("before migration 20260918160000 has run (deploy-before-migrate window)", () => {
+    it("registers a fresh record without naming the version's classification columns", async () => {
+      mocks.classificationColumns = false;
+      queueSelects([]); // no existing record
+      mocks.insertReturning.push(
+        () =>
+          Promise.resolve([
+            { id: "record-uuid", publicId: "ctr_new", slug: "no-bare-unwrap" },
+          ]),
+        () => Promise.resolve([{ id: "version-uuid" }]),
+      );
+
+      const out = await steeringRecordPublishHandler(INPUT, CTX);
+
+      expect(out.published).toBe(true);
+      // The record row's columns predate this migration, so they are still
+      // written unconditionally.
+      expect(mocks.insertedValues[0]).toMatchObject({
+        kind: "rule",
+        force: "must",
+      });
+      // The version row's columns do not exist yet on this database.
+      expect(mocks.insertedValues[1]).not.toHaveProperty("kind");
+      expect(mocks.insertedValues[1]).not.toHaveProperty("force");
+      expect(mocks.insertedValues[1]).not.toHaveProperty("constraintEffect");
+      expect(mocks.insertedValues[1]).not.toHaveProperty("statement");
+    });
+
+    // Codex P1 on #3486 (round 3): an unreadable classification must never
+    // be treated as "unchanged," even when the checksum matches. A record
+    // whose body is unchanged but whose classification is corrected (the
+    // classification-only-correction case this whole idempotency check
+    // exists for) must still update the record row during this window, or
+    // the correction is silently discarded for as long as the migration is
+    // pending.
+    it("always publishes a new version when it cannot read the version's classification, even with a matching checksum", async () => {
+      mocks.classificationColumns = false;
+      queueSelects(
+        [{ id: "record-uuid", publicId: "ctr_1", slug: "no-bare-unwrap" }],
+        [{ id: "v1-uuid", versionNumber: 2, checksum: BODY_CHECKSUM }],
+      );
+      mocks.insertReturning.push(() => Promise.resolve([{ id: "v3-uuid" }]));
+
+      const out = await steeringRecordPublishHandler(INPUT, CTX);
+
+      expect(out).toMatchObject({ version: 3, published: true });
+      // The record row's classification is still updated unconditionally.
+      expect(mocks.updateSets.at(-1)).toMatchObject({
+        activeVersionId: "v3-uuid",
+        kind: "rule",
+        force: "must",
+      });
+      // The version row's columns do not exist yet on this database.
+      expect(mocks.insertedValues[0]).not.toHaveProperty("kind");
+    });
+
+    it("publishes a new version without the classification columns when the body changed", async () => {
+      mocks.classificationColumns = false;
+      queueSelects(
+        [{ id: "record-uuid", publicId: "ctr_1", slug: "no-bare-unwrap" }],
+        [{ id: "v1-uuid", versionNumber: 1, checksum: "0".repeat(64) }],
+      );
+      mocks.insertReturning.push(() => Promise.resolve([{ id: "v2-uuid" }]));
+
+      const out = await steeringRecordPublishHandler(INPUT, CTX);
+
+      expect(out).toMatchObject({ version: 2, published: true });
+      expect(mocks.insertedValues[0]).not.toHaveProperty("kind");
+      expect(mocks.insertedValues[0]).not.toHaveProperty("force");
+      // The record row is written regardless — its columns predate the
+      // migration this window is about.
+      expect(mocks.updateSets.at(-1)).toMatchObject({
+        activeVersionId: "v2-uuid",
+        kind: "rule",
+        force: "must",
+      });
+    });
+  });
+
+  // #3511: the latest-version read and the version insert are two separate
+  // transactions, so two publishes of the same correction both read version N
+  // and both insert version N+1. The loser hit
+  // `steering_record_versions_record_version_idx` (or the partial
+  // `record_latest_idx`) and Postgres 23505 reached the caller as an
+  // unhandled error, on a request that had asked for a change another request
+  // had just made.
+  describe("two matching publish requests at once", () => {
+    const CONFLICT = { code: "23505" };
+
+    it("reports the change as already published rather than a database error", async () => {
+      queueSelects(
+        [{ id: "record-uuid", publicId: "ctr_1", slug: "no-bare-unwrap" }],
+        // First read: the record still carries the wrong classification, so
+        // this call takes the publish path.
+        [{ ...LATEST_MATCHING, versionNumber: 2, kind: "memory" }],
+        // Second read, after the winner committed: the latest version now
+        // carries exactly what this call was asking for.
+        [{ ...LATEST_MATCHING, versionNumber: 3 }],
+      );
+      mocks.insertReturning.push(() => Promise.reject(CONFLICT));
+
+      const out = await steeringRecordPublishHandler(INPUT, CTX);
+
+      expect(out).toEqual({
+        publicId: "ctr_1",
+        recordId: "no-bare-unwrap",
+        version: 3,
+        checksum: BODY_CHECKSUM,
+        published: false,
+      });
+    });
+
+    it("publishes onto the winner's version when the two requests differ", async () => {
+      queueSelects(
+        [{ id: "record-uuid", publicId: "ctr_1", slug: "no-bare-unwrap" }],
+        [{ ...LATEST_MATCHING, versionNumber: 2, kind: "memory" }],
+        // The winner published a different statement, so this call's
+        // correction is still outstanding and lands as version 4.
+        [
+          {
+            ...LATEST_MATCHING,
+            versionNumber: 3,
+            id: "v3-uuid",
+            statement: "Something else entirely.",
+          },
+        ],
+      );
+      mocks.insertReturning.push(
+        () => Promise.reject(CONFLICT),
+        () => Promise.resolve([{ id: "v4-uuid" }]),
+      );
+
+      const out = await steeringRecordPublishHandler(INPUT, CTX);
+
+      expect(out).toMatchObject({ version: 4, published: true });
+      expect(mocks.insertedValues.at(-1)).toMatchObject({
+        versionNumber: 4,
+        parentVersionId: "v3-uuid",
+        statement: INPUT.statement,
+      });
+    });
+
+    // The retry re-enters the same closure, so the ROW EXCLUSIVE lock and the
+    // `hasColumnFresh` probe it guards run again inside the new transaction.
+    // A retry that reused the first attempt's answer would be separable from
+    // the migration's ALTER TABLE, which is the window those two lines close.
+    it("re-probes the classification columns on the retry", async () => {
+      mocks.classificationColumns = false;
+      queueSelects(
+        [{ id: "record-uuid", publicId: "ctr_1", slug: "no-bare-unwrap" }],
+        [{ id: "v1-uuid", versionNumber: 2, checksum: BODY_CHECKSUM }],
+        [{ id: "v2-uuid", versionNumber: 3, checksum: "0".repeat(64) }],
+      );
+      mocks.insertReturning.push(
+        () => Promise.reject(CONFLICT),
+        () => Promise.resolve([{ id: "v4-uuid" }]),
+      );
+
+      const out = await steeringRecordPublishHandler(INPUT, CTX);
+
+      expect(out).toMatchObject({ version: 4, published: true });
+      expect(mocks.insertedValues).toHaveLength(2);
+      for (const values of mocks.insertedValues) {
+        expect(values).not.toHaveProperty("kind");
+        expect(values).not.toHaveProperty("force");
+      }
+      // The record row's columns predate the migration, so they are written
+      // on the attempt that lands.
+      expect(mocks.updateSets.at(-1)).toMatchObject({
+        activeVersionId: "v4-uuid",
+        kind: "rule",
+        force: "must",
+      });
+    });
+
+    it("gives up with a conflict rather than leaking the unique violation", async () => {
+      queueSelects([
+        { id: "record-uuid", publicId: "ctr_1", slug: "no-bare-unwrap" },
+      ]);
+      // Every read answers with a version this call still has to correct, and
+      // every insert loses: sustained contention, not a race that settles.
+      for (let i = 0; i < 8; i++) {
+        mocks.selectResults.push(() =>
+          Promise.resolve([{ ...LATEST_MATCHING, kind: "memory" }]),
+        );
+        mocks.insertReturning.push(() => Promise.reject(CONFLICT));
+      }
+
+      await expect(steeringRecordPublishHandler(INPUT, CTX)).rejects.toSatisfy(
+        (e: unknown) =>
+          isHandlerError(e) &&
+          e.code === "conflict" &&
+          e.reason === "concurrent_publish",
+      );
+    });
+  });
+
+  it("requires a constraint effect on a constraint kind and rejects one on any other kind", async () => {
+    const { steeringRecordPublish } = await import(
+      "@oxagen/oxagen/contracts/steering.record.publish"
+    );
+    expect(() =>
+      steeringRecordPublish.input.parse({ ...INPUT, kind: "constraint" }),
+    ).toThrow();
+    expect(() =>
+      steeringRecordPublish.input.parse({
+        ...INPUT,
+        constraintEffect: "forbid",
+      }),
+    ).toThrow();
+  });
+
+  it("requires a workspace scope", async () => {
+    await expect(
+      steeringRecordPublishHandler(INPUT, {
+        ...CTX,
+        workspaceId: undefined as unknown as string,
+      }),
+    ).rejects.toThrow(/workspaceId is required/);
+  });
+});

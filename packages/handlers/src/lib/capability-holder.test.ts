@@ -98,7 +98,7 @@ describe("holdsCapability", () => {
   it("does not hold when no grant names the capability, because its default is deny", async () => {
     mocks.authz.roles = [role("rol-reviewers")];
     mocks.authz.roleGrants = [
-      { roleId: "rol-reviewers", capabilityId: "merge_context_pr", effect: "allow" },
+      { roleId: "rol-reviewers", capabilityId: "merge_steering_pr", effect: "allow" },
     ];
 
     await expect(holds()).resolves.toBe(false);

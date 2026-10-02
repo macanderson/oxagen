@@ -343,7 +343,7 @@ permissions, and the repositories an installation covers, are the whole grant.
 | **Deployments** | Read and write | Each published steering version becomes a deployment to the `steering` environment (`packages/github/src/deployments.ts`). |
 | **Issues** | Read and write | Ingestion reads issues and comments. `packages/handlers/src/run-issue-provider.ts` creates issues with a token minted for `issues: "write"`, and GitHub refuses to mint a token above what the installation holds. |
 | **Metadata** | Read-only | Mandatory. Repository names, default branches, and an installation's repository list. |
-| **Pull requests** | Read and write | Opens, updates, merges, and reads the pull requests that carry a skill, an agent definition, a context record, or a tool, with their labels and comments. It also covers replies to review comments and resolving review threads, which PR verification needs. |
+| **Pull requests** | Read and write | Opens, updates, merges, and reads the pull requests that carry a skill, an agent definition, a steering record, or a tool, with their labels and comments. It also covers replies to review comments and resolving review threads, which PR verification needs. |
 | **Workflows** | Read and write | Contents write cannot change a file under `.github/workflows/`. An agent that writes code and opens a pull request needs Workflows to change CI files. Steering seed files and the Tacho push token never use it. |
 
 Every other repository permission is **No access**. The app holds no organization or account
@@ -358,7 +358,7 @@ above, for an Oxagen check on every pull request, replies to and resolution of r
 agents that change code, CI files included. Earlier revisions of this document said
 to keep every permission read-only because "the connector never writes to GitHub". That was true of
 the ingestion connector and was never true of the product around it: `packages/github/src/workspace-token.ts`
-mints installation tokens, and `packages/handlers/src/context.pr.open.ts` has been creating branches,
+mints installation tokens, and `packages/handlers/src/steering.pr.open.ts` has been creating branches,
 committing files, opening pull requests and reporting check runs with them since ADR-061. A read-only
 permission set cannot open a pull request, so the documented set described something the code had
 already outgrown.

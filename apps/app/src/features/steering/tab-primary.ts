@@ -6,9 +6,9 @@
 // - Assignments with no enrolled agent: the empty state's Open Agents is not
 //   gold, and the header holds none, so the screen has no gold at all.
 // - The Compiler with no published record: "Nothing to compile yet" carries
-//   Write a context record as the gold.
+//   Write a steering record as the gold.
 // - Proposals with no proposal in the state shown: the empty state carries
-//   no gold, so the header holds none either. A Context PR's own actions sit
+//   no gold, so the header holds none either. A steering PR's own actions sit
 //   on its page (#5077), outside this hub.
 // - Memories with no memory in any state: "No memories yet" has no action,
 //   and the header holds none.

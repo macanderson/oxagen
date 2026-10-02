@@ -1,4 +1,4 @@
-// record-hash.ts — the context record's `record_hash`, computed the way
+// record-hash.ts — the steering record's `record_hash`, computed the way
 // Stella computes it (stella-protocol/src/hash.rs, ADR 0004 there), so a file
 // Oxagen writes into `.oxagen/rules/` re-verifies under `stella context
 // validate` and a file Stella wrote re-verifies here.

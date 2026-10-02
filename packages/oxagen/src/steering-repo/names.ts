@@ -1,6 +1,6 @@
 // names.ts: the names the Shared contract fixes, and the helpers that build
 // and read them (steering-repo-spec, Shared contract).
-import { CONTEXT_RECORD_LINEAGE } from "../context-record-label";
+import { STEERING_RECORD_LINEAGE } from "../steering-record-label";
 import { WORKSPACE_SLUG_PATTERN } from "../workspace-slug";
 
 // ── Repository, check, and environment ──────────────────────────────────────
@@ -267,5 +267,5 @@ export function mentionText(kind: MentionKind, target: string): string {
 
 /** Is this a lineage, the name every record and agent file carries? */
 export function isLineage(value: string): boolean {
-  return CONTEXT_RECORD_LINEAGE.test(value);
+  return STEERING_RECORD_LINEAGE.test(value);
 }

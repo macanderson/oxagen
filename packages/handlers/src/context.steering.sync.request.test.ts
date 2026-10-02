@@ -111,15 +111,15 @@ describe("githubDeliveryBranch", () => {
     },
   );
 
-  // open_context_pr opens a Context PR on steering/<lineage>, or on
+  // open_steering_pr opens a steering PR on steering/<lineage>, or on
   // memory/<lineage> for a memory. A PR from before the steering layout may
   // sit on context/<lineage>. Only the last was read before, so a
-  // Context PR closed unmerged never asked for the sync that settles it.
+  // steering PR closed unmerged never asked for the sync that settles it.
   it.each([
     "steering/ctx.release.no-reread-changelog",
     "memory/ctx.release.no-reread-changelog",
     "context/use-pnpm",
-  ])("reads the base branch of a Context PR on %s", (head) => {
+  ])("reads the base branch of a steering PR on %s", (head) => {
     expect(
       githubDeliveryBranch("pull_request", {
         action: "closed",
@@ -129,7 +129,7 @@ describe("githubDeliveryBranch", () => {
   });
 
   it.each(["tools/github", "steeringx/use-pnpm", "feature/steering/x"])(
-    "ignores a pull request on %s, which no Context PR uses",
+    "ignores a pull request on %s, which no steering PR uses",
     (head) => {
       expect(
         githubDeliveryBranch("pull_request", {
@@ -154,10 +154,10 @@ describe("githubDeliveryBranch", () => {
     },
   );
 
-  // Only a Context PR has a proposal to settle. Any other PR that merges into
+  // Only a steering PR has a proposal to settle. Any other PR that merges into
   // the production branch arrives as its push, so its own events ask nothing.
   it.each(["closed", "synchronize", "reopened", "edited"])(
-    "ignores a %s pull request that is not a Context PR",
+    "ignores a %s pull request that is not a steering PR",
     (action) => {
       expect(
         githubDeliveryBranch("pull_request", {

@@ -1,15 +1,15 @@
 // The steering port on the kernel (ARCHITECTURE.md §3.3; #2961): the records
-// in force, the proposals and one proposal's Context PR, and the workspace
+// in force, the proposals and one proposal's steering PR, and the workspace
 // memories with one memory and one memory PR's records (#4914), each a
 // noBillingGate kernelRead on the workspace ctx, mapped into its view model
 // and parsed at the boundary.
 import "server-only";
 import { agentMemoryList } from "@oxagen/oxagen/contracts/agent.memory.list";
-import { contextPrDiffGet } from "@oxagen/oxagen/contracts/context.pr.diff.get";
-import { contextPrGet } from "@oxagen/oxagen/contracts/context.pr.get";
-import { contextProposalList } from "@oxagen/oxagen/contracts/context.proposal.list";
-import { contextRecordsGet } from "@oxagen/oxagen/contracts/context.records.get";
-import { contextRecordsList } from "@oxagen/oxagen/contracts/context.records.list";
+import { steeringPrDiffGet } from "@oxagen/oxagen/contracts/steering.pr.diff.get";
+import { steeringPrGet } from "@oxagen/oxagen/contracts/steering.pr.get";
+import { steeringProposalList } from "@oxagen/oxagen/contracts/steering.proposal.list";
+import { steeringRecordsGet } from "@oxagen/oxagen/contracts/steering.records.get";
+import { steeringRecordsList } from "@oxagen/oxagen/contracts/steering.records.list";
 import { contextSteeringDeliveries } from "@oxagen/oxagen/contracts/context.steering.deliveries";
 import { contextSteeringFreshness } from "@oxagen/oxagen/contracts/context.steering.freshness";
 import { contextSteeringLayout } from "@oxagen/oxagen/contracts/context.steering.layout";
@@ -21,8 +21,8 @@ import { steeringMemoryPrRecordsList } from "@oxagen/oxagen/contracts/steering.m
 import { captureError } from "@oxagen/telemetry";
 import type { z } from "zod";
 import {
-  ContextPr,
-  ContextPrDiff,
+  SteeringPr,
+  SteeringPrDiff,
   MemoryPage,
   MemoryPrRecords,
   OxagenTree,
@@ -42,8 +42,8 @@ import type { DataSource } from "@/data/ports";
 import { type Read, readError, readOk } from "@/data/read";
 import { kernelRead } from "@/server/kernel";
 import {
-  toContextPr,
-  toContextPrDiff,
+  toSteeringPr,
+  toSteeringPrDiff,
   toMemoryPage,
   toMemoryPrRecords,
   toOxagenTree,
@@ -170,7 +170,7 @@ export const steering: DataSource["steering"] = {
   },
   async records(ctx, q) {
     const read = await kernelRead(ctx, {
-      contract: contextRecordsList,
+      contract: steeringRecordsList,
       input: {
         status: "active",
         limit: q.limit ?? STEERING_PAGE,
@@ -185,7 +185,7 @@ export const steering: DataSource["steering"] = {
   },
   async record(ctx, lineage) {
     const read = await kernelRead(ctx, {
-      contract: contextRecordsGet,
+      contract: steeringRecordsGet,
       input: { recordId: lineage },
       page: "steering",
     });
@@ -204,7 +204,7 @@ export const steering: DataSource["steering"] = {
   },
   async proposals(ctx, q) {
     const read = await kernelRead(ctx, {
-      contract: contextProposalList,
+      contract: steeringProposalList,
       input: {
         limit: q.limit ?? STEERING_PAGE,
         offset: q.offset,
@@ -217,28 +217,28 @@ export const steering: DataSource["steering"] = {
       ? parsed(ProposalPage, toProposalPage(read.value), ctx.orgId, "proposals")
       : read;
   },
-  async contextPr(ctx, proposalId) {
+  async steeringPr(ctx, proposalId) {
     const read = await kernelRead(ctx, {
-      contract: contextPrGet,
+      contract: steeringPrGet,
       input: { proposalId },
       page: "steering",
     });
     return read.ok
-      ? parsed(ContextPr, toContextPr(read.value), ctx.orgId, "contextPr")
+      ? parsed(SteeringPr, toSteeringPr(read.value), ctx.orgId, "steeringPr")
       : read;
   },
-  async contextPrDiff(ctx, proposalId) {
+  async steeringPrDiff(ctx, proposalId) {
     const read = await kernelRead(ctx, {
-      contract: contextPrDiffGet,
+      contract: steeringPrDiffGet,
       input: { proposalId },
       page: "steering",
     });
     return read.ok
       ? parsed(
-          ContextPrDiff,
-          toContextPrDiff(read.value),
+          SteeringPrDiff,
+          toSteeringPrDiff(read.value),
           ctx.orgId,
-          "contextPrDiff",
+          "steeringPrDiff",
         )
       : read;
   },
@@ -333,10 +333,10 @@ export const steering: DataSource["steering"] = {
    * file as get_repository_tree reads it from GitHub now:
    * `steering/governance.toml` in a steering repository,
    * `.oxagen/rules/governance.toml` in a legacy one. Nothing caches the mode (ADR-061 decision 1), so the chip
-   * reads the file the Context PR gate reads.
+   * reads the file the steering PR gate reads.
    *
    * The waiting count is the open proposals: candidates with no pull request
-   * yet and Context PRs still open. The Proposals list's three filters,
+   * yet and steering PRs still open. The Proposals list's three filters,
    * Open, Merged and Closed, each read their count here, one row apiece
    * through list_proposals' `state`. The waiting count is null when the open
    * count failed, and the filter counts are null when any of the three
@@ -349,7 +349,7 @@ export const steering: DataSource["steering"] = {
   async hub(ctx) {
     const count = (state: ProposalState) =>
       kernelRead(ctx, {
-        contract: contextProposalList,
+        contract: steeringProposalList,
         input: { limit: 1, offset: 0, state },
         page: "steering",
       });

@@ -4,9 +4,9 @@
  * Every question steering freshness asks is a question git already answers,
  * so nothing here parses a record, hashes a file, or talks to the platform.
  * That is deliberate: the governed files are versioned by git (ADR-061 — a
- * Context PR merges `.oxagen/rules/<lineage>.toml` onto the production
+ * steering PR merges `.oxagen/rules/<lineage>.toml` onto the production
  * branch), so git's own merge-base arithmetic *is* the definition of "a
- * Context PR merged that this checkout does not have". Re-deriving it from
+ * steering PR merged that this checkout does not have". Re-deriving it from
  * file hashes would be a second, weaker copy of the same answer.
  *
  * The runner is injected so the callers above can be tested against a table
@@ -214,7 +214,7 @@ export async function repoRoot(ctx: GitContext): Promise<string | null> {
 }
 
 /**
- * Resolve the remote's default branch — the production branch a Context PR
+ * Resolve the remote's default branch — the production branch a steering PR
  * targets.
  *
  * Three sources, in descending order of how much they can be trusted to be

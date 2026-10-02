@@ -1,6 +1,6 @@
-// The sentence a refused revision shows (#3395). `revise_context_record`
+// The sentence a refused revision shows (#3395). `revise_steering_record`
 // refuses on its own two reasons and then hands the proposal to
-// `open_context_pr`, so every reason that call throws reaches here too.
+// `open_steering_pr`, so every reason that call throws reaches here too.
 // Anything else is printed with its code attached rather than flattened into
 // "something went wrong": the code is what a reader pastes into an incident.
 // The reading is the kit's (`@/ui/action-failure`); only the vocabulary is

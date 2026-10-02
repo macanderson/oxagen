@@ -280,7 +280,7 @@ export interface SteeringImportDeps {
   /** The organization and workspace slugs, which make the set id. */
   names(scope: ImportScope): Promise<{ organization: string; workspace: string }>;
   /**
-   * Record an import steering PR's proposal row, so merge_context_pr can land
+   * Record an import steering PR's proposal row, so merge_steering_pr can land
    * it (#5122, ADR-265). Production writes an `import` row naming the person
    * who ran the import, and logs a row that fails to write, so the run never
    * stops on it.

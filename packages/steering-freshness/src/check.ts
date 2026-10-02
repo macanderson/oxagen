@@ -3,7 +3,7 @@
  *
  * ## The question
  *
- * "Has a Context PR merged onto the production branch that this checkout
+ * "Has a steering PR merged onto the production branch that this checkout
  * does not have?" (ADR-061; `docs/specs/steering/README.md`.)
  *
  * ## Why the merge base, and not a directory comparison

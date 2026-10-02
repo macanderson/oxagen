@@ -1,7 +1,7 @@
-// context.steering.record-checks.ts: four of the six Context PR checks, for
+// context.steering.record-checks.ts: four of the six steering PR checks, for
 // a steering record (#4731).
 //
-// In a steering repo, open_context_pr writes the proposal as a steering
+// In a steering repo, open_steering_pr writes the proposal as a steering
 // record (context.steering.record.ts). Schema, lineage uniqueness, the hash,
 // and the classification read that file as steering-record/v1 here. The
 // secret and PII scan and the conflict check read only the proposal and the
@@ -57,7 +57,7 @@ function checkSchema(ctx: CheckContext): CheckOutcome {
   if (others.length > 0) {
     return {
       ok: false,
-      summary: `the pull request also changes ${others.join(", ")}; a Context PR changes ${ctx.path} and nothing else`,
+      summary: `the pull request also changes ${others.join(", ")}; a steering PR changes ${ctx.path} and nothing else`,
     };
   }
   const read = readRecord(ctx);

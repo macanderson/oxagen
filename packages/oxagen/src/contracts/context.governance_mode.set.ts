@@ -29,7 +29,7 @@
  *
  * In a legacy repository, landing at once is a commit to the production
  * branch, and the pull request is an ordinary one a person merges on GitHub:
- * Oxagen runs no checks on it and `merge_context_pr` does not merge it.
+ * Oxagen runs no checks on it and `merge_steering_pr` does not merge it.
  *
  * In a steering repository nothing commits to the production branch directly
  * (ADR-232). Both routes open a pull request from `steering/governance` that
@@ -41,7 +41,7 @@
  *
  * A legacy `governance.toml` that exists but cannot be read takes the `team`
  * and `regulated` route. A file Oxagen cannot parse already refuses every
- * Context PR open and merge, and a mode nobody can establish must not be
+ * steering PR open and merge, and a mode nobody can establish must not be
  * treated as the permissive one. An unreadable `steering/governance.toml`
  * refuses the call (`governance_unreadable`), because the merge queue reads
  * the mode from that file and refuses every steering PR until it parses.
@@ -61,7 +61,7 @@
  *
  * **A reviewed change in a steering repository is a governance proposal.**
  * Under `team` or `regulated`, the call opens the steering PR, records it as a
- * proposal of kind `governance`, and answers `proposed`. `merge_context_pr`
+ * proposal of kind `governance`, and answers `proposed`. `merge_steering_pr`
  * lands it once a workspace member other than the author approves it, and
  * records the approver (#4795, ADR-232). A call sets aside the governance
  * proposal already open, because the reused PR now carries its change. Apply
@@ -118,7 +118,7 @@ export const contextGovernanceModeSet = registerCapability({
   name: "set_governance_mode",
   domain: "workspace",
   description:
-    "Set the steering governance mode of a workspace by writing its governance file: the mode key of steering/governance.toml in a steering repository, or .oxagen/rules/governance.toml in a legacy one. Under solo the change lands at once; under team or regulated it opens a pull request for review, which an org Owner or Admin, or a workspace Owner or Admin, may skip with applyImmediately. In a steering repository the change always travels as a checked pull request, and landing at once merges it through the steering merge queue. A reviewed change there is recorded as a governance proposal, which merge_context_pr lands for an approver. The active workspace unless workspaceId names another one in the organization.",
+    "Set the steering governance mode of a workspace by writing its governance file: the mode key of steering/governance.toml in a steering repository, or .oxagen/rules/governance.toml in a legacy one. Under solo the change lands at once; under team or regulated it opens a pull request for review, which an org Owner or Admin, or a workspace Owner or Admin, may skip with applyImmediately. In a steering repository the change always travels as a checked pull request, and landing at once merges it through the steering merge queue. A reviewed change there is recorded as a governance proposal, which merge_steering_pr lands for an approver. The active workspace unless workspaceId names another one in the organization.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent", "cli"],
   layers: ["schema", "api", "mcp", "cli", "unit", "docs", "app"],
@@ -173,7 +173,7 @@ export const contextGovernanceModeSet = registerCapability({
        *   `steering/governance` in a steering repository) with a pull request
        *   open against the production branch. The mode in force is unchanged
        *   until that pull request merges. In a steering repository it is a
-       *   governance proposal, which `merge_context_pr` lands for an approver
+       *   governance proposal, which `merge_steering_pr` lands for an approver
        *   (ADR-232).
        * - `unchanged`: the file already declares `mode`; nothing was written.
        */
@@ -232,7 +232,7 @@ export const contextGovernanceModeSet = registerCapability({
       overrodeReview: z.boolean(),
       /**
        * The governance proposal (`prp_…`) a reviewer lands with
-       * `merge_context_pr`, when `proposed` in a steering repository. Null in
+       * `merge_steering_pr`, when `proposed` in a steering repository. Null in
        * every other case, including a legacy pull request, which nothing in
        * Oxagen lands.
        */

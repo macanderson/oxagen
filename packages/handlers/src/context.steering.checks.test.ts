@@ -5,7 +5,11 @@ import {
   runChecks,
   type CheckContext,
 } from "./context.steering.checks";
-import { buildRecordFile, serializeRecordFile } from "./context.steering.file";
+import {
+  buildRecordFile,
+  RECORD_SCHEMA_TAG,
+  serializeRecordFile,
+} from "./context.steering.file";
 
 const LINEAGE = "ctx.release.no-reread-changelog";
 const STATEMENT = "Do not re-read CHANGELOG.md more than once in a run.";
@@ -76,7 +80,7 @@ describe("the six §10.3 checks", () => {
     ]);
   });
 
-  it("schema: refuses a file whose kind is outside context-record/v0.1", () => {
+  it("schema: refuses a file whose kind is outside the v0.1 record format", () => {
     const text = file().replace('kind = "rule"', 'kind = "directive"');
     const out = CHECKS.schema(ctx({ fileText: text }));
     expect(out.ok).toBe(false);
@@ -85,9 +89,9 @@ describe("the six §10.3 checks", () => {
 
   it("schema: refuses a file that is not TOML and one with the wrong schema tag", () => {
     expect(CHECKS.schema(ctx({ fileText: "schema = [broken" })).ok).toBe(false);
-    const tagged = file().replace("context-record/v0.1", "context-record/v9");
+    const tagged = file().replace(RECORD_SCHEMA_TAG, `${RECORD_SCHEMA_TAG}9`);
     expect(CHECKS.schema(ctx({ fileText: tagged })).summary).toContain(
-      "expected context-record/v0.1",
+      `expected ${RECORD_SCHEMA_TAG}`,
     );
   });
 

@@ -3,7 +3,7 @@
  * `pages/shell.md`): Fleet = pending approvals plus open interjections,
  * Steering = open proposals, Audit = open critical incidents in the
  * organization. Each count reads the store that owns it
- * (`agent.approval_requests`, `agent.interjections`, `agent.context_proposals`,
+ * (`agent.approval_requests`, `agent.interjections`, `agent.steering_proposals`,
  * `tacho.incidents`).
  * A count is null only when its read answered no row, and a null renders as
  * "not recorded", never as a zero.

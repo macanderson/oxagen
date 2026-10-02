@@ -103,8 +103,8 @@ const totals = schema.runTotals;
 const sessions = schema.tachoSessions;
 const findings = schema.findings;
 const claims = schema.findingClaims;
-const records = schema.contextRecords;
-const proposals = schema.contextProposals;
+const records = schema.steeringRecords;
+const proposals = schema.steeringProposals;
 
 /** Tool calls one pass reads, newest first; past this the tool-call window starts at the oldest call read. */
 export const TOOL_CALL_READ_MAX = 200_000;

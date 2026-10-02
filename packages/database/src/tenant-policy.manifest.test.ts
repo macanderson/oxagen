@@ -237,7 +237,7 @@ describe("tenant policy manifest", () => {
     // evidence.witnesses, evidence.verdicts, evidence.disclosure_policies and
     // mcp.credential_grants. Was 102 as of cost.findings (ADR-062, G2963). Was
     // 101 as of
-    // agent.context_proposals and agent.context_appends (ADR-061, #2961).
+    // agent.steering_proposals and agent.context_appends (ADR-061, #2961).
     // Was 99 as of evidence.run_exports (ADR-058, #2952).
     // Was 98 as of billing.spend_counters, cost.price_entries, cost.run_totals
     // and cost.daily_totals (ADR-060, G2962) over WL-27's 94, which dropped

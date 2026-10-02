@@ -55,10 +55,10 @@ vi.mock("@/ui/toast", async (importOriginal) => ({
   toast,
 }));
 vi.mock("../actions", () => ({
-  openContextPr: vi.fn(),
-  mergeContextPr: vi.fn(),
+  openSteeringPr: vi.fn(),
+  mergeSteeringPr: vi.fn(),
   dismissProposal: vi.fn(),
-  approveContextPr: vi.fn(),
+  approveSteeringPr: vi.fn(),
   mergePrWithoutReview: vi.fn(),
   revertSteeringPr: vi.fn(),
   restoreManagedBlock: vi.fn(),
@@ -344,7 +344,7 @@ describe("the Memories tab", () => {
     await renderSteering("/memories");
     expect(
       within(screen.getByTestId("hub-header")).getByRole("button", {
-        name: "Write a context record",
+        name: "Write a steering record",
       }).className,
     ).toMatch(/button-primary/);
     fireEvent.click(
@@ -374,7 +374,7 @@ describe("the Memories tab", () => {
     );
     expect(
       within(screen.getByTestId("hub-header")).queryByRole("button", {
-        name: "Write a context record",
+        name: "Write a steering record",
       }),
     ).toBeNull();
     expect(screen.queryByRole("table", { name: "Memories" })).toBeNull();
