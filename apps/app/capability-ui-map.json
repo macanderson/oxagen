@@ -2204,6 +2204,50 @@
       "proof": "apps/app/src/features/organization/notifications.test.tsx",
       "verifiedAt": "2026-09-28",
       "verifiedBy": "slack-health-notices (#4608)"
+    },
+    "list_work_items": {
+      "route": "/[org]/[ws]/work",
+      "page": "apps/app/src/app/[org]/[ws]/work/page.tsx",
+      "entry": "The Work page: the three tiles, the Inbox, Running, Review and Done tabs with their counts, and one row per work item with its status word, wait line, priority, checks word and cost (features/work/work-page.tsx, work-table.tsx). Work setup reads the same answer for the viewer's control flag.",
+      "testid": "work-tile-ready",
+      "proof": "apps/app/src/features/work/work-page.test.tsx",
+      "verifiedAt": "2026-10-02",
+      "verifiedBy": "p1-05-work-surfaces (#5163)"
+    },
+    "get_work_item": {
+      "route": "/[org]/[ws]/work/[item]",
+      "page": "apps/app/src/app/[org]/[ws]/work/[item]/page.tsx",
+      "entry": "One work item: the head with its status and wait, the source and triage band, the brief, the delivery and every send, the review on the pull request's head commit, cost with its coverage, and the history (features/work/item/work-item-page.tsx).",
+      "testid": "work-item-head",
+      "proof": "apps/app/src/features/work/item/work-item.test.tsx",
+      "verifiedAt": "2026-10-02",
+      "verifiedBy": "p1-05-work-surfaces (#5163)"
+    },
+    "list_work_targets": {
+      "route": "/[org]/[ws]/work/setup?tab=runtimes",
+      "page": "apps/app/src/app/[org]/[ws]/work/setup/page.tsx",
+      "entry": "Work setup's Runtimes tab: one row per agent with its runtime, last poll, tier, whether it can take a send and why not, and the budget line for its tier (features/work/setup/runtimes.tsx).",
+      "testid": "work-targets-table",
+      "proof": "apps/app/src/features/work/setup/setup-page.test.tsx",
+      "verifiedAt": "2026-10-02",
+      "verifiedBy": "p1-05-work-surfaces (#5163)",
+      "also": [
+        {
+          "route": "/[org]/[ws]/work/[item]?dialog=send",
+          "page": "apps/app/src/app/[org]/[ws]/work/[item]/page.tsx",
+          "entry": "The Send dialog on a work item: the agents that can take the send, and the others folded with their reasons (features/work/item/send-dialog.tsx).",
+          "proof": "apps/app/src/features/work/item/work-item.dialogs.test.tsx"
+        }
+      ]
+    },
+    "get_work_outcomes": {
+      "route": "/[org]/[ws]/work/outcomes",
+      "page": "apps/app/src/app/[org]/[ws]/work/outcomes/page.tsx",
+      "entry": "Outcomes: the six tiles, the weekly trend, touches by kind, cost coverage and reopens over the last 30 days (features/work/outcomes/outcomes-page.tsx).",
+      "testid": "work-outcome-accepted",
+      "proof": "apps/app/src/features/work/outcomes/outcomes-page.test.tsx",
+      "verifiedAt": "2026-10-02",
+      "verifiedBy": "p1-05-work-surfaces (#5163)"
     }
   }
 }
