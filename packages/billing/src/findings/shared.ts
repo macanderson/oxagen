@@ -28,6 +28,7 @@ import {
   type RunTotalsRecord,
 } from "../cost-rollup";
 import type { PromptRead } from "./prompts";
+import type { ResultTextMode, ResultUseRead } from "./result-use";
 import type { TokenCounts } from "../cost-rollup";
 import type { PriceEntry } from "../price-book";
 import type { OutcomeRow } from "../run-pr-outcomes";
@@ -299,6 +300,38 @@ interface FindingRunEvidence {
   counterfactualMicros: string;
 }
 
+/** One side of detector 5's split: its large results and the requests that re-read them. */
+export interface FindingResultTally {
+  results: number;
+  /** The requests that re-read these results. */
+  reads: number;
+  /**
+   * What paging those re-reads at `PAGE_TOKENS` would save, in micro-units
+   * as a decimal string, over the re-reads a price covers. A used result's
+   * figure stays out of the finding's saving.
+   */
+  pageSavingMicros: string;
+}
+
+/**
+ * Detector 5's re-reads split by whether a later step quoted the result
+ * (decision 7 of the spend plan). The finding's saving counts the `unused`
+ * and `unchecked` sides. A `used` result stays cited, and its re-reads add
+ * nothing to the saving.
+ */
+export interface FindingResultUse {
+  /**
+   * What the workspace keeps: `content_exact` keeps the text a quote is
+   * checked in, and `digest_only` keeps none. Null when the pass read no
+   * signal.
+   */
+  mode: ResultTextMode | null;
+  used: FindingResultTally;
+  unused: FindingResultTally;
+  /** Results with no verdict. Their re-reads count in full, an upper bound. */
+  unchecked: FindingResultTally;
+}
+
 /** The arithmetic behind a saving, as `cost.findings.cited_frames` stores it. */
 export interface FindingEvidence {
   /** The cited items: calls, runs, or model requests, as the kind counts them. */
@@ -321,6 +354,8 @@ export interface FindingEvidence {
   frames?: Record<string, { seqs: FindingCitedFrame[]; total: number }>;
   /** The setting the fix proposes; absent on a finding whose fix names none. */
   recommendation?: FindingRecommendation;
+  /** Detector 5's split by result use; absent on every other kind, and on a row written before it was stored. */
+  resultUse?: FindingResultUse;
 }
 
 export interface FindingDraft {
@@ -403,6 +438,12 @@ export interface DetectInput {
   outcomes?: ReadonlyMap<string, readonly OutcomeRow[]>;
   /** How many of the window's runs had their model-call frames read. */
   frameCoverage?: FrameCoverage;
+  /**
+   * Whether a later step quoted each large tool result, for detector 5
+   * (decision 7). Absent when the store read none, and detector 5 then
+   * counts every re-read, an upper bound.
+   */
+  resultUse?: ResultUseRead;
 }
 
 /** The input the findings store builds: every read is set. */
@@ -472,6 +513,8 @@ export interface Group {
   claims: FindingClaim[];
   /** The setting the finding's fix proposes; see {@link Groups.recommend}. */
   recommendation?: FindingRecommendation;
+  /** Detector 5's split by result use, which the detector sets after its last `add`. */
+  resultUse?: FindingResultUse;
 }
 
 /** An item's measured and counterfactual sides; null micros when the counterfactual does not cover it. */
@@ -766,6 +809,7 @@ export function toDraft(
     );
   if (group.recommendation !== undefined)
     evidence.recommendation = { ...group.recommendation };
+  if (group.resultUse !== undefined) evidence.resultUse = group.resultUse;
   const draft: FindingDraft = {
     kind: group.kind,
     level: group.level,
