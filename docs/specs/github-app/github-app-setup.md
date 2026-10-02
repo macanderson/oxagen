@@ -837,6 +837,102 @@ When the drift test times out, read the run's last state first. The 60-second wi
 GitHub sending a `repository` webhook for the merge-setting change. Without one, drift shows only
 at the next 10-minute health sweep.
 
+### MCP Studio live test
+
+The MCP Studio live test runs MCP Studio end to end against production Oxagen and the same GitHub
+test organization (lane M17, #5139). The suite is in `apps/app/live/` (`mcp-studio.live.ts`,
+`mcp-studio-rig.ts`, and `mcp-studio-servers.ts`), and the workflow is
+`.github/workflows/mcp-studio-live.yml`. This section is its runbook.
+
+The job starts four sample servers on the runner from M0's fixtures in
+`packages/mcp-studio/fixtures/`:
+
+| Server | Fixture | How Oxagen reaches it |
+| --- | --- | --- |
+| `live_mcp`, an MCP server | `mcp/tools-list.json` | A public tunnel |
+| `live_payments`, an OpenAPI service | `openapi/openapi-3.1.yaml` | A public tunnel |
+| `live_desk`, a GraphQL service | `graphql/schema.graphql` | A public tunnel |
+| `live_ledger`, a gRPC service | `grpc/ledger.proto` | A relay (`apps/relay`) |
+
+Production refuses a private address, so the job opens a Cloudflare quick tunnel
+(`cloudflared tunnel --url`) to the runner. A quick tunnel needs no account. The workflow pins the
+`cloudflared` version and checks its SHA-256. Each request through the tunnel must carry a bearer
+token the workflow makes for the run, and the suite stores that token as the workspace credential
+`mcp-live-upstream`. The gRPC service listens on the runner only. The suite registers a relay named
+after the run and starts it with the key Oxagen signs relay calls with, which the host enrollment
+returns.
+
+The suite runs seven tests in order, in one worker:
+
+1. Create the workspace `mcp-live-<run id>-<attempt>`, store the credential, enroll a host, and
+   connect the relay.
+2. For each server, save a Studio draft that imports and classifies two tools, open its steering
+   PR with Review, and wait for the repository to read healthy.
+3. Merge each steering PR through Oxagen and read a higher published version.
+4. Publish the test agent's file and two Cedar policies: one parks every irreversible call for
+   approval, and one forbids the test agent the MCP server's `create_issue`.
+5. Call each tool through `https://mcp.oxagen.sh/mcp` with the host's gateway key. Six calls
+   return shaped results. `live_payments__create_payment` parks for approval, and
+   `live_mcp__create_issue` is denied and hidden. Neither reaches its upstream.
+6. Change `list_repositories`'s description on the sample MCP server and run a discovery. Expect a
+   sync steering PR, with the locked description still served.
+7. Revoke the relay, wait for the broker to close its connection, and expect the next gRPC call to
+   fail without reaching the upstream.
+
+The job reads the same secrets and variables as the steering live test, in the same `steering-live`
+environment, and no others. It makes the upstream token and the tunnel URL for each run.
+`STEERING_LIVE_ENABLED` turns on both schedules. The two workflows share the `steering-live`
+concurrency group, so they never run at the same time.
+
+#### Product gaps
+
+Two steps wait on Oxagen capabilities that do not exist yet. The rig fails each with its issue's
+number, so the run stops there and says why.
+
+- **#5122.** Oxagen can't merge a steering PR that has no proposal: a Studio Review, a sync, or a
+  Markdown import. A merge on GitHub would leave the steering repo `diverged`. Test 3 stops here,
+  and every later test fails because nothing published.
+- **#5149.** Nothing in Oxagen writes an agent file (`agents/<name>.toml`). Without one, the gateway
+  matches no agent to the host and serves no tool.
+
+When either lands, fill in `mergeSteeringPullRequest` or `publishAgentFile` in
+`apps/app/live/mcp-studio-rig.ts`.
+
+#### Setup
+
+The steering live test's setup above covers this suite too, with one more condition: the test
+Oxagen organization must have governed actions left. The gateway refuses every served call when
+the organization's units run out. The suite's relay names no credential, so it runs on any plan.
+Only a relay credential needs Enterprise.
+
+Dispatch a run with `gh workflow run mcp-studio-live.yml --ref main`. Lane M17 is done after two
+dispatched runs pass in a row.
+
+#### Cleanup
+
+Each run names its workspace `mcp-live-<run id>-<attempt>` and its steering repo
+`oxagen-mcp-live-<run id>-<attempt>`. The sweep and the cleanup steps run
+`live/steering-cleanup.ts` with the suite name `mcp-studio`, so they touch only this suite's
+workspaces and repositories, never the steering live test's. A relay or a host enrollment a failed
+run left stays in the archived workspace, where nothing routes to it. A host enrollment expires
+after one day.
+
+#### Logs
+
+The suite never prints a secret. The sample servers and the relay log no token. When the suite
+fails, the workflow prints the sample servers' log, the tunnel's log, and the control port's status,
+which lists every call each upstream received and every event the relay logged.
+
+#### Failures
+
+- A tunnel that never reaches the sample servers fails its own step. Cloudflare's quick tunnels have
+  no uptime promise, so dispatch the run again.
+- A relay that logs `untrusted_key` trusts a key other than the one the MCP service signs with. The
+  suite takes the key from the host enrollment, which the API service answers. Both services read
+  `TACHO_BUNDLE_SIGNING_PRIVATE_KEY`, so this means the two hold different values.
+- Test 7 waits up to 90 seconds for the relay to log `token_revoked`, or a disconnect with code
+  4001, because the broker re-checks each relay's token every 30 seconds.
+
 ---
 
 ## Known gaps / follow-ups

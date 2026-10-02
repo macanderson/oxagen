@@ -7,10 +7,12 @@ import { defineConfig } from "@playwright/test";
 // It stays apart from playwright.config.ts on purpose. That config holds the
 // three rev1 e2e specs INV-20 fixes (ARCHITECTURE.md §6.3), needs a built app
 // to serve, and matches nothing under live/. This one matches only
-// live/*.live.ts, which no vitest include and no e2e project matches.
+// live/steering-repo.live.ts, which no vitest include and no e2e project
+// matches. The MCP Studio live test (M17) shares live/ and has its own
+// config, playwright.mcp-studio-live.config.ts.
 export default defineConfig({
   testDir: "./live",
-  testMatch: /\.live\.ts$/,
+  testMatch: /steering-repo\.live\.ts$/,
   forbidOnly: true,
   retries: 0,
   // The tests share one workspace and run in file order in one worker.
