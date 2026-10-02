@@ -11,14 +11,14 @@
   overflow: clip;
 }
 .blog-hero h1 {
-  font-size: clamp(34px, 5vw, 58px);
+  font-size: clamp(var(--ox-m-h3), 5vw, var(--ox-m-h1));
   margin-top: 16px;
   max-width: 20ch;
 }
 .blog-hero-sub {
   margin-top: 20px;
   color: var(--ink-3);
-  font-size: clamp(16px, 1.6vw, 18.5px);
+  font-size: var(--ox-m-body);
   max-width: 60ch;
 }
 
@@ -75,7 +75,7 @@
   flex: 1;
 }
 .pillar-card h3 {
-  font-size: 16.5px;
+  font-size: var(--ox-m-h4);
   font-weight: 620;
 }
 .pillar-card p {
@@ -176,7 +176,7 @@
   gap: 10px;
 }
 .post-card h3 {
-  font-size: 18px;
+  font-size: var(--ox-m-h4);
   font-weight: 620;
   line-height: 1.25;
 }
@@ -185,7 +185,7 @@
 }
 .post-card p {
   color: var(--ink-3);
-  font-size: 14.6px;
+  font-size: var(--ox-m-micro);
   line-height: 1.5;
 }
 .byline {
@@ -276,18 +276,18 @@
   max-width: 600px;
 }
 .pillar-hero-copy h1 {
-  font-size: clamp(32px, 4.6vw, 52px);
+  font-size: clamp(var(--ox-m-h3), 4.6vw, var(--ox-m-h1));
   margin-top: 14px;
 }
 .pillar-tagline {
   margin-top: 12px;
   color: var(--ink);
-  font-size: 19px;
+  font-size: var(--ox-m-body);
 }
 .pillar-desc {
   margin-top: 14px;
   color: var(--ink-3);
-  font-size: 16.5px;
+  font-size: var(--ox-m-body);
   max-width: 64ch;
   line-height: 1.6;
 }
@@ -339,14 +339,14 @@
   max-width: 640px;
 }
 .post-head h1 {
-  font-size: clamp(30px, 4.4vw, 50px);
+  font-size: clamp(var(--ox-m-h3), 4.4vw, var(--ox-m-h1));
   margin-top: 16px;
   text-wrap: balance;
 }
 .post-sub {
   margin-top: 18px;
   color: var(--ink-3);
-  font-size: clamp(16.5px, 1.6vw, 19px);
+  font-size: var(--ox-m-body);
   line-height: 1.55;
   max-width: 56ch;
 }
@@ -408,20 +408,20 @@
 .prose {
   order: 1;
   color: var(--ink);
-  font-size: 17.5px;
+  font-size: var(--ox-m-body);
   line-height: 1.7;
 }
 .prose > * + * {
   margin-top: 1.1em;
 }
 .prose h2 {
-  font-size: clamp(24px, 2.6vw, 30px);
+  font-size: clamp(var(--ox-m-h4), 2.6vw, var(--ox-m-h3));
   margin-top: 2.1em;
   padding-top: 0.8em;
   border-top: 1px solid var(--line);
 }
 .prose h3 {
-  font-size: 20px;
+  font-size: var(--ox-m-h4);
   margin-top: 1.7em;
 }
 .prose h2 .anchor,
@@ -509,7 +509,7 @@
 .prose table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 15px;
+  font-size: var(--ox-m-micro);
   line-height: 1.45;
 }
 .prose th,
@@ -534,11 +534,11 @@
   margin-top: 3em;
   padding-top: 1.2em;
   border-top: 1px solid var(--line);
-  font-size: 14.6px;
+  font-size: var(--ox-m-micro);
   color: var(--ink-2);
 }
 .prose .refs-title {
-  font-size: 22px;
+  font-size: var(--ox-m-h4);
   border-top: 0;
   padding-top: 0;
   margin-top: 0;
@@ -610,7 +610,7 @@
   margin-top: 0.8em;
 }
 .callout-body p {
-  font-size: 16px;
+  font-size: var(--ox-m-body);
   color: var(--ink-2);
 }
 .figure {
@@ -638,13 +638,13 @@
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: var(--r-lg);
-  font-size: 14px;
+  font-size: var(--ox-m-micro);
   line-height: 1.45;
 }
 .fig-title {
   margin-bottom: 14px;
   color: var(--ink);
-  font-size: 15.5px;
+  font-size: var(--ox-m-micro);
   font-weight: 600;
   letter-spacing: -0.01em;
 }
@@ -749,13 +749,13 @@
 }
 .fig-bars .fig-track {
   background: var(--raised);
-  border-radius: 2px;
+  border-radius: var(--ox-radius-xs);
 }
 .fig-fill {
   position: absolute;
   inset: 0 auto 0 0;
   background: var(--ink-3);
-  border-radius: 2px;
+  border-radius: var(--ox-radius-xs);
 }
 .fig-row.is-emph .fig-fill {
   background: var(--ink);
@@ -845,7 +845,7 @@
   top: 0;
   bottom: 0;
   background: var(--ink-3);
-  border-radius: 2px;
+  border-radius: var(--ox-radius-xs);
 }
 .fig-interval.is-ended {
   background: var(--panel);
@@ -961,8 +961,8 @@
   initial-value: 0;
 }
 .fig-flow {
-  --gap: 22px;
-  --row-gap: 22px;
+  --gap: calc(var(--ox-space) * 5.5);
+  --row-gap: calc(var(--ox-space) * 5.5);
   --dwell: 1.5s;
 }
 .fig-steps {
@@ -998,7 +998,7 @@
 }
 .fig-step-label {
   color: var(--ink);
-  font-size: 14.5px;
+  font-size: var(--ox-m-micro);
   font-weight: 600;
   line-height: 1.3;
 }
@@ -1026,7 +1026,7 @@
   align-items: flex-start;
   gap: 1px;
   padding: 4px 7px;
-  border-radius: 4px;
+  border-radius: var(--ox-radius-sm);
   background: var(--ink);
   color: var(--ground);
   font-size: 11px;
@@ -1115,11 +1115,11 @@
 }
 @container (min-width: 600px) {
   .fig-flow {
-    --gap: 28px;
-    --row-gap: 40px;
+    --gap: calc(var(--ox-space) * 7);
+    --row-gap: calc(var(--ox-space) * 10);
   }
   .fig-flow.is-dense {
-    --gap: 18px;
+    --gap: calc(var(--ox-space) * 4.5);
   }
   .fig-steps {
     grid-template-columns: repeat(var(--cols), minmax(0, 1fr));
@@ -1218,7 +1218,7 @@
   background: var(--raised);
   border: 1px solid var(--line);
   border-top: 2px solid var(--ink-3);
-  border-radius: 2px;
+  border-radius: var(--ox-radius-xs);
 }
 .fig-rung:last-child .fig-rung-bar {
   border-top-color: var(--ink);
@@ -1226,7 +1226,7 @@
 .fig-rung-label {
   margin-top: 4px;
   color: var(--ink);
-  font-size: 14px;
+  font-size: var(--ox-m-micro);
   font-weight: 600;
   line-height: 1.3;
 }
@@ -1268,7 +1268,7 @@
   border: 1px solid var(--rule);
   border-radius: var(--r);
   color: var(--ink);
-  font-size: 14px;
+  font-size: var(--ox-m-micro);
   font-weight: 600;
   text-align: center;
   overflow-wrap: anywhere;
@@ -1350,11 +1350,11 @@
 /* generations: stacks of real (solid) and generated (hollow) data */
 .fig-generations .fig-key-to {
   background: var(--ink-3);
-  border-radius: 2px;
+  border-radius: var(--ox-radius-xs);
 }
 .fig-generations .fig-key-from {
   border-width: 1.5px;
-  border-radius: 2px;
+  border-radius: var(--ox-radius-xs);
 }
 .fig-gen-rows {
   display: grid;
@@ -1394,7 +1394,7 @@
 }
 .fig-block {
   height: 14px;
-  border-radius: 2px;
+  border-radius: var(--ox-radius-xs);
 }
 .fig-block-real {
   background: var(--ink-3);
@@ -1481,7 +1481,7 @@
   padding: 0 14px;
   border: 1px solid var(--rule);
   border-radius: var(--r);
-  font-size: 14.5px;
+  font-size: var(--ox-m-micro);
   color: var(--ink-3);
   cursor: pointer;
 }
@@ -1496,7 +1496,7 @@
 }
 .prose .sdlc-note {
   margin: 0;
-  font-size: 14px;
+  font-size: var(--ox-m-micro);
   color: var(--ink-3);
 }
 @media (max-width: 560px) {
