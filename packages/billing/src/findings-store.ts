@@ -54,7 +54,6 @@ import {
   type DetectReads,
   type FindingClaim,
   type FindingDraft,
-  type InstructionProposal,
   type FrameClassPrice,
   type FrameClassPrices,
   type FrameContextPart,
@@ -66,7 +65,9 @@ import {
   type ToolCallObservation,
   type UnproductiveSpend,
 } from "./findings";
-import { openInstructionProposals, readRunPrompts } from "./findings-prompts";
+import { openSpendProposals } from "./findings/open-proposals";
+import type { SpendProposalInput } from "./findings/proposal-opener";
+import { readRunPrompts } from "./findings-prompts";
 import {
   readCompactions,
   readFileChanges,
@@ -167,10 +168,13 @@ interface FindingsPassDeps {
     runIdBySession: ReadonlyMap<string, string>,
     runIds: ReadonlySet<string>,
   ) => Promise<PromptRead | undefined>;
-  /** Opens a steering record proposal per repeated instruction; absent, the pass opens none. */
+  /**
+   * Opens the steering record proposals the pass's repeated instructions and
+   * finding drafts support; absent, the pass opens none.
+   */
   openProposals?: (
     scope: FindingsScope,
-    proposals: readonly InstructionProposal[],
+    input: SpendProposalInput,
   ) => Promise<void>;
   /**
    * Each run's frame source, by run public id. Without it, a wrapped run's
@@ -1129,7 +1133,7 @@ const productionDeps: FindingsPassDeps = {
   writeClaimBackfill,
   readPrompts: (scope, window, runIdBySession, runIds) =>
     readRunPrompts(scope, window, runIdBySession, runIds, readFrames),
-  openProposals: openInstructionProposals,
+  openProposals: openSpendProposals,
 };
 
 /**
@@ -1139,9 +1143,10 @@ const productionDeps: FindingsPassDeps = {
  * up to `FRAME_RUNS_READ_MAX` runs and `FRAME_READ_MAX_FRAMES` frames; detect;
  * and replace the open findings and their claims. The pass then gives each
  * applied finding with no claim row the claims a replay finds for it. It also
- * reads the window's operator prompts and opens a proposal for each
- * instruction repeated across runs. Throws when a store is degraded: the job
- * retries rather than writing findings from missing frames.
+ * reads the window's operator prompts, and opens the steering record
+ * proposals its repeated instructions and findings support. Throws when a
+ * store is degraded: the job retries rather than writing findings from
+ * missing frames.
  */
 export async function runFindingsPass(
   scope: FindingsScope,
@@ -1248,7 +1253,10 @@ export async function runFindingsPass(
     const backfill = claimBackfill(unclaimed, replayClaims(input, released));
     if (backfill.length > 0) await deps.writeClaimBackfill?.(scope, backfill);
   }
-  await deps.openProposals?.(scope, instructionProposals(prompts, runs));
+  await deps.openProposals?.(scope, {
+    instructions: instructionProposals(prompts, runs),
+    findings: drafts,
+  });
   return { findings: written };
 }
 

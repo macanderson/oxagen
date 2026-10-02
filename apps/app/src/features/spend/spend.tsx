@@ -111,6 +111,16 @@ function Header({
   );
 }
 
+/** The operator rollup's own refusal, beside the ranking that answered. */
+function OperatorNamesFailure({
+  read,
+}: {
+  read: Extract<Read<SpendReport>, { ok: false }>;
+}) {
+  const t = useTranslations("spend.findings");
+  return <SpendSectionFailure read={read} title={t("operatorNames")} />;
+}
+
 export async function Spend({ ctx, source, view, today }: SpendProps) {
   const at: SpendAt = { org: ctx.orgSlug, ws: ctx.wsSlug };
   const now = today ?? requestInstant();
@@ -273,14 +283,16 @@ async function body({
     case "findings": {
       if (!findings.ok)
         return <SpendReadFailure read={findings} {...failure} />;
-      // The operator ranking sits under the findings it coaches from. It is
-      // asked only for a viewer who may read it; anyone else sees who can
-      // (D15).
-      const [operators, evidence, ranking] = await Promise.all([
+      // The hero leads with the month's unproductive spend, the total the
+      // operator ranking's Total row prints. The ranking sits under the
+      // findings it coaches from. It is asked only for a viewer who may read
+      // it; anyone else sees who can (D15).
+      const [operators, evidence, headline, ranking] = await Promise.all([
         source.spend.byGroup(ctx, "operator", period),
         view.finding === null
           ? Promise.resolve(null)
           : source.spend.findingEvidence(ctx, view.finding),
+        source.spend.unproductive(ctx, period),
         canReadOperatorRanking(ctx)
           ? source.spend.operatorRanking(ctx, period)
           : Promise.resolve(null),
@@ -288,6 +300,7 @@ async function body({
       return (
         <>
           <FindingsSection
+            headline={headline}
             findings={findings.value}
             operators={operators.ok ? operators.value.rows : []}
             harnesses={harnesses.byKey}
@@ -298,6 +311,10 @@ async function body({
               )
             }
           />
+          {/* The rollup names the person on each operator finding. It and
+              the ranking are read apart, so a rollup that fails says so here
+              and leaves the ranking whole (#4574). */}
+          {operators.ok ? null : <OperatorNamesFailure read={operators} />}
           <OperatorRankingSection
             ranking={ranking}
             at={at}

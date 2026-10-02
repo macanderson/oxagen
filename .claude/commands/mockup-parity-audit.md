@@ -7,7 +7,7 @@ argument-hint: "[page path | description of pages] (empty audits every page)"
 
 Arguments: $ARGUMENTS
 
-The command lives in macanderson/oxagen-roadmap, beside the mockup it holds this app to. Check it out
+The command lives in oxageninc/roadmap, beside the mockup it holds this app to. Check it out
 beside this repository (`~/Projects/oxagen-roadmap`, or `../oxagen-roadmap` in a cloud session), then
 read `oxagen-roadmap:.claude/skills/mockup-parity-audit/SKILL.md` and follow it with the arguments
 above. `oxagen-roadmap:<path>` means `<path>` in that checkout.

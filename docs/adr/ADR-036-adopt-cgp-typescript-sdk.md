@@ -6,7 +6,7 @@
 - **Related:** ADR-035 (amended by this decision), #1082 (consume CGP
   directly), `docs/specs/run-evidence-ingress/spec.md` (Approved — the
   governing seam),
-  [`context-graph-protocol#43`](https://github.com/macanderson/context-graph-protocol/pull/43)
+  [`context-graph-protocol#43`](https://github.com/oxageninc/context-graph-protocol/pull/43)
   (the SDK this ADR adopts),
   [`@contextgraphprotocol/typescript-sdk`](https://www.npmjs.com/package/@contextgraphprotocol/typescript-sdk)
 

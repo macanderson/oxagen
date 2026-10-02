@@ -42,7 +42,7 @@ Each source abbreviation below links to the implementation. “Metered” and �
 [CUM]: https://cursor.com/docs/mcp
 [SM]: https://github.com/macanderson/stella/blob/main/crates/stella-cli/src/agent.rs
 
-Claude Desktop is a connected gateway harness, not one of the four wrapped harnesses in [wire.ts][W]. Custom-agent integrations speak the hook protocol themselves; see [the wrapped-agent examples](https://github.com/macanderson/oxagen-wrapped-agents). Neither path inherits the lifecycle coverage of a native adapter.
+Claude Desktop is a connected gateway harness, not one of the four wrapped harnesses in [wire.ts][W]. Custom-agent integrations speak the hook protocol themselves; see [the wrapped-agent examples](https://github.com/oxageninc/oxagen-wrapped-agents). Neither path inherits the lifecycle coverage of a native adapter.
 
 ### Codex trust and approval
 
@@ -56,7 +56,7 @@ Cursor's adapter refuses an ask because its pre-tool protocol cannot provide the
 
 The MCP gateway in [the collector][MG] serves Oxagen's own read-only tools to Claude Desktop and to nothing else. It forwards each call to Oxagen's MCP server and cannot front a third-party server. Claude Code, Codex, Cursor, and Stella call the MCP servers you configure directly. Their `PreToolUse` hooks record and can refuse each `mcp__*` call, client-attested like any other tool call. No wrapped run reaches the `gateway` tier through MCP today.
 
-Routing those calls is #3299 item 6. [The gateway plan](https://github.com/macanderson/oxagen-roadmap/blob/main/docs/gateway-plan.md) serves the workspace's toolbelt from a gateway Oxagen hosts, or the customer hosts, one endpoint per server under its original name, with Oxagen holding the credentials. When a phase ships, this column changes in the same pull request.
+Routing those calls is #3299 item 6. [The gateway plan](https://github.com/oxageninc/roadmap/blob/main/docs/gateway-plan.md) serves the workspace's toolbelt from a gateway Oxagen hosts, or the customer hosts, one endpoint per server under its original name, with Oxagen holding the credentials. When a phase ships, this column changes in the same pull request.
 
 Some MCP calls can never pass through a local gateway, because the vendor runs the tool:
 
@@ -83,7 +83,7 @@ Aider exposes conversation-history files and an OpenAI API-base option. Its docu
 
 ## GitLab
 
-Updated 2026-09-23 for [#3762](https://github.com/macanderson/oxagen/issues/3762). The harness rows above are unchanged. gitlab.com is now a second repository host for steering: a workspace can bind a gitlab.com project as its main repository, and a context record publishes as a merge request on it. Self-managed GitLab is not supported. Every call goes to gitlab.com until a host setting and an outbound-network review exist.
+Updated 2026-09-23 for [#3762](https://github.com/oxageninc/product/issues/3762). The harness rows above are unchanged. gitlab.com is now a second repository host for steering: a workspace can bind a gitlab.com project as its main repository, and a context record publishes as a merge request on it. Self-managed GitLab is not supported. Every call goes to gitlab.com until a host setting and an outbound-network review exist.
 
 The implementation sits behind one provider seam. [The steering host](../../packages/handlers/src/context.steering.host.ts) reads the provider of the workspace's main binding head and sends every steering call to [the GitHub implementation](../../packages/handlers/src/context.steering.github.ts) or [the GitLab implementation](../../packages/handlers/src/context.steering.gitlab.ts). The GitLab side uses [the `@oxagen/gitlab` client](../../packages/gitlab/src/client.ts): merge requests, commit statuses, repository files, branches and compare, and project hooks. It authenticates with a project access token and addresses the project by its numeric id, so a project moved to another group keeps working.
 

@@ -1,5 +1,5 @@
 // The GitHub issue each unbacked part of the Audit page waits on
-// (macanderson/oxagen). A page element with no store behind it renders one
+// (oxageninc/product). A page element with no store behind it renders one
 // sentence saying what is missing and carries its issue as `data-issue`, so a
 // reviewer can find the backend change from the DOM. The number never reaches
 // the reader's text: a customer is told what is missing, not where it is filed.

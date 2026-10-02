@@ -155,7 +155,7 @@ runStreamRoute.get("/", async (c) => {
         // merely caught up — no frames yet, or a reconnect that landed
         // exactly on the head — and is not sealed; it keeps waiting below
         // rather than reporting a false `sealed` that closes a run still
-        // going (finding 4, macanderson/oxagen#3370).
+        // going (finding 4, oxageninc/product#3370).
         if (page.frames.cursor === null && page.run.status !== "live") {
           write(
             `event: done\ndata: ${JSON.stringify({ reason: "sealed", cursor: cursor ?? null })}\n\n`,

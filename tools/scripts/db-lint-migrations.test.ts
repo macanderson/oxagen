@@ -262,7 +262,7 @@ describe("mergeBaseOf and atlasFilesAtRef directly", () => {
 
 describe("the real #3337 incident, reproduced from its actual merge base", () => {
   // #3387's DoD asks for this verified against the real case rather than only
-  // an invented one. The commit history for PR #3337 (macanderson/oxagen) is
+  // an invented one. The commit history for PR #3337 (oxageninc/product) is
   // not fetched by CI's shallow, main-only checkout for this PR, so this test
   // does not run live git commands against that history; it reproduces the
   // exact fixture this check would have read had it existed then, taken from

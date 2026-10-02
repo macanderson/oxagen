@@ -8,7 +8,7 @@
   crates), #1098 (added the run-evidence contract core),
   `docs/specs/run-evidence-ingress/spec.md` (Approved — the governing seam),
   ADR-033 (Stella Rust engine core — the other, Rust-side CGP consumer),
-  [`context-graph-protocol`](https://github.com/macanderson/context-graph-protocol)
+  [`context-graph-protocol`](https://github.com/oxageninc/context-graph-protocol)
   (the canonical upstream, formerly Open Context Protocol / `ocp-*`)
 
 ## Context

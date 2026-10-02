@@ -89,6 +89,7 @@ const source: DataSource = {
     priceBook: refuse,
     operatorRanking: refuse,
     unpricedModels: refuse,
+    unproductive: refuse,
   },
   onboarding: { state: refuse, firstFrame: refuse },
   org: {
