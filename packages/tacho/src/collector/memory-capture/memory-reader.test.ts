@@ -548,14 +548,18 @@ describe("the files a scan found", () => {
   it("sends a deleted file again when it comes back unchanged", async () => {
     const fs = new FakeFs();
     fs.write(memoryPath("-proj", "rule.md"), "Use pnpm.");
+    // A second file keeps the folder there, so the scan after the delete can
+    // list it. A folder that cannot be listed sends no scan at all.
+    fs.write(memoryPath("-proj", "keep.md"), "Keep tests small.");
     const { memoryReader, sent } = reader(fs);
     await memoryReader.scan();
     fs.files.delete(memoryPath("-proj", "rule.md"));
     const gone = await memoryReader.scan();
-    expect(gone.scans?.[0]?.paths).toEqual([]);
+    expect(gone.scans?.[0]?.paths).toEqual([memoryPath("-proj", "keep.md")]);
     fs.write(memoryPath("-proj", "rule.md"), "Use pnpm.");
     expect((await memoryReader.scan()).sent).toBe(1);
     expect(sent.map((entry) => entry.statement)).toEqual([
+      "Keep tests small.",
       "Use pnpm.",
       "Use pnpm.",
     ]);

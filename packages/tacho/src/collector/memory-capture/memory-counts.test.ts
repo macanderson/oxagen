@@ -44,9 +44,11 @@ function ledger(storage: UseCountStorage) {
 }
 
 /** A full read of the Codex store with these counts. */
+/** A read of `counts`. Pass `null` for rows with no last use: an explicit
+ * `undefined` would take the default instead. */
 function read(
   counts: Record<string, number>,
-  lastUsedAt: string | undefined = USED,
+  lastUsedAt: string | null = USED,
 ): HarnessUseCounts {
   return {
     harness: "codex",
@@ -54,7 +56,7 @@ function read(
     counts: Object.entries(counts).map(([thread, count]) => ({
       path: `thread/${thread}`,
       count,
-      ...(lastUsedAt !== undefined ? { lastUsedAt } : {}),
+      ...(lastUsedAt !== null ? { lastUsedAt } : {}),
     })),
   };
 }
@@ -132,7 +134,7 @@ describe("the rise in a count", () => {
 
   it("stamps a rise with no last use at the scan's time", () => {
     const { counts } = ledger(memoryStorage());
-    expect(counts.rises([read({ t1: 1 }, undefined)])[0]?.usedAt).toBe(
+    expect(counts.rises([read({ t1: 1 }, null)])[0]?.usedAt).toBe(
       new Date(NOW).toISOString(),
     );
   });
