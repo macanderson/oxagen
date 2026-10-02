@@ -10,7 +10,7 @@
  * This reads files outside @oxagen/scripts, so it is a `*.tree.test.ts` and
  * `pnpm check:tree-guards` runs it uncached (#4664 item 2).
  */
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -38,8 +38,10 @@ function files(path: string): string[] {
   const abs = join(ROOT, path);
   if (!existsSync(abs)) return [];
   if (TEXT.test(path)) return [path];
+  // A directory can carry a file extension in its name, so keep files only.
   return readdirSync(abs, { recursive: true, encoding: "utf8" })
     .filter((f) => TEXT.test(f) && !f.includes("node_modules"))
+    .filter((f) => statSync(join(abs, f)).isFile())
     .map((f) => join(path, f));
 }
 

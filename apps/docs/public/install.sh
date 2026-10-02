@@ -30,14 +30,16 @@ path_hint() {
 }
 
 # 1. Platform. downloads.oxagen.sh names each executable by its Rust target
-# triple (EXECUTABLE_TARGETS in apps/desktop/src/downloads.ts).
+# triple (EXECUTABLE_TARGETS in apps/desktop/src/downloads.ts). An empty
+# triple means no executable exists for the platform.
 OS=$(uname -s)
 ARCH=$(uname -m)
+TRIPLE=""
 case "$OS-$ARCH" in
   Darwin-arm64|Darwin-aarch64) TRIPLE="aarch64-apple-darwin" ;;
   Darwin-x86_64)               TRIPLE="x86_64-apple-darwin" ;;
   Linux-x86_64|Linux-amd64)    TRIPLE="x86_64-unknown-linux-gnu" ;;
-  Linux-aarch64|Linux-arm64)   TRIPLE="" ;;
+  Linux-aarch64|Linux-arm64)   ;;
   Darwin-*|Linux-*) fail "unsupported architecture: $ARCH" ;;
   *) fail "unsupported OS: $OS. This script supports macOS and Linux. On Windows, download oxagen-x86_64-pc-windows-msvc.exe from https://downloads.oxagen.sh/" ;;
 esac
