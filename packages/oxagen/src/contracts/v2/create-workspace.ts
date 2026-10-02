@@ -114,6 +114,11 @@ export const createWorkspace = defineTool({
        */
       productionBranch: z.string().min(1),
     }),
+
+    // Carried by reference (#5196): where the workspace's steering repo goes
+    // and what it is called. A workspace gets a steering repo beside its main
+    // repo, so the choice belongs to the same call.
+    steeringRepo: workspaceCreate.input.shape.steeringRepo,
   }),
 
   output: z.object({

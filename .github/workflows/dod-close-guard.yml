@@ -110,7 +110,7 @@ jobs:
                 '',
                 'SCR-003: an issue closes only when every DoD item is satisfied *and verified*.',
                 'Tick each item once it is genuinely done, or split the remainder into a new',
-                'issue (`triage` label only, SCR-004) and close this one referencing it.',
+                "issue, filed as this repository's issue rules say (SCR-004), and close this one referencing it.",
                 '',
                 'If this work should not happen at all, close it as **not planned** instead —',
                 'that path is exempt from this check.',

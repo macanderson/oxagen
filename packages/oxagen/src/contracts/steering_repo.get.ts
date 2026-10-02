@@ -2,6 +2,10 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 import { REPO_HEALTH_STATES } from "../steering-repo/health";
 import { steeringRepoProvisionStatus } from "./workspace.create";
+import {
+  steeringConnectionChoice,
+  steeringConnectionPick,
+} from "./steering_repo.shared";
 
 /**
  * The provisioning steps, in the order the job runs them. A contract cannot
@@ -33,37 +37,9 @@ export const steeringRepoReadStatus = z.enum([
   ...steeringRepoProvisionStatus.options,
 ]);
 
-/**
- * A GitHub organization or a GitLab group the owner's tokens reach, which
- * setup could create steering repos in. `id` is the GitHub installation id or
- * the GitLab group id.
- */
-export const steeringConnectionChoice = z.object({
-  provider: z.enum(["github", "gitlab"]),
-  id: z.number().int().positive(),
-  name: z
-    .string()
-    .min(1)
-    .describe(
-      "The GitHub organization's or personal account's login, or the GitLab group's path.",
-    ),
-  kind: z
-    .enum(["organization", "user"])
-    .describe(
-      "organization for a GitHub organization or GitLab group, user for the owner's own personal GitHub account.",
-    ),
-});
-
-/**
- * The connection a person picks when setup stopped with `choose_connection`.
- * It must be one of the choices `get_steering_repo` lists.
- */
-export const steeringConnectionPick = z
-  .object({
-    provider: z.enum(["github", "gitlab"]),
-    id: z.number().int().positive(),
-  })
-  .strict();
+// The connection shapes moved to steering_repo.shared so create_workspace can
+// take them. These re-exports keep the older import path working.
+export { steeringConnectionChoice, steeringConnectionPick };
 
 /** One prescribed setting that differs, with both values rendered as text. */
 export const steeringRepoDifference = z.object({
@@ -179,7 +155,13 @@ export const steeringRepoView = z.object({
   connection: steeringConnectionChoice
     .nullable()
     .describe(
-      "Where this organization creates its steering repos: the stored GitHub installation or GitLab group, or null before one is chosen. retry_steering_repo_provision and import_workspace_steering take resetConnection to change it until Oxagen has created a steering repo there.",
+      "Where this workspace's steering repo lives: the GitHub installation or GitLab group the workspace chose when it was created, else the organization's stored one, or null before either is set. Before the repository exists, retry_steering_repo_provision takes connection to move it. resetConnection clears the organization's stored one until Oxagen has created a steering repo there.",
+    ),
+  requestedName: z
+    .string()
+    .nullable()
+    .describe(
+      "The name the workspace chose for its steering repo, which Oxagen creates exactly, or null for oxagen-<slug>.",
     ),
   connectionChoices: z
     .array(steeringConnectionChoice)

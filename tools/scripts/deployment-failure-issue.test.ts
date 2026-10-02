@@ -183,6 +183,35 @@ describe("bodyFor and recoveredBody", () => {
     expect(body).toContain("https://github.com/x/y/actions/runs/1");
   });
 
+  it("marks a job that lost its runner and says a rerun is coming (#5180)", () => {
+    // The step that was running reads success when AWS reclaims the runner.
+    const lostJob = job("checks", "failure", {
+      id: 110905320352,
+      steps: [{ name: "Lint and typecheck", conclusion: "success" }],
+    });
+    const realJob = job("unit (app)", "failure", {
+      id: 7,
+      steps: [{ name: "Unit tests", conclusion: "failure" }],
+    });
+    const body = bodyFor(
+      "main-red",
+      run("failure"),
+      [lostJob, realJob],
+      new Set([110905320352]),
+    );
+    expect(body).toContain("failure: its runner shut down mid-job");
+    expect(body).toContain('unit (app)](https://github.com/x/y/actions/runs/1/job/10) failure at step "Unit tests"');
+    expect(body).toContain("`rerun-lost-runner.yml` reruns them");
+  });
+
+  it("adds no rerun note when no job lost its runner", () => {
+    const body = bodyFor("main-red", run("failure"), [
+      job("checks", "failure", { id: 1 }),
+    ]);
+    expect(body).not.toContain("shut down mid-job");
+    expect(body).not.toContain("rerun-lost-runner");
+  });
+
   it("ticks only the DoD box CI owns, so dod-close-guard accepts the close", () => {
     const body = bodyFor("deploy", run("failure"), [
       job("deploy app.oxagen.sh", "failure"),
