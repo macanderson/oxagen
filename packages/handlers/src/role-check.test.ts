@@ -52,6 +52,8 @@ const ROLE_CHECKED_CONTRACTS = [
   // ADR-198 (#4369): the runtime, toolbelt and agent-version writes.
   "move_agent",
   "assign_agent_toolbelt",
+  // Lane F32: the per-agent cache keep-alive switch, org Owner or Admin.
+  "set_agent_cache_keep_alive",
   "create_runtime",
   "update_runtime",
   "clone_toolbelt",

@@ -34,6 +34,7 @@ import {
   type SealStore,
 } from "./run.seal";
 import type { CommandRowInput } from "./tacho.command.dispatch";
+import { inAppLedgerRun, ledgerRun } from "./run.test-support";
 
 const ORG = "00000000-0000-4000-8000-000000000001";
 const WORKSPACE = "00000000-0000-4000-8000-000000000002";
@@ -93,6 +94,7 @@ function tenant(orgRole: string | null, workspaceRole: string | null = null) {
 
 const RUN = "tse_0123456789abcdefghjkmn";
 const ROOT_UUID = "3f2b7a5e-8c1d-4e6f-9a0b-1c2d3e4f5a6b";
+const LEDGER_UUID = "0192d4a8-7c1e-7a00-8000-0000000000a1";
 
 /** A host that polled thirty seconds ago. */
 const POLLING = {
@@ -156,6 +158,11 @@ class MemoryStore implements SealStore {
   modes: string[] = [];
   /** A host seal that commits between the lock and the root's UPDATE. */
   hostSealsFirst = false;
+  /**
+   * The ledger runs among `ledgerRuns` that are in-app turns (ADR-235), each
+   * with the user who asked.
+   */
+  readonly askers = new Map<string, string | null>();
   private seq = 0;
   constructor(
     readonly chains: Chain[],
@@ -186,8 +193,12 @@ class MemoryStore implements SealStore {
   private sealable(c: Chain) {
     return c.sealedAt === null || c.sealSource === "idle_timeout";
   }
-  async ledgerRunExists(_scope: unknown, publicId: string) {
-    return this.ledgerRuns.includes(publicId);
+  async ledgerRun(_scope: unknown, publicId: string) {
+    if (!this.ledgerRuns.includes(publicId)) return null;
+    const ids = { publicId, runId: LEDGER_UUID };
+    return this.askers.has(publicId)
+      ? inAppLedgerRun(ids, this.askers.get(publicId) ?? null)
+      : ledgerRun(ids);
   }
   async lockRoot(_scope: unknown, publicId: string) {
     const root = this.chains.find(
@@ -324,6 +335,30 @@ describe("seal_run: refusals", () => {
     );
     expect(err).toSatisfy(conflict("ledger_run"));
     expect((err as Error).message).toMatch(/dispatch_command cancel/);
+    expect(store.rows).toEqual([]);
+    expect(sendEvent).not.toHaveBeenCalled();
+  });
+
+  // ADR-235, item 5: an in-app run is the asking person's own record.
+  it("refuses the person who asked their own in-app run as a ledger run (negative)", async () => {
+    const turn = "arun_5f0c2e9a1b7d4c3e8f6a02";
+    const store = new MemoryStore([chain()], [turn]);
+    store.askers.set(turn, OPERATOR.userId);
+    const err = await handlerOver(store)
+      .handler(parse({ runId: turn }), OPERATOR)
+      .catch((e: unknown) => e);
+    expect(err).toSatisfy(conflict("ledger_run"));
+  });
+
+  it("answers another member's in-app run not found, as a run neither store holds (negative)", async () => {
+    tenant("Owner");
+    const turn = "arun_5f0c2e9a1b7d4c3e8f6a02";
+    const store = new MemoryStore([chain()], [turn]);
+    store.askers.set(turn, "00000000-0000-4000-8000-0000000000e2");
+    const { handler, sendEvent } = handlerOver(store);
+    await expect(
+      handler(parse({ runId: turn }), OPERATOR),
+    ).rejects.toSatisfy(notFound("run_not_found"));
     expect(store.rows).toEqual([]);
     expect(sendEvent).not.toHaveBeenCalled();
   });

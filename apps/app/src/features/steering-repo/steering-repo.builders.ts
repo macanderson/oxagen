@@ -39,6 +39,7 @@ export function steeringRepoView(
     legacySource: null,
     connection: null,
     connectionChoices: [],
+    importRun: null,
     ...overrides,
   };
 }
@@ -49,6 +50,27 @@ export const LEGACY_SOURCE = {
   url: "https://github.com/acme/agent-harness",
   provider: "github" as const,
 };
+
+/**
+ * An import that stopped after its demote step, so `acme/agent-harness` no
+ * longer steers and its `.oxagen/` tree has not moved (#5082).
+ */
+export function stoppedImport(
+  overrides: Partial<NonNullable<SteeringRepoView["importRun"]>> = {},
+): NonNullable<SteeringRepoView["importRun"]> {
+  return {
+    status: "failed",
+    step: "demote",
+    source: { fullName: LEGACY_SOURCE.fullName, url: LEGACY_SOURCE.url },
+    pullRequests: [],
+    cleanup: null,
+    error: {
+      code: "steering_repo_provision_failed",
+      message: "Oxagen could not bind the steering repo.",
+    },
+    ...overrides,
+  };
+}
 
 /**
  * A workspace that never recorded a setup (#4875): every provisioning field
@@ -167,6 +189,7 @@ export function steeringRepoSource(read: Read<SteeringRepoView>) {
       findingEvidence: refuse,
       priceBook: refuse,
       operatorRanking: refuse,
+      perMergedPr: refuse,
       unpricedModels: refuse,
       unproductive: refuse,
     },
@@ -198,6 +221,9 @@ export function steeringRepoSource(read: Read<SteeringRepoView>) {
       freshness: refuse,
       layout: refuse,
       hub: refuse,
+      workspaceMemories: refuse,
+      workspaceMemory: refuse,
+      memoryPrRecords: refuse,
       deliveries: refuse,
       memories: refuse,
       tree: refuse,

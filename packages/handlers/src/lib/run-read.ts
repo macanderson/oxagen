@@ -16,9 +16,23 @@ import { readRunEnrichmentEnabled } from "./run-enrichment";
 // query fences the workspace as well, which also holds on a stack that runs
 // with the RLS bypass on. A witness run is `not_found` to an API-key caller
 // (ADR-064): a worker holds API keys and never sees a witness or its run.
+//
+// A run on an in-app surface (`chat`, `api-chat`) is one of the in-app
+// assistant's turns. It is `not_found` to everyone but the person who asked
+// (ADR-235, item 5). The person is the run's initiating human principal, and
+// the caller is the user the call acts as: the signed-in user, or the creator
+// of the API key. A call the assistant makes carries the asking person as its
+// user, so the same comparison lets the assistant read its own turn. Readers
+// that do not go through `resolveRun` apply the same rule through
+// `canReadRunId` or `ledgerRunReadable` below.
 import type { CapabilityContext } from "@oxagen/oxagen";
 import { HandlerError } from "@oxagen/oxagen/handler-error";
-import type { RunItem } from "@oxagen/oxagen/contracts/run.list";
+import {
+  IN_APP_AGENT_SURFACES,
+  type RunItem,
+} from "@oxagen/oxagen/contracts/run.list";
+import { resolveActingUserId } from "@oxagen/iam/org-role";
+import { withTenantDb } from "@oxagen/database";
 import {
   createPostgresRunStore,
   ledgerFrame,
@@ -39,6 +53,7 @@ import {
   selectTachoSubagentEvents,
 } from "@oxagen/telemetry";
 import {
+  ledgerByPublicIdsQuery,
   ledgerEnrichment,
   type LedgerRunRecord,
   type LedgerRunRow,
@@ -118,15 +133,115 @@ export type RunReadDeps = {
     options?: { sessionUuids?: readonly string[]; limit?: number },
   ) => Promise<SubagentChainRow[]>;
   readEnrichmentEnabled?: typeof readRunEnrichmentEnabled;
+  /**
+   * The user the call acts as. Read only for a run on an in-app surface.
+   * Absent, `resolveActingUserId` answers.
+   */
+  actingUserId?: ActingUserReader;
 };
 
 export const runNotFound = () =>
   new HandlerError({ code: "not_found", reason: "run_not_found" });
 
+/** The user a call acts as: `resolveActingUserId` in `@oxagen/iam`. */
+export type ActingUserReader = (
+  ctx: CapabilityContext,
+) => Promise<string | null>;
+
+/** The prefix of a ledger run's public id. Only a ledger run can be in-app. */
+const LEDGER_RUN_PREFIX = "arun_";
+
+/** Whether a ledger run is one of the in-app assistant's turns (ADR-235). */
+function isInAppRun(row: Pick<LedgerRunRow, "run">): boolean {
+  const surface = row.run.surface;
+  return (
+    surface !== undefined &&
+    (IN_APP_AGENT_SURFACES as readonly string[]).includes(surface)
+  );
+}
+
+/**
+ * Whether the user `actingUserId` names may read a ledger run. A run off the
+ * in-app surfaces is readable. An in-app run is readable only when the caller
+ * is the person behind its initiating principal. A run with no such person,
+ * and a call that acts as no user, read nothing.
+ */
+export function inAppRunReadable(
+  row: Pick<LedgerRunRow, "run" | "identity">,
+  actingUserId: string | null,
+): boolean {
+  if (!isInAppRun(row)) return true;
+  const asker = row.identity.operatorUserId ?? null;
+  return asker !== null && actingUserId === asker;
+}
+
+/**
+ * Whether the caller may read a ledger run. The acting user is resolved only
+ * for an in-app run, so a read of any other run costs no extra query.
+ */
+export async function ledgerRunReadable(
+  ctx: CapabilityContext,
+  row: Pick<LedgerRunRow, "run" | "identity">,
+  actingUserId: ActingUserReader = resolveActingUserId,
+): Promise<boolean> {
+  if (!isInAppRun(row)) return true;
+  return inAppRunReadable(row, await actingUserId(ctx));
+}
+
+/** How a reader that does not go through `resolveRun` applies its rule. */
+export type InAppRunReadDeps = {
+  /**
+   * The ledger run behind an `arun_…` id in the scope's workspace, or null.
+   * Absent, the identity select answers (`readLedgerRunByPublicId`).
+   */
+  readLedgerRun?: (
+    scope: RunScope,
+    publicId: string,
+  ) => Promise<LedgerRunRow | null>;
+  /** The user the call acts as. Absent, `resolveActingUserId` answers. */
+  actingUserId?: ActingUserReader;
+};
+
+/**
+ * The ledger run behind an `arun_…` id in the scope's workspace, with the
+ * columns `list_runs` reads, or null. A `tse_…` id reads nothing.
+ */
+export async function readLedgerRunByPublicId(
+  scope: RunScope,
+  publicId: string,
+): Promise<LedgerRunRow | null> {
+  if (!publicId.startsWith(LEDGER_RUN_PREFIX)) return null;
+  const [row] = await withTenantDb((tx) =>
+    ledgerByPublicIdsQuery(tx, scope, [publicId]),
+  );
+  return row ?? null;
+}
+
+/**
+ * Whether the caller may read the run behind `publicId`, by the rule
+ * `resolveRun` applies. A reader that does not resolve the run calls it and
+ * answers a false the way it answers an id it does not know, so a hidden run
+ * and a missing one read the same. A `tse_…` id, and an id that names no
+ * ledger run in the workspace, answer true: the reader's own lookup decides
+ * those.
+ */
+export async function canReadRunId(
+  ctx: CapabilityContext,
+  publicId: string,
+  deps: InAppRunReadDeps = {},
+): Promise<boolean> {
+  if (!publicId.startsWith(LEDGER_RUN_PREFIX)) return true;
+  const read = deps.readLedgerRun ?? readLedgerRunByPublicId;
+  const row = await read(runScope(ctx), publicId);
+  if (row === null) return true;
+  return ledgerRunReadable(ctx, row, deps.actingUserId);
+}
+
 /**
  * The run behind a public id, with its header and its witness link, or
- * `not_found`: for a run outside the caller's workspace, and for a witness run
- * when the caller holds an API key.
+ * `not_found`: for a run outside the caller's workspace, for a witness run
+ * when the caller holds an API key, and for an in-app run when the caller is
+ * not the person who asked.
  */
 export async function resolveRun(
   deps: RunReadDeps,
@@ -159,6 +274,11 @@ export async function resolveRun(
           enrichmentError: undefined,
         }),
   };
+  if (
+    run.source === "ledger" &&
+    !(await ledgerRunReadable(ctx, run.row, deps.actingUserId))
+  )
+    throw runNotFound();
   if (witnessFor !== null && ctx.apiKeyId !== null) throw runNotFound();
   return { ...run, witnessFor };
 }
@@ -475,5 +595,6 @@ export function defaultRunReadDeps(): RunReadDeps {
     tachoChains: (root, options) =>
       listSubagentChains(requireScope(), root, options),
     readEnrichmentEnabled: readRunEnrichmentEnabled,
+    actingUserId: resolveActingUserId,
   };
 }

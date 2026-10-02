@@ -1,12 +1,14 @@
 // The statement grid's rows: a new kind narrows the force to the forces the
 // kind allows (forcesFor, the rule commit_markdown_import enforces), a
 // conflict blocks the steering PR until a person chooses, Replace the record
-// writes over the record it beats, and the counts and the commit payload are
-// what the dialog shows and sends.
+// writes over the record it beats, a memory row a person may tick unless it
+// repeats a statement or is too long, and the counts and the commit payload
+// are what the dialog shows and sends.
 import { forcesFor } from "@oxagen/oxagen/steering-repo/record-force";
 import { describe, expect, it } from "vitest";
 import {
   importFileResult,
+  importMemory,
   importPolicy,
   importRecord,
   parseOutput,
@@ -24,7 +26,9 @@ import {
   initialEdit,
   matchRowsFit,
   matchRowsOf,
+  memoryKey,
   mergeParses,
+  resolveMemories,
   resolveRows,
   type RowEdit,
   rowKey,
@@ -307,6 +311,7 @@ describe("the counts and the commit", () => {
     expect(tally(rows, [policy, skipped])).toEqual({
       records: 2,
       policies: 1,
+      memories: 0,
       out: 0,
       open: 0,
       tokens: 12,
@@ -334,9 +339,9 @@ describe("the counts and the commit", () => {
     const rows = resolveRows([codeRule, big], new Map());
     expect(commitPayload(rows, [])?.records).toHaveLength(2);
     expect(
-      commitPayload(rows, [], 1_000)?.records.map((r) => r.lineage),
+      commitPayload(rows, [], [], 1_000)?.records.map((r) => r.lineage),
     ).toEqual([codeRule.lineage]);
-    expect(commitPayload(rows, [], 100)).toBeNull();
+    expect(commitPayload(rows, [], [], 100)).toBeNull();
   });
 
   it("joins the parse calls in order, and groups the rows by file", () => {
@@ -408,5 +413,67 @@ describe("the marks between parse calls", () => {
     ]);
     expect(matchRowsFit(rows)).toBe(true);
     expect(matchRowsFit(rows, 50)).toBe(false);
+  });
+});
+
+describe("the memory rows", () => {
+  const lesson = importMemory();
+  const waiting = importMemory({
+    line: 3,
+    statement: "Use pnpm, not npm.",
+    duplicate: { reason: "waiting", memory: "mem_01", file: null, line: null },
+    action: "skip",
+  });
+  const long = importMemory({
+    line: 4,
+    statement: "x".repeat(2001),
+    issue: "A memory holds at most 2,000 characters.",
+    action: "skip",
+  });
+
+  it("takes parse's action, then the person's tick, and keeps a repeat or a long row out", () => {
+    const ticks = new Map([
+      [memoryKey(lesson), false],
+      [memoryKey(waiting), true],
+      [memoryKey(long), true],
+    ]);
+    expect(resolveMemories([lesson, waiting, long], new Map()).map((m) => [m.action, m.editable])).toEqual([
+      ["add", true],
+      ["skip", false],
+      ["skip", false],
+    ]);
+    expect(resolveMemories([lesson, waiting, long], ticks).map((m) => m.action)).toEqual([
+      "skip",
+      "skip",
+      "skip",
+    ]);
+  });
+
+  it("counts the memories to store, and the rest as statements left out", () => {
+    const memories = resolveMemories([lesson, waiting], new Map());
+    expect(tally(resolveRows([codeRule], new Map()), [], memories)).toMatchObject({
+      records: 1,
+      memories: 1,
+      out: 1,
+    });
+  });
+
+  it("sends every memory row with its action, and only those marked add when the payload is too large", () => {
+    const memories = resolveMemories([lesson, waiting], new Map());
+    expect(commitPayload([], [], memories)?.memories).toEqual([lesson, waiting]);
+    const lean = commitPayload([], [], [...memories, ...resolveMemories([long], new Map())], 500);
+    expect(lean?.memories).toEqual([lesson]);
+  });
+
+  it("joins the memories of every parse call, and groups them under their memories file", () => {
+    const parsed = mergeParses([
+      parseOutput({
+        files: [importFileResult({ filename: "notes.md", target: "memories", records: 0, memories: 2 })],
+        records: [],
+        memories: [lesson, waiting],
+      }),
+    ]);
+    const groups = groupsOf(parsed, [], resolveMemories(parsed.memories, new Map()));
+    expect(groups.map((g) => [g.file, g.memories.map((m) => m.memory.line)])).toEqual([["notes.md", [2, 3]]]);
   });
 });

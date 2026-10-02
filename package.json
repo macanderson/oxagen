@@ -100,6 +100,7 @@
     "billing:stripe-sync": "tsx --env-file-if-exists=.env.local tools/scripts/stripe-sync.ts",
     "billing:price-book-sync": "tsx --env-file-if-exists=.env.local tools/scripts/price-book-sync.ts",
     "billing:terms": "tsx --env-file-if-exists=.env.local tools/scripts/billing-terms.ts",
+    "assistant:switch": "tsx --env-file-if-exists=.env.local tools/scripts/assistant-switch.ts",
     "billing:statement": "tsx --env-file-if-exists=.env.local tools/scripts/billing-statement.ts",
     "billing:contract-terms": "tsx --env-file-if-exists=.env.local tools/scripts/billing-contract-terms.ts",
     "billing:prepaid-invoice": "tsx --env-file-if-exists=.env.local tools/scripts/billing-prepaid-invoice.ts",

@@ -35,13 +35,16 @@
  *    or force-pushed and this commit's checks are not implied by the tip's,
  *    and no answer at all is no evidence either way.
  *
- *    `preflight` itself always succeeds (a branch of its one step, never a
- *    skip), so `checks` / `build` / `unit` / `test` / `e2e` /
- *    `rls-integration` / `rds-compatibility` can add `needs: [preflight]`
- *    and read its output
- *    without the default skip-propagation rule (a job skipped by its own
- *    `if:` skips everything that needs it) forcing every PR run to skip the
- *    whole gate.
+ *    The script's own branches never fail and never skip, so `checks` /
+ *    `build` / `unit` / `test` / `e2e` / `rls-integration` /
+ *    `rds-compatibility` can add `needs: [preflight]` and read its output.
+ *
+ *    The job around the script can still fail: a lost runner, a failed
+ *    checkout, or a Node download that times out. A job that needs a failed
+ *    job is skipped unless its `if:` calls a status function, and GitHub
+ *    reads a skipped required check as passing. So each gated job carries
+ *    `!cancelled()` and skips only on the explicit answer `proceed=false`.
+ *    A failed preflight leaves `proceed` empty, and the gate runs.
  *
  *    An unreachable API fails open (runs the gate, with a warning): the same
  *    call blocking every commit's CI is the outage #2730 already was once.
@@ -61,7 +64,13 @@ const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const pipelinePath = join(repoRoot, ".github", "workflows", "pipeline.yml");
 
 export const PREFLIGHT_JOB = "preflight";
-export const PREFLIGHT_GATE = "needs.preflight.outputs.proceed == 'true'";
+// Skip only on an explicit `false`. A failed preflight writes no output, and
+// an empty `proceed` must run the gate rather than skip it.
+export const PREFLIGHT_GATE = "needs.preflight.outputs.proceed != 'false'";
+// Without a status function in its `if:`, a job that needs a failed preflight
+// is skipped before its condition is read, and a skipped required check
+// reads as passing.
+export const PREFLIGHT_STATUS = "!cancelled()";
 export const GATED_JOBS = [
   "checks",
   "build",
@@ -184,6 +193,23 @@ function jobBlock(yaml, job) {
     .join("\n");
 }
 
+/**
+ * The job-level `if:` of a job block, folded to one line, or null. Steps sit
+ * deeper than the job's keys, so a step's own `if: ${{ !cancelled() }}` is
+ * not read as the job's.
+ */
+export function jobCondition(block) {
+  const lines = block.split("\n");
+  const at = lines.findIndex((l) => /^ {4}if:/.test(l));
+  if (at < 0) return null;
+  const parts = [lines[at].replace(/^ {4}if:\s*(?:[>|][-+]?)?/, "").trim()];
+  for (let i = at + 1; i < lines.length; i += 1) {
+    if (!/^ {6}\S/.test(lines[i])) break;
+    parts.push(lines[i].trim());
+  }
+  return parts.filter(Boolean).join(" ");
+}
+
 /** Every problem with the gated jobs' shape, or an empty list. */
 export function guardProblems(yaml) {
   if (jobBlock(yaml, PREFLIGHT_JOB) === null) {
@@ -202,6 +228,11 @@ export function guardProblems(yaml) {
     if (!block.includes(PREFLIGHT_GATE)) {
       problems.push(
         `${job}: its "if:" does not include \`${PREFLIGHT_GATE}\`, so it runs the full gate even when a later push already supersedes it`,
+      );
+    }
+    if (!(jobCondition(block) ?? "").includes(PREFLIGHT_STATUS)) {
+      problems.push(
+        `${job}: its "if:" does not include \`${PREFLIGHT_STATUS}\`, so a failed preflight skips it and a skipped required check reads as passing`,
       );
     }
   }

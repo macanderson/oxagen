@@ -30,12 +30,7 @@ import { registerCapability } from "../registry";
 import { runEffortSourceSchema, runFitSchema } from "../run-fit";
 import { costSchema, ratioSchema, tokenCountsSchema } from "./spend.shared";
 
-/**
- * The surfaces an in-app agent turn is admitted on (`agent_runs.surface`;
- * `PlatformSurface` in @oxagen/run-ledger). Runs on these surfaces are the
- * assistant's own and stay out of the tenant's run lists.
- */
-export const IN_APP_AGENT_SURFACES = ["chat", "api-chat"] as const;
+export { IN_APP_AGENT_SURFACES } from "./run.shared";
 
 /** A public id either store mints: the prefix names the store. */
 export const runPublicIdSchema = z

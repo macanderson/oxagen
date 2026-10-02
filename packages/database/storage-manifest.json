@@ -757,6 +757,17 @@
       "writes": []
     },
     {
+      "domain": "context",
+      "name": "dismiss_memories",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "cli",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "agent",
       "name": "dismiss_memory_promotion",
       "reads": [],
@@ -1766,6 +1777,16 @@
       "writes": []
     },
     {
+      "domain": "spend",
+      "name": "get_spend_per_merged_pr",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api"
+      ],
+      "writes": []
+    },
+    {
       "domain": "context",
       "name": "get_steering_deliveries",
       "reads": [],
@@ -1949,6 +1970,17 @@
       "surfaces": [
         "agent",
         "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "context",
+      "name": "get_workspace_memory",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "cli",
         "mcp"
       ],
       "writes": []
@@ -2477,6 +2509,16 @@
       "writes": []
     },
     {
+      "domain": "context",
+      "name": "list_memory_pr_records",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "agent",
       "name": "list_memory_promotions",
       "reads": [],
@@ -2843,6 +2885,17 @@
       "writes": []
     },
     {
+      "domain": "context",
+      "name": "list_workspace_memories",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "cli",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "workspace",
       "name": "list_workspaces",
       "reads": [],
@@ -3076,6 +3129,17 @@
       "writes": []
     },
     {
+      "domain": "context",
+      "name": "promote_memories",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "cli",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "agent",
       "name": "promote_memory",
       "reads": [],
@@ -3272,6 +3336,15 @@
       "surfaces": [
         "api",
         "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "tacho",
+      "name": "record_tacho_memory_uses",
+      "reads": [],
+      "surfaces": [
+        "api"
       ],
       "writes": []
     },
@@ -3741,6 +3814,16 @@
       "writes": []
     },
     {
+      "domain": "agent",
+      "name": "set_agent_cache_keep_alive",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "approval_rule",
       "name": "set_approval_rule_enabled",
       "reads": [],
@@ -3760,6 +3843,13 @@
         "api",
         "mcp"
       ],
+      "writes": []
+    },
+    {
+      "domain": "assistant",
+      "name": "set_assistant_switch",
+      "reads": [],
+      "surfaces": [],
       "writes": []
     },
     {
@@ -4663,6 +4753,7 @@
         "postgres:agent.memory_recalls",
         "postgres:agent.memory_reflections",
         "postgres:agent.memory_rejections",
+        "postgres:agent.memory_uses",
         "postgres:agent.runtimes",
         "postgres:agent.steering_publications",
         "postgres:agent.steering_repo_health",
@@ -5055,6 +5146,8 @@
         "postgres:work.autonomy_events",
         "postgres:work.briefs",
         "postgres:work.collectors",
+        "postgres:work.direct_orders",
+        "postgres:work.done_checks",
         "postgres:work.done_records",
         "postgres:work.done_verdicts",
         "postgres:work.inbound_events",
@@ -8853,6 +8946,12 @@
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
+        },
+        {
+          "name": "cache_keep_alive",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "boolean"
         }
       ],
       "domain": "agent",
@@ -10190,6 +10289,60 @@
           "type": "uuid"
         },
         {
+          "name": "state",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "label",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "summary",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "memory_type",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "use_count",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "last_used_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "retired_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "retired_reason",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "promoted_lineage",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
           "name": "created_at",
           "nullable": false,
           "primaryKey": false,
@@ -10473,6 +10626,65 @@
       "domain": "agent",
       "id": "postgres:agent.memory_rejections",
       "name": "memory_rejections",
+      "rls": "standard",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "memory_id",
+          "nullable": false,
+          "primaryKey": false,
+          "references": "postgres:agent.memories",
+          "type": "uuid"
+        },
+        {
+          "name": "run_public_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "signal",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "count",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "used_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        }
+      ],
+      "domain": "agent",
+      "id": "postgres:agent.memory_uses",
+      "name": "memory_uses",
       "rls": "standard",
       "store": "postgres",
       "tenantScoped": true
@@ -16191,6 +16403,18 @@
           "type": "timestamp with time zone"
         },
         {
+          "name": "work_order_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "work_order_kind",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
           "name": "breakdown",
           "nullable": false,
           "primaryKey": false,
@@ -16733,6 +16957,12 @@
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
+        },
+        {
+          "name": "subject",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
         },
         {
           "name": "version",
@@ -26865,6 +27095,172 @@
       "domain": "work",
       "id": "postgres:work.collectors",
       "name": "collectors",
+      "rls": "standard",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "public_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "citext"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "run_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "operator_principal_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "agent_principal_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "opened_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "item_id",
+          "nullable": true,
+          "primaryKey": false,
+          "references": "postgres:work.items",
+          "type": "uuid"
+        },
+        {
+          "name": "attached_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "attached_by",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        }
+      ],
+      "domain": "work",
+      "id": "postgres:work.direct_orders",
+      "name": "direct_orders",
+      "rls": "standard",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "created_by_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "order_id",
+          "nullable": false,
+          "primaryKey": false,
+          "references": "postgres:work.orders",
+          "type": "uuid"
+        },
+        {
+          "name": "record_digest",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "verdict",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "result",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "checked_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "session_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "role",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        }
+      ],
+      "domain": "work",
+      "id": "postgres:work.done_checks",
+      "name": "done_checks",
       "rls": "standard",
       "store": "postgres",
       "tenantScoped": true

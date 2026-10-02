@@ -75,6 +75,18 @@ concurrency:
   # ci-superseded.yml reports that state on the pull request (ADR-218, #3257).
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+# The token scopes for every job without a block of its own: preflight,
+# atlas-validate, test, rls-integration and rds-compatibility. They check out
+# the code, pull a CI image, and read the API (main's tip, a compare, and a
+# pull request's files). A job that needs more names its scopes in its own
+# block, which replaces this one. Without this block those jobs got the
+# repository's default token while `pnpm install` ran dependency install
+# scripts beside it.
+permissions:
+  contents: read
+  packages: read
+  pull-requests: read
+
 env:
   # Container jobs bind-mount the workspace with a uid that differs from the
   # container user, so every git invocation (ours, lefthook's prepare hook,
@@ -96,9 +108,9 @@ env:
   ATLAS_VERSION: "v1.2.2"
   # Where jobs run (ADR-246). With the CI_RUNNERS repository variable set to
   # `aws`, each job's runs-on picks one of our own pools: `oxagen-large-*`
-  # (16 vCPU, 64 GB or more) for checks, build, unit, e2e, rls-integration
-  # and rds-compatibility, `oxagen-small-*` (4 vCPU, 16 GB) for the light
-  # jobs, and `oxagen-deploy` for every job that touches production.
+  # (16 vCPU, 64 GB or more) for checks, unit and e2e, `oxagen-small-*`
+  # (4 vCPU, 16 GB) for build, rls-integration, rds-compatibility and the
+  # light jobs, and `oxagen-deploy` for every job that touches production.
   # CI_RUNNER_ARCH picks x64 (the default) or arm64 for the CI pools.
   # CI_HEAVY_POOL picks the pool the heavy jobs use: `large` (the default) or
   # `small`. While the account's EC2 quota holds 64 vCPUs, `small` runs 16
@@ -170,6 +182,14 @@ jobs:
   # those jobs runs unless `heavy` is the string `false`, so an empty output
   # runs them.
   #
+  # `proceed` follows the same rule. Every gated job carries `!cancelled()`
+  # and `proceed != 'false'` in its `if:`, so a preflight job that fails runs
+  # the gate. A lost runner, a failed checkout or a Node download that times
+  # out are all ways it can fail. Before this, a failed preflight skipped
+  # `checks`, `test` and every lane, and GitHub reads a skipped required
+  # check as passing. A pull request or a merge group could then merge with
+  # nothing tested. check-main-preflight.mjs --guard holds this shape.
+  #
   # It runs on ubuntu-slim (one vCPU, $0.002 a minute), because its work is a
   # sparse checkout and a few API calls.
   preflight:
@@ -215,7 +235,7 @@ jobs:
     if: github.event_name != 'workflow_dispatch'
     runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-small-{0}', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
     container:
-      image: ${{ vars.CI_IMAGE_REGISTRY || 'ghcr.io/macanderson' }}/oxagen-ci-base:latest
+      image: ${{ vars.CI_IMAGE_REGISTRY || 'public.ecr.aws/z5z6u7g2' }}/oxagen-ci-base:latest
       volumes:
         - /opt/pnpm-store:/opt/pnpm-store
     timeout-minutes: 5
@@ -228,11 +248,12 @@ jobs:
   checks:
     needs: [preflight]
     if: >-
+      !cancelled() &&
       github.event_name != 'workflow_dispatch' &&
-      needs.preflight.outputs.proceed == 'true'
+      needs.preflight.outputs.proceed != 'false'
     runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-{0}-{1}', vars.CI_HEAVY_POOL || 'large', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
     container:
-      image: ${{ vars.CI_IMAGE_REGISTRY || 'ghcr.io/macanderson' }}/oxagen-ci-base:latest
+      image: ${{ vars.CI_IMAGE_REGISTRY || 'public.ecr.aws/z5z6u7g2' }}/oxagen-ci-base:latest
       volumes:
         - /opt/pnpm-store:/opt/pnpm-store
     # 60m (was 20m): a PR that invalidates many turbo caches must run lint +
@@ -500,15 +521,26 @@ jobs:
   # Build lanes carry no service containers. `next build` and `xmcp build`
   # validate the environment at import time and never connect to a store, which
   # is how deploy-node already builds with no database in reach.
+  #
+  # Build lanes run on the small pool (#5070). On a 16-vCPU runner they took
+  # 1.3 to 1.9 minutes, a third of it checkout and install, while unit (app)
+  # took 6.2. On GitHub's 4-vCPU, 16 GB runners they took 2.1 to 3.2 minutes,
+  # so they still finish well inside unit (app). Each moved lane frees 12
+  # vCPUs of the EC2 quota for the jobs that use 16. The rest lane ran all 8
+  # of its builds at once on those runners with no out-of-memory exit, so 4
+  # at once fits.
   build:
     needs: [preflight]
     if: >-
+      !cancelled() &&
       github.event_name != 'workflow_dispatch' &&
-      needs.preflight.outputs.proceed == 'true' &&
+      needs.preflight.outputs.proceed != 'false' &&
       needs.preflight.outputs.heavy != 'false'
-    runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-{0}-{1}', vars.CI_HEAVY_POOL || 'large', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
+    runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-small-{0}', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
+    env:
+      TURBO_CONCURRENCY: ${{ vars.CI_RUNNERS == 'aws' && '4' || '3' }}
     container:
-      image: ${{ vars.CI_IMAGE_REGISTRY || 'ghcr.io/macanderson' }}/oxagen-ci-base:latest
+      image: ${{ vars.CI_IMAGE_REGISTRY || 'public.ecr.aws/z5z6u7g2' }}/oxagen-ci-base:latest
       volumes:
         - /opt/pnpm-store:/opt/pnpm-store
     timeout-minutes: 40
@@ -571,8 +603,8 @@ jobs:
           # exclusion from the include set, and with an empty TURBO_FILTER
           # (push to main) it starts from every package. $TURBO_CONCURRENCY:
           # this lane has no 5GB Next heap and no service containers beside
-          # it, and at 2 apps/mcp's build could wait for a slot. Our runners
-          # take 12.
+          # it, and at 2 apps/mcp's build could wait for a slot. The small
+          # pool's runners take 4 (see the job's env).
           if [ "$LANE" = rest ]; then
             pnpm turbo run build --concurrency="$TURBO_CONCURRENCY" $TURBO_FILTER \
               --filter=!@oxagen/app --filter=!@oxagen/app-deprecated
@@ -597,12 +629,13 @@ jobs:
   unit:
     needs: [preflight]
     if: >-
+      !cancelled() &&
       github.event_name != 'workflow_dispatch' &&
-      needs.preflight.outputs.proceed == 'true' &&
+      needs.preflight.outputs.proceed != 'false' &&
       needs.preflight.outputs.heavy != 'false'
     runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-{0}-{1}', vars.CI_HEAVY_POOL || 'large', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
     container:
-      image: ${{ vars.CI_IMAGE_REGISTRY || 'ghcr.io/macanderson' }}/oxagen-ci-base:latest
+      image: ${{ vars.CI_IMAGE_REGISTRY || 'public.ecr.aws/z5z6u7g2' }}/oxagen-ci-base:latest
       volumes:
         - /opt/pnpm-store:/opt/pnpm-store
     timeout-minutes: 45
@@ -803,10 +836,10 @@ jobs:
   test:
     needs: [preflight, build, unit]
     if: >-
+      !cancelled() &&
       github.event_name != 'workflow_dispatch' &&
-      needs.preflight.outputs.proceed == 'true' &&
-      needs.preflight.outputs.heavy != 'false' &&
-      !cancelled()
+      needs.preflight.outputs.proceed != 'false' &&
+      needs.preflight.outputs.heavy != 'false'
     runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-small-{0}', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-slim' }}
     timeout-minutes: 5
     steps:
@@ -825,12 +858,13 @@ jobs:
   e2e:
     needs: [preflight]
     if: >-
+      !cancelled() &&
       github.event_name != 'workflow_dispatch' &&
-      needs.preflight.outputs.proceed == 'true' &&
+      needs.preflight.outputs.proceed != 'false' &&
       needs.preflight.outputs.heavy != 'false'
     runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-{0}-{1}', vars.CI_HEAVY_POOL || 'large', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
     container:
-      image: ${{ vars.CI_IMAGE_REGISTRY || 'ghcr.io/macanderson' }}/oxagen-ci-e2e:latest
+      image: ${{ vars.CI_IMAGE_REGISTRY || 'public.ecr.aws/z5z6u7g2' }}/oxagen-ci-e2e:latest
       volumes:
         - /opt/pnpm-store:/opt/pnpm-store
     # next start hardcodes NODE_ENV=production regardless of this job's env,
@@ -1067,12 +1101,18 @@ jobs:
   rls-integration:
     needs: [preflight]
     if: >-
+      !cancelled() &&
       (github.event_name == 'pull_request' || github.event_name == 'merge_group' || (github.event_name == 'push' && github.ref == 'refs/heads/main')) &&
-      needs.preflight.outputs.proceed == 'true' &&
+      needs.preflight.outputs.proceed != 'false' &&
       needs.preflight.outputs.heavy != 'false'
-    runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-{0}-{1}', vars.CI_HEAVY_POOL || 'large', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
+    # The small pool. These four suites took 2.1 minutes on a 16-vCPU runner
+    # and 2.1 minutes on a 4-vCPU one (run 36942279871), while heavy jobs
+    # waited 6 to 22 minutes for a 16-vCPU runner (runs 36948990846,
+    # 36949134740 and 36950286374). The small pool starts it sooner and
+    # leaves the large one to the jobs that use the cores.
+    runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-small-{0}', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
     container:
-      image: ${{ vars.CI_IMAGE_REGISTRY || 'ghcr.io/macanderson' }}/oxagen-ci-base:latest
+      image: ${{ vars.CI_IMAGE_REGISTRY || 'public.ecr.aws/z5z6u7g2' }}/oxagen-ci-base:latest
       volumes:
         - /opt/pnpm-store:/opt/pnpm-store
     timeout-minutes: 15
@@ -1154,12 +1194,16 @@ jobs:
   rds-compatibility:
     needs: [preflight]
     if: >-
+      !cancelled() &&
       (github.event_name == 'pull_request' || github.event_name == 'merge_group' || (github.event_name == 'push' && github.ref == 'refs/heads/main')) &&
-      needs.preflight.outputs.proceed == 'true' &&
+      needs.preflight.outputs.proceed != 'false' &&
       needs.preflight.outputs.heavy != 'false'
-    runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-{0}-{1}', vars.CI_HEAVY_POOL || 'large', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
+    # The small pool. This replay ran in 0.8 minutes on a 16-vCPU runner after
+    # waiting 8 to 22 minutes for one, and in 1.6 minutes on a 4-vCPU runner
+    # (run 36942279871).
+    runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-small-{0}', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
     container:
-      image: ${{ vars.CI_IMAGE_REGISTRY || 'ghcr.io/macanderson' }}/oxagen-ci-base:latest
+      image: ${{ vars.CI_IMAGE_REGISTRY || 'public.ecr.aws/z5z6u7g2' }}/oxagen-ci-base:latest
       volumes:
         - /opt/pnpm-store:/opt/pnpm-store
     timeout-minutes: 20
@@ -1180,14 +1224,15 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version-file: .node-version
-      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+      # The toolchain image already carries Node and pnpm, and the runner
+      # image's pnpm store is mounted at /opt/pnpm-store. The shared action
+      # installs from that store, like every other container job here. The
+      # bare `pnpm install` this replaced used the container's empty default
+      # store and fetched every package from the registry on every run.
+      - uses: ./.github/actions/pnpm-install
+
       - name: Package the production platform seed
-        run: |
-          pnpm install --frozen-lockfile
-          node tools/scripts/build-platform-seed.mjs
+        run: node tools/scripts/build-platform-seed.mjs
 
       - name: Apply migrations and platform defaults without a superuser
         env:
@@ -1354,7 +1399,7 @@ jobs:
     if: >-
       !cancelled() &&
       github.event_name == 'push' && github.ref == 'refs/heads/main' &&
-      needs.preflight.outputs.proceed == 'true' &&
+      needs.preflight.outputs.proceed != 'false' &&
       needs.checks.result == 'success' && needs.test.result == 'success' &&
       needs.e2e.result == 'success' && needs.atlas-validate.result == 'success' &&
       needs.rls-integration.result == 'success' &&
@@ -1374,24 +1419,23 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # v4.0.2
-        with:
-          role-to-assume: arn:aws:iam::916294258235:role/gha-deploy-oxagen-platform
-          aws-region: us-east-1
-
       # Installed before either apply, because both need it. A Postgres apply
       # runs run-db-migrations.sh --apply, which bundles the platform seed with
       # tools/scripts/build-platform-seed.mjs, and that script imports esbuild.
       # db-migrate.ts needs the workspace too. The gate cannot know which store
       # is behind until it asks, so the install is unconditional.
-      - uses: actions/setup-node@v4
+      #
+      # The install runs before the deploy role is assumed, as in deploy-node.
+      # `pnpm install` runs the install scripts of the dependencies
+      # pnpm-workspace.yaml allows to build, and those scripts have no
+      # business seeing production credentials. The shared action also
+      # installs from the runner image's pnpm store instead of the registry.
+      - uses: ./.github/actions/pnpm-install
+
+      - uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # v4.0.2
         with:
-          node-version-file: .node-version
-
-      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
-
-      - name: Install
-        run: pnpm install --frozen-lockfile
+          role-to-assume: arn:aws:iam::916294258235:role/gha-deploy-oxagen-platform
+          aws-region: us-east-1
 
       # Postgres first, and without the tunnels: it needs neither. Aurora is
       # reached by sending Atlas to the node over SSM, which
@@ -1620,14 +1664,16 @@ jobs:
           DEPLOY_SERVICE: web
         run: node tools/scripts/check-deploy-tip.mjs
 
+      # Install before the deploy role is assumed, as deploy-node does, so the
+      # dependency install scripts pnpm runs never see production credentials.
+      - uses: ./.github/actions/pnpm-install
+        if: steps.order.outputs.ship == 'true'
+
       - uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
         if: steps.order.outputs.ship == 'true'
         with:
           role-to-assume: arn:aws:iam::916294258235:role/gha-deploy-oxagen-platform
           aws-region: us-east-1
-
-      - uses: ./.github/actions/pnpm-install
-        if: steps.order.outputs.ship == 'true'
 
       - name: Build the marketing site
         if: steps.order.outputs.ship == 'true'
@@ -1913,7 +1959,17 @@ jobs:
     #
     # `needs: deploy-node` means every service shipped: a failed leg publishes
     # nothing, so the installers never run ahead of the platform they talk to.
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    #
+    # The condition reads that result itself, after `!cancelled()`. Without a
+    # status function GitHub applies `success()`, which fails when any job
+    # upstream was skipped, and `staging` is skipped while it is dormant. From
+    # #4869 on 2026-09-30 every run skipped this job, so no recorder fix
+    # reached an installer (#5089). `deploy-node` runs past `staging` the
+    # same way.
+    if: >-
+      !cancelled() &&
+      github.event_name == 'push' && github.ref == 'refs/heads/main' &&
+      needs.deploy-node.result == 'success'
     needs: [deploy-node]
     # ubuntu-slim: a sparse checkout, two API calls and a tree diff.
     runs-on: ${{ vars.CI_RUNNERS == 'aws' && 'oxagen-deploy' || 'ubuntu-slim' }}

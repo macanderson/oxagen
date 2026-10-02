@@ -3,8 +3,8 @@
 //
 // A memory stays in Oxagen. The curator reads memories and proposes records
 // in a memory PR, copying each cited memory's agent, run, statement, and
-// evidence into the record's `provenance.memories`. Oxagen purges the cited
-// memories when the PR merges or closes.
+// evidence into the record's `provenance.memories`. A cited memory keeps its
+// row after the PR merges or closes (ADR-248).
 //
 // Oxagen sets `agent` and `run` from the authenticated run, never from tool
 // input. The spec pairs them with `capture`: `remember` sets both, a
@@ -27,9 +27,13 @@ export const MEMORY_CAPTURES = [
   "remember",
   "pull_request",
   "local_gateway",
+  "import",
 ] as const;
 export const memoryCaptureSchema = z.enum(MEMORY_CAPTURES);
 export type MemoryCapture = z.output<typeof memoryCaptureSchema>;
+
+/** The most characters a memory's statement holds. */
+export const MEMORY_STATEMENT_MAX = 2000;
 
 /** `mem_<id>`, as Oxagen assigns it. */
 export const memoryIdSchema = z.string().regex(/^mem_[0-9A-Za-z]+$/);
@@ -49,9 +53,9 @@ export const memorySchema = z
         "The run the memory came from. Null for a memory the local gateway read, or one found in a pull request whose run Oxagen did not record.",
       ),
     capture: memoryCaptureSchema.describe(
-      "remember during a run, pull_request from the code repository check, or local_gateway from a harness's memory folder.",
+      "remember during a run, pull_request from the code repository check, local_gateway from a harness's memory folder, or import from a Markdown file a person imported.",
     ),
-    statement: z.string().min(1).max(2000),
+    statement: z.string().min(1).max(MEMORY_STATEMENT_MAX),
     kind: recordKindSchema.describe(
       "What the memory would be as a record. Most are memory.",
     ),

@@ -90,7 +90,10 @@ export function resolvePrompt(args: {
 // ── Baseline builders ────────────────────────────────────────────────────────
 // The canonical text of every platform prompt the registry still owns.
 
-/** Conversation auto-titler (overridable — pure content). */
+/**
+ * Conversation auto-titler. The in-app assistant's titler sends this text
+ * alone, and no workspace override reaches it (ADR-235).
+ */
 export function conversationTitlePrompt(): string {
   return [
     "You name a conversation from the first message a person sent.",

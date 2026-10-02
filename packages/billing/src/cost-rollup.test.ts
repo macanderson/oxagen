@@ -584,6 +584,80 @@ describe("the step classes (F17)", () => {
   });
 });
 
+// Lane F32: while a parent waits on a subagent, the model proxy sends cache
+// keep-alives on the parent's chain. Each is spend, and no step the agent
+// took. A hook seals the parent's Task call when the subagent ends, after the
+// keep-alives.
+describe("cache keep-alives (lane F32)", () => {
+  const ROOT = "00000000-0000-4000-8000-0000000000aa";
+  const at = (s: number) => new Date(Date.UTC(2026, 8, 14, 10, 0, s));
+  /** A keep-alive: 60,000 tokens read at $0.30 and 10 sent at $3, $0.01803. */
+  const keepAlive = (s: number) =>
+    frame({
+      at: at(s),
+      sessionUuid: ROOT,
+      tokens: tokens({ input_uncached: 10, cache_read: 60_000 }),
+      reportedCostMicros: 18_030n,
+      cacheKeepAlive: true,
+    });
+
+  it("counts no step for a keep-alive and still adds its cost to the run's total", () => {
+    const record = rollupRun({
+      meta,
+      book: BOOK,
+      // The parent asks at 1 s, waits through keep-alives at 271 s and 541 s,
+      // and its Task call lands at 600 s.
+      modelCalls: [
+        frame({ at: at(1), sessionUuid: ROOT }),
+        keepAlive(271),
+        keepAlive(541),
+      ],
+      toolCalls: [
+        tool("Task", {
+          isMutating: null,
+          at: at(600).toISOString(),
+          sessionUuid: ROOT,
+        }),
+      ],
+    });
+    // One model call and one tool call: the keep-alives are no steps.
+    expect(record.modelCalls).toBe(1);
+    expect(record.steps).toBe(2);
+    expect(record.productiveRatio).toBe(1);
+    // The Task call is placed under the parent's request, not a keep-alive.
+    expect(record.breakdown.stepClasses).toEqual({ readOnly: 0, edit: 2 });
+    // $0.0045 for the parent's call and $0.01803 for each keep-alive.
+    expect(record.costMicros).toBe(4_500n + 2n * 18_030n);
+    expect(record.tokens).toEqual(
+      tokens({ input_uncached: 1_020, cache_read: 120_000, output: 100 }),
+    );
+    const [model] = record.breakdown.models;
+    expect(model).toMatchObject({
+      model: "claude-sonnet-5",
+      calls: 1,
+      costMicros: 4_500n + 2n * 18_030n,
+      keepAlive: {
+        calls: 2,
+        tokens: tokens({ input_uncached: 20, cache_read: 120_000 }),
+        costMicros: 36_060n,
+      },
+    });
+    // The keep-alives read the whole prompt by design, and the agent's own
+    // call read none of it, so the agent's cache hit rate stays 0.
+    expect(record.cacheHitRate).toBe(0);
+  });
+
+  it("writes no keep-alive key for a run that sent none", () => {
+    const record = rollupRun({
+      meta,
+      book: BOOK,
+      modelCalls: [frame({ at: at(1), sessionUuid: ROOT })],
+      toolCalls: [],
+    });
+    expect(record.breakdown.models[0]).not.toHaveProperty("keepAlive");
+  });
+});
+
 describe("each tool's result cost (#3892, ADR-199)", () => {
   /** 10,000 input tokens at $3 a million: 30,000 micros, so 3 micros a token. */
   const priced = frame({
@@ -665,6 +739,69 @@ describe("each tool's result cost (#3892, ADR-199)", () => {
       resultTokens: 1_200,
       costMicros: null,
     });
+  });
+
+  // #4572 item 7: the input rate divided the priced call's cost by every
+  // call's tokens. Two calls of 10,000 tokens, one with no rate, read $1.50 a
+  // million, so 1,200 result tokens cost 1,800 micros instead of 3,600.
+  it("prices results at the rate of the calls the book priced when a call went unpriced", () => {
+    const early = new Date("2025-12-31T00:00:00.000Z");
+    const record = rollupRun({
+      meta,
+      book: BOOK,
+      modelCalls: [
+        priced,
+        // Before the book's rows begin, with no figure of its own: unpriced.
+        { ...priced, at: early, reportedCostMicros: null },
+      ],
+      toolCalls: [tool("Read", { resultTokens: 1_200 })],
+    });
+    const sonnet = record.breakdown.models[0]!;
+    expect(sonnet.hasUnpriced).toBe(true);
+    expect(sonnet.tokens.input_uncached).toBe(20_000);
+    expect(sonnet.pricedTokens?.input_uncached).toBe(10_000);
+    expect(runInputPrice(record)).toEqual({ micros: 30_000n, tokens: 10_000n });
+    expect(record.breakdown.tools[0]?.costMicros).toBe(3_600n);
+  });
+
+  it("has no input rate for a row rolled up before the priced tokens were kept, when a model has an unpriced call", () => {
+    const record = rollupRun({
+      meta,
+      book: BOOK,
+      modelCalls: [
+        priced,
+        {
+          ...priced,
+          at: new Date("2025-12-31T00:00:00.000Z"),
+          reportedCostMicros: null,
+        },
+      ],
+      toolCalls: [],
+    });
+    const { pricedTokens, ...legacy } = record.breakdown.models[0]!;
+    void pricedTokens;
+    expect(
+      runInputPrice({ ...record, breakdown: { models: [legacy] } }),
+    ).toBeNull();
+  });
+
+  it("is a zero rate, not no rate, for input the book priced at nothing", () => {
+    const free = [
+      ...BOOK.filter((e) => e.tokenClass !== "input_uncached"),
+      entry({
+        id: "pe_in_free",
+        tokenClass: "input_uncached",
+        microsPerMillion: 0n,
+      }),
+    ];
+    const record = rollupRun({
+      meta,
+      book: free,
+      modelCalls: [{ ...priced, reportedCostMicros: null }],
+      toolCalls: [tool("Read", { resultTokens: 1_200 })],
+    });
+    expect(runInputPrice(record)).toEqual({ micros: 0n, tokens: 10_000n });
+    expect(record.breakdown.tools[0]?.costMicros).toBe(0n);
   });
 
   it("prices one token by the rule the findings job uses", () => {

@@ -42,6 +42,7 @@ export const assistantReplyGet = registerCapability({
     "Read the reply an in-app agent turn left on the record, by the run it was recorded as: the persisted reply and its conversation, or the run's status while no reply is recorded.",
   mode: "sync",
   surfaces: ["api"],
+  inAppAssistant: true,
   layers: ["schema", "api", "unit", "docs", "app"],
   scoped: true,
   mutates: false,

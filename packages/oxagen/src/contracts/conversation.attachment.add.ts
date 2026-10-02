@@ -17,6 +17,7 @@ export const conversationAttachmentAdd = registerCapability({
     "Link an already-uploaded asset to a conversation as a chat attachment and return its conversation-file record.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
+  inAppAssistant: true,
   layers: ["schema", "api", "mcp", "unit", "docs"],
   scoped: true,
   // Linking a file record consumes no AI tokens — billing gate must not block this.

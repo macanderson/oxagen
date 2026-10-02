@@ -26,12 +26,15 @@ vi.mock("@oxagen/ai", () => ({
 import { isHandlerError, type CapabilityContext } from "@oxagen/oxagen";
 import { steeringMarkdownImportCommit } from "@oxagen/oxagen/contracts/steering.markdown_import.commit";
 import type {
+  MarkdownImportMemory,
   MarkdownImportPolicy,
   MarkdownImportRecord,
 } from "@oxagen/oxagen/contracts/steering.markdown_import.shared";
 import { fixtureContext, fixtureRepo } from "@oxagen/oxagen/steering-repo/fixture-repo";
 import { readSteeringRecord } from "@oxagen/oxagen/steering-repo/record";
 import { runChecks } from "@oxagen/steering-check";
+import { statementHash } from "../memory/statement";
+import type { MemoryDraft } from "../memory/types";
 import { branchScopeRefusal } from "../steering-repo/stamp";
 import type {
   ToolsPullRequestArgs,
@@ -40,6 +43,7 @@ import type {
 } from "../tools.pr.open";
 import { createCommitMarkdownImportHandler, importPullRequestBody } from "./commit";
 import type { MarkdownImportDeps } from "./deps";
+import type { HeldMemories } from "./memories";
 import { MARKDOWN_IMPORT_PULL_REQUEST } from "./opener";
 import { createParseMarkdownImportHandler } from "./parse";
 import { steeringMarkdownImportParse } from "@oxagen/oxagen/contracts/steering.markdown_import.parse";
@@ -85,10 +89,44 @@ const POLICY: MarkdownImportPolicy = {
   action: "add",
 };
 
+function memory(over: Partial<MarkdownImportMemory> = {}): MarkdownImportMemory {
+  return {
+    file: "notes.md",
+    line: 4,
+    label: "Staging resets nightly",
+    statement: "The staging database resets every night.",
+    kind: "memory",
+    force: "info",
+    duplicate: null,
+    issue: null,
+    action: "add",
+    ...over,
+  };
+}
+
 type Opened = { scope: ToolsPullRequestScope; args: ToolsPullRequestArgs };
+
+/** The memory store's two calls, over the drafts it was given. A dedupe key stored once is not stored again. */
+function memoryStore(held: HeldMemories = { waiting: [], rejected: [] }) {
+  const stored: MemoryDraft[] = [];
+  const store = {
+    held: vi.fn(async () => held),
+    store: vi.fn(async (_scope: unknown, drafts: MemoryDraft[]) => {
+      const written: string[] = [];
+      for (const draft of drafts) {
+        if (stored.some((m) => m.dedupeKey === draft.dedupeKey)) continue;
+        stored.push(draft);
+        written.push(draft.dedupeKey);
+      }
+      return written;
+    }),
+  };
+  return { store, stored };
+}
 
 function deps(over: Partial<MarkdownImportDeps> = {}) {
   const opened: Opened[] = [];
+  const memories = memoryStore();
   const opener: ToolsPullRequestOpener = {
     open: vi.fn(async (scope: ToolsPullRequestScope, args: ToolsPullRequestArgs) => {
       opened.push({ scope, args });
@@ -102,10 +140,11 @@ function deps(over: Partial<MarkdownImportDeps> = {}) {
     split: vi.fn<SplitModel>(),
     branchTaken: async () => false,
     opener,
+    memories: memories.store,
     now: () => new Date("2026-09-30T12:00:00Z"),
     ...over,
   };
-  return { d, opened };
+  return { d, opened, stored: memories.stored };
 }
 
 const commit = (d: MarkdownImportDeps, input: unknown) =>
@@ -176,6 +215,7 @@ describe("commit_markdown_import", () => {
       records: 2,
       policies: 1,
       skipped: 1,
+      memories: { stored: 0, skipped: [] },
     });
     // The branch rule the opener applies accepts these files.
     expect(MARKDOWN_IMPORT_PULL_REQUEST.refusal(args)).toBeNull();
@@ -239,6 +279,149 @@ describe("commit_markdown_import", () => {
       await reasonOf(commit(d, { policies: [POLICY, { ...POLICY, file: "other.md" }] })),
     ).toBe("duplicate_path");
     expect(opened).toHaveLength(0);
+  });
+});
+
+describe("commit_markdown_import with memories", () => {
+  it("refuses a memory over 2,000 characters marked add, and takes one marked skip (negative)", () => {
+    const parse = (memories: MarkdownImportMemory[]) =>
+      steeringMarkdownImportCommit.input.safeParse({ memories }).success;
+    const long = "x".repeat(2001);
+    expect(parse([memory({ statement: long })])).toBe(false);
+    expect(parse([memory({ statement: long, action: "skip" })])).toBe(true);
+    expect(parse([memory({ kind: "fact" as "memory" })])).toBe(false);
+    expect(parse([memory({ force: "may" as "info" })])).toBe(false);
+    expect(parse([memory()])).toBe(true);
+  });
+
+  it("stores each memory marked add as a waiting memory with capture import and opens no PR", async () => {
+    const publishedRecords = vi.fn(async () => []);
+    const branchTaken = vi.fn(async () => false);
+    const { d, opened, stored } = deps({ publishedRecords, branchTaken });
+    const out = await commit(d, {
+      memories: [
+        memory(),
+        memory({ line: 5, label: "Use pnpm", statement: "Use pnpm, not npm." }),
+        memory({ line: 6, statement: "Left out.", action: "skip" }),
+      ],
+    });
+    expect(out).toEqual({
+      pullRequest: null,
+      paths: [],
+      records: 0,
+      policies: 0,
+      skipped: 1,
+      memories: { stored: 2, skipped: [] },
+    });
+    // The person who imported the file is the author: no agent and no run.
+    expect(stored).toEqual([
+      {
+        agentLineage: null,
+        runPublicId: null,
+        capture: "import",
+        statement: "The staging database resets every night.",
+        statementHash: statementHash("The staging database resets every night."),
+        kind: "memory",
+        repos: null,
+        appliesTo: null,
+        tools: null,
+        evidence: [],
+        source: "import:notes.md#L4",
+        dedupeKey: `import:import:notes.md#L4:${statementHash("The staging database resets every night.")}`,
+        label: "Staging resets nightly",
+      },
+      expect.objectContaining({ source: "import:notes.md#L5", label: "Use pnpm", capture: "import" }),
+    ]);
+    // A memories-only commit reads nothing from the registry or the steering repo.
+    expect(opened).toHaveLength(0);
+    expect(publishedRecords).not.toHaveBeenCalled();
+    expect(branchTaken).not.toHaveBeenCalled();
+    expect(steeringMarkdownImportCommit.output.safeParse(out).success).toBe(true);
+  });
+
+  it("stores the memories and opens the steering PR for the records in one commit", async () => {
+    const { d, opened, stored } = deps();
+    const order: string[] = [];
+    const store = d.memories.store;
+    d.memories.store = vi.fn(async (scope: ToolsPullRequestScope, drafts: MemoryDraft[]) => {
+      order.push("memories");
+      return store(scope, drafts);
+    });
+    const open = d.opener.open;
+    d.opener.open = vi.fn(async (scope: ToolsPullRequestScope, args: ToolsPullRequestArgs) => {
+      order.push("pr");
+      return open(scope, args);
+    });
+    const out = await commit(d, { records: [row()], policies: [POLICY], memories: [memory()] });
+    expect(order).toEqual(["memories", "pr"]);
+    expect(opened).toHaveLength(1);
+    expect(opened[0]?.args.title).toBe("Import 1 record and 1 policy file from Markdown");
+    expect(stored).toHaveLength(1);
+    expect(out).toMatchObject({
+      pullRequest: { number: 42 },
+      records: 1,
+      policies: 1,
+      skipped: 0,
+      memories: { stored: 1, skipped: [] },
+    });
+  });
+
+  it("leaves out a memory a waiting memory, a rejection, or an earlier row holds, and names each one", async () => {
+    const held: HeldMemories = {
+      waiting: [{ publicId: "mem_01waiting", statementHash: statementHash("The staging database resets every night.") }],
+      rejected: [statementHash("Use pnpm, not npm.")],
+    };
+    const memories = memoryStore(held);
+    const { d } = deps({ memories: memories.store });
+    const out = await commit(d, {
+      memories: [
+        memory(),
+        memory({ line: 5, statement: "Use pnpm, not npm." }),
+        memory({ line: 6, statement: "Run the linter before you push." }),
+        memory({ file: "other.md", line: 2, statement: "run the linter before you push" }),
+      ],
+    });
+    expect(out.memories).toEqual({
+      stored: 1,
+      skipped: [
+        { file: "notes.md", line: 4, reason: "waiting", memory: "mem_01waiting" },
+        { file: "notes.md", line: 5, reason: "rejected", memory: null },
+        { file: "other.md", line: 2, reason: "import", memory: null },
+      ],
+    });
+    expect(memories.stored.map((m) => m.source)).toEqual(["import:notes.md#L6"]);
+  });
+
+  it("names a memory an earlier import stored from the same line, whose memory has moved on", async () => {
+    const { d } = deps();
+    // The first commit stores the memory. The memory then leaves the waiting
+    // state, so the second commit's check finds no waiting match, and the
+    // store's dedupe key leaves it out.
+    await commit(d, { memories: [memory()] });
+    const out = await commit(d, { memories: [memory(), memory({ line: 9, statement: "A new lesson." })] });
+    expect(out.memories).toEqual({
+      stored: 1,
+      skipped: [{ file: "notes.md", line: 4, reason: "stored", memory: null }],
+    });
+  });
+
+  it("refuses everything before it stores a memory (negative)", async () => {
+    const { d, stored } = deps();
+    expect(
+      await reasonOf(
+        commit(d, {
+          records: [row({ action: null, conflict: { lineage: "a-intel.other", path: null, published: true } })],
+          memories: [memory()],
+        }),
+      ),
+    ).toBe("conflict_unresolved");
+    const exhausted = deps({ branchTaken: async () => true });
+    expect(await reasonOf(commit(exhausted.d, { records: [row()], memories: [memory()] }))).toBe(
+      "import_branches_exhausted",
+    );
+    expect(await reasonOf(commit(d, { memories: [memory({ action: "skip" })] }))).toBe("nothing_to_import");
+    expect(stored).toHaveLength(0);
+    expect(exhausted.stored).toHaveLength(0);
   });
 });
 

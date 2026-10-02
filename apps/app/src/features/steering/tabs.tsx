@@ -1,14 +1,14 @@
 "use client";
-// The Steering hub's five tabs (roadmap pages/steering.md): Library,
-// Assignments, Gates, Proposals, Compiler, in that order, each a link to its
-// own path so a tab survives a reload and a shared link. The row is a
+// The Steering hub's six tabs (roadmap pages/steering.md): Library,
+// Memories, Assignments, Gates, Proposals, Compiler, in that order, each a
+// link to its own path so a tab survives a reload and a shared link. The row is a
 // `RouteTabs` row (ADR-243), which carries the tabs
 // pattern: one tab stop, the arrow keys, Home and End, and Enter or Space to
 // follow a tab. The selected tab names the panel (./steering.tsx), and the
 // panel takes that tab as its label.
 //
 // A count sits after a label only where the record stands behind it: the
-// Library's items and the proposals waiting. Assignments, Gates and the
+// Library's items, the memories waiting (#4914) and the proposals waiting. Assignments, Gates and the
 // Compiler print none until their reads exist, rather than a zero nobody
 // counted. On a phone the strip is one row that scrolls with snap, and the
 // selected tab is scrolled into the row when it changes.

@@ -831,6 +831,18 @@
       "consumes": []
     },
     {
+      "name": "dismiss_memories",
+      "domain": "context",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "dismiss_memory_promotion",
       "domain": "agent",
       "surfaces": [
@@ -1938,6 +1950,17 @@
       "consumes": []
     },
     {
+      "name": "get_spend_per_merged_pr",
+      "domain": "spend",
+      "surfaces": [
+        "api",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "get_steering_deliveries",
       "domain": "context",
       "surfaces": [
@@ -2138,6 +2161,18 @@
         "api",
         "mcp",
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "get_workspace_memory",
+      "domain": "context",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
       ],
       "component": null,
       "produces": [],
@@ -2718,6 +2753,17 @@
       "consumes": []
     },
     {
+      "name": "list_memory_pr_records",
+      "domain": "context",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "list_memory_promotions",
       "domain": "agent",
       "surfaces": [
@@ -3120,6 +3166,18 @@
       "consumes": []
     },
     {
+      "name": "list_workspace_memories",
+      "domain": "context",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "list_workspaces",
       "domain": "workspace",
       "surfaces": [
@@ -3375,6 +3433,18 @@
       "consumes": []
     },
     {
+      "name": "promote_memories",
+      "domain": "context",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "promote_memory",
       "domain": "agent",
       "surfaces": [
@@ -3588,6 +3658,16 @@
       "surfaces": [
         "api",
         "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "record_tacho_memory_uses",
+      "domain": "tacho",
+      "surfaces": [
+        "api"
       ],
       "component": null,
       "produces": [],
@@ -4108,6 +4188,17 @@
       "consumes": []
     },
     {
+      "name": "set_agent_cache_keep_alive",
+      "domain": "agent",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "set_approval_rule_enabled",
       "domain": "approval_rule",
       "surfaces": [
@@ -4127,6 +4218,14 @@
         "mcp",
         "agent"
       ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "set_assistant_switch",
+      "domain": "assistant",
+      "surfaces": [],
       "component": null,
       "produces": [],
       "consumes": []

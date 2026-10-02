@@ -16,7 +16,9 @@ import {
   decidePreflight,
   GATED_JOBS,
   guardProblems,
+  jobCondition,
   PREFLIGHT_GATE,
+  PREFLIGHT_STATUS,
   readCompare,
 } from "./check-main-preflight.mjs";
 
@@ -218,6 +220,47 @@ describe("guardProblems", () => {
         expect.stringMatching(/checks: does not list "needs: \[preflight\]"/),
       ]),
     );
+  });
+
+  it("skips a gated job only on an explicit proceed=false", () => {
+    // A failed preflight writes no output. `== 'true'` read that empty value
+    // as a skip, and GitHub reads a skipped required check as passing.
+    expect(PREFLIGHT_GATE).toBe("needs.preflight.outputs.proceed != 'false'");
+    expect(PREFLIGHT_STATUS).toBe("!cancelled()");
+  });
+
+  it("fails when a gated job loses !cancelled() from its if:", () => {
+    const shape =
+      "  checks:\n    needs: [preflight]\n    if: >-\n      !cancelled() &&\n      github.event_name";
+    expect(pipeline).toContain(shape);
+    const mutated = pipeline.replace(
+      shape,
+      "  checks:\n    needs: [preflight]\n    if: >-\n      github.event_name",
+    );
+    // The checks job's steps still say `!cancelled()`. Only the job's own
+    // `if:` decides whether a failed preflight skips it.
+    expect(guardProblems(mutated)).toEqual([
+      expect.stringMatching(/^checks: its "if:" does not include `!cancelled\(\)`/),
+    ]);
+  });
+
+  it("reads the job-level if: and not a step's", () => {
+    const block = [
+      "  checks:",
+      "    needs: [preflight]",
+      "    if: >-",
+      "      github.event_name != 'workflow_dispatch' &&",
+      "      needs.preflight.outputs.proceed != 'false'",
+      "    steps:",
+      "      - name: A step",
+      "        if: ${{ !cancelled() }}",
+      "        run: true",
+    ].join("\n");
+    expect(jobCondition(block)).toBe(
+      "github.event_name != 'workflow_dispatch' && needs.preflight.outputs.proceed != 'false'",
+    );
+    expect(jobCondition("  test:\n    runs-on: x\n")).toBeNull();
+    expect(jobCondition("  test:\n    if: always()\n    runs-on: x\n")).toBe("always()");
   });
 
   it("names every job the queue-depth fix must cover", () => {

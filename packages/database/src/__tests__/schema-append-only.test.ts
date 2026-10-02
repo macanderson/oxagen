@@ -46,6 +46,7 @@ import {
   authorizationSnapshots,
   authorizationDecisions,
   workBriefs,
+  workDoneChecks,
   workItemFacts,
   workTriageDecisions,
   workTriageCorrections,
@@ -98,6 +99,10 @@ describe("append-only tables: forbidden mutation columns", () => {
     ["work.item_facts", workItemFacts],
     ["work.triage_decisions", workTriageDecisions],
     ["work.triage_corrections", workTriageCorrections],
+    // Each check run of a definition of done (F13, #4638). The migration
+    // revokes UPDATE and DELETE from oxagen_app, and a trigger refuses any
+    // UPDATE.
+    ["work.done_checks", workDoneChecks],
   ];
 
   for (const [tableName, table] of appendOnlyTables) {

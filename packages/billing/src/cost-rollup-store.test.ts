@@ -307,6 +307,66 @@ describe("the token sources a rollup writes (#4493)", () => {
     ]);
   });
 
+  // #4572 item 2: the row kept each source's sum alone, so a reader took one
+  // call's share as the average, and 0, 100, 100, 100 read 225 re-sent. The
+  // rollup now keeps the tokens on the calls after the first.
+  it("keeps each source's tokens on the calls after the first, whatever the first held", async () => {
+    const tools = (n: number): RunTokenSources => ({
+      toolDefinitionTokens: n,
+      contextFrameTokens: null,
+      steeringTokens: null,
+    });
+    const { d, written } = deps({
+      runs: { [WORKER]: meta(WORKER, "prn_worker_operator") },
+      modelCalls: [
+        measured("2026-09-15T09:01:00.000Z", tools(0)),
+        measured("2026-09-15T09:02:00.000Z", tools(100)),
+        measured("2026-09-15T09:03:00.000Z", tools(100)),
+        measured("2026-09-15T09:04:00.000Z", tools(100)),
+      ],
+    });
+    await rebuildRunTotals(WORKER, d);
+    expect(written[0]?.breakdown.standing).toEqual({
+      toolDefinitionTokens: { cached: 0, uncached: 300 },
+      contextFrameTokens: null,
+      steeringTokens: null,
+    });
+  });
+
+  // #4572 item 3: one sum over hit and miss calls priced every re-sent token
+  // at the read rate. The split keeps each call's tokens on the side of its
+  // own cache use.
+  it("splits each call's tokens by whether the call read the cache", async () => {
+    const hit = (at: string): PricedModelCall => ({
+      ...measured(at, {
+        toolDefinitionTokens: 100,
+        contextFrameTokens: null,
+        steeringTokens: 40,
+      }),
+      tokens: { ...ZERO_TOKENS, cache_read: 900, input_uncached: 10 },
+    });
+    const { d, written } = deps({
+      runs: { [WORKER]: meta(WORKER, "prn_worker_operator") },
+      modelCalls: [
+        // The first call sent the prefix first, so none of it is re-sent.
+        hit("2026-09-15T09:01:00.000Z"),
+        hit("2026-09-15T09:02:00.000Z"),
+        measured("2026-09-15T09:03:00.000Z", {
+          toolDefinitionTokens: 100,
+          contextFrameTokens: null,
+          steeringTokens: 40,
+        }),
+        hit("2026-09-15T09:04:00.000Z"),
+      ],
+    });
+    await rebuildRunTotals(WORKER, d);
+    expect(written[0]?.breakdown.standing).toEqual({
+      toolDefinitionTokens: { cached: 200, uncached: 100 },
+      contextFrameTokens: null,
+      steeringTokens: { cached: 80, uncached: 40 },
+    });
+  });
+
   it("writes nothing when the calls cannot be read, so the job retries", async () => {
     const { d, written, sourcesWritten } = deps({
       runs: { [WORKER]: meta(WORKER, "prn_worker_operator") },
@@ -626,6 +686,36 @@ describe("the breakdown jsonb (#4069)", () => {
     expect(revived.models[0]!.costMicros).toBe(4_800n);
   });
 
+  it("writes each model's priced tokens and the re-sent split, and reads them back (#4572)", () => {
+    const [first, second] = breakdown.models;
+    const kept = {
+      ...breakdown,
+      models: [
+        { ...first!, pricedTokens: { ...first!.tokens } },
+        { ...second!, pricedTokens: { ...ZERO_TOKENS } },
+      ],
+      standing: {
+        toolDefinitionTokens: { cached: 200, uncached: 100 },
+        contextFrameTokens: null,
+        steeringTokens: null,
+      },
+    };
+    const stored = throughJsonb(serializeBreakdown(kept));
+    expect(stored.standing).toEqual(kept.standing);
+    expect(reviveBreakdown(stored)).toEqual(kept);
+  });
+
+  it("reads a row rolled up before #4572 with no priced tokens and no split", () => {
+    const stored = throughJsonb(serializeBreakdown(breakdown));
+    expect("standing" in stored).toBe(false);
+    const revived = reviveBreakdown(stored);
+    expect(revived.standing).toBeUndefined();
+    expect(revived.models.map((m) => m.pricedTokens)).toEqual([
+      undefined,
+      undefined,
+    ]);
+  });
+
   it("reads a row rolled up before server_tool_request existed as zero requests and zero cost (#3721)", () => {
     const stored = throughJsonb(serializeBreakdown(breakdown));
     for (const m of stored.models) {
@@ -641,6 +731,43 @@ describe("the breakdown jsonb (#4069)", () => {
     ).toEqual([0n, 0n]);
     // The legacy row reads back whole, as the rollup would write it now.
     expect(revived).toEqual(breakdown);
+  });
+
+  it("writes a model's cache keep-alives with their cost as a decimal string, and reads them back (lane F32)", () => {
+    const [first, second] = breakdown.models;
+    const kept = {
+      ...breakdown,
+      models: [
+        {
+          ...first!,
+          keepAlive: {
+            calls: 2,
+            tokens: { ...ZERO_TOKENS, input_uncached: 20, cache_read: 120_000 },
+            costMicros: 36_060n,
+          },
+        },
+        {
+          ...second!,
+          keepAlive: {
+            calls: 1,
+            tokens: { ...ZERO_TOKENS, cache_read: 10 },
+            costMicros: null,
+          },
+        },
+      ],
+    };
+    const stored = throughJsonb(serializeBreakdown(kept));
+    expect(stored.models[0].keepAlive).toEqual({
+      calls: 2,
+      tokens: { ...ZERO_TOKENS, input_uncached: 20, cache_read: 120_000 },
+      costMicros: "36060",
+    });
+    expect(stored.models[1].keepAlive.costMicros).toBeNull();
+    expect(reviveBreakdown(stored)).toEqual(kept);
+    // A row with no keep-alive writes no key, and reads back with none.
+    const plain = throughJsonb(serializeBreakdown(breakdown));
+    expect("keepAlive" in plain.models[0]).toBe(false);
+    expect(reviveBreakdown(plain).models[0]).not.toHaveProperty("keepAlive");
   });
 });
 

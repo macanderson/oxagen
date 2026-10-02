@@ -1,0 +1,96 @@
+{
+  "name": "dismiss_memories",
+  "domain": "context",
+  "description": "Dismiss workspace memories so the curator does not propose their statements again, or restore dismissed memories with restore: true.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "cli"
+  ],
+  "sensitivity": "high",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "memory_ids": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "minItems": 1,
+        "maxItems": 200
+      },
+      "restore": {
+        "type": "boolean",
+        "default": false
+      }
+    },
+    "required": [
+      "memory_ids"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "changed": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "skipped": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "memory_id": {
+              "type": "string"
+            },
+            "state": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "waiting",
+                    "in_pr",
+                    "promoted",
+                    "dismissed",
+                    "retired"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "memory_id",
+            "state"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "rejections": {
+        "type": "integer",
+        "minimum": 0
+      }
+    },
+    "required": [
+      "changed",
+      "skipped",
+      "rejections"
+    ],
+    "additionalProperties": false
+  }
+}

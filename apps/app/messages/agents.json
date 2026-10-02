@@ -605,6 +605,19 @@
             "mixed": "Its cache writes use both TTLs now.",
             "open": "Open the finding",
             "rest": "Other coaching is read off the token classes, and the record does not split input by class yet."
+          },
+          "keepAlive": {
+            "term": "Cache keep-alive",
+            "on": "On",
+            "off": "Off",
+            "onSub": "While this agent waits on a subagent, the gateway keeps its prompt cache warm when its idle cache finding shows a saving.",
+            "offSub": "The gateway sends no keep-alive for this agent.",
+            "turnOff": "Turn off",
+            "turnOn": "Turn on",
+            "turningOff": "Turning off",
+            "turningOn": "Turning on",
+            "denied": "The keep-alive setting did not change. Only an org Owner or Admin can change it.",
+            "failed": "The keep-alive setting did not change. Reload the page and try again."
           }
         },
         "composition": {

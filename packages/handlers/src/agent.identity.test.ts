@@ -932,12 +932,17 @@ describe.skipIf(!process.env.DATABASE_URL)(
       );
       expect(resumed.status).toBe("active");
       expect(eventTypes()).toEqual(["agent.resumed"]);
-      const read = await inScope(owner, () =>
-        agentGetHandler({ agentId: "qa-chat" }, ctx()),
+      // The assistant is Oxagen's, not the customer's (ADR-235, item 13), so
+      // get_agent answers it as an unknown agent while the writes above
+      // still refuse it by name.
+      await expect(
+        inScope(owner, () => agentGetHandler({ agentId: "qa-chat" }, ctx())),
+      ).rejects.toSatisfy(
+        (err: unknown) =>
+          isHandlerError(err) &&
+          err.code === "not_found" &&
+          err.reason === "agent_not_found",
       );
-      expect(read.identity.managed).toBe(true);
-      expect(read.identity.status).not.toBe("retired");
-      expect(read.credentials).toEqual([]);
     });
 
     it("an unknown agent is not_found for every write", async () => {

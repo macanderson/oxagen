@@ -1,11 +1,13 @@
 // @vitest-environment jsdom
 // The Import Markdown dialog (memory-collection spec, Bulk import; the
 // mockup's md-import.js): Import Markdown opens it, chosen files get their
-// default targets with Memories drawn closed, Review statements sends each
-// file with its target and draws one row per statement with its kind, force,
-// words, and source, a new kind narrows the force to the forces it allows, a
-// conflict blocks the steering PR until a person chooses, and the commit
-// sends the rows and links to the PR it opened. A refusal is named in the
+// default targets with a Claude Code memory file at Memories, Review
+// statements sends each file with its target and draws one row per statement
+// with its kind, force, words, and source, a new kind narrows the force to
+// the forces it allows, a conflict blocks the steering PR until a person
+// chooses, and the commit sends the rows and links to the PR it opened. A
+// memory row is a memory with force info, and the commit says how many
+// memories it stored and links to the Memories tab. A refusal is named in the
 // dialog, which keeps its rows. An axe check runs in every state.
 import {
   cleanup,
@@ -21,13 +23,17 @@ import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import {
   importFileResult,
+  importMemory,
   importPolicy,
   importRecord,
   parseOutput,
 } from "./import.builders";
 
 /** The rows a commit sent, as far as these tests read them. */
-type SentRows = { records: { lineage: string; action: string | null }[] };
+type SentRows = {
+  records: { lineage: string; action: string | null }[];
+  memories?: { file: string; line: number; action: string }[];
+};
 
 const { parseMarkdownImport, matchMarkdownImport, commitMarkdownImport } =
   vi.hoisted(() => ({
@@ -130,13 +136,18 @@ function parsed(records = [tagFromMain, apiRetries]) {
   });
 }
 
+const NO_MEMORIES = { stored: 0, skipped: [] };
+
 const OPENED = {
-  number: 41,
-  url: "https://github.com/acme/oxagen-core-platform/pull/41",
-  branch: "steering/import-2026-10-01",
+  pullRequest: {
+    number: 41,
+    url: "https://github.com/acme/oxagen-core-platform/pull/41",
+    branch: "steering/import-2026-10-01",
+  },
   records: 2,
   policies: 1,
   skipped: 0,
+  memories: NO_MEMORIES,
 };
 
 function renderImport() {
@@ -235,7 +246,7 @@ describe("the Files step", () => {
     expect(within(dialog).getByTestId("import-review")).toBeDisabled();
   });
 
-  it("gives each chosen file its default target, with Memories closed", async () => {
+  it("gives each chosen file its default target, with a Claude Code memory file at Memories", async () => {
     const dialog = await pickFiles([...FILES(), memoryFile()]);
     const targets = Object.fromEntries(
       within(dialog)
@@ -249,24 +260,27 @@ describe("the Files step", () => {
       "CLAUDE.md": "records",
       "README.md": "skip",
       "no-force-push.md": "policies",
-      "memory/project_release_train.md": "skip",
+      "memory/project_release_train.md": "memories",
     });
-    const [memories] = within(dialog).getAllByRole("option", {
-      name: "Memories",
-      hidden: true,
-    });
-    expect(memories).toBeDisabled();
-    expect(memories?.parentElement).toHaveAttribute(
-      "label",
-      "Arrives with memory collection",
-    );
+    // Every target is open, Memories among them.
+    for (const select of within(dialog).getAllByTestId("import-target")) {
+      expect(optionsOf(select)).toEqual(["records", "memories", "policies", "skip"]);
+    }
+    expect(
+      within(dialog).queryByRole("group", { name: "Arrives with memory collection" }),
+    ).toBeNull();
+    const memory = within(dialog)
+      .getAllByRole("row")
+      .find((r) => r.getAttribute("data-file") === "memory/project_release_train.md");
+    expect(memory).toHaveTextContent("Waiting memories");
+    expect(memory).toHaveTextContent("Ready");
     const readme = within(dialog)
       .getAllByRole("row")
       .find((r) => r.getAttribute("data-file") === "README.md");
     expect(readme).toHaveTextContent("Skipped");
     expect(readme).toHaveTextContent("An index of the other files");
     expect(within(dialog).getByTestId("import-file-count")).toHaveTextContent(
-      "4 files. 2 files stay out.",
+      "4 files. 1 file stays out.",
     );
   });
 
@@ -407,7 +421,7 @@ describe("the statement grid", () => {
     );
     expect(
       within(done).getByRole("link", { name: "Open pull request #41" }),
-    ).toHaveAttribute("href", OPENED.url);
+    ).toHaveAttribute("href", OPENED.pullRequest.url);
   });
 
   it("leaves a statement out on Keep the record, and a row a person unticks", async () => {
@@ -478,6 +492,188 @@ describe("the statement grid", () => {
       "core-platform",
       [{ filename: "CLAUDE.md", content: CLAUDE, target: "records" }],
     );
+  });
+});
+
+describe("the Memories target", () => {
+  const MEMORY_PATH = "memory/project_release_train.md";
+  const releaseTrain = importMemory({
+    file: MEMORY_PATH,
+    line: 8,
+    label: "Release train",
+    statement: "Platform releases ship every other Tuesday.",
+  });
+  const repeated = importMemory({
+    file: MEMORY_PATH,
+    line: 9,
+    label: "Staging resets",
+    statement: "The staging database resets every night.",
+    duplicate: { reason: "waiting", memory: "mem_01waiting", file: null, line: null },
+    action: "skip",
+  });
+
+  function parsedMemories(records = [tagFromMain]) {
+    return parseOutput({
+      files: [
+        ...(records.length > 0
+          ? [importFileResult({ filename: "CLAUDE.md", records: records.length })]
+          : []),
+        importFileResult({
+          filename: MEMORY_PATH,
+          target: "memories",
+          detected: "records",
+          records: 0,
+          memories: 2,
+        }),
+      ],
+      records,
+      memories: [releaseTrain, repeated],
+    });
+  }
+
+  const memoryRow = (dialog: HTMLElement, source: string): HTMLElement => {
+    const found = within(dialog)
+      .getAllByTestId("import-memory")
+      .find((r) => r.getAttribute("data-source") === source);
+    if (found === undefined) throw new Error(`no memory row ${source}`);
+    return found;
+  };
+
+  /** Each memory row the last commit sent, as its source and its action. */
+  const sentMemories = (): [string, string][] =>
+    (commitMarkdownImport.mock.lastCall?.[2].memories ?? []).map(
+      (m): [string, string] => [`${m.file}:${String(m.line)}`, m.action],
+    );
+
+  it("sends a memory file with the memories target and draws each memory with force info", async () => {
+    parseMarkdownImport.mockResolvedValue({ ok: true, value: parsedMemories() });
+    const dialog = await pickFiles([new File([CLAUDE], "CLAUDE.md"), memoryFile()]);
+    await reviewStatements(dialog);
+    expect(parseMarkdownImport).toHaveBeenCalledWith("acme", "core-platform", [
+      { filename: "CLAUDE.md", content: CLAUDE, target: "records" },
+      { filename: MEMORY_PATH, content: MEMORY, target: "memories" },
+    ]);
+    const train = memoryRow(dialog, `${MEMORY_PATH}:8`);
+    expect(train).toHaveTextContent("Platform releases ship every other Tuesday.");
+    expect(train).toHaveTextContent("Memory");
+    expect(train).toHaveTextContent("Set by the target");
+    expect(within(train).getByTestId("import-force")).toHaveTextContent("info");
+    expect(train).toHaveTextContent("Takes info only");
+    expect(
+      within(train).getByRole("checkbox", { name: `Import line 8 of ${MEMORY_PATH}` }),
+    ).toBeChecked();
+    // A memory a waiting memory already holds stays out, and names it.
+    const dup = memoryRow(dialog, `${MEMORY_PATH}:9`);
+    expect(dup).toHaveAttribute("data-action", "skip");
+    expect(dup).toHaveTextContent("Duplicate");
+    expect(dup).toHaveTextContent("Matches waiting memory mem_01waiting");
+    expect(
+      within(dup).getByRole("checkbox", { name: `Import line 9 of ${MEMORY_PATH}` }),
+    ).toBeDisabled();
+    const groups = within(dialog).getAllByTestId("import-group");
+    expect(groups[1]).toHaveTextContent("Memories");
+    expect(groups[1]).toHaveTextContent("2 statements");
+    expect(within(dialog).getByTestId("import-memories-intro")).toHaveTextContent(
+      "Memories wait for review on the Memories tab.",
+    );
+    expect(within(dialog).getByTestId("import-summary")).toHaveTextContent(
+      "1 record and 0 policies. 1 memory to store. 1 statement stays out.",
+    );
+    expect(within(dialog).getByTestId("import-commit")).toHaveTextContent("Open steering PR");
+  });
+
+  it("stores memories alone, says how many, and links to the Memories tab", async () => {
+    parseMarkdownImport.mockResolvedValue({ ok: true, value: parsedMemories([]) });
+    commitMarkdownImport.mockResolvedValue({
+      ok: true,
+      value: {
+        pullRequest: null,
+        records: 0,
+        policies: 0,
+        skipped: 1,
+        memories: {
+          stored: 1,
+          skipped: [{ file: MEMORY_PATH, line: 8, reason: "rejected", memory: null }],
+        },
+      },
+    });
+    // The README keeps the memory file's folder in its path, and stays out.
+    const dialog = await pickFiles([memoryFile(), new File(["# Index\n"], "README.md")]);
+    fireEvent.click(within(dialog).getByTestId("import-review"));
+    await within(dialog).findAllByTestId("import-memory");
+    expect(parseMarkdownImport).toHaveBeenCalledWith("acme", "core-platform", [
+      { filename: MEMORY_PATH, content: MEMORY, target: "memories" },
+    ]);
+    const commit = within(dialog).getByTestId("import-commit");
+    expect(commit).toHaveTextContent("Store memories");
+    expect(commit).toBeEnabled();
+    fireEvent.click(commit);
+    const done = await within(dialog).findByTestId("import-done");
+    expect(sentMemories()).toEqual([
+      [`${MEMORY_PATH}:8`, "add"],
+      [`${MEMORY_PATH}:9`, "skip"],
+    ]);
+    expect(done).not.toHaveTextContent("Opened steering PR");
+    expect(within(done).getByTestId("import-memories-stored")).toHaveTextContent(
+      "Stored 1 waiting memory.",
+    );
+    expect(done).toHaveTextContent(
+      `Line 8 of ${MEMORY_PATH} stays out. It repeats a statement a person rejected.`,
+    );
+    expect(
+      within(done).getByRole("link", { name: "Open the Memories tab" }),
+    ).toHaveAttribute("href", "/acme/core-platform/steering/memories");
+  });
+
+  it("leaves out a memory a person unticks, and opens the PR and stores the rest in one commit", async () => {
+    parseMarkdownImport.mockResolvedValue({ ok: true, value: parsedMemories() });
+    commitMarkdownImport.mockResolvedValue({
+      ok: true,
+      value: { ...OPENED, records: 1, policies: 0, memories: { stored: 0, skipped: [] } },
+    });
+    const dialog = await pickFiles([new File([CLAUDE], "CLAUDE.md"), memoryFile()]);
+    await reviewStatements(dialog);
+    fireEvent.click(
+      within(memoryRow(dialog, `${MEMORY_PATH}:8`)).getByRole("checkbox", {
+        name: `Import line 8 of ${MEMORY_PATH}`,
+      }),
+    );
+    expect(within(dialog).getByTestId("import-summary")).toHaveTextContent(
+      "1 record and 0 policies. 2 statements stay out.",
+    );
+    fireEvent.click(within(dialog).getByTestId("import-commit"));
+    const done = await within(dialog).findByTestId("import-done");
+    expect(sent()).toEqual([[tagFromMain.lineage, "add"]]);
+    expect(sentMemories()).toEqual([
+      [`${MEMORY_PATH}:8`, "skip"],
+      [`${MEMORY_PATH}:9`, "skip"],
+    ]);
+    expect(done).toHaveTextContent("Opened steering PR #41");
+    expect(within(done).queryByTestId("import-memories-done")).toBeNull();
+  });
+
+  it("starts a file's memory rows again when its target changes", async () => {
+    parseMarkdownImport.mockResolvedValue({ ok: true, value: parsedMemories() });
+    const dialog = await pickFiles([new File([CLAUDE], "CLAUDE.md"), memoryFile()]);
+    await reviewStatements(dialog);
+    fireEvent.click(
+      within(memoryRow(dialog, `${MEMORY_PATH}:8`)).getByRole("checkbox", {
+        name: `Import line 8 of ${MEMORY_PATH}`,
+      }),
+    );
+    fireEvent.click(within(dialog).getByRole("button", { name: "Back" }));
+    const target = within(dialog)
+      .getAllByTestId("import-target")
+      .find((select) => select.closest("tr")?.getAttribute("data-file") === MEMORY_PATH);
+    if (target === undefined) throw new Error("no memory file row");
+    fireEvent.change(target, { target: { value: "records" } });
+    fireEvent.change(target, { target: { value: "memories" } });
+    await reviewStatements(dialog);
+    expect(
+      within(memoryRow(dialog, `${MEMORY_PATH}:8`)).getByRole("checkbox", {
+        name: `Import line 8 of ${MEMORY_PATH}`,
+      }),
+    ).toBeChecked();
   });
 });
 

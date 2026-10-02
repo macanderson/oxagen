@@ -248,6 +248,30 @@ describe("Providers › roster", () => {
     expect(label).toHaveAttribute("title", providers("weeklyUnpricedTitle"));
   });
 
+  // #4572: a provider and a steering record of 5,200 tokens are priced alike
+  // on the server, and both print $0.2496 (steering.test.tsx).
+  it("prints the weekly price a steering record of the same size prints", () => {
+    renderProviders({
+      servers: readOk(
+        mcpServerList({
+          servers: [
+            {
+              ...stripeServer(),
+              contextTokens: 5_200,
+              weeklyPrice: {
+                micros: "249600",
+                currency: "USD",
+                basis: "estimated",
+              },
+            },
+          ],
+        }),
+      ),
+    });
+    const stripe = screen.getByTestId("provider-weekly-mcs_01k5s1");
+    expect(within(stripe).getByTestId("money")).toHaveTextContent("$0.2496");
+  });
+
   // #4572 item 10: the cent precision rounded a price under half a cent to
   // $0.00, which reads as a free provider.
   it("prints a weekly price under half a cent to the micro, never as $0.00", () => {

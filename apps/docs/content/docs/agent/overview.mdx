@@ -55,7 +55,7 @@ The contract registry defines the agent's tools. A capability whose `surfaces` i
 
 The agent picks tools from that list to answer your request. Before the handler runs, each call passes the IAM check for you, and a capability that requires approval comes to you as an approval card. The IAM check happens before the handler, never inside it.
 
-Your workspace's decision rules and steering do not apply to the assistant. It is Oxagen's agent, and your workspace does not govern or monitor it. A turn started with an API key is the one exception: its calls still meet your workspace's decision rules.
+Your workspace's decision rules, steering, budgets, and kill switches do not apply to the assistant, whether you reach it from the app, an API key, or MCP. It is Oxagen's agent, and your workspace does not govern or monitor it.
 
 ## Delegated context
 

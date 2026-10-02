@@ -237,6 +237,11 @@ import { steeringIndexGetRoute } from "./routes/v1/context.steering.index.get";
 import { steeringRepoGetRoute } from "./routes/v1/steering_repo.get";
 import { steeringRepoRepairRoute } from "./routes/v1/steering_repo.repair";
 import { steeringRepoProvisionRetryRoute } from "./routes/v1/steering_repo.provision.retry";
+import { steeringMemoriesListRoute } from "./routes/v1/steering.memories.list";
+import { steeringMemoriesGetRoute } from "./routes/v1/steering.memories.get";
+import { steeringMemoriesPromoteRoute } from "./routes/v1/steering.memories.promote";
+import { steeringMemoriesDismissRoute } from "./routes/v1/steering.memories.dismiss";
+import { steeringMemoryPrRecordsListRoute } from "./routes/v1/steering.memory_pr_records.list";
 import { steeringMarkdownImportParseRoute } from "./routes/v1/steering.markdown_import.parse";
 import { steeringMarkdownImportCommitRoute } from "./routes/v1/steering.markdown_import.commit";
 import { steeringRepoImportRoute } from "./routes/v1/steering_repo.import";
@@ -348,6 +353,7 @@ import { agentRetireRoute } from "./routes/v1/agent.retire";
 import { agentToolbeltGetRoute } from "./routes/v1/agent.toolbelt.get";
 import { agentMoveRoute } from "./routes/v1/agent.move";
 import { agentToolbeltAssignRoute } from "./routes/v1/agent.toolbelt.assign";
+import { agentCacheKeepAliveSetRoute } from "./routes/v1/agent.cache_keep_alive.set";
 import { runtimeCreateRoute } from "./routes/v1/runtime.create";
 import { runtimeListRoute } from "./routes/v1/runtime.list";
 import { runtimeUpdateRoute } from "./routes/v1/runtime.update";
@@ -363,6 +369,7 @@ import { spendDrillRoute } from "./routes/v1/spend.drill";
 import { spendWasteListRoute } from "./routes/v1/spend.waste";
 import { spendOperatorRankingRoute } from "./routes/v1/spend.operator_ranking";
 import { spendOperatorPseudonymsSetRoute } from "./routes/v1/spend.operator_pseudonyms.set";
+import { spendPerMergedPrRoute } from "./routes/v1/spend.per_merged_pr";
 import { spendUnproductiveRoute } from "./routes/v1/spend.unproductive";
 import { skillConfigGetRoute } from "./routes/v1/skill.config.get";
 import { skillConfigUpdateRoute } from "./routes/v1/skill.config.update";
@@ -583,12 +590,13 @@ const TACHO_INGEST_PER_MIN = 120;
 // memories on the extra prompts, since the daemon fails open on a 429, and
 // its command poll and bundle refresh keep their own budget.
 const TACHO_RECALL_PER_MIN = 120;
-// Three more paths each hold a bucket of TACHO_HOST_PER_MIN of their own:
-// the GitHub credential, the contained launch, and the memory upload. A
-// memory upload is its own bucket because a daemon's first scan sends every
-// memory file a harness holds, and that burst must not starve the command
-// poll or the bundle refresh.
-const TACHO_OWN_BUCKET_PATHS = 3;
+// Four more paths each hold a bucket of TACHO_HOST_PER_MIN of their own:
+// the GitHub credential, the contained launch, the memory upload, and the
+// memory use report. A memory upload is its own bucket because a daemon's
+// first scan sends every memory file a harness holds, and that burst must not
+// starve the command poll or the bundle refresh. The use report sends a few
+// calls every five minutes, and it must not spend the upload's bucket.
+const TACHO_OWN_BUCKET_PATHS = 4;
 
 // Tacho hosts speak to Oxagen with their enrolled API key, whose scope pins
 // org and workspace, so the machine routes sit on a static path outside the
@@ -765,8 +773,17 @@ tachoScoped.use(
     bucketKey: enrolledMachineBucketKey,
   }),
 );
-// `/memories` above matches that path alone, so recall never counts against
-// the memory upload's bucket, nor the upload against recall's.
+// `/memories` above matches that path alone, so neither recall nor the use
+// report counts against the memory upload's bucket, nor the upload against
+// theirs.
+tachoScoped.use(
+  "/memories/uses",
+  distributedRateLimiter({
+    keyPrefix: "tacho-memory-uses",
+    max: TACHO_HOST_PER_MIN,
+    bucketKey: enrolledMachineBucketKey,
+  }),
+);
 tachoScoped.use(
   "/memories/recall",
   distributedRateLimiter({
@@ -899,6 +916,8 @@ orgScoped.route("/spend/waste", spendWasteListRoute);
 // pseudonym setting (spend spec, Operator ranking).
 orgScoped.route("/spend/operators", spendOperatorRankingRoute);
 orgScoped.route("/spend/operators/pseudonyms", spendOperatorPseudonymsSetRoute);
+// Spend per merged pull request, per agent (spend spec, detector 8; F26).
+orgScoped.route("/spend/per-merged-pr", spendPerMergedPrRoute);
 orgScoped.route("/spend/unproductive", spendUnproductiveRoute);
 orgScoped.route("/spend/statement/export", spendStatementExportRoute);
 // Cost-center chargeback (ADR-142). The list, create, delete, and statement
@@ -1093,6 +1112,9 @@ orgScoped.route("/agents/retire", agentRetireRoute);
 orgScoped.route("/agents/move", agentMoveRoute);
 orgScoped.route("/agents/toolbelt/assign", agentToolbeltAssignRoute);
 orgScoped.route("/agents/toolbelt", agentToolbeltGetRoute);
+// The per-agent cache keep-alive switch (lane F32). Session auth; the org
+// role is checked in the handler.
+orgScoped.route("/agents/cache-keep-alive/set", agentCacheKeepAliveSetRoute);
 orgScoped.route("/agents", agentListRoute);
 // Runtimes, toolbelts and tool state (ADR-198). Session auth; the role is
 // checked in each write handler.
@@ -1277,6 +1299,13 @@ orgScoped.route("/context/steering/repo", steeringRepoGetRoute);
 orgScoped.route("/context/steering/repo/repair", steeringRepoRepairRoute);
 // Re-send a failed or blocked steering repo setup (#4750).
 orgScoped.route("/context/steering/repo/retry", steeringRepoProvisionRetryRoute);
+// Workspace memories (#4912): the Memories tab's list and drawer, promotion
+// onto a memory PR, dismissal, and the records of one memory PR.
+orgScoped.route("/context/steering/memories/list", steeringMemoriesListRoute);
+orgScoped.route("/context/steering/memories/get", steeringMemoriesGetRoute);
+orgScoped.route("/context/steering/memories/promote", steeringMemoriesPromoteRoute);
+orgScoped.route("/context/steering/memories/dismiss", steeringMemoriesDismissRoute);
+orgScoped.route("/context/steering/memory-prs/records", steeringMemoryPrRecordsListRoute);
 // The Markdown import (#4907): parse files into proposed steering records and
 // Cedar policies, then open one steering PR with the rows a person kept.
 orgScoped.route("/context/steering/import/parse", steeringMarkdownImportParseRoute);

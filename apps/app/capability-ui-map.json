@@ -105,7 +105,7 @@
     "commit_markdown_import": {
       "route": "/[org]/[ws]/steering",
       "page": "apps/app/src/app/[org]/[ws]/steering/page.tsx",
-      "entry": "Steering \u203a Import Markdown \u203a Review statements \u203a Open steering PR: the statement grid's commit, which opens one steering PR on steering/import-<date> and links to it (features/steering/import/import-markdown.tsx, features/steering/import/actions.ts)",
+      "entry": "Steering \u203a Import Markdown \u203a Review statements \u203a Open steering PR or Store memories: the statement grid's commit, which opens one steering PR on steering/import-<date> and links to it, and stores the memories as waiting memories and links to the Memories tab (features/steering/import/import-markdown.tsx, features/steering/import/actions.ts)",
       "testid": "import-commit",
       "proof": "apps/app/src/features/steering/import/import-markdown.test.tsx",
       "verifiedAt": "2026-10-01",
@@ -646,6 +646,14 @@
       "proof": "apps/app/src/features/spend/spend.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
+    },
+    "get_spend_per_merged_pr": {
+      "route": "/[org]/[ws]/spend",
+      "page": "apps/app/src/app/[org]/[ws]/spend/[[...tab]]/page.tsx",
+      "entry": "Spend › Month, grouped by agent › Per merged PR: each agent's spend on runs that opened a PR, divided by its PRs that merged and were not reverted within 14 days, with the runs behind it in the agent's open row (features/spend/month.tsx, data/live/spend.ts, data/live/mappers/spend.ts)",
+      "proof": "apps/app/src/features/spend/month.test.tsx",
+      "verifiedAt": "2026-10-02",
+      "verifiedBy": "session-3867219c-spend-f26"
     },
     "get_subscription": {
       "route": "/[org]/billing",
@@ -1768,6 +1776,15 @@
       "verifiedAt": "2026-09-22",
       "verifiedBy": "session-1a3727fe-cost-centers"
     },
+    "set_agent_cache_keep_alive": {
+      "route": "/[org]/[ws]/agents/[agent]",
+      "page": "apps/app/src/app/[org]/[ws]/agents/[agent]/page.tsx",
+      "entry": "/[org]/[ws]/agents/[agent] Overview tab, Coaching panel, the Cache keep-alive row's Turn off or Turn on button (features/agents/cache-keep-alive-controls.tsx, features/agents/actions.ts)",
+      "testid": "agent-keep-alive-change",
+      "proof": "apps/app/src/features/agents/cache-keep-alive-controls.test.tsx",
+      "verifiedAt": "2026-10-01",
+      "verifiedBy": "spend-f32-keep-alive (lane F32)"
+    },
     "get_nav_counts": {
       "route": "/[org]/[ws]",
       "page": "apps/app/src/app/[org]/[ws]/(fleet)/page.tsx",
@@ -1891,7 +1908,7 @@
     "list_memories": {
       "route": "/[org]/[ws]/steering/memory",
       "page": "apps/app/src/app/[org]/[ws]/steering/[...view]/page.tsx",
-      "entry": "The Steering Library's Memory shelf reads list_memories through the steering port (data/live/steering.ts, features/steering/tabs/memory.tsx)",
+      "entry": "The Steering Library's Assistant memory shelf reads list_memories through the steering port (data/live/steering.ts, features/steering/tabs/memory.tsx)",
       "proof": "apps/app/src/features/steering/steering.test.tsx",
       "verifiedAt": "2026-09-24",
       "verifiedBy": "session_01GofFReg5qtDbMZjKu569CR"
@@ -1903,6 +1920,50 @@
       "proof": "apps/app/src/features/steering/actions.test.ts",
       "verifiedAt": "2026-09-24",
       "verifiedBy": "session_01GofFReg5qtDbMZjKu569CR"
+    },
+    "list_workspace_memories": {
+      "route": "/[org]/[ws]/steering/memories",
+      "page": "apps/app/src/app/[org]/[ws]/steering/[...view]/page.tsx",
+      "entry": "Steering \u203a Memories lists the workspace's memories ranked by uses, with the State, Harness, Agent, Repository and Type filters, and the hub reads the waiting count the tab carries (features/steering/tabs/memories.tsx, features/steering/memories/panel.tsx, data/live/steering.ts)",
+      "testid": "memory-table",
+      "proof": "apps/app/src/features/steering/memories/memories.test.tsx",
+      "verifiedAt": "2026-10-01",
+      "verifiedBy": "steering-memories-tab (#4914)"
+    },
+    "get_workspace_memory": {
+      "route": "/[org]/[ws]/steering/memories",
+      "page": "apps/app/src/app/[org]/[ws]/steering/[...view]/page.tsx",
+      "entry": "Steering \u203a Memories: a memory's name opens the drawer with its facts, its statement, its source, the runs that used it and its memory PR (features/steering/memories/drawer.tsx, data/live/steering.ts)",
+      "testid": "memory-drawer",
+      "proof": "apps/app/src/features/steering/memories/memories.test.tsx",
+      "verifiedAt": "2026-10-01",
+      "verifiedBy": "steering-memories-tab (#4914)"
+    },
+    "promote_memories": {
+      "route": "/[org]/[ws]/steering/memories",
+      "page": "apps/app/src/app/[org]/[ws]/steering/[...view]/page.tsx",
+      "entry": "Steering \u203a Memories: Promote memories on the selected rows, or Promote memory in the drawer, drafts one record per row and adds the drafts to the memory PR (features/steering/memories/promote-dialog.tsx, features/steering/memories/actions.ts)",
+      "testid": "promote-submit",
+      "proof": "apps/app/src/features/steering/memories/memories.test.tsx",
+      "verifiedAt": "2026-10-01",
+      "verifiedBy": "steering-memories-tab (#4914)"
+    },
+    "dismiss_memories": {
+      "route": "/[org]/[ws]/steering/memories",
+      "page": "apps/app/src/app/[org]/[ws]/steering/[...view]/page.tsx",
+      "entry": "Steering \u203a Memories: Dismiss memories on the selected rows, and Restore memory in a dismissed memory's drawer (features/steering/memories/dismiss-dialog.tsx, features/steering/memories/drawer.tsx, features/steering/memories/actions.ts)",
+      "testid": "dismiss-submit",
+      "proof": "apps/app/src/features/steering/memories/memories.test.tsx",
+      "verifiedAt": "2026-10-01",
+      "verifiedBy": "steering-memories-tab (#4914)"
+    },
+    "list_memory_pr_records": {
+      "route": "/[org]/[ws]/steering/proposals/prs",
+      "page": "apps/app/src/app/[org]/[ws]/steering/[...view]/page.tsx",
+      "entry": "Steering \u203a Proposals \u203a Context PRs: a selected memory PR lists its records and the memories each one cites, read by the PR's number (features/steering/tabs/proposals.tsx, features/steering/context-pr-panel.tsx, features/steering/memory-pr-review.tsx)",
+      "proof": "apps/app/src/features/steering/context-pr-panel.test.tsx",
+      "verifiedAt": "2026-10-01",
+      "verifiedBy": "steering-memories-tab (#4914)"
     },
     "delete_mcp_server": {
       "route": "/[org]/[ws]/agents?tab=servers",

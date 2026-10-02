@@ -340,6 +340,12 @@ export const runTotals = costSchema.table(
     replayGrade: text("replay_grade"),
     governedActions: integer("governed_actions"),
     billedAt: timestamp("billed_at", { withTimezone: true, mode: "date" }),
+    // The run's parent work order (F13, #4638): a send (work.orders.id) or a
+    // direct work order (work.direct_orders.id), which `work_order_kind` names.
+    // No foreign key, because the id names a row in one of two tables. Null
+    // together on a row rolled up before the columns existed.
+    workOrderId: uuid("work_order_id"),
+    workOrderKind: text("work_order_kind"),
     // Per-model and per-tool folds of the same frames, so the daily rollup and
     // the drill pages need no second read of the frame store:
     // { models: [{ model, provider, calls, tokens, costMicros, basis }],
@@ -404,6 +410,18 @@ export const runTotals = costSchema.table(
     stepsGradedCheck: check(
       "run_totals_steps_graded_check",
       sql`(${t.advancedSteps} IS NULL) = (${t.unproductiveSteps} IS NULL) AND (${t.advancedSteps} IS NULL OR (${t.advancedSteps} >= 0 AND ${t.unproductiveSteps} >= 0 AND ${t.advancedSteps} + ${t.unproductiveSteps} = ${t.steps}))`,
+    ),
+    // The runs of one work order (F13, #4638).
+    workOrderIdx: index("run_totals_work_order_idx")
+      .on(t.workOrderId)
+      .where(sql`${t.workOrderId} IS NOT NULL`),
+    workOrderKindCheck: check(
+      "run_totals_work_order_kind_check",
+      sql`${t.workOrderKind} IS NULL OR ${t.workOrderKind} IN ('send', 'direct')`,
+    ),
+    workOrderPairCheck: check(
+      "run_totals_work_order_pair_check",
+      sql`(${t.workOrderId} IS NULL) = (${t.workOrderKind} IS NULL)`,
     ),
   }),
 );

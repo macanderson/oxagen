@@ -4,7 +4,7 @@
 // imports this file (INV-07, INV-22), and it is not an e2e spec (INV-20).
 //
 // The keys and roles come from the page registry's `personas` list,
-// `mockups/pages/pages.json` in macanderson/oxagen-roadmap. The design names
+// `mockups/pages/pages.json` in oxageninc/roadmap. The design names
 // each persona by the role it holds in the design's organization and in its
 // Core platform workspace. Here that is e2e-org and its workspace `core`.
 //

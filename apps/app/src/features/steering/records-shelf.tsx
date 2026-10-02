@@ -14,6 +14,10 @@
 // Each card prints what the record carries and derives only what the record
 // fully determines. The token cost is the assembler's own count of the line
 // the signed bundle carries for the record, so it is computed, not guessed.
+// The weekly price is what list_records priced those tokens at: the server
+// multiplies, at the weekly price the tool providers use, so the card prints
+// a figure and multiplies nothing (ADR-060, #4572). It is an estimate and
+// says so, and a record the server could not price shows none.
 // "New in vN" marks a record whose commit is the head the last merge
 // published at. Whether a record carries an enforcement grant, and its effect
 // line (rendered, cited, violated), have no store yet: each prints "not
@@ -43,6 +47,7 @@ import {
   panelTitle,
 } from "@/ui/control-styles";
 import { ListSelect } from "@/ui/list-select";
+import { Money } from "@/ui/money";
 import { formatCount } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
 import { RowsPager } from "@/ui/pagination";
@@ -238,6 +243,8 @@ function RecordShelfCard({
   const locale = useLocale();
   const face = record.kind === null ? null : KIND_FACE[record.kind];
   const tokens = recordTokens(record);
+  // A page read before list_records priced records carries no price.
+  const weekly = record.weeklyPrice ?? null;
   const freshIn =
     bundle !== null && publishedByLastMerge(record, bundle) ? bundle : null;
   return (
@@ -291,6 +298,15 @@ function RecordShelfCard({
             <span title={t("tokensTitle")}>
               <Badge tone="quiet" dot={false} mono data-term="tokens">
                 {t("tokens", { count: formatCount(tokens, locale) })}
+              </Badge>
+            </span>
+          )}
+          {weekly === null ? null : (
+            <span title={t("weeklyPriceTitle")}>
+              <Badge tone="quiet" dot={false} mono data-term="weekly-price">
+                {t.rich("weeklyPrice", {
+                  price: () => <Money value={weekly} precision="exact" />,
+                })}
               </Badge>
             </span>
           )}

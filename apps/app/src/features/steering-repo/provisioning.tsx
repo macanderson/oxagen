@@ -25,6 +25,12 @@
 // only a GitHub repository, so a GitLab source gets a note and no action. A
 // workspace on a retired sources connection, which the import refuses, gets
 // the empty steering repo only after a person confirms it (`startFresh`).
+//
+// An import that stopped after its demote step goes on through the import
+// too (`pendingMove`, #5082). The old repository no longer steers by then,
+// so `legacySource` reads null, and a retry of the job would finish the repo
+// and leave the `.oxagen/` tree where it was. Once the repo is ready, Finish
+// the move resumes the run, which opens the steering PRs and the cleanup PR.
 import type { SteeringRepoImportOutput } from "@oxagen/oxagen/contracts/steering_repo.import";
 import {
   CheckIcon,
@@ -52,6 +58,7 @@ import {
   STEERING_IMPORT_LEGACY_CONNECTION,
   STEERING_NO_CONNECTION,
   STEERING_REAUTHORIZE,
+  pendingMove,
   type SteeringConnectionPick,
   type SteeringRepoView,
 } from "./types";
@@ -291,11 +298,15 @@ export function SteeringRepoProvisioning({
   const [fresh, setFresh] = useState(false);
   const steps = provisioningSteps(view, ws);
   const ready = view.status === "ready" ? view.repository : null;
-  // A workspace with a legacy source, or one that never started, goes on
-  // through the import. The import creates the repo when there is nothing to
-  // move.
+  const moving = pendingMove(view);
+  // A workspace with a legacy source, one that never started, or one whose
+  // import stopped partway goes on through the import. The import creates the
+  // repo when there is nothing to move.
   const importing =
-    ws !== null && (view.legacySource !== null || view.status === "not_started");
+    ws !== null &&
+    (view.legacySource !== null ||
+      view.status === "not_started" ||
+      moving !== null);
   // The import reads `.oxagen/` only from GitHub.
   const movable =
     view.legacySource === null || view.legacySource.provider === "github";
@@ -534,6 +545,32 @@ export function SteeringRepoProvisioning({
             }}
           >
             {pending ? t("starting") : t("fresh.action")}
+          </button>
+        </div>
+      ) : null}
+      {view.status === "ready" &&
+      moving !== null &&
+      canAct &&
+      ws !== null &&
+      outcome === null ? (
+        <div
+          data-testid="steering-repo-finish-move"
+          className="flex flex-col items-start gap-2"
+        >
+          <p className="text-[12.5px] text-muted-foreground">
+            {t("finishMove.body", { legacy: moving.fullName })}
+          </p>
+          <button
+            type="button"
+            data-testid="steering-repo-finish-move-action"
+            data-touch-target=""
+            disabled={pending}
+            className={buttonPrimary}
+            onClick={() => {
+              void goOn();
+            }}
+          >
+            {pending ? t("moving") : t("finishMove.action")}
           </button>
         </div>
       ) : null}

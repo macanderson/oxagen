@@ -236,6 +236,7 @@ const detail: ContractOutput<typeof agentGet> = {
     registeredAt: "2026-09-01T10:00:00.000Z",
     firstFrameAt: null,
     costCenter: "ENG-1001",
+    cacheKeepAlive: false,
   },
   credentials: [
     {
@@ -303,6 +304,7 @@ describe("toAgentDetail", () => {
       registeredAt: "2026-09-01T10:00:00.000Z",
       firstFrameAt: null,
       costCenter: "ENG-1001",
+      cacheKeepAlive: false,
     });
     expect(view.roles).toEqual([
       {

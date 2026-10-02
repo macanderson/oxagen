@@ -14,6 +14,7 @@ export const conversationDelete = registerCapability({
     "Permanently delete conversations from the user's view (soft-delete: sets deleted_at; row retained for audit, never restorable)",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
+  inAppAssistant: true,
   layers: ["schema", "api", "mcp", "unit", "docs"],
   scoped: true,
   agent: {

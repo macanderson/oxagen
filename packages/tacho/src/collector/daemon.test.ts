@@ -14,7 +14,8 @@ import {
   writeFileSync,
 } from "node:fs";
 import { request } from "node:http";
-import { join } from "node:path";
+import { createRequire } from "node:module";
+import { dirname, join, sep } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { verifyChain } from "../chain";
 import { digestText } from "../claude-code/context";
@@ -38,7 +39,9 @@ import {
   TACHO_BUNDLE_FEATURES,
 } from "../wire";
 import { type DaemonHandle, startDaemon } from "./daemon";
+import { CODEX_MEMORY_STORE_FILE } from "./memory-capture/codex-store";
 import { MEMORY_UPLOAD_PATH } from "./memory-capture/memory-upload";
+import { MEMORY_USES_PATH } from "./memory-capture/memory-uses";
 import { HOOK_ID_REPLAY_WINDOW_MS } from "./registry";
 
 // The command test's session reports pid 59942, which is not running here, so
@@ -1895,14 +1898,27 @@ describe("tachod", () => {
     );
   });
 
-  /** A fetch that answers memory uploads with 201 and passes the rest to the plane. */
+  /**
+   * A fetch that answers memory uploads with 201 and memory use reports with
+   * 200, and passes the rest to the plane.
+   */
   function recordingMemoryUploads(plane: ReturnType<typeof fakeControlPlane>) {
     const uploads: Array<{
       url: string;
       authorization: string | undefined;
       body: unknown;
     }> = [];
+    const reports: unknown[] = [];
     const fetch: FetchLike = async (url, init) => {
+      if (url.endsWith(MEMORY_USES_PATH)) {
+        reports.push(JSON.parse(init.body ?? "null"));
+        return {
+          ok: true,
+          status: 200,
+          text: async () =>
+            JSON.stringify({ recorded: 0, unknown: 0, pending: [], retired: 0 }),
+        };
+      }
       if (!url.endsWith(MEMORY_UPLOAD_PATH)) return plane.fetch(url, init);
       uploads.push({
         url,
@@ -1911,7 +1927,7 @@ describe("tachod", () => {
       });
       return { ok: true, status: 201, text: async () => "{}" };
     };
-    return { fetch, uploads };
+    return { fetch, uploads, reports };
   }
 
   /** Writes a Claude Code memory file and its index, and returns the file's path. */
@@ -1939,7 +1955,8 @@ describe("tachod", () => {
     await vi.waitFor(() => expect(recorded.uploads).toHaveLength(1), {
       timeout: 2_000,
     });
-    // The index file is not a memory, and the frontmatter is not sent.
+    // The index file is not a memory. The frontmatter stays out of the
+    // statement, and its name travels as the label.
     expect(recorded.uploads).toEqual([
       {
         url: `${host.api_url}${MEMORY_UPLOAD_PATH}`,
@@ -1949,8 +1966,137 @@ describe("tachod", () => {
           harness: "claude-code",
           path: file,
           statement: "Use pnpm, not npm.",
+          label: "use-pnpm",
         },
       },
+    ]);
+  });
+
+  it("reports the memory files its first scan found", async () => {
+    const plane = fakeControlPlane("etag-3");
+    const recorded = recordingMemoryUploads(plane);
+    const paths = scratchPaths();
+    const file = writeClaudeMemory(paths, "Use pnpm, not npm.\n");
+    const { host } = await boot(plane, paths, { fetch: recorded.fetch });
+    // No run read a memory yet, so the report holds the scan alone, and the
+    // index file is not listed.
+    await vi.waitFor(() => expect(recorded.reports).toHaveLength(1), {
+      timeout: 2_000,
+    });
+    expect(recorded.reports).toEqual([
+      {
+        host_enrollment_id: host.host_enrollment_id,
+        scans: [
+          {
+            harness: "claude-code",
+            root: `${paths.claudeProjects}${sep}`,
+            paths: [file],
+          },
+        ],
+      },
+    ]);
+  });
+
+  /** Writes Codex's memory store with one row per thread, as Codex lays it out. */
+  function writeCodexStore(
+    paths: ReturnType<typeof scratchPaths>,
+    rows: Array<{ thread: string; description: string; uses: number | null }>,
+  ): void {
+    // A static import of `node:sqlite` loses its prefix under vite-node.
+    const { DatabaseSync } = createRequire(import.meta.url)(
+      "node:sqlite",
+    ) as typeof import("node:sqlite");
+    const dir = dirname(paths.codexHooks);
+    mkdirSync(dir, { recursive: true });
+    const db = new DatabaseSync(join(dir, CODEX_MEMORY_STORE_FILE));
+    db.exec(
+      "CREATE TABLE stage1_outputs (thread_id TEXT PRIMARY KEY, source_updated_at INTEGER NOT NULL, raw_memory TEXT NOT NULL, rollout_summary TEXT NOT NULL, rollout_slug TEXT, generated_at INTEGER NOT NULL, usage_count INTEGER, last_usage INTEGER, selected_for_phase2 INTEGER NOT NULL DEFAULT 0, selected_for_phase2_source_updated_at INTEGER)",
+    );
+    const insert = db.prepare(
+      "INSERT INTO stage1_outputs (thread_id, source_updated_at, raw_memory, rollout_summary, generated_at, usage_count, last_usage) VALUES (?, 1790579094, ?, '# Summary', 1790627482, ?, 1790741856)",
+    );
+    for (const row of rows)
+      insert.run(
+        row.thread,
+        `description: ${row.description}\n task: t\n\n### Task 1\n`,
+        row.uses,
+      );
+    db.close();
+  }
+
+  it("uploads one memory per Codex row, and reports Codex's own counts, for an agent that enrolls Codex", async () => {
+    const plane = fakeControlPlane("etag-3");
+    const recorded = recordingMemoryUploads(plane);
+    const paths = scratchPaths();
+    const signer = bundleSigner();
+    writeHostFile(
+      paths.hostFile,
+      testHostFile(signer, signer.sign(unsignedBundle()), {
+        harnesses: ["claude-code", "codex"],
+      }),
+    );
+    writeCodexStore(paths, [
+      { thread: "t1", description: "Check the CI log first.", uses: 3 },
+      { thread: "t2", description: "Never used.", uses: null },
+    ]);
+    const { host } = await boot(plane, paths, { fetch: recorded.fetch });
+    await vi.waitFor(() => expect(recorded.reports).toHaveLength(2), {
+      timeout: 2_000,
+    });
+    expect(recorded.uploads.map((upload) => upload.body)).toEqual([
+      {
+        host_enrollment_id: host.host_enrollment_id,
+        harness: "codex",
+        path: "thread/t1",
+        statement: "Check the CI log first.",
+      },
+      {
+        host_enrollment_id: host.host_enrollment_id,
+        harness: "codex",
+        path: "thread/t2",
+        statement: "Never used.",
+      },
+    ]);
+    // The rise in Codex's count rides alone, then the store's list.
+    expect(recorded.reports).toEqual([
+      {
+        host_enrollment_id: host.host_enrollment_id,
+        counts: [
+          {
+            harness: "codex",
+            path: "thread/t1",
+            count: 3,
+            used_at: new Date(1790741856 * 1000).toISOString(),
+          },
+        ],
+      },
+      {
+        host_enrollment_id: host.host_enrollment_id,
+        scans: [
+          { harness: "codex", root: "thread/", paths: ["thread/t1", "thread/t2"] },
+        ],
+      },
+    ]);
+    // The reported count is kept, so a restart reports only a rise past it.
+    expect(
+      JSON.parse(readFileSync(paths.memoryCounts, "utf8")).counts,
+    ).toEqual({ codex: { "thread/t1": 3 } });
+  });
+
+  it("leaves Codex's store alone for an agent that does not enroll Codex", async () => {
+    const plane = fakeControlPlane("etag-3");
+    const recorded = recordingMemoryUploads(plane);
+    const paths = scratchPaths();
+    writeCodexStore(paths, [
+      { thread: "t1", description: "Check the CI log first.", uses: 3 },
+    ]);
+    writeClaudeMemory(paths, "Use pnpm, not npm.\n");
+    await boot(plane, paths, { fetch: recorded.fetch });
+    await vi.waitFor(() => expect(recorded.reports).toHaveLength(1), {
+      timeout: 2_000,
+    });
+    expect(recorded.uploads.map((upload) => upload.body)).toEqual([
+      expect.objectContaining({ harness: "claude-code" }),
     ]);
   });
 

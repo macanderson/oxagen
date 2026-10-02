@@ -576,6 +576,36 @@ describe.skipIf(!process.env.DATABASE_URL)(
       ).rejects.toSatisfy(conflict("not_a_draft"));
     });
 
+    // ADR-235, item 13: the managed assistant is Oxagen's, so no customer
+    // mandate binds to it. The refusal is the identity writes' own.
+    it("grant: the managed assistant agent is refused agent_managed_read_only and nothing is written", async () => {
+      const [assistant] = await withSystemDb((tx) =>
+        tx
+          .insert(schema.agents)
+          .values({
+            orgId,
+            workspaceId,
+            slug: "managed-assistant",
+            name: "QA Chat Agent",
+            agentType: "interactive_chat",
+            status: "active",
+            principalId: randomUUID(),
+            createdById: operatorUserId,
+          })
+          .returning({ publicId: schema.agents.publicId }),
+      );
+      const before = await countMandates();
+      await expect(
+        grant(billingUserId, { ...body(), agentId: assistant!.publicId }),
+      ).rejects.toSatisfy(
+        (e: unknown) =>
+          isHandlerError(e) &&
+          e.code === "forbidden" &&
+          e.reason === "agent_managed_read_only",
+      );
+      expect(await countMandates()).toBe(before);
+    });
+
     // ── request → grant, list, get ─────────────────────────────────────────────
 
     it("request: a workspace member records a draft that grants nothing, and the office activates it by requestId", async () => {

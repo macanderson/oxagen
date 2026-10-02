@@ -1104,6 +1104,14 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./kill_switch.list"))
         .killSwitchListHandler as CapabilityHandlerFn,
   );
+  // Oxagen's own switch on its in-app assistant. It is platformOnly and on no
+  // surface, like set_org_billing_terms (INV-31).
+  registerHandler(
+    "set_assistant_switch",
+    async () =>
+      (await import("./assistant.switch.set"))
+        .assistantSwitchSetHandler as CapabilityHandlerFn,
+  );
   registerHandler(
     "publish_context_record",
     async () =>
@@ -1222,6 +1230,39 @@ registerHandlersOnce("@oxagen/handlers", () => {
     async () =>
       (await import("./context.proposal.dismiss"))
         .dismissProposalHandler as CapabilityHandlerFn,
+  );
+  // Workspace memories (memory-collection spec, lane MEM5, #4912): the
+  // Memories tab's list and drawer, promotion onto a memory PR, dismissal,
+  // and the records of one memory PR.
+  registerHandler(
+    "list_workspace_memories",
+    async () =>
+      (await import("./steering.memories.list"))
+        .steeringMemoriesListHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "get_workspace_memory",
+    async () =>
+      (await import("./steering.memories.get"))
+        .steeringMemoriesGetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "promote_memories",
+    async () =>
+      (await import("./steering.memories.promote"))
+        .steeringMemoriesPromoteHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "dismiss_memories",
+    async () =>
+      (await import("./steering.memories.dismiss"))
+        .steeringMemoriesDismissHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "list_memory_pr_records",
+    async () =>
+      (await import("./steering.memory_pr_records.list"))
+        .steeringMemoryPrRecordsListHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "open_context_pr",
@@ -1560,6 +1601,12 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .tachoMemoriesRecallHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "record_tacho_memory_uses",
+    async () =>
+      (await import("./tacho.memories.uses.record"))
+        .tachoMemoryUsesRecordHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "dispatch_command",
     async () =>
       (await import("./tacho.command.dispatch"))
@@ -1753,6 +1800,13 @@ registerHandlersOnce("@oxagen/handlers", () => {
     async () =>
       (await import("./agent.toolbelt.assign"))
         .agentToolbeltAssignHandler as CapabilityHandlerFn,
+  );
+  // Lane F32: the per-agent switch for the model proxy's cache keep-alive.
+  registerHandler(
+    "set_agent_cache_keep_alive",
+    async () =>
+      (await import("./agent.cache_keep_alive.set"))
+        .agentCacheKeepAliveSetHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "create_runtime",
@@ -1987,6 +2041,12 @@ registerHandlersOnce("@oxagen/handlers", () => {
     async () =>
       (await import("./spend.operator_ranking"))
         .spendOperatorRankingHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "get_spend_per_merged_pr",
+    async () =>
+      (await import("./spend.per_merged_pr"))
+        .spendPerMergedPrHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "set_operator_pseudonyms",

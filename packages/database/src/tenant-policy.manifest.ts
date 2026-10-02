@@ -70,6 +70,8 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "agent.memories", policyClass: "standard" },
   { table: "agent.memory_rejections", policyClass: "standard" },
   { table: "agent.memory_recalls", policyClass: "standard" },
+  // The runs that used each memory (ADR-248); org_id + workspace_id NOT NULL.
+  { table: "agent.memory_uses", policyClass: "standard" },
   // Published steering versions and the publish lease (S3, #4449); org_id +
   // workspace_id NOT NULL.
   { table: "agent.steering_versions", policyClass: "standard" },
@@ -457,4 +459,8 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "work.orders", policyClass: "standard" },
   // One fact in a work item's history. Append only.
   { table: "work.item_facts", policyClass: "standard" },
+  // The direct work order of a run no send covers (F13, #4638).
+  { table: "work.direct_orders", policyClass: "standard" },
+  // One check run of a definition of done (F13, #4638). Append only.
+  { table: "work.done_checks", policyClass: "standard" },
 ];

@@ -234,6 +234,25 @@ describe("search_tools", () => {
     }
   });
 
+  // ADR-235, ruled on 2026-10-01: the in-app assistant's managed agent and
+  // the approvals it parked belong to Oxagen and the person who asked, not to
+  // the workspace, so the command menu offers neither.
+  it("leaves the managed assistant agent and its parked approvals out", async () => {
+    await toolsSearchHandler({ query: "", kinds: ["agent", "approval"] }, CTX);
+    const agents = captured.find((c) => c.table === schema.agents)!;
+    expect(agents.where).toMatch(/"agent_type" <> \$\d+/);
+    expect(agents.params).toContain("interactive_chat");
+    const approvals = captured.find(
+      (c) => c.table === schema.approvalRequests,
+    )!;
+    expect(approvals.where).toMatch(
+      /not exists \(select 1 from "agent"\."agent_runs" as "in_app_run" where "in_app_run"\."public_id" = "agent"\."approval_requests"\."run_public_id"::citext/,
+    );
+    expect(approvals.params).toEqual(
+      expect.arrayContaining(["chat", "api-chat"]),
+    );
+  });
+
   it("deals the eight slots across the kinds on the menu's empty query, so a large belt leaves room for records", async () => {
     const extra = Array.from({ length: 10 }, (_, i) => ({
       name: `tool_${i}`,

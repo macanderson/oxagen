@@ -290,7 +290,10 @@ describe("tenant policy manifest", () => {
     // each ledger run's receipts (F25, #4511, 2026-10-01).
     // 168 adds the Phase 1 work records: work.briefs, work.orders and
     // work.item_facts (P1-02, #4897, 2026-10-01).
-    expect(POLICY_MANIFEST.length).toBe(168);
+    // 169 adds agent.memory_uses (MEM2, #4908, ADR-248, 2026-10-01).
+    // 171 adds work.direct_orders and work.done_checks (F13, #4638,
+    // 2026-10-02).
+    expect(POLICY_MANIFEST.length).toBe(171);
   });
 
   it("covers the ADR-055 GAU tables as org_only (WL-24)", () => {

@@ -26,6 +26,7 @@ import { encodeRunCursor, type RunScope } from "./run.list";
 import {
   ctx,
   event,
+  inAppLedgerRun,
   ledgerRun,
   memoryChainHeads,
   memoryEvents,
@@ -92,6 +93,8 @@ type Over = {
   positionFails?: boolean;
   /** Every chain and seq the position read was asked for. */
   positionAsked?: [string, number][];
+  /** Stands in for `resolveActingUserId`; the real one by default. */
+  actingUserId?: RunGetDeps["actingUserId"];
 };
 
 function harness(over: Over = {}) {
@@ -158,6 +161,9 @@ function harness(over: Over = {}) {
         ? Promise.reject(new Error("postgres timeout"))
         : Promise.resolve(over.repositories?.[digest] ?? null);
     },
+    ...(over.actingUserId === undefined
+      ? {}
+      : { actingUserId: over.actingUserId }),
     now: () => clock,
     sleep: (ms) => {
       sleeps.push(ms);
@@ -744,6 +750,75 @@ describe("frame cursor", () => {
       decodeFrameCursor(encodeFrameCursor("18446744073709551615")),
     ).toBeNull();
     expect(decodeFrameCursor(encodeFrameCursor("9".repeat(30)))).toBeNull();
+  });
+});
+
+// ADR-235, item 5: an in-app run is the asking person's own record. Every
+// other caller reads it as a run that does not exist.
+describe("get_run on an in-app run (ADR-235)", () => {
+  const ASKER = ctx().userId as string;
+  const OTHER = "0192d4a8-7c1e-7a00-8000-0000000000e2";
+  const KEY = "0192d4a8-7c1e-7a00-8000-0000000a91e1";
+  const turn = (asker: string | null = ASKER) =>
+    inAppLedgerRun({ publicId: LEDGER_ID, runId: RUN_UUID }, asker);
+
+  it("answers the person who asked with their own turn", async () => {
+    const out = await harness({ ledger: [turn()] }).get(input(), ctx());
+    expect(runGet.output.parse(out)).toEqual(out);
+    expect(out.run.id).toBe(LEDGER_ID);
+  });
+
+  it("answers another member not_found, as it answers an id it does not know (negative)", async () => {
+    const other = { ...ctx(), userId: OTHER };
+    const hidden = await harness({ ledger: [turn()] })
+      .get(input(), other)
+      .catch((e: unknown) => e);
+    const unknown = await harness({ ledger: [turn()], found: false })
+      .get(input(), other)
+      .catch((e: unknown) => e);
+    expect(isHandlerError(hidden) && [hidden.code, hidden.reason]).toEqual([
+      "not_found",
+      "run_not_found",
+    ]);
+    expect(isHandlerError(unknown) && [unknown.code, unknown.reason]).toEqual(
+      ["not_found", "run_not_found"],
+    );
+  });
+
+  it("answers a run on any other surface to every member, as before", async () => {
+    const out = await harness({
+      ledger: [
+        ledgerRun({ publicId: LEDGER_ID, runId: RUN_UUID, surface: "a2a" }),
+      ],
+    }).get(input(), { ...ctx(), userId: OTHER });
+    expect(out.run.id).toBe(LEDGER_ID);
+  });
+
+  it("answers an API-key call as the key's creator: the asker's key reads the turn, another person's does not", async () => {
+    const machine = { ...ctx(), userId: null, apiKeyId: KEY };
+    // Stands in for `resolveActingUserId`, which reads the key's creator from
+    // `auth.api_keys` (lib/run-read.test.ts runs the real one).
+    const creator =
+      (createdBy: string) =>
+      async (c: { userId: string | null; apiKeyId: string | null }) =>
+        c.userId ?? (c.apiKeyId === KEY ? createdBy : null);
+    const own = await harness({
+      ledger: [turn()],
+      actingUserId: creator(ASKER),
+    }).get(input(), machine);
+    expect(own.run.id).toBe(LEDGER_ID);
+    await expect(
+      harness({ ledger: [turn()], actingUserId: creator(OTHER) }).get(
+        input(),
+        machine,
+      ),
+    ).rejects.toMatchObject({ code: "not_found", reason: "run_not_found" });
+  });
+
+  it("answers no one a turn with no person behind it (negative)", async () => {
+    await expect(
+      harness({ ledger: [turn(null)] }).get(input(), ctx()),
+    ).rejects.toMatchObject({ code: "not_found", reason: "run_not_found" });
   });
 });
 

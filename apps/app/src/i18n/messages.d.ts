@@ -669,6 +669,19 @@ type Messages = {
             open: string;
             rest: string;
           };
+          keepAlive: {
+            term: string;
+            on: string;
+            off: string;
+            onSub: string;
+            offSub: string;
+            turnOff: string;
+            turnOn: string;
+            turningOff: string;
+            turningOn: string;
+            denied: string;
+            failed: string;
+          };
         };
         composition: {
           title: string;
@@ -6340,6 +6353,10 @@ type Messages = {
         ready: string;
         moveSteering: string;
         moving: string;
+        finishMove: {
+          body: string;
+          action: string;
+        };
         create: string;
         starting: string;
         startNote: string;
@@ -6419,6 +6436,7 @@ type Messages = {
           provisioning: string;
           failed: string;
           blocked: string;
+          movePending: string;
         };
         lead: {
           notStarted: string;
@@ -6426,10 +6444,12 @@ type Messages = {
           provisioning: string;
           failed: string;
           blocked: string;
+          movePending: string;
         };
         open: {
           act: string;
           view: string;
+          finish: string;
         };
         intro: {
           create: string;
@@ -9824,12 +9844,36 @@ type Messages = {
         cost: string;
         total: string;
       };
+      perMergedPr: {
+        column: string;
+        figure: string;
+        absent: string;
+        absence: {
+          no_merged_pr: string;
+          mixed_currency: string;
+          not_priced: string;
+          no_bounded_run: string;
+        };
+        unpriced: string;
+        show: string;
+        runsTitle: string;
+        runsNote: string;
+        moreRuns: string;
+        state: {
+          merged: string;
+          reverted: string;
+          closed: string;
+          open: string;
+          unread: string;
+        };
+      };
     };
   };
   steering: {
     tabs: {
       label: string;
       library: string;
+      memories: string;
       assignments: string;
       gates: string;
       proposals: string;
@@ -10095,6 +10139,7 @@ type Messages = {
           title: string;
           body: string;
         };
+        hint: string;
         gapTitle: string;
         notRecorded: string;
         tiles: {
@@ -10244,6 +10289,8 @@ type Messages = {
       effectTitle: string;
       tokensTitle: string;
       tokens: string;
+      weeklyPriceTitle: string;
+      weeklyPrice: string;
       compilesTitle: string;
       compilesNotRecorded: string;
       newTitle: string;
@@ -10389,7 +10436,7 @@ type Messages = {
       };
       memory: {
         title: string;
-        notBacked: string;
+        empty: string;
         memories: string;
         unknownAgent: string;
         evidence: string;
@@ -10484,6 +10531,8 @@ type Messages = {
       back: string;
       commit: string;
       commitPending: string;
+      store: string;
+      storePending: string;
       cancel: string;
       close: string;
       drop: {
@@ -10517,11 +10566,11 @@ type Messages = {
         policies: string;
         skip: string;
         memories: string;
-        memoriesHint: string;
       };
       paths: {
         records: string;
         policies: string;
+        memories: string;
         none: string;
       };
       status: {
@@ -10545,6 +10594,7 @@ type Messages = {
       };
       grid: {
         intro: string;
+        memoriesIntro: string;
         tokens: string;
         label: string;
         columns: {
@@ -10567,12 +10617,14 @@ type Messages = {
         quoted: string;
         none: string;
         kept: string;
+        fromTarget: string;
         notRead: string;
         statements: string;
         rules: string;
         empty: string;
         unmatched: string;
         summary: string;
+        memories: string;
         out: string;
         open: string;
         tooMany: string;
@@ -10603,7 +10655,10 @@ type Messages = {
         conflict: string;
         update: string;
         replaced: string;
+        tooLong: string;
         matches: string;
+        waiting: string;
+        rejected: string;
         conflictsWith: string;
         replacedBy: string;
         rowRef: string;
@@ -10617,6 +10672,15 @@ type Messages = {
         opened: string;
         counts: string;
         link: string;
+        stored: string;
+        memoriesNote: string;
+        memoriesLink: string;
+        skip: {
+          waiting: string;
+          rejected: string;
+          import: string;
+          stored: string;
+        };
       };
       failure: {
         denied: string;
@@ -10661,6 +10725,187 @@ type Messages = {
         tier: string;
         superseded: string;
         unknown: string;
+      };
+    };
+    memories: {
+      title: string;
+      lead: string;
+      retry: string;
+      count: string;
+      empty: {
+        title: string;
+        body: string;
+      };
+      noMatch: string;
+      clearFilters: string;
+      filters: {
+        label: string;
+        state: string;
+        harness: string;
+        agent: string;
+        repo: string;
+        type: string;
+        everyHarness: string;
+        everyAgent: string;
+        everyRepo: string;
+        everyType: string;
+      };
+      states: {
+        open: string;
+        waiting: string;
+        in_pr: string;
+        promoted: string;
+        dismissed: string;
+        retired: string;
+        all: string;
+      };
+      types: {
+        user: string;
+        feedback: string;
+        project: string;
+        reference: string;
+      };
+      harness: {
+        "claude-code": string;
+        codex: string;
+        cursor: string;
+        stella: string;
+        "claude-desktop": string;
+      };
+      captures: {
+        remember: string;
+        pull_request: string;
+        local_gateway: string;
+        import: string;
+      };
+      columns: {
+        select: string;
+        memory: string;
+        uses: string;
+        lastUsed: string;
+        harness: string;
+        agent: string;
+        repo: string;
+        state: string;
+      };
+      selectAll: string;
+      selectRow: string;
+      noSignal: string;
+      never: string;
+      none: string;
+      noAgent: string;
+      prLink: string;
+      sameCount: string;
+      selection: {
+        label: string;
+        count: string;
+        clear: string;
+        dismiss: string;
+        promote: string;
+      };
+      drawer: {
+        subtitle: string;
+        section: string;
+        notFoundTitle: string;
+        notFound: string;
+        facts: {
+          state: string;
+          uses: string;
+          lastUsed: string;
+          harness: string;
+          agent: string;
+          repo: string;
+          type: string;
+          captured: string;
+          source: string;
+        };
+        usesValue: string;
+        noSource: string;
+        statement: string;
+        runs: string;
+        noRuns: string;
+        moreUses: string;
+        reported: string;
+        why: {
+          remember: string;
+          pullRequest: string;
+          import: string;
+          other: string;
+        };
+        memoryPr: string;
+        record: string;
+        prNumber: string;
+        prStatus: {
+          open: string;
+          merged: string;
+          closed: string;
+        };
+        noPr: string;
+        promotedMerged: string;
+        dismissed: string;
+        retiredDeleted: string;
+        retiredUnused: string;
+        sameStatement: string;
+        dismiss: string;
+        promote: string;
+        openPr: string;
+        restore: string;
+        restorePending: string;
+        restored: string;
+      };
+      promote: {
+        title: string;
+        sub: string;
+        subNew: string;
+        draft: string;
+        from: string;
+        statement: string;
+        kind: string;
+        kindSuggested: string;
+        kindChosen: string;
+        force: string;
+        forceOnly: string;
+        forceDefault: string;
+        forceChosen: string;
+        scope: string;
+        workspace: string;
+        scopeHint: string;
+        effect: string;
+        effectHint: string;
+        summary: string;
+        submitJoin: string;
+        submitOpen: string;
+        pending: string;
+        cancel: string;
+        noneWaiting: string;
+        tooMany: string;
+        emptyStatement: string;
+        done: string;
+        doneNone: string;
+        skipped: string;
+      };
+      dismiss: {
+        title: string;
+        sub: string;
+        confirm: string;
+        pending: string;
+        cancel: string;
+        noneWaiting: string;
+        done: string;
+      };
+      failure: {
+        denied: string;
+        steeringRepoRequired: string;
+        memoryPrFull: string;
+        memoryPrSettled: string;
+        memoryBranchTaken: string;
+        forceNotAllowed: string;
+        effect: string;
+        recordUnreadable: string;
+        refused: string;
+        invalid: string;
+        pendingApproval: string;
+        unavailable: string;
       };
     };
   };

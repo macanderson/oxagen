@@ -4,8 +4,10 @@
 // mockups/pages/md-import.md). The dialog takes a folder of Markdown files at
 // once. A person chooses a target for each file, parse_markdown_import splits
 // each file into statements with a kind and a force, the person checks every
-// statement in one grid, and commit_markdown_import opens one steering PR.
-// Nothing steers until that PR merges.
+// statement in one grid, and commit_markdown_import opens one steering PR for
+// the records and policies and stores the memories as waiting memories.
+// Nothing steers until that PR merges, and a memory steers nothing until a
+// person promotes it.
 //
 // Files are read in this browser. Their text leaves it only when the person
 // asks for the review, in parse calls of at most 25 files that each fit one
@@ -13,9 +15,9 @@
 // same files with the same targets reads nothing again and keeps every
 // choice. A new target for a file starts that file's rows again.
 //
-// The Memories target is drawn closed: it arrives with memory collection
-// (#4984). The button is never gold, because the head's gold belongs to the
-// page's create action.
+// Once the commit ran, the dialog says how many memories it stored and links
+// to the Memories tab (#4914). The button is never gold, because the head's
+// gold belongs to the page's create action.
 import { UploadSimpleIcon } from "@phosphor-icons/react";
 import { useTranslations } from "next-intl";
 import { type ReactNode, useMemo, useState, useTransition } from "react";
@@ -53,6 +55,7 @@ import {
   readPicked,
 } from "./files";
 import { DropZone, FilesTable } from "./files-step";
+import { CommittedMemories } from "./memories-done";
 import { StatementGrid } from "./review-step";
 import {
   applyMarks,
@@ -60,9 +63,11 @@ import {
   groupsOf,
   matchRowsFit,
   matchRowsOf,
+  memoryKey,
   mergeParses,
   type ParseOutput,
   type ParseResult,
+  resolveMemories,
   resolveRows,
   type RowEdit,
   rowKey,
@@ -75,10 +80,10 @@ type Failed = { failure: ImportFailure; file: string | null };
 type Step = "files" | "review" | "done";
 
 /** Edits on rows of other files: a file given a new target starts its rows again. */
-function withoutFile(
-  edits: ReadonlyMap<string, RowEdit>,
+function withoutFile<T>(
+  edits: ReadonlyMap<string, T>,
   file: string,
-): Map<string, RowEdit> {
+): Map<string, T> {
   const prefix = `${file}\u0000`;
   return new Map([...edits].filter(([key]) => !key.startsWith(prefix)));
 }
@@ -113,6 +118,10 @@ function ImportDialog({
   const [edits, setEdits] = useState<ReadonlyMap<string, RowEdit>>(
     () => new Map(),
   );
+  /** Memory rows a person ticked in or out, by `memoryKey`. */
+  const [ticks, setTicks] = useState<ReadonlyMap<string, boolean>>(
+    () => new Map(),
+  );
   const [failed, setFailed] = useState<Failed | null>(null);
   const [committed, setCommitted] = useState<ImportCommitted | null>(null);
   const [committing, startCommit] = useTransition();
@@ -126,9 +135,14 @@ function ImportDialog({
     () => (parsed === null ? [] : resolveRows(parsed.result.records, edits)),
     [parsed, edits],
   );
+  const memories = useMemo(
+    () =>
+      parsed === null ? [] : resolveMemories(parsed.result.memories, ticks),
+    [parsed, ticks],
+  );
   const counts = useMemo(
-    () => tally(rows, parsed?.result.policies ?? []),
-    [rows, parsed],
+    () => tally(rows, parsed?.result.policies ?? [], memories),
+    [rows, parsed, memories],
   );
   const busy = reading || progress !== null || committing;
 
@@ -145,6 +159,7 @@ function ImportDialog({
         setPicked(read);
         setParsed(null);
         setEdits(new Map());
+        setTicks(new Map());
         setFailed(null);
         setStep("files");
       },
@@ -167,6 +182,7 @@ function ImportDialog({
           },
     );
     setEdits((current) => withoutFile(current, path));
+    setTicks((current) => withoutFile(current, path));
   };
 
   const review = async () => {
@@ -234,7 +250,7 @@ function ImportDialog({
 
   const commit = () => {
     if (parsed === null) return;
-    const payload = commitPayload(rows, parsed.result.policies);
+    const payload = commitPayload(rows, parsed.result.policies, memories);
     if (payload === null) {
       setFailed({ failure: TOO_LARGE, file: null });
       return;
@@ -259,6 +275,13 @@ function ImportDialog({
     setEdits((current) => new Map(current).set(rowKey(record), edit));
   };
 
+  const onTick = (
+    memory: Parameters<typeof memoryKey>[0],
+    on: boolean,
+  ) => {
+    setTicks((current) => new Map(current).set(memoryKey(memory), on));
+  };
+
   const failure =
     failed === null ? null : (
       <div
@@ -280,8 +303,11 @@ function ImportDialog({
   const max = parsed?.result.max ?? 0;
   const tooMany = max > 0 && prFiles > max;
   const out = files.filter((f) => f.target === "skip" || f.locked).length;
+  const pullRequest = committed?.pullRequest ?? null;
   const prUrl =
-    committed === null ? null : parsePullRequestUrl(committed.url);
+    pullRequest === null ? null : parsePullRequestUrl(pullRequest.url);
+  // A commit of memories alone opens no PR, so its button says what it does.
+  const storesOnly = prFiles === 0 && counts.memories > 0;
 
   let body: ReactNode;
   let footer: ReactNode = null;
@@ -293,36 +319,51 @@ function ImportDialog({
         data-testid="import-done"
         className="flex flex-col gap-2 text-[13px]"
       >
-        <p>
-          {t("done.opened", {
-            number: committed.number,
-            branch: committed.branch,
-          })}
-        </p>
-        <p className="text-muted-foreground">
-          {t("done.counts", {
-            records: committed.records,
-            policies: committed.policies,
-          })}
-        </p>
-        {prUrl === null ? (
-          <p className={`${mono} text-muted-foreground`}>{committed.url}</p>
-        ) : (
-          <PullRequestLink
-            to={prUrl}
-            className={linkText}
-            data-testid="import-pr-link"
-          >
-            {t("done.link", { number: committed.number })}
-          </PullRequestLink>
+        {pullRequest === null ? null : (
+          <>
+            <p>
+              {t("done.opened", {
+                number: pullRequest.number,
+                branch: pullRequest.branch,
+              })}
+            </p>
+            <p className="text-muted-foreground">
+              {t("done.counts", {
+                records: committed.records,
+                policies: committed.policies,
+              })}
+            </p>
+            {prUrl === null ? (
+              <p className={`${mono} text-muted-foreground`}>
+                {pullRequest.url}
+              </p>
+            ) : (
+              <PullRequestLink
+                to={prUrl}
+                className={linkText}
+                data-testid="import-pr-link"
+              >
+                {t("done.link", { number: pullRequest.number })}
+              </PullRequestLink>
+            )}
+          </>
         )}
+        <CommittedMemories org={org} ws={ws} memories={committed.memories} />
       </div>
     );
   } else if (step === "review" && parsed !== null) {
-    const groups = groupsOf(parsed.result, rows);
+    const groups = groupsOf(parsed.result, rows, memories);
     body = (
       <div className="flex flex-col gap-3">
         <p className="text-[13px] text-muted-foreground">{t("grid.intro")}</p>
+        {memories.length > 0 ? (
+          <p
+            className="text-[13px] text-muted-foreground"
+            data-testid="import-memories-intro"
+          >
+            {t("grid.memoriesIntro")}
+          </p>
+        ) : null}
         {counts.tokens > 0 ? (
           <p
             className="text-[12.5px] text-muted-foreground"
@@ -342,7 +383,12 @@ function ImportDialog({
         {groups.length === 0 ? (
           <p className="text-[13px] text-muted-foreground">{t("grid.empty")}</p>
         ) : (
-          <StatementGrid groups={groups} rows={rows} onEdit={onEdit} />
+          <StatementGrid
+            groups={groups}
+            rows={rows}
+            onEdit={onEdit}
+            onTick={onTick}
+          />
         )}
         {tooMany ? (
           <p
@@ -366,6 +412,9 @@ function ImportDialog({
           records: counts.records,
           policies: counts.policies,
         })}
+        {counts.memories > 0
+          ? ` ${t("grid.memories", { count: counts.memories })}`
+          : null}
         {counts.out > 0 ? ` ${t("grid.out", { count: counts.out })}` : null}
         {counts.open > 0 ? ` ${t("grid.open", { count: counts.open })}` : null}
       </span>
@@ -389,10 +438,21 @@ function ImportDialog({
           data-touch-target=""
           data-testid="import-commit"
           className={buttonPrimary}
-          disabled={committing || counts.open > 0 || prFiles === 0 || tooMany}
+          disabled={
+            committing ||
+            counts.open > 0 ||
+            prFiles + counts.memories === 0 ||
+            tooMany
+          }
           onClick={commit}
         >
-          {committing ? t("commitPending") : t("commit")}
+          {committing
+            ? storesOnly
+              ? t("storePending")
+              : t("commitPending")
+            : storesOnly
+              ? t("store")
+              : t("commit")}
         </button>
       </>
     );

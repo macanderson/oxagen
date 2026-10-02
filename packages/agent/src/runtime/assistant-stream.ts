@@ -1,11 +1,12 @@
 /**
  * What a streaming caller of `ask_assistant` hands the turn beside the
  * contract's input. `POST /chat/stream` invokes the contract through
- * `kernel.invoke()`, so the turn passes the same IAM, audit, rules and billing
+ * `kernel.invoke()`, so the turn passes the same IAM, audit, and billing
  * gates there as on `POST /assistant/ask` and the MCP tool. The parts, the
- * notices, the client's abort and the model and budget overrides are not
- * contract input; they ride in this async context, and the handler takes them
- * once.
+ * notices, the client's abort and the model overrides are not contract input.
+ * They ride in this async context, and the handler takes them once. No budget
+ * override rides here: no customer-configured budget applies to the assistant
+ * (ADR-235).
  */
 import { AsyncLocalStorage } from "node:async_hooks";
 import type {
@@ -16,7 +17,7 @@ import type {
 /** The surface's per-turn overrides; the contract's input carries none of them. */
 export type AssistantTurnOverrides = Pick<
   AssistantTurnRequest,
-  "tier" | "model" | "effort" | "budget"
+  "tier" | "model" | "effort"
 >;
 
 export interface AssistantStream {

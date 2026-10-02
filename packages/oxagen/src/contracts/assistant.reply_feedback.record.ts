@@ -48,6 +48,7 @@ export const assistantReplyFeedbackRecord = registerCapability({
     "Record a person's verdict on one reply of the in-app assistant, useful or wrong, with an optional short note, against the run the reply was recorded as. Refused unless the run is an assistant run in this workspace whose reply sits in the caller's own conversation.",
   mode: "sync",
   surfaces: ["api", "mcp"],
+  inAppAssistant: true,
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   mutates: true,

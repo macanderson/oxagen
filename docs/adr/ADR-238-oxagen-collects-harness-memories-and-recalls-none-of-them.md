@@ -1,6 +1,8 @@
 # ADR-238: Oxagen collects harness memories and recalls none of them
 
-- **Status:** Accepted. Mac ruled on 2026-09-30.
+- **Status:** Accepted. Mac ruled on 2026-09-30. ADR-248 (2026-10-01)
+  replaces two consequences: a deleted file's memory now retires within one
+  full scan, and a memory's age now runs from its newest use.
 - **Date:** 2026-09-30
 - **Owners:** tacho, steering
 - **Supersedes in part:** ADR-206 decision 10 (recall of unreviewed

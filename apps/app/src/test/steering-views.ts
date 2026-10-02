@@ -1,7 +1,8 @@
 // Typed steering values for the component tests of the two pages that read the
 // steering port (ARCHITECTURE.md §5): a published record, one record's page, a
 // proposal, a Context PR in each state of its machine, the freshness panel's
-// read, and a DataSource that answers every steering read with what a test
+// read, a workspace memory with its page and its drawer read, a memory PR's
+// records, and a DataSource that answers every steering read with what a test
 // hands it.
 //
 // It lives here rather than in `features/steering` because the Steering page
@@ -15,6 +16,7 @@ import type { DataSource } from "@/data/ports";
 import type {
   ContextPr,
   MemoryPage,
+  MemoryPrRecords,
   OxagenTree,
   Proposal,
   ProposalPage,
@@ -26,6 +28,10 @@ import type {
   SteeringDeliveries,
   SteeringHub,
   SteeringLayout,
+  WorkspaceMemory,
+  WorkspaceMemoryDetail,
+  WorkspaceMemoryPage,
+  WorkspaceMemoryQuery,
 } from "@/data/contracts/steering";
 import { type Read, readOk } from "@/data/read";
 
@@ -224,6 +230,12 @@ export type SteeringReads = {
   hub: Read<SteeringHub>;
   deliveries: Read<SteeringDeliveries>;
   memories: Read<MemoryPage>;
+  /** One read for every Memories call, or an answer per query: the tab reads every state for its filters, then the page. */
+  workspaceMemories:
+    | Read<WorkspaceMemoryPage>
+    | ((q: WorkspaceMemoryQuery) => Read<WorkspaceMemoryPage>);
+  workspaceMemory: Read<WorkspaceMemoryDetail>;
+  memoryPrRecords: Read<MemoryPrRecords>;
   tree: Read<OxagenTree>;
   /**
    * The agent registry, which the Assignments count, the Assignments body and
@@ -316,6 +328,133 @@ export function steeringHub(overrides: Partial<SteeringHub> = {}): SteeringHub {
     },
     proposalsWaiting: 3,
     segments: { candidates: 4, prs: 2 },
+    memoriesWaiting: 2,
+    ...overrides,
+  };
+}
+
+/** The agent key a sample memory names: the enrolled agent above. */
+export const MEMORY_AGENT = "acme.core-platform.release-manager";
+export const MEMORY_ID = "mem_01k5rw3draft";
+export const MEMORY_PR_URL = "https://github.com/acme/oxagen-core-platform/pull/59";
+
+/** A waiting Claude Code memory that nine runs used, in no memory PR yet. */
+export function workspaceMemory(
+  overrides: Partial<WorkspaceMemory> = {},
+): WorkspaceMemory {
+  return {
+    id: MEMORY_ID,
+    label: "Draft releases only",
+    summary: "Open every release as a draft first.",
+    statement:
+      "Open every release as a draft. A person publishes it after the notes are read.",
+    state: "waiting",
+    capture: "local_gateway",
+    harness: "claude-code",
+    agent: MEMORY_AGENT,
+    source: "claude-code:~/.claude/projects/core/memory/feedback_draft_releases.md",
+    repos: ["github.com/acme/platform"],
+    memoryType: "feedback",
+    kind: "procedure",
+    uses: 9,
+    useSignal: true,
+    lastUsedAt: "2026-09-30T08:00:00.000Z",
+    createdAt: "2026-09-20T10:00:00.000Z",
+    promotedLineage: null,
+    memoryPr: null,
+    ...overrides,
+  };
+}
+
+/** One group per memory, each memory speaking for itself. */
+export function workspaceMemoryPage(
+  memories: readonly WorkspaceMemory[] = [workspaceMemory()],
+  overrides: Partial<WorkspaceMemoryPage> = {},
+): WorkspaceMemoryPage {
+  return {
+    groups: memories.map((memory) => ({
+      memory,
+      members: [memory],
+      uses: memory.uses,
+      lastUsedAt: memory.lastUsedAt,
+    })),
+    totalGroups: memories.length,
+    totalMemories: memories.length,
+    truncated: false,
+    waiting: memories.filter((m) => m.state === "waiting").length,
+    ...overrides,
+  };
+}
+
+/** The drawer's read of `memory`: the run that wrote it and two runs that read it. */
+export function workspaceMemoryDetail(
+  memory: WorkspaceMemory = workspaceMemory(),
+  overrides: Partial<WorkspaceMemoryDetail> = {},
+): WorkspaceMemoryDetail {
+  return {
+    memory: {
+      ...memory,
+      run: "tse_01k5rt2q",
+      evidence: ["frame:tse_01k5rt2q/3"],
+      retiredAt: null,
+      retiredReason: null,
+    },
+    uses: [
+      {
+        run: "tse_01k5ru9a",
+        signal: "read",
+        count: 2,
+        usedAt: "2026-09-30T08:00:00.000Z",
+      },
+      {
+        run: "arun_01k5rs7m",
+        signal: "read",
+        count: 1,
+        usedAt: "2026-09-29T08:00:00.000Z",
+      },
+    ],
+    usesTotal: 2,
+    memoryPr: null,
+    ...overrides,
+  };
+}
+
+/** Memory PR #59, open on its memory branch, proposing one record that cites one memory. */
+export function memoryPrRecords(
+  overrides: Partial<MemoryPrRecords> = {},
+): MemoryPrRecords {
+  return {
+    pullRequest: {
+      number: 59,
+      url: MEMORY_PR_URL,
+      repository: "acme/oxagen-core-platform",
+      branch: "memory/2026-09-27",
+      status: "open",
+      openedAt: "2026-09-27T09:00:00.000Z",
+      settledAt: null,
+    },
+    branchRead: true,
+    records: [
+      {
+        action: "propose",
+        path: "steering/memory/release/release.draft-releases.md",
+        lineage: "core.release.draft-releases",
+        kind: "procedure",
+        title: "Draft releases only",
+        summary: "Open every release as a draft first.",
+        memories: [
+          {
+            id: MEMORY_ID,
+            statement: "Open every release as a draft.",
+            agent: MEMORY_AGENT,
+            run: "tse_01k5rt2q",
+            evidence: ["frame:tse_01k5rt2q/3"],
+            state: "in_pr",
+          },
+        ],
+        dropped: null,
+      },
+    ],
     ...overrides,
   };
 }
@@ -337,6 +476,9 @@ export function steeringSource(overrides: Partial<SteeringReads> = {}) {
       truncated: false,
     }),
     memories: readOk({ memories: [], total: 0 }),
+    workspaceMemories: readOk(workspaceMemoryPage()),
+    workspaceMemory: readOk(workspaceMemoryDetail()),
+    memoryPrRecords: readOk(memoryPrRecords()),
     tree: readOk({ state: "unbound" }),
     // An empty workspace is the neutral answer for tests that set neither.
     agents: readOk(agentPage([])),
@@ -360,6 +502,9 @@ export function steeringSource(overrides: Partial<SteeringReads> = {}) {
     hub: [],
     deliveries: [],
     memories: [],
+    workspaceMemories: [],
+    workspaceMemory: [],
+    memoryPrRecords: [],
     tree: [],
   };
   const refuse = () => Promise.reject(new Error("not a Steering read"));
@@ -416,6 +561,7 @@ export function steeringSource(overrides: Partial<SteeringReads> = {}) {
       findingEvidence: refuse,
       priceBook: refuse,
       operatorRanking: refuse,
+      perMergedPr: refuse,
       unpricedModels: refuse,
       unproductive: refuse,
     },
@@ -479,6 +625,21 @@ export function steeringSource(overrides: Partial<SteeringReads> = {}) {
       memories: (...args) => {
         calls.memories.push(args);
         return Promise.resolve(reads.memories);
+      },
+      workspaceMemories: (...args) => {
+        calls.workspaceMemories.push(args);
+        const read = reads.workspaceMemories;
+        return Promise.resolve(
+          typeof read === "function" ? read(args[1]) : read,
+        );
+      },
+      workspaceMemory: (...args) => {
+        calls.workspaceMemory.push(args);
+        return Promise.resolve(reads.workspaceMemory);
+      },
+      memoryPrRecords: (...args) => {
+        calls.memoryPrRecords.push(args);
+        return Promise.resolve(reads.memoryPrRecords);
       },
       tree: (...args) => {
         calls.tree.push(args);

@@ -37,6 +37,8 @@ List the workspace's published steering records: what is in force on the product
 | `records[].version` / `.checksum` | nullable | The active `context_record_versions` row |
 | `records[].commit` / `.path` / `.publishedAt` | nullable | The merge commit on the production branch and the file it holds; null when no Context PR published it |
 | `records[].updatedAt` | RFC 3339 | `context_records.updated_at` |
+| `records[].contextTokens` | `int`, nullable | The tokens of the line the signed bundle carries for the record, `- <statement> (<kind>; <lineage>)`, counted as the steering assembler counts them. Null for a record with no force or no statement |
+| `records[].weeklyPrice` | `Cost`, nullable | What `contextTokens` cost the workspace over the last 7 days, an estimate (#4572). It is the tokens at the weekly price per 1,000 that `list_mcp_servers` prices a provider at, so a record and a provider of the same size cost the same. Null when the tokens are null, when the week has no price, or when the price read failed |
 | `total` | `int` | The count ignoring `limit`/`offset` |
 
 ## Semantics

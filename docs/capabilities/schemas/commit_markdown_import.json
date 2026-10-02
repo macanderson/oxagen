@@ -1,7 +1,7 @@
 {
   "name": "commit_markdown_import",
   "domain": "context",
-  "description": "Open one steering PR on steering/import-<date> with the Markdown import's records and Cedar policies marked add. Records keep origin: user and provenance.source: import. The PR runs the steering checks, and nothing steers until it merges.",
+  "description": "Open one steering PR on steering/import-<date> with the Markdown import's records and Cedar policies marked add, and store its memories marked add as waiting memories with capture import. Records keep origin: user and provenance.source: import. The PR runs the steering checks, and nothing steers until it merges. A memory that repeats a waiting or rejected one is left out and named.",
   "mode": "sync",
   "surfaces": [
     "api",
@@ -387,6 +387,139 @@
         },
         "maxItems": 1250,
         "default": []
+      },
+      "memories": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "file": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "description": "The file the statement came from"
+            },
+            "line": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "The line of the file the statement starts on"
+            },
+            "label": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "description": "The memory's name, at most 200 characters"
+            },
+            "statement": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100000,
+              "description": "The memory's text. A row marked add holds at most 2,000 characters."
+            },
+            "kind": {
+              "const": "memory",
+              "description": "Always memory"
+            },
+            "force": {
+              "const": "info",
+              "description": "Always info. A memory carries no other force."
+            },
+            "duplicate": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "reason": {
+                      "type": "string",
+                      "enum": [
+                        "waiting",
+                        "rejected",
+                        "import"
+                      ],
+                      "description": "waiting for a waiting memory, rejected for a statement a person rejected, import for an earlier row of this import"
+                    },
+                    "memory": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "file": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "line": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": 1
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "reason",
+                    "memory",
+                    "file",
+                    "line"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "issue": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 300
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "action": {
+              "type": "string",
+              "enum": [
+                "add",
+                "skip"
+              ],
+              "description": "add or skip. A row with a match or an issue defaults to skip."
+            }
+          },
+          "required": [
+            "file",
+            "line",
+            "label",
+            "statement",
+            "kind",
+            "force",
+            "duplicate",
+            "issue",
+            "action"
+          ],
+          "additionalProperties": false,
+          "x-server-validated": true,
+          "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
+        },
+        "maxItems": 1250,
+        "default": []
       }
     },
     "additionalProperties": false,
@@ -398,29 +531,36 @@
     "type": "object",
     "properties": {
       "pullRequest": {
-        "type": "object",
-        "properties": {
-          "number": {
-            "type": "integer",
-            "exclusiveMinimum": 0
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "number": {
+                "type": "integer",
+                "exclusiveMinimum": 0
+              },
+              "url": {
+                "type": "string"
+              },
+              "branch": {
+                "type": "string"
+              },
+              "headSha": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "number",
+              "url",
+              "branch",
+              "headSha"
+            ],
+            "additionalProperties": false
           },
-          "url": {
-            "type": "string"
-          },
-          "branch": {
-            "type": "string"
-          },
-          "headSha": {
-            "type": "string"
+          {
+            "type": "null"
           }
-        },
-        "required": [
-          "number",
-          "url",
-          "branch",
-          "headSha"
-        ],
-        "additionalProperties": false
+        ]
       },
       "paths": {
         "type": "array",
@@ -441,7 +581,65 @@
       "skipped": {
         "type": "integer",
         "minimum": 0,
-        "description": "Rows marked skip, left out of the PR"
+        "description": "Rows marked skip, left out of the PR and the memories"
+      },
+      "memories": {
+        "type": "object",
+        "properties": {
+          "stored": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Waiting memories stored with capture import"
+          },
+          "skipped": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "file": {
+                  "type": "string"
+                },
+                "line": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "reason": {
+                  "type": "string",
+                  "enum": [
+                    "waiting",
+                    "rejected",
+                    "import",
+                    "stored"
+                  ],
+                  "description": "waiting, rejected, import for an earlier row of this commit, or stored"
+                },
+                "memory": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "file",
+                "line",
+                "reason",
+                "memory"
+              ],
+              "additionalProperties": false
+            },
+            "description": "Memory rows marked add that were left out, each with what it matches"
+          }
+        },
+        "required": [
+          "stored",
+          "skipped"
+        ],
+        "additionalProperties": false
       }
     },
     "required": [
@@ -449,7 +647,8 @@
       "paths",
       "records",
       "policies",
-      "skipped"
+      "skipped",
+      "memories"
     ],
     "additionalProperties": false
   }

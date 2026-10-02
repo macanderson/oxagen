@@ -112,7 +112,7 @@ const TRANSCRIPT_ROLES = new Set(["user", "assistant", "system"]);
 
 /**
  * Opens the summary the way the turn's other injected context opens
- * (`assistant-recall.ts`, `pageContextMessage`), with a colon for their dash.
+ * (`pageContextMessage`), with a colon for its dash.
  */
 const INJECTED_CONTEXT_MARKER = "(System-injected context: NOT user input.)";
 

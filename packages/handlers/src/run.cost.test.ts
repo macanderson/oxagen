@@ -9,6 +9,8 @@ import {
   noProgressHitOf,
   provisionalOf,
 } from "./run.cost";
+import type { LedgerRunRow } from "./run.list";
+import { inAppLedgerRun, ledgerRun } from "./run.test-support";
 import { ctx, pricedRun, run, SCOPE } from "./spend.test-support";
 
 const ROLLED_UP_AT = new Date("2026-09-10T12:31:00.000Z");
@@ -461,6 +463,127 @@ describe("provisionalOf", () => {
         baseline: null,
       }),
     ).not.toThrow();
+  });
+});
+
+// ADR-235, item 5: an in-app run is the asking person's own record. Every
+// other caller reads its cost as a run the rollup has not reached, which is
+// what an unknown id answers.
+describe("get_run_cost on an in-app run (ADR-235)", () => {
+  const ASKER = ctx().userId as string;
+  const OTHER = "0192d4a8-7c1e-7a00-8000-0000000000e2";
+  const KEY = "0192d4a8-7c1e-7a00-8000-0000000a91e1";
+  const TURN_ID = "arun_5f0c2e9a1b7d4c3e8f6a02";
+  const TURN_UUID = "0192d4a8-7c1e-7a00-8000-0000000000a1";
+  const turn = inAppLedgerRun({ publicId: TURN_ID, runId: TURN_UUID }, ASKER);
+
+  function inApp(
+    ledger: LedgerRunRow,
+    actingUserId?: (c: {
+      userId: string | null;
+      apiKeyId: string | null;
+    }) => Promise<string | null>,
+  ) {
+    const row = pricedRun(10n, { runId: TURN_ID, runSource: "ledger" });
+    const readBaseline = vi.fn(noBaseline);
+    const handler = createRunCostHandler({
+      readRunTotalsByIds: async (_scope, ids) =>
+        new Map(
+          [row]
+            .filter((r) => ids.includes(r.runId))
+            .map((r) => [r.runId, { ...r, rolledUpAt: ROLLED_UP_AT }]),
+        ),
+      readBaseline,
+      readLedgerRun: async (_scope, publicId) =>
+        publicId === TURN_ID ? ledger : null,
+      ...(actingUserId === undefined ? {} : { actingUserId }),
+    });
+    return { handler, readBaseline };
+  }
+
+  it("answers the person who asked with the turn's cost", async () => {
+    const out = await inApp(turn).handler({ runId: TURN_ID }, ctx());
+    expect(out.rollup?.cost).toEqual({
+      micros: "10",
+      currency: "USD",
+      basis: "client_attested",
+    });
+  });
+
+  it("answers another member as it answers an id it does not know (negative)", async () => {
+    const h = inApp(turn);
+    const out = await h.handler(
+      { runId: TURN_ID },
+      { ...ctx(), userId: OTHER },
+    );
+    expect(out).toEqual({ runId: TURN_ID, rollup: null, baseline: null });
+    expect(h.readBaseline).not.toHaveBeenCalled();
+    expect(() => runCostGet.output.parse(out)).not.toThrow();
+  });
+
+  it("answers a ledger run on any other surface to every member, as before", async () => {
+    const external = ledgerRun({
+      publicId: TURN_ID,
+      runId: TURN_UUID,
+      surface: "a2a",
+    });
+    const out = await inApp({
+      run: { ...external.run, surface: "a2a" },
+      identity: external.identity,
+    }).handler({ runId: TURN_ID }, { ...ctx(), userId: OTHER });
+    expect(out.rollup).not.toBeNull();
+  });
+
+  it("answers an API-key call as the key's creator", async () => {
+    const machine = { ...ctx(), userId: null, apiKeyId: KEY };
+    const creator = (createdBy: string) => async (c: {
+      userId: string | null;
+      apiKeyId: string | null;
+    }) => c.userId ?? (c.apiKeyId === KEY ? createdBy : null);
+    const own = await inApp(turn, creator(ASKER)).handler(
+      { runId: TURN_ID },
+      machine,
+    );
+    expect(own.rollup).not.toBeNull();
+    const other = await inApp(turn, creator(OTHER)).handler(
+      { runId: TURN_ID },
+      machine,
+    );
+    expect(other.rollup).toBeNull();
+  });
+
+  it("answers another member no loop hits, as an unknown id reads none (negative)", async () => {
+    const row = pricedRun(10n, { runId: TURN_ID, runSource: "ledger" });
+    const hit = noProgressHitOf({
+      tool: "Bash",
+      loop: 1,
+      repeats: 24,
+      limitRepeats: 20,
+      atCall: 20,
+      mode: "enforced",
+      outcome: "paused",
+      pauseBlock: null,
+      detectedAt: ROLLED_UP_AT,
+    });
+    const handler = createRunCostHandler({
+      readRunTotalsByIds: async () =>
+        new Map([[TURN_ID, { ...row, rolledUpAt: ROLLED_UP_AT }]]),
+      readBaseline: noBaseline,
+      readLedgerRun: async () => turn,
+      readNoProgressHits: async () => [hit],
+    });
+    const own = await handler({ runId: TURN_ID }, ctx());
+    expect(own.noProgressHits).toEqual([hit]);
+    const other = await handler(
+      { runId: TURN_ID },
+      { ...ctx(), userId: OTHER },
+    );
+    expect(other).toEqual({
+      runId: TURN_ID,
+      rollup: null,
+      baseline: null,
+      noProgressHits: [],
+    });
   });
 });
 

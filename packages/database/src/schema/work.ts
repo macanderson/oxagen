@@ -7,11 +7,15 @@
 // agent-work-phase-1.html, Data contract: a revision and a version on each
 // work item, the acceptance brief (work.briefs), the work order
 // (work.orders), and the append-only history (work.item_facts). ADR-244 maps
-// each Phase 1 object to these tables. Every table carries the org mixin and
-// the same row-level security as the rest of the database.
+// each Phase 1 object to these tables. F13 (#4638, migration
+// 20261002063000_work_direct_orders.sql) adds the direct work order of a run
+// no send covers (work.direct_orders) and each check run of a definition of
+// done (work.done_checks). Every table carries the org mixin and the same
+// row-level security as the rest of the database.
 //
 // Append only: work.briefs, work.item_facts, work.triage_decisions,
-// work.triage_corrections, work.done_verdicts, and work.autonomy_events. The
+// work.triage_corrections, work.done_verdicts, work.done_checks, and
+// work.autonomy_events. The
 // migrations revoke UPDATE and DELETE from oxagen_app on each, and a trigger
 // refuses any UPDATE of a brief or a fact. work.items is soft deleted: it
 // carries deleted_at and deleted_by_id, and oxagen_app has no DELETE on it. A
@@ -642,6 +646,63 @@ export const workOrders = workSchema.table(
   }),
 );
 
+/** What a run's work order is: a send (work.orders) or a direct work order (work.direct_orders). */
+export const WORK_ORDER_KINDS = ["send", "direct"] as const;
+
+/**
+ * A direct work order: the parent work order of one run that no send covers,
+ * such as a run an operator started outside Oxagen (wasted-spend.html,
+ * Operator productivity, Unassigned spend; F13, #4638). A send needs a work
+ * item and an approved brief, so a direct work order cannot live in
+ * work.orders. The spend rollup opens one the first time it rolls up such a
+ * run.
+ *
+ * What it covers never changes. A person can attach it to a work item later:
+ * `item_id`, `attached_at`, and `attached_by` move together, once, from null,
+ * and a trigger refuses a work item from another org or workspace. Spend on a
+ * direct work order with no work item is unassigned spend.
+ */
+export const workDirectOrders = workSchema.table(
+  "direct_orders",
+  {
+    ...idMixin("dwo"),
+    ...orgScopeMixin(),
+    createdAt: ts("created_at").notNull().defaultNow(),
+    /** The run it covers: `arun_…` or `tse_…`, as cost.run_totals.run_id names it. */
+    runId: text("run_id").notNull(),
+    /** The run's operator, as cost.run_totals.operator_principal_id names it. */
+    operatorPrincipalId: uuid("operator_principal_id"),
+    /** The run's agent, as cost.run_totals.agent_principal_id names it. */
+    agentPrincipalId: uuid("agent_principal_id"),
+    /** When the run started. */
+    openedAt: ts("opened_at").notNull(),
+    /** The work item a person attached it to. None while it is unassigned. */
+    itemId: uuid("item_id").references(() => workItems.id),
+    attachedAt: ts("attached_at"),
+    /** The user id of the person who attached it. */
+    attachedBy: text("attached_by"),
+  },
+  (t) => ({
+    runUniq: uniqueIndex("direct_orders_run_uniq").on(t.runId),
+    openedIdx: index("direct_orders_opened_idx").on(
+      t.orgId,
+      t.workspaceId,
+      t.openedAt,
+    ),
+    itemIdx: index("direct_orders_item_idx")
+      .on(t.itemId)
+      .where(sql`${t.itemId} IS NOT NULL`),
+    runIdCheck: check(
+      "direct_orders_run_id_check",
+      sql`${t.runId} ~ '^(arun|tse)_[0-9a-z]+$'`,
+    ),
+    attachedCheck: check(
+      "direct_orders_attached_check",
+      sql`(${t.itemId} IS NULL) = (${t.attachedAt} IS NULL) AND (${t.itemId} IS NULL) = (${t.attachedBy} IS NULL)`,
+    ),
+  }),
+);
+
 /**
  * One fact in a work item's history. Append only: a row never changes, and a
  * fact whose dedupe key the item already holds is a repeat. The item's state is
@@ -693,6 +754,11 @@ export const workItemFacts = workSchema.table(
     orderIdx: index("item_facts_order_idx")
       .on(t.orderId)
       .where(sql`${t.orderId} IS NOT NULL`),
+    // The spend rollup finds the send a run belongs to by its run_linked
+    // fact (F13, #4638).
+    runLinkedIdx: index("item_facts_run_linked_idx")
+      .on(t.runId)
+      .where(sql`${t.kind} = 'run_linked'`),
     // One approved brief per item revision, and one send request per order.
     approvalUniq: uniqueIndex("item_facts_approval_uniq")
       .on(t.itemId, t.itemRevision)
@@ -817,6 +883,61 @@ export const workDoneVerdicts = workSchema.table(
     digestCheck: check(
       "done_verdicts_record_digest_check",
       sql`${t.recordDigest} ~ '^sha256:[0-9a-f]{64}$'`,
+    ),
+  }),
+);
+
+/** A check run's result: held and proven pass, broken fails, and pending has not decided. */
+export const WORK_DONE_CHECK_RESULTS = ["passed", "failed", "pending"] as const;
+
+/**
+ * One check run of a definition of done: one decide over a work order's done
+ * record, written each time a stage of the work order finishes, whether or not
+ * the verdict changed (F13, #4638). work.done_verdicts keeps only the changes.
+ * Append only. One row per work order and stage session, so a retried step
+ * writes none.
+ */
+export const workDoneChecks = workSchema.table(
+  "done_checks",
+  {
+    id: uuid("id").primaryKey().default(uuidv7Default),
+    ...orgScopeMixin(),
+    ...appendOnlyAuditMixin(),
+    orderId: uuid("order_id")
+      .notNull()
+      .references(() => workOrders.id),
+    /** The done record's lock digest. */
+    recordDigest: text("record_digest").notNull(),
+    verdict: text("verdict").notNull(),
+    /** `passed` for held or proven, `failed` for broken, `pending` otherwise. */
+    result: text("result").notNull(),
+    checkedAt: ts("checked_at").notNull(),
+    /** The session of the stage whose end ran the check. */
+    sessionId: text("session_id").notNull(),
+    /** That stage's role in its workflow file, such as `Fix`. */
+    role: text("role").notNull(),
+  },
+  (t) => ({
+    sessionUniq: uniqueIndex("done_checks_session_uniq").on(
+      t.orderId,
+      t.sessionId,
+    ),
+    checkedIdx: index("done_checks_checked_idx").on(
+      t.orgId,
+      t.workspaceId,
+      t.checkedAt,
+    ),
+    digestCheck: check(
+      "done_checks_record_digest_check",
+      sql`${t.recordDigest} ~ '^sha256:[0-9a-f]{64}$'`,
+    ),
+    verdictCheck: check(
+      "done_checks_verdict_check",
+      sql`${t.verdict} IN ('pending', 'held', 'proven', 'broken')`,
+    ),
+    resultCheck: check(
+      "done_checks_result_check",
+      sql`${t.result} = CASE ${t.verdict} WHEN 'held' THEN 'passed' WHEN 'proven' THEN 'passed' WHEN 'broken' THEN 'failed' ELSE 'pending' END`,
     ),
   }),
 );

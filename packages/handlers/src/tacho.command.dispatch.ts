@@ -78,6 +78,7 @@ import { and, desc, eq, isNull, ne, sql } from "drizzle-orm";
 import { writeRecipientCommand } from "./lib/run-command-recipients";
 import { logger } from "./logger";
 import { ledgerIdentityQuery, type RunScope, runScope } from "./run.list";
+import { canReadRunId } from "./lib/run-read";
 
 // ---- Delivery mode resolution --------------------------------------------------------
 
@@ -328,6 +329,17 @@ type DispatchCommandDeps = {
   /** Run `fn` against a store inside one tenant transaction. */
   withStore<T>(fn: (store: CommandStore) => Promise<T>): Promise<T>;
   now: () => Date;
+  /**
+   * Whether the caller may reach a ledger run by its `arun_…` id. Another
+   * person's in-app assistant run answers as an unknown one (ADR-235), so a
+   * workspace member cannot pause or cancel someone else's assistant turn.
+   * Absent in a unit test that builds its own deps, where every run is
+   * reachable.
+   */
+  canReachLedgerRun?: (
+    ctx: Parameters<CapabilityHandler<typeof tachoCommandDispatch>>[1],
+    publicId: string,
+  ) => Promise<boolean>;
 };
 
 // ---- The handler ---------------------------------------------------------------------
@@ -392,6 +404,14 @@ export function createDispatchCommandHandler(
     const requestedMode =
       carriesPrompt && input.payload ? input.payload.requestedMode : null;
 
+    if (
+      input.target.kind === "run" &&
+      input.target.id.startsWith("arun_") &&
+      deps.canReachLedgerRun !== undefined &&
+      !(await deps.canReachLedgerRun(ctx, input.target.id))
+    ) {
+      throw notFound("run_not_found");
+    }
     const commandIds = await deps.withStore(async (store) => {
       if (
         input.target.kind === "run" &&
@@ -881,6 +901,7 @@ function defaultDispatchCommandDeps(): DispatchCommandDeps {
   return {
     withStore: (fn) => withTenantDb((tx) => fn(postgresCommandStore(tx))),
     now: () => new Date(),
+    canReachLedgerRun: (ctx, publicId) => canReadRunId(ctx, publicId),
   };
 }
 

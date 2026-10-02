@@ -1,5 +1,5 @@
 "use client";
-// The Library's Memory shelf body (roadmap pages/steering-memory.md): the
+// The Library's Assistant memory shelf body (roadmap pages/steering-memory.md): the
 // aggregation strip, the precedence note, the Recalled memory table, and the
 // memory and memforget dialogs.
 //

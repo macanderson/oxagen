@@ -245,3 +245,45 @@ describe("bootstrap() email-transport probe (OXA-1753)", () => {
     expect(mocks.setSecurityEventEmitter).toHaveBeenCalledTimes(1);
   });
 });
+
+// ADR-235: the security event of a call Oxagen's in-app assistant made says
+// so in `detail`, and the event of any other call carries no detail.
+describe("bootstrap() security event emitter", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    __resetBootForTesting();
+    mocks.assertRlsConnectionSafe.mockResolvedValue(undefined);
+    mocks.makeSecurityEventInserter.mockReturnValue(vi.fn());
+  });
+
+  const kernelEvent = {
+    capability: "list_runs",
+    outcome: "allow" as const,
+    surface: "api",
+    orgId: "o1",
+    workspaceId: "w1",
+    actorUserId: "u1",
+    requestId: "r1",
+    errorCode: null,
+    durationMs: 3,
+  };
+
+  it("tags an assistant call's event, and leaves any other call's untagged", async () => {
+    await bootstrap();
+    const emitter = mocks.setSecurityEventEmitter.mock.calls[0]![0] as (
+      event: unknown,
+    ) => void;
+
+    emitter({ ...kernelEvent, oxagenAssistant: true });
+    expect(mocks.recordSecurityEvent.mock.calls[0]![1]).toMatchObject({
+      eventType: "capability.invoke_allowed",
+      actorUserId: "u1",
+      detail: { oxagenAssistant: true },
+    });
+
+    emitter(kernelEvent);
+    expect(mocks.recordSecurityEvent.mock.calls[1]![1]).not.toHaveProperty(
+      "detail",
+    );
+  });
+});

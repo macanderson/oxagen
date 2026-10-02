@@ -67,6 +67,9 @@ vi.mock("./logger", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), debug: vi.fn(), error: vi.fn() },
 }));
 
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
+import { schema } from "@oxagen/database";
 import {
   RETENTION_INCLUDED_MONTHS,
   RETENTION_USD_PER_GB_MONTH,
@@ -78,21 +81,42 @@ import { TEST_CTX } from "./test-utils/fixtures";
 
 // ── tx stub ───────────────────────────────────────────────────────────────────
 
+const dialect = new PgDialect();
+
 interface TxChain {
   select: () => TxChain;
-  from: () => TxChain;
-  where: () => TxChain;
+  from: (table?: unknown) => TxChain;
+  where: (cond?: unknown) => TxChain;
   limit: () => TxChain;
   then: <T>(onFulfilled: (rows: unknown[]) => T) => Promise<T>;
 }
 
+/** One read the handler made: the table it selected from and its WHERE. */
+interface RecordedRead {
+  table: unknown;
+  where: unknown;
+}
+
+/** Every read since the last `queueDbReads`, in order. */
+let reads: RecordedRead[] = [];
+
 /** Resolves to the next queued result set each time a chain is awaited. */
 function makeTx(resultSets: unknown[][]): TxChain {
   let cursor = 0;
+  const current = (): RecordedRead => reads[reads.length - 1]!;
   const chain: TxChain = {
-    select: () => chain,
-    from: () => chain,
-    where: () => chain,
+    select: () => {
+      reads.push({ table: undefined, where: undefined });
+      return chain;
+    },
+    from: (table) => {
+      current().table = table;
+      return chain;
+    },
+    where: (cond) => {
+      current().where = cond;
+      return chain;
+    },
     limit: () => chain,
     then: (onFulfilled) =>
       Promise.resolve(resultSets[cursor++] ?? []).then(onFulfilled),
@@ -102,6 +126,7 @@ function makeTx(resultSets: unknown[][]): TxChain {
 
 /** Queue, in order: settings rows, retention-policy rows, ledger rows. */
 function queueDbReads(resultSets: unknown[][]): void {
+  reads = [];
   const tx = makeTx(resultSets);
   mocks.withSystemDb.mockImplementation(
     (fn: (t: TxChain) => Promise<unknown>) => fn(tx),
@@ -255,6 +280,32 @@ describe("the organisation-wide policy read", () => {
     ]);
     const out = await billingEvidenceRetentionHandler({}, TEST_CTX);
     expect(out.effectiveRetentionDays).toBe(730);
+  });
+
+  it("counts only the workspaces' own policies, never the assistant's", async () => {
+    // The in-app assistant pins its own policy row under subject
+    // `oxagen_assistant` (ADR-235). Its seven-year window is Oxagen's choice
+    // for the assistant's runs. Counted here, one assistant turn would set
+    // the organisation's retention on the org Audit page.
+    queueDbReads([
+      [{ extendedEvidenceRetentionEnabled: false }],
+      [{ maxTtlDays: null }],
+      [{ total: "0" }],
+    ]);
+    await billingEvidenceRetentionHandler({}, TEST_CTX);
+    const policyReads = reads.filter(
+      (read) => read.table === schema.retentionPolicyVersions,
+    );
+    expect(policyReads).toHaveLength(1);
+    const { sql, params } = dialect.sqlToQuery(policyReads[0]!.where as SQL);
+    expect(sql).toMatch(/"org_id" = \$/);
+    expect(sql).toMatch(/"subject" = \$/);
+    expect(params).toEqual(
+      expect.arrayContaining([TEST_CTX.orgId, "workspace"]),
+    );
+    expect(params).not.toContain("oxagen_assistant");
+    // Organisation-wide: the read does not narrow to one workspace.
+    expect(sql).not.toMatch(/"workspace_id" = \$/);
   });
 });
 

@@ -25,7 +25,7 @@ None.
 
 | Field | Type | Description |
 |---|---|---|
-| `approvals` | integer or null | unresolved, unexpired approvals in this workspace — the predicate `list_approvals` pages on |
+| `approvals` | integer or null | unresolved, unexpired approvals in this workspace, the predicate `list_approvals` pages on with no `runId`. A row the in-app assistant parked belongs to the person who asked and does not count (ADR-235). |
 | `interjections` | integer or null | unanswered, unexpired questions agents in this workspace paused to ask, in `agent.interjections`: the predicate `list_interjections` pages on with `open: true` (#3839) |
 | `proposals` | integer or null | steering proposals in `agent.context_proposals` that have not merged and were not rejected, the rows `list_proposals` returns |
 | `incidents` | integer or null | unresolved incidents at severity 10 in `tacho.incidents` across the organization (Audit is an organization page), read through the org-wide seam |

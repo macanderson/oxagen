@@ -110,6 +110,19 @@ describe("get_nav_counts", () => {
     expect(where).toMatch(/"expires_at" > now\(\)/);
   });
 
+  // ADR-235, ruled on 2026-10-01: an approval the in-app assistant parked
+  // belongs to the person who asked, so the workspace's badge never counts it.
+  it("leaves an approval the in-app assistant parked out of the count", async () => {
+    const { reads, out } = run({ [APPROVALS]: [{ n: 0 }] });
+    await out;
+    const read = reads[0];
+    expect(read?.where).toMatch(
+      /not exists \(select 1 from "agent"\."agent_runs" as "in_app_run" where "in_app_run"\."public_id" = "agent"\."approval_requests"\."run_public_id"::citext/,
+    );
+    expect(read?.where).toMatch(/"in_app_run"\."surface" in \(\$\d+, \$\d+\)/);
+    expect(read?.params).toEqual(expect.arrayContaining(["chat", "api-chat"]));
+  });
+
   it("counts a proposal as open until it merges or is rejected", async () => {
     const { reads, out } = run({ [PROPOSALS]: [{ n: 0 }] });
     await out;

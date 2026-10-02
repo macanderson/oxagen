@@ -1,10 +1,10 @@
-// Which Steering view a request asks for (roadmap pages/steering.md): five
+// Which Steering view a request asks for (roadmap pages/steering.md): six
 // tabs, each a path segment, and on the Library a shelf, also a path segment.
 // `/steering` and `/steering/library` are the Library's All shelf;
 // `/steering/records`, `/skills`, `/memory`, `/ontology` and `/instructions`
-// are its other shelves. A filter, a page offset, the rows a Proposals or
-// Skills page holds (#4693), a selected proposal and a Skills cursor stay
-// query values.
+// are its other shelves. A filter, a page offset, the rows a Proposals,
+// Memories or Skills page holds (#4693), a selected proposal, the memory the
+// Memories drawer opens (#4914) and a Skills cursor stay query values.
 //
 // Every address written before the five tabs still lands. `/steering/policy`
 // is Gates, `/steering/preview/<agent>` is `/steering/compiler/<agent>`,
@@ -17,16 +17,24 @@
 // shelf. A segment that names nothing is a 404 rather than a page that
 // guesses.
 import {
+  MEMORY_HARNESSES,
+  type MemoryHarness,
   RECORD_KINDS,
   type RecordKind,
   STEERING_PAGE,
+  WORKSPACE_MEMORY_STATES,
+  type WorkspaceMemoryState,
 } from "@/data/contracts/steering";
 import { SKILL_PAGE, SKILL_ROWS } from "@/data/contracts/skills";
 import { firstParam, routes, type SafePath } from "@/shared/safe-path";
 
-/** The five tabs, in the design's order; each answers one question. */
+/**
+ * The six tabs, in the design's order; each answers one question. Memories
+ * sits beside the Library, as the design puts it beside Records.
+ */
 export const STEERING_TABS = [
   "library",
+  "memories",
   "assignments",
   "gates",
   "proposals",
@@ -54,8 +62,51 @@ export type LibraryShelf = (typeof LIBRARY_SHELVES)[number];
 /** The two segments of Proposals: the candidates and their Context PRs. */
 export type ProposalSegment = "candidates" | "prs";
 
-/** The page sizes Rows per page offers under both Proposals segments (#4693). */
+/** The page sizes Rows per page offers under both Proposals segments and on Memories (#4693). */
 export const PROPOSAL_ROWS: readonly number[] = [10, 25, 50, 100];
+
+/**
+ * The State filter on Memories: Waiting and In PR together by default, one
+ * state, or every state.
+ */
+export const MEMORY_STATE_FILTERS = [
+  "open",
+  ...WORKSPACE_MEMORY_STATES,
+  "all",
+] as const;
+type MemoryStateFilter = (typeof MEMORY_STATE_FILTERS)[number];
+
+/** The Memories tab's filters, and the memory its drawer opens. */
+export type MemoriesView = {
+  state: MemoryStateFilter;
+  harness: MemoryHarness | null;
+  /** An agent key, `org_ns.ws_ns.slug`. */
+  agent: string | null;
+  /** `<host>/<owner>/<name>`, such as `github.com/acme/api`. */
+  repo: string | null;
+  /** A Claude Code memory type, such as `feedback`. */
+  type: string | null;
+  memory: string | null;
+};
+
+/** Memories with no filter: Waiting and In PR, and no drawer. */
+export const NO_MEMORY_FILTERS: MemoriesView = {
+  state: "open",
+  harness: null,
+  agent: null,
+  repo: null,
+  type: null,
+  memory: null,
+};
+
+/** The states a State filter value lists. */
+export function memoryStates(
+  state: MemoryStateFilter,
+): readonly WorkspaceMemoryState[] {
+  if (state === "open") return ["waiting", "in_pr"];
+  if (state === "all") return WORKSPACE_MEMORY_STATES;
+  return [state];
+}
 
 export type SteeringView = {
   tab: SteeringTab;
@@ -82,6 +133,8 @@ export type SteeringView = {
   skillView: string | undefined;
   /** Only on the Skills shelf's `source` view: the skill `/skills/<id>/source` names. */
   skill: string | null;
+  /** Only on Memories. */
+  memories: MemoriesView | null;
 };
 
 /** What a request resolves to: a view, a move to where the view lives now, or nothing. */
@@ -105,6 +158,16 @@ export type SteeringLinkTab =
   | "deliveries";
 
 const OFFSET = /^(0|[1-9][0-9]{0,5})$/;
+/** get_workspace_memory's id rule, with a length a URL may carry. */
+const MEMORY = /^mem_[0-9A-Za-z]{1,60}$/;
+/** An agent key, `org_ns.ws_ns.slug`, within list_workspace_memories' bound. */
+const AGENT_KEY = /^[A-Za-z0-9][A-Za-z0-9._-]{0,199}$/;
+/** The repository rule list_workspace_memories enforces (REPO_REF_PATTERN). */
+const REPO_REF =
+  /^[a-z0-9-]+(?:\.[a-z0-9-]+)+(?:\/(?!\.\.?(?:\/|$))[a-z0-9_.-]+){2,}$/;
+const REPO_MAX = 200;
+/** A Claude Code memory type, as list_workspace_memories takes it. */
+const MEMORY_TYPE = /^[a-z][a-z0-9_-]{0,31}$/;
 /** get_context_pr's own id rule, with a length the contract's id column holds. */
 const PROPOSAL = /^prp_[0-9A-Za-z]{1,60}$/;
 /** An opaque inventory cursor; the length bounds what a URL may carry. */
@@ -142,6 +205,7 @@ const isTab = (raw: string): raw is SteeringTab =>
 
 /** The query values a view keeps, whatever path it moved to. */
 function carried(query: Params) {
+  const agent = firstParam(query.agent);
   return {
     kind: firstParam(query.kind),
     rows: firstParam(query.rows),
@@ -149,6 +213,36 @@ function carried(query: Params) {
     proposal: firstParam(query.proposal),
     cursor: firstParam(query.cursor),
     view: firstParam(query.view),
+    state: firstParam(query.state),
+    harness: firstParam(query.harness),
+    // A redirect that names the Compiler's agent itself keeps that one.
+    ...(agent === undefined ? {} : { agent }),
+    repo: firstParam(query.repo),
+    type: firstParam(query.type),
+    memory: firstParam(query.memory),
+  };
+}
+
+/** One query value when it matches `rule`, else null. */
+function matched(raw: string | undefined, rule: RegExp): string | null {
+  return raw !== undefined && rule.test(raw) ? raw : null;
+}
+
+/** The Memories filters a query names; a value the reads would refuse reads as no filter. */
+function memoriesOf(query: Params): MemoriesView {
+  const state = firstParam(query.state);
+  const harness = firstParam(query.harness);
+  const repo = firstParam(query.repo);
+  return {
+    state: MEMORY_STATE_FILTERS.find((s) => s === state) ?? "open",
+    harness: MEMORY_HARNESSES.find((h) => h === harness) ?? null,
+    agent: matched(firstParam(query.agent), AGENT_KEY),
+    repo:
+      repo !== undefined && repo.length <= REPO_MAX && REPO_REF.test(repo)
+        ? repo
+        : null,
+    type: matched(firstParam(query.type), MEMORY_TYPE),
+    memory: matched(firstParam(query.memory), MEMORY),
   };
 }
 
@@ -178,7 +272,7 @@ function viewOf(
     // A size Rows does not offer reads as the default, so a hand-typed URL
     // cannot ask for more rows than a page shows.
     rows:
-      tab === "proposals"
+      tab === "proposals" || tab === "memories"
         ? (PROPOSAL_ROWS.find((size) => size === rawRows) ?? STEERING_PAGE)
         : shelf === "skills"
           ? (SKILL_ROWS.find((size) => size === rawRows) ?? SKILL_PAGE)
@@ -201,6 +295,7 @@ function viewOf(
         ? (base.skillView ?? firstParam(query.view))
         : undefined,
     skill: shelf === "skills" ? (base.skill ?? null) : null,
+    memories: tab === "memories" ? memoriesOf(query) : null,
   };
 }
 
@@ -282,7 +377,7 @@ export function resolveSteeringRoute(
     });
   }
 
-  if (first === "assignments" || first === "gates") {
+  if (first === "assignments" || first === "gates" || first === "memories") {
     return second === undefined ? view({ tab: first }) : notFound;
   }
 
@@ -323,8 +418,14 @@ export function steeringLink(
     proposal?: string | null;
     /** A skill whose source the Skills shelf opens. */
     skill?: string | null;
+    /**
+     * Only on Memories: the filters and the memory the drawer opens. The
+     * agent filter is `agent` above, which names the Compiler's agent there.
+     */
+    memories?: Partial<Omit<MemoriesView, "agent">>;
   },
 ): SafePath {
+  const m = to.memories ?? {};
   return routes.steering(at.org, at.ws, {
     tab: to.tab,
     agent: to.agent ?? undefined,
@@ -339,6 +440,39 @@ export function steeringLink(
         : String(to.offset),
     proposal: to.proposal ?? undefined,
     skill: to.skill ?? undefined,
+    state: m.state === undefined || m.state === "open" ? undefined : m.state,
+    harness: m.harness ?? undefined,
+    repo: m.repo ?? undefined,
+    type: m.type ?? undefined,
+    memory: m.memory ?? undefined,
+  });
+}
+
+/**
+ * The Memories address for `view` with `change` applied. A change to a
+ * filter starts the list at its first page and closes the drawer.
+ */
+export function memoriesLink(
+  at: SteeringAt,
+  view: Pick<SteeringView, "rows" | "offset"> & { memories: MemoriesView },
+  change: Partial<MemoriesView> & { offset?: number; rows?: number },
+): SafePath {
+  const next = { ...view.memories, ...change };
+  const filtered = Object.keys(change).some(
+    (key) => key !== "memory" && key !== "offset" && key !== "rows",
+  );
+  return steeringLink(at, {
+    tab: "memories",
+    agent: next.agent,
+    rows: change.rows ?? view.rows,
+    offset: filtered ? 0 : (change.offset ?? view.offset),
+    memories: {
+      state: next.state,
+      harness: next.harness,
+      repo: next.repo,
+      type: next.type,
+      memory: filtered ? null : next.memory,
+    },
   });
 }
 

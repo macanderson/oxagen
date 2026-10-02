@@ -104,6 +104,7 @@ import type {
   SpendFindingEvidence,
   SpendFindings,
   SpendGroupKind,
+  SpendPerMergedPr,
   SpendReport,
   SpendWaste,
   UnpricedModels,
@@ -114,6 +115,7 @@ import type {
   ProposalPage,
   RecordDetail,
   MemoryPage,
+  MemoryPrRecords,
   OxagenTree,
   RecordKind,
   RecordPage,
@@ -121,6 +123,9 @@ import type {
   SteeringDeliveries,
   SteeringHub,
   SteeringLayout,
+  WorkspaceMemoryDetail,
+  WorkspaceMemoryPage,
+  WorkspaceMemoryQuery,
 } from "./contracts/steering";
 import type { SteeringRepo } from "./contracts/steering-repo";
 import type {
@@ -492,6 +497,12 @@ export interface DataSource {
       period: DayRange,
     ): Promise<Read<OperatorRanking>>;
     /**
+     * get_spend_per_merged_pr (detector 8; F26): each agent's spend on runs
+     * that opened a pull request, per pull request that merged and stayed.
+     * Caller: features/spend/spend.tsx on the Month tab grouped by agent.
+     */
+    perMergedPr(ctx: WsCtx, period: DayRange): Promise<Read<SpendPerMergedPr>>;
+    /**
      * get_unproductive_spend: the unproductive spend headline for a period,
      * its share of the period's spend, and the part figures and the estimate
      * beside it. Caller: features/spend/spend.tsx, for the Findings hero.
@@ -683,11 +694,31 @@ export interface DataSource {
     layout(ctx: WsCtx): Promise<Read<SteeringLayout>>;
     /**
      * The hub header's reads: list_repositories and get_repository_tree for
-     * the governance mode on the main repository, and three list_proposals
-     * counts for the proposals waiting. Each half fails on its own inside the
-     * value, so a GitHub outage never takes the library down with it.
+     * the governance mode on the main repository, three list_proposals
+     * counts for the proposals waiting, and one list_workspace_memories row
+     * for the memories waiting. Each part fails on its own inside the value,
+     * so a GitHub outage never takes the library down with it.
      */
     hub(ctx: WsCtx): Promise<Read<SteeringHub>>;
+    /**
+     * list_workspace_memories: one page of the Memories tab, ranked by uses,
+     * with memories that say the same thing grouped (#4914). Callers:
+     * features/steering/tabs/memories.tsx and tab-primary.ts.
+     */
+    workspaceMemories(
+      ctx: WsCtx,
+      q: WorkspaceMemoryQuery,
+    ): Promise<Read<WorkspaceMemoryPage>>;
+    /** get_workspace_memory: one memory for the Memories tab's drawer; 404 for a memory this workspace does not hold. */
+    workspaceMemory(
+      ctx: WsCtx,
+      memoryId: string,
+    ): Promise<Read<WorkspaceMemoryDetail>>;
+    /** list_memory_pr_records: the records one memory PR proposes, for the review card on Context PRs. */
+    memoryPrRecords(
+      ctx: WsCtx,
+      prNumber: number,
+    ): Promise<Read<MemoryPrRecords>>;
     /**
      * list_memories: the workspace's active `:AgentMemory` nodes, newest
      * first, up to `limit` (1 to `STEERING_READ_MAX`); the Memory shelf and
