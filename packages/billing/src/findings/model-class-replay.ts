@@ -130,10 +130,11 @@ function spread(n: number, count: number): number[] {
 /**
  * The replay of a model class fit finding: a sample of its cited runs, each
  * with the model it reruns on and its estimated cost there. A run is left
- * out when it is absent from `runs`, has no operator to own it, has no model
- * with a smaller class, or the book cannot price it, since the approval must
- * show a cost and an owner for every run it starts. Null when the finding is
- * another kind or no run is left.
+ * out when it is absent from `runs`, has no operator to own it, has an edit
+ * step, has no model with a smaller class, or the book cannot price it, since
+ * the approval must show a cost and an owner for every run it starts, and a
+ * replay reruns only runs that only read. Null when the finding is another
+ * kind or no run is left.
  *
  * `operatorKey` plans one operator's runs alone, so each owning team can
  * approve its own replay. `sampleMax` lowers the sample size. A value above
@@ -165,6 +166,11 @@ export function planReplay(args: {
     if (run === undefined) continue;
     const { operatorKey } = run;
     if (operatorKey === null) continue;
+    // A replay reruns the whole run on the smaller class, so a run with an
+    // edit step would rerun its edits too, and its estimate would cover more
+    // than the steps the finding priced (F17). A row rolled up before steps
+    // had a class says nothing, and stays in.
+    if ((run.breakdown.stepClasses?.edit ?? 0) > 0) continue;
     if (args.operatorKey !== undefined && operatorKey !== args.operatorKey)
       continue;
     const models = run.breakdown.models.map((m) => ({
