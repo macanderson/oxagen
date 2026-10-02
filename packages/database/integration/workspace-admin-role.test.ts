@@ -9,6 +9,9 @@
  *   - keeps an org's existing system Admin role as it is;
  *   - leaves an org whose custom workspace role is named "admin" with that
  *     role alone, and does not fail on it;
+ *   - gives each system workspace Admin role an allow on get_org_settings and
+ *     get_spend_budget, keeps an org's explicit deny, and grants a custom role
+ *     nothing;
  *   - writes nothing on a second run.
  *
  * The whole replay runs in one transaction that rolls back.
@@ -22,6 +25,16 @@ import postgres from "postgres";
 
 const sql = postgres(process.env["DATABASE_URL"]!, { max: 1, prepare: false });
 afterAll(() => sql.end());
+
+/** The public id provisioning and the migration write for one grant. */
+function grantPublicId(roleId: string, capability: string): string {
+  const hex = createHash("sha256")
+    .update(`${roleId}:${capability}`, "utf8")
+    .digest("hex");
+  return `rlg_${hex.slice(0, 24)}`;
+}
+
+const READS = ["get_org_settings", "get_spend_budget"] as const;
 
 /** The public id bootstrapOrgIAM and the migration write for the role. */
 function rolePublicId(orgId: string): string {
@@ -65,6 +78,7 @@ it("gives every org the workspace Admin role once, and keeps a role that holds t
           (${custom}, ${`t5228_${tag}_c`}, 'Admin role C', ${`t5228c-${tag}`}, ${`c${tag.slice(0, 5)}`}, 'free', 'active', 'business')
       `;
 
+      const roleIds = new Map<string, string>();
       const role = async (
         key: string,
         org: string,
@@ -72,9 +86,11 @@ it("gives every org the workspace Admin role once, and keeps a role that holds t
         name: string,
         system: boolean,
       ) => {
+        const id = randomUUID();
+        roleIds.set(key, id);
         await tx`
-          INSERT INTO iam.roles (public_id, org_id, scope_kind, name, is_system_default)
-          VALUES (${`t5228_${tag}_${key}`}, ${org}, ${scopeKind}, ${name}, ${system})
+          INSERT INTO iam.roles (id, public_id, org_id, scope_kind, name, is_system_default)
+          VALUES (${id}, ${`t5228_${tag}_${key}`}, ${org}, ${scopeKind}, ${name}, ${system})
         `;
       };
       // Each org has the roles an org had before this change.
@@ -92,6 +108,11 @@ it("gives every org the workspace Admin role once, and keeps a role that holds t
       await role("b_ws_admin", seeded, "workspace", "Admin", true);
       // Org C's custom workspace role took the name first.
       await role("c_custom", custom, "workspace", "admin", false);
+      // Org B's own explicit deny on one of the two reads.
+      await tx`
+        INSERT INTO iam.role_grants (public_id, org_id, role_id, capability_id, effect)
+        VALUES (${`t5228_${tag}_deny`}, ${seeded}, ${roleIds.get("b_ws_admin")!}, 'get_spend_budget', 'deny')
+      `;
 
       const readAdmins = () =>
         tx<RoleRow[]>`
@@ -108,6 +129,13 @@ it("gives every org the workspace Admin role once, and keeps a role that holds t
         `;
         return row!.n;
       };
+      const readGrants = () =>
+        tx<{ org_id: string; role_id: string; capability_id: string; effect: string; public_id: string }[]>`
+          SELECT org_id, role_id, capability_id, effect, public_id
+          FROM iam.role_grants
+          WHERE org_id IN ${tx(orgs)}
+          ORDER BY public_id
+        `;
       const before = await countRoles();
 
       await tx.unsafe(migration);
@@ -133,10 +161,46 @@ it("gives every org the workspace Admin role once, and keeps a role that holds t
         is_system_default: false,
       });
 
+      // Grants: both reads for org A's new role, the missing read for org
+      // B's role beside its deny, and nothing for org C's custom role.
+      const freshRole = byOrg.get(fresh)!;
+      const [freshId] = await tx<{ id: string }[]>`
+        SELECT id FROM iam.roles WHERE public_id = ${freshRole.public_id}
+      `;
+      const grants = await readGrants();
+      const seededAdmin = roleIds.get("b_ws_admin")!;
+      const expected = [
+        ...READS.map((capability) => ({
+          org_id: fresh,
+          role_id: freshId!.id,
+          capability_id: capability,
+          effect: "allow",
+          public_id: grantPublicId(freshId!.id, capability),
+        })),
+        {
+          org_id: seeded,
+          role_id: seededAdmin,
+          capability_id: "get_org_settings",
+          effect: "allow",
+          public_id: grantPublicId(seededAdmin, "get_org_settings"),
+        },
+        {
+          org_id: seeded,
+          role_id: seededAdmin,
+          capability_id: "get_spend_budget",
+          effect: "deny",
+          public_id: `t5228_${tag}_deny`,
+        },
+      ];
+      const byPublicId = (a: { public_id: string }, b: { public_id: string }) =>
+        a.public_id < b.public_id ? -1 : 1;
+      expect([...grants].sort(byPublicId)).toEqual(expected.sort(byPublicId));
+
       // A second run writes nothing.
       await tx.unsafe(migration);
       expect(await readAdmins()).toEqual(admins);
       expect(await countRoles()).toBe(before + 1);
+      expect(await readGrants()).toEqual(grants);
       throw rollback;
     }),
   ).rejects.toBe(rollback);
