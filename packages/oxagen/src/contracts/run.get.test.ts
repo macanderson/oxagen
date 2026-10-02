@@ -107,6 +107,7 @@ describe("get_run contract", () => {
       name: null,
       summary: null,
       repositoryUnlinked: false,
+      recordBasis: "live",
     };
     expect(
       runGet.output.safeParse({
@@ -157,6 +158,25 @@ describe("get_run contract", () => {
         witnessFor: null,
       }).success,
     ).toBe(false);
+    // How the frames reached the record is required too (ADR-161), and
+    // closed: a backfilled or resumed run says so, and nothing else parses.
+    for (const recordBasis of ["backfill", "mixed"])
+      expect(
+        runGet.output.safeParse({
+          run: { ...run, recordBasis },
+          frames: { frames: [], cursor: null },
+          witnessFor: null,
+        }).success,
+      ).toBe(true);
+    const { recordBasis: _b, ...withoutBasis } = run;
+    for (const bad of [withoutBasis, { ...run, recordBasis: "imported" }])
+      expect(
+        runGet.output.safeParse({
+          run: bad,
+          frames: { frames: [], cursor: null },
+          witnessFor: null,
+        }).success,
+      ).toBe(false);
   });
 
   it("carries every frame's body reference and never its bytes", () => {

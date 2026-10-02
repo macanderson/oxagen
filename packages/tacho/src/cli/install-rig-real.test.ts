@@ -17,6 +17,8 @@
  */
 import { spawnSync } from "node:child_process";
 import {
+  chmodSync,
+  copyFileSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -25,11 +27,12 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { parseDaemonPid } from "../host/process-scan";
 import { SCHTASKS_NAME, SERVICE_LABEL, type Exec } from "../host/service";
 import type { TachoHarness } from "../wire";
+import type { RuntimeCommands } from "./deps";
 import { enroll } from "./enroll";
 import {
   buildRig,
@@ -257,5 +260,145 @@ describe.skipIf(!REAL || platform === undefined)(
       record("killed", { killAt, before, after, execs: clean.execs });
       expect(diffTrees(before, after)).toEqual(EMPTY_DIFF);
     }, 180_000);
+
+    /**
+     * Audit D-03 and ADR-230 decision 3 (#4298). Windows will not replace or
+     * delete a program's file while the program runs, so an update that
+     * overwrote the `tacho.exe` the daemon runs failed or waited for a
+     * reboot. An update copies its version beside the running one instead,
+     * and Re-apply (a bare enroll from the new copy) moves the hooks and the
+     * daemon onto it in one step. The stand-in executable is a copy of this
+     * Node, named `tacho`, so the daemon really runs from the copy's file
+     * and Windows really holds it.
+     */
+    it("updates beside a running daemon, then moves the hooks and the daemon together", async () => {
+      expect(serviceHeld(on), "a tachod is already loaded here").toBe(false);
+      const seed = seedHome({ platform: on, home: freshHome("update") });
+      const pidFile = buildRig(seed).deps.paths.pid;
+      // The stub's script and pid file, run by each version's executable.
+      const daemonArgs = stubDaemon().command(pidFile).slice(1);
+      const exe = on === "win32" ? "tacho.exe" : "tacho";
+      const copies = join(seed.home, "oxagen", "bin");
+      const keep = (version: string): string => {
+        const file = join(copies, version, exe);
+        mkdirSync(join(copies, version), { recursive: true });
+        copyFileSync(process.execPath, file);
+        chmodSync(file, 0o755);
+        return file;
+      };
+      const runtimeAt = (tacho: string): RuntimeCommands => {
+        const quoted = on === "win32" ? `"${tacho}"` : `'${tacho}'`;
+        return {
+          hookCommand: `${quoted} hook`,
+          credentialHelperCommand: `${quoted} credential issue --harness claude-code`,
+          daemonCommand: [tacho, ...daemonArgs],
+          mcpStdioCommand: [tacho, "mcp-stdio"],
+          binDir: dirname(tacho),
+        };
+      };
+      const rigAt = (tacho: string) =>
+        buildRig(seed, {
+          realServices: { exec: osExec, daemonCommand: [tacho, ...daemonArgs] },
+          overrides: { runtime: runtimeAt(tacho) },
+        });
+      // The pid file as the daemon last wrote it. A read that lands while
+      // the stub writes it reads as nothing yet.
+      const daemon = () => {
+        try {
+          return parseDaemonPid(readFileSync(pidFile, "utf8"));
+        } catch {
+          return undefined;
+        }
+      };
+      // Which version's file a daemon runs from. Compared by directory name:
+      // Windows can report the same path with short (8.3) names.
+      const runsFrom = (version: string) => {
+        const exe = daemon()?.exe;
+        return exe !== undefined && basename(dirname(exe)) === version;
+      };
+
+      // Enrolled from 2.1.3, its daemon running from 2.1.3's file.
+      const v1 = keep("2.1.3");
+      const first = rigAt(v1);
+      const enrolled = await enroll({ harnesses: harnesses(on) }, first.deps);
+      expect(enrolled.ok, enrolled.warnings.join("\n")).toBe(true);
+      await until(() => existsSync(pidFile), 30, "the daemon wrote no pid file");
+      const before = daemon();
+      expect(runsFrom("2.1.3"), JSON.stringify(before)).toBe(true);
+      const oldPid = before?.pid as number;
+      expect(alive(oldPid)).toBe(true);
+
+      // Replacing the running file in place is what failed before (D-03).
+      if (on === "win32")
+        expect(() => copyFileSync(process.execPath, v1)).toThrow();
+
+      // The update copies 2.1.4 beside it while the daemon runs.
+      const v2 = keep("2.1.4");
+      expect(alive(oldPid)).toBe(true);
+
+      // Re-apply from 2.1.4: hooks, service and daemon move together.
+      const second = rigAt(v2);
+      const reapplied = await enroll({}, second.deps);
+      expect(reapplied.ok, reapplied.warnings.join("\n")).toBe(true);
+      await until(
+        () => runsFrom("2.1.4") && alive(daemon()?.pid as number),
+        60,
+        "the daemon did not start from the new copy",
+      );
+      await until(() => !alive(oldPid), 30, "the old daemon still runs");
+      // Every file that names the collector names 2.1.4 and not 2.1.3: no
+      // hook runs one version while the daemon runs another.
+      const named = [
+        second.deps.paths.claudeSettings,
+        second.deps.paths.codexHooks,
+        ...second.deps.paths.cursorHooks.filter((path) => existsSync(path)),
+        second.deps.paths.stellaToml,
+        second.deps.paths.hostFile,
+        second.deps.serviceManager.unitPath,
+        ...(on === "linux" || second.deps.paths.claudeDesktopConfig === undefined
+          ? []
+          : [second.deps.paths.claudeDesktopConfig]),
+      ];
+      const escaped = (path: string) => JSON.stringify(path).slice(1, -1);
+      const names = (text: string, path: string) =>
+        text.includes(path) || text.includes(escaped(path));
+      for (const file of named) {
+        const text = readFileSync(file, "utf8");
+        expect(names(text, v2), `${file} names 2.1.4`).toBe(true);
+        expect(names(text, v1), `${file} still names 2.1.3`).toBe(false);
+      }
+      record("update", {
+        before,
+        after: daemon(),
+        execs: second.execs,
+        warnings: reapplied.warnings,
+      });
+
+      // Nothing holds 2.1.3 now, so it goes without a reboot.
+      await until(
+        () => {
+          try {
+            rmSync(dirname(v1), { recursive: true, force: true });
+          } catch {
+            return false;
+          }
+          return !existsSync(dirname(v1));
+        },
+        30,
+        "the old copy is still held",
+      );
+
+      const newPid = daemon()?.pid as number;
+      const removed = await unenroll({ purge: true }, second.deps);
+      expect(removed.ok, JSON.stringify(removed)).toBe(true);
+      await until(() => !serviceHeld(on), 30, "the service is still held");
+      await until(() => !alive(newPid), 30, "the daemon still runs");
+      rmSync(copies, {
+        recursive: true,
+        force: true,
+        maxRetries: 10,
+        retryDelay: 500,
+      });
+    }, 240_000);
   },
 );

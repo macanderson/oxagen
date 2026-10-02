@@ -435,11 +435,13 @@ describe("workspace.create handler", () => {
     mocks.invoke.mockResolvedValue(fakeOutput);
 
     // xmcp's InferSchema gives every key a required property, so the
-    // deprecated optional mainRepo is passed as undefined.
+    // deprecated optional mainRepo and the optional steeringRepo are passed
+    // as undefined.
     const args = {
       name: "My Workspace",
       slug: "my-workspace",
       mainRepo: undefined,
+      steeringRepo: undefined,
     };
     const result = await handler_workspaceCreate(args);
 

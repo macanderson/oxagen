@@ -1377,3 +1377,5 @@ The assistant flyout reads whether stella's engine can take a turn when a person
 `features/fleet/client.ts` is Fleet's public client entry, for the same reason. It exports `resolveApprovalAction`, so the assistant flyout's parked cards decide through the action Fleet's approval dialog uses: as the signed-in viewer, never as the turn (#4162).
 
 `features/run/client.ts` is the Run page's public client entry, for the same reason. It exports `DeliveryReport`, so Fleet's Steer the fleet receipt reads the commands its broadcast queued through the dialog and the `runs.commands` read the Run page's own report uses (#2953).
+
+`features/steering-repo/client.ts` is the steering repo lane's public client entry, for the same reason. It exports the Organization and Repository name fields that the onboarding first-workspace form and the Organization page's Create workspace dialog both show (#5196).

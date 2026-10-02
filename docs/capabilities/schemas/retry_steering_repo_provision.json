@@ -43,7 +43,12 @@
           "id"
         ],
         "additionalProperties": false,
-        "description": "The GitHub organization or GitLab group to create steering repos in, when setup stopped with choose_connection. One of get_steering_repo's connectionChoices."
+        "description": "The GitHub organization or GitLab group to create the steering repo in. After choose_connection, one of get_steering_repo's connectionChoices. For a workspace with no repository yet, any of list_steering_repo_destinations' destinations."
+      },
+      "name": {
+        "type": "string",
+        "x-server-validated": true,
+        "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
       },
       "resetConnection": {
         "type": "boolean",

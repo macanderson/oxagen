@@ -40,6 +40,7 @@ function restrictedImports(navigationNames) {
           "!@/features/run/client",
           "!@/features/shell/client",
           "!@/features/mcp-studio/client",
+          "!@/features/steering-repo/client",
         ],
         message:
           "Import a page's public surface from '@/features/<page>', never its internals.",

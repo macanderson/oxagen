@@ -13,7 +13,7 @@
 //      gate with no workspace (the web app sends `workspace: null`), the same
 //      transaction points the gate at this one, the org's first (#4582).
 //   4. The handler sends `steering-repo/provision.requested` and returns. The
-//      durable job creates the private repository `oxagen-<slug>`, seeds it,
+//      durable job creates the private repository, seeds it,
 //      applies the prescribed settings, publishes version 1, and binds it with
 //      role steering. It records each step in the setting, so the workspace
 //      shows progress and a retry starts from the step that stopped.
@@ -101,7 +101,13 @@ export function createWorkspaceCreateHandler(
     }
 
     const now = new Date();
-    const state = initialSteeringRepoState(now);
+    // What the person chose for the steering repo rides the state, and the
+    // job checks the place against the stored tokens before it creates
+    // anything (#5196). The handler calls no host, so the write stays fast.
+    const state = initialSteeringRepoState(now, {
+      name: input.steeringRepo?.name,
+      connection: input.steeringRepo?.connection,
+    });
     let ws: Awaited<ReturnType<typeof bootstrapWorkspace>>;
     let claimedGate: boolean;
     try {

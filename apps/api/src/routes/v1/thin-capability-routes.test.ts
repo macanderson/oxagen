@@ -144,6 +144,7 @@ import { contextPrRefresh } from "@oxagen/oxagen/contracts/context.pr.refresh";
 import { contextPrDiffGet } from "@oxagen/oxagen/contracts/context.pr.diff.get";
 import { contextPrMerge } from "@oxagen/oxagen/contracts/context.pr.merge";
 import { contextPrMergeWithoutReview } from "@oxagen/oxagen/contracts/context.pr.merge_without_review";
+import { contextPrRestoreManagedBlock } from "@oxagen/oxagen/contracts/context.pr.restore_managed_block";
 import { contextPrRevert } from "@oxagen/oxagen/contracts/context.pr.revert";
 import { conversationAttachmentAdd } from "@oxagen/oxagen/contracts/conversation.attachment.add";
 import { tachoCommandDispatch } from "@oxagen/oxagen/contracts/tacho.command.dispatch";
@@ -158,6 +159,8 @@ import { onboardingStateGet } from "@oxagen/oxagen/contracts/onboarding.state.ge
 import { repositoryLink } from "@oxagen/oxagen/contracts/repository.link";
 import { repositoryUnlink } from "@oxagen/oxagen/contracts/repository.unlink";
 import { repositoryList } from "@oxagen/oxagen/contracts/repository.list";
+import { codeRepositoryFindingsList } from "@oxagen/oxagen/contracts/repository.findings.list";
+import { instructionPromote } from "@oxagen/oxagen/contracts/repository.instruction.promote";
 import { repositoryTreeGet } from "@oxagen/oxagen/contracts/repository.tree.get";
 import { repositoryProductionBranchSet } from "@oxagen/oxagen/contracts/repository.production_branch.set";
 import { repositoryInitPrOpen } from "@oxagen/oxagen/contracts/repository.init_pr.open";
@@ -314,6 +317,7 @@ import { contextPrRefreshRoute } from "./context.pr.refresh";
 import { contextPrDiffGetRoute } from "./context.pr.diff.get";
 import { contextPrMergeRoute } from "./context.pr.merge";
 import { contextPrMergeWithoutReviewRoute } from "./context.pr.merge_without_review";
+import { contextPrRestoreManagedBlockRoute } from "./context.pr.restore_managed_block";
 import { contextPrRevertRoute } from "./context.pr.revert";
 import { conversationAttachmentAddRoute } from "./conversation.attachment.add";
 import { conversationChatRoute } from "./conversation.chat";
@@ -378,6 +382,8 @@ import { onboardingStateGetRoute } from "./onboarding.state.get";
 import { repositoryLinkRoute } from "./repository.link";
 import { repositoryUnlinkRoute } from "./repository.unlink";
 import { repositoryListRoute } from "./repository.list";
+import { codeRepositoryFindingsListRoute } from "./repository.findings.list";
+import { instructionPromoteRoute } from "./repository.instruction.promote";
 import { repositoryTreeGetRoute } from "./repository.tree.get";
 import { repositoryProductionBranchSetRoute } from "./repository.production_branch.set";
 import { repositoryInitPrOpenRoute } from "./repository.init_pr.open";
@@ -795,6 +801,17 @@ const ROUTES: ThinRoute[] = [
     capability: contextPrMergeWithoutReview.name,
     body: { proposalId: "prp_1" },
     invalidBody: { proposalId: "prp_1", force: true },
+    status: 200,
+  },
+  {
+    file: "context.pr.restore_managed_block",
+    route: contextPrRestoreManagedBlockRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: contextPrRestoreManagedBlock.name,
+    body: { proposalId: "prp_1", path: "AGENTS.md" },
+    // Only AGENTS.md, CLAUDE.md, and README.md hold a managed block.
+    invalidBody: { proposalId: "prp_1", path: "README.txt" },
+    jsonGuard: true,
     status: 200,
   },
   {
@@ -1937,6 +1954,25 @@ const ROUTES: ThinRoute[] = [
     capability: repositoryList.name,
     expectedInput: repositoryList.input.parse({}),
     status: 200,
+  },
+  {
+    file: "repository.findings.list",
+    route: codeRepositoryFindingsListRoute as unknown as Hono<never>,
+    method: "GET",
+    capability: codeRepositoryFindingsList.name,
+    expectedInput: codeRepositoryFindingsList.input.parse({}),
+    status: 200,
+  },
+  {
+    file: "repository.instruction.promote",
+    route: instructionPromoteRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: instructionPromote.name,
+    body: { finding_id: "crf_0a1b2c" },
+    // A proposal id is not a finding id.
+    invalidBody: { finding_id: "prp_0a1b2c" },
+    jsonGuard: true,
+    status: 201,
   },
   {
     file: "tacho.enrollment_token.create",
