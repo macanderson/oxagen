@@ -1,7 +1,7 @@
 {
   "name": "save_studio_draft",
   "domain": "tool",
-  "description": "Save Studio's staged edits to one server folder as a draft: tools to import or remove, their classification and description, saved tests, server.toml, and the definition or tool list they import from. The draft holds no credential, and Review opens a steering PR from it.",
+  "description": "Save Studio's staged edits to one server folder as a draft: tools to import or remove, their classification, description, result cap, and paging, saved tests, the server's exposure mode, server.toml, and the definition or tool list they import from. The draft holds no credential, and Review opens a steering PR from it.",
   "mode": "sync",
   "surfaces": [
     "api",
@@ -192,6 +192,53 @@
                 "request",
                 "raw",
                 "shaped"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "const": "cap"
+                },
+                "tool": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                },
+                "maxResultBytes": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 1048576
+                },
+                "paging": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "kind",
+                "tool",
+                "maxResultBytes"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "const": "expose"
+                },
+                "mode": {
+                  "type": "string",
+                  "enum": [
+                    "direct",
+                    "search"
+                  ]
+                }
+              },
+              "required": [
+                "kind",
+                "mode"
               ],
               "additionalProperties": false
             }
@@ -570,6 +617,53 @@
                 "request",
                 "raw",
                 "shaped"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "const": "cap"
+                },
+                "tool": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                },
+                "maxResultBytes": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 1048576
+                },
+                "paging": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "kind",
+                "tool",
+                "maxResultBytes"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "const": "expose"
+                },
+                "mode": {
+                  "type": "string",
+                  "enum": [
+                    "direct",
+                    "search"
+                  ]
+                }
+              },
+              "required": [
+                "kind",
+                "mode"
               ],
               "additionalProperties": false
             }

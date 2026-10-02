@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { HandlerError } from "@oxagen/oxagen";
 import type { StudioDraftOp, StudioSource } from "@oxagen/oxagen/contracts/tool.studio.draft.save";
-import { parseToolsToml } from "@oxagen/mcp-studio";
+import { parseServerToml, parseToolsToml } from "@oxagen/mcp-studio";
 import {
   buildFolder,
   folderCommit,
@@ -132,6 +132,14 @@ function imp(tool: string): StudioDraftOp {
 
 function classify(tool: string, c: StudioClassification): StudioDraftOp {
   return { kind: "classify", tool, ...c };
+}
+
+function cap(tool: string, maxResultBytes: number, paging?: boolean): StudioDraftOp {
+  return paging === undefined ? { kind: "cap", tool, maxResultBytes } : { kind: "cap", tool, maxResultBytes, paging };
+}
+
+function expose(mode: "direct" | "search"): StudioDraftOp {
+  return { kind: "expose", mode };
 }
 
 type TestOp = Extract<StudioDraftOp, { kind: "test" }>;
@@ -280,6 +288,118 @@ describe("buildFolder", () => {
     expect(folder.files.get("tools.toml")).toBe(production.get("tools.toml"));
     expect(folder.files.get("openapi.yaml")).toBe(production.get("openapi.yaml"));
     expect(folder.files.get("tests/calls.jsonl")).toBe(production.get("tests/calls.jsonl"));
+  });
+});
+
+// ── Caps and exposure ────────────────────────────────────────────────────────
+
+/** tools.toml's entry for one key in a built folder. */
+function toolsEntry(folder: { files: Map<string, string> }, key: string): Record<string, unknown> | undefined {
+  const parsed = parseToolsToml(folder.files.get("tools.toml") ?? "");
+  if (!parsed.ok) throw new Error("tools.toml does not parse.");
+  return parsed.value.tools?.[key];
+}
+
+/** The billing folder with list_charges's paging taken out of tools.toml. */
+function unpagedBillingProduction(): Map<string, string> {
+  const production = billingProduction();
+  const tools = production.get("tools.toml") ?? "";
+  if (!tools.includes('paginate = "cursor"\n')) throw new Error("The billing fixture no longer pages list_charges.");
+  production.set("tools.toml", tools.replace('paginate = "cursor"\n', ""));
+  return production;
+}
+
+describe("buildFolder with a cap or an exposure mode", () => {
+  it("writes a tool's result cap, and turns its paging off", () => {
+    const folder = buildFolder(input({ ops: [cap("list_charges", 16_000, false)], production: billingProduction() }));
+
+    expect(folder.capped).toStrictEqual(["list_charges"]);
+    const entry = toolsEntry(folder, "list_charges");
+    expect(entry?.max_result_bytes).toBe(16_000);
+    expect(entry).not.toHaveProperty("paginate");
+  });
+
+  it("turns paging on with the paging pattern the lock recorded for the tool", () => {
+    const production = unpagedBillingProduction();
+    expect(toolsEntry({ files: production }, "list_charges")).not.toHaveProperty("paginate");
+
+    const folder = buildFolder(input({ ops: [cap("list_charges", 16_000, true)], production }));
+
+    expect(folder.capped).toStrictEqual(["list_charges"]);
+    expect(toolsEntry(folder, "list_charges")).toMatchObject({ max_result_bytes: 16_000, paginate: "cursor" });
+  });
+
+  it("leaves paging as tools.toml has it when the cap does not name it", () => {
+    const folder = buildFolder(input({ ops: [cap("list_charges", 8_000)], production: billingProduction() }));
+
+    expect(toolsEntry(folder, "list_charges")).toMatchObject({ max_result_bytes: 8_000, paginate: "cursor" });
+  });
+
+  it("counts no change when the cap and paging are already in force", () => {
+    const first = buildFolder(input({ ops: [cap("list_charges", 16_000, true)], production: billingProduction() }));
+    const second = buildFolder(input({ ops: [cap("list_charges", 16_000, true)], production: first.files }));
+
+    expect(second.capped).toStrictEqual([]);
+    expect(second.files.get("tools.toml")).toBe(first.files.get("tools.toml"));
+  });
+
+  it("refuses paging for a tool with no paging pattern", () => {
+    const err = refusal(() =>
+      buildFolder(input({ ops: [cap("create_refund", 16_000, true)], production: billingProduction() })),
+    );
+    expect(err.reason).toBe("tool_paging_missing");
+    expect(err.message).toContain("create_refund has no paging pattern");
+  });
+
+  it("refuses a cap on a tool neither tools.toml nor the source holds", () => {
+    const err = refusal(() =>
+      buildFolder(input({ ops: [cap("delete_account", 16_000)], production: billingProduction() })),
+    );
+    expect(err.reason).toBe("tool_not_found");
+    expect(err.message).toContain("delete_account");
+  });
+
+  it("caps a tool imported in the same draft", async () => {
+    const folder = buildFolder(
+      await stripeInput(mcpSource(stripeTools()), [
+        imp("list_charges"),
+        classify("list_charges", READ_THIRD_PARTY),
+        cap("list_charges", 12_000),
+      ]),
+    );
+
+    expect(folder.imported).toStrictEqual(["list_charges"]);
+    expect(folder.capped).toStrictEqual(["list_charges"]);
+    expect(toolsEntry(folder, "list_charges")?.max_result_bytes).toBe(12_000);
+  });
+
+  it("switches server.toml to search mode and keeps the rest of the file", () => {
+    const production = billingProduction();
+    const folder = buildFolder(input({ ops: [expose("search")], production }));
+
+    expect(folder.exposure).toBe("search");
+    expect(folder.compiled.exposure.mode).toBe("search");
+    const written = parseServerToml(folder.files.get("server.toml") ?? "");
+    const before = parseServerToml(production.get("server.toml") ?? "");
+    if (!written.ok || !before.ok) throw new Error("server.toml does not parse.");
+    expect(written.value).toStrictEqual({ ...before.value, exposure: { mode: "search", definition_budget: 8000 } });
+    expect(folder.files.get("server.toml")?.startsWith("#:schema https://oxagen.sh/schemas/mcp-server/v1.json\n")).toBe(
+      true,
+    );
+  });
+
+  it("keeps server.toml's text when the draft sets the mode already in force", () => {
+    const production = billingProduction();
+    const folder = buildFolder(input({ ops: [expose("direct")], production }));
+
+    expect(folder.exposure).toBeNull();
+    expect(folder.files.get("server.toml")).toBe(production.get("server.toml"));
+  });
+
+  it("takes the last exposure mode the draft sets", () => {
+    const folder = buildFolder(input({ ops: [expose("search"), expose("direct")], production: billingProduction() }));
+
+    expect(folder.exposure).toBeNull();
   });
 });
 
