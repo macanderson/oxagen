@@ -14,4 +14,6 @@ A file keeps one waiting memory. A new statement from the same file replaces the
 
 Every enrolled host's daemon reads the memory folders every five minutes, and no setting turns the scan off. Claude Code's folder is `~/.claude/projects/<project>/memory/`, or the one under `CLAUDE_CONFIG_DIR`, and `MEMORY.md` is skipped. The daemon sends a file again each time its text changes, including back to text it held before.
 
+Stella keeps its memories in each workspace's `.stella/private/context.db`. The daemon finds each workspace from the folders of the Stella runs it has seen, reads the `export_memories_v1` view there, and sends each live memory with its lineage as `path`, so its source is `stella:<lineage>`. The memory's kind, such as `reflection`, is its `memory_type`.
+
 The daemon calls `POST /v1/tacho/memories`. Each host gets 30 calls a minute on this path, separate from the command poll and the bundle refresh. See [ADR-206](../adr/ADR-206-memories-wait-in-oxagen-and-reach-a-repository-by-a-memory-pr.md), [ADR-238](../adr/ADR-238-oxagen-collects-harness-memories-and-recalls-none-of-them.md), and [ADR-248](../adr/ADR-248-memories-keep-their-rows-and-rank-by-use.md).
