@@ -46,6 +46,7 @@ import {
   lockedUpstreamTools,
 } from "@oxagen/steering-bundle";
 import { logger } from "../../logger";
+import { jobAuthor } from "../../steering-repo/pr-proposal";
 import {
   syncBody,
   syncCommitMessage,
@@ -594,6 +595,9 @@ async function openPullRequest(
       title: scrub(syncTitle(input.text)),
       body: scrub(syncBody(input.text)),
       commitMessage: scrub(syncCommitMessage(input.text)),
+      // The sync runs with no person behind it, so the PR's proposal row
+      // names the job (#5122).
+      author: jobAuthor("mcp-studio-sync"),
       files: input.files.map((file) => ({
         path: file.path,
         content: file.content === null ? null : scrub(file.content),

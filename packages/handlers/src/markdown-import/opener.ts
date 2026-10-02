@@ -24,6 +24,7 @@ export const MARKDOWN_IMPORT_PULL_REQUEST: SteeringPullRequestKind = {
           reason: "branch_prefix",
           message: `${args.branch} is not a steering/import-<YYYY-MM-DD> branch. A Markdown import opens its steering PR on one.`,
         },
+  proposalKind: "import",
 };
 
 /** The opener over the workspace's steering host and published index. */

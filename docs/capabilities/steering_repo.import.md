@@ -2,7 +2,7 @@
 
 Move the workspace's steering from `.oxagen/` in the repository it binds to a steering repo, and open the steering PRs a person merges (steering spec, Workspace migration; lane S10, #4620; ADR-219). A workspace on a legacy sources connection calls it with `startFresh` instead, which creates an empty steering repo and imports nothing (#4684).
 
-A workspace owner runs this once for each workspace that still reads `.oxagen/`. The run changes no file on a default branch. Every change is a PR on the host, and a person merges each one.
+A workspace owner runs this once for each workspace that still reads `.oxagen/`. The run changes no file on a default branch. Every change is a PR on the host, and a person merges each one. Each steering PR it opens on the steering repo carries an `import` proposal ([ADR-265](../adr/ADR-265-every-steering-pr-oxagen-opens-carries-a-proposal-row.md), #5122), so a person merges it from Oxagen with [`merge_context_pr`](context.pr.merge.md). A merge on GitHub leaves the steering repo diverged.
 
 **Surfaces:** api, mcp
 
@@ -60,7 +60,7 @@ Send `{}` on the first call. The choices count only until the run changes someth
 4. Opens the import steering PRs on the steering repo. The records go in batches on `steering/import-oxagen`, `steering/import-oxagen-2`, and so on, each at most 299 files. `workspace.toml` goes on `workspace/import-oxagen`, and each agent goes on its own `agents/<name>` branch.
 5. Opens one cleanup PR on the old repository, on `oxagen/import-cleanup`. It removes the files the steering repo now holds. Files the import left for a person stay. A converted file that changed on the old repository after step 1 read it stays too, and the cleanup PR lists it.
 
-Merge the PRs in the order `pullRequests` lists them, then merge the cleanup PR last.
+Merge the steering PRs from Oxagen in the order `pullRequests` lists them, then merge the cleanup PR on the old repository last. The cleanup PR changes the old code repository, not the steering repo, so it carries no proposal.
 
 The run records each step in the workspace's `steering_import` setting. A call after a finished run answers what that run did. A call after a stopped run resumes at the step that stopped, and it opens no PR and commits no file twice. The API may time out on a large tree while the run goes on. Call again after 10 minutes to read the answer.
 

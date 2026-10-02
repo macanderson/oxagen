@@ -31,6 +31,7 @@ import {
   proposalUri,
   stampProposalProvenance,
 } from "./steering-repo/propose";
+import { jobAuthor } from "./steering-repo/pr-proposal";
 import {
   resolveProposingAgent,
   type ProposingAgentResolver,
@@ -102,6 +103,8 @@ export function createSteeringProposeHandler(
         }),
         commitMessage: `${input.title}\n\nProposed by ${proposer.agent} from run ${proposer.run}.`,
         files,
+        // An agent proposed it, not a person: the row names the agent (#5122).
+        author: jobAuthor(`agent:${proposer.agent}`),
       },
     );
     return {

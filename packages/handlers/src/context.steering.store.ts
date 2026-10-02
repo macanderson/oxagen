@@ -213,6 +213,31 @@ interface MergeGovernanceInput {
   mergedByUserId: string;
 }
 
+/**
+ * A steering PR proposal's merge (#5122, ADR-265): the commit, the merger,
+ * and the registry records whose file the merge deleted.
+ */
+interface MergeSteeringPrInput {
+  scope: SteeringScope;
+  proposal: ProposalRow;
+  commitSha: string;
+  mergedAt: Date;
+  mergedByUserId: string;
+  /** The governance mode the merge ran under, recorded on each retirement. */
+  policyVersion: string;
+  /**
+   * The lineages of the records to retire. Only an active record retires,
+   * so a lineage the registry does not hold, or holds retired, is skipped.
+   */
+  retire: readonly string[];
+}
+
+interface MergeSteeringPrResult {
+  proposal: ProposalRow;
+  /** The lineages this merge retired, in the order `retire` named them. */
+  retired: string[];
+}
+
 interface PublishMergeResult {
   recordId: string;
   recordPublicId: string;
@@ -381,6 +406,15 @@ export interface SteeringStore {
    * record. A proposal no longer at `checks_passed` throws `already_merged`.
    */
   mergeGovernance(input: MergeGovernanceInput): Promise<ProposalRow>;
+  /**
+   * Move a steering PR proposal from `checks_passed` to `merged`, with its
+   * commit and merger, and clear its merge claim (#5122). In the same
+   * transaction, retire each active record `retire` names: its status becomes
+   * `retired` at the merge commit, and a `retire` promotion event joins its
+   * chain. A proposal no longer at `checks_passed` throws `already_merged`
+   * and retires nothing.
+   */
+  mergeSteeringPr(input: MergeSteeringPrInput): Promise<MergeSteeringPrResult>;
 }
 
 /** A guarded proposal write found the proposal at `status`. */
@@ -1362,5 +1396,75 @@ export const postgresSteeringStore: SteeringStore = {
     );
     if (!row) throw alreadyMerged(input.proposal.publicId);
     return toProposal(row);
+  },
+
+  async mergeSteeringPr(input) {
+    const { scope, proposal } = input;
+    return withTenantDb(async (tx) => {
+      // The repository sync and merge_context_pr's record publication take
+      // the same lock, so a retirement never interleaves with either.
+      await lockWorkspacePublication(tx, scope.workspaceId);
+      const retired: string[] = [];
+      for (const lineageId of input.retire) {
+        const [record] = await tx
+          .select({ id: schema.contextRecords.id })
+          .from(schema.contextRecords)
+          .where(
+            and(
+              eq(schema.contextRecords.orgId, scope.orgId),
+              eq(schema.contextRecords.workspaceId, scope.workspaceId),
+              eq(schema.contextRecords.slug, lineageId),
+              eq(schema.contextRecords.status, "active"),
+              isNull(schema.contextRecords.deletedAt),
+            ),
+          )
+          .limit(1);
+        if (!record) continue;
+        // A retirement is a publication too, as the repository sync writes
+        // it: a checkout that still holds the file is behind this commit.
+        await tx
+          .update(schema.contextRecords)
+          .set({
+            status: "retired",
+            commitSha: input.commitSha,
+            publishedAt: input.mergedAt,
+            updatedById: input.mergedByUserId,
+            updatedAt: input.mergedAt,
+          })
+          .where(eq(schema.contextRecords.id, record.id));
+        await appendPromotion(tx, {
+          scope,
+          recordId: record.id,
+          versionId: null,
+          action: "retire",
+          approverUserId: input.mergedByUserId,
+          policyVersion: input.policyVersion,
+        });
+        retired.push(lineageId);
+      }
+      // The transition guards the transaction: a second call that also read
+      // `checks_passed` rolls back its retirements here.
+      const [row] = await tx
+        .update(schema.contextProposals)
+        .set({
+          status: "merged",
+          mergedCommit: input.commitSha,
+          mergedAt: input.mergedAt,
+          mergedByUserId: input.mergedByUserId,
+          mergeClaimedAt: null,
+          updatedById: input.mergedByUserId,
+          updatedAt: input.mergedAt,
+        })
+        .where(
+          and(
+            eq(schema.contextProposals.id, proposal.id),
+            eq(schema.contextProposals.kind, proposal.kind),
+            eq(schema.contextProposals.status, "checks_passed"),
+          ),
+        )
+        .returning();
+      if (!row) throw alreadyMerged(proposal.publicId);
+      return { proposal: toProposal(row), retired };
+    });
   },
 };

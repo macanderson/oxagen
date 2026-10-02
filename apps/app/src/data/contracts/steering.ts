@@ -30,12 +30,51 @@ export const RecordKind = z.enum(RECORD_KINDS);
 export type RecordKind = z.infer<typeof RecordKind>;
 
 /**
- * What a proposal changes: a record of one of the six kinds, or the steering
- * repository's governance mode (#4795). A governance proposal publishes no
+ * The steering PRs Oxagen opens that change files rather than one record
+ * (#5122), in the shared contract's order:
+ *
+ * - `revert`: the PR revert_steering_pr opens to undo a merged steering PR.
+ * - `tools`: a tools/ PR from MCP Studio's Review or the server sync.
+ * - `import`: a Markdown import's PR, or one a steering import opens from `.oxagen/`.
+ * - `memory_pr`: a memory PR on memory/<date>. `memory` alone is the record kind.
+ * - `agent_file`: the PR that adds agents/<name>.toml when a host enrolls.
+ * - `agent_proposal`: the PR an agent opens with propose_steering.
+ * - `workspace`: the workspace.toml PR that links or unlinks a repository.
+ */
+const STEERING_PR_KINDS = [
+  "revert",
+  "tools",
+  "import",
+  "memory_pr",
+  "agent_file",
+  "agent_proposal",
+  "workspace",
+] as const;
+type SteeringPrKind = (typeof STEERING_PR_KINDS)[number];
+
+/**
+ * What a proposal changes: a record of one of the six kinds, the steering
+ * repository's governance mode (#4795), or the files of one steering PR
+ * (#5122). A governance proposal and a steering PR proposal publish no single
  * record.
  */
-export const ProposalKind = z.enum([...RECORD_KINDS, "governance"]);
+export const ProposalKind = z.enum([
+  ...RECORD_KINDS,
+  "governance",
+  ...STEERING_PR_KINDS,
+]);
 export type ProposalKind = z.infer<typeof ProposalKind>;
+
+const STEERING_PR_KIND_SET: ReadonlySet<string> = new Set(STEERING_PR_KINDS);
+
+/**
+ * True for a steering PR proposal. Its merge runs the steering checks on the
+ * PR's head itself, so it merges from any open status once the PR exists, and
+ * open_context_pr refuses it.
+ */
+export function isSteeringPrKind(kind: ProposalKind): kind is SteeringPrKind {
+  return STEERING_PR_KIND_SET.has(kind);
+}
 
 export const RecordForce = z.enum(["must", "should", "may", "info"]);
 export type RecordForce = z.infer<typeof RecordForce>;
@@ -174,7 +213,10 @@ export const ContextPr = z.object({
   proposalId: PublicId,
   /** The lineage the record or proposal is about: the file stem under .oxagen/rules/, not an id. */
   lineage: z.string().min(1),
-  /** A record kind, or governance for a change to the governance mode (#4795). */
+  /**
+   * A record kind, governance for a change to the governance mode (#4795), or
+   * a steering PR kind (#5122).
+   */
   kind: ProposalKind,
   status: ProposalStatus,
   /** Read from governance.toml when the pull request opens; null before. */
@@ -224,7 +266,10 @@ export const ContextPr = z.object({
     }),
   ),
   onMerge: z.object({
-    /** The record file merge publishes. */
+    /**
+     * The record file merge publishes. For a steering PR proposal it is the
+     * folder every changed file sits under, or `.` for the repository root.
+     */
     path: z.string().min(1),
     /**
      * The promotion ledger's length now and after merge. It is not the
@@ -237,9 +282,9 @@ export const ContextPr = z.object({
     .object({
       commit: z.string().min(1),
       at: Instant,
-      /** Null for a governance proposal, which appends no promotion event. */
+      /** Null for a governance or steering PR proposal, which appends no promotion event. */
       promotionEventId: PublicId.nullable(),
-      /** Null for a governance proposal, which publishes no record. */
+      /** Null for a governance or steering PR proposal, which publishes no single record. */
       recordId: PublicId.nullable(),
       /** The merger's display name; null when unnamed or merged on the host. */
       byName: z.string().nullable(),

@@ -1,6 +1,7 @@
 // Typed steering values for the component tests of the two pages that read the
 // steering port (ARCHITECTURE.md §5): a published record, one record's page, a
-// proposal, a Context PR in each state of its machine, the freshness panel's
+// proposal, a Context PR in each state of its machine (a steering PR
+// proposal's among them), the freshness panel's
 // read, a workspace memory with its page and its drawer read, a memory PR's
 // records, and a DataSource that answers every steering read with what a test
 // hands it.
@@ -245,6 +246,53 @@ export function contextPr(
             onHost: false,
           }
         : null,
+    ...overrides,
+  };
+}
+
+/** The six steering PR kinds (#5122): every proposal kind that is no record kind and no governance change. */
+type SteeringPrKind = Exclude<ContextPr["kind"], RecordKind | "governance">;
+
+/** The branch and the folder of each steering PR kind's fixture PR. */
+const STEERING_PR: Record<SteeringPrKind, { branch: string; folder: string }> =
+  {
+    revert: { branch: "steering/revert-518", folder: "steering/rules" },
+    tools: { branch: "tools/2026-10-02-github", folder: "tools/github" },
+    import: { branch: "steering/import-2026-10-02", folder: "steering" },
+    memory_pr: { branch: "memory/2026-10-02", folder: "steering/memory" },
+    agent_file: { branch: "agents/release-bot", folder: "agents" },
+    agent_proposal: {
+      branch: "steering/proposal-release-bot",
+      folder: "steering/rules",
+    },
+    workspace: { branch: "workspace/link-acme-docs-1a2b3c4d", folder: "." },
+  };
+
+/**
+ * A steering PR proposal's Context PR at `status` (#5122). Its lineage is its
+ * branch, and merge lands the files under one folder. It carries no record
+ * checks and no body, and its merge appends no promotion event and publishes
+ * no single record, so the ledger keeps its length.
+ */
+export function steeringPrContextPr(
+  kind: SteeringPrKind,
+  status: ProposalStatus,
+  overrides: Partial<ContextPr> = {},
+): ContextPr {
+  const { branch, folder } = STEERING_PR[kind];
+  const base = contextPr(status);
+  return {
+    ...base,
+    kind,
+    lineage: branch,
+    pr: base.pr === null ? null : { ...base.pr, branch },
+    body: null,
+    checks: [],
+    onMerge: { path: folder, bundleVersion: { current: 41, afterMerge: 41 } },
+    merged:
+      base.merged === null
+        ? null
+        : { ...base.merged, promotionEventId: null, recordId: null },
     ...overrides,
   };
 }

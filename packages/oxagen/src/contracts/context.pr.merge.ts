@@ -7,13 +7,19 @@
 // promotion event to the hash-chained ledger, and emits `steering.published`.
 // A governance proposal (#4795) publishes no record and appends no promotion
 // event: it lands `steering/governance.toml`, names the approver on the
-// ledger line and the proposal, and emits `steering.governance_changed`. The
-// output is a union on `kind`.
+// ledger line and the proposal, and emits `steering.governance_changed`. A
+// steering PR proposal (#5122, ADR-265) lands its PR's files, publishes the
+// steering version, retires the records a revert deleted, and emits
+// `steering.published`. The output is a union on `kind`.
 // The reviewer is a signed-in user; an API key carries no user, so the MCP
 // surface (API-key auth) is not declared.
 import { z } from "zod";
 import { registerCapability } from "../registry";
-import { governanceModeSchema, recordKindSchema } from "./context.steering.shared";
+import {
+  governanceModeSchema,
+  recordKindSchema,
+  steeringPrKindSchema,
+} from "./context.steering.shared";
 
 /**
  * The number of entries in the workspace's promotion ledger before and after
@@ -80,17 +86,43 @@ const governanceMergeSchema = z
   })
   .strict();
 
+/**
+ * A steering PR proposal's merge (#5122, ADR-265): a revert, tools, import,
+ * memory, agent file, agent proposal, or workspace settings PR. It publishes no single record, so
+ * it names the pull request and the records a revert retired.
+ */
+const steeringPrMergeSchema = z
+  .object({
+    proposalId: z.string(),
+    status: z.literal("merged"),
+    kind: steeringPrKindSchema,
+    pullRequest: z
+      .object({ number: z.number().int().positive(), branch: z.string() })
+      .strict(),
+    /**
+     * The lineages of the registry records this merge retired: a revert whose
+     * merge deleted the file of a record a Context PR published. Empty for
+     * every other merge.
+     */
+    retired: z.array(z.string()),
+    mergedCommit: z.string(),
+    bundleVersion: bundleVersionSchema,
+    publishedVersion: publishedVersionSchema,
+  })
+  .strict();
+
 /** The output merge_context_pr and merge_pr_without_review share. */
 export const contextPrMergeOutputSchema = z.discriminatedUnion("kind", [
   recordMergeSchema,
   governanceMergeSchema,
+  steeringPrMergeSchema,
 ]);
 
 export const contextPrMerge = registerCapability({
   name: "merge_context_pr",
   domain: "context",
   description:
-    "Merge a proposal's Context PR (a GitHub pull request or a GitLab merge request) and publish its record: refused until every check passed and unless the caller is a reviewer the governance mode allows; writes the promotion event to the ledger, bumps the steering version and emits steering.published",
+    "Merge a proposal's steering PR (a GitHub pull request or a GitLab merge request) through the merge queue: refused until every check passed and unless the caller is a reviewer the governance mode allows. A record proposal publishes its record and writes the promotion event to the ledger. A revert, tools, import, memory, agent, or workspace settings PR lands its files, and a revert retires each record whose file it deleted. Bumps the steering version and emits steering.published",
   mode: "sync",
   surfaces: ["api", "agent"],
   layers: ["schema", "api", "unit", "docs", "app"],

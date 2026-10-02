@@ -17,8 +17,10 @@
 //      so is one an earlier import stored from the same line.
 //   5. Open one steering PR with every file through the steering PR opener
 //      (opener.ts). It runs the steering checks on the new head and reports
-//      them as the "Oxagen steering" check. A commit with no record or policy
-//      marked add opens none.
+//      them as the "Oxagen steering" check, and writes the PR's `import`
+//      proposal row with the caller as its author, so merge_context_pr can
+//      land it (#5122). A commit with no record or policy marked add opens
+//      none.
 //
 // Every refusal comes before the first write. The memories are stored before
 // the PR opens: a retry after a failed PR names each memory as waiting and
@@ -36,6 +38,7 @@ import type {
 } from "@oxagen/oxagen/contracts/steering.markdown_import.shared";
 import { assertContractRole } from "../lib/capability-role-guard";
 import type { MemoryDraft } from "../memory/types";
+import { actingAuthor } from "../steering-repo/pr-proposal";
 import { markdownImportBranch } from "../steering-repo/stamp";
 import type { ToolsPullRequestFile } from "../tools.pr.open";
 import type { ImportScope, MarkdownImportDeps } from "./deps";
@@ -272,6 +275,7 @@ export function createCommitMarkdownImportHandler(
       }),
       commitMessage: `steering: import ${counts} from Markdown`,
       files,
+      author: await actingAuthor(ctx),
     });
     return {
       pullRequest: {
