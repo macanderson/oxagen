@@ -123,7 +123,8 @@ export interface ToolCallObservation {
 export interface PricedRequestFrame {
   /**
    * The frame's key within its run: `at` exactly as the store printed it,
-   * then `#` and the frame's position among the run's frames at that same
+   * then `#`, then the chain and `seq` of a wrapped frame (`<uuid>:<seq>`),
+   * or a ledger frame's position among the run's frames at that same
    * instant. A Date would drop the store's sub-millisecond digits.
    */
   key: string;
@@ -182,6 +183,20 @@ export interface PricedRequestFrame {
    * the cache it held. Absent on every other frame.
    */
   cacheKeepAlive?: boolean;
+  /**
+   * The frame's place on the chain it was recorded on. A chain numbers its
+   * model calls and tool calls from one counter, so a call of the same chain
+   * and the same millisecond orders against the frame by it (#4506). Absent
+   * on a ledger frame, which has no chain.
+   */
+  seq?: number;
+  /**
+   * The call named no model, so no price covers it. The findings store hands
+   * such a frame to no detector. The request view reads it as the start of a
+   * request with no price, so the calls after it do not join the request
+   * before it (#4506). Absent on every other frame.
+   */
+  noModel?: true;
 }
 
 /** One class's price at a frame's instant, from the price book. */
@@ -408,6 +423,13 @@ export interface DetectInput {
    * cited but not covered.
    */
   frames?: ReadonlyMap<string, readonly PricedRequestFrame[]>;
+  /**
+   * The model calls that named no model, by run public id, in time order:
+   * each one `noModel`, with no price (#4506). Only the request view reads
+   * them, as request boundaries. A run absent here recorded none, or its
+   * frames were not read.
+   */
+  modellessFrames?: ReadonlyMap<string, readonly PricedRequestFrame[]>;
   /** The window's operator prompts, for detector 6; absent when the store read none. */
   prompts?: PromptRead;
   /**
