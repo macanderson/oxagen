@@ -717,45 +717,53 @@ describe("set_kill_switch", () => {
   });
 
   // Item 3 of Mac's ruling (2026-10-01, ADR-235): the customer's kill
-  // switches do not reach Oxagen's in-app assistant, so a customer cannot
-  // switch the managed assistant agent off. Oxagen does that through
-  // `set_assistant_switch`.
-  it("refuses to switch the managed assistant agent on, and writes nothing", async () => {
-    const flip = flipTx({ generation: 1, activeSwitches: [], liveGrants: 0 });
-    await expect(
-      handlerOver(flip)(
-        {
-          target: { kind: "agent", id: "agt_assistant" },
-          on: true,
-          reason: "stop the assistant",
-        },
-        ctx(),
-      ),
-    ).rejects.toMatchObject({
-      code: "forbidden",
-      reason: "agent_managed_read_only",
-    });
-    expect(flip.ops).toEqual([]);
-    expect(mocks.emitSecurityEvent).not.toHaveBeenCalled();
-  });
+  // switches do not reach Oxagen's in-app assistant, so no customer role can
+  // switch the managed assistant agent on or off. Oxagen does that through
+  // `set_assistant_switch`, which is platform-only.
+  it.each(["Owner", "Admin"])(
+    "refuses a workspace %s who switches the managed assistant agent on, and writes nothing",
+    async (role) => {
+      stubRole(role);
+      const flip = flipTx({ generation: 1, activeSwitches: [], liveGrants: 0 });
+      await expect(
+        handlerOver(flip)(
+          {
+            target: { kind: "agent", id: "agt_assistant" },
+            on: true,
+            reason: "stop the assistant",
+          },
+          ctx(),
+        ),
+      ).rejects.toMatchObject({
+        code: "forbidden",
+        reason: "agent_managed_read_only",
+      });
+      expect(flip.ops).toEqual([]);
+      expect(mocks.emitSecurityEvent).not.toHaveBeenCalled();
+    },
+  );
 
-  it("refuses to clear the switch Oxagen holds on the managed assistant agent", async () => {
-    const flip = flipTx({ generation: 3, activeSwitches: [], liveGrants: 0 });
-    await expect(
-      handlerOver(flip)(
-        {
-          target: { kind: "agent", id: "agt_assistant" },
-          on: false,
-          reason: "turn the assistant back on",
-        },
-        ctx(),
-      ),
-    ).rejects.toMatchObject({
-      code: "forbidden",
-      reason: "agent_managed_read_only",
-    });
-    expect(flip.ops).toEqual([]);
-  });
+  it.each(["Owner", "Admin"])(
+    "refuses a workspace %s who clears the switch Oxagen holds on the managed assistant agent",
+    async (role) => {
+      stubRole(role);
+      const flip = flipTx({ generation: 3, activeSwitches: [], liveGrants: 0 });
+      await expect(
+        handlerOver(flip)(
+          {
+            target: { kind: "agent", id: "agt_assistant" },
+            on: false,
+            reason: "turn the assistant back on",
+          },
+          ctx(),
+        ),
+      ).rejects.toMatchObject({
+        code: "forbidden",
+        reason: "agent_managed_read_only",
+      });
+      expect(flip.ops).toEqual([]);
+    },
+  );
 
   it("flipping off a switch that is not on is a conflict", async () => {
     const flip = flipTx({ generation: 7, activeSwitches: [], liveGrants: 0 });
