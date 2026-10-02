@@ -2041,11 +2041,29 @@
       "writes": []
     },
     {
+      "domain": "work",
+      "name": "get_work_item",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
       "domain": "spend",
       "name": "get_work_order_metrics",
       "reads": [],
       "surfaces": [
         "agent",
+        "api"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "work",
+      "name": "get_work_outcomes",
+      "reads": [],
+      "surfaces": [
         "api"
       ],
       "writes": []
@@ -2966,6 +2984,24 @@
       "surfaces": [
         "api",
         "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "work",
+      "name": "list_work_items",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "work",
+      "name": "list_work_targets",
+      "reads": [],
+      "surfaces": [
+        "api"
       ],
       "writes": []
     },

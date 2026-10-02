@@ -125,7 +125,7 @@ describe("work intake MCP tools", () => {
       () => setWorkCollector({ name: "github", connection_id: "con_01", repos: ["acme/web"], paused: undefined }),
       { collector: COLLECTOR, created: true, reconcile_queued: true },
     ],
-    ["sync_work_collector", () => syncWorkCollector({ collector_id: COLLECTOR_ID }), { collector_id: COLLECTOR_ID, queued: true }],
+    ["sync_work_collector", () => syncWorkCollector({ collector_id: COLLECTOR_ID, name: undefined }), { collector_id: COLLECTOR_ID, queued: true }],
     [
       "get_work_priorities",
       () => getWorkPriorities({}),
