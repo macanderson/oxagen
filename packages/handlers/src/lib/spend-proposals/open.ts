@@ -1,14 +1,15 @@
 /**
- * instruction-proposals.ts — opens a steering record proposal for each
- * instruction operators repeat across runs (detector 6, prompt habits).
+ * open.ts — opens the steering record proposals the builders return.
  *
- * The findings pass in @oxagen/billing finds the instructions and calls the
- * opener register.ts installs, which calls this module inside the
- * workspace's tenant scope. Each proposal goes through `createProposal`, the
- * one place a proposal row is created (ADR-061), with `createOnly` set. A
- * lineage that already has a record or a proposal is refused with
- * `clone_name_taken`, and this module leaves it alone: a later pass never
- * opens the same instruction twice, and a dismissed proposal stays dismissed.
+ * The findings pass in @oxagen/billing calls the opener register.ts
+ * installs, which calls `openSpendProposalsFor` inside the workspace's
+ * tenant scope. Each proposal goes through `createProposal`, the one place a
+ * proposal row is created (ADR-061), with `createOnly` set. A lineage that
+ * already has a record or a proposal, in any state, is refused with
+ * `clone_name_taken`, and this module leaves it alone. Each builder derives
+ * the lineage from what the proposal is about, so a later pass never opens
+ * the same proposal twice, a merged one is not proposed again, and a
+ * dismissed one stays dismissed.
  *
  * This is the system path to `propose_record`. The findings job has no acting
  * user, so the handler's role check (`assertOrgRole`) has no one to check and
@@ -21,28 +22,27 @@
  */
 import { randomUUID } from "node:crypto";
 import type {
-  InstructionProposal,
-  InstructionProposalScope,
+  SpendProposalInput,
+  SpendProposalScope,
 } from "@oxagen/billing/proposal-opener";
 import { emitSecurityEvent } from "@oxagen/database/security";
 import { isHandlerError, type CapabilityContext } from "@oxagen/oxagen";
 import { contextProposalCreate } from "@oxagen/oxagen/contracts/context.proposal.create";
-import { createProposal } from "../context.proposal.shared";
+import { createProposal } from "../../context.proposal.shared";
 import {
   postgresSteeringStore,
   type SteeringStore,
-} from "../context.steering.store";
+} from "../../context.steering.store";
+import { proposalSource } from "./shared";
+import type { SpendProposal, SpendProposalBuilder } from "./types";
 
-/** The attribution each proposal carries. */
-export const INSTRUCTION_PROPOSAL_SOURCE = "finding:repeated_instructions";
-
-export interface InstructionProposalDeps {
+export interface SpendProposalDeps {
   store: Pick<SteeringStore, "insertProposal">;
   create: typeof createProposal;
   audit: typeof emitSecurityEvent;
 }
 
-const PRODUCTION_DEPS: InstructionProposalDeps = {
+const PRODUCTION_DEPS: SpendProposalDeps = {
   store: postgresSteeringStore,
   create: createProposal,
   audit: emitSecurityEvent,
@@ -57,20 +57,29 @@ function isTaken(err: unknown): boolean {
   );
 }
 
+/** Every builder's proposals for one pass, in builder order. */
+export function buildSpendProposals(
+  input: SpendProposalInput,
+  builders: readonly SpendProposalBuilder[],
+): SpendProposal[] {
+  return builders.flatMap((builder) => builder.build(input));
+}
+
 /**
  * Open one proposal per entry, in order. Each entry is tried even when an
  * earlier one fails. The first failure other than a taken lineage is thrown
  * once every entry has been tried.
  */
-export async function openInstructionProposalsFor(
-  scope: InstructionProposalScope,
-  proposals: readonly InstructionProposal[],
-  deps: InstructionProposalDeps = PRODUCTION_DEPS,
+export async function openProposals(
+  scope: SpendProposalScope,
+  proposals: readonly SpendProposal[],
+  deps: SpendProposalDeps = PRODUCTION_DEPS,
 ): Promise<{ opened: number; taken: number }> {
   let opened = 0;
   let taken = 0;
   let failure: { err: unknown } | null = null;
   for (const proposal of proposals) {
+    const source = proposalSource(proposal.kind);
     const ctx: CapabilityContext = {
       orgId: scope.orgId,
       workspaceId: scope.workspaceId,
@@ -96,7 +105,7 @@ export async function openInstructionProposalsFor(
         requestId: ctx.requestId,
         detail: {
           actor: "findings_job",
-          source: INSTRUCTION_PROPOSAL_SOURCE,
+          source,
           lineageId: proposal.lineageId,
           proposalId,
         },
@@ -107,13 +116,14 @@ export async function openInstructionProposalsFor(
         ctx,
         {
           lineageId: proposal.lineageId,
+          ...(proposal.title === null ? {} : { title: proposal.title }),
           kind: "rule",
           force: "should",
           constraintEffect: null,
           sharingScope: "workspace",
           statement: proposal.statement,
           rationale: proposal.rationale,
-          source: INSTRUCTION_PROPOSAL_SOURCE,
+          source,
           support: {
             runs: proposal.runs,
             agents: proposal.agents,

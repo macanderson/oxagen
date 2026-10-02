@@ -264,6 +264,68 @@ export const OperatorRanking = z.object({
 export type OperatorRanking = z.infer<typeof OperatorRanking>;
 export type OperatorRankingRow = OperatorRanking["operators"][number];
 
+/**
+ * `get_spend_per_merged_pr` (spend spec, detector 8; F26): each agent's spend
+ * on bounded runs per pull request that merged and stayed. A bounded run is a
+ * run that opened a pull request. `perMergedPr` is null exactly when
+ * `absence` says why, and the page prints it as absent, never as a zero.
+ */
+export const SpendPerMergedPr = z.object({
+  period: DayRange,
+  agents: z.array(
+    z.object({
+      agentKey: z.string().min(1),
+      boundedRuns: z.number().int().positive(),
+      unpricedRuns: Count,
+      spend: Cost.nullable(),
+      mergedPrs: Count,
+      perMergedPr: Cost.nullable(),
+      absence: z.enum(["no_merged_pr", "mixed_currency", "not_priced"]).nullable(),
+      /** The costliest bounded runs, each with what its pull requests became. */
+      runs: z.array(
+        z.object({
+          runId: PublicId.regex(RUN_PUBLIC_ID),
+          startedAt: z.string(),
+          cost: Cost.nullable(),
+          pullRequests: z.array(
+            z.object({
+              prKey: z.string().min(1),
+              url: z.string().nullable(),
+              state: z.enum(["merged", "reverted", "closed", "open", "unread"]),
+            }),
+          ),
+        }),
+      ),
+    }),
+  ),
+});
+export type SpendPerMergedPr = z.infer<typeof SpendPerMergedPr>;
+export type AgentPerMergedPr = SpendPerMergedPr["agents"][number];
+
+/** The findings behind one figure beside the headline: their savings summed, and how many. */
+const FindingFigure = z.object({ saving: Money, findings: Count });
+
+/**
+ * `get_unproductive_spend` (spend spec, Counting): the workspace's
+ * unproductive spend for a period, the same total the operator ranking
+ * totals. `spend` and `share` are null when the period's spend has no single
+ * figure. `parts` holds detectors 2, 3, and 5 in that order and `estimate`
+ * detector 4: each sits beside the headline and stays out of it.
+ */
+export const UnproductiveSpend = z.object({
+  period: DayRange,
+  unproductive: Money,
+  spend: Money.nullable(),
+  share: Ratio.nullable(),
+  parts: z.array(
+    FindingFigure.extend({
+      detector: z.union([z.literal(2), z.literal(3), z.literal(5)]),
+    }),
+  ),
+  estimate: FindingFigure,
+});
+export type UnproductiveSpend = z.infer<typeof UnproductiveSpend>;
+
 /** An instant a contract carries as ISO 8601 in UTC. */
 const Instant = z.iso.datetime();
 

@@ -140,6 +140,7 @@ async function readMemoryRecord(
     lineage: parsed.lineage,
     kind: parsed.kind,
     status: parsed.status,
+    force: parsed.force,
     statement: recordStatement(read.body),
     repos: parsed.repos ?? null,
     appliesTo: parsed.applies_to ?? null,

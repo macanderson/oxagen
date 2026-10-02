@@ -531,7 +531,7 @@ export function ledgerSealQuery(
  * walks (every attempt's frames), matched on the seal side, so the
  * Chain-and-seal tab shows one root per attempt instead of the latest
  * attempt's root beside a frame count that spans every attempt (finding 8,
- * macanderson/oxagen#3370).
+ * oxageninc/product#3370).
  */
 export function ledgerAllSealsQuery(
   db: QueryDb,

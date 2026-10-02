@@ -8,7 +8,7 @@ description: "The oxagen CLI: govern, ground, explain, meter, and rate your agen
 Oxagen **governs, grounds, explains, meters, and rates** agents. It does not run them. The coding agent is the [`stella`](https://github.com/macanderson/stella) CLI, which reaches Oxagen over MCP and the platform API.
 
 <Callout type="warn">
-**The coding agent moved.** Earlier versions of this CLI shipped an interactive REPL, one-shot turns, a local `fleet` command, sandboxes, skills, slash commands, `eval`, and local rules and settings. All of them are removed. Every removed entry point is still registered and prints a retirement notice that points at Stella, so a stale script fails loudly instead of doing nothing. See [ADR-043](https://github.com/macanderson/oxagen/blob/main/docs/adr/ADR-043-runtime-excision.md).
+**The coding agent moved.** Earlier versions of this CLI shipped an interactive REPL, one-shot turns, a local `fleet` command, sandboxes, skills, slash commands, `eval`, and local rules and settings. All of them are removed. Every removed entry point is still registered and prints a retirement notice that points at Stella, so a stale script fails loudly instead of doing nothing. See [ADR-043](https://github.com/oxageninc/product/blob/main/docs/adr/ADR-043-runtime-excision.md).
 </Callout>
 
 ## Who this is for
@@ -20,7 +20,7 @@ These docs are for **developers and platform operators**. You should be comforta
 - **Meter and bill.** `oxagen budget` sets and reads hard period-to-date spend ceilings for an org or workspace, with live burn against each one. `oxagen cost` prices token usage from the rate card built into the CLI before you spend anything.
 - **Explain a run.** `oxagen trace <executionId>` shows one agent run as a tree: every step, the tool calls it made, and any child runs it started, with timing and spend.
 - **Ground answers.** `oxagen graph search` runs a bounded, workspace-scoped semantic search over the knowledge graph. See [Knowledge graph from the CLI](/docs/cli/knowledge-graph).
-- **Curate what agents learn.** `oxagen memory` and `oxagen remember` manage the workspace's [agent memory](/docs/cli/memory): the OBSERVATION → RULE → FACT ladder, citation analytics, and audited promotions.
+- **Curate what agents learn.** `oxagen memory` lists the [memories your agents wrote](/docs/cli/memory) in their harnesses, ranked by how often runs used them, and promotes the ones worth keeping into steering records.
 - **Govern the workspace.** Bind agents to environments (`oxagen agent env`), manage environments (`oxagen env`), and read or write the workspace's encrypted credential vault (`oxagen secret`).
 - **Route by cost.** `oxagen router` reads the verified-outcome market router: observed outcomes per task class and model, and the governed routing policy.
 

@@ -11,6 +11,10 @@
 // role they hold now: it is the fact the audit needs, and it is labelled as of
 // the grant so nobody reads it as current.
 //
+// The agent's avatar wears the harness the agent registered (#4871). The
+// mandate records no harness, so the page reads it from the agents beside the
+// mandate and hands it in; an agent the read does not hold draws no badge.
+//
 // The scope and the approval rule are the two fields a reader is most likely to
 // misread, so both are stated in full. `MandateScope` calls out a mandate scoped
 // to every tool rather than leaving a reader to spot one character in a list, and
@@ -20,6 +24,7 @@
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import type { MandateRow } from "@/data/contracts/mandates";
+import { AgentAvatar } from "@/ui/agent-avatar";
 import { mono, panel } from "@/ui/control-styles";
 import { useFormatter } from "@/ui/formatter";
 import { MandateScope } from "@/ui/mandate-scope";
@@ -112,7 +117,14 @@ function Approval({ mandate }: { mandate: MandateRow }) {
   );
 }
 
-export function MandateGrant({ mandate }: { mandate: MandateRow }) {
+export function MandateGrant({
+  mandate,
+  harness,
+}: {
+  mandate: MandateRow;
+  /** The harness the mandate's agent registered, or null when it is not known (#4871). */
+  harness: string | null;
+}) {
   const t = useTranslations("mandate.grant");
   const format = useFormatter();
   return (
@@ -126,7 +138,15 @@ export function MandateGrant({ mandate }: { mandate: MandateRow }) {
       </h2>
       <dl className="pb-2">
         <Row label={t("agent")}>
-          <span className={mono}>{mandate.agentSlug}</span>
+          <span className="inline-flex items-center gap-1.5">
+            <AgentAvatar
+              value={null}
+              initials={mandate.agentSlug.slice(0, 2).toUpperCase()}
+              harness={harness}
+              size={18}
+            />
+            <span className={mono}>{mandate.agentSlug}</span>
+          </span>
         </Row>
         <Row label={t("grantedBy")}>
           {mandate.grantedBy === null ? (

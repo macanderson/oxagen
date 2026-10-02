@@ -1,0 +1,28 @@
+{
+  "schema": "work-brief/v1",
+  "item": "wi_01k6aintelplatform612",
+  "item_revision": 2,
+  "repository": "aintel/platform",
+  "source": {
+    "url": "https://github.com/aintel/platform/issues/612",
+    "digest": "sha256:3f1c9a2e7b4d6085a1c3e5f7092b4d6e8a0c2e4f6081a3c5e7f9b1d3f5a7c9e1"
+  },
+  "criteria": [
+    {
+      "id": "c1",
+      "text": "An expired invite link shows the expiry message instead of a server error.",
+      "tag": "code",
+      "intent": "check",
+      "evidence": "invite.expired.test.ts passes",
+      "provenance": "source"
+    },
+    {
+      "id": "c3",
+      "text": "The invite page copy follows the house voice.",
+      "tag": "review",
+      "intent": "review",
+      "evidence": "",
+      "provenance": "person"
+    }
+  ]
+}

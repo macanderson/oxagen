@@ -23,6 +23,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 
 import {
   countMovableLegacyServers,
+  listMovableLegacyServers,
   registerServerFolderWriter,
   registerSteeringPrOpener,
   steeringPrOpener,
@@ -158,6 +159,44 @@ describe("countMovableLegacyServers", () => {
 
   it("reads no row as zero", async () => {
     expect(await countMovableLegacyServers(countTx(undefined) as never, SCOPE)).toBe(0);
+  });
+});
+
+describe("listMovableLegacyServers", () => {
+  /** A select chain that records its columns and WHERE and resolves to `rows`. */
+  function listTx(rows: unknown[]): { tx: unknown; columns: () => string[] } {
+    let picked: Record<string, unknown> = {};
+    const chain: Record<string, unknown> = {};
+    Object.assign(chain, {
+      select: (columns: Record<string, unknown>) => {
+        picked = columns;
+        return chain;
+      },
+      from: () => chain,
+      leftJoin: () => chain,
+      where: (w: SQL) => {
+        where = w;
+        return Promise.resolve(rows);
+      },
+    });
+    return { tx: chain, columns: () => Object.keys(picked) };
+  }
+
+  beforeEach(() => {
+    where = undefined;
+  });
+
+  it("reads the rows countMovableLegacyServers counts, with the WHERE it uses", async () => {
+    const rows = [{ id: "srv-1", name: "Linear", steeringName: null }];
+    const list = listTx(rows);
+
+    expect(await listMovableLegacyServers(list.tx as never, SCOPE)).toEqual(rows);
+    expect(list.columns()).toEqual(["id", "name", "steeringName"]);
+    const listed = new PgDialect().sqlToQuery(where as SQL);
+
+    await countMovableLegacyServers(countTx(1) as never, SCOPE);
+    const counted = new PgDialect().sqlToQuery(where as SQL);
+    expect(listed).toEqual(counted);
   });
 });
 

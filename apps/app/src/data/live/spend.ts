@@ -1,6 +1,8 @@
 // The spend port on the kernel (ARCHITECTURE.md §3.3): the cost rollup at one
 // level (get_spend), Fleet's spend tiles (get_spend at the model level), one key's drill (get_spend_drill), wasted spend by cause
-// (list_waste), operators by unproductive spend (get_operator_ranking), the configured ceilings (get_spend_budget), the price book
+// (list_waste), operators by unproductive spend (get_operator_ranking), the
+// unproductive spend headline (get_unproductive_spend), each agent's spend per merged pull request
+// (get_spend_per_merged_pr), the configured ceilings (get_spend_budget), the price book
 // (list_price_entries) and the models it cannot price
 // (list_unpriced_models), all noBillingGate reads. A refusal passes through as the kernel classified it;
 // an answer the view model refuses is reported once as record_unmappable.
@@ -13,6 +15,8 @@ import { findingList } from "@oxagen/oxagen/contracts/finding.list";
 import { spendDrill } from "@oxagen/oxagen/contracts/spend.drill";
 import { spendGet } from "@oxagen/oxagen/contracts/spend.get";
 import { spendOperatorRanking } from "@oxagen/oxagen/contracts/spend.operator_ranking";
+import { spendPerMergedPr } from "@oxagen/oxagen/contracts/spend.per_merged_pr";
+import { spendUnproductive } from "@oxagen/oxagen/contracts/spend.unproductive";
 import { spendWasteList } from "@oxagen/oxagen/contracts/spend.waste";
 import { tachoSessionPolicyRead } from "@oxagen/oxagen/contracts/tacho.session_policy.read";
 import { captureError } from "@oxagen/telemetry";
@@ -26,9 +30,11 @@ import {
   SpendDrill,
   SpendFindingEvidence,
   SpendFindings,
+  SpendPerMergedPr,
   SpendReport,
   SpendWaste,
   UnpricedModels,
+  UnproductiveSpend,
 } from "@/data/contracts/spend";
 import type { DataSource } from "@/data/ports";
 import { type Read, readError, readOk } from "@/data/read";
@@ -42,9 +48,11 @@ import {
   toSpendDrill,
   toSpendFindingEvidence,
   toSpendFindings,
+  toSpendPerMergedPr,
   toSpendReport,
   toSpendWaste,
   toUnpricedModels,
+  toUnproductiveSpend,
 } from "./mappers/spend";
 
 function toView<O, V extends z.ZodType>(
@@ -119,6 +127,28 @@ export const spend: DataSource["spend"] = {
     return toView(read, OperatorRanking, toOperatorRanking, {
       orgId: ctx.orgId,
       method: "operatorRanking",
+    });
+  },
+  async perMergedPr(ctx, period) {
+    const read = await kernelRead(ctx, {
+      contract: spendPerMergedPr,
+      input: { period },
+      page: "spend",
+    });
+    return toView(read, SpendPerMergedPr, toSpendPerMergedPr, {
+      orgId: ctx.orgId,
+      method: "perMergedPr",
+    });
+  },
+  async unproductive(ctx, period) {
+    const read = await kernelRead(ctx, {
+      contract: spendUnproductive,
+      input: { period },
+      page: "spend",
+    });
+    return toView(read, UnproductiveSpend, toUnproductiveSpend, {
+      orgId: ctx.orgId,
+      method: "unproductive",
     });
   },
   async budgets(ctx) {

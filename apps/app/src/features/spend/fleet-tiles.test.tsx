@@ -88,7 +88,9 @@ const source: DataSource = {
     findingEvidence: refuse,
     priceBook: refuse,
     operatorRanking: refuse,
+    perMergedPr: refuse,
     unpricedModels: refuse,
+    unproductive: refuse,
   },
   onboarding: { state: refuse, firstFrame: refuse },
   org: {

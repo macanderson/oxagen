@@ -831,6 +831,18 @@
       "consumes": []
     },
     {
+      "name": "dismiss_memories",
+      "domain": "context",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "dismiss_memory_promotion",
       "domain": "agent",
       "surfaces": [
@@ -1938,6 +1950,17 @@
       "consumes": []
     },
     {
+      "name": "get_spend_per_merged_pr",
+      "domain": "spend",
+      "surfaces": [
+        "api",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "get_steering_deliveries",
       "domain": "context",
       "surfaces": [
@@ -2097,6 +2120,17 @@
       "consumes": []
     },
     {
+      "name": "get_unproductive_spend",
+      "domain": "spend",
+      "surfaces": [
+        "api",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "get_usage_breakdown",
       "domain": "billing",
       "surfaces": [
@@ -2127,6 +2161,18 @@
         "api",
         "mcp",
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "get_workspace_memory",
+      "domain": "context",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
       ],
       "component": null,
       "produces": [],
@@ -2707,6 +2753,17 @@
       "consumes": []
     },
     {
+      "name": "list_memory_pr_records",
+      "domain": "context",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "list_memory_promotions",
       "domain": "agent",
       "surfaces": [
@@ -3109,6 +3166,18 @@
       "consumes": []
     },
     {
+      "name": "list_workspace_memories",
+      "domain": "context",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "list_workspaces",
       "domain": "workspace",
       "surfaces": [
@@ -3161,6 +3230,18 @@
       "surfaces": [
         "api",
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "migrate_tools_to_steering",
+      "domain": "tool",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
       ],
       "component": null,
       "produces": [],
@@ -3346,6 +3427,18 @@
       "domain": "context",
       "surfaces": [
         "api"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "promote_memories",
+      "domain": "context",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
       ],
       "component": null,
       "produces": [],
@@ -3565,6 +3658,16 @@
       "surfaces": [
         "api",
         "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "record_tacho_memory_uses",
+      "domain": "tacho",
+      "surfaces": [
+        "api"
       ],
       "component": null,
       "produces": [],

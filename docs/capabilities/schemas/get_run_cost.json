@@ -1,7 +1,7 @@
 {
   "name": "get_run_cost",
   "domain": "run",
-  "description": "Read one run's cost rollup: total cost with its basis, tokens by class, cache hit rate, turns, steps and how many of them advanced the run, model and tool calls, and the per-model breakdown (cost by token class, cache saving, whether any call went unpriced) and per-tool breakdown with each tool's result tokens and their estimated cost, the standing context each call after the first re-sent by source (tool definitions, steering, context frames) with its estimated cost, marked as an estimate while the run is still open; null until the rollup has rebuilt the run from its frames, with provisional per-model figures for a wrapped run in the meantime. It also answers the agent's median cost and productive share over its runs in the 30 days before this one.",
+  "description": "Read one run's cost rollup: total cost with its basis, tokens by class, cache hit rate, turns, steps and how many of them advanced the run, model and tool calls, and the per-model breakdown (cost by token class, cache saving, whether any call went unpriced) and per-tool breakdown with each tool's result tokens and their estimated cost, the standing context each call after the first re-sent by source (tool definitions, steering, context frames) with its estimated cost, marked as an estimate while the run is still open; null until the rollup has rebuilt the run from its frames, with provisional per-model figures for a wrapped run in the meantime. It also answers the agent's median cost and productive share over its runs in the 30 days before this one, and each loop that reached the workspace's no-progress limit: the call repeated with an unchanged result, how often, the mode, whether the run was paused, and why an enforced limit could not pause it.",
   "mode": "sync",
   "surfaces": [
     "api",
@@ -1033,6 +1033,80 @@
             "type": "null"
           }
         ]
+      },
+      "noProgressHits": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "tool": {
+              "type": "string"
+            },
+            "loop": {
+              "type": "integer",
+              "exclusiveMinimum": 0
+            },
+            "repeats": {
+              "type": "integer",
+              "exclusiveMinimum": 0
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 2
+            },
+            "atCall": {
+              "type": "integer",
+              "exclusiveMinimum": 0
+            },
+            "mode": {
+              "type": "string",
+              "enum": [
+                "observe",
+                "enforced"
+              ]
+            },
+            "outcome": {
+              "type": "string",
+              "enum": [
+                "would_pause",
+                "paused"
+              ]
+            },
+            "pauseBlock": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "run_sealed",
+                    "no_host",
+                    "host_revoked",
+                    "host_offline",
+                    "no_connection_point",
+                    "pause_unavailable"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "detectedAt": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "tool",
+            "loop",
+            "repeats",
+            "limit",
+            "atCall",
+            "mode",
+            "outcome",
+            "pauseBlock",
+            "detectedAt"
+          ],
+          "additionalProperties": false
+        }
       }
     },
     "required": [

@@ -31,6 +31,7 @@ import type { ApprovalItem, ApprovalQueue } from "@/data/contracts/approvals";
 import type { MandateRow } from "@/data/contracts/mandates";
 import type { Read } from "@/data/read";
 import { routes } from "@/shared/safe-path";
+import { AgentAvatar } from "@/ui/agent-avatar";
 import { linkText, mono, panel, panelHeader } from "@/ui/control-styles";
 import { drawsBar, MandateBar } from "@/ui/mandate-bar";
 import { NamedMeasure } from "@/ui/measure";
@@ -42,6 +43,40 @@ import { Clock } from "@/ui/clock";
 
 type Place = { org: string; ws: string };
 
+/**
+ * Each agent's registered harness by agent key, for the badge on the agent
+ * hop. An approval records the agent key and not its harness, so the page
+ * that draws the card resolves it (#4871). An agent it does not hold draws
+ * no badge.
+ */
+type AgentHarnesses = Readonly<Record<string, string>>;
+
+/** The agent hop: the agent's avatar with its harness badge, then its key. */
+function AgentHop({
+  agentKey,
+  harnesses,
+}: {
+  agentKey: string;
+  harnesses: AgentHarnesses;
+}) {
+  const harness = Object.hasOwn(harnesses, agentKey)
+    ? (harnesses[agentKey] ?? null)
+    : null;
+  return (
+    <dd className="flex min-w-0 items-center gap-1.5">
+      <AgentAvatar
+        value={null}
+        initials={(agentKey.split(".").at(-1) ?? "")
+          .slice(0, 2)
+          .toUpperCase()}
+        harness={harness}
+        size={18}
+      />
+      <span className={`${mono} min-w-0 break-all`}>{agentKey}</span>
+    </dd>
+  );
+}
+
 function ApprovalCard({
   item,
   onResolved,
@@ -50,6 +85,7 @@ function ApprovalCard({
   org,
   ws,
   on,
+  agentHarnesses,
 }: {
   item: ApprovalItem;
   onResolved?: () => void;
@@ -57,6 +93,7 @@ function ApprovalCard({
   mandate: MandateRow | null;
   now: number;
   on: "fleet" | "run";
+  agentHarnesses: AgentHarnesses;
 } & Place) {
   const t = useTranslations("fleet.approvals");
   /**
@@ -91,7 +128,11 @@ function ApprovalCard({
         <dt className="text-muted-foreground">{t("chain.who")}</dt>
         {recorded(item.requester)}
         <dt className="text-muted-foreground">{t("chain.agent")}</dt>
-        {recorded(item.agentKey)}
+        {item.agentKey === null ? (
+          recorded(null)
+        ) : (
+          <AgentHop agentKey={item.agentKey} harnesses={agentHarnesses} />
+        )}
         <dt className="text-muted-foreground">{t("chain.action")}</dt>
         <dd className={`${mono} break-all`}>{item.tool}</dd>
         <dt className="text-muted-foreground">{t("chain.rule")}</dt>
@@ -181,10 +222,13 @@ export function ApprovalsPanel({
   ws,
   on = "fleet",
   onResolved,
+  agentHarnesses = {},
 }: {
   approvals: Read<ApprovalQueue>;
   /** The mandates the cards name, by public id; empty when none was read. */
   mandates: ReadonlyMap<string, MandateRow>;
+  /** Each agent's registered harness by agent key, for the agent hop's badge. */
+  agentHarnesses?: AgentHarnesses;
   now: number;
   /**
    * Which page is drawing the panel. It names the heading's element, so the
@@ -248,6 +292,7 @@ export function ApprovalsPanel({
               org={org}
               ws={ws}
               on={on}
+              agentHarnesses={agentHarnesses}
             />
           ))}
         </ul>
@@ -270,11 +315,14 @@ export function ApprovalCardAlone({
   now,
   org,
   ws,
+  agentHarnesses = {},
 }: {
   item: ApprovalItem;
   /** The mandates the workspace's parked calls drew on, by public id. */
   mandates: ReadonlyMap<string, MandateRow>;
   now: number;
+  /** Each agent's registered harness by agent key, for the agent hop's badge. */
+  agentHarnesses?: AgentHarnesses;
 } & Place) {
   return (
     <ul data-testid="approval-card-alone" className="flex flex-col">
@@ -289,6 +337,7 @@ export function ApprovalCardAlone({
         org={org}
         ws={ws}
         on="fleet"
+        agentHarnesses={agentHarnesses}
       />
     </ul>
   );

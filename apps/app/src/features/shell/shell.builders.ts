@@ -83,6 +83,7 @@ export function shellWorkspace(
     pending: readOk({ items: [], more: false }),
     interjections: readOk({ items: [], more: false }),
     resolved: readOk({ items: [], more: false }),
+    harnesses: {},
     ...overrides,
   };
 }

@@ -82,7 +82,7 @@ jobs:
     # carrying `environment:production` (infra/stacks-new/ci-deploy/main.tf's
     # deploy_subjects). It gates nothing else. The `production` environment
     # carries one protection rule and it is a branch policy
-    # (`gh api repos/macanderson/oxagen/environments`), so a dispatch applies
+    # (`gh api repos/oxageninc/product/environments`), so a dispatch applies
     # with no second person involved. Naming a reviewer that does not exist is
     # worse than naming none, because it is the reason someone stops looking.
     environment: production

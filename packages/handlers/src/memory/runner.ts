@@ -451,8 +451,9 @@ const runUri = (runPublicId: string): string => `oxagen:run/${runPublicId}`;
 /**
  * Every file path under steering/ at `head`, and each file there that reads
  * as a steering record. A file that does not read is left out.
+ * promote_memories reads the same set before it names a new record.
  */
-async function readRecords(
+export async function readRecords(
   host: SteeringHost,
   repo: SteeringRepository,
   head: string,
@@ -474,6 +475,7 @@ async function readRecords(
       lineage: record.lineage,
       kind: record.kind,
       status: record.status,
+      force: record.force,
       statement: recordStatement(read.body),
       repos: record.repos ?? null,
       appliesTo: record.applies_to ?? null,
@@ -666,6 +668,14 @@ export async function curateMemories(
       `[memory] the steering repository ${repo.fullName} has no ${repo.defaultBranch} branch`,
     );
   const { paths, records } = await readRecords(deps.host, repo, head);
+  // A waiting or promoted memory that no run used for `retire_after_days`
+  // retires before the plan reads the queue (ADR-248). Its clock runs from
+  // its newest use, or from its capture when no run used it.
+  const retiredUnused = await deps.store.retireUnused(
+    scope,
+    new Date(now.getTime() - settings.retire_after_days * 86_400_000),
+    now,
+  );
   const [waiting, rejections, recalls, reflections] = await Promise.all([
     deps.store.listWaiting(scope),
     deps.store.listRejections(scope),
@@ -689,14 +699,12 @@ export async function curateMemories(
     reflections,
     runUri,
   });
-  if (plan.drops.length > 0)
-    await deps.store.deleteMemories(
-      scope,
-      plan.drops.map((drop) => drop.memoryId),
-    );
+  // `dropped` counts the memories that left the queue without this PR: the
+  // ones that retired, and the ones an active record already says.
+  const linked = await deps.store.linkMemories(scope, plan.said);
   if (plan.stampRecalls.length > 0)
     await deps.store.stampRecalls(scope, plan.stampRecalls, now);
-  const dropped = plan.drops.length;
+  const dropped = retiredUnused + linked;
 
   // A record that cannot be written stays out of the PR. Its memories keep
   // waiting, and a retirement is proposed again by a later pass.
@@ -826,6 +834,13 @@ export const memoryIntakeSchema = lessonInputSchema
     agentLineage: z.string().trim().min(1).max(200).nullable(),
     runPublicId: z.string().regex(RUN_PUBLIC_ID).nullable(),
     evidence: z.array(z.string().trim().min(1).max(2000)).max(20).default([]),
+    /** A memory file's frontmatter `name`, `description`, and `metadata.type`. */
+    label: z.string().trim().min(1).max(200).optional(),
+    summary: z.string().trim().min(1).max(1000).optional(),
+    memoryType: z
+      .string()
+      .regex(/^[a-z][a-z0-9_-]{0,31}$/)
+      .optional(),
   })
   .superRefine((input, ctx) => {
     if (
@@ -887,6 +902,9 @@ export async function ingestMemories(
       evidence: input.evidence,
       source: input.source,
       dedupeKey: `${input.capture}:${input.source}:${hash}`,
+      label: input.label ?? null,
+      summary: input.summary ?? null,
+      memoryType: input.memoryType ?? null,
     });
   }
   const added = drafts.filter((draft) => draft.capture !== "local_gateway");

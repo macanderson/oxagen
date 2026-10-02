@@ -20,8 +20,8 @@ Read on 2026-09-05, the four stubs did not agree:
 | --- | --- |
 | macanderson/stella | a commit SHA |
 | macanderson/arenabench | `@main` |
-| macanderson/cgp-website | `@main` |
-| macanderson/context-graph-protocol | `@main` |
+| oxageninc/cgp-website | `@main` |
+| oxageninc/context-graph-protocol | `@main` |
 
 stella's header already gave the reason to pin; the other three stubs did not
 pin. A merge in oxagen changed what ran in three repositories with no commit in
@@ -59,7 +59,7 @@ sooner re-pins sooner, and that is a one-line PR.
 `dod-recheck.yml` both fetch `tools/scripts/scr-dod-check.mjs` from oxagen with:
 
 ```yaml
-ref: ${{ github.repository == 'macanderson/oxagen' && github.sha || 'main' }}
+ref: ${{ github.repository == 'oxageninc/product' && github.sha || 'main' }}
 ```
 
 Inside a called workflow, `github.sha` is the *caller's* commit, which does not
@@ -89,7 +89,7 @@ workflow blob SHAs for both the DoD check and the close guard. Different commits
 may carry identical workflow files. Their callers run the same steps, so that
 case passes. A missing pinned workflow or different file content still fails.
 
-The four caller repositories exclude `macanderson/oxagen` reusable workflows
+The four caller repositories exclude `oxageninc/product` reusable workflows
 from Dependabot actions updates. Maintainers coordinate re-pins when the shared
 workflow changes. Other action updates continue normally.
 

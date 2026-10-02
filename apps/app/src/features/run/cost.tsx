@@ -1,5 +1,6 @@
 // The Cost tab (pages/run.md, Model fit and Cost; the mockup's `pRun`,
-// `t==="cost"`): Model fit first, then the six instruments, Spend by area,
+// `t==="cost"`): Model fit first, then the six instruments, the loops that
+// reached the no-progress limit when the run has any, Spend by area,
 // Tool calls, the waterfall, and Spend by token class beside Prompt
 // composition.
 //
@@ -24,8 +25,10 @@
 //
 // Every other figure comes from the reads the page already made for the header
 // and the stat row. The agent baseline and the graded steps ride
-// `get_run_cost` (#3984). `run.tsx` calls `CostTab` as a function and awaits
-// it, so it calls no hook itself; the sections it returns do.
+// `get_run_cost` (#3984), and so does each loop that reached the
+// workspace's no-progress limit (#4490). `run.tsx` calls `CostTab` as a
+// function and awaits it, so it calls no hook itself; the sections it
+// returns do.
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import type { RunFindings, RunTurns } from "@/data/contracts/run";
@@ -37,6 +40,7 @@ import { classPrices, ledgerOf } from "./cost-figures";
 import { Instruments } from "./instruments";
 import { turnFigures } from "./metrics";
 import { ModelFitPanel } from "./model-fit";
+import { NoProgressHits } from "./no-progress";
 import { SpendByArea } from "./spend-by-area";
 import { TokenClassesAndComposition } from "./token-classes";
 import { ToolCalls } from "./tool-calls";
@@ -135,6 +139,7 @@ function CostSections({
         }
         baseline={baseline}
       />
+      <NoProgressHits hits={cost.ok ? (cost.value.noProgressHits ?? []) : []} />
       <SpendByArea
         metrics={metrics}
         prices={prices}

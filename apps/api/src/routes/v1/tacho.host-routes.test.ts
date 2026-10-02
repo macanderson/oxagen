@@ -13,6 +13,7 @@ import { mountTachoHostRoutes } from "./tacho.host-routes";
 // Each route's own body limit, as its module declares it.
 const LIMITS = [
   ["/events", TACHO_MAX_REQUEST_BYTES],
+  ["/memories/uses", 1024 * 1024],
   ["/memories/recall", 384 * 1024],
   ["/commands", 256 * 1024],
   ["/bundle", 64 * 1024],

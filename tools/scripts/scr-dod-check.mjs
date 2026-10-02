@@ -684,6 +684,23 @@ export function formatVerdict(result) {
   ].join("\n");
 }
 
+/**
+ * Join the DoD verdict with the closing-keyword text (`""` when that check
+ * passed) into what the `dod` job fails with and what its comment says.
+ * `failure` holds only the parts that failed. `comment` puts them first and the
+ * passing DoD verdict after them. Joining them in a fixed order made a job that
+ * failed on a closing keyword open its error with "DoD check passed" (#5061).
+ */
+export function composeSummary(dodResult, closingText) {
+  const dodText = formatVerdict(dodResult);
+  const failing = [dodResult.ok ? "" : dodText, closingText].filter(Boolean);
+  const passing = dodResult.ok ? [dodText] : [];
+  return {
+    failure: failing.join("\n\n"),
+    comment: [...failing, ...passing].join("\n\n"),
+  };
+}
+
 // Exercised through the workflow's github-script step in CI; this entry point
 // exists so the logic can be run by hand against a body on disk when debugging
 // a confusing verdict.

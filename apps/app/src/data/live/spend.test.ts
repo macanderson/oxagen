@@ -9,6 +9,8 @@ import { findingList } from "@oxagen/oxagen/contracts/finding.list";
 import { spendDrill } from "@oxagen/oxagen/contracts/spend.drill";
 import { spendGet } from "@oxagen/oxagen/contracts/spend.get";
 import { spendOperatorRanking } from "@oxagen/oxagen/contracts/spend.operator_ranking";
+import { spendPerMergedPr } from "@oxagen/oxagen/contracts/spend.per_merged_pr";
+import { spendUnproductive } from "@oxagen/oxagen/contracts/spend.unproductive";
 import { spendWasteList } from "@oxagen/oxagen/contracts/spend.waste";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -251,6 +253,107 @@ describe("spend port", () => {
     const refused = readError("ranking_mixed_currency", 409);
     kernelRead.mockResolvedValue(refused);
     expect(await spend.operatorRanking(ctx, period)).toEqual(refused);
+  });
+
+  it("perMergedPr reads get_spend_per_merged_pr for the period and copies each figure and absence", async () => {
+    const usd = (micros: string) => ({
+      micros,
+      currency: "USD",
+      basis: "gateway_observed",
+    });
+    kernelRead.mockResolvedValue(
+      readOk({
+        period,
+        agents: [
+          {
+            agentKey: "acme.core.triage",
+            boundedRuns: 4,
+            unpricedRuns: 0,
+            spend: usd("40000000"),
+            mergedPrs: 2,
+            perMergedPr: usd("20000000"),
+            absence: null,
+            runs: [
+              {
+                runId: "tse_01",
+                startedAt: "2026-09-10T09:00:00.000Z",
+                cost: usd("10000000"),
+                pullRequests: [
+                  {
+                    prKey: "github:acme/core#1",
+                    url: "https://github.com/acme/core/pull/1",
+                    state: "merged",
+                  },
+                ],
+              },
+            ],
+          },
+          {
+            agentKey: "acme.core.review",
+            boundedRuns: 1,
+            unpricedRuns: 0,
+            spend: usd("3000000"),
+            mergedPrs: 0,
+            perMergedPr: null,
+            absence: "no_merged_pr",
+            runs: [],
+          },
+        ],
+      }),
+    );
+    const read = await spend.perMergedPr(ctx, period);
+    expect(kernelRead).toHaveBeenCalledWith(ctx, {
+      contract: spendPerMergedPr,
+      input: { period },
+      page: "spend",
+    });
+    if (!read.ok) throw new Error("the figures must map");
+    expect(read.value.agents[0]?.perMergedPr).toEqual(usd("20000000"));
+    expect(read.value.agents[0]?.runs[0]?.pullRequests[0]?.state).toBe(
+      "merged",
+    );
+    expect(read.value.agents[1]).toMatchObject({
+      perMergedPr: null,
+      absence: "no_merged_pr",
+    });
+    expect(captureError).not.toHaveBeenCalled();
+  });
+
+  it("perMergedPr passes a refusal through (negative)", async () => {
+    const refused = readError("forbidden", 403);
+    kernelRead.mockResolvedValue(refused);
+    expect(await spend.perMergedPr(ctx, period)).toEqual(refused);
+  });
+
+  it("unproductive reads get_unproductive_spend for the period with its parts and estimate", async () => {
+    const usd = (micros: string) => ({ micros, currency: "USD" });
+    const answer = {
+      period,
+      unproductive: usd("5000000"),
+      spend: usd("20000000"),
+      share: 0.25,
+      parts: [
+        { detector: 2, saving: usd("100"), findings: 1 },
+        { detector: 3, saving: usd("0"), findings: 0 },
+        { detector: 5, saving: usd("300"), findings: 2 },
+      ],
+      estimate: { saving: usd("900"), findings: 1 },
+    };
+    kernelRead.mockResolvedValue(readOk(answer));
+    const read = await spend.unproductive(ctx, period);
+    expect(kernelRead).toHaveBeenCalledWith(ctx, {
+      contract: spendUnproductive,
+      input: { period },
+      page: "spend",
+    });
+    expect(read).toEqual(readOk(answer));
+    expect(captureError).not.toHaveBeenCalled();
+  });
+
+  it("unproductive passes the mixed-currency refusal through (negative)", async () => {
+    const refused = readError("unproductive_mixed_currency", 409);
+    kernelRead.mockResolvedValue(refused);
+    expect(await spend.unproductive(ctx, period)).toEqual(refused);
   });
 
   it("passes a refusal through as the kernel classified it (negative)", async () => {

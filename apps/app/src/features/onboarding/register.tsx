@@ -33,6 +33,7 @@ import type { Read } from "@/data/read";
 import { getAuthUser } from "@/server/session";
 import type { WsCtx } from "@/server/viewer";
 import { routes } from "@/shared/safe-path";
+import { AgentAvatar } from "@/ui/agent-avatar";
 import { Badge } from "@/ui/badge";
 import {
   buttonSecondary,
@@ -456,22 +457,32 @@ function Waiting({
         </span>
       </div>
       <div className="flex flex-col gap-3 px-4 py-3.5">
-        <div data-testid="first-frame-chips" className="flex flex-wrap gap-2">
-          {frame.agentKey === null ? null : (
-            <Badge tone="quiet" dot={false} mono>
-              {frame.agentKey}
-            </Badge>
+        <div className="flex items-center gap-2">
+          {detail === null ? null : (
+            <AgentAvatar
+              value={null}
+              initials={detail.identity.slug.slice(0, 2).toUpperCase()}
+              harness={harness}
+              size={22}
+            />
           )}
-          {harness === null ? null : (
+          <div data-testid="first-frame-chips" className="flex flex-wrap gap-2">
+            {frame.agentKey === null ? null : (
+              <Badge tone="quiet" dot={false} mono>
+                {frame.agentKey}
+              </Badge>
+            )}
+            {harness === null ? null : (
+              <Badge tone="quiet" dot={false}>
+                {harnessT(harness)}
+              </Badge>
+            )}
             <Badge tone="quiet" dot={false}>
-              {harnessT(harness)}
+              {enrolled === null
+                ? t("noHost")
+                : t("host", { hostname: enrolled.hostname })}
             </Badge>
-          )}
-          <Badge tone="quiet" dot={false}>
-            {enrolled === null
-              ? t("noHost")
-              : t("host", { hostname: enrolled.hostname })}
-          </Badge>
+          </div>
         </div>
         {host === null ? (
           <LogBlock lines={[]} waiting={t("line")} />

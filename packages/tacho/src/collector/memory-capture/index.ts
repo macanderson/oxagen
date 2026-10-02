@@ -17,10 +17,15 @@ export {
   HARNESS_MEMORY_LOCATIONS,
   type HarnessMemoryLocation,
   type LocalMemoryEntry,
+  MEMORY_LABEL_MAX_CHARS,
+  MEMORY_STATEMENT_MAX_CHARS,
+  MEMORY_SUMMARY_MAX_CHARS,
+  MEMORY_TYPE_PATTERN,
   type MemoryReader,
   type MemoryReaderDeps,
   type MemoryReaderFs,
-  MEMORY_STATEMENT_MAX_CHARS,
+  type MemoryScan,
+  type MemoryScanResult,
 } from "./memory-reader";
 export {
   createMemoryRecall,
@@ -42,3 +47,19 @@ export {
   MEMORY_UPLOAD_PATH,
   type MemoryUploadDeps,
 } from "./memory-upload";
+export {
+  createMemoryUses,
+  MEMORY_SCAN_PATHS_MAX,
+  MEMORY_SCANS_PER_REPORT,
+  MEMORY_USE_COUNT_MAX,
+  MEMORY_USE_PENDING_MAX_MS,
+  MEMORY_USES_PATH,
+  MEMORY_USES_PER_REPORT,
+  MEMORY_USES_QUEUED_MAX,
+  type MemoryFile,
+  memoryFileOf,
+  type MemoryRead,
+  memoryReadsOf,
+  type MemoryUses,
+  type MemoryUsesDeps,
+} from "./memory-uses";

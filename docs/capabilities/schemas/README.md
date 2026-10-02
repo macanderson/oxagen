@@ -166,6 +166,7 @@ capability rewrites, so two such branches always conflicted on it (ADR-216).
 
 - append_record
 - commit_markdown_import
+- dismiss_memories
 - dismiss_proposal
 - get_context_pr
 - get_published_steering
@@ -174,14 +175,18 @@ capability rewrites, so two such branches always conflicted on it (ADR-216).
 - get_steering_freshness
 - get_steering_index
 - get_steering_layout
+- get_workspace_memory
 - list_context_records
+- list_memory_pr_records
 - list_proposals
 - list_records
+- list_workspace_memories
 - merge_context_pr
 - merge_pr_without_review
 - open_context_pr
 - parse_markdown_import
 - promote_context_record
+- promote_memories
 - propose_record
 - publish_context_record
 - revise_context_record
@@ -495,6 +500,8 @@ capability rewrites, so two such branches always conflicted on it (ADR-216).
 - get_operator_ranking
 - get_spend
 - get_spend_drill
+- get_spend_per_merged_pr
+- get_unproductive_spend
 - list_cost_centers
 - list_findings
 - list_waste
@@ -523,6 +530,7 @@ capability rewrites, so two such branches always conflicted on it (ADR-216).
 - list_tacho_hosts
 - list_tacho_sessions
 - recall_tacho_memories
+- record_tacho_memory_uses
 - register_contained_launch
 - remove_group_machine
 - revoke_tacho_enrollment
@@ -547,6 +555,7 @@ capability rewrites, so two such branches always conflicted on it (ADR-216).
 - list_studio_tools
 - list_tool_declarations
 - list_tool_versions
+- migrate_tools_to_steering
 - open_studio_review
 - publish_tool_declaration
 - revoke_relay

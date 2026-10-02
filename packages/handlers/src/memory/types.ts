@@ -1,13 +1,14 @@
-// The shapes the memory pipeline passes between its steps (ADR-206).
+// The shapes the memory pipeline passes between its steps (ADR-206, ADR-248).
 //
 // capture.ts turns a sealed run's frames into drafts, store.ts writes and
-// reads the five memory tables, curate.ts and settle.ts decide what the next
+// reads the six memory tables, curate.ts and settle.ts decide what the next
 // memory PR holds, recall.ts ranks what reaches a request, and runner.ts wires
 // them to the steering repo. Every step but the store and the runner is pure.
 import type { z } from "zod";
 import type { GovernanceSettings } from "@oxagen/oxagen/steering-repo/governance";
 import type {
   ProvenanceMemory,
+  RecordForce,
   RecordKind,
 } from "@oxagen/oxagen/steering-repo/record";
 import type { reflectionOutcomeSchema } from "@oxagen/oxagen/steering-repo/reflection";
@@ -19,7 +20,31 @@ export interface MemoryScope {
 }
 
 /** How a memory reached Oxagen (memory/v1 `capture`). */
-export type MemoryCapture = "remember" | "pull_request" | "local_gateway";
+export type MemoryCapture =
+  | "remember"
+  | "pull_request"
+  | "local_gateway"
+  | "import";
+
+/**
+ * Where a memory is in its life (ADR-248). A memory keeps its row in every
+ * state, and with it its uses.
+ *
+ * - `waiting`: collected, and in no open memory PR.
+ * - `in_pr`: an open memory PR cites it.
+ * - `promoted`: a steering record carries it, and it keeps counting uses.
+ * - `dismissed`: a person dismissed it.
+ * - `retired`: its file is gone, or no run used it for `retire_after_days`.
+ */
+export type MemoryState =
+  | "waiting"
+  | "in_pr"
+  | "promoted"
+  | "dismissed"
+  | "retired";
+
+/** Why a memory retired. */
+export type RetiredReason = "deleted" | "unused";
 
 /** A memory ready to store. The store gives it an id. */
 export interface MemoryDraft {
@@ -41,16 +66,63 @@ export interface MemoryDraft {
   source: string | null;
   /** The run, or the capture and source, plus the statement hash. */
   dedupeKey: string;
+  /** A memory file's frontmatter `name`, when it has one. */
+  label?: string | null;
+  /** A memory file's frontmatter `description`, when it has one. */
+  summary?: string | null;
+  /** A memory file's frontmatter `metadata.type`, such as `feedback`. */
+  memoryType?: string | null;
 }
 
-/** A stored memory. `memoryPrId` is null while it waits for the curator. */
+/** A stored memory. */
 export interface StoredMemory extends MemoryDraft {
   /** The row's uuid. Memory PR records cite memories by it. */
   id: string;
   publicId: string;
   reflectionId: string | null;
+  /** The memory PR that last cited it, or null when none has. */
   memoryPrId: string | null;
+  state: MemoryState;
+  /** Distinct runs that used it, plus uses a harness counted with no run. */
+  useCount: number;
+  /** The newest use, or null when no run used it. */
+  lastUsedAt: Date | null;
+  /** The steering record that carries it, once promoted. */
+  promotedLineage: string | null;
   createdAt: Date;
+}
+
+/** How a run used a memory (`agent.memory_uses.signal`). */
+export type MemoryUseSignal = "read" | "harness_count" | "citation";
+
+/**
+ * One use of the memory a source holds, as a host reports it. The store
+ * finds the memory by its capture and source.
+ */
+export interface MemoryUseDraft {
+  capture: MemoryCapture;
+  source: string;
+  /** The run's public id. Null only for a harness's own count. */
+  runPublicId: string | null;
+  signal: MemoryUseSignal;
+  /** Reads in the run, or the harness's count. At least 1. */
+  count: number;
+  usedAt: Date;
+}
+
+/**
+ * What one full scan of a memory folder found. Each waiting or promoted
+ * memory of the agent whose source starts with `prefix` and is not in
+ * `seen` retires.
+ */
+export interface MemoryScanReport {
+  capture: MemoryCapture;
+  /** `<harness>:<folder><separator>`. */
+  prefix: string;
+  /** The source of every memory file the scan found. */
+  seen: string[];
+  /** The host's agent. Only its memories retire. */
+  agentLineage: string | null;
 }
 
 /** How a run ended, in the run record's words (reflection/v1 `outcome`). */
@@ -99,6 +171,11 @@ export interface ActiveRecord {
   lineage: string;
   kind: RecordKind;
   status: "active" | "archived";
+  /**
+   * When the record reaches a request. `must` and `should` load on every
+   * request, never through recall, so the curator never archives one.
+   */
+  force: RecordForce;
   /** The record's body, as `recordStatement` gives it. */
   statement: string;
   /** The record's `repos`, `applies_to`, and `tools`, which recall scopes by. */
@@ -167,8 +244,10 @@ export interface PrSettlement {
   reviewedLineages: string[];
   /** The hash of each statement a record that did not merge cited. */
   rejectedHashes: string[];
-  /** Every memory the PR cited. The store deletes them. */
-  purgeMemoryIds: string[];
+  /** The memories of each record that merged. They become promoted and link to it. */
+  promoted: Array<{ lineage: string; memoryIds: string[] }>;
+  /** The memories of each record that did not merge. They wait again. */
+  returnedMemoryIds: string[];
 }
 
 /** The fields a new memory record file is rendered from. */
@@ -209,7 +288,7 @@ export interface PlannedRetirement {
 export interface CurateInput {
   now: Date;
   governance: Pick<GovernanceSettings, "batch_size" | "retire_after_days">;
-  /** Memories with no memory PR, oldest first. */
+  /** Waiting memories, oldest first. The plan ranks them by use. */
   waiting: StoredMemory[];
   /** Every record under steering/ at the default branch. */
   records: ActiveRecord[];
@@ -223,15 +302,17 @@ export interface CurateInput {
   runUri: (runPublicId: string) => string;
 }
 
-/** Why a waiting memory leaves the queue without a record. */
-export type DropReason = "said" | "expired";
-
 /** What the curator decided for one workspace. */
 export interface CuratePlan {
-  /** Memories to delete: an active record already says them, or they waited too long. */
-  drops: Array<{ memoryId: string; reason: DropReason }>;
+  /**
+   * Memories an active steering record already says. Each links to that
+   * record and becomes promoted, since the record already carries it.
+   */
+  said: Array<{ memoryId: string; lineage: string }>;
   /** Memories left waiting: a rejected statement with no new evidence, or one an open PR already proposes. */
   held: string[];
+  /** Memories left waiting because no run used them yet. Only a used memory enters the batch. */
+  unused: string[];
   /** Memories left for a later day because the batch or the PR's file limit is full. */
   deferred: string[];
   records: PlannedRecord[];
@@ -290,11 +371,12 @@ export interface RecallItem {
   tokens: number;
 }
 
-/** The reads and writes of the five memory tables. store.ts is the Postgres implementation. */
+/** The reads and writes of the six memory tables. store.ts is the Postgres implementation. */
 export interface MemoryStore {
   /**
    * Every workspace the daily curator has work in: waiting memories, an open
-   * memory PR, or a recall row for the retirement check. Reads across tenants.
+   * memory PR, or a recall row for the retirement check. Reads across
+   * tenants.
    */
   listCurateWorkspaces(): Promise<MemoryScope[]>;
   /**
@@ -316,30 +398,74 @@ export interface MemoryStore {
     reflectionId?: string | null,
   ): Promise<number>;
   /**
+   * Store memories, skipping any whose dedupe key exists, and return the
+   * dedupe key of each one written. The Markdown import names the rows it
+   * left out from what this leaves off.
+   */
+  insertMemoriesKeyed(scope: MemoryScope, drafts: MemoryDraft[]): Promise<string[]>;
+  /**
    * Store a memory as the one waiting memory of its capture and source
-   * (ADR-238). Tacho's memory upload calls it for each `local_gateway`
-   * memory, whose source is `<harness>:<path>`, so a memory file has one
-   * waiting row and each edit replaces its text.
+   * (ADR-238, ADR-248). Tacho's memory upload calls it for each
+   * `local_gateway` memory, whose source is `<harness>:<path>`, so a memory
+   * file has one waiting row and each edit replaces its text.
    *
    * A waiting row from the same capture and source takes the draft's
    * statement, hash, dedupe key, and the rest of its content in place, and
-   * keeps its id and creation time. A row an open memory PR cites keeps its
-   * text, and the draft becomes a new waiting row. Returns true when it
-   * inserted or changed a row, and false when the workspace already holds the
-   * statement from that source.
+   * keeps its id, its creation time, and its uses. A row an open memory PR
+   * cites, a promoted row, and a dismissed row keep their text, and the draft
+   * becomes a new waiting row. When the file goes back to text another row of
+   * the source holds, that row holds the file's text again: the waiting row
+   * retires, and a row retired because its file was gone comes back. Returns
+   * true when it inserted or brought back a row or changed its text, and false
+   * when the workspace already holds the statement from that source.
    */
   replaceSourceMemory(scope: MemoryScope, draft: MemoryDraft): Promise<boolean>;
   countWaiting(scope: MemoryScope): Promise<number>;
   /** Waiting memories, oldest first. */
   listWaiting(scope: MemoryScope): Promise<StoredMemory[]>;
-  deleteMemories(scope: MemoryScope, ids: string[]): Promise<number>;
+  /**
+   * Store uses against the memory each source holds now: its waiting
+   * memory, else its newest memory that has not retired, else its newest
+   * memory. A run's uses of one memory share one row per signal, so a run
+   * counts once however often it reads the file. The memory's `use_count`
+   * and `last_used_at` are recomputed from its uses in the same transaction,
+   * and a retired memory a run used comes back. Returns the uses stored and
+   * those whose source holds no memory.
+   */
+  recordUses(
+    scope: MemoryScope,
+    uses: MemoryUseDraft[],
+  ): Promise<{ recorded: number; unknown: number }>;
+  /**
+   * Retire each waiting or promoted memory a full scan no longer found, as
+   * `deleted`. Returns the count retired.
+   */
+  retireMissingSources(
+    scope: MemoryScope,
+    scan: MemoryScanReport,
+    at: Date,
+  ): Promise<number>;
+  /**
+   * Retire each waiting or promoted memory whose newest use, or its capture
+   * when no run used it, came before `before`, as `unused`. Returns the
+   * count retired.
+   */
+  retireUnused(scope: MemoryScope, before: Date, at: Date): Promise<number>;
+  /**
+   * Link waiting memories to the steering record that already says them.
+   * Each becomes promoted. Returns the count linked.
+   */
+  linkMemories(
+    scope: MemoryScope,
+    links: Array<{ memoryId: string; lineage: string }>,
+  ): Promise<number>;
   listOpenPrs(scope: MemoryScope): Promise<OpenMemoryPr[]>;
   /**
    * Has the workspace opened a memory PR from this branch, whatever became of
    * it? The curator opens one PR a day, and the branch names the day.
    */
   openedPrFrom(scope: MemoryScope, branch: string): Promise<boolean>;
-  /** Record an opened memory PR and mark the memories it cites, in one transaction. */
+  /** Record an opened memory PR and move the memories it cites to `in_pr`, in one transaction. */
   insertMemoryPr(
     scope: MemoryScope,
     pr: Omit<OpenMemoryPr, "id" | "openedAt">,

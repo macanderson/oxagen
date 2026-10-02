@@ -43,7 +43,7 @@
  *   GITHUB_RUN_ID         — e.g. 14567890123
  *   GITHUB_SHA            — full commit SHA
  *   GITHUB_SERVER_URL     — e.g. https://github.com
- *   GITHUB_REPOSITORY     — e.g. oxagen-ai/oxagen-monorepo
+ *   GITHUB_REPOSITORY     — e.g. oxageninc/product
  */
 
 import { appendFileSync } from "node:fs";
@@ -56,7 +56,7 @@ const GITHUB_SHA = process.env["GITHUB_SHA"] ?? "unknown";
 const GITHUB_SERVER_URL =
   process.env["GITHUB_SERVER_URL"] ?? "https://github.com";
 const GITHUB_REPOSITORY =
-  process.env["GITHUB_REPOSITORY"] ?? "oxagen-ai/oxagen-monorepo";
+  process.env["GITHUB_REPOSITORY"] ?? "oxageninc/product";
 
 /** Marker embedded in the tracker description so we can find our own ticket. */
 /**

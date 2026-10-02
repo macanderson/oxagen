@@ -8,7 +8,8 @@
 // names the model it repriced against. Prompt habits on a digest_only
 // workspace says Needs prompt text and shows its whole-prompt repeats.
 // Standing context names its weekly price per 1,000 tokens after the share. A
-// kind with no card of its own draws the generic card.
+// kind with no card of its own draws the generic card. An agent finding draws
+// the agent's avatar with its registered harness (#4871).
 import {
   cleanup,
   render,
@@ -353,5 +354,49 @@ describe("Detector cards", () => {
     expect(figure(li, "share")).toHaveTextContent("2.5%");
     expect(figure(li, "unit")).toBeNull();
     expect(li.querySelector("[data-badge]")).toBeNull();
+  });
+});
+
+describe("Agent harness (#4871)", () => {
+  it("draws an agent finding's avatar with the harness the agent registered", () => {
+    render(
+      <IntlProvider>
+        <FindingsList
+          findings={[findingOf("spin_loops")]}
+          spend={SPEND}
+          names={NAMES}
+          harnesses={{ reviewer: "stella" }}
+          at={AT}
+        />
+      </IntlProvider>,
+    );
+    const li = card(findingOf("spin_loops").id);
+    expect(li.querySelector("[data-agent-avatar]")).not.toBeNull();
+    expect(li.querySelector('[data-harness-badge="stella"]')).not.toBeNull();
+  });
+
+  it("draws the avatar with no badge for an agent the index does not hold (negative)", () => {
+    list([findingOf("spin_loops")]);
+    const li = card(findingOf("spin_loops").id);
+    expect(li.querySelector("[data-agent-avatar]")).not.toBeNull();
+    expect(li.querySelector("[data-harness-badge]")).toBeNull();
+  });
+
+  it("draws no agent avatar on a finding about an operator or a tool (negative)", () => {
+    list([
+      findingOf("spend_with_no_outcome", {
+        level: "operator",
+        subject: "prn_ana",
+      }),
+      findingOf("repeated_shell_commands", { level: "tool", subject: "Bash" }),
+    ]);
+    for (const kind of [
+      "spend_with_no_outcome",
+      "repeated_shell_commands",
+    ] as const) {
+      expect(
+        card(findingOf(kind).id).querySelector("[data-agent-avatar]"),
+      ).toBeNull();
+    }
   });
 });

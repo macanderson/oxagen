@@ -112,7 +112,9 @@ function stubSource() {
       findingEvidence: vi.fn(),
       priceBook: vi.fn(),
       operatorRanking: vi.fn(),
+      perMergedPr: vi.fn(),
       unpricedModels: vi.fn(),
+      unproductive: vi.fn(),
     },
     onboarding: { state: vi.fn(), firstFrame: vi.fn() },
     org: {
@@ -194,7 +196,7 @@ describe("ShellChrome", () => {
     expect(shellSource).toHaveBeenCalledWith(ctx, source);
   });
 
-  it("renders the Fleet lane's card once per parked call, with that workspace's mandates", async () => {
+  it("renders the Fleet lane's card once per parked call, with that workspace's mandates and agent harnesses", async () => {
     const { ShellChrome } = await import("./shell-chrome");
     const { OrgCtx } = await import("@/server/viewer");
     const { unsafeMint } = await import("@/server/viewer.testing");
@@ -209,6 +211,7 @@ describe("ShellChrome", () => {
               slug: "finops",
               name: "FinOps",
               pending: readOk({ items: [item], more: false }),
+              harnesses: { "acme.core.release-manager": "codex" },
             }),
           ],
           truncated: false,
@@ -236,6 +239,7 @@ describe("ShellChrome", () => {
       now: 1,
       org: "acme",
       ws: "finops",
+      agentHarnesses: { "acme.core.release-manager": "codex" },
     });
   });
 });

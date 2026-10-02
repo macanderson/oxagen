@@ -70,6 +70,8 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "agent.memories", policyClass: "standard" },
   { table: "agent.memory_rejections", policyClass: "standard" },
   { table: "agent.memory_recalls", policyClass: "standard" },
+  // The runs that used each memory (ADR-248); org_id + workspace_id NOT NULL.
+  { table: "agent.memory_uses", policyClass: "standard" },
   // Published steering versions and the publish lease (S3, #4449); org_id +
   // workspace_id NOT NULL.
   { table: "agent.steering_versions", policyClass: "standard" },
@@ -450,4 +452,11 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "work.autonomy_events", policyClass: "standard" },
   // An export of training examples.
   { table: "work.training_exports", policyClass: "standard" },
+  // The Phase 1 work records (agent-work-phase-1.html, Data contract; P1-02,
+  // #4897). One revision of an acceptance brief. Append only.
+  { table: "work.briefs", policyClass: "standard" },
+  // A work order: one send of one approved brief to one agent and runtime.
+  { table: "work.orders", policyClass: "standard" },
+  // One fact in a work item's history. Append only.
+  { table: "work.item_facts", policyClass: "standard" },
 ];

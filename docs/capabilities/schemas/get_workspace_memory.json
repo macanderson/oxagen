@@ -1,0 +1,428 @@
+{
+  "name": "get_workspace_memory",
+  "domain": "context",
+  "description": "Read one workspace memory with its full text, its source, the runs that used it, and the memory PR that last cited it.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "cli"
+  ],
+  "sensitivity": "low",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "memory_id": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "memory_id"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "memory": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "statement": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "waiting",
+              "in_pr",
+              "promoted",
+              "dismissed",
+              "retired"
+            ]
+          },
+          "capture": {
+            "type": "string",
+            "enum": [
+              "remember",
+              "pull_request",
+              "local_gateway",
+              "import"
+            ]
+          },
+          "harness": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "claude-code",
+                  "codex",
+                  "cursor",
+                  "stella",
+                  "claude-desktop"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "agent": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "repos": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "memory_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "business-rule",
+              "code-rule",
+              "constraint",
+              "procedure",
+              "skill",
+              "fact",
+              "preference",
+              "memory"
+            ]
+          },
+          "use_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "use_signal": {
+            "type": "boolean"
+          },
+          "last_used_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "promoted_lineage": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "memory_pr": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "number": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0
+                  },
+                  "url": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "open",
+                      "merged",
+                      "closed"
+                    ]
+                  }
+                },
+                "required": [
+                  "number",
+                  "url",
+                  "status"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "run": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "applies_to": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "tools": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "retired_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "retired_reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "deleted",
+                  "unused"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "summary",
+          "statement",
+          "state",
+          "capture",
+          "harness",
+          "agent",
+          "source",
+          "repos",
+          "memory_type",
+          "kind",
+          "use_count",
+          "use_signal",
+          "last_used_at",
+          "created_at",
+          "promoted_lineage",
+          "memory_pr",
+          "run",
+          "evidence",
+          "applies_to",
+          "tools",
+          "retired_at",
+          "retired_reason"
+        ],
+        "additionalProperties": false
+      },
+      "uses": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "run": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "signal": {
+              "type": "string",
+              "enum": [
+                "read",
+                "harness_count",
+                "citation"
+              ]
+            },
+            "count": {
+              "type": "integer",
+              "exclusiveMinimum": 0
+            },
+            "used_at": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "run",
+            "signal",
+            "count",
+            "used_at"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "uses_total": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "memory_pr": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "number": {
+                "type": "integer",
+                "exclusiveMinimum": 0
+              },
+              "url": {
+                "type": "string"
+              },
+              "repository": {
+                "type": "string"
+              },
+              "branch": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "open",
+                  "merged",
+                  "closed"
+                ]
+              },
+              "opened_at": {
+                "type": "string"
+              },
+              "settled_at": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "number",
+              "url",
+              "repository",
+              "branch",
+              "status",
+              "opened_at",
+              "settled_at"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "memory",
+      "uses",
+      "uses_total",
+      "memory_pr"
+    ],
+    "additionalProperties": false
+  }
+}

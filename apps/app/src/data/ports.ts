@@ -104,9 +104,11 @@ import type {
   SpendFindingEvidence,
   SpendFindings,
   SpendGroupKind,
+  SpendPerMergedPr,
   SpendReport,
   SpendWaste,
   UnpricedModels,
+  UnproductiveSpend,
 } from "./contracts/spend";
 import type {
   ContextPr,
@@ -490,6 +492,21 @@ export interface DataSource {
       ctx: WsCtx,
       period: DayRange,
     ): Promise<Read<OperatorRanking>>;
+    /**
+     * get_spend_per_merged_pr (detector 8; F26): each agent's spend on runs
+     * that opened a pull request, per pull request that merged and stayed.
+     * Caller: features/spend/spend.tsx on the Month tab grouped by agent.
+     */
+    perMergedPr(ctx: WsCtx, period: DayRange): Promise<Read<SpendPerMergedPr>>;
+    /**
+     * get_unproductive_spend: the unproductive spend headline for a period,
+     * its share of the period's spend, and the part figures and the estimate
+     * beside it. Caller: features/spend/spend.tsx, for the Findings hero.
+     */
+    unproductive(
+      ctx: WsCtx,
+      period: DayRange,
+    ): Promise<Read<UnproductiveSpend>>;
     /** get_spend_budget */
     budgets(ctx: WsCtx): Promise<Read<SpendBudgets>>;
     /**

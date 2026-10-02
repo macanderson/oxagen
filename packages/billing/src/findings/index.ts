@@ -14,7 +14,7 @@ import { idleCacheRewrites } from "./cache-expiry";
 import { cacheWritesNeverRead } from "./cache-writes-never-read";
 import { modelClassFit } from "./model-class-fit";
 import { recurringRuns } from "./recurring-runs";
-import { buildRunViews } from "./requests";
+import { buildRunViews, claimKey } from "./requests";
 import { repeatedInstructions } from "./repeated-instructions";
 import { repeats } from "./repeats";
 import { retryLoops } from "./retry-loops";
@@ -57,11 +57,22 @@ export {
 } from "./repeated-instructions";
 export type { PromptRead, PromptTextMode, RunPrompt } from "./prompts";
 export {
-  instructionProposalOpener,
-  setInstructionProposalOpener,
+  chainVerdicts,
+  MIN_QUOTE_CHARS,
+  resultUseKey,
+  type ChainFrame,
+  type ResultTextMode,
+  type ResultUseRead,
+  type ResultVerdict,
+} from "./result-use";
+export { CARRY_RESULT_TOKENS, resultsToCheck } from "./unpaged-results";
+export {
+  setSpendProposalOpener,
+  spendProposalOpener,
   type InstructionProposal,
-  type InstructionProposalOpener,
-  type InstructionProposalScope,
+  type SpendProposalInput,
+  type SpendProposalOpener,
+  type SpendProposalScope,
 } from "./proposal-opener";
 
 /** Every detector a pass runs, in the order it runs them. */
@@ -85,6 +96,33 @@ export const DETECTED_KINDS: readonly FindingKind[] = DETECTORS.flatMap(
   (d) => d.kinds,
 );
 
+const NO_PROSE: Prose = () => ({ why: "", fix: "" });
+
+/**
+ * Free the frames a counting detector claimed for a group that `toDraft`
+ * will not write: one whose saving is under a cent, or whose coverage is
+ * under half. A later counting detector may then claim them, so spend that
+ * one detector could not write stays in the headline under the next (#4607).
+ * Runs after each detector, before the next one reads `ctx.claimed`. Every
+ * group of the detector's kinds is final by then, since no other detector
+ * writes those kinds.
+ */
+function releaseUnwritten(
+  d: Detector,
+  ctx: DetectContext,
+  windowEnd: Date,
+): void {
+  if (d.counting === null) return;
+  const kinds = new Set<FindingKind>(d.kinds);
+  for (const group of ctx.groups.values()) {
+    if (!kinds.has(group.kind)) continue;
+    if (toDraft(group, windowEnd, NO_PROSE) !== null) continue;
+    for (const f of group.claimedFrames ?? [])
+      ctx.claimed.delete(claimKey(f.runId, f.frameKey));
+    group.claimedFrames = [];
+  }
+}
+
 /**
  * Every finding the window's runs, tool calls, and model calls prove,
  * largest saving first: at most `FINDINGS_PER_KIND` per kind and
@@ -103,6 +141,7 @@ export function detectFindings(input: DetectInput): FindingDraft[] {
   for (const d of DETECTORS) {
     for (const kind of d.kinds) prose.set(kind, d.prose);
     d.detect(input, ctx);
+    releaseUnwritten(d, ctx, input.window.end);
   }
 
   const byKind = new Map<FindingKind, FindingDraft[]>();
@@ -151,7 +190,12 @@ export function replayClaims(
     claimed: new Set(),
     taken: new Set(),
   };
-  for (const d of DETECTORS) if (d.counting !== null) d.detect(replay, ctx);
+  for (const d of DETECTORS) {
+    if (d.counting === null) continue;
+    d.detect(replay, ctx);
+    // As in a pass, so a later detector claims what an unwritten group freed.
+    releaseUnwritten(d, ctx, input.window.end);
+  }
   const out = new Map<string, FindingClaim[]>();
   for (const group of ctx.groups.values())
     if (group.claims.length > 0)

@@ -453,7 +453,8 @@ describe("the drawer", () => {
     );
     const card = within(drawer()).getByTestId("resolved-card");
     expect(card).toHaveTextContent("salesforce__send_email@1");
-    expect(card).toHaveTextContent("Agentacme.core.support-bot");
+    // The agent fact draws the agent's avatar, whose initials sit before its key.
+    expect(card).toHaveTextContent("AgentSUacme.core.support-bot");
     expect(card).toHaveTextContent(
       "Rulemandate:mnd_7K2ETQ4:human_above:usd",
     );
@@ -691,6 +692,109 @@ describe("the drawer", () => {
     expect(drawer().querySelector('[data-reason="error"]')).not.toBeNull();
     expect(drawer()).toHaveTextContent("0+ waiting");
     expect(within(drawer()).queryByTestId("interjection-row")).toBeNull();
+  });
+});
+
+// #4871: a drawer row named its agent in text alone, with no harness. Each row
+// that records an agent now leads with its avatar, badged with the harness the
+// agent registered, which the chrome resolves per workspace.
+describe("the harness badge", () => {
+  function badged(): ShellData {
+    const base = waiting();
+    const [first, second] = base.approvals.workspaces;
+    if (first === undefined || second === undefined)
+      throw new Error("no workspace");
+    return {
+      ...base,
+      approvals: {
+        ...base.approvals,
+        workspaces: [
+          {
+            ...first,
+            interjections: readOk({
+              items: [interjectionItem({ expiresAt: soon(20) })],
+              more: false,
+            }),
+            harnesses: {
+              "acme.core.release-manager": "claude-code",
+              "acme.core.support-bot": "stella",
+            },
+          },
+          { ...second, harnesses: { "acme.finops.invoice-bot": "codex" } },
+        ],
+      },
+    };
+  }
+
+  function badgeOf(el: Element | undefined): string | null {
+    const badge = el?.querySelector("[data-harness-badge]");
+    return badge?.getAttribute("data-harness-badge") ?? null;
+  }
+
+  it("badges each row's agent with the harness its workspace's read resolved", async () => {
+    const user = userEvent.setup();
+    renderShell(badged(), cards);
+    await user.click(button());
+    const aside = drawer();
+    expect(badgeOf(within(aside).getByTestId("interjection-row"))).toBe(
+      "claude-code",
+    );
+    const rows = within(aside).getAllByTestId("approval-row");
+    expect(rows.map(badgeOf)).toEqual(["claude-code", null, "codex"]);
+    expect(rows[0]?.querySelector("[data-avatar]")).toHaveTextContent("RE");
+    expect(badgeOf(within(aside).getByTestId("resolved-row"))).toBe("stella");
+    await user.click(
+      within(aside).getByRole("button", {
+        name: "Open approval apr_03K5RS8F3J",
+      }),
+    );
+    expect(badgeOf(within(drawer()).getByTestId("resolved-card"))).toBe(
+      "stella",
+    );
+  });
+
+  it("draws an agent the read did not resolve with no badge, and keeps the shield where no agent was recorded (negative)", async () => {
+    const user = userEvent.setup();
+    const base = waiting();
+    renderShell(
+      {
+        ...base,
+        approvals: {
+          ...base.approvals,
+          workspaces: [
+            shellWorkspace({
+              pending: readOk({
+                items: [
+                  approvalItem({ expiresAt: soon(9) }),
+                  approvalItem({
+                    id: "apr_02K5RS8F3J",
+                    agentKey: null,
+                    expiresAt: soon(9),
+                  }),
+                ],
+                more: false,
+              }),
+              interjections: readOk({
+                items: [
+                  interjectionItem({ agentKey: null, expiresAt: soon(20) }),
+                ],
+                more: false,
+              }),
+            }),
+          ],
+        },
+      },
+      cards,
+    );
+    await user.click(button());
+    const aside = drawer();
+    const [known, unrecorded] = within(aside).getAllByTestId("approval-row");
+    expect(known?.querySelector("[data-agent-avatar]")).not.toBeNull();
+    expect(badgeOf(known)).toBeNull();
+    expect(unrecorded?.querySelector("[data-agent-avatar]")).toBeNull();
+    const question = within(aside).getByTestId("interjection-row");
+    expect(question.querySelector("[data-agent-avatar]")).toBeNull();
+    expect(question).toHaveTextContent("An agent is paused");
   });
 });
 

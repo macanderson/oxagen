@@ -4,7 +4,9 @@
 // operator, model, or MCP server, each row opening to its costliest runs. One
 // get_spend read at the chosen grouping carries all of it. The design's Budget
 // column is not drawn: a budget holds for the organization or the workspace,
-// never one agent or one operator (#3864).
+// never one agent or one operator (#3864). Grouped by agent, a second read
+// (get_spend_per_merged_pr, F26) adds each agent's spend per merged PR beside
+// its cost, and the agent's open row lists the runs behind that figure.
 import { useLocale, useTranslations } from "next-intl";
 import {
   type Cost,
@@ -15,8 +17,10 @@ import {
   sumMoney,
 } from "@/data/contracts/money";
 import {
+  type AgentPerMergedPr,
   OTHER_SPEND_KEY,
   type SpendBudgets,
+  type SpendPerMergedPr,
   type SpendReport,
   type SpendTopRun,
 } from "@/data/contracts/spend";
@@ -43,6 +47,7 @@ import {
 } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
 import { PressLink } from "@/ui/press-link";
+import { type AgentHarnesses, AgentMark, harnessIn } from "./agent-mark";
 import {
   CostFigure,
   Instant,
@@ -250,16 +255,19 @@ function UngroupedLabel({
 
 /**
  * A group's name, linked to its drill. Only an agent and an operator have a
- * drill: `get_spend_drill` has no model or MCP server kind.
+ * drill: `get_spend_drill` has no model or MCP server kind. An agent's name
+ * carries its avatar with the harness it registered (#4871).
  */
 function GroupLabel({
   row,
   by,
   at,
+  harnesses,
 }: {
   row: Row;
   by: SpendMonthBy;
   at: SpendAt;
+  harnesses: AgentHarnesses;
 }) {
   const t = useTranslations("spend.month");
   if (row.key === OTHER_SPEND_KEY) {
@@ -302,12 +310,18 @@ function GroupLabel({
       );
     case "agent":
       return (
-        <SafeLink
-          to={routes.spend(at.org, at.ws, { tab: "agent", drill: row.key })}
-          className={`${linkText} ${mono} truncate font-semibold`}
-        >
-          {row.key}
-        </SafeLink>
+        <span className="flex min-w-0 items-center gap-2">
+          <AgentMark
+            agentKey={row.key}
+            harness={harnessIn(harnesses, row.key)}
+          />
+          <SafeLink
+            to={routes.spend(at.org, at.ws, { tab: "agent", drill: row.key })}
+            className={`${linkText} ${mono} min-w-0 truncate font-semibold`}
+          >
+            {row.key}
+          </SafeLink>
+        </span>
       );
     case "mcp_server":
       return <span className={`${mono} truncate font-semibold`}>{row.key}</span>;
@@ -349,7 +363,15 @@ function Share({
   );
 }
 
-function RunList({ row, at }: { row: Row; at: SpendAt }) {
+function RunList({
+  row,
+  at,
+  harnesses,
+}: {
+  row: Row;
+  at: SpendAt;
+  harnesses: AgentHarnesses;
+}) {
   const t = useTranslations("spend.month");
   const runs = row.topRuns ?? [];
   const more = row.runs - runs.length;
@@ -364,7 +386,9 @@ function RunList({ row, at }: { row: Row; at: SpendAt }) {
             <AgentAvatar
               value={null}
               initials={initialsOf(run.agentKey ?? run.runId)}
-              harness={run.harness}
+              // A ledger run records no harness; its agent's registered one
+              // stands in.
+              harness={run.harness ?? harnessIn(harnesses, run.agentKey)}
               size={22}
             />
             <span className="flex min-w-0 flex-col">
@@ -395,6 +419,139 @@ function RunList({ row, at }: { row: Row; at: SpendAt }) {
       ) : null}
     </ul>
   );
+}
+
+/** `github:owner/repo#N` as `owner/repo#N`. */
+function prName(prKey: string): string {
+  const colon = prKey.indexOf(":");
+  return colon === -1 ? prKey : prKey.slice(colon + 1);
+}
+
+const PR_TONE = {
+  merged: "allowed",
+  reverted: "failed",
+  closed: "denied",
+  open: "quiet",
+  unread: "quiet",
+} as const satisfies Record<
+  AgentPerMergedPr["runs"][number]["pullRequests"][number]["state"],
+  "allowed" | "failed" | "denied" | "quiet"
+>;
+
+/**
+ * An agent's spend per merged PR, or absent with the reason. An agent with
+ * no entry opened no PR in the period, so it has no figure either.
+ */
+function PerMergedPrFigure({ agent }: { agent: AgentPerMergedPr | null }) {
+  const t = useTranslations("spend.month.perMergedPr");
+  if (agent === null) {
+    return (
+      <span className="flex flex-col items-end" data-per-merged-pr="absent">
+        <span className="text-muted-foreground">{t("absent")}</span>
+        <span className="text-xs text-muted-foreground">
+          {t("absence.no_bounded_run")}
+        </span>
+      </span>
+    );
+  }
+  const unpriced =
+    agent.unpricedRuns === 0 ? null : (
+      <span className="text-xs text-muted-foreground">
+        {t("unpriced", { count: agent.unpricedRuns })}
+      </span>
+    );
+  if (agent.perMergedPr === null) {
+    const reason =
+      agent.absence === "no_merged_pr" || agent.absence === null
+        ? t("absence.no_merged_pr", { runs: agent.boundedRuns })
+        : t(`absence.${agent.absence}`);
+    return (
+      <span className="flex flex-col items-end" data-per-merged-pr="absent">
+        <span className="text-muted-foreground">{t("absent")}</span>
+        <span className="text-xs text-muted-foreground">{reason}</span>
+        {unpriced}
+      </span>
+    );
+  }
+  return (
+    <span className="flex flex-col items-end" data-per-merged-pr="figure">
+      <span className="font-semibold">
+        <Money value={agent.perMergedPr} />
+      </span>
+      <span className="text-xs text-muted-foreground">
+        {t("figure", { merged: agent.mergedPrs, runs: agent.boundedRuns })}
+      </span>
+      {unpriced}
+    </span>
+  );
+}
+
+/** The bounded runs behind an agent's figure, each linked to its run page. */
+function PerMergedPrRuns({
+  agent,
+  at,
+}: {
+  agent: AgentPerMergedPr;
+  at: SpendAt;
+}) {
+  const t = useTranslations("spend.month.perMergedPr");
+  const more = agent.boundedRuns - agent.runs.length;
+  return (
+    <section
+      aria-label={t("runsTitle")}
+      className="flex flex-col gap-1 border-t border-border pt-2"
+      data-testid="spend-month-per-merged-pr-runs"
+    >
+      <h3 className="px-2 text-xs font-semibold">{t("runsTitle")}</h3>
+      <p className="px-2 text-xs text-muted-foreground">{t("runsNote")}</p>
+      <ul className="flex flex-col">
+        {agent.runs.map((run) => (
+          <li
+            key={run.runId}
+            className="flex min-w-0 items-center gap-3 rounded-md px-2 py-1.5 hover:bg-hl"
+          >
+            <span className="flex min-w-0 flex-col">
+              <SafeLink
+                to={routes.run(at.org, at.ws, run.runId)}
+                className={`${linkText} ${mono} truncate`}
+              >
+                {run.runId}
+              </SafeLink>
+              <span className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                <Instant iso={run.startedAt} />
+                {run.pullRequests.map((pr) => (
+                  <span
+                    key={pr.prKey}
+                    className="inline-flex items-center gap-1"
+                    data-pr-state={pr.state}
+                  >
+                    <span className={mono}>{prName(pr.prKey)}</span>
+                    <Badge tone={PR_TONE[pr.state]}>{t(`state.${pr.state}`)}</Badge>
+                  </span>
+                ))}
+              </span>
+            </span>
+            <span className="ml-auto font-semibold">
+              {run.cost === null ? <NotRecordedValue /> : <Money value={run.cost} />}
+            </span>
+          </li>
+        ))}
+        {more > 0 ? (
+          <li className="px-2 py-1.5 text-xs text-muted-foreground">
+            {t("moreRuns", { count: more })}
+          </li>
+        ) : null}
+      </ul>
+    </section>
+  );
+}
+
+/** Each agent's figure by key, or null when the read did not answer. */
+function perMergedPrByAgent(
+  read: Read<SpendPerMergedPr> | null,
+): Map<string, AgentPerMergedPr> | null {
+  if (read === null || !read.ok) return null;
+  return new Map(read.value.agents.map((agent) => [agent.agentKey, agent]));
 }
 
 function GroupPicker({ by, at }: { by: SpendMonthBy; at: SpendAt }) {
@@ -428,12 +585,18 @@ export function MonthSection({
   budgets,
   by,
   at,
+  perMergedPr = null,
+  harnesses = {},
 }: {
   /** The month to date, grouped by `by`. */
   report: SpendReport;
   budgets: Read<SpendBudgets>;
   by: SpendMonthBy;
   at: SpendAt;
+  /** Each agent's spend per merged PR over the same month; read only by agent. */
+  perMergedPr?: Read<SpendPerMergedPr> | null;
+  /** Each agent's registered harness, by key, for the avatars' badges. */
+  harnesses?: AgentHarnesses;
 }) {
   const t = useTranslations("spend.month");
   const locale = useLocale();
@@ -448,26 +611,58 @@ export function MonthSection({
       row.key === OTHER_SPEND_KEY || row.cost === null ? [] : [row.cost],
     ),
   );
+  // A per-merged-PR read that did not answer adds no column, as a budget read
+  // that did not answer adds no meter: an absent figure would be a claim
+  // nobody read.
+  const merged = by === "agent" ? perMergedPrByAgent(perMergedPr) : null;
   // The rest of the spend on the MCP server grouping, and the ungrouped
   // remainder, draw no bar and count no runs: neither is one group.
-  const rows: MonthTableRow[] = report.rows.map((row) => ({
-    key: row.key,
-    label: <GroupLabel row={row} by={by} at={at} />,
-    toggleLabel: t("showRuns", { name: nameOf(row) }),
-    runs: row.key === OTHER_SPEND_KEY ? null : formatCount(row.runs, locale),
-    share: (
-      <Share
-        cost={row.cost}
-        total={total}
-        largest={row.key === OTHER_SPEND_KEY ? null : largest}
-      />
-    ),
-    cost: <CostFigure cost={row.cost} />,
-    runList:
+  const rows: MonthTableRow[] = report.rows.map((row) => {
+    const agent =
+      merged === null || row.key === OTHER_SPEND_KEY
+        ? null
+        : (merged.get(row.key) ?? null);
+    const costliest =
       row.key === OTHER_SPEND_KEY || (row.topRuns ?? []).length === 0 ? null : (
-        <RunList row={row} at={at} />
+        <RunList row={row} at={at} harnesses={harnesses} />
+      );
+    const behind =
+      agent === null || agent.runs.length === 0 ? null : (
+        <PerMergedPrRuns agent={agent} at={at} />
+      );
+    return {
+      key: row.key,
+      label: <GroupLabel row={row} by={by} at={at} harnesses={harnesses} />,
+      toggleLabel: t("showRuns", { name: nameOf(row) }),
+      runs: row.key === OTHER_SPEND_KEY ? null : formatCount(row.runs, locale),
+      share: (
+        <Share
+          cost={row.cost}
+          total={total}
+          largest={row.key === OTHER_SPEND_KEY ? null : largest}
+        />
       ),
-  }));
+      cost: <CostFigure cost={row.cost} />,
+      runList:
+        costliest === null && behind === null ? null : (
+          <div className="flex flex-col gap-2">
+            {costliest}
+            {behind}
+          </div>
+        ),
+      ...(merged === null || row.key === OTHER_SPEND_KEY
+        ? {}
+        : {
+            extra: {
+              content: <PerMergedPrFigure agent={agent} />,
+              toggleLabel:
+                behind === null
+                  ? null
+                  : t("perMergedPr.show", { name: nameOf(row) }),
+            },
+          }),
+    };
+  });
   // The priced rows then sum to the Total row beneath them. The MCP server
   // grouping needs no such row: Other spend holds the rest of each run.
   const ungrouped = by === "mcp_server" ? null : ungroupedCost(report);
@@ -517,6 +712,9 @@ export function MonthSection({
             rows={rows}
             totalLabel={t("columns.total")}
             total={<CostFigure cost={total} />}
+            {...(merged === null
+              ? {}
+              : { extraColumn: t("perMergedPr.column") })}
           />
         )}
       </Panel>

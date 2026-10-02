@@ -23,9 +23,11 @@
 # SCR-003 applies in all five org repos. Copying this file into each would put
 # five drifting implementations of a rule whose sibling check (scr-corpus-check)
 # exists to police drift. Instead this is a `workflow_call` workflow living once
-# in oxagen; the other four repos carry a ~12-line caller. All five repos are
-# public, so `uses: macanderson/oxagen/.github/workflows/dod-check.yml@main`
-# resolves with no extra credentials. See ADR-039.
+# in oxagen; the other four repos carry a ~12-line caller. ADR-039 relied on
+# all five repos being public, so `uses:` resolved with no extra credentials.
+# Since 2026-10-01 this repository is the private `oxageninc/product`, and the
+# callers can no longer reach this file or the tooling checkout below.
+# macanderson/stella#6638 holds the decision on where the shared check lives.
 #
 # ## Why the check runs on the PR, not on the close
 #
@@ -105,12 +107,11 @@ jobs:
       # ERR_MODULE_NOT_FOUND (#1323). Elsewhere `github.repository` is the
       # calling repo, `github.sha` is a commit oxagen does not have, and main
       # is both correct and the only ref a caller can rely on. This repository
-      # moved from macanderson/oxagen to oxageninc/product on 2026-10-01, and
-      # GitHub still redirects the old name, which `repository:` uses.
+      # moved from macanderson/oxagen to oxageninc/product on 2026-10-01.
       - name: Fetch the SCR tooling
         uses: actions/checkout@v5
         with:
-          repository: macanderson/oxagen
+          repository: oxageninc/product
           ref: ${{ github.repository == 'oxageninc/product' && github.sha || 'main' }}
           path: .scr-tools
           sparse-checkout: tools/scripts
@@ -124,7 +125,7 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const { linkedIssues, verdict, formatVerdict } = await import(
+            const { linkedIssues, verdict, composeSummary } = await import(
               `${process.env.GITHUB_WORKSPACE}/.scr-tools/tools/scripts/scr-dod-check.mjs`)
             const { checkClosingKeywords, formatClosingKeywords, pullRequestSources } = await import(
               `${process.env.GITHUB_WORKSPACE}/.scr-tools/tools/scripts/check-closing-keywords.mjs`)
@@ -210,8 +211,10 @@ jobs:
               repository: context.repo, commitsError })
 
             const result = { ok: dodResult.ok && closingResult.ok }
-            const summary = [formatVerdict(dodResult), formatClosingKeywords(closingResult)]
-              .filter(Boolean).join('\n\n')
+            // Failures lead, and the job fails with them alone, so its error
+            // never opens with a passing verdict (#5061).
+            const { failure, comment: summary } = composeSummary(
+              dodResult, formatClosingKeywords(closingResult))
             core.summary.addRaw(summary).write()
 
             // One sticky comment, edited in place. A fresh comment per push
@@ -234,4 +237,4 @@ jobs:
                 ...context.repo, issue_number: pr.number, body })
             }
 
-            if (!result.ok) core.setFailed(summary)
+            if (!result.ok) core.setFailed(failure)

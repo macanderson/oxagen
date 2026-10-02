@@ -2,11 +2,16 @@
  * The Markdown import that `oxagen memory import` and `oxagen steering import`
  * both run: read the files, send them to parse_markdown_import in calls of 25,
  * mark the duplicates and conflicts between calls, then print the rows, or
- * open one steering PR with commit_markdown_import on --yes.
+ * commit them with commit_markdown_import on --yes. The commit opens one
+ * steering PR for the records and policies, and stores the memories as
+ * waiting memories.
  *
  * The two commands differ in what they read. `memory import` reads every file
  * as records, so its output and its commit carry no policies. `steering
- * import` reads Cedar policies too, and passes `policies: true`.
+ * import` reads Cedar policies too, and passes `policies: true`. A file read
+ * as memories gives memory rows. Each parse call marks the memories its own
+ * files repeat, and the commit checks every memory again, so a memory that
+ * repeats one from another call is left out and named there.
  *
  * The commands keep their own lists of the capabilities they call, because
  * the manifest's cli layer looks for the capability names in
@@ -19,6 +24,7 @@ import {
   markdownImportFileCount,
   markdownImportTooManyFiles,
   type MarkdownImportFile,
+  type MarkdownImportMemory,
   type MarkdownImportPolicy,
   type MarkdownImportRecord,
   type MarkdownImportTarget,
@@ -28,6 +34,7 @@ import { markImportMatches, type ImportMatchRow } from "@oxagen/steering-check";
 import { failCommand, type CommandWriter } from "./capture-writer.js";
 import {
   commitMarkdownImport,
+  formatImportMemories,
   formatImportPolicies,
   formatImportPullRequest,
   formatImportRows,
@@ -208,9 +215,11 @@ function writeFileNotes(files: readonly MarkdownImportFile[], writer: CommandWri
 }
 
 export interface MarkdownImportRun {
-  /** Read Cedar policies too. Without it, the output and the commit carry records alone. */
+  /** Read Cedar policies too. Without it, the output and the commit carry no policies. */
   policies: boolean;
-  /** Open the steering PR. Without it, the import only prints the rows. */
+  /** Carry memory rows: print them, and store them on --yes. Without it, the output and the commit carry no memories. */
+  memories?: boolean;
+  /** Open the steering PR and store the memories. Without it, the import only prints the rows. */
   yes?: boolean;
   json?: boolean;
 }
@@ -220,11 +229,11 @@ export interface MarkdownImportRun {
  * --yes.
  *
  * Each parse call compares only its own files, so one pass over every call's
- * rows marks the duplicates and conflicts between calls. A row that
+ * record rows marks the duplicates and conflicts between calls. A row that
  * conflicts with a published record needs a person's choice, and the CLI has
  * no editor, so --yes leaves each one out and names it. An import that marks
  * more than 299 records and policy files add does not fit one steering PR,
- * so --yes refuses it.
+ * so --yes refuses it. Memories count against no PR.
  */
 export async function runMarkdownImport(
   documents: readonly MarkdownImportDocumentInput[],
@@ -233,12 +242,14 @@ export async function runMarkdownImport(
 ): Promise<void> {
   const parsedRecords: MarkdownImportRecord[] = [];
   const parsedPolicies: MarkdownImportPolicy[] = [];
+  const memories: MarkdownImportMemory[] = [];
   const files: MarkdownImportFile[] = [];
   for (let i = 0; i < documents.length; i += MARKDOWN_IMPORT_FILES_PER_CALL) {
     const batch = documents.slice(i, i + MARKDOWN_IMPORT_FILES_PER_CALL);
     const parsed = await callApi(() => parseMarkdownImport(batch), writer);
     parsedRecords.push(...parsed.records);
     parsedPolicies.push(...parsed.policies);
+    if (run.memories) memories.push(...parsed.memories);
     files.push(...parsed.files);
   }
   const records = reconcileImportRows(parsedRecords);
@@ -249,22 +260,33 @@ export async function runMarkdownImport(
   if (!run.yes) {
     if (run.json) {
       const pullRequestFiles = { count, max: STEERING_PR_MAX_FILES, message: tooMany };
-      const output = run.policies
-        ? { files, records, policies, pullRequestFiles }
-        : { files, records, pullRequestFiles };
+      const output = {
+        files,
+        records,
+        ...(run.policies ? { policies } : {}),
+        ...(run.memories ? { memories } : {}),
+        pullRequestFiles,
+      };
       writer.write(JSON.stringify(output, null, 2));
       return;
     }
-    const showRecords = records.length > 0 || policies.length === 0;
-    if (showRecords) writer.write(formatImportRows(records));
-    if (policies.length > 0) {
-      writer.write(`${showRecords ? "\n" : ""}${formatImportPolicies(policies)}`);
-    }
+    const showRecords = records.length > 0 || (policies.length === 0 && memories.length === 0);
+    const tables: string[] = [];
+    if (showRecords) tables.push(formatImportRows(records));
+    if (policies.length > 0) tables.push(formatImportPolicies(policies));
+    if (memories.length > 0) tables.push(formatImportMemories(memories));
+    writer.write(tables.join("\n\n"));
     writeFileNotes(files, writer);
     if (tooMany !== null) {
       writer.writeErr(`  ${tooMany}`);
     } else if (records.length + policies.length > 0) {
-      writer.write("\nRun again with --yes to open the steering PR.");
+      writer.write(
+        memories.length > 0
+          ? "\nRun again with --yes to open the steering PR and store the memories."
+          : "\nRun again with --yes to open the steering PR.",
+      );
+    } else if (memories.length > 0) {
+      writer.write("\nRun again with --yes to store the memories.");
     }
     return;
   }
@@ -286,12 +308,15 @@ export async function runMarkdownImport(
   );
   const adds =
     decided.some((row) => row.action === "add") ||
-    policies.some((policy) => policy.action === "add");
+    policies.some((policy) => policy.action === "add") ||
+    memories.some((row) => row.action === "add");
   if (!adds) {
     failCommand(
-      run.policies
-        ? "No record or policy is marked add, so there is no steering PR to open."
-        : "No record is marked add, so there is no steering PR to open.",
+      memories.length > 0
+        ? "No record, policy, or memory is marked add, so there is nothing to import."
+        : run.policies
+          ? "No record or policy is marked add, so there is no steering PR to open."
+          : "No record is marked add, so there is no steering PR to open.",
       writer,
     );
   }
@@ -299,9 +324,11 @@ export async function runMarkdownImport(
 
   const result = await callApi(
     () =>
-      commitMarkdownImport(
-        run.policies ? { records: decided, policies } : { records: decided },
-      ),
+      commitMarkdownImport({
+        records: decided,
+        ...(run.policies ? { policies } : {}),
+        ...(run.memories ? { memories } : {}),
+      }),
     writer,
   );
   if (run.json) {

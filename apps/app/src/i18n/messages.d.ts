@@ -7045,6 +7045,29 @@ type Messages = {
         productiveValue: string;
         productiveSteps: string;
       };
+      noProgress: {
+        title: string;
+        note: string;
+        line: string;
+        mode: {
+          observe: string;
+          enforced: string;
+        };
+        outcome: {
+          observe: string;
+          paused: string;
+          blocked: string;
+          blockedUnrecorded: string;
+        };
+        block: {
+          run_sealed: string;
+          no_host: string;
+          host_revoked: string;
+          host_offline: string;
+          no_connection_point: string;
+          pause_unavailable: string;
+        };
+      };
     };
     commands: {
       reasonLabel: string;
@@ -9048,10 +9071,6 @@ type Messages = {
       setBudget: string;
     };
     findings: {
-      strip: {
-        label: string;
-        tail: string;
-      };
       facts: {
         findings: string;
         operators: string;
@@ -9061,6 +9080,7 @@ type Messages = {
       };
       note: string;
       emptyTitle: string;
+      operatorNames: string;
       empty: string;
       kind: {
         cache_writes_never_read: string;
@@ -9159,10 +9179,22 @@ type Messages = {
       };
       costData: string;
       hero: string;
-      heroShare: string;
-      heroWindow: string;
-      heroYearStart: string;
-      heroYearEnd: string;
+      heroShareOf: string;
+      heroPeriod: string;
+      heroNoSpend: string;
+      mixedCurrency: string;
+      parts: {
+        title: string;
+        note: string;
+        detector: {
+          "2": string;
+          "3": string;
+          "5": string;
+        };
+        estimate: string;
+        estimated: string;
+        findings: string;
+      };
       attributionMissing: string;
       evidenceLine: string;
       list: string;
@@ -9726,6 +9758,7 @@ type Messages = {
         saving: string;
         denied: string;
         failed: string;
+        unknown: string;
       };
     };
     toolChart: {
@@ -9790,6 +9823,29 @@ type Messages = {
         share: string;
         cost: string;
         total: string;
+      };
+      perMergedPr: {
+        column: string;
+        figure: string;
+        absent: string;
+        absence: {
+          no_merged_pr: string;
+          mixed_currency: string;
+          not_priced: string;
+          no_bounded_run: string;
+        };
+        unpriced: string;
+        show: string;
+        runsTitle: string;
+        runsNote: string;
+        moreRuns: string;
+        state: {
+          merged: string;
+          reverted: string;
+          closed: string;
+          open: string;
+          unread: string;
+        };
       };
     };
   };
@@ -10451,6 +10507,8 @@ type Messages = {
       back: string;
       commit: string;
       commitPending: string;
+      store: string;
+      storePending: string;
       cancel: string;
       close: string;
       drop: {
@@ -10484,11 +10542,11 @@ type Messages = {
         policies: string;
         skip: string;
         memories: string;
-        memoriesHint: string;
       };
       paths: {
         records: string;
         policies: string;
+        memories: string;
         none: string;
       };
       status: {
@@ -10512,6 +10570,7 @@ type Messages = {
       };
       grid: {
         intro: string;
+        memoriesIntro: string;
         tokens: string;
         label: string;
         columns: {
@@ -10534,12 +10593,14 @@ type Messages = {
         quoted: string;
         none: string;
         kept: string;
+        fromTarget: string;
         notRead: string;
         statements: string;
         rules: string;
         empty: string;
         unmatched: string;
         summary: string;
+        memories: string;
         out: string;
         open: string;
         tooMany: string;
@@ -10570,7 +10631,10 @@ type Messages = {
         conflict: string;
         update: string;
         replaced: string;
+        tooLong: string;
         matches: string;
+        waiting: string;
+        rejected: string;
         conflictsWith: string;
         replacedBy: string;
         rowRef: string;
@@ -10584,6 +10648,15 @@ type Messages = {
         opened: string;
         counts: string;
         link: string;
+        stored: string;
+        memoriesNote: string;
+        memoriesLink: string;
+        skip: {
+          waiting: string;
+          rejected: string;
+          import: string;
+          stored: string;
+        };
       };
       failure: {
         denied: string;
@@ -11516,6 +11589,7 @@ type Messages = {
       };
       weeklyAbsent: string;
       weeklyUnpriced: string;
+      weeklyUnpricedTitle: string;
       weeklyTokenCount: string;
       weeklyTokens: string;
       weeklyTitle: string;

@@ -1,8 +1,9 @@
 // The Postgres memory store against a real migrated database (ADR-206): the
 // one-reflection-per-run index, the dedupe key, the waiting queue, one
 // waiting memory per memory file (ADR-238), a memory PR's life from open to
-// settled, the recall counters, the curator's
-// cross-tenant listing, and the tenant policy on agent.memories. It runs
+// settled, the uses and the lifecycle that keeps every row (ADR-248), the
+// recall counters, the curator's cross-tenant listing, and the tenant
+// policy on agent.memories. It runs
 // wherever DATABASE_URL points at a migrated database. CI's `test` job
 // migrates Postgres with Atlas and carries DATABASE_URL in turbo's globalEnv.
 // A local run without one skips. Each test writes to a workspace of its own,
@@ -16,6 +17,7 @@ import type {
   MemoryDraft,
   MemoryPrRecord,
   MemoryScope,
+  MemoryUseDraft,
   ReflectionDraft,
   ReflectionLesson,
 } from "./types";
@@ -24,6 +26,9 @@ const enabled = Boolean(process.env.DATABASE_URL);
 
 const runId = () => `arun_${crypto.randomUUID().replace(/-/g, "")}`;
 
+/** The agent every draft names, as a host's enrollment would. */
+const AGENT = "agt.memory-store-test";
+
 function draft(
   statement: string,
   over: Partial<MemoryDraft> = {},
@@ -31,7 +36,7 @@ function draft(
   const runPublicId = runId();
   const hash = statementHash(statement);
   return {
-    agentLineage: "agt.memory-store-test",
+    agentLineage: AGENT,
     runPublicId,
     capture: "remember",
     statement,
@@ -85,6 +90,17 @@ function proposal(
 
 const FILE = "claude-code:/home/dev/.claude/projects/-proj/memory/use-pnpm.md";
 
+/** The columns a new waiting memory starts with (ADR-248). */
+const FRESH = {
+  label: null,
+  summary: null,
+  memoryType: null,
+  state: "waiting",
+  useCount: 0,
+  lastUsedAt: null,
+  promotedLineage: null,
+};
+
 /** A memory file's statement, as ingest_tacho_memories stores it. */
 function fileMemory(statement: string, source = FILE): MemoryDraft {
   return draft(statement, {
@@ -114,9 +130,14 @@ describe("memory store with empty input", () => {
   };
   const at = new Date("2026-09-01T00:00:00.000Z");
 
-  it("returns before any query when the id or lineage list is empty", async () => {
+  it("returns before any query when the id, lineage, or use list is empty", async () => {
     await expect(store.insertMemories(bogus, [])).resolves.toBe(0);
-    await expect(store.deleteMemories(bogus, [])).resolves.toBe(0);
+    await expect(store.insertMemoriesKeyed(bogus, [])).resolves.toEqual([]);
+    await expect(store.recordUses(bogus, [])).resolves.toEqual({
+      recorded: 0,
+      unknown: 0,
+    });
+    await expect(store.linkMemories(bogus, [])).resolves.toBe(0);
     await expect(store.stampRecalls(bogus, [], at)).resolves.toBeUndefined();
     await expect(store.bumpRecalls(bogus, [], at)).resolves.toBeUndefined();
   });
@@ -152,6 +173,26 @@ describe.skipIf(!enabled)("memory store against Postgres", () => {
       });
     await closeDatabase();
   });
+
+  /** Every row of the workspace's, oldest first, with its lifecycle columns. */
+  const rowsOf = (scope: MemoryScope) =>
+    withSystemDb((tx) =>
+      tx
+        .select({
+          id: schema.memories.id,
+          statement: schema.memories.statement,
+          memoryPrId: schema.memories.memoryPrId,
+          state: schema.memories.state,
+          retiredAt: schema.memories.retiredAt,
+          retiredReason: schema.memories.retiredReason,
+          promotedLineage: schema.memories.promotedLineage,
+          useCount: schema.memories.useCount,
+          lastUsedAt: schema.memories.lastUsedAt,
+        })
+        .from(schema.memories)
+        .where(eq(schema.memories.workspaceId, scope.workspaceId))
+        .orderBy(schema.memories.createdAt, schema.memories.id),
+    );
 
   it("stores one reflection per run", async () => {
     const scope = newScope();
@@ -240,6 +281,44 @@ describe.skipIf(!enabled)("memory store against Postgres", () => {
     });
   });
 
+  it("stores an imported memory with no agent and no run, and returns the keys it wrote", async () => {
+    const scope = newScope();
+    // A Markdown import stores each statement as commit_markdown_import does.
+    const imported = (statement: string, line: number): MemoryDraft => {
+      const source = `import:CLAUDE.md#L${line}`;
+      return draft(statement, {
+        agentLineage: null,
+        runPublicId: null,
+        capture: "import",
+        evidence: [],
+        source,
+        label: statement.slice(0, 36),
+        dedupeKey: `import:${source}:${statementHash(statement)}`,
+      });
+    };
+    const first = imported("Run the migration check before the build.", 4);
+    const second = imported("Pin the lockfile.", 5);
+    expect(
+      [...(await store.insertMemoriesKeyed(scope, [first, second]))].sort(),
+    ).toEqual([first.dedupeKey, second.dedupeKey].sort());
+    // The same line imported again writes nothing and names no key.
+    expect(
+      await store.insertMemoriesKeyed(scope, [first, imported("Write the test first.", 6)]),
+    ).toEqual([`import:import:CLAUDE.md#L6:${statementHash("Write the test first.")}`]);
+
+    const waiting = await store.listWaiting(scope);
+    expect(waiting).toHaveLength(3);
+    expect(waiting.find((m) => m.source === "import:CLAUDE.md#L4")).toMatchObject({
+      capture: "import",
+      agentLineage: null,
+      runPublicId: null,
+      reflectionId: null,
+      source: "import:CLAUDE.md#L4",
+      label: "Run the migration check before the b",
+      state: "waiting",
+    });
+  });
+
   it("lists waiting memories oldest first and keeps nulls as null", async () => {
     const scope = newScope();
     const first = draft("Run the linter before you push.");
@@ -270,6 +349,7 @@ describe.skipIf(!enabled)("memory store against Postgres", () => {
     ]);
     expect(waiting[0]).toEqual({
       ...first,
+      ...FRESH,
       id: expect.any(String),
       publicId: expect.stringMatching(/^mem_/),
       reflectionId: null,
@@ -278,6 +358,7 @@ describe.skipIf(!enabled)("memory store against Postgres", () => {
     });
     expect(waiting[1]).toEqual({
       ...second,
+      ...FRESH,
       id: expect.any(String),
       publicId: expect.stringMatching(/^mem_/),
       reflectionId: null,
@@ -309,18 +390,6 @@ describe.skipIf(!enabled)("memory store against Postgres", () => {
   });
 
   describe("one waiting memory per memory file", () => {
-    /** Each row of the workspace's: its statement, and whether a PR cites it. */
-    const rowsOf = (scope: MemoryScope) =>
-      withSystemDb((tx) =>
-        tx
-          .select({
-            statement: schema.memories.statement,
-            memoryPrId: schema.memories.memoryPrId,
-          })
-          .from(schema.memories)
-          .where(eq(schema.memories.workspaceId, scope.workspaceId))
-          .orderBy(schema.memories.createdAt),
-      );
 
     /** Cite every waiting memory in a new open memory PR. */
     async function citeWaiting(scope: MemoryScope, number: number) {
@@ -343,6 +412,7 @@ describe.skipIf(!enabled)("memory store against Postgres", () => {
       expect(waiting).toHaveLength(1);
       expect(waiting[0]).toEqual({
         ...edited,
+        ...FRESH,
         id: before?.id,
         publicId: before?.publicId,
         reflectionId: null,
@@ -374,7 +444,7 @@ describe.skipIf(!enabled)("memory store against Postgres", () => {
       ]);
     });
 
-    it("drops the waiting memory when the file goes back to the text a memory PR cites", async () => {
+    it("retires the waiting memory when the file goes back to the text a memory PR cites", async () => {
       const scope = newScope();
       await store.replaceSourceMemory(scope, fileMemory("Use pnpm."));
       await citeWaiting(scope, 22);
@@ -384,12 +454,70 @@ describe.skipIf(!enabled)("memory store against Postgres", () => {
         await store.replaceSourceMemory(scope, fileMemory("Use pnpm.")),
       ).toBe(false);
       expect(await store.countWaiting(scope)).toBe(0);
-      expect((await rowsOf(scope)).map((row) => row.statement)).toEqual([
-        "Use pnpm.",
+      expect(
+        (await rowsOf(scope)).map((row) => [
+          row.statement,
+          row.state,
+          row.retiredReason,
+        ]),
+      ).toEqual([
+        ["Use pnpm.", "in_pr", null],
+        ["Use pnpm, never npm.", "retired", "deleted"],
       ]);
     });
 
-    it("keeps the oldest of the waiting rows a file held before and drops the rest", async () => {
+    it("brings back a memory retired as deleted when its file holds the text again", async () => {
+      const scope = newScope();
+      await store.replaceSourceMemory(scope, fileMemory("Use pnpm."));
+      await store.retireMissingSources(
+        scope,
+        { capture: "local_gateway", prefix: "claude-code:/home/dev/", seen: [], agentLineage: AGENT },
+        new Date(),
+      );
+      expect(await store.countWaiting(scope)).toBe(0);
+      expect(
+        await store.replaceSourceMemory(scope, fileMemory("Use pnpm.")),
+      ).toBe(true);
+      expect((await rowsOf(scope)).map((row) => [row.state, row.retiredAt])).toEqual([
+        ["waiting", null],
+      ]);
+    });
+
+    it("keeps a memory retired as unused when a restarted daemon sends its file again", async () => {
+      const scope = newScope();
+      await store.replaceSourceMemory(scope, fileMemory("Use pnpm."));
+      await store.retireUnused(scope, new Date(Date.now() + 60_000), new Date());
+      expect(
+        await store.replaceSourceMemory(scope, fileMemory("Use pnpm.")),
+      ).toBe(false);
+      expect((await rowsOf(scope)).map((row) => [row.state, row.retiredReason])).toEqual([
+        ["retired", "unused"],
+      ]);
+    });
+
+    it("keeps a file's frontmatter, and updates it when only the frontmatter changes", async () => {
+      const scope = newScope();
+      await store.replaceSourceMemory(scope, {
+        ...fileMemory("Use pnpm."),
+        label: "pnpm",
+        memoryType: "feedback",
+      });
+      expect(
+        await store.replaceSourceMemory(scope, {
+          ...fileMemory("Use pnpm."),
+          label: "Package manager",
+          summary: "Which package manager to run.",
+          memoryType: "project",
+        }),
+      ).toBe(false);
+      expect((await store.listWaiting(scope))[0]).toMatchObject({
+        label: "Package manager",
+        summary: "Which package manager to run.",
+        memoryType: "project",
+      });
+    });
+
+    it("keeps the oldest of the waiting rows a file held before and retires the rest", async () => {
       const scope = newScope();
       // Two rows from one file, as ingest wrote them before ADR-238.
       await store.insertMemories(scope, [fileMemory("Use pnpm.")]);
@@ -401,6 +529,10 @@ describe.skipIf(!enabled)("memory store against Postgres", () => {
       const waiting = await store.listWaiting(scope);
       expect(waiting.map((m) => [m.id, m.statement])).toEqual([
         [oldest?.id, "Use pnpm 10."],
+      ]);
+      expect((await rowsOf(scope)).map((row) => row.state)).toEqual([
+        "waiting",
+        "retired",
       ]);
     });
 
@@ -428,6 +560,335 @@ describe.skipIf(!enabled)("memory store against Postgres", () => {
     });
   });
 
+  describe("memory uses and the lifecycle (ADR-248)", () => {
+    const at = (minutes: number) =>
+      new Date(Date.UTC(2026, 9, 1, 12, minutes));
+
+    /** A read of the file `source` holds, by `run`. */
+    const read = (
+      run: string,
+      usedAt: Date,
+      over: Partial<MemoryUseDraft> = {},
+    ): MemoryUseDraft => ({
+      capture: "local_gateway",
+      source: FILE,
+      runPublicId: run,
+      signal: "read",
+      count: 1,
+      usedAt,
+      ...over,
+    });
+
+    /** The uses table's rows for one memory. */
+    const usesOf = (memoryId: string) =>
+      withSystemDb((tx) =>
+        tx
+          .select({
+            runPublicId: schema.memoryUses.runPublicId,
+            signal: schema.memoryUses.signal,
+            count: schema.memoryUses.count,
+            usedAt: schema.memoryUses.usedAt,
+          })
+          .from(schema.memoryUses)
+          .where(eq(schema.memoryUses.memoryId, memoryId))
+          .orderBy(schema.memoryUses.usedAt),
+      );
+
+    /** use_count and last_used_at as the uses table computes them. */
+    const fromUsesTable = async (memoryId: string) => {
+      const rows = await withSystemDb((tx) =>
+        tx.execute(
+          sql`select (count(distinct run_public_id) + coalesce(sum(count) filter (where run_public_id is null), 0))::int as uses, max(used_at) as last from agent.memory_uses where memory_id = ${memoryId}`,
+        ),
+      );
+      const [row] = [...rows] as Array<{ uses: number; last: Date | string | null }>;
+      const last = row?.last ?? null;
+      return {
+        useCount: row?.uses ?? 0,
+        lastUsedAt: last === null ? null : new Date(last),
+      };
+    };
+
+    async function fileMemoryIn(scope: MemoryScope, statement = "Use pnpm.") {
+      await store.replaceSourceMemory(scope, fileMemory(statement));
+      const [row] = await rowsOf(scope);
+      if (row === undefined) throw new Error("expected a memory row");
+      return row;
+    }
+
+    it("adds one use for a run that reads a memory file twice", async () => {
+      const scope = newScope();
+      const memory = await fileMemoryIn(scope);
+      const run = runId();
+      // Twice in one report, and again in a later one.
+      expect(
+        await store.recordUses(scope, [read(run, at(1)), read(run, at(2))]),
+      ).toEqual({ recorded: 2, unknown: 0 });
+      await store.recordUses(scope, [read(run, at(3))]);
+      expect(await usesOf(memory.id)).toEqual([
+        { runPublicId: run, signal: "read", count: 3, usedAt: at(3) },
+      ]);
+      expect((await rowsOf(scope))[0]).toMatchObject({
+        useCount: 1,
+        lastUsedAt: at(3),
+      });
+    });
+
+    it("keeps use_count and last_used_at equal to the uses table", async () => {
+      const scope = newScope();
+      const memory = await fileMemoryIn(scope);
+      const [a, b] = [runId(), runId()];
+      await store.recordUses(scope, [
+        read(a, at(5)),
+        // A run that reads and cites a memory is still one run.
+        read(a, at(6), { signal: "citation" }),
+        read(b, at(4)),
+        // A harness's own count with no run counts as reported.
+        read("", at(2), { runPublicId: null, signal: "harness_count", count: 3 }),
+      ]);
+      await store.recordUses(scope, [
+        read("", at(9), { runPublicId: null, signal: "harness_count", count: 2 }),
+      ]);
+      const [row] = await rowsOf(scope);
+      expect(row?.useCount).toBe(2 + 3 + 2);
+      expect(row?.lastUsedAt).toEqual(at(9));
+      expect({ useCount: row?.useCount, lastUsedAt: row?.lastUsedAt }).toEqual(
+        await fromUsesTable(memory.id),
+      );
+    });
+
+    it("counts both uses when two reports for one memory land at once", async () => {
+      const scope = newScope();
+      const memory = await fileMemoryIn(scope);
+      await Promise.all([
+        store.recordUses(scope, [read(runId(), at(1))]),
+        store.recordUses(scope, [read(runId(), at(2))]),
+      ]);
+      expect((await rowsOf(scope))[0]?.useCount).toBe(2);
+      expect((await fromUsesTable(memory.id)).useCount).toBe(2);
+    });
+
+    it("answers a use of a file that holds no memory as unknown", async () => {
+      const scope = newScope();
+      await fileMemoryIn(scope);
+      expect(
+        await store.recordUses(scope, [
+          read(runId(), at(1), { source: `${FILE}.missing` }),
+          read(runId(), at(1)),
+        ]),
+      ).toEqual({ recorded: 1, unknown: 1 });
+    });
+
+    it("credits a use to the file's waiting memory over the one a memory PR cites", async () => {
+      const scope = newScope();
+      await fileMemoryIn(scope, "Use pnpm.");
+      const cited = await store.listWaiting(scope);
+      await store.insertMemoryPr(
+        scope,
+        pullRequest(31, [proposal("mem.use-pnpm", cited)]),
+      );
+      await store.replaceSourceMemory(scope, fileMemory("Use pnpm 10."));
+      await store.recordUses(scope, [read(runId(), at(1))]);
+      expect(
+        (await rowsOf(scope)).map((row) => [row.statement, row.state, row.useCount]),
+      ).toEqual([
+        ["Use pnpm.", "in_pr", 0],
+        ["Use pnpm 10.", "waiting", 1],
+      ]);
+    });
+
+    it("keeps a promoted memory's row and count, and keeps counting its uses", async () => {
+      const scope = newScope();
+      const memory = await fileMemoryIn(scope);
+      await store.recordUses(scope, [read(runId(), at(1)), read(runId(), at(2))]);
+      const prId = await store.insertMemoryPr(
+        scope,
+        pullRequest(32, [proposal("mem.use-pnpm", await store.listWaiting(scope))]),
+      );
+      await store.settlePr(scope, {
+        prId,
+        status: "merged",
+        settledAt: at(3),
+        mergedLineages: ["mem.use-pnpm"],
+        reviewedLineages: [],
+        rejectedHashes: [],
+        promoted: [{ lineage: "mem.use-pnpm", memoryIds: [memory.id] }],
+        returnedMemoryIds: [],
+      });
+      expect((await rowsOf(scope))[0]).toMatchObject({
+        id: memory.id,
+        state: "promoted",
+        promotedLineage: "mem.use-pnpm",
+        useCount: 2,
+      });
+      await store.recordUses(scope, [read(runId(), at(4))]);
+      expect((await rowsOf(scope))[0]).toMatchObject({
+        state: "promoted",
+        useCount: 3,
+        lastUsedAt: at(4),
+      });
+    });
+
+    it("keeps a dismissed memory's row and count, which no scan or age retires", async () => {
+      const scope = newScope();
+      const memory = await fileMemoryIn(scope);
+      await store.recordUses(scope, [read(runId(), at(1))]);
+      // MEM5 builds dismiss_memories. The row is set the way it will set it.
+      await withSystemDb((tx) =>
+        tx
+          .update(schema.memories)
+          .set({ state: "dismissed" })
+          .where(eq(schema.memories.id, memory.id)),
+      );
+      expect(
+        await store.retireMissingSources(
+          scope,
+          { capture: "local_gateway", prefix: "claude-code:/home/dev/", seen: [], agentLineage: AGENT },
+          at(2),
+        ),
+      ).toBe(0);
+      expect(
+        await store.retireUnused(scope, new Date(Date.now() + 60_000), at(2)),
+      ).toBe(0);
+      await store.recordUses(scope, [read(runId(), at(3))]);
+      expect((await rowsOf(scope))[0]).toMatchObject({
+        state: "dismissed",
+        useCount: 2,
+      });
+    });
+
+    it("retires the memories of files a full scan no longer finds, for the scan's folder and agent only", async () => {
+      const scope = newScope();
+      const root = "claude-code:/home/dev/.claude/projects/";
+      const kept = `${root}-proj/memory/kept.md`;
+      const gone = `${root}-proj/memory/gone.md`;
+      const promotedGone = `${root}-proj/memory/promoted.md`;
+      const elsewhere = "claude-code:/home/other/.claude/projects/-proj/memory/gone.md";
+      const otherAgent = `${root}-proj/memory/other-agent.md`;
+      for (const source of [kept, gone, promotedGone, elsewhere])
+        await store.replaceSourceMemory(scope, fileMemory(`From ${source}.`, source));
+      await store.replaceSourceMemory(scope, {
+        ...fileMemory(`From ${otherAgent}.`, otherAgent),
+        agentLineage: "agt.someone-else",
+      });
+      const promoted = (await store.listWaiting(scope)).find(
+        (m) => m.source === promotedGone,
+      );
+      if (promoted === undefined) throw new Error("expected the promoted memory");
+      await store.linkMemories(scope, [{ memoryId: promoted.id, lineage: "mem.x" }]);
+
+      expect(
+        await store.retireMissingSources(
+          scope,
+          { capture: "local_gateway", prefix: root, seen: [kept], agentLineage: AGENT },
+          at(5),
+        ),
+      ).toBe(2);
+      const states = Object.fromEntries(
+        (await rowsOf(scope)).map((row) => [row.statement, [row.state, row.retiredReason]]),
+      );
+      expect(states).toEqual({
+        [`From ${kept}.`]: ["waiting", null],
+        [`From ${gone}.`]: ["retired", "deleted"],
+        [`From ${promotedGone}.`]: ["retired", "deleted"],
+        [`From ${elsewhere}.`]: ["waiting", null],
+        [`From ${otherAgent}.`]: ["waiting", null],
+      });
+
+      // The file comes back with its text, and so does its memory. The
+      // promoted one comes back promoted.
+      expect(
+        await store.replaceSourceMemory(scope, fileMemory(`From ${gone}.`, gone)),
+      ).toBe(true);
+      expect(
+        await store.replaceSourceMemory(
+          scope,
+          fileMemory(`From ${promotedGone}.`, promotedGone),
+        ),
+      ).toBe(true);
+      const back = Object.fromEntries(
+        (await rowsOf(scope)).map((row) => [row.statement, row.state]),
+      );
+      expect(back[`From ${gone}.`]).toBe("waiting");
+      expect(back[`From ${promotedGone}.`]).toBe("promoted");
+    });
+
+    it("retires a memory no run used within the window, counting from its newest use", async () => {
+      const scope = newScope();
+      await store.insertMemories(scope, [draft("Never used.")]);
+      await store.replaceSourceMemory(scope, fileMemory("Used lately."));
+      await store.recordUses(scope, [read(runId(), new Date(Date.now() + 120_000))]);
+      const cutoff = new Date(Date.now() + 60_000);
+      // Every row was captured before the cutoff, but one was used after it.
+      expect(await store.retireUnused(scope, cutoff, new Date())).toBe(1);
+      expect(
+        (await rowsOf(scope)).map((row) => [row.statement, row.state, row.retiredReason]),
+      ).toEqual([
+        ["Never used.", "retired", "unused"],
+        ["Used lately.", "waiting", null],
+      ]);
+    });
+
+    it("brings back a retired memory that a run uses", async () => {
+      const scope = newScope();
+      await fileMemoryIn(scope);
+      await store.retireUnused(scope, new Date(Date.now() + 60_000), at(1));
+      expect((await rowsOf(scope))[0]?.state).toBe("retired");
+      await store.recordUses(scope, [read(runId(), at(2))]);
+      expect((await rowsOf(scope))[0]).toMatchObject({
+        state: "waiting",
+        retiredAt: null,
+        retiredReason: null,
+        useCount: 1,
+      });
+    });
+
+    it("links a waiting memory to the record that already says it", async () => {
+      const scope = newScope();
+      await store.insertMemories(scope, [draft("Said already.")]);
+      const [memory] = await store.listWaiting(scope);
+      if (memory === undefined) throw new Error("expected a memory");
+      expect(
+        await store.linkMemories(scope, [
+          { memoryId: memory.id, lineage: "mem.said" },
+          { memoryId: memory.id, lineage: "mem.said" },
+        ]),
+      ).toBe(1);
+      expect((await rowsOf(scope))[0]).toMatchObject({
+        state: "promoted",
+        promotedLineage: "mem.said",
+      });
+      expect(await store.countWaiting(scope)).toBe(0);
+    });
+
+    it("retires a returned file memory whose file moved on while its PR was open", async () => {
+      const scope = newScope();
+      await fileMemoryIn(scope, "Use pnpm.");
+      const cited = await store.listWaiting(scope);
+      const prId = await store.insertMemoryPr(
+        scope,
+        pullRequest(33, [proposal("mem.use-pnpm", cited)]),
+      );
+      await store.replaceSourceMemory(scope, fileMemory("Use pnpm 10."));
+      await store.settlePr(scope, {
+        prId,
+        status: "closed",
+        settledAt: at(7),
+        mergedLineages: [],
+        reviewedLineages: [],
+        rejectedHashes: cited.map((m) => m.statementHash),
+        promoted: [],
+        returnedMemoryIds: cited.map((m) => m.id),
+      });
+      expect(
+        (await rowsOf(scope)).map((row) => [row.statement, row.state, row.retiredAt]),
+      ).toEqual([
+        ["Use pnpm.", "retired", at(7)],
+        ["Use pnpm 10.", "waiting", null],
+      ]);
+    });
+  });
+
   it("knows the branches a workspace opened a memory PR from, settled or not", async () => {
     const scope = newScope();
     const other = newScope();
@@ -444,12 +905,13 @@ describe.skipIf(!enabled)("memory store against Postgres", () => {
       mergedLineages: [],
       reviewedLineages: [],
       rejectedHashes: [],
-      purgeMemoryIds: [],
+      promoted: [],
+      returnedMemoryIds: [],
     });
     expect(await store.openedPrFrom(scope, "memory/2026-09-09")).toBe(true);
   });
 
-  it("settles a memory PR: purges, rejects, and stamps recall rows", async () => {
+  it("settles a memory PR: promotes, returns, rejects, and stamps recall rows", async () => {
     const scope = newScope();
     await store.insertMemories(scope, [draft("Merged lesson.")]);
     await store.insertMemories(scope, [draft("Rejected lesson.")]);
@@ -482,7 +944,8 @@ describe.skipIf(!enabled)("memory store against Postgres", () => {
       mergedLineages: ["mem.merged"],
       reviewedLineages: ["mem.stale"],
       rejectedHashes: [rejected.statementHash, rejected.statementHash],
-      purgeMemoryIds: [merged.id, rejected.id],
+      promoted: [{ lineage: "mem.merged", memoryIds: [merged.id] }],
+      returnedMemoryIds: [rejected.id],
     });
 
     expect(await store.listOpenPrs(scope)).toEqual([]);
@@ -496,10 +959,15 @@ describe.skipIf(!enabled)("memory store against Postgres", () => {
         .where(eq(schema.memoryPullRequests.id, prId)),
     );
     expect(row).toEqual({ status: "merged", settledAt });
-    expect((await store.listWaiting(scope)).map((m) => m.id)).toEqual([
-      left.id,
+    // No memory is deleted (ADR-248). The merged record's memory is promoted
+    // and names its PR, and the rejected record's memory waits again.
+    expect(
+      (await rowsOf(scope)).map((r) => [r.id, r.state, r.promotedLineage, r.memoryPrId]),
+    ).toEqual([
+      [merged.id, "promoted", "mem.merged", prId],
+      [rejected.id, "waiting", null, prId],
+      [left.id, "waiting", null, null],
     ]);
-    expect(await store.deleteMemories(scope, [merged.id, rejected.id])).toBe(0);
     expect(await store.listRejections(scope)).toEqual([
       { statementHash: rejected.statementHash, rejectedAt: settledAt },
     ]);
@@ -526,9 +994,10 @@ describe.skipIf(!enabled)("memory store against Postgres", () => {
       mergedLineages: [],
       reviewedLineages: ["mem.other"],
       rejectedHashes: [statementHash("Some other lesson.")],
-      purgeMemoryIds: [left.id],
+      promoted: [{ lineage: "mem.other", memoryIds: [left.id] }],
+      returnedMemoryIds: [],
     });
-    expect(await store.countWaiting(scope)).toBe(1);
+    expect(await store.countWaiting(scope)).toBe(2);
     expect(await store.listRejections(scope)).toHaveLength(1);
     expect(await store.listRecalls(scope)).toHaveLength(2);
 
@@ -555,8 +1024,11 @@ describe.skipIf(!enabled)("memory store against Postgres", () => {
       mergedLineages: [],
       reviewedLineages: ["mem.merged"],
       rejectedHashes: [rejected.statementHash],
-      purgeMemoryIds: again.map((m) => m.id),
+      promoted: [],
+      returnedMemoryIds: again.map((m) => m.id),
     });
+    expect(again).toHaveLength(2);
+    expect(await store.countWaiting(scope)).toBe(3);
     expect(await store.listRejections(scope)).toEqual([
       { statementHash: rejected.statementHash, rejectedAt: later },
     ]);
@@ -661,7 +1133,15 @@ describe.skipIf(!enabled)("memory store against Postgres", () => {
     expect(await store.listRejections(other)).toEqual([]);
     expect(await store.hasReflection(other, run)).toBe(false);
     expect(await store.listReflectionsSince(other, new Date(0))).toEqual([]);
-    expect(await store.deleteMemories(other, ids)).toBe(0);
+    expect(
+      await store.linkMemories(
+        other,
+        ids.map((memoryId) => ({ memoryId, lineage: "mem.other" })),
+      ),
+    ).toBe(0);
+    expect(
+      await store.retireUnused(other, new Date(Date.now() + 60_000), new Date()),
+    ).toBe(0);
     expect(await store.countWaiting(scope)).toBe(1);
 
     // The policy itself, not the store's WHERE, is what filters: an unfiltered
@@ -679,5 +1159,39 @@ describe.skipIf(!enabled)("memory store against Postgres", () => {
       });
     expect(await unfiltered(other.workspaceId)).toEqual([]);
     expect(new Set(await unfiltered(scope.workspaceId))).toEqual(new Set(ids));
+  });
+
+  it("shows another workspace none of this workspace's memory uses", async () => {
+    const scope = newScope();
+    const other = newScope();
+    await store.replaceSourceMemory(scope, fileMemory("Use pnpm."));
+    const use: MemoryUseDraft = {
+      capture: "local_gateway",
+      source: FILE,
+      runPublicId: runId(),
+      signal: "read",
+      count: 1,
+      usedAt: new Date(),
+    };
+    // The other workspace holds no memory for the file, so its use is unknown.
+    expect(await store.recordUses(other, [use])).toEqual({
+      recorded: 0,
+      unknown: 1,
+    });
+    expect(await store.recordUses(scope, [use])).toEqual({
+      recorded: 1,
+      unknown: 0,
+    });
+    const unfiltered = (workspace: string) =>
+      withSystemDb(async (tx) => {
+        await tx.execute(
+          sql`select set_config('app.rls_bypass', 'off', true), set_config('app.current_org_id', ${orgId}, true), set_config('app.current_workspace_id', ${workspace}, true)`,
+        );
+        await tx.execute(sql`set local role oxagen_app`);
+        const rows = await tx.execute(sql`select id from agent.memory_uses`);
+        return [...rows].length;
+      });
+    expect(await unfiltered(other.workspaceId)).toBe(0);
+    expect(await unfiltered(scope.workspaceId)).toBe(1);
   });
 });

@@ -128,6 +128,7 @@ describe("handleMemoryImport", () => {
       records: 1,
       policies: 0,
       skipped: 0,
+      memories: { stored: 0, skipped: [] },
     });
 
     await handleMemoryImport([md("CLAUDE.md", "Never push to main.")], { yes: true });
@@ -145,6 +146,7 @@ describe("handleMemoryImport", () => {
       records: 1,
       policies: 0,
       skipped: 0,
+      memories: { stored: 0, skipped: [] },
     });
     await handleMemoryImport([md("CLAUDE.md", "x")], { yes: true, json: true });
     expect(JSON.parse(text()).pullRequest.number).toBe(3);

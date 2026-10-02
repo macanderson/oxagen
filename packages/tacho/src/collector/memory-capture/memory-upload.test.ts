@@ -90,6 +90,37 @@ describe("an upload", () => {
     expect(lines).toEqual([]);
   });
 
+  it("sends the frontmatter's label, summary, and type when the file has them", async () => {
+    const { fetch, calls } = plane([200, 200]);
+    const { send } = upload(fetch);
+    await send({
+      ...ENTRY,
+      label: "Package manager",
+      summary: "Which tool installs packages",
+      memoryType: "feedback",
+    });
+    await send({ ...ENTRY, label: "Package manager" });
+    expect(calls.map((call) => call.body)).toEqual([
+      {
+        host_enrollment_id: HOST_ENROLLMENT_ID,
+        harness: "claude-code",
+        path: ENTRY.path,
+        statement: "Use pnpm.",
+        label: "Package manager",
+        summary: "Which tool installs packages",
+        memory_type: "feedback",
+      },
+      // The contract is strict, so a field the file lacks is left out.
+      {
+        host_enrollment_id: HOST_ENROLLMENT_ID,
+        harness: "claude-code",
+        path: ENTRY.path,
+        statement: "Use pnpm.",
+        label: "Package manager",
+      },
+    ]);
+  });
+
   it("reads the host at every upload, so a renewed key is used", async () => {
     const { fetch, calls } = plane([200, 200]);
     const { send, host } = upload(fetch);

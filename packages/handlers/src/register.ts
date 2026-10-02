@@ -4,10 +4,11 @@ import {
   registerServerFolderWriter,
   registerSteeringPrOpener,
 } from "@oxagen/agent/runtime/steering-pr";
-import { setInstructionProposalOpener } from "@oxagen/billing/proposal-opener";
+import { setSpendProposalOpener } from "@oxagen/billing/proposal-opener";
 import { setInterjectionTimeoutRunner } from "@oxagen/inngest-functions/interjection-timeout-runner";
 import { setMcpServerDiscoveryRunner } from "@oxagen/inngest-functions/mcp-server-discovery-runner";
 import { setMemoryRunner } from "@oxagen/inngest-functions/memory-runner";
+import { setNoProgressPauseRunner } from "@oxagen/inngest-functions/no-progress-pause-runner";
 import { setRunFitRunner } from "@oxagen/inngest-functions/run-fit-runner";
 import { setRunPrOutcomesRunner } from "@oxagen/inngest-functions/run-pr-outcomes-runner";
 import { setPullRequestBackfillRunner } from "@oxagen/inngest-functions/run-pull-request-backfill-runner";
@@ -225,17 +226,18 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .createServerFolderWriter()
         .addTools(request),
   });
-  // The findings pass (detector 6, prompt habits) opens a steering record
-  // proposal for each instruction operators repeat. The proposal path lives
-  // in this package, which @oxagen/billing cannot import. It runs in the
-  // workspace's tenant scope, and is loaded on the first pass that opens one.
-  setInstructionProposalOpener(async (scope, proposals) => {
+  // The findings pass opens the steering record proposals its findings
+  // support, through one builder per finding kind (./lib/spend-proposals).
+  // The proposal path lives in this package, which @oxagen/billing cannot
+  // import. It runs in the workspace's tenant scope, and is loaded on the
+  // first pass that has something to propose.
+  setSpendProposalOpener(async (scope, input) => {
     const [{ runInTenantScope }, open] = await Promise.all([
       import("@oxagen/tenancy"),
-      import("./lib/instruction-proposals"),
+      import("./lib/spend-proposals"),
     ]);
     await runInTenantScope(scope, () =>
-      open.openInstructionProposalsFor(scope, proposals),
+      open.openSpendProposalsFor(scope, input),
     );
   });
   // The interjection timeout (#3941) lives there too, and is loaded on its
@@ -253,6 +255,18 @@ registerHandlersOnce("@oxagen/handlers", () => {
       return timeout.denyExpiredInterjection(
         request,
         timeout.POSTGRES_INTERJECTION_TIMEOUT_DEPS,
+      );
+    },
+  });
+  // An enforced no-progress limit (#4490) pauses a run through the same
+  // command path an operator's pause takes, which lives here too. Loaded on
+  // the first pause.
+  setNoProgressPauseRunner({
+    pause: async (request) => {
+      const pause = await import("./lib/no-progress-pause");
+      return pause.pauseForNoProgress(
+        request,
+        pause.POSTGRES_NO_PROGRESS_PAUSE_DEPS,
       );
     },
   });
@@ -1171,6 +1185,14 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./steering_repo.import"))
         .importWorkspaceSteeringHandler as CapabilityHandlerFn,
   );
+  // The move of a workspace's MCP servers into its steering repo (ADR-245,
+  // #4948). Provisioning starts the same run when the repo is ready.
+  registerHandler(
+    "migrate_tools_to_steering",
+    async () =>
+      (await import("./tool.steering.migrate"))
+        .migrateToolsToSteeringHandler as CapabilityHandlerFn,
+  );
   registerHandler(
     "get_steering_freshness",
     async () =>
@@ -1200,6 +1222,39 @@ registerHandlersOnce("@oxagen/handlers", () => {
     async () =>
       (await import("./context.proposal.dismiss"))
         .dismissProposalHandler as CapabilityHandlerFn,
+  );
+  // Workspace memories (memory-collection spec, lane MEM5, #4912): the
+  // Memories tab's list and drawer, promotion onto a memory PR, dismissal,
+  // and the records of one memory PR.
+  registerHandler(
+    "list_workspace_memories",
+    async () =>
+      (await import("./steering.memories.list"))
+        .steeringMemoriesListHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "get_workspace_memory",
+    async () =>
+      (await import("./steering.memories.get"))
+        .steeringMemoriesGetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "promote_memories",
+    async () =>
+      (await import("./steering.memories.promote"))
+        .steeringMemoriesPromoteHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "dismiss_memories",
+    async () =>
+      (await import("./steering.memories.dismiss"))
+        .steeringMemoriesDismissHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "list_memory_pr_records",
+    async () =>
+      (await import("./steering.memory_pr_records.list"))
+        .steeringMemoryPrRecordsListHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "open_context_pr",
@@ -1536,6 +1591,12 @@ registerHandlersOnce("@oxagen/handlers", () => {
     async () =>
       (await import("./tacho.memories.recall"))
         .tachoMemoriesRecallHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "record_tacho_memory_uses",
+    async () =>
+      (await import("./tacho.memories.uses.record"))
+        .tachoMemoryUsesRecordHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "dispatch_command",
@@ -1967,10 +2028,22 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .spendOperatorRankingHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "get_spend_per_merged_pr",
+    async () =>
+      (await import("./spend.per_merged_pr"))
+        .spendPerMergedPrHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "set_operator_pseudonyms",
     async () =>
       (await import("./spend.operator_pseudonyms.set"))
         .spendOperatorPseudonymsSetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "get_unproductive_spend",
+    async () =>
+      (await import("./spend.unproductive"))
+        .spendUnproductiveHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "get_clone_draft",

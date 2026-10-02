@@ -98,6 +98,7 @@ import { toolStudioFindingsList } from "@oxagen/oxagen/contracts/tool.studio.fin
 import { toolStudioDescriptionDraft } from "@oxagen/oxagen/contracts/tool.studio.description.draft";
 import { toolStudioTry } from "@oxagen/oxagen/contracts/tool.studio.try";
 import { toolStudioDiscoveryStart } from "@oxagen/oxagen/contracts/tool.studio.discovery.start";
+import { toolSteeringMigrate } from "@oxagen/oxagen/contracts/tool.steering.migrate";
 import { toolStudioListingGet } from "@oxagen/oxagen/contracts/tool.studio.listing.get";
 import { toolStudioListingStart } from "@oxagen/oxagen/contracts/tool.studio.listing.start";
 import { toolStudioDiscoveryGet } from "@oxagen/oxagen/contracts/tool.studio.discovery.get";
@@ -117,6 +118,11 @@ import { contextRecordsGet } from "@oxagen/oxagen/contracts/context.records.get"
 import { contextRecordsAppend } from "@oxagen/oxagen/contracts/context.records.append";
 import { contextProposalCreate } from "@oxagen/oxagen/contracts/context.proposal.create";
 import { contextProposalList } from "@oxagen/oxagen/contracts/context.proposal.list";
+import { steeringMemoriesDismiss } from "@oxagen/oxagen/contracts/steering.memories.dismiss";
+import { steeringMemoriesGet } from "@oxagen/oxagen/contracts/steering.memories.get";
+import { steeringMemoriesList } from "@oxagen/oxagen/contracts/steering.memories.list";
+import { steeringMemoriesPromote } from "@oxagen/oxagen/contracts/steering.memories.promote";
+import { steeringMemoryPrRecordsList } from "@oxagen/oxagen/contracts/steering.memory_pr_records.list";
 import { contextProposalDismiss } from "@oxagen/oxagen/contracts/context.proposal.dismiss";
 import { contextPrOpen } from "@oxagen/oxagen/contracts/context.pr.open";
 import { skillPropose } from "@oxagen/oxagen/contracts/skill.propose";
@@ -160,7 +166,9 @@ import { auditEventsExport } from "@oxagen/oxagen/contracts/audit.events.export"
 import { ORG_ONLY_WORKSPACE_ID } from "@oxagen/oxagen/contracts/audit.log.query";
 import { spendWasteList } from "@oxagen/oxagen/contracts/spend.waste";
 import { spendOperatorRanking } from "@oxagen/oxagen/contracts/spend.operator_ranking";
+import { spendUnproductive } from "@oxagen/oxagen/contracts/spend.unproductive";
 import { spendOperatorPseudonymsSet } from "@oxagen/oxagen/contracts/spend.operator_pseudonyms.set";
+import { spendPerMergedPr } from "@oxagen/oxagen/contracts/spend.per_merged_pr";
 import { findingDismiss } from "@oxagen/oxagen/contracts/finding.dismiss";
 import { findingEvidenceGet } from "@oxagen/oxagen/contracts/finding.evidence.get";
 import { findingFixRecord } from "@oxagen/oxagen/contracts/finding.fix.record";
@@ -243,6 +251,7 @@ import { toolStudioFindingsListRoute } from "./tool.studio.findings.list";
 import { toolStudioDescriptionDraftRoute } from "./tool.studio.description.draft";
 import { toolStudioTryRoute } from "./tool.studio.try";
 import { toolStudioDiscoveryStartRoute } from "./tool.studio.discovery.start";
+import { toolSteeringMigrateRoute } from "./tool.steering.migrate";
 import { toolStudioListingGetRoute } from "./tool.studio.listing.get";
 import { toolStudioListingStartRoute } from "./tool.studio.listing.start";
 import { toolStudioDiscoveryGetRoute } from "./tool.studio.discovery.get";
@@ -262,6 +271,11 @@ import { contextRecordsGetRoute } from "./context.records.get";
 import { contextRecordsAppendRoute } from "./context.records.append";
 import { contextProposalCreateRoute } from "./context.proposal.create";
 import { contextProposalListRoute } from "./context.proposal.list";
+import { steeringMemoriesDismissRoute } from "./steering.memories.dismiss";
+import { steeringMemoriesGetRoute } from "./steering.memories.get";
+import { steeringMemoriesListRoute } from "./steering.memories.list";
+import { steeringMemoriesPromoteRoute } from "./steering.memories.promote";
+import { steeringMemoryPrRecordsListRoute } from "./steering.memory_pr_records.list";
 import { contextProposalDismissRoute } from "./context.proposal.dismiss";
 import { contextPrOpenRoute } from "./context.pr.open";
 import { skillProposeRoute } from "./skill.propose";
@@ -286,7 +300,9 @@ import { costCenterSetRoute } from "./cost_center.set";
 import { auditEventsExportRoute } from "./audit.events.export";
 import { spendWasteListRoute } from "./spend.waste";
 import { spendOperatorRankingRoute } from "./spend.operator_ranking";
+import { spendUnproductiveRoute } from "./spend.unproductive";
 import { spendOperatorPseudonymsSetRoute } from "./spend.operator_pseudonyms.set";
+import { spendPerMergedPrRoute } from "./spend.per_merged_pr";
 import { findingDismissRoute } from "./finding.dismiss";
 import { findingEvidenceGetRoute } from "./finding.evidence.get";
 import { findingFixRecordRoute } from "./finding.fix.record";
@@ -497,6 +513,65 @@ const ROUTES: ThinRoute[] = [
     capability: contextProposalDismiss.name,
     body: { proposalId: "prp_1", reason: "duplicate" },
     invalidBody: { proposalId: "prp_1" },
+    status: 200,
+  },
+  // Workspace memories (#4912).
+  {
+    file: "steering.memories.list",
+    route: steeringMemoriesListRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: steeringMemoriesList.name,
+    body: {},
+    expectedInput: { states: ["waiting", "in_pr"], limit: 50, offset: 0 },
+    invalidBody: { states: ["archived"] },
+    jsonGuard: true,
+    status: 200,
+  },
+  {
+    file: "steering.memories.get",
+    route: steeringMemoriesGetRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: steeringMemoriesGet.name,
+    body: { memory_id: "mem_0a1b2c" },
+    invalidBody: { memory_id: "0a1b2c" },
+    jsonGuard: true,
+    status: 200,
+  },
+  {
+    file: "steering.memories.promote",
+    route: steeringMemoriesPromoteRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: steeringMemoriesPromote.name,
+    body: { drafts: [{ memory_ids: ["mem_0a1b2c"] }] },
+    expectedInput: {
+      drafts: [{ memory_ids: ["mem_0a1b2c"] }],
+      same_text: true,
+    },
+    // A constraint names its effect, and the contract's refine refuses one
+    // without it before the handler sees it.
+    invalidBody: { drafts: [{ memory_ids: ["mem_0a1b2c"], kind: "constraint" }] },
+    jsonGuard: true,
+    status: 200,
+  },
+  {
+    file: "steering.memories.dismiss",
+    route: steeringMemoriesDismissRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: steeringMemoriesDismiss.name,
+    body: { memory_ids: ["mem_0a1b2c"] },
+    expectedInput: { memory_ids: ["mem_0a1b2c"], restore: false },
+    invalidBody: { memory_ids: [] },
+    jsonGuard: true,
+    status: 200,
+  },
+  {
+    file: "steering.memory_pr_records.list",
+    route: steeringMemoryPrRecordsListRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: steeringMemoryPrRecordsList.name,
+    body: { number: 12 },
+    invalidBody: { number: 0 },
+    jsonGuard: true,
     status: 200,
   },
   {
@@ -1135,6 +1210,16 @@ const ROUTES: ThinRoute[] = [
     capability: toolStudioListingGet.name,
     body: { server: "files" },
     invalidBody: { server: "Files" },
+    jsonGuard: true,
+    status: 200,
+  },
+  {
+    file: "tool.steering.migrate",
+    route: toolSteeringMigrateRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: toolSteeringMigrate.name,
+    body: {},
+    invalidBody: { workspaceId: "ws_1" },
     jsonGuard: true,
     status: 200,
   },
@@ -1809,6 +1894,26 @@ const ROUTES: ThinRoute[] = [
     status: 200,
   },
   {
+    file: "spend.per_merged_pr",
+    route: spendPerMergedPrRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: spendPerMergedPr.name,
+    body: { period: { from: "2026-09-01", to: "2026-09-30" } },
+    invalidBody: { period: { from: "2026-09-30", to: "2026-09-01" } },
+    jsonGuard: true,
+    status: 200,
+  },
+  {
+    file: "spend.unproductive",
+    route: spendUnproductiveRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: spendUnproductive.name,
+    body: { period: { from: "2026-09-01", to: "2026-09-30" } },
+    invalidBody: { period: { from: "2026-09-30", to: "2026-09-01" } },
+    jsonGuard: true,
+    status: 200,
+  },
+  {
     file: "spend.operator_pseudonyms.set",
     route: spendOperatorPseudonymsSetRoute as unknown as Hono<never>,
     method: "PUT",
@@ -2398,6 +2503,7 @@ const ROUTES: ThinRoute[] = [
         },
       ],
       policies: [],
+      memories: [],
     },
     // A fact is held to info, so must is refused before invoke.
     invalidBody: {
