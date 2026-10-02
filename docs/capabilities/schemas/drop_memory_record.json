@@ -1,0 +1,88 @@
+{
+  "name": "drop_memory_record",
+  "domain": "context",
+  "description": "Drop one proposed steering record from an open memory PR: pushes a commit to the PR's branch that deletes the record's file. When the PR merges, its settlement rejects the dropped record's statements and its memories wait again. Refused for a merged or closed PR, a path the PR does not propose, and the PR's last record.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "cli"
+  ],
+  "sensitivity": "medium",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "number": {
+        "type": "integer",
+        "exclusiveMinimum": 0,
+        "description": "The memory PR's number in its steering repository."
+      },
+      "path": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 512,
+        "description": "The record file to drop, as list_memory_pr_records names it, such as steering/memory/workspace/general/<lineage>.md."
+      }
+    },
+    "required": [
+      "number",
+      "path"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "pull_request": {
+        "type": "object",
+        "properties": {
+          "number": {
+            "type": "integer",
+            "exclusiveMinimum": 0
+          },
+          "url": {
+            "type": "string"
+          },
+          "branch": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "number",
+          "url",
+          "branch"
+        ],
+        "additionalProperties": false
+      },
+      "path": {
+        "type": "string"
+      },
+      "lineage": {
+        "type": "string"
+      },
+      "commit_sha": {
+        "type": "string"
+      },
+      "already_dropped": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "pull_request",
+      "path",
+      "lineage",
+      "commit_sha",
+      "already_dropped"
+    ],
+    "additionalProperties": false
+  }
+}

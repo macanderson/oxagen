@@ -209,6 +209,25 @@ export const checkResultSchema = z
   .strict();
 export type CheckResult = z.infer<typeof checkResultSchema>;
 
+/**
+ * One finding the latest check run left on a steering PR's head, beyond the
+ * six outcomes (#4518, ADR-267). `managed-block` is the one rule today: the
+ * PR changes the managed block Oxagen writes in AGENTS.md, CLAUDE.md, or
+ * README.md, and restore_managed_block puts it back.
+ */
+export const checkFindingSchema = z
+  .object({
+    rule: z.enum(["managed-block"]),
+    /** The file the finding is in. */
+    path: z.string(),
+    /** The line it starts on, when the check could name one. */
+    line: z.number().int().positive().nullable(),
+    /** One sentence saying what the check found. */
+    message: z.string(),
+  })
+  .strict();
+export type CheckFinding = z.infer<typeof checkFindingSchema>;
+
 /** A lineage id: the file stem under .oxagen/rules/. Shared with handlers that read an id from input. */
 /**
  * A record's lineage id, with `governance` held back. Every governance

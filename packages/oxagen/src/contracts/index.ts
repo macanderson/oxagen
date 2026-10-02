@@ -344,6 +344,7 @@ import { workItemReopen } from "./work.item.reopen";
 import { workOrderClaim } from "./work.order.claim";
 import { workOrderReject } from "./work.order.reject";
 import { steeringMemoryPrRecordsList } from "./steering.memory_pr_records.list";
+import { steeringMemoryPrRecordDrop } from "./steering.memory_pr_records.drop";
 import { workItemCreate } from "./work.item.create";
 import { workTriageRevise } from "./work.triage.revise";
 import { workTriageRetry } from "./work.triage.retry";
@@ -372,6 +373,7 @@ import { steeringPrDiffGet } from "./steering.pr.diff.get";
 import { steeringPrMerge } from "./steering.pr.merge";
 import { steeringPrMergeWithoutReview } from "./steering.pr.merge_without_review";
 import { steeringPrRevert } from "./steering.pr.revert";
+import { steeringPrApprove } from "./steering.pr.approve";
 import { contextSteeringDeliveries } from "./context.steering.deliveries";
 import { steeringRepoGet } from "./steering_repo.get";
 import { steeringRepoRepair } from "./steering_repo.repair";
@@ -1189,6 +1191,7 @@ export {
   steeringMemoriesPromote,
   steeringMemoriesDismiss,
   steeringMemoryPrRecordsList,
+  steeringMemoryPrRecordDrop,
   workBriefSave,
   workBriefApprove,
   workOrderSend,
@@ -1215,6 +1218,7 @@ export {
   steeringPrMerge,
   steeringPrMergeWithoutReview,
   steeringPrRevert,
+  steeringPrApprove,
   contextGovernanceModeSet,
   connectionList,
   connectionCreate,
@@ -1675,6 +1679,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   steeringMemoriesPromote,
   steeringMemoriesDismiss,
   steeringMemoryPrRecordsList,
+  steeringMemoryPrRecordDrop,
   workBriefSave,
   workBriefApprove,
   workOrderSend,
@@ -1701,6 +1706,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   steeringPrMerge,
   steeringPrMergeWithoutReview,
   steeringPrRevert,
+  steeringPrApprove,
   contextGovernanceModeSet,
   agentExecutionList,
   agentExecutionRecord,

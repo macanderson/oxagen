@@ -115,6 +115,14 @@ export class MemoryStore implements SteeringStore {
     action?: "promote" | "retire";
   }[] = [];
   appends: AppendRow[] = [];
+  /** Approvals given in Oxagen (ADR-267), in the order they were recorded. */
+  approvals: {
+    orgId: string;
+    workspaceId: string;
+    proposalId: string;
+    userId: string;
+    commitSha: string;
+  }[] = [];
 
   async insertProposal(
     values: Parameters<SteeringStore["insertProposal"]>[0],
@@ -593,6 +601,35 @@ export class MemoryStore implements SteeringStore {
       },
       ledgerBefore,
     };
+  }
+  async recordApproval(input: Parameters<SteeringStore["recordApproval"]>[0]) {
+    const held = this.approvals.some(
+      (a) =>
+        a.proposalId === input.proposalId &&
+        a.userId === input.userId &&
+        a.commitSha === input.commitSha,
+    );
+    if (held) return;
+    this.approvals.push({
+      orgId: input.scope.orgId,
+      workspaceId: input.scope.workspaceId,
+      proposalId: input.proposalId,
+      userId: input.userId,
+      commitSha: input.commitSha,
+    });
+  }
+  async listApprovals(
+    scope: { orgId: string; workspaceId: string },
+    proposalId: string,
+  ) {
+    return this.approvals
+      .filter(
+        (a) =>
+          a.orgId === scope.orgId &&
+          a.workspaceId === scope.workspaceId &&
+          a.proposalId === proposalId,
+      )
+      .map(({ userId, commitSha }) => ({ userId, commitSha }));
   }
   async mergeGovernance(input: Parameters<SteeringStore["mergeGovernance"]>[0]) {
     const current = this.proposals.find((p) => p.id === input.proposal.id);

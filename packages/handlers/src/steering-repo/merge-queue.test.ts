@@ -283,6 +283,7 @@ describe("mergeApproval", () => {
       heads: [pr.head],
       authorUserId: AUTHOR,
       merger: { userId: MEMBER, orgRole: null, workspaceRole: "Member" },
+      oxagenApprovals: async () => [],
       isMember: async (userId) => userId !== GUEST,
       holdsMergeWithoutReview: async () => false,
       ...over,
@@ -364,6 +365,62 @@ describe("mergeApproval", () => {
       code: "forbidden",
       reason: "approval_required",
     });
+  });
+
+  it("counts an approval given in Oxagen at the checked head (ADR-267)", async () => {
+    const gh = steeringRepo();
+    gh.approvals = [];
+    const args = await input(gh);
+    const head = args.heads[0]!;
+    const given = vi.fn(async () => [{ userId: REVIEWER, commitSha: head }]);
+    await expect(
+      mergeApproval({ ...args, oxagenApprovals: given }),
+    ).resolves.toEqual({ approvedBy: [REVIEWER], withoutReview: false });
+    expect(given).toHaveBeenCalledTimes(1);
+  });
+
+  it("holds an Oxagen approval to the host's rule: not the author, a member, at a head that lands", async () => {
+    const gh = steeringRepo();
+    gh.approvals = [];
+    const args = await input(gh);
+    const head = args.heads[0]!;
+    await expect(
+      refusal(
+        mergeApproval({
+          ...args,
+          oxagenApprovals: async () => [
+            { userId: AUTHOR, commitSha: head },
+            { userId: GUEST, commitSha: head },
+            { userId: REVIEWER, commitSha: "an-older-head" },
+          ],
+        }),
+      ),
+    ).resolves.toMatchObject({ code: "forbidden", reason: "approval_required" });
+  });
+
+  it("counts a person who approved on the host and in Oxagen once", async () => {
+    const gh = steeringRepo();
+    const args = await input(gh);
+    const head = args.heads[0]!;
+    gh.approvals = [{ userId: REVIEWER, login: "reviewer", commitSha: head }];
+    await expect(
+      mergeApproval({
+        ...args,
+        oxagenApprovals: async () => [
+          { userId: REVIEWER, commitSha: head },
+          { userId: MEMBER, commitSha: head },
+        ],
+      }),
+    ).resolves.toEqual({ approvedBy: [REVIEWER, MEMBER], withoutReview: false });
+  });
+
+  it("does not read Oxagen approvals in solo mode", async () => {
+    const gh = steeringRepo();
+    const given = vi.fn(async () => []);
+    await expect(
+      mergeApproval(await input(gh, { mode: "solo", oxagenApprovals: given })),
+    ).resolves.toEqual({ approvedBy: [MEMBER], withoutReview: false });
+    expect(given).not.toHaveBeenCalled();
   });
 
   it("counts an approval at any of the heads, and a refusal names the last one", async () => {
@@ -1030,6 +1087,7 @@ describe("landSteeringPr: when main moves", () => {
         heads,
         authorUserId: AUTHOR,
         merger: { userId: MEMBER, orgRole: null, workspaceRole: "Member" },
+        oxagenApprovals: async () => [],
         isMember: async () => true,
         holdsMergeWithoutReview: async () => false,
       });

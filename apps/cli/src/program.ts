@@ -1242,6 +1242,16 @@ export function buildProgram(): Command {
       },
     );
   memory
+    .command("drop <number> <path>")
+    .description(
+      "Drop one proposed record from an open memory PR. When the PR merges, the record's statements are rejected and its memories wait again",
+    )
+    .option("--json", "Output JSON")
+    .action(async (number: string, path: string, opts: { json?: boolean }) => {
+      const { handleMemoryDrop } = await import("./commands/memory.js");
+      await handleMemoryDrop(number, path, opts);
+    });
+  memory
     .command("import <files...>")
     .description(
       "Read Markdown files into steering records with a kind and a force for each statement. Previews unless --yes.",

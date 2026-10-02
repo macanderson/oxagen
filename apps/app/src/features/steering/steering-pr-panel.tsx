@@ -270,7 +270,7 @@ export function SteeringPrPanel({
             ) : (
               <MemoryPrReview
                 at={at}
-                branch={memoryBranch}
+                number={records.value.pullRequest.number}
                 records={records.value.records}
               />
             )

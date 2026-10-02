@@ -1795,6 +1795,13 @@ export const steeringProposals = agentSchema.table(
     // [{ name, status, summary, detailsUrl, startedAt, completedAt }], one
     // entry per §10.3 check, in the order they run.
     checks: jsonb("checks").notNull().default(sql`'[]'::jsonb`),
+    // What the latest check run found on the head, beyond the six outcomes:
+    // each drifted managed block as [{ rule, path, line, message }] (#4518,
+    // ADR-267). The page draws Restore block from it with no host read. A
+    // new check run resets it to [].
+    checkFindings: jsonb("check_findings")
+      .notNull()
+      .default(sql`'[]'::jsonb`),
     // ── The merge, set by merge_steering_pr ──────────────────────────────────
     // Set while merge_steering_pr is landing the PR, so running the checks
     // again cannot move the row under a merge the host is about to make. A
@@ -1868,6 +1875,47 @@ export const steeringProposals = agentSchema.table(
     mergedCheck: check(
       "steering_proposals_merged_check",
       sql`(${t.status} = 'merged') = (${t.mergedCommit} IS NOT NULL AND (${t.kind} = 'governance' OR (${t.promotionEventId} IS NOT NULL AND ${t.publishedRecordId} IS NOT NULL)))`,
+    ),
+  }),
+);
+
+// An approval of a steering PR given in Oxagen (approve_steering_pr; #4518,
+// ADR-267), at the head commit the person approved. The Oxagen GitHub App
+// opens every steering PR, and GitHub refuses an app's approving review of a
+// pull request it opened, so the approval lives here. merge_steering_pr
+// counts these rows beside the host's approvals, under the same rule: at a
+// head the merge lands, from a workspace member other than the author. A
+// push moves the head, so an older row stops counting and stays as history.
+export const steeringPrApprovals = agentSchema.table(
+  "steering_pr_approvals",
+  {
+    ...idMixin("spa"),
+    ...orgScopeMixin(),
+    proposalId: uuid("proposal_id")
+      .notNull()
+      .references(() => steeringProposals.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").notNull(),
+    // The PR head the person approved.
+    commitSha: text("commit_sha").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    // One person approves one head once.
+    headUniq: uniqueIndex("steering_pr_approvals_head_uq").on(
+      t.proposalId,
+      t.userId,
+      t.commitSha,
+    ),
+    proposalIdx: index("steering_pr_approvals_proposal_idx").on(
+      t.orgId,
+      t.workspaceId,
+      t.proposalId,
+    ),
+    commitShaCheck: check(
+      "steering_pr_approvals_commit_sha_check",
+      sql`char_length(${t.commitSha}) BETWEEN 7 AND 64`,
     ),
   }),
 );

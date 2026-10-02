@@ -6365,6 +6365,26 @@
       }
     },
     {
+      "name": "drop_memory_record",
+      "file": "steering.memory_pr_records.drop.ts",
+      "domain": "context",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "cli": true,
+        "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
       "name": "list_memory_pr_records",
       "file": "steering.memory_pr_records.list.ts",
       "domain": "context",
@@ -6377,6 +6397,22 @@
         "schema": true,
         "api": true,
         "mcp": true,
+        "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
+      "name": "approve_steering_pr",
+      "file": "steering.pr.approve.ts",
+      "domain": "context",
+      "mode": "sync",
+      "surfaces": [
+        "api"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
         "unit": true,
         "docs": true,
         "app": true

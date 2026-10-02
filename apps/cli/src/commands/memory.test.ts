@@ -1,6 +1,6 @@
 /**
  * `oxagen memory` handlers: pins the wire contract of list, show, promote,
- * and dismiss through the apiPostOrThrow seam (the exact route and body,
+ * dismiss, and drop through the apiPostOrThrow seam (the exact route and body,
  * with the server's defaults left to the server), the argument checks that
  * refuse before any request leaves the process, the human and JSON output
  * written through the CommandWriter, and the one-shot path's stderr and
@@ -31,6 +31,7 @@ vi.mock("node:fs/promises", () => ({ readFile }));
 import { captureWriter } from "../lib/capture-writer";
 import {
   handleMemoryDismiss,
+  handleMemoryDrop,
   handleMemoryImport,
   handleMemoryList,
   handleMemoryPromote,
@@ -80,12 +81,13 @@ function listResult(groups: ReturnType<typeof memory>[][], over = {}) {
 }
 
 describe("the capabilities the commands name", () => {
-  it("names the four workspace memory capabilities by their registered names", () => {
+  it("names the five workspace memory capabilities by their registered names", () => {
     expect(MEMORY_COMMAND_CAPABILITIES).toEqual([
       "list_workspace_memories",
       "get_workspace_memory",
       "promote_memories",
       "dismiss_memories",
+      "drop_memory_record",
     ]);
   });
 });
@@ -441,6 +443,76 @@ describe("memory dismiss", () => {
     const captured = captureWriter();
     await handleMemoryDismiss(["mem_0a1b2c"], { json: true }, captured.writer);
     expect(JSON.parse(captured.output())).toEqual(result);
+  });
+});
+
+describe("memory drop", () => {
+  const PATH = "steering/memory/workspace/general/use-pnpm.md";
+  const dropped = (over: Record<string, unknown> = {}) => ({
+    pull_request: {
+      number: 12,
+      url: "https://github.com/acme/steering/pull/12",
+      branch: "memory/2026-10-02",
+    },
+    path: PATH,
+    lineage: "use-pnpm",
+    commit_sha: "abc1234def5678",
+    already_dropped: false,
+    ...over,
+  });
+
+  it("drops the record and says what the merge does with it", async () => {
+    apiPostOrThrow.mockResolvedValue(dropped());
+    const captured = captureWriter();
+    await handleMemoryDrop("12", PATH, {}, captured.writer);
+    expect(apiPostOrThrow).toHaveBeenCalledWith(
+      "context/steering/memory-prs/records/drop",
+      { number: 12, path: PATH },
+    );
+    expect(captured.output()).toBe(
+      [
+        `Dropped ${PATH} from memory PR #12 in commit abc1234 on memory/2026-10-02.`,
+        "When the PR merges, the record's statements are rejected and its memories wait again.",
+        "https://github.com/acme/steering/pull/12",
+      ].join("\n"),
+    );
+  });
+
+  it("says when the record was already dropped", async () => {
+    apiPostOrThrow.mockResolvedValue(dropped({ already_dropped: true }));
+    const captured = captureWriter();
+    await handleMemoryDrop("12", PATH, {}, captured.writer);
+    expect(captured.output()).toContain(
+      `${PATH} was already dropped from memory PR #12 in commit abc1234.`,
+    );
+  });
+
+  it("--json writes the raw result", async () => {
+    apiPostOrThrow.mockResolvedValue(dropped());
+    const captured = captureWriter();
+    await handleMemoryDrop("12", PATH, { json: true }, captured.writer);
+    expect(JSON.parse(captured.output())).toEqual(dropped());
+  });
+
+  it("refuses a number that is not a PR number before any request", async () => {
+    const captured = captureWriter();
+    await expect(
+      handleMemoryDrop("memory/2026-10-02", PATH, {}, captured.writer),
+    ).rejects.toThrow("Invalid memory PR number");
+    await expect(handleMemoryDrop("0", PATH, {}, captured.writer)).rejects.toThrow(
+      'Invalid memory PR number "0".',
+    );
+    expect(apiPostOrThrow).not.toHaveBeenCalled();
+  });
+
+  it("writes the server's refusal", async () => {
+    apiPostOrThrow.mockRejectedValue(
+      new MockApiError("Memory PR #12 is merged, so its records can no longer change.", 409),
+    );
+    const captured = captureWriter();
+    await expect(handleMemoryDrop("12", PATH, {}, captured.writer)).rejects.toThrow(
+      "Memory PR #12 is merged",
+    );
   });
 });
 

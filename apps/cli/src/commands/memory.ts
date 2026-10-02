@@ -7,13 +7,15 @@
  *   oxagen memory show <id> [--json]
  *   oxagen memory promote <ids...> [--one-record] [--statement t] [--kind k] [--force f] [--effect e] [--repo r] [--no-same-text] [--json]
  *   oxagen memory dismiss <ids...> [--restore] [--json]
+ *   oxagen memory drop <number> <path> [--json]
  *   oxagen memory import <files...> [--yes] [--json]
  *
  * A memory steers only the agent that wrote it, through its harness. It
  * reaches other agents only once a person promotes it into a steering record
- * and the memory PR merges. list, show, promote, and dismiss call
- * list_workspace_memories, get_workspace_memory, promote_memories, and
- * dismiss_memories through lib/workspace-memory-client.
+ * and the memory PR merges. list, show, promote, dismiss, and drop call
+ * list_workspace_memories, get_workspace_memory, promote_memories,
+ * dismiss_memories, and drop_memory_record through
+ * lib/workspace-memory-client.
  *
  * `oxagen memory import` reads Markdown files into steering records through
  * parse_markdown_import and commit_markdown_import, with the code
@@ -32,7 +34,9 @@ import {
 import { readImportDocuments, runMarkdownImport } from "../lib/markdown-import.js";
 import {
   dismissWorkspaceMemories,
+  dropMemoryPrRecord,
   formatDismissResult,
+  formatDropResult,
   formatPromoteResult,
   formatWorkspaceMemories,
   formatWorkspaceMemory,
@@ -43,14 +47,15 @@ import {
 } from "../lib/workspace-memory-client.js";
 
 /**
- * The capabilities `oxagen memory list|show|promote|dismiss` call, by their
- * registered names, through the routes in lib/workspace-memory-client.
+ * The capabilities `oxagen memory list|show|promote|dismiss|drop` call, by
+ * their registered names, through the routes in lib/workspace-memory-client.
  */
 export const MEMORY_COMMAND_CAPABILITIES = [
   "list_workspace_memories",
   "get_workspace_memory",
   "promote_memories",
   "dismiss_memories",
+  "drop_memory_record",
 ] as const;
 
 function parseIntOpt(
@@ -255,6 +260,39 @@ export async function handleMemoryDismiss(
       return;
     }
     writer.write(formatDismissResult(result, restore));
+  } catch (err) {
+    handleApiError(err, writer);
+  }
+}
+
+export interface MemoryDropCliOptions {
+  json?: boolean;
+}
+
+/**
+ * `oxagen memory drop <number> <path>`: take one proposed record out of an
+ * open memory PR. The PR's branch gets a commit that deletes the record's
+ * file. When the PR merges, the record's statements are rejected and its
+ * memories wait again.
+ */
+export async function handleMemoryDrop(
+  number: string,
+  path: string,
+  opts: MemoryDropCliOptions,
+  writer: CommandWriter = stdoutWriter,
+): Promise<void> {
+  const pr = parseIntOpt(number, "memory PR number", writer);
+  if (pr === undefined || pr < 1)
+    fail(`Invalid memory PR number "${number}". Use the PR's number, such as 12.`, writer);
+  if (path.trim() === "")
+    fail("Name the record file to drop, such as steering/memory/workspace/general/use-pnpm.md.", writer);
+  try {
+    const result = await dropMemoryPrRecord({ number: pr, path: path.trim() });
+    if (opts.json) {
+      writer.write(JSON.stringify(result, null, 2));
+      return;
+    }
+    writer.write(formatDropResult(result));
   } catch (err) {
     handleApiError(err, writer);
   }

@@ -456,6 +456,9 @@ export const postgresSyncStore: SyncStore = {
       checks: Array.isArray(row.checks)
         ? (row.checks as ProposalRow["checks"])
         : [],
+      checkFindings: Array.isArray(row.checkFindings)
+        ? (row.checkFindings as ProposalRow["checkFindings"])
+        : [],
     }));
   },
 

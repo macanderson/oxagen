@@ -132,6 +132,7 @@ import { workCollectorSet } from "@oxagen/oxagen/contracts/work.collector.set";
 import { workCollectorSync } from "@oxagen/oxagen/contracts/work.collector.sync";
 import { workPrioritiesGet } from "@oxagen/oxagen/contracts/work.priorities.get";
 import { steeringMemoryPrRecordsList } from "@oxagen/oxagen/contracts/steering.memory_pr_records.list";
+import { steeringMemoryPrRecordDrop } from "@oxagen/oxagen/contracts/steering.memory_pr_records.drop";
 import { steeringProposalDismiss } from "@oxagen/oxagen/contracts/steering.proposal.dismiss";
 import { steeringPrOpen } from "@oxagen/oxagen/contracts/steering.pr.open";
 import { skillPropose } from "@oxagen/oxagen/contracts/skill.propose";
@@ -141,6 +142,7 @@ import { steeringPrDiffGet } from "@oxagen/oxagen/contracts/steering.pr.diff.get
 import { steeringPrMerge } from "@oxagen/oxagen/contracts/steering.pr.merge";
 import { steeringPrMergeWithoutReview } from "@oxagen/oxagen/contracts/steering.pr.merge_without_review";
 import { steeringPrRevert } from "@oxagen/oxagen/contracts/steering.pr.revert";
+import { steeringPrApprove } from "@oxagen/oxagen/contracts/steering.pr.approve";
 import { conversationAttachmentAdd } from "@oxagen/oxagen/contracts/conversation.attachment.add";
 import { tachoCommandDispatch } from "@oxagen/oxagen/contracts/tacho.command.dispatch";
 import { tachoCommandList } from "@oxagen/oxagen/contracts/tacho.command.list";
@@ -298,6 +300,7 @@ import { workCollectorSetRoute } from "./work.collector.set";
 import { workCollectorSyncRoute } from "./work.collector.sync";
 import { workPrioritiesGetRoute } from "./work.priorities.get";
 import { steeringMemoryPrRecordsListRoute } from "./steering.memory_pr_records.list";
+import { steeringMemoryPrRecordDropRoute } from "./steering.memory_pr_records.drop";
 import { steeringProposalDismissRoute } from "./steering.proposal.dismiss";
 import { steeringPrOpenRoute } from "./steering.pr.open";
 import { skillProposeRoute } from "./skill.propose";
@@ -307,6 +310,7 @@ import { steeringPrDiffGetRoute } from "./steering.pr.diff.get";
 import { steeringPrMergeRoute } from "./steering.pr.merge";
 import { steeringPrMergeWithoutReviewRoute } from "./steering.pr.merge_without_review";
 import { steeringPrRevertRoute } from "./steering.pr.revert";
+import { steeringPrApproveRoute } from "./steering.pr.approve";
 import { conversationAttachmentAddRoute } from "./conversation.attachment.add";
 import { conversationChatRoute } from "./conversation.chat";
 import { costPriceEntryListRoute } from "./cost.price_entry.list";
@@ -674,6 +678,17 @@ const ROUTES: ThinRoute[] = [
     status: 200,
   },
   {
+    file: "steering.memory_pr_records.drop",
+    route: steeringMemoryPrRecordDropRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: steeringMemoryPrRecordDrop.name,
+    body: { number: 12, path: "steering/memory/workspace/general/use-pnpm.md" },
+    // The memory PR is named by its number, not its branch.
+    invalidBody: { branch: "memory/2026-10-02", path: "use-pnpm.md" },
+    jsonGuard: true,
+    status: 200,
+  },
+  {
     file: "steering.pr.open",
     route: steeringPrOpenRoute as unknown as Hono<never>,
     method: "POST",
@@ -753,6 +768,17 @@ const ROUTES: ThinRoute[] = [
     capability: steeringPrRevert.name,
     body: { proposalId: "prp_1" },
     invalidBody: { proposalId: "prp_1", number: 7 },
+    jsonGuard: true,
+    status: 200,
+  },
+  {
+    file: "steering.pr.approve",
+    route: steeringPrApproveRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: steeringPrApprove.name,
+    body: { proposalId: "prp_1" },
+    // The approval is of the head the checks ran on, never one the caller names.
+    invalidBody: { proposalId: "prp_1", headSha: "abc1234" },
     jsonGuard: true,
     status: 200,
   },

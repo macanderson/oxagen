@@ -243,6 +243,7 @@ import { steeringMemoriesGetRoute } from "./routes/v1/steering.memories.get";
 import { steeringMemoriesPromoteRoute } from "./routes/v1/steering.memories.promote";
 import { steeringMemoriesDismissRoute } from "./routes/v1/steering.memories.dismiss";
 import { steeringMemoryPrRecordsListRoute } from "./routes/v1/steering.memory_pr_records.list";
+import { steeringMemoryPrRecordDropRoute } from "./routes/v1/steering.memory_pr_records.drop";
 import { workItemCreateRoute } from "./routes/v1/work.item.create";
 import { workTriageReviseRoute } from "./routes/v1/work.triage.revise";
 import { workTriageRetryRoute } from "./routes/v1/work.triage.retry";
@@ -263,6 +264,7 @@ import { steeringPrDiffGetRoute } from "./routes/v1/steering.pr.diff.get";
 import { steeringPrMergeRoute } from "./routes/v1/steering.pr.merge";
 import { steeringPrMergeWithoutReviewRoute } from "./routes/v1/steering.pr.merge_without_review";
 import { steeringPrRevertRoute } from "./routes/v1/steering.pr.revert";
+import { steeringPrApproveRoute } from "./routes/v1/steering.pr.approve";
 import { agentRoleAssignRoute } from "./routes/v1/agent.role.assign";
 import { agentRoleRevokeRoute } from "./routes/v1/agent.role.revoke";
 import { agentRoleListRoute } from "./routes/v1/agent.role.list";
@@ -1344,6 +1346,11 @@ orgScoped.route("/context/steering/memories/get", steeringMemoriesGetRoute);
 orgScoped.route("/context/steering/memories/promote", steeringMemoriesPromoteRoute);
 orgScoped.route("/context/steering/memories/dismiss", steeringMemoriesDismissRoute);
 orgScoped.route("/context/steering/memory-prs/records", steeringMemoryPrRecordsListRoute);
+// Drop one proposed record from an open memory PR (#4518).
+orgScoped.route(
+  "/context/steering/memory-prs/records/drop",
+  steeringMemoryPrRecordDropRoute,
+);
 // A person's work item actions (P1-04, ADR-251): the brief, each send, and
 // the close. Each handler refuses an API key and an agent run.
 orgScoped.route("/work/items/brief/save", workBriefSaveRoute);
@@ -1385,6 +1392,8 @@ orgScoped.route(
 );
 // Open a steering PR that undoes a merged one (#4449).
 orgScoped.route("/steering/prs/revert", steeringPrRevertRoute);
+// A person's approval of a steering PR, stored in Oxagen (#4518, ADR-267).
+orgScoped.route("/steering/prs/approve", steeringPrApproveRoute);
 orgScoped.route("/privacy/export", privacyDataExportRoute);
 orgScoped.route("/privacy/erase", privacyDataEraseRoute);
 orgScoped.route("/connections", connectionRoute);

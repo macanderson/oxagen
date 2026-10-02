@@ -8,6 +8,9 @@ type MemoryPrMemory = MemoryPrRecord["memories"][number];
 /** The memory branch the sample records sit on. */
 export const MEMORY_BRANCH = "memory/2026-09-27-release-lessons";
 
+/** The sample memory PR's number, which drop_memory_record names it by. */
+export const MEMORY_PR_NUMBER = 12;
+
 /** One memory an agent recorded in a ledger run, with the frame it saw. */
 export function memoryPrMemory(
   overrides: Partial<MemoryPrMemory> = {},
