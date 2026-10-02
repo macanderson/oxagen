@@ -400,7 +400,9 @@ measured cost per 1,000 job-minutes.
   and the termination watcher records each interruption as a metric. A
   10-minute job on a pool that AWS reclaims less than 5% of the time in a month
   meets an interruption about once in 40,000 jobs. The PR watcher reruns a
-  failed job as it does today.
+  failed job as it does today. The first full day measured about one loss in
+  250 jobs on the large pool, and a workflow now reruns them. See the
+  amendment "lost runners rerun on their own" below.
 - **Image upkeep.** The daily image picks up OS patches and new CI images.
   Bumping the runner agent or the module is a pull request.
 - **New failure points.** If the webhook or the scale-up Lambda fails, jobs
@@ -499,3 +501,42 @@ parts above.
   instead of ten.
 
 Raise `max_runners` when AWS approves the open quota cases.
+
+## Amendment of 2026-10-02: lost runners rerun on their own
+
+AWS reclaimed the spot instance running `checks` on `main` at `62c1296`, and
+`main` went red with no code at fault (#5180). The estimate under
+Consequences was far too low.
+
+Measured from 00:00Z to 16:35Z on 2026-10-02, across 478 `CI` runs:
+
+| Pool | Completed jobs | Jobs that lost their runner | Rate |
+|---|---|---|---|
+| `oxagen-large-x64` | 2,238 | 9 | 0.40%, about 1 in 250 |
+| `oxagen-small-x64` | 2,033 | 1 | 0.05%, about 1 in 2,000 |
+
+- **Every loss was a spot reclaim.** The termination watcher logged a
+  `SpotInterruptionWarning` for each of the 10 instances, 2 minutes before
+  its job logged "The runner has received a shutdown signal". Each instance
+  had been up 3 to 6 minutes when the job died.
+- **Most warnings hit idle runners.** The watcher counted 63 warnings on the
+  large pool between 23:00Z on 2026-10-01 and 16:30Z on 2026-10-02. Only 9
+  jobs failed from one.
+- **The job API cannot see a loss.** The step that was running can read
+  `success`, and 7 of the 10 jobs had no annotation. Only the job log names
+  the cause.
+- **People reran the losses by hand.** Four of the 10 got a second attempt,
+  all started from Mac's account. Two still had no rerun when measured.
+
+Decision: `rerun-lost-runner.yml` runs when a `CI` run fails. It reads each
+failed job's log and annotations. If a job lost its runner, the workflow
+reruns that job and the jobs that depend on it, at most twice per run, and
+only while the run is on its branch's head commit.
+`deployment-failure.yml` still files the `main` P0, because `main` is red
+until the rerun passes, but it marks the lost job so nobody hunts for a code
+fix. The rules and their tests are in `tools/scripts/rerun-lost-runner.mjs`.
+
+This leaves the large pools on spot only. At about 1 loss in 250 jobs, a
+rerun costs one more large-runner job each time. On-demand fallback for the
+large pools would cost more and competes with the deploy pool for the
+on-demand quota (see the amendment above).

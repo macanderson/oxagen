@@ -84,6 +84,22 @@ describe("lostRunner", () => {
     ).toBe(true);
   });
 
+  it("sees past the cancellation line GitHub logs after the shutdown", () => {
+    // The tail of job 110879576762 on 2026-10-02.
+    const log = [
+      "2026-10-02T14:34:34.2148462Z ##[error]The runner has received a shutdown signal. This can happen when the runner service is stopped, or a manually started runner is canceled.",
+      "2026-10-02T14:34:34.2439614Z ##[error]The operation was canceled.",
+      "2026-10-02T14:34:34.3000000Z Cleaning up orphan processes",
+    ].join("\n");
+    expect(lostRunner({ log })).toBe(true);
+  });
+
+  it("does not call a job that was only cancelled a lost runner", () => {
+    const log = "2026-10-02T14:34:34.2439614Z ##[error]The operation was canceled.";
+    expect(lastErrorLine(log)).toBeNull();
+    expect(lostRunner({ log })).toBe(false);
+  });
+
   it("does not call a job that failed on its own a lost runner", () => {
     expect(lostRunner({ log: OWN_FAILURE_LOG })).toBe(false);
   });

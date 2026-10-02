@@ -17,7 +17,8 @@
  * annotation. The job API cannot tell: the step that was running can read
  * `success`, and the job has no annotation for a spot reclaim. Only the
  * last error line counts, so a test that prints the phrase and then fails on
- * its own is not mistaken for a loss.
+ * its own is not mistaken for a loss. A trailing "The operation was
+ * canceled." is skipped, because GitHub logs it after the shutdown message.
  *
  * ## What gets rerun
  *
@@ -56,11 +57,21 @@ export function isRunnerLossMessage(text) {
   return LOSS_MESSAGES.some((re) => re.test(text ?? ""));
 }
 
-/** The last `##[error]` line of a job log, or null. */
+// GitHub often logs this right after the shutdown message, as the steps
+// still running are stopped. It says nothing about why the job ended.
+const CANCEL_ECHO = /##\[error\]The operation was canceled\.\s*$/;
+
+/**
+ * The last `##[error]` line of a job log that says why the job ended, or
+ * null. A trailing "The operation was canceled." is skipped: 3 of the 10
+ * lost runners on 2026-10-02 logged it after the shutdown message.
+ */
 export function lastErrorLine(log) {
   const lines = (log ?? "").split("\n");
   for (let i = lines.length - 1; i >= 0; i--) {
-    if (lines[i].includes("##[error]")) return lines[i];
+    if (lines[i].includes("##[error]") && !CANCEL_ECHO.test(lines[i])) {
+      return lines[i];
+    }
   }
   return null;
 }
