@@ -130,6 +130,10 @@ import { workCollectorsList } from "@oxagen/oxagen/contracts/work.collectors.lis
 import { workCollectorSet } from "@oxagen/oxagen/contracts/work.collector.set";
 import { workCollectorSync } from "@oxagen/oxagen/contracts/work.collector.sync";
 import { workPrioritiesGet } from "@oxagen/oxagen/contracts/work.priorities.get";
+import { workItemsList } from "@oxagen/oxagen/contracts/work.items.list";
+import { workItemGet } from "@oxagen/oxagen/contracts/work.item.get";
+import { workTargetsList } from "@oxagen/oxagen/contracts/work.targets.list";
+import { workOutcomesGet } from "@oxagen/oxagen/contracts/work.outcomes.get";
 import { steeringMemoryPrRecordsList } from "@oxagen/oxagen/contracts/steering.memory_pr_records.list";
 import { contextProposalDismiss } from "@oxagen/oxagen/contracts/context.proposal.dismiss";
 import { contextPrOpen } from "@oxagen/oxagen/contracts/context.pr.open";
@@ -295,6 +299,10 @@ import { workCollectorsListRoute } from "./work.collectors.list";
 import { workCollectorSetRoute } from "./work.collector.set";
 import { workCollectorSyncRoute } from "./work.collector.sync";
 import { workPrioritiesGetRoute } from "./work.priorities.get";
+import { workItemsListRoute } from "./work.items.list";
+import { workItemGetRoute } from "./work.item.get";
+import { workTargetsListRoute } from "./work.targets.list";
+import { workOutcomesGetRoute } from "./work.outcomes.get";
 import { steeringMemoryPrRecordsListRoute } from "./steering.memory_pr_records.list";
 import { contextProposalDismissRoute } from "./context.proposal.dismiss";
 import { contextPrOpenRoute } from "./context.pr.open";
@@ -609,6 +617,49 @@ const ROUTES: ThinRoute[] = [
     capability: workPrioritiesGet.name,
     body: {},
     invalidBody: { lineage: "work.priorities" },
+    jsonGuard: true,
+    status: 200,
+  },
+  // The Work pages' reads (P1-05, #5163).
+  {
+    file: "work.items.list",
+    route: workItemsListRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: workItemsList.name,
+    body: {},
+    expectedInput: { limit: 500 },
+    invalidBody: { limit: 0 },
+    jsonGuard: true,
+    status: 200,
+  },
+  {
+    file: "work.item.get",
+    route: workItemGetRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: workItemGet.name,
+    body: { item: "WI-12" },
+    invalidBody: { item: "" },
+    jsonGuard: true,
+    status: 200,
+  },
+  {
+    file: "work.targets.list",
+    route: workTargetsListRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: workTargetsList.name,
+    body: {},
+    invalidBody: { agent_id: "agt_1" },
+    jsonGuard: true,
+    status: 200,
+  },
+  {
+    file: "work.outcomes.get",
+    route: workOutcomesGetRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: workOutcomesGet.name,
+    body: {},
+    expectedInput: { days: 30 },
+    invalidBody: { days: 3 },
     jsonGuard: true,
     status: 200,
   },

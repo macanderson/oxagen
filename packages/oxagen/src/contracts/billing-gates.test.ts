@@ -113,6 +113,12 @@ const CONSOLE_CONTRACTS = [
   "export_audit_events",
   // The #3098 lane: the Skills page's one read (ADR-052 exclusion 2).
   "list_skills",
+  // The Work pages' reads (P1-05, #5163): reading the workspace's own work
+  // records is never a charge (ADR-052 exclusion 2).
+  "list_work_items",
+  "get_work_item",
+  "list_work_targets",
+  "get_work_outcomes",
 ] as const;
 
 /** The one rev1 governed action. */

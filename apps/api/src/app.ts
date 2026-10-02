@@ -249,6 +249,10 @@ import { workCollectorsListRoute } from "./routes/v1/work.collectors.list";
 import { workCollectorSetRoute } from "./routes/v1/work.collector.set";
 import { workCollectorSyncRoute } from "./routes/v1/work.collector.sync";
 import { workPrioritiesGetRoute } from "./routes/v1/work.priorities.get";
+import { workItemsListRoute } from "./routes/v1/work.items.list";
+import { workItemGetRoute } from "./routes/v1/work.item.get";
+import { workTargetsListRoute } from "./routes/v1/work.targets.list";
+import { workOutcomesGetRoute } from "./routes/v1/work.outcomes.get";
 import { steeringMarkdownImportParseRoute } from "./routes/v1/steering.markdown_import.parse";
 import { steeringMarkdownImportCommitRoute } from "./routes/v1/steering.markdown_import.commit";
 import { steeringRepoImportRoute } from "./routes/v1/steering_repo.import";
@@ -1362,6 +1366,12 @@ orgScoped.route("/work/collectors/list", workCollectorsListRoute);
 orgScoped.route("/work/collectors/set", workCollectorSetRoute);
 orgScoped.route("/work/collectors/sync", workCollectorSyncRoute);
 orgScoped.route("/work/priorities/get", workPrioritiesGetRoute);
+// The Work pages' reads (P1-05, #5163): the item list, one item, the send
+// targets, and the outcome counts.
+orgScoped.route("/work/items/list", workItemsListRoute);
+orgScoped.route("/work/items/get", workItemGetRoute);
+orgScoped.route("/work/targets/list", workTargetsListRoute);
+orgScoped.route("/work/outcomes/get", workOutcomesGetRoute);
 // The Markdown import (#4907): parse files into proposed steering records and
 // Cedar policies, then open one steering PR with the rows a person kept.
 orgScoped.route("/context/steering/import/parse", steeringMarkdownImportParseRoute);
