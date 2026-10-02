@@ -15,8 +15,14 @@
 # path, so the pull request rule below fails only the pull request that touches
 # that stylesheet.
 #
-# The same command runs in pipeline.yml's checks job, which the main ruleset
-# requires, so the two cannot disagree. This file is the one the kit's
+# The main ruleset requires this job, `Brand drift`, on every pull request
+# (Mac, 2026-10-02, #5131). So the workflow takes no `paths` filter and the job
+# takes no `if:`: a required check that never runs blocks the merge for good.
+# The pull request rule below keeps the gate from failing every pull request
+# after a kit merge, which is what took the blocking check offline in #4938.
+#
+# The same command runs in pipeline.yml's checks job as an advisory step with
+# no scoping, so the two cannot disagree. This file is the one the kit's
 # conformance check looks for, and its daily run catches a kit change on a day
 # with no push here.
 #
