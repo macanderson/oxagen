@@ -112,6 +112,9 @@ export function AddCollector({
   const [open, setOpen] = useState(false);
   const [name, setName] = useState(suggested);
   const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set());
+  // The existing collector whose repositories the name ticked, or null once the
+  // ticks are the person's own.
+  const [filledFrom, setFilledFrom] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -122,13 +125,21 @@ export function AddCollector({
 
   function rename(next: string) {
     setName(next);
+    const trimmed = next.trim();
     // An existing collector's name ticks what it reads, so a save changes it in place.
-    if (collectors.some((collector) => collector.name === next.trim())) {
-      setSelected(readsOf(collectors, next.trim(), repos));
+    if (collectors.some((collector) => collector.name === trimmed)) {
+      setSelected(readsOf(collectors, trimmed, repos));
+      setFilledFrom(trimmed);
+    } else if (filledFrom !== null) {
+      // Typing past an existing name ("github" on the way to "github-mobile")
+      // must not hand that collector's repositories to the new one.
+      setSelected(new Set());
+      setFilledFrom(null);
     }
   }
 
   function toggle(repo: string, on: boolean) {
+    setFilledFrom(null);
     setSelected((current) => {
       const next = new Set(current);
       if (on) next.add(repo);
