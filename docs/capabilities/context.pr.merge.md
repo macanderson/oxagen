@@ -47,7 +47,7 @@ The repository sync does not yet record a governance PR merged outside Oxagen, a
 
 ### A steering PR proposal
 
-Every steering PR Oxagen opens carries a proposal row ([ADR-264](../adr/ADR-264-every-steering-pr-oxagen-opens-carries-a-proposal-row.md), #5122). Its kind names the PR:
+Every steering PR Oxagen opens carries a proposal row ([ADR-265](../adr/ADR-265-every-steering-pr-oxagen-opens-carries-a-proposal-row.md), #5122). Its kind names the PR:
 
 | kind | the PR |
 | --- | --- |

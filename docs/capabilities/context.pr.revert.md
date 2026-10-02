@@ -28,7 +28,7 @@ In a steering repository, Oxagen runs the steering checks on the revert's head a
 
 The revert PR waits for review. Its merge follows the approval rules of the workspace's governance mode.
 
-In a steering repository the revert PR carries a proposal of kind `revert` ([ADR-264](../adr/ADR-264-every-steering-pr-oxagen-opens-carries-a-proposal-row.md), #5122). The answer names it as `revertProposalId`, and [`merge_context_pr`](context.pr.merge.md) lands it through the merge queue. A revert of a record PR takes the record's lineage, so its merge retires the record when the revert deleted the record's file. A revert of any other steering PR, such as a tools or memory PR, takes its own branch as its lineage.
+In a steering repository the revert PR carries a proposal of kind `revert` ([ADR-265](../adr/ADR-265-every-steering-pr-oxagen-opens-carries-a-proposal-row.md), #5122). The answer names it as `revertProposalId`, and [`merge_context_pr`](context.pr.merge.md) lands it through the merge queue. A revert of a record PR takes the record's lineage, so its merge retires the record when the revert deleted the record's file. A revert of any other steering PR, such as a tools or memory PR, takes its own branch as its lineage.
 
 ## Who may revert
 

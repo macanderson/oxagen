@@ -64,7 +64,7 @@
 // merge_pr_without_review lands one without review: Apply now is the recorded
 // override. The output is the governance arm of the union on `kind`.
 //
-// A steering PR proposal (#5122, ADR-264) is a revert, tools, import, memory,
+// A steering PR proposal (#5122, ADR-265) is a revert, tools, import, memory,
 // agent file, agent proposal, or workspace.toml PR that its opener recorded. It lands
 // through the same queue, reviewer rule, claim, stamp, trailers, and
 // approvals, with three differences. The merge runs the steering checks on
@@ -897,7 +897,7 @@ const STEERING_PR_NOUN: Record<SteeringPrKind, string> = {
 };
 
 /**
- * The registry records a merged revert deleted (#5122, ADR-264). A revert
+ * The registry records a merged revert deleted (#5122, ADR-265). A revert
  * proposal of a record PR holds the record's lineage. When the registry holds
  * that record active and its file is gone at the merge commit, it retires.
  * Any other revert, and a revert that restored an earlier version of the
@@ -920,7 +920,7 @@ async function revertedRecords(
 }
 
 /**
- * Land a steering PR proposal (#5122, ADR-264): a revert, tools, Markdown
+ * Land a steering PR proposal (#5122, ADR-265): a revert, tools, Markdown
  * import, memory, agent file, or agent proposal PR. The caller holds the
  * merge queue and has checked the health, the reviewer rule, the claim, the
  * head, and the base.

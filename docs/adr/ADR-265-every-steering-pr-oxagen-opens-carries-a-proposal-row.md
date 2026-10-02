@@ -1,4 +1,4 @@
-# ADR-264: Every steering PR Oxagen opens carries a proposal row
+# ADR-265: Every steering PR Oxagen opens carries a proposal row
 
 - **Status:** Accepted
 - **Date:** 2026-10-02

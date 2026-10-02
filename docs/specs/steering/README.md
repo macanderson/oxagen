@@ -185,7 +185,7 @@ merge, and the ledger records `without_review: true`.
 You merge from the app (`merge_context_pr`). Every steering PR Oxagen opens
 carries a proposal row, so each one merges this way: a record PR, a governance
 PR, and a revert, tools, import, memory, agent file, or workspace.toml PR
-(ADR-264).
+(ADR-265).
 For a PR that changes files rather than one record, Oxagen first runs the
 checks on the PR's head itself. Oxagen then works through its merge queue
 (`packages/handlers/src/steering-repo/merge-queue.ts`), one steering PR at a

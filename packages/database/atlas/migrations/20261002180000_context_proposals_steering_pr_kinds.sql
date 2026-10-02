@@ -1,5 +1,5 @@
 -- agent.context_proposals holds every steering PR Oxagen opens (#5122,
--- ADR-264).
+-- ADR-265).
 --
 -- merge_context_pr lands a steering PR only from a proposal row. Until now
 -- only a record proposal and a governance proposal had one, so the revert,

@@ -2,7 +2,7 @@
 
 Move the workspace's steering from `.oxagen/` in the repository it binds to a steering repo, and open the steering PRs a person merges (steering spec, Workspace migration; lane S10, #4620; ADR-219). A workspace on a legacy sources connection calls it with `startFresh` instead, which creates an empty steering repo and imports nothing (#4684).
 
-A workspace owner runs this once for each workspace that still reads `.oxagen/`. The run changes no file on a default branch. Every change is a PR on the host, and a person merges each one. Each steering PR it opens on the steering repo carries an `import` proposal ([ADR-264](../adr/ADR-264-every-steering-pr-oxagen-opens-carries-a-proposal-row.md), #5122), so a person merges it from Oxagen with [`merge_context_pr`](context.pr.merge.md). A merge on GitHub leaves the steering repo diverged.
+A workspace owner runs this once for each workspace that still reads `.oxagen/`. The run changes no file on a default branch. Every change is a PR on the host, and a person merges each one. Each steering PR it opens on the steering repo carries an `import` proposal ([ADR-265](../adr/ADR-265-every-steering-pr-oxagen-opens-carries-a-proposal-row.md), #5122), so a person merges it from Oxagen with [`merge_context_pr`](context.pr.merge.md). A merge on GitHub leaves the steering repo diverged.
 
 **Surfaces:** api, mcp
 

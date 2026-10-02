@@ -20,7 +20,7 @@ export type RecordKind = z.infer<typeof recordKindSchema>;
 
 /**
  * The steering PRs Oxagen opens that change files rather than one record
- * (#5122, ADR-264). Each one carries a proposal row of its kind, so
+ * (#5122, ADR-265). Each one carries a proposal row of its kind, so
  * merge_context_pr lands it through the merge queue like a record PR.
  *
  * - `revert`: the PR revert_steering_pr opens to undo a merged steering PR.

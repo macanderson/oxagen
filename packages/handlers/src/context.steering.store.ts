@@ -214,7 +214,7 @@ interface MergeGovernanceInput {
 }
 
 /**
- * A steering PR proposal's merge (#5122, ADR-264): the commit, the merger,
+ * A steering PR proposal's merge (#5122, ADR-265): the commit, the merger,
  * and the registry records whose file the merge deleted.
  */
 interface MergeSteeringPrInput {

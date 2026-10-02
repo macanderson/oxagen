@@ -25,7 +25,7 @@
 //      the "Oxagen steering" check. A report that fails is logged. The PR is
 //      open, and the missing required check blocks its merge.
 //   6. Write the PR's proposal row, of the kind's proposalKind, so
-//      merge_context_pr can land it (#5122, ADR-264). A row that fails to
+//      merge_context_pr can land it (#5122, ADR-265). A row that fails to
 //      write is logged, and the next commit added to the PR writes it again.
 //
 // With `existing`, step 2 finds that PR open on the branch and targeting the
@@ -234,7 +234,7 @@ export interface SteeringPullRequestKind {
     read: (path: string) => Promise<string | null>,
     args: Pick<ToolsPullRequestArgs, "branch" | "files">,
   ) => Promise<{ reason: string; message: string } | null>;
-  /** The kind of the proposal row each PR of this kind carries (#5122, ADR-264). */
+  /** The kind of the proposal row each PR of this kind carries (#5122, ADR-265). */
   proposalKind: SteeringPrKind;
 }
 

@@ -8,7 +8,7 @@
 //
 // With `record`, the PR's `workspace` proposal row is written or moved to the
 // new head, so merge_context_pr can land it through the merge queue (#5122,
-// ADR-264). A row that fails to write is logged, and the PR stays open.
+// ADR-265). A row that fails to write is logged, and the PR stays open.
 import { createHash } from "node:crypto";
 import { OXAGEN_PR_LABELS } from "@oxagen/github";
 import type { SteeringPullRequest } from "@oxagen/oxagen/contracts/repository.link";

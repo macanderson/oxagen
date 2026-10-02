@@ -1,4 +1,4 @@
-// merge_context_pr on a steering PR proposal (#5122, ADR-264): the revert,
+// merge_context_pr on a steering PR proposal (#5122, ADR-265): the revert,
 // tools, Markdown import, and memory PRs Oxagen opens each carry a proposal
 // row, and the merge lands them through the merge queue with the stamp, the
 // trailers, and the approvals. A merged revert that deleted a record's file

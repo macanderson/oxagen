@@ -222,7 +222,7 @@ export function steeringImportDeps(options: {
     now: () => new Date(),
 
     // Each import steering PR's `import` proposal row, so a person merges it
-    // from Oxagen (#5122, ADR-264). A row that fails to write is logged.
+    // from Oxagen (#5122, ADR-265). A row that fails to write is logged.
     async recordPullRequest(scope, pr) {
       const [{ personAuthor, recordSteeringPrQuietly }, { postgresSteeringStore }] =
         await Promise.all([import("./pr-proposal"), import("../context.steering.store")]);

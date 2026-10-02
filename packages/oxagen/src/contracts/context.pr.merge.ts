@@ -8,7 +8,7 @@
 // A governance proposal (#4795) publishes no record and appends no promotion
 // event: it lands `steering/governance.toml`, names the approver on the
 // ledger line and the proposal, and emits `steering.governance_changed`. A
-// steering PR proposal (#5122, ADR-264) lands its PR's files, publishes the
+// steering PR proposal (#5122, ADR-265) lands its PR's files, publishes the
 // steering version, retires the records a revert deleted, and emits
 // `steering.published`. The output is a union on `kind`.
 // The reviewer is a signed-in user; an API key carries no user, so the MCP
@@ -87,7 +87,7 @@ const governanceMergeSchema = z
   .strict();
 
 /**
- * A steering PR proposal's merge (#5122, ADR-264): a revert, tools, import,
+ * A steering PR proposal's merge (#5122, ADR-265): a revert, tools, import,
  * memory, agent file, agent proposal, or workspace settings PR. It publishes no single record, so
  * it names the pull request and the records a revert retired.
  */

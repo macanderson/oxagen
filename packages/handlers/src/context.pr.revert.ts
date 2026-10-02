@@ -19,7 +19,7 @@
 //    report the required "Oxagen steering" check. A legacy repository has no
 //    required check, so nothing is reported there.
 // 7. In a steering repo, write the revert PR's proposal row, of kind `revert`
-//    (#5122, ADR-264), so merge_context_pr lands it through the merge queue.
+//    (#5122, ADR-265), so merge_context_pr lands it through the merge queue.
 //    A revert of a record PR takes the record's lineage and path, so its merge
 //    can retire the record when the revert deletes the file. Any other revert
 //    takes its own branch as its lineage. A legacy repository gets no row:
