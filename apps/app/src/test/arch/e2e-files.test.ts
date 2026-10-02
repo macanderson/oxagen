@@ -8,9 +8,11 @@
 // `support/`, so the suite directory exists and every entry is checked. The
 // entries WL-47 (`page-load.spec.ts`, `routes.ts`) and WL-48 (`pay.spec.ts`)
 // land are carried in baseline.json as `missing-entry` violations until they
-// do; the baseline only shrinks. The route-set, catalog-key and
-// `--pass-with-no-tests` clauses of INV-20 land with `routes.ts` (WL-47).
-import { readdirSync } from "node:fs";
+// do; the baseline only shrinks. The route-set and catalog-key clauses of
+// INV-20 land with `routes.ts` (WL-47). The `--pass-with-no-tests` clause is
+// checked below: with all three specs present, a Playwright run that matches
+// no test must fail, or a `testMatch` mistake passes the gate green.
+import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { APP_DIR, baselineEntries, describeDiff, diffBaseline } from "./parse";
@@ -148,6 +150,15 @@ describe("e2e files", () => {
       `${RULE} ${SUITE_AT} missing-entry:routes.ts`,
       `${RULE} ${SUITE_AT} missing-entry:support`,
     ]);
+  });
+
+  it("test:e2e fails when Playwright matches no test", () => {
+    const pkg = JSON.parse(
+      readFileSync(path.join(APP_DIR, "package.json"), "utf8"),
+    ) as { scripts?: Record<string, string> };
+    const script = pkg.scripts?.["test:e2e"] ?? "";
+    expect(script).toMatch(/\bplaywright test\b/);
+    expect(script).not.toContain("--pass-with-no-tests");
   });
 
   it("a spec or a playwright config under another app fails; apps/app and a spec-free e2e/ pass", () => {
