@@ -15,11 +15,7 @@ import {
   testHostFile,
   unsignedBundle,
 } from "../host/test-support";
-import {
-  keepWorkOrder,
-  listWorkOrders,
-  readWorkOrder,
-} from "../host/work-orders";
+import { keepWorkOrder, readWorkOrder } from "../host/work-orders";
 import type { TachoHarness, WorkOrderClaimResponse } from "../wire";
 import type { AgentExit } from "./agent-run";
 import { type WorkCommandDeps, workList, workStart } from "./work";
