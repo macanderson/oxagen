@@ -804,3 +804,63 @@ describe("poll etag", () => {
     expect(pollEtag({ ...day, issued_at: "not a date" }, NOW)).toBeUndefined();
   });
 });
+
+// Mac's ruling of 2026-10-01: the open-source Stella coding agent a customer
+// runs as a CLI is governed exactly like Claude Code and Codex (ADR-235). A
+// kill switch reaches a wrapped agent as a newer deny generation, and an
+// operator's hold as the host or session state. Each harness's shell tool
+// meets both the same way.
+describe("PreToolUse evaluation: kill switches and holds bind the Stella CLI like Claude Code and Codex", () => {
+  const signer = bundleSigner();
+  const base = {
+    bundle: signer.sign(unsignedBundle()),
+    bundleVerified: true,
+    hostStatus: "active" as const,
+    latestDenyGeneration: { org: 1, workspace: 1 },
+    controlReachable: true,
+    now: NOW,
+    context: { cwd: "/repo" },
+  };
+  const SHELLS = [
+    { harness: "claude-code", toolName: "Bash", toolInput: { command: "ls" } },
+    { harness: "codex", toolName: "shell", toolInput: { command: ["bash", "-lc", "ls"] } },
+    { harness: "stella", toolName: "bash", toolInput: { command: "ls" } },
+  ] as const;
+
+  it.each(SHELLS)("holds $harness's shell for the host's and the session's state", ({ toolName, toolInput }) => {
+    const shell = { ...base, toolName, toolInput };
+    expect(evaluatePreToolUse({ ...shell, hostStatus: "suspended" }).reason_code).toBe(
+      "host_suspended",
+    );
+    expect(evaluatePreToolUse({ ...shell, hostStatus: "paused" }).reason_code).toBe(
+      "host_paused",
+    );
+    expect(evaluatePreToolUse({ ...shell, hostStatus: "revoked" }).reason_code).toBe(
+      "host_revoked",
+    );
+    expect(evaluatePreToolUse({ ...shell, session: { cancelled: "budget" } }).reason_code).toBe(
+      "session_cancelled",
+    );
+    expect(evaluatePreToolUse({ ...shell, session: { paused: "review" } }).reason_code).toBe(
+      "session_paused",
+    );
+  });
+
+  it.each(SHELLS)("refuses $harness's shell once a kill switch moves the deny generation", ({ toolName, toolInput }) => {
+    const switched = {
+      ...base,
+      toolName,
+      toolInput,
+      latestDenyGeneration: { org: 2, workspace: 1 },
+    };
+    expect(evaluatePreToolUse(switched)).toMatchObject({
+      decision: "defer",
+      reason_code: "bundle_stale",
+    });
+    expect(evaluatePreToolUse({ ...switched, controlReachable: false })).toMatchObject({
+      decision: "deny",
+      reason_code: "bundle_stale",
+      stale: true,
+    });
+  });
+});

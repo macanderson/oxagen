@@ -281,6 +281,9 @@ module "runners" {
             filter               = { name = ["ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-*"] }
             id_ssm_parameter_arn = local.runner_ami_arn[p.arch]
           }
+          # No volume_initialization_rate: EBS caps the combined rate across
+          # volumes being created at once, and at 300 MiB/s each a burst of
+          # 100 runners hit VolumeInitializationLimitExceeded on 2026-10-01.
           block_device_mappings = [{
             device_name = "/dev/sda1"
             volume_size = p.disk.size
@@ -290,7 +293,7 @@ module "runners" {
             encrypted   = true
           }]
           pool_config = var.github_app_ready && lookup(var.warm_pool, name, 0) > 0 ? [{
-            schedule_expression = "rate(1 minute)"
+            schedule_expression = "rate(2 minutes)"
             size                = var.warm_pool[name]
           }] : []
         })
@@ -334,7 +337,7 @@ module "runners" {
             encrypted   = true
           }]
           pool_config = var.github_app_ready && lookup(var.warm_pool, "oxagen-deploy", 0) > 0 ? [{
-            schedule_expression = "rate(1 minute)"
+            schedule_expression = "rate(2 minutes)"
             size                = var.warm_pool["oxagen-deploy"]
           }] : []
         })
