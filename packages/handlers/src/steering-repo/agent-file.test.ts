@@ -1,5 +1,5 @@
 // steering-repo/agent-file.ts: the agent file PR enrollment opens (#5149,
-// ADR-265). These tests open it over the fixture steering repo on the fake
+// ADR-266). These tests open it over the fixture steering repo on the fake
 // host, with the opener's check stubbed, and merge it through
 // merge_context_pr as a person would.
 import { beforeEach, describe, expect, it, vi } from "vitest";

@@ -176,7 +176,7 @@ describe("readCheckContext", () => {
     expect(whereCalls.count).toBe(3);
   });
 
-  it("lists the organization's members by public user id, sorted, each once (ADR-265)", async () => {
+  it("lists the organization's members by public user id, sorted, each once (ADR-266)", async () => {
     rows.set(schema.users, [
       { name: "usr_01k5qk7dzzzzzzzzzzzzzzzz" },
       { name: "usr_01k5qk7daaaaaaaaaaaaaaaa" },

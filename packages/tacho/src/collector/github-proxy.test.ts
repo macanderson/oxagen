@@ -38,7 +38,7 @@ afterEach(async () => {
  * `packages/handlers/src/tacho.github_token.issue.ts` (#4575).
  */
 const STEERING_MESSAGE =
-  "The steering repository takes changes through a steering PR. Call steering_propose, or push a branch from a clone with a credential that can write to it.";
+  "The steering repository takes changes through a steering PR. Call propose_steering, or push a branch from a clone with a credential that can write to it.";
 function steeringRefusal(): Response {
   return new Response(
     JSON.stringify({

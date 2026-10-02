@@ -169,6 +169,32 @@ async function refusal(promise: Promise<unknown>): Promise<string> {
 }
 
 describe("runSteeringImport: a workspace steered by .oxagen/", () => {
+  it("records each import steering PR at its head, so a person merges it from Oxagen (#5122)", async () => {
+    const world = new World();
+    const recorded: Parameters<NonNullable<SteeringImportDeps["recordPullRequest"]>>[1][] = [];
+    await runSteeringImport(SCOPE, CHOICES, {
+      ...world.deps(),
+      recordPullRequest: async (_scope, pr) => {
+        recorded.push(pr);
+      },
+    });
+
+    expect(recorded.map((pr) => pr.branch)).toEqual([IMPORT_BRANCH, IMPORT_WORKSPACE_BRANCH]);
+    for (const pr of recorded) {
+      const pull = world.steering.pulls.find((p) => p.head === pr.branch);
+      expect(pr).toMatchObject({
+        repo: STEERING_REPO,
+        number: pull?.number,
+        url: `https://github.com/a-intel/platform/pull/${pull?.number}`,
+        headSha: world.steering.heads.get(pr.branch),
+        title: pull?.title,
+      });
+      expect(pr.paths.length).toBeGreaterThan(0);
+    }
+    // The cleanup PR is on the old repository, which is no steering repo.
+    expect(recorded.some((pr) => pr.branch === IMPORT_CLEANUP_BRANCH)).toBe(false);
+  });
+
   it("opens the import steering PRs, the cleanup PR, and leaves the old head linked", async () => {
     const world = new World();
     const expected = expectedConversion();

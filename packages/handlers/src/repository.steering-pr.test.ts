@@ -8,6 +8,7 @@ import { steeringPullRequestSchema } from "@oxagen/oxagen/contracts/repository.l
 import { WORKSPACE_TOML_PATH } from "@oxagen/oxagen/steering-repo/paths";
 import { describe, expect, it, vi } from "vitest";
 import type { SteeringRepository } from "./context.steering.github";
+import { MemoryStore } from "./context.steering.test-support";
 import {
   openSteeringPullRequest,
   type SteeringPullRequestHost,
@@ -285,5 +286,63 @@ describe("workspaceTomlBranch", () => {
     expect(workspaceTomlBranch("link", "acme", "end.")).toBe(
       "workspace/link-acme-end.-f0ff8c60",
     );
+  });
+});
+
+describe("openSteeringPullRequest: the proposal row (#5122)", () => {
+  const SCOPE = {
+    orgId: "0192d4a8-7c1e-7a00-8000-00000000ac3e",
+    workspaceId: "0192d4a8-7c1e-7a00-8000-0000000c0e01",
+  };
+  const PERSON = "0192d4a8-7c1e-7a00-8000-0000000005e1";
+  const record = (store: MemoryStore) => ({
+    store,
+    scope: SCOPE,
+    author: { userId: PERSON, source: `user:${PERSON}` },
+    now: new Date("2026-10-02T12:00:00.000Z"),
+  });
+
+  it("writes a workspace proposal for the PR it opens", async () => {
+    const h = host();
+    const store = new MemoryStore();
+    await openSteeringPullRequest(h, STEERING, ARGS, record(store));
+
+    expect(store.proposals).toHaveLength(1);
+    expect(store.proposals[0]).toMatchObject({
+      kind: "workspace",
+      lineageId: BRANCH,
+      status: "pr_open",
+      branch: BRANCH,
+      path: ".",
+      prNumber: 12,
+      prUrl: PR_URL,
+      headSha: "c0ffee",
+      baseRef: "production",
+      createdById: PERSON,
+      checks: [],
+    });
+  });
+
+  it("moves the row of a reused PR to the commit this call wrote", async () => {
+    const store = new MemoryStore();
+    await openSteeringPullRequest(host(), STEERING, ARGS, record(store));
+    const reused = host();
+    reused.findOpenPullRequest.mockResolvedValue({
+      number: 12,
+      htmlUrl: PR_URL,
+      body: "",
+    });
+    reused.putFile.mockResolvedValue({ commitSha: "d00d1e" });
+
+    await openSteeringPullRequest(reused, STEERING, ARGS, record(store));
+
+    expect(store.proposals).toHaveLength(1);
+    expect(store.proposals[0]).toMatchObject({ prNumber: 12, headSha: "d00d1e" });
+  });
+
+  it("writes no row without a store", async () => {
+    const h = host();
+    const out = await openSteeringPullRequest(h, STEERING, ARGS);
+    expect(out).toEqual({ number: 12, url: PR_URL, reused: false });
   });
 });

@@ -11,7 +11,7 @@
 //      (ADR-024) and the hostname.
 //   4. Mint the key and the host row in one transaction, sign the claims and
 //      the initial bundle, and return everything once.
-//   5. Propose the runtime's agent file (#5149, ADR-265): a steering PR that
+//   5. Propose the runtime's agent file (#5149, ADR-266): a steering PR that
 //      adds agents/<runtime>.toml naming the enrolling member as operator, so
 //      the MCP gateway can match the host's runs once a person merges it.
 //      The host is enrolled either way: a PR that does not open is logged
@@ -117,7 +117,7 @@ export const tachoEnrollmentCreateHandler: CapabilityHandler<
       issuedAt,
     });
     // The agent file names its operator by the member's public id, which
-    // only a member of this organization has (ADR-265).
+    // only a member of this organization has (ADR-266).
     const [operator] = await tx
       .select({ publicId: schema.users.publicId })
       .from(schema.users)

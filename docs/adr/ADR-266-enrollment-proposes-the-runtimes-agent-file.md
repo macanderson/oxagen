@@ -1,9 +1,9 @@
-# ADR-265: Enrollment proposes the runtime's agent file
+# ADR-266: Enrollment proposes the runtime's agent file
 
 - **Status:** Accepted
 - **Date:** 2026-10-02
 - **Owners:** steering, tacho
-- **Builds on:** ADR-264 (every steering PR carries a proposal row)
+- **Builds on:** ADR-265 (every steering PR carries a proposal row)
 - **Related:** issue #5149, issue #5122, issue #5139,
   `packages/handlers/src/steering-repo/agent-file.ts`,
   `packages/handlers/src/tacho.enrollment.create.ts`,
@@ -100,7 +100,7 @@ The enrollment's output does not change.
 
 The PR goes through the shared steering PR opener with its own kind,
 `AGENT_FILE_PULL_REQUEST`, on an `agents/` branch. It gets the steering check
-and the `agent_file` proposal row ADR-264 gives every steering PR, and
+and the `agent_file` proposal row ADR-265 gives every steering PR, and
 `merge_context_pr` lands it through the merge queue.
 
 ## Consequences

@@ -688,7 +688,7 @@
           "authorize": "Authorize on GitHub"
         },
         "imported": {
-          "imported": "Oxagen created {repository} and opened {count, plural, one {# steering PR} other {# steering PRs}}. Merge them in order, then the cleanup PR.",
+          "imported": "Oxagen created {repository} and opened {count, plural, one {# steering PR} other {# steering PRs}}. Merge them in order from the Steering page, then merge the cleanup PR on the old repository.",
           "provisioned": "Oxagen created {repository}.",
           "nothingToImport": "This workspace already has its steering repo, {repository}.",
           "needsChoices": "{rules, plural, one {# rule needs} other {# rules need}} a kind and {constraints, plural, one {# constraint needs} other {# constraints need}} an effect before Oxagen can move them. Nothing changed. Send the choices to import_workspace_steering.",

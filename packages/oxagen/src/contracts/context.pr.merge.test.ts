@@ -132,6 +132,7 @@ describe("merge_context_pr contract", () => {
       "memory_pr",
       "agent_file",
       "agent_proposal",
+      "workspace",
     ] as const) {
       const out = contextPrMerge.output.parse({
         proposalId: "prp_7",

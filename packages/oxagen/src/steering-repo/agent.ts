@@ -29,7 +29,7 @@ export type AgentFile = z.output<typeof agentSchema>;
 
 /**
  * The name Oxagen gives the agent file it writes for an enrolled runtime
- * (#5149, ADR-265): the runtime's slug, so `agents/<slug>.toml` names the
+ * (#5149, ADR-266): the runtime's slug, so `agents/<slug>.toml` names the
  * runtime it serves. Null when the slug is not a valid agent name, which
  * `lineageSchema` decides.
  */

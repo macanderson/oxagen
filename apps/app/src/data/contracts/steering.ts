@@ -35,10 +35,11 @@ export type RecordKind = z.infer<typeof RecordKind>;
  *
  * - `revert`: the PR revert_steering_pr opens to undo a merged steering PR.
  * - `tools`: a tools/ PR from MCP Studio's Review or the server sync.
- * - `import`: the Markdown import's PR.
+ * - `import`: a Markdown import's PR, or one a steering import opens from `.oxagen/`.
  * - `memory_pr`: a memory PR on memory/<date>. `memory` alone is the record kind.
  * - `agent_file`: the PR that adds agents/<name>.toml when a host enrolls.
  * - `agent_proposal`: the PR an agent opens with propose_steering.
+ * - `workspace`: the workspace.toml PR that links or unlinks a repository.
  */
 const STEERING_PR_KINDS = [
   "revert",
@@ -47,6 +48,7 @@ const STEERING_PR_KINDS = [
   "memory_pr",
   "agent_file",
   "agent_proposal",
+  "workspace",
 ] as const;
 type SteeringPrKind = (typeof STEERING_PR_KINDS)[number];
 

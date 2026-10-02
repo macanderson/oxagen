@@ -1,5 +1,5 @@
 // steering-repo/agent-file.ts: the agent file Oxagen proposes when a host
-// enrolls (#5149, ADR-265).
+// enrolls (#5149, ADR-266).
 //
 // The MCP gateway serves a workspace's published tools only to a run it can
 // match to an agent file, `agents/<name>.toml`, by the run's runtime. Nothing

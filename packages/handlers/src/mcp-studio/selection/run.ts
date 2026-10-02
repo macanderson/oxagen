@@ -8,9 +8,14 @@
 //      edited in the draft is the one the model reads.
 //   2. Reads tests/selection.jsonl from the production branch, at the commit
 //      the build read. Review does not write that file, so a draft has none.
-//   3. Asks the workspace's model about each task, one at a time, and reports
-//      each hit and miss. runSelection refuses more than SELECTION_TASKS_MAX
-//      tasks before the model resolves, so an over-cap file spends nothing.
+//   3. Asks the workspace's model about each task, SELECTION_CONCURRENCY at
+//      once, and reports each hit and miss. runSelection refuses more than
+//      SELECTION_TASKS_MAX tasks before the model resolves, so an over-cap
+//      file spends nothing.
+//   4. Stops at SELECTION_RUN_DEADLINE_MS, or at the first failed model call.
+//      It starts no new task and returns every task that finished, with a
+//      failed task marked error, the rest marked not_run, and stopped saying
+//      why (#5171). A person sees each answer the workspace paid for.
 //
 // Only a person starts a run. No schedule, compile check, or webhook calls
 // this handler, because every task is a billed model call. It writes nothing
@@ -43,14 +48,15 @@ import { workspaceSelectionModel, type StudioSelectionModel, type StudioSelectio
 /**
  * The longest one run may take. The load balancer and the proxy in front of
  * the API and MCP servers close a request after 300 seconds, so a run stops
- * well before that and says why, instead of ending in a gateway timeout.
+ * well before that and returns what it finished, instead of ending in a
+ * gateway timeout.
  */
 export const SELECTION_RUN_DEADLINE_MS = 240_000;
 
 export interface RunStudioSelectionDeps extends ListStudioFindingsDeps {
   /** The model the run asks, on the organization's route, with the telemetry each request writes. */
   model: (orgId: string, telemetry: StudioSelectionModelDeps["telemetry"]) => StudioSelectionModel;
-  /** The signal that stops the run: SELECTION_RUN_DEADLINE_MS from now in production. */
+  /** The signal that stops the run and returns what finished: SELECTION_RUN_DEADLINE_MS from now in production. */
   deadline: () => AbortSignal;
 }
 
@@ -81,15 +87,13 @@ async function readSelectionTests(
   return read.value;
 }
 
-/** The refusal a person reads for a run that stopped, or the error itself when it is an outage. */
-function stopped(error: unknown, signal: AbortSignal, server: string): unknown {
-  if (signal.aborted) {
-    return new HandlerError({
-      code: "conflict",
-      reason: "selection_timed_out",
-      message: `The selection run for ${server} took longer than ${SELECTION_RUN_DEADLINE_MS / 1000} seconds, so it stopped and reported nothing. The tasks it finished are still billed. Remove tasks from ${SELECTION_TESTS_FILE}, then run it again.`,
-    });
-  }
+/**
+ * The refusal a person reads for a run that failed, or the error itself when
+ * it is an outage. Neither the deadline nor a failed call is a failure here
+ * when a task got an answer: runSelection returns the tasks that finished. It
+ * throws model_failed only when no task got one.
+ */
+function failed(error: unknown, server: string): unknown {
   if (!(error instanceof SelectionRunError)) return error;
   if (error.code !== "model_failed") {
     return new HandlerError({ code: "conflict", reason: error.code, message: error.message });
@@ -122,12 +126,11 @@ export function createRunStudioSelectionHandler(
       // Null outside a chat turn. A request id is not a message id.
       messageId: ctx.messageId,
     });
-    const signal = deps.deadline();
     let report: SelectionReport;
     try {
-      report = await runSelection(selectionTools(folder.compiled), tests, model, signal);
+      report = await runSelection(selectionTools(folder.compiled), tests, model, deps.deadline());
     } catch (error) {
-      throw stopped(error, signal, folder.server);
+      throw failed(error, folder.server);
     }
     return {
       server: folder.server,
@@ -136,6 +139,7 @@ export function createRunStudioSelectionHandler(
       model: model.modelId(),
       counts: report.counts,
       cases: report.cases,
+      stopped: report.stopped,
     };
   };
 }

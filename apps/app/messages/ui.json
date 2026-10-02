@@ -21,7 +21,8 @@
         "import": "import",
         "memory_pr": "memory PR",
         "agent_file": "agent file",
-        "agent_proposal": "agent proposal"
+        "agent_proposal": "agent proposal",
+        "workspace": "workspace settings"
       },
       "unclassified": "unclassified",
       "force": "force {force}",

@@ -307,7 +307,7 @@ export function draftOps(server: StudioServer): Record<string, unknown>[] {
  * every irreversible call until a person approves it. The second forbids the
  * test agent the MCP server's create_issue in every case, so the gateway also
  * leaves that tool out of the agent's tools/list. `agent` is the name of the
- * agent file enrollment proposed: the runtime's slug (ADR-265).
+ * agent file enrollment proposed: the runtime's slug (ADR-266).
  */
 export function policyMarkdown(agent: string): string {
   return [
@@ -628,7 +628,7 @@ export async function mergeSteeringPullRequest(
 
 // ── The agent file ───────────────────────────────────────────────────────────
 
-/** The name of the agent file enrollment proposes for a runtime: its slug (ADR-265). */
+/** The name of the agent file enrollment proposes for a runtime: its slug (ADR-266). */
 function agentNameFor(runtime: string): string {
   const name = agentNameForRuntime(runtime);
   if (name === null) {

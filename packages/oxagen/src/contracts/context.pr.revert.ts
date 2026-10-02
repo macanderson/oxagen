@@ -23,7 +23,7 @@
 // set_governance_mode (ADR-232).
 //
 // In a steering repo the revert PR carries a proposal of kind `revert`
-// (#5122, ADR-264), so merge_context_pr lands it through the merge queue. A
+// (#5122, ADR-265), so merge_context_pr lands it through the merge queue. A
 // revert of a record PR shares the record's lineage, so it is refused while
 // another PR on that record is open.
 import { z } from "zod";

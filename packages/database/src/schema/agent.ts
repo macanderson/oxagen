@@ -1832,10 +1832,10 @@ export const contextProposals = agentSchema.table(
       sql`${t.label} IS NULL OR (length(btrim(${t.label})) BETWEEN 1 AND 36)`,
     ),
     // The six record kinds, a governance change (#4795), and the steering
-    // PRs that change files rather than one record (#5122, ADR-264).
+    // PRs that change files rather than one record (#5122, ADR-265).
     kindCheck: check(
       "context_proposals_kind_check",
-      sql`${t.kind} IN ('rule', 'constraint', 'procedure', 'fact', 'memory', 'preference', 'governance', 'revert', 'tools', 'import', 'memory_pr', 'agent_file', 'agent_proposal')`,
+      sql`${t.kind} IN ('rule', 'constraint', 'procedure', 'fact', 'memory', 'preference', 'governance', 'revert', 'tools', 'import', 'memory_pr', 'agent_file', 'agent_proposal', 'workspace')`,
     ),
     forceCheck: check(
       "context_proposals_force_check",

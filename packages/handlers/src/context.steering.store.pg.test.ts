@@ -706,7 +706,7 @@ describe.skipIf(!enabled)("steering store against Postgres", () => {
     ).rejects.toMatchObject({ code: "conflict", reason: "already_merged" });
 
     // Every other kind merges with its commit alone.
-    const kinds = ["tools", "import", "memory_pr", "agent_file", "agent_proposal"];
+    const kinds = ["tools", "import", "memory_pr", "agent_file", "agent_proposal", "workspace"];
     for (const [i, kind] of kinds.entries()) {
       const row = await pr(kind, 600 + i, `${kind.replace("_", "-")}/x${i}`);
       const out = await inRevertScope(() =>

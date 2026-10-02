@@ -425,7 +425,7 @@ describe("the steering repo provisioning", () => {
       expect(actions.retrySteeringRepoProvision).not.toHaveBeenCalled();
       const outcome = await screen.findByTestId("steering-repo-import-outcome");
       expect(outcome).toHaveTextContent(
-        "Oxagen created acme/oxagen-core-platform and opened 2 steering PRs. Merge them in order, then the cleanup PR.",
+        "Oxagen created acme/oxagen-core-platform and opened 2 steering PRs. Merge them in order from the Steering page, then merge the cleanup PR on the old repository.",
       );
       expect(
         within(outcome).getByRole("link", { name: "Cleanup PR #7" }),

@@ -64,7 +64,7 @@ function names(rows: readonly { name: string }[]): string[] {
  *   organization-shared credential sits under a sentinel workspace id that
  *   workspace scope cannot see. No path writes one today.
  * - members: each organization member's public user id, which an agent
- *   file Oxagen writes names as its operator (ADR-265).
+ *   file Oxagen writes names as its operator (ADR-266).
  * - teams, groups: empty. See each line below.
  */
 export async function readCheckContext(
@@ -93,7 +93,7 @@ export async function readCheckContext(
       );
     // Each member of the organization by public user id (`usr_…`). Oxagen
     // has no member handles, so the agent file it writes for an enrolled
-    // host names its operator this way (ADR-265).
+    // host names its operator this way (ADR-266).
     const members = await tx
       .select({ name: schema.users.publicId })
       .from(schema.users)

@@ -36,6 +36,11 @@ import { schema, type Tx, withTenantDb } from "@oxagen/database";
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { and, eq } from "drizzle-orm";
 import { createSteeringHost } from "./context.steering.host";
+import { postgresSteeringStore } from "./context.steering.store";
+import {
+  authorOf,
+  type SteeringPrProposalStore,
+} from "./steering-repo/pr-proposal";
 import { logger } from "./logger";
 import { GITHUB_PROVIDER } from "./repository.github-connection";
 import {
@@ -54,6 +59,8 @@ type Scope = { orgId: string; workspaceId: string };
 
 export interface RepositoryUnlinkDeps {
   steering: RepositorySteeringHost;
+  /** Where the workspace.toml PR's proposal row is written (#5122). */
+  proposals?: SteeringPrProposalStore;
 }
 
 /**
@@ -150,17 +157,30 @@ export function createRepositoryUnlinkHandler(
       head.provider === GITHUB_PROVIDER ? refOf(head.owner, head.name) : null;
 
     if (file.kind === "read" && ref !== null && file.repositories.includes(ref)) {
-      const pullRequest = await openSteeringPullRequest(deps.steering, repo, {
-        branch: workspaceTomlBranch("unlink", head.owner, head.name),
-        content: withoutRepository(file, ref),
-        message: `Unlink ${head.fullName} from the workspace`,
-        title: `Unlink ${head.fullName}`,
-        body: [
-          `This steering PR removes \`${ref}\` from \`${WORKSPACE_TOML_PATH}\`.`,
-          "",
-          `When it merges, the steering sync unlinks ${head.fullName} from the workspace. Until then the repository stays linked.`,
-        ].join("\n"),
-      });
+      const pullRequest = await openSteeringPullRequest(
+        deps.steering,
+        repo,
+        {
+          branch: workspaceTomlBranch("unlink", head.owner, head.name),
+          content: withoutRepository(file, ref),
+          message: `Unlink ${head.fullName} from the workspace`,
+          title: `Unlink ${head.fullName}`,
+          body: [
+            `This steering PR removes \`${ref}\` from \`${WORKSPACE_TOML_PATH}\`.`,
+            "",
+            `When it merges, the steering sync unlinks ${head.fullName} from the workspace. Until then the repository stays linked.`,
+          ].join("\n"),
+        },
+        // The PR's workspace proposal row, so Oxagen can merge it (#5122).
+        deps.proposals === undefined
+          ? undefined
+          : {
+              store: deps.proposals,
+              scope,
+              author: authorOf(ctx),
+              now: new Date(),
+            },
+      );
       logger.info(
         {
           ...scope,
@@ -208,4 +228,5 @@ export function createRepositoryUnlinkHandler(
 
 export const repositoryUnlinkHandler = createRepositoryUnlinkHandler({
   steering: createSteeringHost(),
+  proposals: postgresSteeringStore,
 });

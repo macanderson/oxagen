@@ -8,7 +8,7 @@
 // A governance proposal (#4795) publishes no record and appends no promotion
 // event: it lands `steering/governance.toml`, names the approver on the
 // ledger line and the proposal, and emits `steering.governance_changed`. A
-// steering PR proposal (#5122, ADR-264) lands its PR's files, publishes the
+// steering PR proposal (#5122, ADR-265) lands its PR's files, publishes the
 // steering version, retires the records a revert deleted, and emits
 // `steering.published`. The output is a union on `kind`.
 // The reviewer is a signed-in user; an API key carries no user, so the MCP
@@ -87,8 +87,8 @@ const governanceMergeSchema = z
   .strict();
 
 /**
- * A steering PR proposal's merge (#5122, ADR-264): a revert, tools, import,
- * memory, agent file, or agent proposal PR. It publishes no single record, so
+ * A steering PR proposal's merge (#5122, ADR-265): a revert, tools, import,
+ * memory, agent file, agent proposal, or workspace settings PR. It publishes no single record, so
  * it names the pull request and the records a revert retired.
  */
 const steeringPrMergeSchema = z
@@ -122,7 +122,7 @@ export const contextPrMerge = registerCapability({
   name: "merge_context_pr",
   domain: "context",
   description:
-    "Merge a proposal's steering PR (a GitHub pull request or a GitLab merge request) through the merge queue: refused until every check passed and unless the caller is a reviewer the governance mode allows. A record proposal publishes its record and writes the promotion event to the ledger. A revert, tools, import, memory, or agent PR lands its files, and a revert retires each record whose file it deleted. Bumps the steering version and emits steering.published",
+    "Merge a proposal's steering PR (a GitHub pull request or a GitLab merge request) through the merge queue: refused until every check passed and unless the caller is a reviewer the governance mode allows. A record proposal publishes its record and writes the promotion event to the ledger. A revert, tools, import, memory, agent, or workspace settings PR lands its files, and a revert retires each record whose file it deleted. Bumps the steering version and emits steering.published",
   mode: "sync",
   surfaces: ["api", "agent"],
   layers: ["schema", "api", "unit", "docs", "app"],

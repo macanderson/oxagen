@@ -93,7 +93,8 @@
                 "import",
                 "memory_pr",
                 "agent_file",
-                "agent_proposal"
+                "agent_proposal",
+                "workspace"
               ]
             },
             "force": {

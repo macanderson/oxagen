@@ -10,7 +10,7 @@ Two of the checks read more than the tree. The hash and conflicts checks compare
 
 - `runtimes`: the slug of each runtime enrolled in the workspace.
 - `credentials`: the name of each credential in the workspace's vault, the `<name>` of `oxagen:credential/<name>`. A revoked credential is left out.
-- `members`: each member of the organization by public user id (`usr_…`). Oxagen stores no member handle yet, so an agent file names its operator by this id ([ADR-265](../adr/ADR-265-enrollment-proposes-the-runtimes-agent-file.md)).
+- `members`: each member of the organization by public user id (`usr_…`). Oxagen stores no member handle yet, so an agent file names its operator by this id ([ADR-266](../adr/ADR-266-enrollment-proposes-the-runtimes-agent-file.md)).
 - `teams`, `groups`: always empty for now. Oxagen stores no team and no reviewer group slug yet. Until it does, the references check reports a team operator and each reviewer group as missing.
 
 **Surfaces:** api, cli

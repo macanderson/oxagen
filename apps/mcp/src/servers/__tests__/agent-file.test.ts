@@ -1,4 +1,4 @@
-// agent-file.test.ts: the agent file enrollment proposes (#5149, ADR-265) is
+// agent-file.test.ts: the agent file enrollment proposes (#5149, ADR-266) is
 // the one the gateway matches the enrolled host's runs to. The file's text
 // goes through the bundle's agent/v1 read, the published tools the served
 // tools read, and the run the host's gateway key resolves to, and

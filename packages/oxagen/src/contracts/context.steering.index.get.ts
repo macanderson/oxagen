@@ -43,7 +43,7 @@ export const steeringCheckContextSchema = z
   .object({
     /** Runtime slugs enrolled in the workspace. */
     runtimes: z.array(z.string()),
-    /** The organization's members by public user id (`usr_…`), which an agent file names as its operator (ADR-265). */
+    /** The organization's members by public user id (`usr_…`), which an agent file names as its operator (ADR-266). */
     members: z.array(z.string()),
     /** Team slugs in the organization. */
     teams: z.array(z.string()),
