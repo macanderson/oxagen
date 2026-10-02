@@ -628,12 +628,6 @@ export class SessionRegistry {
   }
 
   /**
-   * The record for a harness session id, whoever owns it: the live one
-   * first, then the most recently seen. Two agents can hand out the same id,
-   * so a caller that knows which agent it is goes through `ensure`, which
-   * never crosses from one agent's record to another's.
-   */
-  /**
    * Whether this registry places a chain for the session: it holds the
    * session, or a tombstone for it. A backfill leaves such a session to the
    * live path (ADR-161).
@@ -645,6 +639,12 @@ export class SessionRegistry {
     );
   }
 
+  /**
+   * The record for a harness session id, whoever owns it: the live one
+   * first, then the most recently seen. Two agents can hand out the same id,
+   * so a caller that knows which agent it is goes through `ensure`, which
+   * never crosses from one agent's record to another's.
+   */
   get(harnessSessionId: string): SessionRecord | undefined {
     let best: SessionRecord | undefined;
     for (const record of this.sessions.values()) {
