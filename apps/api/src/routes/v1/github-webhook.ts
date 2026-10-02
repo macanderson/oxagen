@@ -38,6 +38,9 @@
  *   2d. `pull_request` → store the state the delivery reports on every run
  *      row that names the pull request, in the workspaces connected to this
  *      installation (ADR-192).
+ *   2e. `pull_request` → ask for the Oxagen check once per workspace that
+ *      links the repository (S2b, #5058). A steering repo's pull requests
+ *      are left to the steering check.
  *   3. Resolve connected GitHub connection(s) for this installation + repo.
  *   4. Ask the connector to extract ingestable (sourceRecordType, record) pairs.
  *   5. Fan out one `ingestion/entity.received` per (connection × record). The
@@ -63,6 +66,10 @@ import {
 } from "@oxagen/handlers/steering-repo/health";
 import { githubHealthSignal } from "@oxagen/handlers/steering-repo/health.events";
 import { routeGithubDiscoveryPush } from "@oxagen/handlers/mcp-studio/discovery/webhook";
+import {
+  githubCodeCheckRequests,
+  requestCodeRepoChecks,
+} from "@oxagen/handlers/code-repo-check/request";
 import { eventClient } from "../../event-client";
 import { getConnector } from "@oxagen/ingestion/connectors";
 import { requireEnv } from "@oxagen/config/env";
@@ -170,6 +177,27 @@ async function requestSteeringHealthRead(
     logger.error(
       { err, event: eventName, reason: signal.trigger.reason },
       "GitHub App webhook: could not request a steering repo health check, so the 10-minute sweep will run it",
+    );
+  }
+}
+
+/**
+ * Ask for the Oxagen check on a pull request in a linked code repository
+ * (S2b, #5058). It logs a failure and never throws, because GitHub retries
+ * any non-2xx without end, and the next push to the pull request asks again.
+ */
+async function requestCodeRepoCheck(
+  body: Record<string, unknown>,
+  installationId: string,
+): Promise<void> {
+  try {
+    await requestCodeRepoChecks(
+      await githubCodeCheckRequests({ body, installationId }),
+    );
+  } catch (err) {
+    logger.error(
+      { err },
+      "GitHub App webhook: could not request the Oxagen check on a code repository's pull request; the next push to the pull request asks again",
     );
   }
 }
@@ -367,6 +395,14 @@ githubAppWebhookRoute.post("/", async (c) => {
       );
     }
   }
+
+  // ── Code repository check (S2b, #5058) ──────────────────────────────────
+  // A pull request in a code repository a workspace links gets the Oxagen
+  // check, posted by the Oxagen GitHub App from outside the repository. The
+  // steering sync and the health read above handle a steering repo's pull
+  // requests, and this asks nothing for them.
+  if (eventName === "pull_request" && installationId)
+    await requestCodeRepoCheck(body, installationId);
 
   if (!installationId) {
     // No installation context to route on — ack so GitHub does not retry.

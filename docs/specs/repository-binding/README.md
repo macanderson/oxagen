@@ -2,8 +2,8 @@
 
 | | |
 |---|---|
-| **Status** | Spec, describes `main` at 3527edbef |
-| **Date** | 2026-09-27 (first written 2026-09-17) |
+| **Status** | Spec, describes `main` at 3527edbef, and §3.5 the code repository check of #5058 |
+| **Date** | 2026-10-02 (first written 2026-09-17) |
 | **Surface** | `apps/app`, `apps/api`, `apps/mcp`, `apps/cli`, `packages/handlers`, `packages/oxagen` |
 | **Design** | `mockups/pages/repositories.md` in `oxageninc/roadmap` |
 | **Builds on** | ADR-212 (a workspace links a code repository by a steering PR), ADR-073 (an API key names a workspace), ADR-020 (the token chain), ADR-043 (Oxagen governs and does not run), `docs/specs/steering/README.md` |
@@ -183,9 +183,67 @@ onboarding screen.
 
 ### 3.5 Code repository check
 
-The spec gives linked repositories one check, named `Oxagen`, posted from
-outside the repository. `names.ts` defines `CODE_REPOSITORY_CHECK_NAME`, and
-no code posts it yet.
+Every pull request in a linked repository gets one check, named `Oxagen`
+(`CODE_REPOSITORY_CHECK_NAME` in `names.ts`). Oxagen posts it from outside
+the repository, so no workflow file is committed there. On GitHub it is a
+check run from the Oxagen GitHub App. On GitLab it is a commit status, posted
+with the project's stored access token. The code is in
+`packages/handlers/src/code-repo-check/` (S2b, #5058).
+
+**Routing.** The GitHub App webhook (`apps/api/src/routes/v1/github-webhook.ts`)
+reads each `pull_request` delivery that opens, reopens, or moves a pull
+request. It finds every workspace with a `linked` head for the repository and
+sends one `code-repo/check.requested` event per workspace. A repository that
+any workspace holds as its steering repo gets no event, because its pull
+requests are steering PRs and carry the `Oxagen steering` check. A GitLab
+merge request goes through `gitlab.webhook.ts` the same way, for the one
+workspace the connection belongs to. The event's id names the head and base
+commits, so a redelivered webhook runs the check once. The durable job is
+`code-repo/check` in `packages/inngest-functions`.
+
+**What it reads.** The check lists the files the pull request changes and
+keeps the harness instruction files: `AGENTS.md`, `CLAUDE.md`, and `GEMINI.md`
+at any depth, `.cursorrules`, `.cursor/rules/`, `.github/copilot-instructions.md`,
+`.github/instructions/*.instructions.md`, `.windsurfrules`, `.windsurf/rules/`,
+and `.clinerules`. It reads each file at the base and at the head, and keeps
+the list items and paragraphs the head adds. Headings, code blocks, tables,
+comments, and frontmatter are skipped.
+
+**Findings.** Each added statement is compared with the workspace's active
+steering records, using the steering conflicts check's own test
+(`similarStatements` in `@oxagen/steering-check`). No model is called.
+
+| Finding | When |
+|---|---|
+| Repeat | The line has the same words as a record, or shares 90 percent of them when both have at least eight distinct words. A line that says the same thing with other force words, such as "You must" where the record says "Always", is a repeat too. |
+| Contradiction | The line and a record say the same thing with opposite effects. A line with "never", "do not", "must not", "avoid", or the like forbids, and any other line requires. A constraint record keeps its published effect. |
+
+Records and lines are compared whole and sentence by sentence.
+
+**Memories.** Each added statement that is neither a repeat nor a
+contradiction goes to S6's memory capture (`ingestMemories`, capture
+`pull_request`). The pull request's URL is the source, and the evidence is the
+pull request and the line at the head commit. A second push to the pull
+request stores no second copy. A memory waits for the curator and a person,
+as every memory does.
+
+**Conclusion.** The check warns by default. On GitHub a finding makes it
+neutral, which a required check still passes. On GitLab, which has no neutral
+status, a warning posts success and its description counts the findings. A
+finding fails the check only when the workspace's published `workspace.toml`
+sets `block_merge = true` under `[code_checks]`. The check reads that file at
+the commit of the published steering version. A workspace with no published
+version, or a file that does not read as `workspace/v1`, warns. The check
+blocks a merge only once the customer makes `Oxagen` a required check in the
+repository's branch rules.
+
+**Limits.** A repository linked by several workspaces gets one `Oxagen` check
+from each, because each workspace's records stay in its own tenant scope. One
+check reads at most 20 instruction files and compares at most 500 statements,
+and hands at most 50 memories to capture. GitHub lists at most 300 changed
+files, so an instruction file past that is not read. The findings are not
+stored, so `list_code_repository_findings`, which the Repositories page asks
+for, has nothing to answer yet.
 
 ## 4. `.oxagen/` in a code checkout
 
