@@ -324,6 +324,7 @@ import "./contracts/run.outputs.get";
 import "./contracts/run.proof.get";
 import "./contracts/run.recent.list";
 import "./contracts/run.seal";
+import "./contracts/run.shared";
 import "./contracts/run.summarize";
 import "./contracts/run.token.issue";
 import "./contracts/run.transcript.get";

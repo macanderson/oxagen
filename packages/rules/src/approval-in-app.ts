@@ -26,7 +26,7 @@
  * waits until a predicate is asked for.
  */
 import { schema } from "@oxagen/database";
-import { IN_APP_AGENT_SURFACES } from "@oxagen/oxagen/contracts/run.list";
+import { IN_APP_AGENT_SURFACES } from "@oxagen/oxagen/contracts/run.shared";
 import { sql, type SQL } from "drizzle-orm";
 
 /** `<alias>.<column>`, named by the column's database name. */

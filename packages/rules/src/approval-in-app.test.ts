@@ -14,7 +14,7 @@ import { describe, expect, it } from "vitest";
 import { drizzle } from "drizzle-orm/pg-proxy";
 import { and, eq } from "drizzle-orm";
 import { schema } from "@oxagen/database";
-import { IN_APP_AGENT_SURFACES } from "@oxagen/oxagen/contracts/run.list";
+import { IN_APP_AGENT_SURFACES } from "@oxagen/oxagen/contracts/run.shared";
 import {
   approvalAskedBy,
   inAppApproval,
