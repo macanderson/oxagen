@@ -95,6 +95,35 @@ interface SightingAttrs {
 const NO_SIGHTING: SightingAttrs = { attrs: {}, commit: () => {} };
 
 /**
+ * The `query_source` values Claude Code gives a request on the session's own
+ * conversation: `repl_main_thread` in the interactive terminal, and `sdk` in
+ * print mode and the Agent SDK. Every other value names a side call, a
+ * compaction, or a subagent.
+ */
+const MAIN_CONVERSATION_QUERY_SOURCES: ReadonlySet<string> = new Set([
+  "repl_main_thread",
+  "sdk",
+]);
+
+/**
+ * Whether an OTel `api_request` record is a call on the session's own
+ * conversation, the one the `SessionStart` context rides, and so carries the
+ * steering that context delivered (#4493). A side call, such as a session
+ * title or a check of a Bash command's prefix, names another subsystem in
+ * `query_source` and sends a short prompt of its own. A value that starts
+ * `repl_main_thread:` is the main thread with a qualifier, such as the output
+ * style in use. A record with no `query_source` cannot say which call it is,
+ * so it takes no steering count.
+ */
+function onSessionConversation(querySource: string | undefined): boolean {
+  if (querySource === undefined) return false;
+  return (
+    MAIN_CONVERSATION_QUERY_SOURCES.has(querySource) ||
+    querySource.startsWith("repl_main_thread:")
+  );
+}
+
+/**
  * The attr a transcript `user` record carries when its text is the open
  * turn's prompt, which the turn's `turn_start` already sealed as a body. Its
  * value names the frame that holds the text.
@@ -1407,7 +1436,10 @@ export class SessionRecorder {
    * counted row lacks. The steering count is the one source known without
    * the request, so the tool definitions and the system context stay absent
    * (ADR-062, amendment of 2026-10-02). A member the producer set itself
-   * wins, as on a proxied call.
+   * wins, as on a proxied call. Only a call on the session's own
+   * conversation comes here: an OTel record whose `query_source` says so
+   * ({@link onSessionConversation}), or a transcript `assistant` record,
+   * since Claude Code writes no side call to the transcript.
    */
   private withUnseenRequestSources(
     body: Record<string, unknown>,
@@ -1943,7 +1975,9 @@ export class SessionRecorder {
     }
     const event = this.seal(
       draft.kind,
-      draft.kind === "llm_call" && draft.source === "otel_log"
+      draft.kind === "llm_call" &&
+        draft.source === "otel_log" &&
+        onSessionConversation(draft.standard.context.query_source)
         ? this.withUnseenRequestSources(draft.body, duplicate)
         : draft.body,
       {

@@ -56,12 +56,14 @@
  * the proxy recorded the request, so only the proxy's sighting carries
  * `tool_definition_tokens`, `context_frame_tokens`, and the system context
  * digest and parts. An OTel or transcript sighting that sealed first carries
- * `steering_tokens` alone, from the session's steering manifest (ADR-062,
- * amendment of 2026-10-02). The proxy row is then the stamped one and the
+ * `steering_tokens` alone, from the session's steering manifest, and only on
+ * a call of the session's own conversation (ADR-062, amendment of
+ * 2026-10-02). The proxy row is then the stamped one and the
  * filter drops it. The read joins it back on the same two ids
  * ({@link PROXY_SIGHTING}) and takes a member from it wherever the priced row
- * carries none. The sums still come from the rows the rollup prices, in the
- * same read.
+ * carries none. A side call declares no tools, so its proxy row carries no
+ * steering either, and the join adds none to it. The sums still come from
+ * the rows the rollup prices, in the same read.
  *
  * The findings job reads a workspace's tool calls with their digests and
  * result tokens through the same client (`readTachoToolCallObservations`).

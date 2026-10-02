@@ -703,6 +703,28 @@ describe("the steering a session was delivered", () => {
     ]);
   });
 
+  it("counts no steering on a side call, whose request declares no tools", () => {
+    const on = tracker();
+    on.noteSteeringManifest(MANIFEST);
+    const { tools: _tools, ...untooled } = request();
+    const sides: Array<[string, Request]> = [
+      ["turn:empty", request({ tools: [] })],
+      ["turn:absent", untooled],
+    ];
+    for (const [turn, side] of sides) {
+      const { facts } = measured(on, exchange(side), turn);
+      expect(facts).not.toHaveProperty("steering_tokens");
+      expect(facts).not.toHaveProperty("steering_tokens_basis");
+      expect(facts.tool_definition_tokens).toBe(0);
+      expect(facts.system_context_parts?.map((part) => part.kind)).toEqual([
+        "system",
+        "system",
+      ]);
+    }
+    // The session's next main call still counts its steering.
+    expect(measured(on, exchange(request())).facts.steering_tokens).toBe(65);
+  });
+
   it("counts steering on a call whose request it could not read", () => {
     const on = tracker();
     on.noteSteeringManifest(MANIFEST);

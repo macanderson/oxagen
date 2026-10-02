@@ -49,6 +49,17 @@ const REQUEST = JSON.stringify({
   messages: [{ role: "user", content: "What does recorder.ts do?" }],
 });
 
+/**
+ * A side call as Claude Code sends one, such as a session title: a short
+ * prompt of its own and no tools.
+ */
+const SIDE_REQUEST = JSON.stringify({
+  model: "claude-haiku-4-5",
+  max_tokens: 512,
+  system: "Write a title of five words or fewer for this coding session.",
+  messages: [{ role: "user", content: "What does recorder.ts do?" }],
+});
+
 const MANIFEST = {
   items: [
     {
@@ -72,8 +83,8 @@ const MANIFEST = {
   cut: 1,
 };
 
-function exchange(): DraftContent {
-  return jsonContent(jcs({ request: REQUEST, response: '{"type":"message"}' }));
+function exchange(request = REQUEST): DraftContent {
+  return jsonContent(jcs({ request, response: '{"type":"message"}' }));
 }
 
 function recorder(): SessionRecorder {
@@ -94,11 +105,12 @@ function body(event: TachoEvent): Record<string, unknown> {
 function call(
   chain: SessionRecorder,
   own: Record<string, unknown> = {},
+  request = REQUEST,
 ): TachoEvent {
   return chain.sealCollectorEvent(
     "llm_call",
     { provider: "anthropic", model: "claude-opus-4-5", ...own },
-    { fidelity: "proxy", content: exchange() },
+    { fidelity: "proxy", content: exchange(request) },
   );
 }
 
@@ -140,6 +152,21 @@ describe("a proxied model call's token sources", () => {
       name: "no-force-push",
       tokens: 40,
     });
+  });
+
+  it("counts no steering on a side call, whose request declares no tools", () => {
+    const chain = withManifest();
+    const main = call(chain);
+    const side = call(chain, { model: "claude-haiku-4-5" }, SIDE_REQUEST);
+    expect(body(main)["steering_tokens"]).toBe(40);
+    expect(body(side)).not.toHaveProperty("steering_tokens");
+    expect(body(side)).not.toHaveProperty("steering_tokens_basis");
+    // The request still shows its own system context, with no steering in it.
+    expect(body(side)["tool_definition_tokens"]).toBe(0);
+    expect(body(side)["system_context_digest"]).toMatch(/^sha256:/);
+    expect(parts(side)?.map((part) => [part.kind, part.name])).toEqual([
+      ["system", "system"],
+    ]);
   });
 
   it("keeps a member the producer set itself", () => {
@@ -233,13 +260,22 @@ function kv(key: string, value: string | number) {
     : { key, value: { stringValue: value } };
 }
 
-/** Claude Code's OTel `api_request` record for one model call. */
-function apiRequest(request: string) {
-  const attrs: Record<string, string | number> = {
+/**
+ * Claude Code's OTel `api_request` record for one model call. By default the
+ * call is on the main thread of an interactive session. `over` changes an
+ * attribute, and an undefined value leaves it out.
+ */
+function apiRequest(
+  request: string,
+  over: Record<string, string | number | undefined> = {},
+) {
+  const attrs: Record<string, string | number | undefined> = {
     model: MODEL,
     request_id: request,
     input_tokens: 10,
     output_tokens: 5,
+    query_source: "repl_main_thread",
+    ...over,
   };
   return {
     resourceLogs: [
@@ -251,7 +287,9 @@ function apiRequest(request: string) {
               {
                 timeUnixNano: TS_NANOS,
                 body: { stringValue: "claude_code.api_request" },
-                attributes: Object.entries(attrs).map(([k, v]) => kv(k, v)),
+                attributes: Object.entries(attrs).flatMap(([k, v]) =>
+                  v === undefined ? [] : [kv(k, v)],
+                ),
               },
             ],
           },
@@ -260,6 +298,12 @@ function apiRequest(request: string) {
     ],
   };
 }
+
+/**
+ * A side call's `query_source`. Any value other than the main thread's reads
+ * the same, so this one only stands for the subsystem that made the call.
+ */
+const SIDE_SOURCE = "session_title";
 
 /** The transcript's `assistant` record for one content block of a call. */
 function assistantRecord(request: string, block: number): string {
@@ -326,6 +370,77 @@ describe("a model call the proxy did not carry", () => {
     expect(row.source).toBe("otel_log");
     expect(countsLlmCallUsage(row)).toBe(true);
     expectSteeringOnly(row);
+  });
+
+  it("counts steering on a main call and none on a side call", () => {
+    const chain = withManifest();
+    const [main] = modelCalls(chain.ingestOtlp(apiRequest("req_main")));
+    const [side] = modelCalls(
+      chain.ingestOtlp(
+        apiRequest("req_side", {
+          model: "claude-haiku-4-5",
+          query_source: SIDE_SOURCE,
+        }),
+      ),
+    );
+    expect(main).toBeDefined();
+    expect(side).toBeDefined();
+    if (main === undefined || side === undefined) return;
+    // Both rows are counted. Only the main call carries the conversation
+    // that the steering rode in on.
+    expect(countsLlmCallUsage(main)).toBe(true);
+    expect(countsLlmCallUsage(side)).toBe(true);
+    expectSteeringOnly(main);
+    expectNoSources(side);
+  });
+
+  it("counts steering on every name Claude Code gives its main thread", () => {
+    const chain = withManifest();
+    const sources = ["sdk", "repl_main_thread:outputStyle:Explanatory"];
+    for (const [index, source] of sources.entries()) {
+      const [row] = modelCalls(
+        chain.ingestOtlp(apiRequest(`req_m${index}`, { query_source: source })),
+      );
+      expect(row).toBeDefined();
+      if (row !== undefined) expectSteeringOnly(row);
+    }
+  });
+
+  it("adds nothing to a compaction or a row that names no source", () => {
+    const chain = withManifest();
+    const rows = modelCalls([
+      ...chain.ingestOtlp(apiRequest("req_c", { query_source: "compact" })),
+      ...chain.ingestOtlp(apiRequest("req_n", { query_source: undefined })),
+    ]);
+    expect(rows).toHaveLength(2);
+    for (const row of rows) {
+      expect(countsLlmCallUsage(row)).toBe(true);
+      expectNoSources(row);
+    }
+  });
+
+  it("adds nothing to either sighting of a side call", () => {
+    const chain = withManifest();
+    const [otel] = modelCalls(
+      chain.ingestOtlp(
+        apiRequest("req_sp", {
+          model: "claude-haiku-4-5",
+          query_source: SIDE_SOURCE,
+        }),
+      ),
+    );
+    // The rollup joins a stamped proxy row back for a member the counted row
+    // lacks, so the proxy row must not carry the steering either.
+    const proxied = call(
+      chain,
+      { model: "claude-haiku-4-5", request_id: "req_sp" },
+      SIDE_REQUEST,
+    );
+    expect(proxied.attrs[LLM_CALL_DUPLICATE_OF_ATTR]).toBe("otel_log");
+    expect(otel).toBeDefined();
+    if (otel === undefined) return;
+    expectNoSources(otel);
+    expect(body(proxied)).not.toHaveProperty("steering_tokens");
   });
 
   it("adds nothing to a later sighting of the same call", () => {
