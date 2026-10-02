@@ -76,14 +76,11 @@ interface Call {
 }
 
 /**
- * One fake network for GitHub and the Oxagen API. Each route answers with a
- * status; the calls are kept in order so a test can say what was never asked.
+ * One fake network for the Oxagen API. Each route answers with a status; the
+ * calls are kept in order so a test can say what was never asked. Any other
+ * URL, GitHub's included, throws.
  */
-function network(routes: {
-  verify?: { status: number; body?: unknown };
-  revoke?: number | Error;
-  register?: number;
-}) {
+function network(routes: { register?: number }) {
   const calls: Call[] = [];
   const fetch: FetchLike = async (url, init) => {
     calls.push({
@@ -97,20 +94,6 @@ function network(routes: {
       status,
       text: async () => JSON.stringify(body),
     });
-    if (url.includes("/installation/repositories")) {
-      const verify = routes.verify ?? {
-        status: 200,
-        body: {
-          total_count: 1,
-          repositories: [{ full_name: "acme/app" }],
-        },
-      };
-      return reply(verify.status, verify.body);
-    }
-    if (url.endsWith("/installation/token")) {
-      if (routes.revoke instanceof Error) throw routes.revoke;
-      return reply(routes.revoke ?? 204);
-    }
     if (url.endsWith("/tacho/contained-launch"))
       return reply(routes.register ?? 201);
     throw new Error(`unexpected fetch ${url}`);
@@ -160,6 +143,14 @@ function runner(
   } as unknown as SessionRegistry;
   const net = network({});
   const fetch = overrides.fetch ?? net.fetch;
+  const custody = {
+    issueForSession: vi.fn(() => ({
+      status: 200,
+      body: { token: "oxgit_lease", expires_at: "2026-09-10T12:15:00.000Z" },
+    })),
+    handle: vi.fn(async () => undefined),
+    release: vi.fn(),
+  };
   const hook = vi.fn(async (envelope: HookEnvelope) => {
     hooks.push(envelope);
     const id = (envelope.payload as { session_id: string }).session_id;
@@ -176,6 +167,7 @@ function runner(
     model: { handle: vi.fn() } as unknown as ModelProxy,
     modelPort: () => 47100,
     issueCredential: credential,
+    github: custody,
     fetch,
     log,
   });
@@ -187,6 +179,7 @@ function runner(
     records,
     log,
     credential,
+    custody,
     seenLaunched,
     recorder,
     calls: net.calls,
@@ -314,7 +307,7 @@ describe("the contained runner refuses before any launch", () => {
   });
 
   it("when the daemon holds no model credential for the harness", async () => {
-    const { contained, credential, calls } = runner({
+    const { contained, credential, custody, calls } = runner({
       credential: {
         status: 403,
         body: { error: "no custody", code: "credential_unavailable" },
@@ -322,75 +315,27 @@ describe("the contained runner refuses before any launch", () => {
     });
     await expect(
       contained.run(
-        { ...REQUEST, github: { repository: "acme/app", token: TOKEN } },
+        { ...REQUEST, github: { repository: "acme/app" } },
         vi.fn(),
       ),
     ).rejects.toThrow(/must hold this harness's model credential/);
     expect(credential).toHaveBeenCalledWith("claude-code");
     expect(mocks.launch).not.toHaveBeenCalled();
-    // Refused before the GitHub check, so GitHub is never asked which
-    // repositories the token reaches. The token still ends with the run
-    // that never started: it is revoked, not left for GitHub's hour.
-    expect(calls.map((call) => `${call.method} ${call.url}`)).toEqual([
-      "DELETE https://api.github.com/installation/token",
-    ]);
-  });
-
-  it.each([
-    [
-      "GitHub refuses the token",
-      { status: 401, body: { message: "Bad credentials" } },
-      /GitHub refused the run's installation token \(401\)/,
-    ],
-    [
-      "the token reaches a second repository",
-      {
-        status: 200,
-        body: {
-          total_count: 2,
-          repositories: [
-            { full_name: "acme/app" },
-            { full_name: "acme/infra" },
-          ],
-        },
-      },
-      /must reach acme\/app and no other repository/,
-    ],
-    [
-      "the token reaches a different repository",
-      {
-        status: 200,
-        body: { total_count: 1, repositories: [{ full_name: "acme/infra" }] },
-      },
-      /must reach acme\/app and no other repository/,
-    ],
-  ])("when %s", async (_label, verify, message) => {
-    const net = network({ verify });
-    const { contained, hook } = runner({ fetch: net.fetch });
-    await expect(
-      contained.run(
-        { ...REQUEST, github: { repository: "acme/app", token: TOKEN } },
-        vi.fn(),
-      ),
-    ).rejects.toThrow(message);
-    expect(mocks.launch).not.toHaveBeenCalled();
-    // No session starts, so a refusal leaves nothing in the record.
-    expect(hook).not.toHaveBeenCalled();
-    // The refused token is revoked, the over-broad one included.
-    expect(net.calls.map((call) => `${call.method} ${call.url}`)).toEqual([
-      "GET https://api.github.com/installation/repositories?per_page=2",
-      "DELETE https://api.github.com/installation/token",
-    ]);
+    expect(custody.issueForSession).not.toHaveBeenCalled();
+    expect(calls).toEqual([]);
   });
 
   it.each([
     ["an unknown harness", { harness: "cursor" }],
     ["an image reference with a shell metacharacter", { image: "img;rm" }],
     ["an extra field", { extra: true }],
+    // An operator-minted token is no longer accepted (ADR-254), so an
+    // older CLI that still sends one is refused rather than ignored.
     [
-      "a personal access token",
-      { github: { repository: "acme/app", token: "ghp_x" } },
+      "a GitHub installation token",
+      { github: { repository: "acme/app", token: TOKEN } },
     ],
+    ["a repository with no owner", { github: { repository: "app" } }],
   ])("for a request with %s", async (_label, change) => {
     const { contained, credential } = runner();
     await expect(
@@ -527,21 +472,23 @@ describe("a contained run's lifecycle", () => {
     );
   });
 
-  it("records what the bridge forwarded and what it refused", async () => {
+  it("records what the bridge refused", async () => {
     mocks.launch.mockImplementation(launcherWalks());
     const { contained, records } = runner();
     await contained.run(REQUEST, vi.fn());
     const options = mocks.bridge.mock.calls[0]?.[0] as ContainedBridgeOptions;
     records.length = 0;
-    options.forwarded?.("GET", "/github/api/repos/acme/app/pulls?state=open");
+    options.githubRefused?.(
+      "/github/git/acme/app.git/info/refs?service=git-upload-pack",
+    );
     options.refused("/elsewhere?secret=1");
     expect(records.flat()).toEqual([
       expect.objectContaining({
         body: {
-          policy_decision: "allow",
-          policy_source: "bundle",
-          policy_reason_code: "contained_github_route",
-          tool_name: "GET /github/api/repos/acme/app/pulls",
+          policy_decision: "deny",
+          policy_source: "kernel",
+          policy_reason_code: "contained_github_custody",
+          tool_name: "/github/git/acme/app.git/info/refs",
         },
       }),
       expect.objectContaining({
@@ -616,84 +563,67 @@ describe("a contained run's lifecycle", () => {
   });
 });
 
-describe("a contained run's GitHub grant", () => {
-  const GITHUB = { repository: "acme/app", token: TOKEN };
-
-  it("verifies before launch, passes the grant to the bridge, and revokes at seal", async () => {
-    mocks.launch.mockImplementation(launcherWalks());
-    const net = network({ revoke: 204 });
-    const { contained, log } = runner({ fetch: net.fetch });
-    await contained.run({ ...REQUEST, github: GITHUB }, vi.fn());
+describe("a contained run's GitHub custody", () => {
+  it("hands the bridge a lease keyed by the launched session and calls no GitHub API", async () => {
+    const net = network({});
+    const { contained, custody } = runner({ fetch: net.fetch });
+    let files: Record<string, string> | undefined;
+    let named: string | undefined;
+    mocks.launch.mockImplementation(
+      async (options: ContainedLauncherOptions) => {
+        const prepared = await options.prepare({
+          sessionId: "contained-0123",
+          directory: "/tmp/oxagen-contained-x",
+          workspace: options.request.workspace,
+        });
+        files = prepared.files;
+        // What the daemon's push record reads while the run is live.
+        named = contained.githubRepository("contained-0123");
+        await options.measured("contained-0123", MEASUREMENT);
+        await prepared.close();
+        return { sessionId: "contained-0123", exitCode: 0 };
+      },
+    );
+    await contained.run(
+      { ...REQUEST, github: { repository: "acme/app" } },
+      vi.fn(),
+    );
+    // The only network call is the launch registration. No token is
+    // checked or revoked here: the custody proxy mints one per request.
     expect(net.calls.map((call) => `${call.method} ${call.url}`)).toEqual([
-      "GET https://api.github.com/installation/repositories?per_page=2",
       "POST https://api.example.test/v1/tacho/contained-launch",
-      "DELETE https://api.github.com/installation/token",
     ]);
-    expect(net.calls.at(-1)?.headers["authorization"]).toBe(`Bearer ${TOKEN}`);
     const options = mocks.bridge.mock.calls[0]?.[0] as ContainedBridgeOptions;
-    expect(options.github).toEqual(GITHUB);
-    expect(log).toHaveBeenCalledWith("Contained run GitHub token revoked");
-  });
-
-  it("revokes the token even when the launch throws", async () => {
-    mocks.launch.mockRejectedValue(
-      new Error("Docker cannot provide the Linux containment profile"),
-    );
-    const net = network({ revoke: 204 });
-    const { contained } = runner({ fetch: net.fetch });
-    await expect(
-      contained.run({ ...REQUEST, github: GITHUB }, vi.fn()),
-    ).rejects.toThrow("Docker cannot provide the Linux containment profile");
-    expect(net.calls.at(-1)).toMatchObject({
-      method: "DELETE",
-      url: "https://api.github.com/installation/token",
+    expect(options.github?.repository).toBe("acme/app");
+    expect(options.github?.lease()).toEqual({
+      status: 200,
+      body: { token: "oxgit_lease", expires_at: "2026-09-10T12:15:00.000Z" },
     });
-  });
-
-  it("reports a token GitHub already invalidated as such", async () => {
-    mocks.launch.mockImplementation(launcherWalks());
-    const net = network({ revoke: 401 });
-    const { contained, log } = runner({ fetch: net.fetch });
-    await contained.run({ ...REQUEST, github: GITHUB }, vi.fn());
-    expect(log).toHaveBeenCalledWith(
-      "Contained run GitHub token already_invalid",
+    // Keyed by the session the launcher started, never by a directory.
+    expect(custody.issueForSession).toHaveBeenCalledWith({
+      session: SESSION_UUID,
+      repository: "acme/app",
+    });
+    expect(options.github?.handle).toBe(custody.handle);
+    expect(options.github?.release).toBe(custody.release);
+    // The measured configuration names the repository and carries no
+    // credential.
+    expect(files?.["github.json"]).toBe(
+      JSON.stringify({ repository: "acme/app" }),
     );
+    expect(JSON.stringify(files)).not.toContain("oxgit_");
+    expect(named).toBe("acme/app");
+    expect(contained.githubRepository("contained-0123")).toBeUndefined();
   });
 
-  it.each([
-    [500, /GitHub did not revoke the run's token \(500\)/],
-    [new Error("socket hang up"), /socket hang up/],
-  ])(
-    "logs a failed revoke without failing a finished run: %s",
-    async (revoke, message) => {
-      mocks.launch.mockImplementation(launcherWalks(undefined, 0));
-      const net = network({ revoke });
-      const { contained, log } = runner({ fetch: net.fetch });
-      await expect(
-        contained.run({ ...REQUEST, github: GITHUB }, vi.fn()),
-      ).resolves.toMatchObject({ exitCode: 0 });
-      expect(log).toHaveBeenCalledWith(
-        expect.stringMatching(/^Contained run GitHub token was not revoked: /),
-      );
-      expect(log).toHaveBeenCalledWith(expect.stringMatching(message));
-    },
-  );
-
-  it("keeps the launch's own error when the revoke fails too", async () => {
-    mocks.launch.mockRejectedValue(new Error("the launch's own error"));
-    const net = network({ revoke: 500 });
-    const { contained, log } = runner({ fetch: net.fetch });
-    await expect(
-      contained.run({ ...REQUEST, github: GITHUB }, vi.fn()),
-    ).rejects.toThrow("the launch's own error");
-    expect(log).toHaveBeenCalledWith(expect.stringMatching(/was not revoked/));
-  });
-
-  it("never calls GitHub for a run without a grant", async () => {
+  it("gives the bridge no GitHub route for a run that names no repository", async () => {
     mocks.launch.mockImplementation(launcherWalks());
     const net = network({});
-    const { contained } = runner({ fetch: net.fetch });
+    const { contained, custody } = runner({ fetch: net.fetch });
     await contained.run(REQUEST, vi.fn());
+    const options = mocks.bridge.mock.calls[0]?.[0] as ContainedBridgeOptions;
+    expect(options).not.toHaveProperty("github");
+    expect(custody.issueForSession).not.toHaveBeenCalled();
     expect(net.calls.some((call) => call.url.includes("github.com"))).toBe(
       false,
     );

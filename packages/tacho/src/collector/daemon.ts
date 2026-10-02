@@ -1505,6 +1505,11 @@ async function initializeDaemon(
   // Bound once the contained runner exists below. Until then no session is
   // one the launcher started, which is the fail-closed answer.
   let launchedContained: (harnessSessionId: string) => boolean = () => false;
+  // The same for the repository a launched session may reach through Git
+  // custody (ADR-254). Until bound, no push is judged as a contained one.
+  let containedGitHubRepository: (
+    harnessSessionId: string,
+  ) => string | undefined = () => undefined;
   function policy(): PolicyView {
     const current = host as HostFile;
     return {
@@ -2693,12 +2698,18 @@ async function initializeDaemon(
           now,
           // Both reads hold this hook's session queue, and both answer no
           // answer once `stop` begins (`hookExecAsync`).
-          pushCredentialBasis: (command, cwd) =>
-            pushCredentialBasis(command, cwd, {
+          pushCredentialBasis: (command, cwd, harnessSessionId) => {
+            const containedRepository =
+              containedGitHubRepository(harnessSessionId);
+            return pushCredentialBasis(command, cwd, {
               receipts: () =>
                 readHostFile(paths.hostFile)?.github_repositories ?? [],
+              ...(containedRepository !== undefined
+                ? { containedRepository }
+                : {}),
               execAsync: hookExecAsync,
-            }),
+            });
+          },
           repositoryRemote: (cwd) => readRepositoryRemote(hookExecAsync, cwd),
           cedar: loadCedarRuntime,
           skills,
@@ -3774,6 +3785,26 @@ async function initializeDaemon(
     log,
   });
 
+  // One Git custody proxy serves both a configured checkout's credential
+  // helper (ADR-151) and the contained launcher's bridge (ADR-254).
+  const githubProxy = createGithubProxy({
+    host: () => {
+      const current = readHostFile(paths.hostFile);
+      return {
+        ...host,
+        github_broker_enabled: current?.github_broker_enabled === true,
+        github_repositories: current?.github_repositories ?? [],
+      };
+    },
+    policy,
+    refreshBundle,
+    registry,
+    controlFetch: options.fetch ?? globalThis.fetch,
+    now,
+    record,
+    log,
+  });
+
   const contained = createContainedRunner({
     host: () => host,
     registry,
@@ -3805,10 +3836,12 @@ async function initializeDaemon(
           log,
         },
       ),
+    github: githubProxy,
     fetch: options.fetch ?? ((input, init) => fetch(input, init)),
     log,
   });
   launchedContained = contained.launched;
+  containedGitHubRepository = contained.githubRepository;
 
   /**
    * The real interrupt. A pause, cancel or kill already stops the session at
@@ -3913,24 +3946,6 @@ async function initializeDaemon(
     for (const refusal of session.recorder.takeOtelRefusals())
       log(`OTel record not sealed for session ${sessionId}: ${refusal}`);
   }
-
-  const githubProxy = createGithubProxy({
-    host: () => {
-      const current = readHostFile(paths.hostFile);
-      return {
-        ...host,
-        github_broker_enabled: current?.github_broker_enabled === true,
-        github_repositories: current?.github_repositories ?? [],
-      };
-    },
-    policy,
-    refreshBundle,
-    registry,
-    controlFetch: options.fetch ?? globalThis.fetch,
-    now,
-    record,
-    log,
-  });
 
   const api: CollectorApi = {
     runContained: contained.run,

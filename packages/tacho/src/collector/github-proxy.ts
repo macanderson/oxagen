@@ -30,6 +30,19 @@ interface Lease {
   repository: string;
   session: string;
   expires: number;
+  /**
+   * Issued to the contained launcher for the session it started (ADR-254).
+   * No `tacho github configure` receipt stands behind such a lease, because
+   * the container's working directory and port are not the host's. The
+   * launcher's bridge is its only holder, and the bridge serves that one
+   * session.
+   */
+  launcher?: true;
+}
+/** The session a contained run's lease is for, and its one repository. */
+export interface GithubSessionLeaseInput {
+  session: string;
+  repository: string;
 }
 export interface GithubLeaseInput {
   repository?: unknown;
@@ -127,7 +140,9 @@ export function createGithubProxy(deps: GithubProxyDeps) {
   function live(lease: Lease): SessionRecord | undefined {
     const host = deps.host();
     if (
-      host.github_broker_enabled !== true ||
+      // `tacho github configure` turns this on for a configured checkout.
+      // A contained run opts in by naming its repository at launch instead.
+      (lease.launcher !== true && host.github_broker_enabled !== true) ||
       host.host_status !== "active" ||
       !Number.isFinite(Date.parse(host.expires_at)) ||
       Date.parse(host.expires_at) <= deps.now() ||
@@ -140,14 +155,47 @@ export function createGithubProxy(deps: GithubProxyDeps) {
       !session.pendingTerminal &&
       session.control.paused == null &&
       session.control.cancelled == null &&
-      receiptMatches(
-        host,
-        lease.repository,
-        session.cwd,
-        deps.registry.agentOf(session).harness,
-      )
+      (lease.launcher === true ||
+        receiptMatches(
+          host,
+          lease.repository,
+          session.cwd,
+          deps.registry.agentOf(session).harness,
+        ))
       ? session
       : undefined;
+  }
+
+  function validRepository(value: unknown): value is string {
+    return (
+      typeof value === "string" &&
+      REPO.test(value) &&
+      ![".", ".."].includes(value.split("/")[1] ?? "")
+    );
+  }
+
+  /** Store a new lease if it is live now, and answer with its token. */
+  function grant(
+    fields: Pick<Lease, "repository" | "session" | "launcher">,
+    host: HostFile,
+  ): { status: number; body: unknown } {
+    const token = `oxgit_${randomBytes(32).toString("base64url")}`;
+    const lease: Lease = {
+      ...fields,
+      id: `rt_${randomBytes(10).toString("hex")}`,
+      repository: fields.repository.toLowerCase(),
+      expires: Math.min(deps.now() + LIFE_MS, Date.parse(host.expires_at)),
+    };
+    if (!live(lease))
+      return {
+        status: 403,
+        body: { error: "The session or enrollment is not active" },
+      };
+    leases.set(hash(token), lease);
+    return {
+      status: 200,
+      body: { token, expires_at: new Date(lease.expires).toISOString() },
+    };
   }
 
   function receiptMatches(
@@ -181,9 +229,7 @@ export function createGithubProxy(deps: GithubProxyDeps) {
         body: { error: "GitHub custody is not enabled on this host" },
       };
     if (
-      typeof input.repository !== "string" ||
-      !REPO.test(input.repository) ||
-      [".", ".."].includes(input.repository.split("/")[1] ?? "") ||
+      !validRepository(input.repository) ||
       typeof input.cwd !== "string" ||
       typeof input.harness !== "string" ||
       !isWrappedHarness(input.harness)
@@ -220,24 +266,54 @@ export function createGithubProxy(deps: GithubProxyDeps) {
             "GitHub custody needs exactly one live session in this working directory",
         },
       };
-    const session = matches[0]!;
-    const token = `oxgit_${randomBytes(32).toString("base64url")}`;
-    const lease: Lease = {
-      id: `rt_${randomBytes(10).toString("hex")}`,
-      repository: input.repository.toLowerCase(),
-      session: session.recorder.sessionUuid,
-      expires: Math.min(deps.now() + LIFE_MS, Date.parse(host.expires_at)),
-    };
-    if (!live(lease))
+    return grant(
+      {
+        repository: input.repository,
+        session: matches[0]!.recorder.sessionUuid,
+      },
+      host,
+    );
+  }
+
+  /**
+   * A lease for one session the contained launcher started (ADR-254). The
+   * launcher names the session itself, so this skips the working-directory
+   * lookup `issue` makes, and it reads no custody receipt. Every other check
+   * is the same, now and on each request: an active enrollment, and a live
+   * session that is not paused, cancelled, or sealed. The server still mints
+   * only for the workspace's binding of the repository. Only the launcher's
+   * bridge calls this, in this process. No HTTP route reaches it.
+   */
+  function issueForSession(input: GithubSessionLeaseInput): {
+    status: number;
+    body: unknown;
+  } {
+    for (const [key, lease] of leases) if (!live(lease)) leases.delete(key);
+    const host = deps.host();
+    if (host.host_status !== "active")
       return {
         status: 403,
-        body: { error: "The session or enrollment is not active" },
+        body: { error: "This host's enrollment is not active" },
       };
-    leases.set(hash(token), lease);
-    return {
-      status: 200,
-      body: { token, expires_at: new Date(lease.expires).toISOString() },
-    };
+    if (!validRepository(input.repository))
+      return {
+        status: 400,
+        body: { error: "Name the GitHub repository as owner/name" },
+      };
+    if (leases.size >= MAX_LEASES)
+      return {
+        status: 409,
+        body: { error: "Too many GitHub run credentials are open on this host" },
+      };
+    return grant(
+      { repository: input.repository, session: input.session, launcher: true },
+      host,
+    );
+  }
+
+  /** Drop a lease once the one request it was issued for has ended. */
+  function release(token: string): void {
+    leases.delete(hash(token));
   }
 
   async function handle(
@@ -506,5 +582,5 @@ export function createGithubProxy(deps: GithubProxyDeps) {
       }
     }
   }
-  return { issue, handle };
+  return { issue, issueForSession, release, handle };
 }
