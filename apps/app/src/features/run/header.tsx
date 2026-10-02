@@ -436,7 +436,7 @@ type PullState = NonNullable<RunRow["pullRequests"]>[number]["state"];
  * live work read did not reach still names the state Fleet shows. An absent
  * list means the read did not happen, and reads null too.
  */
-export function storedPullState(run: RunRow, url: string | null): PullState {
+function storedPullState(run: RunRow, url: string | null): PullState {
   if (url === null) return null;
   return run.pullRequests?.find((pull) => pull.url === url)?.state ?? null;
 }
