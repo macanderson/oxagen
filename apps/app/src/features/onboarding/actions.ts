@@ -12,10 +12,17 @@ import {
   organizationCreate,
   slugFromName,
 } from "@oxagen/oxagen/contracts/org.create";
+import {
+  type SteeringRepoDestinationsListOutput,
+  steeringRepoDestinationsList,
+} from "@oxagen/oxagen/contracts/steering_repo.destinations.list";
 import { tachoEnrollmentTokenCreate } from "@oxagen/oxagen/contracts/tacho.enrollment_token.create";
-import { workspaceCreate } from "@oxagen/oxagen/contracts/workspace.create";
+import {
+  type WorkspaceCreateInput,
+  workspaceCreate,
+} from "@oxagen/oxagen/contracts/workspace.create";
 import type { ActionResult } from "@/server/kernel";
-import { kernelWrite } from "@/server/kernel";
+import { kernelRead, kernelWrite, readToActionResult } from "@/server/kernel";
 import { requireUser, requireViewer } from "@/server/viewer";
 import { routes, type SafePath, sanitizeNext } from "@/shared/safe-path";
 import { AgentForm, type AgentFormValues } from "./agent-form";
@@ -85,10 +92,16 @@ const WORKSPACE_NAME_MAX = 120;
  * taken one is the handler's `conflict` with code `slug_taken`.
  * `create_workspace` starts the steering repo job and answers before the
  * repository exists. The page then shows the job's progress.
+ *
+ * `steeringRepo` is where the repository goes and what it is called (#5196).
+ * Left out, the job takes the organization's default place and
+ * `oxagen-<slug>`. A refused name comes back `invalid` on the field
+ * `steeringRepo.name`.
  */
 export async function createFirstWorkspace(
   org: string,
   name: string,
+  steeringRepo?: WorkspaceCreateInput["steeringRepo"],
 ): Promise<ActionResult<{ slug: string }>> {
   const ctx = await requireViewer(org);
   const trimmed = name.trim();
@@ -109,11 +122,30 @@ export async function createFirstWorkspace(
   const result = await kernelWrite(ctx, workspaceCreate, {
     name: trimmed,
     slug: slugFromName(trimmed),
+    ...(steeringRepo === undefined ? {} : { steeringRepo }),
   });
   if (result.ok) return { ok: true, value: { slug: result.value.slug } };
   if (result.reason === "invalid" && result.field === "slug")
     return { ...result, field: "name" };
   return result;
+}
+
+/**
+ * Where the first workspace's steering repo can go (#5196): every GitHub
+ * organization and GitLab group the organization's stored tokens reach, and
+ * the organization's default. The form reads it when it mounts.
+ */
+export async function readFirstWorkspaceDestinations(
+  org: string,
+): Promise<ActionResult<SteeringRepoDestinationsListOutput>> {
+  const ctx = await requireViewer(org);
+  return readToActionResult(
+    await kernelRead(ctx, {
+      contract: steeringRepoDestinationsList,
+      input: {},
+      page: "onboarding",
+    }),
+  );
 }
 
 export type RegisteredAgent = {

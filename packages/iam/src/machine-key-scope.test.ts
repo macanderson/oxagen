@@ -13,6 +13,7 @@ import { tachoMemoriesRecall } from "@oxagen/oxagen/contracts/tacho.memories.rec
 import { tachoMemoryUsesRecord } from "@oxagen/oxagen/contracts/tacho.memories.uses.record";
 import { workOrderClaim } from "@oxagen/oxagen/contracts/work.order.claim";
 import { workOrderReject } from "@oxagen/oxagen/contracts/work.order.reject";
+import { tachoSessionHeadsList } from "@oxagen/oxagen/contracts/tacho.session_heads.list";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const findFirst = vi.fn();
@@ -329,7 +330,7 @@ describe("a ledger run credential", () => {
 });
 
 describe("the Tacho host key", () => {
-  it("names the control client's nine capabilities as their contracts register them", () => {
+  it("names the control client's ten capabilities as their contracts register them", () => {
     // A capability rename (ADR-025) left this list naming
     // `fetch_tacho_commands` after the contract became `fetch_commands`, and
     // every host's command poll was refused in production. The list is held
@@ -345,13 +346,14 @@ describe("the Tacho host key", () => {
         tachoMemoriesIngest.name,
         tachoMemoriesRecall.name,
         tachoMemoryUsesRecord.name,
+        tachoSessionHeadsList.name,
         workOrderClaim.name,
         workOrderReject.name,
       ].sort(),
     );
   });
 
-  it("may make the nine calls its control client makes", async () => {
+  it("may make the ten calls its control client makes", async () => {
     for (const capability of [
       "ingest_tacho_events",
       "get_tacho_bundle",
@@ -362,6 +364,7 @@ describe("the Tacho host key", () => {
       "record_tacho_memory_uses",
       "claim_work_order",
       "reject_work_order",
+      "list_tacho_session_heads",
     ]) {
       keyWithScope({
         purpose: TACHO_HOST_PURPOSE,

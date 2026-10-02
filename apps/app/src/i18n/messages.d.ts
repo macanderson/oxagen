@@ -5774,6 +5774,13 @@ type Messages = {
       gitlabNotConnected: string;
       repositoryHostUnsupported: string;
       toolNotRegistered: string;
+      findingNotFound: string;
+      findingResolved: string;
+      alreadyInSteering: string;
+      alreadyProposed: string;
+      statementTooLong: string;
+      lineagePrOpen: string;
+      recordNotProposable: string;
     };
     page: {
       title: string;
@@ -6311,11 +6318,15 @@ type Messages = {
     };
     drift: {
       heading: string;
-      notBacked: string;
-      detected: string;
+      location: string;
+      contradiction: string;
+      repeat: string;
+      openPullRequest: string;
+      mergedPullRequest: string;
       promote: string;
       promoting: string;
       promoted: string;
+      proposed: string;
     };
     steeringRepo: {
       heading: string;
@@ -6469,6 +6480,20 @@ type Messages = {
           legacy: string;
           gitlab: string;
         };
+      };
+      destination: {
+        organization: string;
+        loading: string;
+        none: string;
+        failed: string;
+        reauthorizeGithub: string;
+        reauthorizeGitlab: string;
+        optionPersonal: string;
+        optionHost: string;
+        optionHostPersonal: string;
+        repoName: string;
+        repoNameHint: string;
+        repoNameInvalid: string;
       };
     };
   };
@@ -7438,6 +7463,17 @@ type Messages = {
       chain_break: string;
       telemetry_gap: string;
     };
+    backfill: {
+      badge: string;
+      partlyBadge: string;
+      note: string;
+      undatedNote: string;
+      partlyNote: string;
+      tierNotRecorded: string;
+      policy: string;
+      sealedBadge: string;
+      costNote: string;
+    };
     chain: {
       title: string;
       compacted: string;
@@ -7761,6 +7797,7 @@ type Messages = {
       corrective: string;
       provisional: string;
       estimate: string;
+      estimated: string;
       basisNotRecorded: string;
       noEnd: string;
       mostly: {
@@ -10647,6 +10684,10 @@ type Messages = {
         nothingToRevert: string;
         revertBranchExists: string;
         toolNotRegistered: string;
+        blockIntact: string;
+        noManagedBlock: string;
+        noManagedBlocks: string;
+        prNotOpen: string;
       };
       approve: {
         confirm: string;

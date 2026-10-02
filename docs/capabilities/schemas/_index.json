@@ -2537,6 +2537,19 @@
       "consumes": []
     },
     {
+      "name": "list_code_repository_findings",
+      "domain": "repository",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "list_commands",
       "domain": "control",
       "surfaces": [
@@ -3145,6 +3158,18 @@
       "consumes": []
     },
     {
+      "name": "list_steering_repo_destinations",
+      "domain": "repository",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "list_studio_findings",
       "domain": "tool",
       "surfaces": [
@@ -3173,6 +3198,16 @@
         "api",
         "mcp",
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "list_tacho_session_heads",
+      "domain": "tacho",
+      "surfaces": [
+        "api"
       ],
       "component": null,
       "produces": [],
@@ -3533,6 +3568,19 @@
       "domain": "context",
       "surfaces": [
         "api"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "promote_instruction_to_steering",
+      "domain": "repository",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -4022,6 +4070,19 @@
       "domain": "agent",
       "surfaces": [
         "api"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "restore_managed_block",
+      "domain": "context",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli",
+        "agent"
       ],
       "component": null,
       "produces": [],

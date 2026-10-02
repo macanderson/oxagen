@@ -146,6 +146,27 @@ describe("priceFrame", () => {
     expect(before.basis).toBe("estimated");
   });
 
+  it("prices a backfilled frame at its own instant and keeps it estimated (ADR-161)", () => {
+    const older = entry({
+      id: "pe_in_old",
+      tokenClass: "input_uncached",
+      microsPerMillion: 2_000_000n,
+      effectiveFrom: new Date("2025-01-01T00:00:00.000Z"),
+      effectiveTo: new Date("2026-01-01T00:00:00.000Z"),
+    });
+    const now = priceFrame([...BOOK, older], ORG, frame({ basis: "estimated" }));
+    expect(now.scaled).toBe(4_500_000_000n);
+    expect(now.basis).toBe("estimated");
+    expect(now.priceEntryIds.sort()).toEqual(["pe_in", "pe_out"]);
+    // A session from before a price change is priced at the price then.
+    const then = priceFrame([...BOOK, older], ORG, {
+      ...frame({ basis: "estimated" }),
+      at: new Date("2025-06-01T00:00:00.000Z"),
+    });
+    expect(then.priceEntryIds).toContain("pe_in_old");
+    expect(then.basis).toBe("estimated");
+  });
+
   it("marks a frame whose model no entry prices as estimated and keeps its reported figure", () => {
     const p = priceFrame(
       BOOK,

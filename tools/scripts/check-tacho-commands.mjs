@@ -83,6 +83,7 @@ const VERBS = [
   "enroll",
   "status",
   "unenroll",
+  "uninstall",
   "reassign",
   "export",
   "verify",
