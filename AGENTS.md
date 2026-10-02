@@ -58,8 +58,8 @@ Mac owns `oxagen.app`, bought on 2026-09-27. It is registered at Vercel, in the 
 | `steering-assembler` | `src/assemble.ts` | The one assembler (ADR-093): ranks every steering candidate by tier then recency, fits it to a token budget, returns the text and a manifest of what was included or cut and why |
 | `inngest-functions` | `src/functions/` | Durable background jobs |
 | `ingestion` | `src/pipeline.ts` | Universal connector pipeline |
-| `work` | `src/types.ts` | Work item, collector, workflow, and triage types and schemas, and the autonomy gate (`autonomyAllows`). Triage, planning, work order checks, and training export throw `NotBuiltError` |
-| `done-record` | `src/types.ts` | The done-record/v1 type and schema. `decide` and `lockDigest` throw `NotBuiltError` |
+| `work` | `src/records/` | The Phase 1 work records (`@oxagen/work/records`, ADR-244): the work-brief/v1 brief, the append-only facts, `reduceWorkItem`, the stale-action rules (`admitDecision`), and the roles each action takes. `packages/handlers/src/lib/work-records/store.ts` is their one write path. `src/types.ts` holds the collector, workflow, and triage types and the autonomy gate (`autonomyAllows`). `triageItem`, `planWorkOrders`, `evaluateWorkOrder`, and `exportTrainingSet` throw `NotBuiltError` |
+| `done-record` | `src/types.ts` | The done-record/v1 type and schema, `lockDigest`, and `decide`. Phase 1 writes no done record (ADR-244) |
 | `billing` | `src/metering.ts` | Credit gate + usage metering |
 | `billing` | `src/grants.ts` | Credit grants + scope |
 | `plugins` | `src/entitlements/` | Plugin entitlement gate + bootstrap |

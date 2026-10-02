@@ -211,6 +211,7 @@ import { toolStudioFindingsListRoute } from "./routes/v1/tool.studio.findings.li
 import { toolStudioDescriptionDraftRoute } from "./routes/v1/tool.studio.description.draft";
 import { toolStudioTryRoute } from "./routes/v1/tool.studio.try";
 import { toolStudioDiscoveryStartRoute } from "./routes/v1/tool.studio.discovery.start";
+import { toolSteeringMigrateRoute } from "./routes/v1/tool.steering.migrate";
 import { toolStudioListingGetRoute } from "./routes/v1/tool.studio.listing.get";
 import { toolStudioListingStartRoute } from "./routes/v1/tool.studio.listing.start";
 import { toolStudioDiscoveryGetRoute } from "./routes/v1/tool.studio.discovery.get";
@@ -362,6 +363,7 @@ import { spendDrillRoute } from "./routes/v1/spend.drill";
 import { spendWasteListRoute } from "./routes/v1/spend.waste";
 import { spendOperatorRankingRoute } from "./routes/v1/spend.operator_ranking";
 import { spendOperatorPseudonymsSetRoute } from "./routes/v1/spend.operator_pseudonyms.set";
+import { spendUnproductiveRoute } from "./routes/v1/spend.unproductive";
 import { skillConfigGetRoute } from "./routes/v1/skill.config.get";
 import { skillConfigUpdateRoute } from "./routes/v1/skill.config.update";
 import { skillSearchPreviewRoute } from "./routes/v1/skill.search.preview";
@@ -897,6 +899,7 @@ orgScoped.route("/spend/waste", spendWasteListRoute);
 // pseudonym setting (spend spec, Operator ranking).
 orgScoped.route("/spend/operators", spendOperatorRankingRoute);
 orgScoped.route("/spend/operators/pseudonyms", spendOperatorPseudonymsSetRoute);
+orgScoped.route("/spend/unproductive", spendUnproductiveRoute);
 orgScoped.route("/spend/statement/export", spendStatementExportRoute);
 // Cost-center chargeback (ADR-142). The list, create, delete, and statement
 // are organization-level (`scoped: false`). Set writes the active workspace or
@@ -1247,6 +1250,8 @@ orgScoped.route("/tools/studio/server/get", toolStudioServerGetRoute);
 orgScoped.route("/tools/studio/listing/start", toolStudioListingStartRoute);
 orgScoped.route("/tools/studio/listing/get", toolStudioListingGetRoute);
 // Relays (lane M12, #4685): register and revoke a relay for a private network.
+// The move of the workspace's MCP servers into its steering repo (ADR-245, #4948).
+orgScoped.route("/tools/steering/migrate", toolSteeringMigrateRoute);
 orgScoped.route("/tools/relays", toolRelayCreateRoute);
 orgScoped.route("/tools/relays/revoke", toolRelayRevokeRoute);
 orgScoped.route("/credential-grants", credentialGrantListRoute);

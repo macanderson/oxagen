@@ -98,6 +98,7 @@ import { toolStudioFindingsList } from "@oxagen/oxagen/contracts/tool.studio.fin
 import { toolStudioDescriptionDraft } from "@oxagen/oxagen/contracts/tool.studio.description.draft";
 import { toolStudioTry } from "@oxagen/oxagen/contracts/tool.studio.try";
 import { toolStudioDiscoveryStart } from "@oxagen/oxagen/contracts/tool.studio.discovery.start";
+import { toolSteeringMigrate } from "@oxagen/oxagen/contracts/tool.steering.migrate";
 import { toolStudioListingGet } from "@oxagen/oxagen/contracts/tool.studio.listing.get";
 import { toolStudioListingStart } from "@oxagen/oxagen/contracts/tool.studio.listing.start";
 import { toolStudioDiscoveryGet } from "@oxagen/oxagen/contracts/tool.studio.discovery.get";
@@ -160,6 +161,7 @@ import { auditEventsExport } from "@oxagen/oxagen/contracts/audit.events.export"
 import { ORG_ONLY_WORKSPACE_ID } from "@oxagen/oxagen/contracts/audit.log.query";
 import { spendWasteList } from "@oxagen/oxagen/contracts/spend.waste";
 import { spendOperatorRanking } from "@oxagen/oxagen/contracts/spend.operator_ranking";
+import { spendUnproductive } from "@oxagen/oxagen/contracts/spend.unproductive";
 import { spendOperatorPseudonymsSet } from "@oxagen/oxagen/contracts/spend.operator_pseudonyms.set";
 import { findingDismiss } from "@oxagen/oxagen/contracts/finding.dismiss";
 import { findingEvidenceGet } from "@oxagen/oxagen/contracts/finding.evidence.get";
@@ -243,6 +245,7 @@ import { toolStudioFindingsListRoute } from "./tool.studio.findings.list";
 import { toolStudioDescriptionDraftRoute } from "./tool.studio.description.draft";
 import { toolStudioTryRoute } from "./tool.studio.try";
 import { toolStudioDiscoveryStartRoute } from "./tool.studio.discovery.start";
+import { toolSteeringMigrateRoute } from "./tool.steering.migrate";
 import { toolStudioListingGetRoute } from "./tool.studio.listing.get";
 import { toolStudioListingStartRoute } from "./tool.studio.listing.start";
 import { toolStudioDiscoveryGetRoute } from "./tool.studio.discovery.get";
@@ -286,6 +289,7 @@ import { costCenterSetRoute } from "./cost_center.set";
 import { auditEventsExportRoute } from "./audit.events.export";
 import { spendWasteListRoute } from "./spend.waste";
 import { spendOperatorRankingRoute } from "./spend.operator_ranking";
+import { spendUnproductiveRoute } from "./spend.unproductive";
 import { spendOperatorPseudonymsSetRoute } from "./spend.operator_pseudonyms.set";
 import { findingDismissRoute } from "./finding.dismiss";
 import { findingEvidenceGetRoute } from "./finding.evidence.get";
@@ -1139,6 +1143,16 @@ const ROUTES: ThinRoute[] = [
     status: 200,
   },
   {
+    file: "tool.steering.migrate",
+    route: toolSteeringMigrateRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: toolSteeringMigrate.name,
+    body: {},
+    invalidBody: { workspaceId: "ws_1" },
+    jsonGuard: true,
+    status: 200,
+  },
+  {
     file: "tool.studio.discovery.start",
     route: toolStudioDiscoveryStartRoute as unknown as Hono<never>,
     method: "POST",
@@ -1803,6 +1817,16 @@ const ROUTES: ThinRoute[] = [
     route: spendOperatorRankingRoute as unknown as Hono<never>,
     method: "POST",
     capability: spendOperatorRanking.name,
+    body: { period: { from: "2026-09-01", to: "2026-09-30" } },
+    invalidBody: { period: { from: "2026-09-30", to: "2026-09-01" } },
+    jsonGuard: true,
+    status: 200,
+  },
+  {
+    file: "spend.unproductive",
+    route: spendUnproductiveRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: spendUnproductive.name,
     body: { period: { from: "2026-09-01", to: "2026-09-30" } },
     invalidBody: { period: { from: "2026-09-30", to: "2026-09-01" } },
     jsonGuard: true,

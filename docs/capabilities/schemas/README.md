@@ -496,6 +496,7 @@ capability rewrites, so two such branches always conflicted on it (ADR-216).
 - get_operator_ranking
 - get_spend
 - get_spend_drill
+- get_unproductive_spend
 - list_cost_centers
 - list_findings
 - list_waste
@@ -548,6 +549,7 @@ capability rewrites, so two such branches always conflicted on it (ADR-216).
 - list_studio_tools
 - list_tool_declarations
 - list_tool_versions
+- migrate_tools_to_steering
 - open_studio_review
 - publish_tool_declaration
 - revoke_relay

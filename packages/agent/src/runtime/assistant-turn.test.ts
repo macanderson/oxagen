@@ -778,7 +778,7 @@ describe("the prepared turn", () => {
       agentId: "agt_assistant",
       principalId: "prn_assistant",
     });
-    // finding 9 (macanderson/oxagen#3370): materializeTools runs before
+    // finding 9 (oxageninc/product#3370): materializeTools runs before
     // openAssistantRun opens the run, so a tool call parked mid-turn reads
     // the run from a mutable ref rather than from `ctx.agentRun`, which is
     // unset at materialize time. By now the turn has finished, so the ref

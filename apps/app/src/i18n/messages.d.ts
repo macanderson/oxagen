@@ -7045,6 +7045,29 @@ type Messages = {
         productiveValue: string;
         productiveSteps: string;
       };
+      noProgress: {
+        title: string;
+        note: string;
+        line: string;
+        mode: {
+          observe: string;
+          enforced: string;
+        };
+        outcome: {
+          observe: string;
+          paused: string;
+          blocked: string;
+          blockedUnrecorded: string;
+        };
+        block: {
+          run_sealed: string;
+          no_host: string;
+          host_revoked: string;
+          host_offline: string;
+          no_connection_point: string;
+          pause_unavailable: string;
+        };
+      };
     };
     commands: {
       reasonLabel: string;
@@ -9048,10 +9071,6 @@ type Messages = {
       setBudget: string;
     };
     findings: {
-      strip: {
-        label: string;
-        tail: string;
-      };
       facts: {
         findings: string;
         operators: string;
@@ -9061,6 +9080,7 @@ type Messages = {
       };
       note: string;
       emptyTitle: string;
+      operatorNames: string;
       empty: string;
       kind: {
         cache_writes_never_read: string;
@@ -9159,10 +9179,22 @@ type Messages = {
       };
       costData: string;
       hero: string;
-      heroShare: string;
-      heroWindow: string;
-      heroYearStart: string;
-      heroYearEnd: string;
+      heroShareOf: string;
+      heroPeriod: string;
+      heroNoSpend: string;
+      mixedCurrency: string;
+      parts: {
+        title: string;
+        note: string;
+        detector: {
+          "2": string;
+          "3": string;
+          "5": string;
+        };
+        estimate: string;
+        estimated: string;
+        findings: string;
+      };
       attributionMissing: string;
       evidenceLine: string;
       list: string;
@@ -9726,6 +9758,7 @@ type Messages = {
         saving: string;
         denied: string;
         failed: string;
+        unknown: string;
       };
     };
     toolChart: {
@@ -10440,6 +10473,171 @@ type Messages = {
     create: {
       skill: string;
       record: string;
+    };
+    import: {
+      button: string;
+      title: string;
+      intro: string;
+      review: string;
+      reviewPending: string;
+      parsing: string;
+      back: string;
+      commit: string;
+      commitPending: string;
+      cancel: string;
+      close: string;
+      drop: {
+        label: string;
+        chooseFiles: string;
+        chooseFolder: string;
+        filesInput: string;
+        folderInput: string;
+        reading: string;
+        none: string;
+        tooMany: string;
+        unreadable: string;
+        ignored: string;
+      };
+      files: {
+        label: string;
+        columns: {
+          file: string;
+          target: string;
+          path: string;
+          status: string;
+        };
+        lines: string;
+        targetLabel: string;
+        count: string;
+        from: string;
+        out: string;
+      };
+      targets: {
+        records: string;
+        policies: string;
+        skip: string;
+        memories: string;
+        memoriesHint: string;
+      };
+      paths: {
+        records: string;
+        policies: string;
+        none: string;
+      };
+      status: {
+        ready: string;
+        skipped: string;
+        notRead: string;
+        statements: string;
+        rules: string;
+        cedarError: string;
+        cedarProblem: string;
+        matchesPolicy: string;
+        replacesPolicy: string;
+      };
+      reasons: {
+        index: string;
+        links: string;
+        memory: string;
+        empty: string;
+        tooLarge: string;
+        pathTooLong: string;
+      };
+      grid: {
+        intro: string;
+        tokens: string;
+        label: string;
+        columns: {
+          import: string;
+          statement: string;
+          kind: string;
+          force: string;
+          words: string;
+          source: string;
+          marks: string;
+        };
+        importLabel: string;
+        kindLabel: string;
+        effectLabel: string;
+        forceLabel: string;
+        conflictLabel: string;
+        fromFrontmatter: string;
+        yourChoice: string;
+        tokensPerRequest: string;
+        quoted: string;
+        none: string;
+        kept: string;
+        notRead: string;
+        statements: string;
+        rules: string;
+        empty: string;
+        unmatched: string;
+        summary: string;
+        out: string;
+        open: string;
+        tooMany: string;
+      };
+      why: {
+        chosen: string;
+        only: string;
+        points: string;
+        capped: string;
+        default: string;
+      };
+      kinds: {
+        "business-rule": string;
+        "code-rule": string;
+        constraint: string;
+        procedure: string;
+        skill: string;
+        fact: string;
+        preference: string;
+        memory: string;
+      };
+      effects: {
+        require: string;
+        forbid: string;
+      };
+      marks: {
+        duplicate: string;
+        conflict: string;
+        update: string;
+        replaced: string;
+        matches: string;
+        conflictsWith: string;
+        replacedBy: string;
+        rowRef: string;
+      };
+      choices: {
+        choose: string;
+        keep: string;
+        replace: string;
+      };
+      done: {
+        opened: string;
+        counts: string;
+        link: string;
+      };
+      failure: {
+        denied: string;
+        conflictUnresolved: string;
+        policyInvalid: string;
+        nothingToImport: string;
+        duplicateLineage: string;
+        duplicatePath: string;
+        tooManyFiles: string;
+        branchesExhausted: string;
+        branchMoved: string;
+        steeringRepoRequired: string;
+        refused: string;
+        tooLarge: string;
+        invalidInput: string;
+        invalid: string;
+        pendingApproval: string;
+        exhausted: string;
+        unavailable: string;
+        billing: string;
+      };
     };
     deliveries: {
       title: string;
@@ -11351,6 +11549,7 @@ type Messages = {
       };
       weeklyAbsent: string;
       weeklyUnpriced: string;
+      weeklyUnpricedTitle: string;
       weeklyTokenCount: string;
       weeklyTokens: string;
       weeklyTitle: string;

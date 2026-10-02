@@ -277,7 +277,7 @@ export interface MaterializeOptions {
    * null. Every tool's `execute` reads `runIdRef.current` at CALL time
    * instead. By then the caller has set it to the opened run's internal id
    * (the `agent_runs` uuid, not its `arun_` public id), so a parked approval
-   * attaches to the run whose Policy tab a person is actually looking at (finding 9, macanderson/oxagen#3370). A caller with
+   * attaches to the run whose Policy tab a person is actually looking at (finding 9, oxageninc/product#3370). A caller with
    * no such run (a direct API/MCP call, or an automation whose run was
    * already open when it materialized tools) omits this, and the read falls
    * back to `ctx.agentRun.runId` as before.
@@ -916,7 +916,7 @@ export async function materializeTools(
                     // closures were built: for the in-app assistant that
                     // happens before `openAssistantRun` opens the run, so
                     // `ctx.agentRun` is still unset then (finding 9,
-                    // macanderson/oxagen#3370).
+                    // oxageninc/product#3370).
                     runId: opts.runIdRef?.current ?? agentRun?.runId ?? null,
                     capabilityName: cap.name,
                     inputPreview: input,

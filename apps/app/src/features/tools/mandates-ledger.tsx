@@ -46,6 +46,7 @@ import {
 } from "@/data/contracts/mandates";
 import type { Read } from "@/data/read";
 import { routes } from "@/shared/safe-path";
+import { AgentAvatar } from "@/ui/agent-avatar";
 import { linkText, mono, panel } from "@/ui/control-styles";
 import { MandateAuthorityList } from "@/ui/mandate-authority";
 import { MandateScope } from "@/ui/mandate-scope";
@@ -66,10 +67,13 @@ function Row({
   mandate,
   at,
   grant,
+  harness,
 }: {
   mandate: MandateRow;
   at: ToolsAt;
   grant: LedgerGrant | null;
+  /** The harness the mandate's agent registered, or null when the page holds none. */
+  harness: string | null;
 }) {
   const t = useTranslations("tools.mandates");
   const format = useFormatter();
@@ -91,7 +95,15 @@ function Row({
         </div>
       </td>
       <td className="px-3 py-2">
-        <span className={mono}>{mandate.agentSlug}</span>
+        <span className="flex items-center gap-1.5">
+          <AgentAvatar
+            value={null}
+            initials={mandate.agentSlug.slice(0, 2).toUpperCase()}
+            harness={harness}
+            size={18}
+          />
+          <span className={mono}>{mandate.agentSlug}</span>
+        </span>
       </td>
       <td className="px-3 py-2">
         {mandate.grantedBy === null ? (
@@ -195,12 +207,15 @@ export function MandatesLedger({
   orgRole,
   at,
   grant,
+  agentHarnesses = {},
 }: {
   read: Read<MandateList>;
   orgRole: OrgRole;
   at: ToolsAt;
   /** Null for a reader no consequence role can name, who is offered no grant. */
   grant: LedgerGrant | null;
+  /** Each agent's registered harness by slug, for the badge on a row's agent (#4871). */
+  agentHarnesses?: Readonly<Record<string, string>>;
 }) {
   const t = useTranslations("tools.mandates");
   const title = t("title");
@@ -278,6 +293,11 @@ export function MandatesLedger({
                         mandate={mandate}
                         at={at}
                         grant={grant}
+                        harness={
+                          Object.hasOwn(agentHarnesses, mandate.agentSlug)
+                            ? (agentHarnesses[mandate.agentSlug] ?? null)
+                            : null
+                        }
                       />
                     ))}
                   </tbody>

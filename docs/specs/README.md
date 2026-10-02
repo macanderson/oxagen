@@ -6,7 +6,7 @@ Find design intent here before changing a capability, data boundary, or product 
 
 | Topic | Reference |
 |---|---|
-| Product spec (rev1 app) | [Spec](https://github.com/macanderson/oxagen-roadmap/blob/main/docs/mission-control-spec.md) and [plan](https://github.com/macanderson/oxagen-roadmap/blob/main/docs/implementation-plan.md) in oxagen-roadmap |
+| Product spec (rev1 app) | [Spec](https://github.com/oxageninc/roadmap/blob/main/docs/mission-control-spec.md) and [plan](https://github.com/oxageninc/roadmap/blob/main/docs/implementation-plan.md) in oxagen-roadmap |
 | Agent enrollment and evidence | [Tacho](tacho/README.md) |
 | Gateway | [Gateway spec](gateway/spec.md) |
 | Steering | [Steering design](steering/README.md) |
@@ -23,7 +23,7 @@ State whether a spec is proposed, accepted, or superseded. Date implementation s
 
 ## Plans and the roadmap live elsewhere
 
-Implementation plans, build sequencing, gap inventories, epics, and designs for work not yet started belong in [oxagen-roadmap](https://github.com/macanderson/oxagen-roadmap), not here. Track delivery in GitHub issues and PRs using the [contribution workflow](../../CONTRIBUTING.md).
+Implementation plans, build sequencing, gap inventories, epics, and designs for work not yet started belong in [oxagen-roadmap](https://github.com/oxageninc/roadmap), not here. Track delivery in GitHub issues and PRs using the [contribution workflow](../../CONTRIBUTING.md).
 
 On 2026-09-23 (#3895) the plans and unbuilt designs that sat in this directory moved to `docs/oxagen/` in that repository, at the path they had under `docs/` here. This repository cites them as `oxagen-roadmap:docs/oxagen/<path>`. Specs for retired or excised features, and plans already carried out, were deleted. Git history keeps them. Three executed plans stay because code or an ADR cites them as provenance: [`iam/plan.md`](iam/plan.md) and the run-evidence plans [`02`](run-evidence-ingress/02-run-attempt-foundation-plan.md) and [`03`](run-evidence-ingress/03-evidence-ledger-plan.md).
 

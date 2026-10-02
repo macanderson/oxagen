@@ -123,6 +123,7 @@ import { spendDrill } from "./spend.drill";
 import { spendWasteList } from "./spend.waste";
 import { spendOperatorRanking } from "./spend.operator_ranking";
 import { spendOperatorPseudonymsSet } from "./spend.operator_pseudonyms.set";
+import { spendUnproductive } from "./spend.unproductive";
 import { skillConfigGet } from "./skill.config.get";
 import { skillConfigUpdate } from "./skill.config.update";
 import { skillSearchPreview } from "./skill.search.preview";
@@ -302,6 +303,7 @@ import { toolStudioCredentialSet } from "./tool.studio.credential.set";
 import { toolStudioFindingsList } from "./tool.studio.findings.list";
 import { toolStudioDescriptionDraft } from "./tool.studio.description.draft";
 import { toolStudioTry } from "./tool.studio.try";
+import { toolSteeringMigrate } from "./tool.steering.migrate";
 import { toolRelayCreate } from "./tool.relay.create";
 import { toolRelayRevoke } from "./tool.relay.revoke";
 import { credentialGrantList } from "./credential.grant.list";
@@ -931,6 +933,7 @@ export {
   spendWasteList,
   spendOperatorRanking,
   spendOperatorPseudonymsSet,
+  spendUnproductive,
   configurationCloneGet,
   configurationClonePropose,
   skillConfigGet,
@@ -1054,6 +1057,7 @@ export {
   toolStudioFindingsList,
   toolStudioDescriptionDraft,
   toolStudioTry,
+  toolSteeringMigrate,
   toolRelayCreate,
   toolRelayRevoke,
   credentialGrantList,
@@ -1381,6 +1385,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   spendWasteList,
   spendOperatorRanking,
   spendOperatorPseudonymsSet,
+  spendUnproductive,
   configurationCloneGet,
   configurationClonePropose,
   skillConfigGet,
@@ -1504,6 +1509,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   toolStudioFindingsList,
   toolStudioDescriptionDraft,
   toolStudioTry,
+  toolSteeringMigrate,
   toolRelayCreate,
   toolRelayRevoke,
   credentialGrantList,

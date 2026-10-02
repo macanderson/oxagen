@@ -3,8 +3,8 @@
 Project: **Oxagen House Design System** (`f3a06086-f960-4be5-a06c-e5cdd416ade7`)
 
 This design system is the authority for, and should stay consistent with:
-`macanderson/oxagen-brand`, `macanderson/oxagen` (`apps/app`, `apps/web`, `apps/docs`,
-`packages/ui`), `macanderson/tmp-oxagen-mockups` (`site/`, `mockups/`) and
+`oxageninc/brand`, `oxageninc/product` (`apps/app`, `apps/web`, `apps/docs`,
+`packages/ui`), `oxageninc/roadmap` (`site/`, `mockups/`) and
 `macanderson/stella` (`website/`). Only `packages/ui` is a real component library;
 the rest are consumers.
 

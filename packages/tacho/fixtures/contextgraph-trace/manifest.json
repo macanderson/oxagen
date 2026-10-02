@@ -1,5 +1,5 @@
 {
-  "upstream_repository": "https://github.com/macanderson/context-graph-protocol",
+  "upstream_repository": "https://github.com/oxageninc/context-graph-protocol",
   "upstream_commit": "98e32ff217e4e0b8e9be078131d0a0728eb77c06",
   "upstream_path": "contextgraph-trace/fixtures",
   "trace_format": "contextgraph-trace/0.1-sketch",

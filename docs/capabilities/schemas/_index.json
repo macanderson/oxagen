@@ -2097,6 +2097,17 @@
       "consumes": []
     },
     {
+      "name": "get_unproductive_spend",
+      "domain": "spend",
+      "surfaces": [
+        "api",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "get_usage_breakdown",
       "domain": "billing",
       "surfaces": [
@@ -3161,6 +3172,18 @@
       "surfaces": [
         "api",
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "migrate_tools_to_steering",
+      "domain": "tool",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
       ],
       "component": null,
       "produces": [],
