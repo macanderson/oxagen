@@ -25,7 +25,7 @@ concurrency:
 jobs:
   vision-gate:
     # ubuntu-slim (one vCPU, $0.002 a minute): a checkout and one model call.
-    runs-on: ubuntu-slim
+    runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-small-{0}', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-slim' }}
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5

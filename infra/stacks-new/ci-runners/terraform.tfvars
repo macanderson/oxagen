@@ -32,15 +32,16 @@ private_repositories = [
 # Parameter Store (2026-10-01).
 github_app_ready = true
 
-# Idle runners per pool. On 2026-10-01 the account holds 300 spot and 300
-# on-demand vCPUs, and CI runs x64 images with CI_HEAVY_POOL=small, so the
-# warm runners sit where jobs land: 128 vCPUs idle, the rest for cold starts.
-# Grow the large and arm64 pools when the quota and the multi-arch images do.
+# Idle runners per pool. Mac chose speed over concurrency on 2026-10-01, so
+# the heavy pipeline jobs run on oxagen-large-x64 and ten of those wait warm,
+# enough for one pull request's heavy lanes to start at once. Ten small
+# runners carry the light jobs and housekeeping. The account holds 300 spot
+# and 300 on-demand vCPUs, so the warm pools hold 216 of them idle.
 warm_pool = {
   "oxagen-large-arm64" = 0
-  "oxagen-large-x64"   = 2
+  "oxagen-large-x64"   = 10
   "oxagen-small-arm64" = 0
-  "oxagen-small-x64"   = 20
+  "oxagen-small-x64"   = 10
   "oxagen-deploy"      = 1
 }
 

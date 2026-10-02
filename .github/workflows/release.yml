@@ -76,7 +76,7 @@ jobs:
   cut:
     name: Cut ${{ inputs.bump }} release
     if: github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-large-{0}', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
     timeout-minutes: 30
     steps:
       - name: Require RELEASE_TOKEN
@@ -173,7 +173,7 @@ jobs:
   tag:
     name: Tag and publish
     if: "github.event_name == 'push' && startsWith(github.event.head_commit.message, 'chore(release): v')"
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-large-{0}', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
     timeout-minutes: 30
     # A step's `if` cannot read `secrets`; it can read the job's `env`.
     env:
