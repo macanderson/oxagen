@@ -119,6 +119,7 @@ vi.mock("./event-client", () => ({
 }));
 
 import { digestBytes } from "@oxagen/recorder";
+import { type DeviceKey, generateDeviceKey } from "@oxagen/recorder/host";
 import { tachoEventsIngest } from "@oxagen/oxagen/contracts/tacho.events.ingest";
 import { clearSteeringCacheForTests } from "./lib/tacho-steering";
 import {
@@ -398,6 +399,8 @@ interface FakeDb {
   /** The `SET` clause of each `session_files` upsert, in order. */
   fileSets: Array<Record<string, unknown>>;
   commands: Array<Record<string, unknown>>;
+  /** `tacho.checkpoints`, one row per `(sessionId, seq)` like its unique index. */
+  checkpoints: Array<Record<string, unknown>>;
   controlCommands: Array<Record<string, unknown>>;
   updates: Array<{
     table: string;
@@ -537,6 +540,7 @@ function fakeDb(): FakeDb {
     files: [],
     fileSets: [],
     commands: [],
+    checkpoints: [],
     controlCommands: [
       {
         id: "c1",
@@ -1022,6 +1026,28 @@ function wire(db: FakeDb): void {
               // and `returning()` hands back a row only when it inserted one —
               // which is how the handler learns that its INSERT lost.
               onConflictDoNothing: () => {
+                // The checkpoint writer sends its rows in one statement. A
+                // row the `(session_id, seq)` unique index already holds is
+                // skipped, and `returning()` names only the rows written.
+                if (name === "checkpoints") {
+                  const written: Array<{ id: string }> = [];
+                  const proposed = values as unknown as Array<
+                    Record<string, unknown>
+                  >;
+                  for (const row of proposed) {
+                    const held = db.checkpoints.some(
+                      (one) =>
+                        one["sessionId"] === row["sessionId"] &&
+                        one["seq"] === row["seq"],
+                    );
+                    if (held) continue;
+                    db.checkpoints.push(row);
+                    written.push({ id: `tck-${db.checkpoints.length}` });
+                  }
+                  return Object.assign(Promise.resolve([]), {
+                    returning: async () => written,
+                  });
+                }
                 if (name === "session_commands") db.commands.push(values);
                 if (name === "sessions") {
                   const uuid = values["sessionUuid"] as string;
@@ -7344,5 +7370,106 @@ describe("the repository question a host raised (#3941)", () => {
     ).event;
     await tachoEventsIngestHandler(batch([question]), CONTEXT);
     expect(mocks.recordInterjectionFrames).not.toHaveBeenCalled();
+  });
+});
+
+describe("the collector's signed checkpoints (ADR-260, #3406)", () => {
+  /**
+   * An open session's first two frames and the checkpoint the collector
+   * seals over them, signed by `key` the way `checkpoint` in
+   * packages/tacho/src/collector/daemon.ts signs it.
+   */
+  function openSessionWithCheckpoint(key: DeviceKey): {
+    events: TachoEvent[];
+    next: ChainCursor;
+  } {
+    let cursor: ChainCursor = GENESIS_CURSOR;
+    const events: TachoEvent[] = [];
+    for (const draft of [
+      unsealed("agent_start", { session_start_source: "startup" }),
+      unsealed("turn_start", { prompt_length: 3 }),
+    ]) {
+      const sealed = sealEvent(draft, cursor);
+      cursor = sealed.next;
+      events.push(sealed.event);
+    }
+    const lastSeq = cursor.seq - 1;
+    const checkpoint = sealEvent(
+      unsealed(
+        "checkpoint",
+        {
+          checkpoint_id: "01J8ZQ00000000000000000000",
+          checkpoint_event_count: lastSeq + 1,
+          checkpoint_chain_head: cursor.prevHash,
+          checkpoint_device_signature: key.sign(
+            `${SESSION}:${lastSeq}:${cursor.prevHash}`,
+          ),
+          checkpoint_device_key_fingerprint: key.fingerprint,
+        },
+        "collector",
+      ),
+      cursor,
+    );
+    events.push(checkpoint.event);
+    return { events, next: checkpoint.next };
+  }
+
+  it("keeps a checkpoint the host's enrolled key signed, once across re-sent frames", async () => {
+    const key = generateDeviceKey();
+    const db = fakeDb();
+    db.hosts[0]!["devicePublicKey"] = key.publicKey;
+    wire(db);
+    const { events, next } = openSessionWithCheckpoint(key);
+
+    const output = await tachoEventsIngestHandler(batch(events), CONTEXT);
+
+    expect(output.accepted).toBe(events.length);
+    expect(db.checkpoints).toEqual([
+      expect.objectContaining({
+        orgId: CONTEXT.orgId,
+        workspaceId: CONTEXT.workspaceId,
+        sessionId: "s1",
+        // The last frame the checkpoint covers, which is what the key signed.
+        seq: 1,
+        eventCount: 2,
+        chainHead: events[1]!.hash,
+        deviceKeyFingerprint: key.fingerprint,
+      }),
+    ]);
+
+    // The spool sends a batch again when it never saw the answer, and a
+    // later batch can repeat recorded frames before its new ones.
+    await tachoEventsIngestHandler(batch(events), CONTEXT);
+    const later = sealEvent(unsealed("turn_end", {}), next);
+    await tachoEventsIngestHandler(batch([...events, later.event]), CONTEXT);
+
+    expect(db.checkpoints).toHaveLength(1);
+    expect(mocks.loggerWarn).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.stringContaining("checkpoint"),
+    );
+  });
+
+  it("accepts the batch and keeps no row for a checkpoint another key signed (negative)", async () => {
+    const enrolled = generateDeviceKey();
+    const db = fakeDb();
+    db.hosts[0]!["devicePublicKey"] = enrolled.publicKey;
+    wire(db);
+    const { events } = openSessionWithCheckpoint(generateDeviceKey());
+
+    const output = await tachoEventsIngestHandler(batch(events), CONTEXT);
+
+    // The frames are the host's record and still land. Only the checkpoint
+    // row is left out, because the enrolled key does not vouch for it.
+    expect(output.accepted).toBe(events.length);
+    expect(mocks.insertTachoEvents).toHaveBeenCalled();
+    expect(db.checkpoints).toEqual([]);
+    expect(mocks.loggerWarn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        session: SESSION,
+        refused: [{ seq: 2, reason: "key" }],
+      }),
+      expect.stringContaining("checkpoint"),
+    );
   });
 });

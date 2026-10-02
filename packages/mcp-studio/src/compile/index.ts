@@ -3,7 +3,8 @@
 //
 // compile() finds each tools.toml entry's upstream by upstream, operation,
 // field, or method, and applies description, hide, fixed, defaults, rename,
-// and a GraphQL selection. It derives annotations from the classification,
+// and a GraphQL selection. An OpenAPI tool loses the parameter that the
+// server's API key scheme supplies. It derives annotations from the classification,
 // never from the upstream, and prefixes names with toolName(). In search
 // mode it adds <server>__search, __describe, and __call and keeps every
 // imported tool behind them. It assigns no version: lock() does, and
@@ -36,7 +37,7 @@ import {
   type ToolsEntry,
 } from "../contract/tools";
 import { builtinSecurityScheme, type SecurityScheme } from "../model/security-scheme";
-import type { RequestKind, RequestTemplate, UpstreamTool } from "../model/upstream-tool";
+import type { HttpParameter, RequestKind, RequestTemplate, UpstreamTool } from "../model/upstream-tool";
 import { isRecord, propertiesOf, requiredOf, setRequired } from "./json-schema";
 
 export interface CompileInput {
@@ -176,12 +177,34 @@ function idempotencyInputs(entry: ToolsEntry, upstream: UpstreamTool): string[] 
 }
 
 /**
- * The inputSchema the agent sees. Hidden and fixed inputs and the
- * idempotency header leave it, defaults stop being required and carry their
- * default, and renamed inputs take their new names. The upstream schema comes
- * back unchanged when nothing applies.
+ * The parameters the server's API key scheme supplies: those in the place it
+ * names, under its name. Header names match without regard to case. The
+ * gateway places the credential there on every call, so no tool takes one of
+ * them as input, and the request never sends one beside the credential.
+ * Import keeps them, because only server.toml says which scheme a call uses.
  */
-function shapeInput(key: string, entry: ToolsEntry, upstream: UpstreamTool, issues: Issues): ObjectSchema {
+function credentialParameters(auth: ManifestServer["auth"], upstream: UpstreamTool): HttpParameter[] {
+  const apply = auth?.apply;
+  if (apply?.type !== "api_key" || apply.in === undefined || apply.name === undefined || upstream.request.kind !== "http") return [];
+  const name = apply.in === "header" ? apply.name.toLowerCase() : apply.name;
+  return upstream.request.parameters.filter(
+    (parameter) => parameter.in === apply.in && (parameter.in === "header" ? parameter.name.toLowerCase() : parameter.name) === name,
+  );
+}
+
+/**
+ * The inputSchema the agent sees. Hidden and fixed inputs, the idempotency
+ * header, and a parameter the API key supplies leave it, defaults stop being
+ * required and carry their default, and renamed inputs take their new names.
+ * The upstream schema comes back unchanged when nothing applies.
+ */
+function shapeInput(
+  key: string,
+  entry: ToolsEntry,
+  upstream: UpstreamTool,
+  supplied: readonly HttpParameter[],
+  issues: Issues,
+): ObjectSchema {
   const original = upstream.inputSchema;
   const properties = propertiesOf(original);
   const known = (name: string): boolean => Object.hasOwn(properties, name);
@@ -199,6 +222,7 @@ function shapeInput(key: string, entry: ToolsEntry, upstream: UpstreamTool, issu
     }
   }
   for (const name of idempotencyInputs(entry, upstream)) removed.add(name);
+  for (const parameter of supplied) removed.add(parameter.property);
 
   const defaults = Object.entries(entry.defaults ?? {});
   const rename = Object.entries(entry.rename ?? {});
@@ -340,9 +364,21 @@ function selectionProblem(selection: string): string | undefined {
   return undefined;
 }
 
-/** The request template, with tools.toml's GraphQL selection in place of the generated one. */
-function shapeRequest(key: string, entry: ToolsEntry, upstream: UpstreamTool, issues: Issues): RequestTemplate {
+/**
+ * The request template, with tools.toml's GraphQL selection in place of the
+ * generated one, and without a parameter the API key supplies.
+ */
+function shapeRequest(
+  key: string,
+  entry: ToolsEntry,
+  upstream: UpstreamTool,
+  supplied: readonly HttpParameter[],
+  issues: Issues,
+): RequestTemplate {
   const request = upstream.request;
+  if (request.kind === "http" && supplied.length > 0) {
+    return { ...request, parameters: request.parameters.filter((parameter) => !supplied.includes(parameter)) };
+  }
   if (entry.selection === undefined || request.kind !== "graphql") return request;
   const problem = selectionProblem(entry.selection);
   if (problem !== undefined) issues.push({ tool: key, field: "selection", message: `${key}: ${problem}` });
@@ -351,7 +387,13 @@ function shapeRequest(key: string, entry: ToolsEntry, upstream: UpstreamTool, is
 
 // ── Tools ────────────────────────────────────────────────────────────────────
 
-function compileTool(input: CompileInput, key: string, entry: ToolsEntry, issues: Issues): CompiledTool | undefined {
+function compileTool(
+  input: CompileInput,
+  key: string,
+  entry: ToolsEntry,
+  auth: ManifestServer["auth"],
+  issues: Issues,
+): CompiledTool | undefined {
   const { server, tools } = input;
   if (server.exposure.mode === "search" && (SEARCH_MODE_TOOLS as readonly string[]).includes(key)) {
     issues.push({
@@ -370,10 +412,11 @@ function compileTool(input: CompileInput, key: string, entry: ToolsEntry, issues
   }
   const upstream = findUpstream(key, entry, server.source.type, input.upstream, issues);
   if (upstream === undefined) return undefined;
+  const supplied = credentialParameters(auth, upstream);
 
   const definition: EffectiveDefinition = {
     name,
-    inputSchema: shapeInput(key, entry, upstream, issues),
+    inputSchema: shapeInput(key, entry, upstream, supplied, issues),
     annotations: effectiveAnnotations(entry),
   };
   if (upstream.title !== undefined) definition.title = upstream.title;
@@ -431,7 +474,7 @@ function compileTool(input: CompileInput, key: string, entry: ToolsEntry, issues
       data_classes: entry.data_classes ?? [],
     },
     shaping,
-    request: shapeRequest(key, entry, upstream, issues),
+    request: shapeRequest(key, entry, upstream, supplied, issues),
     upstream,
   };
   if (upstream.paging !== undefined) tool.paging = upstream.paging;
@@ -587,13 +630,17 @@ export function compile(input: CompileInput): CompiledServer {
   const { server } = input;
   const issues: Issues = [];
 
+  // Auth resolves first, because a tool drops the parameter its API key
+  // supplies. Its issues still follow the tools' issues.
+  const serverIssues: Issues = [];
+  const environments = resolveEnvironments(server, serverIssues);
+  const auth = resolveAuth(input, environments, serverIssues);
   const tools: Record<string, CompiledTool> = {};
   for (const [key, entry] of Object.entries(input.tools.tools ?? {})) {
-    const tool = compileTool(input, key, entry, issues);
+    const tool = compileTool(input, key, entry, auth, issues);
     if (tool !== undefined) tools[key] = tool;
   }
-  const environments = resolveEnvironments(server, issues);
-  const auth = resolveAuth(input, environments, issues);
+  issues.push(...serverIssues);
 
   let descriptorSet: string | undefined;
   if (server.source.type === "grpc") {

@@ -222,7 +222,7 @@ export function readAuth(
 }
 
 /** The server URL with each {variable} replaced by its default. */
-function expandServerUrl(url: string, server: JsonRecord): string {
+export function expandServerUrl(url: string, server: JsonRecord): string {
   const variables = recordField(server, "variables") ?? {};
   return url.replace(/\{([^}]+)\}/g, (whole, name: string) => {
     const variable = variables[name];
@@ -232,7 +232,7 @@ function expandServerUrl(url: string, server: JsonRecord): string {
 }
 
 /** Why the executor refuses url as an API's base url, or undefined when it accepts it. */
-function baseUrlRefusal(url: string): string | undefined {
+export function baseUrlRefusal(url: string): string | undefined {
   try {
     parseEndpoint(url, "base");
     return undefined;
