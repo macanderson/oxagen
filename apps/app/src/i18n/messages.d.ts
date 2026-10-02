@@ -10594,6 +10594,8 @@ type Messages = {
         gitlabCredentialRejected: string;
         repositoryHostChanged: string;
         mergeTimeUnknown: string;
+        notMergeable: string;
+        mergeabilityUnknown: string;
         mergedOutsideOxagen: string;
         refused: string;
         invalid: string;

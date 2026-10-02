@@ -554,6 +554,14 @@ describe("the sentence for each refusal", () => {
       "GitHub has not said when, so nothing was published. Merge again",
     ],
     [
+      { reason: "conflict", code: "not_mergeable" },
+      "conflicts with the production branch. Nothing was merged.",
+    ],
+    [
+      { reason: "conflict", code: "mergeability_unknown" },
+      "GitHub was still checking whether this pull request can merge",
+    ],
+    [
       { reason: "conflict", code: "merged_outside_oxagen" },
       "Oxagen publishes what the production branch holds",
     ],

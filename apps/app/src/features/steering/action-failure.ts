@@ -51,6 +51,10 @@ export function useActionFailure(): (failure: ActionFailure) => string {
             return t("repositoryHostChanged");
           case "merge_time_unknown":
             return t("mergeTimeUnknown");
+          case "not_mergeable":
+            return t("notMergeable");
+          case "mergeability_unknown":
+            return t("mergeabilityUnknown");
           case "merged_outside_oxagen":
             return t("mergedOutsideOxagen");
           case "already_merged":

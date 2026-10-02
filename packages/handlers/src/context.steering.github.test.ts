@@ -1280,6 +1280,46 @@ describe("the GitHub seam's merge-queue calls", () => {
     expect(sleep).toHaveBeenCalledTimes(9);
   });
 
+  it("refuses mergeability_unknown, naming the state, when GitHub reports clean and refuses every merge", async () => {
+    const { gh, repo, calls, sleep } = await restSeam({
+      [PULL_READ]: mergeablePull(),
+      [MERGE]: refuse(405, NOT_MERGEABLE),
+    });
+    await expect(gh.mergePullRequest(repo, STAMPED)).rejects.toMatchObject({
+      reason: "mergeability_unknown",
+      message: expect.stringContaining("last mergeable_state clean"),
+    });
+    expect(calls.filter((c) => c.method === "PUT")).toHaveLength(10);
+    expect(sleep).toHaveBeenCalledTimes(9);
+  });
+
+  it("sends the merge after the last read when the head never reaches the stamp, and passes GitHub's 409 on", async () => {
+    const { gh, repo, calls, sleep } = await restSeam({
+      [PULL_READ]: mergeablePull("h0"),
+      [MERGE]: refuse(409, "Head branch was modified"),
+    });
+    await expect(gh.mergePullRequest(repo, STAMPED)).rejects.toMatchObject({
+      reason: "github_refused",
+      message: expect.stringContaining("Head branch was modified"),
+    });
+    expect(calls.filter((c) => c.method === "GET")).toHaveLength(10);
+    expect(calls.filter((c) => c.method === "PUT")).toHaveLength(1);
+    expect(sleep).toHaveBeenCalledTimes(9);
+  });
+
+  it("wraps a refused pull request read as github_refused and sends no merge", async () => {
+    const { gh, repo, calls, sleep } = await restSeam({
+      [PULL_READ]: refuse(403, "Resource not accessible by integration"),
+      [MERGE]: () => ({ sha: "sq1" }),
+    });
+    await expect(gh.mergePullRequest(repo, STAMPED)).rejects.toMatchObject({
+      reason: "github_refused",
+      message: expect.stringContaining("Resource not accessible"),
+    });
+    expect(calls.filter((c) => c.method === "PUT")).toHaveLength(0);
+    expect(sleep).not.toHaveBeenCalled();
+  });
+
   it("refuses not_mergeable at once when GitHub reports a conflict", async () => {
     const { gh, repo, calls, sleep } = await restSeam({
       [PULL_READ]: () => ({

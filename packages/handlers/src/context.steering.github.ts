@@ -784,7 +784,11 @@ function conflictsWithBase(
   });
 }
 
-/** GitHub had not finished checking the pull request when the wait ran out. */
+/**
+ * GitHub still refused the merge as not mergeable when the wait ran out. It
+ * may still be checking, or it may report the pull request mergeable and
+ * refuse anyway, so the message names the state GitHub last reported.
+ */
 function mergeabilityUnknown(
   repo: SteeringRepository,
   number: number,
@@ -794,7 +798,7 @@ function mergeabilityUnknown(
   return new HandlerError({
     code: "conflict",
     reason: "mergeability_unknown",
-    message: `GitHub had not finished checking whether #${number} in ${repo.fullName} can merge after ${seconds} seconds (mergeable_state ${mergeableState ?? "unknown"}), so nothing merged. Merge again in a minute.`,
+    message: `GitHub still answered that #${number} in ${repo.fullName} is not mergeable after Oxagen waited ${seconds} seconds for its mergeability check (last mergeable_state ${mergeableState ?? "unknown"}), so nothing merged. Merge again in a minute.`,
   });
 }
 
