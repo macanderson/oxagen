@@ -101,7 +101,12 @@ export interface ItemColumns {
 /** One item, as the derivations read it. */
 export interface DerivedItem {
   columns: ItemColumns;
-  /** Every fact of the item. Any order: the derivations sort them. */
+  /**
+   * The item's facts, in any order: the derivations sort them. The list
+   * leaves out the check facts on a send's older head commits
+   * (listFactsByItem in read.ts). Nothing here reads a check fact, only the
+   * projection's checks on the current head.
+   */
   facts: readonly WorkFact[];
   projection: WorkItemProjection;
   /** The triage suggestion with every correction in force. */
