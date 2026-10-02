@@ -31,7 +31,7 @@ import {
   type PricedRequestFrame,
   type ToolCallObservation,
 } from "./findings";
-import type { FrameClassPrices } from "./findings/shared";
+import { resultMeasure, type FrameClassPrices } from "./findings/shared";
 
 const ORG = "00000000-0000-4000-8000-000000000001";
 const WS = "00000000-0000-4000-8000-000000000002";
@@ -264,21 +264,20 @@ describe("the input rate of a run with an unpriced call (#4572)", () => {
     expect(runInputPrice(legacy)).toBeNull();
   });
 
-  it("prices an unpaged result at the priced calls' rate", () => {
+  // resultMeasure is the shared caller. The unpaged-results detector also
+  // leaves a partly priced run uncovered (#4544), so it reads no rate there.
+  it("prices a result at the priced calls' rate in resultMeasure", () => {
     const r = withUnpricedCall(run());
     const tokens = UNPAGED_RESULT_TOKENS + 1_000;
-    const [finding] = detect({
-      runs: [r],
-      toolCalls: [
-        call(r, {
-          at: 1,
-          tool: "aws_billing__get_cost_and_usage",
-          resultTokens: tokens,
-        }),
-      ],
+    const measure = resultMeasure(r, tokens, () => PAGE_TOKENS);
+    // At 1.5 micros a token both sides read half these.
+    expect(measure.micros).toEqual({
+      measured: BigInt(tokens * 3),
+      counterfactual: BigInt(PAGE_TOKENS * 3),
     });
-    // At 1.5 micros a token the saving read half this.
-    expect(finding?.savingMicros).toBe(BigInt((tokens - PAGE_TOKENS) * 3));
+    const legacy = withUnpricedCall(run());
+    delete legacy.breakdown.models[0]!.pricedTokens;
+    expect(resultMeasure(legacy, tokens, () => PAGE_TOKENS).micros).toBeNull();
   });
 
   it("prices the cache writes' counterfactual at the priced calls' rate", () => {
