@@ -133,7 +133,7 @@ export interface StatusReport {
     unshipped: number;
     oldest_unshipped_at?: string;
     /**
-     * What the WAL ceiling last saw and did (ADR-252), as the daemon wrote it
+     * What the WAL ceiling last saw and did (ADR-260), as the daemon wrote it
      * to `ceiling.json`. Absent until a session first stalls.
      */
     ceiling?: Omit<WalCeilingState, "schema">;
@@ -546,7 +546,7 @@ function formatBytes(bytes: number): string {
 const CEILING_DROPS_SHOWN = 5;
 
 /**
- * The WAL ceiling's lines (ADR-252): what the sessions that stopped shipping
+ * The WAL ceiling's lines (ADR-260): what the sessions that stopped shipping
  * hold against the ceiling, then each session whose stored content went over
  * it, newest first. Nothing when no session is stalled and nothing went.
  */

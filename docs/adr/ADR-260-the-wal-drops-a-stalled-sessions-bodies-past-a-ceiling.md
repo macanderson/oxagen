@@ -1,4 +1,4 @@
-# ADR-252: The WAL drops a stalled session's bodies past a ceiling
+# ADR-260: The WAL drops a stalled session's bodies past a ceiling
 
 - **Status:** Accepted
 - **Date:** 2026-10-02

@@ -88,7 +88,7 @@ export const EFFECT_KINDS = [
 /**
  * Why a `telemetry_gap` frame was sealed. `wal_ceiling` is different from the
  * others: the events are all on the chain, and what went is the stored
- * content of one session the host could not ship (ADR-252).
+ * content of one session the host could not ship (ADR-260).
  */
 export const GAP_CAUSES = [
   "buffer_full",

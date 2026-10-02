@@ -276,7 +276,7 @@ OTel `tool_decision` and `tool.blocked_on_user` seal as `harness_permission`, no
 ### 2.13 Gaps, incidents, chain
 | Column | Type | From |
 |---|---|---|
-| `gap_dropped_count`, `gap_duration_ms`, `gap_cause` | N(UInt32), N(UInt32), LC | collector (`buffer_full`, `daemon_down`, `http_hook_failed`, `otel_missing`, `spool_overflow`, `wal_ceiling`). A `wal_ceiling` gap sits on the daemon's own chain and names, in `incident_evidence`, the session whose stored bodies the WAL ceiling removed, how many bytes, and which events ship without them (ADR-252). Its `gap_duration_ms` is how long that session shipped nothing. |
+| `gap_dropped_count`, `gap_duration_ms`, `gap_cause` | N(UInt32), N(UInt32), LC | collector (`buffer_full`, `daemon_down`, `http_hook_failed`, `otel_missing`, `spool_overflow`, `wal_ceiling`). A `wal_ceiling` gap sits on the daemon's own chain and names, in `incident_evidence`, the session whose stored bodies the WAL ceiling removed, how many bytes, and which events ship without them (ADR-260). Its `gap_duration_ms` is how long that session shipped nothing. |
 | `incident_kind`, `incident_severity` | LC, UInt8 | collector / control plane |
 | `kill_signal`, `kill_outcome` | LC | `oxagen:kill_attempted` |
 | `prev_hash`, `hash` | String | chain |

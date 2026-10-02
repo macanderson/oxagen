@@ -139,7 +139,7 @@ export interface WalStats {
 
 /**
  * One session with events past its shipped cursor, and the bytes its two files
- * hold on disk. The WAL ceiling reads these (`wal-ceiling.ts`, ADR-252).
+ * hold on disk. The WAL ceiling reads these (`wal-ceiling.ts`, ADR-260).
  */
 export interface WalHolding {
   sessionUuid: string;
@@ -1530,7 +1530,7 @@ export class Wal {
    * Every session with an event past its shipped cursor, and the bytes its
    * files hold.
    *
-   * The WAL ceiling asks for this once a minute (ADR-252). It costs two `stat`
+   * The WAL ceiling asks for this once a minute (ADR-260). It costs two `stat`
    * calls per session, plus the tail read `lastSeqOf` already keeps, so it
    * reads no event or body. The byte counts are whole files, shipped lines
    * included, because nothing this cheap says where a session's unshipped
@@ -1557,7 +1557,7 @@ export class Wal {
 
   /**
    * Remove one session's body file and its index, and answer how many bytes
-   * went. Only the WAL ceiling calls this (ADR-252).
+   * went. Only the WAL ceiling calls this (ADR-260).
    *
    * The file is removed, not rewritten. `rewriteBodies` reads every line on
    * the daemon's only thread, and a session over the ceiling can hold
