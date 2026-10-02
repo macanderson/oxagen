@@ -138,6 +138,12 @@ export const agents = agentSchema.table(
     // The toolbelt the agent carries now (tools.toolbelts, app-enforced: no
     // cross-schema FK). Null reads as the workspace's All tools belt.
     toolbeltId: uuid("toolbelt_id"),
+    // Whether the model proxy may keep this agent's prompt cache warm while
+    // it waits on a subagent (spend spec, detector 3; lane F32). True by
+    // default: the proxy then sends a keep-alive only when the agent's idle
+    // cache finding shows it costs less than the rewrites it saves. An org
+    // Owner or Admin sets it false to turn the keep-alive off for the agent.
+    cacheKeepAlive: boolean("cache_keep_alive").notNull().default(true),
   },
   (t) => ({
     // One live agent per runtime and harness: your laptop with Claude Code is

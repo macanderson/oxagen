@@ -324,6 +324,33 @@ describe("a sync and a check against a kit", () => {
     );
   });
 
+  it("writes the kit's gold into the marks module as a colour", () => {
+    expect(sync().status).toBe(0);
+    const module = readFileSync(
+      join(repo(), "packages/ui/src/components/brand-marks.generated.ts"),
+      "utf8",
+    );
+    expect(module).toContain('export const BRAND_GOLD = "#D4AF37";');
+  });
+
+  it("refuses a kit gold that is not a #rrggbb colour, so kit data never becomes code", () => {
+    put(
+      kit,
+      "tokens/house-tokens.json",
+      JSON.stringify({
+        version: "9.9.9",
+        gold: { hex: '#D4AF37"; globalThis.pwned = true; //' },
+        tokens: TOKENS,
+      }),
+    );
+    const result = sync();
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain("house kit gold is not a #rrggbb colour");
+    expect(
+      existsSync(join(repo(), "packages/ui/src/components/brand-marks.generated.ts")),
+    ).toBe(false);
+  });
+
   it("writes the two grounds from the kit's tokens", () => {
     sync();
     const module = readFileSync(join(repo(), "packages/ui/src/lib/house-grounds.ts"), "utf8");

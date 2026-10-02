@@ -8,6 +8,7 @@
 // accountable role decides. The roles block below is the third identity write
 // (#2956): an org Owner or Admin attaches an IAM role to the agent's delegated
 // principal, or detaches one.
+import { agentCacheKeepAliveSet } from "@oxagen/oxagen/contracts/agent.cache_keep_alive.set";
 import { agentCredentialRotate } from "@oxagen/oxagen/contracts/agent.credential.rotate";
 import { agentMove } from "@oxagen/oxagen/contracts/agent.move";
 import { agentRetire } from "@oxagen/oxagen/contracts/agent.retire";
@@ -467,6 +468,33 @@ export async function setAgentCostCenter(
   });
   return result.ok
     ? { ok: true, value: { costCenter: result.value.costCenter } }
+    : result;
+}
+
+// ── Cache keep-alive: the model proxy's per-agent switch (lane F32) ──────────
+
+/**
+ * Turns the cache keep-alive on or off for the agent the slug names. While
+ * the agent waits on a subagent, the model proxy keeps its prompt cache warm
+ * when its idle cache finding shows a saving. `set_agent_cache_keep_alive`
+ * admits an org Owner or Admin; anyone else gets `denied` with nothing
+ * changed. The handler answers the setting the agent now holds.
+ */
+export async function setAgentCacheKeepAlive(
+  org: string,
+  ws: string,
+  agentSlug: string,
+  on: boolean,
+): Promise<ActionResult<{ cacheKeepAlive: boolean }>> {
+  const slug = agentSlug.trim();
+  if (slug === "") return refuseField("agent");
+  const ctx = await requireViewer(org, ws);
+  const result = await kernelWrite(ctx, agentCacheKeepAliveSet, {
+    agent: slug,
+    cacheKeepAlive: on,
+  });
+  return result.ok
+    ? { ok: true, value: { cacheKeepAlive: result.value.cacheKeepAlive } }
     : result;
 }
 

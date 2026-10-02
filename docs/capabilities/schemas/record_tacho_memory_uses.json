@@ -1,7 +1,7 @@
 {
   "name": "record_tacho_memory_uses",
   "domain": "tacho",
-  "description": "Count the memory files runs read on an enrolled Tacho host, and retire the memories whose files a full scan no longer finds.",
+  "description": "Count the memory files runs read on an enrolled Tacho host and the memory uses a harness counted itself, and retire the memories whose files a full scan no longer finds.",
   "mode": "sync",
   "surfaces": [
     "api"
@@ -113,6 +113,46 @@
           "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
         },
         "maxItems": 8,
+        "default": []
+      },
+      "counts": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "harness": {
+              "type": "string",
+              "enum": [
+                "claude-code",
+                "codex",
+                "cursor",
+                "stella",
+                "claude-desktop"
+              ]
+            },
+            "path": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024
+            },
+            "count": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10000
+            },
+            "used_at": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "harness",
+            "path",
+            "count",
+            "used_at"
+          ],
+          "additionalProperties": false
+        },
+        "maxItems": 200,
         "default": []
       }
     },

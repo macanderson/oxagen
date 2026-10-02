@@ -1,6 +1,6 @@
 /**
  * Work order capture against a migrated database (F13, #4638, migration
- * 20261002060000_work_direct_orders.sql):
+ * 20261002063000_work_direct_orders.sql):
  *
  *   - work.direct_orders and work.done_checks keep each tenant's rows to that
  *     tenant, as oxagen_app, for reads and writes

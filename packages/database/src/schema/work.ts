@@ -8,7 +8,7 @@
 // work item, the acceptance brief (work.briefs), the work order
 // (work.orders), and the append-only history (work.item_facts). ADR-244 maps
 // each Phase 1 object to these tables. F13 (#4638, migration
-// 20261002060000_work_direct_orders.sql) adds the direct work order of a run
+// 20261002063000_work_direct_orders.sql) adds the direct work order of a run
 // no send covers (work.direct_orders) and each check run of a definition of
 // done (work.done_checks). Every table carries the org mixin and the same
 // row-level security as the rest of the database.

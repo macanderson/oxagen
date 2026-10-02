@@ -47,7 +47,9 @@ jobs:
           package-manager-cache: false
 
       - name: Fetch base branch
-        run: git fetch origin ${{ github.base_ref }} --no-tags
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: git fetch origin "$BASE_REF" --no-tags
 
       - name: Judge diff against docs/VISION.md, and ask the doc-drift question
         env:

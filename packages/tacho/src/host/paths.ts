@@ -109,6 +109,12 @@ export interface TachoPaths extends TachoHome {
   /** Transcript byte cursors, so a restart does not re-read every transcript. */
   transcriptTailState: string;
   /**
+   * The use count each Codex memory held at the last report, so a restart
+   * reports only the rise since (`collector/memory-capture/memory-counts.ts`).
+   * Counts and memory paths only, no memory text.
+   */
+  memoryCounts: string;
+  /**
    * Each Stella context store the memory scan found, with the last memory use
    * it took there, so a restart counts no use twice
    * (`collector/memory-capture/stella-memories.ts`). Paths and numbers only,
@@ -153,6 +159,7 @@ export const AGENT_FILES: Record<
   pendingEnds: "pending-session-ends.json",
   hookIdJournal: "hook-ids.jsonl",
   transcriptTailState: "transcript-tail.json",
+  memoryCounts: "memory-counts.json",
   stellaMemoryCursors: "stella-memory-cursors.json",
   preSessionCopies: "pre-session",
   stellaIdentity: "stella-identity",

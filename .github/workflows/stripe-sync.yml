@@ -45,16 +45,22 @@ concurrency:
   group: stripe-sync
   cancel-in-progress: false
 
+permissions:
+  contents: read
+
 jobs:
   sync:
     name: reconcile Stripe with packages/billing/src/pricing.ts
     runs-on: ${{ vars.CI_RUNNERS == 'aws' && 'oxagen-deploy' || 'ubuntu-latest' }}
+    # Without a limit a hung job holds a deploy runner for 360 minutes.
+    timeout-minutes: 20
     # Resolves the `production` environment's secrets. As db-migrate.yml already
     # records, this environment's only protection rule is a branch policy, so it
     # gates nothing and is not claimed to.
     environment: production
-    env:
-      STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+    # STRIPE_SECRET_KEY is the live key. It is set on the steps that use it,
+    # not on the job, so `pnpm install` and its dependency install scripts
+    # never see it.
     steps:
       - uses: actions/checkout@v5
 
@@ -70,6 +76,8 @@ jobs:
       # The precondition that made the old step a no-op was invisible. This one
       # is not: no key, no run, and a message naming the secret to set.
       - name: Guard — STRIPE_SECRET_KEY is set
+        env:
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
         run: |
           set -euo pipefail
           if [ -z "${STRIPE_SECRET_KEY:-}" ]; then
@@ -81,6 +89,8 @@ jobs:
       # it. The script prints its own mode line too; this one is here so the
       # answer is in the log even if the script fails early.
       - name: Which Stripe account
+        env:
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
         run: |
           set -euo pipefail
           case "${STRIPE_SECRET_KEY}" in
@@ -90,6 +100,8 @@ jobs:
           esac
 
       - name: Reconcile
+        env:
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
         run: |
           set -euo pipefail
           # An array, not a string. An unquoted "$args" relies on word

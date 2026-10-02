@@ -1,13 +1,26 @@
 /**
- * The memory reader: finds the memory files a harness keeps on this machine
+ * The memory reader: finds the memories each harness keeps on this machine
  * and hands each new one to `send`, which uploads it to Oxagen as a
- * `local_gateway` memory (memory/v1). Claude Code keeps one memory per file
- * in `~/.claude/projects/<project>/memory/`, with `MEMORY.md` as the index.
+ * `local_gateway` memory (memory/v1).
+ *
+ * Claude Code keeps one memory per file. Its project memories sit in
+ * `~/.claude/projects/<project>/memory/`, with `MEMORY.md` as the index. A
+ * subagent keeps its own in a folder named for it: under
+ * `~/.claude/agent-memory/` for a user subagent, and under
+ * `<project>/.claude/agent-memory/` or `<project>/.claude/agent-memory-local/`
+ * for a project subagent. The reader reads a subagent's files the way it
+ * reads project memory files, and skips the subagent's `MEMORY.md` too.
  * The file's frontmatter `name`, `description`, and `type` (top-level or
  * under `metadata:`) travel with it as the memory's label, summary, and type.
  *
- * The reader keeps, for each file, a digest of what it last sent: the
- * statement and the three frontmatter fields. A scan sends only the files
+ * Codex keeps its memories in a SQLite store, one row per thread, which the
+ * reader reads through a `MemoryStore` (`./codex-store`). A store names each
+ * memory by a path under its root, such as `thread/<thread_id>`, and may
+ * hold the harness's own count of the memory's uses. The scan hands those
+ * counts back for `record_tacho_memory_uses` (`./memory-counts`).
+ *
+ * The reader keeps, for each memory, a digest of what it last sent: the
+ * statement and the three frontmatter fields. A scan sends only the memories
  * that are new or changed, so a frontmatter-only edit is sent too. A file
  * edited back to text it held before is sent again, because the API keeps
  * one waiting memory per file and replaces its text with each new send
@@ -15,16 +28,20 @@
  * A daemon restart sends every memory again, and the API's dedupe key makes
  * the repeat a no-op.
  *
- * A scan also lists every memory file it found, one list per location, for
- * `record_tacho_memory_uses`, which retires the memories whose files a scan
- * no longer finds (ADR-248). The lists come back only from a complete scan:
- * every folder listed, where a missing folder counts as empty, and no send
- * failed. A partial list would retire memories whose files still exist.
- * After a complete scan the reader forgets each file the scan did not find,
- * so a deleted file that comes back unchanged is sent again and its memory
- * returns.
+ * A scan also lists every memory it found, one list per location, for
+ * `record_tacho_memory_uses`, which retires the memories a scan no longer
+ * finds (ADR-248). A location's list comes back only when the scan read all
+ * of it: every folder listed, where a missing folder counts as empty, or the
+ * whole store read. A partial list would retire memories that still exist.
+ * A location whose folder or store is not there sends no list. A harness
+ * that is not installed, or a project with no subagent memories, would
+ * otherwise cost a list at every scan, and the memories of a folder deleted
+ * whole retire as unused instead. A scan whose send failed returns no list.
+ * After a location's full read the reader forgets each memory under it that
+ * the scan did not find, so a deleted file that comes back unchanged is sent
+ * again and its memory returns.
  */
-import { join, sep } from "node:path";
+import { isAbsolute, join, sep } from "node:path";
 import { digestBytes, type Sha256Digest } from "../../digest";
 import type { TachoHarness } from "../../wire";
 
@@ -37,16 +54,19 @@ export const MEMORY_SUMMARY_MAX_CHARS = 1_000;
 /** A memory type the ingest contract accepts, such as Claude Code's `feedback`. */
 export const MEMORY_TYPE_PATTERN = /^[a-z][a-z0-9_-]{0,31}$/;
 
-/** One memory file, as the reader sends it. */
+/** The most project folders whose subagent memories one scan reads. */
+export const MEMORY_PROJECT_DIRS_MAX = 200;
+
+/** One memory, as the reader sends it. */
 export interface LocalMemoryEntry {
   harness: TachoHarness;
-  /** The memory file's path. */
+  /** The memory file's path, or the memory's path in its store. */
   path: string;
   /** The file's body without its frontmatter, trimmed and clipped. */
   statement: string;
   /** `sha256:<hex>` over the statement's UTF-8 bytes. */
   contentDigest: Sha256Digest;
-  /** When the file last changed, as an ISO 8601 timestamp. */
+  /** When the memory last changed, as an ISO 8601 timestamp. */
   modifiedAt: string;
   /** The frontmatter `name`, trimmed and clipped. Absent when the file has none. */
   label?: string;
@@ -56,21 +76,30 @@ export interface LocalMemoryEntry {
   memoryType?: string;
 }
 
-/** Every memory file one complete scan found in one location. */
+/** Every memory one full read of one location found. */
 export interface MemoryScan {
   harness: TachoHarness;
-  /** The folder the scan read, ending in the platform's path separator. */
+  /**
+   * The folder the scan read, ending in the platform's path separator, or a
+   * store's root, such as `thread/`.
+   */
   root: string;
-  /** Each memory file the scan found under `root`, sorted. */
+  /** Each memory the scan found under `root`, sorted. */
   paths: string[];
 }
 
 /** Where one harness keeps its memory files. */
 export interface HarnessMemoryLocation {
   harness: TachoHarness;
-  /** The folder that holds one folder per project, for a home directory. */
+  /**
+   * The folder that holds one folder per project or per subagent, for a
+   * home directory.
+   */
   projectsDir: (home: string) => string;
-  /** The folder inside each project folder that holds the memory files. */
+  /**
+   * The folder inside each of those that holds the memory files, or `""`
+   * when the files sit in it directly, as a subagent's do.
+   */
   memoryDir: string;
   /** The extension every memory file carries. */
   extension: string;
@@ -78,16 +107,124 @@ export interface HarnessMemoryLocation {
   skip: readonly string[];
 }
 
-export const HARNESS_MEMORY_LOCATIONS: readonly HarnessMemoryLocation[] = [
-  // Codex, Cursor, stella, and claude-desktop have no known memory folder.
-  {
+/** A Claude Code location: Markdown files, with `MEMORY.md` skipped as the index. */
+function claudeCodeLocation(
+  projectsDir: (home: string) => string,
+  memoryDir: string,
+): HarnessMemoryLocation {
+  return {
     harness: "claude-code",
-    projectsDir: (home) => join(home, ".claude", "projects"),
-    memoryDir: "memory",
+    projectsDir,
+    memoryDir,
     extension: ".md",
     skip: ["MEMORY.md"],
-  },
+  };
+}
+
+/**
+ * The default locations under a home directory: Claude Code's project
+ * memories and its user subagents' memories. Codex keeps its memories in a
+ * store (`./codex-store`). Cursor, Stella, and Claude Desktop have no memory
+ * folder the reader reads.
+ */
+export const HARNESS_MEMORY_LOCATIONS: readonly HarnessMemoryLocation[] = [
+  claudeCodeLocation((home) => join(home, ".claude", "projects"), "memory"),
+  claudeCodeLocation((home) => join(home, ".claude", "agent-memory"), ""),
 ];
+
+/**
+ * Claude Code's locations for the config directory `configDir`
+ * (`$CLAUDE_CONFIG_DIR`, else `~/.claude`): its project memories, its user
+ * subagents' memories, and the project subagents' memories of each folder in
+ * `projectDirs`.
+ */
+export function claudeCodeMemoryLocations(
+  configDir: string,
+  projectDirs: readonly string[] = [],
+): HarnessMemoryLocation[] {
+  const locations = [
+    claudeCodeLocation(() => join(configDir, "projects"), "memory"),
+    claudeCodeLocation(() => join(configDir, "agent-memory"), ""),
+  ];
+  for (const dir of projectDirs.slice(0, MEMORY_PROJECT_DIRS_MAX))
+    locations.push(
+      claudeCodeLocation(() => join(dir, ".claude", "agent-memory"), ""),
+      claudeCodeLocation(() => join(dir, ".claude", "agent-memory-local"), ""),
+    );
+  return locations;
+}
+
+/** What the reader needs to know of one Claude Code session. */
+export interface ProjectSession {
+  /** The harness that runs the session. Absent means Claude Code. */
+  harness?: string;
+  /** Where the session started. */
+  cwd?: string;
+  /** Each repository root the session worked in, as git read it. */
+  baselines?: Record<string, string>;
+}
+
+/**
+ * The folders whose project subagent memories a scan reads: where each
+ * Claude Code session started, and each repository root it worked in,
+ * newest session first, each once, at most `MEMORY_PROJECT_DIRS_MAX`.
+ * `sessions` runs oldest first, as the session registry lists them.
+ */
+export function projectDirsOf(sessions: readonly ProjectSession[]): string[] {
+  const dirs = new Set<string>();
+  for (let i = sessions.length - 1; i >= 0; i -= 1) {
+    const session = sessions[i];
+    if (session === undefined) continue;
+    if (session.harness !== undefined && session.harness !== "claude-code")
+      continue;
+    for (const dir of [session.cwd, ...Object.keys(session.baselines ?? {})])
+      if (dir !== undefined && isAbsolute(dir)) dirs.add(dir);
+    if (dirs.size >= MEMORY_PROJECT_DIRS_MAX) break;
+  }
+  return [...dirs].slice(0, MEMORY_PROJECT_DIRS_MAX);
+}
+
+/** One memory a harness keeps in a store rather than in a file. */
+export interface StoredMemory {
+  /** The memory's path in the store, under the store's root. */
+  path: string;
+  /** The memory's statement. The reader trims and clips it. */
+  statement: string;
+  label?: string;
+  summary?: string;
+  memoryType?: string;
+  /** When the memory last changed, as an ISO 8601 timestamp. */
+  modifiedAt: string;
+  /** How many times the harness counted a use of the memory, when it counts. */
+  useCount?: number;
+  /** When the harness last used the memory, as an ISO 8601 timestamp. */
+  lastUsedAt?: string;
+}
+
+/** What one read of a store found. */
+export type MemoryStoreRead =
+  /** No store is there: the harness is not installed or keeps no memories. */
+  | { kind: "missing" }
+  /** A store is there and could not be read now. */
+  | { kind: "unavailable" }
+  | { kind: "read"; memories: StoredMemory[] };
+
+/** Where one harness keeps its memories in a store, such as Codex's SQLite file. */
+export interface MemoryStore {
+  harness: TachoHarness;
+  /** The prefix every memory path in the store starts with, ending in `/`. */
+  root: string;
+  read: () => Promise<MemoryStoreRead>;
+}
+
+/** The uses a harness counted itself, as one full read of its store found them. */
+export interface HarnessUseCounts {
+  harness: TachoHarness;
+  /** The store's root. Every path in `counts` starts with it. */
+  root: string;
+  /** Each memory the scan sent or found unchanged, with the count the store holds now. */
+  counts: Array<{ path: string; count: number; lastUsedAt?: string }>;
+}
 
 /** The file system calls the reader makes. `node:fs/promises` fits it. */
 export interface MemoryReaderFs {
@@ -108,16 +245,31 @@ export interface MemoryReaderDeps {
   fs: MemoryReaderFs;
   /** Upload one entry. A rejection leaves it unsent for the next scan. */
   send: (entry: LocalMemoryEntry) => Promise<void>;
-  /** The locations to read. Defaults to `HARNESS_MEMORY_LOCATIONS`. */
-  harnesses?: readonly HarnessMemoryLocation[];
+  /**
+   * The locations to read, or a function the scan calls for them each time.
+   * Defaults to `HARNESS_MEMORY_LOCATIONS`.
+   */
+  harnesses?:
+    | readonly HarnessMemoryLocation[]
+    | (() => readonly HarnessMemoryLocation[]);
+  /** The stores to read after the locations, or a function that names them. None by default. */
+  stores?: readonly MemoryStore[] | (() => readonly MemoryStore[]);
 }
 
 /** What one scan did. */
 export interface MemoryScanResult {
   /** Entries sent. */
   sent: number;
-  /** One list per location, present only when the scan was complete. */
+  /**
+   * One list per location the scan read in full whose folder or store is
+   * there. Absent when a send failed and stopped the scan.
+   */
   scans?: MemoryScan[];
+  /**
+   * The harness's own use counts from each store the scan read in full.
+   * Absent when a send failed and stopped the scan.
+   */
+  counts?: HarnessUseCounts[];
 }
 
 export interface MemoryReader {
@@ -151,7 +303,7 @@ function clip(text: string, max: number): string {
  * A frontmatter value without its quotes. A block scalar (`|` or `>`) reads
  * as no value, because Claude Code writes every field on one line.
  */
-function scalar(raw: string): string | undefined {
+export function frontmatterScalar(raw: string): string | undefined {
   const value = raw.trim();
   if (/^[|>][+-]?$/.test(value)) return undefined;
   if (value.length >= 2 && value.startsWith('"') && value.endsWith('"'))
@@ -184,13 +336,13 @@ function frontmatterOf(block: string): Frontmatter {
     if (indent === "") {
       inMetadata = key === "metadata" && raw.trim() === "";
       if (key === "name" || key === "description" || key === "type") {
-        const value = scalar(raw);
+        const value = frontmatterScalar(raw);
         if (value !== undefined) fields[key] = value;
       }
       continue;
     }
     if (inMetadata && key === "type") {
-      const value = scalar(raw);
+      const value = frontmatterScalar(raw);
       if (value !== undefined) fields.metadataType = value;
     }
   }
@@ -253,7 +405,7 @@ function sentDigest(entry: LocalMemoryEntry): Sha256Digest {
 }
 
 /** Whether a file system error says the path is not there. */
-function isMissing(error: unknown): boolean {
+export function isMissing(error: unknown): boolean {
   const code =
     typeof error === "object" && error !== null
       ? (error as { code?: unknown }).code
@@ -266,6 +418,8 @@ interface Listing {
   names: string[];
   /** False when the folder exists and could not be listed. */
   complete: boolean;
+  /** True when the folder is there and was listed. */
+  found: boolean;
 }
 
 /** What the reader found at one listed memory file path. */
@@ -278,21 +432,47 @@ type FileRead =
   | { kind: "unreadable" }
   | { kind: "entry"; entry: LocalMemoryEntry };
 
+/** The key the reader keeps a memory under: its harness and its path. */
+const keyOf = (harness: TachoHarness, path: string) => `${harness}\n${path}`;
+
+/** A folder with the platform's path separator on its end. */
+const withSep = (dir: string) => (dir.endsWith(sep) ? dir : `${dir}${sep}`);
+
+/** A stored memory's statement and fields, trimmed and clipped like a file's. */
+function storedTextOf(memory: StoredMemory): MemoryText {
+  const label = textField(memory.label, MEMORY_LABEL_MAX_CHARS);
+  const summary = textField(memory.summary, MEMORY_SUMMARY_MAX_CHARS);
+  const type = memory.memoryType?.trim().toLowerCase();
+  const memoryType =
+    type !== undefined && MEMORY_TYPE_PATTERN.test(type) ? type : undefined;
+  return {
+    statement: clip(memory.statement.trim(), MEMORY_STATEMENT_MAX_CHARS),
+    ...(label !== undefined ? { label } : {}),
+    ...(summary !== undefined ? { summary } : {}),
+    ...(memoryType !== undefined ? { memoryType } : {}),
+  };
+}
+
 export function createMemoryReader(deps: MemoryReaderDeps): MemoryReader {
   const harnesses = deps.harnesses ?? HARNESS_MEMORY_LOCATIONS;
-  /** The digest of what was last sent, by file path. */
+  const stores = deps.stores ?? [];
+  /** The digest of what was last sent, by harness and path (`keyOf`). */
   const sent = new Map<string, Sha256Digest>();
   let running: Promise<MemoryScanResult> | undefined;
 
   /** A directory's names in order. A folder that is not there lists empty. */
   async function list(dir: string): Promise<Listing> {
     try {
-      return { names: (await deps.fs.readdir(dir)).sort(), complete: true };
+      return {
+        names: (await deps.fs.readdir(dir)).sort(),
+        complete: true,
+        found: true,
+      };
     } catch (error) {
       // Most projects have no memory folder, and a harness that is not
       // installed has no projects folder. Any other failure leaves the
       // folder's files unknown, so the scan is not complete.
-      return { names: [], complete: isMissing(error) };
+      return { names: [], complete: isMissing(error), found: false };
     }
   }
 
@@ -331,51 +511,128 @@ export function createMemoryReader(deps: MemoryReaderDeps): MemoryReader {
 
   async function scanOnce(): Promise<MemoryScanResult> {
     let count = 0;
-    let complete = true;
     const scans: MemoryScan[] = [];
+    const counts: HarnessUseCounts[] = [];
+    /** The key prefix of each location the scan read in full. */
+    const whole: string[] = [];
+    /** The key prefix of each location the scan read, so a repeat is read once. */
+    const read = new Set<string>();
     const seen = new Set<string>();
-    for (const location of harnesses) {
-      const root = location.projectsDir(deps.home);
+
+    /**
+     * Send an entry unless the reader sent the same digest last. False when
+     * the send failed: the API's failure, almost always, so the rest of the
+     * scan would fail the same way. The entry and every one after it wait
+     * for the next scan.
+     */
+    async function offer(entry: LocalMemoryEntry): Promise<boolean> {
+      const key = keyOf(entry.harness, entry.path);
+      const digest = sentDigest(entry);
+      if (sent.get(key) === digest) return true;
+      try {
+        await deps.send(entry);
+      } catch {
+        return false;
+      }
+      sent.set(key, digest);
+      count += 1;
+      return true;
+    }
+
+    const locations =
+      typeof harnesses === "function" ? harnesses() : harnesses;
+    for (const location of locations) {
+      const top = location.projectsDir(deps.home);
+      const root = withSep(top);
+      const prefix = keyOf(location.harness, root);
+      if (read.has(prefix)) continue;
+      read.add(prefix);
       const paths: string[] = [];
-      const projects = await list(root);
-      if (!projects.complete) complete = false;
+      const projects = await list(top);
+      let complete = projects.complete;
       for (const project of projects.names) {
-        const dir = join(root, project, location.memoryDir);
+        const dir =
+          location.memoryDir === ""
+            ? join(top, project)
+            : join(top, project, location.memoryDir);
         const files = await list(dir);
         if (!files.complete) complete = false;
         for (const name of files.names) {
           if (!name.endsWith(location.extension)) continue;
           if (location.skip.includes(name)) continue;
           const path = join(dir, name);
-          const read = await readAt(location.harness, path);
-          if (read.kind === "absent" || read.kind === "empty") continue;
+          const file = await readAt(location.harness, path);
+          if (file.kind === "absent" || file.kind === "empty") continue;
           paths.push(path);
-          seen.add(path);
-          if (read.kind !== "entry") continue;
-          const digest = sentDigest(read.entry);
-          if (sent.get(path) === digest) continue;
-          try {
-            await deps.send(read.entry);
-          } catch {
-            // A failed send is almost always the API's failure, not the
-            // entry's, so the rest of the scan would fail the same way. This
-            // entry and every one after it wait for the next scan, and the
-            // scan is not complete.
-            return { sent: count };
-          }
-          sent.set(path, digest);
-          count += 1;
+          seen.add(keyOf(location.harness, path));
+          if (file.kind !== "entry") continue;
+          if (!(await offer(file.entry))) return { sent: count };
         }
       }
+      if (!complete) continue;
+      whole.push(prefix);
+      if (projects.found)
+        scans.push({ harness: location.harness, root, paths: paths.sort() });
+    }
+
+    for (const store of typeof stores === "function" ? stores() : stores) {
+      const prefix = keyOf(store.harness, store.root);
+      if (read.has(prefix)) continue;
+      read.add(prefix);
+      const found = await store.read();
+      if (found.kind === "unavailable") continue;
+      whole.push(prefix);
+      if (found.kind === "missing") continue;
+      const paths: string[] = [];
+      const useCounts: HarnessUseCounts["counts"] = [];
+      for (const memory of found.memories) {
+        if (
+          !memory.path.startsWith(store.root) ||
+          memory.path.length === store.root.length
+        )
+          continue;
+        const key = keyOf(store.harness, memory.path);
+        if (seen.has(key)) continue;
+        const text = storedTextOf(memory);
+        if (text.statement.length === 0) continue;
+        paths.push(memory.path);
+        seen.add(key);
+        const sentNow = await offer({
+          harness: store.harness,
+          path: memory.path,
+          ...text,
+          contentDigest: digestBytes(text.statement),
+          modifiedAt: memory.modifiedAt,
+        });
+        if (!sentNow) return { sent: count };
+        if (memory.useCount !== undefined)
+          useCounts.push({
+            path: memory.path,
+            count: memory.useCount,
+            ...(memory.lastUsedAt !== undefined
+              ? { lastUsedAt: memory.lastUsedAt }
+              : {}),
+          });
+      }
       scans.push({
-        harness: location.harness,
-        root: root.endsWith(sep) ? root : `${root}${sep}`,
+        harness: store.harness,
+        root: store.root,
         paths: paths.sort(),
       });
+      counts.push({
+        harness: store.harness,
+        root: store.root,
+        counts: useCounts,
+      });
     }
-    if (!complete) return { sent: count };
-    for (const path of [...sent.keys()]) if (!seen.has(path)) sent.delete(path);
-    return { sent: count, scans };
+
+    // Forget what a full read no longer found, so it is sent again if it
+    // comes back. What a partial read missed may still be there, so the
+    // reader keeps it.
+    for (const key of [...sent.keys()])
+      if (!seen.has(key) && whole.some((prefix) => key.startsWith(prefix)))
+        sent.delete(key);
+    return { sent: count, scans, counts };
   }
 
   return {

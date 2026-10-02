@@ -3,12 +3,20 @@
 // test in agent.test.tsx does not reach: a rollup that could not be read, a
 // row with no cost or no input, each health verdict, a composition whose
 // steering, belt, mandates or operator are missing or unreadable, and the
-// agent's versions (ADR-198), and the cache TTL the coaching proposes. Every
-// missing figure says "not recorded" rather than drawing a zero. Axe runs
-// after every test (INV-26).
-import { cleanup, render, screen, within } from "@testing-library/react";
+// agent's versions (ADR-198), the cache TTL the coaching proposes, and the
+// agent's cache keep-alive setting with the button an org Owner or Admin
+// changes it with. Every missing figure says "not recorded" rather than
+// drawing a zero. Axe runs after every test (INV-26).
+import {
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import type { ComponentProps, ReactNode } from "react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readError, readOk } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
@@ -25,11 +33,18 @@ import {
   toolbelt,
 } from "./agents.builders";
 
+const { router, setAgentCacheKeepAlive } = vi.hoisted(() => ({
+  router: { push: vi.fn(), replace: vi.fn(), refresh: vi.fn() },
+  setAgentCacheKeepAlive: vi.fn(),
+}));
+
 vi.mock("next/link", () => ({
   default: ({ children, ...rest }: { children: ReactNode; href: string }) => (
     <a {...rest}>{children}</a>
   ),
 }));
+vi.mock("next/navigation", () => ({ useRouter: () => router }));
+vi.mock("./actions", () => ({ setAgentCacheKeepAlive }));
 
 const { Overview } = await import("./overview");
 
@@ -51,6 +66,7 @@ function renderOverview(overrides: Partial<Props> = {}) {
     lastRun: runRow(),
     operatorName: "Marcus Bell",
     place: PLACE,
+    canSetKeepAlive: false,
     ...overrides,
   };
   render(
@@ -72,6 +88,11 @@ const tile = (title: string) => {
   if (found === undefined) throw new Error(`no tile ${title}`);
   return found;
 };
+
+beforeEach(() => {
+  router.refresh.mockReset();
+  setAgentCacheKeepAlive.mockReset();
+});
 
 afterEach(async () => {
   await expectNoAxe(document.body);
@@ -219,6 +240,70 @@ describe("Overview › cache TTL", () => {
       findings: ttlFinding({ setting: "cache_ttl", value: "1h" }),
     });
     expect(screen.queryByTestId("cache-ttl")).toBeNull();
+  });
+});
+
+describe("Overview › cache keep-alive", () => {
+  const ON_SUB =
+    "While this agent waits on a subagent, the gateway keeps its prompt cache warm when its idle cache finding shows a saving.";
+  const OFF_SUB = "The gateway sends no keep-alive for this agent.";
+
+  it("says the keep-alive is on and offers Turn off to a viewer who may change it", () => {
+    renderOverview({ canSetKeepAlive: true });
+    const line = within(region("Coaching")).getByTestId("cache-keep-alive");
+    expect(line).toHaveAttribute("data-state", "on");
+    expect(line).toHaveTextContent(`Cache keep-aliveOn${ON_SUB}`);
+    expect(
+      within(line).getByRole("button", { name: "Turn off" }),
+    ).toBeInTheDocument();
+  });
+
+  it("says the keep-alive is off and offers Turn on", () => {
+    renderOverview({
+      detail: agentDetail({ identity: { cacheKeepAlive: false } }),
+      canSetKeepAlive: true,
+    });
+    const line = screen.getByTestId("cache-keep-alive");
+    expect(line).toHaveAttribute("data-state", "off");
+    expect(line).toHaveTextContent(`Cache keep-aliveOff${OFF_SUB}`);
+    expect(
+      within(line).getByRole("button", { name: "Turn on" }),
+    ).toBeInTheDocument();
+  });
+
+  it("turns it off for the agent by slug and re-reads the page", async () => {
+    setAgentCacheKeepAlive.mockResolvedValue({
+      ok: true,
+      value: { cacheKeepAlive: false },
+    });
+    renderOverview({ canSetKeepAlive: true });
+    await userEvent.click(screen.getByRole("button", { name: "Turn off" }));
+    expect(setAgentCacheKeepAlive).toHaveBeenCalledWith(
+      "acme",
+      "core-platform",
+      "release-bot",
+      false,
+    );
+    await waitFor(() => {
+      expect(router.refresh).toHaveBeenCalled();
+    });
+  });
+
+  it("shows the setting with no button to a viewer who may not change it (negative)", () => {
+    renderOverview({
+      detail: agentDetail({ identity: { cacheKeepAlive: false } }),
+      canSetKeepAlive: false,
+    });
+    const line = screen.getByTestId("cache-keep-alive");
+    expect(line).toHaveTextContent(`Cache keep-aliveOff${OFF_SUB}`);
+    expect(within(line).queryByRole("button")).toBeNull();
+  });
+
+  it("shows the setting even when the findings could not be read", () => {
+    renderOverview({ findings: readError("findings_unavailable", 503) });
+    expect(screen.getByTestId("cache-keep-alive")).toHaveTextContent(
+      `Cache keep-aliveOn${ON_SUB}`,
+    );
   });
 });
 

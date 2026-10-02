@@ -32,7 +32,10 @@ on:
 
 concurrency:
   group: harness-bridges-${{ github.ref }}
-  cancel-in-progress: true
+  # Cancel only a superseded pull request run. On main, a burst of pushes
+  # cancelled each running build before it finished, so the main-only macOS
+  # and Windows legs could go a whole burst without one result.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
