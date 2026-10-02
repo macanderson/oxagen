@@ -4,8 +4,10 @@
 // caller's org and workspace in every query, so row security and the query
 // agree on the tenant. A read is bounded: the list reads the newest `limit`
 // items and every related row in one query per table, never one query per
-// item. Run costs come from the spend rollup (readRunTotalsByIds) after the
-// transaction closes, because that read opens its own.
+// item. The list reads facts in two queries and leaves out the checks on
+// older head commits (listFactsByItem). Run costs come from the spend rollup
+// (readRunTotalsByIds) after the transaction closes, because that read opens
+// its own.
 //
 // Nothing here calls GitHub or writes anything. derive.ts, detail.ts, and
 // outcomes.ts shape what these reads return.
@@ -112,6 +114,76 @@ async function factsByItem(
     const fact = rowToFact(row);
     if (list) list.push(fact);
     else out.set(row.itemId, [fact]);
+  }
+  return out;
+}
+
+/** One list item's facts and the projection reduced from them. */
+export type ListedFacts = Pick<DerivedItem, "facts" | "projection">;
+
+/**
+ * The facts the Work list reduces each item from, with each projection, in two
+ * queries (#5181). A busy item holds a check_observed fact for every check on
+ * every head commit its pull request had, and most of those facts cannot change
+ * the projection. reduceOrder reads a check only on its send's current head:
+ * the merged head, or else the newest head on the send's pull request. That
+ * head comes from pr_linked, head_observed, and merged facts, never from a
+ * check. So the first query reads every fact except the checks, the reduction
+ * names each send's head, and the second query reads only the checks on those
+ * heads, through item_facts_check_head_idx. The projection is the one every
+ * fact reduces to, and nothing else the row derives reads a check fact
+ * (derive.ts). read.list.pg.test.ts proves both on Postgres.
+ *
+ * The two queries can read different moments: a head's required checks and
+ * its results can commit between them. The row then shows a moment that never
+ * held, until the next read. Accept reads the item again through the store,
+ * so nothing is decided on it. The list's other queries (items, triage) have
+ * always been read the same way.
+ */
+export async function listFactsByItem(tx: Tx, scope: WorkScope, itemIds: readonly string[]): Promise<Map<string, ListedFacts>> {
+  const out = new Map<string, ListedFacts>();
+  if (itemIds.length === 0) return out;
+  const factMap = await factsByItem(tx, scope, itemIds, ["check_observed"]);
+  const heads: { orderId: string; head: string }[] = [];
+  for (const itemId of itemIds) {
+    const list = factMap.get(itemId) ?? [];
+    const projection = reduceWorkItem(list);
+    out.set(itemId, { facts: list, projection });
+    for (const order of projection.orders) if (order.head !== null) heads.push({ orderId: order.orderId, head: order.head });
+  }
+  if (heads.length === 0) return out;
+  const pairs = sql.join(
+    heads.map(({ orderId, head }) => sql`(${orderId}::uuid, ${head})`),
+    sql`, `,
+  );
+  const rows = await tx
+    .select()
+    .from(facts)
+    .where(
+      and(
+        eq(facts.orgId, scope.orgId),
+        eq(facts.workspaceId, scope.workspaceId),
+        inArray(facts.itemId, [...itemIds]),
+        // A literal, not a parameter, so the planner can match the partial
+        // index's predicate in a generic plan too.
+        sql`${facts.kind} = 'check_observed'`,
+        inArray(facts.orderId, unique(heads.map((entry) => entry.orderId))),
+        sql`(${facts.orderId}, ${facts.headSha}) IN (${pairs})`,
+      ),
+    )
+    .orderBy(asc(facts.itemId), asc(facts.itemRevision), asc(facts.occurredAt), asc(facts.dedupeKey));
+  const checksOf = new Map<string, WorkFact[]>();
+  for (const row of rows) {
+    const list = checksOf.get(row.itemId);
+    const fact = rowToFact(row);
+    if (list) list.push(fact);
+    else checksOf.set(row.itemId, [fact]);
+  }
+  for (const [itemId, checks] of checksOf) {
+    const listed = out.get(itemId);
+    if (listed === undefined) continue;
+    const all = [...listed.facts, ...checks];
+    out.set(itemId, { facts: all, projection: reduceWorkItem(all) });
   }
   return out;
 }
@@ -443,14 +515,14 @@ export async function readWorkItemRows(scope: WorkScope, limit: number): Promise
       .limit(limit + 1);
     const page = rows.slice(0, limit);
     const ids = page.map((row) => row.id);
-    const factMap = await factsByItem(tx, scope, ids);
+    const listed = await listFactsByItem(tx, scope, ids);
     const triageMap = await triageByItem(tx, scope, ids);
     const derived: DerivedItem[] = page.map((row) => {
-      const list = factMap.get(row.id) ?? [];
+      const { facts: list, projection } = listed.get(row.id) ?? { facts: [], projection: reduceWorkItem([]) };
       return {
         columns: columnsOf(row),
         facts: list,
-        projection: reduceWorkItem(list),
+        projection,
         triage: triageMap.get(row.id) ?? effectiveTriage(null, null, []),
       };
     });
