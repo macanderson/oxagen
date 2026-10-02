@@ -15398,6 +15398,12 @@
           "type": "text"
         },
         {
+          "name": "pause_block",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
           "name": "detected_at",
           "nullable": false,
           "primaryKey": false,
