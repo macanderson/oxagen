@@ -130,6 +130,13 @@ export interface ModelCallFrameRow {
    * does not parse is absent too.
    */
   systemContextParts?: readonly SystemContextPart[];
+  /**
+   * The model proxy sent this call as a cache keep-alive while a parent run
+   * waited on a subagent (`oxagen.cache_keep_alive`, lane F32). It is spend,
+   * and no step the agent took. Absent on every other frame, a ledger frame
+   * included.
+   */
+  cacheKeepAlive?: true;
 }
 
 const SYSTEM_CONTEXT_PARTS = systemContextPartSchema
@@ -383,6 +390,14 @@ const METERING_VALUE = `attrs['${TACHO_METERING_ATTR}']`;
 const FRAME_PROXY_OBSERVED = `toUInt8(c.metering = '${TACHO_METERING_OBSERVED}' OR r.metering = '${TACHO_METERING_OBSERVED}' OR q.metering = '${TACHO_METERING_OBSERVED}')`;
 
 /**
+ * The mark the loopback proxy seals on a cache keep-alive it sent
+ * (`KEEP_ALIVE_ATTR` in `packages/tacho/src/collector/cache-keep-alive.ts`).
+ * The proxy seals the keep-alive's only sighting, so the priced row carries
+ * it. A literal in the SQL, like the metering mark, so it adds no parameter.
+ */
+const CACHE_KEEP_ALIVE_VALUE = "attrs['oxagen.cache_keep_alive']";
+
+/**
  * The proxy sighting's token sources and system context, grouped on one
  * call id, for the join named `alias` on `c.<key>`. Keyed on each id apart
  * for the reason the transcript joins are (`TRANSCRIPT_THINKING`). The
@@ -606,7 +621,8 @@ export async function readModelCallFrames(args: {
         ${proxiedCount("steering_tokens", "steering")} AS steering_tokens,
         ${FRAME_CONTEXT_DIGEST} AS system_context_digest,
         ${consume === undefined ? FRAME_CONTEXT_PARTS : "NULL"} AS system_context_parts,
-        ${FRAME_PROXY_OBSERVED} AS proxy_observed
+        ${FRAME_PROXY_OBSERVED} AS proxy_observed,
+        toUInt8(c.keep_alive = '1') AS cache_keep_alive
       FROM (
         SELECT
           ts, seq, session_uuid, model, provider, input_tokens, output_tokens,
@@ -614,7 +630,8 @@ export async function readModelCallFrames(args: {
           thinking_tokens, web_search_requests, cost_usd_micros, request_id,
           message_id, tool_definition_tokens, context_frame_tokens,
           steering_tokens, system_context_digest, system_context_parts,
-          ${METERING_VALUE} AS metering
+          ${METERING_VALUE} AS metering,
+          ${CACHE_KEEP_ALIVE_VALUE} AS keep_alive
         FROM tacho_events FINAL
         WHERE org_id = {orgId:UUID}
           AND workspace_id = {workspaceId:UUID}
@@ -691,6 +708,7 @@ export async function readModelCallFrames(args: {
     system_context_digest?: string | null;
     system_context_parts?: string | null;
     proxy_observed?: string | number | null;
+    cache_keep_alive?: string | number | null;
   };
   return consumeFrames<Row, ModelCallFrameRow>(result, (r) => {
     const parts = parseSystemContextParts(r.system_context_parts);
@@ -720,6 +738,9 @@ export async function readModelCallFrames(args: {
         ? { systemContextDigest: r.system_context_digest }
         : {}),
       ...(parts === undefined ? {} : { systemContextParts: parts }),
+      ...(Number(r.cache_keep_alive ?? 0) === 1
+        ? { cacheKeepAlive: true as const }
+        : {}),
     };
   }, consume);
 }

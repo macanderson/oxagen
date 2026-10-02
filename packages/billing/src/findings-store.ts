@@ -634,6 +634,7 @@ export function pricedFrames(
       systemContextDigest: digest,
       systemContextParts:
         digest === null ? null : (partsByDigest.get(digest) ?? null),
+      ...(row.cacheKeepAlive === true ? { cacheKeepAlive: true } : {}),
     });
   }
   return out;
