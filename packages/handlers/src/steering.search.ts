@@ -8,14 +8,15 @@
 // published gets no hits and null versions, not an error, so the agent's
 // next step reads the same either way.
 //
-// A call from a run searches the two versions that run was delivered, so a
-// version that publishes during the run does not change what the run reads.
-// read_steering does the same.
+// The MCP surface sets no run id (apps/mcp/src/context.ts, buildContext), so
+// every call there reads the versions published now. A call from a run would
+// have to read the two versions that run was delivered, so that a version
+// published during the run does not change what the run reads. Nothing
+// records those yet, so steering.published.ts refuses a call that names a
+// run. read_steering does the same.
 //
-// The handler is a factory, so a test can hand it any version. The instance
-// register.ts loads reads the Postgres version store through
-// steering.published.ts, which refuses a call that names a run until a run's
-// delivered versions can be read back (#5137).
+// The handler is a factory, so a test can hand it any version. register.ts
+// loads the instance bound to steering.published.ts (#5137).
 import type { CheckedContext } from "@oxagen/oxagen";
 import {
   searchSteering,

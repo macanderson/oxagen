@@ -13,7 +13,7 @@ import {
   type SteeringSearchInput,
   type SteeringSearchOutput,
 } from "@oxagen/oxagen/steering-repo/steering-tools";
-import { indexLine, type BundleSource, type Delivery } from "./render";
+import { blockFor, indexLine, type BundleSource, type Delivery } from "./render";
 import { compareText } from "./tree";
 
 export {
@@ -51,30 +51,43 @@ function reachesRepository(record: BundleRecord, repository: string | undefined)
   return repository === undefined || record.repos === undefined || record.repos.includes(repository);
 }
 
-function isAlwaysOn(record: BundleRecord): boolean {
-  return (
-    (record.force === "must" || record.force === "should") &&
-    record.load === "always" &&
-    record.skills === undefined
-  );
-}
-
-/** Search the published versions. With no query, every record that fits the filters matches, in lineage order. */
+/**
+ * Search the published versions. With no query, every record that fits the
+ * filters matches, in lineage order.
+ *
+ * A hit is always on when the block a run on the repository receives holds
+ * it: the version's block for that repository, else its block for every
+ * other repository. With no repository, that second block. So a record whose
+ * tool target is missing from the version's tools, which publish leaves out
+ * of every block, is never always on (#4483).
+ *
+ * The workspace's record shadows an organization record of the same lineage,
+ * as read_steering's lookup does, so each lineage comes back once (#4483).
+ */
 export function searchSteering(delivery: Delivery, input: SteeringSearchInput): SteeringSearchOutput {
   const words = queryWords(input.query);
   const limit = input.limit ?? STEERING_SEARCH_DEFAULT_LIMIT;
-  const scored: Array<{ record: BundleRecord; source: BundleSource; score: number }> = [];
+  const shadowed = new Set((delivery.workspace?.records ?? []).map((record) => record.lineage));
+  const scored: Array<{
+    record: BundleRecord;
+    source: BundleSource;
+    score: number;
+    alwaysOn: boolean;
+  }> = [];
   const sources: Array<[BundleSource, Delivery[BundleSource]]> = [
     ["organization", delivery.organization],
     ["workspace", delivery.workspace],
   ];
   for (const [source, bundle] of sources) {
-    for (const record of bundle?.records ?? []) {
+    if (bundle === null) continue;
+    const block = new Set(blockFor(bundle, input.repository ?? null)?.lineages ?? []);
+    for (const record of bundle.records) {
+      if (source === "organization" && shadowed.has(record.lineage)) continue;
       if (input.kind !== undefined && record.kind !== input.kind) continue;
       if (!reachesRepository(record, input.repository)) continue;
       const score = words.length === 0 ? 0 : scoreRecord(record, words);
       if (words.length > 0 && score === 0) continue;
-      scored.push({ record, source, score });
+      scored.push({ record, source, score, alwaysOn: block.has(record.lineage) });
     }
   }
   scored.sort(
@@ -87,13 +100,13 @@ export function searchSteering(delivery: Delivery, input: SteeringSearchInput): 
     workspace_version: delivery.workspace?.version ?? null,
     organization_version: delivery.organization?.version ?? null,
     total: scored.length,
-    hits: scored.slice(0, limit).map(({ record, source }) => ({
+    hits: scored.slice(0, limit).map(({ record, source, alwaysOn }) => ({
       lineage: record.lineage,
       label: record.label,
       ...(record.description === undefined ? {} : { description: record.description }),
       kind: record.kind,
       force: record.force,
-      always_on: isAlwaysOn(record),
+      always_on: alwaysOn,
       source,
       line: indexLine(record),
     })),

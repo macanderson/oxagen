@@ -6,8 +6,9 @@
 // heading with the label, then the body with its @tool: mentions rendered in
 // the version's exposure modes. The frontmatter never comes back. The
 // workspace's record wins over an organization record of the same lineage.
-// A call from a run reads the two versions that run was delivered, so the
-// record matches the index line the run was given (see steering.search.ts).
+// An MCP call reads the versions published now, and a call that names a run
+// is refused until a run's delivered versions are recorded (see
+// steering.search.ts).
 //
 // A lineage neither published version holds refuses as
 // `not_found: steering_record_not_found`. A file the skill's folder does not

@@ -148,7 +148,7 @@
         },
         "agent": {
           "type": "string",
-          "description": "The agent that proposed the record with propose_record."
+          "description": "The agent that proposed the record with steering_propose."
         },
         "memories": {
           "type": "array",

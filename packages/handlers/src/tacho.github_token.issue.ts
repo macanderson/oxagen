@@ -110,7 +110,7 @@ function steeringRepoProposeOnly(): HandlerError {
     code: "conflict",
     reason: "steering_repo_propose_only",
     message:
-      "The steering repository takes changes through a steering PR. Call propose_record, or push a branch from a clone with a credential that can write to it.",
+      "The steering repository takes changes through a steering PR. Call steering_propose, or push a branch from a clone with a credential that can write to it.",
   });
 }
 

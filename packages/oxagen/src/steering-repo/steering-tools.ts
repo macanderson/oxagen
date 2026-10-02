@@ -42,7 +42,11 @@ export const steeringSearchHitSchema = z
     description: z.string().optional(),
     kind: z.string(),
     force: z.string(),
-    /** True for a record every request of a run on the repository already receives. */
+    /**
+     * True for a record the always-on block of a run on the repository holds:
+     * the version's block for that repository, else its block for every other
+     * repository. With no repository, that second block.
+     */
     always_on: z.boolean(),
     source: z.enum(["workspace", "organization"]),
     line: z.string().describe("The record's index line."),

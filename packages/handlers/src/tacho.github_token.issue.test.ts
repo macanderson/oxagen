@@ -60,7 +60,7 @@ const head = {
 const repo = { ...head, role: "linked" as const, steering: false };
 const steeringRepo = { ...head, role: "main" as const, steering: true };
 const PROPOSE_ONLY_MESSAGE =
-  "The steering repository takes changes through a steering PR. Call propose_record, or push a branch from a clone with a credential that can write to it.";
+  "The steering repository takes changes through a steering PR. Call steering_propose, or push a branch from a clone with a credential that can write to it.";
 /** What GitHub's mint answers for a repository the installation lacks. */
 const NOT_COVERED = new Error(
   "GitHub App token mint failed (422): There is at least one repository that does not exist or is not accessible to the parent installation.",

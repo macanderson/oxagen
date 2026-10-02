@@ -12,7 +12,7 @@ An agent finds steering that its index did not list, or finds the lineage behind
 
 Cursor reads all of its steering through this tool. Cursor's model calls go to Cursor's servers, so no steering block reaches its requests. A rule in Cursor's dashboard tells it to call this tool at the start of each task (`CURSOR_DASHBOARD_RULE` in `packages/steering-bundle/src/cursor.ts`).
 
-A workspace with no published version gets no hits and null versions, not an error.
+A workspace with no published version gets no hits and null versions, not an error. When both versions hold a lineage, only the workspace's record comes back, the same record read_steering returns.
 
 The steering repo spec proposed the name `steering_search`. ADR-025 puts the verb first.
 
@@ -32,7 +32,7 @@ The steering repo spec proposed the name `steering_search`. ADR-025 puts the ver
 | `workspace_version` | `int` or null | The workspace version searched. Null before its first publish. |
 | `organization_version` | `int` or null | The organization version searched. Null before its first publish. |
 | `hits` | array | `{ lineage, label, description?, kind, force, always_on, source, line }` for each hit, best match first. |
-| `hits[].always_on` | `boolean` | True for a record every request of a run on the repository already receives. |
+| `hits[].always_on` | `boolean` | True when the always-on block of a run on `repository` holds the record: the version's block for that repository, else its block for every other repository. With no `repository`, that second block. A record whose tool target no server provides is never always on. |
 | `hits[].source` | `"workspace"` or `"organization"` | The version the hit came from. |
 | `hits[].line` | `string` | The record's index line. |
 | `total` | `int` | How many records matched before the limit. |
