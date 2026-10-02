@@ -158,9 +158,9 @@ above in the change that records its field.
 | §12.8 row or mockup kind | Reads | What is missing |
 |---|---|---|
 | Refetching a stable list (mockup) | a read-only tool's identical result of the same input in an earlier run | the saving is the tool's execution, and the result tokens enter the new run's context either way; no recorder writes a per-call tool execution cost, or the size of a not-modified or diff response |
-| Cache misses after a stable prefix changed | a system-context digest per turn | `tacho_events` carries `prompt_digest` for the user prompt and no digest of the system context; no ledger event records one |
-| Tool-list bloat | `cost.run_totals.tool_definition_tokens` | null on every row until a recorder measures prompt composition (ADR-060) |
-| Context bloat | `cost.run_totals.context_frame_tokens` and the citation rate from `context_use_feedback` | the column is null, and no recorder writes `context_use_feedback` |
+| Cache misses after a stable prefix changed | a system-context digest per turn | recorded since #4505 on each proxied model call; detector 3 (`cache_busts`, ADR-208) reads it. See the amendment of 2026-10-02 |
+| Tool-list bloat | `cost.run_totals.tool_definition_tokens` | recorded since #4505 on each proxied model call; detector 2 (`standing_context`, ADR-208) reads it. See the amendment of 2026-10-02 |
+| Context bloat | `cost.run_totals.context_frame_tokens` and the citation rate from `context_use_feedback` | the column stays null for Claude Code by the amendment of 2026-10-02, and no recorder writes `context_use_feedback` |
 | Retry storms | per-call provider errors with the cost of each retry | a failed provider call carries no billed tokens in either frame store, so a storm has no measured cost to save |
 | Unproductive tail | the step after which nothing was kept | `productive_ratio` and step grading are null until the grading lane writes them |
 | Wrong tier | step shapes and the tier each call took | no recorder classifies a step or records a route tier |
@@ -181,3 +181,55 @@ above in the change that records its field.
 - A finding whose window is under seven days has an annualised figure and a
   share below its own run rate: the seven-day minimum trades that for never
   scaling a few minutes of runs to a year.
+
+## Amendment 2026-10-02: what each recorder path measures (#4493)
+
+#4505 gave the Claude Code recorder the three token sources and the system
+context of a model call. Each `llm_call` frame can carry
+`tool_definition_tokens`, `context_frame_tokens`, and `steering_tokens`, each
+with a `_basis` of `reported` or `estimated`. It can also carry
+`system_context_digest`, one digest over the ordered parts of the system
+context, and `system_context_parts`, each part's kind, name, digest, and token
+count. A part never carries its text. The rollup sums the three sources into
+`cost.run_totals`, and a source no counted call measured stays null.
+
+A recorder sets a member only when it can see what the member measures. An
+absent member means nothing measured it. It never means zero.
+
+| Path | What it sees | What the counted row carries |
+|---|---|---|
+| Loopback model proxy (`fidelity = 'proxy'`) | the request body | the tool definition count, the steering count, the system context digest, and its parts |
+| OTel `api_request` record or transcript `assistant` record, on a session the proxy did not carry | usage and ids, never the request | the steering count alone |
+| A subagent's OTel or transcript row | the same, on a child chain that was delivered no steering manifest | nothing |
+
+- **Steering on both paths.** Claude Code delivers steering in
+  `SessionStart` context, which rides the conversation, so even the request
+  cannot say which bytes are steering. The session's `steering.manifest`
+  frame can. So both paths take the steering count from the manifest, and a
+  call the proxy did not carry gets the same count a proxied call would.
+- **No digest without the request.** A digest over the steering parts alone
+  would read as the whole system context. Detector 3 would then read a
+  changed tool as an unchanged prefix. On a call the proxy did not carry,
+  the digest and the parts stay absent. Detector 3 then names no changed
+  part for the call, and it leaves out a rewrite past the cache lifetime as
+  one of unknown cause (`packages/billing/src/findings/cache-busts.ts`).
+- **Context frames stay absent for Claude Code.** Its hook context rides the
+  conversation, and nothing in the request marks it apart (ADR-200), so any
+  count would be a guess. The envelope, the column, and the rollup carry the
+  member, so a harness that can measure it fills it with no further change.
+- **Every count is an estimate today.** Claude Code reports none of the
+  three, so each count is `budgetTokens` (UTF-8 bytes over four) with basis
+  `estimated`. A count the producer sets itself keeps its own value and basis.
+- **Only the counted row takes the sources.** A later sighting of the same
+  call is stamped `oxagen.llm_call_duplicate_of` and is never summed. The
+  rollup joins a stamped proxy row back for the members the counted row
+  lacks (`packages/telemetry/src/cost-frames.ts`).
+
+`cost.run_totals` keeps no basis per source. A reader that needs the basis
+reads it per call from `tacho_events`. Adding basis columns to
+`cost.run_totals` needs a Postgres migration and is left for the change that
+first reads them.
+
+The code is `packages/tacho/src/claude-code/system-context.ts`
+(`SystemContextTracker.measure` and `measureUnseen`) and
+`SessionRecorder.withUnseenRequestSources` in `recorder.ts`.
