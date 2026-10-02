@@ -42,4 +42,14 @@ describe("writtenDir", () => {
       writtenDir({ hook_event_name: "Stop", tool_name: "Write" }),
     ).toBeUndefined();
   });
+
+  it("ignores a write that failed, which wrote nothing", () => {
+    expect(
+      writtenDir({
+        hook_event_name: "PostToolUseFailure",
+        tool_name: "Write",
+        tool_input: { file_path: "/other/repo/a.ts" },
+      }),
+    ).toBeUndefined();
+  });
 });
