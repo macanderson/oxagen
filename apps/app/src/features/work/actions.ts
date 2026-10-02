@@ -386,17 +386,20 @@ export async function reopenItem(
 }
 
 /**
- * Add or change a GitHub collector: its name and the repositories it reads.
- * A new or widened collector reads those repositories once now.
+ * Add or change a GitHub collector: its name, the GitHub connection it reads
+ * through, and the repositories it reads. A new collector needs the
+ * connection; a change may leave it out and keep the one it has. A new or
+ * widened collector reads those repositories once now.
  */
 export async function setCollector(
   org: string,
   ws: string,
-  input: { name: string; repos: string[] },
+  input: { name: string; repos: string[]; connectionId: string | null },
 ): Promise<ActionResult<{ created: boolean; reconcileQueued: boolean }>> {
   const ctx = await requireViewer(org, ws);
   const result = await kernelWrite(ctx, workCollectorSet, {
     name: input.name.trim(),
+    ...(input.connectionId === null ? {} : { connection_id: input.connectionId }),
     repos: input.repos.map((repo) => repo.trim()).filter((repo) => repo !== ""),
   });
   if (!result.ok) return result;
