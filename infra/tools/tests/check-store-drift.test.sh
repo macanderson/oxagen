@@ -527,7 +527,7 @@ contains "$OUT" "::error::ClickHouse still has tacho_events.anthropic_user_email
 contains "$OUT" "0031_drop.sql" "dropped report: names the migration that drops it"
 contains "$OUT" "by hand" "dropped report: says an apply may skip it and what to do instead"
 case "$OUT" in
-  *"events.a"*) fail "dropped report: a column that is gone must not be named" ;;
+  *"still has events.a,"*) fail "dropped report: a column that is gone must not be named" ;;
   *) pass ;;
 esac
 case "$OUT" in
