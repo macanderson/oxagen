@@ -607,7 +607,7 @@ describe("revertPlanOf", () => {
       },
       readAt,
     );
-    if (commit === null) throw new Error("fixture did not parse");
+    if (commit?.kind !== "commit") throw new Error("fixture did not parse");
     expect(revertPlanOf(commit)).toEqual({
       kind: "merge_commits",
       repository: "acme/app",
