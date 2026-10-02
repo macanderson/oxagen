@@ -262,10 +262,11 @@ describe("readResultUse", () => {
   });
 
   it("fails the read on a body failure that a retry can change", async () => {
+    // Build the rows first: each one stores its own body under its ref, so
+    // the failure must replace the stored body after the row is built.
+    const rows = [call(2, {}, { content: LINE }), said(3, "Done.")];
     bytes.set("ref-3", new Error("connection reset"));
-    chSelect.mockResolvedValue({
-      data: [call(2, {}, { content: LINE }), said(3, "Done.")],
-    });
+    chSelect.mockResolvedValue({ data: rows });
     await expect(
       readResultUse(SCOPE, [result(RUN_A, 2, 9_000)], ROOTS),
     ).rejects.toThrow("connection reset");
