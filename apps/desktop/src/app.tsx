@@ -61,6 +61,7 @@ import {
   restartTachoService,
   runSidecar,
   setAutoUpdate,
+  type Sidecar,
   type TachoStatus,
   tachoStatus,
   uninstallCli,
@@ -71,6 +72,7 @@ import {
   addHarnessArgs,
   ago,
   collectorText,
+  commandName,
   defaultRegistration,
   deregisterArgs,
   deregisterNeedsSession,
@@ -144,7 +146,7 @@ interface RunOutcome {
 }
 
 /**
- * One state read. `status` is what `tacho status` said, and is absent when it
+ * One state read. `status` is what `oxagen agent status` said, and is absent when it
  * was not asked this time (a plain tick, or an action running): the panel
  * keeps what it shows.
  */
@@ -157,36 +159,6 @@ interface MachineRead {
 
 const labelOf = (h: string) => HARNESS_LABEL[h as Harness] ?? h;
 const joinLabels = (list: readonly string[]) => list.map(labelOf).join(" and ");
-
-/**
- * What the Activity log and the error banner call each recorder action that
- * `act` runs. The recorder still runs as the bundled `tacho` sidecar, but a
- * person types `oxagen agent …` now (#4879), so its argv is not shown as a
- * command line.
- */
-const RECORDER_ACTIONS: Record<string, string> = {
-  enroll: "Enrolling this machine",
-  apply: "Reassigning this machine",
-  deregister: "Removing the agent",
-  add: "Wrapping the agent",
-  reapply: "Re-applying the hooks and the collector",
-};
-
-/**
- * The log line `act` opens with and the subject of its failure message. An
- * `oxagen` command reads as typed. A recorder run, including the legacy
- * `oxagen tacho reassign` spelling, reads as what it does.
- */
-function actionText(
-  name: string,
-  sidecar: "tacho" | "oxagen",
-  args: string[],
-): { log: string; subject: string } {
-  if (sidecar === "oxagen" && args[0] !== "tacho")
-    return { log: `$ oxagen ${args.join(" ")}`, subject: `oxagen ${args[0]}` };
-  const what = RECORDER_ACTIONS[name] ?? "The recorder";
-  return { log: what, subject: what };
-}
 
 /** Open a docs URL in the system browser instead of navigating the webview. */
 const openDocs = (url: string) => (e: MouseEvent) => {
@@ -360,7 +332,7 @@ export function App() {
     };
   }, [appVersion]);
   const pollRef = useRef<number | null>(null);
-  // The last `tacho status` failure shown, so a failure that repeats on
+  // The last `oxagen agent status` failure shown, so a failure that repeats on
   // every poll is reported once rather than re-raised every 20 s.
   const statusErrorRef = useRef<string | null>(null);
 
@@ -385,25 +357,25 @@ export function App() {
   const [confirming, setConfirming] = useState<string | null>(null);
   const [alsoDefault, setAlsoDefault] = useState(true);
 
-  // True while an action is changing the machine. The poll skips `tacho
-  // status` then: it would read the same files `enroll` or `unenroll` is
-  // rewriting, and its transient failure replaced the action's own error.
+  // True while an action is changing the machine. The poll skips `oxagen
+  // agent status` then: it would read the same files `enroll` or `unenroll`
+  // is rewriting, and its transient failure replaced the action's own error.
   const busyRef = useRef(false);
   // The Rust shell holds a close or a Quit until the running action ends, so
-  // closing the window never stops `tacho` between two file writes. A sign-in
+  // closing the window never stops the CLI between two file writes. A sign-in
   // or a first run holds nothing: see `busyHoldsClose`. An automatic install
   // mid-swap holds it too, whatever `busy` says.
   useEffect(() => {
     busyHoldRef.current = busyHoldsClose(busy);
     void reportBusy(busyHoldRef.current || installHoldRef.current);
   }, [busy]);
-  // Set by a tick that wants `tacho status`, cleared by the read that asks
+  // Set by a tick that wants `oxagen agent status`, cleared by the read that asks
   // it. A tick that joins a plain read already out leaves it set, so the
   // next read asks instead of the hooks going unread for another 20 s.
   const hooksDueRef = useRef(false);
   // One poller for both kinds of read, and every result applied in `apply`,
   // so a slow old answer never replaces a newer one: see `createPoller`. Two
-  // pollers that each set state inside their read let a 20 s `tacho status`
+  // pollers that each set state inside their read let a 20 s `oxagen agent status`
   // started before an action land after it.
   const poller = useMemo(
     () =>
@@ -471,7 +443,7 @@ export function App() {
     };
   }, [refresh]);
 
-  // `host` is an enrolled host or null. A host.json that `tacho unenroll`
+  // `host` is an enrolled host or null. A host.json that `oxagen agent unenroll`
   // retired (an offline revoke) is `retiredHost`: not enrolled, not wrapped,
   // and not a reason to refuse an uninstall. See `isEnrolled`.
   const rawHost = state?.host ?? null;
@@ -590,8 +562,8 @@ export function App() {
   // Step 3 opens with a scan of the machine. One scan at a time, tracked in
   // a ref: putting `detecting` in the dependency list made setDetecting(true)
   // re-run the effect, whose cleanup then discarded the result and left the
-  // step on "Scanning…" for good. The scan's own timeout (tacho's exec
-  // budget) bounds it; a result is always applied.
+  // step on "Scanning…" for good. The scan's own timeout (the recorder's
+  // exec budget) bounds it; a result is always applied.
   const scanRef = useRef(false);
   useEffect(() => {
     if (firstRun !== true || step !== 3 || detected !== null) return;
@@ -648,7 +620,7 @@ export function App() {
 
   async function act(
     name: string,
-    sidecar: "tacho" | "oxagen",
+    sidecar: Sidecar,
     args: string[],
     after?: (result: RunOutcome) => Promise<void> | void,
     onFail?: (result: RunOutcome) => void,
@@ -670,8 +642,8 @@ export function App() {
     setError(null);
     setNotice(null);
     setConfirming(null);
-    const shown = actionText(name, sidecar, args);
-    setLog([{ text: shown.log, err: false }]);
+    // The command the app runs is the one a person would type (#4891).
+    setLog([{ text: `$ oxagen ${args.join(" ")}`, err: false }]);
     try {
       const run = runSidecar(sidecar, args, (line, stream) =>
         setLog((prev) => [...prev, { text: line, err: stream === "stderr" }]),
@@ -695,7 +667,7 @@ export function App() {
       }
       if (result.code !== 0) {
         setError(
-          `${shown.subject} exited ${result.code ?? "?"}. See the output below.`,
+          `${commandName(args)} exited ${result.code ?? "?"}. See the output below.`,
         );
         onFail?.(result);
       } else {
@@ -783,14 +755,14 @@ export function App() {
     }
     return act(
       "enroll",
-      "tacho",
+      "oxagen",
       args,
       () => {
         setOutcome({
           ok: true,
           detail: `Registered ${joinLabels(chosen)} with Oxagen.`,
         });
-        // Only the ones `tacho verify` can drive: never a connected app, and
+        // Only the ones `oxagen agent verify` can drive: never a connected app, and
         // never a Cursor the scan found without its command line.
         setRunPicks(drivable(chosen, detected?.harnesses ?? null));
       },
@@ -800,7 +772,7 @@ export function App() {
           ok: false,
           detail:
             lines.at(-1) ??
-            `Enrolling this machine exited ${result.code ?? "?"} without a message`,
+            `${commandName(args)} exited ${result.code ?? "?"} without a message`,
         });
       },
     );
@@ -808,7 +780,7 @@ export function App() {
 
   async function runConnect(only?: Harness[]) {
     // `drivable` again at the call site, not only where runPicks is set: a
-    // connected app must never reach `tacho verify`, whichever path asked.
+    // connected app must never reach `oxagen agent verify`, whichever path asked.
     const picks = drivable(
       only ?? runPicks ?? hostHarnesses,
       detected?.harnesses ?? null,
@@ -863,7 +835,7 @@ export function App() {
 
   /**
    * Ask the control plane whether the session still works, right before an
-   * action that runs `tacho reassign`: with a dead token, reassign revokes
+   * action that runs `oxagen agent reassign`: with a dead token, reassign revokes
    * the enrollment, strips the hooks, fails to enroll again and removes the
    * service. `sessionExpired` is learned from the picker's first call only,
    * so a session that died since still reads as signed in. The check holds
@@ -946,7 +918,7 @@ export function App() {
       // Always, enrolled or not: `unenroll` strips Tacho's hooks and the
       // service whether or not host.json is there, and finishes a revoke an
       // earlier offline run left pending.
-      const result = await runSidecar("tacho", unenrollArgs(true), (line, s) =>
+      const result = await runSidecar("oxagen", unenrollArgs(true), (line, s) =>
         setLog((prev) => [...prev, { text: line, err: s === "stderr" }]),
       );
       if (result.code !== 0)
@@ -1157,7 +1129,7 @@ export function App() {
   // Running from a directory that is gone after this launch (an AppImage
   // mount, a mounted .dmg, App Translocation) with no durable copy of the
   // tools yet: hooks and the service written now would stop working when
-  // the app quits, so tacho refuses; "Keep the tools" makes the copy.
+  // the app quits, so the CLI refuses; "Keep the tools" makes the copy.
   const toolsTransient =
     state?.sidecar_transient === true && state.bin_dir === null;
   const keepToolsHint =
@@ -1192,7 +1164,7 @@ export function App() {
   // A running sidecar locks the pickers, with one exception: the sign-in that
   // fills them. Picking changes local state only, but `applyWorkspace` reads
   // that state when it starts and clears it when it succeeds, so a change made
-  // while `tacho reassign` runs would move the machine to the old target and
+  // while `oxagen agent reassign` runs would move the machine to the old target and
   // drop the new choice without saying so.
   const pickersLocked = busy !== null && busy !== "signin" && busy !== "signup";
 
@@ -1608,7 +1580,7 @@ export function App() {
                       {isConnected(h) ||
                       withoutCommandLine(h, detected?.harnesses ?? null) ? (
                         // Registered, so it shows; not drivable, so it gets
-                        // no checkbox. `tacho verify` returns ok:false for a
+                        // no checkbox. `oxagen agent verify` returns ok:false for a
                         // connected app by design, and for a Cursor with no
                         // command line: offering either as a target reported
                         // a failure for something that cannot succeed.
@@ -1851,7 +1823,7 @@ export function App() {
         <div className="agents">
           {agentRows.map((row) => {
             const confirmKey = `dereg-${row.key}`;
-            // With other agents left, de-registering is a `tacho reassign`,
+            // With other agents left, de-registering is an `oxagen agent reassign`,
             // which needs a working sign-in. Without one it would unenroll
             // the machine; the last agent's `unenroll` finishes offline.
             const signInFirst =
@@ -2130,7 +2102,7 @@ export function App() {
             <button
               type="button"
               onClick={() =>
-                act("reapply", "tacho", reapplyArgs(), () =>
+                act("reapply", "oxagen", reapplyArgs(), () =>
                   setNotice(
                     "Hooks and the collector re-applied from this app.",
                   ),

@@ -12,32 +12,33 @@
     "args": ["logout"]
   },
   {
-    "sidecar": "tacho",
-    "args": ["status", "--json"]
+    "sidecar": "oxagen",
+    "args": ["agent", "status", "--json"]
   },
   {
-    "sidecar": "tacho",
-    "args": ["detect", "--json"]
+    "sidecar": "oxagen",
+    "args": ["agent", "detect", "--json"]
   },
   {
-    "sidecar": "tacho",
-    "args": ["verify", "--harness", "claude-code", "--json"]
+    "sidecar": "oxagen",
+    "args": ["agent", "verify", "--harness", "claude-code", "--json"]
   },
   {
-    "sidecar": "tacho",
-    "args": ["verify", "--harness", "codex", "--json"]
+    "sidecar": "oxagen",
+    "args": ["agent", "verify", "--harness", "codex", "--json"]
   },
   {
-    "sidecar": "tacho",
-    "args": ["verify", "--harness", "cursor", "--json"]
+    "sidecar": "oxagen",
+    "args": ["agent", "verify", "--harness", "cursor", "--json"]
   },
   {
-    "sidecar": "tacho",
-    "args": ["verify", "--harness", "stella", "--json"]
+    "sidecar": "oxagen",
+    "args": ["agent", "verify", "--harness", "stella", "--json"]
   },
   {
-    "sidecar": "tacho",
+    "sidecar": "oxagen",
     "args": [
+      "agent",
       "enroll",
       "--org",
       "acme",
@@ -48,8 +49,9 @@
     ]
   },
   {
-    "sidecar": "tacho",
+    "sidecar": "oxagen",
     "args": [
+      "agent",
       "enroll",
       "--workspace",
       "core",
@@ -58,21 +60,21 @@
     ]
   },
   {
-    "sidecar": "tacho",
-    "args": ["enroll", "--harness", "cursor"]
+    "sidecar": "oxagen",
+    "args": ["agent", "enroll", "--harness", "cursor"]
   },
   {
-    "sidecar": "tacho",
-    "args": ["reassign", "--org", "globex", "--workspace", "ops"]
+    "sidecar": "oxagen",
+    "args": ["agent", "reassign", "--org", "globex", "--workspace", "ops"]
   },
   {
-    "sidecar": "tacho",
-    "args": ["reassign", "--workspace", "ops"]
+    "sidecar": "oxagen",
+    "args": ["agent", "reassign", "--workspace", "ops"]
   },
   {
     "sidecar": "oxagen",
     "args": [
-      "tacho",
+      "agent",
       "reassign",
       "--org",
       "globex",
@@ -83,34 +85,34 @@
   },
   {
     "sidecar": "oxagen",
-    "args": ["tacho", "reassign", "--workspace", "ops", "--default"]
+    "args": ["agent", "reassign", "--workspace", "ops", "--default"]
   },
   {
-    "sidecar": "tacho",
-    "args": ["reassign", "--harness", "claude-code,stella"]
+    "sidecar": "oxagen",
+    "args": ["agent", "reassign", "--harness", "claude-code,stella"]
   },
   {
-    "sidecar": "tacho",
-    "args": ["reassign", "--harness", "claude-code"]
+    "sidecar": "oxagen",
+    "args": ["agent", "reassign", "--harness", "claude-code"]
   },
   {
-    "sidecar": "tacho",
-    "args": ["unenroll", "--harness", "claude-code"]
+    "sidecar": "oxagen",
+    "args": ["agent", "unenroll", "--harness", "claude-code"]
   },
   {
-    "sidecar": "tacho",
-    "args": ["reassign", "--harness", "claude-code,claude-desktop"]
+    "sidecar": "oxagen",
+    "args": ["agent", "reassign", "--harness", "claude-code,claude-desktop"]
   },
   {
-    "sidecar": "tacho",
-    "args": ["enroll"]
+    "sidecar": "oxagen",
+    "args": ["agent", "enroll"]
   },
   {
-    "sidecar": "tacho",
-    "args": ["unenroll", "--all"]
+    "sidecar": "oxagen",
+    "args": ["agent", "unenroll", "--all"]
   },
   {
-    "sidecar": "tacho",
-    "args": ["unenroll", "--all", "--purge"]
+    "sidecar": "oxagen",
+    "args": ["agent", "unenroll", "--all", "--purge"]
   }
 ]
