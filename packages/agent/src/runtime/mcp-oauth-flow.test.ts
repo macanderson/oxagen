@@ -13,8 +13,13 @@ const m = vi.hoisted(() => ({
   healthcheck: vi.fn(),
   snapshots: vi.fn(),
   change: vi.fn(),
+  steeringWriter: vi.fn(),
+  addServer: vi.fn(),
   rows: [] as unknown[][],
-  inserts: [] as { values: unknown; set: unknown }[],
+  inserts: [] as { values: unknown; set: unknown; doNothing: boolean }[],
+  updates: [] as { set: unknown }[],
+  /** What each update's RETURNING yields, in order; one row when empty. */
+  updateResults: [] as unknown[][],
   pendingRedirect: null as URL | null,
   /** What the provider holds after `auth()` ran: a client, or none. */
   clientInfo: { client_id: "x" } as { client_id: string } | undefined,
@@ -49,9 +54,13 @@ vi.mock("./mcp-snapshots", () => ({
   captureToolSnapshots: m.snapshots,
   recordServerChange: m.change,
 }));
+vi.mock("./steering-pr", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./steering-pr")>()),
+  steeringWriter: m.steeringWriter,
+}));
 
 // A query builder that answers every select with the next queued row set and
-// records every insert.
+// records every insert and update.
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   const select = () => {
@@ -64,7 +73,11 @@ vi.mock("@oxagen/database", async (importOriginal) => {
     return chain;
   };
   const insert = () => {
-    const rec = { values: undefined as unknown, set: undefined as unknown };
+    const rec = {
+      values: undefined as unknown,
+      set: undefined as unknown,
+      doNothing: false,
+    };
     const chain = {
       values: (v: unknown) => {
         rec.values = v;
@@ -74,10 +87,30 @@ vi.mock("@oxagen/database", async (importOriginal) => {
         rec.set = o.set;
         return chain;
       },
+      onConflictDoNothing: () => {
+        rec.doNothing = true;
+        return chain;
+      },
       returning: async () => {
         m.inserts.push(rec);
         return [{ id: "row-uuid", publicId: "mcs_new" }];
       },
+    };
+    return chain;
+  };
+  const update = () => {
+    const rec = { set: undefined as unknown };
+    m.updates.push(rec);
+    const result = () => m.updateResults.shift() ?? [{ id: "row-uuid" }];
+    const chain = {
+      set: (v: unknown) => {
+        rec.set = v;
+        return chain;
+      },
+      where: () => chain,
+      returning: async () => result(),
+      then: (ok: (v: unknown) => unknown, fail: (e: unknown) => unknown) =>
+        Promise.resolve(result()).then(ok, fail),
     };
     return chain;
   };
@@ -87,7 +120,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const dbMock = {
     ...real,
     withTenantDb: async (fn: (tx: unknown) => unknown) =>
-      fn({ select, insert }),
+      fn({ select, insert, update }),
   };
   return { ...dbMock, withOrgDb: dbMock.withTenantDb };
 });
@@ -102,12 +135,21 @@ import {
 
 const SCOPE = { orgId: "org-1", workspaceId: "ws-1", userId: "user-1" };
 const REDIRECT = "https://app.oxagen.sh/api/v1/mcp/oauth/callback";
+const STEERING_PR = {
+  number: 12,
+  url: "https://github.com/acme/steering/pull/12",
+  branch: "tools/add-server-linear-20261001t120000z",
+};
 const fetchFn = vi.fn() as unknown as typeof fetch;
 
 beforeEach(() => {
   vi.clearAllMocks();
   m.rows = [];
   m.inserts = [];
+  m.updates = [];
+  m.updateResults = [];
+  m.steeringWriter.mockResolvedValue(null);
+  m.addServer.mockResolvedValue(STEERING_PR);
   m.pendingRedirect = null;
   m.clientInfo = { client_id: "x" };
   m.detect.mockResolvedValue("oauth");
@@ -803,5 +845,218 @@ describe("completeMcpAuthorization", () => {
     expect(m.snapshots).not.toHaveBeenCalled();
     // Stored as not yet known, so the runtime still offers the provider.
     expect(m.inserts.at(-1)?.values).toMatchObject({ healthStatus: "unknown" });
+  });
+});
+
+// Once a workspace's tools live in its steering repo (M13, #4478, ADR-209 §6),
+// a sign-in stores the tokens but writes no enabled legacy row. An enabled row
+// would connect the server before review, and a legacy row would put the
+// workspace back on direct writes.
+describe("recording an authorized server once tools live in the steering repo", () => {
+  const saved = {
+    codeVerifier: "v",
+    orgId: "org-1",
+    workspaceId: "ws-1",
+    orgListingId: "listing-1",
+    returnTo: "",
+  };
+  const listing = {
+    id: "listing-1",
+    title: "Linear",
+    name: "verified/linear",
+    endpointUrl: "https://mcp.linear.app/mcp",
+  };
+  const row = (over: Record<string, unknown>) => ({
+    id: "srv-2",
+    publicId: "mcs_2",
+    origin: "legacy",
+    steeringName: null,
+    enabled: false,
+    deletedAt: null,
+    deletedById: null,
+    ...over,
+  });
+  const complete = () =>
+    completeMcpAuthorization(
+      SCOPE,
+      { state: "s1", code: "c1", redirectUrl: REDIRECT },
+      { fetchFn },
+    );
+
+  beforeEach(() => {
+    m.loadState.mockResolvedValue(saved);
+    m.auth.mockResolvedValue("AUTHORIZED");
+    m.steeringWriter.mockResolvedValue({
+      addServer: m.addServer,
+      addTools: vi.fn(),
+    });
+  });
+
+  it("proposes a new server in a steering PR, pins its tools first, and records no enable", async () => {
+    m.rows.push([listing], []);
+
+    const out = await complete();
+
+    expect(out).toEqual({
+      mcpServerId: "mcs_new",
+      name: "Linear",
+      healthStatus: "healthy",
+      discoveredTools: ["list_issues"],
+      steeringPr: { number: 12, url: STEERING_PR.url },
+    });
+    expect(m.steeringWriter).toHaveBeenCalledWith({
+      orgId: "org-1",
+      workspaceId: "ws-1",
+    });
+    expect(m.inserts).toHaveLength(1);
+    expect(m.inserts[0]).toMatchObject({
+      doNothing: true,
+      set: undefined,
+      values: {
+        origin: "proposed",
+        enabled: false,
+        orgListingId: "listing-1",
+        transportType: "streamable-http",
+        authStrategy: "bearer",
+        healthStatus: "healthy",
+        createdById: "user-1",
+      },
+    });
+    expect(m.snapshots).toHaveBeenCalledWith(
+      expect.objectContaining({ mcpServerId: "row-uuid" }),
+    );
+    expect(m.addServer).toHaveBeenCalledWith({
+      orgId: "org-1",
+      workspaceId: "ws-1",
+      serverId: "row-uuid",
+      actorUserId: "user-1",
+    });
+    // The folder the PR adds lists the tools the probe pinned.
+    expect(m.snapshots.mock.invocationCallOrder[0]).toBeLessThan(
+      m.addServer.mock.invocationCallOrder[0] as number,
+    );
+    expect(m.change).not.toHaveBeenCalled();
+    expect(m.deleteState).toHaveBeenCalledWith("s1");
+  });
+
+  it("turns a disabled legacy row into a proposal and keeps its id", async () => {
+    m.rows.push([listing], [row({})]);
+
+    const out = await complete();
+
+    expect(out).toMatchObject({ mcpServerId: "mcs_2", steeringPr: { number: 12 } });
+    expect(m.inserts).toEqual([]);
+    expect(m.updates[0]?.set).toMatchObject({
+      origin: "proposed",
+      enabled: false,
+      steeringName: null,
+      name: "Linear",
+      endpointUrl: "https://mcp.linear.app/mcp",
+      healthStatus: "healthy",
+      discoveredTools: ["list_issues"],
+    });
+    expect(m.addServer).toHaveBeenCalledWith(
+      expect.objectContaining({ serverId: "srv-2" }),
+    );
+    expect(m.change).not.toHaveBeenCalled();
+  });
+
+  it("leaves a server whose steering PR is open off, and says the sign-in is saved", async () => {
+    m.rows.push([listing], [row({ origin: "proposed", steeringName: "linear" })]);
+
+    await expect(complete()).rejects.toMatchObject({
+      code: "conflict",
+      reason: "steering_pr_open",
+      message: expect.stringContaining("tools/servers/linear/"),
+    });
+    // The code was exchanged, so the tokens are stored.
+    expect(m.auth).toHaveBeenCalled();
+    expect(m.inserts).toEqual([]);
+    expect(m.updates).toEqual([]);
+    expect(m.addServer).not.toHaveBeenCalled();
+    expect(m.snapshots).not.toHaveBeenCalled();
+    expect(m.change).not.toHaveBeenCalled();
+  });
+
+  it("writes a server the steering repo already holds directly", async () => {
+    m.rows.push([listing], [row({ origin: "steering", steeringName: "linear" })]);
+
+    const out = await complete();
+
+    expect(out).not.toHaveProperty("steeringPr");
+    expect(m.addServer).not.toHaveBeenCalled();
+    expect(m.inserts[0]?.set).toMatchObject({ enabled: true });
+    expect(m.change).toHaveBeenCalledWith(
+      expect.objectContaining({ changeType: "enable" }),
+    );
+  });
+
+  it("deletes the proposed row when the PR does not open, and records nothing", async () => {
+    m.addServer.mockRejectedValue(new Error("GitHub is down"));
+    m.rows.push([listing], []);
+
+    await expect(complete()).rejects.toThrow("GitHub is down");
+
+    expect(m.updates[0]?.set).toMatchObject({
+      deletedAt: expect.any(Date),
+      deletedById: "user-1",
+    });
+    expect(m.change).not.toHaveBeenCalled();
+  });
+
+  it("returns the steering PR when a stored refresh token still works", async () => {
+    m.rows.push(
+      [
+        {
+          id: "listing-1",
+          title: "Linear",
+          endpointUrl: "https://mcp.linear.app/mcp",
+          authKind: "oauth",
+        },
+      ],
+      [],
+    );
+    m.getSecret.mockResolvedValue({
+      oauthClientId: "dcr-client",
+      oauthClientRedirectUri: REDIRECT,
+    });
+
+    const out = await startMcpAuthorization(
+      SCOPE,
+      { mcpServerId: "mcs_1", redirectUrl: REDIRECT },
+      { fetchFn },
+    );
+
+    expect(out).toEqual({
+      status: "authorized",
+      mcpServerId: "mcs_new",
+      healthStatus: "healthy",
+      discoveredTools: ["list_issues"],
+      steeringPr: { number: 12, url: STEERING_PR.url },
+    });
+    expect(m.change).not.toHaveBeenCalled();
+  });
+
+  it("writes an enabled legacy row in a workspace that has not migrated", async () => {
+    m.steeringWriter.mockResolvedValue(null);
+    m.rows.push([listing]);
+
+    const out = await complete();
+
+    expect(out).not.toHaveProperty("steeringPr");
+    expect(m.steeringWriter).toHaveBeenCalledWith({
+      orgId: "org-1",
+      workspaceId: "ws-1",
+    });
+    expect(m.inserts).toHaveLength(1);
+    expect(m.inserts[0]?.values).toMatchObject({ enabled: true });
+    expect(
+      (m.inserts[0]?.values as Record<string, unknown>).origin,
+    ).toBeUndefined();
+    expect(m.inserts[0]?.set).toMatchObject({ enabled: true, deletedAt: null });
+    expect(m.addServer).not.toHaveBeenCalled();
+    expect(m.change).toHaveBeenCalledWith(
+      expect.objectContaining({ changeType: "enable" }),
+    );
   });
 });

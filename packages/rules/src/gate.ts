@@ -86,6 +86,12 @@ type MandateCheck = (args: {
   agentPrincipalId: string;
   userId: string | null;
   requestId?: string;
+  /**
+   * The internal id (`agent_runs.id`) of the run this call belongs to, or
+   * null when none is in scope. A call the mandate parks records the run
+   * on its approval row, as an auto-approval receipt does (#3478).
+   */
+  runId: string | null;
 }) => Promise<DecisionSettlement | undefined>;
 
 /**
@@ -229,6 +235,9 @@ export function createDecisionRulesGate(
       agentPrincipalId: principal.id,
       userId: ctx.userId,
       requestId: ctx.requestId,
+      // The run the parked approval names, read by `list_approvals` and by
+      // `resolve_approval`'s refusal of the run that raised it (#3478).
+      runId: ctx.runId ?? null,
     });
     // By here the mandate has reserved authority in the ledger, and the only
     // thing that gives it back is the settlement the kernel applies to the

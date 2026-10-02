@@ -14,7 +14,7 @@ import { type ListRow, ListTable } from "@/ui/list-table";
 import { Money } from "@/ui/money";
 import { formatCount } from "@/ui/money-format";
 import { cell } from "@/ui/table";
-import { NotRecordedValue, Section } from "./section";
+import { NotRecordedValue, retentionDaysBelowPaid, Section } from "./section";
 import type { GovernedCharge, Statement } from "./statement";
 
 /** The governed-action line's basis: how the meter was priced. */
@@ -74,6 +74,26 @@ export function ThisPeriod({
   const r = retention;
   const count = (n: number) => formatCount(n, locale);
   const notRecorded = <NotRecordedValue>{t("notRecorded")}</NotRecordedValue>;
+  // A subscriber's window prints in months, and 30 days with no subscription
+  // prints in days (ADR-241, signup grant).
+  const retentionBasis = (): string => {
+    const held = t("thisPeriod.basis.heldNotRecorded");
+    const days = retentionDaysBelowPaid(r);
+    if (days === null) {
+      return t(
+        r.extendedRetentionEnabled
+          ? "thisPeriod.basis.retentionExtended"
+          : "thisPeriod.basis.retention",
+        { months: count(r.includedMonths), held },
+      );
+    }
+    return t(
+      r.extendedRetentionEnabled
+        ? "thisPeriod.basis.retentionExtendedDays"
+        : "thisPeriod.basis.retentionDays",
+      { days: count(days), held },
+    );
+  };
   const line = (
     name: string,
     cells: ListRow["cells"],
@@ -99,15 +119,7 @@ export function ThisPeriod({
     ]),
     line("retention", [
       t("thisPeriod.lines.retention"),
-      t(
-        r.extendedRetentionEnabled
-          ? "thisPeriod.basis.retentionExtended"
-          : "thisPeriod.basis.retention",
-        {
-          months: count(r.includedMonths),
-          held: t("thisPeriod.basis.heldNotRecorded"),
-        },
-      ),
+      retentionBasis(),
       <StatementAmount key="amount" value={s.retentionAmount} />,
     ]),
     line("discount", [

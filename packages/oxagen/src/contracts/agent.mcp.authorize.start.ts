@@ -57,6 +57,14 @@ export const agentMcpAuthorizeStart = registerCapability({
       mcpServerId: z.string(),
       healthStatus: z.enum(["healthy", "degraded", "unreachable"]),
       discoveredTools: z.array(z.string()),
+      /**
+       * Set when the workspace's tools live in its steering repo and the
+       * sign-in opened a steering PR that adds the server. The server stays
+       * off until the PR merges and the next publish connects it.
+       */
+      steeringPr: z
+        .object({ number: z.number().int().positive(), url: z.string().url() })
+        .optional(),
     }),
     z.object({
       /** The server registers no clients and none was supplied: bring an OAuth app. */

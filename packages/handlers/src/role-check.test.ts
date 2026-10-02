@@ -172,6 +172,10 @@ const ROLE_CHECKED_CONTRACTS = [
   // workspace's calls, so only an org Owner or Admin mints or revokes one.
   "create_relay",
   "revoke_relay",
+  // Private repository names, binding ids, and approved refs (#3340): org
+  // Owner or Admin, or workspace Owner or Member. A workspace Viewer and an
+  // org Billing member read the list until the handler asserted the roles.
+  "list_repositories",
 ] as const;
 
 const AGENT_ROLE_CHECKED_CONTRACTS = [

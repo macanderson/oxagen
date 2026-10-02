@@ -6,7 +6,6 @@ import {
   downloadUrl,
   expectedAssets,
   installSection,
-  releaseAssetUrl,
   releaseTag,
 } from "./lib/release-artifacts";
 
@@ -53,14 +52,36 @@ describe("expectedAssets", () => {
   });
 });
 
+describe("the macOS updater archive", () => {
+  it("is named in desktop.yml the way publish-downloads.mjs reads it", () => {
+    // classifyUpdaterArchive (apps/desktop/src/downloads.ts) accepts exactly
+    // Oxagen_<version>_aarch64.app.tar.gz and Oxagen_<version>_x64.app.tar.gz.
+    // If the rename drifts, the feed loses its macOS keys and every Mac stops
+    // being offered updates, so the name is pinned here.
+    const workflow = readFileSync(
+      join(import.meta.dirname, "../../.github/workflows/desktop.yml"),
+      "utf8",
+    );
+    expect(workflow).toContain(
+      'mv "$dir/Oxagen.app.tar.gz" "$dir/Oxagen_${VERSION}_${arch}.app.tar.gz"',
+    );
+    expect(workflow).toContain(
+      'mv "$dir/Oxagen.app.tar.gz.sig" "$dir/Oxagen_${VERSION}_${arch}.app.tar.gz.sig"',
+    );
+    expect(workflow).toMatch(/aarch64-\*\) arch=aarch64 ;;/);
+    expect(workflow).toMatch(/\*\) arch=x64 ;;/);
+    expect(workflow).toContain("release/bundle/macos/*.app.tar.gz");
+  });
+});
+
 describe("urls", () => {
-  it("point at the versioned download path and the desktop-v release", () => {
+  it("point every file at its versioned path on the downloads host", () => {
     expect(releaseTag("2.2.0")).toBe("desktop-v2.2.0");
     expect(downloadUrl("2.2.0", "Oxagen_2.2.0_aarch64.dmg")).toBe(
       "https://downloads.oxagen.sh/desktop/2.2.0/Oxagen_2.2.0_aarch64.dmg",
     );
-    expect(releaseAssetUrl("2.2.0", "tacho-x86_64-pc-windows-msvc.exe")).toBe(
-      "https://github.com/macanderson/oxagen/releases/download/desktop-v2.2.0/tacho-x86_64-pc-windows-msvc.exe",
+    expect(downloadUrl("2.2.0", "tacho-x86_64-pc-windows-msvc.exe")).toBe(
+      "https://downloads.oxagen.sh/desktop/2.2.0/tacho-x86_64-pc-windows-msvc.exe",
     );
   });
 });
@@ -75,6 +96,11 @@ describe("installSection", () => {
     }
     expect(section).toContain("npm install -g @oxagen/cli@2.2.0");
     expect(section).toContain("desktop/2.2.0/SHA256SUMS.txt");
+    // The repository is private, so the notes link no GitHub release (ADR-247).
+    expect(section).not.toContain("github.com");
+    expect(section).toContain(
+      "[oxagen-aarch64-apple-darwin](https://downloads.oxagen.sh/desktop/2.2.0/oxagen-aarch64-apple-darwin)",
+    );
     expect(section.startsWith("## Install\n")).toBe(true);
     // The prose rules the repository holds: no em dashes, no exclamation marks.
     expect(section).not.toMatch(/[—!]/);

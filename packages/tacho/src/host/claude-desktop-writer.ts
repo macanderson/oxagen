@@ -49,6 +49,19 @@
  * requires every surface to say so instead of implying coverage it does not
  * have. `oxagenMcpPresence` returns the count and names of those other servers
  * for exactly that purpose.
+ *
+ * ## Who sent a prompt, checked 2026-10-01
+ *
+ * Nothing on this tier records a prompt. The gateway sees the tool calls the
+ * app routes through it and no message, so no frame from this tier carries
+ * `prompt_source` or `prompt_origin`. The app's Code tab is another matter:
+ * it runs Claude Code, which fires the user's Claude Code hooks and writes a
+ * transcript with `entrypoint` `claude-desktop`, so its runs reach Tacho as
+ * Claude Code runs. That transcript sets `promptSource` to `sdk` on every
+ * prompt, typed or not, and the sender shows in `origin.kind` instead:
+ * `human` for a prompt the person typed, `task-notification` for a
+ * background task's report, and `peer` for a message from another agent.
+ * `claude-desktop-prompt-source.test.ts` holds those lines.
  */
 import { join } from "node:path";
 import {

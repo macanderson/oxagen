@@ -76,6 +76,6 @@ Postgres binding through it, which is why the contract declares
   disabled plane is exactly what an operator calls this to see. That error comes
   from the store clients (`withTenantDb`, `scopedSession`, `chInsert`/`chSelect`)
   when the organisation's scoped data access is refused.
-- A `dedicated` row whose envelope cannot be opened (missing
-  `AUTH_TOKEN_ENCRYPTION_KEY`, corrupt ciphertext) fails the read rather than
+- A `dedicated` row whose envelope cannot be opened (no credential
+  vault key, [`AUTH_TOKEN_ENCRYPTION_KEY`](../../packages/config/src/registry.ts), or corrupt ciphertext) fails the read rather than
   falling back to reporting the shared plane.

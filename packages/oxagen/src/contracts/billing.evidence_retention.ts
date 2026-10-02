@@ -42,6 +42,13 @@ export const billingEvidenceRetention = registerCapability({
     /** Months of evidence retention included on every paid tier. */
     includedMonths: z.number().int().positive(),
     /**
+     * Days of evidence this organisation's billing basis includes today: the
+     * paid tiers' months, counted as 30 days each, for a subscriber or an
+     * organisation approved for invoice billing, and 30 days for one with no
+     * subscription, on its signup grant or past it (ADR-241).
+     */
+    includedDays: z.number().int().positive(),
+    /**
      * The longest retention window any of this organisation's pinned retention
      * policies declares, in days, or null when none is pinned yet. Null means
      * the organisation has not declared one, not that evidence is kept forever.

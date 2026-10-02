@@ -1212,4 +1212,79 @@ describe("one model call reported by several sources", () => {
       "1",
     ]);
   });
+
+  // #4351, decided 2026-10-01: one model reply is one step, however many
+  // parts it arrives in. The fold drew each part as a model step, while the
+  // Cost tab's query counted the reply once.
+  describe("a reply in several parts folds to one model step", () => {
+    const reply = { request_id: "req_1" };
+    const first = (seq: number) =>
+      tachoRow(seq, "llm_call", {
+        source: "transcript",
+        attrs: {},
+        body: JSON.stringify(reply),
+        ...retained(seq),
+      });
+    const part = (seq: number, requestId = "req_1") =>
+      tachoRow(seq, "llm_call", {
+        source: "transcript",
+        attrs: { [DUP]: "transcript" },
+        body: JSON.stringify({ request_id: requestId }),
+        ...retained(seq),
+      });
+    const steps = (rows: ReturnType<typeof tachoRow>[]) =>
+      stepFolds(withoutDuplicateModelCalls(rows.map(tachoFrame)));
+    const seqs = (fold: { members: { seq: string }[] }) =>
+      fold.members.map((frame) => frame.seq);
+
+    it("counts the issue's two-part reply as one model step that holds both parts", () => {
+      const folded = steps([tachoRow(0, "turn_start"), first(1), part(2)]);
+      const models = folded.filter((step) => step.node === "model");
+      expect(models).toHaveLength(1);
+      expect(seqs(models[0]!)).toEqual(["1", "2"]);
+      expect(models[0]?.frames).toBe(2);
+    });
+
+    it("pairs an unkeyed tool request with its receipt across the reply's further part", () => {
+      const folded = steps([
+        tachoRow(0, "turn_start"),
+        first(1),
+        tachoRow(2, "tool_requested"),
+        part(3),
+        tachoRow(4, "tool_call"),
+      ]);
+      const models = folded.filter((step) => step.node === "model");
+      const tools = folded.filter((step) => step.kind === "tool_call");
+      expect(models.map(seqs)).toEqual([["1", "3"]]);
+      expect(tools.map(seqs)).toEqual([["2", "4"]]);
+    });
+
+    it("keeps two replies two steps (negative)", () => {
+      const folded = steps([
+        tachoRow(0, "turn_start"),
+        first(1),
+        part(2),
+        tachoRow(3, "llm_call", {
+          source: "transcript",
+          attrs: {},
+          body: JSON.stringify({ request_id: "req_2" }),
+          ...retained(3),
+        }),
+        part(4, "req_2"),
+      ]);
+      expect(
+        folded.filter((step) => step.node === "model").map(seqs),
+      ).toEqual([
+        ["1", "2"],
+        ["3", "4"],
+      ]);
+    });
+
+    it("draws a part whose first part is not on the page as the reply, with the parts after it", () => {
+      const folded = steps([tachoRow(0, "turn_start"), part(1), part(2)]);
+      expect(
+        folded.filter((step) => step.node === "model").map(seqs),
+      ).toEqual([["1", "2"]]);
+    });
+  });
 });
