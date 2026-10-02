@@ -24,6 +24,10 @@
 //      way. The PR's last record is refused: closing the PR rejects it.
 //   5. Commit the delete on the head that was read. The host refuses
 //      `head_moved` when someone pushed in between.
+//   6. Move the memory PR's proposal row to that commit (ADR-265), as
+//      promote_memories does after its commit, so merge_steering_pr lands
+//      the head the drop made. A row write that fails is logged: the commit
+//      stands, and the repository sync moves the row to the new head.
 import { HandlerError, type CapabilityHandler } from "@oxagen/oxagen";
 import {
   steeringMemoryPrRecordDrop,
@@ -33,11 +37,23 @@ import { STEERING_DIR } from "@oxagen/oxagen/steering-repo/paths";
 import type { SteeringHost } from "./context.steering.github";
 import { assertContractRole } from "./lib/capability-role-guard";
 import type { WorkspaceMemoryStore } from "./memory/workspace-store";
+import {
+  actingAuthor,
+  recordSteeringPrQuietly,
+  type SteeringPrAuthor,
+  type SteeringPrProposalStore,
+} from "./steering-repo/pr-proposal";
 
 export interface SteeringMemoryPrRecordDropDeps {
   workspace: Pick<WorkspaceMemoryStore, "findMemoryPr">;
   /** The steering host, made on the first call that reaches it. */
   host(): Promise<SteeringHost>;
+  /** The proposal rows merge_steering_pr lands a steering PR from (ADR-265). */
+  proposals(): Promise<SteeringPrProposalStore>;
+  /** The person the row records as the commit's author. */
+  author(
+    ctx: Parameters<CapabilityHandler<typeof steeringMemoryPrRecordDrop>>[1],
+  ): Promise<SteeringPrAuthor>;
   /** The handler-side role check (lib/capability-role-guard.ts). */
   assertRole(
     ctx: Parameters<CapabilityHandler<typeof steeringMemoryPrRecordDrop>>[1],
@@ -59,6 +75,11 @@ export const defaultSteeringMemoryPrRecordDropDeps: SteeringMemoryPrRecordDropDe
       const { createSteeringHost } = await import("./context.steering.host");
       return createSteeringHost();
     },
+    async proposals() {
+      const { postgresSteeringStore } = await import("./context.steering.store");
+      return postgresSteeringStore;
+    },
+    author: (ctx) => actingAuthor(ctx),
     // The guard answers the role it found. The handler needs only the refusal.
     assertRole: async (ctx) => {
       await assertContractRole(steeringMemoryPrRecordDrop, ctx);
@@ -172,6 +193,22 @@ export function createSteeringMemoryPrRecordDropHandler(
       parent: head,
       message: `Drop ${record.lineage} from memory PR #${pr.number}`,
       files: [{ path: input.path, content: null }],
+    });
+    // The row follows the PR to the commit the drop made (#5122).
+    await recordSteeringPrQuietly(await deps.proposals(), {
+      scope,
+      repo,
+      kind: "memory_pr",
+      pullRequest: {
+        number: pr.number,
+        url: pr.url,
+        branch: pr.branch,
+        headSha: sha,
+      },
+      title: `Memory PR ${pr.branch.slice("memory/".length)}`,
+      paths: pr.records.map((entry) => entry.path),
+      check: null,
+      author: await deps.author(ctx),
     });
     return {
       pull_request: pullRequest,

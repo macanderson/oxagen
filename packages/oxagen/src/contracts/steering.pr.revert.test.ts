@@ -43,8 +43,15 @@ describe("revert_steering_pr contract", () => {
         headSha: "head9",
       },
       check: "success",
+      revertProposalId: "prp_2",
     });
     expect(out.pullRequest.branch).toBe("steering/revert-519");
+    // The revert's own proposal, which merge_steering_pr lands (#5122). A
+    // legacy repository's revert has none.
+    expect(out.revertProposalId).toBe("prp_2");
+    expect(
+      steeringPrRevert.output.safeParse({ ...out, revertProposalId: null }).success,
+    ).toBe(true);
     // A legacy repository has no required check, so none is reported.
     expect(
       steeringPrRevert.output.safeParse({ ...out, check: null }).success,

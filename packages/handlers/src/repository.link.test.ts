@@ -22,6 +22,7 @@ import {
 } from "./repository.link";
 import type { LinkTarget } from "./repository.link.write";
 import { readWorkspaceToml } from "./repository.workspace-toml";
+import { MemoryStore as ProposalStore } from "./context.steering.test-support";
 import { makeCTX } from "./test-utils/fixtures";
 
 const mocks = vi.hoisted(() => ({
@@ -572,5 +573,41 @@ describe("readWorkspaceNames", () => {
   it("answers null when the workspace no longer exists", async () => {
     slugReads([{ slug: "a-intel" }], []);
     await expect(readWorkspaceNames(SCOPE)).resolves.toBeNull();
+  });
+});
+
+describe("link_repository: the proposal row (#5122)", () => {
+  it("writes the PR's workspace proposal row, authored by the person who linked", async () => {
+    const proposals = new ProposalStore();
+    const { deps } = handler(workspaceToml("github.com/acme/other"));
+    const run = createRepositoryLinkHandler({ ...deps, proposals });
+
+    await run(INPUT, makeCTX());
+
+    expect(proposals.proposals).toHaveLength(1);
+    expect(proposals.proposals[0]).toMatchObject({
+      kind: "workspace",
+      lineageId: BRANCH,
+      status: "pr_open",
+      prNumber: 12,
+      prUrl: PR_URL,
+      headSha: "c0ffee",
+      createdById: "u_1",
+      source: "user:u_1",
+    });
+  });
+
+  it("records the key's creator as the author of a link made with an API key, so they cannot merge it alone", async () => {
+    mocks.resolveActingUserId.mockResolvedValueOnce("u_key_owner");
+    const proposals = new ProposalStore();
+    const { deps } = handler(workspaceToml("github.com/acme/other"));
+    const run = createRepositoryLinkHandler({ ...deps, proposals });
+
+    await run(INPUT, makeCTX({ userId: null, apiKeyId: "key_1" }));
+
+    expect(proposals.proposals[0]).toMatchObject({
+      createdById: "u_key_owner",
+      source: "api_key:key_1",
+    });
   });
 });

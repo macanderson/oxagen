@@ -18,7 +18,7 @@
 import { useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
 import type { RepositoryChange } from "@/data/contracts/repository";
-import type { SteeringPr } from "@/data/contracts/steering";
+import { type SteeringPr, isSteeringPrKind } from "@/data/contracts/steering";
 import { routes } from "@/shared/safe-path";
 import { Badge } from "@/ui/badge";
 import { buttonPrimary, buttonSecondary, mono } from "@/ui/control-styles";
@@ -42,11 +42,24 @@ type Check = SteeringPr["checks"][number];
 /** The signed-in person the close comment names. */
 export type Closer = { name: string; email: string };
 
-/** Every check reported, none failed, and nothing merged yet. */
+/** The statuses a steering PR merges from: its merge runs the steering checks first (#5122). */
+const STEERING_PR_MERGEABLE: ReadonlySet<string> = new Set([
+  "pr_open",
+  "checks_running",
+  "checks_passed",
+  "checks_failed",
+]);
+
+/**
+ * Whether Merge is offered. Nothing merged yet, and then: a steering PR in a
+ * status its merge starts from, or a record PR whose every check reported and
+ * passed.
+ */
 function canMerge(pr: SteeringPr): boolean {
+  if (pr.merged !== null) return false;
+  if (isSteeringPrKind(pr.kind)) return STEERING_PR_MERGEABLE.has(pr.status);
   return (
     pr.status === "checks_passed" &&
-    pr.merged === null &&
     pr.checks.length > 0 &&
     pr.checks.every((check) => check.status === "passed")
   );
@@ -287,10 +300,14 @@ function Loaded({
           <dt>{t("facts.kind")}</dt>
           <dd className="flex flex-wrap items-center gap-2">
             <Badge tone="quiet" dot={false}>
-              {changes("kinds.steering_record")}
+              {isSteeringPrKind(pr.kind)
+                ? changes("kinds.steering_pr")
+                : changes("kinds.steering_record")}
             </Badge>
             <span className={`${mono} text-[11.5px] text-dim`}>
-              {changes("kindPaths.steering_record")}
+              {isSteeringPrKind(pr.kind)
+                ? pr.onMerge.path
+                : changes("kindPaths.steering_record")}
             </span>
           </dd>
           <dt>{t("facts.pullRequest")}</dt>

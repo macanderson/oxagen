@@ -37,6 +37,7 @@ import { steeringPrOpen } from "@oxagen/oxagen/contracts/steering.pr.open";
 import {
   CHECK_NAMES,
   type CheckFinding,
+  isSteeringPrKind,
   type CheckName,
   type CheckResult,
   type ConstraintEffect,
@@ -152,6 +153,15 @@ export function createOpenSteeringPrHandler(
         code: "conflict",
         reason: "governance_proposal",
         message: `${row.prUrl ?? row.publicId} changes the governance mode, so the record checks do not apply. Set the mode again in the workspace's governance settings to run its checks.`,
+      });
+    }
+    // A steering PR proposal's PR changes files, not one record. Its opener
+    // opened the PR, and its merge runs the steering checks (#5122).
+    if (isSteeringPrKind(row.kind)) {
+      throw new HandlerError({
+        code: "conflict",
+        reason: "steering_pr_proposal",
+        message: `${row.prUrl ?? row.publicId} is a ${row.kind.replace(/_/g, " ")} steering PR, so the record checks do not apply. Merge it from Oxagen: the merge runs the steering checks on its head first.`,
       });
     }
     if (!isOpen(row.status)) {

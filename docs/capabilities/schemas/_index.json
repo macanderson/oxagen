@@ -1235,18 +1235,6 @@
       "consumes": []
     },
     {
-      "name": "get_budget_policy",
-      "domain": "workspace",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
-      "component": null,
-      "produces": [],
-      "consumes": []
-    },
-    {
       "name": "get_capability_registry",
       "domain": "capability",
       "surfaces": [
@@ -2228,18 +2216,6 @@
     {
       "name": "get_usage_breakdown",
       "domain": "billing",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
-      "component": null,
-      "produces": [],
-      "consumes": []
-    },
-    {
-      "name": "get_user_budget",
-      "domain": "user",
       "surfaces": [
         "api",
         "mcp",
@@ -5216,18 +5192,6 @@
       "consumes": []
     },
     {
-      "name": "update_budget_policy",
-      "domain": "workspace",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
-      "component": null,
-      "produces": [],
-      "consumes": []
-    },
-    {
       "name": "update_connection",
       "domain": "connection",
       "surfaces": [
@@ -5382,18 +5346,6 @@
     {
       "name": "update_toolbelt",
       "domain": "toolbelt",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
-      "component": null,
-      "produces": [],
-      "consumes": []
-    },
-    {
-      "name": "update_user_budget",
-      "domain": "user",
       "surfaces": [
         "api",
         "mcp",

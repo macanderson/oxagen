@@ -10,8 +10,8 @@
  *
  *   1. the `ChatSelectionStore` interface (the agent selection), consumed by
  *      `useComposerSelectionState()`;
- *   2. the `[ComposerModelState, setState]` tuple (model/tier/effort/budget/
- *      generate), consumed by the composer.
+ *   2. the `[ComposerModelState, setState]` tuple (model/tier/effort),
+ *      consumed by the composer.
  *
  * Both return null/fall back when no ChatSessionProvider wraps the tree
  * (flag off), leaving legacy behavior byte-identical. Delete this file with
@@ -22,11 +22,7 @@ import type {
   AgentSelectionApply,
   ChatSelectionStore,
 } from "../agent-picker/chat-selection-context";
-import {
-  applyWorkspaceBudgetGovernance,
-  type ComposerModelState,
-  type WorkspaceBudgetGovernance,
-} from "../model-state";
+import type { ComposerModelState } from "../model-state";
 import { useChatSessionContext } from "./session-store";
 import type { ChatSessionState } from "./session-state";
 
@@ -60,28 +56,20 @@ export function useSessionSelectionBridge(): ChatSelectionStore | null {
 }
 
 // ---------------------------------------------------------------------------
-// Bridge 2 — ComposerModelState (model / tier / effort / budget / generate)
+// Bridge 2 — ComposerModelState (model / tier / effort)
 // ---------------------------------------------------------------------------
 
 /** Project the session fields onto a ComposerModelState carrier. */
 export function composeModelState(
   carrier: ComposerModelState,
   state: ChatSessionState,
-  governance: WorkspaceBudgetGovernance | null,
 ): ComposerModelState {
-  return applyWorkspaceBudgetGovernance(
-    {
-      ...carrier,
-      tier: state.tier,
-      model: state.model,
-      effort: state.effort,
-      budgetEnabled: state.budgetUsd !== null,
-      budgetUsd: state.budgetUsd,
-      // v2 semantics: a cap always pauses-and-asks at the ceiling.
-      budgetMode: state.budgetUsd !== null ? "prompt" : carrier.budgetMode,
-    },
-    governance,
-  );
+  return {
+    ...carrier,
+    tier: state.tier,
+    model: state.model,
+    effort: state.effort,
+  };
 }
 
 /** Split a ComposerModelState back into a session patch. */
@@ -89,38 +77,32 @@ export function modelStateToSessionPatch(next: ComposerModelState): {
   tier: ChatSessionState["tier"];
   model: string | null;
   effort: ChatSessionState["effort"];
-  budgetUsd: number | null;
 } {
   return {
     tier: next.tier,
     model: next.model,
     effort: next.effort ?? "medium",
-    budgetUsd: next.budgetEnabled ? next.budgetUsd : null,
   };
 }
 
 /**
  * Drop-in replacement for the composer's `useState<ComposerModelState>`:
- * with a session provider mounted, model/tier/effort/budget live in the
- * unified store (other carrier-only fields stay local); without one, this IS a
- * plain useState.
+ * with a session provider mounted, model/tier/effort live in the unified
+ * store; without one, this IS a plain useState.
  */
 export function useSessionModelState(
   initial: ComposerModelState,
-  governance: WorkspaceBudgetGovernance | null,
 ): [
   ComposerModelState,
   React.Dispatch<React.SetStateAction<ComposerModelState>>,
 ] {
   const session = useChatSessionContext();
-  // Carrier for the fields the session doesn't own (seeds, budget
-  // mode/grace) AND the full fallback state when no provider exists.
+  // The full fallback state when no provider exists.
   const [carrier, setCarrier] = React.useState<ComposerModelState>(initial);
 
   const composed = React.useMemo(
-    () =>
-      session ? composeModelState(carrier, session.state, governance) : carrier,
-    [session, carrier, governance],
+    () => (session ? composeModelState(carrier, session.state) : carrier),
+    [session, carrier],
   );
 
   const composedRef = React.useRef(composed);
@@ -149,7 +131,7 @@ export function useSessionModelState(
     // fields, a stale read here would silently clobber the first write.
     composedRef.current = next;
     update(modelStateToSessionPatch(next));
-    // Keep the carrier in sync for the session-unowned fields.
+    // Keep the carrier in sync so it matches if the provider unmounts.
     setCarrier(next);
   }, []);
 

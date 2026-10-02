@@ -65,6 +65,7 @@ A refused call writes nothing.
 | --- | --- |
 | `proposal_not_found` | The workspace holds no proposal with this id |
 | `governance_proposal` | The proposal changes the governance mode. [set_governance_mode](context.governance_mode.set.md) opens that PR and runs its checks |
+| `steering_pr_proposal` | The proposal is a steering PR Oxagen opened, such as a tools, import, memory, or revert PR. It carries no record checks to run after a restore. Fix the file on its branch, then merge it with [merge_steering_pr](steering.pr.merge.md) |
 | `proposal_merged`, `proposal_rejected` | The proposal already merged, or was dismissed |
 | `pr_not_open` | The proposal has no steering PR yet, or its PR closed on the host |
 | `repository_host_changed` | The PR was opened on one host, and the workspace's steering repo is now on another |

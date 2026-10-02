@@ -535,6 +535,8 @@
         "head": "Checked commit",
         "headUnknown": "not committed yet",
         "path": "File",
+        "folder": "Folder",
+        "root": "repository root",
         "governance": "Governance mode",
         "approvals": "Approvals"
       },
@@ -562,6 +564,10 @@
         "governance": "Put the mode in {path} in force",
         "version": "Take the workspace's promotion ledger from {current} entries to {next}",
         "promotion": "Write the promotion event to the ledger and a steering_published audit event",
+        "steeringChecks": "Run the steering checks on the pull request's latest commit",
+        "lands": "Merge the pull request's files into the production branch",
+        "retires": "Retire each record whose file the revert deletes",
+        "steeringVersion": "Publish the next steering version",
         "review": "Merge rule: {review}"
       },
       "merged": {
@@ -594,6 +600,7 @@
       },
       "record": {
         "title": "Record",
+        "proposalTitle": "Proposal",
         "kind": "Kind",
         "force": "Force",
         "effect": "Constraint effect",
@@ -691,6 +698,7 @@
         "confirm": "Merge pull request",
         "title": "Merge this pull request",
         "body": "Merging publishes the record for every agent this workspace steers. The host merges first, and Oxagen publishes only when the host agrees.",
+        "filesBody": "Oxagen runs the steering checks on the pull request's latest commit first. If they pass, the host merges the files and Oxagen publishes the next steering version.",
         "dialogConfirm": "Merge and publish",
         "pending": "Merging",
         "blocked": "Merge is blocked until every check passes."
@@ -714,7 +722,7 @@
         "gitlabCredentialRejected": "GitLab no longer accepts the access token stored for this project. Nothing was changed. Connect the project again with a new token. If Oxagen created this steering project, an organization owner or admin must connect its group again with a new group access token.",
         "repositoryHostChanged": "This pull request was opened on another host than the one the workspace's main repository is on now. Close the proposal and propose it again.",
         "mergeTimeUnknown": "The pull request merged and GitHub has not said when, so nothing was published. Merge again to publish it.",
-        "mergedOutsideOxagen": "Someone merged this pull request on the repository host after the checks ran. Oxagen publishes what the production branch holds, and this proposal shows the result once the sync finishes. The Steering freshness panel lists anything in the file it could not publish.",
+        "mergedOutsideOxagen": "Someone merged this pull request on the repository host. Oxagen publishes what the production branch holds, and this proposal shows the result once the sync finishes. The Steering freshness panel lists anything Oxagen could not publish.",
         "refused": "The change was refused: {code}. Nothing was changed.",
         "invalid": "Write a reason before you dismiss the proposal.",
         "pendingApproval": "The change is waiting for approval: {accessRequestId}.",
@@ -725,7 +733,9 @@
         "recordFileMissing": "The record file is not on the branch at the checked commit. Nothing was changed.",
         "productionBranchMissing": "The repository has no production branch to merge into. Nothing was merged.",
         "productionBranchMoving": "The production branch kept moving while Oxagen was merging. Merge again.",
-        "checksFailed": "The production branch moved, and the checks failed after Oxagen brought the branch up to date. Fix the branch and run the checks again.",
+        "checksFailed": "The steering checks failed on the pull request's latest commit, so nothing merged. The Oxagen steering check on the pull request holds the report. Fix the branch and try again.",
+        "steeringPrProposal": "This pull request changes steering files, so it has no record checks to run. Merge it, and Oxagen runs the steering checks on its latest commit first.",
+        "steeringRepoRequired": "This repository has no steering/governance.toml on its production branch, so Oxagen cannot merge this pull request. Merge it on the repository host, or set up the steering repository first. Nothing was merged.",
         "notMerged": "Only a merged steering PR can be reverted. Nothing was opened.",
         "governanceProposal": "This pull request changed the governance mode. Set the mode again to change it back. Nothing was opened.",
         "prNotRecorded": "This proposal has no recorded pull request. Nothing was changed.",
@@ -764,6 +774,7 @@
         "pending": "Opening",
         "opened": "Revert pull request #{number} is open.",
         "goToPr": "Go to pull request #{number}",
+        "goToProposal": "Open the revert's steering PR",
         "checkFailed": "The Oxagen steering check failed on the revert. Read the check on the pull request."
       },
       "restore": {

@@ -9,7 +9,7 @@
  * session-settings.test.tsx.
  *
  * Covers:
- *   - agent name + `{model} · {branch}` subtitle render from the store
+ *   - agent name + `{model}` subtitle render from the store
  *   - falls back to "Default assistant" / a capitalized tier label
  *   - center tap calls onOpenSettings
  *   - Conversations / Activity buttons call their handlers
@@ -45,7 +45,6 @@ const BASE_SEED: SessionSeed = {
   defaultAgentId: null,
   textModel: null,
   textTier: "fast",
-  budgetUsd: null,
 };
 
 function renderHeader(
@@ -79,17 +78,13 @@ describe("ChatHeaderMobile — session summary", () => {
     expect(screen.getByText("Fast")).toBeInTheDocument();
   });
 
-  it("renders the current agent's name and the `{model} · {budget}` subtitle", () => {
+  it("renders the current agent's name and the `{model}` subtitle", () => {
     renderHeader(
       { agents: [CODER] },
-      {
-        ...BASE_SEED,
-        defaultAgentId: "agt_code",
-        budgetUsd: 1,
-      },
+      { ...BASE_SEED, defaultAgentId: "agt_code" },
     );
     expect(screen.getByText("Coder")).toBeInTheDocument();
-    expect(screen.getByText("Fast · $1.00 cap")).toBeInTheDocument();
+    expect(screen.getByText("Fast")).toBeInTheDocument();
   });
 
   it("uses modelLabelOf to prettify an explicit gateway model id", () => {

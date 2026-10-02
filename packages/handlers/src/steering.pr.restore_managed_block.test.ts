@@ -147,6 +147,21 @@ describe("restore_managed_block", () => {
     ).rejects.toMatchObject({ reason: "no_managed_blocks" });
   });
 
+  it("refuses a steering PR Oxagen opened, whose merge runs the steering checks, and writes nothing (#5122, negative)", async () => {
+    const h = steeringRepo();
+    const { proposalId, branch } = await opened(h);
+    h.github.commit(branch, "AGENTS.md", "Push to main.\n", "edit AGENTS.md");
+    // The same open PR, recorded as a tools steering PR.
+    h.store.proposals[0]!.kind = "tools";
+    const stamps = h.github.stamps.length;
+    const { handler } = restore(h);
+
+    const err = await refusal(handler({ proposalId, path: "AGENTS.md" }, ctx()));
+
+    expect(err).toMatchObject({ code: "conflict", reason: "steering_pr_proposal" });
+    expect(h.github.stamps).toHaveLength(stamps);
+  });
+
   it("refuses a proposal whose PR is not open yet, and one that is gone (negative)", async () => {
     const h = steeringRepo();
     const { proposalId } = await createProposeRecordHandler(h)(

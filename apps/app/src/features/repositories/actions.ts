@@ -38,7 +38,7 @@ import {
   type CodeRepositoryFindingsListOutput,
 } from "@oxagen/oxagen/contracts/repository.findings.list";
 import { instructionPromote } from "@oxagen/oxagen/contracts/repository.instruction.promote";
-import type { SteeringPr } from "@/data/contracts/steering";
+import { type SteeringPr, isSteeringPrKind } from "@/data/contracts/steering";
 import type {
   AttachedInstallation,
   GitHubInstallations,
@@ -355,9 +355,9 @@ const CHANGES_LIMIT = 50;
 
 /**
  * The pull requests Oxagen has open or merged on this workspace's
- * repositories, newest first. Every one today is a steering record's steering
- * PR: a proposal with no pull request yet is not a change on GitHub, so it
- * stays on the Steering page and off this list.
+ * repositories, newest first: each steering record's steering PR and each
+ * steering PR Oxagen opened (#5122). A proposal with no pull request yet is
+ * not a change on GitHub, so it stays on the Steering page and off this list.
  */
 export async function readRepositoryChanges(
   org: string,
@@ -378,7 +378,7 @@ export async function readRepositoryChanges(
       lineage: proposal.lineageId,
       statement: proposal.statement,
       why: proposal.rationale,
-      kind: "steering_record",
+      kind: isSteeringPrKind(proposal.kind) ? "steering_pr" : "steering_record",
       pullRequest: proposal.pr,
       openedBy: proposal.source,
       status: proposal.status,

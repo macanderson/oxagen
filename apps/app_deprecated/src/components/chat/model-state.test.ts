@@ -10,8 +10,6 @@ import { describe, it, expect } from "vitest";
 import {
   defaultModelState,
   buildSeededModelState,
-  applyWorkspaceBudgetGovernance,
-  type WorkspaceBudgetGovernance,
 } from "./model-state";
 
 describe("defaultModelState", () => {
@@ -37,11 +35,13 @@ describe("defaultModelState", () => {
     expect(defaultModelState).not.toHaveProperty("seededVideoModel");
   });
 
-  it("has the per-turn budget off by default", () => {
-    expect(defaultModelState.budgetEnabled).toBe(false);
-    expect(defaultModelState.budgetUsd).toBeNull();
-    expect(defaultModelState.budgetMode).toBe("prompt");
-    expect(defaultModelState.budgetGracePct).toBe(0.25);
+  // ADR-235: no customer budget applies to the assistant, so the composer
+  // state carries no per-turn budget.
+  it("carries no per-turn budget fields (ADR-235)", () => {
+    expect(defaultModelState).not.toHaveProperty("budgetEnabled");
+    expect(defaultModelState).not.toHaveProperty("budgetUsd");
+    expect(defaultModelState).not.toHaveProperty("budgetMode");
+    expect(defaultModelState).not.toHaveProperty("budgetGracePct");
   });
 });
 
@@ -79,48 +79,5 @@ describe("buildSeededModelState", () => {
       textTier: "precise",
     });
     expect(state.effort).toBe("medium");
-  });
-
-  it("defaults the budget to off when the seed omits it", () => {
-    const state = buildSeededModelState({
-      textModel: null,
-      textTier: null,
-    });
-    expect(state.budgetEnabled).toBe(false);
-    expect(state.budgetUsd).toBeNull();
-    expect(state.budgetMode).toBe("prompt");
-    expect(state.budgetGracePct).toBe(0.25);
-  });
-
-  it("seeds an enabled saved budget default", () => {
-    const state = buildSeededModelState({
-      textModel: null,
-      textTier: null,
-      budget: {
-        enabled: true,
-        limitUsd: 2,
-        mode: "enforce",
-        graceOveragePct: 0.5,
-      },
-    });
-    expect(state.budgetEnabled).toBe(true);
-    expect(state.budgetUsd).toBe(2);
-    expect(state.budgetMode).toBe("enforce");
-    expect(state.budgetGracePct).toBe(0.5);
-  });
-
-  it("normalizes budgetUsd to null when the saved default is disabled, even if limitUsd is set", () => {
-    const state = buildSeededModelState({
-      textModel: null,
-      textTier: null,
-      budget: {
-        enabled: false,
-        limitUsd: 5,
-        mode: "prompt",
-        graceOveragePct: 0.25,
-      },
-    });
-    expect(state.budgetEnabled).toBe(false);
-    expect(state.budgetUsd).toBeNull();
   });
 });

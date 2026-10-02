@@ -162,12 +162,11 @@ vi.mock("@oxagen/ai/catalog", () => ({
 }));
 
 // model-picker re-exports its pure state helpers (defaultModelState,
-// buildSeededModelState, applyWorkspaceBudgetGovernance) from model-state.ts,
-// which has no UI imports. Pull the REAL implementations from there so the
-// composer's budget-governance path runs faithfully — only the interactive
-// ModelPicker component itself is stubbed. Spreading the real module (instead
-// of listing helpers by hand) keeps this mock in sync with model-state.ts as
-// it gains new exports. Clamp/strip behaviour is covered by model-state.test.ts.
+// buildSeededModelState) from model-state.ts, which has no UI imports. Pull
+// the REAL implementations from there so the composer's seeding runs
+// faithfully — only the interactive ModelPicker component itself is stubbed.
+// Spreading the real module (instead of listing helpers by hand) keeps this
+// mock in sync with model-state.ts as it gains new exports.
 vi.mock("./model-picker", async () => {
   const state =
     await vi.importActual<typeof import("./model-state")>("./model-state");
@@ -213,14 +212,6 @@ vi.mock("./mcp-server-picker", () => ({
       </button>
     </div>
   ),
-}));
-
-// BudgetControl stub — the real component pulls in Base UI Popover/Switch,
-// which aren't otherwise exercised in this file (mirrors the McpServerPicker
-// stub above: these tests isolate MessageComposer's own submit/queue/dispatch
-// logic, not the toolbar controls' internal rendering).
-vi.mock("./budget-control", () => ({
-  BudgetControl: () => <div data-testid="budget-control" />,
 }));
 
 vi.mock("@/components/ui/button", () => ({
@@ -1137,10 +1128,6 @@ describe("MessageComposer — queue drain: model & refs", () => {
           tier: null,
           model: "claude-opus-4-5",
           effort: null,
-          budgetEnabled: false,
-          budgetUsd: null,
-          budgetMode: "prompt",
-          budgetGracePct: 0.25,
         }}
       />,
     );
@@ -1161,10 +1148,6 @@ describe("MessageComposer — queue drain: model & refs", () => {
           tier: null,
           model: "claude-opus-4-5",
           effort: null,
-          budgetEnabled: false,
-          budgetUsd: null,
-          budgetMode: "prompt",
-          budgetGracePct: 0.25,
         }}
       />,
     );
@@ -1236,10 +1219,6 @@ describe("MessageComposer — effort control", () => {
           tier: "precise",
           model: null,
           effort: "high",
-          budgetEnabled: false,
-          budgetUsd: null,
-          budgetMode: "prompt",
-          budgetGracePct: 0.25,
         }}
       />,
     );
@@ -1268,10 +1247,6 @@ describe("MessageComposer — model branch (explicit model.model)", () => {
           tier: null,
           model: "claude-opus-4-5",
           effort: null,
-          budgetEnabled: false,
-          budgetUsd: null,
-          budgetMode: "prompt",
-          budgetGracePct: 0.25,
         }}
       />,
     );
@@ -1281,6 +1256,8 @@ describe("MessageComposer — model branch (explicit model.model)", () => {
     const fd = action.mock.calls[0][0] as FormData;
     expect(fd.get("model")).toBe("claude-opus-4-5");
     expect(fd.get("tier")).toBeNull();
+    // ADR-235: the composer sends no per-turn budget.
+    expect(fd.has("budget")).toBe(false);
   });
 });
 
@@ -1330,10 +1307,6 @@ describe("MessageComposer — null tier in initialModelState", () => {
           tier: null,
           model: null,
           effort: null,
-          budgetEnabled: false,
-          budgetUsd: null,
-          budgetMode: "prompt",
-          budgetGracePct: 0.25,
         }}
       />,
     );
@@ -1397,10 +1370,6 @@ describe("MessageComposer — queue drain: null tier fallback", () => {
       tier: null as null,
       model: null as null,
       effort: null as null,
-      budgetEnabled: false as const,
-      budgetUsd: null as null,
-      budgetMode: "prompt" as const,
-      budgetGracePct: 0.25 as const,
     };
     const { rerender } = render(
       <MessageComposer
@@ -1447,10 +1416,6 @@ describe("MessageComposer — queue drain: effort in drained message", () => {
       tier: "precise" as const,
       model: null as null,
       effort: "high" as const,
-      budgetEnabled: false as const,
-      budgetUsd: null as null,
-      budgetMode: "prompt" as const,
-      budgetGracePct: 0.25 as const,
     };
     const { rerender } = render(
       <MessageComposer
@@ -2535,7 +2500,6 @@ describe("MessageComposer — mobile toolbar", () => {
     expect(screen.queryByRole("button", { name: "Generate image" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Generate video" })).toBeNull();
     expect(screen.queryByTestId("mcp-server-picker")).toBeNull();
-    expect(screen.queryByTestId("budget-control")).toBeNull();
   });
 
   it("opens the bottom sheet with the overflow controls", async () => {
@@ -2558,7 +2522,7 @@ describe("MessageComposer — mobile toolbar", () => {
     expect(screen.queryByRole("button", { name: "Generate image" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Generate video" })).toBeNull();
     expect(screen.getByTestId("mcp-server-picker")).toBeInTheDocument();
-    expect(screen.getByTestId("budget-control")).toBeInTheDocument();
+    expect(screen.queryByText("Per-turn budget")).toBeNull();
   });
 
   it("never renders a code-context row — ADR-043 removed the code target", async () => {
@@ -2613,7 +2577,6 @@ describe("MessageComposer — mobile toolbar", () => {
     expect(screen.getByRole("textbox")).toHaveAttribute("rows", "3");
     expect(screen.getByTestId("model-picker")).toBeInTheDocument();
     expect(screen.getByTestId("mcp-server-picker")).toBeInTheDocument();
-    expect(screen.getByTestId("budget-control")).toBeInTheDocument();
     expect(screen.queryByTestId("composer-overflow-btn")).toBeNull();
   });
 });

@@ -347,6 +347,86 @@ describe("a failed check", () => {
   });
 });
 
+describe("a steering PR (#5122)", () => {
+  it("offers Merge on a tools PR at pr_open, whose merge runs the steering checks itself", async () => {
+    await loaded(
+      {
+        ...PASSED,
+        kind: "tools",
+        lineage: "tools/billing",
+        status: "pr_open",
+        checks: [],
+        onMerge: {
+          path: "tools/servers/billing",
+          bundleVersion: { current: 7, afterMerge: 7 },
+        },
+      },
+      {
+        ...ROW,
+        kind: "steering_pr",
+        lineage: "tools/billing",
+        status: "pr_open",
+        checks: null,
+      },
+    );
+    await waitFor(() => {
+      expect(callbacks.onMergeable).toHaveBeenLastCalledWith(true);
+    });
+    expect(screen.getByTestId("change-merge")).toBeEnabled();
+    expect(screen.getByText("steering PR")).toBeInTheDocument();
+    // The folder the PR changes, beside its kind and in the files list.
+    expect(screen.getAllByText("tools/servers/billing")).toHaveLength(2);
+    expect(
+      within(screen.getByTestId("change-files")).getByText("tools/servers/billing"),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps Merge disabled once a steering PR merged (negative)", async () => {
+    await loaded({
+      ...PASSED,
+      kind: "memory_pr",
+      status: "merged",
+      checks: [],
+      merged: {
+        commit: "fedcba9876543210",
+        at: "2026-09-19T10:00:00.000Z",
+        promotionEventId: null,
+        recordId: null,
+        byName: null,
+        onHost: false,
+      },
+    });
+    expect(screen.queryByTestId("change-merge")).toBeNull();
+    expect(callbacks.onMergeable).not.toHaveBeenCalledWith(true);
+    expect(callbacks.onMergeable).toHaveBeenLastCalledWith(false);
+  });
+
+  it("offers Merge on a steering PR whose last checks failed, since the merge runs them again", async () => {
+    await loaded({
+      ...PASSED,
+      kind: "tools",
+      lineage: "tools/billing",
+      status: "checks_failed",
+    });
+    await waitFor(() => {
+      expect(callbacks.onMergeable).toHaveBeenLastCalledWith(true);
+    });
+    expect(screen.getByTestId("change-merge")).toBeEnabled();
+  });
+
+  it("offers no Merge on a steering PR that was closed (negative)", async () => {
+    await loaded({
+      ...PASSED,
+      kind: "import",
+      lineage: "steering/import-2026-09-28",
+      status: "rejected",
+    });
+    expect(screen.queryByTestId("change-merge")).toBeNull();
+    expect(callbacks.onMergeable).not.toHaveBeenCalledWith(true);
+    expect(callbacks.onMergeable).toHaveBeenLastCalledWith(false);
+  });
+});
+
 describe("merging", () => {
   it("merges a pull request whose every check passed, then re-reads it", async () => {
     const user = await loaded(PASSED);

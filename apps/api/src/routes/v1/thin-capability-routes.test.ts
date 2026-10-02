@@ -110,8 +110,6 @@ import { credentialGrantList } from "@oxagen/oxagen/contracts/credential.grant.l
 import { killSwitchSet } from "@oxagen/oxagen/contracts/kill_switch.set";
 import { killSwitchList } from "@oxagen/oxagen/contracts/kill_switch.list";
 import { billingBudgetSet } from "@oxagen/oxagen/contracts/billing.budget.set";
-import { budgetPolicyRead } from "@oxagen/oxagen/contracts/budget.policy.read";
-import { budgetPolicyWrite } from "@oxagen/oxagen/contracts/budget.policy.write";
 import { chatMessageExecution } from "@oxagen/oxagen/contracts/chat.message.execution";
 import { steeringRecordPromote } from "@oxagen/oxagen/contracts/steering.record.promote";
 import { steeringRecordPublish } from "@oxagen/oxagen/contracts/steering.record.publish";
@@ -285,8 +283,6 @@ import { credentialGrantListRoute } from "./credential.grant.list";
 import { killSwitchSetRoute } from "./kill_switch.set";
 import { killSwitchListRoute } from "./kill_switch.list";
 import { billingBudgetSetRoute } from "./billing.budget.set";
-import { budgetPolicyReadRoute } from "./budget.policy.read";
-import { budgetPolicyWriteRoute } from "./budget.policy.write";
 import { chatMessageExecutionRoute } from "./chat.message.execution";
 import { steeringRecordPromoteRoute } from "./steering.record.promote";
 import { steeringRecordPublishRoute } from "./steering.record.publish";
@@ -1564,23 +1560,6 @@ const ROUTES: ThinRoute[] = [
       period: "rolling",
       limit: { micros: "250000000", currency: "USD" },
     },
-    status: 200,
-  },
-  {
-    file: "budget.policy.read",
-    route: budgetPolicyReadRoute as unknown as Hono<never>,
-    method: "GET",
-    capability: budgetPolicyRead.name,
-    expectedInput: {},
-    status: 200,
-  },
-  {
-    file: "budget.policy.write",
-    route: budgetPolicyWriteRoute as unknown as Hono<never>,
-    method: "PATCH",
-    capability: budgetPolicyWrite.name,
-    body: { enabled: true, limitUsd: 5, graceOveragePct: 0.25 },
-    invalidBody: { graceOveragePct: 99 },
     status: 200,
   },
   {

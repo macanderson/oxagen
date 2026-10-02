@@ -188,13 +188,11 @@
     "absorbs": [
       "update_workspace_settings",
       "update_memory_policy",
-      "update_budget_policy",
       "set_routing_policy"
     ],
     "resolved": [
       "update_workspace_settings",
       "update_memory_policy",
-      "update_budget_policy",
       "set_routing_policy"
     ],
     "unresolved": [],
@@ -1953,36 +1951,30 @@
     "does": "any level",
     "absorbs": [
       "set_spend_budget",
-      "get_spend_budget",
-      "update_user_budget",
-      "get_user_budget",
-      "get_budget_policy"
+      "get_spend_budget"
     ],
     "resolved": [
       "set_spend_budget",
-      "get_spend_budget",
-      "update_user_budget",
-      "get_user_budget",
-      "get_budget_policy"
+      "get_spend_budget"
     ],
     "unresolved": [],
     "isNew": false,
     "inherit": {
-      "name": "update_user_budget",
-      "file": "budget.policy.write.ts",
-      "domain": "user",
+      "name": "set_spend_budget",
+      "file": "billing.budget.set.ts",
+      "domain": "billing",
       "mode": "sync",
-      "sensitivity": "low",
+      "sensitivity": "medium",
       "defaultEffect": "deny",
-      "scoped": "false",
-      "surfaces": "[\"api\", \"mcp\", \"agent\"]",
-      "riskLevel": "low",
-      "category": "user",
+      "scoped": "true",
+      "surfaces": "[\"api\", \"mcp\", \"agent\", \"cli\"]",
+      "riskLevel": "medium",
+      "category": "billing",
       "requiresApproval": "false",
       "hasInput": true,
       "hasOutput": true,
-      "inputLines": 11,
-      "outputLines": 6
+      "inputLines": 1,
+      "outputLines": 1
     }
   },
   {

@@ -205,60 +205,11 @@ export const workspaceMemoryPolicy = workspaceSchema.table(
   }),
 );
 
-// Per-workspace per-turn dollar budget GOVERNANCE. An org/workspace admin sets a
-// budget an org admin can dictate for a workspace: a soft `default` (seeds
-// members who haven't set their own) or a hard `ceiling` (clamps members — they
-// can't exceed it and the enforcement mode can only get stricter). Resolved
-// against the member's own budget by resolveEffectiveTurnBudget in @oxagen/billing;
-// the per-turn budget guard applies the single merged policy. Rows created
-// on first write; absent ⇒ no governance (members keep their personal budget).
-// (Org-WIDE default across all workspaces is a planned follow-up — the merge
-// function already accepts an org level, so it needs no billing change.)
-export const workspaceBudgetPolicy = workspaceSchema.table(
-  "workspace_budget_policy",
-  {
-    id: uuid("id").primaryKey().default(uuidv7Default),
-    orgId: uuid("org_id").notNull(),
-    workspaceId: uuid("workspace_id").notNull().unique(),
-    // Whether the governed budget is active for this workspace.
-    enabled: boolean("enabled").notNull().default(true),
-    // Governed ceiling/default in USD; NULL when no amount is set yet.
-    // numeric(12,2), not real/float4 (2026-07-11 audit §5 item 1): this value
-    // feeds direct comparisons/arithmetic in packages/billing/src/turn-budget.ts
-    // and float rounding error is not acceptable for a dollar ceiling.
-    limitUsd: numeric("limit_usd", { precision: 12, scale: 2, mode: "number" }),
-    // Enforcement mode at the ceiling: "grace" | "prompt" | "enforce".
-    mode: text("mode").notNull().default("enforce"),
-    // grace mode: fraction ABOVE the limit allowed before a hard stop (0.25 = 25%).
-    graceOveragePct: real("grace_overage_pct").notNull().default(0.25),
-    // "ceiling" = hard cap members can't exceed; "default" = seed members can override.
-    enforcement: text("enforcement").notNull().default("ceiling"),
-    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
-      .notNull()
-      .defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" })
-      .notNull()
-      .defaultNow(),
-  },
-  (t) => ({
-    // workspace_budget_policy_workspace_idx was dropped (2026-07-11 audit
-    // §4.2, migration 20260802150000_index_constraint_hardening): duplicate of
-    // the workspaceId.unique() constraint above (identical single column,
-    // both unique). Not redeclared here — see workspaces_org_idx above for
-    // the same documented-removal pattern.
-    orgWorkspaceIdx: index("workspace_budget_policy_org_workspace_idx").on(
-      t.orgId,
-      t.workspaceId,
-    ),
-  }),
-);
-
 // Per-workspace policy for the sessions Oxagen does not run — a wrapped
 // Claude Code or Codex behind the loopback model proxy (ADR-094). This is the
 // setting `unsignedBundle` signs into the policy bundle's `budget` and
-// `models` clauses, and it is a different thing from workspaceBudgetPolicy
-// above: that one governs an in-app assistant TURN, this one governs a wrapped
-// harness SESSION on somebody's laptop. Absent row ⇒ observed-only, which is
+// `models` clauses. It governs a wrapped harness SESSION on somebody's laptop,
+// never an in-app assistant turn (ADR-235). Absent row ⇒ observed-only, which is
 // what every host had before this table (the bundle carried a hardcoded
 // `budget.mode: "observed"`, so the proxy's refusal branches were unreachable
 // — docs/audits/2026-09-21-model-gateway-arming.md).

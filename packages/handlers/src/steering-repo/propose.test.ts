@@ -30,6 +30,7 @@ import {
   createSteeringPullRequestOpener,
   type ToolsPullRequestHost,
 } from "../tools.pr.open";
+import { MemoryStore as ProposalStore } from "../context.steering.test-support";
 import {
   managedBlockRefusal,
   ownedPathRefusal,
@@ -324,6 +325,7 @@ describe("PROPOSAL_PULL_REQUEST through the opener", () => {
         host: () => fake,
         readIndex: async () => null,
         readContext: async () => ({ runtimes: [], members: [], teams: [], groups: [], credentials: [] }),
+        proposals: new ProposalStore(),
         now: () => NOW,
       },
       PROPOSAL_PULL_REQUEST,

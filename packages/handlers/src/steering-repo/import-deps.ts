@@ -221,6 +221,29 @@ export function steeringImportDeps(options: {
   return {
     now: () => new Date(),
 
+    // Each import steering PR's `import` proposal row, so a person merges it
+    // from Oxagen (#5122, ADR-265). A row that fails to write is logged.
+    async recordPullRequest(scope, pr) {
+      const [{ personAuthor, recordSteeringPrQuietly }, { postgresSteeringStore }] =
+        await Promise.all([import("./pr-proposal"), import("../context.steering.store")]);
+      await recordSteeringPrQuietly(postgresSteeringStore, {
+        scope,
+        repo: pr.repo,
+        kind: "import",
+        pullRequest: {
+          number: pr.number,
+          url: pr.url,
+          branch: pr.branch,
+          headSha: pr.headSha,
+        },
+        title: pr.title,
+        paths: pr.paths,
+        check: null,
+        author: personAuthor(options.actorUserId),
+        rationale: `Oxagen opened this steering PR when it moved the workspace's steering from .oxagen/ to the steering repo. Merge the import's PRs in order from Oxagen, so each lands through the merge queue with the stamp and the ledger line.`,
+      });
+    },
+
     async readState(scope) {
       return readImportState(await readSettings(scope));
     },

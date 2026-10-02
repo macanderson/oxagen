@@ -38,7 +38,12 @@ export async function openSteeringPr(
     : result;
 }
 
-/** Merges the pull request once every check passed; merge publishes the record. */
+/**
+ * Merges the pull request once every check passed; merge publishes the
+ * record. A steering PR proposal (#5122) merges from any open status, because
+ * the merge runs the steering checks on its head first. Every arm of the
+ * output carries the merge commit.
+ */
 export async function mergeSteeringPr(
   org: string,
   ws: string,
@@ -58,6 +63,12 @@ export type RevertOpened = {
   branch: string;
   /** The Oxagen steering check on the revert's head; null when none was reported. */
   check: "success" | "failure" | null;
+  /**
+   * The proposal that carries the revert PR, which merge_steering_pr merges
+   * (#5122). Null in a legacy repository, where the revert merges on the host,
+   * and null when Oxagen could not record it.
+   */
+  proposalId: string | null;
 };
 
 /**
@@ -73,7 +84,7 @@ export async function revertSteeringPr(
   const ctx = await requireViewer(org, ws);
   const result = await kernelWrite(ctx, steeringPrRevert, { proposalId });
   if (!result.ok) return result;
-  const { pullRequest, check } = result.value;
+  const { pullRequest, check, revertProposalId } = result.value;
   return {
     ok: true,
     value: {
@@ -81,6 +92,7 @@ export async function revertSteeringPr(
       url: pullRequest.url,
       branch: pullRequest.branch,
       check,
+      proposalId: revertProposalId,
     },
   };
 }

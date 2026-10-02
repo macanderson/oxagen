@@ -7,7 +7,7 @@ import type { CapabilityContext } from "@oxagen/oxagen";
 import { steeringMemoryPrRecordDrop } from "@oxagen/oxagen/contracts/steering.memory_pr_records.drop";
 import { describe, expect, it, vi } from "vitest";
 import type { SteeringHost } from "./context.steering.github";
-import { REPO } from "./context.steering.test-support";
+import { MemoryStore, REPO } from "./context.steering.test-support";
 import { settleMemoryPr } from "./memory/settle";
 import type { WorkspaceMemoryPr } from "./memory/workspace-store";
 import { createSteeringMemoryPrRecordDropHandler } from "./steering.memory_pr_records.drop";
@@ -86,10 +86,14 @@ function host(over: Partial<SteeringHost> = {}): SteeringHost {
 }
 
 function deps(target: WorkspaceMemoryPr | null, steering: SteeringHost = host()) {
+  const store = new MemoryStore();
   return {
     workspace: { findMemoryPr: vi.fn(async () => target) },
     host: vi.fn(async () => steering),
+    proposals: vi.fn(async () => store),
+    author: vi.fn(async () => ({ userId: "user_1", source: "user:user_1" })),
     assertRole: vi.fn(async () => undefined),
+    store,
   };
 }
 
@@ -120,6 +124,55 @@ describe("drop_memory_record", () => {
       lineage: "pin-toolchain",
       commit_sha: "dropped9",
       already_dropped: false,
+    });
+    // The memory PR's proposal row names the commit the drop made, so the
+    // merge lands that head (ADR-265).
+    expect(d.store.proposals).toEqual([
+      expect.objectContaining({
+        kind: "memory_pr",
+        lineageId: "memory/2026-10-01",
+        prNumber: 8,
+        headSha: "dropped9",
+        status: "pr_open",
+        createdById: "user_1",
+      }),
+    ]);
+  });
+
+  it("moves an existing memory PR row to the drop's commit", async () => {
+    const d = deps(PR);
+    await d.store.insertProposal({
+      orgId: scope.orgId,
+      workspaceId: scope.workspaceId,
+      lineageId: "memory/2026-10-01",
+      kind: "memory_pr",
+      force: "info",
+      constraintEffect: null,
+      sharingScope: "workspace",
+      statement: "Memory PR 2026-10-01",
+      rationale: "The curator opened it.",
+      source: "memory-curator",
+      supportRuns: [],
+      supportAgents: [],
+      supportingRecordIds: [],
+      evidenceLinks: [],
+      createdById: null,
+      status: "pr_open",
+      provider: REPO.provider,
+      repository: REPO.fullName,
+      baseRef: "main",
+      branch: "memory/2026-10-01",
+      path: "steering/memory/workspace/general",
+      prNumber: 8,
+      prUrl: PR.url,
+      headSha: "head9",
+      checks: [],
+    });
+    await createSteeringMemoryPrRecordDropHandler(d)(input(PIN), ctx);
+    expect(d.store.proposals).toHaveLength(1);
+    expect(d.store.proposals[0]).toMatchObject({
+      headSha: "dropped9",
+      source: "memory-curator",
     });
   });
 

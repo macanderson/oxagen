@@ -4,8 +4,10 @@
 // stays disabled until every check passed, the merged record, a closed
 // proposal, and a failed read. It also covers the review each governance mode
 // asks for, a drifted managed block, and a memory PR whose records no read
-// returns yet. Approve, Drop, and Restore block each reach their action with
-// the arguments the panel holds (#4518). Every state gets an axe check.
+// returns yet. A steering PR proposal (#5122) merges from any open status and
+// offers no control that runs the record checks, while a governance change
+// keeps its gate. Approve, Drop, and Restore block each reach their action
+// with the arguments the panel holds (#4518). Every state gets an axe check.
 import {
   cleanup,
   fireEvent,
@@ -26,6 +28,7 @@ import {
   PROPOSAL_ID,
   steeringPr,
   memoryPrRecords,
+  steeringPrSteeringPr,
 } from "@/test/steering-views";
 
 const { actions, router } = vi.hoisted(() => ({
@@ -333,7 +336,7 @@ describe("the review each governance mode asks for", () => {
     });
     // merge_pr_without_review and open_steering_pr refuse a governance change.
     expect(mergeWithoutReview()).toBeNull();
-    expect(screen.queryByTestId("open-steering-pr")).toBeNull();
+    expect(screen.queryByTestId("open-steering-pr-open")).toBeNull();
     expect(approve()).toBeEnabled();
     expect(merge()).toBeEnabled();
     expect(screen.getByRole("button", { name: "Close without merging" })).toBeEnabled();
@@ -353,6 +356,124 @@ describe("the review each governance mode asks for", () => {
     expect(onMerge).not.toHaveTextContent("as a record in force");
     expect(onMerge).not.toHaveTextContent("promotion event");
     expect(onMerge).not.toHaveTextContent("promotion ledger");
+  });
+
+  it("keeps Merge blocked on a governance change until its checks pass (negative)", () => {
+    for (const status of ["pr_open", "checks_failed"] as const) {
+      const panel = renderPanel(readOk(steeringPr(status, { kind: "governance" })));
+      expect(merge()).toBeDisabled();
+      expect(panel).toHaveTextContent(
+        "Merge is blocked until every check passes.",
+      );
+      expect(screen.queryByTestId("open-steering-pr-open")).toBeNull();
+      cleanup();
+    }
+  });
+});
+
+describe("a steering PR proposal (#5122)", () => {
+  const onMergeSteps = (panel: HTMLElement) =>
+    [...(panel.querySelector("[data-on-merge]")?.querySelectorAll("li") ?? [])].map(
+      (li) => li.textContent,
+    );
+
+  it("enables Merge on a tools PR at pull request open and offers no control that runs the record checks", () => {
+    const panel = renderPanel(readOk(steeringPrSteeringPr("tools", "pr_open")));
+    expect(merge()).toBeEnabled();
+    expect(panel).not.toHaveTextContent("Merge is blocked");
+    // open_steering_pr refuses a steering PR: its merge runs the steering checks.
+    expect(screen.queryByTestId("open-steering-pr-open")).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "Run the checks again" }),
+    ).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Close without merging" }),
+    ).toBeEnabled();
+    expect(panel.querySelector("[data-check]")).toBeNull();
+    expect(panel.querySelector('[data-fact="path"] dt')).toHaveTextContent(
+      "Folder",
+    );
+    expect(panel.querySelector('[data-fact="path"] dd')).toHaveTextContent(
+      "tools/github",
+    );
+  });
+
+  it.each(["pr_open", "checks_running", "checks_passed", "checks_failed"] as const)(
+    "enables Merge and Merge without review at %s, the statuses merge_steering_pr takes",
+    (status) => {
+      renderPanel(readOk(steeringPrSteeringPr("import", status)), {
+        approvals: 0,
+        canMergeWithoutReview: true,
+      });
+      expect(merge()).toBeEnabled();
+      expect(mergeWithoutReview()).toBeEnabled();
+    },
+  );
+
+  it("blocks Merge while no pull request is open (negative)", () => {
+    renderPanel(readOk(steeringPrSteeringPr("tools", "proposed")));
+    expect(merge()).toBeDisabled();
+  });
+
+  it("lists what merging the files does, with no record and no promotion event", () => {
+    const panel = renderPanel(
+      readOk(steeringPrSteeringPr("tools", "checks_failed")),
+    );
+    expect(onMergeSteps(panel)).toEqual([
+      "Run the steering checks on the pull request's latest commit",
+      "Merge the pull request's files into the production branch",
+      "Publish the next steering version",
+      "Merge rule: team: an org Owner or Admin, or a workspace Owner, other than the author merges",
+    ]);
+    expect(panel.querySelector("[data-on-merge]")).not.toHaveTextContent(
+      "promotion",
+    );
+  });
+
+  it("names the records a revert retires among what merge will do", () => {
+    const panel = renderPanel(readOk(steeringPrSteeringPr("revert", "pr_open")));
+    expect(onMergeSteps(panel)).toEqual([
+      "Run the steering checks on the pull request's latest commit",
+      "Merge the pull request's files into the production branch",
+      "Retire each record whose file the revert deletes",
+      "Publish the next steering version",
+      "Merge rule: team: an org Owner or Admin, or a workspace Owner, other than the author merges",
+    ]);
+  });
+
+  it("retires nothing on a PR that is no revert (negative)", () => {
+    const panel = renderPanel(
+      readOk(steeringPrSteeringPr("agent_proposal", "pr_open")),
+    );
+    expect(panel.querySelector("[data-on-merge]")).not.toHaveTextContent(
+      "Retire",
+    );
+  });
+
+  it("names the repository root for files at the top of the repository", () => {
+    const panel = renderPanel(
+      readOk(
+        steeringPrSteeringPr("agent_file", "pr_open", {
+          onMerge: { path: ".", bundleVersion: { current: 41, afterMerge: 41 } },
+        }),
+      ),
+    );
+    expect(panel.querySelector('[data-fact="path"] dd')).toHaveTextContent(
+      "repository root",
+    );
+  });
+
+  it("offers Revert pull request on a merged memory PR and prints no promotion event or record", () => {
+    const panel = renderPanel(readOk(steeringPrSteeringPr("memory_pr", "merged")));
+    const merged = panel.querySelector("[data-merged]");
+    expect(revert()).toBeEnabled();
+    expect(merged).toContainElement(revert());
+    expect(merged?.querySelector('[data-fact="commit"] dd')).toHaveTextContent(
+      "4d5e6f7a8b9c",
+    );
+    expect(merged?.querySelector('[data-fact="promotion-event"]')).toBeNull();
+    expect(merged?.querySelector('[data-fact="record"]')).toBeNull();
+    expect(merge()).toBeNull();
   });
 });
 
@@ -552,7 +673,7 @@ describe("a read that failed", () => {
   it.each([
     [
       { ok: false, reason: "denied", permission: "steering.read" } as const,
-      "You cannot see steering PR in this workspace.",
+      "You cannot see Steering PR in this workspace.",
     ],
     [readError("not_found", 404), "Steering PR could not be loaded: not_found."],
   ])("renders the failure in place of the panel", (read, text) => {

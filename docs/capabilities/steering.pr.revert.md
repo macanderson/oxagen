@@ -28,6 +28,8 @@ In a steering repository, Oxagen runs the steering checks on the revert's head a
 
 The revert PR waits for review. Its merge follows the approval rules of the workspace's governance mode.
 
+In a steering repository the revert PR carries a proposal of kind `revert` ([ADR-265](../adr/ADR-265-every-steering-pr-oxagen-opens-carries-a-proposal-row.md), #5122). The answer names it as `revertProposalId`, and [`merge_steering_pr`](steering.pr.merge.md) lands it through the merge queue. A revert of a record PR takes the record's lineage, so its merge retires the record when the revert deleted the record's file. A revert of any other steering PR, such as a tools or memory PR, takes its own branch as its lineage.
+
 ## Who may revert
 
 A revert is a merge-class action. The caller first needs one of the contract's roles: an org Owner or Admin, or a workspace Owner or Member. Then the governance mode on the production branch decides, as it does for a merge:
@@ -45,7 +47,8 @@ An API key acts as its creator, with the creator's current roles. That is why th
 ## Limits
 
 - A governance proposal is refused. The governance mode changes only through [`set_governance_mode`](context.governance_mode.set.md) ([ADR-232](../adr/ADR-232-a-steering-repositorys-governance-mode-changes-through-a-steering-pr.md)). Set the mode again to change it back.
-- The revert PR carries no proposal, so `merge_steering_pr` cannot merge it. It merges the way the other many-file steering PRs, such as tools and memory PRs, merge today.
+- In a legacy repository the revert PR carries no proposal. It merges on the host, and the repository sync reads the merge.
+- A revert of a record PR is refused `lineage_pr_open` while another PR on that record is open: one concern, one pull request.
 - One revert at a time for each merged PR. While the revert branch exists, a second call is refused `revert_branch_exists`.
 
 ## Input
@@ -60,6 +63,7 @@ An API key acts as its creator, with the creator's current roles. That is why th
 | `reverted` | `{ number, mergedCommit }` | The merged steering PR and the merge commit the revert undoes |
 | `pullRequest` | `{ number, url, branch, headSha }` | The revert PR. `headSha` is the revert branch's head, or null when the host did not say |
 | `check` | `"success"`, `"failure"`, or `null` | The `Oxagen steering` check on the revert's head. Null in a legacy repository, and null when the host refused the report |
+| `revertProposalId` | `string` or `null` | The proposal that carries the revert PR, which `merge_steering_pr` merges. Null in a legacy repository, and null when Oxagen could not record it |
 
 ## Errors
 
@@ -75,6 +79,7 @@ An API key acts as its creator, with the creator's current roles. That is why th
 | `conflict` | `governance_unreadable` | The governance file on the production branch cannot be read, so the mode's rule cannot be applied. |
 | `conflict` | `merge_commit_unknown` | Neither Oxagen nor the host names the merge commit, or the commit has no parent. |
 | `conflict` | `nothing_to_revert` | The merge changed nothing outside the ledger. |
+| `conflict` | `lineage_pr_open` | Another PR on the reverted record is open. Merge or close it, then revert. Nothing is opened. |
 | `conflict` | `revert_branch_exists` | A revert branch for this PR already exists. Merge or close its pull request, delete the branch, and revert again. |
 | `conflict` | `production_branch_missing` | The repository has no production branch. |
 | `conflict` | `github_refused` / `gitlab_refused` | The host refused a read or a write. |

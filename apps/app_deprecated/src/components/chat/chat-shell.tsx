@@ -6,10 +6,7 @@ import { type ComposerAction } from "./message-composer";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ChatShellClient } from "./chat-shell-client";
 import { resolvedTierCatalog } from "@oxagen/ai";
-import type {
-  ComposerModelState,
-  WorkspaceBudgetGovernance,
-} from "./model-picker";
+import type { ComposerModelState } from "./model-picker";
 import type { McpServerSummary } from "./mcp-types";
 import type { AgentOption } from "./agent-picker/agent-picker-types";
 
@@ -41,7 +38,6 @@ export function ChatShell({
   availableAgents,
   defaultAgentId,
   setDefaultAgentAction,
-  workspaceBudgetGovernance,
   agentId,
   walletBalanceCents,
   userFirstName,
@@ -67,7 +63,6 @@ export function ChatShell({
         availableAgents={availableAgents}
         defaultAgentId={defaultAgentId}
         setDefaultAgentAction={setDefaultAgentAction}
-        workspaceBudgetGovernance={workspaceBudgetGovernance}
         agentId={agentId}
       />
     </Suspense>
@@ -91,7 +86,6 @@ async function AsyncShell({
   availableAgents,
   defaultAgentId,
   setDefaultAgentAction,
-  workspaceBudgetGovernance,
   agentId,
   walletBalanceCents,
   userFirstName,
@@ -114,7 +108,6 @@ async function AsyncShell({
   setDefaultAgentAction?: (
     agentId: string | null,
   ) => Promise<{ ok: boolean; error?: string }>;
-  workspaceBudgetGovernance?: WorkspaceBudgetGovernance | null;
   agentId?: string | null;
   walletBalanceCents?: number | null;
   userFirstName?: string | null;
@@ -149,7 +142,6 @@ async function AsyncShell({
       availableAgents={availableAgents}
       defaultAgentId={defaultAgentId}
       setDefaultAgentAction={setDefaultAgentAction}
-      workspaceBudgetGovernance={workspaceBudgetGovernance}
       agentId={agentId}
     />
   );
