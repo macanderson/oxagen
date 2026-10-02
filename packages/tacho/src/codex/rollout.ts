@@ -339,10 +339,12 @@ function callBody(state: CodexRolloutState, payload: Rec): Rec {
 
 /**
  * The frame a usage record closes the response in hand with. The body is
- * the response's text and tool requests; a response that wrote neither
- * (only reasoning) gets an empty body, since it had nothing visible to keep.
- * A response whose items this reader did not hold, because they named
- * another turn or were too long, gets no body, and the frame shows the gap.
+ * the response's text and tool requests. A response that wrote neither gets
+ * an empty body, since it had nothing visible to keep: one that wrote only
+ * reasoning, or a compaction call, whose summary Codex stores encrypted in
+ * the `compacted` line after the record. A response whose items this reader
+ * dropped, because they named another turn or were too long, gets no body,
+ * and the frame shows the gap.
  */
 function closeResponse(
   state: CodexRolloutState,
@@ -353,6 +355,7 @@ function closeResponse(
   const turnId = short(payload["turn_id"]);
   let held = state.held;
   let next: CodexRolloutState = state;
+  let dropped = false;
   if (
     held?.turnId !== undefined &&
     turnId !== undefined &&
@@ -360,6 +363,7 @@ function closeResponse(
   ) {
     next = dropHeld(state);
     held = undefined;
+    dropped = true;
   }
   const { held: _closed, ...rest } = next;
   const attrs: Record<string, string> = {};
@@ -369,9 +373,9 @@ function closeResponse(
     attrs["transcript.tool_use_ids"] = JSON.stringify(held.calls);
   if (held?.tooLarge === true) attrs["body_omitted"] = "too_large";
   const content =
-    held === undefined || held.tooLarge === true
+    dropped || held?.tooLarge === true
       ? undefined
-      : textContent(held.parts.join("\n"));
+      : textContent(held?.parts.join("\n") ?? "");
   const draft: TranscriptDraft = {
     kind: "llm_call",
     ts,

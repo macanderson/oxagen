@@ -39,6 +39,8 @@ one host, read on 2026-10-02:
   an inter-agent message had cut the response short.
 - 16,633 of the 19,089 responses wrote no text. They asked for a tool and
   stopped.
+- 100 usage records came with no item before them. Each was a compaction
+  call, and a `compacted` line followed it.
 - Rollouts imported from another agent hold thousands of assistant messages
   and no usage records. A forked subagent's rollout starts with its parent's
   history, usage records included, and `session_meta` says where that copy
@@ -69,9 +71,13 @@ one host, read on 2026-10-02:
    body Claude Code's reader writes for an assistant message
    (`assistantMessageText`). Reasoning is left out, as thinking is. The
    reader seals no prompt, tool call or tool result frame, because hooks
-   record those. A response that wrote only reasoning gets an empty body.
-   A body longer than `TACHO_MAX_BODY_BYTES` is not held, and the frame
-   carries `body_omitted: too_large`.
+   record those. A response that wrote nothing visible gets an empty body:
+   one that wrote only reasoning, or a compaction call. Codex writes a
+   compaction call's usage record, then a `compacted` line whose summary is
+   encrypted, and no item between them. A body longer than
+   `TACHO_MAX_BODY_BYTES` is not held, and the frame carries
+   `body_omitted: too_large`. A response whose text was dropped (decision
+   4) gets no body, so the frame shows the gap.
 4. **What drops a response's text.** The reader drops the text it holds, and
    counts it in `orphaned`, when one of these comes before a usage record: a
    `token_count` event, `task_started`, `task_complete`, `turn_aborted`, a

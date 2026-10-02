@@ -344,7 +344,9 @@ describe("normalizeRolloutLine", () => {
     ]);
     expect(state.orphaned).toBe(1);
     expect(drafts).toHaveLength(1);
-    expect(drafts[0]?.content).toBeUndefined();
+    // The record closes a response that wrote nothing this reader saw, such
+    // as a compaction call, so its body is empty rather than missing.
+    expect(text(drafts[0])).toBe("");
     expect(drafts[0]?.body["message_id"]).toBe("resp_2");
   });
 
@@ -358,6 +360,21 @@ describe("normalizeRolloutLine", () => {
     expect(drafts[0]?.content).toBeUndefined();
     expect(drafts[0]?.turn).toEqual({ turn_id: "turn-2" });
     expect(state.orphaned).toBe(1);
+  });
+
+  it("gives a compaction call an empty body", () => {
+    // Codex writes the compaction call's usage record, then the `compacted`
+    // line that holds its summary, encrypted.
+    const { drafts } = feed([
+      META,
+      TURN,
+      line("event_msg", { type: "token_count" }),
+      usage("resp_7"),
+      line("compacted", { message: "", replacement_history: [] }),
+    ]);
+    expect(drafts).toHaveLength(1);
+    expect(text(drafts[0])).toBe("");
+    expect(drafts[0]?.attrs).toEqual({});
   });
 
   it("gives a response with only reasoning an empty body", () => {
