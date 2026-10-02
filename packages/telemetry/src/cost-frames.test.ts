@@ -147,6 +147,7 @@ describe("readModelCallFrames", () => {
       "system_context_parts",
       "proxy_observed",
       "cache_keep_alive",
+      "seq",
     ]);
     expect(query_params).toEqual({
       orgId: ORG,
@@ -312,6 +313,81 @@ describe("readModelCallFrames", () => {
       "sessionUuids",
       "sources",
       "workspaceId",
+    ]);
+  });
+
+  // #4506 pass 4 and pass 6: a chain numbers its llm_call and tool_call
+  // events from one counter, so the findings job orders two events of one
+  // millisecond by `seq` and keys a frame by its chain and `seq`.
+  it("carries each wrapped frame's seq on its chain", async () => {
+    const base = {
+      at: "2026-09-14T10:00:00.000Z",
+      model: "claude-sonnet-5",
+      provider: "anthropic",
+      input_uncached: "10",
+      cache_read: "0",
+      cache_write_5m: "0",
+      cache_write_1h: "0",
+      output: "5",
+      reasoning: "0",
+      server_tool_request: "0",
+      cost_micros: null,
+      session_uuid: RUN,
+    };
+    // ClickHouse quotes a UInt64 by default; a row from a mock may not.
+    answer([{ ...base, seq: "41" }, { ...base, seq: 42 }, { ...base }]);
+    const frames = await readModelCallFrames({
+      orgId: ORG,
+      workspaceId: WS,
+      run: { kind: "tacho", rootSessionUuid: RUN, sessionUuids: [RUN] },
+    });
+    expect(frames.map((f) => f.seq)).toEqual([41, 42, undefined]);
+    expect(frames[2]).not.toHaveProperty("seq");
+    expect(lastQuery().query).toContain("c.seq AS seq");
+  });
+
+  // #4506 pass 7: the rollup and every other reader price only a call that
+  // names its model. The findings job asks for the rest too, as request
+  // boundaries with no price.
+  it("leaves out a call that names no model unless the caller keeps it", async () => {
+    const run = {
+      kind: "tacho" as const,
+      rootSessionUuid: RUN,
+      sessionUuids: [RUN],
+    };
+    answer([]);
+    await readModelCallFrames({ orgId: ORG, workspaceId: WS, run });
+    expect(lastQuery().query).toContain("AND model != ''");
+
+    answer([
+      {
+        at: "2026-09-14T10:00:00.000Z",
+        model: "",
+        provider: "",
+        input_uncached: "10",
+        cache_read: "0",
+        cache_write_5m: "0",
+        cache_write_1h: "0",
+        output: "5",
+        reasoning: "0",
+        server_tool_request: "0",
+        cost_micros: null,
+        session_uuid: RUN,
+        seq: "7",
+      },
+    ]);
+    const frames = await readModelCallFrames({
+      orgId: ORG,
+      workspaceId: WS,
+      run,
+      keepModelless: true,
+    });
+    const { query, query_params } = lastQuery();
+    expect(query).not.toContain("model != ''");
+    // The filter is SQL text, so keeping the rows adds no parameter.
+    expect(query_params).not.toHaveProperty("keepModelless");
+    expect(frames).toEqual([
+      expect.objectContaining({ model: "", seq: 7, sessionUuid: RUN }),
     ]);
   });
 
