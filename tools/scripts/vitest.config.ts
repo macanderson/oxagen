@@ -22,10 +22,13 @@ export default defineConfig({
     // The one package in the repo whose coverage nothing enforced. Every other
     // vitest config here declares thresholds — 36 of 37 — and the exception was
     // this one, which holds the guards that decide whether anything else may
-    // merge: `env-check.ts`, `scr-dod-check.mjs`, `check_manifest.mjs`,
-    // `check-dod-stub-parity.mjs`, `check-infra-doc-paths.mjs`,
-    // `ensure-e2e-failure-ticket.ts`. `test:coverage` ran and reported a number
-    // that could not fail, so the guard code was the least-guarded code here.
+    // merge: `env-check.ts`, `check_manifest.mjs`, `check-dod-stub-parity.mjs`,
+    // `check-infra-doc-paths.mjs`, `ensure-e2e-failure-ticket.ts`.
+    // `test:coverage` ran and reported a number that could not fail, so the
+    // guard code was the least-guarded code here. The DoD checker,
+    // `scr-dod-check.mjs`, was one of them until it moved to oxageninc/.github
+    // with its tests on 2026-10-02 (#5183). The floors below were measured
+    // with it here.
     //
     // These are a floor, not a target. They are the measured values less the
     // 2.5 points of headroom CLAUDE.md's ratchet asks for, so CI cannot go red

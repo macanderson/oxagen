@@ -229,7 +229,10 @@ enforce or record it:
   contained tier (`oxagen run -- <agent>`, an OS sandbox whose only egress is the
   gateway) is that launcher, aimed at CI, headless runs, cloud runners and managed
   devices. Its first profile is a measured Docker container on Linux (ADR-152),
-  and the control plane, not the launcher, decides that a run was contained.
+  and the control plane, not the launcher, decides that a run was contained. The
+  launcher may run on compute Oxagen operates, or on Oxagen's sandbox host software
+  in a customer's own cloud (ADR-289). Oxagen still runs no turn there. Containing
+  and hosting a customer's agent process is governing, not running.
 - New capabilities or tool surfaces that bypass typed contracts, IAM/entitlement
   gates, or metering ("just this once" untyped/unmetered paths).
 - Agent answers or UI surfaces that present ungrounded, citation-free output where
@@ -245,8 +248,8 @@ enforce or record it:
   agent usage to *their* customers — downstream customer records, markup or per-unit
   price plans, usage attribution to a third party, re-bill runs, or holding a
   customer's own payment credentials so we can bill on their behalf. We sell the
-  platform by use, fine-tuning runs at a flat fee, and hosting at cost. There is no
-  margin line, so there is nothing to resell.
+  platform by use, hosted compute by the running hour, and fine-tuning runs at a
+  flat fee.
 
 **Not drift:** bug fixes, refactors, tests, CI/tooling, docs, dependency hygiene,
 performance work, and maintenance of existing surfaces. Routine engineering that
@@ -269,8 +272,9 @@ strategic drift, not to nag maintenance.
    (connector breadth, standalone evals, framework mindshare)? (drifts)
 6. Does it make Oxagen run agents rather than govern them — an engine, a sandbox
    for Oxagen's own agent code, fan-out, or an executor as a product surface?
-   (drifts) Containing a customer's agent process, or proxying its model traffic on
-   loopback, is governing, not running (ADR-094, ADR-096).
+   (drifts) Containing a customer's agent process, on compute Oxagen or the
+   customer operates, or proxying its model traffic on loopback, is governing, not
+   running (ADR-094, ADR-096, ADR-289).
 7. Does it strengthen or weaken the enforced contract — the binding of identity,
    knowledge scope, permitted action, commercial terms, outcome, and audit record
    into one object? (advances / drifts)

@@ -1,6 +1,6 @@
 # ADR-198: An agent is one operator on one runtime with one harness
 
-- **Status:** Accepted
+- **Status:** Accepted. Amended in part by ADR-289, accepted 2026-10-02: the uniqueness index gains the operator, and the agent model stands
 - **Date:** 2026-09-25
 - **Owners:** platform
 - **Supersedes:** ADR-057 decision 1 (git is the definition of record) and the

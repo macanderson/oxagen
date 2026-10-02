@@ -1,14 +1,15 @@
 #!/usr/bin/env node
-// Caller-stub drift check for the two DoD workflows (oxagen #2661).
+// Caller-stub drift check for the DoD workflows (oxagen #2661).
 //
-// ADR-039 keeps one implementation here and gives the four caller repos a
-// ~12-line stub each. A stub is small enough that nobody reviews it twice and
-// large enough to drift, and two of its facts matter:
+// ADR-039 keeps one implementation, in oxageninc/.github since 2026-10-02
+// (#5183), and gives the five caller repos, this one included, a short stub
+// each. A stub is small enough that nobody reviews it twice and large enough
+// to drift, and two of its facts matter:
 //
-//   - Both `dod-check.yml` and `dod-close-guard.yml` pin oxagen commits.
-//     Compare the resolved workflow blob SHAs, so unrelated commits that
-//     carry identical workflow bytes do not report drift (#2989, ADR-045).
-//     A partial re-pin that changes those bytes still fails.
+//   - Both `dod-check.yml` and `dod-close-guard.yml` pin oxageninc/.github
+//     commits. Compare the resolved workflow blob SHAs, so unrelated commits
+//     that carry identical workflow bytes do not report drift (#2989,
+//     ADR-045). A partial re-pin that changes those bytes still fails.
 //   - `dod-recheck.yml` stays byte-identical except for the declared exception.
 //
 // ## The declared exception
@@ -16,19 +17,28 @@
 // `macanderson/stella` implements the recheck itself, in
 // `scripts/dod-recheck.sh`, with its own tests and `make` target, and its
 // AGENTS.md documents it. That is not the drift ADR-039 exists to stop: the
-// VERDICT still comes from one implementation here — stella's file only
-// subscribes to its own issue edits and asks for a re-run, which is a per-repo
-// event subscription rather than a second copy of the rule.
+// VERDICT still comes from one implementation in oxageninc/.github. Stella's
+// file only subscribes to its own issue edits and asks for a re-run, which is
+// a per-repo event subscription rather than a second copy of the rule.
 //
 // It is named here rather than left to be rediscovered, and naming it is what
-// makes a FIFTH shape fail instead of joining it.
+// makes a second exception fail instead of joining it.
+
+import { isEntrypoint } from "./lib/is-entrypoint.mjs";
 
 // Where the implementation and each caller live. Owners differ since
 // 2026-10-01: this repository became `oxageninc/product`, `cgp-website` and
 // `context-graph-protocol` moved to `oxageninc`, and `stella` and `arenabench`
 // stayed on `macanderson`. Keys stay the short names the report prints.
-const HOME = "oxageninc/product";
-const CALLERS = {
+//
+// The implementation moved to the public `oxageninc/.github` on 2026-10-02.
+// GitHub does not let a public repository, or one with another owner, call a
+// private repository's reusable workflow, so the private `oxageninc/product`
+// could no longer hold it (#5183). This repository is now a caller too. It
+// reads its own stubs with its own token.
+export const HOME = "oxageninc/.github";
+export const CALLERS = {
+  product: "oxageninc/product",
   stella: "macanderson/stella",
   arenabench: "macanderson/arenabench",
   "cgp-website": "oxageninc/cgp-website",
@@ -41,18 +51,26 @@ const CLOSE_GUARD = ".github/workflows/dod-close-guard.yml";
 /** Repos that implement the recheck themselves, with why. */
 export const RECHECK_EXCEPTIONS = {
   stella:
-    "implements the recheck in scripts/dod-recheck.sh with its own tests and make target; the verdict still comes from oxagen's dod-check.yml",
+    "implements the recheck in scripts/dod-recheck.sh with its own tests and make target; the verdict still comes from oxageninc/.github's dod-check.yml",
 };
 
+/** `text` with every regex metacharacter escaped. */
+const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&");
+
 /**
- * The oxagen commit a stub's `uses:` line pins, or null.
+ * The oxageninc/.github commit a stub's `uses:` line pins, or null.
  *
  * `workflow` names which stub is being read, because a repo carries more than
  * one and a regex that matched any of them would read the wrong line.
+ *
+ * The match includes the repository. A stub still calling the old home,
+ * `oxageninc/product`, reads as pinning nothing here. Matching the file name
+ * alone would look its commit up in oxageninc/.github, find nothing, and
+ * report a pin that no longer resolves, which is not what is wrong.
  */
 export function pinnedRef(source, workflow = "dod-check.yml") {
-  const escaped = workflow.replace(/\./g, "\\.");
-  const m = new RegExp(`${escaped}@([0-9a-f]{7,40})\\b`).exec(source ?? "");
+  const path = escapeRegExp(`${HOME}/.github/workflows/${workflow}`);
+  const m = new RegExp(`${path}@([0-9a-f]{7,40})\\b`).exec(source ?? "");
   return m ? m[1] : null;
 }
 
@@ -70,7 +88,7 @@ export function divergence(observed) {
     const ref = pinnedRef(facts.checkSource);
     if (!ref) {
       problems.push(
-        `${repo}: ${CHECK} pins no oxagen commit — a moving ref or a missing uses: line`,
+        `${repo}: ${CHECK} pins no ${HOME} commit — a moving ref, a missing uses: line, or a uses: line naming another repository`,
       );
       continue;
     }
@@ -118,7 +136,7 @@ export function divergence(observed) {
     }
     if (!pinnedRef(source, "dod-close-guard.yml")) {
       problems.push(
-        `${repo}: ${CLOSE_GUARD} pins no oxagen commit — a moving ref on the one stub that carries issues: write (#1336)`,
+        `${repo}: ${CLOSE_GUARD} pins no ${HOME} commit — a moving ref, or another repository, on the one stub that carries issues: write (#1336)`,
       );
       continue;
     }
@@ -161,11 +179,11 @@ async function api(path) {
 /**
  * The workflow blob SHA at the caller's pinned commit, or null.
  *
- * Reading the file at the pinned ref rather than at oxagen's `main` is the
- * whole point: what a caller runs is the version it named, and that is what has
- * to agree between the four. A ref that no longer resolves returns null so the
- * caller can call it drift, rather than throwing into the fail-open path and
- * reporting nothing at all.
+ * Reading the file at the pinned ref rather than at `main` of oxageninc/.github
+ * is the whole point: what a caller runs is the version it named, and that is
+ * what has to agree between the five. A ref that no longer resolves returns
+ * null so the caller can call it drift, rather than throwing into the
+ * fail-open path and reporting nothing at all.
  */
 async function resolveWorkflowBlob(source, workflow) {
   const ref = pinnedRef(source, workflow);
@@ -215,14 +233,11 @@ async function main() {
   process.exit(1);
 }
 
-const isEntrypoint =
-  process.argv[1] !== undefined &&
-  import.meta.url === new URL(`file://${process.argv[1]}`).href;
-
-if (isEntrypoint) {
+if (isEntrypoint(import.meta.url)) {
   main().catch((err) => {
-    // Fails open: this reads four other repositories over the network, and a
-    // rate limit or an outage must not be what blocks a merge here.
+    // Fails open: this reads five repositories and oxageninc/.github over the
+    // network, and a rate limit or an outage must not be what blocks a merge
+    // here.
     console.log(
       `[dod-stub-parity] UNAVAILABLE — THIS CHECK DID NOT RUN: ${err.message}`,
     );

@@ -1,6 +1,6 @@
 # ADR-096: Oxagen may contain the process that runs turns: the contained tier
 
-- **Status:** Accepted
+- **Status:** Accepted. Amended by ADR-289, accepted 2026-10-02: the launcher may also run on compute Oxagen operates, or on Oxagen's sandbox host software in a customer's cloud
 - **Date:** 2026-09-18
 - **Owners:** platform
 - **Decided by:** the maintainer, 2026-09-18, approving the architecture review

@@ -1,6 +1,6 @@
 # ADR-187: Two gateways carry every customer agent's traffic, and Oxagen holds the keys
 
-- **Status:** Accepted on 2026-10-02. The maintainer first accepted the parts MCP Studio depends on, then the whole record the same day. Three design questions stay open (see Open for acceptance)
+- **Status:** Accepted on 2026-10-02. The maintainer first accepted the parts MCP Studio depends on, then the whole record the same day. Three design questions stay open (see Open for acceptance). Amended in part by ADR-289, accepted 2026-10-02: an operator sends work only to agents bound to them, the cloud gateway holds subscription logins for a cloud runtime, and hosted compute is billed by the running hour
 - **Date:** 2026-09-25
 - **Owners:** platform, gateway
 - **Decided by:** the maintainer set the direction on 2026-09-25. On 2026-10-02 the maintainer accepted the parts MCP Studio depends on (#5138), then the whole record
