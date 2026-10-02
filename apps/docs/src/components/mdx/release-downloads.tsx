@@ -6,10 +6,15 @@
  * Every URL is a function of the version. The desktop workflow names its
  * bundles by the tauri bundler's convention and the sidecars by Rust triple
  * (`.github/workflows/desktop.yml`, `tools/packaging/README.md`), and
- * `apps/desktop/scripts/publish-downloads.mjs` lays the installers out under
- * `desktop/<version>/` on downloads.oxagen.sh. So a release page written
- * before the installers finish building points at where they will be, and
- * nothing has to come back to edit it.
+ * `apps/desktop/scripts/publish-downloads.mjs` lays the installers and the
+ * executables out under `desktop/<version>/` on downloads.oxagen.sh. So a
+ * release page written before the installers finish building points at where
+ * they will be, and nothing has to come back to edit it.
+ *
+ * Nothing here links a GitHub release. The repository is private and has
+ * changed owner more than once, so every file a release ships is on the
+ * downloads host (ADR-247). `release-hosting.tree.test.ts` in tools/scripts
+ * fails if a GitHub release link comes back.
  */
 
 import { AutoUpdateNotice } from "./latest-downloads";
@@ -24,7 +29,6 @@ function updatesItself(version: string): boolean {
 }
 
 const DOWNLOADS = "https://downloads.oxagen.sh";
-const REPO = "https://github.com/macanderson/oxagen";
 
 interface Installer {
   label: string;
@@ -76,7 +80,7 @@ export function desktopInstallers(version: string): Platform[] {
   ];
 }
 
-/** The sidecar binaries attached to the `desktop-v*` release, by triple. */
+/** The bare executables published beside the installers, by triple. */
 export const CLI_TARGETS = [
   { name: "macOS, Apple silicon", triple: "aarch64-apple-darwin", ext: "" },
   { name: "macOS, Intel", triple: "x86_64-apple-darwin", ext: "" },
@@ -98,18 +102,14 @@ export function cliBinaryUrl(
   triple: string,
   ext: string,
 ): string {
-  return `${REPO}/releases/download/desktop-v${encodeURIComponent(version)}/${name}-${triple}${ext}`;
+  return installerUrl(version, `${name}-${triple}${ext}`);
 }
 
 export function releaseUrls(version: string): {
-  platform: string;
-  desktop: string;
   npm: string;
 } {
   const v = encodeURIComponent(version);
   return {
-    platform: `${REPO}/releases/tag/v${v}`,
-    desktop: `${REPO}/releases/tag/desktop-v${v}`,
     npm: `https://www.npmjs.com/package/@oxagen/cli/v/${v}`,
   };
 }
@@ -123,9 +123,11 @@ const link =
 const mono = "font-mono text-xs text-fd-muted-foreground break-all";
 
 /**
- * `cli={false}` is for a version whose bare executables and npm package were
- * never published (2.1.1 shipped before release.yml existed); the page then
- * shows the app alone and says why.
+ * `cli={false}` is for a version whose bare executables and npm package are
+ * not available: 2.1.1 shipped before release.yml existed, and 2.1.2 and
+ * 2.1.3 attached the executables only to a GitHub release that is now
+ * private, while their npm publish failed (#4489). The page then shows the
+ * app alone and says why.
  */
 export function ReleaseDownloads({
   version,
@@ -184,12 +186,10 @@ export function ReleaseDownloads({
             <p className="text-sm text-fd-muted-foreground">
               The same <code className="font-mono">tacho</code> and{" "}
               <code className="font-mono">oxagen</code> executables the app
-              links onto your PATH, one file each, attached to the{" "}
-              <a className={link} href={urls.desktop}>
-                desktop-v{version} release
-              </a>
-              . Each has a <code className="font-mono">.sha256</code> beside it.
-              Rename the file to <code className="font-mono">tacho</code> or{" "}
+              links onto your PATH, one file each, on downloads.oxagen.sh
+              beside the installers. Each has a{" "}
+              <code className="font-mono">.sha256</code> beside it. Rename the
+              file to <code className="font-mono">tacho</code> or{" "}
               <code className="font-mono">oxagen</code>, make it executable, and
               put it on your PATH.
             </p>
@@ -230,7 +230,7 @@ export function ReleaseDownloads({
 
           <div className={card}>
             <div className={label}>Also in this release</div>
-            <ul className="m-0 grid list-none gap-3 p-0 text-sm sm:grid-cols-3">
+            <ul className="m-0 grid list-none gap-3 p-0 text-sm sm:grid-cols-2">
               <li className="flex flex-col">
                 <a className={link} href={urls.npm}>
                   @oxagen/cli {version} on npm
@@ -238,12 +238,6 @@ export function ReleaseDownloads({
                 <span className={mono}>
                   npm install -g @oxagen/cli@{version}
                 </span>
-              </li>
-              <li className="flex flex-col">
-                <a className={link} href={urls.platform}>
-                  Platform release v{version}
-                </a>
-                <span className={mono}>tag v{version}</span>
               </li>
               <li className="flex flex-col">
                 <a className={link} href={`${DOWNLOADS}/`}>
@@ -260,7 +254,7 @@ export function ReleaseDownloads({
         <p className="text-sm text-fd-muted-foreground">
           The bare <code className="font-mono">tacho</code> and{" "}
           <code className="font-mono">oxagen</code> executables and the npm
-          package were not published for {version}. The app links both onto your
+          package are not available for {version}. The app links both onto your
           PATH on first launch.
         </p>
       )}
