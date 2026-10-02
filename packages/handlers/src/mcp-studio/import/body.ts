@@ -1,8 +1,9 @@
 // body.ts: the steering PR's title, commit message, and body for a Review
 // (lane M11, ADR-224).
 //
-// The body lists every tool the PR imports, removes, and reclassifies, the
-// definition token total against the budget, and the tool checks' findings.
+// The body lists every tool the PR imports, removes, reclassifies, and caps,
+// the exposure mode it sets, the definition token total against the budget,
+// and the tool checks' findings.
 // It is built from the BuiltFolder alone: tool keys, classifications, and
 // lint messages. A lint message names a credential by its reference, such as
 // oxagen:credential/billing, and never holds a secret.
@@ -56,6 +57,12 @@ function tokensText(tokens: BuiltFolder["tokens"]): string {
   return `${total} The folder is ${tokens.definitions - tokens.budget} tokens over budget.`;
 }
 
+function exposureText(mode: NonNullable<BuiltFolder["exposure"]>): string {
+  return mode === "search"
+    ? `server.toml's exposure mode is now ${code("search")}. Each request carries the server's three search tools, and an agent finds a tool before it calls it.`
+    : `server.toml's exposure mode is now ${code("direct")}. Each request carries every imported tool's definition.`;
+}
+
 function findingText(finding: BuiltFolder["findings"][number]): string {
   const at = [finding.tool, finding.field].filter((part) => part !== null).join(".");
   const where = at === "" ? "" : ` on ${code(at)}`;
@@ -92,6 +99,12 @@ function render(folder: BuiltFolder, revision: number, items: number, findings: 
   }
   if (folder.tested.length > 0) {
     sections.push(`## Saved tests\n\n${bullets(folder.tested.map(code), items, "None.")}`);
+  }
+  if (folder.capped.length > 0) {
+    sections.push(`## Result caps\n\n${bullets(folder.capped.map(code), items, "None.")}`);
+  }
+  if (folder.exposure !== null) {
+    sections.push(`## Exposure\n\n${exposureText(folder.exposure)}`);
   }
   sections.push(`## Definition tokens\n\n${tokensText(folder.tokens)}`);
   sections.push(`## Findings\n\n${findingsText(folder.findings, findings)}`);

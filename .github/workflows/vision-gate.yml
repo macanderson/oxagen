@@ -4,6 +4,12 @@
 # advisory verdict (advances / neutral / drifts) as a sticky PR comment + step
 # summary. Never blocks merge (the script exits 0 unless VISION_GATE_STRICT=1);
 # fork PRs no-op safely because secrets are unavailable there.
+#
+# It also asks a doc-drift question of the same diff (#3202): does a doc or
+# runbook in the diff, operator guidance under infra/** included, claim a
+# control is on while the code leaves it off? Each finding is a warning
+# annotation and a section of the comment. It never blocks, even in strict
+# mode.
 name: Vision Gate
 
 on:
@@ -43,7 +49,7 @@ jobs:
       - name: Fetch base branch
         run: git fetch origin ${{ github.base_ref }} --no-tags
 
-      - name: Judge diff against docs/VISION.md
+      - name: Judge diff against docs/VISION.md, and ask the doc-drift question
         env:
           AI_GATEWAY_API_KEY: ${{ secrets.AI_GATEWAY_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

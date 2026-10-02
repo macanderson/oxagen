@@ -156,6 +156,13 @@ ${pillars.map((p) => `          <li><a href="${urls.pillar(p.slug)}">${esc(p.nam
           <li><a class="ext" href="https://github.com/oxagenai" target="_blank" rel="noopener">GitHub</a></li>
         </ul>
       </nav>
+      <nav class="foot-col" aria-label="Legal">
+        <h4>Legal</h4>
+        <ul>
+          <li><a href="/terms">Terms of service</a></li>
+          <li><a href="/privacy">Privacy policy</a></li>
+        </ul>
+      </nav>
       <div class="foot-col">
         <h4>Contact</h4>
         <address>

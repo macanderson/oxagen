@@ -144,6 +144,7 @@ describe("readStudioRecord's mapping", () => {
       environments: OUTPUT.environments,
       exposure: { mode: "direct", definitionBudget: 8000 },
       sync: { schedule: "daily", lastAt: "2026-09-29T10:00:30.000Z" },
+      feedbackWindowDays: 30,
     });
     expect(record.tools).toEqual([
       {

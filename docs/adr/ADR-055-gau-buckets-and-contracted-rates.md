@@ -3,6 +3,8 @@
 - **Status:** Accepted
 - **Date:** 2026-09-13
 - **Owners:** platform
+- **Amended by:** ADR-241 (a new organization gets one signup grant, then
+  subscribes: §4, §6, §7 and §13).
 - **Refines:** ADR-052 (the governed action is the billable unit). The unit
   and its four exclusions stand. The pricing clause "tier allowance plus
   per-action overage" is replaced by the model below. Retention beyond the

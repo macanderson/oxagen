@@ -126,6 +126,7 @@ type Rows = {
   contractTerms: unknown[];
   entitled: unknown[];
   free: unknown[];
+  grant: unknown[];
 };
 
 const tablesRead: unknown[] = [];
@@ -163,6 +164,8 @@ function makeTx(rows: Rows) {
             if (table === schema.subscriptions && joined)
               return Promise.resolve(rows.entitled);
             if (table === schema.plans) return Promise.resolve(rows.free);
+            if (table === schema.gauSignupGrants)
+              return Promise.resolve(rows.grant);
             return Promise.reject(new Error("unexpected table"));
           },
         };
@@ -177,6 +180,7 @@ function setup(overrides: Partial<Rows> = {}) {
     contractTerms: [],
     entitled: [],
     free: [FREE_PLAN],
+    grant: [],
     ...overrides,
   };
   mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => unknown) =>
@@ -361,6 +365,30 @@ describe("resolveGauEntitlement — the subscription for periodFor", () => {
     setup();
     const { subscription } = await resolveGauEntitlement("org-1", NOW);
     expect(subscription).toBeNull();
+  });
+
+  it("carries the org's signup grant and the Free row's rule on the same read", async () => {
+    const grant = {
+      grantedGau: 33_000,
+      grantedAt: new Date("2026-09-10T00:00:00.000Z"),
+      expiresAt: new Date("2026-10-10T00:00:00.000Z"),
+    };
+    setup({
+      free: [{ ...FREE_PLAN, subscriptionRequiredAfterGrant: false }],
+      grant: [grant],
+    });
+    const entitlement = await resolveGauEntitlement("org-1", NOW);
+    expect(entitlement.grant).toEqual(grant);
+    expect(entitlement.subscriptionRequiredAfterGrant).toBe(false);
+    expect(tablesRead).toContain(schema.gauSignupGrants);
+    expect(mocks.withTenantDb).toHaveBeenCalledTimes(1);
+  });
+
+  it("an org with no grant row reads grant null and the rule on by default", async () => {
+    setup();
+    const entitlement = await resolveGauEntitlement("org-1", NOW);
+    expect(entitlement.grant).toBeNull();
+    expect(entitlement.subscriptionRequiredAfterGrant).toBe(true);
   });
 
   it("resolves terms and subscription in ONE tenant-scoped round trip", async () => {

@@ -1020,6 +1020,7 @@ type Messages = {
             repeated_instructions: string;
             recurring_runs: string;
             spend_with_no_outcome: string;
+            retry_loops: string;
           };
         };
       };
@@ -1822,6 +1823,7 @@ type Messages = {
       governedNote: string;
       retained: string;
       retainedNote: string;
+      retainedDaysNote: string;
       due: string;
       dueNote: string;
     };
@@ -1845,6 +1847,8 @@ type Messages = {
         tokens: string;
         retention: string;
         retentionExtended: string;
+        retentionDays: string;
+        retentionExtendedDays: string;
         heldNotRecorded: string;
         discount: string;
         total: string;
@@ -1859,10 +1863,13 @@ type Messages = {
       };
       governed: string;
       governedNote: string;
+      grantNote: string;
+      grantEndedNote: string;
       sealed: string;
       sealedNote: string;
       retained: string;
       retainedNote: string;
+      retainedDaysNote: string;
       halted: string;
       inApp: string;
       free: string;
@@ -1943,6 +1950,7 @@ type Messages = {
       title: string;
       free: string;
       freeTerms: string;
+      freeTermsNotRecorded: string;
       blocks: string;
       blocksTerms: string;
       negotiated: string;
@@ -3203,6 +3211,25 @@ type Messages = {
         search: string;
         compileError: string;
       };
+      exposure: {
+        title: string;
+        staged: string;
+        modes: {
+          direct: string;
+          search: string;
+        };
+        bodies: {
+          direct: string;
+          search: string;
+        };
+      };
+      calls: {
+        title: string;
+        counts: string;
+        unrecorded: string;
+        missing: string;
+        uncalled: string;
+      };
     };
     panel: {
       classification: string;
@@ -3232,6 +3259,20 @@ type Messages = {
       draftNotBuilt: string;
       draftFailed: string;
       draftError: string;
+      cap: string;
+      capTokens: string;
+      capUnread: string;
+      capHint: string;
+      capInvalid: string;
+      capImportFirst: string;
+      paging: string;
+      pagingChoice: {
+        keep: string;
+        on: string;
+        off: string;
+      };
+      pagingHint: string;
+      pagingNone: string;
       shaping: string;
       shapingMissing: string;
       hidden: string;
@@ -3397,6 +3438,7 @@ type Messages = {
         title: string;
         unstage: string;
         unstageNamed: string;
+        unstageExposure: string;
       };
       ops: {
         import: string;
@@ -3404,6 +3446,8 @@ type Messages = {
         classify: string;
         describe: string;
         test: string;
+        cap: string;
+        expose: string;
       };
       files: {
         title: string;
@@ -3417,6 +3461,7 @@ type Messages = {
         tokensUnmeasured: string;
         tokensAdded: string;
         tokensRemoved: string;
+        exposure: string;
         columns: {
           change: string;
           tool: string;
@@ -3430,6 +3475,7 @@ type Messages = {
         fields: {
           classification: string;
           description: string;
+          cap: string;
         };
       };
       findings: {
@@ -3496,6 +3542,7 @@ type Messages = {
           tool_key_collision: string;
           test_invalid: string;
           test_holds_credential: string;
+          tool_paging_missing: string;
         };
       };
       review: {
@@ -9028,6 +9075,7 @@ type Messages = {
         repeated_instructions: string;
         recurring_runs: string;
         spend_with_no_outcome: string;
+        retry_loops: string;
       };
       kindDefinition: {
         cache_writes_never_read: string;
@@ -9042,6 +9090,7 @@ type Messages = {
         repeated_instructions: string;
         recurring_runs: string;
         spend_with_no_outcome: string;
+        retry_loops: string;
       };
       level: {
         tool: string;
@@ -9116,8 +9165,6 @@ type Messages = {
       heroYearEnd: string;
       attributionMissing: string;
       evidenceLine: string;
-      atStake: string;
-      atStakeUnknown: string;
       list: string;
       filters: {
         label: string;
@@ -9139,6 +9186,22 @@ type Messages = {
         range: string;
         previous: string;
         next: string;
+      };
+      card: {
+        amount: string;
+        estimatedAmount: string;
+        share: string;
+        unit: {
+          weeklyPerThousandTokens: string;
+        };
+        estimated: string;
+        needsPromptText: string;
+        text: {
+          spin_loops: string;
+          duplicate_tool_calls: string;
+          repeated_shell_commands: string;
+          spend_with_no_outcome: string;
+        };
       };
     };
     columns: {
@@ -9205,6 +9268,10 @@ type Messages = {
         haltedEarly: string;
       };
       causesMissing: string;
+      retryLoopsWhy: string;
+      retryLoopsNone: string;
+      retryLoopsFindings: string;
+      retryLoopsOpen: string;
       runs: string;
       note: string;
       runAmountMissing: string;

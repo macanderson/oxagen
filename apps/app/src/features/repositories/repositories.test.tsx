@@ -380,11 +380,11 @@ describe("states", () => {
       "Repositories",
     );
     expect(screen.getByText("Core platform")).toBeTruthy();
-    const tabs = screen.getByRole("navigation", { name: "Repository views" });
+    const tabs = screen.getByRole("tablist", { name: "Repository views" });
     await waitFor(() => {
       expect(
         within(tabs)
-          .getAllByRole("link")
+          .getAllByRole("tab")
           .map((l) => l.textContent),
       ).toEqual([
         "Repositories2",
@@ -393,6 +393,13 @@ describe("states", () => {
         "Configuration",
       ]);
     });
+    // The selected tab names the panel the tab's body draws in.
+    const open = within(tabs).getByRole("tab", { selected: true });
+    expect(open).toHaveTextContent(/^Repositories/);
+    expect(open).toHaveAttribute(
+      "aria-controls",
+      screen.getByRole("tabpanel", { name: /^Repositories/ }).id,
+    );
     const gold = screen.getByTestId("repositories-add-oxagen");
     expect(gold.className).toContain("bg-button-primary-bg");
     // Exactly one gold action on the screen: the panel's and the rows' Add
@@ -417,7 +424,7 @@ describe("states", () => {
     expect(empty).toHaveTextContent("This workspace has no repository yet");
     expect(screen.queryByTestId("repositories-add-oxagen")).toBeNull();
     expect(
-      screen.queryByRole("navigation", { name: "Repository views" }),
+      screen.queryByRole("tablist", { name: "Repository views" }),
     ).toBeNull();
     await expectNoAxe(empty);
     await user.click(within(empty).getByTestId("repositories-empty-add"));
@@ -535,6 +542,20 @@ describe("the Repositories tab", () => {
     await loaded();
     const banner = await screen.findByTestId("repositories-ungoverned");
     expect(banner).toHaveTextContent("acme/docs-site");
+    // #3340: every record lives in the steering repository (ADR-212), so the
+    // panel promises a linked repository no records of its own and no
+    // Context PRs.
+    expect(banner).toHaveTextContent(
+      "Every record lives in the steering repository",
+    );
+    const panel = screen.getByTestId("repositories-panel");
+    expect(panel).toHaveTextContent(
+      "A linked repo is a code repository the workspace’s agents work in",
+    );
+    for (const promise of ["Context PR", "repository-scoped", "Scope is"]) {
+      expect(banner).not.toHaveTextContent(promise);
+      expect(panel).not.toHaveTextContent(promise);
+    }
   });
 
   it("opens a repository's dialog from its name by keyboard, the row taking no role of its own", async () => {
@@ -1509,7 +1530,7 @@ describe("the other tabs", () => {
     });
     await loaded("changes");
     expect(await screen.findByTestId("changes-empty")).toBeTruthy();
-    const tabs = screen.getByRole("navigation", { name: "Repository views" });
+    const tabs = screen.getByRole("tablist", { name: "Repository views" });
     expect(within(tabs).getByText("Changes")).toBeTruthy();
     cleanup();
     actions.readRepositoryChanges.mockResolvedValue({
@@ -1587,6 +1608,20 @@ describe("repository refusal messages", () => {
     for (const reason of ["conflict", "not_found"] as const)
       expect(result.current({ ok: false, reason, code })).toContain(recovery);
   });
+
+  // #3340: a linked code repository never receives Context PRs (ADR-212), so
+  // no refusal gives that as its reason.
+  it.each(["main_repo_claimed", "repository_linked_elsewhere"])(
+    "gives %s a reason the code holds, with no Context PR claim",
+    (code) => {
+      const { result } = renderHook(useRepositoriesFailure, {
+        wrapper: IntlProvider,
+      });
+      const said = result.current({ ok: false, reason: "conflict", code });
+      expect(said).toContain("steering");
+      expect(said).not.toContain("Context PR");
+    },
+  );
 
   it("preserves unknown refusal codes and approval request identifiers", () => {
     const { result } = renderHook(useRepositoriesFailure, {

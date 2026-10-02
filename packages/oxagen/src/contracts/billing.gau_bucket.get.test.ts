@@ -16,6 +16,15 @@ const period = {
 
 const prepaid = {
   mode: "prepaid" as const,
+  basis: "signup_grant" as const,
+  signupGrant: {
+    grantedGau: 33_000,
+    grantedAt: "2026-09-01T00:00:00.000Z",
+    expiresAt: "2026-10-01T00:00:00.000Z",
+    active: true,
+    remainingGau: 9350,
+    evidenceDays: 30,
+  },
   period,
   includedGau: 5000,
   purchasedGau: 5000,
@@ -33,6 +42,8 @@ const prepaid = {
 
 const invoiced = {
   mode: "invoice" as const,
+  basis: "subscription" as const,
+  signupGrant: null,
   period,
   includedGau: 300_000,
   purchasedGau: 0,

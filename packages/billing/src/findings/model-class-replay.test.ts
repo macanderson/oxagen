@@ -295,6 +295,16 @@ describe("planReplay", () => {
     expect(p.estimatedMicros).toBe(2_000_000n);
   });
 
+  it("leaves out a run with an edit step, and keeps a run whose steps have no class yet", () => {
+    const reads = run();
+    reads.breakdown.stepClasses = { readOnly: 4, edit: 0 };
+    const edits = run();
+    edits.breakdown.stepClasses = { readOnly: 100, edit: 2 };
+    const unclassed = run();
+    const p = plan([reads, edits, unclassed])!;
+    expect(p.runs.map((r) => r.runId)).toEqual([reads.runId, unclassed.runId]);
+  });
+
   it("plans nothing for another kind, or when no run is left", () => {
     const r = run();
     expect(

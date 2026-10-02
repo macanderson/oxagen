@@ -53,6 +53,8 @@ export function prepaidBucketOutput(
 ): GauBucketOutput {
   return {
     mode: "prepaid",
+    basis: "subscription",
+    signupGrant: null,
     period: SEPTEMBER,
     includedGau: 50000,
     purchasedGau: 5000,
@@ -73,6 +75,8 @@ export function prepaidBucketOutput(
 export function invoiceBucketOutput(): GauBucketOutput {
   return {
     mode: "invoice",
+    basis: "subscription",
+    signupGrant: null,
     period: SEPTEMBER,
     includedGau: 300000,
     purchasedGau: 1,
@@ -131,6 +135,7 @@ export function evidenceRetentionOutput(
 ): EvidenceRetentionOutput {
   return {
     includedMonths: 12,
+    includedDays: 360,
     effectiveRetentionDays: null,
     extendedRetentionEnabled: false,
     usdPerGbMonth: 0.08,

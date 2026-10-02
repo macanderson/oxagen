@@ -2,10 +2,14 @@
 // `link_repository`. What it has to get right is the version chain against
 // `repository_bindings_repository_version_uq` on (connection, repository,
 // version): a repository this connection bound before already HAS a version 1,
-// so a second one would violate the index. Three cases, one per test.
+// so a second one would violate the index. The latest version is read across
+// the workspace's connections, so a relink through a replacement connection
+// continues the repository's one lineage (#3340).
 import { describe, expect, it } from "vitest";
 import type { GitHubRepoInfo } from "@oxagen/github";
 import { schema, type Tx } from "@oxagen/database";
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 import { writeRepositoryHead } from "./repository.binding-write";
 
 const REPO: GitHubRepoInfo = {
@@ -24,6 +28,7 @@ const SCOPE = { orgId: "org_1", workspaceId: "ws_1" };
 const LATEST = {
   id: "binding-1",
   publicId: "rpb_first",
+  connectionId: "conn-uuid",
   version: 1,
   providerOwner: REPO.owner,
   providerName: REPO.name,
@@ -33,6 +38,8 @@ const LATEST = {
 
 interface Writes {
   inserts: Array<{ table: unknown; values: Record<string, unknown> }>;
+  /** The predicate of the one read. */
+  where?: SQL;
 }
 
 /** A drizzle terminal that can be awaited or `.returning()`-ed. */
@@ -56,9 +63,12 @@ function tx(opts: { latest?: unknown[]; inserted?: unknown[] }): {
   const fake = {
     select: () => ({
       from: () => ({
-        where: () => ({
-          orderBy: () => ({ limit: async () => opts.latest ?? [] }),
-        }),
+        where: (where: SQL) => {
+          writes.where = where;
+          return {
+            orderBy: () => ({ limit: async () => opts.latest ?? [] }),
+          };
+        },
       }),
     }),
     insert: (table: unknown) => ({
@@ -169,6 +179,49 @@ describe("writeRepositoryHead", () => {
       role: "linked",
     });
     expect(out).toEqual({ bindingPublicId: "rpb_fourth" });
+  });
+
+  // #3340 finding 7: an operator unlinks a repository whose connection was
+  // retired and links it again through the connection that replaced it. The
+  // lookup used to filter on the connection, found nothing, and wrote a
+  // second version 1 with no predecessor.
+  it("reads the workspace's latest version of the repository through any connection", async () => {
+    const { tx: t, writes } = tx({ latest: [] });
+    await writeRepositoryHead(t, args("linked"));
+    if (writes.where === undefined) throw new Error("the writer read nothing");
+    expect(new PgDialect().sqlToQuery(writes.where).params).toEqual([
+      "org_1",
+      "ws_1",
+      "github",
+      "9001",
+    ]);
+  });
+
+  it("supersedes a version another connection holds, so a relink through a replacement connection continues the lineage", async () => {
+    const { tx: t, writes } = tx({
+      latest: [{ ...LATEST, connectionId: "conn-retired", version: 2 }],
+      inserted: [{ id: "binding-3", publicId: "rpb_third" }],
+    });
+    const out = await writeRepositoryHead(t, args("linked"));
+
+    const binding = writes.inserts.find(
+      (w) => w.table === schema.repositoryBindings,
+    );
+    // Nothing the version records moved, but its connection did: the new
+    // version names the replacement connection and its predecessor.
+    expect(binding?.values).toMatchObject({
+      connectionId: "conn-uuid",
+      version: 3,
+      supersedesBindingId: "binding-1",
+    });
+    const head = writes.inserts.find(
+      (w) => w.table === schema.repositoryBindingHeads,
+    );
+    expect(head?.values).toMatchObject({
+      connectionId: "conn-uuid",
+      currentBindingId: "binding-3",
+    });
+    expect(out).toEqual({ bindingPublicId: "rpb_third" });
   });
 
   it("supersedes on a rename too, carrying every renamed field together", async () => {
