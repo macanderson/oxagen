@@ -567,6 +567,10 @@ describe("GitHub daemon custody", () => {
     // A CI runner never ran `tacho github configure`.
     t.host.github_broker_enabled = false;
     t.host.github_repositories = [];
+    // A configured checkout's lease still needs its receipt. Ask before
+    // `issueForSession` runs, because that call drops every lease that is
+    // no longer live, and a dropped lease answers 401 instead.
+    expect((await t.request()).status).toBe(403);
     const lease = t.proxy.issueForSession({
       session: t.session.recorder.sessionUuid,
       repository: "Acme/Repo",
@@ -585,8 +589,6 @@ describe("GitHub daemon custody", () => {
       );
     expect((await fetchRefs()).status).toBe(200);
     expect(JSON.stringify(t.recorded)).toContain('"gateway_brokered"');
-    // A configured checkout's lease still needs its receipt.
-    expect((await t.request()).status).toBe(403);
     t.proxy.release(token);
     expect((await fetchRefs()).status).toBe(401);
   });
