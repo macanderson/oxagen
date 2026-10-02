@@ -87,7 +87,7 @@ function hostRow(overrides: Record<string, unknown> = {}): TachoHostRow {
     bundleFeatures: [BUNDLE_FEATURE_CEDAR],
     runtimeId: "22222222-2222-4222-8222-222222222222",
     ...overrides,
-  } as TachoHostRow;
+  } as unknown as TachoHostRow;
 }
 
 /** A transaction whose runtimes read answers `slug`, counting the reads. */
