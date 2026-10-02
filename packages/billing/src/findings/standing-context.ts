@@ -1,15 +1,22 @@
 /**
- * Standing context (detector 2): the context every turn of a run re-sends,
- * priced as `standing_tokens × read_price × (requests − 1)` per run and split
- * by source (spec detector 2). The sources are the run-totals columns F3
- * writes (#4493): tool definitions, context frames, and steering. Each column
- * holds a sum over the run's model calls, so one call's share is the sum over
- * the calls, and every call after the first re-sent it.
+ * Standing context (detector 2): the context every model call of a run
+ * re-sends, priced as `standing_tokens × read_price × (requests − 1)` per run
+ * and split by source (spec detector 2). The sources are the run-totals
+ * columns F3 writes (#4493): tool definitions, context frames, and steering.
+ * Each column holds a sum over the run's model calls, so one call's share is
+ * the sum over the calls, and every call after the first re-sent it.
  *
  * The price is the run's prompt-cache read price, since a re-sent prefix is a
  * cache read. A run that read nothing from the cache sent its prefix
  * uncached, so it falls back to the run's input price. A run with neither
  * price is cited and left out of the tokens, the split, and the saving.
+ *
+ * The fix moves a rarely called tool provider to Searchable and holds the
+ * steering prefix to its budget. It does not change the context frames, so
+ * their re-sent tokens are the counterfactual: the finding measures every
+ * source, and its saving counts the tool definitions and steering alone. A
+ * run whose only re-sent source is context frames has no saving the fix can
+ * reach, so the finding leaves it out.
  *
  * Every recorder today estimates the sources, and the run-totals row keeps no
  * basis per source, so the finding's basis is `estimated`. It prices a part
@@ -35,8 +42,15 @@ import {
 
 function detect(input: DetectInput, ctx: DetectContext): void {
   for (const run of input.runs) {
-    const resent = resentStandingTokens(sourcesOf(run), run.modelCalls);
-    if (resent === null || resent === 0) continue;
+    const sources = sourcesOf(run);
+    const resent = resentStandingTokens(sources, run.modelCalls);
+    if (resent === null) continue;
+    // The context frames the fix leaves in place; 0 when none were reported.
+    const kept =
+      sources.contextFrameTokens === null
+        ? 0
+        : resentTokens(sources.contextFrameTokens, run.modelCalls);
+    if (resent - kept <= 0) continue;
     const key = agentOrOperator("standing_context", run);
     if (key === null || !ctx.groups.admits(key, run)) continue;
     const price = standingReadPrice(run);
@@ -46,11 +60,14 @@ function detect(input: DetectInput, ctx: DetectContext): void {
       run,
       {
         measuredTokens: resent,
-        counterfactualTokens: 0,
+        counterfactualTokens: kept,
         micros:
           price === null
             ? null
-            : { measured: priceInputTokens(price, resent), counterfactual: 0n },
+            : {
+                measured: priceInputTokens(price, resent),
+                counterfactual: priceInputTokens(price, kept),
+              },
         basis: "estimated",
       },
       // The finding is about each run's prefix as a whole, not a call.
@@ -104,8 +121,11 @@ export const standingContext: Detector = {
   kinds: ["standing_context"],
   counting: null,
   detect,
-  prose: (group, evidence) => ({
-    why: `${plural(pricedRuns(group).length, "run", "runs")} re-sent ${plural(evidence.measuredTokens, "estimated token", "estimated tokens")} of standing context on every turn after the first: ${standingSplit(group)}.`,
-    fix: "Move a tool provider whose tools agents rarely call to Searchable, and hold the steering prefix to its budget.",
-  }),
+  prose: (group, evidence) => {
+    const frames = resentOf(group, "contextFrameTokens") ?? 0;
+    return {
+      why: `${plural(pricedRuns(group).length, "run", "runs")} re-sent ${plural(evidence.measuredTokens, "estimated token", "estimated tokens")} of standing context on every model call after the first: ${standingSplit(group)}.${frames > 0 ? " The saving leaves out the context frames, which the fix does not change." : ""}`,
+      fix: "Move a tool provider whose tools agents rarely call to Searchable, and hold the steering prefix to its budget.",
+    };
+  },
 };

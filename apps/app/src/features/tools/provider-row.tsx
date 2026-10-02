@@ -14,9 +14,12 @@
 // Weekly price is what the provider's tool definitions cost the workspace over
 // the last 7 days, sent on every model call (#4537). The server prices it from
 // the book at each call's rate, and the row prints the figure it returns: the
-// app never multiplies a rate by tokens (ADR-060). The cell says not recorded
-// when no listing names the provider, and not priced when the tokens are
-// known and the week has no priced call.
+// app never multiplies a rate by tokens (ADR-060). The figure prints to the
+// micro, because a small provider can cost less than half a cent a week, and
+// rounding that to $0.00 would show a charged provider as free (#4572). The
+// cell says not recorded when no listing names the provider, and not priced
+// when the tokens are known and the server priced no quote: the week had no
+// call, a call with no rate in the book, or rates in two currencies.
 import { useLocale, useTranslations } from "next-intl";
 import { useState } from "react";
 import type { McpServer } from "@/data/contracts/tools";
@@ -66,7 +69,7 @@ function ProviderWeeklyPrice({ server }: { server: McpServer }) {
         data-state="unpriced"
         className="flex flex-col items-end gap-0.5 text-xs text-muted-foreground"
       >
-        <span>{t("weeklyUnpriced")}</span>
+        <span title={t("weeklyUnpricedTitle")}>{t("weeklyUnpriced")}</span>
         <span className="text-[10.5px]">
           {t("weeklyTokenCount", { tokens: count })}
         </span>
@@ -79,7 +82,7 @@ function ProviderWeeklyPrice({ server }: { server: McpServer }) {
       className="flex flex-col items-end gap-0.5"
       title={t("weeklyTitle", { tokens: count })}
     >
-      <Money value={weeklyPrice} />
+      <Money value={weeklyPrice} precision="exact" />
       <span className="text-[10.5px] text-muted-foreground">
         {t("weeklyTokens", { tokens: count })}
       </span>

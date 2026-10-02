@@ -242,6 +242,34 @@ describe("Providers › roster", () => {
       providers("weeklyTokenCount", { tokens: "12,000" }),
     );
     expect(stripe).not.toHaveTextContent("$");
+    // #4572 item 8: the server gives no price when a call of the week has no
+    // rate, and the cell says why it has none.
+    const label = within(stripe).getByText(providers("weeklyUnpriced"));
+    expect(label).toHaveAttribute("title", providers("weeklyUnpricedTitle"));
+  });
+
+  // #4572 item 10: the cent precision rounded a price under half a cent to
+  // $0.00, which reads as a free provider.
+  it("prints a weekly price under half a cent to the micro, never as $0.00", () => {
+    renderProviders({
+      servers: readOk(
+        mcpServerList({
+          servers: [
+            {
+              ...stripeServer(),
+              contextTokens: 80,
+              weeklyPrice: {
+                micros: "4000",
+                currency: "USD",
+                basis: "estimated",
+              },
+            },
+          ],
+        }),
+      ),
+    });
+    const stripe = screen.getByTestId("provider-weekly-mcs_01k5s1");
+    expect(within(stripe).getByTestId("money")).toHaveTextContent("$0.004");
   });
 
   it("says no provider is registered rather than drawing an empty table", () => {
