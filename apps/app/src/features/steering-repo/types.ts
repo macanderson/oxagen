@@ -5,6 +5,7 @@
 // packages/oxagen/src/steering-repo/health.ts. `types.test.ts` pins the copies.
 // `SteeringRepoView` is the app's name for what `get_steering_repo` answers:
 // ./read assigns the port's record to it, so the compiler checks the two agree.
+import type { SteeringImportRunView } from "@oxagen/oxagen/contracts/steering_repo.get";
 import type { Read } from "@/data/read";
 
 /** The provisioning steps, in the order the job runs them. */
@@ -132,7 +133,24 @@ export type SteeringRepoView = {
   connection: SteeringConnectionChoice | null;
   /** The connections to pick from when setup stopped with `choose_connection`. */
   connectionChoices: readonly SteeringConnectionChoice[];
+  /** The workspace's last `import_workspace_steering` run, or null. See `pendingMove`. */
+  importRun: SteeringImportRunView | null;
 };
+
+/**
+ * The repository whose `.oxagen/` tree a stopped import has yet to move, or
+ * null (#5082). The import's demote step stops that repository steering, so
+ * from then on `legacySource` reads null and only the run's own state says
+ * the move is unfinished, even once the steering repo is ready. Calling
+ * `import_workspace_steering` again resumes the run at the step that stopped.
+ */
+export function pendingMove(
+  view: SteeringRepoView,
+): { fullName: string; url: string } | null {
+  const run = view.importRun;
+  if (run === null || run.status === "done" || run.step === null) return null;
+  return run.source;
+}
 
 /**
  * What the steering repo read answers: the view, or the failed `Read` that
