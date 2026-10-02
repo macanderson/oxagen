@@ -144,6 +144,7 @@ describe("readModelCallFrames", () => {
       "steering_tokens",
       "system_context_digest",
       "system_context_parts",
+      "proxy_observed",
     ]);
     expect(query_params).toEqual({
       orgId: ORG,
@@ -209,6 +210,54 @@ describe("readModelCallFrames", () => {
         steeringTokens: null,
       },
     ]);
+  });
+
+  // The loopback proxy seals every call it carries with
+  // `oxagen.metering: observed`. The read maps that mark to gateway_observed,
+  // from the priced row or from the proxy sighting joined back to it.
+  it("labels a call the proxy observed gateway_observed and any other call client_attested", async () => {
+    const base = {
+      at: "2026-09-14T10:00:00.000Z",
+      model: "claude-sonnet-5",
+      provider: "anthropic",
+      input_uncached: "10",
+      cache_read: "0",
+      cache_write_5m: "0",
+      cache_write_1h: "0",
+      output: "5",
+      reasoning: "0",
+      server_tool_request: "0",
+      cost_micros: null,
+      session_uuid: RUN,
+    };
+    answer([
+      { ...base, proxy_observed: 1 },
+      { ...base, proxy_observed: "1" },
+      { ...base, proxy_observed: 0 },
+      // A row from before the attribute existed carries no figure at all.
+      { ...base },
+    ]);
+    const frames = await readModelCallFrames({
+      orgId: ORG,
+      workspaceId: WS,
+      run: { kind: "tacho", rootSessionUuid: RUN, sessionUuids: [RUN] },
+    });
+    expect(frames.map((f) => f.basis)).toEqual([
+      "gateway_observed",
+      "gateway_observed",
+      "client_attested",
+      "client_attested",
+    ]);
+
+    // The mark is read off the priced row and off both proxy joins, with no
+    // new query parameter.
+    const { query, query_params } = lastQuery();
+    expect(query).toContain("attrs['oxagen.metering'] AS metering");
+    expect(query).toContain("max(attrs['oxagen.metering']) AS metering");
+    expect(query).toContain(
+      "toUInt8(c.metering = 'observed' OR r.metering = 'observed' OR q.metering = 'observed') AS proxy_observed",
+    );
+    expect(query_params).not.toHaveProperty("meteringAttr");
   });
 
   // Both vendors count thinking inside the output figure they publish, and

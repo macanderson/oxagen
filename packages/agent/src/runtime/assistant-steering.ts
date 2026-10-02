@@ -1,35 +1,20 @@
 /**
- * The in-app assistant's steering, assembled by the one assembler and
- * recorded on the turn's run (ADR-093 §7 as amended on 2026-09-25, #4158).
+ * The in-app assistant's steering, as the one assembler states it and the
+ * turn's run records it (ADR-093 §7).
  *
- * Two sources are candidates:
+ * A Stella turn carries no workspace steering (ADR-235, which amends ADR-093
+ * §7 and reverses the #4158 path that fed the workspace's published records
+ * and instructions into the prompt). `noWorkspaceSteering` is what the turn
+ * uses: the assembler with no candidate, so the prompt is Oxagen's baseline
+ * alone and the run's `steering.manifest` frame names no item. That frame is
+ * the record's statement that nothing from the workspace steered the turn.
  *
- *  - the workspace's published context records, read by the same function
- *    that builds a wrapped agent's policy bundle
- *    (`readPublishedSteeringCandidates`, `published-steering.ts`), so a record
- *    reads the same in both places;
- *  - the workspace's instructions (`prompt_config.additionalInstructions`),
- *    as one item of kind `instruction` (ADR-093 §3).
- *
- * `@oxagen/steering-assembler` ranks them by tier and then by recency, fits
- * them to `ASSISTANT_STEERING_BUDGET_TOKENS`, and returns the text and a
- * manifest naming every candidate as included or cut, with the reason. The
- * text goes into the system prompt after the governance baseline. The
- * manifest goes onto the run as a `steering.manifest` frame before the engine
- * is asked anything (`AssistantRunRecorder.steeringManifest`).
- *
- * This replaces the interim check for #3303, which refused instructions past
- * 8,000 characters whole and stated their precedence in a note. The budget
- * now covers records and instructions together, a cut is named in the
- * manifest instead of a refusal, and the ranking states the precedence: a
- * published MUST record ranks above the instructions, which carry SHOULD.
- *
- * Recalled memory still reaches the turn apart from this, as a context
- * message capped by `RECALL_LIMIT` (`assistant-recall.ts`). Moving it into
- * the assembler is the memory adapter #3296 describes.
+ * `assembleAssistantSteering` still takes published records and the
+ * workspace's instructions, and ranks a published MUST record above the
+ * instructions (#3303). The run recorder's tests build manifests with it. No
+ * production path hands it a workspace item.
  */
 import type { PromptConfig } from "@oxagen/ai";
-import { withTenantDb } from "@oxagen/database";
 import { digestJcs } from "@oxagen/run-evidence";
 import {
   assembleSteering,
@@ -39,17 +24,6 @@ import {
   type SteeringItemKind,
   type SteeringManifest,
 } from "@oxagen/steering-assembler";
-import pino from "pino";
-import {
-  readPublishedSteeringCandidates,
-  type SteeringTx,
-} from "./published-steering";
-
-const logger = pino({
-  level: process.env.LOG_LEVEL ?? "info",
-  base: { pkg: "agent.assistant-steering" },
-});
-
 /**
  * The most instruction text `update_prompt_settings` accepts
  * (`prompt.settings.write.ts`, `z.string().max(8000)`). A value past it can
@@ -175,61 +149,21 @@ export function assembleAssistantSteering(input: {
 }
 
 /**
- * Read the workspace's published records and assemble the turn's steering.
- * Must run inside the turn's tenant scope.
- *
- * A failed read does not refuse the turn. Steering is advice the model
- * reads. The gates that refuse an action run in the kernel whatever the
- * prompt says (ADR-097 §2). So the turn runs on the instructions alone, and
- * the manifest frame names `record` as unavailable. The record then never
- * reads "the workspace published nothing" when the registry did not answer
- * (ADR-051).
+ * The steering of a Stella turn: none (ADR-235). The workspace's published
+ * records and its instructions steer the workspace's own agents, and the
+ * workspace does not govern Oxagen's. The assembler still runs, with no
+ * candidate, so the run records a manifest that names no item and the prompt
+ * is the baseline alone, byte for byte.
  */
-export async function loadAssistantSteering(input: {
+export function noWorkspaceSteering(scope: {
   orgId: string;
   workspaceId: string;
-  promptConfig: PromptConfig | null | undefined;
-  requestId?: string | null;
-}): Promise<AssistantSteering> {
-  const scope = { orgId: input.orgId, workspaceId: input.workspaceId };
-  const unavailableKinds: SteeringItemKind[] = [];
-  let records: SteeringCandidate[] = [];
-  try {
-    records = await withTenantDb((tx) =>
-      readPublishedSteeringCandidates(
-        tx as unknown as SteeringTx,
-        input.orgId,
-        input.workspaceId,
-      ),
-    );
-  } catch (err) {
-    unavailableKinds.push("record");
-    logger.warn(
-      { err, ...scope, requestId: input.requestId },
-      "published steering could not be read, so this turn carries none",
-    );
-  }
-  const steering = assembleAssistantSteering({
+}): AssistantSteering {
+  return assembleAssistantSteering({
     ...scope,
-    records,
-    promptConfig: input.promptConfig,
-    unavailableKinds,
+    records: [],
+    promptConfig: null,
   });
-  const overBudget = steering.manifest.items
-    .filter((item) => item.reason === "budget")
-    .map((item) => item.id);
-  if (overBudget.length > 0) {
-    logger.warn(
-      {
-        ...scope,
-        requestId: input.requestId,
-        budgetTokens: steering.manifest.budget_tokens,
-        cut: overBudget,
-      },
-      "steering past the turn's budget was cut, and the run's manifest names each item",
-    );
-  }
-  return steering;
 }
 
 /**

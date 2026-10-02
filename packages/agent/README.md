@@ -5,12 +5,12 @@
 ## Boundary
 
 - **Owns:**
-  - Tool materialisation (`src/runtime/materialize-tools.ts`): kill switches, IAM, plugin entitlement, tool RBAC, first-use consent, the approval pause, and the audit row, applied per call in each tool's `execute`.
+  - Tool materialisation (`src/runtime/materialize-tools.ts`): kill switches, IAM, plugin entitlement, tool RBAC, first-use consent, the approval pause, and the audit row, applied per call in each tool's `execute`. A Stella call writes no `tool_invocations` row, and the kernel skips the workspace's decision rules for it (ADR-235).
   - The tool-count check against a provider's per-request cap (`src/runtime/tool-budget.ts`, #2611).
   - The governed turn (`runGovernedTurn` in `src/runtime/governed-turn.ts`): one bounded, metered model turn over the materialised tools, run on the `stella-serve` engine (ADR-053).
   - The assistant turn and its SSE stream (`src/runtime/assistant-turn.ts`, `src/runtime/assistant-stream.ts`) and approval resume (`src/runtime/approval-resume.ts`).
-  - The assistant turn's steering (`src/runtime/assistant-steering.ts`): published context records and the workspace's instructions, assembled by `@oxagen/steering-assembler` into the system prompt, with the manifest recorded on the run as a `steering.manifest` frame (ADR-093 §7, #4158).
-  - The published context-record read and the record adapter (`src/runtime/published-steering.ts`). The in-app turn and a wrapped agent's policy bundle (`packages/handlers/src/lib/tacho-steering.ts`) both read steering through it, so a record reads the same in both.
+  - The assistant turn's steering (`src/runtime/assistant-steering.ts`): none from the workspace (ADR-235). The turn records a `steering.manifest` frame that names no item, and its system prompt is Oxagen's baseline alone.
+  - The published context-record read and the record adapter (`src/runtime/published-steering.ts`), which a wrapped agent's policy bundle (`packages/handlers/src/lib/tacho-steering.ts`) reads steering through.
   - The plugin-type contributor registry and the MCP server contributors (`src/runtime/plugin-type.ts`, `src/runtime/plugin-types/`).
   - The MCP client and the Neo4j projection of invoked tools (`src/dispatch/`), and agent memory in Neo4j (`src/memory/`).
   - The `agent.*` handlers (`src/handlers/`): approvals, the MCP registry and consent ledger, memory, agent definitions and roles, executions, traces, and error clustering. `src/register.ts` registers them.

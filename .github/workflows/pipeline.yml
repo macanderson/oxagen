@@ -180,6 +180,13 @@ jobs:
       - uses: actions/checkout@v5
         with:
           sparse-checkout: tools/scripts
+      # The scripts below run on the host. GitHub's image ships Node on the
+      # PATH and our runner image keeps it in the tool cache (ADR-246), so the
+      # job asks for it by the repository's pin. On our runners the version is
+      # already in the cache and this takes about a second.
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
       - name: Decide whether this commit still needs the full gate
         id: preflight-tip
         env:
