@@ -8,11 +8,11 @@ import type { PriceEntry } from "./price-book";
 import {
   emptyWeekTally,
   priceAtPerThousand,
-  resentStandingTokens,
+  resentSplitOf,
   runReadPrice,
   standingContextBySource,
-  standingReadPrice,
   tallyWeek,
+  weeklyCostOf,
   weeklyPriceFromBook,
   weeklyPriceOfTally,
   type WeekOfModel,
@@ -72,10 +72,20 @@ describe("runReadPrice", () => {
     });
   });
 
-  it("is null when a model's cache reads include an unpriced call", () => {
+  it("is null when a model's cache reads include an unpriced call on a row with no priced tokens", () => {
     const partial = priced(30_000, 9_000n);
     partial.breakdown.models[0]!.hasUnpriced = true;
     expect(runReadPrice(partial)).toBeNull();
+  });
+
+  // #4572 item 7: the cost counts the priced calls alone, so the rate divides
+  // it by their tokens. The old ratio read 9,000 over all 30,000 tokens.
+  it("divides by the priced calls' tokens when a model has an unpriced call", () => {
+    const partial = priced(30_000, 9_000n);
+    const model = partial.breakdown.models[0]!;
+    model.hasUnpriced = true;
+    model.pricedTokens = { ...ZERO_TOKENS, cache_read: 20_000 };
+    expect(runReadPrice(partial)).toEqual({ micros: 9_000n, tokens: 20_000n });
   });
 
   it("ignores an unpriced model that read nothing from the cache", () => {
@@ -92,37 +102,46 @@ describe("runReadPrice", () => {
   });
 });
 
-describe("standingReadPrice", () => {
+describe("the price of re-sent tokens", () => {
+  const steering = {
+    toolDefinitionTokens: null,
+    contextFrameTokens: null,
+    steeringTokens: 20_000,
+  };
+
   it("does not fall back to the input price when the cache reads have no price", () => {
-    const partial = priced(30_000, 9_000n);
+    const partial = { ...priced(30_000, 9_000n), modelCalls: 4 };
     const model = partial.breakdown.models[0]!;
     model.tokens = { ...model.tokens, input_uncached: 3_000 };
     model.costByClass = { ...model.costByClass, input_uncached: 9_000n };
     model.hasUnpriced = true;
-    expect(standingReadPrice(partial)).toBeNull();
+    const part = standingContextBySource(partial, steering)?.steeringTokens;
+    expect(part).toEqual({ resentTokens: 15_000, micros: null });
   });
 
   it("is the input price for a run that read nothing from the cache", () => {
-    const run = priced(0, 0n);
+    const run = { ...priced(0, 0n), modelCalls: 4 };
     const model = run.breakdown.models[0]!;
     model.tokens = { ...model.tokens, input_uncached: 3_000 };
     model.costByClass = { ...model.costByClass, input_uncached: 9_000n };
     model.costMicros = 9_000n;
-    expect(standingReadPrice(run)).toEqual({ micros: 9_000n, tokens: 3_000n });
+    const part = standingContextBySource(run, steering)?.steeringTokens;
+    expect(part).toEqual({ resentTokens: 15_000, micros: 45_000n });
   });
 
-  it("is null for a cache-free run whose uncached input includes an unpriced call", () => {
-    const run = priced(0, 0n);
+  it("has no price for a cache-free run whose uncached input includes an unpriced call on a row with no priced tokens", () => {
+    const run = { ...priced(0, 0n), modelCalls: 4 };
     const model = run.breakdown.models[0]!;
     model.tokens = { ...model.tokens, input_uncached: 3_000 };
     model.costByClass = { ...model.costByClass, input_uncached: 6_000n };
     model.costMicros = 6_000n;
     model.hasUnpriced = true;
-    expect(standingReadPrice(run)).toBeNull();
+    const of = () => standingContextBySource(run, steering)?.steeringTokens;
+    expect(of()?.micros).toBeNull();
     // A row stored before `hasUnpriced` existed marks it by a null cost.
     model.hasUnpriced = false;
     model.costMicros = null;
-    expect(standingReadPrice(run)).toBeNull();
+    expect(of()?.micros).toBeNull();
   });
 });
 
@@ -469,6 +488,25 @@ describe("weeklyPriceFromBook", () => {
   });
 });
 
+describe("weeklyCostOf", () => {
+  const price = { perThousandMicros: 48_000n, currency: "USD" };
+
+  // list_records prices a record with this, and list_mcp_servers prices a
+  // provider's 5,200 tokens as 249,600 micros: the same size, the same price.
+  it("prices tokens at the week's price per 1,000, labelled estimated", () => {
+    expect(weeklyCostOf(5_200, price)).toEqual({
+      micros: "249600",
+      currency: "USD",
+      basis: "estimated",
+    });
+  });
+
+  it("is null without the tokens or the price", () => {
+    expect(weeklyCostOf(null, price)).toBeNull();
+    expect(weeklyCostOf(5_200, null)).toBeNull();
+  });
+});
+
 describe("priceAtPerThousand", () => {
   it("prices a count of tokens at a quoted price per 1,000, rounded half to even", () => {
     expect(priceAtPerThousand(300_000n, 4_000)).toBe(1_200_000n);
@@ -478,30 +516,40 @@ describe("priceAtPerThousand", () => {
   });
 });
 
-describe("resentStandingTokens", () => {
-  it("is the reported sources less the first call's share", () => {
-    expect(
-      resentStandingTokens(
-        {
-          toolDefinitionTokens: 80_000,
-          contextFrameTokens: null,
-          steeringTokens: 20_000,
-        },
-        4,
-      ),
-    ).toBe(75_000);
+describe("resentSplitOf", () => {
+  const none = {
+    toolDefinitionTokens: null,
+    contextFrameTokens: null,
+    steeringTokens: null,
+  };
+
+  it("estimates a row with no stored split from the sums, less one call's share", () => {
+    const run = { ...priced(30_000, 9_000n), modelCalls: 4 };
+    const split = resentSplitOf(run, {
+      ...none,
+      toolDefinitionTokens: 80_000,
+      steeringTokens: 20_000,
+    });
+    expect(split).toEqual({
+      toolDefinitionTokens: { cached: 60_000, uncached: 0 },
+      steeringTokens: { cached: 15_000, uncached: 0 },
+      contextFrameTokens: null,
+    });
+    const once = { ...priced(0, 0n), modelCalls: 1 };
+    const one = resentSplitOf(once, { ...none, steeringTokens: 5_000 });
+    expect(one.steeringTokens).toEqual({ cached: 0, uncached: 0 });
   });
 
-  it("is null when no source reported, and 0 when the run made one call", () => {
-    const none = {
-      toolDefinitionTokens: null,
+  it("reads the split the rollup stored over the estimate", () => {
+    const run = { ...priced(30_000, 9_000n), modelCalls: 4 };
+    const standing = {
+      toolDefinitionTokens: { cached: 200, uncached: 100 },
       contextFrameTokens: null,
       steeringTokens: null,
     };
-    expect(resentStandingTokens(none, 4)).toBeNull();
-    expect(resentStandingTokens({ ...none, steeringTokens: 5_000 }, 1)).toBe(
-      0,
-    );
+    const stored = { ...run, breakdown: { ...run.breakdown, standing } };
+    const sums = { ...none, toolDefinitionTokens: 300 };
+    expect(resentSplitOf(stored, sums)).toEqual(standing);
   });
 });
 
@@ -538,6 +586,51 @@ describe("standingContextBySource", () => {
         sources,
       )?.toolDefinitionTokens,
     ).toEqual({ resentTokens: 60_000, micros: null });
+  });
+
+  // #4572 item 2: tool definitions of 0, 100, 100, and 100 tokens over four
+  // calls. The calls after the first re-sent 300, and the old estimate from
+  // the sum, 300 × 3 / 4, read 225.
+  it("counts the re-sent tokens the rollup measured, whatever the first call held", () => {
+    const run = { ...priced(30_000, 9_000n), modelCalls: 4 };
+    const standing = {
+      toolDefinitionTokens: { cached: 300, uncached: 0 },
+      contextFrameTokens: null,
+      steeringTokens: null,
+    };
+    const stored = { ...run, breakdown: { ...run.breakdown, standing } };
+    const sums = {
+      ...sources,
+      toolDefinitionTokens: 300,
+      steeringTokens: null,
+    };
+    const part = standingContextBySource(stored, sums)?.toolDefinitionTokens;
+    // 300 tokens at 0.3 micros a token.
+    expect(part).toEqual({ resentTokens: 300, micros: 90n });
+  });
+
+  // #4572 item 3: reads cost 0.3 micros a token and input 3. The old price
+  // put all 40,000 tokens at the read rate, 12,000 micros.
+  it("prices the tokens on calls that missed the cache at the input rate", () => {
+    const run = { ...priced(30_000, 9_000n), modelCalls: 4 };
+    const model = run.breakdown.models[0]!;
+    model.tokens = { ...model.tokens, input_uncached: 3_000 };
+    model.costByClass = { ...model.costByClass, input_uncached: 9_000n };
+    model.costMicros = 18_000n;
+    const standing = {
+      toolDefinitionTokens: { cached: 30_000, uncached: 10_000 },
+      contextFrameTokens: null,
+      steeringTokens: null,
+    };
+    const stored = { ...run, breakdown: { ...run.breakdown, standing } };
+    const sums = {
+      ...sources,
+      toolDefinitionTokens: 50_000,
+      steeringTokens: null,
+    };
+    const part = standingContextBySource(stored, sums)?.toolDefinitionTokens;
+    // 30,000 × 0.3 + 10,000 × 3 = 9,000 + 30,000 micros.
+    expect(part).toEqual({ resentTokens: 40_000, micros: 39_000n });
   });
 
   it("prices free cache reads at zero rather than leaving the price out", () => {

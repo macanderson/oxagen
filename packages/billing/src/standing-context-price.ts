@@ -8,19 +8,23 @@
  * in the prefix costs its read price once per request, and a week of it costs
  * that price summed over the requests of the week.
  *
- * The findings pass prices a run's re-reads with `standingReadPrice`, from
- * the costs the rollup recorded on the run. The tool and steering pages print
- * a weekly price per 1,000 tokens with `weeklyPriceOfTally`, from the book
- * rates in force at each of the workspace's requests of the last 7 days. Both
- * price a re-read at the cache read rate, or at the input rate when the
- * request read nothing from the cache.
+ * The findings pass and the run page price a run's re-reads with
+ * `standingContextBySource`, from the costs and the re-sent split the rollup
+ * recorded on the run. The tool and steering pages print a weekly price per
+ * 1,000 tokens with `weeklyPriceOfTally`, from the book rates in force at each
+ * of the workspace's requests of the last 7 days, and `weeklyCostOf` prices a
+ * provider's or a record's tokens at it. Both price a re-read at the cache
+ * read rate, or at the input rate when the request read nothing from the
+ * cache.
  */
 import {
   divideHalfEven,
   priceInputTokens,
+  pricedTokensOf,
   runInputPrice,
   type CostBasis,
   type InputPrice,
+  type ResentSourceTokens,
   type RunBreakdown,
 } from "./cost-rollup";
 import {
@@ -53,11 +57,11 @@ function readTheCache(run: PricedRun): boolean {
  * price, as with `runInputPrice`.
  *
  * A zero price is a price: a model whose book rate for a cache read is 0, or
- * whose reads round to 0 micros, read the cache for free. A model with an
- * unpriced call among its cache reads is not: its tokens count every call and
- * its cost only the priced ones, so the ratio would read low. A run with such
- * a model has no read price. A row stored before `hasUnpriced` existed marks
- * an unpriced model by a null cost, the rule the store revives it by.
+ * whose reads round to 0 micros, read the cache for free. The ratio divides
+ * the reads' cost by the tokens of the calls the book priced
+ * (`pricedTokensOf`), since the cost counts only those calls. A row rolled
+ * up before those tokens were kept, with an unpriced call among a model's
+ * cache reads, has no read price, because the ratio would read low.
  */
 export function runReadPrice(run: PricedRun): InputPrice | null {
   if (run.costBasis === null || run.costBasis === "estimated") return null;
@@ -65,9 +69,10 @@ export function runReadPrice(run: PricedRun): InputPrice | null {
   let tokens = 0n;
   for (const m of run.breakdown.models) {
     if (m.tokens.cache_read === 0) continue;
-    if (m.hasUnpriced || m.costMicros === null) return null;
+    const priced = pricedTokensOf(m, "cache_read");
+    if (priced === null) return null;
     micros += m.costByClass.cache_read;
-    tokens += BigInt(m.tokens.cache_read);
+    tokens += BigInt(priced);
   }
   if (tokens === 0n) return null;
   return { micros, tokens };
@@ -245,6 +250,25 @@ export function priceAtPerThousand(
   );
 }
 
+/**
+ * What `tokens` sent on every request cost the workspace over the week, as
+ * the wire carries a cost: the tokens at the week's price per 1,000, an
+ * estimate. Null without either figure. The providers table and the steering
+ * record cards both print this, so a provider and a record of the same size
+ * show the same price.
+ */
+export function weeklyCostOf(
+  tokens: number | null,
+  price: Pick<WeeklyContextPrice, "perThousandMicros" | "currency"> | null,
+): { micros: string; currency: string; basis: "estimated" } | null {
+  if (tokens === null || price === null) return null;
+  return {
+    micros: priceAtPerThousand(price.perThousandMicros, tokens).toString(),
+    currency: price.currency,
+    basis: "estimated",
+  };
+}
+
 /** A run's standing context by source; null where the recorder did not report it. */
 export interface StandingContextSources {
   toolDefinitionTokens: number | null;
@@ -276,31 +300,58 @@ export const STANDING_SOURCES = [
 export type StandingSource = (typeof STANDING_SOURCES)[number];
 
 /**
- * The tokens of one source that a run re-sent: its sum over the run's model
- * calls, less the first call's share. The run-totals columns hold the sum
- * over every call, so one call's share is the sum over the calls. A run of
- * one call re-sent nothing.
+ * The tokens of one source that a run re-sent, estimated from its sum over
+ * the run's model calls: the sum less one call's average share. A row rolled
+ * up before the rollup kept the re-sent split holds only the sum, so this is
+ * the best it can say. A run of one call re-sent nothing.
  */
 export function resentTokens(tokens: number, requests: number): number {
   if (requests <= 1) return 0;
   return Math.round((tokens * (requests - 1)) / requests);
 }
 
+/** A run as the standing context price reads it. */
+type StandingRun = {
+  costBasis: CostBasis | null;
+  breakdown: Pick<RunBreakdown, "models" | "standing">;
+  modelCalls: number;
+};
+
 /**
- * The standing tokens a run re-sent over every reported source; null when no
- * source reported. Each source rounds on its own, so the total is the sum of
- * the run page's areas.
+ * Each source's tokens on the run's model calls after its first, split by
+ * whether the call read the cache; null for a source no call reported.
+ *
+ * The rollup measures the split on the frames (#4572): the first call's own
+ * count, whatever it was, is left out, and each later call's tokens fall on
+ * the side of its own cache use. A row rolled up before that holds only each
+ * source's sum, so the split is estimated from it with `resentTokens`, and
+ * every token falls on one side: read from the cache when the run read the
+ * cache at all, else sent uncached.
  */
-export function resentStandingTokens(
+export function resentSplitOf(
+  run: StandingRun,
   sources: StandingContextSources,
-  requests: number,
-): number | null {
-  let total: number | null = null;
-  for (const source of STANDING_SOURCES) {
-    const tokens = sources[source];
-    if (tokens !== null) total = (total ?? 0) + resentTokens(tokens, requests);
-  }
-  return total;
+): Record<StandingSource, ResentSourceTokens | null> {
+  const stored = run.breakdown.standing;
+  if (stored !== undefined)
+    return {
+      toolDefinitionTokens: stored.toolDefinitionTokens,
+      steeringTokens: stored.steeringTokens,
+      contextFrameTokens: stored.contextFrameTokens,
+    };
+  const cached = readTheCache(run);
+  const estimate = (tokens: number | null): ResentSourceTokens | null => {
+    if (tokens === null) return null;
+    const resent = resentTokens(tokens, run.modelCalls);
+    return cached
+      ? { cached: resent, uncached: 0 }
+      : { cached: 0, uncached: resent };
+  };
+  return {
+    toolDefinitionTokens: estimate(sources.toolDefinitionTokens),
+    steeringTokens: estimate(sources.steeringTokens),
+    contextFrameTokens: estimate(sources.contextFrameTokens),
+  };
 }
 
 /** One source's re-sent tokens and their price; null micros when the run has no price. */
@@ -310,57 +361,55 @@ export interface StandingSourcePrice {
 }
 
 /**
- * What a run paid for one uncached input token, as `runInputPrice` reads it,
- * and null when a model with uncached input has an unpriced call. Such a
- * model's tokens count every call and its cost only the priced ones, so the
- * ratio would read low, as with `runReadPrice`.
+ * What one source's re-sent tokens cost the run: the tokens of the calls that
+ * read the cache at the run's cache read price, and the tokens of the calls
+ * that read nothing at its input price, since those sent the prefix
+ * uncached. Null when a side has tokens and the run has no price for it. A
+ * cache read never falls back to the input price, which would price it at
+ * the uncached rate.
  */
-function runUncachedPrice(run: PricedRun): InputPrice | null {
-  for (const m of run.breakdown.models) {
-    if (m.tokens.input_uncached === 0) continue;
-    if (m.hasUnpriced || m.costMicros === null) return null;
+function priceResent(
+  run: StandingRun,
+  part: ResentSourceTokens,
+): bigint | null {
+  let micros = 0n;
+  if (part.cached > 0) {
+    const read = runReadPrice(run);
+    if (read === null) return null;
+    micros += priceInputTokens(read, part.cached);
   }
-  return runInputPrice(run);
-}
-
-/**
- * The price a run re-read its standing context at: its cache read price, or
- * its input price when it read nothing from the cache, since then it sent
- * the prefix uncached. Null when that price is not known, including when a
- * model the price reads has an unpriced call. A run that read the cache and
- * has no read price never falls back to the input price, which would price
- * its cache reads at the uncached rate.
- */
-export function standingReadPrice(run: PricedRun): InputPrice | null {
-  return readTheCache(run) ? runReadPrice(run) : runUncachedPrice(run);
+  if (part.uncached > 0) {
+    const input = runInputPrice(run);
+    if (input === null) return null;
+    micros += priceInputTokens(input, part.uncached);
+  }
+  return micros;
 }
 
 /**
  * A run's standing context by source, as `standing_tokens × read_price ×
- * (requests − 1)` (spec detector 2). A source the recorder did not report is
+ * (requests − 1)` (spec detector 2), with each call after the first priced
+ * at the rate its own cache use paid. A source the recorder did not report is
  * null, never a zero. Null when no source reported.
  */
 export function standingContextBySource(
-  run: {
-    costBasis: CostBasis | null;
-    breakdown: Pick<RunBreakdown, "models">;
-    modelCalls: number;
-  },
+  run: StandingRun,
   sources: StandingContextSources,
 ): Record<StandingSource, StandingSourcePrice | null> | null {
-  if (STANDING_SOURCES.every((source) => sources[source] === null)) return null;
-  const price = standingReadPrice(run);
-  const priced = (tokens: number | null): StandingSourcePrice | null => {
-    if (tokens === null) return null;
-    const resent = resentTokens(tokens, run.modelCalls);
-    return {
-      resentTokens: resent,
-      micros: price === null ? null : priceInputTokens(price, resent),
-    };
-  };
+  const split = resentSplitOf(run, sources);
+  if (STANDING_SOURCES.every((source) => split[source] === null)) return null;
+  const priced = (
+    part: ResentSourceTokens | null,
+  ): StandingSourcePrice | null =>
+    part === null
+      ? null
+      : {
+          resentTokens: part.cached + part.uncached,
+          micros: priceResent(run, part),
+        };
   return {
-    toolDefinitionTokens: priced(sources.toolDefinitionTokens),
-    steeringTokens: priced(sources.steeringTokens),
-    contextFrameTokens: priced(sources.contextFrameTokens),
+    toolDefinitionTokens: priced(split.toolDefinitionTokens),
+    steeringTokens: priced(split.steeringTokens),
+    contextFrameTokens: priced(split.contextFrameTokens),
   };
 }
