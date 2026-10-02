@@ -41,7 +41,7 @@ import {
   type AnyColumn,
   type SQL,
 } from "drizzle-orm";
-import { alias } from "drizzle-orm/pg-core";
+import { alias, getTableConfig } from "drizzle-orm/pg-core";
 import {
   createRunRollup,
   createDailyRollup,
@@ -127,14 +127,21 @@ export function toolCallName(payload: AnyColumn | SQL): SQL<string | null> {
 export function inAppRunTotal(): SQL<boolean> {
   const totals = schema.runTotals;
   const agentRuns = schema.agentRuns;
-  const alias = "in_app_run";
-  const column = (c: { name: string }) =>
-    sql`${sql.identifier(alias)}.${sql.identifier(c.name)}`;
+  const runAlias = "in_app_run";
+  const inner = (c: { name: string }) =>
+    sql`${sql.identifier(runAlias)}.${sql.identifier(c.name)}`;
+  // The outer row's columns, named in full. Drizzle writes a single-table
+  // select list without table names, and inside this subquery a bare
+  // "org_id" or "workspace_id" would bind to the inner table's own column.
+  // The reader selects from `cost.run_totals` without an alias.
+  const table = getTableConfig(totals);
+  const outer = (c: { name: string }) =>
+    sql`${sql.identifier(table.schema ?? "public")}.${sql.identifier(table.name)}.${sql.identifier(c.name)}`;
   const surfaces = sql.join(
     IN_APP_AGENT_SURFACES.map((surface) => sql`${surface}`),
     sql`, `,
   );
-  return sql<boolean>`exists (select 1 from ${agentRuns} as ${sql.identifier(alias)} where ${column(agentRuns.publicId)} = ${totals.runId}::citext and ${column(agentRuns.orgId)} = ${totals.orgId} and ${column(agentRuns.workspaceId)} = ${totals.workspaceId} and ${column(agentRuns.surface)} in (${surfaces}))`;
+  return sql<boolean>`exists (select 1 from ${agentRuns} as ${sql.identifier(runAlias)} where ${inner(agentRuns.publicId)} = ${outer(totals.runId)}::citext and ${inner(agentRuns.orgId)} = ${outer(totals.orgId)} and ${inner(agentRuns.workspaceId)} = ${outer(totals.workspaceId)} and ${inner(agentRuns.surface)} in (${surfaces}))`;
 }
 const seals = schema.agentRunAttemptSeals;
 const sessions = schema.tachoSessions;
