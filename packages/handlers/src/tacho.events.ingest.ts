@@ -1015,14 +1015,18 @@ export function reportedCostBasis(
  * The cost the batch's counted model calls carried on frames a backfill
  * sealed (ADR-161). The ingest counts it toward the session's totals and
  * keeps it out of the spend-budget counter.
+ *
+ * It counts the calls `foldDelta` counts, by the same rule
+ * (`countsLlmCallUsage`) and the same reading of the figure (`num`), so the
+ * part of `delta.totalCostMicros` it names is never more or less than that
+ * part. A copy of a call another sighting already counted adds nothing to
+ * either.
  */
 export function backfilledCostMicros(counted: readonly TachoEvent[]): number {
   let micros = 0;
   for (const event of counted) {
-    if (event.kind !== "llm_call" || !isBackfilledFrame(event)) continue;
-    const cost = (event.body as Body)["cost_usd_micros"];
-    if (typeof cost === "number" && Number.isFinite(cost) && cost > 0)
-      micros += cost;
+    if (!countsLlmCallUsage(event) || !isBackfilledFrame(event)) continue;
+    micros += num((event.body as Body)["cost_usd_micros"]);
   }
   return micros;
 }
@@ -1320,13 +1324,22 @@ function terminalPatch(
  * keeps adding the observed calls. The harness's total is the claim that
  * observed metering exists to check, so it never replaces the observed one
  * (#3944, S-07). It is stored in `harness_reported_cost_micros` either way.
+ *
+ * A session a backfill rebuilt (`backfill`, and `mixed` once a live resume
+ * continued it) keeps adding its calls too. Its `agent_stop` can carry
+ * Claude Code's own total from the transcript's `cost-state`, which is the
+ * harness's estimate, not Oxagen's. ADR-161 prices such a run from the price
+ * book at each call's own instant, so the rollup's figure is the one its run
+ * reads, and the harness's total stays in `harness_reported_cost_micros` for
+ * comparison only.
  */
 export function sessionTotalCost(
   harnessTotal: number | undefined,
   observed: boolean,
   deltaMicros: number,
+  recordBasis: RecordBasis,
 ): { kind: "assign"; micros: number } | { kind: "add"; micros: number } {
-  if (harnessTotal !== undefined && !observed)
+  if (harnessTotal !== undefined && !observed && recordBasis === "live")
     return { kind: "assign", micros: harnessTotal };
   return { kind: "add", micros: deltaMicros };
 }
@@ -2139,6 +2152,7 @@ const ingestBatch = async (
         existing?.costBasis === TACHO_METERING_OBSERVED ||
           firstObserved !== undefined,
         delta.totalCostMicros,
+        recordBasis,
       );
       const increments = {
         numTurns: sql`${schema.tachoSessions.numTurns} + ${delta.numTurns}`,

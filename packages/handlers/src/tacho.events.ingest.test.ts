@@ -135,6 +135,7 @@ import {
   isObservedModelCall,
   lastRecordedContext,
   reportedCostBasis,
+  sessionTotalCost,
   tachoEventsIngestHandler,
   tachoToolCallEntries,
   usageCountedEvents,
@@ -7355,8 +7356,11 @@ describe("a backfilled session", () => {
     "oxagen.git_basis": "recorded",
   };
 
-  /** A finished session as a backfill seals it: every frame marked. */
-  function backfilled(): TachoEvent[] {
+  /**
+   * A finished session as a backfill seals it: every frame marked. `stop`
+   * adds to the `agent_stop` body, such as Claude Code's own total.
+   */
+  function backfilled(stop: Record<string, unknown> = {}): TachoEvent[] {
     let cursor: ChainCursor = GENESIS_CURSOR;
     const out: TachoEvent[] = [];
     for (const draft of [
@@ -7398,6 +7402,7 @@ describe("a backfilled session", () => {
           session_outcome: "unknown",
           session_end_reason: "backfill_end_of_file",
           completeness_gaps: ["backfill"],
+          ...stop,
         },
         "transcript",
         CLAUDE_CODE,
@@ -7480,5 +7485,76 @@ describe("a backfilled session", () => {
     const live = session().filter((e) => e.kind === "llm_call");
     expect(backfilledCostMicros([estimated as TachoEvent, ...live])).toBe(1200);
     expect(backfilledCostMicros(live)).toBe(0);
+  });
+
+  // The PR #5166 review: the figure kept off the counter is subtracted from
+  // what `foldDelta` added, so the two must count the same calls.
+  it("names as backfilled exactly the cost foldDelta counted, and not a copy's", () => {
+    const [call] = backfilled().filter((e) => e.kind === "llm_call");
+    if (call === undefined) throw new Error("the chain has no model call");
+    // A later sighting of the same call that the host stamped as a copy. It
+    // carries a figure, as a transcript frame will once frames carry cost.
+    const copy: TachoEvent = {
+      ...call,
+      attrs: { ...call.attrs, "oxagen.llm_call_duplicate_of": "transcript" },
+    };
+    const delta = {
+      numModelCalls: 0,
+      inputTokens: 0,
+      outputTokens: 0,
+      cacheReadTokens: 0,
+      cacheCreationTokens: 0,
+      cacheCreation5mTokens: 0,
+      cacheCreation1hTokens: 0,
+      thinkingTokens: 0,
+      webSearchRequests: 0,
+      webFetchRequests: 0,
+      totalCostMicros: 0,
+    } as Parameters<typeof foldDelta>[0];
+    for (const event of [call, copy]) foldDelta(delta, event);
+    expect(delta.numModelCalls).toBe(1);
+    expect(delta.totalCostMicros).toBe(1200);
+    expect(backfilledCostMicros([call, copy])).toBe(delta.totalCostMicros);
+  });
+
+  it("assigns the harness's total only to a live session the proxy never metered", () => {
+    expect(sessionTotalCost(5_000, false, 10, "live")).toEqual({
+      kind: "assign",
+      micros: 5_000,
+    });
+    for (const [observed, basis] of [
+      [true, "live"],
+      [false, "backfill"],
+      [false, "mixed"],
+    ] as const)
+      expect(sessionTotalCost(5_000, observed, 10, basis)).toEqual({
+        kind: "add",
+        micros: 10,
+      });
+    expect(sessionTotalCost(undefined, false, 10, "live")).toEqual({
+      kind: "add",
+      micros: 10,
+    });
+  });
+
+  it("keeps Claude Code's own total off a backfilled session's cost and stores it for comparison", async () => {
+    const db = fakeDb();
+    wire(db);
+    await tachoEventsIngestHandler(
+      batch(backfilled({ total_cost_usd_micros: 987_000 })),
+      CONTEXT,
+    );
+    const increments = db.updates.find(
+      (u) => u.table === "sessions" && u.values["inputTokens"] !== undefined,
+    );
+    // The batch's own calls add to the row, and the harness's figure never
+    // replaces them: the rollup's price-book estimate is the run's cost.
+    const total = increments?.values["totalCostMicros"];
+    expect(total).toBeInstanceOf(SQL);
+    expect(new PgDialect().sqlToQuery(total as SQL).params).toEqual([1200]);
+    expect(db.sessions.get(SESSION)).toMatchObject({
+      recordBasis: "backfill",
+      harnessReportedCostMicros: 987_000,
+    });
   });
 });
