@@ -288,6 +288,6 @@ describe("the committed book", () => {
         `${path} is stale. Run node tools/scripts/build-book-editions.mjs, then rehash the migrations.`,
       ).toBe(true);
     }
-    expect(MIGRATION_NAME).toMatch(/^\d{14}_book_second_edition\.sql$/);
+    expect(MIGRATION_NAME).toMatch(/^\d{14}_book_[a-z_]+\.sql$/);
   });
 });

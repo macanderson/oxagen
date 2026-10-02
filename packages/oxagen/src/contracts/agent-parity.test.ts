@@ -71,6 +71,10 @@ const OFF_AGENT: Readonly<Record<string, string>> = {
     "The app reads a Stella turn's reply with it, and Stella wrote that reply.",
   get_slack_connection:
     "It belongs to the Slack connection flow, which is on no surface.",
+  get_work_item:
+    "It returns the issue's description and every source revision as collected, and the Phase 1 plan screens inbound content before any model reads it. This read does not screen.",
+  get_work_outcomes:
+    "Phase 1 keeps Work off the agent surface: every work decision refuses an agent run (assertWorkActor), and the item reads carry unscreened issue text. The outcome counts move with the other Work reads.",
   get_workspace_memory:
     "Mac ruled on 2026-09-25 that the in-app agent never receives workspace memories.",
   import_workspace_steering:
@@ -81,6 +85,10 @@ const OFF_AGENT: Readonly<Record<string, string>> = {
     "It belongs to the Slack connection flow, which is on no surface.",
   list_sso_providers:
     "Stella never reads or changes how people sign in, and SSO settings decide that.",
+  list_work_items:
+    "It returns titles and requesters copied from GitHub issues, and the Phase 1 plan screens inbound content before any model reads it. This read does not screen.",
+  list_work_targets:
+    "It lists where a person can send work, and send_work_order refuses an agent run (assertWorkActor), so only a person's Send dialog uses it.",
   list_workspace_memories:
     "Mac ruled on 2026-09-25 that the in-app agent never receives workspace memories.",
   preview_skill_search:

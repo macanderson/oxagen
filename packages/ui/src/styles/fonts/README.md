@@ -1,26 +1,27 @@
 # House typefaces
 
 The [Oxagen house brand system](https://github.com/oxageninc/brand)
-sets type in three faces, each with one job:
+sets type in three faces, each with one job, and loads two more:
 
 | Face | Token | Sets |
 |---|---|---|
-| Space Grotesk | `--ox-font-display` | The Oxagen and stella wordmarks, and line 1 of the oxagen.sh hero |
-| Geist | `--ox-font` | Every heading, body text, labels, buttons, tables, navigation |
+| Space Grotesk | `--ox-font-display` | The Oxagen and stella wordmarks, and on oxagen.sh every h1, h2, h3, and hero line |
+| Aeonik | `--ox-font` | Every heading in the app and the docs, body text, labels, buttons, tables, navigation |
 | Monaspace Neon | `--ox-font-mono` | Code, terminal output, logs, digests, paths, and ids |
+| Aeonik Mono, Aeonik Fono | none | Loaded for a page that names them; no role uses them yet |
 
 Both wordmarks are Space Grotesk's own outlines at weight 600. Nothing in the
 marks is drawn, so the wordmark has to render in Space Grotesk or it stops
 matching the logo.
 
-Space Grotesk sets nothing else (ADR-226, amendment of 2026-09-29). The kit's
-`house-tailwind.css` still maps h1 to h3 to it, so `../globals.css` sets
-`--font-display` to Geist after the kit's import, and exposes Space Grotesk to
-the marks as `--font-wordmark`.
+In the app and the docs, Space Grotesk sets the wordmarks and nothing else.
+The kit's `house-tailwind.css` points `--font-display` and `--font-sans` at
+Aeonik and exposes Space Grotesk to the marks as `--font-wordmark` (Mac,
+2026-10-02, oxageninc/brand#80).
 
 ## Stylesheets
 
-`../house-fonts.css` holds the `@font-face` rules for all three faces, with
+`../house-fonts.css` holds the `@font-face` rules for every face, with
 `src` urls relative to this directory. Two stylesheets import it:
 
 - `../globals.css`, which every Next.js app imports.
@@ -49,12 +50,15 @@ them with a CDN link, a Google Fonts `@import`, or a build subset another way.
 | File | Face |
 |---|---|
 | `space-grotesk-latin-400.woff2` to `-700.woff2` | Space Grotesk, four static weights |
-| `geist-latin-wght.woff2` | Geist, variable weight 100 to 900 |
+| `aeonik-wght.woff2` | Aeonik, variable weight 100 to 900 |
+| `aeonik-italic-wght.woff2` | Aeonik italic, variable weight 100 to 900 |
+| `aeonik-mono-wght.woff2` | Aeonik Mono, variable weight 100 to 900 |
+| `aeonik-fono-wght.woff2` | Aeonik Fono, variable weight 100 to 900 |
 | `monaspace-neon-latin-wght.woff2` | Monaspace Neon, variable weight 200 to 800 |
 
 ## Licenses
 
-All three faces are under the SIL Open Font License 1.1, which permits
-self-hosting and redistribution. Each license file must travel with its
-binaries: `LICENSE-OFL.txt` (Space Grotesk, by Florian Karsten),
-`LICENSE-OFL-geist.txt`, and `LICENSE-OFL-monaspace.txt`.
+Space Grotesk and Monaspace Neon are under the SIL Open Font License 1.1.
+Each license file travels with its binaries: `LICENSE-OFL.txt` (Space
+Grotesk, by Florian Karsten) and `LICENSE-OFL-monaspace.txt`. Aeonik, Aeonik
+Mono, and Aeonik Fono are by CoType Foundry.

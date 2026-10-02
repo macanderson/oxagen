@@ -990,11 +990,11 @@
 
 /*
  * Brand type tokens come from the kit's house-tailwind.css, imported above, in
- * its non-inline @theme: --font-sans and --font-display are Geist, --font-mono
+ * its non-inline @theme: --font-sans and --font-display are Aeonik, --font-mono
  * is Monaspace Neon, and --font-wordmark is Space Grotesk. Every heading and
- * every line of text is Geist, and Space Grotesk sets the wordmark and line 1
- * of a marketing hero (Mac, 2026-09-29). Kit 2.4.0 (oxageninc/brand
- * #27) made that the kit's own rule, so this file no longer overrides it.
+ * every line of text in the app and the docs is Aeonik, and Space Grotesk
+ * sets the wordmarks (Mac, 2026-10-02). The kit carries
+ * that rule (oxageninc/brand#80), so this file does not override it.
  */
 
 @custom-variant dark (&:is(.dark *));
@@ -1015,7 +1015,7 @@
   }
 
   /*
-   * TYPE RULE: Geist (--font-sans, and --font-display, which names the same
+   * TYPE RULE: Aeonik (--font-sans, and --font-display, which names the same
    * face) sets every heading and everything read. Monaspace Neon (--font-mono)
    * sets code and identifiers, with texture healing on. Space Grotesk
    * (--font-wordmark) sets the wordmark only.
@@ -1032,7 +1032,7 @@
   h2,
   h3 {
     font-family: var(--font-display);
-    /* The kit's own heading weight and tracking, drawn in Geist.
+    /* The kit's own heading weight and tracking, drawn in Aeonik.
        --ox-weight-display (700) is for a page title, which the text-m-h1 and
        text-a-h1 utilities carry. */
     font-weight: var(--ox-weight-heading);

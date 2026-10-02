@@ -298,6 +298,16 @@ export async function setCollector(tx: Tx, scope: WorkScope, input: SetCollector
 }
 
 /** The workspace's collector by id, or null. */
+/** The workspace's collector with this name, which is unique in the workspace. */
+export async function findCollectorByName(tx: Tx, scope: WorkScope, name: string) {
+  const [row] = await tx
+    .select({ id: collectors.id, health: collectors.health, type: collectors.type })
+    .from(collectors)
+    .where(and(eq(collectors.name, name), eq(collectors.orgId, scope.orgId), eq(collectors.workspaceId, scope.workspaceId)))
+    .limit(1);
+  return row ?? null;
+}
+
 export async function findCollector(tx: Tx, scope: WorkScope, collectorId: string) {
   const [row] = await tx
     .select({ id: collectors.id, health: collectors.health, type: collectors.type })

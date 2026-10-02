@@ -6,6 +6,8 @@ import {
   workCollectorSet,
   type WorkCollectorSetOutput,
 } from "@oxagen/oxagen/contracts/work.collector.set";
+import { HandlerError } from "@oxagen/oxagen/handler-error";
+import { resolveActingUserId } from "@oxagen/iam/org-role";
 import { assertContractRole } from "./lib/capability-role-guard";
 import type { CollectorView, SetCollectorInput, SetCollectorResult } from "./lib/work-intake/collectors";
 import { type WorkEvent, sendWorkEvents, workRefusal } from "./lib/work-intake/handler-support";
@@ -38,7 +40,18 @@ export const defaultWorkCollectorSetDeps: WorkCollectorSetDeps = {
 
 export function createWorkCollectorSetHandler(deps: WorkCollectorSetDeps): CapabilityHandler<typeof workCollectorSet> {
   return async (input, ctx): Promise<WorkCollectorSetOutput> => {
-    const actorUserId = await assertContractRole(workCollectorSet, ctx);
+    await assertContractRole(workCollectorSet, ctx);
+    // assertContractRole answers the role that passed, not who acted. The
+    // actor is the person the call acts as, which the record stores as a
+    // user id.
+    const actorUserId = await resolveActingUserId(ctx);
+    if (actorUserId === null) {
+      throw new HandlerError({
+        code: "forbidden",
+        reason: "person_required",
+        message: "Sign in to Oxagen to set up a collector. The call names no person to record as the actor.",
+      });
+    }
     const scope = { orgId: ctx.orgId, workspaceId: ctx.workspaceId };
     let written: { result: SetCollectorResult; view: CollectorView };
     try {

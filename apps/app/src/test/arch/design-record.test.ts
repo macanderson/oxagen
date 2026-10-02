@@ -344,9 +344,9 @@ function scanned(): string[] {
 
 /**
  * A reference to Space Grotesk: the kit's display token, the wordmark token,
- * or the family by name. Mac set the rule on 2026-09-29: every heading and
- * every line of text is one face, and Space Grotesk sets the wordmark only.
- * On 2026-10-02 that face became Aeonik in place of Geist (oxageninc/brand#81).
+ * or the family by name. Mac set the rule on 2026-10-02: every heading and
+ * every line of text in the app is Aeonik, and Space Grotesk sets the
+ * wordmark only.
  */
 const SPACE_GROTESK = /--ox-font-display|--font-wordmark|Space Grotesk/;
 
