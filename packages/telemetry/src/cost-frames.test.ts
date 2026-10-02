@@ -146,6 +146,7 @@ describe("readModelCallFrames", () => {
       "system_context_digest",
       "system_context_parts",
       "proxy_observed",
+      "cache_keep_alive",
     ]);
     expect(query_params).toEqual({
       orgId: ORG,
@@ -259,6 +260,59 @@ describe("readModelCallFrames", () => {
       "toUInt8(c.metering = 'observed' OR r.metering = 'observed' OR q.metering = 'observed') AS proxy_observed",
     );
     expect(query_params).not.toHaveProperty("meteringAttr");
+  });
+
+  // The loopback proxy marks each cache keep-alive it sends
+  // (`oxagen.cache_keep_alive: "1"`, lane F32). The read carries the mark so
+  // billing can keep the keep-alive's cost and leave it out of the steps.
+  it("marks a cache keep-alive the proxy sent, and no other frame", async () => {
+    const base = {
+      at: "2026-09-14T10:00:00.000Z",
+      model: "claude-sonnet-5",
+      provider: "anthropic",
+      input_uncached: "10",
+      cache_read: "60000",
+      cache_write_5m: "0",
+      cache_write_1h: "0",
+      output: "0",
+      reasoning: "0",
+      server_tool_request: "0",
+      cost_micros: "18030",
+      session_uuid: RUN,
+      proxy_observed: 1,
+    };
+    answer([
+      { ...base, cache_keep_alive: 1 },
+      { ...base, cache_keep_alive: "1" },
+      { ...base, cache_keep_alive: 0 },
+      // A row from before the mark existed carries no figure at all.
+      { ...base },
+    ]);
+    const frames = await readModelCallFrames({
+      orgId: ORG,
+      workspaceId: WS,
+      run: { kind: "tacho", rootSessionUuid: RUN, sessionUuids: [RUN] },
+    });
+    expect(frames.map((f) => f.cacheKeepAlive)).toEqual([
+      true,
+      true,
+      undefined,
+      undefined,
+    ]);
+    expect(frames[2]).not.toHaveProperty("cacheKeepAlive");
+
+    // Read off the priced row with no new query parameter.
+    const { query, query_params } = lastQuery();
+    expect(query).toContain("attrs['oxagen.cache_keep_alive'] AS keep_alive");
+    expect(query).toContain("toUInt8(c.keep_alive = '1') AS cache_keep_alive");
+    expect(Object.keys(query_params as object).sort()).toEqual([
+      "duplicateAttr",
+      "orgId",
+      "rootSessionUuid",
+      "sessionUuids",
+      "sources",
+      "workspaceId",
+    ]);
   });
 
   // Both vendors count thinking inside the output figure they publish, and

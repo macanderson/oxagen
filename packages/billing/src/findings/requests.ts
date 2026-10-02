@@ -16,6 +16,12 @@
  * apart. A call whose chain has no such frame takes the run's latest frame at
  * or before it: the proxy records a subagent's model call on the root chain
  * (ADR-168), so that call still lands by time alone (ADR-208 names the gap).
+ *
+ * A cache keep-alive the proxy sent while the run waited on a subagent (lane
+ * F32) made no tool call, so no call is placed under it. A hook seals a tool
+ * call when the tool finishes, so the parent's call that started the subagent
+ * finishes after the wait, and the subagent's own calls fall back to the run's
+ * latest frame. Left in, the keep-alive took both.
  */
 import type { RunTotalsRecord } from "../cost-rollup";
 import { RepeatedCalls, repeatKindOf } from "../step-grade";
@@ -106,7 +112,9 @@ function attribute(
   calls: readonly ViewCall[],
   frames: readonly PricedRequestFrame[],
 ): RunRequest[] {
-  const ordered = [...frames].sort((a, b) => timeOf(a) - timeOf(b));
+  const ordered = frames
+    .filter((f) => f.cacheKeepAlive !== true)
+    .sort((a, b) => timeOf(a) - timeOf(b));
   const requests: RunRequest[] = [];
   let before: RunRequest | null = null;
   const byFrame = new Map<PricedRequestFrame, RunRequest>();
