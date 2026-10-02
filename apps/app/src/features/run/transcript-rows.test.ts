@@ -1059,4 +1059,42 @@ describe("rowsOf", () => {
   it("draws no row for a turn, which is a group of steps (negative)", () => {
     expect(rowsOf(frame({ node: null, kind: "turn" }))).toEqual([]);
   });
+
+  // #4351: one model reply is one step, however many parts it arrives in.
+  // The server sends the reply's further parts on the step that holds them.
+  it("draws a reply in two parts as one step that carries both parts, in order", () => {
+    const entry = frame({
+      key: "11",
+      node: "model",
+      kind: "model_call",
+      response: transcriptBody({ seq: "11", text: "Reading the config first." }),
+      parts: [transcriptBody({ seq: "13", text: "The flag is off in prod." })],
+    });
+    const said = rowsOf(entry).filter((row) => row.kind === "text");
+    expect(said.map((row) => row.text)).toEqual([
+      "Reading the config first.",
+      "The flag is off in prod.",
+    ]);
+    // Both rows belong to the one step, keyed apart so neither replaces the
+    // other.
+    expect(said.map((row) => row.entry)).toEqual(["11", "11"]);
+    expect(new Set(said.map((row) => row.key)).size).toBe(2);
+    expect(feedOf([entry]).filter((row) => row.kind === "text")).toHaveLength(
+      2,
+    );
+  });
+
+  it("draws a one-part reply as it did before parts existed (negative)", () => {
+    const entry = frame({
+      key: "11",
+      node: "model",
+      kind: "model_call",
+      response: transcriptBody({ seq: "11", text: "Done." }),
+    });
+    expect(
+      rowsOf(entry)
+        .filter((row) => row.kind === "text")
+        .map((row) => row.key),
+    ).toEqual(["11:text"]);
+  });
 });

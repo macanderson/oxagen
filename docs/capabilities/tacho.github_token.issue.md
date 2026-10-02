@@ -8,7 +8,7 @@ Mint a GitHub App installation token for one repository bound to the calling hos
 
 **Output:** `token`, `expires_at`, and the repository's `owner`, `name`, `full_name`, and binding `role`.
 
-The deployment must set `OXAGEN_TACHO_GITHUB_BROKER=1`. The host API key must own the named active enrollment, and its creator must still hold the organization Owner or Admin role. The handler resolves the GitHub installation from the workspace connection and narrows the token to the current binding's immutable repository ID with `contents: write` and `metadata: read`. Unbound repositories, invalid IDs, missing connections, and GitHub refusals fail without returning a broader credential.
+The deployment must turn the broker on ([`OXAGEN_TACHO_GITHUB_BROKER`](../../packages/config/src/registry.ts)). The host API key must own the named active enrollment, and its creator must still hold the organization Owner or Admin role. The handler resolves the GitHub installation from the workspace connection and narrows the token to the current binding's immutable repository ID with `contents: write` and `metadata: read`. Unbound repositories, invalid IDs, missing connections, and GitHub refusals fail without returning a broader credential.
 
 The workspace's steering repository takes changes through a steering PR. This capability refuses it with `conflict: steering_repo_propose_only` before it reads an installation. One GitHub App serves code repositories and steering repos (ADR-228), and that app is the only bypass actor on the merge ruleset, so every token it mints could merge past the steering check. Propose the change through a steering PR instead, or push a branch from a clone with a credential that can write to the repository.
 
@@ -20,7 +20,7 @@ The credential exists only in the server response and daemon memory. The daemon 
 
 | Code | Reason | When |
 |---|---|---|
-| `forbidden` | `github_broker_disabled` | the deployment does not set `OXAGEN_TACHO_GITHUB_BROKER=1` |
+| `forbidden` | `github_broker_disabled` | the deployment has not turned the broker on ([`OXAGEN_TACHO_GITHUB_BROKER`](../../packages/config/src/registry.ts)) |
 | `forbidden` | `host_inactive` | the host enrollment is not active |
 | `not_found` | `repository_not_governed` | no head in the host's workspace points at that repository |
 | `conflict` | `repository_id_invalid` | the binding's repository ID is not a number |

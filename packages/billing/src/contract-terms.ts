@@ -20,10 +20,22 @@
  * of the same join would be one too many.
  */
 
-import { and, desc, eq, gt, inArray, isNull, lte, or } from "drizzle-orm";
+import {
+  and,
+  desc,
+  eq,
+  gt,
+  gte,
+  inArray,
+  isNull,
+  lt,
+  lte,
+  or,
+} from "drizzle-orm";
 import { schema, type Tx, withTenantDb } from "@oxagen/database";
 import type { PlanTier } from "@oxagen/oxagen/types";
 import type { GauTerms } from "./pricing";
+import type { SignupGrant } from "./signup-grant";
 import { ENTITLED_SUBSCRIPTION_STATUSES } from "./tier";
 
 /** The seeded Free plan (`packages/database/src/seed.ts`, `PLAN_SEEDS`). */
@@ -69,6 +81,19 @@ export interface GauEntitlement {
   terms: ContractTerms;
   /** The entitled subscription, or null for an organisation with none. */
   subscription: GauSubscriptionPeriod | null;
+  /**
+   * The organisation's one-time signup grant (signup-grant.ts), or null for
+   * an organisation that has none: one created before the grant existed and
+   * not yet given one by the migration that introduced it.
+   */
+  grant: SignupGrant | null;
+  /**
+   * The Free row's `subscription_required_after_grant`: whether an
+   * organisation with no subscription is refused once its grant is spent or
+   * expired. When an operator clears it, such an organisation falls back to
+   * the Free row's monthly allowance instead (ADR-241, signup grant).
+   */
+  subscriptionRequiredAfterGrant: boolean;
 }
 
 interface PlanTermsRow {
@@ -105,7 +130,7 @@ export async function readGauEntitlement(
   orgId: string,
   now: Date = new Date(),
 ): Promise<GauEntitlement> {
-  const [n, e, f] = await Promise.all([
+  const [n, e, f, g] = await Promise.all([
     // Effective: started, and not yet ended. The partial unique index on
     // (org_id) WHERE effective_to IS NULL keeps one open row per org; a row
     // with a future effective_to is still in force until that instant.
@@ -167,14 +192,32 @@ export async function readGauEntitlement(
         blockSizeGau: schema.plans.blockSizeGau,
         includedGauPerMonth: schema.plans.includedGauPerMonth,
         updatedAt: schema.plans.updatedAt,
+        subscriptionRequiredAfterGrant:
+          schema.plans.subscriptionRequiredAfterGrant,
       })
       .from(schema.plans)
       .where(eq(schema.plans.slug, FREE_PLAN_SLUG))
+      .limit(1),
+    tx
+      .select({
+        grantedGau: schema.gauSignupGrants.grantedGau,
+        grantedAt: schema.gauSignupGrants.grantedAt,
+        expiresAt: schema.gauSignupGrants.expiresAt,
+      })
+      .from(schema.gauSignupGrants)
+      .where(eq(schema.gauSignupGrants.orgId, orgId))
       .limit(1),
   ]);
   const negotiated = n[0];
   const entitled = e[0];
   const free = f[0];
+  const grantRow = g[0];
+  const grant: SignupGrant | null = grantRow
+    ? { ...grantRow, grantedGau: Number(grantRow.grantedGau) }
+    : null;
+  // The rule is the Free row's. A database without that row fails below.
+  const subscriptionRequiredAfterGrant =
+    free?.subscriptionRequiredAfterGrant ?? true;
 
   const subscription: GauSubscriptionPeriod | null = entitled
     ? {
@@ -207,6 +250,8 @@ export async function readGauEntitlement(
         ...termsOf(negotiated),
       },
       subscription,
+      grant,
+      subscriptionRequiredAfterGrant,
     };
   }
   return {
@@ -218,7 +263,58 @@ export async function readGauEntitlement(
       ...termsOf(published),
     },
     subscription,
+    grant,
+    subscriptionRequiredAfterGrant,
   };
+}
+
+/**
+ * Statuses of a subscription that once entitled the organisation and has
+ * since lapsed. An `incomplete` or `incomplete_expired` row never took a
+ * first payment, so it entitled nobody.
+ */
+const LAPSED_SUBSCRIPTION_STATUSES = ["canceled", "unpaid"] as const;
+
+/**
+ * Whether a subscription covered the bucket over `period`, read from the
+ * stored subscription rows on the caller's executor (ADR-241, signup grant).
+ *
+ * The close job reads this after the bucket has ended. By then a
+ * subscription canceled at its period end reads `canceled`, and
+ * `readGauEntitlement` leaves it out, so today's entitlement would call the
+ * ended bucket a non-subscriber's and drop its overage. A row counts when it
+ * existed before the bucket ended and either is still entitled (a renewal
+ * moved its period past the bucket) or lapsed with a recorded period that
+ * overlaps the bucket and runs to its end.
+ */
+export async function readPeriodSubscribed(
+  tx: Tx,
+  orgId: string,
+  period: { start: Date; end: Date },
+): Promise<boolean> {
+  const rows = await tx
+    .select({ id: schema.subscriptions.id })
+    .from(schema.subscriptions)
+    .where(
+      and(
+        eq(schema.subscriptions.orgId, orgId),
+        lt(schema.subscriptions.createdAt, period.end),
+        or(
+          inArray(schema.subscriptions.status, [
+            ...ENTITLED_SUBSCRIPTION_STATUSES,
+          ]),
+          and(
+            inArray(schema.subscriptions.status, [
+              ...LAPSED_SUBSCRIPTION_STATUSES,
+            ]),
+            lt(schema.subscriptions.currentPeriodStart, period.end),
+            gte(schema.subscriptions.currentPeriodEnd, period.end),
+          ),
+        ),
+      ),
+    )
+    .limit(1);
+  return rows.length > 0;
 }
 
 /**

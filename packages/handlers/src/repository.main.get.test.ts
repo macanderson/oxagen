@@ -214,6 +214,9 @@ describe("get_main_repository", () => {
   // pinned by role — without that predicate a linked head could be reported
   // as the repository steering resolves through. repository.pg.test.ts proves
   // the same against Postgres with both heads present; this pins the SQL.
+  // Kept on purpose (#3340): a linked code repository never steers and never
+  // receives Context PRs (ADR-212), so the read stays pinned to the steering
+  // head.
   it("selects only a head with a steering role", async () => {
     let captured: SQL | undefined;
     mocks.withTenantDb

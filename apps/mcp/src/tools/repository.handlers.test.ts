@@ -178,6 +178,16 @@ describe("unlink_repository tool", () => {
   it("refuses an id that is not a binding id (negative)", () => {
     expect(() => unlinkSchema.bindingId.parse("con_0b")).toThrow();
   });
+
+  // An MCP client reads these hints to decide whether to ask a person first.
+  // The handler deletes the head, so the tool is destructive (#3340).
+  it("tells an MCP client the unlink is destructive", () => {
+    expect(unlinkMetadata.annotations).toEqual({
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: true,
+    });
+  });
 });
 
 import treeTool, { metadata as treeMetadata } from "./repository.tree.get";
