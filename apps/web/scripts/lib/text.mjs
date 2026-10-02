@@ -1,6 +1,6 @@
 // Text for generated images, set as glyph outlines rather than <text>, so the
-// raster never depends on which fonts a machine has installed. Geist is
-// the house face for text. Space Grotesk sets the wordmark only, and the card
+// raster never depends on which fonts a machine has installed. Aeonik is
+// the house face for text, read from the kit's file in apps/web/fonts/. Space Grotesk sets the wordmark only, and the card
 // draws the wordmark from its SVG. A weight is instanced from the variable file on
 // demand, the same way the kit's glyphs.py does it.
 
@@ -10,7 +10,7 @@ import * as fontkit from "fontkit";
 
 const FONT_FILE = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
-  "../fonts/Geist-VariableFont_wght.ttf",
+  "../../fonts/aeonik-wght.woff2",
 );
 
 let base = null;

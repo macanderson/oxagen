@@ -615,7 +615,8 @@ function skill() {
 }
 
 /**
- * The three faces: Space Grotesk (display), Geist (text), Monaspace Neon (code).
+ * The faces: Space Grotesk (display), Aeonik (text), Monaspace Neon (code),
+ * and Aeonik Mono and Aeonik Fono, which load and take no role.
  * One copy, in @oxagen/ui, imported by every app. `house-fonts.css` is the
  * kit's @font-face file with its paths moved from ../fonts/ to ./fonts/.
  */

@@ -2,8 +2,9 @@
 // replaces the workspace's open findings and keeps a proven finding's public
 // id, a decision that commits while a pass is writing stays decided, a
 // workspace whose runs stopped is still visited until its open findings go,
-// the headline counts a frame two findings claim once (ADR-208), and an
-// applied finding with no claim rows gets its replayed claims once (#4506).
+// the headline counts a frame two findings claim once (ADR-208), an applied
+// finding with no claim rows gets its replayed claims once (#4506), and the
+// pass reads the instruction lineages the proposal opener refuses (#4579).
 // Runs wherever DATABASE_URL points at
 // a migrated database — CI's `test` job migrates Postgres with Atlas before
 // `turbo run build test:unit` and carries DATABASE_URL in turbo's globalEnv;
@@ -15,6 +16,7 @@ import { afterAll, describe, expect, it } from "vitest";
 import { inAppRunTotal } from "./cost-rollup-store";
 import {
   findingFingerprint,
+  instructionLineage,
   type FindingClaim,
   type FindingDraft,
 } from "./findings";
@@ -22,6 +24,7 @@ import {
   claimBackfill,
   CLAIMING_KINDS,
   listWorkspacesForFindings,
+  readTakenLineages,
   readUnclaimedApplied,
   readUnproductiveSpend,
   runFindingsPass,
@@ -485,6 +488,73 @@ describe.skipIf(!enabled)("writeFindings against Postgres", () => {
         await tx
           .delete(schema.agentRuns)
           .where(inArray(schema.agentRuns.id, Object.values(runIds)));
+      });
+    }
+  });
+
+  it("reads the workspace's repeated instruction lineages that a record or a proposal holds, in any case or state (#4579)", async () => {
+    const own = {
+      orgId: crypto.randomUUID(),
+      workspaceId: crypto.randomUUID(),
+    };
+    const other = { orgId: own.orgId, workspaceId: crypto.randomUUID() };
+    const recorded = instructionLineage("a1b2c3d4e5f6");
+    const retired = instructionLineage("fedcba987654");
+    const proposed = instructionLineage("0123456789ab");
+    const rejected = instructionLineage("abcdef012345");
+    const elsewhere = instructionLineage("111111111111");
+    const proposal = (
+      scope: typeof own,
+      lineageId: string,
+      status = "proposed",
+    ) => ({
+      ...scope,
+      lineageId,
+      kind: "rule",
+      force: "should",
+      sharingScope: "workspace",
+      statement: "Run the tests before you commit.",
+      rationale: "Runs received this instruction 3 times.",
+      source: "findings_job",
+      status,
+    });
+    try {
+      await withSystemDb(async (tx) => {
+        await tx.insert(schema.steeringRecords).values([
+          // The column ignores case, as the opener's own check does.
+          { ...own, slug: recorded.toUpperCase(), title: "Run the tests" },
+          {
+            ...own,
+            slug: retired,
+            title: "Run the linter",
+            status: "retired",
+            deletedAt: new Date(),
+          },
+          // Another lineage family, and a slug that only contains the prefix.
+          { ...own, slug: "ctx.habits.spin_loops-abc", title: "Spin loops" },
+          { ...own, slug: `x.${recorded}`, title: "Not a lineage" },
+        ]);
+        await tx
+          .insert(schema.steeringProposals)
+          .values([
+            proposal(own, proposed),
+            proposal(own, rejected, "rejected"),
+            proposal(other, elsewhere),
+          ]);
+      });
+
+      expect(await readTakenLineages(own)).toEqual(
+        new Set([recorded, retired, proposed, rejected]),
+      );
+    } finally {
+      await withSystemDb(async (tx) => {
+        const workspaces = [own.workspaceId, other.workspaceId];
+        await tx
+          .delete(schema.steeringRecords)
+          .where(inArray(schema.steeringRecords.workspaceId, workspaces));
+        await tx
+          .delete(schema.steeringProposals)
+          .where(inArray(schema.steeringProposals.workspaceId, workspaces));
       });
     }
   });
