@@ -203,7 +203,8 @@ export const PLATFORM_ALLOWLIST = new Set<string>([
   // (apps/desktop/src-tauri/src/cli_install.rs, `sidecar_env_for`). The
   // recorder's old executable names and `oxagen tacho` read it to skip the
   // one line naming their replacement, since the app streams a sidecar's
-  // stderr into its log (#4879). Never an operator's variable.
+  // stderr into its log (#4879). The CLI's usage telemetry reads it to send
+  // nothing for a command the app ran (#4891). Never an operator's variable.
   "OXAGEN_DESKTOP_SIDECAR",
   // Set by the AppImage runtime on every process the image starts; tacho
   // reads it to know its exec path is a per-launch mount and refuse to bake

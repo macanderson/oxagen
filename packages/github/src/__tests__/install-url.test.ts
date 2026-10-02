@@ -228,10 +228,14 @@ describe("verifyInstallState", () => {
     });
   });
 
-  it("refuses an expired state", () => {
+  it("refuses an expired state and still returns what it said", () => {
     expect(
       verifyInstallState(sign({ expiresAt: Date.now() - 1 }), SECRET),
-    ).toEqual({ ok: false, error: "expired" });
+    ).toEqual({
+      ok: false,
+      error: "expired",
+      state: expect.objectContaining({ orgId: "org-1", returnTo: "settings" }),
+    });
   });
 
   it("judges expiry against the injected clock", () => {
@@ -241,6 +245,7 @@ describe("verifyInstallState", () => {
     expect(verifyInstallState(state, SECRET, 1_001)).toEqual({
       ok: false,
       error: "expired",
+      state: expect.objectContaining({ expiresAt: 1_000 }),
     });
   });
 

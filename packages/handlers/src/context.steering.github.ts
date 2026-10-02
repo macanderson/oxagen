@@ -679,6 +679,8 @@ interface SteeringGitHubDeps {
   rest?: (token: string) => GitHubRest;
   /** The Oxagen user a host account is linked to. Defaults to {@link linkedOxagenUser}. */
   linkAccount?: (providerId: string, accountId: string) => Promise<string | null>;
+  /** Waits `ms` milliseconds before the merge reads the pull request again. Defaults to a timer. */
+  sleep?: (ms: number) => Promise<void>;
 }
 
 /**
@@ -944,6 +946,29 @@ async function listGitTree(
   return entries;
 }
 
+/**
+ * GitHub works out whether a pull request can merge in the background after
+ * every push. Until it knows, the pull request reads `mergeable: null` and the
+ * merge endpoint answers 405 "Pull Request is not mergeable". The merge queue
+ * pushes its stamp commit just before it merges, so its first merge met that
+ * answer every time (#5157). The merge then reads the pull request until
+ * GitHub knows, at most MERGE_SETTLE_READS times MERGE_SETTLE_INTERVAL_MS
+ * apart, and merges again once GitHub says it can.
+ */
+const MERGE_SETTLE_READS = 15;
+const MERGE_SETTLE_INTERVAL_MS = 1_000;
+/** How many more merges follow a "not mergeable" answer, each after GitHub said it can merge. */
+const MERGE_RETRIES = 2;
+
+/** GitHub's answer to a merge it can't do yet, or can't do at all. */
+function refusedAsNotMergeable(err: unknown): boolean {
+  return (
+    err instanceof GitHubApiError &&
+    err.status === 405 &&
+    /not mergeable/i.test(err.message)
+  );
+}
+
 export function githubRefused(err: unknown): HandlerError {
   if (err instanceof HandlerError) return err;
   return new HandlerError({
@@ -970,6 +995,9 @@ export function createSteeringGitHub(
   const rests = new WeakMap<SteeringRepository, GitHubRest>();
   const makeRest = deps.rest ?? ((token: string) => githubRest({ token }));
   const linkAccount = deps.linkAccount ?? linkedOxagenUser;
+  const sleep =
+    deps.sleep ??
+    ((ms: number) => new Promise<void>((done) => setTimeout(done, ms)));
   const clientFor = (repo: SteeringRepository): GitHubClient => {
     const gh = clients.get(repo);
     if (!gh)
@@ -986,6 +1014,73 @@ export function createSteeringGitHub(
       throw new Error(`[context.steering] no client for ${repo.fullName}`);
     const path = `/repos/${githubPath(repo.owner)}/${githubPath(repo.repo)}`;
     return { rest, path };
+  };
+  type MergeArgs = Parameters<SteeringGitHub["mergePullRequest"]>[1];
+  const mergeOnce = async (
+    repo: SteeringRepository,
+    args: MergeArgs,
+  ): Promise<{ sha: string }> => {
+    if (args.commitMessage !== undefined) {
+      // The shared client sends no commit body, and the trailers live in
+      // the body, so a merge that carries them goes through REST.
+      const { rest, path } = restFor(repo);
+      const out = await rest.request<{ sha: string }>(
+        "PUT",
+        `${path}/pulls/${args.number}/merge`,
+        {
+          merge_method: "squash",
+          commit_title: args.commitTitle,
+          commit_message: args.commitMessage,
+          sha: args.sha,
+        },
+      );
+      return { sha: out.data.sha };
+    }
+    const out = await clientFor(repo).mergePullRequest({
+      owner: repo.owner,
+      repo: repo.repo,
+      number: args.number,
+      mergeMethod: "squash",
+      commitTitle: args.commitTitle,
+      sha: args.sha,
+    });
+    return { sha: out.sha };
+  };
+  /**
+   * Reads the pull request until GitHub knows whether it can merge. True only
+   * when GitHub says it can, at the head the merge is pinned to. Anything else
+   * is false, and the merge keeps GitHub's first refusal: a closed pull
+   * request, a head that moved, a "no" from GitHub, a failed read, or no
+   * answer after MERGE_SETTLE_READS reads.
+   */
+  const mergeableOnceChecked = async (
+    repo: SteeringRepository,
+    number: number,
+    sha: string,
+  ): Promise<boolean> => {
+    const { rest, path } = restFor(repo);
+    for (let read = 0; read < MERGE_SETTLE_READS; read += 1) {
+      await sleep(MERGE_SETTLE_INTERVAL_MS);
+      let pr: {
+        state: string;
+        mergeable: boolean | null;
+        head: { sha: string };
+      };
+      try {
+        pr = (
+          await rest.request<typeof pr>("GET", `${path}/pulls/${number}`)
+        ).data;
+      } catch (err) {
+        logger.warn(
+          { err: String(err), repo: repo.fullName, number },
+          "Reading a steering PR's mergeability failed, so the merge keeps GitHub's refusal",
+        );
+        return false;
+      }
+      if (pr.state !== "open" || pr.head.sha !== sha) return false;
+      if (pr.mergeable !== null) return pr.mergeable;
+    }
+    return false;
   };
   return {
     async resolveRepository(scope) {
@@ -1365,34 +1460,17 @@ export function createSteeringGitHub(
       }
     },
     async mergePullRequest(repo, args) {
-      try {
-        if (args.commitMessage !== undefined) {
-          // The shared client sends no commit body, and the trailers live in
-          // the body, so a merge that carries them goes through REST.
-          const { rest, path } = restFor(repo);
-          const out = await rest.request<{ sha: string }>(
-            "PUT",
-            `${path}/pulls/${args.number}/merge`,
-            {
-              merge_method: "squash",
-              commit_title: args.commitTitle,
-              commit_message: args.commitMessage,
-              sha: args.sha,
-            },
-          );
-          return { sha: out.data.sha };
+      for (let retry = 0; ; retry += 1) {
+        try {
+          return await mergeOnce(repo, args);
+        } catch (err) {
+          if (
+            retry >= MERGE_RETRIES ||
+            !refusedAsNotMergeable(err) ||
+            !(await mergeableOnceChecked(repo, args.number, args.sha))
+          )
+            throw githubRefused(err);
         }
-        const out = await clientFor(repo).mergePullRequest({
-          owner: repo.owner,
-          repo: repo.repo,
-          number: args.number,
-          mergeMethod: "squash",
-          commitTitle: args.commitTitle,
-          sha: args.sha,
-        });
-        return { sha: out.sha };
-      } catch (err) {
-        throw githubRefused(err);
       }
     },
     async closePullRequest(repo, number) {

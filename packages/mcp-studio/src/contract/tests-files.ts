@@ -13,7 +13,9 @@
 // header, query parameter, or cookie carries one. A recorded response keeps no
 // Set-Cookie header. The header checks below are a second guard.
 //
-// selection.jsonl holds tasks and the tool a model should pick for each.
+// selection.jsonl holds tasks and the tool a model should pick for each. A
+// task that no tool fits expects null, and a selection run scores a model that
+// picks none for it as a hit.
 import { z } from "zod";
 import { instantSchema, toolNameSchema } from "@oxagen/oxagen/steering-repo/common";
 import { withChecks, type CustomCheck } from "./checks";
@@ -178,7 +180,9 @@ export type RecordedCall = z.output<typeof recordedCallSchema>;
 export const selectionTestSchema = z
   .object({
     task: z.string().min(1).max(2000).describe("What a person might ask the agent to do."),
-    expect: toolNameSchema.describe("The tool that fits the task: billing__create_refund."),
+    expect: toolNameSchema
+      .nullable()
+      .describe("The tool that fits the task, such as billing__create_refund, or null when no tool fits."),
   })
   .strict();
 export type SelectionTest = z.output<typeof selectionTestSchema>;

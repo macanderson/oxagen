@@ -149,14 +149,14 @@ describe("runSidecar", () => {
   it("streams lines to the listener as they arrive and resolves with both buffers on close", async () => {
     const seen: string[] = [];
     const pending = runSidecar(
-      "tacho",
-      ["enroll", "--org", "acme"],
+      "oxagen",
+      ["agent", "enroll", "--org", "acme"],
       (line, stream) => seen.push(`${stream}:${line}`),
     );
     const command = spawned[0];
     if (command === undefined) throw new Error("no sidecar spawned");
-    expect(command.program).toBe("tacho");
-    expect(command.args).toEqual(["enroll", "--org", "acme"]);
+    expect(command.program).toBe("oxagen");
+    expect(command.args).toEqual(["agent", "enroll", "--org", "acme"]);
     // Let the invoke settle before emitting, as the real shell does.
     await Promise.resolve();
     command.emit("stdout", "[1/6] Minting the device key");
@@ -181,10 +181,10 @@ describe("runSidecar", () => {
     spawned[0]?.emit("error", "sidecar not found");
     await expect(failing).rejects.toThrow("sidecar not found");
     spawnFails = new Error(
-      "Oxagen does not run `tacho daemon`: not a command the app sends",
+      "Oxagen does not run `oxagen daemon`: not a command the app sends",
     );
-    await expect(runSidecar("tacho", ["daemon"])).rejects.toThrow(
-      "Oxagen does not run `tacho daemon`",
+    await expect(runSidecar("oxagen", ["daemon"])).rejects.toThrow(
+      "Oxagen does not run `oxagen daemon`",
     );
   });
 
@@ -192,11 +192,11 @@ describe("runSidecar", () => {
   // hands over the sidecar and the argv only, and the Rust shell adds what
   // it needs (TACHO_BIN_DIR) itself.
   it("asks the Rust shell to run it and passes no environment of its own", async () => {
-    const pending = runSidecar("tacho", ["unenroll", "--purge"]);
+    const pending = runSidecar("oxagen", ["agent", "unenroll", "--purge"]);
     const call = invoked.find((c) => c.cmd === "run_sidecar");
     expect(call?.args).toEqual({
-      sidecar: "tacho",
-      args: ["unenroll", "--purge"],
+      sidecar: "oxagen",
+      args: ["agent", "unenroll", "--purge"],
       onEvent: expect.anything(),
     });
     await Promise.resolve();
@@ -208,15 +208,19 @@ describe("runSidecar", () => {
   it("gives a bounded probe a deadline instead of waiting on a close that never comes", async () => {
     vi.useFakeTimers();
     try {
-      const pending = runSidecar("tacho", ["detect", "--json"], undefined, {
-        timeoutMs: 5_000,
-      });
+      const pending = runSidecar(
+        "oxagen",
+        ["agent", "detect", "--json"],
+        undefined,
+        { timeoutMs: 5_000 },
+      );
       await Promise.resolve();
       await Promise.resolve();
       spawned[0]?.emit("stdout", "{");
       vi.advanceTimersByTime(5_001);
+      // It names the command the app ran (#4891).
       await expect(pending).rejects.toThrow(
-        "The recorder did not finish within 5s",
+        "oxagen agent detect --json did not finish within 5s",
       );
       // The late process is stopped by the id the shell gave it.
       expect(invoked.at(-1)).toEqual({
@@ -224,9 +228,12 @@ describe("runSidecar", () => {
         args: { id: spawned[0]?.id },
       });
       // A close inside the deadline clears it and resolves normally.
-      const quick = runSidecar("tacho", ["status", "--json"], undefined, {
-        timeoutMs: 5_000,
-      });
+      const quick = runSidecar(
+        "oxagen",
+        ["agent", "status", "--json"],
+        undefined,
+        { timeoutMs: 5_000 },
+      );
       await Promise.resolve();
       await Promise.resolve();
       spawned[1]?.emit("close", { code: 0 });
@@ -237,7 +244,7 @@ describe("runSidecar", () => {
     }
   });
 
-  it("reads tacho status --json off the sidecar and answers null when it printed none", async () => {
+  it("reads oxagen agent status --json off the sidecar and answers null when it printed none", async () => {
     const ok = tachoStatus();
     await Promise.resolve();
     spawned[0]?.emit(
@@ -245,7 +252,8 @@ describe("runSidecar", () => {
       '{"enrolled": true, "wal": {"sessions": 1, "unshipped": 0}}',
     );
     spawned[0]?.emit("close", { code: 0 });
-    expect(spawned[0]?.args).toEqual(["status", "--json"]);
+    expect(spawned[0]?.program).toBe("oxagen");
+    expect(spawned[0]?.args).toEqual(["agent", "status", "--json"]);
     expect(await ok).toEqual({
       enrolled: true,
       wal: { sessions: 1, unshipped: 0 },
@@ -333,7 +341,7 @@ describe("the machine scan", () => {
   it("resolves the detect document", async () => {
     const pending = detectHarnesses();
     await Promise.resolve();
-    expect(spawned[0]?.args).toEqual(["detect", "--json"]);
+    expect(spawned[0]?.args).toEqual(["agent", "detect", "--json"]);
     spawned[0]?.emit("stdout", '{"enrolled":false,"harnesses":[]}');
     spawned[0]?.emit("close", { code: 0 });
     expect(await pending).toEqual({ enrolled: false, harnesses: [] });

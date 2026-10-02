@@ -32,3 +32,6 @@ export { readExportObject } from "./export-storage";
 // kernel for it.
 export { stopAssistantTurn } from "./assistant-actions";
 export { handleAssistantStop } from "./assistant-stop";
+// Sign out from a page outside the shell: the steering connect's result page
+// offers it to an account that can't open the organization (#5151).
+export { SignOutButton } from "./sign-out-button";

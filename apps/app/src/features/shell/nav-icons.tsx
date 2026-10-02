@@ -5,11 +5,11 @@ import {
   CoinsIcon,
   CompassIcon,
   CrosshairIcon,
-  FingerprintIcon,
   FolderSimpleIcon,
   KeyIcon,
   LockKeyIcon,
   ReceiptIcon,
+  RobotIcon,
   ShieldCheckIcon,
   WalletIcon,
 } from "@phosphor-icons/react/ssr";
@@ -17,7 +17,7 @@ import type { NavKey } from "./nav";
 
 export const NAV_ICONS: Record<NavKey, PhosphorIcon> = {
   fleet: CrosshairIcon,
-  agents: FingerprintIcon,
+  agents: RobotIcon,
   steering: CompassIcon,
   repositories: FolderSimpleIcon,
   spend: CoinsIcon,
