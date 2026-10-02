@@ -16,6 +16,8 @@ export default defineConfig({
         ...coverageConfigDefaults.exclude,
         "src/**/*.test.ts",
         "src/index.ts",
+        // Fact builders the record tests share. No production module imports them.
+        "src/records/test-fixtures.ts",
       ],
       // Lane C0 ships types, constants, and stubs whose tests reach every
       // line. The ratchet caps a threshold at 90.
