@@ -1,6 +1,6 @@
 /**
  * dismiss_memories: a person sets memories aside, or brings them back
- * (memory-collection spec, Lifecycle; ADR-245).
+ * (memory-collection spec, Lifecycle; ADR-248).
  *
  * A dismissed memory leaves the Memories tab's default view, and its
  * statement hash joins `memory_rejections`, so the curator does not propose

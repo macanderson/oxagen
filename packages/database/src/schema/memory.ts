@@ -1,11 +1,11 @@
 // Memories, reflections, and memory PRs (steering-repo-spec, Memory and
-// reflection; ADR-206, ADR-245).
+// reflection; ADR-206, ADR-248).
 //
 // An agent's lessons wait here until the curator cites them in a memory PR.
 // A memory keeps its row for life, and `state` says where it is: waiting,
 // in_pr while an open memory PR cites it, promoted once its record merged,
 // dismissed by a person, or retired when its file is gone or nothing used it
-// for `retire_after_days` (ADR-245). A record that did not merge leaves a
+// for `retire_after_days` (ADR-248). A record that did not merge leaves a
 // hash of each cited statement in `memory_rejections`, so the curator does
 // not propose the lesson again without new evidence.
 //
@@ -25,7 +25,7 @@
 // Oxagen could not tell.
 //
 // The migration that creates these tables and their tenant policies is
-// 20260927021500_steering_memories.sql. 20261002003000_memory_uses.sql adds
+// 20260927021500_steering_memories.sql. 20261002040000_memory_uses.sql adds
 // the lifecycle columns and `memory_uses`.
 import {
   check,
@@ -155,7 +155,7 @@ export const memories = agentSchema.table(
     memoryPrId: uuid("memory_pr_id").references(() => memoryPullRequests.id, {
       onDelete: "set null",
     }),
-    // waiting, in_pr, promoted, dismissed, or retired (ADR-245).
+    // waiting, in_pr, promoted, dismissed, or retired (ADR-248).
     state: text("state").notNull().default("waiting"),
     // A Claude Code memory file's frontmatter `name`, `description`, and
     // `metadata.type` (user, feedback, project, or reference).
@@ -234,7 +234,7 @@ export const memories = agentSchema.table(
   }),
 );
 
-// One row per memory, run, and signal (ADR-245). `read` is a run that read
+// One row per memory, run, and signal (ADR-248). `read` is a run that read
 // the memory's file, `harness_count` is a use the harness counted itself with
 // no run, and `citation` is a run that cited the memory. `count` is how many
 // times: reads in that run, or the harness's count. A memory's `use_count` is

@@ -6,7 +6,7 @@
  * `local_gateway`, the host's agent as its agent, and no run. A file keeps
  * one waiting memory, and each new statement replaces its text (ADR-238).
  * A Claude Code memory file's frontmatter `name`, `description`, and
- * `metadata.type` arrive as `label`, `summary`, and `memory_type` (ADR-245).
+ * `metadata.type` arrive as `label`, `summary`, and `memory_type` (ADR-248).
  *
  * Machine-to-machine, authenticated by the host's API key. The host names
  * itself so the handler can check the key's scope names the same host.

@@ -16,4 +16,4 @@ The handler reads each run's `tse_…` id from the host's own sessions. It store
 
 The daemon sends a scan only after it listed every memory folder without an error. Each waiting or promoted memory of the host's agent from a file under the scan's root that the scan did not find retires as `deleted`. It comes back when the file holds its statement again.
 
-The daemon calls `POST /v1/tacho/memories/uses`. Each host gets 30 calls a minute on this path, separate from the memory upload, recall, and the control paths. See [ADR-245](../adr/ADR-245-memories-keep-their-rows-and-rank-by-use.md).
+The daemon calls `POST /v1/tacho/memories/uses`. Each host gets 30 calls a minute on this path, separate from the memory upload, recall, and the control paths. See [ADR-248](../adr/ADR-248-memories-keep-their-rows-and-rank-by-use.md).

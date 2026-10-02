@@ -309,6 +309,7 @@ main{flex:1;position:relative}
 }
 .hp-wrap{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%)}
 .consent-copy{font-size:13px;color:var(--muted);line-height:1.55}
+.consent-copy a{color:var(--ink);border-bottom:1px solid var(--line-strong)}
 .form-foot{display:grid;gap:12px}
 .form-status{font-size:14px;color:var(--muted);min-height:1.4em}
 .form-status.err{color:var(--ember-a)}
@@ -513,7 +514,7 @@ main{flex:1;position:relative}
           </div>
         </fieldset>
 
-        <p class="consent-copy">Oxagen uses your details only to send the book and to follow up about Oxagen. Oxagen will not send you spam.</p>
+        <p class="consent-copy">Oxagen uses your details only to send the book and to follow up about Oxagen. Oxagen will not send you spam. The <a href="/privacy">privacy policy</a> explains how Oxagen handles them.</p>
 
         <div class="hp-wrap" aria-hidden="true">
           <label for="g-website">Website</label>
@@ -555,6 +556,8 @@ main{flex:1;position:relative}
 <footer class="gate-footer">
   <div class="wrap">
     <span>© 2026 Oxagen, Inc.</span>
+    <span><a href="/terms">Terms of service</a></span>
+    <span><a href="/privacy">Privacy policy</a></span>
     <span><a href="mailto:success@oxagen.sh">success@oxagen.sh</a></span>
   </div>
 </footer>

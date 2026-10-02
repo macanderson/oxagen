@@ -70,7 +70,7 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "agent.memories", policyClass: "standard" },
   { table: "agent.memory_rejections", policyClass: "standard" },
   { table: "agent.memory_recalls", policyClass: "standard" },
-  // The runs that used each memory (ADR-245); org_id + workspace_id NOT NULL.
+  // The runs that used each memory (ADR-248); org_id + workspace_id NOT NULL.
   { table: "agent.memory_uses", policyClass: "standard" },
   // Published steering versions and the publish lease (S3, #4449); org_id +
   // workspace_id NOT NULL.
@@ -137,6 +137,10 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   // through withSystemDb.
   { table: "billing.contract_terms", policyClass: "org_only" },
   { table: "billing.gau_buckets", policyClass: "org_only" },
+  // ADR-241 (signup grant): one row per org, org_id NOT NULL, no
+  // workspace_id. create_org writes it through its system transaction; the
+  // gate and the recorder read it through withTenantDb.
+  { table: "billing.gau_signup_grants", policyClass: "org_only" },
   { table: "billing.gau_settlements", policyClass: "org_only" },
   // The refunded/disputed half of the settlement ledger (ADR-085). org_id NOT
   // NULL, no workspace_id, written only by the webhook through withSystemDb.
@@ -172,6 +176,9 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "cost.run_pr_outcomes", policyClass: "standard" },
   // The reverts kept until their outcome rows exist (#4491); org_id + workspace_id NOT NULL.
   { table: "cost.run_pr_reverts", policyClass: "standard" },
+  // Where the outcome refresh stands in each ledger run's receipts (#4511);
+  // org_id + workspace_id NOT NULL.
+  { table: "cost.run_pr_receipt_walks", policyClass: "standard" },
   // The loops that reached a workspace's no-progress limit (spend spec,
   // detector 1); org_id + workspace_id NOT NULL.
   { table: "cost.no_progress_hits", policyClass: "standard" },

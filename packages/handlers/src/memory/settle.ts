@@ -1,4 +1,4 @@
-// What a decided memory PR leaves behind (ADR-206 decision 7, as ADR-245
+// What a decided memory PR leaves behind (ADR-206 decision 7, as ADR-248
 // amends it).
 //
 // The curator settles each open memory PR before it plans the next one. A

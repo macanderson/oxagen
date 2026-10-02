@@ -34,6 +34,18 @@ export const OUTCOME_FORGE_READS_PER_PASS = 60;
  */
 export const HEAD_BRANCH_SETTLE_MS = 60 * 60 * 1000;
 
+/**
+ * Days after a pull request closes or merges that the refresh stops reading
+ * it, whatever its CI or branch reads say. Detector 8 counts a revert only
+ * within 14 days of the merge (`REVERT_WINDOW_DAYS` in
+ * findings/spend-with-no-outcome.ts, kept equal by hand because that module
+ * imports this one), and a check still pending two weeks after the close is
+ * not going to finish.
+ */
+export const OUTCOME_SETTLE_DAYS = 14;
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
 /** The pull request's identity in the table: `github:owner/repo#N`, lower case. */
 export function prKeyOf(
   provider: RunPrProvider,
@@ -257,13 +269,24 @@ export function withTerminalReason(
 /**
  * Whether the hourly refresh reads a pull request from GitHub again. A row
  * is settled once its pull request is closed or merged, its CI finished, and
- * its head branch was read at least an hour after the close. Anything else,
- * including a row never written, is read again. A revert is not a reason:
- * the reverts kept in `cost.run_pr_reverts` mark those on every pass.
+ * its head branch was read at least an hour after the close. A row whose
+ * close is `OUTCOME_SETTLE_DAYS` old is settled too, even with CI still
+ * pending or a branch never read. Anything else, including a row never
+ * written, is read again. A revert is not a reason: the reverts kept in
+ * `cost.run_pr_reverts` mark those on every pass, and a read of the reverted
+ * pull request would not show one.
  */
-export function needsForgeRead(row: OutcomeRow | undefined): boolean {
+export function needsForgeRead(
+  row: OutcomeRow | undefined,
+  now: Date,
+): boolean {
   if (!row) return true;
   if (row.prState === null || row.prState === "open") return true;
+  if (
+    row.closedAt !== null &&
+    now.getTime() - row.closedAt.getTime() >= OUTCOME_SETTLE_DAYS * DAY_MS
+  )
+    return false;
   if (row.ciState === null || row.ciState === "pending") return true;
   if (row.headBranchReadAt === null || row.closedAt === null) return true;
   return (
@@ -296,6 +319,20 @@ export function ciStateOf(overall: CiOverallVerdict): RunPrCiState {
     default:
       return "none";
   }
+}
+
+/**
+ * The row's CI state for a read of a head commit's checks that may have
+ * stopped short of the last one. A failing check fails the commit whatever
+ * the unread checks say. Any other verdict from a partial read is `pending`,
+ * so the row is not settled on it and the next pass reads the checks again.
+ */
+export function ciStateOfRead(
+  overall: CiOverallVerdict,
+  complete: boolean,
+): RunPrCiState {
+  const state = ciStateOf(overall);
+  return complete || state === "failed" ? state : "pending";
 }
 
 /** A pull request named by repository and number. */

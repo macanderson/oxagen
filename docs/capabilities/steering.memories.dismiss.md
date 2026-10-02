@@ -32,4 +32,4 @@ Dismiss workspace memories, so the curator does not propose their statements aga
 
 A dismissal moves each waiting or `in_pr` memory to `dismissed` and adds its statement hash to `agent.memory_rejections`. A hash already there takes the new time and keeps the memory PR that rejected it. The curator then proposes the statement again only after memories from 2 distinct runs repeat it. A memory an open memory PR cites stays dismissed when that PR settles.
 
-A restore moves each dismissed memory back: to `in_pr` when its open memory PR still cites it, else to `waiting`. It removes each statement hash a dismissal wrote, once no other dismissed memory holds that statement. A hash a memory PR rejected stays. Both run in one transaction ([ADR-245](../adr/ADR-245-memories-keep-their-rows-and-rank-by-use.md)).
+A restore moves each dismissed memory back: to `in_pr` when its open memory PR still cites it, else to `waiting`. It removes each statement hash a dismissal wrote, once no other dismissed memory holds that statement. A hash a memory PR rejected stays. Both run in one transaction ([ADR-248](../adr/ADR-248-memories-keep-their-rows-and-rank-by-use.md)).

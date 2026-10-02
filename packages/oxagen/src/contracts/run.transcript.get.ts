@@ -564,6 +564,13 @@ export const transcriptEntrySchema = z
     request: transcriptBodySchema.nullable(),
     /** What came back; null when only a write-ahead intention was recorded. */
     response: transcriptBodySchema.nullable(),
+    /**
+     * A model reply's further parts, after `response`, in the order recorded
+     * (#4351). A wrapped transcript writes one record per content block of a
+     * reply, and one reply is one step, so the step carries every part.
+     * Absent when the reply came in one part.
+     */
+    parts: z.array(transcriptBodySchema).max(256).optional(),
     /** The decision folded into the entry; null when none was. */
     decision: transcriptDecisionSchema.nullable(),
     /** Frames folded into the entry, the opening frame included. */

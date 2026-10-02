@@ -98,6 +98,7 @@ import { toolStudioFindingsList } from "@oxagen/oxagen/contracts/tool.studio.fin
 import { toolStudioDescriptionDraft } from "@oxagen/oxagen/contracts/tool.studio.description.draft";
 import { toolStudioTry } from "@oxagen/oxagen/contracts/tool.studio.try";
 import { toolStudioDiscoveryStart } from "@oxagen/oxagen/contracts/tool.studio.discovery.start";
+import { toolSteeringMigrate } from "@oxagen/oxagen/contracts/tool.steering.migrate";
 import { toolStudioListingGet } from "@oxagen/oxagen/contracts/tool.studio.listing.get";
 import { toolStudioListingStart } from "@oxagen/oxagen/contracts/tool.studio.listing.start";
 import { toolStudioDiscoveryGet } from "@oxagen/oxagen/contracts/tool.studio.discovery.get";
@@ -248,6 +249,7 @@ import { toolStudioFindingsListRoute } from "./tool.studio.findings.list";
 import { toolStudioDescriptionDraftRoute } from "./tool.studio.description.draft";
 import { toolStudioTryRoute } from "./tool.studio.try";
 import { toolStudioDiscoveryStartRoute } from "./tool.studio.discovery.start";
+import { toolSteeringMigrateRoute } from "./tool.steering.migrate";
 import { toolStudioListingGetRoute } from "./tool.studio.listing.get";
 import { toolStudioListingStartRoute } from "./tool.studio.listing.start";
 import { toolStudioDiscoveryGetRoute } from "./tool.studio.discovery.get";
@@ -1204,6 +1206,16 @@ const ROUTES: ThinRoute[] = [
     capability: toolStudioListingGet.name,
     body: { server: "files" },
     invalidBody: { server: "Files" },
+    jsonGuard: true,
+    status: 200,
+  },
+  {
+    file: "tool.steering.migrate",
+    route: toolSteeringMigrateRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: toolSteeringMigrate.name,
+    body: {},
+    invalidBody: { workspaceId: "ws_1" },
     jsonGuard: true,
     status: 200,
   },

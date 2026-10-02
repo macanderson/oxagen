@@ -1,11 +1,11 @@
-# ADR-247: `oxagen memory` reads workspace memories
+# ADR-249: `oxagen memory` reads workspace memories
 
 - **Status:** Accepted. The agent building lane MEM5 chose this. Mac has not
   ruled on it, and the memory collection spec lists the CLI name as an open
   question.
 - **Date:** 2026-10-01
 - **Owners:** steering, cli
-- **Related:** issue #4912 (lane MEM5), ADR-238, ADR-239, ADR-245, the memory
+- **Related:** issue #4912 (lane MEM5), ADR-238, ADR-239, ADR-248, the memory
   collection spec (`memory-collection-spec.html` in oxageninc/roadmap,
   sections Capabilities and Open questions).
 

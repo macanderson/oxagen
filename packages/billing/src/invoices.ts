@@ -28,10 +28,13 @@ async function resolveOrgIdFromSubscription(
  * Line-item detail is NOT mirrored — the invoices UI links to the
  * Stripe-hosted invoice, and receipts read line items straight off the
  * provider payload.
+ *
+ * Returns the invoice it read. `getInvoice` pages every line, so the webhook
+ * uses these lines in place of the first page its payload embeds (#4895).
  */
 export async function syncInvoiceFromStripe(
   stripeInvoiceId: string,
-): Promise<void> {
+): Promise<BillingInvoice> {
   const start = Date.now();
   const invoice = await billingProvider().getInvoice(stripeInvoiceId);
 
@@ -109,4 +112,5 @@ export async function syncInvoiceFromStripe(
       "billing: invoice synced",
     );
   });
+  return invoice;
 }

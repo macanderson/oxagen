@@ -1,7 +1,7 @@
 /**
  * Transport and formatters for workspace memories: the memories agents wrote
  * in their harnesses' own stores, which Oxagen collects from enrolled hosts
- * (memory-collection spec; ADR-245).
+ * (memory-collection spec; ADR-248).
  *
  * `oxagen memory list|show|promote|dismiss` call the org-scoped routes of
  * list_workspace_memories, get_workspace_memory, promote_memories, and

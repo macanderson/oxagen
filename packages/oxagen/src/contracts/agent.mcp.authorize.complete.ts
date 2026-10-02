@@ -28,6 +28,15 @@ export const agentMcpAuthorizeComplete = registerCapability({
     name: z.string(),
     healthStatus: z.enum(["healthy", "degraded", "unreachable"]),
     discoveredTools: z.array(z.string()),
+    /**
+     * Set when the workspace's tools live in its steering repo and the
+     * sign-in opened a steering PR that adds the server. The tokens are
+     * stored, and the server stays off until the PR merges and the next
+     * publish connects it.
+     */
+    steeringPr: z
+      .object({ number: z.number().int().positive(), url: z.string().url() })
+      .optional(),
   }),
 });
 

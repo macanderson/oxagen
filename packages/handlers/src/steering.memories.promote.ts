@@ -1,6 +1,6 @@
 // steering.memories.promote.ts: promote_memories, a person's draft steering
 // records from selected memories (memory-collection spec, Promotion;
-// ADR-206, ADR-245).
+// ADR-206, ADR-248).
 //
 // The handler checks the caller's role, then hands the drafts to
 // memory/promote.ts, which writes them to the open memory PR or opens one on

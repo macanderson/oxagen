@@ -2280,7 +2280,9 @@ describe("the effort a model call ran at", () => {
   it("maps the server's effort, and reads a missing one as unrecorded (negative)", () => {
     const first = runTranscript({ entries: [transcriptEntry()] }).entries[0];
     if (!first) throw new Error("Missing transcript fixture entry");
-    const { subagent: _appSubagent, ...entry } = first;
+    // The app's parts carry the app's body shape, so the wire entry leaves
+    // them out, as it leaves the subagent out.
+    const { subagent: _appSubagent, parts: _appParts, ...entry } = first;
     const wire = (seq: string, effort?: string | null) => ({
       ...entry,
       seq,

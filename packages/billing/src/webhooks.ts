@@ -24,7 +24,7 @@ import {
   onChargeRefunded,
 } from "./disputes";
 import { logger } from "./logger";
-import type { BillingWebhookEvent } from "./provider";
+import type { BillingInvoice, BillingWebhookEvent } from "./provider";
 
 export function verifyStripeSignature(
   rawBody: string,
@@ -136,6 +136,25 @@ export async function processStripeEvent(
   return { status: "applied" };
 }
 
+/**
+ * The event's invoice with every line Stripe holds. A webhook payload embeds
+ * the first page of `invoice.lines` only, and the receipt prints each line,
+ * so an invoice whose payload page is short takes its lines from the full
+ * read `syncInvoiceFromStripe` already made (#4895). Everything else stays as
+ * the event saw it: the status that fired this event is the one to act on.
+ */
+function withAllLines(
+  fromEvent: BillingInvoice,
+  fullRead: BillingInvoice,
+): BillingInvoice {
+  if (fromEvent.lineItemsComplete) return fromEvent;
+  return {
+    ...fromEvent,
+    lineItems: fullRead.lineItems,
+    lineItemsComplete: fullRead.lineItemsComplete,
+  };
+}
+
 async function dispatch(event: BillingWebhookEvent): Promise<void> {
   switch (event.type) {
     case "subscription.created":
@@ -161,13 +180,16 @@ async function dispatch(event: BillingWebhookEvent): Promise<void> {
     case "invoice.paid":
     case "invoice.payment_failed": {
       if (!event.invoice) return;
-      await syncInvoiceFromStripe(event.invoice.providerInvoiceId);
+      const invoice = withAllLines(
+        event.invoice,
+        await syncInvoiceFromStripe(event.invoice.providerInvoiceId),
+      );
       // A governed-action settlement invoice (auto top-up, interim,
       // month-end) settles its ledger row. settleGauPaid grants once however
       // many times paid arrives, settleGauOpen touches only a pending row, and
       // neither invoice carries a subscription, so the dunning functions below
       // leave the org's dunning state alone (ADR-055 §6).
-      const settlementId = event.invoice.gauSettlementId;
+      const settlementId = invoice.gauSettlementId;
       if (settlementId !== null && event.type !== "invoice.created") {
         const paid = event.type === "invoice.paid";
         await withSystemDb((tx) =>
@@ -180,19 +202,19 @@ async function dispatch(event: BillingWebhookEvent): Promise<void> {
       // in advance) grants what it sold when its invoice is paid. The grant is
       // fenced per order, so a redelivery or a race with the issue-time grant
       // adds nothing twice.
-      const prepaid = event.invoice.prepaidOrder ?? null;
+      const prepaid = invoice.prepaidOrder ?? null;
       if (prepaid !== null && event.type === "invoice.paid") {
         await grantPrepaidOrder(prepaid.orderId, {
           trigger: "paid",
-          stripeInvoiceId: event.invoice.providerInvoiceId,
+          stripeInvoiceId: invoice.providerInvoiceId,
           assistantSpendCap: prepaid.assistantSpendCap,
         });
       }
       // Deposit the plan's included credits on the first invoice and every
       // renewal. Idempotent per event (ledger unique key).
       if (event.type === "invoice.paid") {
-        await grantPlanCreditsForInvoicePaid(event.invoice);
-        await onInvoiceRecovered(event.invoice);
+        await grantPlanCreditsForInvoicePaid(invoice);
+        await onInvoiceRecovered(invoice);
         // Email the customer a receipt. Runs last and is best-effort (never
         // throws), so it cannot trigger a re-dispatch of this event nor fail the
         // webhook.
@@ -204,10 +226,10 @@ async function dispatch(event: BillingWebhookEvent): Promise<void> {
         // is deliberately re-dispatched on the provider's retry. Both paths send
         // a second receipt. A per-invoice send guard belongs in receipts.ts if
         // duplicate receipts ever become a problem.
-        await sendPaymentReceipt(event.invoice);
+        await sendPaymentReceipt(invoice);
       }
       if (event.type === "invoice.payment_failed") {
-        await onInvoicePaymentFailed(event.invoice);
+        await onInvoicePaymentFailed(invoice);
       }
       return;
     }

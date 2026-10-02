@@ -1,6 +1,6 @@
 // steering.memory_pr_records.list.ts: list_memory_pr_records, the records of
 // one memory PR for the memory PR review card (memory-collection spec,
-// Capabilities; ADR-206, ADR-245).
+// Capabilities; ADR-206, ADR-248).
 //
 // The memory PR row lists each record the PR proposes or archives, and the
 // memories each one cites. While the PR is open, the handler reads its

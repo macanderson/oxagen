@@ -1,6 +1,6 @@
 /**
  * list_workspace_memories: the Memories tab's list (memory-collection spec,
- * Memories tab and Use counting; ADR-245).
+ * Memories tab and Use counting; ADR-248).
  *
  * The list ranks memories by uses, then by the newest use, then by the
  * newest capture. Memories that say the same thing share one group: the

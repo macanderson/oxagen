@@ -1,5 +1,5 @@
 // workspace.ts: how the Memories tab and promote_memories read workspace
-// memories (memory-collection spec, Memories tab and Promotion; ADR-245).
+// memories (memory-collection spec, Memories tab and Promotion; ADR-248).
 //
 // Pure. workspace-store.ts reads the rows, and the handlers pass them here
 // to name each memory's harness, to group memories that say the same thing,

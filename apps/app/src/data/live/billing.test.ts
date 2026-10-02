@@ -201,6 +201,7 @@ describe("billing.retention", () => {
     expect(await billing.retention(ctx)).toEqual(
       readOk({
         includedMonths: 12,
+        includedDays: 360,
         perGbMonth: { micros: "80000", currency: "USD" },
         extendedRetentionEnabled: false,
       }),

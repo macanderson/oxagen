@@ -1,5 +1,5 @@
 // steering.memories.list.ts: list_workspace_memories, the Memories tab's
-// ranked list (memory-collection spec, Memories tab; ADR-245).
+// ranked list (memory-collection spec, Memories tab; ADR-248).
 //
 // The store reads the 2,000 highest ranked memories that match the filters,
 // in the curator's order: uses, then the newest use, then the newest capture.

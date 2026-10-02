@@ -5,6 +5,7 @@
 // table meets the panel's edges the way the mockup draws it.
 import { useTranslations } from "next-intl";
 import type { ComponentProps, ReactNode } from "react";
+import type { EvidenceRetention } from "@/data/contracts/billing";
 import { panel, panelBody, panelHeader, panelTitle } from "@/ui/control-styles";
 import { useFormatter } from "@/ui/formatter";
 
@@ -104,6 +105,19 @@ export function NotRecordedValue({ children }: { children: ReactNode }) {
  */
 export function isoDate(iso: string): string {
   return new Date(iso).toISOString().slice(0, 10);
+}
+
+/**
+ * The organization's own evidence window in days, when it is shorter than the
+ * paid tiers' months: 30 days with no subscription (ADR-241, signup grant).
+ * Null for a subscriber, whose window the page prints in months.
+ */
+export function retentionDaysBelowPaid(
+  retention: EvidenceRetention,
+): number | null {
+  return retention.includedDays < retention.includedMonths * 30
+    ? retention.includedDays
+    : null;
 }
 
 /** Whether [start, end) is one whole UTC calendar month. */

@@ -700,11 +700,11 @@ describe("errorMiddleware billing errors", () => {
     expect("reason" in b.error).toBe(false);
   });
 
-  it("GauExhaustedError carries reason free_no_payment_method in the body when set", async () => {
+  it("GauExhaustedError carries its reason in the body", async () => {
     const { GauExhaustedError } = await import("@oxagen/billing");
     const { status, body } = await triggerError(
       new GauExhaustedError({
-        reason: "free_no_payment_method",
+        reason: "signup_grant_used",
         remainingGau: 0,
         periodEnd: new Date("2026-10-01T00:00:00.000Z"),
       }),
@@ -712,7 +712,7 @@ describe("errorMiddleware billing errors", () => {
     expect(status).toBe(402);
     const b = body as { error: { code: string; reason?: string } };
     expect(b.error.code).toBe("gau_exhausted");
-    expect(b.error.reason).toBe("free_no_payment_method");
+    expect(b.error.reason).toBe("signup_grant_used");
   });
 
   it("AssistantSpendCapError → 402 with its code, not 500", async () => {

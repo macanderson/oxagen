@@ -1,5 +1,5 @@
 // steering.memories.get.ts: get_workspace_memory, one memory for the
-// Memories tab's drawer (memory-collection spec, Memories tab; ADR-245).
+// Memories tab's drawer (memory-collection spec, Memories tab; ADR-248).
 //
 // It reads the memory by its public id inside the caller's workspace, then
 // its newest 100 uses and the memory PR that last cited it. A memory another

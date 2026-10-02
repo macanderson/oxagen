@@ -1,24 +1,35 @@
 // The Studio draft (#4678): how staged edits combine, what the diff and the
 // file list show, the definition tokens before and after, what a saved test
-// loses before it is staged, and which stored edits the page can read.
-import { STUDIO_DRAFT_OPS_BYTES_MAX } from "@oxagen/oxagen/contracts/tool.studio.draft.save";
+// loses before it is staged, which stored edits the page can read, and the
+// result cap and exposure mode spend's levers stage.
+import {
+  STUDIO_DRAFT_OPS_BYTES_MAX,
+  STUDIO_MAX_RESULT_BYTES,
+} from "@oxagen/oxagen/contracts/tool.studio.draft.save";
 import { describe, expect, it } from "vitest";
 import {
+  capBytes,
+  capTokens,
   DESCRIPTION_MAX,
   type DraftOp,
   draftCount,
+  draftExposure,
   draftFiles,
   draftLines,
   draftTokens,
   importedAfter,
+  MAX_RESULT_TOKENS,
   mergeDrafts,
+  opTool,
   parseStoredDraft,
   readDraftOps,
   scrubTest,
   sourceRequired,
   stageChecked,
+  stagedCap,
   stagedClassification,
   stagedDescription,
+  stagedExposure,
   unstage,
 } from "./draft";
 
@@ -41,6 +52,18 @@ const describeOf = (tool: string, description: string): DraftOp => ({
   tool,
   description,
 });
+const capOf = (
+  tool: string,
+  maxResultBytes: number,
+  paging?: boolean,
+): DraftOp =>
+  paging === undefined
+    ? { kind: "cap", tool, maxResultBytes }
+    : { kind: "cap", tool, maxResultBytes, paging };
+const exposeOf = (mode: "direct" | "search"): DraftOp => ({
+  kind: "expose",
+  mode,
+});
 const testOf = (tool: string, args = "{}"): DraftOp => ({
   kind: "test",
   tool,
@@ -56,7 +79,9 @@ function staged(...ops: DraftOp[]): readonly DraftOp[] {
   let draft: readonly DraftOp[] = [];
   for (const op of ops) {
     const next = stageChecked(draft, op);
-    if (next === null) throw new Error(`refused ${op.kind} ${op.tool}`);
+    if (next === null) {
+      throw new Error(`refused ${op.kind} ${opTool(op) ?? "the server"}`);
+    }
     draft = next;
   }
   return draft;
@@ -152,6 +177,64 @@ describe("stageChecked", () => {
   });
 });
 
+describe("stageChecked with caps and exposure", () => {
+  it("replaces a second cap of one tool and keeps caps of two tools apart", () => {
+    const draft = staged(
+      capOf("create_payment", 16_000, true),
+      capOf("list_customers", 8_000),
+      capOf("create_payment", 4_000, false),
+    );
+    expect(draft).toEqual([
+      capOf("create_payment", 4_000, false),
+      capOf("list_customers", 8_000),
+    ]);
+    expect(stagedCap("create_payment", draft)?.maxResultBytes).toBe(4_000);
+    expect(stagedCap("create_refund", draft)).toBeUndefined();
+  });
+
+  it("keeps one exposure mode, the last one staged", () => {
+    const draft = staged(exposeOf("search"), importOf("create_refund"), exposeOf("direct"));
+    expect(draft).toEqual([exposeOf("direct"), importOf("create_refund")]);
+    expect(stagedExposure(draft)).toBe("direct");
+    expect(stagedExposure([])).toBeUndefined();
+  });
+
+  it("drops a cancelled import's cap and keeps the exposure mode", () => {
+    const draft = staged(
+      importOf("create_refund"),
+      capOf("create_refund", 16_000),
+      exposeOf("search"),
+    );
+    expect(stageChecked(draft, removeOf("create_refund"))).toEqual([
+      exposeOf("search"),
+    ]);
+  });
+
+  it("takes a cap up to save_studio_draft's largest and refuses one outside it", () => {
+    expect(stageChecked([], capOf("create_payment", 0))).toBeNull();
+    expect(
+      stageChecked([], capOf("create_payment", STUDIO_MAX_RESULT_BYTES + 1)),
+    ).toBeNull();
+    expect(stageChecked([], capOf("create_payment", 1.5))).toBeNull();
+    expect(
+      stageChecked([], capOf("create_payment", STUDIO_MAX_RESULT_BYTES)),
+    ).toEqual([capOf("create_payment", STUDIO_MAX_RESULT_BYTES)]);
+  });
+});
+
+describe("the result cap's units", () => {
+  it("writes 4 bytes for each token and reads them back", () => {
+    expect(capBytes(4_000)).toBe(16_000);
+    expect(capTokens(16_000)).toBe(4_000);
+    expect(capTokens(16_003)).toBe(4_000);
+  });
+
+  it("takes as many tokens as save_studio_draft's largest cap holds", () => {
+    expect(MAX_RESULT_TOKENS).toBe(262_144);
+    expect(capBytes(MAX_RESULT_TOKENS)).toBe(STUDIO_MAX_RESULT_BYTES);
+  });
+});
+
 describe("unstage", () => {
   it("drops the edit at one index", () => {
     const draft = staged(importOf("a_tool"), importOf("b_tool"), importOf("c_tool"));
@@ -231,6 +314,36 @@ describe("draftLines, draftFiles and draftCount", () => {
   it("ignore an edit to a tool that stays unimported", () => {
     const ops = staged(classifyOf("create_refund"));
     expect(draftLines(VIEW, ops)).toEqual([]);
+  });
+
+  it("show a cap as a change to the tool and to tools.toml", () => {
+    const ops = staged(capOf("list_customers", 16_000, true));
+    expect(draftLines(VIEW, ops)).toEqual([
+      { change: "changed", tool: "list_customers", fields: ["cap"] },
+    ]);
+    expect(draftFiles(VIEW, ops)).toEqual(["tools.toml"]);
+    expect(draftCount(VIEW, ops)).toBe(1);
+  });
+
+  it("change server.toml alone for a new exposure mode", () => {
+    const view = { ...VIEW, exposure: "direct" as const };
+    const ops = staged(exposeOf("search"));
+    expect(draftExposure(view, ops)).toBe("search");
+    expect(draftLines(view, ops)).toEqual([]);
+    expect(draftFiles(view, ops)).toEqual(["server.toml"]);
+    expect(draftCount(view, ops)).toBe(1);
+  });
+
+  it("count no change for the exposure mode already in force", () => {
+    const view = { ...VIEW, exposure: "search" as const };
+    const ops = staged(exposeOf("search"));
+    expect(draftExposure(view, ops)).toBeNull();
+    expect(draftFiles(view, ops)).toEqual([]);
+    expect(draftCount(view, ops)).toBe(0);
+  });
+
+  it("count a staged mode as a change when the view does not know the mode", () => {
+    expect(draftExposure(VIEW, staged(exposeOf("direct")))).toBe("direct");
   });
 });
 
@@ -385,8 +498,18 @@ describe("readDraftOps", () => {
       classifyOf("create_refund", "critical", ["moves_money"]),
       describeOf("create_refund", "Refund a charge."),
       testOf("create_refund"),
+      capOf("create_refund", 16_000, true),
+      capOf("list_prices", 4_000),
+      exposeOf("search"),
     ];
     expect(readDraftOps(ops)).toEqual(ops);
+  });
+
+  it("refuses an exposure edit that names a tool, or a cap with a paging style", () => {
+    expect(readDraftOps([{ ...exposeOf("search"), tool: "create_refund" }])).toBeNull();
+    expect(
+      readDraftOps([{ kind: "cap", tool: "create_refund", maxResultBytes: 4_000, paging: "cursor" }]),
+    ).toBeNull();
   });
 
   it("refuses an edit kind this page does not know", () => {

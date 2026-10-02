@@ -88,47 +88,42 @@ beside their sources as `*.test.ts`.
 
 ## Installation
 
-**From the monorepo** (recommended today):
+Three ways, in the order the docs recommend
+(https://docs.oxagen.sh/docs/cli/installation):
+
+1. **The Oxagen app.** Download it from https://downloads.oxagen.sh/. On first
+   launch it links `oxagen` onto your PATH.
+2. **A single executable.** Each version publishes `oxagen-<rust triple>`
+   (`oxagen-aarch64-apple-darwin`, `oxagen-x86_64-unknown-linux-gnu`, and so
+   on) with a `.sha256` beside it, at
+   `https://downloads.oxagen.sh/latest/<file>` and
+   `https://downloads.oxagen.sh/desktop/<version>/<file>`. It needs no Node.js.
+3. **npm.** `npm install -g @oxagen/cli`. The package on npm lags the app
+   (#4489).
+
+**From a checkout of this repository** (contributors):
 
 ```bash
-git clone https://github.com/macanderson/oxagen.git
-cd oxagen
 pnpm install
-
 pnpm --filter @oxagen/cli start -- --version     # run from source (tsx)
 # or
 pnpm --filter @oxagen/cli build                  # compile once
 node apps/cli/dist/index.js --version
 ```
 
-**Standalone bundle** (portable, no install — CI/containers):
+**Standalone bundle** (portable, no install, for CI and containers):
 
 ```bash
 pnpm --filter @oxagen/cli bundle
 node apps/cli/dist-standalone/oxagen.mjs --version
 ```
 
-**From npm:**
-
-```bash
-npm install -g @oxagen/cli
-# or
-pnpm add -g @oxagen/cli
-oxagen --version
-```
-
-> The published npm package expects `tsx` on `PATH`, so it does not run
-> standalone outside the monorepo. Use the monorepo or standalone bundle
-> methods instead.
->
 > The standalone bundle is what
-> `pnpm --filter @oxagen/cli publish:standalone` ships — the single-file bundle
+> `pnpm --filter @oxagen/cli publish:standalone` ships: the single-file bundle
 > plus a clean manifest. Publishing `apps/cli/package.json` as-is does **not**
 > work: its `bin` points at `dist/index.js`, whose shebang is
 > `#!/usr/bin/env tsx`, and its `dependencies` still carry unpublished
 > `workspace:*` packages.
-
-See https://docs.oxagen.sh/docs/cli/installation for the full walkthrough.
 
 ## Authentication
 
@@ -175,8 +170,7 @@ oxagen logs                         # tail the CLI's own debug log
 
 ```bash
 oxagen graph search -q "…"
-oxagen memory list|show|edit|salience|promote|demote|candidates|citations|import|rm
-oxagen remember "<lesson>" --class RULE --enforcement 90
+oxagen memory list|show|promote|dismiss|import   # the memories agents wrote in their harnesses
 ```
 
 **Govern** — workspace, agents, credentials
@@ -184,6 +178,7 @@ oxagen remember "<lesson>" --class RULE --enforcement 90
 ```bash
 oxagen init --org <org> --workspace <ws>          # link this project to an org + workspace
 oxagen pull                                       # write the workspace's published steering into .oxagen/
+oxagen steering import <paths...>                 # preview Markdown files as steering records and policies, then --yes opens the PR
 oxagen agent env bind|unbind|list                 # bind an agent to an environment
 oxagen env list|get|create|update|rm|set-default  # workspace environments
 oxagen secret list|set|rm|reveal|import|export    # encrypted credential vault

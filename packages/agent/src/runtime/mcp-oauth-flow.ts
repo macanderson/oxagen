@@ -7,7 +7,9 @@
 //             returned URL in a popup.
 //   complete  `authorize_mcp_server`: the app's callback hands the
 //             code back; exchange it, store the tokens, list the server's
-//             tools and upsert the provider row.
+//             tools and upsert the provider row. Once the workspace's tools
+//             live in its steering repo, the row is proposed in a steering
+//             PR instead (`recordAuthorizedServer`).
 //
 // Storage is the one the runtime already reads (plugin-types/mcp.ts): a
 // `plugin.installed_plugins` listing with `auth_kind = 'oauth'`, the client
@@ -44,10 +46,12 @@ import type {
   AgentMcpAuthorizeStartOutput,
 } from "@oxagen/oxagen/contracts/agent.mcp.authorize.start";
 import type { AgentMcpAuthorizeCompleteOutput } from "@oxagen/oxagen/contracts/agent.mcp.authorize.complete";
-import { healthcheck } from "../dispatch/mcp-client";
+import { healthcheck, type McpToolDescriptor } from "../dispatch/mcp-client";
 import { captureToolSnapshots, recordServerChange } from "./mcp-snapshots";
 import { probeMcpAuth } from "./mcp-auth-probe";
 import { mcpOAuthFetch } from "./mcp-oauth-fetch";
+import { steeringWriter } from "./steering-pr";
+import { proposeListingServer } from "./steering-proposal";
 
 /** The path every redirect URL must end in: the app's one callback route. */
 export const MCP_OAUTH_CALLBACK_PATH = "/api/v1/mcp/oauth/callback";
@@ -469,6 +473,7 @@ export async function startMcpAuthorization(
       mcpServerId: done.mcpServerId,
       healthStatus: done.healthStatus,
       discoveredTools: done.discoveredTools,
+      ...(done.steeringPr === undefined ? {} : { steeringPr: done.steeringPr }),
     };
   }
   if (provider.pendingRedirect === null) {
@@ -554,9 +559,37 @@ export async function completeMcpAuthorization(
 }
 
 /**
+ * Pin the tool descriptors a probe listed. A failure is swallowed: the
+ * provider is authorized, and the runtime pins on first use.
+ */
+async function pinDescriptors(
+  scope: FlowScope,
+  mcpServerId: string,
+  descriptors: readonly McpToolDescriptor[],
+): Promise<void> {
+  if (descriptors.length === 0) return;
+  await captureToolSnapshots({
+    orgId: scope.orgId,
+    workspaceId: scope.workspaceId,
+    mcpServerId,
+    descriptors: [...descriptors],
+    ...(scope.userId ? { createdById: scope.userId } : {}),
+  }).catch(() => undefined);
+}
+
+/**
  * The provider row for an authorized listing: probe it with the stored token,
  * upsert `mcp.mcp_servers` (reviving a removed one), pin its tool descriptors
  * and record the enable.
+ *
+ * In a workspace whose tools live in its steering repo (`steeringWriter`,
+ * ADR-209 §6), the tokens are stored all the same, but the row is decided the
+ * way `set_plugin_enabled` decides it (`proposeListingServer`). A server the
+ * repo already holds is written as above. A server with an open steering PR
+ * is left off, and the sign-in answers `steering_pr_open`. Any other server
+ * becomes a proposed, disabled row, its tools are pinned, and a steering PR
+ * adds its folder. No enable is recorded for either, because nothing was
+ * turned on.
  */
 async function recordAuthorizedServer(
   scope: FlowScope,
@@ -578,6 +611,57 @@ async function recordAuthorizedServer(
   // right after sign-in is recorded as not yet known, since the runtime leaves
   // an unreachable provider out of every turn.
   const storedHealth = probe.status === "unreachable" ? "unknown" : probe.status;
+
+  const writer = await steeringWriter({
+    orgId: scope.orgId,
+    workspaceId: scope.workspaceId,
+  });
+  if (writer !== null) {
+    const outcome = await proposeListingServer(writer, {
+      orgId: scope.orgId,
+      workspaceId: scope.workspaceId,
+      userId: scope.userId ?? null,
+      listing: { id: listing.id, name: listing.title },
+      values: {
+        name: listing.title,
+        transportType: "streamable-http",
+        endpointUrl: listing.endpointUrl,
+        authStrategy: "bearer",
+        healthStatus: storedHealth,
+        lastHealthcheckAt: now,
+        discoveredTools: probe.discoveredTools as object,
+        createdById: scope.userId ?? null,
+      },
+      refresh: {
+        name: listing.title,
+        endpointUrl: listing.endpointUrl,
+        healthStatus: storedHealth,
+        lastHealthcheckAt: now,
+        discoveredTools: probe.discoveredTools as object,
+      },
+      // Pinned before the PR opens, so the folder it adds lists these tools.
+      beforeOpen: (serverId) =>
+        pinDescriptors(scope, serverId, probe.descriptors),
+      caller: "authorize_mcp_server",
+    });
+    if (outcome.kind === "pending") {
+      return refuse(
+        "conflict",
+        "steering_pr_open",
+        `Your sign-in to ${listing.title} is saved. The server turns on when the steering PR that adds tools/servers/${outcome.folder}/ merges and publishes.`,
+      );
+    }
+    if (outcome.kind === "proposed") {
+      return {
+        mcpServerId: outcome.publicId,
+        name: listing.title,
+        healthStatus: probe.status,
+        discoveredTools: probe.discoveredTools,
+        steeringPr: { number: outcome.pr.number, url: outcome.pr.url },
+      };
+    }
+  }
+
   const [server] = await withTenantDb((tx) =>
     tx
       .insert(schema.mcpServers)
@@ -621,17 +705,7 @@ async function recordAuthorizedServer(
       }),
   );
   if (server === undefined) throw new Error("mcp_servers upsert failed");
-  if (probe.descriptors.length > 0) {
-    await captureToolSnapshots({
-      orgId: scope.orgId,
-      workspaceId: scope.workspaceId,
-      mcpServerId: server.id,
-      descriptors: probe.descriptors,
-      ...(scope.userId ? { createdById: scope.userId } : {}),
-    }).catch(() => {
-      /* the provider is authorized; the runtime pins on first use */
-    });
-  }
+  await pinDescriptors(scope, server.id, probe.descriptors);
   await recordServerChange({
     orgId: scope.orgId,
     workspaceId: scope.workspaceId,

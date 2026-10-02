@@ -1,7 +1,7 @@
 /**
  * list_memory_pr_records: the records of one memory PR, for the memory PR
  * review card on the Steering page (memory-collection spec, Capabilities;
- * ADR-206, ADR-245).
+ * ADR-206, ADR-248).
  *
  * The PR is named by its number. When the workspace's memory PRs hold that
  * number on more than one repository, the newest one answers. Each
@@ -80,7 +80,7 @@ export const steeringMemoryPrRecordsList = registerCapability({
             summary: z.string(),
             /**
              * The memories the record cites, in the order the PR cites them.
-             * A retirement cites none. A memory deleted before ADR-245 kept
+             * A retirement cites none. A memory deleted before ADR-248 kept
              * every row is left out.
              */
             memories: z.array(

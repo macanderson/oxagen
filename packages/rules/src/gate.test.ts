@@ -294,7 +294,28 @@ describe("createDecisionRulesGate — the mandate check", () => {
       agentPrincipalId: "prn_agent",
       userId: "u1",
       requestId: "req_1",
+      runId: null,
     });
+  });
+
+  // #3478: the mandate gate's parked approval names the run that raised it,
+  // so the run is handed to the check the way it is handed to auto-approval.
+  test("hands the check the run the call belongs to", async () => {
+    const checkMandate = vi.fn(async () => settlement);
+    const gate = createDecisionRulesGate({
+      loadRuleSet: async () => null,
+      checkMandate,
+    });
+    const runId = "0192d4a8-0000-7000-8000-0000000000aa";
+    await gate({
+      capability: "stripe__create_payment",
+      input: { amount: "12.50" },
+      ctx: { ...CTX, userId: "u1", runId },
+      principal: agent,
+    });
+    expect(checkMandate).toHaveBeenCalledWith(
+      expect.objectContaining({ runId }),
+    );
   });
 
   test.each([

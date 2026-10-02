@@ -1,6 +1,6 @@
 // workspace-store.ts: the Postgres reads and writes behind the workspace
 // memory capabilities (memory-collection spec, Memories tab, Promotion, and
-// Lifecycle; ADR-245).
+// Lifecycle; ADR-248).
 //
 // store.ts holds what the curator and Tacho read and write. This file holds
 // what a person does from the Memories tab, the CLI, or MCP: list and read

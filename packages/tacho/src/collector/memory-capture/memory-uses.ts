@@ -1,7 +1,7 @@
 /**
  * Memory uses: the memory files a Claude Code run read, counted on this host
  * and reported to the control plane's `/v1/tacho/memories/uses`
- * (`record_tacho_memory_uses`, ADR-245), with the files each complete memory
+ * (`record_tacho_memory_uses`, ADR-248), with the files each complete memory
  * scan found.
  *
  * A use is one run reading one memory file. The hook handler hands each

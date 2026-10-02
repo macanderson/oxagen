@@ -1019,6 +1019,133 @@ describe("ToolPanel tools the record barely holds", () => {
   });
 });
 
+describe("ToolPanel result cap", () => {
+  const CAP = {
+    unread:
+      "This panel does not show the cap tools.toml sets now. A cap you add to the draft replaces it.",
+    importFirst: "Import this tool before you set its result cap.",
+    invalid: "Enter a whole number of tokens from 1 to 262,144.",
+    pagingNone:
+      "Only a tool from an OpenAPI or GraphQL definition can page, so this cap cuts the result.",
+  } as const;
+
+  it("stages a cap in tokens as bytes, with paging on, for a server whose tools page", async () => {
+    const user = userEvent.setup();
+    const panel = renderPanel(studioTool("list_invoices"), {
+      serverName: "billing",
+      pageable: true,
+    });
+    const section = within(region("Result cap"));
+    expect(section.getByText(CAP.unread)).toBeInTheDocument();
+    const tokens = section.getByLabelText("Cap in tokens");
+    expect(tokens).toHaveAttribute("placeholder", "16384");
+    const stage = section.getByRole("button", { name: "Add to draft" });
+    expect(stage).toBeDisabled();
+
+    await user.type(tokens, "4000");
+    await user.selectOptions(section.getByLabelText("Paging"), "on");
+    await user.click(stage);
+    expect(panel.onStage.mock.calls).toEqual([
+      [{ kind: "cap", tool: "list_invoices", maxResultBytes: 16_000, paging: true }],
+    ]);
+  });
+
+  it("leaves paging out of the edit when a person leaves it as it is", async () => {
+    const user = userEvent.setup();
+    const panel = renderPanel(studioTool("list_invoices"), {
+      serverName: "billing",
+      pageable: true,
+    });
+    const section = within(region("Result cap"));
+    expect(section.getByLabelText("Paging")).toHaveValue("keep");
+    await user.type(section.getByLabelText("Cap in tokens"), "2500");
+    await user.click(section.getByRole("button", { name: "Add to draft" }));
+    expect(panel.onStage.mock.calls).toEqual([
+      [{ kind: "cap", tool: "list_invoices", maxResultBytes: 10_000 }],
+    ]);
+  });
+
+  it("offers no paging on a server whose tools cannot page", async () => {
+    const user = userEvent.setup();
+    const panel = renderPanel(toolOn(STRIPE, "create_payment"));
+    const section = within(region("Result cap"));
+    expect(section.queryByRole("combobox")).toBeNull();
+    expect(section.getByText(CAP.pagingNone)).toBeInTheDocument();
+    await user.type(section.getByLabelText("Cap in tokens"), "1000");
+    await user.click(section.getByRole("button", { name: "Add to draft" }));
+    expect(panel.onStage.mock.calls).toEqual([
+      [{ kind: "cap", tool: "create_payment", maxResultBytes: 4_000 }],
+    ]);
+  });
+
+  it.each(["0", "262145", "12.5"])(
+    "refuses %s tokens and keeps the edit out of the draft",
+    async (value) => {
+      const user = userEvent.setup();
+      const panel = renderPanel(toolOn(STRIPE, "create_payment"));
+      const section = within(region("Result cap"));
+      await user.type(section.getByLabelText("Cap in tokens"), value);
+      expect(section.getByTestId("studio-panel-cap-invalid")).toHaveTextContent(
+        CAP.invalid,
+      );
+      const stage = section.getByRole("button", { name: "Add to draft" });
+      expect(stage).toBeDisabled();
+      await user.click(stage);
+      expect(panel.onStage).not.toHaveBeenCalled();
+    },
+  );
+
+  it("shows the cap the draft holds and keeps the button off until the choice changes", async () => {
+    const user = userEvent.setup();
+    const ops: DraftOp[] = [
+      { kind: "cap", tool: "list_invoices", maxResultBytes: 16_000, paging: false },
+    ];
+    const panel = renderPanel(studioTool("list_invoices"), {
+      serverName: "billing",
+      pageable: true,
+      ops,
+    });
+    const section = within(region("Result cap"));
+    const facts = section.getByTestId("studio-panel-cap");
+    expect(fact(facts, "Cap in tokens")).toBe("4,000");
+    expect(fact(facts, "Paging")).toBe("Off");
+    expect(section.getByTestId("studio-panel-cap-staged")).toHaveTextContent(
+      "In the draft",
+    );
+    expect(section.queryByText(CAP.unread)).toBeNull();
+    const tokens = section.getByLabelText("Cap in tokens");
+    expect(tokens).toHaveValue(4000);
+    const stage = section.getByRole("button", { name: "Add to draft" });
+    expect(stage).toBeDisabled();
+
+    await user.selectOptions(section.getByLabelText("Paging"), "on");
+    expect(stage).toBeEnabled();
+    await user.click(stage);
+    expect(panel.onStage.mock.calls).toEqual([
+      [{ kind: "cap", tool: "list_invoices", maxResultBytes: 16_000, paging: true }],
+    ]);
+  });
+
+  it("asks for the import before a person caps a tool nobody imported", () => {
+    renderPanel(toolOn(BILLING, "void_invoice"), {
+      serverName: "billing",
+      pageable: true,
+    });
+    const section = within(region("Result cap"));
+    expect(section.getByText(CAP.importFirst)).toBeInTheDocument();
+    expect(section.queryByRole("spinbutton")).toBeNull();
+    expect(section.queryByRole("button")).toBeNull();
+  });
+
+  it("draws no cap controls for a person who cannot edit", () => {
+    renderPanel(toolOn(STRIPE, "create_payment"), { canEdit: false });
+    const section = within(region("Result cap"));
+    expect(section.getByText(CAP.unread)).toBeInTheDocument();
+    expect(section.queryByRole("spinbutton")).toBeNull();
+    expect(section.queryByRole("button")).toBeNull();
+  });
+});
+
 describe("ToolPanel read-only", () => {
   it("draws no edit controls for a person who cannot edit", () => {
     renderPanel(toolOn(STRIPE, "create_payment"), { canEdit: false });

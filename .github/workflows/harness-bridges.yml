@@ -52,6 +52,13 @@ jobs:
 
       - uses: actions/checkout@v5
 
+      # Every step below runs Node on the host. GitHub's images ship it on the
+      # PATH, and our runner image keeps it in the tool cache (ADR-246), so
+      # the job asks for the repository's pin, as `preflight` does (#5021).
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+
       - name: The bridges arrive as text files
         shell: bash
         run: |
@@ -65,9 +72,13 @@ jobs:
 
       - name: The check fails before the bootstrap
         shell: bash
+        # The check exits 1 on a missing bridge. Any other code, such as 127
+        # when `node` is not on the PATH, means the check never ran.
         run: |
-          if node tools/scripts/ensure-harness-bridges.mjs --check; then
-            echo "::error::the check passed on text-file bridges"
+          status=0
+          node tools/scripts/ensure-harness-bridges.mjs --check || status=$?
+          if [ "$status" -ne 1 ]; then
+            echo "::error::the check exited $status on text-file bridges, and only 1 means it ran and found them unlinked"
             exit 1
           fi
 

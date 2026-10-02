@@ -19,7 +19,7 @@ An org Owner or Admin, or a workspace Owner, can call all three. An API key acts
 
 Each server folder has one draft. The folder name is the server's name under `tools/servers/`.
 
-1. Stage your edits as `ops`. An edit imports a tool, removes one, classifies one, rewrites its description, or saves a test call.
+1. Stage your edits as `ops`. An edit imports a tool, removes one, classifies one, rewrites its description, sets its result cap and paging, or saves a test call. One edit, `expose`, sets the server's exposure mode in `server.toml`.
 2. Send `server.toml` and the source the tools import from, such as an OpenAPI document, a GraphQL schema, `.proto` files, or an MCP server's `tools/list` result. Omit either one to keep the stored copy.
 3. Call `save_studio_draft` with the revision you started from.
 
@@ -63,6 +63,7 @@ Review refuses while any imported tool has no `risk`, `side_effect`, or `egress`
 ## What the PR body shows
 
 - The imported, removed, and reclassified tools, the changed descriptions, and the saved tests.
+- The tools whose result cap or paging changed, and the exposure mode when the draft changes it.
 - The token total of every imported tool's definition against the budget, which is `definition_budget` in `server.toml` or the default.
 - The tool checks' findings, errors first, then warnings, then info.
 
@@ -85,6 +86,7 @@ Each refusal answers `conflict` (409) unless the table says otherwise.
 | `server_toml_missing`, `server_toml_invalid`, `server_name_mismatch` | `server.toml` is absent, does not parse, or names another server | Save a valid `server.toml` for this server |
 | `source_required`, `source_invalid`, `importer_not_built` | Review needs the source, the source does not import, or its importer has not shipped | Save the source again, or wait for the importer |
 | `tool_not_offered`, `tool_not_found`, `tool_key_collision` | The source does not offer an imported tool, an edit names an unknown tool, or two tools make one key | Remove or rename the edit the message names |
+| `tool_paging_missing` | A `cap` edit turns paging on for a tool whose definition has no paging pattern | Leave the tool's paging as it is, save, and Review |
 | `production_branch_missing` | The steering repo has no production branch | Restore the branch, then Review |
 
 ## Add a server that runs on machines
@@ -160,6 +162,18 @@ Open a tool on the server page. Its panel shows how agents used the tool over th
 Below the figures, the panel lists what agents' reflections said about the tool, newest first. A high count of schema rejections or retries usually means the tool's description or input schema confuses agents. Draft a new description, and Review opens a steering PR for a person to check.
 
 Oxagen counts only calls made through its served tools, from the day the count started. When the call store does not answer, the panel shows the counts as not recorded and still lists the notes.
+
+## Move connected servers into the steering repo
+
+A workspace that connected MCP servers before it had a steering repo keeps them as rows in Oxagen. One migration steering PR moves them: a folder under `tools/servers/` for each server, built from those rows and their pinned tool lists. When the PR merges, the next publish takes each server over. From then on, a change to the workspace's tools is a steering PR.
+
+Oxagen opens the migration PR when a workspace's steering repo finishes its setup. To start a workspace that never started, or to retry one that failed, call `migrate_tools_to_steering`, or run `oxagen tools migrate`.
+
+| Capability | API route | What it does |
+|---|---|---|
+| `migrate_tools_to_steering` | `POST /v1/{org}/{ws}/tools/steering/migrate` | Opens the migration PR, or answers the one already open |
+
+An org Owner or Admin can call it. A repeat call opens nothing new. It answers `already_open` with the open PR, or `already_migrated` once no server is left to move. A `stdio` server stays a row, and the PR body lists it with the reason.
 
 ## Other writers of the folder
 

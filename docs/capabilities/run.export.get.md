@@ -43,7 +43,7 @@ Read one run export back: where the job stands, the bundle's digest and size onc
 
 ## The download URL
 
-The URL points at `GET /v1/run-exports/download?token=…` on the API. It needs no session, so the person who verifies the bundle can fetch it with the link alone. The token names the export, its organisation and workspace, and the bundle digest, and it is signed with HMAC-SHA256 under the deployment's export signing secret (`AUDIT_EXPORT_SIGNING_SECRET`, or `BETTER_AUTH_SECRET` when that is unset) with its own domain prefix. It expires 15 minutes after the read that minted it. Reading `get_run_export` again mints a new one.
+The URL points at `GET /v1/run-exports/download?token=…` on the API. It needs no session, so the person who verifies the bundle can fetch it with the link alone. The token names the export, its organisation and workspace, and the bundle digest, and it is signed with HMAC-SHA256 under the deployment's export signing secret ([`AUDIT_EXPORT_SIGNING_SECRET`](../../packages/config/src/registry.ts) says which value that is) with its own domain prefix. It expires 15 minutes after the read that minted it. Reading `get_run_export` again mints a new one.
 
 The route answers `404` for a missing, forged, or expired token, for an export that is not ready, and for one whose stored digest no longer matches the token. A good token streams `application/zip` with `X-Bundle-Digest` set to the bundle digest.
 

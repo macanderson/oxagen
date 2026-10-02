@@ -280,7 +280,7 @@ describe("planCuration", () => {
 
     it("leaves age to the store: a memory past retire_after_days is still planned", () => {
       // The runner retires a memory no run used for retire_after_days before
-      // it plans (ADR-245), so a memory the plan reads is one to keep.
+      // it plans (ADR-248), so a memory the plan reads is one to keep.
       const plan = planCuration(
         input({
           waiting: [

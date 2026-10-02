@@ -1,6 +1,6 @@
 # ADR-209: A migrated workspace's tool registry is written from its steering repo
 
-- **Status:** Accepted (amended by ADR-211: the migration moves streamable-http rows only, and an sse row stays a legacy row that no longer holds a workspace on direct writes)
+- **Status:** Accepted (amended by ADR-211: the migration moves streamable-http rows only, and an sse row stays a legacy row that no longer holds a workspace on direct writes, and by ADR-245: `migrate_tools_to_steering` and steering repo provisioning start the migration)
 - **Date:** 2026-09-27
 - **Owners:** tools, steering
 - **Related:** issue #4478 (lane M13), PR #4480, PR #4472 (S5 publish),
@@ -73,6 +73,13 @@ folder's remote source cannot reach.
      server's `tools.toml` and lock, and refuses hand-authored declarations for
      that server.
    - A plugin the repo already holds is still toggled on and off directly.
+   - The OAuth sign-in (`authorize_mcp_server`, and `start_mcp_authorization`
+     when a stored token still works) stores the tokens, then decides the row
+     as `set_plugin_enabled` does. Both call `proposeListingServer` in
+     `packages/agent/src/runtime/steering-proposal.ts`. The sign-in pins the
+     tools it listed before the PR opens, so the folder lists them. A server
+     whose steering PR is open is refused with `steering_pr_open`, and the
+     tokens stay stored. (Added 2026-10-01, #4478.)
 7. **Consequence tags are called impacts.** `consequence_tags` is renamed to
    `impacts` on `agent.tool_versions` and `tools.mandates`, and in every
    contract. The tool checksum keeps `consequence_tags` as its input key, so no

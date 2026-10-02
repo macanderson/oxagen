@@ -1,7 +1,7 @@
 // The Postgres memory store against a real migrated database (ADR-206): the
 // one-reflection-per-run index, the dedupe key, the waiting queue, one
 // waiting memory per memory file (ADR-238), a memory PR's life from open to
-// settled, the uses and the lifecycle that keeps every row (ADR-245), the
+// settled, the uses and the lifecycle that keeps every row (ADR-248), the
 // recall counters, the curator's cross-tenant listing, and the tenant
 // policy on agent.memories. It runs
 // wherever DATABASE_URL points at a migrated database. CI's `test` job
@@ -90,7 +90,7 @@ function proposal(
 
 const FILE = "claude-code:/home/dev/.claude/projects/-proj/memory/use-pnpm.md";
 
-/** The columns a new waiting memory starts with (ADR-245). */
+/** The columns a new waiting memory starts with (ADR-248). */
 const FRESH = {
   label: null,
   summary: null,
@@ -521,7 +521,7 @@ describe.skipIf(!enabled)("memory store against Postgres", () => {
     });
   });
 
-  describe("memory uses and the lifecycle (ADR-245)", () => {
+  describe("memory uses and the lifecycle (ADR-248)", () => {
     const at = (minutes: number) =>
       new Date(Date.UTC(2026, 9, 1, 12, minutes));
 
@@ -920,7 +920,7 @@ describe.skipIf(!enabled)("memory store against Postgres", () => {
         .where(eq(schema.memoryPullRequests.id, prId)),
     );
     expect(row).toEqual({ status: "merged", settledAt });
-    // No memory is deleted (ADR-245). The merged record's memory is promoted
+    // No memory is deleted (ADR-248). The merged record's memory is promoted
     // and names its PR, and the rejected record's memory waits again.
     expect(
       (await rowsOf(scope)).map((r) => [r.id, r.state, r.promotedLineage, r.memoryPrId]),

@@ -1,5 +1,5 @@
 // steering.memories.dismiss.ts: dismiss_memories, a person sets memories
-// aside or brings them back (memory-collection spec, Lifecycle; ADR-245).
+// aside or brings them back (memory-collection spec, Lifecycle; ADR-248).
 //
 // A dismissal moves each waiting or in_pr memory to dismissed and adds its
 // statement hash to memory_rejections, so the curator does not propose the

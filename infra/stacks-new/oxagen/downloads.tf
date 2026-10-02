@@ -1,11 +1,17 @@
 # ---------------------------------------------------------------------------
-# downloads.oxagen.sh — the desktop installers and their checksums
+# downloads.oxagen.sh — every file a desktop release ships
 # ---------------------------------------------------------------------------
 #
 # Every installer `.github/workflows/desktop.yml` builds (`.dmg` for both Mac
 # architectures, `.deb` / `.rpm` / `.AppImage`, `.msi` / NSIS `.exe`) is laid
 # out as `desktop/<version>/<file>` next to a `SHA256SUMS.txt`, with an
-# `index.html` at the root listing the current version. The same static-site
+# `index.html` at the root listing the current version. The bare `oxagen` and
+# `tacho` executables, the macOS updater archives, and the updater `.sig`
+# files sit in the same prefix. The in-app update feed is
+# `updater/latest.json`, outside `desktop/` because it changes with every
+# release; it carries a five-minute Cache-Control, which the default cache
+# behavior honors (ADR-247). Nothing a person or an installed app downloads
+# comes from a GitHub release, because the repository is private. The same static-site
 # module the marketing site uses: a private bucket reached only through an
 # Origin Access Control, security headers, and TLS on the branded hostname.
 # A download is a file with an extension, so the rewrite function passes it

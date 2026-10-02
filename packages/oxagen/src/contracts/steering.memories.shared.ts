@@ -1,6 +1,6 @@
 // steering.memories.shared.ts: the shapes the workspace memory contracts
 // share (memory-collection spec, Memories tab, Promotion, and Capabilities;
-// ADR-245). Not a capability: the barrel exports it so the file-coverage
+// ADR-248). Not a capability: the barrel exports it so the file-coverage
 // guard sees it.
 //
 // A workspace memory is a row of agent.memories: what an agent wrote in its
@@ -20,7 +20,7 @@ export const workspaceMemoryIdSchema = z
   .string()
   .regex(/^mem_[0-9A-Za-z]+$/, "a memory id is mem_ followed by letters and digits");
 
-/** Where a memory is in its life (ADR-245). */
+/** Where a memory is in its life (ADR-248). */
 export const workspaceMemoryStateSchema = z.enum([
   "waiting",
   "in_pr",

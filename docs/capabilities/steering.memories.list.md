@@ -41,7 +41,7 @@ A memory carries `id` (`mem_…`), `label`, `summary`, `statement`, `state`, `ca
 
 ## Semantics
 
-The list ranks memories by uses, then by the newest use, then by the newest capture, the curator's order ([ADR-245](../adr/ADR-245-memories-keep-their-rows-and-rank-by-use.md)). `use_count` is the distinct runs that used the memory, plus the uses a harness counted with no run.
+The list ranks memories by uses, then by the newest use, then by the newest capture, the curator's order ([ADR-248](../adr/ADR-248-memories-keep-their-rows-and-rank-by-use.md)). `use_count` is the distinct runs that used the memory, plus the uses a harness counted with no run.
 
 Memories that say the same thing share one group: the same statement hash, or the word-overlap test the curator uses (80% of their content words in common, and neither one negates alone). A group stays inside one repository. The handler groups the 2,000 highest ranked memories that match, then cuts the page from the groups.
 

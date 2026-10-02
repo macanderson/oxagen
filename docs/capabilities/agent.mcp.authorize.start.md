@@ -54,7 +54,7 @@ A union on `status`:
 | `status`          | Fields                                      | Meaning                                              |
 | ----------------- | ------------------------------------------- | ---------------------------------------------------- |
 | `redirect`        | `authorizationUrl`, `state`                 | Open the URL; the callback completes the flow.       |
-| `authorized`      | `mcpServerId`, `healthStatus`, `discoveredTools` | A stored refresh token still worked.            |
+| `authorized`      | `mcpServerId`, `healthStatus`, `discoveredTools`, `steeringPr?` | A stored refresh token still worked. `steeringPr` is set when the server was proposed in a steering PR, as `authorize_mcp_server` describes. |
 | `client_required` | `scopesSupported`                           | Supply `client`: the server takes neither a metadata document nor a registration. |
 | `not_oauth`       | none                                        | The endpoint asks for no OAuth. Use `register_mcp_server`. |
 
@@ -63,6 +63,7 @@ A union on `status`:
 - Postgres: upserts a `plugin.installed_plugins` listing (`plugin_type = 'mcp_server'`, `auth_kind = 'oauth'`).
 - Postgres: writes the OAuth client to `mcp.credentials`, with the secret envelope-encrypted, when one is supplied or registered. A registered client also records its token endpoint auth method (`oauth_client_auth_method`), and the code exchange and every refresh authenticate with that method. A supplied client clears it.
 - Postgres: stores the PKCE verifier and state in `auth.verifications` for 10 minutes.
+- On `authorized`, records the server as `authorize_mcp_server` does, including a steering PR in a workspace whose tools live in its steering repo.
 
 ## Errors
 
@@ -76,3 +77,4 @@ A union on `status`:
 | `conflict`  | `authorization_discovery_failed` | The server's OAuth metadata could not be read. |
 | `conflict`  | `registration_refused`           | The server refused to register Oxagen as a client. |
 | `conflict`  | `authorization_failed`           | The authorization server refused to start.   |
+| `conflict`  | `steering_pr_open`               | On `authorized`: a steering PR that adds the server is already open. |

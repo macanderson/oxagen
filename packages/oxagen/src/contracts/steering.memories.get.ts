@@ -1,6 +1,6 @@
 /**
  * get_workspace_memory: one memory in full, for the Memories tab's drawer
- * (memory-collection spec, Memories tab; ADR-245).
+ * (memory-collection spec, Memories tab; ADR-248).
  *
  * It answers the memory's text and where it came from, the runs that used it
  * (newest first, at most 100), and the memory PR that last cited it. A memory

@@ -35,10 +35,13 @@ export function googleTag(measurementId = GA_MEASUREMENT_ID) {
 }
 
 /**
- * The LinkedIn Insight Tag, verbatim from the campaign manager snippet:
- * a partner id pushed onto the queue, then a loader that appends
+ * The LinkedIn Insight Tag, from the campaign manager snippet: a partner id
+ * pushed onto the queue, then a loader that appends
  * snap.licdn.com/li.lms-analytics/insight.min.js and buffers lintrk() calls
- * made before it arrives.
+ * made before it arrives. One line is added to the vendor's loader: a browser
+ * that sends Global Privacy Control gets no loader, because the privacy
+ * policy (/privacy#cookies) says the site skips the tag for that signal.
+ * Nothing on the site calls lintrk(), so skipping it breaks nothing.
  * @param {string} partnerId
  */
 export function linkedInInsightTag(partnerId = LINKEDIN_PARTNER_ID) {
@@ -49,6 +52,7 @@ window._linkedin_data_partner_ids.push(_linkedin_partner_id);
 </script>
 <script type="text/javascript">
 (function(l) {
+if (navigator.globalPrivacyControl === true) return;
 if (!l){window.lintrk = function(a,b){window.lintrk.q.push([a,b])};
 window.lintrk.q=[]}
 var s = document.getElementsByTagName("script")[0];

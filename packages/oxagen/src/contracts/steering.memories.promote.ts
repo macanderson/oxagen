@@ -1,6 +1,6 @@
 /**
  * promote_memories: a person's draft steering records, from the memories
- * they selected (memory-collection spec, Promotion; ADR-206, ADR-245).
+ * they selected (memory-collection spec, Promotion; ADR-206, ADR-248).
  *
  * Each draft cites its memories in `provenance.memories`. The drafts join the
  * open memory PR on its `memory/<date>` branch as one commit, or, when no

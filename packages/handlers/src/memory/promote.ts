@@ -1,6 +1,6 @@
 // promote.ts: a person's draft steering records, from the memories they
 // selected, onto a memory PR (memory-collection spec, Promotion; ADR-206,
-// ADR-245).
+// ADR-248).
 //
 // The drafts take the curator's path to the steering repo. They join the
 // newest open memory PR as one commit on its branch, or, when none is open,
