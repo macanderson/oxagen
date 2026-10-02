@@ -2542,7 +2542,8 @@
       "surfaces": [
         "api",
         "mcp",
-        "cli"
+        "cli",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -3556,7 +3557,8 @@
       "surfaces": [
         "api",
         "mcp",
-        "cli"
+        "cli",
+        "agent"
       ],
       "component": null,
       "produces": [],
@@ -4037,7 +4039,8 @@
       "surfaces": [
         "api",
         "mcp",
-        "cli"
+        "cli",
+        "agent"
       ],
       "component": null,
       "produces": [],

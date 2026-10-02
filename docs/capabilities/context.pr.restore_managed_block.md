@@ -2,7 +2,7 @@
 
 Put Oxagen's managed block back in `AGENTS.md`, `CLAUDE.md`, or `README.md` on an open steering PR's branch, as one commit (#4518). The steering PR panel offers it as Restore block when the `owned` check finds a changed block. The six checks then run again on the new commit.
 
-**Surfaces:** api, mcp, cli
+**Surfaces:** api, mcp, cli, agent
 
 ## Mode
 
@@ -16,7 +16,7 @@ Put Oxagen's managed block back in `AGENTS.md`, `CLAUDE.md`, or `README.md` on a
 - App: Steering, the steering PR panel, Restore block beside a drifted managed block
 - Authentication: org Owner or Admin, or workspace Owner or Member
 - Not billed (`noBillingGate: true`), IAM default-deny, medium sensitivity
-- Not on the agent surface.
+- Agent: Stella finds it with `search_tools` and loads it with `load_tools`. Each call waits for a person's approval (`riskLevel: medium`).
 
 ## Managed blocks
 

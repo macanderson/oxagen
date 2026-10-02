@@ -2316,6 +2316,7 @@
       "name": "list_code_repository_findings",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "cli",
         "mcp"
@@ -3240,6 +3241,7 @@
       "name": "promote_instruction_to_steering",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "cli",
         "mcp"
@@ -3678,6 +3680,7 @@
       "name": "restore_managed_block",
       "reads": [],
       "surfaces": [
+        "agent",
         "api",
         "cli",
         "mcp"

@@ -86,11 +86,12 @@ export const codeRepositoryFindingsList = registerCapability({
   description:
     "List the instruction-file statements in the workspace's linked code repositories that repeat or contradict an active steering record. The Oxagen check on each pull request stores the statements it flags, and this read compares them with today's records, so a statement that no longer matches any record is left out. Each finding names its file, line, pull request, and the record it matches.",
   mode: "sync",
-  surfaces: ["api", "mcp", "cli"],
+  surfaces: ["api", "mcp", "cli", "agent"],
   layers: ["schema", "api", "mcp", "cli", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
   mutates: false,
+  agent: { requiresApproval: false, riskLevel: "low", category: "governance" },
   sensitivity: "low",
   defaultEffect: "deny",
   defaultRoles: {

@@ -1005,10 +1005,11 @@ describe("listCodeRepositoryFindings", () => {
 
   it("carries the handler's role refusal as denied (negative)", async () => {
     invoke.mockRejectedValue({ code: "forbidden", reason: "role_not_held" });
+    // A denial names the catalog permission it lacked, as every read's does.
     expect(await listCodeRepositoryFindings("acme", "core-platform")).toEqual({
       ok: false,
       reason: "denied",
-      code: "role_not_held",
+      code: "repository.read",
     });
   });
 });

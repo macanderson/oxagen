@@ -28,7 +28,7 @@ export const contextPrRestoreManagedBlock = registerCapability({
   description:
     "Restore the Oxagen managed block in AGENTS.md, CLAUDE.md, or README.md on an open steering PR's branch, as one commit, from the production branch, keeping every line outside the block. Runs the six checks again on the new commit. Refused when the block already matches the production branch.",
   mode: "sync",
-  surfaces: ["api", "mcp", "cli"],
+  surfaces: ["api", "mcp", "cli", "agent"],
   layers: ["schema", "api", "mcp", "cli", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,

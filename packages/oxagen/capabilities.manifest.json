@@ -2254,7 +2254,8 @@
       "surfaces": [
         "api",
         "mcp",
-        "cli"
+        "cli",
+        "agent"
       ],
       "layers": {
         "schema": true,
@@ -4899,7 +4900,8 @@
       "surfaces": [
         "api",
         "mcp",
-        "cli"
+        "cli",
+        "agent"
       ],
       "layers": {
         "schema": true,
@@ -5008,7 +5010,8 @@
       "surfaces": [
         "api",
         "mcp",
-        "cli"
+        "cli",
+        "agent"
       ],
       "layers": {
         "schema": true,

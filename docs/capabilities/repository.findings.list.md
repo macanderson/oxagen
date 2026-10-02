@@ -2,7 +2,7 @@
 
 List the instruction-file statements in the workspace's linked code repositories that repeat or contradict an active steering record. The Repositories page shows them in its Instruction files section (#4518, [ADR-263](../adr/ADR-263-code-repository-findings-are-stored-when-the-check-runs.md)). It writes nothing and runs no model.
 
-**Surfaces:** api, mcp, cli
+**Surfaces:** api, mcp, cli, agent
 
 ## Surface
 
@@ -12,7 +12,7 @@ List the instruction-file statements in the workspace's linked code repositories
 - App: Repositories, the Instruction files section
 - Authentication: org Owner or Admin, or workspace Owner, Member, or Viewer
 - Billing: `noBillingGate: true`
-- Not on the agent surface.
+- Agent: Stella finds it with `search_tools` and loads it with `load_tools`. It reads only, so it runs without approval.
 
 ## Input
 

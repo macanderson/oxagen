@@ -27,7 +27,7 @@ export const instructionPromote = registerCapability({
   description:
     "Propose a new version of the steering record an instruction-file statement contradicts, with the statement as its text, and open the proposal's steering PR. Takes a finding id from list_code_repository_findings. Refused for a repeat, for a statement that matches no record now, and while another PR is open on the record. Nothing steers until the PR merges.",
   mode: "sync",
-  surfaces: ["api", "mcp", "cli"],
+  surfaces: ["api", "mcp", "cli", "agent"],
   layers: ["schema", "api", "mcp", "cli", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
