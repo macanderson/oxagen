@@ -1,8 +1,9 @@
 /**
  * The host's HTTPS client to the control plane (spec section 3.1 steps 3
- * and 4; section 7.4). Three machine-to-machine calls, each authenticated by
- * the host API key and validated against the wire schemas. `fetch` is
- * injected so tests run against a fake control plane.
+ * and 4; section 7.4). Machine-to-machine calls, each authenticated by the
+ * host API key and validated against the wire schemas: ingest, bundle, and
+ * the command poll, plus the claim and refusal of a work order (ADR-250).
+ * `fetch` is injected so tests run against a fake control plane.
  */
 import {
   type BundleResponse,
@@ -16,6 +17,12 @@ import {
   TACHO_BATCH_SCHEMA,
   TACHO_COMMANDS_SCHEMA,
   type TachoBatch,
+  WORK_ORDER_CLAIM_PATH,
+  WORK_ORDER_REJECT_PATH,
+  type WorkOrderClaimResponse,
+  workOrderClaimResponseSchema,
+  type WorkOrderRejectResponse,
+  workOrderRejectResponseSchema,
 } from "../wire";
 
 export type FetchLike = (
@@ -133,8 +140,32 @@ export class ControlUnreachable extends Error {
   }
 }
 
+/**
+ * The work order endpoints for a host whose API is at `apiUrl`. The signed
+ * enrollment claims name only ingest, bundle, and commands, so these come
+ * from the API URL, the way the memory paths do.
+ */
+export function workOrderEndpointsFor(apiUrl: string): {
+  workOrderClaim: string;
+  workOrderReject: string;
+} {
+  const base = apiUrl.replace(/\/+$/, "");
+  return {
+    workOrderClaim: `${base}${WORK_ORDER_CLAIM_PATH}`,
+    workOrderReject: `${base}${WORK_ORDER_REJECT_PATH}`,
+  };
+}
+
 export interface ControlClientOptions {
-  endpoints: { ingest: string; bundle: string; commands: string };
+  endpoints: {
+    ingest: string;
+    bundle: string;
+    commands: string;
+    /** `claim_work_order`. Absent, `claimWorkOrder` throws. */
+    workOrderClaim?: string;
+    /** `reject_work_order`. Absent, `rejectWorkOrder` throws. */
+    workOrderReject?: string;
+  };
   apiKey: string;
   hostEnrollmentId: string;
   fetch?: FetchLike;
@@ -175,6 +206,17 @@ export interface ControlClient {
     acknowledgements?: CommandAcknowledgement[],
     daemon?: Omit<DaemonHealth, "spool_oldest_at" | "bundle_etag">,
   ) => Promise<CommandsResponse>;
+  /**
+   * Claim a work order for this host before any run starts (ADR-250). The
+   * answer carries the run's first prompt. A refused claim throws
+   * `ControlError`, whose body holds the server's message.
+   */
+  claimWorkOrder: (workOrderId: string) => Promise<WorkOrderClaimResponse>;
+  /** Refuse a work order this host cannot start, with the reason. */
+  rejectWorkOrder: (
+    workOrderId: string,
+    reason: string,
+  ) => Promise<WorkOrderRejectResponse>;
 }
 
 export function createControlClient(
@@ -238,6 +280,12 @@ export function createControlClient(
     }
   }
 
+  function endpoint(url: string | undefined, name: string): string {
+    if (url === undefined)
+      throw new Error(`the control client has no ${name} endpoint`);
+    return url;
+  }
+
   return {
     ingest: async (events, daemon, bodies) =>
       ingestResponseSchema.parse(
@@ -269,5 +317,49 @@ export function createControlClient(
           ...(daemon !== undefined ? { daemon } : {}),
         }),
       ),
+    claimWorkOrder: async (workOrderId) =>
+      workOrderClaimResponseSchema.parse(
+        await post(
+          endpoint(options.endpoints.workOrderClaim, "work order claim"),
+          {
+            host_enrollment_id: options.hostEnrollmentId,
+            work_order_id: workOrderId,
+          },
+        ),
+      ),
+    rejectWorkOrder: async (workOrderId, reason) =>
+      workOrderRejectResponseSchema.parse(
+        await post(
+          endpoint(options.endpoints.workOrderReject, "work order refusal"),
+          {
+            host_enrollment_id: options.hostEnrollmentId,
+            work_order_id: workOrderId,
+            reason,
+          },
+        ),
+      ),
   };
+}
+
+/**
+ * The message a control plane error carries, for a person to read: the
+ * `error.message` of the API's error body, or the status when the body has
+ * none.
+ */
+export function controlErrorMessage(error: ControlError): string {
+  try {
+    const body: unknown = JSON.parse(error.body);
+    if (typeof body === "object" && body !== null) {
+      const inner = (body as Record<string, unknown>)["error"];
+      if (typeof inner === "object" && inner !== null) {
+        const message = (inner as Record<string, unknown>)["message"];
+        if (typeof message === "string" && message.length > 0) return message;
+      }
+      const message = (body as Record<string, unknown>)["message"];
+      if (typeof message === "string" && message.length > 0) return message;
+    }
+  } catch {
+    // Not JSON: fall through to the status.
+  }
+  return `Oxagen answered ${error.status}.`;
 }
