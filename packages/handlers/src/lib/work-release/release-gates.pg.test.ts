@@ -274,8 +274,37 @@ describe.skipIf(!enabled)("Phase 1 release gates against Postgres", { timeout: 3
           status: "connected",
           deliveryConfig: { installationId: INSTALLATION, owner: "aintel-test", repo: "work-intake" },
         })
-        .returning({ publicId: schema.sourceConnections.publicId });
+        .returning({ id: schema.sourceConnections.id, publicId: schema.sourceConnections.publicId });
       connectionPublicId = connection!.publicId;
+
+      // A collector reads only repositories the workspace links (#5254), so link the recorded one.
+      const [owner, name] = REPOSITORY.split("/") as [string, string];
+      const providerRepositoryId = `p106-${tag}`;
+      const [binding] = await tx
+        .insert(schema.repositoryBindings)
+        .values({
+          orgId,
+          workspaceId: gate.workspaceId,
+          connectionId: connection!.id,
+          provider: "github",
+          providerRepositoryId,
+          providerOwner: owner,
+          providerName: name,
+          providerFullName: REPOSITORY,
+          configuredDefaultRef: "main",
+          observedAt: new Date(),
+          version: 1,
+        })
+        .returning({ id: schema.repositoryBindings.id });
+      await tx.insert(schema.repositoryBindingHeads).values({
+        orgId,
+        workspaceId: gate.workspaceId,
+        connectionId: connection!.id,
+        provider: "github",
+        providerRepositoryId,
+        currentBindingId: binding!.id,
+        role: "linked",
+      });
 
       // The workspace's priorities record, as a merged steering record publishes it.
       const statement = "Rank each item P0 to P3.\n1. A security hole is P0.\n2. A defect a customer can hit ranks P2.";
@@ -316,6 +345,9 @@ describe.skipIf(!enabled)("Phase 1 release gates against Postgres", { timeout: 3
       // A record names its active version, so the record goes first.
       await tx.delete(s.steeringRecords).where(eq(s.steeringRecords.orgId, orgId));
       await tx.delete(s.steeringRecordVersions).where(eq(s.steeringRecordVersions.orgId, orgId));
+      // A binding head names its binding, and both name the connection.
+      await tx.delete(s.repositoryBindingHeads).where(eq(s.repositoryBindingHeads.orgId, orgId));
+      await tx.delete(s.repositoryBindings).where(eq(s.repositoryBindings.orgId, orgId));
       await tx.delete(s.sourceConnections).where(eq(s.sourceConnections.orgId, orgId));
       await tx.delete(s.tachoControlCommands).where(eq(s.tachoControlCommands.orgId, orgId));
       await tx.delete(s.tachoSessions).where(eq(s.tachoSessions.orgId, orgId));
