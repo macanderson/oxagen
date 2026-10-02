@@ -12,8 +12,10 @@ import { eventClient } from "../event-client";
 import {
   checkEvent,
   githubCodeCheckRequests,
+  githubPullRequestClose,
   githubPullRequestHead,
   gitlabCodeCheckRequest,
+  gitlabMergeRequestClose,
   gitlabMergeRequestHead,
   linkedScopes,
   requestCodeRepoChecks,
@@ -107,6 +109,8 @@ describe("githubCodeCheckRequests", () => {
           installationId: 61200044,
           connectionId: null,
           key: `${PLATFORM}:github:771020341:318`,
+          closed: null,
+          mergeCommitSha: null,
         },
       },
       expect.objectContaining({
@@ -160,14 +164,8 @@ describe("githubCodeCheckRequests", () => {
     expect(events).toEqual([]);
   });
 
-  it("asks nothing for a closed pull request or a delivery with no installation (negative)", async () => {
+  it("asks nothing for a delivery with no installation (negative)", async () => {
     const deps = heads({ "github:771020341": [linked(ORG, PLATFORM)] });
-    await expect(
-      githubCodeCheckRequests(
-        { body: fixture("github-pull-request-closed"), installationId: "61200044" },
-        deps,
-      ),
-    ).resolves.toEqual([]);
     await expect(
       githubCodeCheckRequests(
         { body: fixture("github-pull-request-opened"), installationId: null },
@@ -175,6 +173,41 @@ describe("githubCodeCheckRequests", () => {
       ),
     ).resolves.toEqual([]);
     expect(deps.sharedHeads).not.toHaveBeenCalled();
+  });
+
+  it("asks each linking workspace to settle a merged pull request's findings, with the merge commit (ADR-263)", async () => {
+    const deps = heads({ "github:771020341": [linked(ORG, PLATFORM)] });
+    const events = await githubCodeCheckRequests(
+      { body: fixture("github-pull-request-closed"), installationId: "61200044" },
+      deps,
+    );
+    expect(events).toHaveLength(1);
+    expect(events[0]?.id).toBe(
+      `code-repo-check:${PLATFORM}:github:771020341:318:merged:c47a0e9d1f2b3c4d5e6f708192a3b4c5d6e7f809`,
+    );
+    expect(events[0]?.data).toMatchObject({
+      closed: "merged",
+      mergeCommitSha: "5c4b3a2918f7e6d5c4b3a2918f7e6d5c4b3a2918",
+      headSha: "c47a0e9d1f2b3c4d5e6f708192a3b4c5d6e7f809",
+      key: `${PLATFORM}:github:771020341:318`,
+    });
+  });
+});
+
+describe("githubPullRequestClose", () => {
+  it("reads a pull request closed without merging, with no merge commit", () => {
+    const body = fixture("github-pull-request-closed");
+    const pr = body.pull_request as Record<string, unknown>;
+    const closed = githubPullRequestClose({
+      ...body,
+      pull_request: { ...pr, merged: false, merge_commit_sha: "5c4b3a29" },
+    });
+    expect(closed?.close).toEqual({ closed: "unmerged", mergeCommitSha: null });
+    expect(closed?.head.number).toBe(318);
+  });
+
+  it("reads nothing from an opened pull request (negative)", () => {
+    expect(githubPullRequestClose(fixture("github-pull-request-opened"))).toBeNull();
   });
 });
 
@@ -234,6 +267,28 @@ describe("the GitLab merge request request", () => {
     expect(gitlabMergeRequestHead({ ...event, state: "merged" }, body)).toBeNull();
     expect(gitlabMergeRequestHead({ ...event, lastCommitSha: null }, body)).toBeNull();
     expect(gitlabMergeRequestHead({ ...event, action: "approved" }, body)).toBeNull();
+  });
+
+  it("asks the workspace to settle a merge request that merged or closed (ADR-263)", async () => {
+    const merged = { ...event, state: "merged", action: "merge", mergeCommitSha: "7a6b5c4d" };
+    expect(gitlabMergeRequestClose(merged, body)?.close).toEqual({
+      closed: "merged",
+      mergeCommitSha: "7a6b5c4d",
+    });
+    const request = await gitlabCodeCheckRequest(
+      { scope, connectionId: CONNECTION_ID, event: merged, body },
+      heads({ "gitlab:4242": [linked(ORG, PLATFORM)] }),
+    );
+    expect(request?.data).toMatchObject({ closed: "merged", mergeCommitSha: "7a6b5c4d" });
+    expect(
+      gitlabMergeRequestClose({ ...event, state: "closed", action: "close" }, body)?.close,
+    ).toEqual({ closed: "unmerged", mergeCommitSha: null });
+  });
+
+  it("settles nothing on a later update to a merged merge request (negative)", () => {
+    expect(
+      gitlabMergeRequestClose({ ...event, state: "merged", action: "update" }, body),
+    ).toBeNull();
   });
 });
 

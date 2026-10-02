@@ -44,8 +44,10 @@ const RELEASE = { name: "a-intel.core.release-bot", operator: "platform-team", r
 const OTHER = { name: "a-intel.core.other", operator: "platform-team", runtime: "mac-02", harness: "codex" };
 
 /** A published workspace version with these agents. Only the fields the resolver reads are real. */
-function bundle(agents: object[], workspace: string | undefined = "core-platform"): Bundle {
-  return { workspace, agents } as unknown as Bundle;
+// `null` is an organization repository's version, which has no workspace slug. A default
+// parameter cannot stand for it: passing `undefined` would apply the default.
+function bundle(agents: object[], workspace: string | null = "core-platform"): Bundle {
+  return { workspace: workspace ?? undefined, agents } as unknown as Bundle;
 }
 
 interface Options {
@@ -111,7 +113,7 @@ describe("proposingAgentOf", () => {
   });
 
   it("names no agent from an organization repository's version", async () => {
-    const { read } = sources({ current: bundle([REVIEWER], undefined) });
+    const { read } = sources({ current: bundle([REVIEWER], null) });
     expect(await proposingAgentOf(context(), read)).toBeNull();
   });
 

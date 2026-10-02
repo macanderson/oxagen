@@ -1,9 +1,8 @@
 // @vitest-environment jsdom
-// The Repositories page's instruction files section (#4518). While no
-// capability backs the read, it names `list_code_repository_findings` and
-// lists nothing. Once the read answers, each code repository with a drifted
-// file lists it with Promote to steering, and a workspace with no drifted file
-// draws no section.
+// The Repositories page's instruction files section (#4518, ADR-263). It
+// reads `list_code_repository_findings`: each linked code repository with a
+// statement that repeats or contradicts a steering record lists it, a read
+// that fails says why, and a workspace with no finding draws no section.
 import { cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { expectNoAxe } from "@/test/expect-no-axe";
@@ -58,32 +57,53 @@ afterEach(async () => {
   }
 });
 
+const FINDING = {
+  id: "crf_contra1",
+  path: "AGENTS.md",
+  line: 12,
+  statement: "Always push to main.",
+  kind: "contradiction" as const,
+  record: "Never push to main",
+  pullRequest: { number: 318, url: "https://github.com/acme/api/pull/318", merged: false },
+  proposalId: null,
+};
+
 describe("the instruction files section", () => {
-  it("names the missing capability while no read backs it", async () => {
+  it("says why when the read fails, and lists nothing (negative)", async () => {
     await section({
-      kind: "not_backed",
-      capability: "list_code_repository_findings",
+      kind: "failed",
+      failure: { ok: false, reason: "denied", code: "role_not_held" },
     });
     expect(
       screen.getByRole("heading", { name: "Instruction files" }),
     ).toBeInTheDocument();
-    const unavailable = screen.getByTestId("instruction-findings-unavailable");
-    expect(unavailable).toHaveAttribute(
-      "data-capability",
-      "list_code_repository_findings",
+    expect(screen.getByTestId("instruction-findings-failure")).toHaveAttribute(
+      "role",
+      "alert",
     );
-    expect(unavailable).toHaveTextContent("list_code_repository_findings");
     expect(screen.queryByTestId("instruction-drift")).toBeNull();
+    expect(
+      document.querySelector("[data-not-backed]"),
+    ).toBeNull();
   });
 
-  it("lists each drifted file under its code repository with Promote to steering", async () => {
+  it("lists each finding under its code repository, with Promote to steering on a contradiction", async () => {
     await section({
       kind: "ok",
       repositories: [
         {
           repositoryId: "rpb_link01",
           fullName: "acme/api",
-          findings: [{ path: "AGENTS.md" }, { path: "CLAUDE.md" }],
+          findings: [
+            FINDING,
+            {
+              ...FINDING,
+              id: "crf_repeat1",
+              path: "CLAUDE.md",
+              line: 3,
+              kind: "repeat",
+            },
+          ],
         },
         { repositoryId: "rpb_link02", fullName: "acme/web", findings: [] },
       ],
@@ -95,6 +115,7 @@ describe("the instruction files section", () => {
     const [api] = repositories;
     if (api === undefined) throw new Error("no repository row");
     expect(api).toHaveTextContent("acme/api");
+    expect(api.dataset.repository).toBe("rpb_link01");
     expect(
       within(api)
         .getAllByTestId("instruction-drift-finding")
@@ -102,11 +123,11 @@ describe("the instruction files section", () => {
     ).toEqual(["AGENTS.md", "CLAUDE.md"]);
     expect(
       within(api).getAllByRole("button", { name: "Promote to steering" }),
-    ).toHaveLength(2);
+    ).toHaveLength(1);
     expect(screen.queryByText("acme/web")).toBeNull();
   });
 
-  it("draws nothing when the read answers and no file drifted (negative)", async () => {
+  it("draws nothing when the read answers and no statement differs (negative)", async () => {
     const { container } = await section({
       kind: "ok",
       repositories: [

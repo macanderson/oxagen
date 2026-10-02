@@ -297,6 +297,33 @@
         }
       ]
     },
+    "list_code_repository_findings": {
+      "route": "/[org]/[ws]/repositories",
+      "page": "apps/app/src/app/[org]/[ws]/repositories/[[...tab]]/page.tsx",
+      "entry": "Repositories › Instruction files: each linked code repository's statements that repeat or contradict a steering record, with the file, line, record and pull request (features/repositories/instruction-findings.tsx, features/repositories/instruction-findings-read.ts, features/repositories/actions.ts)",
+      "testid": "instruction-findings",
+      "proof": "apps/app/src/features/repositories/instruction-findings.test.tsx",
+      "verifiedAt": "2026-10-02",
+      "verifiedBy": "s7-instruction-files (#4518)"
+    },
+    "promote_instruction_to_steering": {
+      "route": "/[org]/[ws]/repositories",
+      "page": "apps/app/src/app/[org]/[ws]/repositories/[[...tab]]/page.tsx",
+      "entry": "Repositories › Instruction files › Promote to steering on a contradiction, which opens a steering proposal and its steering PR and names the proposal (features/repositories/instruction-drift.tsx, features/repositories/actions.ts)",
+      "testid": "instruction-drift-promote",
+      "proof": "apps/app/src/features/repositories/instruction-drift.test.tsx",
+      "verifiedAt": "2026-10-02",
+      "verifiedBy": "s7-instruction-files (#4518)"
+    },
+    "restore_managed_block": {
+      "route": "/[org]/[ws]/steering",
+      "page": "apps/app/src/app/[org]/[ws]/steering/page.tsx",
+      "entry": "/[org]/[ws]/steering: the Restore block button under a drifted managed block on an open steering PR (features/steering/write-controls.tsx, shown by context-pr-panel.tsx)",
+      "testid": "restore-managed-block",
+      "proof": "apps/app/src/features/steering/write-controls.test.tsx",
+      "verifiedAt": "2026-10-02",
+      "verifiedBy": "s7-instruction-files (#4518)"
+    },
     "seal_run": {
       "route": "/[org]/[ws]/runs/[run]",
       "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",

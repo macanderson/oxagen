@@ -33,7 +33,11 @@ import { contextProposalList } from "@oxagen/oxagen/contracts/context.proposal.l
 import { contextPrGet } from "@oxagen/oxagen/contracts/context.pr.get";
 import { contextPrMerge } from "@oxagen/oxagen/contracts/context.pr.merge";
 import { contextProposalDismiss } from "@oxagen/oxagen/contracts/context.proposal.dismiss";
-import { z } from "zod";
+import {
+  codeRepositoryFindingsList,
+  type CodeRepositoryFindingsListOutput,
+} from "@oxagen/oxagen/contracts/repository.findings.list";
+import { instructionPromote } from "@oxagen/oxagen/contracts/repository.instruction.promote";
 import { type ContextPr, isSteeringPrKind } from "@/data/contracts/steering";
 import type {
   AttachedInstallation,
@@ -530,35 +534,46 @@ export async function closeRepositoryChange(
 }
 
 /**
- * `promote_instruction_to_steering` as the page calls it before the platform
- * registers it (#4518). The kernel answers `tool_not_registered` today, and
- * the same call reaches the handler once the capability lands. The schemas
- * are the proposed shapes, and the platform contract replaces them.
+ * The instruction-file statements in the workspace's linked code repositories
+ * that repeat or contradict a steering record (`list_code_repository_findings`,
+ * ADR-263). The Oxagen check stores them on each pull request, and the read
+ * compares them with today's records.
  */
-const promoteInstructionContract = {
-  name: "promote_instruction_to_steering",
-  input: z
-    .object({ repository_id: z.string().min(1), path: z.string().min(1) })
-    .strict(),
-  output: z.object({ proposal_id: z.string().min(1) }),
-};
+export async function listCodeRepositoryFindings(
+  org: string,
+  ws: string,
+): Promise<ActionResult<CodeRepositoryFindingsListOutput>> {
+  const ctx = await requireViewer(org, ws);
+  const read = await kernelRead(ctx, {
+    contract: codeRepositoryFindingsList,
+    input: {},
+    page: "repositories",
+  });
+  return readToActionResult(read);
+}
 
 /**
- * Promote an instruction file that drifted in a code repository into the
- * steering repo. The platform opens a steering proposal from the file, and
- * the answer names it.
+ * Promote one statement that contradicts a steering record
+ * (`promote_instruction_to_steering`). The platform proposes a new version of
+ * the record with the statement as its text and opens the proposal's
+ * steering PR. The answer names the proposal and the PR.
  */
 export async function promoteInstructionToSteering(
   org: string,
   ws: string,
-  input: { repositoryId: string; path: string },
-): Promise<ActionResult<{ proposalId: string }>> {
+  findingId: string,
+): Promise<ActionResult<{ proposalId: string; pullRequestUrl: string | null }>> {
   const ctx = await requireViewer(org, ws);
-  const result = await kernelWrite(ctx, promoteInstructionContract, {
-    repository_id: input.repositoryId,
-    path: input.path,
+  const result = await kernelWrite(ctx, instructionPromote, {
+    finding_id: findingId,
   });
   return result.ok
-    ? { ok: true, value: { proposalId: result.value.proposal_id } }
+    ? {
+        ok: true,
+        value: {
+          proposalId: result.value.proposal_id,
+          pullRequestUrl: result.value.pull_request?.url ?? null,
+        },
+      }
     : result;
 }

@@ -461,6 +461,25 @@ describe("Restore block", () => {
       "AGENTS.md",
     );
   });
+
+  it("names the refusal when the block already matches, and stays on the page (negative)", async () => {
+    restoreManagedBlock.mockResolvedValue({
+      ok: false,
+      reason: "conflict",
+      code: "block_intact",
+    });
+    render(<RestoreManagedBlock {...TARGET} path="AGENTS.md" />, {
+      wrapper: intl,
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Restore block" }));
+    expect(
+      await screen.findByText(
+        "The managed block already matches the production branch. Nothing was changed.",
+      ),
+    ).toBeInTheDocument();
+    expect(router.replace).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Restore block" })).toBeEnabled();
+  });
 });
 
 describe("Revert pull request", () => {
@@ -673,6 +692,22 @@ describe("the sentence for each refusal", () => {
     [
       { reason: "conflict", code: "lineage_pr_open" },
       "Another pull request is already open for this lineage. Merge or close it first.",
+    ],
+    [
+      { reason: "conflict", code: "block_intact" },
+      "The managed block already matches the production branch.",
+    ],
+    [
+      { reason: "conflict", code: "no_managed_block" },
+      "holds no managed block in this file, so there is nothing to restore.",
+    ],
+    [
+      { reason: "conflict", code: "no_managed_blocks" },
+      "keeps its steering under .oxagen/, which holds no managed blocks.",
+    ],
+    [
+      { reason: "conflict", code: "pr_not_open" },
+      "This proposal has no open steering PR. Open it first.",
     ],
     [
       { reason: "conflict", code: "not_merged" },
