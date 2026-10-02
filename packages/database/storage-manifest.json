@@ -3877,6 +3877,16 @@
       "writes": []
     },
     {
+      "domain": "tool",
+      "name": "run_studio_selection",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "agent",
       "name": "save_memory",
       "reads": [],

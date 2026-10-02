@@ -1,13 +1,14 @@
 #!/usr/bin/env node
 /**
  * Drive the built desktop app through tauri-driver and run the panel actions
- * that need no Oxagen session: the scan in setup step 3 (`tacho detect`),
- * Sign out (`oxagen logout`), the start of Sign in (`oxagen login
- * --browser`), and the machine read the poll makes (`tacho status`). Each one
- * reaches its sidecar through `run_sidecar` and the allowlist in
- * `src-tauri/src/sidecar.rs`, which #4318 item 6 asks to see working in a
- * built app. The run also checks that the page cannot start a command off
- * that list, or spawn a process through the shell plugin.
+ * that need no Oxagen session: the scan in setup step 3 (`oxagen agent
+ * detect`), Sign out (`oxagen logout`), the start of Sign in (`oxagen login
+ * --browser`), and the machine read the poll makes (`oxagen agent status`).
+ * Each one reaches the `oxagen` sidecar through `run_sidecar` and the
+ * allowlist in `src-tauri/src/sidecar.rs`, which #4318 item 6 asks to see
+ * working in a built app. The run also checks that the page cannot start a
+ * command off that list, start the bundled `tacho` at all (#4891), or spawn
+ * a process through the shell plugin.
  *
  * Linux only: tauri-driver drives WebKitWebDriver there. The app runs in a
  * scratch HOME with a stand-in control plane on 127.0.0.1 that answers the
@@ -193,7 +194,7 @@ async function run() {
 
   await ipcChecks();
 
-  // `tacho detect --json`: the scan that opens step 3.
+  // `oxagen agent detect --json`: the scan that opens step 3.
   await click("Continue");
   await until(
     "step 3 lists the scan's agents",
@@ -208,7 +209,7 @@ async function run() {
   const text = await pageText();
   if (text.includes("Could not scan for agents"))
     throw new Error("the scan failed");
-  record("tacho detect ran", { rows });
+  record("oxagen agent detect ran", { rows });
   await capture("step-3-scan");
 
   // `oxagen logout`: Sign out, from step 2.
@@ -245,26 +246,35 @@ async function run() {
 }
 
 /**
- * The same IPC the page's bridge uses: `tacho status` runs and reports, a
- * command off the allowlist is refused, and the shell plugin spawns nothing.
+ * The same IPC the page's bridge uses: `oxagen agent status` runs and
+ * reports, a command off the allowlist is refused, the bundled `tacho`
+ * cannot be started, and the shell plugin spawns nothing.
  */
 async function ipcChecks() {
-  const status = await invokeSidecar("tacho", ["status", "--json"]);
-  if (!status.ok) throw new Error(`tacho status: ${status.error}`);
+  const status = await invokeSidecar("oxagen", ["agent", "status", "--json"]);
+  if (!status.ok) throw new Error(`oxagen agent status: ${status.error}`);
   // Not enrolled here, so it prints `{"enrolled": false}` and exits 1. The
   // page's `tachoStatus` reads the document whatever the exit code.
   const report = JSON.parse(status.stdout.join("\n"));
   if (report.enrolled !== false)
-    throw new Error(`tacho status answered ${JSON.stringify(status)}`);
-  record("tacho status ran", { code: status.code, report });
+    throw new Error(`oxagen agent status answered ${JSON.stringify(status)}`);
+  record("oxagen agent status ran", { code: status.code, report });
 
-  const refused = await invokeSidecar("tacho", ["daemon"]);
+  const refused = await invokeSidecar("oxagen", ["daemon"]);
   if (
     refused.ok ||
-    !refused.error.includes("Oxagen does not run `tacho daemon`")
+    !refused.error.includes("Oxagen does not run `oxagen daemon`")
   )
-    throw new Error(`tacho daemon was not refused: ${JSON.stringify(refused)}`);
-  record("tacho daemon refused", { error: refused.error });
+    throw new Error(
+      `oxagen daemon was not refused: ${JSON.stringify(refused)}`,
+    );
+  record("oxagen daemon refused", { error: refused.error });
+
+  // #4891: `tacho` is not a sidecar the page may name, whatever the argv.
+  const tacho = await invokeSidecar("tacho", ["status", "--json"]);
+  if (tacho.ok)
+    throw new Error(`the page started tacho: ${JSON.stringify(tacho)}`);
+  record("tacho refused", { error: tacho.error });
 
   const spawned = await asyncScript(`
     const done = arguments[arguments.length - 1];

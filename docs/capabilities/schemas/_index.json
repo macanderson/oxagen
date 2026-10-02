@@ -4255,6 +4255,17 @@
       "consumes": []
     },
     {
+      "name": "run_studio_selection",
+      "domain": "tool",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "save_memory",
       "domain": "agent",
       "surfaces": [

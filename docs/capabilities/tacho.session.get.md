@@ -29,7 +29,7 @@ One session's flight-recorder index (`docs/specs/tacho/data-model.md` section 3)
 | `files` | object[] | paths touched with counts and seq range |
 | `commands` | object[] | shell commands with decision and rule |
 | `incidents` | object[] | |
-| `checkpointCount` | integer | |
+| `checkpointCount` | integer | the session's signed checkpoints in `tacho.checkpoints`. Ingest stores one for each collector `checkpoint` frame whose device-key signature verifies against the host's enrolled key (ADR-260). Zero for a session recorded before ADR-260 shipped. `get_run_chain` lists them |
 
 The session projection does not name the person by address, and carries nothing
 derived from one. It carries the principals this deployment issued —

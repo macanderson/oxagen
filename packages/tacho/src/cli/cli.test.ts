@@ -4896,4 +4896,55 @@ describe("moving a machine off the tacho names (#4879)", () => {
     // A second run finds nothing left to move.
     expect(await moveOffTachoNames(after)).toEqual([]);
   });
+
+  // #4891: the desktop app's Re-apply is a bare enroll. The app ran it as the
+  // bundled `tacho enroll`, which put the hooks and the service back on the
+  // tacho names after every move the CLI made. It now runs `oxagen agent
+  // enroll`, whose runtime is the oxagen one.
+  it("re-applies an enrolled machine under the executable that runs the re-apply", async () => {
+    const legacy = deps();
+    const enrolled = await enroll(
+      {
+        token: "tok",
+        org: "acme",
+        workspace: "core",
+        apiUrl: "https://api.test",
+        harnesses: ["claude-code"],
+      },
+      legacy,
+    );
+    expect(enrolled.ok).toBe(true);
+    const host = readHostFile(legacy.paths.hostFile);
+    expect(host?.hook_command).toBe("node /opt/tacho/tacho-hook.mjs");
+
+    // The app's Re-apply: `oxagen agent enroll` with no flags.
+    const app = { ...legacy, runtime: OXAGEN_RUNTIME };
+    expect((await enroll({}, app)).ok).toBe(true);
+    expect(readHostFile(legacy.paths.hostFile)).toMatchObject({
+      host_enrollment_id: host?.host_enrollment_id,
+      hook_command: "/opt/oxagen/oxagen hook",
+      daemon_command: ["/opt/oxagen/oxagen", "daemon"],
+    });
+    expect(legacy.service.installed?.command).toEqual([
+      "/opt/oxagen/oxagen",
+      "daemon",
+    ]);
+    const ours = commandsIn(legacy.readSettings()).filter((command) =>
+      command.includes(`--enrollment ${TEST_ENROLLMENT}`),
+    );
+    expect(ours.length).toBeGreaterThan(0);
+    for (const command of ours)
+      expect(command).toContain("/opt/oxagen/oxagen hook");
+    // A re-apply mints nothing.
+    expect(
+      legacy.requests.filter((r) => r.url.endsWith("/tacho/enrollments")),
+    ).toHaveLength(1);
+
+    // The old Re-apply, the same bare enroll from the tacho executable, moves
+    // the machine back. The executable decides, so the app must run oxagen.
+    expect((await enroll({}, legacy)).ok).toBe(true);
+    expect(readHostFile(legacy.paths.hostFile)?.hook_command).toBe(
+      "node /opt/tacho/tacho-hook.mjs",
+    );
+  });
 });

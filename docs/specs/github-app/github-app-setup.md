@@ -534,8 +534,8 @@ After configuring an App and its env vars:
 6. **Webhook:** with the App's webhook pointed at `/webhooks/github/app`, push a commit (or open a
    PR) to a connected repo; confirm a 2xx delivery in the App's **Advanced → Recent Deliveries** and
    an `ingestion/entity.received` event in Inngest. (Records persist only for mapped record types.)
-7. **Steering:** as an organization Owner, connect GitHub from onboarding. Confirm the redirect
-   carries `steering=connected` and a row in `ingestion.oauth_accounts` has
+7. **Steering:** as an organization Owner, connect GitHub from onboarding. Confirm the browser
+   lands back on onboarding with `steering=connected` and a row in `ingestion.oauth_accounts` has
    `provider = 'github_steering'`.
 
 ---
@@ -603,13 +603,18 @@ Onboarding starts the connect at
   code.
 
 Both carry a state signed with purpose `steering`, and GitHub returns both to the app's one
-callback, `GET /oauth/github/callback`. The callback checks the signature and the purpose, and
-answers 400 to a state signed for anything else. For a steering state it records the installation
+callback, `GET /oauth/github/callback`. The callback checks the signature and the purpose. A state
+it can't use never ends on JSON (#5151). An expired steering state goes through the landing below
+with `code=state_expired`, and any other bad or foreign state goes to the result page with
+`code=state_invalid` and no `return_to`. For a steering state it records the installation
 id in the platform registry, exchanges the code with `GITHUB_APP_CLIENT_ID` and
 `GITHUB_APP_CLIENT_SECRET`, stores the token, and sends the provision event again for each scope
-that waits on a connection. It then redirects to `return_to` with `steering=connected`, or with
-`steering=error&code=<reason>` when a step after the state check fails. The start route ignores the
-retired `app` parameter. `GET /oauth/github/steering` is gone and answers 404.
+that waits on a connection. It then redirects to the app's landing, `/github/steering`, with
+`return_to` and `steering=connected`, or with `steering=error&code=<reason>` when a step after the
+state check fails. The landing sends a member of the organization on to `return_to` with the same
+query. A browser that can't open the organization, such as one signed in to another Oxagen account,
+gets a result page that says how the install ended, never the organization's 404 (#5151). The start
+route ignores the retired `app` parameter. `GET /oauth/github/steering` is gone and answers 404.
 
 Provisioning reads the owner's installations with that token (`GET /user/installations`) and makes
 one change with it: `PUT /user/installations/{installation_id}/repositories/{repository_id}`. That
@@ -792,7 +797,11 @@ one and how to refresh it.
 2. Connect GitHub steering for the test organization. Still signed in as the test account, open
    `https://app.oxagen.sh/api/v1/<oxagen org>/connections/steering/github?mode=install&return_to=/<oxagen org>`.
    On GitHub, install Oxagen Connect on `ox-product` with **All repositories**, and authorize it.
-   Oxagen returns to the organization with `steering=connected`. Don't start from Oxagen Connect's
+   Oxagen returns through `/github/steering`, which sends a member of the organization on to it with
+   `steering=connected`. A browser signed in to another Oxagen account gets the GitHub connection
+   result page instead, and the connection is saved all the same. The install link expires 10
+   minutes after it is made. An install that finishes later lands on the result page and saves
+   nothing, so start the connect again. Don't start from Oxagen Connect's
    public install page: the callback refuses an install that carries no steering state. Authorize
    with a GitHub account that owns `ox-product` and no other organization that has Oxagen Connect,
    so the token Oxagen stores sees only the test organization.

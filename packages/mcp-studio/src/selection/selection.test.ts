@@ -11,6 +11,7 @@ import type { SelectionTest } from "../contract/tests-files";
 import {
   runSelection,
   SELECTION_INSTRUCTIONS,
+  SELECTION_TASKS_MAX,
   SelectionRunError,
   selectionTools,
   type SelectionCase,
@@ -295,6 +296,38 @@ describe("runSelection", () => {
     expect(error).toMatchObject({
       code: "duplicate_tool",
       message: `Two tools are named ${REFUND}, so a reply could not say which one the model picked.`,
+    });
+    expect(fake.requests).toHaveLength(0);
+  });
+
+  it("asks every task when the run holds exactly the most tasks one run allows", async () => {
+    const cases: SelectionCase[] = Array.from({ length: SELECTION_TASKS_MAX }, (_, index) => ({
+      task: `Refund charge ch_${index}.`,
+      expect: REFUND,
+    }));
+    const fake = fakeModel(() => ({ tool: REFUND }));
+
+    const report = await runSelection(TOOLS, cases, fake.model);
+
+    expect(report.counts).toStrictEqual({ total: SELECTION_TASKS_MAX, hits: SELECTION_TASKS_MAX, misses: 0, malformed: 0, skipped: 0 });
+    expect(fake.requests).toHaveLength(SELECTION_TASKS_MAX);
+  });
+
+  it("refuses a run with more tasks than one run allows before it asks the model", async () => {
+    const cases: SelectionCase[] = Array.from({ length: SELECTION_TASKS_MAX + 1 }, (_, index) => ({
+      task: `Refund charge ch_${index}.`,
+      expect: REFUND,
+    }));
+    const fake = fakeModel(() => ({ tool: REFUND }));
+
+    const error = await rejection(runSelection(TOOLS, cases, fake.model));
+
+    expect(error).toBeInstanceOf(SelectionRunError);
+    expect(error).toMatchObject({
+      code: "too_many_tasks",
+      line: null,
+      completed: [],
+      message: `The run has ${SELECTION_TASKS_MAX + 1} tasks, and one run asks at most ${SELECTION_TASKS_MAX}, because each task is a billed model call. Remove tasks from tests/selection.jsonl until it holds ${SELECTION_TASKS_MAX} or fewer.`,
     });
     expect(fake.requests).toHaveLength(0);
   });

@@ -362,6 +362,32 @@ describe("get_run_chain", () => {
     });
   });
 
+  it("names the newest checkpoint's head as the root of a session still recording (#3406)", async () => {
+    // Ingest now writes the collector's signed checkpoints (ADR-260), so a
+    // live wrapped session has rows here. It has no seal yet, and its newest
+    // checkpoint is the latest commitment the host signed.
+    const older = `sha256:${"b".repeat(64)}`;
+    const newer = `sha256:${"c".repeat(64)}`;
+    const chain = tachoHarness(
+      [0, 1, 2, 3, 4, 5].map((seq) => tachoRow(seq)),
+      {
+        checkpoints: [
+          checkpoint({ seq: 1, eventCount: 2, chainHead: older }),
+          checkpoint({ seq: 4, eventCount: 5, chainHead: newer }),
+        ],
+        session: { outcome: "running", sealedAt: null, finalHash: null },
+      },
+    );
+    const out = await chain({ runId: TACHO_ID }, ctx());
+    expect(runChainGet.output.parse(out)).toEqual(out);
+    expect(out.merkleRoot).toBe(newer);
+    expect(out.seals).toEqual([]);
+    expect(out.checkpoints.map((row) => [row.seq, row.chainHead])).toEqual([
+      ["1", older],
+      ["4", newer],
+    ]);
+  });
+
   it("an observe-tier recording stops the ladder at inspect and says which rung refused", async () => {
     const chain = tachoHarness([tachoRow(0)], {
       session: { enforcementTier: "observe" },

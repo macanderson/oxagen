@@ -103,6 +103,69 @@ describe("request placement", () => {
     ).toEqual([[parent.key, ["Grep@300", "Task@720"]]]);
   });
 
+  // #4506 pass 4: a chain numbers its model calls and tool calls from one
+  // counter, so a call of a frame's own millisecond and chain is placed by
+  // seq, whatever order the store returns the frames in.
+  it("places a call of two model calls' own millisecond and chain by seq", () => {
+    const first = frame(2, { key: "first", seq: 10 });
+    const second = frame(2, { key: "second", seq: 12 });
+    const calls = [call(2, { seq: 11 }), call(2, { seq: 13, inputDigest: "x" })];
+    const expected = [
+      ["first", ["Read@11"]],
+      ["second", ["Read@13"]],
+    ];
+    expect(placed(input(calls, [second, first]))).toEqual(expected);
+    expect(placed(input(calls, [first, second]))).toEqual(expected);
+  });
+
+  // #4506 pass 5: the proxy records a subagent's model call on the root
+  // chain (ADR-168).
+  it("places a subagent's call under a root chain frame later than its own chain's", () => {
+    const own = frame(2, { key: "own", sessionUuid: CHILD });
+    const proxied = frame(5, { key: "proxied" });
+    expect(
+      placed(
+        input(
+          [call(3, { sessionUuid: CHILD }), call(6, { sessionUuid: CHILD })],
+          [own, proxied],
+        ),
+      ),
+    ).toEqual([
+      ["own", ["Read@3"]],
+      ["proxied", ["Read@6"]],
+    ]);
+  });
+
+  // #4506 pass 7: a model call that named no model bounds a request that
+  // nothing prices.
+  it("starts a request with no price at a model call that named no model", () => {
+    const priced = frame(2);
+    const modelless = frame(6, {
+      key: "modelless",
+      costMicros: null,
+      basis: null,
+      model: "",
+      noModel: true,
+    });
+    const i: DetectInput = {
+      ...input([call(3), call(8)], [priced]),
+      modellessFrames: new Map([[RUN_ID, [modelless]]]),
+    };
+    expect(placed(i)).toEqual([
+      [priced.key, ["Read@3"]],
+      ["modelless", ["Read@8"]],
+    ]);
+    const [view] = buildRunViews(i, new Map([[RUN_ID, RUN]]));
+    expect(view?.requests?.[1]?.frame).toMatchObject({
+      costMicros: null,
+      noModel: true,
+    });
+    // Without it, the call joins the priced request before it.
+    expect(placed(input([call(3), call(8)], [priced]))).toEqual([
+      [priced.key, ["Read@3", "Read@8"]],
+    ]);
+  });
+
   it("keeps a keep-alive out of placement when it shares an instant with the parent's request", () => {
     const parent = frame(2);
     const keepAlive = frame(2, {

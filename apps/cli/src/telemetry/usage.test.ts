@@ -53,6 +53,7 @@ beforeEach(() => {
   process.env = { ...ORIGINAL_ENV };
   delete process.env["DO_NOT_TRACK"];
   delete process.env["OXAGEN_TELEMETRY"];
+  delete process.env["OXAGEN_DESKTOP_SIDECAR"];
   setConfigReturn({});
   mockFetch.mockResolvedValue({ ok: true, status: 200 });
   // Most tests don't care about the one-time disclosure banner's exact
@@ -79,6 +80,11 @@ describe("isTelemetryEnabled — opt-out signals", () => {
     expect(isTelemetryEnabled()).toBe(false);
   });
 
+  it("OXAGEN_DESKTOP_SIDECAR=1, set on every oxagen the desktop app starts, disables telemetry", () => {
+    process.env["OXAGEN_DESKTOP_SIDECAR"] = "1";
+    expect(isTelemetryEnabled()).toBe(false);
+  });
+
   it("config telemetry.enabled=false (`oxagen telemetry off`) disables telemetry", () => {
     setConfigReturn({ telemetry: { enabled: false } });
     expect(isTelemetryEnabled()).toBe(false);
@@ -101,6 +107,21 @@ describe("opting out fully suppresses id generation and network I/O", () => {
     expect(mockFetch).not.toHaveBeenCalled();
     // No installId/disclosed write should occur — disabled means truly no-op.
     expect(mockWriteConfig).not.toHaveBeenCalled();
+  });
+
+  // #4891: the desktop app polls `oxagen agent status --json` every few
+  // seconds through its sidecar. Each poll was one usage event.
+  it("records no usage event for a desktop app status poll", async () => {
+    process.env["OXAGEN_DESKTOP_SIDECAR"] = "1";
+    for (let poll = 0; poll < 3; poll++)
+      await recordUsageEvent({
+        command: "agent",
+        durationMs: 40,
+        exitStatus: "success",
+      });
+    expect(mockFetch).not.toHaveBeenCalled();
+    expect(mockWriteConfig).not.toHaveBeenCalled();
+    expect(process.stderr.write).not.toHaveBeenCalled();
   });
 
   it("never sends or writes for verify, the offline auditor's check, even with telemetry on", async () => {
