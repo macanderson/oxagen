@@ -33,6 +33,10 @@
 // by the operator's spend, both counted by frame time. Unassigned spend
 // never adds to the unproductive figures (decision 3). Under pseudonyms the
 // done count stays, and the share and the evidence behind both are dropped.
+// The unassigned share takes its spend from the same split as its unassigned
+// part (./lib/work-order-metrics-reads.ts), so a run left unpriced nulls both
+// sides together. That spend equals the unproductive share's whole whenever
+// neither read left a run unpriced.
 import {
   countClaims,
   dayBounds,

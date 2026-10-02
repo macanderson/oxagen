@@ -50,31 +50,45 @@ Every figure carries the work orders (`workOrders`, `wo_…`) and the runs (`run
 
 Per operator, per week. Each covers the work orders the operator sent and the direct work orders Oxagen opened for the operator's runs. `metrics` holds one field per metric, named by its id in camel case.
 
-### done_work_orders
+### Done work orders
+
+Metric id: `done_work_orders`.
 
 Work orders whose definition of done passed. A work order counts in the week of its first passing check run. Only a work order sent from Oxagen has a definition of done, so a direct work order is never done.
 
-### cost_per_done
+### Cost per done
+
+Metric id: `cost_per_done`.
 
 Spend on work orders with a definition of done, divided by done work orders. Null when nothing was done.
 
-### unproductive_share
+### Unproductive share
+
+Metric id: `unproductive_share`.
 
 Unproductive spend divided by all spend, each frame counted by the time it ran. This is the guardrail on growth. Null under pseudonyms.
 
-### agents_in_flight
+### Agents in flight
+
+Metric id: `agents_in_flight`.
 
 Distinct agents with a run open, averaged over the week. Two runs of one agent at once count it once. For the current week, the average covers the part of the week that has passed.
 
-### leverage
+### Leverage
+
+Metric id: `leverage`.
 
 Done work orders divided by agents in flight. Null when no agent was in flight.
 
-### touches_per_done
+### Touches per done
+
+Metric id: `touches_per_done`.
 
 Interrupts divided by done work orders. `basis` is `interrupts`: no detector classifies corrective prompts yet, so the figure counts interrupts on every workspace. An interrupt is a prompt that stopped the agent mid-message, which only harnesses that report it record. Null when nothing was done.
 
-### unassigned_share
+### Unassigned share
+
+Metric id: `unassigned_share`.
 
 Unassigned spend divided by all spend. Null under pseudonyms.
 
@@ -82,37 +96,51 @@ Unassigned spend divided by all spend. Null under pseudonyms.
 
 For the work orders with a definition of done, grouped by operator, by agent, and for the workspace. `done` is the week's done work orders.
 
-### done_rate
+### Done rate
+
+Metric id: `done_rate`.
 
 Work orders closed in the week whose definition of done passed by the close, divided by work orders closed in the week.
 
-### first_pass_rate
+### First-pass rate
+
+Metric id: `first_pass_rate`.
 
 Done work orders with no failed check run before the passing one, divided by done work orders. A pending check run is not a failure.
 
-### cost_to_done
+### Cost to done
+
+Metric id: `cost_to_done`.
 
 Spend on every run of a work order that started by its passing check, averaged over done work orders. Each run adds its whole cost.
 
-### time_to_done
+### Time to done
+
+Metric id: `time_to_done`.
 
 Time from dispatch to the passing check, averaged over done work orders, in milliseconds.
 
-### rework_spend
+### Rework spend
+
+Metric id: `rework_spend`.
 
 Spend on runs that started after a failed check run, up to the passing one.
 
-### abandoned_spend
+### Abandoned spend
+
+Metric id: `abandoned_spend`.
 
 Spend on work orders closed in the week with no passing check run.
 
-### reopen_rate
+### Reopen rate
+
+Metric id: `reopen_rate`.
 
 Done work orders whose work item a person reopened, or that a person returned, within 14 days of the passing check, divided by done work orders. `pending` counts the done work orders whose 14 days have not ended.
 
 ## Unassigned spend
 
-### unassigned_spend
+Metric id: `unassigned_spend`.
 
 Spend on runs whose direct work order has no work item, with its tokens and its share of all spend. A direct work order attached to a work item within 24 hours of its first run counts as assigned from that run. One attached later counts as assigned from the attachment on, so the frames before the attachment stay unassigned. The 24-hour window is the same for every workspace.
 
