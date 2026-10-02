@@ -648,6 +648,71 @@ describe("pricedFrames", () => {
       ],
     );
   });
+
+  // #4506 pass 6. A frame of the same instant can become visible after a
+  // pass keyed the others, for example when a new chain widens the frame
+  // reads. A key built from the frame's place at that instant then moves,
+  // and an applied finding's claim no longer matches the frame a later
+  // detector claims. A key built from the chain and seq does not move.
+  it("keeps every frame's key when a later read adds a frame of the same instant that sorts first", () => {
+    const SUBAGENT = "00000000-0000-4000-8000-0000000000cc";
+    // A chain whose uuid sorts ahead of every chain the first read held.
+    const EARLY = "00000000-0000-4000-8000-000000000003";
+    const keyByCost = (rows: ModelCallFrameRow[]) =>
+      new Map(
+        pricedFrames([], SCOPE.orgId, rows, SESSION).map((f) => [
+          f.costMicros,
+          f.key,
+        ]),
+      );
+    const read = [
+      frameRow({ sessionUuid: SESSION, seq: 9 }),
+      frameRow({ sessionUuid: SUBAGENT, seq: 4, reportedCostMicros: "30000" }),
+    ];
+    const before = keyByCost(read);
+    expect([...before]).toEqual([
+      [15_000n, `2026-09-10T10:00:00.500000Z#${SESSION}:9`],
+      [30_000n, `2026-09-10T10:00:00.500000Z#${SUBAGENT}:4`],
+    ]);
+    // Each new frame sorts ahead of the first read's frames by its content,
+    // and by its chain or its seq.
+    const after = keyByCost([
+      frameRow({ sessionUuid: SESSION, seq: 2, reportedCostMicros: "1000" }),
+      frameRow({ sessionUuid: EARLY, seq: 1, reportedCostMicros: "2000" }),
+      ...read,
+    ]);
+    expect(after.size).toBe(4);
+    for (const [cost, key] of before) expect(after.get(cost)).toBe(key);
+    expect(new Set(after.values()).size).toBe(4);
+  });
+
+  // #4506 pass 7: a call that names no model has no price, even when the
+  // harness reported a figure for it.
+  it("keeps a row that names no model as a frame with no price", () => {
+    const [frame] = pricedFrames(
+      [],
+      SCOPE.orgId,
+      [frameRow({ model: "", sessionUuid: SESSION, seq: 3 })],
+      SESSION,
+    );
+    expect(frame).toMatchObject({
+      key: `2026-09-10T10:00:00.500000Z#${SESSION}:3`,
+      costMicros: null,
+      basis: null,
+      sessionUuid: null,
+      seq: 3,
+      noModel: true,
+    });
+    // A row that names its model is priced as before, and is not marked.
+    const [named] = pricedFrames(
+      [],
+      SCOPE.orgId,
+      [frameRow({ sessionUuid: SESSION, seq: 4 })],
+      SESSION,
+    );
+    expect(named).toMatchObject({ costMicros: 15_000n, basis: "estimated" });
+    expect(named).not.toHaveProperty("noModel");
+  });
 });
 
 describe("runFindingsPass", () => {
@@ -1184,6 +1249,77 @@ describe("a pass with more frames than it may hold", () => {
         savingMicros: 15_000n,
       }),
     ]);
+  });
+});
+
+describe("calls that named no model (#4506)", () => {
+  it("reads them only for the pass, and leaves them out of the price book slice", async () => {
+    vi.mocked(loadPriceBookSlice).mockClear();
+    vi.mocked(readModelCallFrames).mockReset();
+    vi.mocked(readModelCallFrames).mockImplementation(async () => [
+      frameRow({ model: "", sessionUuid: SESSION, seq: 1 }),
+      frameRow({ sessionUuid: SESSION, seq: 2 }),
+    ]);
+    const runs: FrameRead[] = [{ runId: RUN_ID, ref: tachoRef(SESSION) }];
+    const kept = await readPricedFrames(SCOPE, runs, 10, true);
+    expect(readModelCallFrames).toHaveBeenLastCalledWith({
+      ...SCOPE,
+      run: tachoRef(SESSION),
+      keepModelless: true,
+    });
+    expect(kept.get(RUN_ID)?.map((f) => f.noModel === true)).toEqual([
+      true,
+      false,
+    ]);
+    expect(loadPriceBookSlice).toHaveBeenLastCalledWith(
+      expect.objectContaining({ models: ["claude-sonnet-5"] }),
+    );
+    // Every other reader asks for priced frames alone.
+    await readPricedFrames(SCOPE, runs, 10);
+    expect(readModelCallFrames).toHaveBeenLastCalledWith({
+      ...SCOPE,
+      run: tachoRef(SESSION),
+    });
+  });
+
+  it("hands them to the request view alone, and the repeat after one claims no priced frame", async () => {
+    const priced = pricedFrame("2026-09-10T10:00:00.500Z", 15_000n);
+    const answered = pricedFrame("2026-09-10T10:00:01.500Z", 15_000n);
+    const modelless: PricedRequestFrame = {
+      ...pricedFrame("2026-09-10T10:00:02.500Z", 15_000n),
+      costMicros: null,
+      basis: null,
+      model: "",
+      noModel: true,
+    };
+    const calls = [
+      row({ seq: 1, at: "2026-09-10T10:00:01.000Z" }),
+      row({ seq: 2, at: "2026-09-10T10:00:03.000Z" }),
+    ];
+    const write = vi.fn(
+      async (_s, _at, _decided, drafts: readonly FindingDraft[]) =>
+        drafts.length,
+    );
+    // Without the call that named no model, the repeat lands on the request
+    // that only answered in text, and the finding claims its price.
+    await runFindingsPass(
+      SCOPE,
+      passDeps(calls, [priced, answered], write),
+    );
+    expect(
+      write.mock.calls[0]?.[3].flatMap((d) => d.claims ?? []).map((c) => c.frameKey),
+    ).toEqual([answered.key]);
+
+    await runFindingsPass(
+      SCOPE,
+      passDeps(calls, [priced, answered, modelless], write),
+    );
+    const seen: DetectInput | undefined =
+      vi.mocked(detectFindings).mock.calls.at(-1)?.[0];
+    expect(seen?.frames?.get(RUN_ID)).toEqual([priced, answered]);
+    expect(seen?.modellessFrames?.get(RUN_ID)).toEqual([modelless]);
+    expect(seen?.frameCoverage).toMatchObject({ read: 1, capped: 0 });
+    expect(write.mock.calls[1]?.[3]).toEqual([]);
   });
 });
 
