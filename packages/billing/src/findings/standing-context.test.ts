@@ -128,15 +128,49 @@ describe("standing context", () => {
     expect(finding!.evidence.frames).toBeUndefined();
   });
 
-  it("names the split by source and leaves out a source no run reported", () => {
+  // #4572 item 9: the text said "every turn after the first", and one turn
+  // can hold several model calls. The finding prices model calls.
+  it("names the split by source, in model calls, and leaves out a source no run reported", () => {
     const [finding] = detect([run()]);
     expect(finding!.why).toBe(
-      "1 run re-sent 75,000 estimated tokens of standing context on every turn after the first: 60,000 of tool definitions and 15,000 of steering.",
+      "1 run re-sent 75,000 estimated tokens of standing context on every model call after the first: 60,000 of tool definitions and 15,000 of steering.",
     );
+    expect(finding!.why).not.toContain("turn");
     const [all] = detect([run({ contextFrameTokens: 40_000 })]);
     expect(all!.why).toContain(
       "60,000 of tool definitions, 15,000 of steering, and 30,000 of context frames.",
     );
+  });
+
+  // #4572 item 6: the old counterfactual was 0, so the saving counted the
+  // context frames' 9,000 micros too (31,500 in all), and the fix cannot
+  // reach them.
+  it("counts the context frames in the measure and leaves them out of the saving", () => {
+    const [finding] = detect([run({ contextFrameTokens: 40_000 })]);
+    // 140,000 tokens over four calls: three re-sent 105,000, and 30,000 of
+    // those are context frames, at 0.3 micros a token.
+    expect(finding!.evidence).toMatchObject({
+      measuredTokens: 105_000,
+      counterfactualTokens: 30_000,
+      measuredMicros: "31500",
+      counterfactualMicros: "9000",
+    });
+    expect(finding!.savingMicros).toBe(22_500n);
+    expect(finding!.why).toContain(
+      "The saving leaves out the context frames, which the fix does not change.",
+    );
+  });
+
+  it("writes nothing for a run whose only re-sent source is context frames", () => {
+    expect(
+      detect([
+        run({
+          toolDefinitionTokens: null,
+          steeringTokens: null,
+          contextFrameTokens: 40_000,
+        }),
+      ]),
+    ).toEqual([]);
   });
 
   it("prices at the input price when the run read nothing from the cache", () => {
@@ -152,7 +186,7 @@ describe("standing context", () => {
       measuredTokens: 75_000,
     });
     expect(finding!.why).toBe(
-      "1 run re-sent 75,000 estimated tokens of standing context on every turn after the first: 60,000 of tool definitions and 15,000 of steering.",
+      "1 run re-sent 75,000 estimated tokens of standing context on every model call after the first: 60,000 of tool definitions and 15,000 of steering.",
     );
   });
 
