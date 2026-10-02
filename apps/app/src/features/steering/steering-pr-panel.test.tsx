@@ -443,7 +443,7 @@ describe("a read that failed", () => {
   it.each([
     [
       { ok: false, reason: "denied", permission: "steering.read" } as const,
-      "You cannot see steering PR in this workspace.",
+      "You cannot see Steering PR in this workspace.",
     ],
     [readError("not_found", 404), "Steering PR could not be loaded: not_found."],
   ])("renders the failure in place of the panel", (read, text) => {
