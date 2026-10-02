@@ -430,6 +430,14 @@ export function toRunTranscript(
       kinds: entry.kinds,
       request: toTranscriptBody(entry.request),
       response: toTranscriptBody(entry.response),
+      ...(entry.parts === undefined
+        ? {}
+        : {
+            parts: entry.parts.flatMap((part) => {
+              const body = toTranscriptBody(part);
+              return body === null ? [] : [body];
+            }),
+          }),
       decision: toTranscriptDecision(entry.decision),
       frames: entry.frames,
       turn: entry.turn,

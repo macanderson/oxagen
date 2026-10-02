@@ -130,8 +130,8 @@ describe("the frame", () => {
       screen.getByRole("heading", { level: 1, name: "Acme Robotics" }),
     ).toBeInTheDocument();
     const tab = screen.getByRole("tab", { name: "Model funding and routes" });
-    expect(tab).toHaveAttribute("aria-current", "page");
     expect(tab).toHaveAttribute("aria-selected", "true");
+    expect(tab).toHaveAttribute("tabindex", "0");
     expect(
       screen.getAllByRole("button", { name: "Create a workspace" }),
     ).toHaveLength(1);

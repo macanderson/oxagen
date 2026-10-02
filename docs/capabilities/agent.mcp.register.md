@@ -37,12 +37,14 @@ and the handler refuses one that carries a username or a password.
 | `mcpServerId`     | `string`                                   | Prefixed with `mcp_`.                  |
 | `healthStatus`    | `"healthy" \| "degraded" \| "unreachable"` | Result of the initial healthcheck.     |
 | `discoveredTools` | `string[]`                                 | Tool names found via `tools/list`.     |
+| `steeringPr`      | `{ number, url }?`                         | The steering PR that adds the server. Set only in a workspace whose tools live in its steering repo. |
 
 ## Side effects
 
 - Postgres: insert `agent.mcp_servers` row plus per-tool rows in `agent.mcp_tools`.
 - Neo4j: upsert `(:McpServer { public_id })-[:HAS_TOOL]->(:McpTool)`.
 - ClickHouse: emit `agent.mcp.registered` event.
+- In a workspace whose tools live in its steering repo (ADR-209), a streamable-http server is written as a disabled row with origin `proposed`, and a steering PR adds its folder. The server turns on when that PR merges and the next publish runs. When the PR does not open, the row is soft-deleted and the writer's error is returned.
 
 ## Errors
 

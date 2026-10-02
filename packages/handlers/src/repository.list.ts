@@ -4,7 +4,9 @@
 // at, and left-joined to its connection so a retired connection reads as
 // `connectionLive: false` instead of dropping the repository from the list —
 // the same judgement `get_main_repository` makes, through the same predicate.
-// No GitHub call: a settings read renders while GitHub is down.
+// No GitHub call: a settings read renders while GitHub is down. The role gate
+// runs first: org Owner or Admin, or workspace Owner or Member, as the
+// contract declares.
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import {
   repositoryList,
@@ -12,6 +14,7 @@ import {
 } from "@oxagen/oxagen/contracts/repository.list";
 import { schema, withTenantDb } from "@oxagen/database";
 import { and, eq, sql } from "drizzle-orm";
+import { assertContractRole } from "./lib/capability-role-guard";
 import { isLiveConnectionRow } from "./repository.github-connection";
 import { gitlabDeliveryConfigOf } from "./repository.gitlab-connection";
 
@@ -52,6 +55,11 @@ export function eventDelivery(row: {
 export const repositoryListHandler: CapabilityHandler<
   typeof repositoryList
 > = async (_input, ctx): Promise<RepositoryListOutput> => {
+  // The kernel's IAM check allows every capability for a non-enterprise org,
+  // so the handler asks for the contract's roles itself (INV-29, #3340). A
+  // workspace Viewer or an org Billing member would otherwise read every
+  // private repository name, binding id, and approved ref.
+  await assertContractRole(repositoryList, ctx);
   const rows = await withTenantDb((tx) =>
     tx
       .select({

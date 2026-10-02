@@ -47,7 +47,7 @@ Columns, in order: `id, occurred_at, event_type, outcome, actor_user_id, org_id,
 
 ## Signature
 
-The key is `AUDIT_EXPORT_SIGNING_SECRET` when it is set to at least 16 characters, otherwise `BETTER_AUTH_SECRET`. Recompute `HMAC-SHA256(key, body)` over the exact bytes of `body` and compare with `signature`.
+The key is the deployment's export signing secret. The registry entry [`AUDIT_EXPORT_SIGNING_SECRET`](../../packages/config/src/registry.ts) says which value that is. Recompute `HMAC-SHA256(key, body)` over the exact bytes of `body` and compare with `signature`.
 
 ## Bounds and failures
 

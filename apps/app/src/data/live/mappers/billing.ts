@@ -74,9 +74,21 @@ export function toUsageCredits(
 export function toGauBucket(
   out: ContractOutput<typeof billingGauBucketGet>,
 ): z.input<typeof GauBucket> {
-  const { invoice, autoTopup } = out;
+  const { invoice, autoTopup, signupGrant } = out;
   return {
     mode: out.mode,
+    basis: out.basis,
+    signupGrant:
+      signupGrant === null
+        ? null
+        : {
+            grantedGau: signupGrant.grantedGau,
+            grantedAt: signupGrant.grantedAt,
+            expiresAt: signupGrant.expiresAt,
+            active: signupGrant.active,
+            remainingGau: signupGrant.remainingGau,
+            evidenceDays: signupGrant.evidenceDays,
+          },
     period: { start: out.period.start, end: out.period.end },
     includedGau: out.includedGau,
     purchasedGau: out.purchasedGau,
@@ -175,6 +187,7 @@ export function toEvidenceRetention(
 ): z.input<typeof EvidenceRetention> {
   return {
     includedMonths: out.includedMonths,
+    includedDays: out.includedDays,
     perGbMonth: {
       micros: microsFromDecimal(String(out.usdPerGbMonth)) ?? "",
       currency: "USD",

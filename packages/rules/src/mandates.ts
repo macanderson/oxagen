@@ -61,6 +61,7 @@ import {
 } from "./call-facts";
 import { logger } from "./logger";
 import { notifyApprovalRequested } from "./approval-notify";
+import { resolveRunPublicId } from "./run-public-id";
 import { loadRuleSetIn, lockDecisionRulesIn } from "./rule-store";
 import {
   exceeds,
@@ -714,6 +715,12 @@ interface MandateCheckArgs {
   agentPrincipalId: string;
   userId: string | null;
   requestId?: string;
+  /**
+   * The internal id (`agent_runs.id`) of the run the call belongs to; null or
+   * absent when none is in scope. Written to a parked approval as the run's
+   * public id (`resolveRunPublicId`), null when it names no run here.
+   */
+  runId?: string | null;
   now?: () => Date;
 }
 
@@ -1068,12 +1075,21 @@ export async function decideMandate(
         digest,
         at,
       });
+      // The run that parked the call, so `list_approvals` finds the row under
+      // its run and `resolve_approval` refuses that run an answer to its own
+      // question (ADR-175). Null when no run was in scope (#3478).
+      const runPublicId = await resolveRunPublicId(tx, {
+        orgId: args.orgId,
+        workspaceId: args.workspaceId,
+        runId: args.runId ?? null,
+      });
       const [row] = await tx
         .insert(schema.approvalRequests)
         .values({
           orgId: args.orgId,
           workspaceId: args.workspaceId,
           toolCallId,
+          runPublicId,
           capabilityName: args.capability,
           inputPreview: (args.input ?? {}) as object,
           riskLevel: tool.riskGrade,

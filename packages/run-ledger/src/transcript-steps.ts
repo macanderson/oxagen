@@ -32,11 +32,18 @@
  *    on the call key where the request has one, else the frame right after
  *    it. Each request takes a response no other request took (#3994).
  * 3. A tool request with no key takes the unkeyed gates right after it, and
- *    the unkeyed receipt that closes it.
+ *    the unkeyed receipt that closes it. A later sighting of a model call on
+ *    its chain, such as a reply's further part, sits between them without
+ *    parting them.
  * 4. A lone model or tool frame is a whole step.
  * 5. A run of identical frames with nothing to read on them (Claude Code's
  *    thirty hook registrations) is one event step.
  * 6. Any other frame is its own event step.
+ *
+ * A model step also takes its reply's further parts: a transcript writes one
+ * record per content block, and the host marks each block after the first as
+ * a later sighting of its own source. One reply is one model step, however
+ * many parts it arrives in (ADR-199 §1, ADR-242, one model reply is one step).
  *
  * A tool step also takes the effect frames (`command`, `file_io`, `network`)
  * right after it that name its call, or that name no call when the step
@@ -291,6 +298,12 @@ const HARNESS_SOURCES: ReadonlySet<string> = new Set([
 
 const chainOf = (frame: RunFrame): string => frame.chain?.sessionUuid ?? "";
 const callOf = (frame: RunFrame): string | null => frame.identity.callId;
+/** A wrapped model call another source, or an earlier part, already sealed. */
+const isLaterSighting = (frame: RunFrame): boolean =>
+  (frame.llmCall?.duplicateOf ?? null) !== null;
+/** A reply's further part: marked a later sighting of its own source. */
+const isReplyPart = (frame: RunFrame): boolean =>
+  isLaterSighting(frame) && frame.llmCall?.duplicateOf === frame.llmCall?.source;
 
 function isControl(type: string): boolean {
   return (
@@ -398,6 +411,38 @@ function groupTurn(frames: readonly RunFrame[], from: number, to: number) {
   const claimed = new Set<number>();
   const at = (i: number) => frames[i] as RunFrame;
 
+  /**
+   * Each reply's further parts, by the index of the frame they join (#4351).
+   * A transcript writes one record per content block of a model reply, and
+   * the host marks each block after the first as a later sighting of its own
+   * source. One reply is one model step (ADR-199 §1), so the parts join the
+   * step of the reply's first part: on the same chain, a shared call key, and
+   * the same source. A part whose first part is not in the turn joins the
+   * first such part that is, which then stands for the reply.
+   */
+  const partsOf = new Map<number, number[]>();
+  const replyHead = new Map<string, number>();
+  for (let i = from; i < to; i += 1) {
+    const frame = at(i);
+    const call = frame.llmCall;
+    if (call === undefined || call.keys.length === 0) continue;
+    const ids = call.keys.map(
+      (key) => `${chainOf(frame)}\u0000${key}\u0000${call.source ?? ""}`,
+    );
+    const head = isReplyPart(frame)
+      ? ids
+          .map((id) => replyHead.get(id))
+          .find((found): found is number => found !== undefined)
+      : undefined;
+    if (head === undefined) {
+      for (const id of ids) if (!replyHead.has(id)) replyHead.set(id, i);
+      continue;
+    }
+    const parts = partsOf.get(head);
+    if (parts === undefined) partsOf.set(head, [i]);
+    else parts.push(i);
+  }
+
   /** The effect frames right after `indexes` that belong to its call. */
   const withEffects = (
     indexes: number[],
@@ -478,6 +523,11 @@ function groupTurn(frames: readonly RunFrame[], from: number, to: number) {
       const indexes = [i];
       for (let j = i + 1; j < to; j += 1) {
         const next = at(j);
+        // A later sighting of a model call on this chain, such as a reply's
+        // further part, neither parts a request from its receipt nor pairs
+        // with either. The query leaves it out of its letters the same way
+        // (`selectTachoTurnGroups`, #4351).
+        if (chainOf(next) === chain && isLaterSighting(next)) continue;
         if (claimed.has(j) || chainOf(next) !== chain || callOf(next) !== null)
           break;
         if (next.type === toolClose) {
@@ -518,6 +568,11 @@ function groupTurn(frames: readonly RunFrame[], from: number, to: number) {
   for (let i = from; i < to; i += 1) {
     if (claimed.has(i)) continue;
     const group = callGroup(i) ?? pairGroup(i);
+    if (group.tag === "model") {
+      for (const j of [...group.indexes])
+        for (const part of partsOf.get(j) ?? [])
+          if (!claimed.has(part)) group.indexes.push(part);
+    }
     for (const j of group.indexes) claimed.add(j);
     group.indexes.sort((a, b) => a - b);
     groups.push(group);
@@ -934,6 +989,23 @@ function withRelations(folds: TranscriptFold[]): TranscriptFold[] {
 }
 
 // ── Zooms ───────────────────────────────────────────────────────────────────
+
+/**
+ * A model step's further reply parts: the wrapped model-call frames it holds
+ * besides its request and response halves, in the order recorded (#4351). A
+ * reader shows them after the response. Empty for any other step.
+ */
+export function replyPartsOf(
+  fold: Pick<TranscriptFold, "node" | "members" | "request" | "response">,
+): RunFrame[] {
+  if (fold.node !== "model") return [];
+  return fold.members.filter(
+    (frame) =>
+      frame.llmCall !== undefined &&
+      frame !== fold.request &&
+      frame !== fold.response,
+  );
+}
 
 /** The `steps` zoom: one entry per step, by the rules at the top of this file. */
 export function stepFolds(frames: readonly RunFrame[]): TranscriptFold[] {

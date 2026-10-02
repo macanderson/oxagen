@@ -730,6 +730,11 @@ export const TranscriptEntry = z.object({
   kinds: z.array(TranscriptKind),
   request: TranscriptBody.nullable(),
   response: TranscriptBody.nullable(),
+  /**
+   * A model reply's further parts, after `response`, in the order recorded.
+   * One reply is one step, however many parts it arrives in (#4351).
+   */
+  parts: z.array(TranscriptBody).optional(),
   decision: TranscriptDecision.nullable(),
   /** Frames folded into the entry, the opening frame included. */
   frames: z.number().int().positive(),

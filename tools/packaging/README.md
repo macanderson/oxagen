@@ -66,9 +66,13 @@ tap job will run, not one that runs today. Spec for the app and the binaries:
 | `homebrew/tacho.rb` | Formula: the bare `tacho` and `oxagen` executables, no app | `tacho-<triple>`, `oxagen-<triple>` for the two macOS triples and `x86_64-unknown-linux-gnu` |
 | `scoop/oxagen.json` | Scoop: the bare `tacho.exe` and `oxagen.exe` shimmed as `tacho` and `oxagen` | `tacho-x86_64-pc-windows-msvc.exe`, `oxagen-x86_64-pc-windows-msvc.exe` |
 
-The desktop app on Windows and Linux is the `.msi` / `-setup.exe` and the
-`.deb` / `.rpm` / `.AppImage` on the release page; there is no winget, apt or
-dnf entry.
+Every file comes from `https://downloads.oxagen.sh/desktop/<version>/`, never
+from a GitHub release: the repository is private and has changed owner more
+than once (ADR-247). The desktop app on Windows and Linux is the `.msi` /
+`-setup.exe` and the `.deb` / `.rpm` / `.AppImage` there; there is no winget,
+apt or dnf entry. The cask, the formula, and the Scoop manifest read the
+newest version from the update feed, `https://downloads.oxagen.sh/updater/latest.json`,
+which names releases only.
 
 ## What the release produces
 
@@ -91,9 +95,15 @@ per target. Each job:
 
 3. writes a `<asset>.sha256` next to each staged binary and, on the macOS
    jobs, next to the `.dmg` (`tools/packaging/checksums.mjs`, `sha256sum`
-   format) and attaches the binaries and every checksum to the same release,
-   so the formula and the manifest can install the CLIs without the app and
-   the cask's `# stamp:` digests have a `.sha256` to read.
+   format) and attaches the binaries and every checksum to the same release.
+
+Then the `publish` job copies the installers and the bare executables to
+`https://downloads.oxagen.sh/desktop/<version>/` with a `SHA256SUMS.txt` that
+lists every one of them and a `<executable>.sha256` beside each executable
+(`apps/desktop/scripts/publish-downloads.mjs`). That is where the formula and
+the manifest install the CLIs from without the app, and where the cask's
+`# stamp:` digests come from. The GitHub release is a mirror for people with
+repository access.
 
 The version is the lockstep monorepo version (`pnpm release:*` bumps every
 package, `apps/desktop/package.json` included, and `tacho --version` prints
@@ -120,10 +130,14 @@ missing.
 Once the release is published, a tap job (or a person) runs:
 
 ```
-mkdir -p /tmp/sums && cd /tmp/sums
-gh release download desktop-v2.1.1 --repo macanderson/oxagen --pattern '*.sha256'
-cd - && node tools/packaging/stamp.mjs --version 2.1.1 --sums /tmp/sums --out /tmp/stamped
+mkdir -p /tmp/sums
+curl -fsSL https://downloads.oxagen.sh/desktop/2.2.0/SHA256SUMS.txt -o /tmp/sums/SHA256SUMS.sha256
+node tools/packaging/stamp.mjs --version 2.2.0 --sums /tmp/sums --out /tmp/stamped
 ```
+
+`stamp.mjs` reads every `*.sha256` file in `--sums`, one line per asset, so
+the version's `SHA256SUMS.txt` saved under that suffix carries every digest
+the templates need.
 
 and commits `/tmp/stamped/homebrew/*.rb` to the tap's `Casks/` and
 `Formula/` and `/tmp/stamped/scoop/oxagen.json` to the bucket. `stamp.mjs`

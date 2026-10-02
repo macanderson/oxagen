@@ -62,7 +62,7 @@ const Panel = React.forwardRef<HTMLElement, PanelProps>(
       <section
         ref={ref}
         className={cn(
-          "flex flex-col overflow-hidden rounded-xl border bg-card text-card-foreground shadow-sm",
+          "flex flex-col overflow-hidden rounded-2xl border bg-card text-card-foreground",
           className,
         )}
         {...props}

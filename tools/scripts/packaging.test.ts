@@ -162,7 +162,13 @@ describe("stamp", () => {
       architecture: { "64bit": { url: string[]; hash: string[] } };
     };
     expect(manifest.version).toBe("2.1.1");
-    expect(manifest.architecture["64bit"].url[0]).toContain("desktop-v2.1.1/");
+    expect(manifest.architecture["64bit"].url[0]).toBe(
+      "https://downloads.oxagen.sh/desktop/2.1.1/tacho-x86_64-pc-windows-msvc.exe",
+    );
+    // Every template installs from the downloads host, never a GitHub
+    // release, which is private (ADR-247).
+    for (const file of written)
+      expect(readFileSync(file, "utf8"), file).not.toContain("github.com");
     expect(manifest.architecture["64bit"].hash).toEqual([
       hex("tacho-x86_64-pc-windows-msvc.exe"),
       hex("oxagen-x86_64-pc-windows-msvc.exe"),

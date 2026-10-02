@@ -304,6 +304,8 @@ const ENTITLEMENT: GauEntitlement = {
     includedGauPerMonth: 50_000,
   },
   subscription: null,
+  grant: null,
+  subscriptionRequiredAfterGrant: true,
 };
 
 const WS_A = "11111111-1111-4111-8111-111111111111";

@@ -46,6 +46,24 @@ const mocks = vi.hoisted(() => ({
     }),
   ),
   assertDataPlaneUsable: vi.fn(),
+  // The uncached plane read the write transaction makes (#3340 finding 1).
+  loadDataPlaneBinding: vi.fn(
+    async (): Promise<{
+      orgId: string;
+      kind: "postgres";
+      mode: "shared" | "dedicated";
+      status: "active";
+    }> => ({
+      orgId: "org_1",
+      kind: "postgres",
+      mode: "shared",
+      status: "active",
+    }),
+  ),
+}));
+
+vi.mock("@oxagen/database/data-plane", () => ({
+  loadDataPlaneBinding: mocks.loadDataPlaneBinding,
 }));
 
 vi.mock("@oxagen/database", async (importOriginal) => {
@@ -268,6 +286,12 @@ beforeEach(() => {
     mode: "shared",
     status: "active",
   });
+  mocks.loadDataPlaneBinding.mockResolvedValue({
+    orgId: "org_1",
+    kind: "postgres",
+    mode: "shared",
+    status: "active",
+  });
   armSystemDb();
   armTenant([STEERING_HEAD]);
 });
@@ -361,6 +385,38 @@ describe("resolveLinkTarget", () => {
 
 describe("writeLinkedHead", () => {
   const ARGS = { userId: "user_1", now: NOW };
+
+  // #3340 finding 1: the pre-check reads the plane before the transaction,
+  // so a plane that moved since would put the head where the trigger cannot
+  // see it. The write asks again, uncached, under the workspace lock.
+  describe("the data plane, asked again inside the transaction", () => {
+    it("re-reads the organization's plane uncached, not through the cached resolver", async () => {
+      armTenant([STEERING_HEAD]);
+      mocks.resolveDataPlane.mockClear();
+      await writeLinkedHead(SCOPE, TARGET, ARGS);
+      expect(mocks.loadDataPlaneBinding).toHaveBeenCalledWith(
+        "org_1",
+        "postgres",
+      );
+      expect(mocks.resolveDataPlane).not.toHaveBeenCalled();
+    });
+
+    it("refuses with main_repo_plane_unsupported when the plane moved after the pre-check, and writes nothing", async () => {
+      const tenant = armTenant([STEERING_HEAD]);
+      mocks.loadDataPlaneBinding.mockResolvedValueOnce({
+        orgId: "org_1",
+        kind: "postgres",
+        mode: "dedicated",
+        status: "active",
+      });
+      await expect(writeLinkedHead(SCOPE, TARGET, ARGS)).rejects.toMatchObject(
+        { code: "conflict", reason: "main_repo_plane_unsupported" },
+      );
+      // Inside the transaction, after the lock, before any read or write.
+      expect(tenant.events).toEqual(["lock"]);
+      expect(mocks.writeRepositoryHead).not.toHaveBeenCalled();
+    });
+  });
 
   it("takes the workspace lock, reads the heads, writes the head, then promotes the connection", async () => {
     const tenant = armTenant([STEERING_HEAD]);

@@ -37,7 +37,7 @@ import { buttonPrimary, buttonSecondary } from "@/ui/control-styles";
 import { useFormatter } from "@/ui/formatter";
 import { useNavigate } from "@/ui/navigation";
 import { PageHeader } from "@/ui/page-header";
-import { RouteTabs } from "@/ui/route-tabs";
+import { RouteTabPanel, RouteTabs } from "@/ui/route-tabs";
 import {
   listInstallationRepositories,
   readRepositoryChanges,
@@ -68,6 +68,9 @@ export type RepositoriesViewer = Closer & { role: string };
 type Trees = Readonly<Record<string, Load<RepositoryTree>>>;
 
 type WizardState = { open: boolean; initial: string | null; opening: number };
+
+/** The id of the panel the page draws under its tabs. */
+const REPOSITORIES_PANEL = "repositories-panel";
 
 /** The codes that mean GitHub is not connected yet, so the wizard connects it first. */
 const UNCONNECTED = new Set(["github_not_connected", "github_not_authorized"]);
@@ -335,32 +338,37 @@ export function Repositories({
         {steering}
         <RouteTabs
           label={t("tabs.label")}
+          panel={REPOSITORIES_PANEL}
           tabs={[
             {
               to: routes.repositories(org, ws),
               label: t("tabs.repositories"),
               count: bound.length,
               current: view.tab === "repositories",
+              name: "repositories",
             },
             {
               to: routes.repositories(org, ws, "working-copies"),
               label: t("tabs.workingCopies"),
               current: view.tab === "working-copies",
+              name: "working-copies",
             },
             {
               to: routes.repositories(org, ws, "changes"),
               label: t("tabs.changes"),
               ...(openCount > 0 ? { count: openCount } : {}),
               current: view.tab === "changes",
+              name: "changes",
             },
             {
               to: routes.repositories(org, ws, "configuration"),
               label: t("tabs.configuration"),
               current: view.tab === "configuration",
+              name: "configuration",
             },
           ]}
         />
-        <div className="mt-4">
+        <RouteTabPanel panel={REPOSITORIES_PANEL} className="mt-4">
           {notice === null ? null : (
             <p
               role="status"
@@ -427,7 +435,7 @@ export function Repositories({
               tree={main === null ? undefined : (main.tree ?? undefined)}
             />
           )}
-        </div>
+        </RouteTabPanel>
       </>
     );
 
