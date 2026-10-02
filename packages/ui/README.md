@@ -178,6 +178,7 @@ Import from `@oxagen/ui` (barrel) or `@/components/ui/<file>` (app proxy).
 | `MotionProvider` | `motion-provider.tsx` | motion config provider. |
 | `GlobalErrorPage`, `NotFoundPage` | `global-error.tsx`, `not-found.tsx` | full-page templates. |
 | `cn` | `lib/utils.ts` | `clsx` + `tailwind-merge`. |
+| `houseTypeMerge` | `lib/house-type-merge.ts` | The tailwind-merge config that files `text-a-*` and `text-m-*` as font sizes, so a text colour beside one keeps both. Every `cn()` in product builds on it. Import it from `@oxagen/ui/lib/house-type-merge`. |
 
 ## Styling
 
