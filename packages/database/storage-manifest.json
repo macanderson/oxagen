@@ -757,6 +757,17 @@
       "writes": []
     },
     {
+      "domain": "context",
+      "name": "dismiss_memories",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "cli",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "agent",
       "name": "dismiss_memory_promotion",
       "reads": [],
@@ -1944,6 +1955,17 @@
       "writes": []
     },
     {
+      "domain": "context",
+      "name": "get_workspace_memory",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "cli",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "workspace",
       "name": "get_workspace_settings",
       "reads": [],
@@ -2467,6 +2489,16 @@
       "writes": []
     },
     {
+      "domain": "context",
+      "name": "list_memory_pr_records",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "agent",
       "name": "list_memory_promotions",
       "reads": [],
@@ -2833,6 +2865,17 @@
       "writes": []
     },
     {
+      "domain": "context",
+      "name": "list_workspace_memories",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "cli",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "workspace",
       "name": "list_workspaces",
       "reads": [],
@@ -3051,6 +3094,17 @@
       "reads": [],
       "surfaces": [
         "api"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "context",
+      "name": "promote_memories",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "cli",
+        "mcp"
       ],
       "writes": []
     },
