@@ -57,11 +57,12 @@ export {
 } from "./repeated-instructions";
 export type { PromptRead, PromptTextMode, RunPrompt } from "./prompts";
 export {
-  instructionProposalOpener,
-  setInstructionProposalOpener,
+  setSpendProposalOpener,
+  spendProposalOpener,
   type InstructionProposal,
-  type InstructionProposalOpener,
-  type InstructionProposalScope,
+  type SpendProposalInput,
+  type SpendProposalOpener,
+  type SpendProposalScope,
 } from "./proposal-opener";
 
 /** Every detector a pass runs, in the order it runs them. */
