@@ -140,6 +140,13 @@ describe("chrome", () => {
     expect(footer).toContain(`© ${new Date().getUTCFullYear()} Oxagen`);
   });
 
+  it("links the terms of service and the privacy policy from the footer", () => {
+    const footer = siteFooter({ wordmark, pillars });
+    expect(footer).toContain('<nav class="foot-col" aria-label="Legal">');
+    expect(footer).toContain('<a href="/terms">Terms of service</a>');
+    expect(footer).toContain('<a href="/privacy">Privacy policy</a>');
+  });
+
   it("gives the phone menu one list with no headings and no demo button", () => {
     const header = siteHeader({ wordmark });
     const drawer = header.slice(header.indexOf('<div class="drawer"'));

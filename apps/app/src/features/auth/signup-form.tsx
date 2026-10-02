@@ -4,7 +4,8 @@
 // and requirement list, the submit and the terms line. A new account goes to
 // email verification when the deployment requires it, otherwise straight to
 // creating its organization. An address handed back by Verify email's Change
-// it fills the email field, which stays editable.
+// it fills the email field, which stays editable. The terms line links the
+// terms of service and privacy policy on oxagen.sh.
 
 import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useState } from "react";
@@ -19,6 +20,7 @@ import {
   SignupSchema,
   fieldErrors,
 } from "./schemas";
+import { linkText } from "@/ui/control-styles";
 import { Field, PasswordField } from "@/ui/field";
 import { SubmitButton } from "@/ui/form-feedback";
 import { formText } from "./form-text";
@@ -30,6 +32,12 @@ type SignupField = "name" | "email" | "password";
 
 const PASSWORD_ID = "signup-password";
 const REQUIREMENTS_ID = `${PASSWORD_ID}-requirements`;
+
+/** The legal pages live on the website, outside the app. */
+const TERMS_URL = "https://oxagen.sh/terms";
+const PRIVACY_URL = "https://oxagen.sh/privacy";
+/** Underlined, so a link in running text does not rely on colour alone. */
+const legalLink = `${linkText} underline`;
 
 export function SignupForm({
   next = AFTER_SIGNUP,
@@ -146,7 +154,30 @@ export function SignupForm({
           label={t("signup.submit")}
           pendingLabel={t("signup.pending")}
         />
-        <p className="text-xs leading-relaxed text-dim">{t("signup.terms")}</p>
+        <p className="text-xs leading-relaxed text-dim">
+          {t.rich("signup.terms", {
+            terms: (chunks) => (
+              <a
+                href={TERMS_URL}
+                target="_blank"
+                rel="noopener"
+                className={legalLink}
+              >
+                {chunks}
+              </a>
+            ),
+            privacy: (chunks) => (
+              <a
+                href={PRIVACY_URL}
+                target="_blank"
+                rel="noopener"
+                className={legalLink}
+              >
+                {chunks}
+              </a>
+            ),
+          })}
+        </p>
       </form>
     </AuthPanel>
   );
