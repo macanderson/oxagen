@@ -12,6 +12,8 @@
  * are 16 vCPU, the instance types with local NVMe come first in priority, and
  * the warm pools run around the clock. Spot comes first and on-demand fills
  * in, because the two have separate quotas and together hold more runners.
+ * `max_runners` in terraform.tfvars caps the CI pools below the two quotas
+ * combined, so the on-demand deploy pool and production always find room.
  */
 
 locals {
@@ -25,28 +27,24 @@ locals {
     "oxagen-large-arm64" = {
       arch     = "arm64"
       types    = ["m8gd.4xlarge", "m7gd.4xlarge", "m8g.4xlarge", "r8g.4xlarge", "m7g.4xlarge", "r7g.4xlarge"]
-      max      = 250
       disk     = { size = 150, iops = 16000, throughput = 1000 }
       priority = 10
     }
     "oxagen-large-x64" = {
       arch     = "x64"
       types    = ["m7a.4xlarge", "m6id.4xlarge", "m7i.4xlarge", "r7a.4xlarge", "m6a.4xlarge", "m6i.4xlarge"]
-      max      = 100
       disk     = { size = 150, iops = 16000, throughput = 1000 }
       priority = 20
     }
     "oxagen-small-arm64" = {
       arch     = "arm64"
       types    = ["m8gd.xlarge", "m7gd.xlarge", "m8g.xlarge", "m7g.xlarge", "m6g.xlarge"]
-      max      = 150
       disk     = { size = 80, iops = 6000, throughput = 500 }
       priority = 30
     }
     "oxagen-small-x64" = {
       arch     = "x64"
       types    = ["m7a.xlarge", "m6id.xlarge", "m7i.xlarge", "m6a.xlarge"]
-      max      = 150
       disk     = { size = 80, iops = 6000, throughput = 500 }
       priority = 40
     }
@@ -275,7 +273,7 @@ module "runners" {
           runner_name_prefix    = "${name}-"
           runner_group_name     = var.ci_runner_group
           instance_types        = p.types
-          runners_maximum_count = p.max
+          runners_maximum_count = var.max_runners[name]
           ami = {
             owners               = ["099720109477"]
             filter               = { name = ["ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-*"] }
@@ -319,7 +317,7 @@ module "runners" {
           instance_target_capacity_type        = "on-demand"
           instance_allocation_strategy         = "prioritized"
           enable_on_demand_failover_for_errors = []
-          runners_maximum_count                = 6
+          runners_maximum_count                = var.max_runners["oxagen-deploy"]
           vpc_id                               = data.aws_vpc.production.id
           subnet_ids                           = data.aws_subnets.production_public.ids
           runner_additional_security_group_ids = [aws_security_group.deploy_runner.id]

@@ -113,6 +113,15 @@ variable "warm_pool" {
   default     = {}
 }
 
+variable "max_runners" {
+  description = <<-EOT
+    The most runners each pool may hold at once, idle and busy together. Every
+    pool needs an entry. terraform.tfvars sizes them to the account's EC2 vCPU
+    quotas, so raise them when a quota rises.
+  EOT
+  type        = map(number)
+}
+
 variable "webhook_domain" {
   description = "The stable address the GitHub App posts workflow_job events to."
   type        = string
