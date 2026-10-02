@@ -230,6 +230,11 @@ export async function recordWorkPullRequestDelivery(scope: WorkScope, delivery: 
         const record = await readWorkItem(tx, scope, send.itemId);
         const order = record.projection.orders.find((entry) => entry.orderId === send.orderId);
         if (order === undefined) continue;
+        // A delivery about a pull request the send has moved past changes
+        // nothing on it: the send's head, merge, and close are its current
+        // pull request's.
+        const current = order.pullRequest;
+        if (current === null || current.repository.toLowerCase() !== delivery.repository || current.number !== delivery.number) continue;
         const { facts } = evidenceFacts(order, { pull: delivery.pull, required: null, checks: null }, now.toISOString());
         // Only the pull request's own facts: the required list and the checks
         // come from a read, never from a delivery that does not carry them.

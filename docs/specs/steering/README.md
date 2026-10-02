@@ -210,6 +210,16 @@ the default branch, squash merge settings, and disabled Actions. They do not
 read or write rulesets or environment protection. Deployment records still
 identify published versions. See [ADR-237](../../adr/ADR-237-steering-repositories-support-github-free.md).
 
+### Revert
+
+Revert pull request on a merged steering PR (`revert_steering_pr`) opens a
+steering PR that undoes it. Oxagen reads the merge commit's first parent,
+writes every path the merge changed back to that version on
+`<prefix>/revert-<number>`, and runs the checks on the new branch. The ledger
+keeps its lines, because it only grows. The revert PR waits for review like
+any other steering PR. Reverting takes the same governance-mode rule as
+merging, and a governance change is reverted by setting the mode again.
+
 ### Stamp
 
 The stamp computes each record's identity from its content:

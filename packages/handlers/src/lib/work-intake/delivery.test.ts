@@ -72,6 +72,22 @@ describe("routeGithubWorkDelivery", () => {
     expect(send).toHaveBeenCalledWith([event]);
   });
 
+  it("keeps the events of collectors that stored the delivery when another one fails", async () => {
+    const receive = vi
+      .fn()
+      .mockResolvedValueOnce({ kind: "stored", inboundEventId: "ie-a", deliveryId: "d", paused: false })
+      .mockRejectedValueOnce(new Error("db down"));
+    const send = vi.fn(async () => undefined);
+    const routing = await routeGithubWorkDelivery(input, {
+      collectorsFor: async () => [collector("a", WS_A), collector("b", WS_B)],
+      receive,
+      ports: vi.fn(),
+      send,
+    });
+    expect(routing).toMatchObject({ stored: 1, failed: 1 });
+    expect(send).toHaveBeenCalledWith([expect.objectContaining({ id: "work-event-ie-a" })]);
+  });
+
   it("sends nothing when no collector reads the repository", async () => {
     const send = vi.fn(async () => undefined);
     const routing = await routeGithubWorkDelivery(input, {
@@ -80,7 +96,7 @@ describe("routeGithubWorkDelivery", () => {
       ports: vi.fn(),
       send,
     });
-    expect(routing).toEqual({ events: [], stored: 0, duplicates: 0, rejected: 0 });
+    expect(routing).toEqual({ events: [], stored: 0, duplicates: 0, rejected: 0, failed: 0 });
     expect(send).not.toHaveBeenCalled();
   });
 });

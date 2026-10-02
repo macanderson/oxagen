@@ -135,8 +135,11 @@ import { contextProposalDismiss } from "@oxagen/oxagen/contracts/context.proposa
 import { contextPrOpen } from "@oxagen/oxagen/contracts/context.pr.open";
 import { skillPropose } from "@oxagen/oxagen/contracts/skill.propose";
 import { contextPrGet } from "@oxagen/oxagen/contracts/context.pr.get";
+import { contextPrRefresh } from "@oxagen/oxagen/contracts/context.pr.refresh";
+import { contextPrDiffGet } from "@oxagen/oxagen/contracts/context.pr.diff.get";
 import { contextPrMerge } from "@oxagen/oxagen/contracts/context.pr.merge";
 import { contextPrMergeWithoutReview } from "@oxagen/oxagen/contracts/context.pr.merge_without_review";
+import { contextPrRevert } from "@oxagen/oxagen/contracts/context.pr.revert";
 import { conversationAttachmentAdd } from "@oxagen/oxagen/contracts/conversation.attachment.add";
 import { tachoCommandDispatch } from "@oxagen/oxagen/contracts/tacho.command.dispatch";
 import { tachoCommandList } from "@oxagen/oxagen/contracts/tacho.command.list";
@@ -297,8 +300,11 @@ import { contextProposalDismissRoute } from "./context.proposal.dismiss";
 import { contextPrOpenRoute } from "./context.pr.open";
 import { skillProposeRoute } from "./skill.propose";
 import { contextPrGetRoute } from "./context.pr.get";
+import { contextPrRefreshRoute } from "./context.pr.refresh";
+import { contextPrDiffGetRoute } from "./context.pr.diff.get";
 import { contextPrMergeRoute } from "./context.pr.merge";
 import { contextPrMergeWithoutReviewRoute } from "./context.pr.merge_without_review";
+import { contextPrRevertRoute } from "./context.pr.revert";
 import { conversationAttachmentAddRoute } from "./conversation.attachment.add";
 import { conversationChatRoute } from "./conversation.chat";
 import { costPriceEntryListRoute } from "./cost.price_entry.list";
@@ -530,7 +536,8 @@ const ROUTES: ThinRoute[] = [
     method: "POST",
     capability: contextProposalDismiss.name,
     body: { proposalId: "prp_1", reason: "duplicate" },
-    invalidBody: { proposalId: "prp_1" },
+    // The reason is optional (#5077), but a blank one is still refused.
+    invalidBody: { proposalId: "prp_1", reason: "" },
     status: 200,
   },
   // Work intake and triage (P1-03, #5103).
@@ -702,6 +709,24 @@ const ROUTES: ThinRoute[] = [
     status: 200,
   },
   {
+    file: "context.pr.refresh",
+    route: contextPrRefreshRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: contextPrRefresh.name,
+    body: { proposalId: "prp_1" },
+    invalidBody: {},
+    status: 200,
+  },
+  {
+    file: "context.pr.diff.get",
+    route: contextPrDiffGetRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: contextPrDiffGet.name,
+    body: { proposalId: "prp_1" },
+    invalidBody: { proposalId: "nope" },
+    status: 200,
+  },
+  {
     file: "context.pr.merge",
     route: contextPrMergeRoute as unknown as Hono<never>,
     method: "POST",
@@ -717,6 +742,16 @@ const ROUTES: ThinRoute[] = [
     capability: contextPrMergeWithoutReview.name,
     body: { proposalId: "prp_1" },
     invalidBody: { proposalId: "prp_1", force: true },
+    status: 200,
+  },
+  {
+    file: "context.pr.revert",
+    route: contextPrRevertRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: contextPrRevert.name,
+    body: { proposalId: "prp_1" },
+    invalidBody: { proposalId: "prp_1", number: 7 },
+    jsonGuard: true,
     status: 200,
   },
   {

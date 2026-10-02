@@ -1201,6 +1201,17 @@
       "writes": []
     },
     {
+      "domain": "context",
+      "name": "get_context_pr_diff",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "billing",
       "name": "get_contract_rate",
       "reads": [],
@@ -3444,6 +3455,16 @@
       "writes": []
     },
     {
+      "domain": "context",
+      "name": "refresh_context_pr",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api"
+      ],
+      "writes": []
+    },
+    {
       "domain": "work",
       "name": "refresh_work_order_checks",
       "reads": [],
@@ -3687,6 +3708,18 @@
       "reads": [],
       "surfaces": [
         "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "context",
+      "name": "revert_steering_pr",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "cli",
         "mcp"
       ],
       "writes": []

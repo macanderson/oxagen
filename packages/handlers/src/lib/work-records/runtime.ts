@@ -32,7 +32,7 @@ import {
 import { and, eq } from "drizzle-orm";
 import { queueRunCancel } from "./delivery";
 import { buildWorkOrderPrompt, type PromptSource } from "./prompt";
-import { appendFacts, readWorkItem, type WorkItemRecord, type WorkScope, type WorkWrite } from "./store";
+import { appendFacts, type WorkItemRecord, type WorkScope, type WorkWrite } from "./store";
 
 /** The enrolled host a runtime call came from, as `resolveEnrolledHost` read it. */
 export interface ClaimingHost {
@@ -99,6 +99,15 @@ async function assertTargetHost(tx: Tx, scope: WorkScope, order: OrderRow, host:
   if (command === undefined || command.hostId !== host.id) {
     throw new WorkRecordError("forbidden", "This work order was sent to another machine. This host must not start it.");
   }
+}
+
+/**
+ * The item's record under its row lock, held to the end of the transaction.
+ * An append of no facts takes the lock and writes nothing, so a decision made
+ * on this record cannot race another writer's.
+ */
+function lockedRecord(tx: Tx, scope: WorkScope, itemId: string): Promise<WorkWrite> {
+  return appendFacts(tx, scope, { itemId, facts: [] });
 }
 
 function orderOf(record: Pick<WorkItemRecord, "projection">, orderId: string): OrderProjection {
@@ -224,7 +233,7 @@ export async function claimWorkOrder(tx: Tx, scope: WorkScope, host: ClaimingHos
 export async function rejectWorkOrder(tx: Tx, scope: WorkScope, host: ClaimingHost, orderPublicId: string, reason: string, now: Date): Promise<{ repeat: boolean }> {
   const row = await orderByPublicId(tx, scope, orderPublicId);
   await assertTargetHost(tx, scope, row, host);
-  const before = await readWorkItem(tx, scope, row.itemId);
+  const before = await lockedRecord(tx, scope, row.itemId);
   const current = orderOf(before, row.id);
   // A send that already ended, whatever ended it, has nothing left to refuse.
   if (current.delivery === "rejected" || current.closed) return { repeat: true };
@@ -272,7 +281,7 @@ export type RunLinkOutcome = "linked" | "repeat" | "not_claimed" | "already_link
 export async function linkWorkOrderRun(tx: Tx, scope: WorkScope, input: RunLinkInput): Promise<RunLinkOutcome> {
   const row = await orderByPublicId(tx, scope, input.workOrder);
   await assertTargetHost(tx, scope, row, input.host);
-  const before = await readWorkItem(tx, scope, row.itemId);
+  const before = await lockedRecord(tx, scope, row.itemId);
   const current = orderOf(before, row.id);
   const claim = claimOf(before.facts, row.id);
   if (claim === undefined || claim.kind !== "claimed" || claim.data.host !== input.host.publicId) return "not_claimed";
@@ -366,6 +375,8 @@ export interface AckedCommand {
   payload: unknown;
   /** The host's detail, on a `failed` acknowledgement. */
   detail?: string | null;
+  /** The command's recipient: the run's `tse_…` id for a `cancel`. */
+  targetId?: string | null;
 }
 
 function workOrderOf(payload: unknown): string | null {
@@ -380,7 +391,10 @@ function workOrderOf(payload: unknown): string | null {
  * runtime and waits for its claim. A `work_order` command the host could not
  * keep is `send_rejected` with the host's reason, so the send ends instead of
  * waiting for a claim that cannot come. A stop's `cancel` the host applied is
- * `stopped`. Returns the number of facts recorded.
+ * `stopped` only when it went to the run the send is linked to and a person
+ * asked the send to stop. A `cancel` sent to a duplicate run, or to a run of a
+ * send that already ended, stops that run and leaves the send as it is.
+ * Returns the number of facts recorded.
  */
 export async function recordWorkOrderAcks(tx: Tx, scope: WorkScope, host: ClaimingHost, acked: readonly AckedCommand[], at: Date): Promise<number> {
   let recorded = 0;
@@ -392,10 +406,11 @@ export async function recordWorkOrderAcks(tx: Tx, scope: WorkScope, host: Claimi
     const stopped = command.command === "cancel" && command.outcome === "applied";
     if (!delivered && !refused && !stopped) continue;
     const row = await orderByPublicId(tx, scope, workOrder);
-    if (refused) {
+    if (refused || stopped) {
+      const current = orderOf(await lockedRecord(tx, scope, row.itemId), row.id);
       // A host that already claimed the send keeps it: the claim is the later word.
-      const current = orderOf(await readWorkItem(tx, scope, row.itemId), row.id);
-      if (current.delivery !== "waiting_for_claim") continue;
+      if (refused && current.delivery !== "waiting_for_claim") continue;
+      if (stopped && (current.delivery !== "stopping" || !current.runIds.includes(command.targetId ?? ""))) continue;
     }
     const reason = command.detail?.trim() ? command.detail.trim() : "The host could not keep the work order.";
     const fact = delivered

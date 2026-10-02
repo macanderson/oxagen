@@ -60,7 +60,9 @@ export const RUN_FIT_REQUESTED_EVENT = "run/fit.requested";
  * by the tacho ingest handler for each root session and URL a batch's
  * `oxagen:pr_link` or `pr.url` frames name, with an id that holds for that
  * pair, so a re-sent batch asks once. Data is
- * `{ orgId, workspaceId, rootSessionUuid, url }`.
+ * `{ orgId, workspaceId, rootSessionUuid, url, opened? }`. `opened` is true
+ * when a `pr_open` call recorded the link, and the backfill then puts the
+ * Oxagen block and label on the pull request (ADR-252).
  */
 export const RUN_PULL_REQUEST_LINKED_EVENT = "run/pull-request.linked";
 

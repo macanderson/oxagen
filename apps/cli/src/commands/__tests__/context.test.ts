@@ -1,7 +1,7 @@
 /**
- * `oxagen context propose` output-discipline tests: the flag rules (no wasted
- * round trip), the one call it makes, `--json` as the exact payload, and API
- * failures on stderr.
+ * `oxagen context propose` and `oxagen context revert` output-discipline
+ * tests: the flag rules (no wasted round trip), the one call each makes,
+ * `--json` as the exact payload, and API failures on stderr.
  */
 import {
   afterEach,
@@ -16,7 +16,12 @@ import type { CommandWriter } from "../../lib/capture-writer.js";
 
 vi.mock("../../lib/api.js", () => ({ apiPostOrThrow: vi.fn() }));
 
-import { contextPropose, type ProposalResult } from "../context.js";
+import {
+  contextPropose,
+  contextRevert,
+  type ProposalResult,
+  type RevertResult,
+} from "../context.js";
 import { apiPostOrThrow } from "../../lib/api.js";
 
 function memoryWriter(): {
@@ -118,6 +123,69 @@ describe("oxagen context propose", () => {
     await contextPropose(FLAGS, writer);
     expect(out).toEqual([]);
     expect(err.join("\n")).toContain("no_principal");
+    expect(process.exitCode).toBe(1);
+  });
+});
+
+const REVERT: RevertResult = {
+  proposalId: "prp_9",
+  reverted: { number: 519, mergedCommit: "7d2e91a0" },
+  pullRequest: {
+    number: 520,
+    url: "https://github.com/a-intel/platform/pull/520",
+    branch: "steering/revert-519",
+    headSha: "head9",
+  },
+  check: "success",
+};
+
+describe("oxagen context revert", () => {
+  it("opens the revert through revert_steering_pr and names the PR, its link, and the check", async () => {
+    (apiPostOrThrow as Mock).mockResolvedValueOnce(REVERT);
+    const { writer, out, err } = memoryWriter();
+    await contextRevert("prp_9", {}, writer);
+    expect(apiPostOrThrow).toHaveBeenCalledTimes(1);
+    expect(apiPostOrThrow).toHaveBeenCalledWith("context/prs/revert", {
+      proposalId: "prp_9",
+    });
+    expect(out).toEqual([
+      "opened #520 on steering/revert-519: it reverts #519",
+      "https://github.com/a-intel/platform/pull/520",
+      "Oxagen steering check passed",
+    ]);
+    expect(err).toEqual([]);
+  });
+
+  it("says when no check was reported, as in a legacy repository", async () => {
+    (apiPostOrThrow as Mock).mockResolvedValueOnce({ ...REVERT, check: null });
+    const { writer, out } = memoryWriter();
+    await contextRevert("prp_9", {}, writer);
+    expect(out.at(-1)).toBe("no Oxagen steering check was reported");
+  });
+
+  it("--json emits the exact payload as one line", async () => {
+    (apiPostOrThrow as Mock).mockResolvedValueOnce(REVERT);
+    const { writer, out } = memoryWriter();
+    await contextRevert("prp_9", { json: true }, writer);
+    expect(out).toEqual([JSON.stringify(REVERT)]);
+  });
+
+  it("refuses an argument that is not a proposal id before any call", async () => {
+    const { writer, err } = memoryWriter();
+    await contextRevert("519", {}, writer);
+    expect(err[0]).toContain("name the merged proposal");
+    expect(process.exitCode).toBe(2);
+    expect(apiPostOrThrow).not.toHaveBeenCalled();
+  });
+
+  it("routes a refusal to stderr with exit code 1", async () => {
+    (apiPostOrThrow as Mock).mockRejectedValueOnce(
+      new Error("HTTP 409: not_merged"),
+    );
+    const { writer, out, err } = memoryWriter();
+    await contextRevert("prp_9", {}, writer);
+    expect(out).toEqual([]);
+    expect(err.join("\n")).toContain("not_merged");
     expect(process.exitCode).toBe(1);
   });
 });
