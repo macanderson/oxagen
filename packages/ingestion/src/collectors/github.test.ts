@@ -338,6 +338,7 @@ describe("toWorkItem", () => {
       priorityRaw: "p1",
       estimateMinutes: null,
       tainted: ["subject", "description"],
+      sourceRepository: "acme/web",
     });
   });
 

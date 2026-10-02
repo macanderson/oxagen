@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { PRIORITIES } from "./fixtures/triage-fixtures";
-import { priorityCites, priorityRuleNumbers } from "./priorities-rules";
+import { priorityCites, priorityRuleNumbers, priorityRules } from "./priorities-rules";
 
 describe("priorityRuleNumbers", () => {
   it("reads the six rules of the spec's priorities record", () => {
@@ -34,6 +34,25 @@ describe("priorityCites", () => {
       "aintel.work.priorities#4",
       "aintel.work.priorities#5",
       "aintel.work.priorities#6",
+    ]);
+  });
+});
+
+describe("priorityRules", () => {
+  it("reads each rule's text, with its continuation lines joined", () => {
+    const rules = priorityRules(PRIORITIES.body);
+    expect(rules.map((rule) => rule.number)).toEqual(priorityRuleNumbers(PRIORITIES.body));
+    expect(rules[1]).toEqual({
+      number: 2,
+      text: "A defect a paying customer reported ranks one level above the same defect found by us.",
+    });
+  });
+
+  it("keeps a repeated number's first text, and ends a rule at a blank line", () => {
+    const body = ["Intro line.", "2. Second.", "1. First,", "   continued.", "", "Notes after.", "2. Again."].join("\n");
+    expect(priorityRules(body)).toEqual([
+      { number: 1, text: "First, continued." },
+      { number: 2, text: "Second." },
     ]);
   });
 });

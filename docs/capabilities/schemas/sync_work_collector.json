@@ -1,0 +1,49 @@
+{
+  "name": "sync_work_collector",
+  "domain": "work",
+  "description": "Queue a reconcile of one work collector now, even when it is failing, such as after reconnecting GitHub.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "collector_id": {
+        "type": "string",
+        "format": "uuid"
+      }
+    },
+    "required": [
+      "collector_id"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "collector_id": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "queued": {
+        "const": true
+      }
+    },
+    "required": [
+      "collector_id",
+      "queued"
+    ],
+    "additionalProperties": false
+  }
+}

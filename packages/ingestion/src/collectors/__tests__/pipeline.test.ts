@@ -743,6 +743,29 @@ describe("reconcileCollector", () => {
     expect(await reconcileCollector(s.h.ports, COLLECTOR_ID)).toEqual({ kind: "skipped", reason: "scope_invalid" });
   });
 
+  it("leaves the cursor where it was when a page's item fails to store, so the next reconcile reads it again", async () => {
+    const s = setup();
+    putRecord(s.fake, { id: "401", updatedAt: s.ago(50) });
+    putRecord(s.fake, { id: "402", updatedAt: s.ago(49) });
+    const upsert = s.h.store.upsertItem.bind(s.h.store);
+    let calls = 0;
+    vi.spyOn(s.h.store, "upsertItem").mockImplementation(async (collector, input) => {
+      calls += 1;
+      if (calls === 2) throw new Error("the store refused the write");
+      return upsert(collector, input);
+    });
+    const failed = finished(await reconcileCollector(s.h.ports, COLLECTOR_ID));
+    expect(failed.summary).toMatchObject({ ok: false, pages: 0, error: "the store refused the write" });
+    expect(s.collector().cursor).toBeNull();
+
+    // The next reconcile reads the same page again and stores both items once.
+    vi.mocked(s.h.store.upsertItem).mockImplementation(upsert);
+    const retried = finished(await reconcileCollector(s.h.ports, COLLECTOR_ID));
+    expect(retried.summary).toMatchObject({ ok: true, pages: 1, handled: 2 });
+    expect(s.collector().cursor).not.toBeNull();
+    expect(s.h.store.items).toHaveLength(2);
+  });
+
   it("fails when the collector names no connection", async () => {
     const s = setup({ collector: { connectionId: null } });
     const result = finished(await reconcileCollector(s.h.ports, COLLECTOR_ID));

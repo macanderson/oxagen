@@ -116,6 +116,14 @@ export default defineConfig({
         "src/local-servers/broker.ts",
         "src/local-servers/route.ts",
         "src/local-servers/transport.ts",
+        // work intake and triage (P1-03, #5103)
+        "src/tools/work.collector.set.ts",
+        "src/tools/work.collector.sync.ts",
+        "src/tools/work.collectors.list.ts",
+        "src/tools/work.item.create.ts",
+        "src/tools/work.priorities.get.ts",
+        "src/tools/work.triage.retry.ts",
+        "src/tools/work.triage.revise.ts",
       ],
       exclude: ["src/tools/*.test.ts"],
       thresholds: {

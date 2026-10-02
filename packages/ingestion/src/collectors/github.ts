@@ -771,6 +771,7 @@ function toWorkItem(item: ProviderItem, config: GitHubCollectorConfig): WorkItem
     priorityRaw: priority?.raw ?? null,
     estimateMinutes: null,
     tainted: ["subject", "description"],
+    sourceRepository: repositoryOf(issue.repository_url),
   };
 }
 

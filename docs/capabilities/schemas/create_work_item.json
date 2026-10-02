@@ -1,0 +1,93 @@
+{
+  "name": "create_work_item",
+  "domain": "work",
+  "description": "Enter a work item by hand: a subject, an optional description and labels, and the repository it belongs to. Triage reads it next.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "subject": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 300
+      },
+      "description": {
+        "type": "string",
+        "maxLength": 20000
+      },
+      "labels": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "maxItems": 20,
+        "default": []
+      },
+      "repository": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "subject"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "item_id": {
+        "type": "string"
+      },
+      "number": {
+        "type": "string"
+      },
+      "state": {
+        "type": "string",
+        "enum": [
+          "new",
+          "held",
+          "triaged",
+          "needs_info",
+          "changed",
+          "ready",
+          "sent",
+          "running",
+          "review",
+          "done",
+          "closed"
+        ]
+      },
+      "revision": {
+        "type": "integer",
+        "exclusiveMinimum": 0
+      },
+      "version": {
+        "type": "integer",
+        "minimum": 0
+      }
+    },
+    "required": [
+      "item_id",
+      "number",
+      "state",
+      "revision",
+      "version"
+    ],
+    "additionalProperties": false
+  }
+}

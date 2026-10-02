@@ -328,6 +328,27 @@ import { steeringMemoriesGet } from "./steering.memories.get";
 import { steeringMemoriesPromote } from "./steering.memories.promote";
 import { steeringMemoriesDismiss } from "./steering.memories.dismiss";
 import { steeringMemoryPrRecordsList } from "./steering.memory_pr_records.list";
+import { workItemCreate } from "./work.item.create";
+import { workTriageRevise } from "./work.triage.revise";
+import { workTriageRetry } from "./work.triage.retry";
+import { workCollectorsList } from "./work.collectors.list";
+import { workCollectorSet } from "./work.collector.set";
+import { workCollectorSync } from "./work.collector.sync";
+import { workPrioritiesGet } from "./work.priorities.get";
+// The shapes the work intake and triage contracts share (P1-03, #5103).
+// Not a capability, so exported here to satisfy the file-coverage guard.
+export {
+  collectorHealthSchema,
+  repositoryNameSchema,
+  triageOutcomeSchema,
+  triageStandingSchema,
+  triageViewSchema,
+  workCollectorSchema,
+  workItemIdSchema,
+  workItemStateSchema,
+  workPrioritySchema,
+} from "./work.intake.shared";
+export type { TriageViewOutput, WorkCollectorView } from "./work.intake.shared";
 import { contextPrOpen } from "./context.pr.open";
 import { contextPrGet } from "./context.pr.get";
 import { contextPrMerge } from "./context.pr.merge";
@@ -1122,6 +1143,13 @@ export {
   steeringMemoriesPromote,
   steeringMemoriesDismiss,
   steeringMemoryPrRecordsList,
+  workItemCreate,
+  workTriageRevise,
+  workTriageRetry,
+  workCollectorsList,
+  workCollectorSet,
+  workCollectorSync,
+  workPrioritiesGet,
   contextPrOpen,
   contextPrGet,
   contextPrMerge,
@@ -1581,6 +1609,13 @@ export const contracts: readonly CapabilityDeclaration[] = [
   steeringMemoriesPromote,
   steeringMemoriesDismiss,
   steeringMemoryPrRecordsList,
+  workItemCreate,
+  workTriageRevise,
+  workTriageRetry,
+  workCollectorsList,
+  workCollectorSet,
+  workCollectorSync,
+  workPrioritiesGet,
   contextPrOpen,
   contextPrGet,
   contextPrMerge,

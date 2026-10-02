@@ -592,6 +592,16 @@ capability rewrites, so two such branches always conflicted on it (ADR-216).
 - update_user_budget
 - update_workspace_user_preferences
 
+## work
+
+- create_work_item
+- get_work_priorities
+- list_work_collectors
+- retry_work_triage
+- revise_work_triage
+- set_work_collector
+- sync_work_collector
+
 ## workspace
 
 - archive_workspace

@@ -689,6 +689,18 @@ after the registered name separately when their contract uses a dotted stem.
 | [update_user_budget](budget.policy.write.md) | [budget.policy.write.ts](../../packages/oxagen/src/contracts/budget.policy.write.ts) | api, mcp, agent |
 | [update_workspace_user_preferences](update_workspace_user_preferences.md) | [user.workspace_preferences.write.ts](../../packages/oxagen/src/contracts/user.workspace_preferences.write.ts) | api |
 
+## Work
+
+| Capability | Contract | Declared surfaces |
+| --- | --- | --- |
+| [create_work_item](work.item.create.md) | [work.item.create.ts](../../packages/oxagen/src/contracts/work.item.create.ts) | api, mcp |
+| [get_work_priorities](work.priorities.get.md) | [work.priorities.get.ts](../../packages/oxagen/src/contracts/work.priorities.get.ts) | api, mcp |
+| [list_work_collectors](work.collectors.list.md) | [work.collectors.list.ts](../../packages/oxagen/src/contracts/work.collectors.list.ts) | api, mcp |
+| [retry_work_triage](work.triage.retry.md) | [work.triage.retry.ts](../../packages/oxagen/src/contracts/work.triage.retry.ts) | api, mcp |
+| [revise_work_triage](work.triage.revise.md) | [work.triage.revise.ts](../../packages/oxagen/src/contracts/work.triage.revise.ts) | api, mcp |
+| [set_work_collector](work.collector.set.md) | [work.collector.set.ts](../../packages/oxagen/src/contracts/work.collector.set.ts) | api, mcp |
+| [sync_work_collector](work.collector.sync.md) | [work.collector.sync.ts](../../packages/oxagen/src/contracts/work.collector.sync.ts) | api, mcp |
+
 ## Workspace
 
 | Capability | Contract | Declared surfaces |

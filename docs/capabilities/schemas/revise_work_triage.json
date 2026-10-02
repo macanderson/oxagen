@@ -1,0 +1,608 @@
+{
+  "name": "revise_work_triage",
+  "domain": "work",
+  "description": "Correct a work item's triage suggestion (priority, estimate, labels, predicted paths, acceptance criteria) or its outcome. A null value clears a correction so triage decides again.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "item_id": {
+        "type": "string"
+      },
+      "expected_version": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "reason": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 2000,
+        "description": "Why the person changed the suggestion."
+      },
+      "priority": {
+        "anyOf": [
+          {
+            "type": "string",
+            "enum": [
+              "P0",
+              "P1",
+              "P2",
+              "P3"
+            ]
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "estimate_minutes": {
+        "anyOf": [
+          {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 43200
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "labels": {
+        "anyOf": [
+          {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1000
+            },
+            "maxItems": 50
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "claims": {
+        "anyOf": [
+          {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1000
+            },
+            "maxItems": 50
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "criteria": {
+        "anyOf": [
+          {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1000
+            },
+            "minItems": 1,
+            "maxItems": 50
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "outcome": {
+        "anyOf": [
+          {
+            "type": "string",
+            "enum": [
+              "triaged",
+              "needs_info",
+              "duplicate",
+              "out_of_scope"
+            ]
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "duplicate_of": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "item_id",
+      "expected_version",
+      "reason"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "item_id": {
+        "type": "string"
+      },
+      "version": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "state": {
+        "type": "string",
+        "enum": [
+          "new",
+          "held",
+          "triaged",
+          "needs_info",
+          "changed",
+          "ready",
+          "sent",
+          "running",
+          "review",
+          "done",
+          "closed"
+        ]
+      },
+      "changed": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "enum": [
+            "priority",
+            "estimate_minutes",
+            "labels",
+            "claims",
+            "criteria",
+            "outcome"
+          ]
+        }
+      },
+      "triage": {
+        "type": "object",
+        "properties": {
+          "decision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "priority": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "P0",
+                      "P1",
+                      "P2",
+                      "P3"
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "by": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "oxagen",
+                      "person"
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "actor": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "at": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "value",
+              "by",
+              "actor",
+              "at"
+            ],
+            "additionalProperties": false
+          },
+          "priority_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "cites": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "estimate_minutes": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "by": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "oxagen",
+                      "person"
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "actor": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "at": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "value",
+              "by",
+              "actor",
+              "at"
+            ],
+            "additionalProperties": false
+          },
+          "labels": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "anyOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "by": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "oxagen",
+                      "person"
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "actor": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "at": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "value",
+              "by",
+              "actor",
+              "at"
+            ],
+            "additionalProperties": false
+          },
+          "claims": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "anyOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "by": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "oxagen",
+                      "person"
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "actor": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "at": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "value",
+              "by",
+              "actor",
+              "at"
+            ],
+            "additionalProperties": false
+          },
+          "criteria": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "anyOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "by": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "oxagen",
+                      "person"
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "actor": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "at": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "value",
+              "by",
+              "actor",
+              "at"
+            ],
+            "additionalProperties": false
+          },
+          "questions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "duplicates": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "related": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "conflicts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "decision",
+          "priority",
+          "priority_reason",
+          "cites",
+          "estimate_minutes",
+          "labels",
+          "claims",
+          "criteria",
+          "questions",
+          "duplicates",
+          "related",
+          "conflicts"
+        ],
+        "additionalProperties": false
+      },
+      "standing": {
+        "type": "object",
+        "properties": {
+          "outcome": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "triaged",
+                  "needs_info",
+                  "duplicate",
+                  "out_of_scope",
+                  "failed"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "oxagen",
+                  "person"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "duplicate_of": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "outcome",
+          "by",
+          "duplicate_of"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "required": [
+      "item_id",
+      "version",
+      "state",
+      "changed",
+      "triage",
+      "standing"
+    ],
+    "additionalProperties": false
+  }
+}

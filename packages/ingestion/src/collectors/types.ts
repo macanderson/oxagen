@@ -145,6 +145,12 @@ export interface WorkItemInput {
   estimateMinutes: number | null;
   /** The fields above that a requester outside the workspace wrote. */
   tainted: TaintedField[];
+  /**
+   * The repository the item lives in, as owner/name, when the provider has
+   * one. Oxagen records it beside the provider id and never keys on it, so a
+   * rename does not split the item (ADR-244).
+   */
+  sourceRepository?: string | null;
 }
 
 /** What a write-back call changes on the provider's item. */
