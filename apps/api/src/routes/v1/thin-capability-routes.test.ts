@@ -52,8 +52,8 @@ import { agentMemoryUpdate } from "@oxagen/oxagen/contracts/agent.memory.update"
 import { agentMemoryCitationsList } from "@oxagen/oxagen/contracts/agent.memory_citation.list";
 import { agentMemoryCitationStats } from "@oxagen/oxagen/contracts/agent.memory_citation.stats";
 import { agentMemoryEvidenceAttach } from "@oxagen/oxagen/contracts/agent.memory_evidence.attach";
-import { agentMemoryImportCommit } from "@oxagen/oxagen/contracts/agent.memory_import.commit";
-import { agentMemoryImportParse } from "@oxagen/oxagen/contracts/agent.memory_import.parse";
+import { steeringMarkdownImportCommit } from "@oxagen/oxagen/contracts/steering.markdown_import.commit";
+import { steeringMarkdownImportParse } from "@oxagen/oxagen/contracts/steering.markdown_import.parse";
 import { agentMemoryPromotionDismiss } from "@oxagen/oxagen/contracts/agent.memory_promotion.dismiss";
 import { agentMemoryPromotionCandidates } from "@oxagen/oxagen/contracts/agent.memory_promotion.list";
 import { agentMemoryPromotionRationales } from "@oxagen/oxagen/contracts/agent.memory_promotion.rationales";
@@ -200,8 +200,8 @@ import { agentMemoryUpdateRoute } from "./agent.memory.update";
 import { agentMemoryCitationsListRoute } from "./agent.memory_citation.list";
 import { agentMemoryCitationStatsRoute } from "./agent.memory_citation.stats";
 import { agentMemoryEvidenceAttachRoute } from "./agent.memory_evidence.attach";
-import { agentMemoryImportCommitRoute } from "./agent.memory_import.commit";
-import { agentMemoryImportParseRoute } from "./agent.memory_import.parse";
+import { steeringMarkdownImportCommitRoute } from "./steering.markdown_import.commit";
+import { steeringMarkdownImportParseRoute } from "./steering.markdown_import.parse";
 import { agentMemoryPromotionDismissRoute } from "./agent.memory_promotion.dismiss";
 import { agentMemoryPromotionCandidatesRoute } from "./agent.memory_promotion.list";
 import { agentMemoryPromotionRationalesRoute } from "./agent.memory_promotion.rationales";
@@ -861,43 +861,6 @@ const ROUTES: ThinRoute[] = [
     },
     invalidBody: { memoryId: "m_1", sourceKind: "HUMAN_CONFIRM", strength: 9 },
     status: 201,
-  },
-  {
-    file: "agent.memory_import.commit",
-    route: agentMemoryImportCommitRoute as unknown as Hono<never>,
-    method: "POST",
-    capability: agentMemoryImportCommit.name,
-    body: {
-      drafts: [
-        { lesson: "always scope by workspace", memoryKind: "ENGINEERING" },
-      ],
-    },
-    expectedInput: {
-      drafts: [
-        {
-          lesson: "always scope by workspace",
-          memoryKind: "ENGINEERING",
-          memoryClass: "OBSERVATION",
-          source: "user",
-          nodeRef: "user-memory",
-          sourceDocument: "",
-          classified: false,
-        },
-      ],
-    },
-    invalidBody: { drafts: [] },
-    status: 201,
-  },
-  {
-    file: "agent.memory_import.parse",
-    route: agentMemoryImportParseRoute as unknown as Hono<never>,
-    method: "POST",
-    capability: agentMemoryImportParse.name,
-    body: {
-      documents: [{ filename: "notes.md", content: "# lessons\n- scope it" }],
-    },
-    invalidBody: { documents: [] },
-    status: 200,
   },
   {
     file: "agent.memory_promotion.dismiss",
@@ -2367,6 +2330,100 @@ const ROUTES: ThinRoute[] = [
     invalidBody: { outcome: "finished" },
     jsonGuard: true,
     status: 200,
+  },
+  {
+    file: "steering.markdown_import.parse",
+    route: steeringMarkdownImportParseRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: steeringMarkdownImportParse.name,
+    body: {
+      documents: [{ filename: "CLAUDE.md", content: "Never push to main." }],
+    },
+    // 26 files is one more than a call takes.
+    invalidBody: {
+      documents: Array.from({ length: 26 }, (_, i) => ({
+        filename: `${i}.md`,
+        content: "x",
+      })),
+    },
+    jsonGuard: true,
+    status: 200,
+  },
+  {
+    file: "steering.markdown_import.commit",
+    route: steeringMarkdownImportCommitRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: steeringMarkdownImportCommit.name,
+    body: {
+      records: [
+        {
+          file: "CLAUDE.md",
+          line: 1,
+          origin: "split",
+          lineage: "a-intel.claude.no-push-to-main",
+          label: "No push to main",
+          statement: "Never push to main.",
+          kind: "constraint",
+          kindReason: "It forbids an action.",
+          force: "must",
+          forceWords: "Never",
+          effect: "forbid",
+          tokens: 5,
+          duplicate: null,
+          conflict: null,
+          action: "add",
+          frontmatter: null,
+        },
+      ],
+    },
+    expectedInput: {
+      records: [
+        {
+          file: "CLAUDE.md",
+          line: 1,
+          origin: "split",
+          lineage: "a-intel.claude.no-push-to-main",
+          label: "No push to main",
+          statement: "Never push to main.",
+          kind: "constraint",
+          kindReason: "It forbids an action.",
+          force: "must",
+          forceWords: "Never",
+          effect: "forbid",
+          tokens: 5,
+          duplicate: null,
+          conflict: null,
+          action: "add",
+          frontmatter: null,
+        },
+      ],
+      policies: [],
+    },
+    // A fact is held to info, so must is refused before invoke.
+    invalidBody: {
+      records: [
+        {
+          file: "CLAUDE.md",
+          line: 1,
+          origin: "split",
+          lineage: "a-intel.claude.ci-runs-on-push",
+          label: "CI runs on push",
+          statement: "CI runs on every push.",
+          kind: "fact",
+          kindReason: "It states how the work is.",
+          force: "must",
+          forceWords: "",
+          effect: null,
+          tokens: 5,
+          duplicate: null,
+          conflict: null,
+          action: "add",
+          frontmatter: null,
+        },
+      ],
+    },
+    jsonGuard: true,
+    status: 201,
   },
 ];
 

@@ -22,6 +22,7 @@ import {
   CapabilityError,
   type CapabilityContext,
 } from "@oxagen/oxagen";
+import { createOxagenAssistantBinding } from "@oxagen/oxagen/oxagen-assistant";
 import { runInTenantScope } from "@oxagen/tenancy";
 import {
   and,
@@ -229,14 +230,21 @@ export async function resumeApprovedCall(
           inputDigest(parsed.data) !== payload.validatedDigest
         )
           throw new ApprovalResumeError("input_schema_changed");
+        const requestId = crypto.randomUUID();
+        // Only a Stella turn parks a call with a resume payload
+        // (`approvalMode: "park"`, assistant-turn.ts). The resume is the rest
+        // of that call, so it carries the binding that keeps the workspace's
+        // decision rules off Stella's calls (ADR-235). The person's IAM check
+        // still runs at invoke.
         const ctx: CapabilityContext = {
           orgId: ref.orgId,
           workspaceId: ref.workspaceId,
           userId: payload.requesterUserId,
           apiKeyId: null,
-          requestId: crypto.randomUUID(),
+          requestId,
           surface: "app",
           messageId: payload.messageId,
+          oxagenAssistant: createOxagenAssistantBinding({ requestId }),
         };
         const [orgRoles, workspaceRoles] = await Promise.all([
           resolveActorOrgRoles(ctx.orgId, payload.requesterUserId),
@@ -251,6 +259,10 @@ export async function resumeApprovedCall(
         bootstrapIAMRuntime();
         bootstrapBillingRuntime();
         bootstrapEntitlementRuntime();
+        // The rules gate does not judge this call, which carries the Stella
+        // binding (ADR-235). It stays registered for any nested call that
+        // names a customer's agent, and the catch below still names a rule
+        // refusal from one.
         bootstrapDecisionRulesRuntime();
         // The agent the parked turn ran as: stella (#4218). An `agent` switch
         // on it, or a deny naming its principal, stops the approved call as it
@@ -296,9 +308,6 @@ export async function resumeApprovedCall(
         const budgets = await getSpendBudgetStatuses({ orgId: ctx.orgId });
         if (budgets.some((status) => status.budget.enabled && status.overLimit))
           throw new ApprovalResumeError("budget_exhausted");
-        // invoke owns the fresh decision-rule check and its approval receipt.
-        // A preflight gate would commit before run admission and commit again
-        // when the canonical invocation evaluates the same standing rule.
         run = await openAssistantRun({
           orgId: ref.orgId,
           workspaceId: ref.workspaceId,
@@ -338,15 +347,12 @@ export async function resumeApprovedCall(
         if (Date.now() >= row.expiresAt.getTime())
           throw new ApprovalResumeError("approval_expired");
         dispatched = true;
+        // No rule digest is passed and no fresh rules are required: the
+        // workspace's decision rules do not judge Stella's calls, so a payload
+        // sealed with a `ruleDigest` before ADR-235 resumes like any other.
         await invoke(cap.name, payload.rawInput, ctx, {
           surface: "agent",
-          requireFreshRules: true,
           runId: run.runId,
-          // A decision rule parked this call, and the person approved the
-          // exact call the rule judged (#4226). The rules gate re-judges it
-          // on current rules and accepts the approval only when the digest
-          // still matches. A changed rule set asks a person again.
-          ...(payload.ruleDigest ? { approvedDigest: payload.ruleDigest } : {}),
           assertValidatedInput: (value) => {
             if (inputDigest(value) !== payload.validatedDigest)
               throw new ApprovalResumeError("input_schema_changed");

@@ -28,7 +28,7 @@ env:
 
 jobs:
   schema:
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-small-{0}', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
     environment: staging
     timeout-minutes: 30
     steps:
@@ -88,7 +88,7 @@ jobs:
 
   deploy:
     needs: schema
-    runs-on: ubuntu-24.04-arm
+    runs-on: ${{ vars.CI_RUNNERS == 'aws' && 'oxagen-large-arm64' || 'ubuntu-24.04-arm' }}
     environment: staging
     timeout-minutes: 45
     strategy:
@@ -140,7 +140,7 @@ jobs:
 
   verify:
     needs: deploy
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-small-{0}', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
     environment: staging
     steps:
       - uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3

@@ -3,17 +3,9 @@
   "domain": "agent",
   "description": "Parse a batch of uploaded markdown documents into draft AgentMemory records, classifying each by kind + weight. Read-only: returns editable drafts for review, persists nothing.",
   "mode": "sync",
-  "surfaces": [
-    "api",
-    "mcp",
-    "agent"
-  ],
+  "surfaces": [],
   "sensitivity": "medium",
-  "agent": {
-    "requiresApproval": false,
-    "riskLevel": "low",
-    "category": "memory"
-  },
+  "agent": null,
   "chain": {
     "produces": [],
     "consumes": [],
