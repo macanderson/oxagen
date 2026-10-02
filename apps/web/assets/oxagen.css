@@ -99,9 +99,9 @@
   --r-lg: var(--ox-radius); /* windows: the terminal, cards, panels */
   --r-xl: var(--ox-radius-3xl); /* frames: card grids, the demo box */
   --r-pill: 999px; /* the eyebrow pill, tags */
-  /* The page wrap. The kit's --ox-wrap is 1120px; this site's wrap is 60px
-     wider, and moving it onto --ox-wrap waits on Mac (oxageninc/product#5104). */
-  --page-wrap: 1180px;
+  /* The page wrap is the kit's house wrap, 1180px since Mac's decision of
+     2026-10-02 (oxageninc/brand#72). */
+  --page-wrap: var(--ox-wrap);
   /* The hairline under a control, on ink. The light theme below repoints it
      to the paper twin. */
   --shadow-ui: var(--ox-shadow-ui);
