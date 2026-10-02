@@ -2410,6 +2410,7 @@ const ROUTES: ThinRoute[] = [
         },
       ],
       policies: [],
+      memories: [],
     },
     // A fact is held to info, so must is refused before invoke.
     invalidBody: {

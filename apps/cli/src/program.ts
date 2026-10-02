@@ -752,15 +752,15 @@ export function buildProgram(): Command {
       "Markdown files, or folders to search for .md, .markdown, and .mdx files",
     )
     .description(
-      "Read Markdown files into steering records and Cedar policies. Previews unless --yes.",
+      "Read Markdown files into steering records, Cedar policies, or memories. Previews unless --yes.",
     )
     .option(
       "--as <target>",
-      "records or policies for every file. Without it, each file takes the target its text implies, such as policies for a file with a cedar block.",
+      "records, policies, or memories for every file. Without it, each file takes the target its text implies, such as policies for a file with a cedar block.",
     )
     .option(
       "-y, --yes",
-      "Open one steering PR with every row marked add. Records that conflict with a published record are left out.",
+      "Open one steering PR with every record and policy marked add, and store every memory marked add as a waiting memory. Records that conflict with a published record are left out.",
     )
     .option("--json", "Output JSON")
     .action(

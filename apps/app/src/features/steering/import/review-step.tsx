@@ -3,7 +3,10 @@
 // `mdimRowHtml`): one group per file, and under a records file one row per
 // statement with its kind and the reason for it, its force within the forces
 // the kind allows, the words behind the force, the file and line it starts
-// on, and any duplicate or conflict. A policy file shows its head only.
+// on, and any duplicate or conflict. Under a memories file each row is a
+// memory with force info, and its mark names the waiting memory, the
+// rejected statement, or the earlier row it repeats. A policy file shows its
+// head only.
 //
 // Table text never wraps. The shell's cell overflow shows the whole value of
 // a cut line in a hover card, and each line that can be cut carries the whole
@@ -23,6 +26,8 @@ import {
   IMPORT_KINDS,
   type ImportEffect,
   type ImportKind,
+  memoryKey,
+  type ResolvedMemory,
   type ResolvedRow,
   type RowEdit,
   rowKey,
@@ -331,6 +336,108 @@ function RecordRow({
   );
 }
 
+/** What a memory row repeats, or why it cannot be stored. */
+function MemoryMarks({ memory }: { memory: ResolvedMemory["memory"] }) {
+  const t = useTranslations("steering.import.marks");
+  const match = memory.duplicate;
+  if (match !== null) {
+    const note =
+      match.reason === "waiting"
+        ? t("waiting", { memory: match.memory ?? "" })
+        : match.reason === "rejected"
+          ? t("rejected")
+          : t("matches", {
+              record: t("rowRef", { line: match.line ?? 1, file: match.file ?? "" }),
+            });
+    return (
+      <>
+        <Badge tone="quiet" data-mark="duplicate">
+          {t("duplicate")}
+        </Badge>
+        <span data-truncate={note} className={sub}>
+          {note}
+        </span>
+      </>
+    );
+  }
+  if (memory.issue !== null) {
+    return (
+      <>
+        <Badge tone="failed" data-mark="too-long">
+          {t("tooLong")}
+        </Badge>
+        <span data-truncate={memory.issue} className={sub}>
+          {memory.issue}
+        </span>
+      </>
+    );
+  }
+  return null;
+}
+
+function MemoryRow({
+  row,
+  onTick,
+}: {
+  row: ResolvedMemory;
+  onTick: (on: boolean) => void;
+}) {
+  const t = useTranslations("steering.import");
+  const { memory } = row;
+  const at = { line: memory.line, file: memory.file };
+  return (
+    <tr
+      data-testid="import-memory"
+      data-source={`${memory.file}:${memory.line}`}
+      data-action={row.action}
+    >
+      <td>
+        <input
+          type="checkbox"
+          data-testid="import-on"
+          aria-label={t("grid.importLabel", at)}
+          checked={row.action === "add"}
+          disabled={!row.editable}
+          onChange={(event) => {
+            onTick(event.currentTarget.checked);
+          }}
+        />
+      </td>
+      <td>
+        <span
+          data-truncate={memory.statement}
+          className={`block max-w-[34ch] truncate ${row.action === "skip" ? "text-muted-foreground" : "text-foreground"}`}
+        >
+          {oneLine(memory.statement)}
+        </span>
+      </td>
+      <td>
+        <span className="block text-foreground">{t("kinds.memory")}</span>
+        <span className={sub}>{t("grid.fromTarget")}</span>
+      </td>
+      <td>
+        <span className={`${mono} text-foreground`} data-testid="import-force">
+          {memory.force}
+        </span>
+      </td>
+      <td>
+        <span className="text-muted-foreground">{t("grid.none")}</span>
+        <span className={sub} data-reason="only">
+          {t("why.only", { force: memory.force })}
+        </span>
+      </td>
+      <td>
+        <span className={`${mono} text-muted-foreground`}>
+          {memory.file}:{memory.line}
+        </span>
+      </td>
+      <td>
+        <MemoryMarks memory={memory} />
+      </td>
+    </tr>
+  );
+}
+
 /** A file's head row: its path, its target, and what parse made of it. */
 function GroupHead({ group }: { group: FileGroup }) {
   const t = useTranslations("steering.import");
@@ -345,7 +452,10 @@ function GroupHead({ group }: { group: FileGroup }) {
     what = t("grid.rules", { count: policy.statements.length });
     if (issue !== undefined) problem = issue.message;
   } else {
-    what = t("grid.statements", { count: group.rows.length });
+    what = t("grid.statements", {
+      count:
+        group.target === "memories" ? group.memories.length : group.rows.length,
+    });
   }
   return (
     <tr data-testid="import-group" data-file={group.file}>
@@ -380,10 +490,13 @@ export function StatementGrid({
   groups,
   rows,
   onEdit,
+  onTick,
 }: {
   groups: readonly FileGroup[];
   rows: readonly ResolvedRow[];
   onEdit: (index: number, edit: RowEdit) => void;
+  /** A memory row ticked in or out. */
+  onTick: (memory: ResolvedMemory["memory"], on: boolean) => void;
 }) {
   const t = useTranslations("steering.import.grid");
   return (
@@ -408,6 +521,15 @@ export function StatementGrid({
             row={row}
             rows={rows}
             onEdit={onEdit}
+          />
+        )),
+        ...group.memories.map((row) => (
+          <MemoryRow
+            key={memoryKey(row.memory)}
+            row={row}
+            onTick={(on) => {
+              onTick(row.memory, on);
+            }}
           />
         )),
       ])}

@@ -635,6 +635,13 @@ export const routes = {
    */
   steeringRecord: (org: string, ws: string, lineage: string): SafePath =>
     pathOf(org, ws, "steering", "records", lineage),
+  /**
+   * The Steering page's Memories tab, at `steering?tab=memories`
+   * (memory-collection spec, Memories tab). #4914 builds the tab. Until it
+   * lands, the page answers this address with the Library.
+   */
+  steeringMemories: (org: string, ws: string): SafePath =>
+    withQuery(pathOf(org, ws, "steering"), { tab: "memories" }),
 };
 
 /**
