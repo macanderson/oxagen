@@ -218,7 +218,7 @@ function FindingText({
               }),
             );
         }
-        if ((values.contextFrameTokens ?? 0) > 0)
+        if (values.contextFrameTokens !== null && values.contextFrameTokens > 0)
           lines.push(t("standing_context.contextFrames"));
         return lines.join(" ");
       }

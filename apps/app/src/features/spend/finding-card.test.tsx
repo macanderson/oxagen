@@ -310,7 +310,7 @@ describe("Detector cards", () => {
     for (const finding of ALL) {
       const text = textOf(card(finding.id));
       expect(text?.getAttribute("data-finding-text")).toBe("catalogue");
-      expect(text).toHaveTextContent(WRITTEN[finding.kind as Known]);
+      expect(text).toHaveTextContent(WRITTEN[finding.kind]);
     }
   });
 
@@ -322,13 +322,13 @@ describe("Detector cards", () => {
     await showAll(user);
     for (const finding of ALL) {
       const text = textOf(card(finding.id));
-      if (VALUES[finding.kind as Known] === undefined) {
+      if (VALUES[finding.kind] === undefined) {
         // The repeat kinds name only the runs, the calls, and the saving.
         expect(text?.getAttribute("data-finding-text")).toBe("catalogue");
         continue;
       }
       expect(text?.getAttribute("data-finding-text")).toBe("detector");
-      expect(text).toHaveTextContent(WHY[finding.kind as Known]);
+      expect(text).toHaveTextContent(WHY[finding.kind]);
     }
   });
 
