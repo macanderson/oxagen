@@ -20,7 +20,7 @@
 //      else is added;
 //   5. the outsider's own organization, e2e-outside, through create_org;
 //   6. the ids a capture path names beyond the run: the agent and runtime
-//      seed:e2e registered, one stdio tool server through register_mcp_server,
+//      seed:e2e registered, one stdio MCP server through register_mcp_server,
 //      the owner's principal as the operator, one steering proposal through
 //      append_record, and three invitations for the `invite` page (open,
 //      expired, and declined) through send_workspace_invite and
@@ -78,7 +78,7 @@ const SEEDED_AGENT_SLUG = "e2e-agent";
 const SEEDED_RUNTIME_SLUG = "e2e-runtime";
 
 /**
- * The tool server this seed registers in core. A stdio server is stored as
+ * The MCP server this seed registers in core. A stdio server is stored as
  * given and probed by nobody, so registering it reaches no network.
  */
 const TOOL_SERVER = {
@@ -444,7 +444,7 @@ async function seedOutsideOrg(outsiderId: string): Promise<void> {
 
 type CaptureIds = Pick<PersonasRecord, "values" | "missing">;
 
-/** The stdio tool server's public id, registered on the first run. */
+/** The stdio MCP server's public id, registered on the first run. */
 async function seedToolServer(core: Scope, ownerId: string): Promise<string> {
   const [existing] = await withTenantDb((tx) =>
     tx
@@ -476,7 +476,7 @@ async function seedToolServer(core: Scope, ownerId: string): Promise<string> {
   return registered.mcpServerId;
 }
 
-/** Agent, runtime, tool server, and operator, in core's tenant scope. */
+/** Agent, runtime, MCP server, and operator, in core's tenant scope. */
 async function seedCaptureIds(
   core: Scope,
   ownerId: string,

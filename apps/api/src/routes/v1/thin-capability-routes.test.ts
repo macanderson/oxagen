@@ -123,6 +123,13 @@ import { steeringMemoriesDismiss } from "@oxagen/oxagen/contracts/steering.memor
 import { steeringMemoriesGet } from "@oxagen/oxagen/contracts/steering.memories.get";
 import { steeringMemoriesList } from "@oxagen/oxagen/contracts/steering.memories.list";
 import { steeringMemoriesPromote } from "@oxagen/oxagen/contracts/steering.memories.promote";
+import { workItemCreate } from "@oxagen/oxagen/contracts/work.item.create";
+import { workTriageRevise } from "@oxagen/oxagen/contracts/work.triage.revise";
+import { workTriageRetry } from "@oxagen/oxagen/contracts/work.triage.retry";
+import { workCollectorsList } from "@oxagen/oxagen/contracts/work.collectors.list";
+import { workCollectorSet } from "@oxagen/oxagen/contracts/work.collector.set";
+import { workCollectorSync } from "@oxagen/oxagen/contracts/work.collector.sync";
+import { workPrioritiesGet } from "@oxagen/oxagen/contracts/work.priorities.get";
 import { steeringMemoryPrRecordsList } from "@oxagen/oxagen/contracts/steering.memory_pr_records.list";
 import { contextProposalDismiss } from "@oxagen/oxagen/contracts/context.proposal.dismiss";
 import { contextPrOpen } from "@oxagen/oxagen/contracts/context.pr.open";
@@ -279,6 +286,13 @@ import { steeringMemoriesDismissRoute } from "./steering.memories.dismiss";
 import { steeringMemoriesGetRoute } from "./steering.memories.get";
 import { steeringMemoriesListRoute } from "./steering.memories.list";
 import { steeringMemoriesPromoteRoute } from "./steering.memories.promote";
+import { workItemCreateRoute } from "./work.item.create";
+import { workTriageReviseRoute } from "./work.triage.revise";
+import { workTriageRetryRoute } from "./work.triage.retry";
+import { workCollectorsListRoute } from "./work.collectors.list";
+import { workCollectorSetRoute } from "./work.collector.set";
+import { workCollectorSyncRoute } from "./work.collector.sync";
+import { workPrioritiesGetRoute } from "./work.priorities.get";
 import { steeringMemoryPrRecordsListRoute } from "./steering.memory_pr_records.list";
 import { contextProposalDismissRoute } from "./context.proposal.dismiss";
 import { contextPrOpenRoute } from "./context.pr.open";
@@ -519,6 +533,78 @@ const ROUTES: ThinRoute[] = [
     capability: contextProposalDismiss.name,
     body: { proposalId: "prp_1", reason: "duplicate" },
     invalidBody: { proposalId: "prp_1" },
+    status: 200,
+  },
+  // Work intake and triage (P1-03, #5103).
+  {
+    file: "work.item.create",
+    route: workItemCreateRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: workItemCreate.name,
+    body: { subject: "Fix the invite email" },
+    expectedInput: { subject: "Fix the invite email", labels: [] },
+    invalidBody: { subject: "" },
+    jsonGuard: true,
+    status: 201,
+  },
+  {
+    file: "work.triage.revise",
+    route: workTriageReviseRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: workTriageRevise.name,
+    body: { item_id: "wi_01", expected_version: 3, reason: "A paying customer", priority: "P0" },
+    invalidBody: { item_id: "01", expected_version: 3, reason: "x", priority: "P0" },
+    jsonGuard: true,
+    status: 200,
+  },
+  {
+    file: "work.triage.retry",
+    route: workTriageRetryRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: workTriageRetry.name,
+    body: { item_id: "wi_01" },
+    invalidBody: { item_id: "tri_01" },
+    jsonGuard: true,
+    status: 202,
+  },
+  {
+    file: "work.collectors.list",
+    route: workCollectorsListRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: workCollectorsList.name,
+    body: {},
+    invalidBody: { name: "github" },
+    jsonGuard: true,
+    status: 200,
+  },
+  {
+    file: "work.collector.set",
+    route: workCollectorSetRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: workCollectorSet.name,
+    body: { name: "github", connection_id: "con_1", repos: ["acme/web"] },
+    invalidBody: { name: "GitHub Issues" },
+    jsonGuard: true,
+    status: 200,
+  },
+  {
+    file: "work.collector.sync",
+    route: workCollectorSyncRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: workCollectorSync.name,
+    body: { collector_id: "00000000-0000-4000-8000-000000000001" },
+    invalidBody: { collector_id: "col-1" },
+    jsonGuard: true,
+    status: 202,
+  },
+  {
+    file: "work.priorities.get",
+    route: workPrioritiesGetRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: workPrioritiesGet.name,
+    body: {},
+    invalidBody: { lineage: "work.priorities" },
+    jsonGuard: true,
     status: 200,
   },
   // Workspace memories (#4912).

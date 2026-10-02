@@ -491,3 +491,54 @@ describe("GitLab webhook: the steering repo health check (S2, #4560)", () => {
     });
   });
 });
+
+describe("GitLab webhook: the Oxagen check on a code repository (S2b, #5058)", () => {
+  it("asks once per merge request delivery, with the scope, the connection, the event, and the body", async () => {
+    const { deps } = world({});
+    const requestCodeCheck = vi.fn(async () => undefined);
+    deps.requestCodeCheck = requestCodeCheck;
+    const body = mrEvent({});
+    await deliver(deps, body);
+    expect(requestCodeCheck).toHaveBeenCalledTimes(1);
+    expect(requestCodeCheck).toHaveBeenCalledWith(
+      { orgId: CONNECTION.orgId, workspaceId: CONNECTION.workspaceId },
+      CONNECTION,
+      expect.objectContaining({
+        kind: "merge_request",
+        iid: 7,
+        lastCommitSha: "abc123",
+        targetBranch: "main",
+      }),
+      body,
+    );
+  });
+
+  it("asks nothing for a push", async () => {
+    const { deps } = world({});
+    const requestCodeCheck = vi.fn(async () => undefined);
+    deps.requestCodeCheck = requestCodeCheck;
+    await deliver(deps, {
+      object_kind: "push",
+      ref: "refs/heads/feature",
+      project: { id: 4242, path_with_namespace: "acme/platform/rules", default_branch: "main" },
+    });
+    expect(requestCodeCheck).not.toHaveBeenCalled();
+  });
+
+  it("logs a failed request and answers the delivery as before (negative)", async () => {
+    const { deps, state } = world({ mrState: "closed" });
+    deps.requestCodeCheck = vi.fn(async () => {
+      throw new Error("event bus down");
+    });
+    vi.mocked(logger.error).mockClear();
+    await expect(deliver(deps, mrEvent({ state: "closed" }))).resolves.toEqual({
+      status: 200,
+      outcome: "proposal_rejected",
+    });
+    expect(state.rejected).toEqual([{ id: "p-7", reason: CLOSED_ON_GITLAB }]);
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.objectContaining({ connectionId: CONNECTION.id, iid: 7 }),
+      expect.stringContaining("could not request the Oxagen check"),
+    );
+  });
+});

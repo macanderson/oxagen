@@ -109,14 +109,19 @@ describe("the MCP Studio server page", () => {
 
   it("moves every other path to the Agents tab that absorbed it, after resolving the viewer", async () => {
     await expect(Promise.resolve(open(["providers"]))).rejects.toThrow(
-      "REDIRECT /acme/core-platform/agents?tab=servers",
+      "REDIRECT /acme/core-platform/agents?tab=mcp-servers",
     );
     expect(requireViewer).toHaveBeenCalledWith("acme", "core-platform");
     expect(StudioServer).not.toHaveBeenCalled();
     // `/tools/servers` alone names no server, so it is the old Providers tab.
     await expect(Promise.resolve(open(["servers"]))).rejects.toThrow(
-      "REDIRECT /acme/core-platform/agents?tab=servers",
+      "REDIRECT /acme/core-platform/agents?tab=mcp-servers",
     );
+    // A bare `/tools` lands on MCP servers.
+    await expect(Promise.resolve(open([]))).rejects.toThrow(
+      "REDIRECT /acme/core-platform/agents?tab=mcp-servers",
+    );
+    expect(StudioServer).not.toHaveBeenCalled();
   });
 
   it("names its one page, a server's, by the Studio title", async () => {

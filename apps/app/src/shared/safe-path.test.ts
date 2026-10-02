@@ -159,7 +159,7 @@ describe("routes", () => {
         rows: "25",
         cursor: "g2",
       }),
-    ).toBe("/acme/core/agents?tab=servers&rows=25&cursor=g2");
+    ).toBe("/acme/core/agents?tab=mcp-servers&rows=25&cursor=g2");
     expect(routes.steering("acme", "core")).toBe("/acme/core/steering");
     expect(
       routes.steering("acme", "core", {
@@ -343,9 +343,9 @@ describe("routes", () => {
     expect(routes.agents("acme", "core-platform", { tab: "agents" })).toBe(
       "/acme/core-platform/agents",
     );
-    expect(routes.agents("acme", "core-platform", { tab: "servers" })).toBe(
-      "/acme/core-platform/agents?tab=servers",
-    );
+    expect(
+      routes.agents("acme", "core-platform", { tab: "mcp-servers" }),
+    ).toBe("/acme/core-platform/agents?tab=mcp-servers");
     expect(routes.agents("acme", "core-platform", { tab: "toolbelts" })).toBe(
       "/acme/core-platform/agents?tab=toolbelts",
     );
@@ -369,7 +369,7 @@ describe("routes", () => {
       "/acme/core-platform/agents?tab=toolbelts",
     );
     expect(routes.tools("acme", "core-platform", { tab: "providers" })).toBe(
-      "/acme/core-platform/agents?tab=servers",
+      "/acme/core-platform/agents?tab=mcp-servers",
     );
     expect(routes.tools("acme", "core-platform", { tab: "policy" })).toBe(
       "/acme/core-platform/agents?tab=policies",

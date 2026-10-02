@@ -71,7 +71,7 @@ const { mcpServerListOutput, toolVersionListOutput } = await import(
 );
 
 const at = { org: "acme", ws: "core-platform" };
-const PROVIDERS = "/acme/core-platform/agents?tab=servers";
+const PROVIDERS = "/acme/core-platform/agents?tab=mcp-servers";
 const failure = translator("tools.actions.failure");
 const oauth = translator("tools.import.oauth");
 const drill = translator("tools.providers.drill");

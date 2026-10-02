@@ -9,9 +9,11 @@
 // the export's name does not matter. A type with no module here has no
 // doorbell, fetch, or reconcile. Its inbound events wait unprocessed, and the
 // reconcile skips it, until the module ships.
+import * as github from "./github";
 import { registerCollectorModule } from "./registry";
 
-const SHIPPED_MODULES: readonly Record<string, unknown>[] = [];
+/** The GitHub Issues collector shipped with Phase 1 of agent work (P1-03, #5103). */
+const SHIPPED_MODULES: readonly Record<string, unknown>[] = [github];
 
 /** Register every shipped module. Safe to call more than once. */
 export function registerCollectorModules(

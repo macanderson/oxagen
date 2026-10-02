@@ -27,7 +27,7 @@ export const SIGNED_IN_ROUTES: readonly RouteRow[] = [
   { path: `/${org}/${ws}`, titleKey: "fleet" },
   { path: `/${org}/${ws}/agents`, titleKey: "agents" },
   { path: `/${org}/${ws}/agents/e2e-agent/overview`, titleKey: "agent" },
-  { path: `/${org}/${ws}/agents?tab=servers`, titleKey: "agents" },
+  { path: `/${org}/${ws}/agents?tab=mcp-servers`, titleKey: "agents" },
   { path: `/${org}/${ws}/agents?tab=policies`, titleKey: "agents" },
   { path: `/${org}/${ws}/agents?tab=runtimes`, titleKey: "agents" },
   { path: `/${org}/${ws}/agents?tab=switches`, titleKey: "agents" },

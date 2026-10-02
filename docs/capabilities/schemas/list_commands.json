@@ -89,7 +89,8 @@
                 "message",
                 "revoke",
                 "refresh_bundle",
-                "kill"
+                "kill",
+                "work_order"
               ]
             },
             "status": {

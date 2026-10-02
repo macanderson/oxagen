@@ -150,7 +150,7 @@ export function toApprovalRuleSet(
   };
 }
 
-// ── Connections and tool servers (lane: connections) ────────────────────────
+// ── Connections and MCP servers (lane: connections) ─────────────────────────
 
 /**
  * `list_connections` as the connections table reads it. The contract carries

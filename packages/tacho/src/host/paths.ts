@@ -134,6 +134,13 @@ export interface TachoPaths extends TachoHome {
    * A cache only, so `oxagen agent unenroll` removes it.
    */
   stellaIdentity: string;
+  /**
+   * The work orders the control plane sent this agent and no one has
+   * started yet, one JSON file each (0600; `host/work-orders.ts`).
+   * `oxagen work list` reads them and `oxagen work start` removes one once
+   * the agent's harness has started.
+   */
+  workOrders: string;
 }
 
 /**
@@ -163,6 +170,7 @@ export const AGENT_FILES: Record<
   stellaMemoryCursors: "stella-memory-cursors.json",
   preSessionCopies: "pre-session",
   stellaIdentity: "stella-identity",
+  workOrders: "work-orders",
 };
 
 /** Claude Code's config directory: `$CLAUDE_CONFIG_DIR`, else `~/.claude`. */

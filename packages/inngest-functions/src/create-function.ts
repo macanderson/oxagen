@@ -248,6 +248,10 @@ function buildInngestConfig(
     // Inngest-native shape: { period, key?, timeout? }.
     inngestConfig.debounce = config.debounce;
   }
+  if (config.throttle) {
+    // Inngest-native shape: { limit, period, key?, burst? }.
+    inngestConfig.throttle = config.throttle;
+  }
   return inngestConfig;
 }
 
