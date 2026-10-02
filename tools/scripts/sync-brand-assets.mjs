@@ -64,9 +64,11 @@
  * `--check` also runs the literal guard in lib/brand-literals.mjs: each
  * stylesheet it lists must take its corners, shadows, font sizes, and page
  * wrap from the kit's tokens, so a theme change reaches every site with no
- * hand edit (oxageninc/brand#63, #5104). A literal is listed as `literal`
- * with its line and the token to use, and an allowlist entry that excuses
- * nothing is listed as `keep`.
+ * hand edit (oxageninc/brand#63, #5104). It reads the classes in the docs
+ * chrome's markup too, where a fixed Tailwind size or a length in square
+ * brackets is a literal. A literal is listed as `literal` with its line and
+ * the token to use, and an allowlist entry that excuses nothing is listed as
+ * `keep`.
  *
  * SURFACE_MARKS lists the marks each app may carry. The product shows the
  * wordmark where a word fits and the hive where the slot is square. The kit
@@ -85,7 +87,7 @@ import {
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { INK_TOKENS } from "../../apps/web/scripts/lib/theme.mjs";
-import { GUARDED, literalDrift } from "./lib/brand-literals.mjs";
+import { GUARDED, GUARDED_MARKUP, literalDrift, markupDrift } from "./lib/brand-literals.mjs";
 import { isEntrypoint } from "./lib/is-entrypoint.mjs";
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
@@ -852,7 +854,8 @@ function desktopIcons() {
 
 /**
  * The literal guard, in a check only: every corner, shadow, font size, or
- * page wrap a guarded stylesheet writes as a literal instead of a kit token.
+ * page wrap a guarded stylesheet writes as a literal instead of a kit token,
+ * and every fixed size, corner, or shadow class in the docs chrome's markup.
  * The kit's own house-tokens.css names the nearest token in each message.
  */
 function literals() {
@@ -873,6 +876,16 @@ function literals() {
       kind: "literal",
       path: h.path,
       why: `line ${h.line}: ${h.prop}: ${h.value}; use ${h.use}`,
+    });
+  }
+  const markup = new Map(
+    GUARDED_MARKUP.map(({ path }) => [path, committed(path)?.toString("utf8") ?? null]),
+  );
+  for (const h of markupDrift(markup, { tokens })) {
+    drifted.push({
+      kind: "literal",
+      path: h.path,
+      why: `line ${h.line}: ${h.prop} ${h.value}; use ${h.use}`,
     });
   }
   for (const k of stale) {

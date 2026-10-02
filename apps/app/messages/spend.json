@@ -701,7 +701,7 @@
     "ranking": {
       "title": "Operator ranking",
       "note": "Operators by unproductive spend for this period, highest first. Each figure links to its definition.",
-      "managersOnly": "An org Owner or Admin can read the operator ranking. Ask one of them for the figures.",
+      "managersOnly": "An org Owner or Admin, or this workspace's Owner, can read the operator ranking. Ask one of them for the figures.",
       "empty": "No run has unproductive spend in this period.",
       "mixedCurrency": "This period holds unproductive spend in more than one currency. The ranking adds up one currency, so Oxagen built no ranking.",
       "unnamed": "Unnamed operator",

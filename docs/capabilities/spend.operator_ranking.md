@@ -11,10 +11,10 @@ The operators of the active workspace ranked by unproductive spend, highest firs
 ## Surface
 
 - API: `POST /v1/:org_slug/:workspace_slug/spend/operators`
-- Authentication: session (org Owner or Admin)
+- Authentication: session (org Owner or Admin, or the workspace's Owner)
 - Capability name: `get_operator_ranking`
-- Not billed (`noBillingGate: true`). IAM default-deny; medium sensitivity. The handler asserts the role itself, so an org Member, a Billing member, a workspace Member, and a workspace Owner who is not an org Owner or Admin are refused with `forbidden` (`org_role_required`) on every tier. In an Enterprise org the kernel's IAM check admits the same two roles: migration `20261002045000_backfill_spend_ranking_grants.sql` grants them to every org that existed before the capability did.
-- No workspace role reads the ranking. No person holds a workspace IAM role yet (#3198), so in an Enterprise org the kernel cannot admit a workspace Owner, and the ranking names org roles on every tier so that each tier admits the same people.
+- Not billed (`noBillingGate: true`). IAM default-deny; medium sensitivity. The handler asserts the role itself, so an org Member, a Billing member, a workspace Member, and a workspace Viewer are refused with `forbidden` (`org_role_required`) on every tier. In an Enterprise org the kernel's IAM check admits the same three roles. Migration `20261002045000_backfill_spend_ranking_grants.sql` grants the two org roles to every org that existed before the capability did, and `20261002180000_backfill_workspace_owner_assignments.sql` grants the workspace Owner.
+- The workspace Owner reads the ranking of that one workspace. The person who creates a workspace holds its Owner role in IAM (#5182). Owner of one workspace gives no access to the ranking of another.
 - Agent: Stella finds it with `search_tools` and loads it with `load_tools`. It runs with no approval step (`riskLevel: low`).
 
 ## Input
@@ -53,7 +53,7 @@ Each row:
 
 | Code | Reason | When |
 |---|---|---|
-| `forbidden` | `org_role_required` | the caller is not an org Owner or Admin |
+| `forbidden` | `org_role_required` | the caller is not an org Owner, an org Admin, or this workspace's Owner |
 | `conflict` | `ranking_mixed_currency` | the period's claimed frames are priced in more than one currency; the ranking sums one currency, so none is built |
 
 ## Counting

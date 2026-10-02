@@ -13,7 +13,7 @@ import { workspaceCreate } from "@oxagen/oxagen/contracts/workspace.create";
 import { ORG_ONLY_WORKSPACE_ID, type CapabilityContext } from "@oxagen/oxagen";
 import { closeDatabase, schema, withSystemDb } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
-import { eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { organizationCreateHandler } from "./org.create";
 import { initialSteeringRepoState } from "./steering_repo.provision";
 import {
@@ -192,9 +192,16 @@ describe.skipIf(!enabled)("create_org against Postgres", () => {
         .from(schema.orgUsers)
         .where(eq(schema.orgUsers.userId, userId));
 
-      // IAM bootstrap: the creator's human principal holds the org Owner role.
+      // IAM bootstrap: the creator's human principal holds the org Owner
+      // role, and the workspace Owner role on the first workspace (#5182).
       const ownerAssignments = await tx
-        .select({ role: schema.roles.name, kind: schema.principals.kind })
+        .select({
+          role: schema.roles.name,
+          scopeKind: schema.roles.scopeKind,
+          kind: schema.principals.kind,
+          workspaceId: schema.principalRoleAssignments.workspaceId,
+          assignedBy: schema.principalRoleAssignments.assignedBy,
+        })
         .from(schema.principalRoleAssignments)
         .innerJoin(
           schema.roles,
@@ -296,13 +303,32 @@ describe.skipIf(!enabled)("create_org against Postgres", () => {
     expect(org.createdById).toBe(userId);
 
     expect(snapshot.memberships).toEqual([{ orgId: org.id, role: "owner" }]);
-    expect(snapshot.ownerAssignments).toEqual([
-      { role: "Owner", kind: "human" },
-    ]);
     expect(snapshot.grants[0]?.n).toBeGreaterThan(0);
 
     expect(snapshot.workspaces).toHaveLength(1);
     const ws = snapshot.workspaces[0]!;
+    // The org Owner role org-wide, and the workspace Owner role on the first
+    // workspace only, both on the creator's one human principal.
+    expect(
+      [...snapshot.ownerAssignments].sort((a, b) =>
+        a.scopeKind.localeCompare(b.scopeKind),
+      ),
+    ).toEqual([
+      {
+        role: "Owner",
+        scopeKind: "org",
+        kind: "human",
+        workspaceId: null,
+        assignedBy: userId,
+      },
+      {
+        role: "Owner",
+        scopeKind: "workspace",
+        kind: "human",
+        workspaceId: ws.id,
+        assignedBy: userId,
+      },
+    ]);
     expect(ws.publicId).toBe(out.workspace?.publicId);
     expect(ws.slug).toBe("core");
     expect(ws.namespace).toMatch(/^[a-z0-9]{2,6}$/);
@@ -490,6 +516,40 @@ describe.skipIf(!enabled)("create_org against Postgres", () => {
 
     await createIn("Data", "data");
     expect(await workspacesOf()).toHaveLength(2);
+    // create_workspace gives its creator the workspace Owner role on each new
+    // workspace, on the same human principal (#5182).
+    const workspaceOwners = await withSystemDb((tx) =>
+      tx
+        .select({
+          workspaceId: schema.principalRoleAssignments.workspaceId,
+          parentUserId: schema.principals.parentUserId,
+          kind: schema.principals.kind,
+        })
+        .from(schema.principalRoleAssignments)
+        .innerJoin(
+          schema.roles,
+          eq(schema.roles.id, schema.principalRoleAssignments.roleId),
+        )
+        .innerJoin(
+          schema.principals,
+          eq(schema.principals.id, schema.principalRoleAssignments.principalId),
+        )
+        .where(
+          and(
+            eq(schema.principalRoleAssignments.orgId, org.id),
+            eq(schema.roles.scopeKind, "workspace"),
+            eq(schema.roles.name, "Owner"),
+          ),
+        ),
+    );
+    expect(
+      workspaceOwners.map((w) => w.workspaceId).sort(),
+    ).toEqual((await workspacesOf()).map((w) => w.id).sort());
+    expect(
+      workspaceOwners.every(
+        (w) => w.parentUserId === userId && w.kind === "human",
+      ),
+    ).toBe(true);
     expect(await readGate()).toEqual([
       { workspaceId: firstRow?.id, step: "wrap" },
     ]);

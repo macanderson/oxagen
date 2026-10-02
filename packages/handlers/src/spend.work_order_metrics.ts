@@ -11,8 +11,9 @@
 // the claims `readUnproductiveClaims` returns, counted by `countClaims`.
 // Unassigned spend is reported beside it and never added to it.
 //
-// The answer names operators, so its readers are the ranking's: an org
-// Owner or Admin. With the pseudonym setting on, a pseudonym replaces each
+// The answer names operators, so its readers are the ranking's org roles:
+// an org Owner or Admin. The ranking also admits the workspace's Owner
+// (#5182), and this answer does not. With the pseudonym setting on, a pseudonym replaces each
 // name, and each operator row drops its evidence, both shares, its agents,
 // and its unassigned spend and tokens. Any of those could match a
 // pseudonym to a name on a page that names operators.

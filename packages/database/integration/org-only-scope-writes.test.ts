@@ -68,6 +68,10 @@ const USER = "00000000-0000-0000-0023-000000000001";
 /** Likewise `iam.principal_role_assignments.principal_id` / `.role_id`. */
 const PRINCIPAL = "00000000-0000-0000-0024-000000000001";
 const ROLE = "00000000-0000-0000-0025-000000000001";
+/** The workspace creator's org-wide human principal (#5182). */
+const CREATOR = "00000000-0000-0000-0024-000000000002";
+/** The org's workspace-scoped Owner role (#5182). */
+const OWNER_ROLE = "00000000-0000-0000-0025-000000000002";
 
 const APP_ROLE = "org_only_scope_test_role";
 
@@ -99,6 +103,8 @@ beforeAll(async () => {
   await sql.unsafe(
     `GRANT SELECT, INSERT, DELETE ON iam.principal_role_assignments TO "${APP_ROLE}"`,
   );
+  await sql.unsafe(`GRANT SELECT ON iam.principals TO "${APP_ROLE}"`);
+  await sql.unsafe(`GRANT SELECT ON iam.roles TO "${APP_ROLE}"`);
 
   await sql.begin(async (tx) => {
     await tx`SELECT set_config('app.rls_bypass', 'on', true)`;
@@ -128,6 +134,22 @@ beforeAll(async () => {
         ('pra_oos_org', ${PRINCIPAL}, ${ROLE}, ${ORG}, NULL)
       ON CONFLICT (public_id) DO NOTHING
     `;
+    // What bootstrapOrgIAM leaves for a workspace's creator: an org-wide human
+    // principal, and the org's workspace-scoped Owner role (#5182).
+    await tx`
+      INSERT INTO iam.principals
+        (id, public_id, org_id, kind, display_name, status, parent_user_id)
+      VALUES
+        (${CREATOR}, 'prn_oos_creator', ${ORG}, 'human', 'Creator', 'active', ${USER})
+      ON CONFLICT DO NOTHING
+    `;
+    await tx`
+      INSERT INTO iam.roles
+        (id, public_id, org_id, scope_kind, name, is_system_default)
+      VALUES
+        (${OWNER_ROLE}, 'rol_oos_ws_owner', ${ORG}, 'workspace', 'Owner', true)
+      ON CONFLICT DO NOTHING
+    `;
   });
 });
 
@@ -135,6 +157,8 @@ afterAll(async () => {
   await sql.begin(async (tx) => {
     await tx`SELECT set_config('app.rls_bypass', 'on', true)`;
     await tx`DELETE FROM iam.principal_role_assignments WHERE org_id = ${ORG}`;
+    await tx`DELETE FROM iam.principals WHERE org_id = ${ORG}`;
+    await tx`DELETE FROM iam.roles WHERE org_id = ${ORG}`;
     await tx`DELETE FROM workspace.workspace_slug_history WHERE org_id = ${ORG}`;
     await tx`DELETE FROM workspace.workspace_users WHERE workspace_id = ${WS}`;
     await tx`DELETE FROM workspace.workspaces WHERE org_id = ${ORG}`;
@@ -142,6 +166,12 @@ afterAll(async () => {
   });
   await sql
     .unsafe(`REVOKE ALL ON iam.principal_role_assignments FROM "${APP_ROLE}"`)
+    .catch(() => undefined);
+  await sql
+    .unsafe(`REVOKE ALL ON iam.principals FROM "${APP_ROLE}"`)
+    .catch(() => undefined);
+  await sql
+    .unsafe(`REVOKE ALL ON iam.roles FROM "${APP_ROLE}"`)
     .catch(() => undefined);
   await sql
     .unsafe(`REVOKE USAGE ON SCHEMA iam FROM "${APP_ROLE}"`)
@@ -337,6 +367,65 @@ describe("an org-only scope and the tables an org-only write reaches", () => {
         return countAssignments(tx);
       });
       expect(row?.n).toBe("2");
+    });
+  });
+
+  // #5182: the bootstrap gives the creator the workspace Owner role in IAM,
+  // after the re-point, on create_workspace's own transaction. These are its
+  // three statements as the application role runs them.
+  describe("the creator's workspace Owner assignment", () => {
+    const readCreator = (tx: postgres.TransactionSql) =>
+      tx<{ id: string }[]>`
+        SELECT id FROM iam.principals
+        WHERE org_id = ${ORG} AND parent_user_id = ${USER}
+          AND kind = 'human' AND status = 'active'
+      `;
+    const readOwnerRole = (tx: postgres.TransactionSql) =>
+      tx<{ id: string }[]>`
+        SELECT id FROM iam.roles
+        WHERE org_id = ${ORG} AND scope_kind = 'workspace' AND name = 'Owner'
+      `;
+    const assign = (tx: postgres.TransactionSql, workspaceId: string) =>
+      tx`
+        INSERT INTO iam.principal_role_assignments
+          (public_id, principal_id, role_id, org_id, workspace_id, assigned_by)
+        VALUES
+          (${`pra_oos_owner_${workspaceId.slice(-4)}`}, ${CREATOR}, ${OWNER_ROLE}, ${ORG}, ${workspaceId}, ${USER})
+      `;
+
+    it("refuses the principal read under the sentinel, so the bootstrap reads after the re-point", async () => {
+      const { code } = await refusalOf(
+        inScope(ORG, ORG_ONLY_WORKSPACE_ID, readCreator),
+      );
+      expect(code).toBe(INVALID_UUID);
+    });
+
+    it("reads the principal and the role, and writes the assignment, once the scope names the new workspace", async () => {
+      const rollback = new Error("roll back the assignment");
+      let seen: Record<string, string | undefined> = {};
+      await expect(
+        inScope(ORG, WS, async (tx) => {
+          const [principal] = await readCreator(tx);
+          const [role] = await readOwnerRole(tx);
+          await assign(tx, WS);
+          const [held] = await tx<{ n: string }[]>`
+            SELECT count(*)::text AS n FROM iam.principal_role_assignments
+            WHERE principal_id = ${CREATOR} AND role_id = ${OWNER_ROLE}
+              AND workspace_id = ${WS}
+          `;
+          seen = { principal: principal?.id, role: role?.id, held: held?.n };
+          throw rollback;
+        }),
+      ).rejects.toBe(rollback);
+      expect(seen).toEqual({ principal: CREATOR, role: OWNER_ROLE, held: "1" });
+    });
+
+    it("refuses an assignment on a workspace the scope does not name (negative)", async () => {
+      const other = "00000000-0000-0000-0022-000000000009";
+      const { code } = await refusalOf(
+        inScope(ORG, WS, (tx) => assign(tx, other)),
+      );
+      expect(code).toBe(RLS_REFUSAL);
     });
   });
 });

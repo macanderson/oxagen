@@ -10,7 +10,7 @@ body:
       value: |
         **Security vulnerabilities must NOT be reported here.** Use [private vulnerability reporting](https://github.com/oxageninc/product/security/advisories/new) or `security@oxagen.sh` (see SECURITY.md).
 
-        File the issue complete. Title it `<Priority> <Tier> <Size> Bug (<Area>): <what goes wrong>` in plain words. Apply one priority label, one `MODEL:` tier, one `SIZE:`, `KIND:BUG`, and one `AREA:`, then `JOB:` and one or two `PILLAR:` labels where they apply. Set the issue type to Bug, and set the Priority, Model Tier, Estimated Minutes, and Area(s) fields. CLAUDE.md has the rules under Issue titles and Oxagen issue fields.
+        File the issue complete. Title it `<Priority> <Tier> <Size> Bug (<Area>): <what goes wrong>` in plain words. Apply one priority label, one `MODEL:` tier, one `SIZE:`, `KIND:BUG`, and one `AREA:`, then `JOB:` and one or two `PILLAR:` labels where they apply. Set the issue type to Bug, and set the Priority, Model Tier, Minutes Estimated, and Area(s) fields. Apply `MIGRATION-REQUIRED` once you know the work changes a schema. CLAUDE.md has the rules under Issue titles and Oxagen issue fields.
 
         Before filing: if you can fix it in the branch you are on, fix it there (SCR-004). File only when the fix needs a maintainer decision, a rig, a credential or real spend, or is larger than one session.
   - type: dropdown
