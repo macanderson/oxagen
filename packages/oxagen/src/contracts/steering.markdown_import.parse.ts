@@ -4,6 +4,7 @@ import {
   MARKDOWN_IMPORT_FILES_MAX,
   markdownImportDocumentSchema,
   markdownImportFileSchema,
+  markdownImportMemorySchema,
   markdownImportPolicySchema,
   markdownImportPullRequestFilesSchema,
   markdownImportRecordSchema,
@@ -24,10 +25,14 @@ import {
  * - A file under the `policies` target becomes one Cedar policy file from its
  *   fenced `cedar` blocks, with an @id on every statement and the early shape
  *   checks.
- * - Each statement is checked against the published records and the import's
- *   other statements with the steering check's conflicts test. A duplicate
- *   defaults to skip and names the record it matches. A conflict waits for a
- *   person's choice.
+ * - A file under the `memories` target is split the same way, and each
+ *   statement becomes a memory row with kind memory and force info. A row
+ *   whose statement a waiting memory holds, or a person rejected, or an
+ *   earlier row of the import holds, defaults to skip and names the match.
+ * - Each record statement is checked against the published records and the
+ *   import's other statements with the steering check's conflicts test. A
+ *   duplicate defaults to skip and names the record it matches. A conflict
+ *   waits for a person's choice.
  * - `pullRequestFiles` counts the rows marked add against the 299 files one
  *   steering PR holds, and says what to do when the import is over.
  *
@@ -37,7 +42,7 @@ export const steeringMarkdownImportParse = registerCapability({
   name: "parse_markdown_import",
   domain: "context",
   description:
-    "Read up to 25 Markdown files and propose steering records and Cedar policies from them. Each statement gets a kind with a reason, a force its kind allows with the words that justify it, an effect when it is a constraint, its source line, and any duplicate or conflict with a published record or another statement. Writes nothing.",
+    "Read up to 25 Markdown files and propose steering records, Cedar policies, and memories from them. Each record statement gets a kind with a reason, a force its kind allows with the words that justify it, an effect when it is a constraint, its source line, and any duplicate or conflict with a published record or another statement. Each memory row names any waiting or rejected memory it repeats. Writes nothing.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent", "cli"],
   layers: ["schema", "api", "mcp", "cli", "unit", "docs", "app"],
@@ -70,6 +75,9 @@ export const steeringMarkdownImportParse = registerCapability({
       policies: z
         .array(markdownImportPolicySchema)
         .describe("The Cedar policy files proposed, one per file"),
+      memories: z
+        .array(markdownImportMemorySchema)
+        .describe("The memories proposed, file by file in source order"),
       pullRequestFiles: markdownImportPullRequestFilesSchema.describe(
         "The files the rows marked add would put in one steering PR, and a message when that is more than one PR holds",
       ),

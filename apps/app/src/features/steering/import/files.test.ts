@@ -79,12 +79,12 @@ describe("detectTarget", () => {
     ).toEqual({ target: "skip", reason: "links", locked: false });
   });
 
-  it("skips a Claude Code memory file until the Memories target arrives", () => {
+  it("starts a Claude Code memory file at Memories", () => {
     const md =
       "---\nname: Release train\ndescription: Platform releases ship every other Tuesday.\nmetadata:\n  type: project\n---\n\nPlatform releases ship every other Tuesday.";
     expect(isMemoryFile(md)).toBe(true);
     expect(detectTarget("memory/project_release_train.md", md)).toEqual({
-      target: "skip",
+      target: "memories",
       reason: "memory",
       locked: false,
     });
@@ -291,10 +291,12 @@ describe("the parse calls", () => {
         file("b.md", "skip"),
         file("c.md", "policies"),
         file("d.md", "records", true),
+        file("e.md", "memories"),
       ]),
     ).toEqual([
       { filename: "a.md", content: "Use pnpm.", target: "records" },
       { filename: "c.md", content: "Use pnpm.", target: "policies" },
+      { filename: "e.md", content: "Use pnpm.", target: "memories" },
     ]);
   });
 

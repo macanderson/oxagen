@@ -385,6 +385,7 @@ export async function agentGetHandler(
         registeredAt: row.createdAt.toISOString(),
         firstFrameAt: iso(figures?.earliestStartedAt ?? null),
         costCenter: row.costCenter,
+        cacheKeepAlive: row.cacheKeepAlive,
       },
       runtime:
         row.runtimeId === null

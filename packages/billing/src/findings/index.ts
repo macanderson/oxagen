@@ -57,11 +57,22 @@ export {
 } from "./repeated-instructions";
 export type { PromptRead, PromptTextMode, RunPrompt } from "./prompts";
 export {
-  instructionProposalOpener,
-  setInstructionProposalOpener,
+  chainVerdicts,
+  MIN_QUOTE_CHARS,
+  resultUseKey,
+  type ChainFrame,
+  type ResultTextMode,
+  type ResultUseRead,
+  type ResultVerdict,
+} from "./result-use";
+export { CARRY_RESULT_TOKENS, resultsToCheck } from "./unpaged-results";
+export {
+  setSpendProposalOpener,
+  spendProposalOpener,
   type InstructionProposal,
-  type InstructionProposalOpener,
-  type InstructionProposalScope,
+  type SpendProposalInput,
+  type SpendProposalOpener,
+  type SpendProposalScope,
 } from "./proposal-opener";
 
 /** Every detector a pass runs, in the order it runs them. */

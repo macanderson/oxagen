@@ -1,106 +1,75 @@
 ---
 title: Memory from the CLI
-description: "Engram, the workspace's memory of what agents learned: capture and recall lessons from the CLI, the OBSERVATION → RULE → FACT confidence ladder, and how memory differs from the knowledge graph."
+description: "Review the memories your agents wrote in their harnesses, ranked by how often runs used them, and promote the ones worth keeping into steering records."
 ---
 
-As an agent works, it learns things: that a test is flaky for a specific reason, that your team always uses `withTenantDb`, that the staging database is on an unusual port. **Agent memory** is where those lessons live, and Oxagen's memory engine, **Engram**, keeps it. Before an agent starts new work, it recalls the relevant lessons, so it doesn't rediscover the same gotcha twice. Over time, agents repeat fewer mistakes in *your* workspace.
+Your agents already write down what they learn, each in its own harness: Claude Code in its memory folder, Codex in its memory store, Stella in its context store. Oxagen collects those memories from every enrolled host every five minutes and counts the runs that use each one. `oxagen memory` lists them, shows one in full, promotes the ones worth keeping into steering records, and dismisses the rest.
 
-Memory is **workspace-scoped**. Every run in the workspace shares it. It is not kept per conversation, and it never crosses workspaces or organizations.
+A memory steers only the agent that wrote it, and its harness already does that. Oxagen embeds no memory and sends none to another agent. A memory reaches other agents only once you promote it into a steering record and the memory PR merges in git.
 
-<Callout type="info">
-**Memory is not the knowledge graph.** Agent memory is *experiential*: what an agent **learned** from doing work. The [knowledge graph](/docs/cli/knowledge-graph) is *structural*: what your code and entities **are**. An agent draws on both. Memory tells it what worked last time, and the graph tells it how the system is wired.
-</Callout>
-
-## The two axes
-
-Every memory has two independent axes, so how sure Oxagen is that a memory is true stays separate from what the memory is about:
-
-- **Class**: the epistemic ladder, from tentative to settled: **OBSERVATION → RULE → FACT**.
-  - `OBSERVATION`: something noticed in passing.
-  - `RULE`: a distilled instruction the agent should follow, with an enforcement strength.
-  - `FACT`: settled ground truth. Promotion to FACT requires human confirmation.
-- **Kind**: the content domain, an open label like `gotcha`, `convention-deviation`, `bug-root-cause`, `preference`, or `constraint`.
-
-And two independent scores:
-
-- **Confidence** (0–100): how sure it is that the memory is *true*. It decays over time and recovers when re-confirmed.
-- **Enforcement** (1–100, RULE only): how strongly it *should* be followed.
-
-Memories that are cited often, with good outcomes, resist decay. Unused ones fade and are archived (recoverable, not deleted). Citations create the pressure that surfaces promotion candidates, which closes the loop.
-
-## Capture a memory
-
-Capture a lesson from the shell with `oxagen remember`. It infers the class and kind from your text. Pin the class and enforcement when you want to:
+## List memories
 
 ```bash
-oxagen remember "the staging DB listens on port 5433"
-oxagen remember "always use withTenantDb, never raw db()" --class RULE --enforcement 90
+oxagen memory list
+oxagen memory list --harness claude-code --type feedback
+oxagen memory list --state promoted,retired --repository github.com/acme/api
 ```
+
+The list ranks memories by uses, then by the newest use, then by the newest capture. Memories that say the same thing share one row, marked `(+N same)`. Without `--state`, it lists waiting memories and memories a memory PR cites.
 
 | Flag | Purpose |
 |---|---|
-| `--class <OBSERVATION\|RULE\|FACT>` | Pin the epistemic class instead of inferring it. |
-| `--kind <kind>` | Pin the content-domain kind. |
-| `--enforcement <1-100>` | How strongly to follow it (RULE only). |
-| `--node <ref>` | Anchor the memory to a graph node. |
+| `--state <states>` | Comma-separated: `waiting`, `in_pr`, `promoted`, `dismissed`, `retired`. |
+| `--harness <harness>` | `claude-code`, `codex`, `cursor`, `stella`, or `claude-desktop`. |
+| `--agent <lineage>` | Memories one agent wrote. |
+| `--repository <repo>` | Memories scoped to a repository, such as `github.com/acme/api`. |
+| `--type <type>` | A Claude Code memory type: `user`, `feedback`, `project`, or `reference`. |
+| `--limit <n>`, `--offset <n>` | Page through the rows, 50 at a time by default. |
 | `--json` | Machine-readable output. |
 
-## Browse and recall
+Uses count distinct runs. A harness that reports no use shows `No signal`, so a zero never reads as unused.
 
-The full management surface is `oxagen memory`:
-
-```bash
-oxagen memory list --class RULE --sort citations   # rules, most-cited first
-oxagen memory show mem_01H…                         # one memory in full
-oxagen memory edit mem_01H… --lesson "…"            # revise (re-embeds)
-oxagen memory candidates                            # observations ripe to promote
-oxagen memory dismiss mem_01H…                      # drop one from the candidate queue
-oxagen memory demote mem_01H… --to observation      # walk a rule/fact back down
-oxagen memory citations --days 30                   # workspace citation analytics
-oxagen memory rm mem_01H…                           # delete
-```
-
-### Promote up the ladder
-
-When an observation keeps holding up, promote it. Promotion records an audit event. The `--rationale` flag is optional:
+## Show one memory
 
 ```bash
-oxagen memory promote mem_01H… --to rule --enforcement 80
-oxagen memory promote mem_01H… --to fact \
-  --rationale "cited in three reviews; team agreed to enforce"
+oxagen memory show mem_01J8…
 ```
 
-`--to fact` requires human confirmation. `oxagen memory salience` adjusts confidence, enforcement, or lifecycle status (`ACTIVE`/`SUPERSEDED`/`RETRACTED`/`ARCHIVED`) without changing the class.
+It prints the memory's text, its source file, its harness and agent, each run that used it, and the memory PR that last cited it.
 
-### Demote back down
-
-Demotion is the audited inverse of promotion, for rules that stopped earning their citations or facts that turned out to be wrong. It only moves down. Demoting to `observation` clears enforcement, and leaving FACT clears its human confirmation:
+## Promote memories
 
 ```bash
-oxagen memory demote mem_01H… --to observation
-oxagen memory demote mem_01H… --to rule --enforcement 60 \
-  --rationale "still useful context, no longer binding"
+oxagen memory promote mem_01J8…
+oxagen memory promote mem_01J8… mem_01J9… --one-record --kind code-rule --force must
+oxagen memory promote mem_01J8… --kind constraint --effect forbid --repo github.com/acme/api
 ```
 
-### Dismiss a promotion suggestion
+Each id becomes one draft steering record, or `--one-record` cites every id in one record. Each record also cites the waiting memories that say the same thing, unless you pass `--no-same-text`. The drafts join the open memory PR, or the command opens one on `memory/<date>`. Nothing steers until a person merges the PR.
 
-`oxagen memory candidates` shows a ranked window of observations under citation pressure. Dismissing one is durable. The memory stays active and recallable, but it leaves the queue until you restore it, and the next candidate takes its slot:
+| Flag | Purpose |
+|---|---|
+| `--one-record` | Cite every id in one record. |
+| `--statement <text>` | The record's body. Defaults to the first memory's statement. |
+| `--kind <kind>` | `business-rule`, `code-rule`, `constraint`, `procedure`, `fact`, `preference`, or `memory`. |
+| `--force <force>` | `must`, `should`, `may`, or `info`, within what the kind allows. Defaults to `should` for a rule kind, `may` for a preference, and `info` for a fact or a memory. |
+| `--effect <effect>` | `require` or `forbid`. A constraint needs one. |
+| `--repo <repo>` | Scope the record to a repository. Repeat it for more. |
+| `--no-same-text` | Cite only the ids you name. |
+| `--json` | Machine-readable output. |
+
+Only a waiting memory is promoted. The command names each memory it left out and why.
+
+## Dismiss memories
 
 ```bash
-oxagen memory dismiss mem_01H…            # silence the suggestion
-oxagen memory dismiss mem_01H… --restore  # let it re-qualify later
+oxagen memory dismiss mem_01J8…
+oxagen memory dismiss mem_01J8… --restore
 ```
 
-### Citation analytics
+A dismissed memory leaves the default list. The curator proposes its statement again only after memories from 2 more runs repeat it. `--restore` brings a dismissed memory back.
 
-A workspace-wide rollup of which memories and graph nodes agents cite, how useful those citations were, and where agents break promoted rules. Read it with:
-
-```bash
-oxagen memory citations                   # 30-day window, top 10 per list
-oxagen memory citations --days 90 --limit 25
-```
-
-### Import existing docs
+## Import existing docs
 
 Turn Markdown rule docs, such as `CLAUDE.md`, `AGENTS.md`, or a conventions folder, into steering records in bulk:
 
@@ -113,17 +82,7 @@ The preview lists one row per statement: its kind, its force with the words that
 
 The command sends files in calls of 25 and then compares the rows of every call, so a statement two calls both hold is marked a duplicate. `--yes` opens one steering PR on `steering/import-<date>` with every row marked add. A row that conflicts with a published record is left out, and the command names it. One steering PR holds at most 299 records, so `--yes` refuses an import that marks more add. Nothing steers an agent until the PR merges. The command calls `parse_markdown_import` and `commit_markdown_import`.
 
-## How agents use memory
-
-An agent can request `recall_memory` over MCP before it works and record a lesson with `write_memory` or `save_memory`. Configure that workflow in the harness or its instructions. Installing the CLI alone does not make an external agent recall or write memories.
-
-Use the curation commands above to review the lessons, promote useful ones, and demote or delete stale ones. A memory's enforcement score is context for the agent, not a server-side denial rule.
-
-## Governance
-
-Memory writes pass the same IAM checks as every capability and leave an audit record. When an agent writes on a person's behalf, the record names both the person and the agent. Because memory lives in the workspace graph, it travels with the workspace and is not locked to Oxagen's storage.
-
 ## Related
 
-- [Knowledge graph from the CLI](/docs/cli/knowledge-graph): the structural context memory sits alongside.
 - [Agent memory](/docs/agent/memory): the memory model and governance boundary.
+- [Knowledge graph from the CLI](/docs/cli/knowledge-graph): the structural context memory sits beside.

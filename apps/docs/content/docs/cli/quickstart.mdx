@@ -77,13 +77,13 @@ The query runs online and returns only the bounded results your workspace grants
 ## 6. Curate what agents have learned
 
 ```bash
-oxagen memory candidates                 # OBSERVATIONs ripe for promotion
+oxagen memory list                                   # ranked by how often runs used them
 oxagen memory show mem_01J8…
-oxagen memory promote mem_01J8… --to RULE --enforcement 90 --rationale "Confirmed across 3 runs"
-oxagen remember "staging Postgres is on 5433, not 5432" --class RULE
+oxagen memory promote mem_01J8… --kind code-rule --force must
+oxagen memory dismiss mem_01J9…
 ```
 
-Oxagen records every promotion and demotion as an audit event. See [Memory from the CLI](/docs/cli/memory).
+A promoted memory becomes a steering record on the memory PR, and it steers other agents once the PR merges. See [Memory from the CLI](/docs/cli/memory).
 
 ## 7. Manage environments and secrets
 

@@ -42,6 +42,8 @@ import { agentCredentialRotate } from "./agent.credential.rotate";
 import { agentSuspend } from "./agent.suspend";
 import { agentRetire } from "./agent.retire";
 import { agentToolbeltGet } from "./agent.toolbelt.get";
+// Lane F32: the per-agent switch for the model proxy's cache keep-alive.
+import { agentCacheKeepAliveSet } from "./agent.cache_keep_alive.set";
 import { tachoIncidentList } from "./tacho.incident.list";
 import { agentApprovalResolve } from "./agent.approval.resolve";
 import { mandateGrant } from "./mandate.grant";
@@ -75,6 +77,7 @@ import { tachoBundleGet } from "./tacho.bundle.get";
 import { tachoGithubTokenIssue } from "./tacho.github_token.issue";
 import { tachoMemoriesIngest } from "./tacho.memories.ingest";
 import { tachoMemoriesRecall } from "./tacho.memories.recall";
+import { tachoMemoryUsesRecord } from "./tacho.memories.uses.record";
 import { tachoCommandDispatch } from "./tacho.command.dispatch";
 import { pauseWorkspaceRuns } from "./tacho.workspace_runs.pause";
 import { tachoMachineGroupAdd } from "./tacho.machine_group.add";
@@ -123,6 +126,7 @@ import { spendDrill } from "./spend.drill";
 import { spendWasteList } from "./spend.waste";
 import { spendOperatorRanking } from "./spend.operator_ranking";
 import { spendOperatorPseudonymsSet } from "./spend.operator_pseudonyms.set";
+import { spendPerMergedPr } from "./spend.per_merged_pr";
 import { spendUnproductive } from "./spend.unproductive";
 import { skillConfigGet } from "./skill.config.get";
 import { skillConfigUpdate } from "./skill.config.update";
@@ -319,6 +323,11 @@ import { contextRecordsAppend } from "./context.records.append";
 import { contextProposalCreate } from "./context.proposal.create";
 import { contextProposalList } from "./context.proposal.list";
 import { contextProposalDismiss } from "./context.proposal.dismiss";
+import { steeringMemoriesList } from "./steering.memories.list";
+import { steeringMemoriesGet } from "./steering.memories.get";
+import { steeringMemoriesPromote } from "./steering.memories.promote";
+import { steeringMemoriesDismiss } from "./steering.memories.dismiss";
+import { steeringMemoryPrRecordsList } from "./steering.memory_pr_records.list";
 import { contextPrOpen } from "./context.pr.open";
 import { contextPrGet } from "./context.pr.get";
 import { contextPrMerge } from "./context.pr.merge";
@@ -585,6 +594,9 @@ export {
   markdownImportFileCount,
   markdownImportFileSchema,
   markdownImportMatchSchema,
+  markdownImportMemoryMatchReasonSchema,
+  markdownImportMemoryMatchSchema,
+  markdownImportMemorySchema,
   markdownImportOriginSchema,
   markdownImportPolicyIssueSchema,
   markdownImportPolicySchema,
@@ -598,6 +610,8 @@ export type {
   MarkdownImportDocument,
   MarkdownImportFile,
   MarkdownImportMatch,
+  MarkdownImportMemory,
+  MarkdownImportMemoryMatch,
   MarkdownImportPolicy,
   MarkdownImportRecord,
   MarkdownImportTarget,
@@ -611,6 +625,23 @@ export type {
   SteeringMarkdownImportCommitOutput,
 } from "./steering.markdown_import.commit";
 export type { ContextPr } from "./context.pr.open";
+// The shapes the workspace memory contracts share (memory-collection spec).
+// Not a capability, so exported here to satisfy the file-coverage guard.
+export {
+  memoryDraftRecordSchema,
+  promotableKindSchema,
+  workspaceMemoryGroupSchema,
+  workspaceMemoryIdSchema,
+  workspaceMemorySchema,
+  workspaceMemoryStateSchema,
+} from "./steering.memories.shared";
+export type {
+  MemoryDraftRecord,
+  PromotableKind,
+  WorkspaceMemory,
+  WorkspaceMemoryGroup,
+  WorkspaceMemoryState,
+} from "./steering.memories.shared";
 // Finding vocabulary (ADR-062): a finding, its evidence and the decision
 // input. The shared file is not a capability, so it is exported here to
 // satisfy the check-contracts file-coverage guard.
@@ -799,6 +830,7 @@ export {
   agentSuspend,
   agentRetire,
   agentToolbeltGet,
+  agentCacheKeepAliveSet,
   tachoIncidentList,
   agentApprovalResolve,
   mandateGrant,
@@ -860,6 +892,7 @@ export {
   tachoGithubTokenIssue,
   tachoMemoriesIngest,
   tachoMemoriesRecall,
+  tachoMemoryUsesRecord,
   tachoContainedLaunchRegister,
   tachoCommandDispatch,
   pauseWorkspaceRuns,
@@ -933,6 +966,7 @@ export {
   spendWasteList,
   spendOperatorRanking,
   spendOperatorPseudonymsSet,
+  spendPerMergedPr,
   spendUnproductive,
   configurationCloneGet,
   configurationClonePropose,
@@ -1083,6 +1117,11 @@ export {
   contextProposalCreate,
   contextProposalList,
   contextProposalDismiss,
+  steeringMemoriesList,
+  steeringMemoriesGet,
+  steeringMemoriesPromote,
+  steeringMemoriesDismiss,
+  steeringMemoryPrRecordsList,
   contextPrOpen,
   contextPrGet,
   contextPrMerge,
@@ -1254,6 +1293,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   agentSuspend,
   agentRetire,
   agentToolbeltGet,
+  agentCacheKeepAliveSet,
   tachoIncidentList,
   agentApprovalResolve,
   mandateGrant,
@@ -1312,6 +1352,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   tachoGithubTokenIssue,
   tachoMemoriesIngest,
   tachoMemoriesRecall,
+  tachoMemoryUsesRecord,
   tachoContainedLaunchRegister,
   tachoCommandDispatch,
   pauseWorkspaceRuns,
@@ -1385,6 +1426,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   spendWasteList,
   spendOperatorRanking,
   spendOperatorPseudonymsSet,
+  spendPerMergedPr,
   spendUnproductive,
   configurationCloneGet,
   configurationClonePropose,
@@ -1534,6 +1576,11 @@ export const contracts: readonly CapabilityDeclaration[] = [
   contextProposalCreate,
   contextProposalList,
   contextProposalDismiss,
+  steeringMemoriesList,
+  steeringMemoriesGet,
+  steeringMemoriesPromote,
+  steeringMemoriesDismiss,
+  steeringMemoryPrRecordsList,
   contextPrOpen,
   contextPrGet,
   contextPrMerge,

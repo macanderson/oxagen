@@ -5,7 +5,9 @@ import { forcesFor } from "../steering-repo/record-force";
 import { steeringMarkdownImportCommit } from "./steering.markdown_import.commit";
 import { steeringMarkdownImportParse } from "./steering.markdown_import.parse";
 import {
+  markdownImportMemorySchema,
   markdownImportRecordSchema,
+  type MarkdownImportMemory,
   type MarkdownImportRecord,
 } from "./steering.markdown_import.shared";
 
@@ -70,11 +72,65 @@ describe("the Markdown import contracts", () => {
     expect(
       steeringMarkdownImportParse.input.safeParse({ documents: [{ ...doc, content: "x".repeat(100_001) }] }).success,
     ).toBe(false);
-    expect(
-      steeringMarkdownImportParse.input.safeParse({ documents: [{ ...doc, target: "memories" }] }).success,
-    ).toBe(false);
   });
 
+  it("takes the records, policies, memories, and skip targets, and no other (negative)", () => {
+    const doc = { filename: "CLAUDE.md", content: "Never push to main." };
+    for (const target of ["records", "policies", "memories", "skip"]) {
+      expect(steeringMarkdownImportParse.input.safeParse({ documents: [{ ...doc, target }] }).success, target).toBe(
+        true,
+      );
+    }
+    expect(
+      steeringMarkdownImportParse.input.safeParse({ documents: [{ ...doc, target: "decisions" }] }).success,
+    ).toBe(false);
+  });
+});
+
+function memoryRow(over: Partial<MarkdownImportMemory> = {}): MarkdownImportMemory {
+  return {
+    file: "notes.md",
+    line: 2,
+    label: "Staging resets nightly",
+    statement: "The staging database resets every night.",
+    kind: "memory",
+    force: "info",
+    duplicate: null,
+    issue: null,
+    action: "add",
+    ...over,
+  };
+}
+
+describe("markdownImportMemorySchema", () => {
+  it("takes a memory with force info and refuses any other kind or force (negative)", () => {
+    expect(markdownImportMemorySchema.safeParse(memoryRow()).success).toBe(true);
+    expect(markdownImportMemorySchema.safeParse({ ...memoryRow(), kind: "fact" }).success).toBe(false);
+    expect(markdownImportMemorySchema.safeParse({ ...memoryRow(), force: "should" }).success).toBe(false);
+  });
+
+  it("holds a row marked add to the 2,000 characters a memory takes (negative)", () => {
+    const long = "x".repeat(2001);
+    expect(markdownImportMemorySchema.safeParse(memoryRow({ statement: "x".repeat(2000) })).success).toBe(true);
+    expect(markdownImportMemorySchema.safeParse(memoryRow({ statement: long })).success).toBe(false);
+    expect(markdownImportMemorySchema.safeParse(memoryRow({ statement: long, action: "skip" })).success).toBe(true);
+  });
+
+  it("names a waiting memory, a rejected statement, or an earlier row as the match", () => {
+    for (const duplicate of [
+      { reason: "waiting", memory: "mem_01", file: null, line: null },
+      { reason: "rejected", memory: null, file: null, line: null },
+      { reason: "import", memory: null, file: "a.md", line: 3 },
+    ] as const) {
+      expect(markdownImportMemorySchema.safeParse(memoryRow({ duplicate, action: "skip" })).success).toBe(true);
+    }
+    expect(
+      markdownImportMemorySchema.safeParse({
+        ...memoryRow(),
+        duplicate: { reason: "published", memory: null, file: null, line: null },
+      }).success,
+    ).toBe(false);
+  });
 });
 
 describe("markdownImportRecordSchema", () => {

@@ -698,6 +698,13 @@ function webTheme(kit) {
  * asterisk of stella). The hive keeps each outline and gold cell from the kit.
  */
 function marks(kit) {
+  // The gold lands in generated TypeScript as a string literal. Anything but a
+  // `#rrggbb` colour here would be code in a module the server imports, so a
+  // kit value of any other shape fails the sync, as the grounds already do.
+  const gold = kit?.gold?.hex;
+  if (typeof gold !== "string" || !/^#[0-9A-Fa-f]{6}$/.test(gold)) {
+    throw new Error(`house kit gold is not a #rrggbb colour: ${JSON.stringify(gold)}`);
+  }
   const read = (name) => readFileSync(svg(name), "utf8");
   const viewBox = (src) => src.match(/viewBox="([^"]+)"/)[1];
   const pathData = (src, cls) =>
@@ -767,7 +774,7 @@ function marks(kit) {
  */
 
 /** The kit's gold, pinned. It marks identity, and it is never a surface or a state. */
-export const BRAND_GOLD = "${kit.gold.hex}";
+export const BRAND_GOLD = "${gold}";
 
 export interface WordmarkGeometry {
   /** The kit's own viewBox. Do not re-fit it. */

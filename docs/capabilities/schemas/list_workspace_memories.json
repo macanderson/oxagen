@@ -1,0 +1,553 @@
+{
+  "name": "list_workspace_memories",
+  "domain": "context",
+  "description": "List the workspace's memories ranked by uses, then the newest use, then the newest capture, with memories that say the same thing grouped. Filter by state (waiting and in_pr by default), harness, agent, repository, and memory type.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "cli"
+  ],
+  "sensitivity": "low",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "states": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "enum": [
+            "waiting",
+            "in_pr",
+            "promoted",
+            "dismissed",
+            "retired"
+          ]
+        },
+        "minItems": 1,
+        "maxItems": 5,
+        "default": [
+          "waiting",
+          "in_pr"
+        ]
+      },
+      "harness": {
+        "type": "string",
+        "enum": [
+          "claude-code",
+          "codex",
+          "cursor",
+          "stella",
+          "claude-desktop"
+        ]
+      },
+      "agent": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "repository": {
+        "type": "string"
+      },
+      "type": {
+        "type": "string"
+      },
+      "limit": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 200,
+        "default": 50
+      },
+      "offset": {
+        "type": "integer",
+        "minimum": 0,
+        "default": 0
+      }
+    },
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "groups": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "memory": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "label": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "summary": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "statement": {
+                  "type": "string"
+                },
+                "state": {
+                  "type": "string",
+                  "enum": [
+                    "waiting",
+                    "in_pr",
+                    "promoted",
+                    "dismissed",
+                    "retired"
+                  ]
+                },
+                "capture": {
+                  "type": "string",
+                  "enum": [
+                    "remember",
+                    "pull_request",
+                    "local_gateway",
+                    "import"
+                  ]
+                },
+                "harness": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "enum": [
+                        "claude-code",
+                        "codex",
+                        "cursor",
+                        "stella",
+                        "claude-desktop"
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "agent": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "source": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "repos": {
+                  "anyOf": [
+                    {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "memory_type": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "business-rule",
+                    "code-rule",
+                    "constraint",
+                    "procedure",
+                    "skill",
+                    "fact",
+                    "preference",
+                    "memory"
+                  ]
+                },
+                "use_count": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "use_signal": {
+                  "type": "boolean"
+                },
+                "last_used_at": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "created_at": {
+                  "type": "string"
+                },
+                "promoted_lineage": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "memory_pr": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "number": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0
+                        },
+                        "url": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "open",
+                            "merged",
+                            "closed"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "number",
+                        "url",
+                        "status"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "label",
+                "summary",
+                "statement",
+                "state",
+                "capture",
+                "harness",
+                "agent",
+                "source",
+                "repos",
+                "memory_type",
+                "kind",
+                "use_count",
+                "use_signal",
+                "last_used_at",
+                "created_at",
+                "promoted_lineage",
+                "memory_pr"
+              ],
+              "additionalProperties": false
+            },
+            "members": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "label": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "summary": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "statement": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "string",
+                    "enum": [
+                      "waiting",
+                      "in_pr",
+                      "promoted",
+                      "dismissed",
+                      "retired"
+                    ]
+                  },
+                  "capture": {
+                    "type": "string",
+                    "enum": [
+                      "remember",
+                      "pull_request",
+                      "local_gateway",
+                      "import"
+                    ]
+                  },
+                  "harness": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "claude-code",
+                          "codex",
+                          "cursor",
+                          "stella",
+                          "claude-desktop"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "agent": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "source": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "repos": {
+                    "anyOf": [
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "memory_type": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "business-rule",
+                      "code-rule",
+                      "constraint",
+                      "procedure",
+                      "skill",
+                      "fact",
+                      "preference",
+                      "memory"
+                    ]
+                  },
+                  "use_count": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "use_signal": {
+                    "type": "boolean"
+                  },
+                  "last_used_at": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "created_at": {
+                    "type": "string"
+                  },
+                  "promoted_lineage": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "memory_pr": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "number": {
+                            "type": "integer",
+                            "exclusiveMinimum": 0
+                          },
+                          "url": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "open",
+                              "merged",
+                              "closed"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "number",
+                          "url",
+                          "status"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "label",
+                  "summary",
+                  "statement",
+                  "state",
+                  "capture",
+                  "harness",
+                  "agent",
+                  "source",
+                  "repos",
+                  "memory_type",
+                  "kind",
+                  "use_count",
+                  "use_signal",
+                  "last_used_at",
+                  "created_at",
+                  "promoted_lineage",
+                  "memory_pr"
+                ],
+                "additionalProperties": false
+              },
+              "minItems": 1
+            },
+            "use_count": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "last_used_at": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "memory",
+            "members",
+            "use_count",
+            "last_used_at"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "total_groups": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "total_memories": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "truncated": {
+        "type": "boolean"
+      },
+      "waiting": {
+        "type": "integer",
+        "minimum": 0
+      }
+    },
+    "required": [
+      "groups",
+      "total_groups",
+      "total_memories",
+      "truncated",
+      "waiting"
+    ],
+    "additionalProperties": false
+  }
+}

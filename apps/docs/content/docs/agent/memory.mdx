@@ -51,7 +51,7 @@ Each written memory includes:
 
 ## Viewing and managing memories
 
-Use `oxagen memory list`, `show`, `edit`, `salience`, and `rm` to manage workspace memories. Use `candidates`, `promote`, `demote`, and `dismiss` for the promotion queue. [Memory from the CLI](/docs/cli/memory) documents the flags.
+Manage these memories over the API and MCP with `list_memories`, `update_memory`, and `delete_memory`. `oxagen memory` manages a different set: the memories agents write in their own harnesses, which Oxagen collects from enrolled hosts. [Memory from the CLI](/docs/cli/memory) covers those.
 
 Memories are scoped to the workspace. They are not shared across workspaces.
 
@@ -70,11 +70,11 @@ stateDiagram-v2
 
 *Promotion moves a memory up the ladder, and FACT needs a person's confirmation. Demotion is the audited inverse. Dismissal removes a candidate from the queue without changing its class.*
 
-Use `oxagen memory candidates` to inspect promotion candidates. Promotion to FACT requires human confirmation. `oxagen memory promote`, `demote`, and `dismiss` record the lifecycle changes described in [Memory from the CLI](/docs/cli/memory).
+`list_memory_promotions` lists promotion candidates. Promotion to FACT requires human confirmation. `promote_memory`, `demote_memory`, and `dismiss_memory_promotion` record the lifecycle changes.
 
 ## Citation analytics
 
-Run `oxagen memory citations --days 30` to inspect influence and compliance judgments attached to citations. These recorded judgments are evidence about context use, not a guarantee that an agent followed a rule. See [Citations](/docs/knowledge/citations).
+Call `get_citation_stats` with `days: 30` to inspect influence and compliance judgments attached to citations. These recorded judgments are evidence about context use, not a guarantee that an agent followed a rule. See [Citations](/docs/knowledge/citations).
 
 ## Memory in the knowledge graph
 

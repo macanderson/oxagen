@@ -3,7 +3,7 @@ title: Citations
 description: Workspace-wide analytics on which memories and graph nodes agents cite, how useful those citations were, and where promoted rules get violated.
 ---
 
-Inspect which workspace memories and graph nodes were cited with `oxagen memory citations` or `get_citation_stats`. The current app has no Citations dashboard.
+Inspect which memories and graph nodes were cited with `get_citation_stats`. The current app has no Citations dashboard.
 
 ## What a citation records
 
@@ -20,7 +20,7 @@ Citations accrue on their own, and you instrument nothing. A recall made while a
 
 The statistics include influence and compliance breakdowns, daily totals, most-cited and least-useful memories, violated rules, and cited nodes. These are recorded judgments about context use. They do not prove that an agent complied with every instruction.
 
-Review candidates with `oxagen memory candidates`, then promote, demote, or dismiss them with the [memory commands](/docs/cli/memory).
+Review candidates with `list_memory_promotions`, then promote, demote, or dismiss them with `promote_memory`, `demote_memory`, and `dismiss_memory_promotion`.
 
 ## Programmatic access
 
@@ -32,9 +32,6 @@ curl -X POST "https://api.oxagen.sh/v1/{org_slug}/{workspace_slug}/agent/memory/
   -H "Authorization: Bearer $OXAGEN_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"days": 30, "limit": 10}'
-
-# CLI
-oxagen memory citations --days 30 --limit 10
 ```
 
 `days` (1 to 365, default 30) sets the window. `limit` (1 to 50, default 10) caps each top-N list. The MCP tool `get_citation_stats` takes the same input, so an agent can read its own citation quality.
@@ -42,4 +39,3 @@ oxagen memory citations --days 30 --limit 10
 ## Related
 
 - [Agent memory](/docs/agent/memory): the memory model, the promotion lifecycle, and the management surface.
-- [CLI memory commands](/docs/cli/memory): `oxagen memory citations` and the rest of the lifecycle from the terminal.

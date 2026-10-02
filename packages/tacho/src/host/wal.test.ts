@@ -17,6 +17,7 @@ import {
 } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
+import type { TachoEvent } from "../envelope";
 import type { FrameBody } from "../evidence/frame-body";
 import { minimalSession } from "../test-helpers";
 import { scratchPaths } from "./test-support";
@@ -1358,5 +1359,150 @@ describe("a write across several sessions", () => {
     );
     expect(served(wal, a[0]!)).toEqual(["a's prompt, retried"]);
     expect(wal.read(OTHER_UUID)).toEqual(b.slice(0, 2));
+  });
+});
+
+describe("ship order", () => {
+  // In id order the imported session would ship first.
+  const IMPORTED = "0a0a0a0a-0000-4000-8000-00000000000a";
+  const LIVE = "fbfbfbfb-0000-4000-8000-00000000000b";
+  const LIVE_AT = "2026-10-02T03:20:00.000Z";
+  const IMPORTED_AT = "2026-09-29T04:05:00.000Z";
+
+  /** `minimalSession` under `uuid`, its events one second apart from `ts`. */
+  function sessionAt(uuid: string, ts: string): TachoEvent[] {
+    const start = Date.parse(ts);
+    return minimalSession().map((event) => ({
+      ...event,
+      session_uuid: uuid,
+      root_session_uuid: uuid,
+      ts: new Date(start + event.seq * 1_000).toISOString(),
+      event_id_idem: idemFor(uuid, event.seq),
+    }));
+  }
+
+  function idemFor(uuid: string, seq: number): string {
+    return `evt_${uuid.slice(-4)}${seq.toString(16).padStart(60, "0")}`;
+  }
+
+  /** One more event on `session`, at `ts`. */
+  function nextEvent(session: TachoEvent[], ts: string): TachoEvent {
+    const last = session.at(-1)!;
+    const seq = last.seq + 1;
+    return {
+      ...session[1]!,
+      seq,
+      ts,
+      event_id_idem: idemFor(last.session_uuid, seq),
+    };
+  }
+
+  it("ships the session with the latest event first, whatever its id", () => {
+    const wal = new Wal(scratchPaths().wal);
+    const live = sessionAt(LIVE, LIVE_AT);
+    const imported = sessionAt(IMPORTED, IMPORTED_AT);
+    // An import writes after the live session, so ordering by the time a
+    // file was written would put the import first too.
+    wal.append(live);
+    wal.append(imported);
+    expect(wal.unshipped(live.length)).toEqual(live);
+    expect(wal.unshipped(100)).toEqual([...live, ...imported]);
+  });
+
+  it("keeps that order after a restart", () => {
+    const paths = scratchPaths();
+    const live = sessionAt(LIVE, LIVE_AT);
+    const imported = sessionAt(IMPORTED, IMPORTED_AT);
+    new Wal(paths.wal).append([...live, ...imported]);
+    expect(new Wal(paths.wal).unshipped(100)).toEqual([...live, ...imported]);
+  });
+
+  it("moves a session ahead when it records a later event", () => {
+    const wal = new Wal(scratchPaths().wal);
+    const live = sessionAt(LIVE, LIVE_AT);
+    const resumed = sessionAt(IMPORTED, IMPORTED_AT);
+    wal.append(live);
+    wal.append(resumed);
+    const next = nextEvent(resumed, "2026-10-02T03:30:00.000Z");
+    wal.append([next]);
+    expect(wal.unshipped(100)).toEqual([...resumed, next, ...live]);
+  });
+
+  it("keeps the order when an append is refused", () => {
+    const wal = new Wal(scratchPaths().wal);
+    const live = sessionAt(LIVE, LIVE_AT);
+    const imported = sessionAt(IMPORTED, IMPORTED_AT);
+    wal.append(live);
+    wal.append(imported);
+    // The second event repeats a seq on disk, so the whole batch is refused,
+    // the later event with it.
+    const next = nextEvent(imported, "2026-10-02T03:30:00.000Z");
+    expect(() => wal.append([next, imported[0]!])).toThrow(
+      /not after the last written seq/,
+    );
+    expect(wal.unshipped(100)).toEqual([...live, ...imported]);
+  });
+
+  it("still skips held sessions", () => {
+    const wal = new Wal(scratchPaths().wal);
+    const live = sessionAt(LIVE, LIVE_AT);
+    const imported = sessionAt(IMPORTED, IMPORTED_AT);
+    wal.append([...live, ...imported]);
+    expect(wal.unshipped(100, new Set([LIVE]))).toEqual(imported);
+  });
+});
+
+describe("the oldest unshipped event in stats()", () => {
+  // `health()` calls `stats()` for every `/health` request and every shipped
+  // batch, so what one call reads is read again and again.
+
+  /** `minimalSession` with each event one second after the one before. */
+  function spacedSession(): TachoEvent[] {
+    const start = Date.parse("2026-10-02T03:20:00.000Z");
+    return minimalSession().map((event) => ({
+      ...event,
+      ts: new Date(start + event.seq * 1_000).toISOString(),
+    }));
+  }
+
+  it("reads a small window, not a scan chunk, to find it", () => {
+    const wal = new Wal(scratchPaths().wal);
+    const session = spacedSession();
+    wal.append(session);
+    const reads = vi.mocked(readSync);
+    reads.mockClear();
+    expect(wal.stats().oldestUnshippedAt).toBe(session[0]!.ts);
+    expect(reads).toHaveBeenCalled();
+    for (const call of reads.mock.calls) {
+      const buffer = call[1] as Uint8Array;
+      expect(buffer.byteLength).toBeLessThanOrEqual(16 * 1024);
+    }
+  });
+
+  it("reads no event file again until the session's cursor moves", () => {
+    const wal = new Wal(scratchPaths().wal);
+    const session = spacedSession();
+    const uuid = session[0]!.session_uuid;
+    wal.append(session);
+    expect(wal.stats().oldestUnshippedAt).toBe(session[0]!.ts);
+    const opened = vi.mocked(openSync);
+    opened.mockClear();
+    expect(wal.stats().oldestUnshippedAt).toBe(session[0]!.ts);
+    expect(opened).not.toHaveBeenCalled();
+    wal.markShipped(uuid, 1);
+    expect(wal.stats().oldestUnshippedAt).toBe(session[2]!.ts);
+  });
+
+  it("reads a compacted session afresh when its id comes back", () => {
+    const wal = new Wal(scratchPaths().wal);
+    const session = spacedSession();
+    const uuid = session[0]!.session_uuid;
+    wal.append(session);
+    expect(wal.stats().oldestUnshippedAt).toBe(session[0]!.ts);
+    wal.markShipped(uuid, session.at(-1)!.seq);
+    expect(wal.compact(Date.now() + 10 * 86_400_000, 1)).toEqual([uuid]);
+    const again = { ...session[0]!, ts: "2026-10-03T00:00:00.000Z" };
+    wal.append([again]);
+    expect(wal.stats().oldestUnshippedAt).toBe(again.ts);
   });
 });

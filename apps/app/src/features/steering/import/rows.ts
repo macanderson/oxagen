@@ -14,6 +14,11 @@
 // that record's lineage, so the commit writes over the record where it lives,
 // and over an earlier statement of the same import it leaves that statement
 // out. Until a person chooses, the row blocks the steering PR.
+//
+// A memory row is a memory with force info, and its kind and force do not
+// change. A person ticks it in or out. A row that repeats a waiting memory, a
+// rejected statement, or an earlier row, or that is too long for a memory,
+// stays out: the commit would leave it out and name it anyway.
 import type { steeringMarkdownImportParse } from "@oxagen/oxagen/contracts/steering.markdown_import.parse";
 import {
   clampForce,
@@ -26,6 +31,7 @@ import { type ImportTarget, PARSE_CALL_BYTES_MAX } from "./files";
 export type ParseOutput = ContractOutput<typeof steeringMarkdownImportParse>;
 export type ImportRecord = ParseOutput["records"][number];
 export type ImportPolicy = ParseOutput["policies"][number];
+export type ImportMemory = ParseOutput["memories"][number];
 export type ImportFileResult = ParseOutput["files"][number];
 /**
  * The kinds and effects as plain unions, not as the contract's zod output, so
@@ -44,6 +50,7 @@ export type ParseResult = {
   files: ImportFileResult[];
   records: ImportRecord[];
   policies: ImportPolicy[];
+  memories: ImportMemory[];
   /** The most files one steering PR holds. */
   max: number;
 };
@@ -59,6 +66,7 @@ export function mergeParses(outputs: readonly ParseOutput[]): ParseResult {
     files: outputs.flatMap((o) => o.files),
     records: outputs.flatMap((o) => o.records),
     policies: outputs.flatMap((o) => o.policies),
+    memories: outputs.flatMap((o) => o.memories),
     max: outputs[0]?.pullRequestFiles.max ?? 0,
   };
 }
@@ -334,12 +342,44 @@ export function resolveRows(
   return rows;
 }
 
+/** One memory row with what the commit does with it. */
+export type ResolvedMemory = {
+  memory: ImportMemory;
+  /** False for a row that repeats a statement or is too long: it stays out. */
+  editable: boolean;
+  action: "add" | "skip";
+};
+
+/**
+ * A memory row's key: its file, line, and words. A second parse of the same
+ * files that proposes the same statement finds the choice made on it.
+ */
+export function memoryKey(memory: ImportMemory): string {
+  return [memory.file, memory.line, memory.statement].join("\u0000");
+}
+
+/** Every memory row with its action: as parse proposed it, or as a person ticked it. */
+export function resolveMemories(
+  memories: readonly ImportMemory[],
+  ticks: ReadonlyMap<string, boolean>,
+): ResolvedMemory[] {
+  return memories.map((memory): ResolvedMemory => {
+    const editable = memory.duplicate === null && memory.issue === null;
+    const on = editable
+      ? (ticks.get(memoryKey(memory)) ?? memory.action === "add")
+      : false;
+    return { memory, editable, action: on ? "add" : "skip" };
+  });
+}
+
 /** What the grid's foot counts. */
 export type Tally = {
   /** Records the steering PR would hold. */
   records: number;
   /** Policy files the steering PR would hold. */
   policies: number;
+  /** Memories the commit would store. */
+  memories: number;
   /** Statements left out. */
   out: number;
   /** Conflicts that still need a choice. */
@@ -351,6 +391,7 @@ export type Tally = {
 export function tally(
   rows: readonly ResolvedRow[],
   policies: readonly ImportPolicy[],
+  memories: readonly ResolvedMemory[] = [],
 ): Tally {
   let records = 0;
   let out = 0;
@@ -365,10 +406,12 @@ export function tally(
         tokens += row.record.tokens;
     }
   }
+  const stored = memories.filter((m) => m.action === "add").length;
   return {
     records,
     policies: policies.filter((p) => p.action === "add").length,
-    out,
+    memories: stored,
+    out: out + (memories.length - stored),
     open,
     tokens,
   };
@@ -394,6 +437,7 @@ export function commitRecords(rows: readonly ResolvedRow[]): ImportRecord[] {
 export type CommitPayload = {
   records: ImportRecord[];
   policies: ImportPolicy[];
+  memories: ImportMemory[];
 };
 
 function bytesOf(payload: CommitPayload): number {
@@ -409,26 +453,30 @@ function bytesOf(payload: CommitPayload): number {
 export function commitPayload(
   rows: readonly ResolvedRow[],
   policies: readonly ImportPolicy[],
+  memories: readonly ResolvedMemory[] = [],
   bytesMax: number = PARSE_CALL_BYTES_MAX,
 ): CommitPayload | null {
   const full: CommitPayload = {
     records: commitRecords(rows),
     policies: [...policies],
+    memories: memories.map(({ memory, action }) => ({ ...memory, action })),
   };
   if (bytesOf(full) <= bytesMax) return full;
   const lean: CommitPayload = {
     records: full.records.filter((r) => r.action === "add"),
     policies: full.policies.filter((p) => p.action === "add"),
+    memories: full.memories.filter((m) => m.action === "add"),
   };
   return bytesOf(lean) <= bytesMax ? lean : null;
 }
 
-/** One file of the grid: its head, and its rows or its policy. */
+/** One file of the grid: its head, and its rows, its memories, or its policy. */
 export type FileGroup = {
   file: string;
   target: ImportTarget;
   result: ImportFileResult;
   rows: { index: number; row: ResolvedRow }[];
+  memories: ResolvedMemory[];
   policy: ImportPolicy | null;
 };
 
@@ -436,6 +484,7 @@ export type FileGroup = {
 export function groupsOf(
   parsed: ParseResult,
   rows: readonly ResolvedRow[],
+  memories: readonly ResolvedMemory[] = [],
 ): FileGroup[] {
   return parsed.files.map((result) => ({
     file: result.filename,
@@ -444,6 +493,10 @@ export function groupsOf(
     rows: rows.flatMap((row, index) =>
       row.record.file === result.filename ? [{ index, row }] : [],
     ),
+    memories:
+      result.target === "memories"
+        ? memories.filter((m) => m.memory.file === result.filename)
+        : [],
     policy: parsed.policies.find((p) => p.file === result.filename) ?? null,
   }));
 }

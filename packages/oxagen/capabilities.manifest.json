@@ -59,6 +59,24 @@
       }
     },
     {
+      "name": "set_agent_cache_keep_alive",
+      "file": "agent.cache_keep_alive.set.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
       "name": "rotate_agent_credential",
       "file": "agent.credential.rotate.ts",
       "domain": "agent",
@@ -6383,6 +6401,23 @@
       }
     },
     {
+      "name": "get_spend_per_merged_pr",
+      "file": "spend.per_merged_pr.ts",
+      "domain": "spend",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "agent"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
       "name": "export_statement",
       "file": "spend.statement.export.ts",
       "domain": "spend",
@@ -6477,6 +6512,99 @@
         "unit": true,
         "docs": true,
         "app": true
+      }
+    },
+    {
+      "name": "dismiss_memories",
+      "file": "steering.memories.dismiss.ts",
+      "domain": "context",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "cli": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "get_workspace_memory",
+      "file": "steering.memories.get.ts",
+      "domain": "context",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "cli": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "list_workspace_memories",
+      "file": "steering.memories.list.ts",
+      "domain": "context",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "cli": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "promote_memories",
+      "file": "steering.memories.promote.ts",
+      "domain": "context",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "cli": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "list_memory_pr_records",
+      "file": "steering.memory_pr_records.list.ts",
+      "domain": "context",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
       }
     },
     {
@@ -6841,6 +6969,21 @@
     {
       "name": "recall_tacho_memories",
       "file": "tacho.memories.recall.ts",
+      "domain": "tacho",
+      "mode": "sync",
+      "surfaces": [
+        "api"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "record_tacho_memory_uses",
+      "file": "tacho.memories.uses.record.ts",
       "domain": "tacho",
       "mode": "sync",
       "surfaces": [

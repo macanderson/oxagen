@@ -167,6 +167,8 @@ export const agentGet = registerCapability({
           firstFrameAt: instant.nullable(),
           /** The cost-center label the agent's spend is charged to (ADR-142), or null when it inherits the workspace's. */
           costCenter: costCenterLabelSchema.nullable(),
+          /** Whether the model proxy may keep the agent's prompt cache warm while it waits on a subagent; true by default (lane F32). */
+          cacheKeepAlive: z.boolean(),
         })
         .strict(),
       /** The runtime the agent runs on now; null when it runs on no named runtime. */

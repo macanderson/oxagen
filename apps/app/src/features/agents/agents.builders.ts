@@ -123,6 +123,7 @@ export function agentDetail(overrides: DetailOverrides = {}): AgentDetail {
       registeredAt: "2026-09-01T10:00:00.000Z",
       firstFrameAt: "2026-09-02T10:00:00.000Z",
       costCenter: null,
+      cacheKeepAlive: true,
       ...identity,
     },
     credentials: [
@@ -634,6 +635,7 @@ export function agentsSource(reads: AgentReads) {
       findingEvidence: refuse,
       priceBook: refuse,
       operatorRanking: refuse,
+      perMergedPr: refuse,
       unpricedModels: refuse,
       unproductive: refuse,
     },

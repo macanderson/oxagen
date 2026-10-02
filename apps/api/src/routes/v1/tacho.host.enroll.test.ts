@@ -132,8 +132,9 @@ describe("POST /v1/tacho/enroll rate limits", () => {
     // The credential ceiling is the sum of the post-auth budgets, so a healthy
     // enrolled key never meets it before its own: 120 ingest + 120 recall +
     // 30 each for the control pair, the GitHub credential, the contained
-    // launch and the memory upload. Change this with the constants in app.ts.
-    const ceiling = 120 + 120 + 30 * 4;
+    // launch, the memory upload and the memory use report. Change this with
+    // the constants in app.ts.
+    const ceiling = 120 + 120 + 30 * 5;
     atMinute(1);
     const statuses: number[] = [];
     for (let i = 0; i <= ceiling; i++) {

@@ -1,9 +1,9 @@
 "use client";
 // The Import Markdown dialog's first step (the mockup's `mdimPick`): the drop
 // zone with its two buttons, which are the keyboard path, and one row per
-// Markdown file with its target, the path it lands at, and its status. A file
-// the review already read shows what parse found in it: its statement count,
-// its rule count, or its Cedar error.
+// Markdown file with its target, where it lands, and its status. A file the
+// review already read shows what parse found in it: its statement count, its
+// rule count, or its Cedar error.
 import { MARKDOWN_IMPORT_FILE_CHARS_MAX } from "@oxagen/oxagen/contracts/steering.markdown_import.shared";
 import { UploadSimpleIcon } from "@phosphor-icons/react";
 import { useTranslations } from "next-intl";
@@ -25,7 +25,13 @@ import type { ImportFileResult, ImportPolicy, ParseResult } from "./rows";
 /** A select in a table row: the field skin at the row's height. */
 export const rowSelect = `${inputBase} h-8 min-h-8 w-auto py-0 text-[12.5px]`;
 
-const TARGETS: readonly ImportTarget[] = ["records", "policies", "skip"];
+/** The targets in the order the spec lists them (memory-collection spec, Bulk import). */
+const TARGETS: readonly ImportTarget[] = [
+  "records",
+  "memories",
+  "policies",
+  "skip",
+];
 
 /** The reasons a skipped file names in its status. */
 const SKIP_REASONS: ReadonlySet<TargetReason> = new Set([
@@ -207,6 +213,13 @@ function useFileStatus(): (
         note: t("status.statements", { count: result.records }),
       };
     }
+    if (file.target === "memories" && result !== null) {
+      return {
+        tone: "allowed",
+        text: t("status.ready"),
+        note: t("status.statements", { count: result.memories }),
+      };
+    }
     return { tone: "allowed", text: t("status.ready"), note: null };
   };
 }
@@ -267,20 +280,18 @@ export function FilesTable({
                 }}
                 className={rowSelect}
               >
-                <option value="records">{t("targets.records")}</option>
-                <option value="policies">{t("targets.policies")}</option>
-                <option value="skip">{t("targets.skip")}</option>
-                {/* The Memories target lands with memory collection (#4984). */}
-                <optgroup label={t("targets.memoriesHint")}>
-                  <option value="memories" disabled>
-                    {t("targets.memories")}
+                {TARGETS.map((target) => (
+                  <option key={target} value={target}>
+                    {t(`targets.${target}`)}
                   </option>
-                </optgroup>
+                ))}
               </select>
             </td>
             <td>
               {file.target === "skip" ? (
                 <span className="text-muted-foreground">{t("paths.none")}</span>
+              ) : file.target === "memories" ? (
+                <span className="text-foreground">{t("paths.memories")}</span>
               ) : (
                 <span className={`${mono} text-foreground`}>
                   {file.target === "records"

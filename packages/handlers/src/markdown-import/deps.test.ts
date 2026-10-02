@@ -28,6 +28,13 @@ vi.mock("../tools.pr.open", () => ({ toolsSteeringHost: () => host }));
 const opener = vi.hoisted(() => ({ open: vi.fn() }));
 vi.mock("./opener", () => ({ markdownImportPullRequestOpener: opener }));
 
+const memoryStore = vi.hoisted(() => ({
+  listWaiting: vi.fn(),
+  listRejections: vi.fn(),
+  insertMemoriesKeyed: vi.fn(),
+}));
+vi.mock("../memory/store", () => ({ postgresMemoryStore: memoryStore }));
+
 // The model call has its own tests (split.test.ts). Mocking it here keeps the
 // gateway and billing modules out of a suite whose database is a stub.
 vi.mock("./split", () => ({ splitWithModel: vi.fn() }));
@@ -50,6 +57,9 @@ beforeEach(() => {
     host.readFile,
     host.branchHead,
     opener.open,
+    memoryStore.listWaiting,
+    memoryStore.listRejections,
+    memoryStore.insertMemoriesKeyed,
   ]) {
     fn.mockReset();
   }
@@ -127,5 +137,29 @@ describe("markdownImportDeps", () => {
     expect(opener.open).toHaveBeenCalledWith(scope, args);
     expect(deps.split).toBe(splitWithModel);
     expect(deps.now()).toBeInstanceOf(Date);
+  });
+
+  it("reads the waiting memories' hashes and the rejected statements from the memory store", async () => {
+    memoryStore.listWaiting.mockResolvedValue([
+      { id: "uuid-1", publicId: "mem_01", statementHash: "hash-a", statement: "Use pnpm." },
+    ]);
+    memoryStore.listRejections.mockResolvedValue([
+      { statementHash: "hash-b", rejectedAt: new Date("2026-09-01T00:00:00Z") },
+    ]);
+    await expect(markdownImportDeps().memories.held(scope)).resolves.toEqual({
+      waiting: [{ publicId: "mem_01", statementHash: "hash-a" }],
+      rejected: ["hash-b"],
+    });
+    expect(memoryStore.listWaiting).toHaveBeenCalledWith(scope);
+    expect(memoryStore.listRejections).toHaveBeenCalledWith(scope);
+  });
+
+  it("stores the memories through the store's keyed insert", async () => {
+    memoryStore.insertMemoriesKeyed.mockResolvedValue(["import:import:a.md#L1:hash"]);
+    const drafts = [{ dedupeKey: "import:import:a.md#L1:hash" }] as never[];
+    await expect(markdownImportDeps().memories.store(scope, drafts)).resolves.toEqual([
+      "import:import:a.md#L1:hash",
+    ]);
+    expect(memoryStore.insertMemoriesKeyed).toHaveBeenCalledWith(scope, drafts);
   });
 });

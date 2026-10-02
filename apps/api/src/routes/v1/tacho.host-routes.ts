@@ -7,6 +7,7 @@ import { tachoEventsIngestRoute } from "./tacho.events.ingest";
 import { tachoGithubTokenIssueRoute } from "./tacho.github_token.issue";
 import { tachoMemoriesIngestRoute } from "./tacho.memories.ingest";
 import { tachoMemoriesRecallRoute } from "./tacho.memories.recall";
+import { tachoMemoryUsesRecordRoute } from "./tacho.memories.uses.record";
 
 /**
  * Mount the routes an enrolled Tacho host calls, largest body limit first.
@@ -26,6 +27,7 @@ import { tachoMemoriesRecallRoute } from "./tacho.memories.recall";
  */
 export function mountTachoHostRoutes(router: Hono<AppEnv>): void {
   router.route("/", tachoEventsIngestRoute); // TACHO_MAX_REQUEST_BYTES, 4 MiB
+  router.route("/", tachoMemoryUsesRecordRoute); // 1 MiB
   router.route("/", tachoMemoriesRecallRoute); // 384 KiB
   router.route("/", tachoCommandFetchRoute); // 256 KiB
   router.route("/", tachoBundleGetRoute); // 64 KiB

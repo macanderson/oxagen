@@ -55,7 +55,7 @@ describe("settleMemoryPr", () => {
     ).toBeNull();
   });
 
-  it("merges each proposed record still at its path, and rejects one the person removed", () => {
+  it("promotes the memories of each proposed record still at its path, and returns those of one the person removed", () => {
     const kept = propose("run-tests", ["m1", "m2"], ["h1"]);
     const removed = propose("skip-lint", ["m3"], ["h2", "h3"]);
     const settlement = settleMemoryPr(
@@ -71,7 +71,8 @@ describe("settleMemoryPr", () => {
       mergedLineages: ["run-tests"],
       reviewedLineages: [],
       rejectedHashes: ["h2", "h3"],
-      purgeMemoryIds: ["m1", "m2", "m3"],
+      promoted: [{ lineage: "run-tests", memoryIds: ["m1", "m2"] }],
+      returnedMemoryIds: ["m3"],
     });
   });
 
@@ -86,7 +87,7 @@ describe("settleMemoryPr", () => {
     expect(settlement?.settledAt).toBe(NOW);
   });
 
-  it("rejects every proposed record of a PR closed unmerged, whatever the paths say", () => {
+  it("rejects every proposed record of a PR closed unmerged and returns its memories, whatever the paths say", () => {
     const record = propose("run-tests", ["m1"], ["h1"]);
     const settlement = settleMemoryPr(
       openPr([record]),
@@ -101,7 +102,8 @@ describe("settleMemoryPr", () => {
       mergedLineages: [],
       reviewedLineages: [],
       rejectedHashes: ["h1"],
-      purgeMemoryIds: ["m1"],
+      promoted: [],
+      returnedMemoryIds: ["m1"],
     });
   });
 
@@ -118,7 +120,8 @@ describe("settleMemoryPr", () => {
       expect(settlement?.reviewedLineages).toEqual(["old-fact"]);
       expect(settlement?.mergedLineages).toEqual([]);
       expect(settlement?.rejectedHashes).toEqual([]);
-      expect(settlement?.purgeMemoryIds).toEqual([]);
+      expect(settlement?.promoted).toEqual([]);
+      expect(settlement?.returnedMemoryIds).toEqual([]);
     }
   });
 
@@ -135,7 +138,7 @@ describe("settleMemoryPr", () => {
       NOW,
     );
     expect(settlement?.rejectedHashes).toEqual(["h1"]);
-    expect(settlement?.purgeMemoryIds).toEqual(["m1", "m2"]);
+    expect(settlement?.returnedMemoryIds).toEqual(["m1", "m2"]);
     expect(settlement?.reviewedLineages).toEqual(["old-fact"]);
 
     const merged = settleMemoryPr(
@@ -148,5 +151,26 @@ describe("settleMemoryPr", () => {
       NOW,
     );
     expect(merged?.mergedLineages).toEqual(["run-tests"]);
+    expect(merged?.promoted).toEqual([
+      { lineage: "run-tests", memoryIds: ["m1"] },
+      { lineage: "run-tests", memoryIds: ["m2"] },
+    ]);
+  });
+
+  it("deletes no memory: every cited memory is promoted or returned", () => {
+    const kept = propose("run-tests", ["m1"], ["h1"]);
+    const removed = propose("skip-lint", ["m2"], ["h2"]);
+    const settlement = settleMemoryPr(
+      openPr([kept, removed, retire("old-fact")]),
+      MERGED,
+      new Set([kept.path]),
+      NOW,
+    );
+    const moved = [
+      ...(settlement?.promoted.flatMap((p) => p.memoryIds) ?? []),
+      ...(settlement?.returnedMemoryIds ?? []),
+    ];
+    expect(moved.sort()).toEqual(["m1", "m2"]);
+    expect(settlement).not.toHaveProperty("purgeMemoryIds");
   });
 });

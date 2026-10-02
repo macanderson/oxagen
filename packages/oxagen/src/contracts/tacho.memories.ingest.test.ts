@@ -35,6 +35,29 @@ describe("host memory contract", () => {
     }
   });
 
+  it("takes a memory file's frontmatter name, description, and type", () => {
+    const parsed = contract.input.parse({
+      ...input,
+      label: " Billing tests ",
+      summary: "Run them before a proration change.",
+      memory_type: "feedback",
+    });
+    expect(parsed.label).toBe("Billing tests");
+    expect(parsed.memory_type).toBe("feedback");
+    for (const patch of [
+      { label: "" },
+      { label: "l".repeat(201) },
+      { summary: "s".repeat(1001) },
+      { memory_type: "Feedback" },
+      { memory_type: "a type" },
+    ]) {
+      expect(
+        contract.input.safeParse({ ...input, ...patch }).success,
+        JSON.stringify(patch),
+      ).toBe(false);
+    }
+  });
+
   it("trims the statement the way remember_lesson does", () => {
     const parsed = contract.input.parse({
       ...input,

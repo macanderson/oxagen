@@ -1,0 +1,54 @@
+{
+  "name": "set_agent_cache_keep_alive",
+  "domain": "agent",
+  "description": "Turn the cache keep-alive on or off for one agent in the active workspace. While the agent waits on a subagent, the model proxy resends its last request with no output so its cached prompt stays warm. It runs only when the agent's idle cache finding shows the keep-alive costs less than the cache rewrites it saves. Off stops it for this agent.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "medium",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "agent": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+      },
+      "cacheKeepAlive": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "agent",
+      "cacheKeepAlive"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "agentId": {
+        "type": "string"
+      },
+      "cacheKeepAlive": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "agentId",
+      "cacheKeepAlive"
+    ],
+    "additionalProperties": false
+  }
+}

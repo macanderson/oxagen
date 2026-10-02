@@ -838,6 +838,8 @@ async function unenrollLocked(
     deps.paths.daemonSealedState,
     deps.paths.hookIdJournal,
     deps.paths.transcriptTailState,
+    deps.paths.memoryCounts,
+    deps.paths.stellaMemoryCursors,
     deps.paths.pid,
     deps.paths.daemonLauncher,
   ]) {

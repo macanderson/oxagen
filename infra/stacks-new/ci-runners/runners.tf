@@ -10,8 +10,10 @@
  *
  * Speed comes first here, at Mac's direction on 2026-10-01: the heavy pools
  * are 16 vCPU, the instance types with local NVMe come first in priority, and
- * the warm pools run around the clock. Spot comes first and on-demand fills
- * in, because the two have separate quotas and together hold more runners.
+ * the warm pools run around the clock. Spot comes first. The small pools fall
+ * back to on-demand when spot fails, and the large pools wait for spot
+ * instead, so the on-demand deploy pool and production always find room
+ * (#5070). `max_runners` in terraform.tfvars caps each pool.
  */
 
 locals {
@@ -21,34 +23,41 @@ locals {
   # capacity. Every type in one pool has the same vCPU count and at least the
   # same memory (64 GB large, 16 GB small), so a job runs at the same width
   # wherever it lands and the concurrency the workflows set never outgrows it.
+  #
+  # on_demand says whether a pool falls back to on-demand when spot fails. The
+  # large pools don't (#5070). At 16 vCPUs each, 22 large runners on
+  # on-demand would need 352 vCPUs, more than the 300 the quota holds, and the
+  # deploy pool and the production app node have no other quota to run on.
+  # The small pools keep the fallback: all 36 on on-demand need 144 vCPUs,
+  # which leaves room for the deploy pool's 96 and production's 6.
   pools = {
     "oxagen-large-arm64" = {
-      arch     = "arm64"
-      types    = ["m8gd.4xlarge", "m7gd.4xlarge", "m8g.4xlarge", "r8g.4xlarge", "m7g.4xlarge", "r7g.4xlarge"]
-      max      = 250
-      disk     = { size = 150, iops = 16000, throughput = 1000 }
-      priority = 10
+      arch      = "arm64"
+      types     = ["m8gd.4xlarge", "m7gd.4xlarge", "m8g.4xlarge", "r8g.4xlarge", "m7g.4xlarge", "r7g.4xlarge"]
+      disk      = { size = 150, iops = 16000, throughput = 1000 }
+      priority  = 10
+      on_demand = false
     }
     "oxagen-large-x64" = {
-      arch     = "x64"
-      types    = ["m7a.4xlarge", "m6id.4xlarge", "m7i.4xlarge", "r7a.4xlarge", "m6a.4xlarge", "m6i.4xlarge"]
-      max      = 100
-      disk     = { size = 150, iops = 16000, throughput = 1000 }
-      priority = 20
+      arch      = "x64"
+      types     = ["m7a.4xlarge", "m6id.4xlarge", "m7i.4xlarge", "r7a.4xlarge", "m6a.4xlarge", "m6i.4xlarge"]
+      disk      = { size = 150, iops = 16000, throughput = 1000 }
+      priority  = 20
+      on_demand = false
     }
     "oxagen-small-arm64" = {
-      arch     = "arm64"
-      types    = ["m8gd.xlarge", "m7gd.xlarge", "m8g.xlarge", "m7g.xlarge", "m6g.xlarge"]
-      max      = 150
-      disk     = { size = 80, iops = 6000, throughput = 500 }
-      priority = 30
+      arch      = "arm64"
+      types     = ["m8gd.xlarge", "m7gd.xlarge", "m8g.xlarge", "m7g.xlarge", "m6g.xlarge"]
+      disk      = { size = 80, iops = 6000, throughput = 500 }
+      priority  = 30
+      on_demand = true
     }
     "oxagen-small-x64" = {
-      arch     = "x64"
-      types    = ["m7a.xlarge", "m6id.xlarge", "m7i.xlarge", "m6a.xlarge"]
-      max      = 150
-      disk     = { size = 80, iops = 6000, throughput = 500 }
-      priority = 40
+      arch      = "x64"
+      types     = ["m7a.xlarge", "m6id.xlarge", "m7i.xlarge", "m6a.xlarge"]
+      disk      = { size = 80, iops = 6000, throughput = 500 }
+      priority  = 40
+      on_demand = true
     }
   }
 
@@ -275,7 +284,7 @@ module "runners" {
           runner_name_prefix    = "${name}-"
           runner_group_name     = var.ci_runner_group
           instance_types        = p.types
-          runners_maximum_count = p.max
+          runners_maximum_count = var.max_runners[name]
           ami = {
             owners               = ["099720109477"]
             filter               = { name = ["ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-*"] }
@@ -292,6 +301,8 @@ module "runners" {
             throughput  = p.disk.throughput
             encrypted   = true
           }]
+          # See `on_demand` in locals.pools.
+          enable_on_demand_failover_for_errors = p.on_demand ? local.runner_defaults.enable_on_demand_failover_for_errors : []
           pool_config = var.github_app_ready && lookup(var.warm_pool, name, 0) > 0 ? [{
             schedule_expression = "rate(2 minutes)"
             size                = var.warm_pool[name]
@@ -319,7 +330,7 @@ module "runners" {
           instance_target_capacity_type        = "on-demand"
           instance_allocation_strategy         = "prioritized"
           enable_on_demand_failover_for_errors = []
-          runners_maximum_count                = 6
+          runners_maximum_count                = var.max_runners["oxagen-deploy"]
           vpc_id                               = data.aws_vpc.production.id
           subnet_ids                           = data.aws_subnets.production_public.ids
           runner_additional_security_group_ids = [aws_security_group.deploy_runner.id]

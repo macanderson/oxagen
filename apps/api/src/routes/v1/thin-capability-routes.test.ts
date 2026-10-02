@@ -60,6 +60,7 @@ import { agentMemoryPromotionRationales } from "@oxagen/oxagen/contracts/agent.m
 import { agentRegister } from "@oxagen/oxagen/contracts/agent.register";
 import { agentMove } from "@oxagen/oxagen/contracts/agent.move";
 import { agentToolbeltAssign } from "@oxagen/oxagen/contracts/agent.toolbelt.assign";
+import { agentCacheKeepAliveSet } from "@oxagen/oxagen/contracts/agent.cache_keep_alive.set";
 import { runtimeCreate } from "@oxagen/oxagen/contracts/runtime.create";
 import { runtimeList } from "@oxagen/oxagen/contracts/runtime.list";
 import { runtimeUpdate } from "@oxagen/oxagen/contracts/runtime.update";
@@ -118,6 +119,11 @@ import { contextRecordsGet } from "@oxagen/oxagen/contracts/context.records.get"
 import { contextRecordsAppend } from "@oxagen/oxagen/contracts/context.records.append";
 import { contextProposalCreate } from "@oxagen/oxagen/contracts/context.proposal.create";
 import { contextProposalList } from "@oxagen/oxagen/contracts/context.proposal.list";
+import { steeringMemoriesDismiss } from "@oxagen/oxagen/contracts/steering.memories.dismiss";
+import { steeringMemoriesGet } from "@oxagen/oxagen/contracts/steering.memories.get";
+import { steeringMemoriesList } from "@oxagen/oxagen/contracts/steering.memories.list";
+import { steeringMemoriesPromote } from "@oxagen/oxagen/contracts/steering.memories.promote";
+import { steeringMemoryPrRecordsList } from "@oxagen/oxagen/contracts/steering.memory_pr_records.list";
 import { contextProposalDismiss } from "@oxagen/oxagen/contracts/context.proposal.dismiss";
 import { contextPrOpen } from "@oxagen/oxagen/contracts/context.pr.open";
 import { skillPropose } from "@oxagen/oxagen/contracts/skill.propose";
@@ -163,6 +169,7 @@ import { spendWasteList } from "@oxagen/oxagen/contracts/spend.waste";
 import { spendOperatorRanking } from "@oxagen/oxagen/contracts/spend.operator_ranking";
 import { spendUnproductive } from "@oxagen/oxagen/contracts/spend.unproductive";
 import { spendOperatorPseudonymsSet } from "@oxagen/oxagen/contracts/spend.operator_pseudonyms.set";
+import { spendPerMergedPr } from "@oxagen/oxagen/contracts/spend.per_merged_pr";
 import { findingDismiss } from "@oxagen/oxagen/contracts/finding.dismiss";
 import { findingEvidenceGet } from "@oxagen/oxagen/contracts/finding.evidence.get";
 import { findingFixRecord } from "@oxagen/oxagen/contracts/finding.fix.record";
@@ -215,6 +222,7 @@ import { agentSuspendRoute } from "./agent.suspend";
 import { agentToolbeltGetRoute } from "./agent.toolbelt.get";
 import { agentMoveRoute } from "./agent.move";
 import { agentToolbeltAssignRoute } from "./agent.toolbelt.assign";
+import { agentCacheKeepAliveSetRoute } from "./agent.cache_keep_alive.set";
 import { runtimeCreateRoute } from "./runtime.create";
 import { runtimeListRoute } from "./runtime.list";
 import { runtimeUpdateRoute } from "./runtime.update";
@@ -265,6 +273,11 @@ import { contextRecordsGetRoute } from "./context.records.get";
 import { contextRecordsAppendRoute } from "./context.records.append";
 import { contextProposalCreateRoute } from "./context.proposal.create";
 import { contextProposalListRoute } from "./context.proposal.list";
+import { steeringMemoriesDismissRoute } from "./steering.memories.dismiss";
+import { steeringMemoriesGetRoute } from "./steering.memories.get";
+import { steeringMemoriesListRoute } from "./steering.memories.list";
+import { steeringMemoriesPromoteRoute } from "./steering.memories.promote";
+import { steeringMemoryPrRecordsListRoute } from "./steering.memory_pr_records.list";
 import { contextProposalDismissRoute } from "./context.proposal.dismiss";
 import { contextPrOpenRoute } from "./context.pr.open";
 import { skillProposeRoute } from "./skill.propose";
@@ -291,6 +304,7 @@ import { spendWasteListRoute } from "./spend.waste";
 import { spendOperatorRankingRoute } from "./spend.operator_ranking";
 import { spendUnproductiveRoute } from "./spend.unproductive";
 import { spendOperatorPseudonymsSetRoute } from "./spend.operator_pseudonyms.set";
+import { spendPerMergedPrRoute } from "./spend.per_merged_pr";
 import { findingDismissRoute } from "./finding.dismiss";
 import { findingEvidenceGetRoute } from "./finding.evidence.get";
 import { findingFixRecordRoute } from "./finding.fix.record";
@@ -503,6 +517,65 @@ const ROUTES: ThinRoute[] = [
     invalidBody: { proposalId: "prp_1" },
     status: 200,
   },
+  // Workspace memories (#4912).
+  {
+    file: "steering.memories.list",
+    route: steeringMemoriesListRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: steeringMemoriesList.name,
+    body: {},
+    expectedInput: { states: ["waiting", "in_pr"], limit: 50, offset: 0 },
+    invalidBody: { states: ["archived"] },
+    jsonGuard: true,
+    status: 200,
+  },
+  {
+    file: "steering.memories.get",
+    route: steeringMemoriesGetRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: steeringMemoriesGet.name,
+    body: { memory_id: "mem_0a1b2c" },
+    invalidBody: { memory_id: "0a1b2c" },
+    jsonGuard: true,
+    status: 200,
+  },
+  {
+    file: "steering.memories.promote",
+    route: steeringMemoriesPromoteRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: steeringMemoriesPromote.name,
+    body: { drafts: [{ memory_ids: ["mem_0a1b2c"] }] },
+    expectedInput: {
+      drafts: [{ memory_ids: ["mem_0a1b2c"] }],
+      same_text: true,
+    },
+    // A constraint names its effect, and the contract's refine refuses one
+    // without it before the handler sees it.
+    invalidBody: { drafts: [{ memory_ids: ["mem_0a1b2c"], kind: "constraint" }] },
+    jsonGuard: true,
+    status: 200,
+  },
+  {
+    file: "steering.memories.dismiss",
+    route: steeringMemoriesDismissRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: steeringMemoriesDismiss.name,
+    body: { memory_ids: ["mem_0a1b2c"] },
+    expectedInput: { memory_ids: ["mem_0a1b2c"], restore: false },
+    invalidBody: { memory_ids: [] },
+    jsonGuard: true,
+    status: 200,
+  },
+  {
+    file: "steering.memory_pr_records.list",
+    route: steeringMemoryPrRecordsListRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: steeringMemoryPrRecordsList.name,
+    body: { number: 12 },
+    invalidBody: { number: 0 },
+    jsonGuard: true,
+    status: 200,
+  },
   {
     file: "context.pr.open",
     route: contextPrOpenRoute as unknown as Hono<never>,
@@ -614,6 +687,16 @@ const ROUTES: ThinRoute[] = [
     capability: agentToolbeltAssign.name,
     body: { agentId: "agt_1", toolbeltId: "tbt_0123456789abcdefghjkmn" },
     invalidBody: { agentId: "agt_1" },
+    status: 200,
+  },
+  {
+    file: "agent.cache_keep_alive.set",
+    route: agentCacheKeepAliveSetRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: agentCacheKeepAliveSet.name,
+    body: { agent: "release-bot", cacheKeepAlive: false },
+    invalidBody: { agent: "release-bot", cacheKeepAlive: "off" },
+    jsonGuard: true,
     status: 200,
   },
   {
@@ -1823,6 +1906,16 @@ const ROUTES: ThinRoute[] = [
     status: 200,
   },
   {
+    file: "spend.per_merged_pr",
+    route: spendPerMergedPrRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: spendPerMergedPr.name,
+    body: { period: { from: "2026-09-01", to: "2026-09-30" } },
+    invalidBody: { period: { from: "2026-09-30", to: "2026-09-01" } },
+    jsonGuard: true,
+    status: 200,
+  },
+  {
     file: "spend.unproductive",
     route: spendUnproductiveRoute as unknown as Hono<never>,
     method: "POST",
@@ -2422,6 +2515,7 @@ const ROUTES: ThinRoute[] = [
         },
       ],
       policies: [],
+      memories: [],
     },
     // A fact is held to info, so must is refused before invoke.
     invalidBody: {

@@ -122,6 +122,7 @@ function agent(overrides: Partial<AgentDetail> = {}): Read<AgentDetail> {
       registeredAt: "2026-09-01T10:00:00.000Z",
       firstFrameAt: null,
       costCenter: null,
+      cacheKeepAlive: true,
     },
     credentials: [],
     roles: [],
