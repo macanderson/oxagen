@@ -111,14 +111,17 @@ env:
   # CI_IMAGE_REGISTRY points the toolchain and service images at ECR Public
   # (public.ecr.aws/<alias>).
   #
-  # The turbo steps below run this many tasks at once. GitHub's 2-core,
-  # 7 GB runner needs 3 to stay inside its memory.
+  # A public repository's ubuntu-latest runner has 4 cores and 16 GB. The
+  # three values below were sized for the private 2-core, 7 GB runner, so
+  # they fit either one.
+  #
+  # The turbo steps below run this many tasks at once.
   TURBO_CONCURRENCY: "3"
-  # Lint and typecheck run fewer tasks at once. Their heaviest tsc and eslint
-  # scripts pin a 4 GB heap (#4990), so GitHub's 7 GB runner takes 1.
+  # Lint and typecheck run one task at a time, because their heaviest tsc and
+  # eslint scripts pin a large heap (#4990).
   LINT_TURBO_CONCURRENCY: "1"
   # Each Vitest process in the unit job's `rest` lane starts this many
-  # workers. GitHub's 2-core runner takes 1 (#5046).
+  # workers (#5046).
   UNIT_VITEST_MAX_WORKERS: "1"
   # Jobs run inside the toolchain container, so service containers are
   # reached by their service name on the shared docker network, not localhost.
@@ -1977,7 +1980,7 @@ jobs:
       needs.deploy-node.result == 'success'
     needs: [deploy-node]
     # ubuntu-slim: a sparse checkout, two API calls and a tree diff.
-    runs-on: ubuntu-slim
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     environment: production
     # One installer publish at a time, and never cancelled mid-flight, like
@@ -2091,7 +2094,7 @@ jobs:
       needs.deploy-node.result == 'success'
     needs: [deploy-node]
     # ubuntu-slim: one API call.
-    runs-on: ubuntu-slim
+    runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
       actions: write

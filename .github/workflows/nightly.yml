@@ -10,9 +10,11 @@ on:
 # Atlas is baked into the oxagen-ci-* images (pin lives in pipeline.yml's
 # ATLAS_VERSION, read by ci-image.yml at image build time). The images and the
 # service images come from the same registry expressions pipeline.yml uses:
-# ECR Public when CI_IMAGE_REGISTRY is set, and the frozen GHCR images and
-# Docker Hub otherwise. Hard-coded GHCR images left this full sweep on a
-# toolchain that no longer tracked .node-version, pnpm or Playwright.
+# the toolchain images from ECR Public (public.ecr.aws/z5z6u7g2 when
+# CI_IMAGE_REGISTRY is unset), and the service images from the ECR Public
+# mirrors when it is set and Docker Hub otherwise. Hard-coded GHCR images left
+# this full sweep on a toolchain that no longer tracked .node-version, pnpm or
+# Playwright.
 env:
   # Container jobs: see the identical block in pipeline.yml — git in the
   # bind-mounted workspace trips "dubious ownership" without this.
