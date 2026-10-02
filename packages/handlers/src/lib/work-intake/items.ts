@@ -136,27 +136,38 @@ function providerColumns(input: WorkItemInput) {
   };
 }
 
+/** True when the stored copy changed later than the copy being written. */
+function storedIsNewer(stored: string | null, incoming: string | null): boolean {
+  if (stored === null || incoming === null) return false;
+  return Date.parse(stored) > Date.parse(incoming);
+}
+
 /**
  * Insert or update the workspace's item for a provider id. The input is
  * already screened. A new item takes the workspace's next number and keeps
  * the collector that first heard it. Returns the row before the write (null
- * when new) and after it.
+ * when new) and after it. Under the lock, a stored copy newer than the input
+ * wins: nothing is written and `stale` is true, so two reads of one issue
+ * that overlap cannot leave the older text on the row.
  */
 export async function upsertProviderItem(
   tx: Tx,
   scope: WorkScope,
   collectorId: string,
   input: WorkItemInput,
-): Promise<{ before: IntakeItemRow | null; after: IntakeItemRow; created: boolean }> {
+): Promise<{ before: IntakeItemRow | null; after: IntakeItemRow; created: boolean; stale: boolean }> {
   await lock(tx, scope, `source:${input.providerId}`);
   const before = await findProviderItem(tx, scope, input.providerId);
+  if (before && storedIsNewer(before.sourceUpdatedAt, input.sourceUpdatedAt)) {
+    return { before, after: before, created: false, stale: true };
+  }
   if (before) {
     const [row] = await tx
       .update(items)
       .set({ ...providerColumns(input), updatedAt: sql`now()` })
       .where(and(eq(items.id, before.id), eq(items.orgId, scope.orgId), eq(items.workspaceId, scope.workspaceId)))
       .returning(rowColumns);
-    return { before, after: toRow(row!), created: false };
+    return { before, after: toRow(row!), created: false, stale: false };
   }
   const number = await nextItemNumber(tx, scope);
   const [row] = await tx
@@ -171,7 +182,7 @@ export async function upsertProviderItem(
       ...providerColumns(input),
     })
     .returning(rowColumns);
-  return { before: null, after: toRow(row!), created: true };
+  return { before: null, after: toRow(row!), created: true, stale: false };
 }
 
 /** What a person enters by hand. */

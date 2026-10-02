@@ -137,6 +137,8 @@ export function postgresCollectorStore(scope: WorkScope, now: () => Date = () =>
     async upsertItem(collector: CollectorRecord, input: WorkItemInput) {
       return withTenantDb(async (tx) => {
         const written = await upsertProviderItem(tx, scope, collector.id, input);
+        // A newer copy landed first. Its facts are already recorded.
+        if (written.stale) return { item: written.after, created: false };
         const material = { subject: input.subject, description: input.description, labels: input.labels };
         const occurredAt = input.sourceUpdatedAt ?? now().toISOString();
         await recordSource(tx, scope, {

@@ -12,6 +12,8 @@ const eventSchema = z.object({
   workspaceId: z.string().uuid(),
   rootSessionUuid: z.string().uuid(),
   url: z.string().url().max(2048),
+  /** The run opened this pull request, so it gets the Oxagen block (ADR-252). */
+  opened: z.boolean().optional(),
 });
 
 /**
