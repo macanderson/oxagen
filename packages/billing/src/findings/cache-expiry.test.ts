@@ -427,6 +427,148 @@ describe("idle cache rewrites", () => {
     expect(idle(detectFindings(input))).toBeUndefined();
   });
 
+  describe("a rewrite whose cause is unknown (#4614)", () => {
+    it("adds nothing to the avoided sum, and turns the TTL comparison back to 5 minutes", () => {
+      const known = cacheRun();
+      const unknown = cacheRun();
+      const finding = idle(
+        detectFindings(
+          cacheInput([
+            { run: known, frames: fiveMinuteWalk(known, 600) },
+            {
+              run: unknown,
+              frames: fiveMinuteWalk(unknown, 600, {
+                systemContextDigest: null,
+              }),
+            },
+          ]),
+        ),
+      );
+      // Cited uncovered, so the coverage gate counts it, and priced nowhere.
+      expect(finding!.evidence).toMatchObject({
+        calls: 2,
+        coveredCalls: 1,
+        measuredTokens: 42_000,
+        measuredMicros: "144900",
+      });
+      expect(finding!.confidence).toBe("medium");
+      // Only the known rewrite is avoided, $0.1449. Each run wrote 42,500
+      // tokens the 1-hour TTL pays $2.25 more on, $0.19 in all. Read as idle,
+      // the unknown rewrite would double the avoided sum and pick 1 hour.
+      expect(finding!.recommendation).toEqual({
+        setting: "cache_ttl",
+        value: "5m",
+        current: "5m",
+      });
+      expect(finding!.fix).toBe(
+        `Keep the 5-minute cache TTL for ${CACHE_AGENT}, and send a keep-alive read every 4.5 minutes while it waits. Across 1 wait of 5 to 60 minutes, the 1-hour TTL would have cost $0.19 more on writes and would have avoided $0.14 in rewrites.`,
+      );
+      expect(finding!.why).toBe(
+        `${CACHE_AGENT} waited 10 minutes 2 times, and each wait rewrote a 42,000-token cache on average. For the 1 of 2 rewrites this finding prices, a keep-alive would have cost $0.03 against $0.14. 1 rewrite recorded no system context digest, so its cause is unknown.`,
+      );
+    });
+
+    it("writes no finding and proposes no TTL when every rewrite's cause is unknown", () => {
+      const run = cacheRun();
+      const input = cacheInput([
+        {
+          run,
+          frames: fiveMinuteWalk(run, 600, { systemContextDigest: null }),
+        },
+      ]);
+      const ctx = context(input);
+      idleCacheRewrites.detect(input, ctx);
+      const [group] = [...ctx.groups.values()];
+      expect(group).toMatchObject({ calls: 1, covered: 0 });
+      expect(ctx.claimed.size).toBe(0);
+      expect(detectFindings(input)).toEqual([]);
+    });
+  });
+
+  describe("frame coverage the read cap left partial (#4614)", () => {
+    /** The agent's two runs, of which the pass read only the first. */
+    function capped(over: Partial<RunTotalsRecord> = {}) {
+      const read = cacheRun();
+      const unread = cacheRun(over);
+      return cacheInput([{ run: read, frames: fiveMinuteWalk(read, 600) }], {
+        runs: [read, unread],
+        frameCoverage: { runs: 2, read: 1, capped: 1, unmatched: 0 },
+      });
+    }
+
+    it("proposes no TTL while the cap left one of the agent's runs unread", () => {
+      const finding = idle(detectFindings(capped()));
+      expect(finding).toBeDefined();
+      expect(finding!.recommendation).toBeUndefined();
+      expect(finding!.evidence.recommendation).toBeUndefined();
+      expect(finding!.fix).toBe(
+        `For ${CACHE_AGENT}, send a keep-alive read every 4.5 minutes while it waits. Oxagen read the frames of only some of its runs, so it proposes no cache TTL.`,
+      );
+    });
+
+    it("still proposes a TTL when the unread run belongs to another agent", () => {
+      const finding = idle(
+        detectFindings(capped({ agentKey: "acme.core.other" })),
+      );
+      expect(finding!.recommendation).toEqual({
+        setting: "cache_ttl",
+        value: "1h",
+        current: "5m",
+      });
+    });
+
+    it("still proposes a TTL when the run absent from the frames had no frames to read", () => {
+      const input = capped();
+      const finding = idle(
+        detectFindings({
+          ...input,
+          frameCoverage: { runs: 2, read: 1, capped: 0, unmatched: 1 },
+        }),
+      );
+      expect(finding!.recommendation).toMatchObject({ value: "1h" });
+    });
+  });
+
+  it("averages the cache size over every wait it counts, priced or not (#4614)", () => {
+    /** A prefix of `tokens` written, then written again 10 minutes later. */
+    const walk = (
+      run: RunTotalsRecord,
+      tokens: number,
+      over: Partial<PricedRequestFrame> = {},
+    ) => [
+      cacheFrame(run, 0, { input_uncached: 100, cache_write_5m: tokens }, over),
+      cacheFrame(
+        run,
+        600,
+        { input_uncached: 100, cache_write_5m: tokens + 100 },
+        over,
+      ),
+    ];
+    const priced = cacheRun();
+    const unpriced = cacheRun();
+    const finding = idle(
+      detectFindings(
+        cacheInput([
+          { run: priced, frames: walk(priced, 10_000) },
+          {
+            run: unpriced,
+            frames: walk(unpriced, 100_000, { classPrices: listPrices("EUR") }),
+          },
+        ]),
+      ),
+    );
+    expect(finding!.evidence).toMatchObject({
+      calls: 2,
+      coveredCalls: 1,
+      measuredTokens: 10_000,
+    });
+    // (10,000 + 100,000) ÷ 2 waits. The priced rewrite alone is $0.0345
+    // against two reads at $0.006.
+    expect(finding!.why).toBe(
+      `${CACHE_AGENT} waited 10 minutes 2 times, and each wait rewrote a 55,000-token cache on average. For the 1 of 2 rewrites this finding prices, a keep-alive would have cost $0.01 against $0.03.`,
+    );
+  });
+
   it("prices a keep-alive per 4.5 minutes on the 5-minute TTL", () => {
     const run = cacheRun();
     // 9 minutes is two reads, and 8.9 minutes is one.

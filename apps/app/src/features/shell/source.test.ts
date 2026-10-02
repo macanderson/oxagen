@@ -3,11 +3,13 @@
 // across the organization's workspaces. This file proves the shell receives
 // the context's organization, the session's person and the port's read, reads
 // each workspace in its own resolved scope up to a bound, reads the mandate
-// ledger only where a parked call names one, and refuses to render without a
-// session.
+// ledger only where a parked call names one, reads the agents only where a
+// row names one, and refuses to render without a session.
 import { createHash } from "node:crypto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { DataSource } from "@/data/ports";
+import { agentPage, enrolledAgent } from "@/test/steering-views";
+import { interjectionItem } from "./shell.builders";
 
 const getAuthUser = vi.fn();
 vi.mock("@/features/auth", () => ({ getAuthUser }));
@@ -44,6 +46,7 @@ const pending = vi.fn();
 const openInterjections = vi.fn<DataSource["interjections"]["open"]>();
 const resolvedSince = vi.fn<DataSource["approvals"]["resolvedSince"]>();
 const mandatesList = vi.fn();
+const agentsList = vi.fn<DataSource["agents"]["list"]>();
 const source = {
   runtimes: { list: vi.fn(), agents: vi.fn(), named: vi.fn() },
   conversations: { latest: vi.fn(), list: vi.fn(), byId: vi.fn() },
@@ -75,7 +78,7 @@ const source = {
   approvals: { pending, resolved: vi.fn(), resolvedSince },
   interjections: { open: openInterjections, forRun: vi.fn() },
   agents: {
-    list: vi.fn(),
+    list: agentsList,
     get: vi.fn(),
     toolbelt: vi.fn(),
     incidents: vi.fn(),
@@ -179,6 +182,18 @@ beforeEach(() => {
   resolvedSince.mockReset();
   resolvedSince.mockResolvedValue(emptyQueue);
   mandatesList.mockReset();
+  agentsList.mockReset();
+  agentsList.mockResolvedValue(
+    readOk(
+      agentPage([
+        enrolledAgent({
+          slug: "invoice-bot",
+          agentKey: "acme.finops.invoice-bot",
+          harness: "codex",
+        }),
+      ]),
+    ),
+  );
   context.mockReset();
   context.mockResolvedValue(listed);
   preferences.mockReset();
@@ -230,6 +245,7 @@ describe("shellSource", () => {
             pending: emptyQueue,
             interjections: emptyQueue,
             resolved: emptyQueue,
+            harnesses: {},
           },
         ],
         truncated: false,
@@ -404,6 +420,51 @@ describe("shellSource across the organization's workspaces", () => {
     );
     await shellSource(ctx, source);
     expect(mandatesList).not.toHaveBeenCalled();
+  });
+
+  // #4871: a drawer row names its agent by key, and the row's avatar wears the
+  // harness that agent registered.
+  it("resolves the harness of each agent a workspace's rows name, in that workspace's scope", async () => {
+    pending.mockResolvedValue(readOk({ items: [parked], more: false }));
+    openInterjections.mockResolvedValue(
+      readOk({
+        items: [interjectionItem({ agentKey: "acme.finops.stranger" })],
+        more: false,
+      }),
+    );
+    mandatesList.mockResolvedValue(readOk({ mandates: [] }));
+    const { data } = await shellSource(ctx, source);
+    expect(agentsList).toHaveBeenCalledOnce();
+    expect(agentsList).toHaveBeenCalledWith(
+      { org: "acme", ws: "core-platform" },
+      { cursor: null, includeRetired: true },
+    );
+    // An agent the read does not hold is left out, so its row draws no badge.
+    expect(data.approvals.workspaces[0]?.harnesses).toEqual({
+      "acme.finops.invoice-bot": "codex",
+    });
+  });
+
+  it("does not read the agents when no row names one (negative)", async () => {
+    pending.mockResolvedValue(
+      readOk({
+        items: [{ ...parked, agentKey: null, mandateId: null }],
+        more: false,
+      }),
+    );
+    const { data } = await shellSource(ctx, source);
+    expect(agentsList).not.toHaveBeenCalled();
+    expect(data.approvals.workspaces[0]?.harnesses).toEqual({});
+  });
+
+  it("leaves every row unbadged when the agents read fails, and the drawer still renders (negative)", async () => {
+    pending.mockResolvedValue(
+      readOk({ items: [{ ...parked, mandateId: null }], more: false }),
+    );
+    agentsList.mockResolvedValue(readError("agent_index_unavailable", 503));
+    const { data } = await shellSource(ctx, source);
+    expect(data.approvals.workspaces[0]?.harnesses).toEqual({});
+    expect(data.approvals.workspaces[0]?.pending.ok).toBe(true);
   });
 
   it("stops at the workspace bound and says the count is partial", async () => {

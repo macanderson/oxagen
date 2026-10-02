@@ -662,6 +662,32 @@ describe("the frame list", () => {
 describe("parked calls", () => {
   const pending = (items = [parkedRelease()]) => ok({ items, more: false });
 
+  it("badges each parked card's avatar with the harness the run header names (#4871)", async () => {
+    await renderTab({
+      run: { harness: { name: "codex", version: null, runtime: null } },
+      // No frame on the page records it, so it is drawn as a card.
+      approvals: pending([parkedRelease({ tool: "stripe__create_payment" })]),
+    });
+    const card = within(screen.getByTestId("parked-elsewhere")).getByTestId(
+      "approval",
+    );
+    expect(card.querySelector("[data-harness-badge]")).toHaveAttribute(
+      "data-harness-badge",
+      "codex",
+    );
+  });
+
+  it("draws no badge on a parked card when the run names no agent (negative)", async () => {
+    await renderTab({
+      run: { agentKey: null },
+      approvals: pending([parkedRelease({ tool: "stripe__create_payment" })]),
+    });
+    const card = within(screen.getByTestId("parked-elsewhere")).getByTestId(
+      "approval",
+    );
+    expect(card.querySelector("[data-harness-badge]")).toBeNull();
+  });
+
   // The proof capability-ui-map.json names for `resolve_approval` and
   // `get_auto_eligibility` on the Run page: the parked call's card, inside the
   // frame that records it, decides it with Approve and Deny.

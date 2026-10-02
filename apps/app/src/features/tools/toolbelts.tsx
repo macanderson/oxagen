@@ -101,6 +101,7 @@ export function Toolbelts({
   canEdit,
   list,
   open,
+  agentHarnesses = {},
 }: {
   at: ToolsAt;
   /** An org Owner or Admin: who the toolbelt writes admit (see `canAdministerOrg`). */
@@ -109,6 +110,8 @@ export function Toolbelts({
   list: Read<ToolbeltList>;
   /** `get_toolbelt` for the belt the URL names, or null when none is open. */
   open: Read<ToolbeltDetail> | null;
+  /** Each agent's registered harness by slug, for the open belt's carriers. */
+  agentHarnesses?: Readonly<Record<string, string>>;
 }) {
   const t = useTranslations("tools.toolbelts");
   const allTools = list.ok
@@ -152,7 +155,12 @@ export function Toolbelts({
         </div>
       </section>
       {open === null ? null : open.ok ? (
-        <BeltView at={at} detail={open.value} canEdit={canEdit} />
+        <BeltView
+          at={at}
+          detail={open.value}
+          canEdit={canEdit}
+          agentHarnesses={agentHarnesses}
+        />
       ) : (
         <section
           aria-label={t("title")}

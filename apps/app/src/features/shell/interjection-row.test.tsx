@@ -43,6 +43,7 @@ function show(props: Partial<Parameters<typeof InterjectionRow>[0]> = {}) {
           now={SHELL_NOW}
           countdown={countdown}
           agent="release-manager"
+          harness={null}
           {...props}
         />
       </ul>
@@ -81,6 +82,25 @@ describe("InterjectionRow", () => {
   });
 
   it("names no agent when the writer recorded none (negative)", () => {
-    expect(show({ agent: null })).toHaveTextContent("An agent is paused");
+    const row = show({ agent: null });
+    expect(row).toHaveTextContent("An agent is paused");
+    // No agent, no avatar: the speech mark stays (#4871).
+    expect(row.querySelector("[data-agent-avatar]")).toBeNull();
+  });
+
+  // #4871: the agent that paused wears the harness it registered.
+  it("leads with the agent's avatar and its registered harness", () => {
+    const row = show({ harness: "claude-code" });
+    expect(row.querySelector("[data-avatar]")).toHaveTextContent("RE");
+    expect(row.querySelector("[data-harness-badge]")).toHaveAttribute(
+      "data-harness-badge",
+      "claude-code",
+    );
+  });
+
+  it("draws the agent's avatar with no badge when its harness is not known (negative)", () => {
+    const row = show({ harness: null });
+    expect(row.querySelector("[data-agent-avatar]")).not.toBeNull();
+    expect(row.querySelector("[data-harness-badge]")).toBeNull();
   });
 });

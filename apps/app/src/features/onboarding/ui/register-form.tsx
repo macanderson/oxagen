@@ -28,6 +28,7 @@ import type { NamedRuntimeList } from "@/data/contracts/runtimes";
 import type { ToolbeltList } from "@/data/contracts/toolbelts";
 import type { Read } from "@/data/read";
 import { routes, type SafePath } from "@/shared/safe-path";
+import { AgentAvatar } from "@/ui/agent-avatar";
 import { ChoiceGroup } from "@/ui/choice-group";
 import {
   buttonPrimary,
@@ -102,7 +103,15 @@ function Reserved({ reserved }: { reserved: ReservedAgent }) {
       className="grid grid-cols-[auto_1fr] gap-x-5 gap-y-1.5 text-[13px]"
     >
       <dt className={kvTerm}>{t("name")}</dt>
-      <dd className={kvValue}>{reserved.name}</dd>
+      <dd className={`${kvValue} flex items-center gap-1.5`}>
+        <AgentAvatar
+          value={null}
+          initials={reserved.slug.slice(0, 2).toUpperCase()}
+          harness={reserved.harness}
+          size={18}
+        />
+        {reserved.name}
+      </dd>
       <dt className={kvTerm}>{t("slug")}</dt>
       <dd className={`${kvValue} ${mono}`}>{reserved.slug}</dd>
       <dt className={kvTerm}>{t("harness")}</dt>

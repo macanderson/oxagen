@@ -215,6 +215,51 @@ describe("cache busts", () => {
     expect(bust(detectFindings(input))).toBeUndefined();
   });
 
+  it("says its cost covers only the busts with a price (#4614)", () => {
+    const priced = cacheRun();
+    const unpriced = cacheRun();
+    const finding = bust(
+      detectFindings(
+        cacheInput([
+          {
+            run: priced,
+            frames: bustWalk(priced, 120, { digest: "a" }, { digest: "a" }),
+          },
+          {
+            run: unpriced,
+            frames: bustWalk(
+              unpriced,
+              120,
+              { digest: "a" },
+              { digest: "a" },
+            ).map((f) => ({ ...f, classPrices: undefined })),
+          },
+        ]),
+      ),
+    );
+    expect(finding!.evidence).toMatchObject({
+      calls: 2,
+      coveredCalls: 1,
+      measuredMicros: "144900",
+    });
+    expect(finding!.why).toBe(
+      `${CACHE_AGENT} rewrote its cache 2 times because the start of the prompt changed. The first change was in the messages after the system context (2 times). The 1 of 2 rewrites with a price cost $0.14 more than reading the cache back.`,
+    );
+  });
+
+  it("counts no bust for a rewrite past the TTL with a digest missing, and no idle rewrite either (#4614)", () => {
+    const run = cacheRun();
+    const drafts = detectFindings(
+      cacheInput([
+        {
+          run,
+          frames: bustWalk(run, 600, { digest: null }, { digest: "a" }),
+        },
+      ]),
+    );
+    expect(drafts).toEqual([]);
+  });
+
   it("leaves out a request that read its prefix back", () => {
     const run = cacheRun();
     const frames = [

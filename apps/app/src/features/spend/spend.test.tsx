@@ -7,8 +7,8 @@
 // columns in the design's order, one key's drill, the evidence and stub
 // dialogs, and each state (empty, loading, error, denied, waiting). Every
 // money figure carries its basis or prints "not recorded"; a slice no store
-// records says so and names its issue; axe checks the state each test ends in
-// (INV-26).
+// records says so and names its issue; each agent's avatar carries the harness
+// it registered (#4871); axe checks the state each test ends in (INV-26).
 import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { NextIntlClientProvider } from "next-intl";
@@ -31,6 +31,7 @@ import { type Read, readError, readOk } from "@/data/read";
 import type { WsRole } from "@/server/viewer";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { pickOption } from "@/test/select";
+import { agentPage, enrolledAgent } from "@/test/steering-views";
 import enMessages from "../../../messages/en.json";
 import spendMessages from "../../../messages/spend.json";
 import uiMessages from "../../../messages/ui.json";
@@ -145,6 +146,7 @@ const priceBook = vi.fn<DataSource["spend"]["priceBook"]>();
 const unpricedModels = vi.fn<DataSource["spend"]["unpricedModels"]>();
 const operatorRanking = vi.fn<DataSource["spend"]["operatorRanking"]>();
 const unproductive = vi.fn<DataSource["spend"]["unproductive"]>();
+const agentsList = vi.fn<DataSource["agents"]["list"]>();
 const source: DataSource = {
   runtimes: { list: vi.fn(), agents: vi.fn(), named: vi.fn() },
   conversations: { latest: vi.fn(), list: vi.fn(), byId: vi.fn() },
@@ -182,7 +184,7 @@ const source: DataSource = {
   approvals: { pending: vi.fn(), resolved: vi.fn(), resolvedSince: vi.fn() },
   interjections: { open: vi.fn(), forRun: vi.fn() },
   agents: {
-    list: vi.fn(),
+    list: agentsList,
     get: vi.fn(),
     toolbelt: vi.fn(),
     incidents: vi.fn(),
@@ -246,6 +248,24 @@ const source: DataSource = {
     toolbelt: vi.fn(),
   },
 };
+
+/**
+ * The agents the harness index reads (#4871): triage registered on Claude Code
+ * and stella-ci on stella. `acme.core.review` is not among them.
+ */
+const registry = agentPage([
+  enrolledAgent({
+    slug: "triage",
+    agentKey: "acme.core.triage",
+    harness: "claude-code",
+  }),
+  enrolledAgent({
+    id: "agt_01k5rs7c",
+    slug: "stella-ci",
+    agentKey: "a-intel.core.stella-ci",
+    harness: "stella",
+  }),
+]);
 
 /** The route's own parse, so a test names a path the way a person does. */
 async function renderSpend(
@@ -430,6 +450,8 @@ beforeEach(() => {
   unpricedModels.mockReset();
   operatorRanking.mockReset();
   unproductive.mockReset().mockResolvedValue(readOk(HEADLINE));
+  agentsList.mockReset();
+  agentsList.mockResolvedValue(readOk(registry));
 });
 
 afterEach(async () => {
@@ -734,6 +756,79 @@ describe("Spend › Month", () => {
     expect(run).toHaveTextContent("$4.00");
     expect(run.querySelector('[data-harness-badge="codex"]')).not.toBeNull();
     expect(screen.getByText("7 more runs")).toBeInTheDocument();
+  });
+
+  it("badges each agent with the harness it registered, and a run with the harness it recorded (#4871)", async () => {
+    loadedMonth();
+    await renderSpend();
+    expect(agentsList).toHaveBeenCalledWith(ctx, {
+      cursor: null,
+      includeRetired: true,
+    });
+    const triageRow = rowOf("acme.core.triage");
+    expect(
+      triageRow.querySelector('[data-harness-badge="claude-code"]'),
+    ).not.toBeNull();
+    await userEvent.click(
+      within(triageRow).getByRole("button", {
+        name: "Costliest runs of acme.core.triage",
+      }),
+    );
+    // The run recorded Codex and keeps it over its agent's registered harness.
+    const run = screen.getByRole("link", { name: /Repair the login redirect/ });
+    expect(run.querySelector("[data-harness-badge]")).toHaveAttribute(
+      "data-harness-badge",
+      "codex",
+    );
+  });
+
+  it("badges a run that recorded no harness with the one its agent registered (#4871)", async () => {
+    loadedMonth(() =>
+      month([
+        row("acme.core.triage", {
+          runs: 8,
+          topRuns: [{ ...triage, harness: null }],
+        }),
+      ]),
+    );
+    await renderSpend();
+    await userEvent.click(
+      screen.getByRole("button", {
+        name: "Costliest runs of acme.core.triage",
+      }),
+    );
+    const run = screen.getByRole("link", { name: /Repair the login redirect/ });
+    expect(run.querySelector("[data-harness-badge]")).toHaveAttribute(
+      "data-harness-badge",
+      "claude-code",
+    );
+  });
+
+  it("leaves an agent the registry does not hold unbadged (negative)", async () => {
+    loadedMonth();
+    await renderSpend();
+    const review = rowOf("acme.core.review");
+    expect(review.querySelector("[data-agent-avatar]")).not.toBeNull();
+    expect(review.querySelector("[data-harness-badge]")).toBeNull();
+  });
+
+  it("still lists the groups, every agent's avatar unbadged, when the agents do not answer (negative)", async () => {
+    loadedMonth();
+    agentsList.mockResolvedValue(readError("agents_down", 503));
+    await renderSpend();
+    const triageRow = rowOf("acme.core.triage");
+    expect(triageRow).toHaveTextContent("$9.00");
+    // Each group's avatar sits in its row's header cell. A top run, in the
+    // hidden row under it, keeps the harness its session recorded, which needs
+    // no agents read.
+    const avatars = [
+      ...document.querySelectorAll<HTMLElement>(
+        "tr[data-key] > th [data-agent-avatar]",
+      ),
+    ];
+    expect(avatars.length).toBeGreaterThan(0);
+    for (const avatar of avatars)
+      expect(avatar.querySelector("[data-harness-badge]")).toBeNull();
   });
 
   it("groups by the query's choice, with the chip in force pressed and Agent on the bare path", async () => {
@@ -1177,6 +1272,26 @@ describe("Spend › Findings", () => {
   });
 });
 
+describe("Spend › Findings › harness (#4871)", () => {
+  it("badges a finding on an agent with the harness that agent registered", async () => {
+    loaded({ operator: report([row("prn_marcusbell", { operator: MARCUS })]) });
+    await renderSpend(["findings"]);
+    const card = document.querySelector('li[data-finding="fnd_01k5rteg"]');
+    if (card === null) throw new Error("no card on stella-ci");
+    expect(card.querySelector('[data-harness-badge="stella"]')).not.toBeNull();
+  });
+
+  it("draws no agent avatar on a finding about a tool or an operator (negative)", async () => {
+    loaded({ operator: report([row("prn_marcusbell", { operator: MARCUS })]) });
+    await renderSpend(["findings"]);
+    for (const id of ["fnd_01k5rtgh", "fnd_01k5rtop"]) {
+      const card = document.querySelector(`li[data-finding="${id}"]`);
+      if (card === null) throw new Error(`no card ${id}`);
+      expect(card.querySelector("[data-agent-avatar]")).toBeNull();
+    }
+  });
+});
+
 describe("Spend › Tokens", () => {
   function classRow(name: string): HTMLElement {
     const hit = document.querySelector<HTMLElement>(
@@ -1267,6 +1382,21 @@ describe("Spend › Tokens", () => {
     expect(
       document.querySelector('tr[data-key="a-intel.core.agent-0"]'),
     ).toBeNull();
+  });
+
+  it("badges each agent with the harness it registered, and leaves one the registry does not hold unbadged (#4871)", async () => {
+    loaded({
+      agent: report([row("acme.core.triage"), row("acme.core.review")]),
+    });
+    await renderSpend(["tokens"]);
+    expect(
+      rowOf("acme.core.triage").querySelector(
+        '[data-harness-badge="claude-code"]',
+      ),
+    ).not.toBeNull();
+    const review = rowOf("acme.core.review");
+    expect(review.querySelector("[data-agent-avatar]")).not.toBeNull();
+    expect(review.querySelector("[data-harness-badge]")).toBeNull();
   });
 });
 
@@ -1522,6 +1652,12 @@ describe("Spend › By tool", () => {
 });
 
 describe("Spend › Wasted spend", () => {
+  it("reads no agents, since its rows name runs and no agent (negative, #4871)", async () => {
+    loaded();
+    await renderSpend(["waste"]);
+    expect(agentsList).not.toHaveBeenCalled();
+  });
+
   it("prints the four tiles, the recorded cause, retry loops from the findings, the five other design causes as not recorded, and a card per run with its two links", async () => {
     loaded();
     await renderSpend(["waste"]);
@@ -1670,6 +1806,29 @@ describe("Spend › drill", () => {
     expect(byDay).toHaveTextContent("Peak $20.00 on 2026-09-15");
     expect(byDay).toHaveTextContent("Average $10.00");
     expect(rowOf("github__get_issue")).toHaveTextContent("5");
+  });
+
+  it("badges an agent's drill with the harness the agent registered (#4871)", async () => {
+    drill.mockResolvedValue(readOk(drillOf()));
+    findings.mockResolvedValue(readOk(listing()));
+    await renderSpend(["agent", "a-intel.core.stella-ci"]);
+    const heading = screen.getByRole("heading", {
+      level: 2,
+      name: "a-intel.core.stella-ci",
+    });
+    expect(
+      heading.parentElement?.querySelector('[data-harness-badge="stella"]'),
+    ).not.toBeNull();
+  });
+
+  it("reads no agents and draws no agent avatar on a tool's drill (negative)", async () => {
+    drill.mockResolvedValue(
+      readOk(drillOf({ kind: "tool", key: "github__get_issue" })),
+    );
+    findings.mockResolvedValue(readOk(listing()));
+    await renderSpend(["tool", "github__get_issue"]);
+    expect(agentsList).not.toHaveBeenCalled();
+    expect(document.querySelector("[data-agent-avatar]")).toBeNull();
   });
 
   it("says what Export this view would do and that nothing was built", async () => {
