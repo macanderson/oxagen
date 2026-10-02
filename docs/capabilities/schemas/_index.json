@@ -4052,6 +4052,19 @@
       "consumes": []
     },
     {
+      "name": "revert_steering_pr",
+      "domain": "context",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent",
+        "cli"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "revise_context_record",
       "domain": "context",
       "surfaces": [
