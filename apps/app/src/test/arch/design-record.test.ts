@@ -158,17 +158,25 @@ describe("design record: the recipes carry the mockup's rules", () => {
   });
 
   it("`.panel` and `.stat` sit on the panel fill with the hairline and the maia card corner", () => {
-    // The corner is the preset's card (`rounded-2xl`, 13px at 0.45rem), which
-    // replaced the mockup's 12px on 2026-09-28; globals.css sets the scale.
+    // The corner is the preset's card (`rounded-2xl`, 13px at the kit's
+    // 0.45rem base), which replaced the mockup's 12px on 2026-09-28. The
+    // scale is the kit's: @oxagen/ui reads each --ox-radius-<step> token, so a
+    // theme change moves it, and the app sets no corner of its own
+    // (oxageninc/brand#63).
     for (const recipe of [panel, statTile]) {
       expect(recipe).toContain("bg-card");
       expect(recipe).toContain("border-border");
       expect(recipe).toContain("rounded-2xl");
     }
+    const kit = readFileSync(
+      path.join(APP_DIR, "../../packages/ui/src/styles/globals.css"),
+      "utf8",
+    );
+    expect(kit).toMatch(/--ui-radius:\s*var\(--ox-radius-base\)/);
+    expect(kit).toMatch(/--radius-2xl:\s*var\(--ox-radius-2xl\)/);
+    expect(kit).toMatch(/--radius-4xl:\s*var\(--ox-radius-4xl\)/);
     const css = read("src/app/globals.css");
-    expect(lightRoot()).toMatch(/--ui-radius:\s*0\.45rem/);
-    expect(css).toMatch(/--radius-2xl:\s*calc\(var\(--radius\) \* 1\.8\)/);
-    expect(css).toMatch(/--radius-4xl:\s*calc\(var\(--radius\) \* 2\.6\)/);
+    expect(css).not.toMatch(/^\s*--(ui-radius|radius(-\w+)?):/m);
     expect(statTerm).toContain("uppercase");
     expect(statValue).toContain("tabular-nums");
   });

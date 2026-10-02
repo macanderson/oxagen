@@ -53,7 +53,7 @@ import { SheetHandle } from "@/ui/sheet-dialog";
 // saturated copy of the page, the 4xl corner and the faint ring the menus
 // wear. On a phone phone.css turns it into a sheet and keeps the top corners.
 const commandSurface =
-  "isolate overflow-hidden rounded-4xl bg-dialog-bg/55 dark:bg-dialog-bg/70 text-dialog-fg shadow-2xl ring-1 ring-foreground/5 dark:ring-foreground/10 " +
+  "isolate overflow-hidden rounded-4xl bg-dialog-bg/55 dark:bg-dialog-bg/70 text-dialog-fg shadow-pop ring-1 ring-foreground/5 dark:ring-foreground/10 " +
   "before:pointer-events-none before:absolute before:inset-0 before:-z-1 before:rounded-[inherit] before:backdrop-blur-lg dark:before:backdrop-blur-2xl before:backdrop-saturate-150";
 
 /** How long typing rests before the query goes to `search_tools`. */

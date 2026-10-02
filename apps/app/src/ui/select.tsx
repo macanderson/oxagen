@@ -10,7 +10,7 @@ import { Select as SelectPrimitive } from "@base-ui/react/select";
 import { cn } from "@/ui/cn";
 
 const menuSurface =
-  "relative isolate rounded-2xl bg-menu-popup-bg/55 dark:bg-menu-popup-bg/70 text-menu-popup-fg shadow-2xl ring-1 ring-foreground/5 outline-none dark:ring-foreground/10 before:pointer-events-none before:absolute before:inset-0 before:-z-1 before:rounded-[inherit] before:backdrop-blur-lg dark:before:backdrop-blur-2xl before:backdrop-saturate-150";
+  "relative isolate rounded-2xl bg-menu-popup-bg/55 dark:bg-menu-popup-bg/70 text-menu-popup-fg shadow-pop ring-1 ring-foreground/5 outline-none dark:ring-foreground/10 before:pointer-events-none before:absolute before:inset-0 before:-z-1 before:rounded-[inherit] before:backdrop-blur-lg dark:before:backdrop-blur-2xl before:backdrop-saturate-150";
 
 const Select = SelectPrimitive.Root;
 
