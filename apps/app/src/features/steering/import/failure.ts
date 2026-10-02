@@ -10,11 +10,11 @@ import type { ActionResult } from "@/server/kernel";
 export type ImportFailure = Exclude<ActionResult<unknown>, { ok: true }>;
 
 /** The dialog's own refusal: rows the commit cannot carry in one call. */
-export const TOO_LARGE: ImportFailure = {
+export const TOO_LARGE = {
   ok: false,
   reason: "invalid",
   code: "import_too_large",
-};
+} as const satisfies ImportFailure;
 
 /** The file a refused parse input names, as `documents.3.content` names the fourth file sent. */
 export function fileOfField(

@@ -91,6 +91,8 @@ export function pickedFromInput(
 /**
  * A dropped entry, as much of the browser's FileSystemEntry as the walk
  * reads. The browser's own entries fit these shapes.
+ *
+ * @internal Exported for files.test.ts.
  */
 export interface DropEntry {
   readonly isFile: boolean;
@@ -98,9 +100,11 @@ export interface DropEntry {
   /** The entry's path from the drop, such as `/agents/api/retries.md`. */
   readonly fullPath: string;
 }
+/** @internal Exported for files.test.ts. */
 export interface DropFileEntry extends DropEntry {
   file(ok: (file: File) => void, fail?: (error: DOMException) => void): void;
 }
+/** @internal Exported for files.test.ts. */
 export interface DropDirectoryEntry extends DropEntry {
   createReader(): {
     readEntries(
@@ -163,7 +167,11 @@ export async function pickedFromDrop(data: DropData): Promise<PickedFile[]> {
   return walked.flat();
 }
 
-/** The number of lines a file holds, as an editor counts them. */
+/**
+ * The number of lines a file holds, as an editor counts them.
+ *
+ * @internal Exported for files.test.ts.
+ */
 export function lineCount(content: string): number {
   return content === "" ? 0 : content.split("\n").length;
 }
@@ -193,6 +201,8 @@ function fenceCloses(line: string, open: { ch: string; len: number }): boolean {
  * True for a file that holds a fenced `cedar` block, or a `permit (` or
  * `forbid (` statement outside every fence. A Cedar example inside a fence of
  * another language is an example, not a policy.
+ *
+ * @internal Exported for files.test.ts.
  */
 export function holdsCedar(content: string): boolean {
   let open: { ch: string; len: number; info: string } | null = null;
@@ -231,6 +241,8 @@ function onlyHeadingsAndLinks(content: string): boolean {
 /**
  * Claude Code memory frontmatter: a name and a description, with the type at
  * the top level or under `metadata`, and no steering-record schema.
+ *
+ * @internal Exported for files.test.ts.
  */
 export function isMemoryFile(content: string): boolean {
   const lines = content.split("\n");
@@ -245,7 +257,11 @@ export function isMemoryFile(content: string): boolean {
   return fields.has("name") && fields.has("description") && !fields.has("schema");
 }
 
-/** The target a file starts with, and why. */
+/**
+ * The target a file starts with, and why.
+ *
+ * @internal Exported for files.test.ts.
+ */
 export function detectTarget(
   path: string,
   content: string,

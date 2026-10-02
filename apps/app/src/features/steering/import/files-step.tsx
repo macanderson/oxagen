@@ -47,8 +47,8 @@ export function DropZone({
   onUnreadable: () => void;
 }) {
   const t = useTranslations("steering.import.drop");
-  const filesInput = useRef<HTMLInputElement | null>(null);
-  const folderInput = useRef<HTMLInputElement | null>(null);
+  const filesRef = useRef<HTMLInputElement | null>(null);
+  const folderRef = useRef<HTMLInputElement | null>(null);
   const [over, setOver] = useState(false);
   const fromInput = (input: HTMLInputElement) => {
     const list = Array.from(input.files ?? []);
@@ -87,7 +87,7 @@ export function DropZone({
         className={buttonSmall}
         disabled={disabled}
         onClick={() => {
-          filesInput.current?.click();
+          filesRef.current?.click();
         }}
       >
         {t("chooseFiles")}
@@ -98,13 +98,13 @@ export function DropZone({
         className={buttonSmall}
         disabled={disabled}
         onClick={() => {
-          folderInput.current?.click();
+          folderRef.current?.click();
         }}
       >
         {t("chooseFolder")}
       </button>
       <input
-        ref={filesInput}
+        ref={filesRef}
         type="file"
         multiple
         accept=".md,.markdown,text/markdown"
@@ -117,7 +117,7 @@ export function DropZone({
       />
       <input
         ref={(element) => {
-          folderInput.current = element;
+          folderRef.current = element;
           // React passes no `webkitdirectory` prop, so the folder picker is
           // asked for by its attribute.
           element?.setAttribute("webkitdirectory", "");

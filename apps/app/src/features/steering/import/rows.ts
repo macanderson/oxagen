@@ -34,7 +34,7 @@ export type ImportFileResult = ParseOutput["files"][number];
 export type ImportKind = (typeof RECORD_KINDS)[number];
 export type ImportEffect = "require" | "forbid";
 export type ImportForce = ImportRecord["force"];
-export type ImportAction = ImportRecord["action"];
+type ImportAction = ImportRecord["action"];
 
 /** The eight record kinds, in the order the Kind select offers them. */
 export const IMPORT_KINDS: readonly ImportKind[] = RECORD_KINDS;
@@ -86,7 +86,12 @@ export function rowKey(record: ImportRecord): string {
   );
 }
 
-/** A row as parse proposed it: a duplicate starts unticked, a conflict ticked with no choice. */
+/**
+ * A row as parse proposed it: a duplicate starts unticked, a conflict ticked
+ * with no choice.
+ *
+ * @internal Exported for rows.test.ts.
+ */
 export function initialEdit(record: ImportRecord): RowEdit {
   return {
     on: record.action !== "skip",
@@ -98,7 +103,7 @@ export function initialEdit(record: ImportRecord): RowEdit {
   };
 }
 
-export function editOf(
+function editOf(
   edits: ReadonlyMap<string, RowEdit>,
   record: ImportRecord,
 ): RowEdit {
@@ -111,6 +116,8 @@ const RANK: Record<ImportForce, number> = { must: 3, should: 2, may: 1, info: 0 
  * The force the words behind it point to (memory-collection spec,
  * Enforcement grade): must, never, always, and do not point to must, should
  * and prefer to point to should, and consider and can point to may.
+ *
+ * @internal Exported for rows.test.ts.
  */
 export function wordForce(words: string): ImportForce | null {
   if (/\b(must|never|always|do not|don't|no agent)\b/i.test(words))
@@ -130,7 +137,7 @@ export function forcesOf(kind: ImportKind): readonly ImportForce[] {
  * Another kind takes the force the words point to when the kind allows it,
  * and the kind's default when it does not or when no word points anywhere.
  */
-export function forceForKind(
+function forceForKind(
   record: ImportRecord,
   kind: ImportKind,
 ): ImportForce {
@@ -283,7 +290,12 @@ export function tally(
   };
 }
 
-/** The rows commit_markdown_import takes: each as parse proposed it, with the person's changes. */
+/**
+ * The rows commit_markdown_import takes: each as parse proposed it, with the
+ * person's changes.
+ *
+ * @internal Exported for rows.test.ts.
+ */
 export function commitRecords(rows: readonly ResolvedRow[]): ImportRecord[] {
   return rows.map(({ record, edit, action, lineage }) => ({
     ...record,
