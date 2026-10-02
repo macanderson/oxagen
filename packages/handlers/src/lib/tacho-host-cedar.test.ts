@@ -90,11 +90,13 @@ function hostRow(overrides: Record<string, unknown> = {}): TachoHostRow {
   } as unknown as TachoHostRow;
 }
 
-/** A transaction whose runtimes read answers `slug`, counting the reads. */
-function runtimeTx(slug: string | undefined = CEDAR_RUNTIME) {
-  const findFirst = vi.fn(async () =>
-    slug === undefined ? undefined : { slug },
-  );
+/**
+ * A transaction whose runtimes read answers `slug`, counting the reads.
+ * `null` means the runtime is not found. Passing `undefined` would take the
+ * default slug instead, which is how this test once read a found runtime.
+ */
+function runtimeTx(slug: string | null = CEDAR_RUNTIME) {
+  const findFirst = vi.fn(async () => (slug === null ? undefined : { slug }));
   return {
     tx: { query: { runtimes: { findFirst } } } as unknown as Parameters<
       typeof resolveHostCedar
@@ -340,7 +342,7 @@ describe("resolveHostCedar", () => {
       resolveHostCedar(runtimeTx("mac-mini-2").tx, hostRow(), policy),
     ).resolves.toEqual({});
     await expect(
-      resolveHostCedar(runtimeTx(undefined).tx, hostRow(), policy),
+      resolveHostCedar(runtimeTx(null).tx, hostRow(), policy),
     ).resolves.toEqual({});
   });
 
