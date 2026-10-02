@@ -35,6 +35,7 @@ type Messages = {
     agent: string;
     mandate: string;
     record: string;
+    contextPr: string;
     steering: string;
     repositories: string;
     spend: string;
@@ -9898,9 +9899,6 @@ type Messages = {
       gates: string;
       proposals: string;
       compiler: string;
-      candidates: string;
-      prs: string;
-      segments: string;
     };
     hub: {
       description: string;
@@ -10371,35 +10369,48 @@ type Messages = {
     proposals: {
       title: string;
       lead: string;
-      emptyTitle: string;
-      empty: string;
-      checks: string;
-      source: string;
-      support: string;
-      runs: string;
-      agents: string;
-      records: string;
-      evidence: string;
-      none: string;
-      viewPr: string;
-    };
-    prs: {
-      title: string;
-      lead: string;
-      empty: string;
-      number: string;
-      columns: {
-        pr: string;
-        branch: string;
-        kind: string;
-        state: string;
+      states: {
+        label: string;
+        open: string;
+        merged: string;
+        closed: string;
+      };
+      list: {
+        columns: {
+          proposal: string;
+          kind: string;
+          pr: string;
+          checks: string;
+          state: string;
+          updated: string;
+        };
+        open: string;
+        noPr: string;
+        number: string;
+        openOnGitHub: string;
+        openOnGitLab: string;
+        checks: string;
+        checksNotRun: string;
+      };
+      empty: {
+        open: {
+          title: string;
+          body: string;
+        };
+        merged: {
+          title: string;
+          body: string;
+        };
+        closed: {
+          title: string;
+          body: string;
+        };
       };
     };
     pr: {
       heading: string;
       title: string;
       machine: string;
-      goToPr: string;
       rejected: string;
       notOpened: string;
       modeUnread: string;
@@ -10461,6 +10472,93 @@ type Messages = {
         unknownAgent: string;
         evidence: string;
       };
+      page: {
+        eyebrow: string;
+        crumbs: string;
+        back: {
+          open: string;
+          merged: string;
+          closed: string;
+        };
+        loading: string;
+        number: string;
+      };
+      record: {
+        title: string;
+        kind: string;
+        force: string;
+        effect: string;
+        raisedBy: string;
+        raisedAt: string;
+        rationale: string;
+      };
+      support: {
+        title: string;
+        runs: string;
+        agents: string;
+        records: string;
+        evidence: string;
+        none: string;
+      };
+      activity: {
+        title: string;
+        raised: string;
+        opened: string;
+        checksStarted: string;
+        checksPassed: string;
+        checksFailed: string;
+        merged: string;
+        closed: string;
+        closedBecause: string;
+        inOxagen: string;
+        onHost: string;
+        github: string;
+        gitlab: string;
+        by: string;
+        timeNotRecorded: string;
+      };
+      diff: {
+        title: string;
+        fileLabel: string;
+        statuses: {
+          added: string;
+          modified: string;
+          removed: string;
+        };
+        lines: {
+          same: string;
+          removed: string;
+          added: string;
+        };
+        truncated: string;
+        wholesale: string;
+        gap: string;
+        noPr: string;
+        settled: string;
+        openFiles: string;
+        empty: string;
+        against: string;
+        moreFiles: string;
+        loading: string;
+      };
+      refresh: {
+        github: string;
+        gitlab: string;
+        pending: string;
+        mergedOnHost: string;
+        moved: string;
+        current: string;
+      };
+      clone: {
+        open: string;
+        title: string;
+        lead: string;
+        ghLead: string;
+        copy: string;
+        copied: string;
+        copyGh: string;
+        copyFailed: string;
+      };
     };
     actions: {
       open: {
@@ -10482,6 +10580,9 @@ type Messages = {
       };
       merge: {
         confirm: string;
+        title: string;
+        body: string;
+        dialogConfirm: string;
         pending: string;
         blocked: string;
       };

@@ -415,6 +415,9 @@ export async function readRepositoryChange(
     page: "repositories",
   });
   if (!read.ok) return readToActionResult(read);
+  // The same shape the Steering port's mapper draws (data/live/mappers/
+  // steering.ts). A feature may not import a live mapper (INV-07), so the
+  // mapping is spelled here and the actions test pins it field by field.
   const out = read.value;
   return {
     ok: true,
@@ -434,12 +437,32 @@ export async function readRepositoryChange(
               baseRef: out.pr.baseRef,
               branch: out.pr.branch,
               headSha: out.pr.headSha,
+              provider: out.pr.provider,
             },
+      raised: {
+        statement: out.raised.statement,
+        rationale: out.raised.rationale,
+        source: out.raised.source,
+        sourceName: out.raised.sourceName,
+        force: out.raised.force,
+        constraintEffect: out.raised.constraintEffect,
+        sharingScope: out.raised.sharingScope,
+        support: {
+          runs: out.raised.support.runs,
+          agents: out.raised.support.agents,
+          recordIds: out.raised.support.recordIds,
+          evidenceLinks: out.raised.support.evidenceLinks,
+        },
+        at: out.raised.at,
+      },
       body: out.body,
       checks: out.checks.map((check) => ({
         name: check.name,
         status: check.status,
         summary: check.summary,
+        detailsUrl: check.detailsUrl,
+        startedAt: check.startedAt,
+        completedAt: check.completedAt,
       })),
       onMerge: {
         path: out.onMerge.publishes.path,
@@ -456,6 +479,17 @@ export async function readRepositoryChange(
               at: out.merged.at,
               promotionEventId: out.merged.promotionEventId,
               recordId: out.merged.recordId,
+              byName: out.merged.byName,
+              onHost: out.merged.onHost,
+            },
+      closed:
+        out.closed === null
+          ? null
+          : {
+              at: out.closed.at,
+              reason: out.closed.reason,
+              byName: out.closed.byName,
+              onHost: out.closed.onHost,
             },
     },
   };

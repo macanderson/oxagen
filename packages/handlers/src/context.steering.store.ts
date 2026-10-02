@@ -240,7 +240,12 @@ export interface SteeringStore {
   ): Promise<ProposalRow | null>;
   listProposals(
     scope: SteeringScope,
-    filter: { status?: string; lineageId?: string },
+    filter: {
+      status?: string;
+      /** Any of these statuses; narrows with `status` when both are set. */
+      statuses?: readonly string[];
+      lineageId?: string;
+    },
     page: Page,
   ): Promise<{ rows: ProposalRow[]; total: number }>;
   /**
@@ -349,6 +354,17 @@ export interface SteeringStore {
   mergedRefs(
     row: ProposalRow,
   ): Promise<{ promotionEventPublicId: string; recordPublicId: string } | null>;
+  /**
+   * The display names of these users, for the Context PR page's raised,
+   * merged and closed lines, read only for members of the organization so a
+   * name never crosses an organization boundary. A user with no display
+   * name, no row or no membership is left out, and the page names them
+   * generically rather than by email.
+   */
+  userNames(
+    scope: SteeringScope,
+    userIds: readonly string[],
+  ): Promise<Map<string, string>>;
 
   /**
    * The publication, in one transaction: upsert the registry record and its
@@ -587,6 +603,29 @@ export const postgresSteeringStore: SteeringStore = {
     });
   },
 
+  async userNames(scope, userIds) {
+    const ids = [...new Set(userIds)];
+    if (ids.length === 0) return new Map();
+    const rows = await withTenantDb((tx) =>
+      tx
+        .select({ id: schema.users.id, name: schema.users.displayName })
+        .from(schema.users)
+        .innerJoin(
+          schema.orgUsers,
+          and(
+            eq(schema.orgUsers.userId, schema.users.id),
+            eq(schema.orgUsers.orgId, scope.orgId),
+          ),
+        )
+        .where(inArray(schema.users.id, ids)),
+    );
+    return new Map(
+      rows.flatMap((r) =>
+        r.name !== null && r.name.trim() !== "" ? [[r.id, r.name]] : [],
+      ),
+    );
+  },
+
   async findOpenPrOnLineage(scope, lineageId, excludingId) {
     const [row] = await withTenantDb((tx) =>
       tx
@@ -613,6 +652,9 @@ export const postgresSteeringStore: SteeringStore = {
       scoped(scope),
       filter.status
         ? eq(schema.contextProposals.status, filter.status)
+        : undefined,
+      filter.statuses
+        ? inArray(schema.contextProposals.status, [...filter.statuses])
         : undefined,
       filter.lineageId
         ? eq(schema.contextProposals.lineageId, filter.lineageId)

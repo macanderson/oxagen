@@ -2,14 +2,17 @@
 // tabs, each a path segment, and on the Library a shelf, also a path segment.
 // `/steering` and `/steering/library` are the Library's All shelf;
 // `/steering/records`, `/skills`, `/memory`, `/ontology` and `/instructions`
-// are its other shelves. A filter, a page offset, the rows a Proposals,
-// Memories or Skills page holds (#4693), a selected proposal, the memory the
-// Memories drawer opens (#4914) and a Skills cursor stay query values.
+// are its other shelves. A filter, the Proposals state (#5077), a page
+// offset, the rows a Proposals, Memories or Skills page holds (#4693), the
+// memory the Memories drawer opens (#4914) and a Skills cursor stay query
+// values. One Context PR is its own route, `/steering/proposals/prs/<prp_…>`.
 //
 // Every address written before the five tabs still lands. `/steering/policy`
 // is Gates, `/steering/preview/<agent>` is `/steering/compiler/<agent>`,
-// `/steering/prs` is `/steering/proposals/prs`, and a `?tab=` query from the
-// old one-route page moves to the path it now names. The tabs this page had
+// `/steering/proposals/prs` and `/steering/prs`, the Context PRs segment, are
+// the Proposals list (#5077), and one that selected a proposal with
+// `?proposal=` is that Context PR's page. A `?tab=` query from the old
+// one-route page moves to the path it now names. The tabs this page had
 // before the design (Settings and Delivery) moved into the tab whose question
 // they answer: the freshness gates refuse stale runs, so they are Gates, and
 // the per-run delivery report says which agent received what, so it is
@@ -19,6 +22,8 @@
 import {
   MEMORY_HARNESSES,
   type MemoryHarness,
+  PROPOSAL_STATES,
+  type ProposalState,
   RECORD_KINDS,
   type RecordKind,
   STEERING_PAGE,
@@ -59,10 +64,7 @@ export const LIBRARY_SHELVES = [
 ] as const;
 export type LibraryShelf = (typeof LIBRARY_SHELVES)[number];
 
-/** The two segments of Proposals: the candidates and their Context PRs. */
-export type ProposalSegment = "candidates" | "prs";
-
-/** The page sizes Rows per page offers under both Proposals segments and on Memories (#4693). */
+/** The page sizes Rows per page offers on the Proposals list and on Memories (#4693). */
 export const PROPOSAL_ROWS: readonly number[] = [10, 25, 50, 100];
 
 /**
@@ -112,21 +114,18 @@ export type SteeringView = {
   tab: SteeringTab;
   /** Only on the Library. */
   shelf: LibraryShelf | null;
-  /** Only on Proposals. */
-  segment: ProposalSegment | null;
+  /** Only on Proposals: the state the list shows, open unless the URL names another (#5077). */
+  state: ProposalState | null;
   /** Only on the Compiler: the agent it assembles for. */
   agent: string | null;
   /** Only on the Records shelf. */
   kind: RecordKind | null;
   offset: number;
   /**
-   * How many rows a page holds: on either Proposals segment one of
-   * PROPOSAL_ROWS, on the Skills shelf one of SKILL_ROWS, and
-   * `STEERING_PAGE` everywhere else.
+   * How many rows a page holds: on Proposals one of PROPOSAL_ROWS, on the
+   * Skills shelf one of SKILL_ROWS, and `STEERING_PAGE` everywhere else.
    */
   rows: number;
-  /** Only on the Context PRs segment: the Context PR selected. */
-  proposal: string | null;
   /** Only on the Skills shelf: the inventory page `list_skills` answered with. */
   cursor: string | null;
   /** Only on the Skills shelf: which of its views is open. */
@@ -169,7 +168,7 @@ const REPO_MAX = 200;
 /** A Claude Code memory type, as list_workspace_memories takes it. */
 const MEMORY_TYPE = /^[a-z][a-z0-9_-]{0,31}$/;
 /** get_context_pr's own id rule, with a length the contract's id column holds. */
-const PROPOSAL = /^prp_[0-9A-Za-z]{1,60}$/;
+export const PROPOSAL_ID = /^prp_[0-9A-Za-z]{1,60}$/;
 /** An opaque inventory cursor; the length bounds what a URL may carry. */
 const CURSOR_MAX = 512;
 /** An agent slug or a skill id as the registry mints it. */
@@ -190,7 +189,7 @@ const ALIASES: Readonly<Record<string, SteeringLinkTab>> = {
   freshness: "gates",
   deliveries: "assignments",
   preview: "compiler",
-  prs: "prs",
+  prs: "proposals",
 };
 
 const SHELF_SEGMENTS: ReadonlySet<string> = new Set(
@@ -208,12 +207,12 @@ function carried(query: Params) {
   const agent = firstParam(query.agent);
   return {
     kind: firstParam(query.kind),
+    state: firstParam(query.state),
     rows: firstParam(query.rows),
     offset: firstParam(query.offset),
     proposal: firstParam(query.proposal),
     cursor: firstParam(query.cursor),
     view: firstParam(query.view),
-    state: firstParam(query.state),
     harness: firstParam(query.harness),
     // A redirect that names the Compiler's agent itself keeps that one.
     ...(agent === undefined ? {} : { agent }),
@@ -252,16 +251,19 @@ function viewOf(
 ): SteeringView {
   const tab = base.tab;
   const shelf = base.shelf ?? (tab === "library" ? "all" : null);
-  const segment = base.segment ?? (tab === "proposals" ? "candidates" : null);
   const rawKind = firstParam(query.kind);
+  const rawState = firstParam(query.state);
   const rawRows = Number(firstParam(query.rows));
   const rawOffset = firstParam(query.offset);
-  const rawProposal = firstParam(query.proposal);
   const rawCursor = firstParam(query.cursor);
   return {
     tab,
     shelf,
-    segment,
+    // A state the list does not offer reads as open, the default.
+    state:
+      tab === "proposals"
+        ? (PROPOSAL_STATES.find((st) => st === rawState) ?? "open")
+        : null,
     agent: base.agent ?? null,
     kind:
       shelf === "records"
@@ -277,12 +279,6 @@ function viewOf(
         : shelf === "skills"
           ? (SKILL_ROWS.find((size) => size === rawRows) ?? SKILL_PAGE)
           : STEERING_PAGE,
-    proposal:
-      segment === "prs" &&
-      rawProposal !== undefined &&
-      PROPOSAL.test(rawProposal)
-        ? rawProposal
-        : null,
     cursor:
       shelf === "skills" &&
       rawCursor !== undefined &&
@@ -316,10 +312,31 @@ export function resolveSteeringRoute(
   segments: readonly string[] | undefined,
   query: Params,
 ): SteeringRoute {
-  const redirect = (tab: string, agent?: string): SteeringRoute => ({
-    kind: "redirect",
-    to: routes.steering(at.org, at.ws, { tab, agent, ...carried(query) }),
-  });
+  const redirect = (tab: string, agent?: string): SteeringRoute => {
+    const { proposal, ...kept } = carried(query);
+    // The Context PRs segment selected one proposal with `?proposal=`; that
+    // proposal is its own page now (#5077).
+    if (
+      (tab === "prs" || tab === "proposals") &&
+      proposal !== undefined &&
+      PROPOSAL_ID.test(proposal)
+    ) {
+      return {
+        kind: "redirect",
+        to: routes.steeringProposal(at.org, at.ws, proposal, {
+          state: kept.state,
+          rows: kept.rows,
+          offset: kept.offset,
+        }),
+      };
+    }
+    // A selection the list no longer reads is not carried onto it.
+    const carry = tab === "prs" || tab === "proposals" ? kept : carried(query);
+    return {
+      kind: "redirect",
+      to: routes.steering(at.org, at.ws, { tab, agent, ...carry }),
+    };
+  };
   const notFound: SteeringRoute = { kind: "not_found" };
   const view = (base: Parameters<typeof viewOf>[0]): SteeringRoute => ({
     kind: "view",
@@ -382,9 +399,17 @@ export function resolveSteeringRoute(
   }
 
   if (first === "proposals") {
-    if (second === undefined) return view({ tab: "proposals" });
+    if (second === undefined) {
+      // A link from before #5077 selected a proposal on this tab too.
+      const selected = firstParam(query.proposal);
+      return selected !== undefined && PROPOSAL_ID.test(selected)
+        ? redirect("proposals")
+        : view({ tab: "proposals" });
+    }
+    // `/proposals/prs/<id>` is the Context PR page, its own route; the
+    // segment alone is the list.
     return second === "prs" && third === undefined
-      ? view({ tab: "proposals", segment: "prs" })
+      ? redirect("proposals")
       : notFound;
   }
 
@@ -412,10 +437,11 @@ export function steeringLink(
     tab: SteeringLinkTab;
     agent?: string | null;
     kind?: RecordKind | null;
+    /** The Proposals state; open, the default, is left off. */
+    state?: ProposalState | null;
     offset?: number;
     /** How many proposals a page holds; only on Proposals. */
     rows?: number;
-    proposal?: string | null;
     /** A skill whose source the Skills shelf opens. */
     skill?: string | null;
     /**
@@ -430,6 +456,15 @@ export function steeringLink(
     tab: to.tab,
     agent: to.agent ?? undefined,
     kind: to.kind ?? undefined,
+    // One `state` query value serves both lists, which never share a URL.
+    state:
+      to.tab === "memories"
+        ? m.state === undefined || m.state === "open"
+          ? undefined
+          : m.state
+        : to.state === undefined || to.state === null || to.state === "open"
+          ? undefined
+          : to.state,
     rows:
       to.rows === undefined || to.rows === STEERING_PAGE
         ? undefined
@@ -438,9 +473,7 @@ export function steeringLink(
       to.offset === undefined || to.offset === 0
         ? undefined
         : String(to.offset),
-    proposal: to.proposal ?? undefined,
     skill: to.skill ?? undefined,
-    state: m.state === undefined || m.state === "open" ? undefined : m.state,
     harness: m.harness ?? undefined,
     repo: m.repo ?? undefined,
     type: m.type ?? undefined,
@@ -479,4 +512,27 @@ export function memoriesLink(
 /** Where a shelf chip points: All is `/steering/library`, every other shelf its own segment. */
 export function shelfLink(at: SteeringAt, shelf: LibraryShelf): SafePath {
   return steeringLink(at, { tab: shelf === "all" ? "library" : shelf });
+}
+
+/**
+ * The list a Context PR page was opened from, as its query carries it: the
+ * state, the page size and the offset, each null when absent or not one the
+ * list offers. The page's way back builds the list's address from it.
+ */
+export function proposalListFrom(query: Params): {
+  state: ProposalState | null;
+  rows: number | null;
+  offset: number | null;
+} {
+  const rawState = firstParam(query.state);
+  const rawRows = Number(firstParam(query.rows));
+  const rawOffset = firstParam(query.offset);
+  return {
+    state: PROPOSAL_STATES.find((st) => st === rawState) ?? null,
+    rows: PROPOSAL_ROWS.find((size) => size === rawRows) ?? null,
+    offset:
+      rawOffset !== undefined && OFFSET.test(rawOffset)
+        ? Number(rawOffset)
+        : null,
+  };
 }
