@@ -9,6 +9,7 @@ Dismiss workspace memories, so the curator does not propose their statements aga
 - API: `POST /v1/:org_slug/:workspace_slug/context/steering/memories/dismiss`, returns 200
 - MCP: `dismiss_memories`
 - CLI: `oxagen memory dismiss <ids...> [--restore]`
+- App: Steering › Memories, Dismiss memories on the selected rows, and Restore memory in a dismissed memory's drawer
 - Authentication: org Owner or Admin, or workspace Owner or Member, checked by the handler
 - Billing: `noBillingGate: true`
 - Not on the agent surface.

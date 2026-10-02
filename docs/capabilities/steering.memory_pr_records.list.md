@@ -8,6 +8,7 @@ List the records one memory PR proposes or archives, each with the memories it c
 
 - API: `POST /v1/:org_slug/:workspace_slug/context/steering/memory-prs/records`, returns 200
 - MCP: `list_memory_pr_records`
+- App: Steering › Proposals › Context PRs, the records of a selected memory PR
 - Authentication: org Owner or Admin, or workspace Owner, Member, or Viewer, checked by the handler
 - Billing: `noBillingGate: true`
 - Not on the agent surface.

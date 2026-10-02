@@ -41,7 +41,7 @@ export const steeringMemoriesPromote = registerCapability({
     "Promote waiting workspace memories into draft steering records. The drafts join the open memory PR, or open one on today's memory branch. Each record cites its memories, and nothing steers until a person merges the PR.",
   mode: "sync",
   surfaces: ["api", "mcp", "cli"],
-  layers: ["schema", "api", "mcp", "cli", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "cli", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
   mutates: true,

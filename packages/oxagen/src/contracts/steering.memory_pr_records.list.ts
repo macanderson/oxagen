@@ -32,7 +32,7 @@ export const steeringMemoryPrRecordsList = registerCapability({
     "List the records one memory PR proposes or archives, each with the memories it cites, and which proposed records were dropped from the PR's branch.",
   mode: "sync",
   surfaces: ["api", "mcp"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
   mutates: false,

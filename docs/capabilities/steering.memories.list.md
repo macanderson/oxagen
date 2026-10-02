@@ -9,6 +9,7 @@ List the workspace's memories, the lessons agents wrote in their harnesses' own 
 - API: `POST /v1/:org_slug/:workspace_slug/context/steering/memories/list`, returns 200
 - MCP: `list_workspace_memories`
 - CLI: `oxagen memory list`
+- App: Steering › Memories at `/{org}/{ws}/steering/memories`, the ranked table with its five filters. The hub reads one row for the waiting count on the tab
 - Authentication: org Owner or Admin, or workspace Owner, Member, or Viewer, checked by the handler
 - Billing: `noBillingGate: true`
 - Not on the agent surface. The in-app agent never receives workspace memories.

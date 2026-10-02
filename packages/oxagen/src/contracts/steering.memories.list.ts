@@ -35,7 +35,7 @@ export const steeringMemoriesList = registerCapability({
     "List the workspace's memories ranked by uses, then the newest use, then the newest capture, with memories that say the same thing grouped. Filter by state (waiting and in_pr by default), harness, agent, repository, and memory type.",
   mode: "sync",
   surfaces: ["api", "mcp", "cli"],
-  layers: ["schema", "api", "mcp", "cli", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "cli", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
   mutates: false,
