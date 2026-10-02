@@ -105,7 +105,7 @@
       },
       "compilesNotRecorded": "not recorded",
       "compilesTitle": "list_records carries no enforcement grant, so whether this record also compiles to a gate is not recorded. Tracked in #{issue}.",
-      "tokensTitle": "list_records carries no token cost for a record. Tracked in #{issue}.",
+      "tokensTitle": "This list does not show token costs yet. The Records shelf shows each record's tokens and weekly price. Tracked in #{issue}.",
       "scopeTargetTitle": "list_records carries no repository for a record, so the repository this record names is not recorded. Tracked in #{issue}.",
       "sourceNone": "not recorded",
       "gap": "Only records are read into this list today. Instructions, skills, memory, and ontology notes join it when the steering registry (Phase 1) reads every source into one item type, tracked in #{issue}.",

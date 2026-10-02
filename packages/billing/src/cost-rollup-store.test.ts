@@ -755,6 +755,43 @@ describe("the breakdown jsonb (#4069)", () => {
     // The legacy row reads back whole, as the rollup would write it now.
     expect(revived).toEqual(breakdown);
   });
+
+  it("writes a model's cache keep-alives with their cost as a decimal string, and reads them back (lane F32)", () => {
+    const [first, second] = breakdown.models;
+    const kept = {
+      ...breakdown,
+      models: [
+        {
+          ...first!,
+          keepAlive: {
+            calls: 2,
+            tokens: { ...ZERO_TOKENS, input_uncached: 20, cache_read: 120_000 },
+            costMicros: 36_060n,
+          },
+        },
+        {
+          ...second!,
+          keepAlive: {
+            calls: 1,
+            tokens: { ...ZERO_TOKENS, cache_read: 10 },
+            costMicros: null,
+          },
+        },
+      ],
+    };
+    const stored = throughJsonb(serializeBreakdown(kept));
+    expect(stored.models[0].keepAlive).toEqual({
+      calls: 2,
+      tokens: { ...ZERO_TOKENS, input_uncached: 20, cache_read: 120_000 },
+      costMicros: "36060",
+    });
+    expect(stored.models[1].keepAlive.costMicros).toBeNull();
+    expect(reviveBreakdown(stored)).toEqual(kept);
+    // A row with no keep-alive writes no key, and reads back with none.
+    const plain = throughJsonb(serializeBreakdown(breakdown));
+    expect("keepAlive" in plain.models[0]).toBe(false);
+    expect(reviveBreakdown(plain).models[0]).not.toHaveProperty("keepAlive");
+  });
 });
 
 describe("streamed rollup reads", () => {
