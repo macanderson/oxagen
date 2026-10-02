@@ -5,11 +5,14 @@
 // files under tools/servers/<name>/. They all open the steering PR here. The
 // Markdown import (markdown-import/commit.ts) opens its steering/import-<date>
 // PR through the same flow, with its own branch rule
-// (createSteeringPullRequestOpener).
+// (createSteeringPullRequestOpener), and so does an agent's propose_steering
+// call (steering-repo/propose.ts).
 //
 // Without `existing`:
 //   1. Refuse a branch outside tools/, a path outside the branch's folder,
 //      more than 299 files, or a repository without steering/governance.toml.
+//      A kind with a rule against the production files (refusalAgainstBase)
+//      refuses here too, before anything is written.
 //   2. Create the branch at `at`, the commit the caller built the files
 //      against, or at the production head when the caller names none. A
 //      branch that already exists is refused, so two writers never share one.
@@ -206,9 +209,10 @@ export function toolsPullRequestRefusal(
 }
 
 /**
- * One kind of steering PR this opener writes: tools/ PRs here, and the
- * Markdown import's steering/import-<date> PRs (markdown-import/commit.ts).
- * The kind names the PR in messages and refuses the arguments it cannot take.
+ * One kind of steering PR this opener writes: tools/ PRs here, the Markdown
+ * import's steering/import-<date> PRs (markdown-import/commit.ts), and an
+ * agent's proposal (steering-repo/propose.ts). The kind names the PR in
+ * messages and refuses the arguments it cannot take.
  */
 export interface SteeringPullRequestKind {
   /** The prefix of the reasons the opener refuses with, such as `tools` in tools_branch_exists. */
@@ -219,6 +223,17 @@ export interface SteeringPullRequestKind {
   refusal: (
     args: Pick<ToolsPullRequestArgs, "branch" | "files">,
   ) => { reason: string; message: string } | null;
+  /**
+   * Why the files cannot change what the production branch holds, or null.
+   * `read` answers a file at the commit the steering checks compare the PR
+   * against, or null when that commit has no such file. The opener asks
+   * after it finds the production head and before it writes anything. A
+   * kind whose rule needs no file from the repository leaves it out.
+   */
+  refusalAgainstBase?: (
+    read: (path: string) => Promise<string | null>,
+    args: Pick<ToolsPullRequestArgs, "branch" | "files">,
+  ) => Promise<{ reason: string; message: string } | null>;
   /** The kind of the proposal row each PR of this kind carries (#5122, ADR-264). */
   proposalKind: SteeringPrKind;
 }
@@ -444,6 +459,19 @@ export function createSteeringPullRequestOpener(
     return null;
   }
 
+  /** Refuse the files when the kind's rule against `base` says so. */
+  async function refuseAgainstBase(
+    host: ToolsPullRequestHost,
+    repo: SteeringRepository,
+    base: string,
+    args: Pick<ToolsPullRequestArgs, "branch" | "files">,
+  ): Promise<void> {
+    const rule = kind.refusalAgainstBase;
+    if (rule === undefined) return;
+    const refusal = await rule((path) => host.readFile(repo, path, base), args);
+    if (refusal) throw refuse(refusal.reason, refusal.message);
+  }
+
   return {
     async open(scope, args) {
       const refusal = kind.refusal(args);
@@ -477,6 +505,7 @@ export function createSteeringPullRequestOpener(
         // The files were built against `at`. Starting the branch at a newer
         // production head would revert whatever merged in between.
         const base = args.at ?? productionHead;
+        await refuseAgainstBase(host, repo, base, args);
         await host.ensureBranch(repo, args.branch, production, {
           exclusive: true,
           at: base,
@@ -545,6 +574,8 @@ export function createSteeringPullRequestOpener(
           `${args.branch} moved while the files were built. Read the branch again and retry.`,
         );
       }
+      // The checks on an open PR compare it against the production head.
+      await refuseAgainstBase(host, repo, productionHead, args);
       const { sha } = await host.commitFiles(repo, {
         branch: args.branch,
         parent,

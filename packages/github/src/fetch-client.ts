@@ -195,7 +195,12 @@ interface GHPullDetail {
   updated_at: string;
   body: string | null;
   base: { ref: string };
-  head: { ref: string; sha: string | null };
+  head: {
+    ref: string;
+    sha: string | null;
+    /** Null once a fork the pull request came from is deleted. */
+    repo?: { full_name: string } | null;
+  };
   merge_commit_sha?: string | null;
   merged_at?: string | null;
   additions?: number;
@@ -1063,6 +1068,9 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
       baseRef: data.base.ref,
       headRef: data.head.ref,
       headSha: data.head.sha,
+      ...(data.head.repo === undefined
+        ? {}
+        : { headRepository: data.head.repo?.full_name ?? null }),
       mergeCommitSha: data.merge_commit_sha ?? null,
       mergedAt: data.merged_at ?? null,
       additions: data.additions ?? 0,

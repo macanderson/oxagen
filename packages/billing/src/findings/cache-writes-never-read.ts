@@ -63,5 +63,9 @@ export const cacheWritesNeverRead: Detector = {
   prose: (group, evidence) => ({
     why: `${plural(group.runs.size, "run", "runs")} wrote ${plural(evidence.measuredTokens, "prompt-cache token", "prompt-cache tokens")} and read none of them back.`,
     fix: "Stop marking the prefix cacheable on runs that end before a second call reads it.",
+    values: {
+      kind: "cache_writes_never_read",
+      writtenTokens: evidence.measuredTokens,
+    },
   }),
 };

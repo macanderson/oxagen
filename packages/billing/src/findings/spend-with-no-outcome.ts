@@ -20,6 +20,7 @@
  * whose merge or revert time is unknown, and one whose revert is dated before
  * its merge.
  */
+import type { RunTotalsRecord } from "../cost-rollup";
 import { NO_PR_KEY, type OutcomeRow } from "../run-pr-outcomes";
 import { claimKey } from "./requests";
 import {
@@ -27,6 +28,8 @@ import {
   plural,
   requestMeasure,
   type Detector,
+  type FindingValues,
+  type Group,
 } from "./shared";
 
 /** A revert this many days or fewer after the merge undoes the run's work. */
@@ -92,6 +95,28 @@ export function noOutcomeReason(
   return reason;
 }
 
+/** Why each cited run's work did not land, keyed by the run record the groups hold. */
+const reasonOf = new WeakMap<RunTotalsRecord, NoOutcomeReason>();
+
+/** The cited runs by why their work did not land, the figures the card names (#5023). */
+function valuesOf(group: Group): FindingValues {
+  const counts: Record<NoOutcomeReason, number> = {
+    closed_unmerged: 0,
+    reverted: 0,
+    abandoned: 0,
+  };
+  for (const { run } of group.runs.values()) {
+    const reason = reasonOf.get(run);
+    if (reason !== undefined) counts[reason] += 1;
+  }
+  return {
+    kind: "spend_with_no_outcome",
+    closedUnmerged: counts.closed_unmerged,
+    reverted: counts.reverted,
+    abandoned: counts.abandoned,
+  };
+}
+
 export const spendWithNoOutcome: Detector = {
   kinds: ["spend_with_no_outcome"],
   counting: 8,
@@ -102,7 +127,8 @@ export const spendWithNoOutcome: Detector = {
     if (outcomes === undefined) return;
     for (const run of input.runs) {
       const rows = outcomes.get(run.runId);
-      if (rows === undefined || noOutcomeReason(rows) === null) continue;
+      const reason = rows === undefined ? null : noOutcomeReason(rows);
+      if (reason === null) continue;
       const key = agentOrOperator("spend_with_no_outcome", run);
       if (key === null || !ctx.groups.admits(key, run)) continue;
       // A run absent here was not read: the frame cap left it out, or it has
@@ -112,6 +138,7 @@ export const spendWithNoOutcome: Detector = {
       // spent nothing. Citing it would add an unpriced call and pull the
       // group's coverage down.
       if (frames.length === 0 && run.modelCalls === 0) continue;
+      reasonOf.set(run, reason);
       for (const frame of frames) {
         const claim = claimKey(run.runId, frame.key);
         if (ctx.claimed.has(claim)) continue;
@@ -142,5 +169,6 @@ export const spendWithNoOutcome: Detector = {
   prose: (group) => ({
     why: `${plural(group.runs.size, "run", "runs")} ended with nothing kept. Each pull request closed unmerged or was reverted within ${REVERT_WINDOW_DAYS} days of its merge, or the run was abandoned before it opened one.`,
     fix: "Read why each pull request closed or was reverted, and send work whose runs keep ending this way back to its work item with the spend attached.",
+    values: valuesOf(group),
   }),
 };

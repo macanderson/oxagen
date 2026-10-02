@@ -39,6 +39,10 @@ const REQUIRED_STARTUP_CALLS: ReadonlyArray<readonly [string, string]> = [
   ],
   ["setSecurityEventEmitter(", "the SOC2 CC6/CC7 audit trail is not written"],
   ["initTracer(", "OpenTelemetry spans are never exported"],
+  [
+    "registerProposingAgentResolver(servedProposingAgent)",
+    "propose_steering finds no agent and refuses every call",
+  ],
 ];
 
 describe("mcp middleware startup wiring", () => {

@@ -10,6 +10,7 @@
  * through withTenantDb in their own modules.
  */
 import { schema, withSystemDb, type Tx } from "@oxagen/database";
+import { runInTenantScope } from "@oxagen/tenancy";
 import {
   readModelCallFrames,
   readTachoFileChanges,
@@ -87,6 +88,8 @@ import {
   type PriceTokenClass,
 } from "./price-book";
 import type { OutcomeRow } from "./run-pr-outcomes";
+import type { WeeklyContextPrice } from "./standing-context-price";
+import { readWeeklyContextPrice } from "./standing-context-price-store";
 
 const totals = schema.runTotals;
 const sessions = schema.tachoSessions;
@@ -244,6 +247,15 @@ interface FindingsPassDeps {
     scope: FindingsScope,
     backfill: readonly ClaimBackfill[],
   ) => Promise<void>;
+  /**
+   * The workspace's weekly price per 1,000 tokens of standing context as of
+   * `now`, which detector 2's values quote (#5023); absent, the pass reads
+   * none and the values carry no price.
+   */
+  readWeeklyPrice?: (
+    scope: FindingsScope,
+    now: Date,
+  ) => Promise<WeeklyContextPrice | null>;
 }
 
 /**
@@ -1244,6 +1256,10 @@ const productionDeps: FindingsPassDeps = {
   readPrompts: (scope, window, runIdBySession, runIds) =>
     readRunPrompts(scope, window, runIdBySession, runIds, readFrames),
   openProposals: openSpendProposals,
+  // The price reads the book through the tenant connection, as the tool and
+  // steering pages do, so the card quotes the same price they do.
+  readWeeklyPrice: (scope, now) =>
+    runInTenantScope(scope, () => readWeeklyContextPrice(scope, now)),
 };
 
 /**
@@ -1349,6 +1365,14 @@ export async function runFindingsPass(
     runIds.size === 0
       ? undefined
       : await deps.readPrompts?.(scope, { start, end }, runIdBySession, runIds);
+  // Detector 2 quotes the week's price per 1,000 tokens (#5023). A workspace
+  // with no runs in the window has no finding to quote it on. A failed read
+  // fails the pass, as every other read does, so the job retries rather than
+  // write a finding whose price reads as not recorded.
+  const weeklyPrice =
+    runIds.size === 0
+      ? undefined
+      : await deps.readWeeklyPrice?.(scope, end);
   const input: DetectReads = {
     window: { start, end },
     toolWindowStart: toolWindowStart(start, rows, TOOL_CALL_READ_MAX),
@@ -1365,6 +1389,17 @@ export async function runFindingsPass(
     ...(fileChangeTimes ? { fileChangeTimes } : {}),
     ...(prompts ? { prompts } : {}),
     ...(resultUse ? { resultUse } : {}),
+    ...(weeklyPrice === undefined
+      ? {}
+      : {
+          weeklyContextPrice:
+            weeklyPrice === null
+              ? null
+              : {
+                  perThousandMicros: weeklyPrice.perThousandMicros,
+                  currency: weeklyPrice.currency,
+                },
+        }),
   };
   const drafts = detectFindings(input);
   const written = await deps.write(scope, end, decidedSince, drafts);

@@ -30,13 +30,17 @@ const WAIT_LINE =
 
 const day = (at: Date) => at.toISOString().slice(0, 10);
 
-/** The cost line: every turn the finding cites, or the part of them a price covers. */
+/**
+ * The cost line: every call the finding cites, or the part of them a price
+ * covers. The finding counts each call of a counted turn and prices the turn
+ * once (#5023), so a priced turn covers all of its calls.
+ */
 function costLine(draft: FindingDraft): string {
   const amount = formatMicros(draft.savingMicros, draft.currency);
   const { calls, coveredCalls } = draft.evidence;
   return coveredCalls >= calls
-    ? `Those turns cost ${amount}.`
-    : `${plural(coveredCalls, "turn", "turns")} of them have a price, and those cost ${amount}.`;
+    ? `Those calls cost ${amount}.`
+    : `${plural(coveredCalls, "call", "calls")} of them have a price, and those cost ${amount}.`;
 }
 
 function proposalFor(draft: FindingDraft): SpendProposal {
