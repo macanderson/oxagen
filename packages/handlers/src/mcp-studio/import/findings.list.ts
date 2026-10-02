@@ -48,6 +48,12 @@ export interface StudioFolderView {
   draft: StoredStudioDraft | null;
   /** The steering repository the folder was read from. */
   repo: SteeringRepository;
+  /**
+   * The production branch's commit the folder was read at. A caller that
+   * reads a file Review does not manage, such as tests/selection.jsonl, reads
+   * it at this commit so both reads see one tree.
+   */
+  productionSha: string;
 }
 
 /**
@@ -94,7 +100,7 @@ export async function buildStudioFolderView(
     credentials,
     unclassified: "report",
   });
-  return { folder, draft, repo };
+  return { folder, draft, repo, productionSha };
 }
 
 export function createListStudioFindingsHandler(
