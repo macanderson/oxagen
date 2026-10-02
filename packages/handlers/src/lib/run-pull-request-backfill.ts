@@ -140,8 +140,11 @@ export function githubConnectionOf(
   return unnamed?.id ?? null;
 }
 
-/** The workspace's connected GitHub source that reads `owner`'s repositories. */
-async function githubConnectionFor(
+/**
+ * The workspace's connected GitHub source that reads `owner`'s repositories.
+ * Work order evidence reads through the same source (work-records/evidence.ts).
+ */
+export async function githubConnectionFor(
   scope: Scope,
   owner: string,
 ): Promise<string | null> {

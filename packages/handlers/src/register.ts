@@ -1258,6 +1258,68 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./steering.memories.dismiss"))
         .steeringMemoriesDismissHandler as CapabilityHandlerFn,
   );
+  // Phase 1 work actions (P1-04, ADR-250): a person's decisions on a work
+  // item, and a host's claim or refusal of a work order.
+  registerHandler(
+    "save_work_brief",
+    async () =>
+      (await import("./work.brief.save")).workBriefSaveHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "approve_work_brief",
+    async () =>
+      (await import("./work.brief.approve")).workBriefApproveHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "send_work_order",
+    async () =>
+      (await import("./work.order.send")).workOrderSendHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "cancel_work_order",
+    async () =>
+      (await import("./work.order.cancel")).workOrderCancelHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "stop_work_order",
+    async () =>
+      (await import("./work.order.stop")).workOrderStopHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "return_work_order",
+    async () =>
+      (await import("./work.order.return")).workOrderReturnHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "accept_work_order",
+    async () =>
+      (await import("./work.order.accept")).workOrderAcceptHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "refresh_work_order_checks",
+    async () =>
+      (await import("./work.order.checks.refresh")).workOrderChecksRefreshHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "close_work_item",
+    async () =>
+      (await import("./work.item.close")).workItemCloseHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "reopen_work_item",
+    async () =>
+      (await import("./work.item.reopen")).workItemReopenHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "claim_work_order",
+    async () =>
+      (await import("./work.order.claim")).workOrderClaimHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "reject_work_order",
+    async () =>
+      (await import("./work.order.reject")).workOrderRejectHandler as CapabilityHandlerFn,
+  );
   registerHandler(
     "list_memory_pr_records",
     async () =>

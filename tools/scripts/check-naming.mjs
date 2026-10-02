@@ -209,6 +209,14 @@ const ACTIONS = new Set([
   "append",
   "propose",
   "merge",
+  // Phase 1 work lifecycle (P1-04, ADR-250). A person returns a send's result
+  // to the agent, closes or reopens a work item; a runtime claims a work
+  // order before it starts and rejects one it cannot start.
+  "return",
+  "close",
+  "reopen",
+  "claim",
+  "reject",
   // snake_case compound actions
   "set_enabled",
   "set_default",
