@@ -374,7 +374,13 @@ describe("a steering PR (#5122)", () => {
     });
     expect(screen.getByTestId("change-merge")).toBeEnabled();
     expect(screen.getByText("steering PR")).toBeInTheDocument();
-    expect(screen.getByText("tools/servers/billing")).toBeInTheDocument();
+    // The folder the PR changes, in the state line and in the files list.
+    expect(
+      within(screen.getByTestId("change-state")).getByText("tools/servers/billing"),
+    ).toBeInTheDocument();
+    expect(
+      within(screen.getByTestId("change-files")).getByText("tools/servers/billing"),
+    ).toBeInTheDocument();
   });
 
   it("keeps Merge disabled once a steering PR merged (negative)", async () => {
