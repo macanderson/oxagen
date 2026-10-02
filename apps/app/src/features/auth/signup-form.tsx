@@ -33,9 +33,6 @@ type SignupField = "name" | "email" | "password";
 const PASSWORD_ID = "signup-password";
 const REQUIREMENTS_ID = `${PASSWORD_ID}-requirements`;
 
-/** The legal pages live on the website, outside the app. */
-const TERMS_URL = "https://oxagen.sh/terms";
-const PRIVACY_URL = "https://oxagen.sh/privacy";
 /** Underlined, so a link in running text does not rely on colour alone. */
 const legalLink = `${linkText} underline`;
 
@@ -158,7 +155,7 @@ export function SignupForm({
           {t.rich("signup.terms", {
             terms: (chunks) => (
               <a
-                href={TERMS_URL}
+                href="https://oxagen.sh/terms"
                 target="_blank"
                 rel="noopener noreferrer"
                 className={legalLink}
@@ -168,7 +165,7 @@ export function SignupForm({
             ),
             privacy: (chunks) => (
               <a
-                href={PRIVACY_URL}
+                href="https://oxagen.sh/privacy"
                 target="_blank"
                 rel="noopener noreferrer"
                 className={legalLink}
