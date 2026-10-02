@@ -117,8 +117,10 @@ function opensSentence(text, index) {
   const trimmed = prefix.trim();
   if (trimmed !== "" && !/^(?:\/\/|\*|--|>)$/.test(trimmed)) {
     if (/^(?:#+|[-*+]|\d+\.|\|)$/.test(trimmed)) return true;
+    // A breadcrumb separator written as a JSON escape (›) opens a label.
+    if (/\\u[0-9a-fA-F]{4}$/.test(trimmed)) return true;
     const last = trimmed[trimmed.length - 1];
-    return !/[a-z0-9,(/:'\-–]/.test(last);
+    return !/[A-Za-z0-9,(/:;'\-–]/.test(last);
   }
   // At the start of a line: read the end of the line before it.
   if (lineStart === 0) return true;
@@ -135,7 +137,8 @@ const WORD_RULES = [
   {
     id: "words-record",
     re: new RegExp(String.raw`\b([Cc])ontext(${SEP})(records?)\b`, "g"),
-    to: (_m, c, sep, rec) => `${c === "C" ? "S" : "s"}teering${sep}${rec}`,
+    to: (_m, c, sep, rec, offset, text) =>
+      `${c === "C" && opensSentence(text, offset) ? "S" : "s"}teering${sep}${rec}`,
   },
   {
     id: "words-record-title",
