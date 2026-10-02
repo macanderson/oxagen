@@ -180,7 +180,7 @@ export interface HookHandlerDeps {
   /**
    * Count the memory files one Claude Code tool call read as uses of those
    * memories in the call's run (`memoryReadsOf` and `createMemoryUses` in
-   * `./memory-capture/memory-uses`, ADR-245). Called for each `PostToolUse`
+   * `./memory-capture/memory-uses`, ADR-248). Called for each `PostToolUse`
    * of a Claude Code session, with the run's root session, so a subagent's
    * read counts for the run it belongs to. It queues the reads and never
    * waits. Absent, as in `tacho-hook`, no read is counted.

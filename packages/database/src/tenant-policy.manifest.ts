@@ -70,7 +70,7 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "agent.memories", policyClass: "standard" },
   { table: "agent.memory_rejections", policyClass: "standard" },
   { table: "agent.memory_recalls", policyClass: "standard" },
-  // The runs that used each memory (ADR-245); org_id + workspace_id NOT NULL.
+  // The runs that used each memory (ADR-248); org_id + workspace_id NOT NULL.
   { table: "agent.memory_uses", policyClass: "standard" },
   // Published steering versions and the publish lease (S3, #4449); org_id +
   // workspace_id NOT NULL.

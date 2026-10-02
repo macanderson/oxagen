@@ -1,6 +1,6 @@
 /**
  * A Claude Code tool call that ran is handed to `noteMemoryReads`, which
- * counts the memory files it read as uses in the call's run (ADR-245). The
+ * counts the memory files it read as uses in the call's run (ADR-248). The
  * run is the root session, so a subagent's read counts for the run it
  * belongs to. A failed call read nothing, and a session of another harness
  * reads no Claude Code memory as its own.

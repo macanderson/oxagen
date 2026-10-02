@@ -23,6 +23,10 @@
 //                           version store as version 1, so the first steering
 //                           PR publishes version 2 (#4732).
 //
+// Once the last step makes a workspace's repo ready, the run starts the move
+// of the workspace's MCP servers into it (migrate_tools_to_steering, ADR-245).
+// A start that fails is logged, and the repo stays ready.
+//
 // Every step is safe to repeat. The state lives in the `steering_repo` key of
 // the workspace's settings, or of the organization's for `<org>/oxagen-config`, and
 // records what each step made, so a rerun adopts it instead of making another.
@@ -309,6 +313,14 @@ export interface ProvisionDeps {
   legacySteeringSource?(
     scope: Extract<SteeringRepoScope, { kind: "workspace" }>,
   ): Promise<LegacySteeringSource | null>;
+  /**
+   * Start the move of the workspace's MCP servers into its steering repo
+   * (migrate_tools_to_steering, ADR-245), once the repo is ready. Unset, as
+   * in tests that do not exercise it, nothing starts.
+   */
+  startToolMigration?(
+    scope: Extract<SteeringRepoScope, { kind: "workspace" }>,
+  ): Promise<void>;
 }
 
 /**
@@ -852,6 +864,31 @@ function lastStep(scope: SteeringRepoScope): SteeringRepoStep {
 }
 
 /**
+ * Start the move of the workspace's MCP servers into its new steering repo
+ * (ADR-245, #4948), once the last step has made the repo ready. The move is
+ * safe to repeat, so a rerun of the last step starts it again and finds the
+ * PR it opened. A failure is logged and never fails the step: the repo is
+ * ready, and migrate_tools_to_steering retries the move.
+ */
+async function startToolMigration(ctx: StepContext): Promise<void> {
+  const start = ctx.deps.startToolMigration;
+  const scope = ctx.scope;
+  if (start === undefined || scope.kind !== "workspace") return;
+  try {
+    await start(scope);
+  } catch (err) {
+    logger.warn(
+      {
+        orgId: scope.orgId,
+        workspaceId: scope.workspaceId,
+        err: err instanceof Error ? err.message : String(err),
+      },
+      "steering_repo.provision: the steering repo is ready, but its MCP servers did not start moving into it; migrate_tools_to_steering retries the move",
+    );
+  }
+}
+
+/**
  * Whether an owner has to authorize again: the token is missing, or the host
  * refused it. Both provider errors and the blocked error carry this code.
  */
@@ -940,6 +977,7 @@ export async function runSteeringRepoStep(
   ctx.state.error = null;
   ctx.state.status = step === lastStep(scope) ? "ready" : "provisioning";
   await save(ctx);
+  if (ctx.state.status === "ready") await startToolMigration(ctx);
   return { step, status: ctx.state.status, ran: true };
 }
 
@@ -1827,6 +1865,34 @@ export function steeringRepoProvisionDeps(options: {
       return runInTenantScope(
         { orgId: scope.orgId, workspaceId: scope.workspaceId },
         () => publish(scope),
+      );
+    },
+
+    // The run migrate_tools_to_steering runs, with no person behind it, in
+    // the workspace's tenant scope (ADR-245). Loaded on the call, so a
+    // provision that never reaches ready loads none of it.
+    async startToolMigration(scope) {
+      const [{ runToolMigration }, { toolMigrationDeps }] = await Promise.all([
+        import("./mcp-studio/migration-run"),
+        import("./mcp-studio/migration-deps"),
+      ]);
+      const workspace = { orgId: scope.orgId, workspaceId: scope.workspaceId };
+      const result = await runInTenantScope(
+        {
+          ...workspace,
+          principalKind: "service",
+          capabilityName: "migrate_tools_to_steering",
+        },
+        () =>
+          runToolMigration(workspace, { actorUserId: null }, toolMigrationDeps()),
+      );
+      logger.info(
+        {
+          ...workspace,
+          state: result.state,
+          pullRequests: result.pullRequests.map((pr) => pr.number),
+        },
+        "steering_repo.provision: started the move of the workspace's MCP servers into its steering repo",
       );
     },
   };

@@ -106,7 +106,7 @@ export const MACHINE_KEY_CAPABILITIES: Readonly<
   // reports events, fetches its mandate, polls for commands, asks for a
   // repository-scoped git credential (ADR-151), sends the memories its
   // harnesses wrote, asks for the memories a prompt should see (ADR-206),
-  // and reports the memory files its runs read (ADR-245); it does not
+  // and reports the memory files its runs read (ADR-248); it does not
   // enroll, revoke, or read the fleet. The command poll is `fetch_commands`
   // since ADR-025 renamed it from `fetch_tacho_commands`; this list kept the
   // old name, so every host's poll was refused and a pause or revoke never
@@ -125,7 +125,7 @@ export const MACHINE_KEY_CAPABILITIES: Readonly<
     // ADR-206: the memories one prompt on the host should see, from the
     // key's own workspace. Each record served is stamped as recalled.
     "recall_tacho_memories",
-    // ADR-245: the memory files the host's runs read, and the files each
+    // ADR-248: the memory files the host's runs read, and the files each
     // memory scan found, in the key's own workspace.
     "record_tacho_memory_uses",
   ]),

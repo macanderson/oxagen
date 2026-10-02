@@ -1,5 +1,5 @@
 // What the curator puts in one workspace's next memory PR (ADR-206,
-// decisions 6, 8, and 9, as ADR-245 amends them).
+// decisions 6, 8, and 9, as ADR-248 amends them).
 //
 // The plan takes seven steps, in order. It proposes archiving memory records
 // that a reflection contradicts or that no run recalled. It links each
@@ -355,7 +355,7 @@ export function planCuration(input: CurateInput): CuratePlan {
   );
   const { said, kept } = sayMemories(input);
   const { held, ready } = holdMemories(kept, input);
-  // Only a memory a run used enters the batch (ADR-245). A memory with no
+  // Only a memory a run used enters the batch (ADR-248). A memory with no
   // use waits, and retires once `retire_after_days` pass with no use.
   const used = ready.filter((memory) => memory.useCount > 0);
   const unused = ready

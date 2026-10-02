@@ -17,7 +17,7 @@
  *
  * A scan also lists every memory file it found, one list per location, for
  * `record_tacho_memory_uses`, which retires the memories whose files a scan
- * no longer finds (ADR-245). The lists come back only from a complete scan:
+ * no longer finds (ADR-248). The lists come back only from a complete scan:
  * every folder listed, where a missing folder counts as empty, and no send
  * failed. A partial list would retire memories whose files still exist.
  * After a complete scan the reader forgets each file the scan did not find,

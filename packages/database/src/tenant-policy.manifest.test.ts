@@ -288,7 +288,7 @@ describe("tenant policy manifest", () => {
     // (ADR-241 signup grant, #4886, 2026-10-01).
     // 165 adds cost.run_pr_receipt_walks, where the outcome refresh stands in
     // each ledger run's receipts (F25, #4511, 2026-10-01).
-    // 166 adds agent.memory_uses (MEM2, #4908, ADR-245, 2026-10-01).
+    // 166 adds agent.memory_uses (MEM2, #4908, ADR-248, 2026-10-01).
     expect(POLICY_MANIFEST.length).toBe(166);
   });
 
