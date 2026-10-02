@@ -60,59 +60,65 @@
 }
 
 /* ───────────────────────────────────────────────────────────────────────────
- * Docs type: the kit's app scale (Mac, 2026-10-02, oxageninc/brand#72).
+ * Docs type: one step above the kit's app scale.
  *
- * Every docs site reads the app scale (--ox-a-*), the scale the app and
- * stella's docs use. Fumadocs brings its own sizes: a 16px body on a 28px
- * line, a 28px title, an 18px description, and 14px chrome from Tailwind's
- * text-sm. These rules sit outside any CSS layer, so they win over Fumadocs'
- * layered prose styles and utilities. Each size is a kit token with its
- * line-height twin, so a change in the kit's theme editor reaches this site
- * with the next sync.
+ * Mac put the docs on the app scale (--ox-a-*) on 2026-10-02
+ * (oxageninc/brand#72), then found the pages read small the same day
+ * (#5217). Docs are read for minutes at a time, not glanced at like a
+ * dashboard, so every size here is the app scale times --docs-step (8/7):
+ * a 16px body, a 34px title, and the headings in proportion. The sidebar,
+ * the phone drawer, and the table of contents title sit at 15px. Fumadocs
+ * brings its own sizes; these rules sit outside any CSS layer, so they win
+ * over its layered prose styles and utilities. Each size reads a kit token,
+ * so a change in the kit's theme editor still reaches this site with the
+ * next sync.
  *
  * `.prose` is the page body and also each item in the table of contents,
  * which Fumadocs marks `prose text-sm`.
  * ─────────────────────────────────────────────────────────────────────────── */
+:root {
+  --docs-step: calc(8 / 7);
+}
+
 .prose {
-  font-size: var(--ox-a-body);
+  font-size: calc(var(--ox-a-body) * var(--docs-step));
   line-height: var(--ox-a-body-leading);
 }
 
-/* Fumadocs sets a table at 0.875em, which is 12.25px on a 14px body and off
-   the scale, so a table takes the body size. */
+/* Fumadocs sets a table at 0.875em, which falls off the scale, so a table
+   takes the body size. */
 .prose table {
-  font-size: var(--ox-a-body);
+  font-size: calc(var(--ox-a-body) * var(--docs-step));
   line-height: var(--ox-a-body-leading);
 }
 
 /* The page title, and an h1 in the body. */
 #nd-page h1 {
-  font-size: var(--ox-a-h1);
+  font-size: calc(var(--ox-a-h1) * var(--docs-step));
   line-height: var(--ox-a-h1-leading);
 }
 
 .prose h2 {
-  font-size: var(--ox-a-h2);
+  font-size: calc(var(--ox-a-h2) * var(--docs-step));
   line-height: var(--ox-a-h2-leading);
 }
 
 .prose h3 {
-  font-size: var(--ox-a-h3);
+  font-size: calc(var(--ox-a-h3) * var(--docs-step));
   line-height: var(--ox-a-h3-leading);
 }
 
 .prose h4 {
-  font-size: var(--ox-a-h4);
+  font-size: calc(var(--ox-a-h4) * var(--docs-step));
   line-height: var(--ox-a-h4-leading);
 }
 
-/* The sidebar, the phone drawer, and the table of contents title. Fumadocs
-   sets the drawer at 15px, a size the scale does not have. The sidebar's own
-   items set no size, so they follow their aside. */
+/* The sidebar, the phone drawer, and the table of contents title, at 15px.
+   The sidebar's own items set no size, so they follow their aside. */
 #nd-sidebar,
 #nd-sidebar-mobile,
 #toc-title {
-  font-size: var(--ox-a-body);
+  font-size: calc(var(--ox-a-body) * 15 / 14);
   line-height: var(--ox-a-body-leading);
 }
 
@@ -124,21 +130,21 @@
    and the search dialog, and any entry a Fumadocs upgrade adds with one of
    these sizes.
 
-   The app scale has no 18px step. text-lg sets two things: the description
-   under the title, and the search field. h4 keeps the description reading
-   as a lead above the 14px body. It also keeps the search field at 16px, the
-   size under which a phone's browser zooms the page when the field takes
-   focus.
+   Each step is taken one up, times --docs-step, like the rest of the page.
+   text-lg sets two things: the description under the title, and the search
+   field. The h4 step keeps the description reading as a lead above the
+   body, and keeps the search field above 16px, the size under which a
+   phone's browser zooms the page when the field takes focus.
 
    The hooks are Fumadocs' stable ids: #nd-page is the article, and the
    sidebar, drawer, and table of contents keep the ids its own themes style.
    The search dialog renders outside the layout, so it is found by its role. */
 :is(#nd-sidebar, #nd-sidebar-mobile, #nd-toc, [data-toc-popover], #nd-page, [role="dialog"]) {
-  --text-xs: var(--ox-a-micro);
+  --text-xs: calc(var(--ox-a-micro) * var(--docs-step));
   --text-xs--line-height: var(--ox-a-micro-leading);
-  --text-sm: var(--ox-a-body);
+  --text-sm: calc(var(--ox-a-body) * var(--docs-step));
   --text-sm--line-height: var(--ox-a-body-leading);
-  --text-lg: var(--ox-a-h4);
+  --text-lg: calc(var(--ox-a-h4) * var(--docs-step));
   --text-lg--line-height: var(--ox-a-h4-leading);
 }
 
@@ -186,11 +192,11 @@ figure.shiki {
   box-shadow: var(--ui-shadow-pop);
 }
 
-/* Code reads the app body step. Fumadocs sets the code at a fixed 13px
-   (text-[0.8125rem] on the scroll area), halfway between the micro and body
-   steps, and the body step matches the prose around it. */
+/* Code reads 15px, the body step times 15/14: a step under the 16px prose
+   around it, so a long line still fits the column. Fumadocs sets the code at
+   a fixed 13px (text-[0.8125rem] on the scroll area). */
 figure.shiki pre {
-  font-size: var(--ox-a-body);
+  font-size: calc(var(--ox-a-body) * 15 / 14);
   line-height: var(--ox-a-body-leading);
 }
 

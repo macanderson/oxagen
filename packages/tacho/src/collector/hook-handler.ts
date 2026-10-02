@@ -1005,13 +1005,23 @@ async function routeHook(
   const at = replay?.receivedAt ?? toProtocolTimestamp(deps.now());
   const inferredCwd =
     harness === "cursor" && input["cursor_cwd_inferred"] === true;
+  // Codex sends a spawned subagent's own rollout as `transcript_path` on
+  // every hook the subagent fires except `SubagentStop`, under the root
+  // session's id. The session's transcript is the root's rollout. Taking the
+  // subagent's in its place made the tailer start over on that file, and on
+  // the root's again at the next root hook. The daemon tails the subagent's
+  // rollout on a cursor of its own (`noteSubagentTranscript`).
+  const sessionTranscript =
+    harness === "codex" && input.agent_id !== undefined
+      ? undefined
+      : input.transcript_path;
   const { record, reopened } = deps.registry.ensure(input.session_id, {
     ambient: false,
     lastHookEvent: input.hook_event_name,
     ...(harness !== undefined ? { harness } : {}),
     ...(agent !== undefined ? { customAgent: agent } : {}),
-    ...(input.transcript_path !== undefined
-      ? { transcriptPath: input.transcript_path }
+    ...(sessionTranscript !== undefined
+      ? { transcriptPath: sessionTranscript }
       : {}),
     ...(input.cwd !== undefined && !inferredCwd ? { cwd: input.cwd } : {}),
     ...(pidFromEnv(env) !== undefined ? { pid: pidFromEnv(env) } : {}),

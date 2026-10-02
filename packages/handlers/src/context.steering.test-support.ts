@@ -713,6 +713,7 @@ export class FakeGitHub implements SteeringGitHub {
     commitTitle: string;
     sha: string;
     commitMessage?: string;
+    base?: string;
   }[] = [];
   deletedBranches: string[] = [];
   /** Every stamp commit `commitFiles` wrote, in order. */
@@ -1109,6 +1110,7 @@ export class FakeGitHub implements SteeringGitHub {
       commitTitle: string;
       sha: string;
       commitMessage?: string;
+      base?: string;
     },
   ) {
     if (this.mergeRefusedWith) return this.refused(this.mergeRefusedWith);

@@ -449,6 +449,7 @@ describe("landSteeringPr: stamping", () => {
     const gh = steeringRepo();
     const before = await ledgerLines(gh);
     const pr = await openPr(gh, "a-intel.platform.release-notes");
+    const mainBefore = gh.heads.get("main");
 
     const landed = await land(gh, pr);
 
@@ -522,6 +523,8 @@ describe("landSteeringPr: stamping", () => {
           checks: CHECKS,
           version: 21,
         }),
+        // The main commit the queue read before it stamped (#5157).
+        base: mainBefore,
       },
     ]);
   });
