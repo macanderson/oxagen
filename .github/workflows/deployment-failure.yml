@@ -21,12 +21,11 @@
 # all but one report, which is the #2730 mistake again. Two runs that race
 # to file are deduplicated by the script instead.
 #
-# ## The P0 label and triage-guard
+# ## The P0 label
 #
-# SCR-005 reserves priority labels for the triage identity. This workflow's
-# P0 is Mac's standing decision for this one class of issue, and
-# triage-guard.yml exempts it. Issues created with GITHUB_TOKEN do not
-# trigger other workflows in any case.
+# This workflow's P0 is Mac's standing decision for this one class of issue
+# (2026-09-23). It is the one priority a workflow applies. Every other
+# workflow that files an issue leaves the priority to `/triage-issues`.
 name: deployment-failure
 
 on:
@@ -45,6 +44,9 @@ permissions:
   contents: read
   actions: read
   issues: write
+  # Reads a failed job's annotations to tell a lost runner from a real
+  # failure (rerun-lost-runner.mjs).
+  checks: read
 
 jobs:
   record:
@@ -58,6 +60,7 @@ jobs:
         with:
           sparse-checkout: |
             tools/scripts/deployment-failure-issue.mjs
+            tools/scripts/rerun-lost-runner.mjs
             .node-version
           sparse-checkout-cone-mode: false
       - uses: actions/setup-node@v4

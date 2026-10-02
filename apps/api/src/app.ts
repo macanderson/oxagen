@@ -238,6 +238,7 @@ import { steeringIndexGetRoute } from "./routes/v1/context.steering.index.get";
 import { steeringRepoGetRoute } from "./routes/v1/steering_repo.get";
 import { steeringRepoRepairRoute } from "./routes/v1/steering_repo.repair";
 import { steeringRepoProvisionRetryRoute } from "./routes/v1/steering_repo.provision.retry";
+import { steeringRepoDestinationsListRoute } from "./routes/v1/steering_repo.destinations.list";
 import { steeringMemoriesListRoute } from "./routes/v1/steering.memories.list";
 import { steeringMemoriesGetRoute } from "./routes/v1/steering.memories.get";
 import { steeringMemoriesPromoteRoute } from "./routes/v1/steering.memories.promote";
@@ -625,6 +626,8 @@ const TACHO_RECALL_PER_MIN = 120;
 // rejects each work order it receives, and a retry of either must not spend
 // the command poll's bucket. A backfill asks once per 500 sessions, a burst
 // at its start that must not starve the command poll either (ADR-161).
+// tacho.host.enroll.test.ts and tacho.events.ingest.test.ts write out the
+// credential ceiling this sets, so a new bucket changes both tests.
 const TACHO_OWN_BUCKET_PATHS = 6;
 
 // Tacho hosts speak to Oxagen with their enrolled API key, whose scope pins
@@ -1450,6 +1453,9 @@ orgOnlyScoped.route("/onboarding/state", onboardingStateGetRoute);
 // the advertised REST surface unreachable (#3097).
 orgOnlyScoped.route("/audit/events/export", auditEventsExportRoute);
 orgOnlyScoped.route("/connections/steering", steeringConnectionRoute);
+// Where a new workspace's steering repo can go, read before the workspace
+// exists, so it needs an org and no workspace, like POST /workspaces.
+orgOnlyScoped.route("/steering-repo/destinations", steeringRepoDestinationsListRoute);
 app.route("/v1/:org_slug", orgOnlyScoped);
 
 app.route("/v1/:org_slug/:workspace_slug", orgScoped);

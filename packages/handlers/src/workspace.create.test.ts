@@ -559,7 +559,55 @@ describe("createWorkspaceCreateHandler: the creating transaction", () => {
       deployment_id: null,
       binding_id: null,
       connection_choices: [],
+      requested_name: null,
+      requested_connection: null,
+      connection: null,
       updated_at: NOW.toISOString(),
+    });
+  });
+
+  it("writes the steering repo's chosen name and place into the first state, for the job to act on", async () => {
+    const chosen = workspaceCreate.input.parse({
+      name: "Platform",
+      slug: "platform",
+      steeringRepo: {
+        name: "acme-platform-steering",
+        connection: { provider: "gitlab", id: 77 },
+      },
+    });
+    await handler(chosen, CTX);
+
+    expect(mocks.updates).toHaveLength(1);
+    expect(steeringStateIn(mocks.updates[0]?.values.settings)).toMatchObject({
+      status: "provisioning",
+      requested_name: "acme-platform-steering",
+      requested_connection: { provider: "gitlab", id: 77 },
+      // The job resolves the place. The handler calls no host.
+      connection: null,
+      attempt: 1,
+      candidate: null,
+    });
+  });
+
+  it("writes only the half of the choice the caller sent", async () => {
+    const named = workspaceCreate.input.parse({
+      name: "Platform",
+      slug: "platform",
+      steeringRepo: { name: "platform-rules" },
+    });
+    await handler(named, CTX);
+    expect(steeringStateIn(mocks.updates[0]?.values.settings)).toMatchObject({
+      requested_name: "platform-rules",
+      requested_connection: null,
+    });
+  });
+
+  it("leaves the name and the place to the job's defaults when the caller chose neither", async () => {
+    await handler(INPUT, CTX);
+    expect(steeringStateIn(mocks.updates[0]?.values.settings)).toMatchObject({
+      requested_name: null,
+      requested_connection: null,
+      connection: null,
     });
   });
 

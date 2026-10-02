@@ -19,6 +19,9 @@ import {
   STEERING_DEFAULT_BRANCH,
   STEERING_ENVIRONMENT,
   STEERING_REPO_NAME_PREFIX,
+  STEERING_REPO_NAME_PATTERN,
+  defaultSteeringRepoName,
+  isWorkspaceSteeringRepoName,
   steeringRepoName,
   TOOL_NAME_MAX,
   TOOL_NAME_PATTERN,
@@ -72,6 +75,55 @@ describe("steeringRepoName", () => {
     expect(() => steeringRepoName("core", n)).toThrow(
       `the attempt number is a whole number from 1, not ${n}`,
     );
+  });
+});
+
+describe("defaultSteeringRepoName", () => {
+  it("is oxagen-<slug>", () => {
+    expect(defaultSteeringRepoName("core-platform")).toBe("oxagen-core-platform");
+  });
+
+  it("starts the config workspace at oxagen-config-2, past the organization's repository", () => {
+    expect(defaultSteeringRepoName("config")).toBe(`${ORGANIZATION_REPO_NAME}-2`);
+  });
+
+  it("refuses a slug that is not one", () => {
+    expect(() => defaultSteeringRepoName("Core Platform")).toThrow(RangeError);
+  });
+
+  it("is always a name a person may choose", () => {
+    for (const slug of ["core-platform", "config", "a", "billing7"])
+      expect(isWorkspaceSteeringRepoName(defaultSteeringRepoName(slug))).toBe(true);
+  });
+});
+
+describe("isWorkspaceSteeringRepoName", () => {
+  it.each(["oxagen-support", "Support_Steering", "steering.v2", "a", "a".repeat(100)])(
+    "accepts %s",
+    (name) => {
+      expect(isWorkspaceSteeringRepoName(name)).toBe(true);
+    },
+  );
+
+  it.each([
+    "",
+    "-lead",
+    "trail-",
+    "two--symbols",
+    "dot.-dash",
+    "has space",
+    "repo.git",
+    "repo.atom",
+    "a".repeat(101),
+    "oxagen-config",
+    "OXAGEN-CONFIG",
+  ])("refuses %s", (name) => {
+    expect(isWorkspaceSteeringRepoName(name)).toBe(false);
+  });
+
+  it("checks the shape apart from the reserved name", () => {
+    expect(STEERING_REPO_NAME_PATTERN.test(ORGANIZATION_REPO_NAME)).toBe(true);
+    expect(isWorkspaceSteeringRepoName(ORGANIZATION_REPO_NAME)).toBe(false);
   });
 });
 

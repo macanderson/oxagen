@@ -1252,6 +1252,12 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./steering_repo.provision.retry"))
         .retrySteeringRepoProvisionHandler as CapabilityHandlerFn,
   );
+  registerHandler(
+    "list_steering_repo_destinations",
+    async () =>
+      (await import("./steering_repo.destinations.list"))
+        .listSteeringRepoDestinationsHandler as CapabilityHandlerFn,
+  );
   // The Markdown import (#4907): parse files into steering records and Cedar
   // policies, then open one steering PR with the rows a person kept.
   registerHandler(
