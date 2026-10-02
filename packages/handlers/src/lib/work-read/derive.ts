@@ -345,6 +345,28 @@ function lastAt(orderFacts: readonly WorkFact[], kind: FactKind): string | null 
 }
 
 /**
+ * The required check a send in review waits on, ranked the way the checks word
+ * ranks them (checksWordOf): a check that finished without passing, then one
+ * that has not reported, then one still running. reviewGate stops at the
+ * first required check in name order, so on its own it could name a missing
+ * check while the word reads failing because another check failed (#5181).
+ */
+function requiredCheckWaitOf(order: OrderProjection, head: string): WorkWaitOutput {
+  const required = (order.requiredChecks ?? []).map((name) => ({
+    name,
+    conclusion: order.checks.find((check) => check.name === name)?.conclusion,
+  }));
+  for (const { name, conclusion } of required) {
+    if (conclusion !== undefined && conclusion !== "success" && conclusion !== "pending") {
+      return { kind: "check_failed", check: name, conclusion, head };
+    }
+  }
+  const missing = required.find((check) => check.conclusion === undefined);
+  if (missing !== undefined) return { kind: "check_missing", check: missing.name, head };
+  return { kind: "checks_running", head };
+}
+
+/**
  * What a send in review waits for. A pull request closed without merging is
  * read first, because nothing after it can make the item done, even an
  * acceptance already on its head. Then an acceptance on the head and a merge,
@@ -379,18 +401,8 @@ function reviewWaitOf(
     case "checks_unknown":
       return { kind: "checks_unread", head };
     case "check_missing":
-      return { kind: "check_missing", check: gate.detail ?? "", head };
-    case "check_failed": {
-      // Name a required check that finished without passing before one still
-      // running, so the line agrees with the checks word, which ranks a
-      // failure above a check that is running.
-      const required = (order.requiredChecks ?? [])
-        .map((name) => order.checks.find((check) => check.name === name))
-        .filter((check) => check !== undefined && check.conclusion !== "success");
-      const failing = required.find((check) => check?.conclusion !== "pending");
-      if (failing === undefined) return { kind: "checks_running", head };
-      return { kind: "check_failed", check: failing.name, conclusion: failing.conclusion, head };
-    }
+    case "check_failed":
+      return requiredCheckWaitOf(order, head);
     case "pr_closed":
       return { kind: "pr_closed", at: lastAt(orderFacts, "pr_closed") };
     case "no_pull_request":
