@@ -27,8 +27,8 @@ maintainer ruled that no customer role gets a budget, cap, toggle, switch,
 setting, or approval control over the assistant, on any app page or API. These
 four capabilities are such controls.
 
-`DEREGISTERED.md` §1 says a feature leaves the tree only under an ADR that
-names it. This is that ADR.
+`DEREGISTERED.md` §12 says deleting a feature takes an ADR that names its
+files. This is that ADR.
 
 ## Decision
 
@@ -88,9 +88,11 @@ Keep these:
 - `createTurnBudgetGuard` and `evaluateTurnBudget` in `@oxagen/billing`, and
   the `budgetGuard` input on `runGovernedTurn`. No production caller passes a
   guard after this change. The seam stays for a governed agent's turn.
-- `iam.role_grants` rows that name the four capabilities. The resolver skips a
-  grant for a capability that is not registered
-  (`packages/iam/src/delegation-ceiling.ts`), so the rows grant nothing.
+- `iam.role_grants` rows that name the four capabilities. They grant nothing,
+  because `invoke()` never resolves a capability that is not registered. The
+  delegation ceiling (`packages/iam/src/delegation-ceiling.ts`) treats an
+  unknown capability as `deny`, and the `budget.set` permission no longer
+  names the four, so the role editor does not pass them to it.
 - The names in ADRs, audits, `docs/specs/adr025-naming-mapping.md`, and
   `tools/scripts/adr025-name-map.mjs`. They record history.
 

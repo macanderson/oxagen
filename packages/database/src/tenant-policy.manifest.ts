@@ -354,8 +354,6 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   // Agent-memory decay policy. org_id + workspace_id both NOT NULL
   // → standard tenant_isolation RLS.
   { table: "workspace.workspace_memory_policy", policyClass: "standard" },
-  // Per-turn budget governance. org_id + workspace_id both NOT NULL
-  // → standard tenant_isolation RLS.
   // Wrapped-harness session governance: what the loopback model gateway
   // refuses for a Claude Code or Codex session. org_id + workspace_id both
   // NOT NULL → standard tenant_isolation RLS.
