@@ -96,7 +96,8 @@ interface TachoTx {
     retentionPolicyVersions: { findFirst: (args: unknown) => Promise<unknown> };
     // The mandate read (`resolveHostMandate`): the host's agent identity and
     // its active version's config, for the budget half of the mandate, and
-    // the host's runtime, for containment (ADR-204).
+    // the host's runtime, for containment (ADR-204) and for the slug the
+    // Cedar part is cut by (`resolveHostCedar`).
     agents: { findFirst: (args: unknown) => Promise<unknown> };
     agentVersions: { findFirst: (args: unknown) => Promise<unknown> };
     runtimes: { findFirst: (args: unknown) => Promise<unknown> };
