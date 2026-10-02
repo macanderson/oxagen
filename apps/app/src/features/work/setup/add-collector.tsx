@@ -121,10 +121,15 @@ export function AddCollector({
   const cannotSave = linked === null || repos.length === 0;
 
   function rename(next: string) {
+    const left = collectors.some((collector) => collector.name === name.trim());
     setName(next);
     // An existing collector's name ticks what it reads, so a save changes it in place.
     if (collectors.some((collector) => collector.name === next.trim())) {
       setSelected(readsOf(collectors, next.trim(), repos));
+    } else if (left) {
+      // Typing past an existing name ("github" on the way to "github-mobile")
+      // clears what that name ticked, so a new collector never inherits its repositories.
+      setSelected(new Set());
     }
   }
 
