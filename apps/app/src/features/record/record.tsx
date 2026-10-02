@@ -22,6 +22,7 @@ import { PageRecord } from "@/features/shell";
 import { getSession } from "@/server/session";
 import { branchFor, recordPathFor } from "@/features/create";
 import type { WsCtx } from "@/server/viewer";
+import { mayActInWorkspace } from "@/shared/workspace-authority";
 import { panel, panelBody, panelHeader } from "@/ui/control-styles";
 import { useFormatter } from "@/ui/formatter";
 import { KindPanel } from "./kind-panel";
@@ -47,9 +48,10 @@ const OPEN_STATUSES = new Set([
  * authority: this only decides what the page shows.
  */
 function canRevise(ctx: WsCtx): boolean {
-  const orgAdmin = ctx.orgRole === "owner" || ctx.orgRole === "admin";
-  const wsWriter = ctx.wsRole === "owner" || ctx.wsRole === "member";
-  return orgAdmin || wsWriter;
+  return (
+    mayActInWorkspace(ctx.orgRole, ctx.wsRole, ["owner", "admin"]) ||
+    ctx.wsRole === "member"
+  );
 }
 
 /** The design's `.sk` shimmer (globals.css), the one every skeleton draws. */

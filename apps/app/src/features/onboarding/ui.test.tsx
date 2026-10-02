@@ -378,7 +378,7 @@ describe("the name step", () => {
     await user.click(harnessOption(/Codex/));
     await user.click(screen.getByRole("button", { name: "Continue" }));
     expect(screen.getByTestId("register-failure")).toHaveTextContent(
-      "This account may not register agents here. An organization owner or admin can.",
+      "This account may not register agents here. An organization or workspace owner or admin can.",
     );
     expect(router.push).not.toHaveBeenCalled();
   });

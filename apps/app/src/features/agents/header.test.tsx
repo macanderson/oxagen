@@ -36,6 +36,7 @@ function renderHeader(overrides: Partial<Props> = {}) {
     identity: agentDetail().identity,
     lastRun: runRow(),
     orgRole: "owner",
+    wsRole: "member",
     org: "acme",
     ws: "core-platform",
     ...overrides,

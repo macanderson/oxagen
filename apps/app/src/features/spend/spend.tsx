@@ -31,6 +31,7 @@ import {
 import { PageRecord } from "@/features/shell";
 import type { WsCtx } from "@/server/viewer";
 import { routes } from "@/shared/safe-path";
+import { mayActInWorkspace } from "@/shared/workspace-authority";
 import { PageHeader } from "@/ui/page-header";
 import { RouteTabPanel } from "@/ui/route-tabs";
 import { BudgetDialog } from "./budget-dialog";
@@ -383,7 +384,12 @@ async function body({
             <GatewayPolicySection
               at={at}
               policy={gateway.value}
-              canEdit={ctx.wsRole === "owner" || ctx.wsRole === "admin"}
+              // update_tacho_session_policy admits an org Owner or Admin, or
+              // the workspace's Owner or Admin.
+              canEdit={mayActInWorkspace(ctx.orgRole, ctx.wsRole, [
+                "owner",
+                "admin",
+              ])}
             />
           ) : (
             <SpendSectionFailure read={gateway} />

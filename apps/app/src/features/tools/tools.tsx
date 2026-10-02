@@ -19,6 +19,7 @@ import type { DataSource } from "@/data/ports";
 import type { Read } from "@/data/read";
 import { EMPTY_HARNESS_INDEX, readAgentHarnessIndex } from "@/features/agent-harness";
 import type { WsCtx } from "@/server/viewer";
+import { mayActInWorkspace } from "@/shared/workspace-authority";
 import { panel, statStrip, statTile } from "@/ui/control-styles";
 import { RouteTabPanel } from "@/ui/route-tabs";
 import { ImportProvider } from "./import-provider";
@@ -49,23 +50,30 @@ function limitOf(rows: number): { limit?: number } {
   return rows === TOOLS_PAGE ? {} : { limit: rows };
 }
 
+/** The org roles the Tools writes name. */
+const ORG_MANAGERS: readonly WsCtx["orgRole"][] = ["owner", "admin"];
+
 /**
- * An org Owner or Admin: exactly what `set_tool_classification`,
- * `set_kill_switch`, `register_mcp_server`, `delete_mcp_server`,
- * `set_approval_rules`, `set_approval_rule_enabled` and `delete_approval_rule`
- * declare at org scope. Each of those handlers asserts the same pair itself,
- * on every org tier (INV-29), so hiding their controls from anyone else hides
- * nothing the kernel would have allowed.
- *
- * `import_tools`, `register_mcp_server` and `delete_mcp_server` also declare a
- * workspace Owner. A workspace's creator holds that role in IAM
- * (`workspace-bootstrap.ts`, #5182), so the handlers admit them. This page
- * still reads only the org role, so it hides these controls from a creator
- * who holds no org manager role. Reading `ctx.wsRole` here belongs to #3198,
- * which keeps the rest of the workspace role model.
+ * An org Owner or Admin, or the workspace's Owner or Admin: who may use the
+ * Tools writes. `import_tools`, `set_tool_classification`, `set_kill_switch`
+ * on a workspace target, `register_mcp_server`, `delete_mcp_server`, the
+ * toolbelt writes and the three approval-rule writes each name the org pair,
+ * and every one of them acts inside the workspace, so its Owner and Admin
+ * pass too (#5228). Each handler asserts this itself, on every org tier
+ * (INV-29), so hiding the controls from anyone else hides nothing the kernel
+ * would have allowed.
+ */
+function canAdministerWorkspace(ctx: WsCtx): boolean {
+  return mayActInWorkspace(ctx.orgRole, ctx.wsRole, ORG_MANAGERS);
+}
+
+/**
+ * An org Owner or Admin. A kill switch on an operator, a workspace, the
+ * organization or a class stops calls outside this workspace, so
+ * `set_kill_switch` admits only the org pair for those targets.
  */
 function canAdministerOrg(ctx: WsCtx): boolean {
-  return ctx.orgRole === "owner" || ctx.orgRole === "admin";
+  return ORG_MANAGERS.includes(ctx.orgRole);
 }
 
 /**
@@ -73,16 +81,17 @@ function canAdministerOrg(ctx: WsCtx): boolean {
  * can name. `grant_mandate` asserts, in its handler and on every org tier, an
  * org role the workspace names for every tag on the mandate
  * (`assertConsequenceRole`, INV-29), and both the defaults and the workspace's
- * `consequence_roles` overrides draw only from those four. The handler makes
- * the per-tag call and the dialog names its refusal.
+ * `consequence_roles` overrides draw only from those four. The workspace's
+ * Owner and Admin pass that gate too (#5228). The handler makes the per-tag
+ * call and the dialog names its refusal.
  */
 function canGrantMandates(ctx: WsCtx): boolean {
-  return (
-    ctx.orgRole === "owner" ||
-    ctx.orgRole === "admin" ||
-    ctx.orgRole === "billing" ||
-    ctx.orgRole === "compliance"
-  );
+  return mayActInWorkspace(ctx.orgRole, ctx.wsRole, [
+    "owner",
+    "admin",
+    "billing",
+    "compliance",
+  ]);
 }
 
 /**
@@ -121,7 +130,8 @@ function grantableAgents(read: Read<AgentPage>): LedgerGrant {
  * Connect an agent is the page's one gold action. Import reads the MCP servers
  * the harness configs on enrolled runtimes name, which nothing records yet,
  * so it says so (#4810). Add server opens the import dialog. An org Owner or
- * Admin only; nobody else may write what they open.
+ * Admin, or the workspace's Owner or Admin, only; nobody else may write what
+ * they open.
  */
 export async function ToolsHeaderActions({
   ctx,
@@ -130,7 +140,7 @@ export async function ToolsHeaderActions({
   ctx: WsCtx;
   source: DataSource;
 }) {
-  if (!canAdministerOrg(ctx)) return null;
+  if (!canAdministerWorkspace(ctx)) return null;
   const at: ToolsAt = { org: ctx.orgSlug, ws: ctx.wsSlug };
   const servers = await source.tools.mcpServers(ctx);
   return (
@@ -201,7 +211,7 @@ async function TabBody({
   view: ToolsView;
   at: ToolsAt;
 }) {
-  const admin = canAdministerOrg(ctx);
+  const admin = canAdministerWorkspace(ctx);
   switch (view.tab) {
     case "tools": {
       const [read, servers] = await Promise.all([
@@ -290,7 +300,8 @@ async function TabBody({
     }
     case "policy": {
       // `list_approval_rules` admits an org Owner, Admin or Compliance; its
-      // three writes an org Owner or Admin. The mandates ledger reads every
+      // three writes an org Owner or Admin. The workspace's Owner and Admin
+      // pass both (#5228). The mandates ledger reads every
       // mandate in the workspace, and a reader who may grant also gets the
       // agents read the picker needs. A mandate names its agent by slug, so
       // the harness index badges the ledger's Agent column (#4871).
@@ -330,6 +341,7 @@ async function TabBody({
           at={at}
           orgRole={ctx.orgRole}
           canFlip={admin}
+          canFlipOrgWide={canAdministerOrg(ctx)}
           selfWorkspaceId={ctx.workspaceId}
           orgName={ctx.orgName}
           wsName={ctx.wsName}
@@ -388,7 +400,7 @@ export async function ToolsBody({
     roster !== null &&
     roster.length === 0
   ) {
-    return <ToolsEmpty at={at} canImport={canAdministerOrg(ctx)} />;
+    return <ToolsEmpty at={at} canImport={canAdministerWorkspace(ctx)} />;
   }
   return (
     <div className="flex flex-col gap-4">

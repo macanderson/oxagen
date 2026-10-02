@@ -947,6 +947,7 @@ describe("record writes", () => {
           hasSummary={hasSummary}
           summarizable={summarizable}
           orgRole={orgRole}
+          wsRole="member"
         />
         <ExportAction
           org="acme"
@@ -954,6 +955,7 @@ describe("record writes", () => {
           runId={RUN}
           sealed
           orgRole={orgRole}
+          wsRole="member"
         />
       </IntlProvider>,
     );
@@ -1049,6 +1051,7 @@ describe("record writes", () => {
           hasSummary={false}
           summarizable={false}
           orgRole="owner"
+          wsRole="member"
         />
         <ExportAction
           org="acme"
@@ -1056,6 +1059,7 @@ describe("record writes", () => {
           runId={RUN}
           sealed={false}
           orgRole="owner"
+          wsRole="member"
         />
       </IntlProvider>,
     );

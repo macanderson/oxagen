@@ -945,7 +945,7 @@
         }
       },
       "failure": {
-        "denied": "Your roles in this workspace do not allow an import. A workspace Owner or Member, or an organization Owner or Admin, can import.",
+        "denied": "Your roles in this workspace do not allow an import. A workspace Owner, Admin or Member, or an organization Owner or Admin, can import.",
         "conflictUnresolved": "A conflict still needs a choice. Choose for every conflict, then open the steering PR.",
         "policyInvalid": "A policy file failed its checks. Set its target to Skip, or fix the file and review it again.",
         "nothingToImport": "Every row is marked skip. Tick at least one statement, then import again.",

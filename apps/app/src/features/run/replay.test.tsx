@@ -26,7 +26,11 @@ vi.mock("@/features/shell/client", () => choices);
 
 const { ReplayActions } = await import("./replay-actions");
 
-function renderReplay(run: RunRow, orgRole: OrgRole = "owner") {
+function renderReplay(
+  run: RunRow,
+  orgRole: OrgRole = "owner",
+  wsRole: OrgRole = "member",
+) {
   return render(
     <IntlProvider>
       <ReplayActions
@@ -34,6 +38,7 @@ function renderReplay(run: RunRow, orgRole: OrgRole = "owner") {
         ws="core-platform"
         run={run}
         orgRole={orgRole}
+        wsRole={wsRole}
       />
     </IntlProvider>,
   );
@@ -109,16 +114,26 @@ describe("Fork", () => {
     expect(screen.queryByTestId("fork-refused")).toBeNull();
   });
 
+  it.each(["owner", "admin"] as const)(
+    "offers Fork to the workspace's %s whose organization role is only Viewer (#5228)",
+    (wsRole) => {
+      const run = runRow({ source: "ledger", replayGrade: "fork" });
+      renderReplay(run, "viewer", wsRole);
+      expect(screen.getByTestId("run-fork")).not.toBeDisabled();
+      expect(screen.queryByTestId("fork-refused")).toBeNull();
+    },
+  );
+
   it("draws Fork disabled for an organization Viewer on a run it could fork, and opens no dialog and calls nothing (negative)", async () => {
-    // A Viewer who owns the workspace can read the run, and fork_run still
-    // refuses them: it checks the organization role alone.
+    // A Viewer who is only a workspace Member can read the run, and fork_run
+    // still refuses them.
     const user = userEvent.setup();
     const run = runRow({ source: "ledger", replayGrade: "fork" });
     const { container } = renderReplay(run, "viewer");
     const button = screen.getByTestId("run-fork");
     expect(button).toBeDisabled();
     const reason =
-      "Forking needs an organization Owner, Admin or Member role. A workspace role does not grant it.";
+      "Forking needs an organization Owner, Admin or Member role, or the workspace Owner or Admin role.";
     expect(button).toHaveAttribute("title", reason);
     expect(screen.getByTestId("fork-refused")).toHaveTextContent(reason);
     await user.click(button);

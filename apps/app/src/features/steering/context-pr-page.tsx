@@ -28,6 +28,7 @@ import { getAuthUser } from "@/server/session";
 import type { WsCtx } from "@/server/viewer";
 import { parsePullRequestUrl } from "@/shared/pull-request-url";
 import { routes, type SafePath } from "@/shared/safe-path";
+import { mayActInWorkspace } from "@/shared/workspace-authority";
 import { linkText, mono } from "@/ui/control-styles";
 import { LiveRefresh } from "@/ui/live-refresh";
 import { PullRequestLink, SafeLink } from "@/ui/navigation";
@@ -237,9 +238,12 @@ function repositoryUrlOf(prUrl: string, repository: string): string | null {
   }
 }
 
-/** Whether the viewer may merge a Context PR no one approved: an org or workspace owner (#4518). */
+/**
+ * Whether the viewer may merge a Context PR no one approved: an org Owner
+ * (#4518), or the workspace's Owner or Admin (#5228).
+ */
 function canMergeWithoutReview(ctx: WsCtx): boolean {
-  return ctx.orgRole === "owner" || ctx.wsRole === "owner";
+  return mayActInWorkspace(ctx.orgRole, ctx.wsRole, ["owner"]);
 }
 
 export async function ContextPrPage({

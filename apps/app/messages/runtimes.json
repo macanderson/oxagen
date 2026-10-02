@@ -47,7 +47,7 @@
         "slugTaken": "Another runtime in this workspace has this slug. Choose another."
       },
       "failure": {
-        "denied": "Your roles do not let you add a runtime. An organization Owner or Admin can. Nothing was changed.",
+        "denied": "Your roles do not let you add a runtime. An organization or workspace Owner or Admin can. Nothing was changed.",
         "invalid": "This name or slug is not one the write accepts. Nothing was changed.",
         "refused": "This write was refused: {code}. Nothing was changed.",
         "pendingApproval": "This write is waiting for approval. Access request {accessRequestId}.",
@@ -72,11 +72,11 @@
       "term": "Contained launcher",
       "required": "Required",
       "notRequired": "Not required",
-      "readOnly": "An organization Owner or Admin can change it.",
+      "readOnly": "An organization or workspace Owner or Admin can change it.",
       "saving": "Saving",
       "note": "A change reaches each host on its next bundle fetch.",
       "failure": {
-        "denied": "Your roles do not let you change containment. An organization Owner or Admin can. Nothing was changed.",
+        "denied": "Your roles do not let you change containment. An organization or workspace Owner or Admin can. Nothing was changed.",
         "notFound": "This runtime no longer exists. Nothing was changed.",
         "refused": "This write was refused: {code}. Nothing was changed.",
         "invalid": "This change is not one the write accepts. Nothing was changed.",
@@ -217,7 +217,7 @@
       "confirm": "Unenroll runtime",
       "pending": "Unenrolling",
       "failure": {
-        "denied": "Your roles do not let you unenroll a host. An organization Owner or Admin can. Nothing was changed.",
+        "denied": "Your roles do not let you unenroll a host. An organization or workspace Owner or Admin can. Nothing was changed.",
         "notFound": "This enrollment no longer exists. Nothing was changed.",
         "refused": "This write was refused: {code}. Nothing was changed.",
         "invalid": "This enrollment id is not one the write accepts. Nothing was changed.",

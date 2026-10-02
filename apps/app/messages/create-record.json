@@ -170,7 +170,7 @@
       "repo": {
         "loading": "Reading the workspace’s main repository.",
         "unbound": "This workspace has no steering repository yet, so there is nowhere to open the pull request. Oxagen creates one when it provisions the workspace.",
-        "denied": "Opening a Context PR needs Owner or Admin on the organization, or Owner or Member on the workspace.",
+        "denied": "Opening a Context PR needs Owner or Admin on the organization, or Owner, Admin or Member on the workspace.",
         "unavailable": "The main repository could not be read ({code}). Nothing was written. Close the wizard and open it again to retry."
       }
     },
@@ -201,7 +201,7 @@
       "onContextPrs": "Open the pull request on Context PRs"
     },
     "failure": {
-      "orgRoleRequired": "Opening a Context PR needs Owner or Admin on the organization, or Owner or Member on the workspace. Nothing was written.",
+      "orgRoleRequired": "Opening a Context PR needs Owner or Admin on the organization, or Owner, Admin or Member on the workspace. Nothing was written.",
       "noPrincipal": "Oxagen could not tell who is signed in. Sign in again and retry. Nothing was written.",
       "lineagePrOpen": "A Context PR for this lineage is already open. One concern, one pull request. Change the description to name a different concern, or finish the open one first.",
       "governanceUnreadable": "The main repository’s governance file could not be read, so Oxagen cannot tell who may merge. Fix it on the production branch, then try again.",

@@ -23,7 +23,7 @@ import { readError, readOk } from "@/data/read";
 import type { WsCtx as WsCtxType, WsRole } from "@/server/viewer";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
-import type { GrantEffect } from "@oxagen/oxagen";
+import type { CapabilityDeclaration, GrantEffect } from "@oxagen/oxagen";
 import { killSwitchSet } from "@oxagen/oxagen/contracts/kill_switch.set";
 import { toolClassificationSet } from "@oxagen/oxagen/contracts/tool.classification.set";
 import { toolImport } from "@oxagen/oxagen/contracts/tool.import";
@@ -1311,19 +1311,27 @@ type ToolsWriteContract = (typeof TOOLS_WRITES)[number][1];
 
 /**
  * Whether the page offers this capability's control to this viewer, read off
- * its own `defaultRoles.org`, the object each handler asserts. The page does
- * not read the workspace clause yet, though a workspace's creator holds the
- * workspace Owner role in IAM (#3143, #5182). Reading it is #3198.
+ * the contract itself: an org role its `defaultRoles.org` allows, or the
+ * workspace's Owner or Admin when the capability acts inside the workspace
+ * (its contract does not carry `orgLevel: true`, #5228). Each handler asserts
+ * the same. The Flip the gate reads is the header's, which offers the
+ * levels inside the workspace to a workspace Owner or Admin; the org-wide
+ * levels are switches.test.tsx's.
  */
 function enforceablyGrants(
   contract: ToolsWriteContract,
   ctx: WsCtxType,
 ): boolean {
   const org: Partial<Record<string, GrantEffect>> = contract.defaultRoles.org;
-  return Object.entries(org)
+  const byOrgRole = Object.entries(org)
     .filter(([, effect]) => effect === "allow")
     .map(([role]) => role.toLowerCase())
     .includes(ctx.orgRole);
+  // `name` keeps the type from being all-optional, which TypeScript would
+  // refuse to assign a contract that declares no `orgLevel`.
+  const declared: Pick<CapabilityDeclaration, "name" | "orgLevel"> = contract;
+  const workspaceAuthority = ctx.wsRole === "owner" || ctx.wsRole === "admin";
+  return byOrgRole || (declared.orgLevel !== true && workspaceAuthority);
 }
 
 /**
@@ -1351,7 +1359,7 @@ async function offered(ctx: WsCtxType): Promise<Record<ToolsWrite, boolean>> {
     dialog.queryByRole("button", { name: "Reclassify this version" }) !== null;
   expect(
     dialog.queryByText(
-      "Reclassifying a tool version needs an organization Owner or Admin.",
+      "Reclassifying a tool version needs an organization Owner or Admin, or the workspace Owner or Admin.",
     ) === null,
   ).toBe(classifyOffered);
   cleanup();
@@ -1370,8 +1378,9 @@ describe("Tools › write gates", () => {
     ["admin", "owner"],
     ["billing", "viewer"],
     ["compliance", "member"],
+    ["viewer", "admin"],
   ] as const)(
-    "gates each write on exactly the org roles its contract grants, for an org %s holding %s in the workspace",
+    "gates each write on its contract, for an org %s holding %s in the workspace",
     async (orgRole, wsRole) => {
       const ctx = viewer(orgRole, wsRole);
       expect(await offered(ctx)).toEqual(
@@ -1384,4 +1393,82 @@ describe("Tools › write gates", () => {
       );
     },
   );
+
+  // The oracle above reads the contracts, so this pins what it must answer:
+  // none of the three is org-level, so a workspace Owner or Admin gets all
+  // three, and a workspace Member with no org manager role gets none.
+  it.each([
+    ["owner", true],
+    ["admin", true],
+    ["member", false],
+  ] as const)(
+    "offers the workspace's %s whose org role is Member every write: %s (#5228)",
+    async (wsRole, all) => {
+      expect(await offered(viewer("member", wsRole))).toEqual({
+        import_tools: all,
+        set_tool_classification: all,
+        set_kill_switch: all,
+      });
+    },
+  );
+});
+
+// The Definition of done of #5228: the Tools page shows every workspace
+// action to the workspace's Owner and Admin, whatever their org role. Beside
+// the three writes above, those are Add server in the header, New toolbelt
+// and Clone on Toolbelts, removing a provider on MCP servers, and the policy
+// draft and Create rule on Policies. A workspace Member whose org role is
+// Member is offered none of them.
+describe("Tools › workspace Owner or Admin (#5228)", () => {
+  /** Which of those controls each tab offers this viewer. */
+  async function workspaceActions(ctx: WsCtxType) {
+    await renderActions({}, ctx);
+    const header = screen.queryAllByTestId("tools-import-open").length > 0;
+    cleanup();
+    await renderTools({}, "toolbelts", {}, ctx);
+    const toolbelts =
+      screen.queryByTestId("tools-belt-new") !== null &&
+      screen.queryByTestId("toolbelt-clone-tbt_alltools") !== null;
+    cleanup();
+    await renderTools({}, "providers", {}, ctx);
+    const providers =
+      screen.queryByTestId("provider-remove-open-mcs_01k5s1") !== null;
+    cleanup();
+    await renderTools({}, "policy", {}, ctx);
+    const policy =
+      screen.queryByTestId("tools-policy-draft-open") !== null &&
+      screen.queryByTestId("rule-create-open") !== null;
+    cleanup();
+    return { header, toolbelts, providers, policy };
+  }
+
+  it.each(["owner", "admin"] as const)(
+    "offers every workspace action to the workspace's %s whose org role is Member",
+    async (wsRole) => {
+      expect(await workspaceActions(viewer("member", wsRole))).toEqual({
+        header: true,
+        toolbelts: true,
+        providers: true,
+        policy: true,
+      });
+    },
+  );
+
+  it("offers none of them to a workspace Member whose org role is Member (negative)", async () => {
+    expect(await workspaceActions(member)).toEqual({
+      header: false,
+      toolbelts: false,
+      providers: false,
+      policy: false,
+    });
+  });
+
+  it("offers an org Owner the same controls, so the fixtures draw each one (control)", async () => {
+    expect(await workspaceActions(owner)).toEqual({
+      header: true,
+      toolbelts: true,
+      providers: true,
+      policy: true,
+    });
+  });
 });

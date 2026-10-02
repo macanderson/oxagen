@@ -60,7 +60,7 @@
       "submit": "Open the pull request",
       "pending": "Opening",
       "pendingOpen": "Branch <code>{branch}</code> is waiting on its checks. Land or close it before you propose another change to this file.",
-      "readOnly": "Your role can read this record and not change it. An org Owner or Admin, or a workspace Owner or Member, can propose a change.",
+      "readOnly": "Your role can read this record and not change it. An org Owner or Admin, or a workspace Owner, Admin or Member, can propose a change.",
       "statLabel": "{added} lines added and {removed} lines removed",
       "nothingChanged": "Nothing changed yet.",
       "checksLabel": "Checks",
@@ -248,7 +248,7 @@
       }
     },
     "failure": {
-      "orgRoleRequired": "Your role cannot propose a change to this record. An org Owner or Admin, or a workspace Owner or Member, can.",
+      "orgRoleRequired": "Your role cannot propose a change to this record. An org Owner or Admin, or a workspace Owner, Admin or Member, can.",
       "noPrincipal": "Oxagen could not tell who is signed in. Sign in again and retry.",
       "recordNotFound": "This workspace holds no record on that lineage.",
       "recordUnclassified": "This record states no kind, force or scope, so Oxagen cannot write a valid file for it. Republish it through a pull request that states all three.",
