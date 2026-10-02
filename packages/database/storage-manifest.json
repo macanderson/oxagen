@@ -3280,6 +3280,15 @@
     },
     {
       "domain": "context",
+      "name": "propose_steering",
+      "reads": [],
+      "surfaces": [
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "context",
       "name": "publish_context_record",
       "reads": [],
       "surfaces": [
