@@ -502,6 +502,9 @@ describe("memory drop", () => {
     await expect(handleMemoryDrop("0", PATH, {}, captured.writer)).rejects.toThrow(
       'Invalid memory PR number "0".',
     );
+    await expect(handleMemoryDrop("12abc", PATH, {}, captured.writer)).rejects.toThrow(
+      'Invalid memory PR number "12abc".',
+    );
     expect(apiPostOrThrow).not.toHaveBeenCalled();
   });
 

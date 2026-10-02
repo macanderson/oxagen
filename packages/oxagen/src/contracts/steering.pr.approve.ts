@@ -11,7 +11,8 @@
 // The approver is a signed-in person. An API key resolves to the person who
 // made it, so a key held by an agent could approve a change it proposed. The
 // contract is on the api surface only, which the web app reaches with the
-// person's session, and the handler refuses a call that carries no user.
+// person's session, and the handler refuses every API-key call and every call
+// that carries no user.
 // It is off the agent surface for the same reason resolve_approval is
 // (ADR-175): a review is a person's decision.
 import { z } from "zod";

@@ -12,16 +12,19 @@
 // approvals, under the same rule.
 //
 // Flow:
-//   1. Refuse a call with no signed-in person (`no_principal`): an API key
-//      acts as the person who made it, so a key an agent holds could approve
-//      a change it proposed. Then check the contract's roles.
+//   1. Refuse an agent run (`agent_run`), and any call that is not a person's
+//      session (`no_principal`). API-key auth sets the call's user to the
+//      person who made the key, so the gate refuses `apiKeyId` itself, as
+//      lib/work-records/actor.ts does: a key an agent holds, an `oxagen login`
+//      key included, could otherwise approve a change it proposed. Then check
+//      the contract's roles.
 //   2. Refuse what has nothing to approve: no such proposal, a merged or
 //      dismissed one, and one whose steering PR is not open yet.
 //   3. Refuse the proposal's author (`author_cannot_approve`), as the merge
 //      would not count the approval.
-//   4. Read the PR on the host once. Refuse a PR the host merged or closed,
-//      and one whose head moved off the head the checks ran on: the person
-//      would approve a head nobody checked.
+//   4. Read the PR on the host once. Refuse a PR the host merged or closed
+//      (`pr_closed`), and one whose head moved off the head the checks ran on:
+//      the person would approve a head nobody checked.
 //   5. Record the approval at that head. Approving the same head again
 //      records nothing new.
 //
@@ -54,7 +57,17 @@ export function createApproveSteeringPrHandler(
   deps: ApproveSteeringPrDeps,
 ): CapabilityHandler<typeof steeringPrApprove> {
   return async (input, ctx): Promise<SteeringPrApproveOutput> => {
-    const userId = ctx.userId ?? null;
+    if (ctx.agentRun) {
+      throw new HandlerError({
+        code: "forbidden",
+        reason: "agent_run",
+        message:
+          "An agent run cannot approve a steering PR. A person approves it in Oxagen.",
+      });
+    }
+    // API-key auth sets userId to the key's creator, so a missing user is not
+    // the only call to refuse.
+    const userId = ctx.apiKeyId ? null : (ctx.userId ?? null);
     if (!userId) {
       throw new HandlerError({
         code: "forbidden",
@@ -96,7 +109,7 @@ export function createApproveSteeringPrHandler(
     const pr = await deps.github.getPullRequest(repo, row.prNumber);
     if (pr.merged || !pr.open) {
       throw refuse(
-        "pr_not_open",
+        "pr_closed",
         `${row.prUrl ?? row.publicId} is ${pr.merged ? "merged" : "closed"} on ${repo.provider === "gitlab" ? "GitLab" : "GitHub"}, so there is nothing to approve.`,
       );
     }

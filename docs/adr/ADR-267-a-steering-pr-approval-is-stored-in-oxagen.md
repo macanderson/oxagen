@@ -53,9 +53,10 @@ approval it records:
 
 3. **Only a person signed in to Oxagen approves.** `approve_steering_pr` is on
    the `api` surface only, which the web app reaches with the person's
-   session. The handler refuses a call with no user (`no_principal`). An API
-   key acts as the person who made it, so a key an agent holds could approve
-   a change that agent proposed. The capability is off the agent surface for
+   session. The handler refuses every API-key call and every call with no user
+   (`no_principal`), and an agent run (`agent_run`). API-key auth sets the
+   call's user to the person who made the key, so a key an agent holds could
+   otherwise approve a change that agent proposed. The capability is off the agent surface for
    the reason ADR-175 gives for `resolve_approval`: a review is a person's
    decision. The author is refused (`author_cannot_approve`), and so is a head
    that moved after the checks ran (`head_moved`), so nobody approves a head

@@ -83,6 +83,8 @@ export function useActionFailure(): (failure: ActionFailure) => string {
           // approve_steering_pr and drop_memory_record (#4518).
           case "author_cannot_approve":
             return t("authorCannotApprove");
+          case "pr_closed":
+            return t("prClosed");
           case "memory_pr_not_found":
             return t("memoryPrNotFound");
           case "memory_pr_settled":

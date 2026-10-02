@@ -4,7 +4,7 @@
  * open, and no approval on the host. The IAM reads are replaced, and the
  * contract's role check is a spy.
  */
-import { HandlerError } from "@oxagen/oxagen";
+import { HandlerError, type CapabilityContext } from "@oxagen/oxagen";
 import { steeringPrApprove } from "@oxagen/oxagen/contracts/steering.pr.approve";
 import { steeringProposalCreate } from "@oxagen/oxagen/contracts/steering.proposal.create";
 import { describe, expect, it, vi } from "vitest";
@@ -168,6 +168,33 @@ describe("approve_steering_pr", () => {
     expect(h.store.approvals).toHaveLength(0);
   });
 
+  it("refuses an API key, though API-key auth names the key's creator as the user (negative)", async () => {
+    const h = teamRepo();
+    const proposalId = await opened(h);
+    const { handler, assertRole } = approve(h);
+    const err = await refusal(
+      handler({ proposalId }, ctx({ userId: MEMBER, apiKeyId: "aky_cli" })),
+    );
+    expect(err).toMatchObject({ code: "forbidden", reason: "no_principal" });
+    expect(assertRole).not.toHaveBeenCalled();
+    expect(h.store.approvals).toHaveLength(0);
+  });
+
+  it("refuses an agent run (negative)", async () => {
+    const h = teamRepo();
+    const proposalId = await opened(h);
+    const { handler, assertRole } = approve(h);
+    const err = await refusal(
+      handler({ proposalId }, {
+        ...ctx({ userId: MEMBER }),
+        agentRun: { principalKind: "agent" },
+      } as unknown as CapabilityContext),
+    );
+    expect(err).toMatchObject({ code: "forbidden", reason: "agent_run" });
+    expect(assertRole).not.toHaveBeenCalled();
+    expect(h.store.approvals).toHaveLength(0);
+  });
+
   it("refuses the proposal's author, and records nothing (negative)", async () => {
     const h = teamRepo();
     const proposalId = await opened(h);
@@ -225,7 +252,7 @@ describe("approve_steering_pr", () => {
     h.github.closeOnHost(h.store.proposals[0]!.prNumber!);
     await expect(
       refusal(approve(h).handler({ proposalId }, ctx({ userId: MEMBER }))),
-    ).resolves.toMatchObject({ code: "conflict", reason: "pr_not_open" });
+    ).resolves.toMatchObject({ code: "conflict", reason: "pr_closed" });
     expect(h.store.approvals).toHaveLength(0);
   });
 

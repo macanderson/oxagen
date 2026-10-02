@@ -10682,6 +10682,7 @@ type Messages = {
         repositoryChanged: string;
         mergeCommitUnknown: string;
         authorCannotApprove: string;
+        prClosed: string;
         memoryPrNotFound: string;
         memoryPrSettled: string;
         recordNotInPr: string;

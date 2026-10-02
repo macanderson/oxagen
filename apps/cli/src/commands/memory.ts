@@ -281,9 +281,10 @@ export async function handleMemoryDrop(
   opts: MemoryDropCliOptions,
   writer: CommandWriter = stdoutWriter,
 ): Promise<void> {
-  const pr = parseIntOpt(number, "memory PR number", writer);
-  if (pr === undefined || pr < 1)
+  // parseInt reads "12abc" as 12, so the whole argument must be digits.
+  if (!/^\d+$/.test(number.trim()) || Number(number) < 1)
     fail(`Invalid memory PR number "${number}". Use the PR's number, such as 12.`, writer);
+  const pr = Number(number.trim());
   if (path.trim() === "")
     fail("Name the record file to drop, such as steering/memory/workspace/general/use-pnpm.md.", writer);
   try {

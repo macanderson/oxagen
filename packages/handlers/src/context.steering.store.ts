@@ -537,7 +537,7 @@ function toProposal(
  * entry that does not read is dropped, so a row written by an older build
  * never fails the read.
  */
-function asFindings(value: unknown): CheckFinding[] {
+export function asFindings(value: unknown): CheckFinding[] {
   if (!Array.isArray(value)) return [];
   return value.flatMap((entry) => {
     const read = checkFindingSchema.safeParse(entry);

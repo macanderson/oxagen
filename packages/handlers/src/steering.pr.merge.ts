@@ -760,7 +760,13 @@ async function mergeGovernanceProposal(
         const from = row.headSha ?? recorded.headSha;
         row = await deps.store.updateProposal(
           row.id,
-          { status: "checks_running", headSha: head, updatedById: userId },
+          // A new run resets the findings, as every record run does.
+          {
+            status: "checks_running",
+            headSha: head,
+            checkFindings: [],
+            updatedById: userId,
+          },
           ["checks_passed"],
           { headSha: from },
         );

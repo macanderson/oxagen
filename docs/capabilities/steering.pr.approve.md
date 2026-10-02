@@ -5,7 +5,7 @@
 **Mode:** sync
 **Scope:** tenant + workspace
 **Surfaces:** api
-**Why no MCP, CLI, or agent:** The approver is a person signed in to Oxagen. An API key, which the MCP server and the CLI send, acts as the person who made it, so a key an agent holds could approve a change the agent proposed. The handler refuses a call with no signed-in user (`no_principal`). The in-app assistant does not get it either, for the reason in [ADR-175](../adr/ADR-175-approvals-and-consent-are-off-the-agent-surface.md): a review is a person's decision.
+**Why no MCP, CLI, or agent:** The approver is a person signed in to Oxagen. An API key, which the MCP server and the CLI send, acts as the person who made it, so a key an agent holds could approve a change the agent proposed. The handler refuses every API-key call and every call with no signed-in user (`no_principal`), and an agent run (`agent_run`). The in-app assistant does not get it either, for the reason in [ADR-175](../adr/ADR-175-approvals-and-consent-are-off-the-agent-surface.md): a review is a person's decision.
 **Billing:** `noBillingGate: true`
 **Mutates:** yes
 **Roles:** org Owner or Admin, or workspace Owner or Member (`defaultEffect: deny`), checked by the handler.
@@ -43,10 +43,10 @@ A person who approved on the host and in Oxagen counts once. The `Oxagen-Approve
 
 ## Semantics
 
-1. The handler refuses a call with no signed-in user, then checks the contract's roles.
+1. The handler refuses an agent run and any call that is not a person's session, an API-key call included, then checks the contract's roles.
 2. It refuses a proposal the workspace does not hold, a merged or dismissed proposal, and one whose steering PR is not open yet.
 3. It refuses the proposal's author. The merge would not count the author's approval.
-4. It reads the PR on the host once. A PR the host merged or closed is refused, and so is a head that moved after the checks ran. Run the checks again with [`open_steering_pr`](steering.pr.open.md), then approve the new head.
+4. It reads the PR on the host once. A PR the host merged or closed is refused (`pr_closed`), and so is a head that moved after the checks ran. Run the checks again with [`open_steering_pr`](steering.pr.open.md), then approve the new head.
 5. It records the approval at the head. Approving the same head again records nothing new.
 
 No governance mode is refused. The mode on the proposal is the one read when the PR opened, and the merge reads the mode again. An approval given under `solo` still counts if the mode is `team` when the merge runs.
@@ -57,11 +57,13 @@ No governance mode is refused. The mode on the proposal is the one read when the
 
 | code | reason | meaning |
 | --- | --- | --- |
-| `forbidden` | `no_principal` | The call carries no signed-in user. Nothing is read. |
+| `forbidden` | `no_principal` | The call is an API-key call or carries no signed-in user. Nothing is read. |
+| `forbidden` | `agent_run` | An agent run made the call. Nothing is read. |
 | `forbidden` | `author_cannot_approve` | The caller raised the proposal. |
 | `not_found` | `proposal_not_found` | The workspace holds no such proposal. |
 | `conflict` | `proposal_merged`, `proposal_rejected` | The proposal is merged or dismissed. |
-| `conflict` | `pr_not_open` | The proposal has no open steering PR, or the host merged or closed it. |
+| `conflict` | `pr_not_open` | The proposal has no open steering PR yet. |
+| `conflict` | `pr_closed` | The host merged or closed the pull request. |
 | `conflict` | `head_moved` | The PR's head is not the commit the checks ran on. |
 | `conflict` | `repository_host_changed` | The PR is on another host than the workspace's repository. |
 

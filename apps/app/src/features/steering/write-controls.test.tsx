@@ -684,6 +684,10 @@ describe("the sentence for each refusal", () => {
       "Ask another workspace member to approve it.",
     ],
     [
+      { reason: "conflict", code: "pr_closed" },
+      "This pull request is merged or closed on the repository host",
+    ],
+    [
       { reason: "not_found", code: "memory_pr_not_found" },
       "This workspace has no such memory PR.",
     ],

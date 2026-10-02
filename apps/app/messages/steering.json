@@ -732,6 +732,7 @@
         "repositoryChanged": "This pull request merged in another repository than the one this workspace steers through now. Revert it there by hand.",
         "mergeCommitUnknown": "Oxagen cannot find what the production branch held before this merge, so nothing was opened.",
         "authorCannotApprove": "You raised this proposal, so the merge would not count your approval. Ask another workspace member to approve it. Nothing was recorded.",
+        "prClosed": "This pull request is merged or closed on the repository host, so there is nothing to approve. Reload the page to see where it is.",
         "memoryPrNotFound": "This workspace has no such memory PR.",
         "memoryPrSettled": "This memory PR is merged or closed, so its records can no longer change.",
         "recordNotInPr": "This memory PR holds no such record. Reload the page to see its records.",
