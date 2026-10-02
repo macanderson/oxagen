@@ -37,6 +37,7 @@ import {
   type GithubRig,
   waitForChecks,
   waitForHealth,
+  waitForProvisioned,
   waiting,
 } from "./steering-rig";
 
@@ -88,20 +89,7 @@ test("a new workspace gets a healthy steering repo", async () => {
   const created = await createWorkspace(r.ox, r.settings);
   expect(created.slug).toBe(r.settings.runSlug);
 
-  const ready = await poll(
-    `workspace ${r.settings.runSlug} steering repo provisioned`,
-    { timeoutMs: 5 * MINUTE, intervalMs: 5 * SECOND },
-    async () => {
-      const view = await readSteeringRepo(r.ox, r.settings);
-      if (view.status === "failed" || view.status === "blocked") {
-        const why = view.error === null ? "no error" : `${view.error.code}: ${view.error.message}`;
-        throw new Error(
-          `Provisioning stopped with status ${view.status} at step ${view.failedStep ?? "unknown"} (${why}).`,
-        );
-      }
-      return view.status === "ready" ? reached(view) : waiting(describeRepo(view));
-    },
-  );
+  const ready = await waitForProvisioned(r.ox, r.settings);
   expect(ready.repository?.fullName ?? "").toMatch(runRepoFullName(r.settings));
 
   // Opening the first steering PR sends the pull_request webhook that runs
