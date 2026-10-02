@@ -228,7 +228,7 @@ describe("oxagen work start", () => {
       "This work order was sent to another host.",
     ],
     ["a busy server", 429, "rate_limited", "Too many requests."],
-  ])(
+  ] as const)(
     "prints the server's refusal for %s, starts nothing, claims once, and keeps the order (negative)",
     async (_, status, code, message) => {
       const m = machine();
