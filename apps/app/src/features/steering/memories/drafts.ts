@@ -28,7 +28,7 @@ type PromoteDrafts =
   (typeof steeringMemoriesPromote)["input"]["_input"]["drafts"];
 
 /** A kind a memory can be promoted as. A skill is a folder, so it is not one. */
-export type PromoteKind = Exclude<SteeringRecordKind, "skill">;
+type PromoteKind = Exclude<SteeringRecordKind, "skill">;
 
 /** The seven kinds, in the order the Kind select offers them. */
 export const PROMOTE_KINDS: readonly PromoteKind[] = RECORD_KINDS.filter(

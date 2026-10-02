@@ -74,7 +74,7 @@ export const MEMORY_STATE_FILTERS = [
   ...WORKSPACE_MEMORY_STATES,
   "all",
 ] as const;
-export type MemoryStateFilter = (typeof MEMORY_STATE_FILTERS)[number];
+type MemoryStateFilter = (typeof MEMORY_STATE_FILTERS)[number];
 
 /** The Memories tab's filters, and the memory its drawer opens. */
 export type MemoriesView = {

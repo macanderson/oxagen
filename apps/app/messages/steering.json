@@ -890,6 +890,7 @@
         "import": "Markdown import"
       },
       "columns": {
+        "select": "Select",
         "memory": "Memory",
         "uses": "Uses",
         "lastUsed": "Last used",

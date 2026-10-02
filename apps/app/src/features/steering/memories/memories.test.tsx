@@ -50,7 +50,10 @@ const { router, promoteMemories, dismissMemories, toast } = vi.hoisted(
 );
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
 vi.mock("./actions", () => ({ promoteMemories, dismissMemories }));
-vi.mock("@/ui/toast", () => ({ toast }));
+vi.mock("@/ui/toast", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/ui/toast")>()),
+  toast,
+}));
 vi.mock("../actions", () => ({
   openContextPr: vi.fn(),
   mergeContextPr: vi.fn(),

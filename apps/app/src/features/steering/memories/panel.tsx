@@ -61,7 +61,7 @@ type Dialog = {
 };
 
 /** The view the panel draws: the page size, the offset and the filters. */
-export type MemoriesPanelView = {
+type MemoriesPanelView = {
   rows: number;
   offset: number;
   memories: MemoriesView;
@@ -442,7 +442,11 @@ export function MemoriesPanel({
         >
           <thead>
             <tr className="border-b border-border">
-              <th scope="col" className={`${headCell} w-8 text-left`}>
+              <th
+                scope="col"
+                aria-label={t("columns.select")}
+                className={`${headCell} w-8 text-left`}
+              >
                 <input
                   type="checkbox"
                   data-testid="memory-pick-all"

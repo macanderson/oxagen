@@ -10740,6 +10740,7 @@ type Messages = {
         import: string;
       };
       columns: {
+        select: string;
         memory: string;
         uses: string;
         lastUsed: string;

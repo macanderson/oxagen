@@ -393,7 +393,7 @@ export type SteeringHub = z.infer<typeof SteeringHub>;
  * memory PR's record carry. The registry's six context-record kinds are
  * `RecordKind` above.
  */
-export const STEERING_RECORD_KINDS = [
+const STEERING_RECORD_KINDS = [
   "business-rule",
   "code-rule",
   "constraint",

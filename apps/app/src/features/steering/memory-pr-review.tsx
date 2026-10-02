@@ -13,7 +13,11 @@ import { SafeLink } from "@/ui/navigation";
 import type { SteeringAt } from "./view";
 import { DropMemoryRecord } from "./write-controls";
 
-/** One record a memory PR proposes or archives. */
+/**
+ * One record a memory PR proposes or archives.
+ *
+ * @internal Exported for memory-pr-review.builders.ts.
+ */
 export type MemoryPrRecord = MemoryPrRecords["records"][number];
 
 /** One memory a record cites: what it says, the agent it came from, and where it was seen. */

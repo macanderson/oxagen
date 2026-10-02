@@ -19,7 +19,7 @@ import { requireViewer } from "@/server/viewer";
 type PromoteInput = (typeof steeringMemoriesPromote)["input"]["_input"];
 
 /** What the tab says once promote_memories answered. */
-export type MemoriesPromoted = {
+type MemoriesPromoted = {
   /** The memory PR the drafts are on; null when no draft was left to add. */
   pullRequest: { number: number; url: string; opened: boolean } | null;
   /** Records added to the memory PR. */
@@ -55,7 +55,7 @@ export async function promoteMemories(
 }
 
 /** What the tab says once dismiss_memories answered. */
-export type MemoriesDismissed = { changed: number; skipped: number };
+type MemoriesDismissed = { changed: number; skipped: number };
 
 /** Dismiss the memories, or with `restore` bring dismissed ones back to waiting. */
 export async function dismissMemories(
