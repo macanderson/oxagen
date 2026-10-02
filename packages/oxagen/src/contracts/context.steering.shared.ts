@@ -88,6 +88,39 @@ export const proposalStatusSchema = z.enum([
 export type ProposalStatus = z.infer<typeof proposalStatusSchema>;
 
 /**
+ * The three states a person filters proposals by, as a pull request list
+ * names them. `open` is every proposal a person can still act on: a candidate
+ * with no pull request yet, and a Context PR still open on the host. `closed`
+ * is a dismissal, from Oxagen or from the host closing the pull request.
+ */
+export const proposalStateSchema = z.enum(["open", "merged", "closed"]);
+export type ProposalState = z.infer<typeof proposalStateSchema>;
+
+/** The statuses each state holds. Every status sits in exactly one state. */
+export const PROPOSAL_STATE_STATUSES: Readonly<
+  Record<ProposalState, readonly ProposalStatus[]>
+> = {
+  open: [
+    "proposed",
+    "pr_open",
+    "checks_running",
+    "checks_passed",
+    "checks_failed",
+  ],
+  merged: ["merged"],
+  closed: ["rejected"],
+};
+
+/** The state a status sits in. */
+export function proposalStateOf(status: ProposalStatus): ProposalState {
+  return status === "merged"
+    ? "merged"
+    : status === "rejected"
+      ? "closed"
+      : "open";
+}
+
+/**
  * The repository hosts steering publishes through (#3762). A Context PR on
  * GitLab is a merge request; its number is the merge request's IID.
  */

@@ -279,6 +279,7 @@ function pr(over: Partial<GitHubPullRequest>): GitHubPullRequest {
     commits: 1,
     commentCount: 99,
     reviewCommentCount: 7,
+    labels: [],
     ...over,
   };
 }

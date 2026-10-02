@@ -5,10 +5,10 @@
 // there (./steering.tsx).
 //
 // A view whose body holds its own primary action takes the gold from the
-// header (the design's `tabPrimary`): a selected Context PR whose checks
-// passed, where Merge pull request is the gold, and the Skills shelf's Search
-// and Versions views, whose submit buttons are. There the header button is
-// drawn secondary, so the screen still carries exactly one gold.
+// header (the design's `tabPrimary`): the Skills shelf's Search and Versions
+// views, whose submit buttons are. There the header button is drawn
+// secondary, so the screen still carries exactly one gold. A Context PR's
+// Merge is gold on its own page (#5077), outside this hub.
 import { useTranslations } from "next-intl";
 import { CreateButton } from "@/ui/create-button";
 import type { SteeringView } from "./view";
@@ -19,17 +19,8 @@ const SKILL_VIEWS_WITH_PRIMARY: ReadonlySet<string> = new Set([
   "versions",
 ]);
 
-/**
- * Whether the view's body holds its own primary action. `mergeable` says the
- * selected Context PR's checks passed, which is when its Merge button is gold.
- */
-export function tabHoldsPrimary(
-  view: SteeringView,
-  mergeable: boolean,
-): boolean {
-  if (view.tab === "proposals") {
-    return view.segment === "prs" && view.proposal !== null && mergeable;
-  }
+/** Whether the view's body holds its own primary action. */
+export function tabHoldsPrimary(view: SteeringView): boolean {
   return (
     view.shelf === "skills" &&
     view.skillView !== undefined &&

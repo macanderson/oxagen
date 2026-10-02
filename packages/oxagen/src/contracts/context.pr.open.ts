@@ -73,6 +73,32 @@ export const contextPrSchema = z
       })
       .strict()
       .nullable(),
+    /**
+     * The proposal as raised: what it says, why, who raised it and when, and
+     * the support it cites. The Context PR page shows it beside the PR.
+     */
+    raised: z
+      .object({
+        statement: z.string(),
+        rationale: z.string(),
+        /** Who raised it, as recorded: `user:<uuid>`, `api_key:<uuid>`, or the caller's own attribution. */
+        source: z.string(),
+        /** The display name, when `source` names a user who has one; null otherwise. */
+        sourceName: z.string().nullable(),
+        force: recordForceSchema,
+        constraintEffect: constraintEffectSchema.nullable(),
+        sharingScope: publishedSharingScopeSchema,
+        support: z
+          .object({
+            runs: z.array(z.string()),
+            agents: z.array(z.string()),
+            recordIds: z.array(z.string()),
+            evidenceLinks: z.array(z.string()),
+          })
+          .strict(),
+        at: instant,
+      })
+      .strict(),
     /** The PR body as opened. */
     body: z.string().nullable(),
     checks: z.array(checkResultSchema),
@@ -99,10 +125,30 @@ export const contextPrSchema = z
         commit: z.string(),
         at: instant,
         byUserId: z.string().nullable(),
+        /** The merger's display name; null when unnamed or merged on the host. */
+        byName: z.string().nullable(),
+        /** True when the host merged it and the repository sync recorded the merge (ADR-184). */
+        onHost: z.boolean(),
         /** Null for a governance proposal, which appends no promotion event (#4795). */
         promotionEventId: z.string().nullable(),
         /** Null for a governance proposal, which publishes no record. */
         recordId: z.string().nullable(),
+      })
+      .strict()
+      .nullable(),
+    /**
+     * The close, once the proposal is dismissed in Oxagen or its pull request
+     * closed on the host. Null while it is open or once it merged.
+     */
+    closed: z
+      .object({
+        at: instant,
+        /** The reason given in Oxagen, or the one the repository sync wrote. Null when none was given. */
+        reason: z.string().nullable(),
+        byUserId: z.string().nullable(),
+        byName: z.string().nullable(),
+        /** True when the host closed it and the repository sync recorded the close (ADR-184). */
+        onHost: z.boolean(),
       })
       .strict()
       .nullable(),

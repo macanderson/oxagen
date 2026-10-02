@@ -26,6 +26,17 @@ export const contextPrFixture = {
     sharingScope: "workspace",
     statement: "Do not re-read CHANGELOG.md more than once in a run.",
   },
+  raised: {
+    statement: "Do not re-read CHANGELOG.md more than once in a run.",
+    rationale: "Three runs re-read it.",
+    source: "reflector · run_01K5RH3G8K5PAS7D",
+    sourceName: null,
+    force: "should",
+    constraintEffect: null,
+    sharingScope: "workspace",
+    support: { runs: ["run_1"], agents: [], recordIds: [], evidenceLinks: [] },
+    at: "2026-09-15T00:00:00.000Z",
+  },
   body: "…",
   checks: [],
   onMerge: {
@@ -37,6 +48,7 @@ export const contextPrFixture = {
     review: "team: an Owner or Admin other than the author merges",
   },
   merged: null,
+  closed: null,
 };
 
 describe("open_context_pr contract", () => {
@@ -80,6 +92,24 @@ describe("open_context_pr contract", () => {
     ).toBe(true);
     expect(
       contextPrSchema.safeParse({ ...contextPrFixture, status: "candidate" })
+        .success,
+    ).toBe(false);
+    // A close names whether the host made it (#5077).
+    expect(
+      contextPrSchema.safeParse({
+        ...contextPrFixture,
+        status: "rejected",
+        closed: {
+          at: "2026-09-15T01:00:00.000Z",
+          reason: null,
+          byUserId: null,
+          byName: null,
+          onHost: true,
+        },
+      }).success,
+    ).toBe(true);
+    expect(
+      contextPrSchema.safeParse({ ...contextPrFixture, closed: undefined })
         .success,
     ).toBe(false);
   });

@@ -4,6 +4,7 @@
 import { z } from "zod";
 import { registerCapability } from "../registry";
 import {
+  proposalStateSchema,
   proposalStatusSchema,
   proposalViewSchema,
 } from "./context.steering.shared";
@@ -12,7 +13,7 @@ export const contextProposalList = registerCapability({
   name: "list_proposals",
   domain: "context",
   description:
-    "List the workspace's record proposals with their support and Context PR state, newest first, optionally narrowed to one status or lineage",
+    "List the workspace's record proposals with their support and Context PR state, newest first, optionally narrowed to one status, one state (open, merged or closed) or one lineage",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
@@ -33,6 +34,12 @@ export const contextProposalList = registerCapability({
   input: z
     .object({
       status: proposalStatusSchema.optional(),
+      /**
+       * open, merged or closed, as a pull request list filters. Narrows with
+       * `status` when both are given, so a status outside the state lists
+       * nothing.
+       */
+      state: proposalStateSchema.optional(),
       lineageId: z.string().min(1).max(200).optional(),
       limit: z.number().int().min(1).max(200).default(50),
       offset: z.number().int().nonnegative().default(0),

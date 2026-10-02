@@ -282,11 +282,11 @@ describe("the machine status banner", () => {
     // An action's own error is not the status failure: it stays.
     expect(
       statusBanner(
-        "Reassigning this machine exited 1. See the output below.",
+        "oxagen agent reassign exited 1. See the output below.",
         failure,
         { ok: true },
       ),
-    ).toBe("Reassigning this machine exited 1. See the output below.");
+    ).toBe("oxagen agent reassign exited 1. See the output below.");
     expect(statusBanner("some other error", null, { ok: true })).toBe(
       "some other error",
     );
