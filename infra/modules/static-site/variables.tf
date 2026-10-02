@@ -62,6 +62,18 @@ variable "immutable_path_patterns" {
   default     = []
 }
 
+variable "raw_path_patterns" {
+  description = <<-EOT
+    Path patterns served as the exact object asked for, with no clean-URL
+    rewrite. For files without an extension, such as a bare executable, which
+    the rewrite would otherwise treat as a page. These paths keep the default
+    cache policy, so a publish that overwrites them and invalidates them is
+    seen at the edge.
+  EOT
+  type        = list(string)
+  default     = []
+}
+
 variable "content_security_policy" {
   description = <<-EOT
     CSP header value, or null to send none. Set per site: a docs site that
