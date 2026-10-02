@@ -181,6 +181,12 @@ const ROLE_CHECKED_CONTRACTS = [
   // Owner or Admin, or workspace Owner or Member. A workspace Viewer and an
   // org Billing member read the list until the handler asserted the roles.
   "list_repositories",
+  // The Work pages' reads (P1-05, #5163): a work item grants no authority,
+  // so each read asks for the workspace's read roles before it reads.
+  "list_work_items",
+  "get_work_item",
+  "list_work_targets",
+  "get_work_outcomes",
 ] as const;
 
 const AGENT_ROLE_CHECKED_CONTRACTS = [

@@ -216,6 +216,14 @@ export function fleetSource(reads: FleetReads) {
   const refuse = () => Promise.reject(new Error("not a Fleet read"));
   const source: DataSource = {
     runtimes: { list: refuse, agents: refuse, named: refuse },
+    work: {
+      list: refuse,
+      get: refuse,
+      targets: refuse,
+      outcomes: refuse,
+      collectors: refuse,
+      priorities: refuse,
+    },
     conversations: { latest: refuse, list: refuse, byId: refuse },
     pretenant: { orgs: refuse, workspaces: refuse },
     shell: {

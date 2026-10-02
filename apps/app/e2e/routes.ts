@@ -5,7 +5,8 @@
 // composes the document title as `%s · Oxagen` (src/app/layout.tsx), so a row
 // asserts `<pages[titleKey]> · Oxagen` and nothing else — a page that renders an
 // error boundary or a not-found keeps its own title, so the assertion fails
-// rather than passing on a broken page.
+// rather than passing on a broken page. A work item's page is the one row whose
+// title names more than its page: `WI-1 · Work item · Oxagen` (expectedTitle).
 //
 // The table is data so the same rows can be read by the deploy verification
 // (WL-52) against a real organization, not only by the e2e run against the seed.
@@ -24,6 +25,16 @@ const ws = SEED.workspaceSlug;
 
 /** Every signed-in rev1 surface, in navigation order. */
 export const SIGNED_IN_ROUTES: readonly RouteRow[] = [
+  { path: `/${org}/${ws}/work`, titleKey: "work" },
+  { path: `/${org}/${ws}/work?tab=running`, titleKey: "work" },
+  { path: `/${org}/${ws}/work?tab=review`, titleKey: "work" },
+  { path: `/${org}/${ws}/work?tab=done`, titleKey: "work" },
+  // The one work item seed:e2e enters. Its title names the item first.
+  { path: `/${org}/${ws}/work/${SEED.workItemNumber}`, titleKey: "workItem" },
+  { path: `/${org}/${ws}/work/setup`, titleKey: "workSetup" },
+  { path: `/${org}/${ws}/work/setup?tab=priorities`, titleKey: "workSetup" },
+  { path: `/${org}/${ws}/work/setup?tab=runtimes`, titleKey: "workSetup" },
+  { path: `/${org}/${ws}/work/outcomes`, titleKey: "workOutcomes" },
   { path: `/${org}/${ws}`, titleKey: "fleet" },
   { path: `/${org}/${ws}/agents`, titleKey: "agents" },
   { path: `/${org}/${ws}/agents/e2e-agent/overview`, titleKey: "agent" },
@@ -68,7 +79,16 @@ export const ANONYMOUS_ROUTES: readonly RouteRow[] = [
   { path: "/cli/complete", titleKey: "cliComplete" },
 ] as const;
 
-/** The document title a row must produce, per the root layout's template. */
+/**
+ * The document title a row must produce, per the root layout's template. A
+ * work item's page names the item before the page, `WI-1 · Work item`, from
+ * the last segment of its path (the item route's generateMetadata).
+ */
 export function expectedTitle(row: RouteRow): string {
-  return `${pages.pages[row.titleKey]} · ${pages.app.name}`;
+  const page = pages.pages[row.titleKey];
+  const name =
+    row.titleKey === "workItem"
+      ? `${row.path.slice(row.path.lastIndexOf("/") + 1)} · ${page}`
+      : page;
+  return `${name} · ${pages.app.name}`;
 }

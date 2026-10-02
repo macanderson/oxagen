@@ -40,7 +40,10 @@ function triageField<T extends z.ZodTypeAny>(value: T) {
       value: value.nullable(),
       /** `oxagen` for a triage suggestion, `person` for a correction, null when neither set it. */
       by: z.enum(["oxagen", "person"]).nullable(),
-      /** The user id of the person who corrected it. */
+      /**
+       * The person who corrected it: their user id in revise_work_triage's
+       * answer, and their display name in get_work_item's, which a page shows.
+       */
       actor: z.string().nullable(),
       at: z.string().nullable(),
     })

@@ -1,6 +1,6 @@
 // Test support for the sign-in, organization-creation, Fleet, Agents, Audit,
 // Billing, Create, Organization, Shell, Skills, Spend, Steering, Tools, MCP
-// Studio and Repositories components: the real catalogs, a client provider,
+// Studio, Repositories and Work components: the real catalogs, a client provider,
 // and a server `getTranslations` stand-in that formats ICU arguments the
 // simple way (the components under test use no plurals).
 import { NextIntlClientProvider } from "next-intl";
@@ -28,6 +28,8 @@ import tools from "../../messages/tools.json";
 import ui from "../../messages/ui.json";
 import repositories from "../../messages/repositories.json";
 import runtimes from "../../messages/runtimes.json";
+import work from "../../messages/work.json";
+import workItem from "../../messages/work-item.json";
 
 export const messages = {
   ...en,
@@ -53,6 +55,8 @@ export const messages = {
   ...ui,
   ...repositories,
   ...runtimes,
+  ...work,
+  ...workItem,
 };
 
 export function IntlProvider({

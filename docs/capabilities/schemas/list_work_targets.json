@@ -1,0 +1,179 @@
+{
+  "name": "list_work_targets",
+  "domain": "work",
+  "description": "List the workspace's agents with their runtime, enrolled host, tier, and whether each can take a send now, with the reason when not.",
+  "mode": "sync",
+  "surfaces": [
+    "api"
+  ],
+  "sensitivity": "low",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {},
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "agents": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "harness": {
+              "type": "string"
+            },
+            "runtime": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "tier": {
+                      "type": "string",
+                      "enum": [
+                        "contained",
+                        "gateway",
+                        "harness",
+                        "observe"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "tier"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "host": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "last_poll_at": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "takes_work_orders": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "last_poll_at",
+                    "takes_work_orders"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "operates": {
+              "type": "boolean"
+            },
+            "busy_with": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "number": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "number"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "can_take": {
+              "type": "boolean"
+            },
+            "reason": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "no_runtime",
+                    "no_host",
+                    "host_outdated",
+                    "not_operator",
+                    "busy"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "quiet": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "harness",
+            "runtime",
+            "host",
+            "operates",
+            "busy_with",
+            "can_take",
+            "reason",
+            "quiet"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "agents"
+    ],
+    "additionalProperties": false
+  }
+}

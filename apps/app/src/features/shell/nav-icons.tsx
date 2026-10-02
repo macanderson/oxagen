@@ -7,6 +7,7 @@ import {
   CrosshairIcon,
   FolderSimpleIcon,
   KeyIcon,
+  ListChecksIcon,
   LockKeyIcon,
   ReceiptIcon,
   RobotIcon,
@@ -16,6 +17,7 @@ import {
 import type { NavKey } from "./nav";
 
 export const NAV_ICONS: Record<NavKey, PhosphorIcon> = {
+  work: ListChecksIcon,
   fleet: CrosshairIcon,
   agents: RobotIcon,
   steering: CompassIcon,

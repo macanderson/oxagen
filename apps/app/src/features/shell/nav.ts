@@ -1,5 +1,5 @@
-// The shell's navigation model (ARCHITECTURE.md §1.2): the sidebar's eight
-// links in the mockup's order (Workspace: Fleet, Agents, Steering,
+// The shell's navigation model (ARCHITECTURE.md §1.2): the sidebar's nine
+// links in the mockup's order (Workspace: Work, Fleet, Agents, Steering,
 // Repositories, Spend; Organization: Organization, Billing, Audit),
 // the phone's thumb bar and More
 // sheet over the same keys, which item is current, and the breadcrumbs. Pure
@@ -13,6 +13,7 @@
 import { pathOf, routes, type SafePath } from "@/shared/safe-path";
 
 export type WorkspaceNavKey =
+  | "work"
   | "fleet"
   | "agents"
   | "steering"
@@ -24,6 +25,10 @@ type OrgPageNavKey = "apiKeys" | "roles" | "modelFunding" | "sso";
 export type NavKey = WorkspaceNavKey | OrgNavKey | OrgPageNavKey;
 
 export const WORKSPACE_NAV: readonly WorkspaceNavKey[] = [
+  // Work leads the workspace items, as the mockup's navigation does (roadmap
+  // mockups/src/views.js navItems at the ADR-226 pin): the inbox of work
+  // items, then the runs that do the work.
+  "work",
   "fleet",
   "agents",
   "steering",
@@ -60,6 +65,7 @@ export const THUMB_SLOTS: readonly ThumbSlot[] = ["fleet", "agents", "spend"];
 
 /** The rest of the sidebar, one tap away in the phone's More sheet (mockup `DLG_EXT.more`). */
 export const MORE_SHEET: readonly NavKey[] = [
+  "work",
   "steering",
   "repositories",
   "organization",
@@ -90,6 +96,7 @@ function isOrgSegment(segment: string): segment is keyof typeof ORG_SEGMENTS {
 }
 
 const WORKSPACE_SEGMENT: Record<Exclude<WorkspaceNavKey, "fleet">, string> = {
+  work: "work",
   agents: "agents",
   steering: "steering",
   repositories: "repositories",
@@ -269,6 +276,22 @@ export function breadcrumbs(
       if (id !== undefined) {
         const agentHref = pathOf(org, ws, "agents", id);
         out.push({ kind: "id", text: id, href: agentHref });
+      }
+      break;
+    case "work":
+      // Work's own pages (Setup, Outcomes) end the trail at Work. One work
+      // item ends it on the item's number, or the label its page declared
+      // (`PageRecord`), under Work.
+      if (id === undefined || id === "setup" || id === "outcomes") {
+        out.push({ kind: "nav", key: "work", href: null });
+      } else {
+        out.push({ kind: "nav", key: "work", href: pathOf(org, ws, "work") });
+        const label = names.record?.id === id ? names.record.label : null;
+        out.push(
+          label === null
+            ? { kind: "id", text: id, href: null }
+            : { kind: "name", text: label, href: null },
+        );
       }
       break;
     case "mandates":
