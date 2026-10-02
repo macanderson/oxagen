@@ -1,7 +1,8 @@
 # ADR-235: Workspaces do not govern or monitor Stella
 
 - **Status:** Accepted. Amended 2026-10-01 with the maintainer's ruling on
-  every limit §5 listed, and on the Stella CLI.
+  every limit §5 listed, and on the Stella CLI. Amended 2026-10-02 with the
+  maintainer's ruling on the assistant's spend and on controls.
 - **Date:** 2026-09-30
 - **Owners:** platform
 - **Decided by:** the maintainer, 2026-09-30, answering #4310: "the in app
@@ -15,10 +16,11 @@
   `packages/agent/src/runtime/assistant-turn.ts`,
   `packages/agent/src/runtime/approval-resume.ts`.
 
-> **Amended 2026-10-01.** The maintainer ruled on the thirteen open items
-> this ADR first left for him, and on the Stella CLI. The amendment at the end
-> states the full ruling and what the code does under it. Where it and §5
-> disagree, the amendment holds.
+> **Amended 2026-10-01 and 2026-10-02.** The maintainer ruled on the
+> thirteen open items this ADR first left for him, on the Stella CLI, and then
+> on the assistant's spend and on controls. The amendments at the end state
+> each ruling and what the code does under it. Where they and §5 disagree, the
+> amendments hold.
 
 ## Context
 
@@ -260,4 +262,33 @@ so they count toward the customer's spend ceilings for the customer's own
 agents. That is accounting of what the organisation spent, not a budget
 against the assistant. It is listed for the maintainer in the PR that ships
 this amendment.
+
+## Amendment of 2026-10-02: spend and controls
+
+### The ruling
+
+The maintainer ruled on 2026-10-02, in two parts.
+
+1. **The assistant's spend is its own line on the Spend page.** The totals
+   include it, so they still match the daily rows and the statements. The
+   line names no run and offers no drill-down, findings, or model analysis.
+2. **The Oxagen app never controls the assistant.** No customer role gets a
+   budget, cap, toggle, switch, setting, or approval control for the
+   assistant, on any app page or through any API. Oxagen's own operator
+   switch, `set_assistant_switch`, is platform-only and stays.
+
+### What the code does
+
+- **Spend.** `get_spend` returns one row keyed `ASSISTANT_SPEND_KEY` in every
+  grouping when the period has an assistant run. The customer rows leave the
+  assistant's share out, so the rows still sum to the total. The row lists no
+  runs, and the page renders it with no link. `spend.drill` on a customer key
+  leaves the assistant's runs out. The waste list names none of them, run
+  names come back for none of them, and the cost rollup asks for no findings
+  pass or Model fit reading for them. The findings pass reads no assistant
+  run.
+- **Controls.** `set_kill_switch` refuses the managed assistant agent, on and
+  off, for every customer role (`kill_switch.set.ts`), and so do
+  `agent.suspend` and `agent.retire`. The PR that ships this amendment lists
+  every other control it found and what it did with each.
 
