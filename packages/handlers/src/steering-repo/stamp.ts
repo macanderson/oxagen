@@ -20,6 +20,7 @@ import { readJsonLines } from "@oxagen/oxagen/steering-repo/files";
 import {
   BRANCH_PREFIXES,
   branchPrefixOf,
+  STEERING_PR_MAX_FILES,
   type BranchPrefix,
 } from "@oxagen/oxagen/steering-repo/names";
 import {
@@ -423,9 +424,10 @@ export const IMPORT_BRANCH = "steering/import-oxagen";
 /**
  * The most files one steering PR may change. The host's compare lists at most
  * 300 files and does not say when it cut the list, so `refuseLongCompare`
- * refuses a steering PR at 300.
+ * refuses a steering PR at 300. The contracts read the same number from
+ * @oxagen/oxagen/steering-repo/names.
  */
-export const STEERING_PR_MAX_FILES = 299;
+export { STEERING_PR_MAX_FILES };
 
 const IMPORT_BATCH = /^steering\/import-oxagen-([2-9]|[1-9][0-9]+)$/;
 
@@ -445,6 +447,38 @@ export function importBranch(batch: number): string {
 export function isImportBranch(branch: string): boolean {
   return branch === IMPORT_BRANCH || IMPORT_BATCH.test(branch);
 }
+
+const MARKDOWN_IMPORT =
+  /^steering\/import-\d{4}-\d{2}-\d{2}(?:-(?:[2-9]|[1-9][0-9]+))?$/;
+
+/**
+ * The branch of a Markdown import's steering PR (commit_markdown_import):
+ * steering/import-<YYYY-MM-DD> on the UTC day of the import, then
+ * steering/import-<YYYY-MM-DD>-2, -3, and so on for later imports that day.
+ */
+export function markdownImportBranch(at: Date, n = 1): string {
+  if (!Number.isInteger(n) || n < 1) {
+    throw new RangeError(`A Markdown import branch number is a whole number from 1, not ${n}`);
+  }
+  const day = at.toISOString().slice(0, 10);
+  return n === 1 ? `steering/import-${day}` : `steering/import-${day}-${n}`;
+}
+
+/** True for a branch {@link markdownImportBranch} names. */
+export function isMarkdownImportBranch(branch: string): boolean {
+  return MARKDOWN_IMPORT.test(branch);
+}
+
+/**
+ * What a Markdown import's steering PR may change: steering records (a memory
+ * record under steering/memory/ too), skills, and Cedar policy files. It may
+ * change many of them, so one import is one review.
+ */
+const MARKDOWN_IMPORT_FILE_KINDS: ReadonlySet<string> = new Set([
+  "record",
+  "skill-record",
+  "policy",
+]);
 
 /**
  * The folder an import writes each converted record to. On an import branch,
@@ -475,10 +509,12 @@ export type BranchScopeRefusal = {
  * null when they do. The branch starts with the top-level folder it changes
  * (workspace/ for root files, memory/ for steering/memory/). A memory PR, a
  * tools PR, and an import PR (see {@link isImportBranch}) may change many
- * files. Every other steering PR changes one record, one skill, one agent,
- * one policy group, or one root file. No steering PR may change the ledger,
- * which only the stamp writes, and only an import PR may carry
- * {@link IMPORT_REPLACES_PATH}.
+ * files. A Markdown import PR (see {@link isMarkdownImportBranch}) may change
+ * many steering records, skills, and Cedar policy files, under steering/,
+ * steering/memory/, and policy/, and nothing else. Every other steering PR
+ * changes one record, one skill, one agent, one policy group, or one root
+ * file. No steering PR may change the ledger, which only the stamp writes,
+ * and only an import PR may carry {@link IMPORT_REPLACES_PATH}.
  */
 export function branchScopeRefusal(
   branch: string,
@@ -497,6 +533,17 @@ export function branchScopeRefusal(
       reason: "ledger_owned",
       message: `${ledger} is in the ledger, which only Oxagen writes when it stamps a steering PR`,
     };
+  }
+  if (isMarkdownImportBranch(branch)) {
+    const foreign = paths.find(
+      (path) => !MARKDOWN_IMPORT_FILE_KINDS.has(classifySteeringRepoPath(path)),
+    );
+    return foreign
+      ? {
+          reason: "branch_scope",
+          message: `${foreign} is not a steering record, a skill, or a Cedar policy file, and a Markdown import on ${branch} changes only those`,
+        }
+      : null;
   }
   const outside = paths.find((path) => branchPrefixForPath(path) !== prefix);
   if (outside) {

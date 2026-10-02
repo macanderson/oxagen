@@ -253,6 +253,22 @@ interface GithubDeployment {
   description?: string | null;
   payload?: unknown;
   performed_via_github_app?: { id?: number; slug?: string } | null;
+  creator?: { login?: string; type?: string } | null;
+}
+
+/**
+ * Whether the app made this deployment. GitHub fills
+ * `performed_via_github_app` on some deployments and leaves it null on one
+ * made with the app's installation token, which records the app's bot user as
+ * the creator instead (seen on `oxageninc/oxagen-gtm` on 2026-10-01). A
+ * `<slug>[bot]` login belongs only to that app, so either field anchors it.
+ * When GitHub names an app, its slug and id must match.
+ */
+function madeByApp(d: GithubDeployment, app: GithubHistoryTarget["app"]): boolean {
+  const via = d.performed_via_github_app;
+  if (via !== null && via !== undefined)
+    return via.slug === app.slug && (via.id === undefined || via.id === app.id);
+  return d.creator?.type === "Bot" && d.creator.login === `${app.slug}[bot]`;
 }
 
 interface GithubCompare {
@@ -324,10 +340,7 @@ export async function githubPublished(
     "GET",
     `${githubRoot(t)}/deployments?environment=${seg(STEERING_ENVIRONMENT)}&per_page=${GITHUB_DEPLOYMENT_PAGE}`,
   );
-  const hit = (res.data ?? []).find((d) => {
-    const app = d.performed_via_github_app;
-    return app?.slug === t.app.slug && (app.id === undefined || app.id === t.app.id);
-  });
+  const hit = (res.data ?? []).find((d) => madeByApp(d, t.app));
   if (hit === undefined) return null;
   return { sha: hit.sha, version: deploymentVersion(hit) };
 }

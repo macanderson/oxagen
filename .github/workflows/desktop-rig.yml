@@ -35,6 +35,7 @@ on:
     paths:
       - "apps/desktop/**"
       - "packages/tacho/**"
+  workflow_dispatch: {}
 
 concurrency:
   group: desktop-rig-${{ github.ref }}
@@ -50,8 +51,14 @@ jobs:
     timeout-minutes: 40
     strategy:
       fail-fast: false
+      # A pull request runs the Linux leg only (#4918). The macOS and Windows
+      # legs ran 728 and 877 minutes on pull requests in the week of
+      # 2026-09-23, at $0.062 and $0.010 a minute. They run on a push to main
+      # and on a manual dispatch, so a platform-specific break shows on main
+      # within one merge. Dispatch this workflow on a branch to run them
+      # before merging.
       matrix:
-        os: [ubuntu-22.04, macos-latest, windows-latest]
+        os: ${{ fromJSON(github.event_name == 'pull_request' && '["ubuntu-22.04"]' || '["ubuntu-22.04", "macos-latest", "windows-latest"]') }}
     steps:
       - uses: actions/checkout@v5
 

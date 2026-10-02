@@ -1,11 +1,20 @@
 {
   "$schema": "https://v2-9-18.turborepo.dev/schema.json",
   "ui": "tui",
-  "globalDependencies": [
-    ".env.example",
-    "pnpm-lock.yaml",
-    "tsconfig.base.json"
-  ],
+  // A file here goes into every task's hash, so a change to it re-runs every
+  // task in the repository (#4918). List only a file that every task reads.
+  //
+  // pnpm-lock.yaml is not listed. Turbo already hashes each package's resolved
+  // dependency tree from the lockfile into that package's tasks, and the root
+  // package's tree into every task, so a lockfile change re-runs the packages
+  // whose dependencies moved and their dependents. As a global file, a
+  // three-line lockfile change for one package re-ran all of them.
+  //
+  // .env.example is not listed. tools/scripts/env-check.ts writes it from
+  // packages/config/src/registry.ts, no cached task reads it, and env:check in
+  // the checks job runs uncached and fails when it drifts. A registry change
+  // still re-runs every package that imports @oxagen/config.
+  "globalDependencies": ["tsconfig.base.json"],
   "globalEnv": [
     "NODE_ENV",
     "VERCEL_ENV",
@@ -172,12 +181,22 @@
       ]
     },
 
+    // typecheck and lint read the types of every workspace package they
+    // import, so each hash must cover those packages (#4918). Without a
+    // dependency edge, a change to packages/database left the hash of
+    // apps/app#typecheck unchanged and the cache replayed a pass. `^build`
+    // adds that edge: a package's build task hashes its non-test files even
+    // where the package has no build script. Only apps have build scripts and
+    // nothing depends on an app, so the edge waits for no task. A package
+    // turbo.json that sets dependsOn for these tasks must list `^build` too.
     "typecheck": {
+      "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", "src/**", "tsconfig.json", "package.json"],
       "outputs": []
     },
 
     "lint": {
+      "dependsOn": ["^build"],
       "inputs": [
         "$TURBO_DEFAULT$",
         "src/**",
