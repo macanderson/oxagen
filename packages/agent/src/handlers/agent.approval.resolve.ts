@@ -16,9 +16,10 @@
 //      check holds for any other caller that carries a run.
 //   4. An approval the in-app assistant parked (`inAppApproval` in
 //      @oxagen/rules) is answered only by the person who asked (ADR-235,
-//      ruled on 2026-10-01). Anyone else is refused `forbidden`
-//      `not_the_requester`, before the UPDATE. The requester is read with
-//      the row in step 2.
+//      ruled on 2026-10-01). Anyone else gets `approval_expired`, the
+//      answer for an unknown id, before the UPDATE. The workspace's readers
+//      leave the row out, so this answer reveals nothing they hide. The
+//      requester is read with the row in step 2.
 //   5. On a row the mandate gate parked (ADR-059 decision 4), the mandate's
 //      approval rule decides who answers (MC spec §6.9): an agent principal
 //      is refused `agent_cannot_resolve_own_mandate`; the caller holds an
@@ -160,18 +161,15 @@ export async function agentApprovalResolveHandler(
   }
 
   // ADR-235, ruled on 2026-10-01: an in-app approval goes to the person who
-  // asked, and only that person answers it. A row whose requester cannot be
-  // read is refused to everyone, never opened to the workspace.
+  // asked, and only that person answers it. Anyone else gets the answer for
+  // an id that is not there, because `list_approvals` and the other readers
+  // leave the row out for them. A row whose requester cannot be read is
+  // refused to everyone, never opened to the workspace.
   if (
     found.inApp &&
     (found.requesterUserId === null || found.requesterUserId !== actingUserId)
   ) {
-    throw new HandlerError({
-      code: "forbidden",
-      reason: "not_the_requester",
-      message:
-        "Only the person who asked the assistant can answer this approval.",
-    });
+    throw expired();
   }
 
   const { parked } = found;

@@ -83,8 +83,9 @@ const DIAGNOSIS_SYSTEM =
  * Suspect files are ranked by a pure function (no model). The optional model call
  * (diagnosis) runs ONLY when input.summarize === true.
  *
- * An execution of the in-app assistant answers as not found unless the
- * assistant itself asks (`assistantExecutionsHidden`, ADR-235).
+ * An execution of the in-app assistant answers as not found, unless the
+ * assistant asks for one of the turns of the person it acts for
+ * (`assistantExecutionsHidden`, ADR-235).
  */
 export async function agentDebugTraceHandler(
   input: AgentDebugTraceInput,

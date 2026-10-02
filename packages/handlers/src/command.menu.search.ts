@@ -18,8 +18,9 @@
  * the same scope through the search_nodes capability. No cross-tenant leakage
  * is possible even if the input kind/query is manipulated.
  *
- * The run arm leaves out the in-app assistant's executions unless the
- * assistant itself asks (`assistantExecutionsHidden`, ADR-235). The agent arm
+ * The run arm leaves out the in-app assistant's executions, except the turns
+ * of the person the assistant acts for when it asks
+ * (`assistantExecutionsHidden`, ADR-235). The agent arm
  * leaves out the workspace's managed assistant agent, and the principal arm
  * leaves out the service principal that agent acts as. The assistant is
  * Oxagen's own, and the workspace's lists do not show it (ADR-235).

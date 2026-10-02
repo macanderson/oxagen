@@ -290,7 +290,7 @@ describe("agentDebugTraceHandler: the in-app assistant's executions", () => {
     expect(traceGet).not.toHaveBeenCalled();
   });
 
-  it("diagnoses the assistant's own execution when the call carries its binding", async () => {
+  it("diagnoses the asker's own assistant execution when the call carries its binding", async () => {
     const ctx = {
       ...CTX,
       oxagenAssistant: createOxagenAssistantBinding({
@@ -306,9 +306,12 @@ describe("agentDebugTraceHandler: the in-app assistant's executions", () => {
       ctx,
     );
     expect(frame.executionId).toBe("aex_assistant");
+    // The root read keeps the assistant's rows of this person's turns only.
     const where = rootWhere();
-    expect(where.sql).not.toContain("not exists");
-    expect(where.params).not.toContain("interactive_chat");
+    expect(where.sql).toMatch(EXCLUSION);
+    const own = /"own_conversation"\."user_id" = \$(\d+)\)/u.exec(where.sql);
+    expect(own).not.toBeNull();
+    expect(where.params[Number(own![1]) - 1]).toBe(CTX.userId);
     // The span tree is read with the same context, so it sees the row too.
     expect(traceGet).toHaveBeenCalledWith(
       { executionId: "aex_assistant" },

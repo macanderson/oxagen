@@ -1680,14 +1680,18 @@ async function _invokeCoreInner(
       //
       // A Stella call skips it (ADR-235). The ceilings are the customer's own
       // configuration, and no customer-configured budget applies to Oxagen's
-      // in-app assistant. The credit gate, the assistant spend cap, and the
-      // billing admission gate above are Oxagen's, and they still apply.
+      // in-app assistant. The assistant's own contracts skip it on every
+      // surface, as they skip the rules gate below: a person renaming or
+      // purging their own conversation carries no binding. The credit gate,
+      // the assistant spend cap, and the billing admission gate above are
+      // Oxagen's, and they still apply.
       if (
         _budgetGate !== null &&
         ctx.orgId &&
         !skipBilling &&
         isScoped &&
-        !isOxagenAssistantCall(ctx)
+        !isOxagenAssistantCall(ctx) &&
+        cap.inAppAssistant !== true
       ) {
         await _budgetGate({
           orgId: ctx.orgId,

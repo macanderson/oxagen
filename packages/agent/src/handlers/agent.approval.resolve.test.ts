@@ -43,8 +43,8 @@
  *   - an approval the in-app assistant parked (ADR-235, ruled on
  *     2026-10-01): the in-app fact is read with the row; the person who
  *     asked answers it and nobody is notified; another Owner, and anyone
- *     when the requester cannot be read → forbidden `not_the_requester`, no
- *     UPDATE, no NOTIFY; the run that raised it is sent to the assistant,
+ *     when the requester cannot be read → conflict `approval_expired`, the
+ *     answer for an unknown id, with no UPDATE and no NOTIFY; the run that raised it is sent to the assistant,
  *     not to Fleet; a row that is not in-app is answered by another Owner as
  *     before
  */
@@ -1246,8 +1246,9 @@ describe("resolve_approval: an approval the in-app assistant parked", () => {
   // the person who asked, and only that person can answer them.
   const inApp = (overrides: Partial<Tenant> = {}) =>
     setup({ inApp: true, runPublicId: RUN_PUBLIC_ID, runs: RUNS, ...overrides });
-  const notTheRequester = (e: unknown) =>
-    forbidden(e) && isHandlerError(e) && e.reason === "not_the_requester";
+  // Another person gets the answer for an unknown id, so the refusal does
+  // not reveal a row the workspace's readers hide.
+  const notTheRequester = conflict;
 
   it("reads whether the row is in-app with the row itself", async () => {
     const captured = inApp({ requesterUserId: "u_1" });

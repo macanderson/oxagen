@@ -689,6 +689,43 @@ describe("kernel decision-rules gate: Stella's calls (ADR-235)", () => {
     expect(overCeiling).toHaveBeenCalledOnce();
   });
 
+  // The assistant's own contracts skip the ceiling on every surface, as they
+  // skip the rules gate. A person purging their own conversation over the
+  // API carries no binding, and a customer budget must not block it.
+  it.each(["api", "mcp"] as const)(
+    "skips the customer's spend ceiling for an in-app assistant contract on the %s surface",
+    async (surface) => {
+      registerCapability({
+        name: "test.purge_conversation",
+        domain: "test",
+        description: "Purge one of the person's own assistant conversations.",
+        mode: "sync" as const,
+        surfaces: ["api", "mcp"] as const,
+        inAppAssistant: true,
+        layers: ["unit"] as const,
+        sensitivity: "low" as const,
+        defaultEffect: "allow" as const,
+        defaultRoles: { org: {}, workspace: {} },
+        input: z.object({ id: z.string() }),
+        output: z.object({ ok: z.boolean() }),
+      });
+      const handler = vi.fn(async () => ({ ok: true }));
+      registerHandler("test.purge_conversation", async () => handler);
+      const overCeiling = vi.fn(async () => {
+        throw Object.assign(new Error("over the workspace's spend ceiling"), {
+          code: "budget_exceeded",
+        });
+      });
+      setBudgetAdmissionGate(overCeiling);
+
+      await expect(
+        invoke("test.purge_conversation", { id: "cnv_1" }, ctx, { surface }),
+      ).resolves.toEqual({ ok: true });
+      expect(overCeiling).not.toHaveBeenCalled();
+      expect(handler).toHaveBeenCalledOnce();
+    },
+  );
+
   const forgeries: { name: string; binding: () => unknown }[] = [
     { name: "a literal true", binding: () => true },
     {

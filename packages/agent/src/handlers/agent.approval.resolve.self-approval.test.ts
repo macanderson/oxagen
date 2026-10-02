@@ -487,10 +487,11 @@ describe("resolve_approval: a turn answering its own parked write", () => {
       { approvalId: APPROVAL_PUBLIC_ID, decision: "approved" },
       otherOwner,
     ).catch((e: unknown) => e);
+    // The same answer as an unknown id: the workspace's readers hide the row.
     expect(
       isHandlerError(err) &&
-        err.code === "forbidden" &&
-        err.reason === "not_the_requester",
+        err.code === "conflict" &&
+        err.reason === "approval_expired",
     ).toBe(true);
     expect(store.row).toMatchObject({
       resolution: null,

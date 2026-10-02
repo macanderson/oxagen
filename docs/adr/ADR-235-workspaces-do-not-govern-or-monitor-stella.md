@@ -219,7 +219,8 @@ Codex.
    assistant agent.
 4. **Parked approvals reach only the person who asked.** An approval whose run
    is on an in-app surface stays off Fleet, the nav count, and approver
-   notifications. Only the person who asked can answer it. A person's approval
+   notifications. Only the person who asked can answer it, and anyone else
+   gets the answer for an unknown id. A person's approval
    of a Stella row never opens a workspace rule's standing window for a
    customer agent's identical call.
 5. **The assistant's runs stay off workspace lists.** A single-run read of an
@@ -227,8 +228,9 @@ Codex.
 6. **Run enrichment skips assistant runs.** The sweep leaves out the in-app
    surfaces, so no paid summary is made for a Stella turn.
 7. **The execution record stays internal.** Workspace-facing execution reads
-   leave out the assistant's executions. A call carrying the binding still
-   reads them, so the assistant reads its own history.
+   leave out the assistant's executions. A call carrying the binding reads
+   only those of the person it acts for, so the assistant reads that person's
+   history and no one else's.
 8. **The security event stays, tagged.** Each security event of a Stella call
    carries `detail.oxagenAssistant: true`. The event is the person's own action
    on customer data and the SOC 2 record of it.
@@ -236,7 +238,8 @@ Codex.
    the assistant makes reinforces and cites nothing.
 10. **No customer-configured budget.** The turn reads neither the person's turn
     budget nor the workspace's, the kernel skips the customer's spend ceilings
-    for a Stella call, and the approval resume no longer checks them. The
+    for a Stella call and for the assistant's own contracts on every surface,
+    and the approval resume no longer checks them. The
     credit gate, the assistant spend cap, the billing admission gate, and
     invoice billing are Oxagen's and still apply. The SSE route accepts a
     `budget` field and ignores it.

@@ -108,13 +108,18 @@ describe("agent.execution.list handler: the in-app assistant's executions", () =
   /** The NOT EXISTS test the handler adds, as the dialect renders it. */
   const EXCLUSION =
     /not exists \(select 1 from "agent"\."agents" where "agent"\."agents"\."id" = "agent"\."agent_executions"\."agent_id" and "agent"\."agents"\."agent_type" = \$(\d+)\)/u;
+  /** The OR the assistant's own call adds: the person who asked, as a param. */
+  const OWN = /"own_conversation"\."user_id" = \$(\d+)\)/u;
 
   /**
    * A fake tx that renders the WHERE it receives and applies the exclusion
    * the way Postgres would: a row whose agent is `interactive_chat` drops
-   * out when the rendered WHERE carries the NOT EXISTS test.
+   * out when the rendered WHERE carries the NOT EXISTS test, unless the
+   * WHERE also keeps the turns of the person who asked and the row is one.
    */
-  function setupRendering(rows: Array<Row & { agentType: string | null }>) {
+  function setupRendering(
+    rows: Array<Row & { agentType: string | null; askedBy?: string }>,
+  ) {
     const wheres: Array<{ sql: string; params: unknown[] }> = [];
     vi.mocked(withTenantDb).mockImplementation((fn) => {
       if (typeof fn !== "function") return undefined as never;
@@ -128,9 +133,19 @@ describe("agent.execution.list handler: the in-app assistant's executions", () =
               const hides =
                 match !== null &&
                 rendered.params[Number(match[1]) - 1] === "interactive_chat";
+              const own = OWN.exec(rendered.sql);
+              const asker =
+                own === null ? undefined : rendered.params[Number(own[1]) - 1];
               const visible = rows
-                .filter((r) => !(hides && r.agentType === "interactive_chat"))
-                .map(({ agentType: _agentType, ...r }) => r);
+                .filter(
+                  (r) =>
+                    !(
+                      hides &&
+                      r.agentType === "interactive_chat" &&
+                      (asker === undefined || r.askedBy !== asker)
+                    ),
+                )
+                .map(({ agentType: _agentType, askedBy: _askedBy, ...r }) => r);
               return {
                 orderBy: () => ({ limit: () => Promise.resolve(visible) }),
               };
@@ -151,6 +166,14 @@ describe("agent.execution.list handler: the in-app assistant's executions", () =
       publicId: "aex_assistant",
       agentId: ASSISTANT_AGENT,
       agentType: "interactive_chat",
+      askedBy: CTX.userId!,
+    },
+    {
+      ...row(2),
+      publicId: "aex_assistant_other",
+      agentId: ASSISTANT_AGENT,
+      agentType: "interactive_chat",
+      askedBy: "u_2",
     },
     { ...row(1), agentType: "custom" },
   ];
@@ -168,7 +191,7 @@ describe("agent.execution.list handler: the in-app assistant's executions", () =
     expect(wheres[0]!.params).toContain("interactive_chat");
   });
 
-  it("shows the assistant its own execution when the call carries its binding", async () => {
+  it("shows the assistant the asker's own execution, and not another person's, when the call carries its binding", async () => {
     const wheres = setupRendering(rows());
     const out = await agentExecutionListHandler(
       { limit: 25 },
@@ -184,8 +207,10 @@ describe("agent.execution.list handler: the in-app assistant's executions", () =
       "aex_assistant",
       "aex_1",
     ]);
-    expect(wheres[0]!.sql).not.toContain("not exists");
-    expect(wheres[0]!.params).not.toContain("interactive_chat");
+    // Another person's turn stays hidden from the assistant too.
+    expect(wheres[0]!.sql).toMatch(EXCLUSION);
+    expect(wheres[0]!.sql).toMatch(OWN);
+    expect(wheres[0]!.params).toContain(CTX.userId);
   });
 
   it("hides the assistant's execution from a forged binding (negative)", async () => {

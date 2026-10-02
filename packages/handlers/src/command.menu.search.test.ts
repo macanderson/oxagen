@@ -22,9 +22,23 @@ vi.mock("@oxagen/database", () => {
         workspaceId: "workspaceId",
         publicId: "publicId",
         agentId: "agentId",
+        originId: "originId",
         status: "status",
         createdAt: "createdAt",
         deletedAt: "deletedAt",
+      },
+      // The assistant's own call reads these as identifiers, by column name.
+      messages: {
+        id: { name: "id" },
+        conversationId: { name: "conversation_id" },
+        orgId: { name: "org_id" },
+        workspaceId: { name: "workspace_id" },
+      },
+      conversations: {
+        id: { name: "id" },
+        orgId: { name: "org_id" },
+        workspaceId: { name: "workspace_id" },
+        userId: { name: "user_id" },
       },
       agents: {
         id: "id",
@@ -63,10 +77,13 @@ vi.mock("drizzle-orm", () => ({
   ne: (a: unknown, b: unknown) => ({ ne: [a, b] }),
   or: (...args: unknown[]) => ({ or: args }),
   // The run arm's assistant exclusion is a raw fragment (ADR-235).
-  sql: (strings: TemplateStringsArray, ...values: unknown[]) => ({
-    sql: strings.join("?"),
-    values,
-  }),
+  sql: Object.assign(
+    (strings: TemplateStringsArray, ...values: unknown[]) => ({
+      sql: strings.join("?"),
+      values,
+    }),
+    { identifier: (name: string) => ({ identifier: name }) },
+  ),
 }));
 
 vi.mock("./logger", () => ({
@@ -355,12 +372,35 @@ describe("commandMenuSearchHandler: the in-app assistant's executions", () => {
   }
 
   /**
+   * The person whose own executions the assistant's call keeps: the OR of
+   * the exclusion and the asker test, whose last value is the user id.
+   */
+  function ownAsker(cond: unknown): unknown {
+    if (typeof cond !== "object" || cond === null || !("sql" in cond))
+      return undefined;
+    const fragment = cond as { sql: string; values: unknown[] };
+    if (
+      !fragment.sql.startsWith("(") ||
+      !isAssistantExclusion(fragment.values[0])
+    )
+      return undefined;
+    const own = fragment.values[1] as { values: unknown[] } | undefined;
+    return own?.values.at(-1);
+  }
+
+  /**
    * A fake tx that records the run query's WHERE and applies the exclusion
    * the way Postgres would: a row whose agent is `interactive_chat` drops out
-   * when the WHERE carries the fragment.
+   * when the WHERE carries the fragment, unless the WHERE keeps the asker's
+   * own turns and the row is one.
    */
   function setupRuns(
-    rows: Array<{ publicId: string; status: string; agentType: string }>,
+    rows: Array<{
+      publicId: string;
+      status: string;
+      agentType: string;
+      askedBy?: string;
+    }>,
   ) {
     const wheres: Array<{ and: unknown[] }> = [];
     mockWithTenantDb.mockImplementation(
@@ -376,10 +416,21 @@ describe("commandMenuSearchHandler: the in-app assistant's executions", () => {
           },
           orderBy: () => tx,
           limit: () => {
-            const hides = where.and.some(isAssistantExclusion);
+            const asker = where.and
+              .map(ownAsker)
+              .find((a) => a !== undefined);
+            const hides =
+              where.and.some(isAssistantExclusion) || asker !== undefined;
             return Promise.resolve(
               rows
-                .filter((r) => !(hides && r.agentType === "interactive_chat"))
+                .filter(
+                  (r) =>
+                    !(
+                      hides &&
+                      r.agentType === "interactive_chat" &&
+                      (asker === undefined || r.askedBy !== asker)
+                    ),
+                )
                 .map((r) => ({
                   publicId: r.publicId,
                   status: r.status,
@@ -400,6 +451,13 @@ describe("commandMenuSearchHandler: the in-app assistant's executions", () => {
       publicId: "aex_assistant",
       status: "completed",
       agentType: "interactive_chat",
+      askedBy: "u1",
+    },
+    {
+      publicId: "aex_assistant_other",
+      status: "completed",
+      agentType: "interactive_chat",
+      askedBy: "u2",
     },
   ];
   const input = {
@@ -417,7 +475,7 @@ describe("commandMenuSearchHandler: the in-app assistant's executions", () => {
     expect(wheres[0]!.and.some(isAssistantExclusion)).toBe(true);
   });
 
-  it("finds the assistant's own executions when the call carries its binding", async () => {
+  it("finds the asker's own assistant executions, and not another person's, when the call carries its binding", async () => {
     const wheres = setupRuns(runs());
     const result = await commandMenuSearchHandler(input, {
       ...ctx,
@@ -429,7 +487,7 @@ describe("commandMenuSearchHandler: the in-app assistant's executions", () => {
       "aex_custom",
       "aex_assistant",
     ]);
-    expect(wheres[0]!.and.some(isAssistantExclusion)).toBe(false);
+    expect(wheres[0]!.and.map(ownAsker)).toContain("u1");
   });
 });
 

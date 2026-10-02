@@ -91,8 +91,8 @@ const execColumns = {
  * the tree in memory. Every query is tenant-scoped.
  *
  * An execution of the in-app assistant answers as not found, and none joins
- * the tree as a child, unless the assistant itself asks
- * (`assistantExecutionsHidden`, ADR-235).
+ * the tree as a child, unless the assistant asks for one of the turns of the
+ * person it acts for (`assistantExecutionsHidden`, ADR-235).
  */
 export async function agentTraceGetHandler(
   input: AgentTraceGetInput,

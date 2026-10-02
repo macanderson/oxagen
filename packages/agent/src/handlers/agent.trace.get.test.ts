@@ -502,7 +502,10 @@ describe("agent.trace.get handler: the in-app assistant's executions", () => {
   const EXCLUSION =
     /not exists \(select 1 from "agent"\."agents" where "agent"\."agents"\."id" = "agent"\."agent_executions"\."agent_id" and "agent"\."agents"\."agent_type" = \$(\d+)\)/u;
 
-  type TypedExec = ExecRow & { agentType: string | null };
+  /** The OR the assistant's own call adds: the person who asked, as a param. */
+  const OWN = /"own_conversation"\."user_id" = \$(\d+)\)/u;
+
+  type TypedExec = ExecRow & { agentType: string | null; askedBy?: string };
 
   /** True when the rendered WHERE leaves `interactive_chat` agents out. */
   function hidesAssistant(rendered: { sql: string; params: unknown[] }) {
@@ -513,6 +516,12 @@ describe("agent.trace.get handler: the in-app assistant's executions", () => {
     );
   }
 
+  /** The person whose own assistant rows the WHERE keeps, if it keeps any. */
+  function askerOf(rendered: { sql: string; params: unknown[] }) {
+    const own = OWN.exec(rendered.sql);
+    return own === null ? undefined : rendered.params[Number(own[1]) - 1];
+  }
+
   /**
    * Like `setup`, but the execution reads render the WHERE they receive and
    * apply the exclusion the way Postgres would. Steps and tool calls are
@@ -520,10 +529,17 @@ describe("agent.trace.get handler: the in-app assistant's executions", () => {
    */
   function setupRendering(root: TypedExec, children: TypedExec[] = []) {
     const wheres: Array<{ sql: string; params: unknown[] }> = [];
-    const visible = (rows: TypedExec[], hides: boolean) =>
+    const visible = (rows: TypedExec[], hides: boolean, asker: unknown) =>
       rows
-        .filter((r) => !(hides && r.agentType === "interactive_chat"))
-        .map(({ agentType: _agentType, ...r }) => r);
+        .filter(
+          (r) =>
+            !(
+              hides &&
+              r.agentType === "interactive_chat" &&
+              (asker === undefined || r.askedBy !== asker)
+            ),
+        )
+        .map(({ agentType: _agentType, askedBy: _askedBy, ...r }) => r);
     let dbCall = 0;
     vi.mocked(withTenantDb).mockImplementation((fn) => {
       if (typeof fn !== "function") return undefined as never;
@@ -538,12 +554,13 @@ describe("agent.trace.get handler: the in-app assistant's executions", () => {
               const rendered = dialect.sqlToQuery(cond);
               wheres.push(rendered);
               const hides = hidesAssistant(rendered);
+              const asker = askerOf(rendered);
               return {
-                limit: () => Promise.resolve(visible([root], hides)),
+                limit: () => Promise.resolve(visible([root], hides, asker)),
                 orderBy: () => {
                   if (childBatchServed) return Promise.resolve([]);
                   childBatchServed = true;
-                  return Promise.resolve(visible(children, hides));
+                  return Promise.resolve(visible(children, hides, asker));
                 },
               };
             },
@@ -556,13 +573,14 @@ describe("agent.trace.get handler: the in-app assistant's executions", () => {
   }
 
   const ASSISTANT_AGENT = "00000000-0000-4000-8000-0000000000a1";
-  const assistantExec = (): TypedExec => ({
+  const assistantExec = (askedBy: string = CTX.userId!): TypedExec => ({
     ...exec({
       id: "aexuuid_assistant",
       publicId: "aex_assistant",
       agentId: ASSISTANT_AGENT,
     }),
     agentType: "interactive_chat",
+    askedBy,
   });
   const withBinding = () => ({
     ...CTX,
@@ -580,7 +598,7 @@ describe("agent.trace.get handler: the in-app assistant's executions", () => {
     expect(wheres[0]!.params).toContain("interactive_chat");
   });
 
-  it("returns the assistant its own execution when the call carries its binding", async () => {
+  it("returns the assistant the asker's own execution when the call carries its binding", async () => {
     const wheres = setupRendering(assistantExec());
     const out = await agentTraceGetHandler(
       { executionId: "aex_assistant" },
@@ -588,9 +606,16 @@ describe("agent.trace.get handler: the in-app assistant's executions", () => {
     );
     expect(out.executionId).toBe("aex_assistant");
     for (const where of wheres) {
-      expect(where.sql).not.toContain("not exists");
-      expect(where.params).not.toContain("interactive_chat");
+      expect(where.sql).toMatch(OWN);
+      expect(where.params).toContain(CTX.userId);
     }
+  });
+
+  it("answers as not found when the assistant asks for another person's execution (negative)", async () => {
+    setupRendering(assistantExec("u_2"));
+    await expect(
+      agentTraceGetHandler({ executionId: "aex_assistant" }, withBinding()),
+    ).rejects.toBeInstanceOf(ExecutionNotFoundError);
   });
 
   it("leaves an assistant execution out of another execution's tree", async () => {
