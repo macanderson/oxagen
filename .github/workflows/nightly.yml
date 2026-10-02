@@ -27,7 +27,7 @@ jobs:
   full:
     runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-large-{0}', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
     container:
-      image: ${{ vars.CI_IMAGE_REGISTRY || 'ghcr.io/macanderson' }}/oxagen-ci-base:latest
+      image: ${{ vars.CI_IMAGE_REGISTRY || 'public.ecr.aws/z5z6u7g2' }}/oxagen-ci-base:latest
     # 90, as pipeline.yml's `test` job: at the bounded concurrency below the
     # full suite outlasts 30 minutes (#4266).
     timeout-minutes: 90
@@ -194,7 +194,7 @@ jobs:
   e2e:
     runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-large-{0}', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
     container:
-      image: ${{ vars.CI_IMAGE_REGISTRY || 'ghcr.io/macanderson' }}/oxagen-ci-e2e:latest
+      image: ${{ vars.CI_IMAGE_REGISTRY || 'public.ecr.aws/z5z6u7g2' }}/oxagen-ci-e2e:latest
     # 75m, measured rather than guessed. This job runs the whole Playwright
     # suite in one shard, where pipeline.yml splits the same 121 tests across
     # four jobs that take ~7m each; it also builds apps/app first, and while
