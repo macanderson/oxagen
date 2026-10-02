@@ -37,6 +37,7 @@
         "machine": null,
         "harness": null,
         "repositoryUnlinked": false,
+        "recordBasis": "live",
         "name": "Release notes",
         "summary": null
       },
