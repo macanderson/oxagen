@@ -19,7 +19,7 @@ Merge is the publication ([ADR-061](../adr/ADR-061-steering-governance-mode-thre
 | mode | who merges |
 | --- | --- |
 | `solo` | any workspace member (org Owner/Admin, workspace Owner/Member), the author included |
-| `team` | an org Owner or Admin, or a workspace Owner, other than the author |
+| `team` | an org Owner or Admin, or a workspace Owner or Admin, other than the author |
 | `regulated` | an org Owner or Admin other than the author; recorded on the ledger row as the accountable approver |
 
 Outside `solo` mode the PR also needs an approval on the host at the head that merges. The approver is a workspace member other than the author, and their host account is linked to an Oxagen user. Without one, an org Owner, a workspace Owner, or a member who holds [`merge_pr_without_review`](context.pr.merge_without_review.md) may still merge, and the ledger line and the trailers record that nobody reviewed it. Oxagen refuses anyone else with `approval_required`.

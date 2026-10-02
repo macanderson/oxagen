@@ -21,6 +21,7 @@ export const orgSsoVerifyDomain = registerCapability({
   surfaces: ["api", "mcp"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: false,
+  orgLevel: true,
   sensitivity: "high",
   defaultEffect: "deny",
   defaultRoles: { org: { Owner: "allow", Admin: "allow" }, workspace: {} },

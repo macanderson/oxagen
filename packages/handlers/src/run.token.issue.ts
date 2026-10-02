@@ -9,8 +9,9 @@ import {
 import {
   assertOrgRole,
   resolveActingUserId,
-  resolveActorOrgRoles,
+  type OrgRoleActor,
 } from "@oxagen/iam/org-role";
+import { isHandlerError } from "@oxagen/oxagen/handler-error";
 import { schema, type Tx, withTenantDb } from "@oxagen/database";
 import { lockRunForControl } from "@oxagen/run-ledger";
 import { and, eq } from "drizzle-orm";
@@ -53,7 +54,7 @@ export const runTokenIssueHandler: CapabilityHandler<
       throw new HandlerError({ code: "not_found", reason: "run_not_found" });
     if (run.cancelled || !["pending", "running"].includes(run.status))
       throw new HandlerError({ code: "conflict", reason: "run_not_writable" });
-    await assertRunParty(tx, scope, run.id, userId);
+    await assertRunParty(tx, scope, run.id, { ...ctx, userId });
     const attempt = await tx.query.agentRunAttempts.findFirst({
       where: and(
         eq(schema.agentRunAttempts.publicId, input.attemptId),
@@ -99,7 +100,8 @@ export const runTokenIssueHandler: CapabilityHandler<
  * A V2 run row names the operator who delegated it
  * (`initiating_principal_id`) and the agent acting for them
  * (`agent_principal_id`). When it names either, the caller must be one of
- * them, or hold org Owner or Admin. Otherwise any workspace Member could mint
+ * them, or hold org Owner or Admin, or be the workspace's Owner or Admin
+ * (`assertOrgRole`'s workspace rule, #5228). Otherwise any workspace Member could mint
  * a credential for a colleague's live attempt and write frames the seal
  * records as that run's own evidence. A V1 row names neither, and the role
  * gate above remains its whole boundary.
@@ -113,8 +115,9 @@ async function assertRunParty(
   tx: Tx,
   scope: { orgId: string; workspaceId: string },
   runId: string,
-  userId: string,
+  actor: OrgRoleActor & { userId: string },
 ): Promise<void> {
+  const { userId } = actor;
   const [row] = await tx
     .select({
       initiating: schema.agentRuns.initiatingPrincipalId,
@@ -137,12 +140,16 @@ async function assertRunParty(
       ),
     );
   if (own.some((principal) => parties.includes(principal.id))) return;
-  const orgRoles = await resolveActorOrgRoles(scope.orgId, userId, tx);
-  if (orgRoles.includes("Owner") || orgRoles.includes("Admin")) return;
+  try {
+    await assertOrgRole(actor, { org: ["Owner", "Admin"] }, tx);
+    return;
+  } catch (err) {
+    if (!isHandlerError(err) || err.code !== "forbidden") throw err;
+  }
   throw new HandlerError({
     code: "forbidden",
     reason: "not_run_principal",
     message:
-      "Only the run's initiating principal, its agent, or an org Owner or Admin can issue its credential",
+      "Only the run's initiating principal, its agent, an org Owner or Admin, or the workspace's Owner or Admin can issue its credential",
   });
 }

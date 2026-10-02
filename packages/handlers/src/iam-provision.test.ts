@@ -1,7 +1,7 @@
 // iam-provision.test.ts — unit tests for bootstrapOrgIAM / provisionMemberPrincipal.
 //
 // Tests verify:
-//   - bootstrapOrgIAM inserts 7 system roles with deterministic public_ids
+//   - bootstrapOrgIAM inserts 8 system roles with deterministic public_ids
 //   - Owner principal is created with kind:"human"
 //   - Owner role assignment is created via principalRoleAssignments
 //   - role_grants are seeded from listCapabilities()
@@ -169,7 +169,7 @@ describe("bootstrapOrgIAM()", () => {
     mocks.listCapabilities.mockReturnValue(FAKE_CAPABILITIES);
   });
 
-  it("inserts exactly 7 human system roles (4 org + 3 workspace) for a fresh org", async () => {
+  it("inserts exactly 8 human system roles (4 org + 4 workspace) for a fresh org", async () => {
     const db = buildMockDb({});
 
     await bootstrapOrgIAM({
@@ -189,7 +189,7 @@ describe("bootstrapOrgIAM()", () => {
           r.values["name"] as (typeof AGENT_ROLE_NAMES)[number],
         ),
     );
-    expect(roleInserts).toHaveLength(7);
+    expect(roleInserts).toHaveLength(8);
 
     // Check org roles.
     const orgRoles = roleInserts.filter((r) => r.values["scopeKind"] === "org");
@@ -201,9 +201,13 @@ describe("bootstrapOrgIAM()", () => {
     const wsRoles = roleInserts.filter(
       (r) => r.values["scopeKind"] === "workspace",
     );
-    expect(wsRoles).toHaveLength(3);
+    // Admin joined the workspace roles with #5228. Every new org gets it,
+    // marked system-default so rule 7.6 of the resolver reads it.
+    expect(wsRoles).toHaveLength(4);
     const wsRoleNames = wsRoles.map((r) => r.values["name"] as string).sort();
-    expect(wsRoleNames).toEqual(["Member", "Owner", "Viewer"]);
+    expect(wsRoleNames).toEqual(["Admin", "Member", "Owner", "Viewer"]);
+    const wsAdmin = wsRoles.find((r) => r.values["name"] === "Admin");
+    expect(wsAdmin?.values["isSystemDefault"]).toBe(true);
   });
 
   it("role public_ids are deterministic (same input → same output)", async () => {

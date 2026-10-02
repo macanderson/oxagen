@@ -48,6 +48,7 @@ export const billingGauBucketPurchase = registerCapability({
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
+  orgLevel: true,
   agent: { requiresApproval: true, riskLevel: "high", category: "billing" },
   sensitivity: "high",
   mutates: true,

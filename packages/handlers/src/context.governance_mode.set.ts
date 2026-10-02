@@ -109,7 +109,7 @@ const PR_BODY = [
   "| Mode | Who merges a Context PR |",
   "| --- | --- |",
   "| `solo` | any workspace member, the author included |",
-  "| `team` | an org Owner or Admin, or a workspace Owner, other than the author |",
+  "| `team` | an org Owner or Admin, or a workspace Owner or Admin, other than the author |",
   "| `regulated` | an org Owner or Admin other than the author, recorded as the accountable approver |",
   "",
   "Merging this is an ordinary merge on GitHub. Oxagen runs no checks on this",

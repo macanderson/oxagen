@@ -61,8 +61,15 @@ export function isDenial(value: unknown): value is DenialResponse {
 /** System-defined org-level roles that exist in every org. */
 export type SystemOrgRole = "Owner" | "Admin" | "Compliance" | "Billing";
 
-/** System-defined workspace-level roles that exist in every workspace. */
-export type SystemWorkspaceRole = "Owner" | "Member" | "Viewer";
+/**
+ * System-defined workspace-level roles that exist in every workspace.
+ *
+ * A workspace's Owner and Admin pass every role check for a capability that
+ * acts inside that workspace, whatever the contract's `defaultRoles` names
+ * (#5228, `packages/oxagen/src/iam/workspace-authority.ts`). A contract still
+ * names Member and Viewer where it grants them.
+ */
+export type SystemWorkspaceRole = "Owner" | "Admin" | "Member" | "Viewer";
 
 export type CapabilityLayer =
   | "schema"
@@ -219,6 +226,22 @@ export interface CapabilityDeclaration<
    * because the IAM check allows every capability for a non-enterprise org.
    */
   platformOnly?: boolean;
+  /**
+   * When true, the capability acts on the organization, not inside one
+   * workspace: billing, org settings, org membership, or a workspace other
+   * than the call's own. A workspace's Owner and Admin gain nothing here, so
+   * the workspace authority rule skips it and the contract's org roles decide
+   * (#5228, `packages/oxagen/src/iam/workspace-authority.ts`).
+   *
+   * Default false: a capability acts inside the call's workspace, and that
+   * workspace's Owner and Admin pass its role check with no role entry.
+   *
+   * Mark it on the contract, not by the call's workspace id. The app and the
+   * API put a real workspace id on an org-level call made from a workspace
+   * page or with a workspace-scoped key, so `ORG_ONLY_WORKSPACE_ID` alone
+   * cannot tell an org-level call apart.
+   */
+  orgLevel?: boolean;
   /**
    * When true, the capability is part of Oxagen's in-app assistant itself:
    * asking it, stopping a turn, reading a reply, and the conversations it
@@ -689,6 +712,17 @@ export interface CheckedContext extends CapabilityContext {
    * origin (`app`, `runner`, ...) and never says `agent`.
    */
   invokeSurface?: CapabilitySurface;
+  /**
+   * The registered name of the capability this checked context was built for.
+   * The kernel sets it on every checked context, over any value the caller
+   * passed in, so a nested invoke carries its own name.
+   *
+   * The workspace authority rule reads it (#5228): `assertOrgRole` admits a
+   * workspace's Owner or Admin only when the capability named here acts
+   * inside the workspace. A context the kernel did not build carries none,
+   * and the rule then admits nobody.
+   */
+  invokedCapability?: string;
   /**
    * The PLATFORM-CREATED reference to the immutable `iam.authorization_decisions`
    * row that allowed this invocation.

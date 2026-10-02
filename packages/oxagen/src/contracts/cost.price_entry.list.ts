@@ -56,6 +56,7 @@ export const costPriceEntryList = registerCapability({
   surfaces: ["api", "mcp", "agent", "cli"],
   layers: ["schema", "api", "mcp", "app", "unit", "docs"],
   scoped: true,
+  orgLevel: true,
   noBillingGate: true,
   mutates: false,
   sensitivity: "low",

@@ -10,6 +10,7 @@ export const workspaceInviteSend = registerCapability({
   mutates: true,
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
+  orgLevel: true,
   agent: { requiresApproval: true, riskLevel: "medium", category: "workspace" },
   sensitivity: "low",
   defaultEffect: "deny",

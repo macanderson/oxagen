@@ -22,6 +22,7 @@ export const orgSlackConnectionStart = registerCapability({
   surfaces: [],
   layers: ["schema", "app", "unit", "docs"],
   scoped: false,
+  orgLevel: true,
   // Connecting Slack is governance, not AI usage. It consumes no credits.
   noBillingGate: true,
   mutates: true,

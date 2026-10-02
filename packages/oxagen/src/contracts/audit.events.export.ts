@@ -47,6 +47,7 @@ export const auditEventsExport = registerCapability({
   surfaces: ["api", "mcp"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
+  orgLevel: true,
   noBillingGate: true,
   mutates: false,
   sensitivity: "high",

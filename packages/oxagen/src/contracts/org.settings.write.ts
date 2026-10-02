@@ -16,6 +16,7 @@ export const orgSettingsWrite = registerCapability({
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
+  orgLevel: true,
   agent: {
     requiresApproval: false,
     riskLevel: "medium",

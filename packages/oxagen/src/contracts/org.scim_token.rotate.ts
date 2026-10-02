@@ -23,6 +23,7 @@ export const orgScimTokenRotate = registerCapability({
   surfaces: ["api"],
   layers: ["schema", "api", "unit", "docs", "app"],
   scoped: false,
+  orgLevel: true,
   sensitivity: "high",
   mutates: true,
   defaultEffect: "deny",

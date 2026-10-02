@@ -525,7 +525,7 @@
       "modeUnread": "read from the governance file when the pull request opens",
       "modes": {
         "solo": "solo: any workspace member merges, the author included",
-        "team": "team: an org Owner or Admin, or a workspace Owner, other than the author merges",
+        "team": "team: an org Owner or Admin, or a workspace Owner or Admin, other than the author merges",
         "regulated": "regulated: an org Owner or Admin other than the author merges, recorded as the accountable approver"
       },
       "facts": {
