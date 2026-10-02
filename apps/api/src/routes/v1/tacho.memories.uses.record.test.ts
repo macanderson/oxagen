@@ -27,6 +27,14 @@ const input = {
       paths: [`${ROOT}-proj/memory/use-pnpm.md`],
     },
   ],
+  counts: [
+    {
+      harness: "codex",
+      path: "thread/01a0e198-36ea-7e52-aedf-4b346877c10d",
+      count: 3,
+      used_at: "2026-10-01T12:00:00.000Z",
+    },
+  ],
 };
 const answer = { recorded: 1, unknown: 0, pending: [], retired: 0 };
 

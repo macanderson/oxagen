@@ -103,6 +103,75 @@ describe("record_tacho_memory_uses", () => {
     expect(deps.retireMissing).not.toHaveBeenCalled();
   });
 
+  it("stores each harness count as a use with no run, beside the reads", async () => {
+    const { deps, handler } = handlerWith();
+    const thread = "thread/01a0e198-36ea-7e52-aedf-4b346877c10d";
+    const input = contract.input.parse({
+      host_enrollment_id: HOST,
+      uses: [use()],
+      counts: [
+        {
+          harness: "codex",
+          path: thread,
+          count: 4,
+          used_at: "2026-10-01T10:00:00.000Z",
+        },
+        // A host clock ahead of Oxagen's is stamped at Oxagen's time.
+        {
+          harness: "codex",
+          path: `${thread}-2`,
+          count: 1,
+          used_at: "2026-10-01T13:00:00.000Z",
+        },
+      ],
+    });
+    await expect(handler(input, ctx)).resolves.toEqual({
+      recorded: 3,
+      unknown: 0,
+      pending: [],
+      retired: 0,
+    });
+    expect(deps.recordUses).toHaveBeenCalledWith(scope, [
+      expect.objectContaining({ signal: "read", runPublicId: "tse_run1" }),
+      {
+        capture: "local_gateway",
+        source: `codex:${thread}`,
+        runPublicId: null,
+        signal: "harness_count",
+        count: 4,
+        usedAt: new Date("2026-10-01T10:00:00.000Z"),
+      },
+      {
+        capture: "local_gateway",
+        source: `codex:${thread}-2`,
+        runPublicId: null,
+        signal: "harness_count",
+        count: 1,
+        usedAt: NOW,
+      },
+    ]);
+  });
+
+  it("asks for no session when a report holds only harness counts", async () => {
+    const { deps, handler } = handlerWith();
+    const input = contract.input.parse({
+      host_enrollment_id: HOST,
+      counts: [
+        {
+          harness: "codex",
+          path: "thread/t1",
+          count: 2,
+          used_at: "2026-10-01T10:00:00.000Z",
+        },
+      ],
+    });
+    await expect(handler(input, ctx)).resolves.toMatchObject({
+      recorded: 1,
+      pending: [],
+    });
+    expect(deps.runsOf).not.toHaveBeenCalled();
+  });
+
   it("stores a Stella citation as a citation of the memory its lineage names", async () => {
     const { deps, handler } = handlerWith();
     const input = contract.input.parse({

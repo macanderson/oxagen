@@ -14,10 +14,17 @@
  * `citation`. Its path is the memory's lineage, so its source is
  * `stella:<lineage>`.
  *
- * A scan names a folder where a harness keeps its memory files, and every
- * memory file the scan found there. Each waiting or promoted memory of the
- * host's agent from a file under that folder that the scan did not find
- * retires. The daemon sends a scan only when it listed every folder.
+ * A count is a use the harness counted itself, with no run: Codex keeps a
+ * `usage_count` on each memory, and the daemon sends the rise since its last
+ * report. It names the memory by its path in the harness's store, such as
+ * `thread/<thread_id>`, and the store adds the count to the memory's uses
+ * as a `harness_count` use.
+ *
+ * A scan names a folder where a harness keeps its memory files, or the root
+ * of a harness's store such as Codex's `thread/`, and every memory the scan
+ * found there. Each waiting or promoted memory of the host's agent from a
+ * source under that root that the scan did not find retires. The daemon
+ * sends a scan only when it read all of that folder or store.
  *
  * Machine-to-machine, authenticated by the host's API key. The host names
  * itself so the handler can check the key's scope names the same host.
@@ -32,6 +39,8 @@ export const MEMORY_USES_PER_REPORT = 200;
 export const MEMORY_SCAN_PATHS_MAX = 4_000;
 /** The most scans one report carries. */
 export const MEMORY_SCANS_PER_REPORT = 8;
+/** The most harness counts one report carries. The daemon sends more in later calls. */
+export const MEMORY_COUNTS_PER_REPORT = 200;
 
 const pathSchema = z.string().min(1).max(1024);
 
@@ -54,6 +63,19 @@ const useSchema = z
     /** How many times the run read the file since the host last reported it. */
     count: z.number().int().min(1).max(10_000),
     /** When the run last read the file. */
+    used_at: z.string().datetime({ offset: true }),
+  })
+  .strict();
+
+const countSchema = z
+  .object({
+    /** The harness that counted the uses. */
+    harness: tachoHarnessSchema,
+    /** The memory's path, as the memory upload named it. With the harness, it is the memory's source. */
+    path: pathSchema,
+    /** How many uses the harness counted since the host last reported this memory. */
+    count: z.number().int().min(1).max(10_000),
+    /** When the harness last used the memory. */
     used_at: z.string().datetime({ offset: true }),
   })
   .strict();
@@ -85,7 +107,7 @@ export const tachoMemoryUsesRecord = registerCapability({
   name: "record_tacho_memory_uses",
   domain: "tacho",
   description:
-    "Count the memory files runs read on an enrolled Tacho host, and retire the memories whose files a full scan no longer finds.",
+    "Count the memory files runs read on an enrolled Tacho host and the memory uses a harness counted itself, and retire the memories whose files a full scan no longer finds.",
   mode: "sync",
   surfaces: ["api"],
   layers: ["schema", "api", "unit", "docs"],
@@ -103,13 +125,14 @@ export const tachoMemoryUsesRecord = registerCapability({
       host_enrollment_id: hostEnrollmentIdSchema,
       uses: z.array(useSchema).max(MEMORY_USES_PER_REPORT).default([]),
       scans: z.array(scanSchema).max(MEMORY_SCANS_PER_REPORT).default([]),
+      counts: z.array(countSchema).max(MEMORY_COUNTS_PER_REPORT).default([]),
     })
     .strict(),
   output: z
     .object({
-      /** Uses stored, each against the memory its file holds. */
+      /** Uses and counts stored, each against the memory its source holds. */
       recorded: z.number().int().min(0),
-      /** Uses of a file that holds no memory in the workspace. They are dropped. */
+      /** Uses and counts of a source that holds no memory in the workspace. They are dropped. */
       unknown: z.number().int().min(0),
       /** The index in `uses` of each use whose run Oxagen has not recorded yet. */
       pending: z.array(z.number().int().min(0)),
