@@ -1,8 +1,8 @@
 /**
  * session-state.ts — the ONE chat session model (chat_ux_v2).
  *
- * Every run-context setting a conversation has — agent, model, effort, budget
- * cap — lives in this single state object with a single reducer
+ * Every run-context setting a conversation has — agent, model, effort — lives
+ * in this single state object with a single reducer
  * (`applySessionPatch`) as the only write path. The header subtitle, the
  * SessionSettings surface, and the actual run payload are all projections of
  * one store value, so a mismatch between what the UI shows and what the turn
@@ -32,26 +32,15 @@ export interface ChatSessionState {
   model: string | null;
   /** Reasoning effort. The v2 UI exposes low | medium | high. */
   effort: EffortLevel;
-  /**
-   * Per-turn budget cap in USD; null = no cap. v2 semantics are always
-   * "prompt": pause and ask before a reply exceeds the cap.
-   */
-  budgetUsd: number | null;
 }
 
 export const SESSION_STATE_VERSION = 1;
-
-/** Budget preset chips, in USD. "Custom" is any other value. */
-export const BUDGET_PRESETS_USD = [0.5, 1, 2, 5] as const;
-export const BUDGET_MIN_USD = 0.05;
-export const BUDGET_STEP_USD = 0.25;
 
 export const defaultChatSessionState: ChatSessionState = {
   agentId: null,
   tier: "fast",
   model: null,
   effort: "medium",
-  budgetUsd: null,
 };
 
 // ---------------------------------------------------------------------------
@@ -104,8 +93,6 @@ export interface SessionSeed {
   /** Effective model defaults (workspace > user > system). */
   textModel: string | null;
   textTier: TextTier | null;
-  /** The user's saved per-turn budget default, already governance-clamped. */
-  budgetUsd: number | null;
 }
 
 /**
@@ -119,7 +106,6 @@ export function seedSessionState(seed: SessionSeed): ChatSessionState {
     agentId: seed.defaultAgentId,
     tier: seed.textModel ? null : (seed.textTier ?? "fast"),
     model: seed.textModel,
-    budgetUsd: seed.budgetUsd,
   };
 }
 
@@ -151,34 +137,23 @@ export function sessionDiffersFromDefaults(
     state.agentId !== defaults.agentId ||
     state.tier !== defaults.tier ||
     state.model !== defaults.model ||
-    state.effort !== defaults.effort ||
-    state.budgetUsd !== defaults.budgetUsd
+    state.effort !== defaults.effort
   );
 }
 
 /**
  * The header-subtitle projection — the ONLY read-only echo of session state
- * allowed anywhere. Renders as `{model}` alone, or `{model} · {budget}` when a
- * per-turn cap is set.
+ * allowed anywhere. Renders as `{model}`.
  */
 export interface SessionSubtitleParts {
   model: string;
-  /** Formatted per-turn cap (e.g. "$1.00 cap"), or null when uncapped. */
-  budget: string | null;
 }
 
-export function sessionSubtitleParts(
-  state: ChatSessionState,
-  options: {
-    /** Display name for the resolved model/tier (from the model catalog). */
-    modelLabel: string;
-  },
-): SessionSubtitleParts {
-  return {
-    model: options.modelLabel,
-    budget:
-      state.budgetUsd !== null ? `$${state.budgetUsd.toFixed(2)} cap` : null,
-  };
+export function sessionSubtitleParts(options: {
+  /** Display name for the resolved model/tier (from the model catalog). */
+  modelLabel: string;
+}): SessionSubtitleParts {
+  return { model: options.modelLabel };
 }
 
 // ---------------------------------------------------------------------------
@@ -237,10 +212,6 @@ export function decodeSessionState(
     effort: EFFORTS.includes(obj.effort as EffortLevel)
       ? (obj.effort as EffortLevel)
       : base.effort,
-    budgetUsd:
-      typeof obj.budgetUsd === "number" && obj.budgetUsd >= BUDGET_MIN_USD
-        ? obj.budgetUsd
-        : null,
   };
 }
 

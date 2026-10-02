@@ -125,7 +125,15 @@ jobs:
           # Both outputs feed the issue body. Postgres first: it is the store
           # whose drift had no other caller, so it is the one a reader is least
           # likely to have heard about another way.
-          cat /tmp/pg-drift.txt /tmp/drift.txt > /tmp/combined.txt 2>/dev/null || true
+          #
+          # The issue body must never carry a credential. `::add-mask::` hides
+          # a value in the log only, and `tee` saved the raw line, so the
+          # production DATABASE_URL reached three drift issues (since deleted).
+          # Drop every workflow command line, then blank the user and
+          # password in any URL that still carries them.
+          cat /tmp/pg-drift.txt /tmp/drift.txt 2>/dev/null \
+            | sed -E -e '/^::/d' -e 's#://[^/:@[:space:]]+:[^@[:space:]]+@#://***:***@#g' \
+            > /tmp/combined.txt || true
 
       # Matches infra-drift.yml next door: found by a dedicated label rather
       # than by matching a title, closed only on a real clean answer, and

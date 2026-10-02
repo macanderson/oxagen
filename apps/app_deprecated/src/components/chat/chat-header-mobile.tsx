@@ -3,8 +3,8 @@
  * chat-header-mobile.tsx — the v2 mobile chat header (chat_ux_v2 + phone
  * width only; see chat-shell-client.tsx's mount gate). Slim 48px bar:
  * conversations on the left, a tap-to-open session-settings summary in the
- * center (agent name over the `{model} · {budget}` subtitle), activity +
- * notifications on the right.
+ * center (agent name over the `{model}` subtitle), activity + notifications
+ * on the right.
  *
  * Props-driven — no data fetching here. The center summary reads the
  * unified session store directly via `useChatSession()` (safe: this
@@ -62,10 +62,7 @@ export function ChatHeaderMobile({
     ? modelLabelOf(state.model)
     : tierLabel(state.tier ?? "fast");
 
-  const parts = sessionSubtitleParts(state, { modelLabel });
-  const subtitle = parts.budget
-    ? `${parts.model} · ${parts.budget}`
-    : parts.model;
+  const subtitle = sessionSubtitleParts({ modelLabel }).model;
 
   return (
     <header

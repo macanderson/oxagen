@@ -2,44 +2,34 @@ import { z } from "zod";
 import { defineTool } from "./_define";
 import { spendBudgetSetInputObject } from "../billing.budget.set";
 import { billingBudgetGet } from "../billing.budget.get";
-import { budgetPolicyWrite } from "../budget.policy.write";
-import { budgetPolicyRead } from "../budget.policy.read";
-import { workspaceBudgetPolicyRead } from "../workspace.budget_policy.read";
 
 /**
- * Appendix E: `set_budget` — "any level". Absorbs `set_spend_budget`,
- * `get_spend_budget`, `update_user_budget`, `get_user_budget` and
- * `get_budget_policy`.
+ * Appendix E: `set_budget` — "any level". Absorbs `set_spend_budget` and
+ * `get_spend_budget`.
  *
- * v1 had three unrelated budget systems: an org/workspace period ceiling
- * (`set_spend_budget`), a user's own per-turn ceiling (`update_user_budget`),
- * and a workspace-governed per-turn policy (`get_budget_policy`). §12.5 and A.8
- * `billing.budgets` collapse them into one row: a budget belongs to an
+ * §12.5 and A.8 `billing.budgets` give a budget one row: a budget belongs to an
  * organization, workspace, operator or agent, has a period, a limit, and a hard
  * or soft mode. This tool is that row.
  *
- * Three decisions worth checking:
+ * Appendix E also folded in three per-turn sources: `update_user_budget`,
+ * `get_user_budget` and `get_budget_policy`. They set a budget for one turn of
+ * Oxagen's in-app assistant. Mac ruled on 2026-10-02 that no customer sets a
+ * budget for the assistant (ADR-235), and ADR-277 deleted all three. So this
+ * tool carries no `turn` period, and none of the fields that only meant
+ * something for a turn: what happens at the ceiling (`grace`, `prompt` or
+ * `enforce`) and the grace cushion. Appendix E in oxageninc/roadmap still
+ * lists the three, and the fixtures here no longer do.
  *
- * 1. **Two things were both called `mode`, and only one keeps the name.** §12.5
- *    gives a budget a `hard` or `soft` mode — hard budgets are enforced at the
- *    model proxy before the call. `update_user_budget`'s mode was a different
- *    axis entirely (grace / prompt / enforce: what happens AT the ceiling). It
- *    carries by import under the name `onBreach`, because leaving both as
- *    `mode` would make one of them silently win in every handler that reads the
- *    input, and a budget that enforces when it meant to prompt is the expensive
- *    direction of that mistake.
+ * Two decisions worth checking:
  *
- * 2. **`period` gains `turn`.** A.8 lists daily, monthly and rolling.
- *    `update_user_budget`'s ceiling is per-turn, and Appendix E folds it here,
- *    so a fourth literal is added rather than dropping a shipped ceiling. It is
- *    the period for which `onBreach` and `graceOveragePct` are meaningful and
- *    `windowDays` is not.
+ * 1. **`mode` is hard or soft.** §12.5 gives a budget a `hard` or `soft` mode.
+ *    Hard budgets are enforced at the model proxy before the call.
  *
- * 3. **The reads fold into the write's response.** `get_spend_budget`,
- *    `get_user_budget` and `get_budget_policy` all returned a status; a set
- *    returns every ceiling now governing the scope, so the panel renders the
- *    new state without a second round trip. That is v1 `set_spend_budget`'s
- *    round-trip behaviour, widened to the levels §12.5 adds.
+ * 2. **The read folds into the write's response.** `get_spend_budget` returned
+ *    a status; a set returns every ceiling now governing the scope, so the
+ *    panel renders the new state without a second round trip. That is v1
+ *    `set_spend_budget`'s round-trip behaviour, widened to the levels §12.5
+ *    adds.
  *
  * Amounts are `Money` — integer micro-units in a decimal string with their
  * currency — carried from `set_spend_budget`, which moved to that shape with
@@ -47,8 +37,7 @@ import { workspaceBudgetPolicyRead } from "../workspace.budget_policy.read";
  * `limit_micros` on the way in as well as on the way out, so §12.3's
  * integer-micro rule now governs the ceiling a human types the same way it
  * governs the cost records it is compared against, and no float sits between
- * the two. `update_user_budget`'s plain-USD `limitUsd` carries into it as a
- * rename, declared below.
+ * the two.
  */
 
 // Carried by import and widened per §12.5: "Each budget belongs to an
@@ -59,18 +48,16 @@ const budgetScope = z.enum([
   "agent",
 ] as const);
 
-// Carried and widened per A.8 `billing.budgets.period` (daily) plus the
-// per-turn ceiling absorbed from update_user_budget — see the header.
+// Carried and widened per A.8 `billing.budgets.period` (daily).
 const budgetPeriod = z.enum([
   ...spendBudgetSetInputObject.shape.period.options,
   "daily",
-  "turn",
 ] as const);
 
 /**
  * §12.5 / A.8 `billing.budgets.mode`. New: no absorbed contract had the field,
- * because v1's org ceiling was always hard and its per-turn ceiling always
- * soft. Making it explicit is what lets one row serve both.
+ * because v1's spend ceiling was always hard. Making it explicit lets one row
+ * hold a hard ceiling or a soft one that only notifies.
  */
 const budgetMode = z.enum(["hard", "soft"]);
 
@@ -98,18 +85,6 @@ export const setBudgetInputObject = spendBudgetSetInputObject.extend({
   mode: budgetMode.default("hard"),
 
   /**
-   * Carried from update_user_budget's `mode`, renamed — see header. Omit to
-   * leave unchanged; it decides what happens AT the ceiling, where `mode`
-   * decides whether the ceiling is enforced at all.
-   */
-  onBreach: budgetPolicyWrite.input.shape.mode,
-  /**
-   * Carried: the grace cushion, still capped at 10 (1000%) so a fat-fingered
-   * value cannot quietly disable the ceiling it modifies.
-   */
-  graceOveragePct: budgetPolicyWrite.input.shape.graceOveragePct,
-
-  /**
    * A.8 `notify_at`: the percentages that raise a notification. New as an
    * input — v1 hard-coded the 50/80/95 ladder and only reported which rung had
    * been reached.
@@ -128,10 +103,6 @@ const budgetStatus = billingBudgetGet.output.shape.budgets.element.extend({
   scopeId: z.string().nullable(),
   period: budgetPeriod,
   mode: budgetMode,
-  // Carried from get_user_budget / get_budget_policy: the two fields those
-  // reads returned, now attached to the budget they describe.
-  onBreach: budgetPolicyRead.output.shape.mode,
-  graceOveragePct: workspaceBudgetPolicyRead.output.shape.graceOveragePct,
   notifyAtPercent: z.array(z.number().int()),
 });
 
@@ -139,47 +110,23 @@ export const setBudget = defineTool({
   name: "set_budget",
   domain: "billing",
   description:
-    "Set the spend ceiling for any level — organization, workspace, operator, or agent (§12.5). Choose the period (turn, daily, monthly, or a trailing rolling window), the USD limit, whether the ceiling is hard (enforced at the model proxy before the call) or soft, what happens at the ceiling, and the notification thresholds. Returns every ceiling now governing the scope with its live burn.",
+    "Set the spend ceiling for any level — organization, workspace, operator, or agent (§12.5). Choose the period (daily, monthly, or a trailing rolling window), the USD limit, whether the ceiling is hard (enforced at the model proxy before the call) or soft, and the notification thresholds. Returns every ceiling now governing the scope with its live burn.",
   mode: "sync",
   surfaces: ["api", "mcp", "cli", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
-  // Stricter of the two: set_spend_budget is scoped, update_user_budget was
-  // not. A budget that can now name an operator or agent must resolve the
-  // workspace it belongs to, or "agent X" is ambiguous across tenants.
+  // Carried from set_spend_budget. A budget that can now name an operator or
+  // agent must resolve the workspace it belongs to, or "agent X" is ambiguous
+  // across tenants.
   scoped: true,
 
-  absorbs: [
-    "set_spend_budget",
-    "get_spend_budget",
-    "update_user_budget",
-    "get_user_budget",
-    "get_budget_policy",
-  ],
-  renames: [
-    {
-      from: "limitUsd",
-      source: "update_user_budget",
-      to: "limit",
-      why: "The ceiling is `Money` — integer micro-units with a currency (ADR-057 decision 2) — carried by import from `set_spend_budget`, whose own `limitUsd` moved to `limit` in the same change. `update_user_budget`'s plain-USD number is the same ceiling in the weaker encoding, so this is a rename onto the carried field, not a second amount",
-    },
-  ],
-  drops: [
-    {
-      field: "enforcement",
-      from: "get_budget_policy",
-      why: "v1 distinguished a workspace budget that SEEDS members (default) from one they cannot exceed (ceiling). §12.5 gives a budget one enforcement axis — hard or soft — and a seeding default is exactly `mode: 'soft'` on the workspace-scope row, so keeping both would be two names for one decision",
-    },
-  ],
+  absorbs: ["set_spend_budget", "get_spend_budget"],
+  drops: [],
 
   /**
-   * Strictest of the five. `set_spend_budget` is sensitivity medium / risk
-   * medium and grants only governance roles; `update_user_budget` was low / low
-   * and granted every role down to Viewer, because in v1 it could only change
-   * the caller's own per-turn ceiling. That is no longer true: this tool can
-   * raise an org ceiling, which §12.5 makes the override that clears a denial
-   * at the proxy. The strict source wins on every field — including at
-   * workspace scope, where set_spend_budget's grant is the ceiling and Member
-   * and Viewer, which update_user_budget granted, do not carry.
+   * Carried from `set_spend_budget`: sensitivity medium, risk medium, and only
+   * governance roles. This tool can raise an org ceiling, which §12.5 makes
+   * the override that clears a denial at the proxy. At workspace scope it
+   * grants Owner alone, because workspace Admin is not a system workspace role.
    */
   agent: { requiresApproval: false, riskLevel: "medium", category: "billing" },
   sensitivity: "medium",
@@ -193,8 +140,7 @@ export const setBudget = defineTool({
    * being over one, or an org that breached its ceiling could not raise it.
    */
   noBillingGate: true,
-  // Writes billing.budgets. Both write sources mutate — budget.policy.write's
-  // handler is an insert-or-update on the preferences row.
+  // Writes billing.budgets.
   mutates: true,
 
   input: setBudgetInputObject
@@ -226,8 +172,8 @@ export const setBudget = defineTool({
 
   output: z.object({
     /**
-     * Every ceiling now governing the scope. A per-turn ceiling under an
-     * operator budget under an org ceiling is the normal case, and the panel
+     * Every ceiling now governing the scope. An operator budget under a
+     * workspace ceiling under an org ceiling is the normal case, and the panel
      * has to show which one bites first.
      */
     budgets: z.array(budgetStatus),

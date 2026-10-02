@@ -977,10 +977,13 @@ html:not(.js) .nav-item:is(:hover, :focus-within) > .menu {
   color: var(--gold);
   border-color: color-mix(in srgb, var(--gold) 45%, transparent);
 }
+/* A long name keeps its line and its tag drops below it, so "Context Graph
+   Protocol" does not break into three short lines beside its tag. */
 .mm-t {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 7px;
+  gap: 4px 7px;
   color: var(--ink);
   font-size: var(--fs-ui);
   font-weight: 550;

@@ -17,7 +17,6 @@ const SEED: SessionSeed = {
   defaultAgentId: "agt_default",
   textModel: null,
   textTier: "fast",
-  budgetUsd: null,
 };
 
 function base(overrides: Partial<ChatSessionState> = {}): ChatSessionState {
@@ -38,17 +37,13 @@ describe("applySessionPatch", () => {
     const next = applySessionPatch(base(), {
       agentId: "agt_1",
       effort: "high",
-      budgetUsd: 2,
     });
-    expect(next).toEqual(
-      base({ agentId: "agt_1", effort: "high", budgetUsd: 2 }),
-    );
+    expect(next).toEqual(base({ agentId: "agt_1", effort: "high" }));
   });
 
-  it("carries no repo/branch/environment fields (ADR-043)", () => {
+  it("carries no repo/branch/environment or budget fields (ADR-043, ADR-235)", () => {
     expect(Object.keys(defaultChatSessionState).sort()).toEqual([
       "agentId",
-      "budgetUsd",
       "effort",
       "model",
       "tier",
@@ -62,7 +57,6 @@ describe("seedSessionState", () => {
     expect(seeded.agentId).toBe("agt_default");
     expect(seeded.tier).toBe("fast");
     expect(seeded.model).toBeNull();
-    expect(seeded.budgetUsd).toBeNull();
   });
 
   it("prefers an explicit default model over the tier", () => {
@@ -100,26 +94,16 @@ describe("sessionDiffersFromDefaults", () => {
       sessionDiffersFromDefaults({ ...defaults, effort: "high" }, defaults),
     ).toBe(true);
     expect(
-      sessionDiffersFromDefaults({ ...defaults, budgetUsd: 2 }, defaults),
-    ).toBe(true);
-    expect(
       sessionDiffersFromDefaults({ ...defaults, agentId: "agt_x" }, defaults),
     ).toBe(true);
   });
 });
 
 describe("sessionSubtitleParts", () => {
-  it("renders the model label alone when the turn is uncapped", () => {
-    expect(sessionSubtitleParts(base(), { modelLabel: "Fast" })).toEqual({
+  it("renders the model label alone", () => {
+    expect(sessionSubtitleParts({ modelLabel: "Fast" })).toEqual({
       model: "Fast",
-      budget: null,
     });
-  });
-
-  it("formats the per-turn cap when one is set", () => {
-    expect(
-      sessionSubtitleParts(base({ budgetUsd: 1 }), { modelLabel: "Sonnet" }),
-    ).toEqual({ model: "Sonnet", budget: "$1.00 cap" });
   });
 });
 
@@ -130,7 +114,6 @@ describe("persistence codecs", () => {
       tier: null,
       model: "anthropic/claude-sonnet-5",
       effort: "high",
-      budgetUsd: 2,
     });
     expect(
       decodeSessionState(encodeSessionState(state), defaultChatSessionState),
@@ -155,14 +138,21 @@ describe("persistence codecs", () => {
         agentId: "agt_1",
         tier: "warp-speed",
         effort: "impossible",
-        budgetUsd: -4,
       }),
       defaultChatSessionState,
     );
     expect(decoded?.agentId).toBe("agt_1");
     expect(decoded?.tier).toBe(defaultChatSessionState.tier);
     expect(decoded?.effort).toBe(defaultChatSessionState.effort);
-    expect(decoded?.budgetUsd).toBeNull();
+  });
+
+  it("drops a per-turn budget a stored session still carries (ADR-235)", () => {
+    const decoded = decodeSessionState(
+      JSON.stringify({ v: 1, agentId: "agt_1", budgetUsd: 2 }),
+      defaultChatSessionState,
+    );
+    expect(decoded?.agentId).toBe("agt_1");
+    expect(decoded).not.toHaveProperty("budgetUsd");
   });
 });
 

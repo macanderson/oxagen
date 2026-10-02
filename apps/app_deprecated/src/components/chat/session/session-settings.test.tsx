@@ -68,7 +68,6 @@ const SEED: SessionSeed = {
   defaultAgentId: null,
   textModel: null,
   textTier: "fast",
-  budgetUsd: null,
 };
 
 /** Exposes the store as DOM alongside the rendered SessionSettings. */
@@ -125,20 +124,12 @@ describe("SessionSettings — Session section", () => {
     expect(stateOf().effort).toBe("high");
   });
 
-  it("writes a budget preset via a chip", () => {
+  it("offers no per-turn budget control (ADR-235)", () => {
     renderHarness();
-    fireEvent.click(screen.getByRole("button", { name: "$2" }));
-    expect(stateOf().budgetUsd).toBe(2);
-  });
-
-  it("the custom budget stepper respects min/step and clamps below the minimum", () => {
-    renderHarness();
-    fireEvent.click(screen.getByRole("button", { name: "Custom" }));
-    const input = screen.getByLabelText("Custom per-turn budget in dollars");
-    expect(input).toHaveAttribute("min", "0.05");
-    expect(input).toHaveAttribute("step", "0.25");
-    fireEvent.change(input, { target: { value: "0.01" } });
-    expect(stateOf().budgetUsd).toBe(0.05);
+    expect(
+      screen.queryByRole("group", { name: "Per-turn budget" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Per-turn budget")).not.toBeInTheDocument();
   });
 
   it('"Reset to defaults" restores the seeded state', () => {

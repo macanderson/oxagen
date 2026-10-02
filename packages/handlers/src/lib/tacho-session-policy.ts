@@ -8,9 +8,8 @@
  * real code that nothing could reach — the gateway metered and never governed
  * (docs/audits/2026-09-21-model-gateway-arming.md §2).
  *
- * This is a different setting from `workspace_budget_policy`, which governs an
- * in-app assistant TURN. This one governs a wrapped harness SESSION on
- * somebody's laptop, and the two are read by different enforcers.
+ * This setting governs a wrapped harness SESSION on somebody's laptop. It
+ * never applies to Oxagen's in-app assistant (ADR-235).
  */
 import { schema, withTenantDb } from "@oxagen/database";
 import { eq } from "drizzle-orm";

@@ -9,16 +9,14 @@ import type { AppEnv } from "../../app";
 const mocks = vi.hoisted(() => ({ invoke: vi.fn() }));
 vi.mock("@oxagen/oxagen/kernel", () => ({ invoke: mocks.invoke }));
 
-import { budgetPolicyReadRoute } from "./budget.policy.read";
-import { budgetPolicyWriteRoute } from "./budget.policy.write";
 import { userPreferencesReadRoute } from "./user.preferences.read";
 import { userPreferencesSetRoute } from "./user.preferences.set";
 
 /**
  * What `userScoped` in app.ts actually is: `authMiddleware` and nothing else.
  * It sets `userId` and never an org or workspace, which is the whole point —
- * these four capabilities are `scoped: false` because they are user-global,
- * and one of them is reachable before the user belongs to any organization.
+ * these capabilities are `scoped: false` because they are user-global, and
+ * they are reachable before the user belongs to any organization.
  */
 function userScopedApp(path: string, route: Hono<AppEnv>): Hono<AppEnv> {
   const app = new Hono<AppEnv>();
@@ -50,37 +48,6 @@ const CASES = [
         body: JSON.stringify({ theme: "dark" }),
       }),
     output: { locale: "en", theme: "dark", timezone: "UTC" },
-  },
-  {
-    name: "GET /user/budget/read",
-    path: "/user/budget/read",
-    route: budgetPolicyReadRoute,
-    request: () => new Request("http://localhost/user/budget/read"),
-    output: {
-      enabled: false,
-      limitUsd: null,
-      mode: "soft",
-      graceOveragePct: 0,
-      enforcement: "default",
-    },
-  },
-  {
-    name: "PATCH /user/budget/write",
-    path: "/user/budget/write",
-    route: budgetPolicyWriteRoute,
-    request: () =>
-      new Request("http://localhost/user/budget/write", {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ enabled: false }),
-      }),
-    output: {
-      enabled: false,
-      limitUsd: null,
-      mode: "soft",
-      graceOveragePct: 0,
-      enforcement: "default",
-    },
   },
 ] as const;
 

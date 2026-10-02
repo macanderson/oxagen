@@ -27,10 +27,7 @@ import { useToolStream } from "./use-tool-stream";
 import type { ChatShellProps } from "./chat-shell-props";
 import type { StreamEvent } from "./stream-event-types";
 import type { ResolvedTierCatalog } from "@oxagen/ai/catalog";
-import type {
-  ComposerModelState,
-  WorkspaceBudgetGovernance,
-} from "./model-picker";
+import type { ComposerModelState } from "./model-picker";
 import type { McpServerSummary } from "./mcp-types";
 import type { AgentOption } from "./agent-picker/agent-picker-types";
 import { ChatSelectionProvider } from "./agent-picker/chat-selection-context";
@@ -178,7 +175,6 @@ export function ChatShellClient({
   availableAgents,
   defaultAgentId,
   setDefaultAgentAction,
-  workspaceBudgetGovernance,
   agentId,
   pageContext,
   onConversationCreated,
@@ -215,9 +211,6 @@ export function ChatShellClient({
   setDefaultAgentAction?: (
     agentId: string | null,
   ) => Promise<{ ok: boolean; error?: string }>;
-  /** Workspace-level per-turn budget governance. Null/omitted ⇒
-   * no governance active for this workspace. */
-  workspaceBudgetGovernance?: WorkspaceBudgetGovernance | null;
   /** Bound published agent's public id (Ask page ?agent=…). Seeds the initial
    * agent selection so the composer chip reflects the binding; the composer
    * then carries it in each stream request as `agentId`. Null ⇒ unbound. */
@@ -275,8 +268,6 @@ export function ChatShellClient({
     turnUsage,
     turnError,
     turnWarning,
-    turnBudgetNotice,
-    turnCostUsd,
     suggestedPrompts,
     consume,
     reset,
@@ -386,39 +377,6 @@ export function ChatShellClient({
       description: turnWarning.message,
     });
   }, [turnWarning, toast]);
-
-  // Per-turn dollar budget (OXA — turn-budget): surface the engine's non-
-  // blocking budget-guard notices as a toast, same dedupe-by-content pattern
-  // as the turnError effect above (a new object identity every render must
-  // not re-toast the same notice). "stopped" ends the turn early (mirrors the
-  // engine's `stopReason: "budget"`); "within_grace" is informational and the
-  // turn keeps streaming. The gated "prompt" mode's pause is NOT here — it
-  // renders as an approval card via pendingApprovals instead.
-  const lastToastedBudgetNoticeRef = React.useRef<string | null>(null);
-  React.useEffect(() => {
-    if (turnBudgetNotice === undefined) {
-      lastToastedBudgetNoticeRef.current = null;
-      return;
-    }
-    const key = `${turnBudgetNotice.state} ${turnBudgetNotice.costUsd} ${turnBudgetNotice.limitUsd}`;
-    if (lastToastedBudgetNoticeRef.current === key) return;
-    lastToastedBudgetNoticeRef.current = key;
-    const cost = turnBudgetNotice.costUsd.toFixed(4);
-    const limit = turnBudgetNotice.limitUsd.toFixed(4);
-    if (turnBudgetNotice.state === "stopped") {
-      toast.add({
-        type: "warning",
-        title: "Turn stopped — per-turn budget reached",
-        description: `This turn cost $${cost} of your $${limit} budget and was stopped.`,
-      });
-    } else {
-      toast.add({
-        type: "info",
-        title: "Over budget — within grace window",
-        description: `This turn is at $${cost}, past your $${limit} budget but still inside the grace cushion.`,
-      });
-    }
-  }, [turnBudgetNotice, toast]);
 
   const router = useRouter();
   const pathname = usePathname();
@@ -690,20 +648,6 @@ export function ChatShellClient({
                   return JSON.parse(raw) as string[];
                 } catch {
                   return [];
-                }
-              })(),
-              // Per-turn dollar budget (OXA — turn-budget). The composer
-              // always sets this (see message-composer.tsx budgetPayload) but
-              // a malformed/missing value degrades to `null`, which the route
-              // treats as "no per-turn override" and falls back to the user's
-              // saved default (budget.policy.read).
-              budget: (() => {
-                const raw = formData.get("budget") as string | null;
-                if (!raw) return null;
-                try {
-                  return JSON.parse(raw);
-                } catch {
-                  return null;
                 }
               })(),
               // Forward attachment IDS ONLY — never the base64 bytes or the
@@ -1202,10 +1146,6 @@ export function ChatShellClient({
       defaultAgentId: currentDefaultAgentId,
       textModel: initialModelState?.model ?? null,
       textTier: initialModelState?.tier ?? null,
-      budgetUsd:
-        initialModelState?.budgetEnabled && initialModelState.budgetUsd
-          ? initialModelState.budgetUsd
-          : null,
     }),
     [currentDefaultAgentId, initialModelState],
   );
@@ -1353,18 +1293,6 @@ export function ChatShellClient({
                           </TimelineItem>
                         ))}
                       </ActivityTimeline>
-                      {/* Live cost estimate while a budgeted turn streams
-                      (chat_ux_v2): "≈ $0.31" next to the in-progress
-                      message, from per-step budget-tick events. */}
-                      {chatUxV2 && isStreaming && turnCostUsd !== undefined ? (
-                        <p
-                          data-testid="live-cost-estimate"
-                          aria-live="polite"
-                          className="text-[11px] tabular-nums text-muted-foreground/80"
-                        >
-                          ≈ ${turnCostUsd.toFixed(2)}
-                        </p>
-                      ) : null}
                       {turnUsage !== undefined ? (
                         <div id="turn-result">
                           <MessageFooter
@@ -1471,10 +1399,6 @@ export function ChatShellClient({
               defaultAgentId={currentDefaultAgentId}
               onSetDefaultAgent={
                 setDefaultAgentAction ? handleSetDefaultAgent : undefined
-              }
-              workspaceBudgetGovernance={workspaceBudgetGovernance}
-              walletBalanceUsd={
-                walletBalanceCents != null ? walletBalanceCents / 100 : null
               }
               orgSlug={orgSlug}
               workspaceSlug={workspaceSlug}
