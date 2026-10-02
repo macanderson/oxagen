@@ -654,6 +654,7 @@ after the registered name separately when their contract uses a dotted stem.
 | [open_studio_review](tool.studio.review.open.md) | [tool.studio.review.open.ts](../../packages/oxagen/src/contracts/tool.studio.review.open.ts) | api, mcp |
 | [publish_tool_declaration](tool.declaration.publish.md) | [tool.declaration.publish.ts](../../packages/oxagen/src/contracts/tool.declaration.publish.ts) | api |
 | [revoke_relay](tool.relay.revoke.md) | [tool.relay.revoke.ts](../../packages/oxagen/src/contracts/tool.relay.revoke.ts) | api, mcp |
+| [run_studio_selection](tool.studio.selection.run.md) | [tool.studio.selection.run.ts](../../packages/oxagen/src/contracts/tool.studio.selection.run.ts) | api, mcp |
 | [save_studio_draft](tool.studio.draft.save.md) | [tool.studio.draft.save.ts](../../packages/oxagen/src/contracts/tool.studio.draft.save.ts) | api, mcp |
 | [set_mcp_credential](tool.studio.credential.set.md) | [tool.studio.credential.set.ts](../../packages/oxagen/src/contracts/tool.studio.credential.set.ts) | api, mcp |
 | [set_tool_classification](tool.classification.set.md) | [tool.classification.set.ts](../../packages/oxagen/src/contracts/tool.classification.set.ts) | api, mcp, agent |
