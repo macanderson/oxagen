@@ -21,7 +21,7 @@ const change = (
   lineage: `ctx.scr.${proposalId}`,
   statement: `Statement ${proposalId}`,
   why: "",
-  kind: "context_record",
+  kind: "steering_record",
   pullRequest: {
     number: 7,
     url: "https://github.com/acme/platform/pull/7",

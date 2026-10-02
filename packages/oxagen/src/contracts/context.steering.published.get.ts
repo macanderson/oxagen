@@ -2,7 +2,7 @@
  * `get_published_steering`: the published `.oxagen/` tree, with every file's text, for
  * `oxagen pull` to write into a directory on a developer's machine.
  *
- * Steering is published by merging a Context PR onto the main repository's
+ * Steering is published by merging a steering PR onto the main repository's
  * production branch (ADR-061), so what is in force is whatever that branch
  * holds under `.oxagen/` now. This read returns it from GitHub through the
  * workspace's own App installation at the moment of the call, at one commit:

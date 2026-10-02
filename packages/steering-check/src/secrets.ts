@@ -1,5 +1,5 @@
 // secrets.ts: the secret and personal-data scanner every steering check and
-// every Context PR shares. It moved here from @oxagen/handlers unchanged, and
+// every steering PR shares. It moved here from @oxagen/handlers unchanged, and
 // handlers re-exports it for the callers that still import it there.
 //
 // Secrets, mirroring the detector Stella's `stella context validate` reuses

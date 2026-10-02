@@ -22,6 +22,7 @@
 //   authorization_deny_generations → (no public id — internal counter)
 //   emergency_denies               → emd_
 //   authorization_decisions        → azd_
+//   capability_renames             → (no public id — keyed by the retired name)
 
 import {
   bigint,
@@ -621,6 +622,38 @@ export const authorizationDecisions = iamSchema.table(
 );
 
 // ---------------------------------------------------------------------------
+// capability_renames — each capability name a rename retired (#4325)
+// ---------------------------------------------------------------------------
+//
+// One row per retired name, with the name that replaced it. A renamed
+// capability keeps no alias, so nothing can call a retired name. Audit rows
+// keep the name they recorded, and Audit reads this table to show the old
+// name and the new one under the new one. The migration that retires a name
+// writes its row, and the app only reads them.
+//
+// A platform catalog: no organization owns a row, so the table has no tenant
+// policy (tenant-policy.manifest.ts lists the tables that carry org_id).
+export const capabilityRenames = iamSchema.table(
+  "capability_renames",
+  {
+    retiredName: text("retired_name").primaryKey(),
+    currentName: text("current_name").notNull(),
+    retiredAt: timestamp("retired_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+    // The issue or ADR that decided the rename.
+    reason: text("reason").notNull(),
+  },
+  (t) => ({
+    currentIdx: index("capability_renames_current_idx").on(t.currentName),
+    distinctCheck: check(
+      "capability_renames_distinct_check",
+      sql`${t.retiredName} <> ${t.currentName}`,
+    ),
+  }),
+);
+
+// ---------------------------------------------------------------------------
 // Inferred row types — re-exported so callers need only one import path.
 // ---------------------------------------------------------------------------
 
@@ -656,3 +689,5 @@ export type IamAuthorizationDecision =
   typeof authorizationDecisions.$inferSelect;
 export type NewIamAuthorizationDecision =
   typeof authorizationDecisions.$inferInsert;
+
+export type IamCapabilityRename = typeof capabilityRenames.$inferSelect;

@@ -109,7 +109,7 @@ describe("set_governance_mode contract", () => {
       }).success,
     ).toBe(false);
     // A steering repository's proposed change names the governance proposal a
-    // reviewer lands with merge_context_pr (ADR-232).
+    // reviewer lands with merge_steering_pr (ADR-232).
     expect(
       contextGovernanceModeSet.output.safeParse({
         ...ANSWER,

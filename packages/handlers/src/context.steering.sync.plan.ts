@@ -15,7 +15,7 @@
 // keeps its last good version. Every such file becomes a finding the Steering
 // page and the commit's check show.
 import { stringify } from "smol-toml";
-import { CONTEXT_RECORD_LINEAGE } from "@oxagen/oxagen/context-record-label";
+import { STEERING_RECORD_LINEAGE } from "@oxagen/oxagen/steering-record-label";
 import type {
   ConstraintEffect,
   PublishedSharingScope,
@@ -262,7 +262,7 @@ function readFile(file: RepoFile): {
     const raw = parsed.file.raw[i]!;
     const lineage = record.lineage_id;
     const unstamped = stamped.unstamped.includes(lineage);
-    if (!CONTEXT_RECORD_LINEAGE.test(lineage) || lineage.length > 200) {
+    if (!STEERING_RECORD_LINEAGE.test(lineage) || lineage.length > 200) {
       findings.push(
         finding(
           "lineage_invalid",
@@ -345,7 +345,7 @@ const sameStatement = (a: string | null, b: string | null) =>
 /**
  * The plan that makes the registry match `files`.
  *
- * `defer` names lineages the sync must leave alone this time: a Context PR
+ * `defer` names lineages the sync must leave alone this time: a steering PR
  * Oxagen is merging right now publishes them itself, with its reviewer on the
  * ledger, and the next sync finds nothing left to do.
  */

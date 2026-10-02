@@ -79,8 +79,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
           .delete(schema.codeRepositoryFindings)
           .where(eq(schema.codeRepositoryFindings.orgId, scope.orgId));
         await tx
-          .delete(schema.contextProposals)
-          .where(eq(schema.contextProposals.orgId, scope.orgId));
+          .delete(schema.steeringProposals)
+          .where(eq(schema.steeringProposals.orgId, scope.orgId));
         await tx
           .delete(schema.repositoryBindingHeads)
           .where(eq(schema.repositoryBindingHeads.orgId, scope.orgId));

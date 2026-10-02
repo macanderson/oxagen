@@ -7,7 +7,7 @@
  * in its message, as the client builds it.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { ContextPrRestoreManagedBlockOutput } from "@oxagen/oxagen/contracts/context.pr.restore_managed_block";
+import type { SteeringPrRestoreManagedBlockOutput } from "@oxagen/oxagen/contracts/steering.pr.restore_managed_block";
 import type { CommandWriter } from "../../lib/capture-writer.js";
 
 const mocks = vi.hoisted(() => ({
@@ -49,12 +49,12 @@ function memoryWriter(): { writer: CommandWriter; out: string[]; err: string[] }
 /** An API refusal, worded as lib/api.js words a non-2xx answer. */
 function refusal(status: number, error: Record<string, string>): ApiError {
   return new ApiError(
-    `Error ${status} from context/prs/restore-block: ${JSON.stringify({ error, requestId: "req_1" })} (trace iad1::abc)`,
+    `Error ${status} from steering/prs/restore-block: ${JSON.stringify({ error, requestId: "req_1" })} (trace iad1::abc)`,
     status,
   );
 }
 
-const RESTORED: ContextPrRestoreManagedBlockOutput = {
+const RESTORED: SteeringPrRestoreManagedBlockOutput = {
   commit_sha: "9f8e7d6c5b4a39281706f5e4d3c2b1a098765432",
   status: "checks_running",
 };
@@ -94,7 +94,7 @@ describe("oxagen steering restore-block", () => {
     mocks.apiPostOrThrow.mockResolvedValueOnce(RESTORED);
     const { writer, out, err } = memoryWriter();
     await steeringRestoreBlock(" prp_42 ", "./agents.md", {}, writer);
-    expect(mocks.apiPostOrThrow).toHaveBeenCalledWith("context/prs/restore-block", {
+    expect(mocks.apiPostOrThrow).toHaveBeenCalledWith("steering/prs/restore-block", {
       proposalId: "prp_42",
       path: "AGENTS.md",
     });

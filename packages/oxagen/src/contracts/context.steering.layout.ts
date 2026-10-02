@@ -1,11 +1,11 @@
 /**
  * `get_steering_layout`: which of the two repository layouts the workspace's
  * bound repository uses, so a client can show the path and branch
- * `open_context_pr` will actually write before that write happens (#4765).
+ * `open_steering_pr` will actually write before that write happens (#4765).
  *
  * ## Why the app needs this at all
  *
- * `open_context_pr` (`context.pr.open.ts`) reads `steering/governance.toml`
+ * `open_steering_pr` (`steering.pr.open.ts`) reads `steering/governance.toml`
  * off the bound repository's production branch on every open. A repository
  * that carries the file is a steering repo: a new record's file goes under
  * `steering/<kind folder>/` or, for a memory, `steering/memory/workspace/general/`,
@@ -18,11 +18,11 @@
  * ## Why it is cheap and why a failure answers `null`
  *
  * One file read on the bound repository's default branch, the same call
- * `open_context_pr` makes. A caller that cannot resolve a bound repository,
+ * `open_steering_pr` makes. A caller that cannot resolve a bound repository,
  * or whose read of `steering/governance.toml` fails, answers `layout: null`
  * rather than a guess: the wizard then shows the path and branch as set when
  * the pull request opens, instead of a value that may not match what
- * `open_context_pr` writes.
+ * `open_steering_pr` writes.
  *
  * Read-only, and every role may call it: it answers with a fact anyone with
  * repository access could read off the repository directly.

@@ -1,7 +1,7 @@
 // steering-repo/agent-file.ts: the agent file PR enrollment opens (#5149,
 // ADR-266). These tests open it over the fixture steering repo on the fake
 // host, with the opener's check stubbed, and merge it through
-// merge_context_pr as a person would.
+// merge_steering_pr as a person would.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({ report: null as unknown }));
@@ -15,7 +15,7 @@ import { agentSchema } from "@oxagen/oxagen/steering-repo/agent";
 import { fixtureRepo } from "@oxagen/oxagen/steering-repo/fixture-repo";
 import { readTomlFile } from "@oxagen/oxagen/steering-repo/files";
 import type { CheckReport } from "@oxagen/steering-check";
-import { createMergeContextPrHandler } from "../context.pr.merge";
+import { createMergeSteeringPrHandler } from "../steering.pr.merge";
 import {
   REPO,
   REVIEWER,
@@ -162,7 +162,7 @@ describe("openAgentFilePr", () => {
     });
 
     const proposalId = h.store.proposals[0]?.publicId ?? "";
-    await createMergeContextPrHandler(h, {
+    await createMergeSteeringPrHandler(h, {
       readHealth: async () => "healthy",
       steeringCheck: async () => passed(),
     })({ proposalId }, ctx({ userId: REVIEWER }));
@@ -192,12 +192,12 @@ describe("openAgentFilePr", () => {
     expect(h.github.pulls).toHaveLength(2);
   });
 
-  it("merges through merge_context_pr, which puts the file on the production branch", async () => {
+  it("merges through merge_steering_pr, which puts the file on the production branch", async () => {
     const h = steeringHarness();
     await openAgentFilePr(deps(h), enrolled());
     const proposalId = h.store.proposals[0]?.publicId ?? "";
 
-    const out = await createMergeContextPrHandler(h, {
+    const out = await createMergeSteeringPrHandler(h, {
       readHealth: async () => "healthy",
       steeringCheck: async () => passed(),
     })({ proposalId }, ctx({ userId: REVIEWER }));

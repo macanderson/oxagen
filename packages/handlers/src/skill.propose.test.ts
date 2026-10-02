@@ -1,6 +1,6 @@
 // propose_skill against the in-memory GitHub the steering handlers use: what
 // reaches the repository, what the call refuses, and that a refusal writes
-// nothing. The role gate is the org-role module, faked the way the Context PR
+// nothing. The role gate is the org-role module, faked the way the steering PR
 // tests fake it.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { HandlerError } from "@oxagen/oxagen";

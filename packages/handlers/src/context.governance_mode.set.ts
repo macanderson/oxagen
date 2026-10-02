@@ -2,8 +2,8 @@
 // steers under, from Organization › Workspaces › Edit workspace (ADR-061).
 //
 // The mode is a file, not a column. ADR-061 decision 1 rejects a
-// `workspace_settings.governance_mode` cache, so `open_context_pr` and
-// `merge_context_pr` read the repository itself every time, and a write here
+// `workspace_settings.governance_mode` cache, so `open_steering_pr` and
+// `merge_steering_pr` read the repository itself every time, and a write here
 // is a change to that file. Which file depends on the layout:
 //
 //   steering  `steering/governance.toml`, the top-level `mode` key. Its
@@ -32,7 +32,7 @@
 //
 // The steering review route records its PR as a governance proposal (kind
 // and lineage `governance`) and answers `proposed`. The mode in force stays
-// as it is until `merge_context_pr` lands the PR for an approver, with the
+// as it is until `merge_steering_pr` lands the PR for an approver, with the
 // approver on the record (#4795). A call that proposes a change replaces the
 // governance proposal already open, because the PR it reuses now carries this
 // call's change. The prior proposal is set aside in the same transaction that
@@ -101,12 +101,12 @@ const PR_TITLE = "Change the steering governance mode";
 
 const PR_BODY = [
   "This pull request changes `.oxagen/rules/governance.toml`, which decides",
-  "who may merge a Context PR in this workspace.",
+  "who may merge a steering PR in this workspace.",
   "",
   "**Read the diff for the mode being set** — this description is not updated",
   "when the branch is, so the file is the only current statement of it.",
   "",
-  "| Mode | Who merges a Context PR |",
+  "| Mode | Who merges a steering PR |",
   "| --- | --- |",
   "| `solo` | any workspace member, the author included |",
   "| `team` | an org Owner or Admin, or a workspace Owner or Admin, other than the author |",
@@ -297,7 +297,7 @@ async function withdrawGovernanceProposal(
 }
 
 /**
- * Record the review-route PR as a governance proposal, so merge_context_pr
+ * Record the review-route PR as a governance proposal, so merge_steering_pr
  * lands it for an approver (#4795). It carries no record: `force` is `info`,
  * the scope is the workspace, and the statement names the change. Its checks
  * are the steering checks reported on the PR, so the row lists none of the

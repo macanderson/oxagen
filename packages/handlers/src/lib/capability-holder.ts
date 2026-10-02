@@ -2,7 +2,7 @@
 // as the organization's IAM data grants it?
 //
 // A handler asks this when a second capability widens what the invoked one
-// may do. merge_context_pr asks it for merge_pr_without_review: the merge
+// may do. merge_steering_pr asks it for merge_pr_without_review: the merge
 // needs no approval when the merger holds that capability (ADR-213).
 //
 // It asks the resolver directly (`fetchAuthz`, then the pure `resolve`) and

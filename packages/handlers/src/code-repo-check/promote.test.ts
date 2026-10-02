@@ -1,10 +1,10 @@
 // promote_instruction_to_steering (S7, #4518; ADR-263): a statement that
 // contradicts a steering record becomes a proposal for that record, and its
 // steering PR opens. Every refusal comes before anything is written. The
-// finding store is in memory, the steering store and open_context_pr are
+// finding store is in memory, the steering store and open_steering_pr are
 // fakes that record their calls.
 import { HandlerError } from "@oxagen/oxagen";
-import type { ContextPrOpenOutput } from "@oxagen/oxagen/contracts/context.pr.open";
+import type { SteeringPrOpenOutput } from "@oxagen/oxagen/contracts/steering.pr.open";
 import { instructionPromote } from "@oxagen/oxagen/contracts/repository.instruction.promote";
 import { describe, expect, it, vi } from "vitest";
 import { ctx, SCOPE } from "../context.steering.test-support";
@@ -88,7 +88,7 @@ function setup(over: {
       ({
         status: "checks_passed",
         pr: { number: 7, url: "https://github.com/a-intel/oxagen-platform/pull/7" },
-      }) as unknown as ContextPrOpenOutput,
+      }) as unknown as SteeringPrOpenOutput,
   );
   const assertRole = vi.fn(async () => undefined);
   const deps = {

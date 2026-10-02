@@ -125,7 +125,7 @@ export const updateWorkspace = defineTool({
     /**
      * The two steering-freshness gates, carried by reference from
      * `update_workspace_settings`. They belong here for the same reason
-     * `governanceMode` does: both decide what happens to a Context record
+     * `governanceMode` does: both decide what happens to a steering record
      * between the production branch and the agent acting on it —
      * `governanceMode` who may publish one, these two whether a checkout that
      * has not caught up may act at all. A patch, so setting one gate does not
@@ -145,7 +145,7 @@ export const updateWorkspace = defineTool({
 
     // ---- governance (new; Appendix A wrk.workspaces) ----------------------
     /**
-     * §10.3 step 3 spends this value: `solo` lets the author merge a Context
+     * §10.3 step 3 spends this value: `solo` lets the author merge a steering
      * PR, `team` requires a code-owner review, `regulated` requires a named
      * approver from a role and appends to `promotions.jsonl`. It is the
      * strongest single setting on the workspace — it decides whether a human

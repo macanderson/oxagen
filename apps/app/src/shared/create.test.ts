@@ -35,7 +35,7 @@ describe("openCreate", () => {
 });
 
 describe("createRequestOf", () => {
-  it("offers the skill and context-record wizards today and keeps the tool kind out", () => {
+  it("offers the skill and steering-record wizards today and keeps the tool kind out", () => {
     expect(CREATE_KINDS).toContain("skill");
     expect(CREATE_KINDS).toContain("record");
     expect(CREATE_KINDS).not.toContain("tool");

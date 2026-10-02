@@ -34,7 +34,7 @@ import { auditLogQuery } from "@oxagen/oxagen/contracts/audit.log.query";
 import { schema } from "@oxagen/database";
 import { and, eq, gte, lt, type SQL } from "drizzle-orm";
 import { auditLogQueryHandler } from "./audit.log.query";
-import { ORG_ONLY_WS } from "./audit.shared";
+import { capabilityIs, ORG_ONLY_WS } from "./audit.shared";
 import { makeCTX } from "./test-utils/fixtures";
 import { type RoleFixture, roleTenantDb } from "./test-utils/role-tx";
 
@@ -323,7 +323,7 @@ describe("query_audit_log filters and paging", () => {
         eq(se.eventType, "auth.sign_in"),
         eq(se.actorUserId, USER),
         eq(schema.users.publicId, "usr_7k2m9q4x8r1t5v3w6y0z2a"),
-        eq(se.capability, "create_api_key"),
+        capabilityIs("create_api_key"),
         eq(se.outcome, "allow"),
         gte(se.occurredAt, new Date("2026-09-01T00:00:00.000Z")),
         lt(se.occurredAt, new Date("2026-09-15T00:00:00.000Z")),

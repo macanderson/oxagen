@@ -1,7 +1,7 @@
 {
   "createRecord": {
     "describe": {
-      "title": "Write a context record",
+      "title": "Write a steering record",
       "subtitle": "One concern per record, and one record per pull request.",
       "placeholder": "Do not re-read CHANGELOG.md more than once in a run; cache the first read.",
       "hint": "Say the thing itself, not the reason for it. The reason belongs in the rationale on the pull request, where a reviewer reads it once. In the bundle, every agent pays for it on every turn.",
@@ -114,7 +114,7 @@
       "items": {
         "schema": {
           "name": "Schema",
-          "detail": "<code>context-record/v0.1</code> is valid: one file, one record, one lineage."
+          "detail": "<code>{schema}</code> is valid: one file, one record, one lineage."
         },
         "lineage": {
           "name": "Lineage uniqueness",
@@ -148,7 +148,7 @@
       "fileRecord": "the record",
       "rationale": "Rationale on the pull request",
       "checks": {
-        "schema": "<code>context-record/v0.1</code>",
+        "schema": "<code>{schema}</code>",
         "lineage": "<code>{lineage}</code> is free",
         "hash": "recomputed at merge",
         "secrets": "statement, rationale, and evidence",
@@ -170,7 +170,7 @@
       "repo": {
         "loading": "Reading the workspace’s main repository.",
         "unbound": "This workspace has no steering repository yet, so there is nowhere to open the pull request. Oxagen creates one when it provisions the workspace.",
-        "denied": "Opening a Context PR needs Owner or Admin on the organization, or Owner, Admin or Member on the workspace.",
+        "denied": "Opening a steering PR needs Owner or Admin on the organization, or Owner, Admin or Member on the workspace.",
         "unavailable": "The main repository could not be read ({code}). Nothing was written. Close the wizard and open it again to retry."
       }
     },
@@ -196,21 +196,21 @@
         "constraint_effect": "constraint_effect"
       },
       "passed": "Every check passed. A reviewer can merge it under the workspace’s governance mode.",
-      "failed": "A check failed, so the pull request cannot merge. Fix the file on the branch, or close the pull request from Context PRs. Nothing is in force.",
-      "running": "The checks are still running. Context PRs shows them as they finish.",
-      "onContextPrs": "Open the pull request on Context PRs"
+      "failed": "A check failed, so the pull request cannot merge. Fix the file on the branch, or close the pull request from Steering PRs. Nothing is in force.",
+      "running": "The checks are still running. Steering PRs shows them as they finish.",
+      "onSteeringPrs": "Open the pull request on Steering PRs"
     },
     "failure": {
-      "orgRoleRequired": "Opening a Context PR needs Owner or Admin on the organization, or Owner, Admin or Member on the workspace. Nothing was written.",
+      "orgRoleRequired": "Opening a steering PR needs Owner or Admin on the organization, or Owner, Admin or Member on the workspace. Nothing was written.",
       "noPrincipal": "Oxagen could not tell who is signed in. Sign in again and retry. Nothing was written.",
-      "lineagePrOpen": "A Context PR for this lineage is already open. One concern, one pull request. Change the description to name a different concern, or finish the open one first.",
+      "lineagePrOpen": "A steering PR for this lineage is already open. One concern, one pull request. Change the description to name a different concern, or finish the open one first.",
       "governanceUnreadable": "The main repository’s governance file could not be read, so Oxagen cannot tell who may merge. Fix it on the production branch, then try again.",
       "repositoryMissing": "This workspace has no steering repository yet. Oxagen creates one when it provisions the workspace.",
       "githubRefused": "GitHub refused the write. Check the GitHub App’s access to the repository and try again.",
       "gitlabRefused": "GitLab refused the write. Nothing was published. Check that the project access token still has the api scope and the Developer role, then try again.",
       "gitlabCredentialRejected": "GitLab no longer accepts the access token stored for this project. Nothing was changed. Connect the project again with a new token. If Oxagen created this steering project, an organization owner or admin must connect its group again with a new group access token.",
       "baseMoved": "The production branch moved while the pull request was opening. Try again.",
-      "proposalMoved": "Another change moved this proposal first. Open the pull request on Context PRs to see where it stands.",
+      "proposalMoved": "Another change moved this proposal first. Open the pull request on Steering PRs to see where it stands.",
       "unanswered": "Oxagen did not answer. Try again.",
       "slugTaken": "Another record or proposal already has this slug. Go back to the first step, change the slug, and try again. Nothing was written.",
       "refused": "The pull request was refused ({code}).",

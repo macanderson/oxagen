@@ -184,7 +184,7 @@ export const searchGraph = defineTool({
          * knowledge records, `memory` for memory records, `doc` for chunks,
          * `symbol` for code, `episode` for run summaries)." Replaces
          * `search_graph`'s `z.literal("entity")`, which predates the code graph
-         * and the context records both being searchable.
+         * and the steering records both being searchable.
          */
         kind: z.enum(["fact", "memory", "doc", "symbol", "episode", "graph"]),
 

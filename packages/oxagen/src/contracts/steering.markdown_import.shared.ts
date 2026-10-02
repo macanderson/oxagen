@@ -10,7 +10,7 @@
 // no other kind. Each memory row is a memory with force info, and one marked
 // add fits the 2,000 characters a memory holds.
 import { z } from "zod";
-import { CONTEXT_RECORD_LABEL_MAX } from "../context-record-label";
+import { STEERING_RECORD_LABEL_MAX } from "../steering-record-label";
 import { lineageSchema } from "../steering-repo/common";
 import { MEMORY_STATEMENT_MAX } from "../steering-repo/memory";
 import { STEERING_PR_MAX_FILES } from "../steering-repo/names";
@@ -149,7 +149,7 @@ export const markdownImportRecordSchema = z
       .string()
       .trim()
       .min(1)
-      .max(CONTEXT_RECORD_LABEL_MAX)
+      .max(STEERING_RECORD_LABEL_MAX)
       .describe("The record's name, at most 36 characters"),
     statement: z
       .string()

@@ -2,7 +2,7 @@
 
 Confirm or change the production branch of one of the workspace's repositories (MC spec §10.1, §11.4).
 
-The production branch is the only branch whose commits update the code graph, the only one `.oxagen/` is read from, and the only one a Context PR merges into. GitHub's default branch is the suggestion. A person decides. A binding records GitHub's default branch when the steering repo job or a merged steering PR writes its head, which is the confirm half. This is the change half: any branch that exists on GitHub, named by the caller.
+The production branch is the only branch whose commits update the code graph, the only one `.oxagen/` is read from, and the only one a steering PR merges into. GitHub's default branch is the suggestion. A person decides. A binding records GitHub's default branch when the steering repo job or a merged steering PR writes its head, which is the confirm half. This is the change half: any branch that exists on GitHub, named by the caller.
 
 The handler reads the branch through the workspace's installation and, when it differs from what the binding records, writes a successor binding version carrying it and moves the head onto that version, in one transaction under the workspace's repository lock. Binding versions are immutable, so runs admitted against the old branch keep citing it. Naming the branch the binding already records writes nothing and answers `changed: false`.
 

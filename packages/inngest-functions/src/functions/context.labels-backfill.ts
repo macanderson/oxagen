@@ -1,7 +1,7 @@
 import { and, eq, isNull } from "drizzle-orm";
 import { schema, withSystemDb, withTenantDb } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
-import { contextRecordLabel } from "@oxagen/oxagen/context-record-label";
+import { steeringRecordLabel } from "@oxagen/oxagen/steering-record-label";
 import { createFunction } from "../create-function";
 
 /** Fill only missing display labels, including records written by older ingesters. */
@@ -14,19 +14,19 @@ export const [contextLabelsBackfill] = createFunction(
       withSystemDb((tx) =>
         tx
           .select({
-            id: schema.contextRecords.id,
-            orgId: schema.contextRecords.orgId,
-            workspaceId: schema.contextRecords.workspaceId,
-            slug: schema.contextRecords.slug,
+            id: schema.steeringRecords.id,
+            orgId: schema.steeringRecords.orgId,
+            workspaceId: schema.steeringRecords.workspaceId,
+            slug: schema.steeringRecords.slug,
           })
-          .from(schema.contextRecords)
+          .from(schema.steeringRecords)
           .where(
             and(
-              isNull(schema.contextRecords.label),
-              isNull(schema.contextRecords.deletedAt),
+              isNull(schema.steeringRecords.label),
+              isNull(schema.steeringRecords.deletedAt),
             ),
           )
-          .orderBy(schema.contextRecords.id)
+          .orderBy(schema.steeringRecords.id)
           .limit(500),
       ),
     );
@@ -37,15 +37,15 @@ export const [contextLabelsBackfill] = createFunction(
           () =>
             withTenantDb((tx) =>
               tx
-                .update(schema.contextRecords)
-                .set({ label: contextRecordLabel(record.slug) })
+                .update(schema.steeringRecords)
+                .set({ label: steeringRecordLabel(record.slug) })
                 .where(
                   and(
-                    eq(schema.contextRecords.id, record.id),
-                    eq(schema.contextRecords.orgId, record.orgId),
-                    eq(schema.contextRecords.workspaceId, record.workspaceId),
-                    isNull(schema.contextRecords.label),
-                    isNull(schema.contextRecords.deletedAt),
+                    eq(schema.steeringRecords.id, record.id),
+                    eq(schema.steeringRecords.orgId, record.orgId),
+                    eq(schema.steeringRecords.workspaceId, record.workspaceId),
+                    isNull(schema.steeringRecords.label),
+                    isNull(schema.steeringRecords.deletedAt),
                   ),
                 ),
             ),

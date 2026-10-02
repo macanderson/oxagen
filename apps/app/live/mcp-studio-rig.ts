@@ -22,7 +22,7 @@ import { readFileSync } from "node:fs";
 import { z } from "zod";
 import type { AgentApprovalListOutput } from "@oxagen/oxagen/contracts/agent.approval.list";
 import { agentNameForRuntime } from "@oxagen/oxagen/steering-repo/agent";
-import type { ContextProposalListOutput } from "@oxagen/oxagen/contracts/context.proposal.list";
+import type { SteeringProposalListOutput } from "@oxagen/oxagen/contracts/steering.proposal.list";
 import type { RuntimeListItem } from "@oxagen/oxagen/contracts/runtime.list";
 import type { SteeringMarkdownImportCommitOutput } from "@oxagen/oxagen/contracts/steering.markdown_import.commit";
 import type { SteeringMarkdownImportParseOutput } from "@oxagen/oxagen/contracts/steering.markdown_import.parse";
@@ -449,8 +449,8 @@ export type StudioContractFit = [
   Assert<Fits<AgentApprovalListOutput, z.output<typeof approvalsListed>>>,
   Assert<Fits<SteeringMarkdownImportParseOutput, z.output<typeof importParsed>>>,
   Assert<Fits<SteeringMarkdownImportCommitOutput, z.output<typeof importCommitted>>>,
-  Assert<Fits<ContextProposalListOutput, z.output<typeof openProposals>>>,
-  Assert<Fits<ContextProposalListOutput, z.output<typeof agentProposals>>>,
+  Assert<Fits<SteeringProposalListOutput, z.output<typeof openProposals>>>,
+  Assert<Fits<SteeringProposalListOutput, z.output<typeof agentProposals>>>,
 ];
 
 function path(settings: Settings, rest: string): string {
@@ -597,7 +597,7 @@ export interface BarePullRequest {
 async function openProposalFor(ox: Oxagen, settings: Settings, number: number) {
   const listed = await ox.call(
     "POST",
-    path(settings, "/context/proposals"),
+    path(settings, "/steering/proposals"),
     { state: "open", limit: 200 },
     openProposals,
   );
@@ -607,7 +607,7 @@ async function openProposalFor(ox: Oxagen, settings: Settings, number: number) {
 /**
  * Merges a steering PR through Oxagen. Each opener writes a proposal row for
  * the PR it opens (#5122), so the suite finds the row by the PR's number and
- * calls `merge_context_pr` with it. The merge runs the steering checks on the
+ * calls `merge_steering_pr` with it. The merge runs the steering checks on the
  * PR's head, lands it through the merge queue, and answers the steering
  * version it published.
  */
@@ -648,7 +648,7 @@ export async function publishAgentFile(ox: Oxagen, settings: Settings, runtime: 
   const branch = `agents/${agentNameFor(runtime)}`;
   const listed = await ox.call(
     "POST",
-    path(settings, "/context/proposals"),
+    path(settings, "/steering/proposals"),
     { lineageId: branch, limit: 20 },
     agentProposals,
   );

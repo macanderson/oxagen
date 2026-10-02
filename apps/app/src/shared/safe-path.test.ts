@@ -162,7 +162,7 @@ describe("routes", () => {
       }),
     ).toBe("/acme/core/agents?tab=mcp-servers&rows=25&cursor=g2");
     expect(routes.steering("acme", "core")).toBe("/acme/core/steering");
-    // `prs`, once the Context PRs segment, is the Proposals list (#5077).
+    // `prs`, once the steering PRs segment, is the Proposals list (#5077).
     expect(
       routes.steering("acme", "core", {
         tab: "prs",
@@ -171,7 +171,7 @@ describe("routes", () => {
         proposal: "prp_1&x",
       }),
     ).toBe("/acme/core/steering/proposals?state=merged&offset=50&proposal=prp_1%26x");
-    // One Context PR is its own page, carrying the list it was opened from.
+    // One steering PR is its own page, carrying the list it was opened from.
     expect(routes.steeringProposal("acme", "core", "prp_1")).toBe(
       "/acme/core/steering/proposals/prs/prp_1",
     );

@@ -4,9 +4,9 @@
 // request, the same six checks, and a merge. Nothing here edits what is in
 // force.
 //
-// The write is `revise_context_record`: it raises a proposal carrying the
+// The write is `revise_steering_record`: it raises a proposal carrying the
 // record's kind, force, effect and scope exactly as they stand, then hands it
-// to `open_context_pr`, which commits the file to `steering/<lineage>` (or
+// to `open_steering_pr`, which commits the file to `steering/<lineage>` (or
 // `memory/<lineage>` for a memory), opens the pull request and runs the six
 // checks. The handler gates the role
 // (INV-29), so a role that may not revise is refused there whatever this
@@ -19,6 +19,7 @@ import { Badge } from "@/ui/badge";
 import { buttonPrimary, mono } from "@/ui/control-styles";
 import { FormAlert } from "@/ui/form-feedback";
 import { SheetDialog } from "@/ui/sheet-dialog";
+import { LEGACY_RECORD_SCHEMA } from "@oxagen/oxagen/steering-repo/paths";
 import { reviseRecord } from "./actions";
 import { UNANSWERED, useReviseFailure } from "./revise-failure";
 import type { RecordAt } from "./view";
@@ -134,6 +135,7 @@ export function ProposeDialog({
     what: t.rich(`checks.${key}.what`, {
       lineage: at.lineage,
       effect: constraintEffect ?? t("checks.effect.absent"),
+      schema: LEGACY_RECORD_SCHEMA,
       code,
     }),
   }));

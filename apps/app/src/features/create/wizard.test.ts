@@ -53,7 +53,7 @@ describe("the wizard registry", () => {
     }
   });
 
-  it("carries the context-record wizard: five steps, ending on a pull request", async () => {
+  it("carries the steering-record wizard: five steps, ending on a pull request", async () => {
     const record = await WIZARDS.record?.();
     expect(record?.need).toBe("steering.write");
     expect(record?.steps({ ...record.init() })).toEqual([

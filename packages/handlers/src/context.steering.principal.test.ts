@@ -2,7 +2,7 @@
 // call, the key's creator (`resolveActingUserId`; apps/app/ARCHITECTURE.md §9,
 // 2026-09-15). This file runs the real gate with only the key lookup
 // replaced by a key whose row names no creator: `assertOrgRole` refuses it
-// with `no_principal` before any store or GitHub call. `merge_context_pr`
+// with `no_principal` before any store or GitHub call. `merge_steering_pr`
 // keeps its own reviewer gate, which needs a signed-in user, so a key is
 // refused there too.
 import { describe, expect, it, vi } from "vitest";
@@ -12,16 +12,16 @@ vi.mock("@oxagen/iam/org-role", async (importOriginal) => ({
   resolveActingUserId: async (c: { userId: string | null }) => c.userId,
 }));
 
-import { contextPrMerge } from "@oxagen/oxagen/contracts/context.pr.merge";
-import { contextPrOpen } from "@oxagen/oxagen/contracts/context.pr.open";
-import { contextProposalCreate } from "@oxagen/oxagen/contracts/context.proposal.create";
-import { contextProposalDismiss } from "@oxagen/oxagen/contracts/context.proposal.dismiss";
-import { contextRecordsAppend } from "@oxagen/oxagen/contracts/context.records.append";
-import { createMergeContextPrHandler } from "./context.pr.merge";
-import { createOpenContextPrHandler } from "./context.pr.open";
-import { createProposeRecordHandler } from "./context.proposal.create";
-import { createDismissProposalHandler } from "./context.proposal.dismiss";
-import { createAppendRecordHandler } from "./context.records.append";
+import { steeringPrMerge } from "@oxagen/oxagen/contracts/steering.pr.merge";
+import { steeringPrOpen } from "@oxagen/oxagen/contracts/steering.pr.open";
+import { steeringProposalCreate } from "@oxagen/oxagen/contracts/steering.proposal.create";
+import { steeringProposalDismiss } from "@oxagen/oxagen/contracts/steering.proposal.dismiss";
+import { steeringRecordsAppend } from "@oxagen/oxagen/contracts/steering.records.append";
+import { createMergeSteeringPrHandler } from "./steering.pr.merge";
+import { createOpenSteeringPrHandler } from "./steering.pr.open";
+import { createProposeRecordHandler } from "./steering.proposal.create";
+import { createDismissProposalHandler } from "./steering.proposal.dismiss";
+import { createAppendRecordHandler } from "./steering.records.append";
 import { ctx, harness } from "./context.steering.test-support";
 
 const API_KEY_CTX = ctx({ userId: null, apiKeyId: "key_1" });
@@ -33,9 +33,9 @@ describe("the role-gated steering writes under an API key with no creator", () =
   // person, so the role gate has a principal there (#4180).
   it("declare no MCP or CLI surface for the PR writes", () => {
     for (const contract of [
-      contextPrOpen,
-      contextPrMerge,
-      contextProposalDismiss,
+      steeringPrOpen,
+      steeringPrMerge,
+      steeringProposalDismiss,
     ]) {
       expect(contract.surfaces, contract.name).toEqual(["api", "agent"]);
     }
@@ -49,10 +49,10 @@ describe("the role-gated steering writes under an API key with no creator", () =
       sharingScope: "workspace",
     };
     await expect(
-      createOpenContextPrHandler(h)({ proposalId: "prp_1" }, API_KEY_CTX),
+      createOpenSteeringPrHandler(h)({ proposalId: "prp_1" }, API_KEY_CTX),
     ).rejects.toMatchObject(NO_PRINCIPAL);
     await expect(
-      createMergeContextPrHandler(h)({ proposalId: "prp_1" }, API_KEY_CTX),
+      createMergeSteeringPrHandler(h)({ proposalId: "prp_1" }, API_KEY_CTX),
     ).rejects.toMatchObject(NO_PRINCIPAL);
     await expect(
       createDismissProposalHandler(h)(
@@ -62,7 +62,7 @@ describe("the role-gated steering writes under an API key with no creator", () =
     ).rejects.toMatchObject(NO_PRINCIPAL);
     await expect(
       createProposeRecordHandler(h)(
-        contextProposalCreate.input.parse({
+        steeringProposalCreate.input.parse({
           record: { ...record, kind: "rule", force: "should" },
           rationale: "14 unsatisfied runs in 30 days.",
         }),
@@ -71,7 +71,7 @@ describe("the role-gated steering writes under an API key with no creator", () =
     ).rejects.toMatchObject(NO_PRINCIPAL);
     await expect(
       createAppendRecordHandler(h)(
-        contextRecordsAppend.input.parse({
+        steeringRecordsAppend.input.parse({
           ...record,
           kind: "observation",
           sourceRefs: ["frame:run_1/12"],

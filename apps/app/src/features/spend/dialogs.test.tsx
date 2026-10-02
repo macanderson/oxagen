@@ -384,7 +384,7 @@ describe("Fix a finding", () => {
       );
       await userEvent.click(screen.getByRole("button", { name: "Fix" }));
       await userEvent.click(
-        screen.getByRole("button", { name: "Draft a context PR" }),
+        screen.getByRole("button", { name: "Draft a steering PR" }),
       );
       const event = events[0];
       const request = event === undefined ? null : createRequestOf(event);
@@ -408,7 +408,7 @@ describe("Fix a finding", () => {
         screen.getByRole("button", { name: "Plan a code PR with stella" }),
       ).toBeInTheDocument();
       await userEvent.click(
-        screen.getByRole("button", { name: "Draft a context PR" }),
+        screen.getByRole("button", { name: "Draft a steering PR" }),
       );
       expect(listener).toHaveBeenCalledOnce();
       expect(listener.mock.results[0]?.value).toEqual({

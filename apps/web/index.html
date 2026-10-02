@@ -172,8 +172,10 @@
 .h-legend{list-style:none;margin:4px 0 0;padding:0;display:flex;flex-wrap:wrap;gap:16px;font-size:12.5px;color:var(--ink-3)}
 .h-legend li{display:inline-flex;align-items:center;gap:7px}
 .h-legend li::before{content:"";width:16px;height:9px;border-radius:3px;border:1px solid var(--ink-3);background:var(--raised)}
-.h-legend li.is-wait::before{border-style:dashed;border-color:var(--approval);background:none}
-.h-legend li.is-live::before{width:8px;height:8px;border-radius:50%;border:0;background:var(--gold-hi)}
+/* Legend keys take k-* classes. The site-wide .is-wait state rule would draw
+   a dashed box around the key's label. */
+.h-legend li.k-wait::before{border-style:dashed;border-color:var(--approval);background:none}
+.h-legend li.k-live::before{width:8px;height:8px;border-radius:50%;border:0;background:var(--gold-hi)}
 .h-report{display:grid;gap:10px;margin-top:18px}
 .h-tiles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
 .h-tile{padding:11px 13px;border:1px solid var(--line);border-radius:var(--r);background:var(--panel)}
@@ -235,7 +237,7 @@
 .h-findings .v small{font-size:11px;color:var(--faint)}
 .h-findings .dg-track{grid-column:2/-1}
 
-/* learn: a context record reviewed as a pull request */
+/* learn: a steering record reviewed as a pull request */
 .h-file{border:1px solid var(--rule);border-radius:var(--r);overflow:hidden;background:var(--panel)}
 .h-file>.dg-m{display:block;padding:8px 12px;border-bottom:1px solid var(--line);color:var(--ink-3)}
 .h-diff{padding:8px 0;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px;line-height:1.75}
@@ -362,7 +364,7 @@
             <div class="h-row dg-in" style="--i:2"><span class="h-who">docs-sync<small>stella</small></span><span class="h-track"><i class="h-bar is-wait" style="--a:30%;--w:42%"></i></span></div>
             <div class="h-row dg-in" style="--i:3"><span class="h-who">release-notes<small>claude-code</small></span><span class="h-track"><i class="h-bar" style="--a:50%;--w:30%"></i></span></div>
             <div class="h-row dg-in" style="--i:4"><span class="h-who">migration-check<small>codex</small></span><span class="h-track"><i class="h-bar is-live" style="--a:79%;--w:19%"></i></span></div>
-            <ul class="h-legend dg-in" style="--i:5"><li>done</li><li class="is-wait">waiting on a person</li><li class="is-live">running</li></ul>
+            <ul class="h-legend dg-in" style="--i:5"><li>done</li><li class="k-wait">waiting on a person</li><li class="k-live">running</li></ul>
           </div>
           <div class="h-report dg-in" style="--i:6">
             <span class="dg-k">morning report</span>

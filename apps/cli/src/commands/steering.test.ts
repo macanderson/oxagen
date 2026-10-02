@@ -557,7 +557,7 @@ describe("resolveContext", () => {
     expect(ctx.policy.sources.blockStaleRuns).toBe("project");
   });
 
-  // Two Context PRs merged inside one second, so the platform names both
+  // Two steering PRs merged inside one second, so the platform names both
   // commits without ordering them. HEAD holds the first and lacks the second.
   it("reads the checkout as behind the platform when HEAD lacks one of the tied commits", async () => {
     const tmp = await mkdtemp(join(tmpdir(), "oxagen-cli-"));
@@ -596,7 +596,7 @@ describe("resolveContext", () => {
 
   // The workspace approved `release`; the remote's own default is still
   // `main`. Comparing against `main` left an enforced checkout reported as
-  // `current` while Context PRs merged into `release`.
+  // `current` while steering PRs merged into `release`.
   it("compares against the workspace's approved branch, not the remote's default", async () => {
     const tmp = await mkdtemp(join(tmpdir(), "oxagen-cli-"));
     await mkdir(join(tmp, ".oxagen"), { recursive: true });

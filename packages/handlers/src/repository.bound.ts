@@ -121,7 +121,7 @@ export function repositoryHostUnsupported(fullName: string): HandlerError {
   return new HandlerError({
     code: "conflict",
     reason: "repository_host_unsupported",
-    message: `${fullName} is a GitLab project. This action supports GitHub repositories only today; Context PRs, bindings and steering publication work on GitLab.`,
+    message: `${fullName} is a GitLab project. This action supports GitHub repositories only today; steering PRs, bindings and steering publication work on GitLab.`,
   });
 }
 

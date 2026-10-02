@@ -9,7 +9,7 @@
 //   counts toward the workspace's badge (ADR-235, ruled on 2026-10-01).
 // - interjections: the predicate list_interjections pages on with `open:
 //   true` (unanswered, unexpired, this workspace), in agent.interjections.
-// - proposals: open steering proposals in agent.context_proposals, the rows
+// - proposals: open steering proposals in agent.steering_proposals, the rows
 //   list_proposals returns that have not merged and were not rejected.
 // - incidents: open critical incidents in tacho.incidents across the
 //   organization, the rows list_incidents returns with `open: true` at
@@ -25,7 +25,7 @@ import { and, eq, isNull, notInArray, sql } from "drizzle-orm";
 
 const ar = schema.approvalRequests;
 const ij = schema.interjections;
-const cp = schema.contextProposals;
+const cp = schema.steeringProposals;
 const inc = schema.tachoIncidents;
 
 /** Proposal statuses that close a proposal: nothing waits on a person. */

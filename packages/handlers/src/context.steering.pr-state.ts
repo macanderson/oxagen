@@ -1,9 +1,9 @@
 // context.steering.pr-state.ts — what the repository sync and
-// refresh_context_pr agree on when they move a Context PR to the host's state
+// refresh_steering_pr agree on when they move a steering PR to the host's state
 // (ADR-184 decision 5): the statuses a moved head resets, the pending checks
 // it resets to, and the wording of a close on the host. One copy, so a close
 // the refresh records reads the same as one the sync records, and the
-// Context PR page names both as a close on the host.
+// steering PR page names both as a close on the host.
 import {
   CHECK_NAMES,
   isRecordKind,
@@ -20,7 +20,7 @@ export const STALE_FROM = [
   "checks_failed",
 ] as const;
 
-/** Every status of a Context PR still open on the host. */
+/** Every status of a steering PR still open on the host. */
 export const OPEN_PR = ["pr_open", ...STALE_FROM] as const;
 
 /** The six checks, pending, for a head nobody has checked yet. */
@@ -63,7 +63,7 @@ export const checksAfterMove = (kind: string): CheckResult[] =>
 export const hostName = (repo: Pick<SteeringRepository, "provider">) =>
   repo.provider === "gitlab" ? "GitLab" : "GitHub";
 
-/** The reason recorded when the host closed a Context PR without merging it. */
+/** The reason recorded when the host closed a steering PR without merging it. */
 export const closedOnHostReason = (
   repo: Pick<SteeringRepository, "provider">,
 ) => `Closed on ${hostName(repo)} without merging`;

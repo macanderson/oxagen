@@ -67,7 +67,7 @@
       "checks": {
         "schema": {
           "name": "Schema",
-          "what": "<code>context-record/v0.1</code> still valid after the edit"
+          "what": "<code>{schema}</code> still valid after the edit"
         },
         "lineage": {
           "name": "Lineage",

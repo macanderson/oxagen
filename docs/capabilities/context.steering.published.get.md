@@ -2,7 +2,7 @@
 
 Returns the published `.oxagen/` tree with every file's text, so `oxagen pull` can write the steering in force into a directory on your machine.
 
-Steering is published when a Context PR merges onto the main repository's production branch (ADR-061). The steering in force is whatever that branch holds under `.oxagen/` now. This read fetches it from GitHub through the workspace's own App installation at the moment of the call. The tree and every file are read at one commit, `head`, so a push that lands mid-read cannot mix two commits into one answer. A machine needs no git access to the main repository to receive its workspace's steering.
+Steering is published when a steering PR merges onto the main repository's production branch (ADR-061). The steering in force is whatever that branch holds under `.oxagen/` now. This read fetches it from GitHub through the workspace's own App installation at the moment of the call. The tree and every file are read at one commit, `head`, so a push that lands mid-read cannot mix two commits into one answer. A machine needs no git access to the main repository to receive its workspace's steering.
 
 Omit `bindingId` to read the workspace's main repository, because its `.oxagen/` is the one that steers the workspace. Pass a binding id from `list_repositories` to read another bound repository. `.oxagen/workspace.json` is never returned: it is a machine's link to its workspace and is gitignored.
 

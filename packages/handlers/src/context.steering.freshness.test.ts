@@ -295,7 +295,7 @@ describe("get_steering_freshness handler", () => {
     expect(out.steeringVersion).toBe(0);
   });
 
-  // A Context PR publication commits while this read is in flight. Read
+  // A steering PR publication commits while this read is in flight. Read
   // independently, the count could observe the new promotion while the
   // publication still observed the commit before it, and the response paired
   // the new steering version with the old `headCommit`. A checkout sitting at

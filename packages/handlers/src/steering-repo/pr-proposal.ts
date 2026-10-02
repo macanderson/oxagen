@@ -1,7 +1,7 @@
 // steering-repo/pr-proposal.ts: the proposal row every steering PR Oxagen
 // opens carries (#5122, ADR-265).
 //
-// merge_context_pr lands a steering PR only from a proposal row. A record PR
+// merge_steering_pr lands a steering PR only from a proposal row. A record PR
 // and a governance PR always had one. The revert, tools, Markdown import,
 // memory, and agent PRs now get one too, written here by their opener once
 // the PR is open. The row's kind names the PR, its lineage is the PR's branch

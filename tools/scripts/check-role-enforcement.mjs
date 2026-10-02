@@ -154,7 +154,7 @@ export const ROLE_ENFORCEMENT_EXEMPT = new Map([
  * (each needs its own "assert the role, or relax the contract" decision).
  * A stem here is the contract file's basename without `.ts`. #4194 took out
  * seven whose handlers enforce through a helper or an inline check the old
- * scan could not see: `api.key.list`, `api.key.rotate`, `context.pr.merge`,
+ * scan could not see: `api.key.list`, `api.key.rotate`, `steering.pr.merge`,
  * `org.member.add`, `org.member.remove`, `org.member_role.change`, and
  * `privacy.data.export`.
  */

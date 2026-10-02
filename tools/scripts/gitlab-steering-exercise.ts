@@ -1,8 +1,8 @@
 #!/usr/bin/env tsx
 /**
- * Publish one context record as a merge request on a real gitlab.com project,
- * through the same GitLab steering seam and checks `open_context_pr` and
- * `merge_context_pr` use (#3762), and write the evidence to a JSON file.
+ * Publish one steering record as a merge request on a real gitlab.com project,
+ * through the same GitLab steering seam and checks `open_steering_pr` and
+ * `merge_steering_pr` use (#3762), and write the evidence to a JSON file.
  *
  * Usage:
  *
@@ -107,7 +107,7 @@ const scope = {
 };
 const repo = await seam.resolveRepository(scope);
 
-// 3. The proposal's file, branch and merge request, as `open_context_pr` makes them.
+// 3. The proposal's file, branch and merge request, as `open_steering_pr` makes them.
 const lineageId = `ctx.exercise.gitlab-${Date.now().toString(36)}`;
 const proposal = {
   lineageId,
@@ -140,7 +140,7 @@ const { commitSha } = await seam.putFile(repo, {
   branch,
 });
 const mr = await seam.openPullRequest(repo, {
-  title: `Context PR: ${lineageId}`,
+  title: `Steering PR: ${lineageId}`,
   head: branch,
   base: repo.defaultBranch,
   body: `Exercise for #3762. Proposal prp_exercise.\n\n> ${proposal.statement}`,

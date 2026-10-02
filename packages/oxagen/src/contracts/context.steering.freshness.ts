@@ -4,7 +4,7 @@
  *
  * ## Why the platform answers this at all
  *
- * A developer's checkout can tell, from git alone, whether a Context PR
+ * A developer's checkout can tell, from git alone, whether a steering PR
  * merged onto the production branch that it does not have (ADR-061;
  * `docs/specs/steering/README.md`). Git is the primary signal and it is
  * usually enough. This read exists for the two things git on that machine
@@ -156,13 +156,13 @@ export const contextSteeringFreshness = registerCapability({
     steeringVersion: z.number().int().nonnegative(),
     /**
      * The production-branch commit the newest record was published at, or
-     * null when no Context PR has merged yet. A checkout that cannot reach
+     * null when no steering PR has merged yet. A checkout that cannot reach
      * it is behind, whatever its own remote-tracking refs say.
      */
     headCommit: z.string().nullable(),
     /**
      * Every commit published at the newest instant, `headCommit` among them.
-     * Empty when no Context PR has merged. It holds more than one only when
+     * Empty when no steering PR has merged. It holds more than one only when
      * two merges share a second, which is as fine as GitHub reports a merge.
      * The platform stores nothing that orders two commits on the branch, so
      * it does not pick: a checkout is current when it can reach each of

@@ -1,0 +1,109 @@
+{
+  "name": "refresh_steering_pr",
+  "domain": "context",
+  "description": "Read a proposal's steering PR from GitHub or GitLab now and move the proposal to the host's state: a pull request closed on the host is closed, a moved head resets the checks to pending, and a merge on the host asks the repository sync to publish it. Answers the host's state and the proposal's status after the refresh.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "governance"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "proposalId": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "proposalId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "proposalId": {
+        "type": "string"
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "proposed",
+          "pr_open",
+          "checks_running",
+          "checks_passed",
+          "checks_failed",
+          "merged",
+          "rejected"
+        ]
+      },
+      "host": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "state": {
+                "type": "string",
+                "enum": [
+                  "open",
+                  "merged",
+                  "closed"
+                ]
+              },
+              "headSha": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "baseRef": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "state",
+              "headSha",
+              "baseRef"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "changed": {
+        "type": "boolean"
+      },
+      "syncRequested": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "proposalId",
+      "status",
+      "host",
+      "changed",
+      "syncRequested"
+    ],
+    "additionalProperties": false
+  }
+}

@@ -1,7 +1,7 @@
 "use client";
-// One Context PR on the Changes tab (mockup `oxprDetail()`; MC spec §10.2):
+// One steering PR on the Changes tab (mockup `oxprDetail()`; MC spec §10.2):
 // the route `repositories/changes/<id>`, the address the close comment links
-// to. It reads `get_context_pr` on demand and shows the pull request's kind,
+// to. It reads `get_steering_pr` on demand and shows the pull request's kind,
 // branch and base, who opened it and why, the file it carries, every check
 // with its own result, and what merge will do.
 //
@@ -10,7 +10,7 @@
 //     the checks behind it read queued, and merge is disabled.
 //   - Merge is enabled only when every check reported and none failed, and the
 //     pull request is not merged. The click handler refuses otherwise, so a
-//     disabled button invoked anyway is a no-op; `merge_context_pr` re-reads
+//     disabled button invoked anyway is a no-op; `merge_steering_pr` re-reads
 //     the governance mode and the head at merge time and refuses on its own.
 //   - Close previews the comment Oxagen would post. `dismiss_proposal` closes
 //     the pull request and records that text as the reason; posting it on
@@ -18,7 +18,7 @@
 import { useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
 import type { RepositoryChange } from "@/data/contracts/repository";
-import { type ContextPr, isSteeringPrKind } from "@/data/contracts/steering";
+import { type SteeringPr, isSteeringPrKind } from "@/data/contracts/steering";
 import { routes } from "@/shared/safe-path";
 import { Badge } from "@/ui/badge";
 import { buttonPrimary, buttonSecondary, mono } from "@/ui/control-styles";
@@ -37,7 +37,7 @@ import { UNANSWERED, useRepositoriesFailure } from "./failure";
 import { REPOSITORY_GAPS } from "./gaps";
 import { buttonDanger, code, kv, type Load, note, SectionLabel } from "./parts";
 
-type Check = ContextPr["checks"][number];
+type Check = SteeringPr["checks"][number];
 
 /** The signed-in person the close comment names. */
 export type Closer = { name: string; email: string };
@@ -55,7 +55,7 @@ const STEERING_PR_MERGEABLE: ReadonlySet<string> = new Set([
  * status its merge starts from, or a record PR whose every check reported and
  * passed.
  */
-function canMerge(pr: ContextPr): boolean {
+function canMerge(pr: SteeringPr): boolean {
   if (pr.merged !== null) return false;
   if (isSteeringPrKind(pr.kind)) return STEERING_PR_MERGEABLE.has(pr.status);
   return (
@@ -103,7 +103,7 @@ export function ChangeDetail({
   const states = useTranslations("repositories.changes.states");
   const failureText = useRepositoriesFailure();
   const [version, setVersion] = useState(0);
-  const [read, setRead] = useState<Load<ContextPr>>({ kind: "loading" });
+  const [read, setRead] = useState<Load<SteeringPr>>({ kind: "loading" });
   const [merging, setMerging] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
@@ -275,7 +275,7 @@ function Loaded({
   onMerge,
   onClose,
 }: {
-  pr: ContextPr;
+  pr: SteeringPr;
   row: RepositoryChange | null;
   failed: Check | null;
   mergeable: boolean;
@@ -302,12 +302,12 @@ function Loaded({
             <Badge tone="quiet" dot={false}>
               {isSteeringPrKind(pr.kind)
                 ? changes("kinds.steering_pr")
-                : changes("kinds.context_record")}
+                : changes("kinds.steering_record")}
             </Badge>
             <span className={`${mono} text-[11.5px] text-dim`}>
               {isSteeringPrKind(pr.kind)
                 ? pr.onMerge.path
-                : changes("kindPaths.context_record")}
+                : changes("kindPaths.steering_record")}
             </span>
           </dd>
           <dt>{t("facts.pullRequest")}</dt>
@@ -520,7 +520,7 @@ function Loaded({
 /**
  * Close a pull request without merging (mockup `DLG_EXT.closepr`): the
  * comment Oxagen posts, previewed. The link is this page's full URL, so a
- * reader on GitHub lands on the Context PR that closed it.
+ * reader on GitHub lands on the steering PR that closed it.
  */
 function ClosePullRequestDialog({
   org,

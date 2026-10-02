@@ -133,7 +133,7 @@ describe("steering/sync", () => {
   });
 
   it("waits out a merge's grace window, then syncs again with force", async () => {
-    // A Context PR merged from Oxagen publishes itself with its reviewer on
+    // A steering PR merged from Oxagen publishes itself with its reviewer on
     // the ledger. The first sync defers it; the second, after the window,
     // publishes whatever that merge left unpublished.
     runner

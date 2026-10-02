@@ -219,7 +219,7 @@ export const PERMISSION_CATALOG: readonly Permission[] = [
     id: "steering.read",
     group: "Graph and steering",
     description: "Read steering records and promotion candidates",
-    capabilities: ["list_context_records", "list_memory_promotions"],
+    capabilities: ["list_steering_records", "list_memory_promotions"],
   },
   {
     id: "steering.propose",
@@ -227,9 +227,9 @@ export const PERMISSION_CATALOG: readonly Permission[] = [
     description:
       "Promote, publish, revise, demote and dismiss steering records",
     capabilities: [
-      "promote_context_record",
-      "revise_context_record",
-      "publish_context_record",
+      "promote_steering_record",
+      "revise_steering_record",
+      "publish_steering_record",
       "promote_memory",
       "demote_memory",
       "dismiss_memory_promotion",

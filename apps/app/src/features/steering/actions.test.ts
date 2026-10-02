@@ -7,7 +7,7 @@
 // registers one, its case here fails and moves to the ok path, as
 // restore_managed_block's did.
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { contextPrOutput } from "@/test/steering-outputs";
+import { steeringPrOutput } from "@/test/steering-outputs";
 
 const { invoke, requireViewer } = vi.hoisted(() => ({
   invoke: vi.fn<typeof import("@oxagen/oxagen").invoke>(),
@@ -32,14 +32,14 @@ const kernel =
 const { WsCtx } = await import("@/server/viewer");
 const { unsafeMint } = await import("@/server/viewer.testing");
 const {
-  approveContextPr,
+  approveSteeringPr,
   dismissProposal,
   dropMemoryRecord,
   forgetMemory,
-  mergeContextPr,
+  mergeSteeringPr,
   mergePrWithoutReview,
-  openContextPr,
-  refreshContextPr,
+  openSteeringPr,
+  refreshSteeringPr,
   restoreManagedBlock,
   revertSteeringPr,
   setGovernanceMode,
@@ -75,23 +75,23 @@ beforeEach(() => {
   requireViewer.mockResolvedValue(ctx);
 });
 
-describe("openContextPr", () => {
+describe("openSteeringPr", () => {
   it("opens the pull request for the workspace viewer and returns where the machine stopped", async () => {
-    invoke.mockResolvedValue(contextPrOutput({ status: "checks_failed" }));
-    expect(await openContextPr("acme", "core-platform", ID)).toEqual({
+    invoke.mockResolvedValue(steeringPrOutput({ status: "checks_failed" }));
+    expect(await openSteeringPr("acme", "core-platform", ID)).toEqual({
       ok: true,
       value: { status: "checks_failed" },
     });
     expect(requireViewer).toHaveBeenCalledWith("acme", "core-platform");
     expect(invoke).toHaveBeenCalledWith(
-      "open_context_pr",
+      "open_steering_pr",
       { proposalId: ID },
       expect.objectContaining(TENANT),
     );
   });
 
   it("refuses a malformed proposal id before the kernel runs (negative)", async () => {
-    expect(await openContextPr("acme", "core-platform", "ctr_1")).toEqual({
+    expect(await openSteeringPr("acme", "core-platform", "ctr_1")).toEqual({
       ok: false,
       reason: "invalid",
       code: "invalid_input",
@@ -102,7 +102,7 @@ describe("openContextPr", () => {
 
   it("returns the handler's role refusal as denied with its reason (negative)", async () => {
     invoke.mockRejectedValue(refused("forbidden", "org_role_required"));
-    expect(await openContextPr("acme", "core-platform", ID)).toEqual({
+    expect(await openSteeringPr("acme", "core-platform", ID)).toEqual({
       ok: false,
       reason: "denied",
       code: "org_role_required",
@@ -111,7 +111,7 @@ describe("openContextPr", () => {
 
   it("returns a second pull request on the lineage as a conflict (negative)", async () => {
     invoke.mockRejectedValue(refused("conflict", "lineage_pr_open"));
-    expect(await openContextPr("acme", "core-platform", ID)).toEqual({
+    expect(await openSteeringPr("acme", "core-platform", ID)).toEqual({
       ok: false,
       reason: "conflict",
       code: "lineage_pr_open",
@@ -119,7 +119,7 @@ describe("openContextPr", () => {
   });
 });
 
-describe("mergeContextPr", () => {
+describe("mergeSteeringPr", () => {
   it("merges and returns the merge commit", async () => {
     invoke.mockResolvedValue({
       proposalId: ID,
@@ -136,12 +136,12 @@ describe("mergeContextPr", () => {
       bundleVersion: { before: 41, after: 42 },
       publishedVersion: null,
     });
-    expect(await mergeContextPr("acme", "core-platform", ID)).toEqual({
+    expect(await mergeSteeringPr("acme", "core-platform", ID)).toEqual({
       ok: true,
       value: { commit: "4d5e6f7a8b9c" },
     });
     expect(invoke).toHaveBeenCalledWith(
-      "merge_context_pr",
+      "merge_steering_pr",
       { proposalId: ID },
       expect.objectContaining(TENANT),
     );
@@ -158,7 +158,7 @@ describe("mergeContextPr", () => {
       bundleVersion: { before: 42, after: 42 },
       publishedVersion: 7,
     });
-    expect(await mergeContextPr("acme", "core-platform", ID)).toEqual({
+    expect(await mergeSteeringPr("acme", "core-platform", ID)).toEqual({
       ok: true,
       value: { commit: "5e6f7a8b9c0d" },
     });
@@ -166,7 +166,7 @@ describe("mergeContextPr", () => {
 
   it("returns a steering PR whose steering checks failed on its head as a conflict (negative)", async () => {
     invoke.mockRejectedValue(refused("conflict", "checks_failed"));
-    expect(await mergeContextPr("acme", "core-platform", ID)).toEqual({
+    expect(await mergeSteeringPr("acme", "core-platform", ID)).toEqual({
       ok: false,
       reason: "conflict",
       code: "checks_failed",
@@ -175,7 +175,7 @@ describe("mergeContextPr", () => {
 
   it("returns a merge before the checks passed as a conflict (negative)", async () => {
     invoke.mockRejectedValue(refused("conflict", "checks_not_passed"));
-    expect(await mergeContextPr("acme", "core-platform", ID)).toEqual({
+    expect(await mergeSteeringPr("acme", "core-platform", ID)).toEqual({
       ok: false,
       reason: "conflict",
       code: "checks_not_passed",
@@ -184,7 +184,7 @@ describe("mergeContextPr", () => {
 
   it("returns the author merging their own proposal under team mode as denied (negative)", async () => {
     invoke.mockRejectedValue(refused("forbidden", "separation_of_duties"));
-    expect(await mergeContextPr("acme", "core-platform", ID)).toMatchObject({
+    expect(await mergeSteeringPr("acme", "core-platform", ID)).toMatchObject({
       ok: false,
       reason: "denied",
       code: "separation_of_duties",
@@ -281,7 +281,7 @@ describe("dismissProposal", () => {
   });
 });
 
-describe("refreshContextPr", () => {
+describe("refreshSteeringPr", () => {
   it("reads the pull request from the host and answers what moved", async () => {
     invoke.mockResolvedValue({
       proposalId: ID,
@@ -290,7 +290,7 @@ describe("refreshContextPr", () => {
       changed: true,
       syncRequested: false,
     });
-    expect(await refreshContextPr("acme", "core-platform", ID)).toEqual({
+    expect(await refreshSteeringPr("acme", "core-platform", ID)).toEqual({
       ok: true,
       value: {
         changed: true,
@@ -299,7 +299,7 @@ describe("refreshContextPr", () => {
       },
     });
     expect(invoke).toHaveBeenCalledWith(
-      "refresh_context_pr",
+      "refresh_steering_pr",
       { proposalId: ID },
       expect.objectContaining(TENANT),
     );
@@ -307,7 +307,7 @@ describe("refreshContextPr", () => {
 
   it("carries the host's refusal (negative)", async () => {
     invoke.mockRejectedValue(refused("conflict", "github_refused"));
-    expect(await refreshContextPr("acme", "core-platform", ID)).toEqual({
+    expect(await refreshSteeringPr("acme", "core-platform", ID)).toEqual({
       ok: false,
       reason: "conflict",
       code: "github_refused",
@@ -386,11 +386,11 @@ describe("revertSteeringPr", () => {
 
 describe("a person the workspace refuses", () => {
   it.each([
-    ["openContextPr", () => openContextPr("acme", "x", ID)],
-    ["mergeContextPr", () => mergeContextPr("acme", "x", ID)],
+    ["openSteeringPr", () => openSteeringPr("acme", "x", ID)],
+    ["mergeSteeringPr", () => mergeSteeringPr("acme", "x", ID)],
     ["dismissProposal", () => dismissProposal("acme", "x", ID, "why")],
-    ["refreshContextPr", () => refreshContextPr("acme", "x", ID)],
-    ["approveContextPr", () => approveContextPr("acme", "x", ID)],
+    ["refreshSteeringPr", () => refreshSteeringPr("acme", "x", ID)],
+    ["approveSteeringPr", () => approveSteeringPr("acme", "x", ID)],
     ["mergePrWithoutReview", () => mergePrWithoutReview("acme", "x", ID)],
     ["revertSteeringPr", () => revertSteeringPr("acme", "x", ID)],
     [
@@ -410,7 +410,7 @@ describe("a person the workspace refuses", () => {
 
 describe("the steering PR writes Oxagen has not registered yet", () => {
   it.each([
-    ["approveContextPr", () => approveContextPr("acme", "core-platform", ID)],
+    ["approveSteeringPr", () => approveSteeringPr("acme", "core-platform", ID)],
     [
       "dropMemoryRecord",
       () => dropMemoryRecord("acme", "core-platform", BRANCH, RECORD_PATH),

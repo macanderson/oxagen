@@ -1,0 +1,136 @@
+{
+  "name": "get_steering_pr_diff",
+  "domain": "context",
+  "description": "Get the files a proposal's steering PR changes, each as it is on the production branch and on the pull request's head, read from GitHub or GitLab now. Empty once the pull request merged or closed, because its branch is deleted.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "introspection"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "proposalId": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "proposalId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "proposalId": {
+        "type": "string"
+      },
+      "state": {
+        "type": "string",
+        "enum": [
+          "diff",
+          "no_pr",
+          "settled"
+        ]
+      },
+      "baseRef": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "headSha": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "files": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "added",
+                "modified",
+                "removed"
+              ]
+            },
+            "before": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "after": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "truncated": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "path",
+            "status",
+            "before",
+            "after",
+            "truncated"
+          ],
+          "additionalProperties": false
+        },
+        "maxItems": 20
+      },
+      "moreFiles": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "proposalId",
+      "state",
+      "baseRef",
+      "headSha",
+      "files",
+      "moreFiles"
+    ],
+    "additionalProperties": false
+  }
+}
