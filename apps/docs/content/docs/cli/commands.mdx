@@ -1,11 +1,11 @@
 ---
 title: Command reference
-description: "Every oxagen command and flag: budgets and cost, runs, the knowledge graph, agent memory, steering, environments, the credential vault, and the market router."
+description: "Every oxagen command and flag: budgets and cost, runs, the knowledge graph, agent memory, steering, work orders, environments, the credential vault, and the market router."
 ---
 
 Run `oxagen --help` for the live list, and append `--help` to any command for its flags.
 
-Most platform commands need an [authenticated CLI](/docs/cli/account-setup). `cost`, `logs`, and `telemetry` work offline. `oxagen agent enroll` with a one-time token needs no login. The commands under `oxagen agent` that take no agent argument act on this machine's local state.
+Most platform commands need an [authenticated CLI](/docs/cli/account-setup). `cost`, `logs`, and `telemetry` work offline. `oxagen agent enroll` with a one-time token needs no login. The commands under `oxagen agent` that take no agent argument act on this machine's local state. `oxagen work` acts for the agents enrolled on this machine and needs no login.
 
 <Callout type="warn">
 **Retired commands.** These commands belonged to the agent runtime and were removed: `sandbox`, `sandbox-template`, `code`, `eval`, `file-lock`, `a2a`, `models`, `skill`, `prompt`, `command`, `rules`, `settings`, `config`, `mcp`, `import`, `pr`, `recover`, and `lineage`. So were the interactive surfaces `view`, `agents`, `solve`, `replay`, and `fleet`, and a bare `oxagen "<prompt>"`. Each one is still registered, prints a retirement notice that points at the `stella` CLI, and exits non-zero. `oxagen daemon` now runs the collector. See [Machine commands](#machine-commands).
@@ -356,6 +356,30 @@ Runs one agent session under Oxagen control. Everything after `--` is the agent'
 | `--github-repository <owner/name>` | With `--contained`: the one repository the run may fetch and push. Oxagen's Git custody gets the credential for each request, so you mint no token. The workspace must have the repository bound. |
 
 The command exits with the agent's own exit code. It exits 1 when the machine is not enrolled, when Oxagen refuses the session, or when the command cannot start. It exits 2 when no command follows `--`, when the custom agent's name is invalid, or when the harness is not wrapped on this machine. See [Wrap a custom agent](/docs/cli/wrap-an-agent#wrap-a-custom-agent).
+
+## oxagen work: work orders on this machine
+
+```bash
+oxagen work list
+oxagen work start <work order>
+```
+
+A person sends work to an agent from [Work](/docs/work) in the app. The work order waits on the agent's host until someone at that machine starts it.
+
+| Subcommand | Description |
+|---|---|
+| `list` | Lists each work order waiting on this machine, with its work item, when it arrived, and its key. |
+| `start <work order>` | Claims the work order, then starts the agent's harness in the current directory with the brief as its first prompt. Run it in a checkout of the brief's repository. A work order id starts with `wo_`. |
+
+`start` claims the work order before anything runs. When Oxagen refuses the claim, nothing starts, and the message says why: the send ended, it went to another machine, or a run already started for it. `start` never claims again on its own. When this machine does not wrap the agent's harness, or the harness command is not installed, `start` tells Oxagen, and Oxagen ends the send so the item can be sent again. The work order stays in `list` until the harness starts.
+
+| Exit code | Meaning |
+|---|---|
+| `0` | `list` finished. For `start`, the harness ran and exited 0. |
+| `1` | No agent is enrolled on this machine, the work order is not waiting here, Oxagen refused the claim, or the harness could not start. |
+| `2` | The id is not a work order id. |
+
+After a successful claim, `start` exits with the harness's own exit code.
 
 ## Machine commands
 
