@@ -37,6 +37,7 @@ import {
 } from "@/features/tools";
 import { routes, type SafePath } from "@/shared/safe-path";
 import type { WsCtx } from "@/server/viewer";
+import { mayActInWorkspace } from "@/shared/workspace-authority";
 import { Badge } from "@/ui/badge";
 import {
   buttonSecondary,
@@ -113,12 +114,13 @@ async function serverVersions(
 }
 
 /**
- * An org Owner or Admin: the roles `set_kill_switch` and the Studio writes
- * assert at org scope. It is the Tools page's rule (tools.tsx), which does not
- * read the workspace Owner role yet (#3198).
+ * An org Owner or Admin, or the workspace's Owner or Admin: the roles
+ * `set_kill_switch` on a tool and the Studio writes admit. Each acts inside
+ * the workspace, so its Owner and Admin pass (#5228). It is the Tools page's
+ * rule (tools.tsx).
  */
-function canAdministerOrg(ctx: WsCtx): boolean {
-  return ctx.orgRole === "owner" || ctx.orgRole === "admin";
+function canAdministerWorkspace(ctx: WsCtx): boolean {
+  return mayActInWorkspace(ctx.orgRole, ctx.wsRole, ["owner", "admin"]);
 }
 
 /** Who turned a switch off, why, and who turned it back on. */
@@ -308,7 +310,7 @@ export async function StudioServer({
 }) {
   const at: StudioAt = { org: ctx.orgSlug, ws: ctx.wsSlug };
   const here = studioHref(at, route.serverId, route.tab);
-  const canEdit = canAdministerOrg(ctx);
+  const canEdit = canAdministerWorkspace(ctx);
   // The record is read by the folder the registry row names, so it waits on
   // the server list alone. The other reads run beside it.
   const serverList = source.tools.mcpServers(ctx);

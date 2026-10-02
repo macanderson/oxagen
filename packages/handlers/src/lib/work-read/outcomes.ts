@@ -2,8 +2,9 @@
 // days, counted from the work records (P1-05, #5163; agent-work-phase-1.html,
 // Screens: Outcome view, and Release gates: the measures).
 //
-// Pure. read.ts loads the items whose records can count and their run costs,
-// and computeOutcomes counts them. Every figure comes from a fact, and none is
+// Pure. read.ts loads the items whose records can count, their run costs, the
+// sends in the window, and the weekly intake counts, and computeOutcomes
+// counts them. Every figure comes from a fact, and none is
 // estimated:
 //
 //   - An item counts as accepted and merged when the later of its acceptance
@@ -25,14 +26,34 @@
 //     days ago. One reopened when a reopen fact follows that done time. Items
 //     done in the last 30 days wait to count.
 //   - Weeks are UTC weeks from Monday that overlap the window.
+//   - Delivery puts each send read.ts loaded for the window in one bucket, in
+//     this order: rejected when it has a send_rejected fact, claimed when a
+//     runtime claimed it, withdrawn when a person withdrew it, and waiting
+//     otherwise. The four buckets add up to the sends.
+//   - A send claimed and then withdrawn, after a stop no run confirmed,
+//     counts as claimed: the runtime received it. reduceWorkItem
+//     (@oxagen/work/records) ranks the withdrawal first, because it asks what
+//     state the send is in now. Delivery asks whether the runtime received it.
+//   - Claim time runs from the send to its first claim, over the claimed
+//     sends. A claim time that would run backwards is left out of the sample,
+//     as lead time is.
+//   - A week's entered and sent counts come from read.ts, which counts them
+//     in the database with no cap. A week the database did not name counts 0.
+//   - A week used the full flow when at least one item was accepted and
+//     merged in it.
 //
 // Median and 90th percentile use the nearest rank: the value at position
 // ceil(p * n) of the sorted sample. Both are null with no sample.
+//
+// Delivery and the weekly counts are the pilot's measures
+// (agent-work-phase-1.html, Release gates). Nothing here decides the pilot: a
+// person reads the figures and decides.
 import type { WorkOutcomesGetOutput } from "@oxagen/oxagen/contracts/work.outcomes.get";
 import { type WorkFact, type WorkItemProjection, sortFacts } from "@oxagen/work/records";
 import { type RunCost, costOf, doneAtOf } from "./derive";
 
-const HOUR_MS = 60 * 60 * 1000;
+const MINUTE_MS = 60 * 1000;
+const HOUR_MS = 60 * MINUTE_MS;
 const DAY_MS = 24 * HOUR_MS;
 
 /** How many days an item waits after it finishes before its reopens count. */
@@ -46,11 +67,39 @@ export interface OutcomeItem {
   corrections: number;
 }
 
+/** One send a person made in the window, and what the runtime did with it. */
+export interface SendOutcome {
+  /** When the person sent it: its send_requested fact. */
+  requestedAt: string;
+  /** The runtime's first claim, or null with none. */
+  claimedAt: string | null;
+  /** The send has a send_rejected fact. */
+  rejected: boolean;
+  /** The send has a send_withdrawn fact. */
+  withdrawn: boolean;
+}
+
+/** One UTC week's intake, counted by the database. */
+export interface WeekIntake {
+  /** The Monday the week starts, as YYYY-MM-DD in UTC. */
+  week: string;
+  /** Items Oxagen created in the week, collected from a provider or entered by a person. */
+  entered: number;
+  /** Sends a person made in the week. */
+  sent: number;
+}
+
 export interface OutcomesInput {
   now: Date;
   days: number;
   items: readonly OutcomeItem[];
   runs: ReadonlyMap<string, RunCost>;
+  /** Sends a person made in the window, each with what the runtime did. */
+  sends: readonly SendOutcome[];
+  /** More sends were made in the window than read.ts read. */
+  sendsTruncated: boolean;
+  /** Items entered and sends made in each UTC week of the window, counted by the database. */
+  intake: readonly WeekIntake[];
 }
 
 /** The value at nearest rank `p` of an ascending sample, or null with no sample. Pure. */
@@ -113,6 +162,38 @@ function countKind(facts: readonly WorkFact[], kind: WorkFact["kind"]): number {
   return facts.filter((fact) => fact.kind === kind).length;
 }
 
+/** Each send in one bucket, and the claim time over the claimed sends. Pure. */
+function countDelivery(sends: readonly SendOutcome[], truncated: boolean): WorkOutcomesGetOutput["delivery"] {
+  let claimed = 0;
+  let rejected = 0;
+  let withdrawn = 0;
+  let waiting = 0;
+  const minutes: number[] = [];
+  for (const send of sends) {
+    if (send.rejected) {
+      rejected += 1;
+    } else if (send.claimedAt !== null) {
+      claimed += 1;
+      const gap = (Date.parse(send.claimedAt) - Date.parse(send.requestedAt)) / MINUTE_MS;
+      if (gap >= 0) minutes.push(gap);
+    } else if (send.withdrawn) {
+      withdrawn += 1;
+    } else {
+      waiting += 1;
+    }
+  }
+  minutes.sort((a, b) => a - b);
+  return {
+    sends: sends.length,
+    claimed,
+    rejected,
+    withdrawn,
+    waiting,
+    claim_minutes: { median: nearestRank(minutes, 0.5), p90: nearestRank(minutes, 0.9), sample: minutes.length },
+    truncated,
+  };
+}
+
 /** One accepted item in the window, with its done time and lead time. */
 interface Accepted {
   item: OutcomeItem;
@@ -121,8 +202,7 @@ interface Accepted {
   leadHours: number | null;
 }
 
-/** Count what the work finished in the window. Pure. */
-/** The figures from the items read. read.ts adds whether the read stopped at its cap. Pure. */
+/** Count what the work finished in the window, from the items and sends read. read.ts adds whether a read stopped at its cap. Pure. */
 export function computeOutcomes(input: OutcomesInput): Omit<WorkOutcomesGetOutput, "truncated"> {
   const end = input.now.getTime();
   const start = end - input.days * DAY_MS;
@@ -176,16 +256,22 @@ export function computeOutcomes(input: OutcomesInput): Omit<WorkOutcomesGetOutpu
     if (item.facts.some((fact) => fact.kind === "reopened" && Date.parse(fact.occurredAt) > doneAt)) reopened += 1;
   }
 
+  const intakeOf = new Map(input.intake.map((row) => [row.week, row]));
   const weeks = weeksBetween(new Date(start), input.now).map((week) => {
     const from = Math.max(week.getTime(), start);
     const to = Math.min(week.getTime() + 7 * DAY_MS - 1, end);
     const inWeek = accepted.filter((entry) => within(entry.doneAt, from, to));
     const weekLeads = inWeek.flatMap((entry) => (entry.leadHours === null ? [] : [entry.leadHours])).sort((a, b) => a - b);
+    const day = isoDay(week);
+    const intake = intakeOf.get(day);
     return {
-      week: isoDay(week),
+      week: day,
       accepted_merged: inWeek.length,
       returned: returnedAt.filter((at) => within(at, from, to)).length,
       median_lead_hours: nearestRank(weekLeads, 0.5),
+      entered: intake?.entered ?? 0,
+      sent: intake?.sent ?? 0,
+      full_flow: inWeek.length > 0,
     };
   });
 
@@ -199,6 +285,7 @@ export function computeOutcomes(input: OutcomesInput): Omit<WorkOutcomesGetOutpu
     touches: { per_item: accepted.length === 0 ? null : touchTotal / accepted.length, ...touches },
     cost: costOf(runIds, input.runs),
     reopens: { cohort, reopened, waiting },
+    delivery: countDelivery(input.sends, input.sendsTruncated),
     weeks,
   };
 }

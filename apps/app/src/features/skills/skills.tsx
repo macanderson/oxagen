@@ -3,6 +3,7 @@ import { useTranslations } from "next-intl";
 import type { DataSource } from "@/data/ports";
 import type { WsCtx } from "@/server/viewer";
 import { routes } from "@/shared/safe-path";
+import { mayActInWorkspace } from "@/shared/workspace-authority";
 import { buttonSecondary } from "@/ui/control-styles";
 import { SafeLink } from "@/ui/navigation";
 import { SkillsFailure, SkillsInventory, SkillsLede } from "./sections";
@@ -43,7 +44,10 @@ export async function Skills({
       <SkillVersions
         at={at}
         configuration={read.value}
-        canEdit={ctx.orgRole === "owner" || ctx.orgRole === "admin"}
+        canEdit={mayActInWorkspace(ctx.orgRole, ctx.wsRole, [
+          "owner",
+          "admin",
+        ])}
       />
     );
   return (

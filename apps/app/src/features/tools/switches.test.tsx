@@ -26,6 +26,13 @@ const { router, flipKillSwitch } = vi.hoisted(() => ({
 }));
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
 vi.mock("./actions", () => ({ flipKillSwitch }));
+// The header's dialog picks a target through this Server Action when its
+// picker opens. No test here opens a picker, so it answers an empty list.
+vi.mock("@/features/shell/client", () => ({
+  chooseSwitchTargets: vi.fn(() =>
+    Promise.resolve({ ok: true, value: { options: [], partial: false } }),
+  ),
+}));
 
 const { Switches } = await import("./switches");
 const { killSwitchBoard } = await import("./tools.builders");
@@ -73,14 +80,18 @@ const board = (switches: Row[]) => readOk(killSwitchBoard({ switches }));
 
 function renderSwitches(
   read: Read<Board>,
-  { canFlip = true }: { canFlip?: boolean } = {},
+  {
+    canFlip = true,
+    canFlipOrgWide = canFlip,
+  }: { canFlip?: boolean; canFlipOrgWide?: boolean } = {},
 ) {
   return render(
     <IntlProvider>
       <Switches
         at={at}
-        orgRole={canFlip ? "owner" : "member"}
+        orgRole={canFlipOrgWide ? "owner" : "member"}
         canFlip={canFlip}
+        canFlipOrgWide={canFlipOrgWide}
         selfWorkspaceId={SELF_WS}
         orgName="Acme Robotics"
         wsName="Core platform"
@@ -337,5 +348,59 @@ describe("Switches › Create a switch", () => {
     expect(
       screen.queryByTestId("tools-switch-edit-emd_01k5a1-open"),
     ).not.toBeInTheDocument();
+  });
+});
+
+// A workspace's Owner or Admin flips the switches that stay inside the
+// workspace, and only an org Owner or Admin flips one that reaches past it
+// (#5228, `set_kill_switch`).
+describe("Switches › workspace Owner or Admin", () => {
+  it("offers a toggle on an agent's switch and none on the organization, workspace, class or operator switches", () => {
+    renderSwitches(
+      board([
+        row("emd_01k5a1", { kind: "agent", id: "agt_invoicebot" }),
+        row("emd_01k5o1", { kind: "operator", id: PRIYA }, { scope: "org" }),
+      ]),
+      { canFlip: true, canFlipOrgWide: false },
+    );
+    expect(within(card("emd_01k5a1")).getByRole("switch")).toBeVisible();
+    expect(within(card("emd_01k5o1")).queryByRole("switch")).toBeNull();
+    const shipped = ["org:self", "workspace:self", "class:moves_money"];
+    for (const id of shipped) {
+      expect(within(card(id)).queryByRole("switch")).toBeNull();
+    }
+  });
+
+  it("offers only the levels inside the workspace in the header's dialog", async () => {
+    renderSwitches(board([]), { canFlip: true, canFlipOrgWide: false });
+    fireEvent.click(screen.getByTestId("tools-flip-open"));
+    await screen.findByTestId("tools-flip-dialog");
+    const level = document.querySelector("#kind");
+    if (!(level instanceof HTMLSelectElement)) throw new Error("no level");
+    expect([...level.options].map((o) => o.value)).toEqual([
+      "tool_server",
+      "tool_version",
+      "connection",
+      "agent",
+    ]);
+    expect(level.value).toBe("tool_server");
+  });
+
+  it("offers every level to an org Owner or Admin (negative control)", async () => {
+    renderSwitches(board([]));
+    fireEvent.click(screen.getByTestId("tools-flip-open"));
+    await screen.findByTestId("tools-flip-dialog");
+    const level = document.querySelector("#kind");
+    if (!(level instanceof HTMLSelectElement)) throw new Error("no level");
+    expect([...level.options].map((o) => o.value)).toEqual([
+      "class",
+      "org",
+      "workspace",
+      "tool_server",
+      "tool_version",
+      "connection",
+      "agent",
+      "operator",
+    ]);
   });
 });

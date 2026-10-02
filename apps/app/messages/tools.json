@@ -168,7 +168,7 @@
         "reasonHint": "Recorded on the version. The security event omits the reason.",
         "confirm": "Reclassify this version",
         "pending": "Reclassifying…",
-        "denied": "Reclassifying a tool version needs an organization Owner or Admin.",
+        "denied": "Reclassifying a tool version needs an organization Owner or Admin, or the workspace Owner or Admin.",
         "tagsPlaceholder": "moves_money destroys_data"
       }
     },
@@ -301,7 +301,7 @@
           "endpoint_not_public": "The endpoint must be a public https address.",
           "redirect_url_invalid": "The redirect URL was refused. Reload the page and try again.",
           "server_not_found": "That provider is no longer in this workspace.",
-          "org_role_required": "Authorizing a provider needs an org Owner or Admin, or a workspace Owner."
+          "org_role_required": "Authorizing a provider needs an org Owner or Admin, or a workspace Owner or Admin."
         }
       },
       "another": "Add another provider"

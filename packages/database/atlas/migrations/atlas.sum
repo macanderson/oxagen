@@ -1,4 +1,4 @@
-h1:3gg99PsRMtv7iYm+VEt75UND3tXs30he9PRqXMo8cUA=
+h1:aEvjKeejxqzG18G717qDfsfGYvX+AgMyX9XBOOZa+UM=
 20260611233016_initial_schema.sql h1:zDxoHTpnCTjbF+5PvUDeUGvyJCb6yhltPOFOw1pdqMQ=
 20260612000959_add_agent_execution_step_timing.sql h1:d6h37F1Jf3ze2TIHheAB3P9PR0hbcaenjF15U45v2ak=
 20260612052000_regrant_oxagen_app.sql h1:Xh0Mx6rfN3XHIBA7nIlNhADsWGfC1mZtn25NsnrIZXo=
@@ -269,3 +269,5 @@ h1:3gg99PsRMtv7iYm+VEt75UND3tXs30he9PRqXMo8cUA=
 20261002203000_context_proposals_steering_pr_kinds.sql h1:Lwoq7kA32ERU2BbSCpzqKYQ8zRYaSIjM8nY1biaKfG8=
 20261002235000_drop_assistant_turn_budgets.sql h1:64rRZ9BiD6PiqyOofeI2OmjQK58XHoQ2F5NNyUtJx4E=
 20261003010000_steering_records_rename.sql h1:hrNY+rahS7AI9Ow8kWzezYyJWmqE5kmuYuxsEE9ck9E=
+20261003020000_item_facts_check_head_idx.sql h1:Q3Z10Q87xqF/shf/1izSH8Amvn+XlrgLXhojbedO/xA=
+20261003030000_workspace_admin_role.sql h1:M24EN+rKqNhOZuG/lZrwB9Hwp+17aZwCQicogAYPopA=

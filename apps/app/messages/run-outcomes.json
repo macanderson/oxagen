@@ -4,7 +4,7 @@
     "loadProviders": "Check issue connections",
     "loadingProviders": "Checking connections",
     "providerFailed": "The connections could not be read. Try again.",
-    "providerOwner": "An organization owner or admin can authorize issue providers.",
+    "providerOwner": "An organization or workspace owner or admin can authorize issue providers.",
     "githubTitle": "GitHub",
     "githubConnected": "The workspace GitHub installation is connected. Issue creation also requires its Issues write permission.",
     "githubUnconfigured": "GitHub authorization is not configured for this deployment.",

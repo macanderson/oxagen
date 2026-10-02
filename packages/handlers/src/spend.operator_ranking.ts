@@ -182,7 +182,14 @@ export function createOperatorRankingHandler(
     const userId = await resolveActingUserId(ctx);
     const scope = { orgId: ctx.orgId, workspaceId: ctx.workspaceId };
     await assertOrgRole(
-      { orgId: ctx.orgId, workspaceId: ctx.workspaceId, userId },
+      {
+        orgId: ctx.orgId,
+        workspaceId: ctx.workspaceId,
+        userId,
+        // Lets the gate admit the workspace's Owner or Admin (#5228).
+        invokedCapability: ctx.invokedCapability,
+        agentRun: ctx.agentRun,
+      },
       { org: [...RANKING_ROLES.org], workspace: [...RANKING_ROLES.workspace] },
     );
     const { from, to } = input.period;

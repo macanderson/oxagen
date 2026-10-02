@@ -2065,7 +2065,7 @@ describe("controls", () => {
     const fork = actions.getByTestId("run-fork");
     expect(fork).toBeDisabled();
     expect(fork.getAttribute("title")).toContain(
-      "Forking needs an organization Owner, Admin or Member role.",
+      "Forking needs an organization Owner, Admin or Member role, or the workspace Owner or Admin role.",
     );
     await expectNoAxe(container);
   });

@@ -177,7 +177,7 @@ describe("SealRunAction", () => {
     const button = screen.getByTestId("run-seal");
     expect(button).toBeDisabled();
     expect(button).toHaveAccessibleDescription(
-      "Sealing a run needs an organization Owner or Admin role, or the workspace Owner role.",
+      "Sealing a run needs an organization Owner or Admin role, or the workspace Owner or Admin role.",
     );
     await user.click(button);
     expect(screen.queryByTestId("run-seal-dialog")).toBeNull();

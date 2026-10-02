@@ -18,6 +18,7 @@ export const costCenterDelete = registerCapability({
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: false,
+  orgLevel: true,
   noBillingGate: true,
   mutates: true,
   sensitivity: "medium",

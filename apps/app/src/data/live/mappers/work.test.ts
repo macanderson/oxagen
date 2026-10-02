@@ -302,8 +302,17 @@ describe("toWorkTargetList and toWorkOutcomes", () => {
       touches: { per_item: null, brief_approvals: 0, acceptances: 0, returns: 1, triage_overrides: 0, triage_corrections: 0 },
       cost: { runs: 1, known_runs: 0, total: null },
       reopens: { cohort: 0, reopened: 0, waiting: 0 },
+      delivery: {
+        sends: 2,
+        claimed: 1,
+        rejected: 0,
+        withdrawn: 0,
+        waiting: 1,
+        claim_minutes: { median: 3, p90: 3, sample: 1 },
+        truncated: false,
+      },
       truncated: false,
-      weeks: [{ week: "2026-09-28", accepted_merged: 0, returned: 1, median_lead_hours: null }],
+      weeks: [{ week: "2026-09-28", accepted_merged: 0, returned: 1, median_lead_hours: null, entered: 2, sent: 2, full_flow: false }],
     });
     const view = WorkOutcomes.parse(toWorkOutcomes(out));
     expect(view.leadTime).toEqual({ medianHours: null, p90Hours: null, sample: 0 });

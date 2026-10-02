@@ -55,6 +55,7 @@ export const workspaceList = registerCapability({
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: false,
+  orgLevel: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "workspace" },
   sensitivity: "low",
   mutates: false,

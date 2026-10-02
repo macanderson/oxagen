@@ -29,6 +29,7 @@ import {
   resolveActorOrgRole as resolveActorRole,
   generateApiKey,
 } from "./lib/api-key-authz";
+import { workspaceAuthorityRole } from "@oxagen/iam/org-role";
 import { STELLA_OPERATIONAL_TELEMETRY_SCOPE_PURPOSE } from "./lib/stella-telemetry-enrollment";
 import {
   ENROLLMENT_CLAIMS_SCHEMA,
@@ -71,13 +72,17 @@ export const telemetryStellaEnrollHandler: CapabilityHandler<
   if (!ctx.workspaceId) throw denied("Forbidden: workspaceId is required");
 
   const actorRole = await resolveActorRole(ctx.orgId, ctx.userId);
-  if (!actorRole || !AUTHORIZED_ROLES.has(actorRole)) {
+  // A workspace's Owner or Admin enrols that workspace's installs too (#5228).
+  if (
+    (!actorRole || !AUTHORIZED_ROLES.has(actorRole)) &&
+    (await workspaceAuthorityRole(ctx, ctx.userId)) === null
+  ) {
     logger.warn(
       { orgId: ctx.orgId, actorRole },
       "telemetry.stella.enroll: rejected — insufficient org role",
     );
     throw denied(
-      "Forbidden: only org Owners and Admins can enrol Stella telemetry",
+      "Forbidden: only org Owners and Admins, or the workspace's Owner or Admin, can enrol Stella telemetry",
     );
   }
 

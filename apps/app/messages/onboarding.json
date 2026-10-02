@@ -367,7 +367,7 @@
         "signedIn": "Signed in as",
         "needed": "Needed",
         "decidedBy": "Decided by",
-        "decidedByValue": "an organization owner or admin through register_agent",
+        "decidedByValue": "an organization or workspace owner or admin through register_agent",
         "dialogTitle": "Request access",
         "dialogBody": "Oxagen cannot send an access request from this page yet. Ask an organization owner to grant {permission}. The grant lands in the audit record."
       },
@@ -516,7 +516,7 @@
         }
       },
       "failure": {
-        "orgRoleRequired": "This account may not register agents here. An organization owner or admin can.",
+        "orgRoleRequired": "This account may not register agents here. An organization or workspace owner or admin can.",
         "noPrincipal": "The call carried no person Oxagen could check a role for. Nothing ran.",
         "agentNotFound": "That agent is not in this workspace. Nothing was written.",
         "slugTaken": "An agent in this workspace already holds that slug. Pick another.",

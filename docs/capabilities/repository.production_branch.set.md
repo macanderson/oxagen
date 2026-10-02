@@ -18,7 +18,7 @@ The handler reads the branch through the workspace's installation and, when it d
 - MCP: `set_production_branch`
 - CLI: `oxagen repo branch <bindingId> <branch> [--json]`
 - App: the repository dialog on the Repositories page, "Make <branch> the production branch" or "Set production branch"
-- Authentication: session or API key. The main repository's branch takes an org Owner or Admin; a linked repository's also admits the workspace Owner. Checked by the handler (INV-29)
+- Authentication: session or API key. An org Owner or Admin, or the workspace's Owner or Admin, for the main repository and a linked one alike (#5228). Checked by the handler (INV-29)
 - Capability name: `set_production_branch`
 - Not billed (`noBillingGate: true`); IAM default-deny; high sensitivity
 - Agent: Stella finds it with `search_tools` and loads it with `load_tools`. Each call waits for a person's approval (`riskLevel: high`).

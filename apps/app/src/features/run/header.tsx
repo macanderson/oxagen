@@ -992,8 +992,9 @@ export function RunHeader({
   pulls: readonly RunOutputNode[] | null;
   /**
    * The viewer's two roles, because the writes gate on them differently:
-   * `dispatch_command` admits an org Owner or Admin or a workspace Owner or
-   * Member, `export_run` an org Owner or Admin. Each control is drawn
+   * `dispatch_command` admits an org Owner or Admin or a workspace Owner,
+   * Admin or Member, `export_run` an org Owner or Admin. The workspace's
+   * Owner and Admin pass every one of them (#5228). Each control is drawn
    * disabled for a viewer its handler would refuse.
    */
   orgRole: OrgRole;
@@ -1084,6 +1085,7 @@ export function RunHeader({
               ws={place.ws}
               run={run}
               orgRole={orgRole}
+              wsRole={wsRole}
             />
           ) : (
             <RunControls
@@ -1130,6 +1132,7 @@ export function RunHeader({
             sealed={sealed}
             closedIdle={run.sealSource === "idle_timeout"}
             orgRole={orgRole}
+            wsRole={wsRole}
           />
         </div>
       </header>

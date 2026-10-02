@@ -11,11 +11,20 @@ const OUTPUT = {
   touches: { per_item: 2.5, brief_approvals: 4, acceptances: 4, returns: 1, triage_overrides: 0, triage_corrections: 1 },
   cost: { runs: 5, known_runs: 4, total: { micros: "12000000", currency: "USD" } },
   reopens: { cohort: 3, reopened: 1, waiting: 4 },
+  delivery: {
+    sends: 7,
+    claimed: 4,
+    rejected: 1,
+    withdrawn: 1,
+    waiting: 1,
+    claim_minutes: { median: 2, p90: 12.5, sample: 4 },
+    truncated: false,
+  },
   truncated: false,
-  weeks: [{ week: "2026-09-28", accepted_merged: 2, returned: 0, median_lead_hours: 5 }],
+  weeks: [{ week: "2026-09-28", accepted_merged: 2, returned: 0, median_lead_hours: 5, entered: 6, sent: 3, full_flow: true }],
 };
 
-// get_work_outcomes (P1-05, #5163).
+// get_work_outcomes (P1-05, #5163; the pilot measures, P1-06, #5241).
 describe("get_work_outcomes contract", () => {
   it("registers a read on the API surface that never meters", () => {
     expect(contract.name).toBe("get_work_outcomes");
@@ -41,7 +50,16 @@ describe("get_work_outcomes contract", () => {
       lead_time: { median_hours: null, p90_hours: null, sample: 0 },
       touches: { ...OUTPUT.touches, per_item: null },
       cost: { runs: 0, known_runs: 0, total: null },
-      weeks: [{ week: "2026-09-28", accepted_merged: 0, returned: 0, median_lead_hours: null }],
+      delivery: {
+        sends: 0,
+        claimed: 0,
+        rejected: 0,
+        withdrawn: 0,
+        waiting: 0,
+        claim_minutes: { median: null, p90: null, sample: 0 },
+        truncated: false,
+      },
+      weeks: [{ week: "2026-09-28", accepted_merged: 0, returned: 0, median_lead_hours: null, entered: 0, sent: 0, full_flow: false }],
     };
     expect(contract.output.safeParse(empty).success).toBe(true);
   });
@@ -50,5 +68,16 @@ describe("get_work_outcomes contract", () => {
     expect(contract.output.safeParse({ ...OUTPUT, weeks: [{ ...OUTPUT.weeks[0], week: "2026-W40" }] }).success).toBe(false);
     expect(contract.output.safeParse({ ...OUTPUT, returned: -1 }).success).toBe(false);
     expect(contract.output.safeParse({ ...OUTPUT, acceptance_rate: 0.8 }).success).toBe(false);
+  });
+
+  it("refuses a negative delivery count, a week whose full flow is not a boolean, and a pilot verdict", () => {
+    expect(contract.output.safeParse({ ...OUTPUT, delivery: { ...OUTPUT.delivery, waiting: -1 } }).success).toBe(false);
+    expect(
+      contract.output.safeParse({ ...OUTPUT, delivery: { ...OUTPUT.delivery, claim_minutes: { median: -1, p90: 2, sample: 1 } } }).success,
+    ).toBe(false);
+    expect(contract.output.safeParse({ ...OUTPUT, weeks: [{ ...OUTPUT.weeks[0], full_flow: 1 }] }).success).toBe(false);
+    expect(contract.output.safeParse({ ...OUTPUT, weeks: [{ ...OUTPUT.weeks[0], full_flow: "yes" }] }).success).toBe(false);
+    expect(contract.output.safeParse({ ...OUTPUT, delivery: { ...OUTPUT.delivery, claim_rate: 0.6 } }).success).toBe(false);
+    expect(contract.output.safeParse({ ...OUTPUT, pilot_passed: true }).success).toBe(false);
   });
 });

@@ -29,6 +29,7 @@
  */
 import { schema, type Tx } from "@oxagen/database";
 import { agentApprovalResolve } from "@oxagen/oxagen/contracts/agent.approval.resolve";
+import { WORKSPACE_FULL_ACCESS_ROLES } from "@oxagen/oxagen/iam";
 import { and, eq, gt, inArray, isNull, or } from "drizzle-orm";
 import { logger } from "./logger";
 
@@ -41,13 +42,19 @@ export {
 
 /**
  * The IAM roles `resolve_approval` admits, read from its contract's
- * `defaultRoles`. Its `assertOrgRole` gate and the recipients of
- * `approval.requested` take the same lists, so who may resolve an approval
- * and who is told about one cannot drift apart.
+ * `defaultRoles`, plus the workspace's Owner and Admin, whom every role gate
+ * admits for a workspace capability (#5228). Its `assertOrgRole` gate and the
+ * recipients of `approval.requested` take the same lists, so who may resolve
+ * an approval and who is told about one cannot drift apart.
  */
 export const APPROVAL_RESOLVER_ROLES = {
   org: allowedRoles(agentApprovalResolve.defaultRoles.org),
-  workspace: allowedRoles(agentApprovalResolve.defaultRoles.workspace),
+  workspace: [
+    ...new Set([
+      ...allowedRoles(agentApprovalResolve.defaultRoles.workspace),
+      ...WORKSPACE_FULL_ACCESS_ROLES,
+    ]),
+  ],
 };
 
 function allowedRoles(

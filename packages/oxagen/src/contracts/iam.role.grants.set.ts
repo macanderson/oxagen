@@ -23,6 +23,7 @@ export const iamRoleGrantsSet = registerCapability({
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
+  orgLevel: true,
   noBillingGate: true,
   agent: { requiresApproval: true, riskLevel: "high", category: "iam" },
   sensitivity: "high",

@@ -31,6 +31,7 @@ export const apiKeyList = registerCapability({
   surfaces: ["api", "mcp", "agent"],
   layers: ["api", "docs", "mcp", "unit", "app"],
   scoped: true,
+  orgLevel: true,
   // A console read is never a governed action (ADR-052 exclusion 2).
   noBillingGate: true,
   sensitivity: "high",

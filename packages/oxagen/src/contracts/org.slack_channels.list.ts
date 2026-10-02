@@ -20,6 +20,7 @@ export const orgSlackChannelsList = registerCapability({
   surfaces: [],
   layers: ["schema", "app", "unit", "docs"],
   scoped: false,
+  orgLevel: true,
   noBillingGate: true,
   // A read of Slack, not of Oxagen state. Declared so `kernelRead` accepts it.
   mutates: false,

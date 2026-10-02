@@ -197,7 +197,7 @@ export function steeringPrOutput(
       publishes: { lineageId: LINEAGE, path: RECORD_PATH },
       bundleVersion: { current: 41, afterMerge: 42 },
       review:
-        "team: an org Owner or Admin, or a workspace Owner, other than the author merges",
+        "team: an org Owner or Admin, or a workspace Owner or Admin, other than the author merges",
     },
     merged: null,
     closed: null,

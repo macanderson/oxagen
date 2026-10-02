@@ -499,7 +499,7 @@ describe("Fix a finding", () => {
       screen.getByRole("button", { name: "Record the fix as applied" }),
     );
     expect(
-      await screen.findByText(/Your organization role cannot decide a finding/),
+      await screen.findByText(/Your role cannot decide a finding/),
     ).toBeInTheDocument();
     expect(router.replace).not.toHaveBeenCalled();
 

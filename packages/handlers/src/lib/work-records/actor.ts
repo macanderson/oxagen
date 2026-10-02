@@ -14,7 +14,7 @@
 //
 // A runtime's calls (claim and reject) are checked by the host credential
 // instead: see runtime.ts.
-import type { CapabilityContext } from "@oxagen/oxagen";
+import type { CheckedContext } from "@oxagen/oxagen";
 import { HandlerError } from "@oxagen/oxagen/handler-error";
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { type WorkItemAction, workActionRoles } from "@oxagen/work/records";
@@ -30,7 +30,7 @@ export interface WorkActor {
  * Refuse unless the caller is a signed-in person who holds a role `action`
  * takes in the call's org or workspace. Returns the person's user id.
  */
-export async function assertWorkActor(ctx: CapabilityContext, action: WorkItemAction): Promise<WorkActor> {
+export async function assertWorkActor(ctx: CheckedContext, action: WorkItemAction): Promise<WorkActor> {
   if (ctx.agentRun) {
     throw new HandlerError({
       code: "forbidden",
@@ -54,6 +54,11 @@ export async function assertWorkActor(ctx: CapabilityContext, action: WorkItemAc
   if (userId === null) {
     throw new HandlerError({ code: "forbidden", reason: "person_required", message: "Sign in to Oxagen to decide work." });
   }
-  const role = await assertOrgRole({ orgId: ctx.orgId, workspaceId: ctx.workspaceId, userId }, workActionRoles(action));
+  // The invoked capability lets the gate admit the workspace's Owner or Admin
+  // (#5228). An agent run never reaches this line.
+  const role = await assertOrgRole(
+    { orgId: ctx.orgId, workspaceId: ctx.workspaceId, userId, invokedCapability: ctx.invokedCapability },
+    workActionRoles(action),
+  );
   return { userId, role };
 }

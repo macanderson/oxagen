@@ -31,6 +31,7 @@ import {
   noOperatorMessage,
   resolveOperatorUserId,
 } from "./lib/api-key-authz";
+import { workspaceAuthorityRole } from "@oxagen/iam/org-role";
 import {
   enrollmentDocument,
   mintHostEnrollment,
@@ -70,12 +71,21 @@ export const tachoEnrollmentCreateHandler: CapabilityHandler<
   if (!operatorUserId) throw denied(noOperatorMessage(ctx));
 
   const actorRole = await resolveActorRole(ctx.orgId, operatorUserId);
-  if (!actorRole || !AUTHORIZED_ROLES.has(actorRole)) {
+  // A workspace's Owner or Admin enrols hosts in that workspace too (#5228).
+  if (
+    (!actorRole || !AUTHORIZED_ROLES.has(actorRole)) &&
+    (await workspaceAuthorityRole(
+      { ...ctx, userId: operatorUserId },
+      operatorUserId,
+    )) === null
+  ) {
     logger.warn(
       { orgId: ctx.orgId, actorRole },
       "tacho.enrollment.create: rejected — insufficient org role",
     );
-    throw denied("Forbidden: only org Owners and Admins can enrol Tacho hosts");
+    throw denied(
+      "Forbidden: only org Owners and Admins, or the workspace's Owner or Admin, can enrol Tacho hosts",
+    );
   }
 
   const signing = requireEnrollmentSigning("create_tacho_enrollment");

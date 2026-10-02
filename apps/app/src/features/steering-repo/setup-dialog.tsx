@@ -38,14 +38,17 @@ export function SteeringRepoSetup({
   ws,
   view,
   canAct,
+  canChangeConnection = canAct,
   returnTo,
   initiallyOpen = false,
 }: {
   org: string;
   ws: string;
   view: SteeringRepoView;
-  /** An owner or admin: the setup's actions are theirs. */
+  /** An org or workspace Owner or Admin: the setup's actions are theirs. */
   canAct: boolean;
+  /** An org Owner or Admin: the organization's connection is theirs. */
+  canChangeConnection?: boolean;
   /** Where GitHub sends the person back to: this page with the dialog open. */
   returnTo: SafePath;
   /** The address asked for the dialog (`?setup=steering`). */
@@ -129,6 +132,7 @@ export function SteeringRepoSetup({
             ws={ws}
             view={view}
             canAct={canAct}
+            canChangeConnection={canChangeConnection}
             returnTo={returnTo}
           />
         </div>

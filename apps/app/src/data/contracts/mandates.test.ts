@@ -192,6 +192,13 @@ describe("blindSpotOf", () => {
     expect(blindSpotOf(listOf(100, 100), "owner")).toBe("truncated");
   });
 
+  // list_mandates shows the workspace's Owner and Admin every mandate,
+  // whatever their org role (#5228), so their answer is not narrowed.
+  it("is null for the workspace's Owner or Admin who holds a narrow org role", () => {
+    expect(blindSpotOf(listOf(0), "member", true)).toBeNull();
+    expect(blindSpotOf(listOf(100, 100), "viewer", true)).toBe("truncated");
+  });
+
   // A narrowed reader is the stronger statement: the rows themselves are not
   // the whole set, so naming the page bound would understate it.
   it("names the reader's scope first when both hold", () => {

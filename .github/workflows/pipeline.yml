@@ -96,35 +96,24 @@ env:
   # oxagen-ci-* images. This pin stays here as the single source ci-image.yml
   # reads when building those images.
   ATLAS_VERSION: "v1.2.2"
-  # Where jobs run (ADR-246). With the CI_RUNNERS repository variable set to
-  # `aws`, each job's runs-on picks one of our own pools: `oxagen-large-*`
-  # (16 vCPU, 64 GB or more) for checks, unit and e2e, `oxagen-small-*`
-  # (4 vCPU, 16 GB) for build, rls-integration, rds-compatibility and the
-  # light jobs, and `oxagen-deploy` for every job that touches production.
-  # CI_RUNNER_ARCH picks x64 (the default) or arm64 for the CI pools.
-  # CI_HEAVY_POOL picks the pool the heavy jobs use: `large` (the default) or
-  # `small`. While the account's EC2 quota holds 64 vCPUs, `small` runs 16
-  # heavy jobs at once instead of 4. Unset,
-  # or any other value, means GitHub-hosted runners, so setting CI_RUNNERS to
-  # `github` rolls every job back on its next run. CI_IMAGE_REGISTRY points
-  # the toolchain and service images at ECR Public (public.ecr.aws/<alias>)
-  # and falls back to the frozen GHCR images. docs/runbooks/ci-runners.md.
+  # Every job runs on GitHub-hosted runners, which are free for a public
+  # repository. The AWS runner pools of ADR-246 were removed (#5218).
+  # CI_IMAGE_REGISTRY points the toolchain and service images at ECR Public
+  # (public.ecr.aws/<alias>).
   #
-  # The turbo steps below run this many tasks at once. GitHub's 2-core,
-  # 7 GB runner needs 3 to stay inside its memory. Our large runners have 16
-  # cores and at least 64 GB and take 12. Our small ones have 4 cores and
-  # 16 GB and take 4.
-  TURBO_CONCURRENCY: ${{ vars.CI_RUNNERS == 'aws' && (vars.CI_HEAVY_POOL == 'small' && '4' || '12') || '3' }}
-  # Lint and typecheck run fewer tasks at once. Their heaviest tsc and eslint
-  # scripts pin a 4 GB heap (#4990), and apps/app and apps/app_deprecated pin
-  # 8 GB (#5212), so GitHub's 7 GB runner takes 1 and our 16 GB small runner
-  # takes 2.
-  LINT_TURBO_CONCURRENCY: ${{ vars.CI_RUNNERS == 'aws' && (vars.CI_HEAVY_POOL == 'small' && '2' || '12') || '1' }}
-  # Each Vitest process in the unit job's `rest` lane starts this many workers.
-  # Vitest's default is one per core less one, so 12 processes on a 16-core
-  # runner started about 180 and timed tests out (#5046). 12 processes at 2
-  # workers fit 16 cores. GitHub's 2-core runner already defaults to 1.
-  UNIT_VITEST_MAX_WORKERS: ${{ vars.CI_RUNNERS == 'aws' && (vars.CI_HEAVY_POOL == 'small' && '1' || '2') || '1' }}
+  # A public repository's ubuntu-latest runner has 4 cores and 16 GB. The
+  # three values below were sized for the private 2-core, 7 GB runner, so
+  # they fit either one.
+  #
+  # The turbo steps below run this many tasks at once.
+  TURBO_CONCURRENCY: "3"
+  # Lint and typecheck run one task at a time, because their heaviest tsc and
+  # eslint scripts pin a 4 GB heap (#4990), and apps/app and
+  # apps/app_deprecated pin 8 GB (#5212).
+  LINT_TURBO_CONCURRENCY: "1"
+  # Each Vitest process in the unit job's `rest` lane starts this many
+  # workers (#5046).
+  UNIT_VITEST_MAX_WORKERS: "1"
   # Jobs run inside the toolchain container, so service containers are
   # reached by their service name on the shared docker network, not localhost.
   DATABASE_URL: postgres://oxagen:oxagen@postgres:5432/oxagen?sslmode=disable
@@ -186,7 +175,7 @@ jobs:
   # sparse checkout and a few API calls.
   preflight:
     name: Preflight (skip the gate for a superseded commit)
-    runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-small-{0}', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-slim' }}
+    runs-on: ubuntu-slim
     timeout-minutes: 5
     outputs:
       proceed: ${{ steps.preflight-tip.outputs.proceed }}
@@ -225,7 +214,7 @@ jobs:
 
   atlas-validate:
     if: github.event_name != 'workflow_dispatch'
-    runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-small-{0}', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
     container:
       image: ${{ vars.CI_IMAGE_REGISTRY || 'public.ecr.aws/z5z6u7g2' }}/oxagen-ci-base:latest
       volumes:
@@ -243,7 +232,7 @@ jobs:
       !cancelled() &&
       github.event_name != 'workflow_dispatch' &&
       needs.preflight.outputs.proceed != 'false'
-    runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-{0}-{1}', vars.CI_HEAVY_POOL || 'large', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
     container:
       image: ${{ vars.CI_IMAGE_REGISTRY || 'public.ecr.aws/z5z6u7g2' }}/oxagen-ci-base:latest
       volumes:
@@ -531,9 +520,9 @@ jobs:
       github.event_name != 'workflow_dispatch' &&
       needs.preflight.outputs.proceed != 'false' &&
       needs.preflight.outputs.heavy != 'false'
-    runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-small-{0}', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
     env:
-      TURBO_CONCURRENCY: ${{ vars.CI_RUNNERS == 'aws' && '4' || '3' }}
+      TURBO_CONCURRENCY: "3"
     container:
       image: ${{ vars.CI_IMAGE_REGISTRY || 'public.ecr.aws/z5z6u7g2' }}/oxagen-ci-base:latest
       volumes:
@@ -628,7 +617,7 @@ jobs:
       github.event_name != 'workflow_dispatch' &&
       needs.preflight.outputs.proceed != 'false' &&
       needs.preflight.outputs.heavy != 'false'
-    runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-{0}-{1}', vars.CI_HEAVY_POOL || 'large', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
     container:
       image: ${{ vars.CI_IMAGE_REGISTRY || 'public.ecr.aws/z5z6u7g2' }}/oxagen-ci-base:latest
       volumes:
@@ -840,7 +829,7 @@ jobs:
       !cancelled() &&
       github.event_name != 'workflow_dispatch' &&
       needs.preflight.outputs.proceed != 'false'
-    runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-small-{0}', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-slim' }}
+    runs-on: ubuntu-slim
     timeout-minutes: 5
     steps:
       - name: Every build and unit lane passed
@@ -872,7 +861,7 @@ jobs:
       github.event_name != 'workflow_dispatch' &&
       needs.preflight.outputs.proceed != 'false' &&
       needs.preflight.outputs.heavy != 'false'
-    runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-{0}-{1}', vars.CI_HEAVY_POOL || 'large', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
     container:
       image: ${{ vars.CI_IMAGE_REGISTRY || 'public.ecr.aws/z5z6u7g2' }}/oxagen-ci-e2e:latest
       volumes:
@@ -1120,7 +1109,7 @@ jobs:
     # waited 6 to 22 minutes for a 16-vCPU runner (runs 36948990846,
     # 36949134740 and 36950286374). The small pool starts it sooner and
     # leaves the large one to the jobs that use the cores.
-    runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-small-{0}', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
     container:
       image: ${{ vars.CI_IMAGE_REGISTRY || 'public.ecr.aws/z5z6u7g2' }}/oxagen-ci-base:latest
       volumes:
@@ -1211,7 +1200,7 @@ jobs:
     # The small pool. This replay ran in 0.8 minutes on a 16-vCPU runner after
     # waiting 8 to 22 minutes for one, and in 1.6 minutes on a 4-vCPU runner
     # (run 36942279871).
-    runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-small-{0}', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
     container:
       image: ${{ vars.CI_IMAGE_REGISTRY || 'public.ecr.aws/z5z6u7g2' }}/oxagen-ci-base:latest
       volumes:
@@ -1416,7 +1405,7 @@ jobs:
       needs.rds-compatibility.result == 'success' &&
       (needs.staging.result == 'success' ||
        (needs.staging.result == 'skipped' && vars.STAGING_ENABLED != 'true'))
-    runs-on: ${{ vars.CI_RUNNERS == 'aws' && 'oxagen-deploy' || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
     # An apply adds the platform seed over SSM and a pnpm install for the
     # stores, on top of the ~2 minutes of tunnel setup a check alone needs.
     timeout-minutes: 30
@@ -1643,7 +1632,7 @@ jobs:
     # a red gate as noise.
     needs:
       [checks, test, e2e, atlas-validate, rls-integration, rds-compatibility, staging]
-    runs-on: ${{ vars.CI_RUNNERS == 'aws' && 'oxagen-deploy' || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     environment: production
     # One web deploy at a time, and never cancelled mid-flight. When several
@@ -1787,7 +1776,7 @@ jobs:
     # instance `oxagen-app`; an m7g.xlarge after #4866). An
     # x86 build passes every check here and fails to load a native module
     # there, at first request rather than at build.
-    runs-on: ${{ vars.CI_RUNNERS == 'aws' && 'oxagen-deploy' || 'ubuntu-24.04-arm' }}
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 45
     environment: production
     # One deploy of each service at a time, across runs, and never cancelled
@@ -1983,7 +1972,7 @@ jobs:
       needs.deploy-node.result == 'success'
     needs: [deploy-node]
     # ubuntu-slim: a sparse checkout, two API calls and a tree diff.
-    runs-on: ${{ vars.CI_RUNNERS == 'aws' && 'oxagen-deploy' || 'ubuntu-slim' }}
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     environment: production
     # One installer publish at a time, and never cancelled mid-flight, like
@@ -2101,7 +2090,7 @@ jobs:
       needs.deploy-node.result == 'success'
     needs: [deploy-node]
     # ubuntu-slim: one API call.
-    runs-on: ${{ vars.CI_RUNNERS == 'aws' && 'oxagen-deploy' || 'ubuntu-slim' }}
+    runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
       actions: write
