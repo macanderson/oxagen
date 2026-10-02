@@ -1,0 +1,125 @@
+{
+  "name": "propose_steering",
+  "domain": "context",
+  "description": "Open a steering PR on the workspace's steering repo from files, a title, your rationale, and frames of this run as evidence. Put every file under one folder: steering/, tools/, agents/, policy/, steering/memory/, or the repository root. Leave id, hash, and provenance out of a record: Oxagen writes provenance with your agent and run, and writes id and hash on merge. Files only Oxagen writes are refused. The PR runs the steering checks, and nothing steers until a person merges it.",
+  "mode": "sync",
+  "surfaces": [
+    "mcp"
+  ],
+  "sensitivity": "medium",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "medium",
+    "category": "governance"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "title": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200,
+        "description": "The steering PR's title, such as Ask before refunds over $100."
+      },
+      "rationale": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 4000,
+        "description": "Why the change should merge. The reviewer reads it in the PR."
+      },
+      "evidence": {
+        "type": "array",
+        "items": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "maxItems": 20,
+        "default": []
+      },
+      "files": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string",
+              "maxLength": 512,
+              "description": "The file's path in the steering repo, such as steering/billing/aintel.billing.refunds-over-100.md."
+            },
+            "content": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 1048576
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "path",
+            "content"
+          ],
+          "additionalProperties": false
+        },
+        "minItems": 1,
+        "maxItems": 299,
+        "description": "Every file the PR writes or deletes, all under one folder: steering/, tools/, agents/, policy/, steering/memory/, or the repository root."
+      }
+    },
+    "required": [
+      "title",
+      "rationale",
+      "files"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "number": {
+        "type": "integer",
+        "exclusiveMinimum": 0,
+        "description": "The steering PR's number."
+      },
+      "url": {
+        "type": "string",
+        "description": "The steering PR's page on GitHub or GitLab."
+      },
+      "branch": {
+        "type": "string"
+      },
+      "head_sha": {
+        "type": "string",
+        "description": "The commit the PR opened at, which the Oxagen steering check ran on."
+      },
+      "agent": {
+        "type": "string",
+        "description": "The agent Oxagen wrote into each record's provenance."
+      },
+      "run": {
+        "type": "string",
+        "description": "The run Oxagen wrote into each record's provenance."
+      }
+    },
+    "required": [
+      "number",
+      "url",
+      "branch",
+      "head_sha",
+      "agent",
+      "run"
+    ],
+    "additionalProperties": false
+  }
+}

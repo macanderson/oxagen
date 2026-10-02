@@ -411,11 +411,9 @@ export function createSteeringPullRequestOpener(
     base: string,
     args: Pick<ToolsPullRequestArgs, "branch" | "files">,
   ): Promise<void> {
-    if (kind.refusalAgainstBase === undefined) return;
-    const refusal = await kind.refusalAgainstBase(
-      (path) => host.readFile(repo, path, base),
-      args,
-    );
+    const rule = kind.refusalAgainstBase;
+    if (rule === undefined) return;
+    const refusal = await rule((path) => host.readFile(repo, path, base), args);
     if (refusal) throw refuse(refusal.reason, refusal.message);
   }
 
