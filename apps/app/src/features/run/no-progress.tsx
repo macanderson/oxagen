@@ -67,7 +67,7 @@ export function NoProgressHits({
         <ul className="m-0 flex list-none flex-col gap-2 p-0">
           {hits.map((hit) => (
             <HitLine
-              key={`${hit.tool}:${hit.loop}:${hit.atCall}`}
+              key={[hit.tool, hit.loop, hit.atCall].join(":")}
               hit={hit}
             />
           ))}
