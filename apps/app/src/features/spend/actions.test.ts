@@ -4,6 +4,7 @@
 import { billingBudgetSet } from "@oxagen/oxagen/contracts/billing.budget.set";
 import { findingDismiss } from "@oxagen/oxagen/contracts/finding.dismiss";
 import { findingFixRecord } from "@oxagen/oxagen/contracts/finding.fix.record";
+import { spendOperatorPseudonymsSet } from "@oxagen/oxagen/contracts/spend.operator_pseudonyms.set";
 import { spendStatementExport } from "@oxagen/oxagen/contracts/spend.statement.export";
 import { tachoSessionPolicyWrite } from "@oxagen/oxagen/contracts/tacho.session_policy.write";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -37,6 +38,7 @@ const {
   recordFindingFixAction,
   setBudgetAction,
   setGatewayPolicyAction,
+  setOperatorPseudonymsAction,
   setPriceEntryAction,
 } = await import("./actions");
 
@@ -471,5 +473,68 @@ describe("exportCostCenterStatementAction", () => {
       reason: "denied",
       code: "authz_denied",
     });
+  });
+});
+
+describe("setOperatorPseudonymsAction", () => {
+  it("resolves the viewer for the page's workspace and turns pseudonyms on through set_operator_pseudonyms", async () => {
+    invoke.mockResolvedValue({ pseudonyms: true });
+    expect(await setOperatorPseudonymsAction(at, true)).toEqual({
+      ok: true,
+      value: { pseudonyms: true },
+    });
+    expect(requireViewer).toHaveBeenCalledWith("acme", "core-platform");
+    expect(invoke).toHaveBeenCalledWith(
+      spendOperatorPseudonymsSet.name,
+      { enabled: true },
+      expect.objectContaining({
+        orgId: ctx.orgId,
+        workspaceId: ctx.workspaceId,
+        userId: ctx.userId,
+      }),
+    );
+  });
+
+  it("turns pseudonyms off", async () => {
+    invoke.mockResolvedValue({ pseudonyms: false });
+    expect(await setOperatorPseudonymsAction(at, false)).toEqual({
+      ok: true,
+      value: { pseudonyms: false },
+    });
+    expect(invoke).toHaveBeenCalledWith(
+      spendOperatorPseudonymsSet.name,
+      { enabled: false },
+      expect.anything(),
+    );
+  });
+
+  it("returns the handler's role refusal as denied (negative)", async () => {
+    invoke.mockRejectedValue(forbidden());
+    expect(await setOperatorPseudonymsAction(at, true)).toEqual({
+      ok: false,
+      reason: "denied",
+      code: "org_role_required",
+    });
+  });
+
+  it("refuses a value that is not a boolean, setting nothing (negative)", async () => {
+    // A Server Action takes whatever the client posts. A method type's
+    // parameters are bivariant, so this binding admits a string with no cast.
+    const loose: { set(where: typeof at, enabled: unknown): Promise<unknown> } =
+      { set: setOperatorPseudonymsAction };
+    expect(await loose.set(at, "yes")).toEqual({
+      ok: false,
+      reason: "invalid",
+      code: "invalid_input",
+      field: "enabled",
+    });
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("stops when no viewer resolves, setting nothing (negative)", async () => {
+    const notFound = new Error("NEXT_HTTP_ERROR_FALLBACK;404");
+    requireViewer.mockRejectedValue(notFound);
+    await expect(setOperatorPseudonymsAction(at, true)).rejects.toBe(notFound);
+    expect(invoke).not.toHaveBeenCalled();
   });
 });
