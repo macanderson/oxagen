@@ -1,8 +1,8 @@
 /**
  * The heavy-lane decision for pipeline.yml (#4918). A draft and a
  * documentation-only pull request skip `build`, `unit`, `e2e`,
- * `rls-integration`, `rds-compatibility` and `test`; every other run keeps
- * them, and every doubt resolves to running them.
+ * `rls-integration` and `rds-compatibility`; every other run keeps them, and
+ * every doubt resolves to running them. `test` always runs (#5094).
  */
 import { describe, expect, it } from "vitest";
 import { MAX_FILES, decideScope, isDocsPath, readPullRequestFiles, run } from "./ci-pr-scope.mjs";
