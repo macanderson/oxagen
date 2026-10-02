@@ -122,7 +122,8 @@ held open, so an update failed or waited for a reboot (D-03).
   the person runs the copy's `tacho unenroll --all --purge` and then deletes
   the copy, the links, and the profile block by hand, as the desktop docs
   describe. A `tacho` command that reads `desktop.json` and removes them is
-  not part of this decision.
+  not part of this decision. The amendment of 2026-10-02 replaces this
+  consequence.
 
 ## Alternatives
 
@@ -140,3 +141,90 @@ held open, so an update failed or waited for a reboot (D-03).
 - **Fail open for every harness when the collector is gone.** Claude Code and
   Codex do not block on a failed hook, and their error is the only sign the
   collector is gone, so wrapping them removes the signal and adds nothing.
+
+## Amendment 2026-10-02: a journal, and an uninstall that runs without the app
+
+#4298 asked for two things decision 6 left out: an install journal that
+records what each install wrote, and an uninstall that removes exactly that
+when the app is already gone. Before this amendment, a person who moved the
+app to the Trash first had to delete the per-user copy, the PATH links, and
+the shell profile lines by hand.
+
+### Decision
+
+7. **The app journals what it writes.** Every launch records, in the
+   `journal` list in `~/.config/oxagen/desktop.json`, each thing it writes
+   other than the directories and empty files already in `created`:
+
+   | Entry | What it names |
+   |---|---|
+   | `copy` | a per-user copy, `<data-local>/oxagen/bin/<version>` |
+   | `link` | a PATH symlink, with the `target` it points at |
+   | `shim` | a Windows `.cmd` shim, with its whole `text` |
+   | `profile` | a shell profile that holds the marker block |
+   | `fish` | `~/.config/fish/conf.d/oxagen.fish`, which is wholly Oxagen's |
+   | `user-path` | the link directory on the Windows user PATH |
+
+   The copy, the profile, and the user PATH entry are recorded before they
+   are written. A link or a block the launch finds already in place is
+   recorded too, so a machine an older app set up gets a journal at its next
+   launch. A launch that changes nothing writes nothing. "Remove links" drops
+   the entries for what it removed, and the prune of old copies drops the
+   entry for each copy it deleted. `record_journal` in `cli_install.rs`
+   writes the journal.
+8. **`oxagen agent uninstall` removes what the journal records, without the
+   app.** It runs from the per-user copy, or from any other install of the
+   `oxagen` CLI, and takes three steps:
+   1. It runs `unenroll --all --purge`. It stops there when the unenroll did
+      not finish or an agent is still enrolled. A hook that still names the
+      copy would fail to spawn once the copy is gone.
+   2. It undoes each journal entry only while the thing is still what the app
+      wrote: a link that still points at its target, a shim with its exact
+      text, the marker block (by the same rule as `remove_path_block`), a fish
+      file that opens with the begin marker, and the user PATH entry. Anything
+      else is left and named.
+   3. It removes the two sidecars from each copy directory under
+      `<data-local>/oxagen/bin`, journaled or found there, then the
+      directories in `created` once they are empty, the Tacho directory, and
+      `~/.config/oxagen`. That is the same set the app's own **Uninstall**
+      removes. A `copy` entry that names a directory anywhere else, or a link
+      where a copy should be, is left and named. The journal is a file in the
+      person's home directory, so the command does not trust its paths to
+      delete outside the one directory the app keeps copies in.
+
+   With no journal (an app from before this amendment, never launched since),
+   the copies still go, and the command names the links and profile lines to
+   delete by hand.
+9. **The collector does nothing on its own when the app is gone.** An update
+   and a reinstall also remove the bundle for a moment, and the collector
+   cannot tell those from a removal. Since decision 1, no hook and no service
+   names the bundle, so a missing app breaks nothing. The person runs
+   `oxagen agent uninstall` when they mean to remove Oxagen.
+
+### Consequences
+
+- The consequence "A terminal-only uninstall leaves the app's artifacts" no
+  longer holds.
+- On Windows the command cannot delete the `oxagen.exe` it runs from. It
+  names that directory, to delete once the command exits.
+- An app from before this amendment keeps the `journal` key when it rewrites
+  `desktop.json`, because every writer of that file reads it, changes its own
+  key, and writes the rest back.
+- Decision 3 now has a check on Windows. `install-rig-real.test.ts` runs a
+  daemon from one version's copy, shows that overwriting that running
+  `tacho.exe` fails, copies a second version beside it, re-enrolls from the
+  second, and checks that every hook file, `host.json`, and the scheduled
+  task's launcher name only the second version. It then deletes the first
+  copy with no reboot. `desktop-rig.yml` runs it on `windows-latest` on a push
+  to `main` or a manual dispatch.
+
+### Alternatives
+
+- **Re-derive ownership in the CLI with the app's rules.** The CLI could
+  treat any link into the copy directory, any marker block, and any shim of
+  the released shape as the app's, with no journal. Two copies of those rules
+  in two languages drift apart, and nothing would record what was written.
+- **Have the collector remove itself when its app disappears.** Rejected by
+  decision 9: an update would look the same.
+- **Ship an uninstaller as a third sidecar.** It would need its own build,
+  signing, and copy, to do what the `oxagen` already in the copy does.

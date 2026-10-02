@@ -273,6 +273,14 @@ export const runGet = registerCapability({
          * workspace either way. A ledger run answers false.
          */
         repositoryUnlinked: z.boolean(),
+        /**
+         * How the run's frames reached the record (ADR-161). `live` was
+         * recorded as it ran. `backfill` was rebuilt from the harness's
+         * transcript after it ended, so nothing gated it and its cost is the
+         * price book's estimate. `mixed` is a backfilled run that a live
+         * resume continued. A ledger run answers `live`.
+         */
+        recordBasis: z.enum(["live", "backfill", "mixed"]),
       }),
       frames: runFramePageSchema,
       /**

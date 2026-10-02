@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { ZERO_TOKENS, type RunTotalsRecord } from "../cost-rollup";
 import type { StoredRunTotals } from "../cost-rollup-store";
-import { detectFindings, type DetectInput } from "./index";
+import {
+  detectFindings,
+  type DetectInput,
+  type FrameContextPart,
+  type PricedRequestFrame,
+  type ToolCallObservation,
+} from "./index";
 import { standingSourcesOf as sourcesOf } from "../standing-context-price";
 
 const ORG = "00000000-0000-4000-8000-000000000001";
@@ -91,15 +97,54 @@ function run(
   };
 }
 
-function detect(runs: RunTotalsRecord[]) {
+function detect(runs: RunTotalsRecord[], over: Partial<DetectInput> = {}) {
   const input: DetectInput = {
     window: { start: START, end: END },
     toolWindowStart: START,
     runs,
     toolCalls: [],
     decidedSince: new Map(),
+    ...over,
   };
   return detectFindings(input).filter((f) => f.kind === "standing_context");
+}
+
+/** A tool definition in a request's system context, as the recorder lists it. */
+function tool(name: string, provider: string, tokens: number): FrameContextPart {
+  return { kind: "tool", name, provider, digest: `sha256:${name}`, tokens };
+}
+
+/** One model call of a run whose system context lists `parts`. */
+function frameListing(
+  r: RunTotalsRecord,
+  minute: number,
+  parts: readonly FrameContextPart[],
+): PricedRequestFrame {
+  const at = new Date(r.startedAt.getTime() + minute * 60_000);
+  return {
+    key: `${at.toISOString()}#0`,
+    at,
+    costMicros: 4_500n,
+    tokens: 25_000,
+    basis: "gateway_observed",
+    systemContextDigest: "sha256:context",
+    systemContextParts: parts,
+  };
+}
+
+/** A call the run made to `name`. */
+function callTo(r: RunTotalsRecord, name: string): ToolCallObservation {
+  return {
+    runId: r.runId,
+    at: new Date(r.startedAt.getTime() + 30_000),
+    seq: 3,
+    tool: name,
+    inputDigest: "in-1",
+    outputDigest: "out-1",
+    isMutating: false,
+    resultTokens: 200,
+    sessionUuid: null,
+  };
 }
 
 describe("standing context", () => {
@@ -200,6 +245,72 @@ describe("standing context", () => {
     const partial = run();
     partial.breakdown.models[0]!.hasUnpriced = true;
     expect(detect([partial])).toEqual([]);
+  });
+
+  // #5023: the card names the provider whose definitions add the most
+  // tokens to a request, and the weekly price the tool and steering pages
+  // quote, so a provider of the same size shows the same price everywhere.
+  it("stores the top tool provider, the tools the runs called, and the week's price per 1,000 tokens", () => {
+    const r = run();
+    const parts = [
+      // The harness's own tools cannot move to Searchable, so they are left out.
+      tool("Read", "builtin", 9_000),
+      tool("mcp__github__get_pr", "github", 3_000),
+      tool("mcp__github__list_issues", "github", 2_000),
+      tool("mcp__slack__post", "slack", 4_000),
+      { kind: "steering", name: "ctx.rules", digest: "sha256:r", tokens: 5_000 },
+    ] satisfies FrameContextPart[];
+    const [finding] = detect([r], {
+      frames: new Map([
+        [r.runId, [frameListing(r, 0, parts), frameListing(r, 1, parts)]],
+      ]),
+      toolCalls: [
+        callTo(r, "mcp__github__get_pr"),
+        callTo(r, "mcp__github__get_pr"),
+      ],
+      weeklyContextPrice: { perThousandMicros: 29_110_000n, currency: "USD" },
+    });
+    expect(finding!.evidence.values).toEqual({
+      kind: "standing_context",
+      resentTokens: 75_000,
+      toolDefinitionTokens: 60_000,
+      steeringTokens: 15_000,
+      contextFrameTokens: null,
+      provider: {
+        name: "github",
+        tokens: 5_000,
+        tools: 2,
+        toolsCalled: 1,
+        // 5,000 tokens at $29.11 a week for each 1,000.
+        weeklyPrice: {
+          micros: "145550000",
+          currency: "USD",
+          basis: "estimated",
+        },
+      },
+      weeklyPricePerThousand: {
+        micros: "29110000",
+        currency: "USD",
+        basis: "estimated",
+      },
+    });
+  });
+
+  it("stores no provider and no price, never zeros, when no frame listed one and the week had no price (negative)", () => {
+    const r = run();
+    const [finding] = detect([r], { weeklyContextPrice: null });
+    expect(finding!.evidence.values).toMatchObject({
+      kind: "standing_context",
+      resentTokens: 75_000,
+      provider: null,
+      weeklyPricePerThousand: null,
+    });
+    // A pass that read no price at all stores none either.
+    const [unread] = detect([run()]);
+    expect(unread!.evidence.values).toMatchObject({
+      provider: null,
+      weeklyPricePerThousand: null,
+    });
   });
 
   it("cites the operator when the run names no agent", () => {

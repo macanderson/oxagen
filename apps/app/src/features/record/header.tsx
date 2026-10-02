@@ -19,19 +19,15 @@
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import type { RecordDetail } from "@/data/contracts/steering";
-import { routes } from "@/shared/safe-path";
 import { Badge } from "@/ui/badge";
 import { CloneButton } from "@/ui/clone-button";
 import {
   buttonPrimary,
   buttonSecondary,
   eyebrow,
-  linkText,
   mono,
 } from "@/ui/control-styles";
-import { SafeLink } from "@/ui/navigation";
 import { KindBadge, KindTile } from "./kind";
-import type { RecordAt } from "./view";
 
 /** `.btn.danger`: the red outline a destructive action takes. */
 export const buttonDanger =
@@ -50,7 +46,6 @@ function Property({ name, children }: { name: string; children: ReactNode }) {
 }
 
 export function Header({
-  at,
   detail,
   pendingBranch,
   dirty,
@@ -58,7 +53,6 @@ export function Header({
   onArchive,
   onPropose,
 }: {
-  at: RecordAt;
   detail: RecordDetail;
   /** The branch of a proposal already open on this lineage, if any. */
   pendingBranch: string | null;
@@ -82,15 +76,10 @@ export function Header({
       className="flex flex-col gap-4 pb-[18px] md:flex-row md:items-start md:justify-between"
     >
       <div className="flex min-w-0 flex-col">
-        <p className={`${eyebrow} mb-1`}>
-          <SafeLink
-            to={routes.steering(at.org, at.ws, { tab: "records" })}
-            className={`${linkText} underline`}
-          >
-            {t("steering")}
-          </SafeLink>
-          <span aria-hidden="true"> · </span>
-          <span>{t("record")}</span>
+        {/* Plain text, not a link: the breadcrumb above already links back
+            to Steering (#5177). */}
+        <p data-testid="record-eyebrow" className={`${eyebrow} mb-1`}>
+          {t("eyebrow")}
         </p>
         <div className="flex items-start gap-3">
           {record.kind === null ? null : <KindTile kind={record.kind} />}

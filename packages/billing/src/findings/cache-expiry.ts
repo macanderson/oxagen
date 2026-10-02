@@ -379,6 +379,16 @@ export const idleCacheRewrites: Detector = {
     return {
       why: `${group.subject} waited ${waited} ${plural(evidence.calls, "time", "times")}, and each wait rewrote a ${average.toLocaleString("en-US")}-token cache on average. ${cost}${unknown}`,
       fix: fixOf(group.subject, stats, currency),
+      values: {
+        kind: "idle_cache_rewrites",
+        minWaitMinutes: lo,
+        maxWaitMinutes: hi,
+        averageTokens: average,
+        keepAlive: { micros: evidence.counterfactualMicros, currency },
+        rewrites: { micros: evidence.measuredMicros, currency },
+        pricedRewrites: evidence.coveredCalls,
+        unknownRewrites: stats.unknown,
+      },
     };
   },
 };

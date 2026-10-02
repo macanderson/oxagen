@@ -15,6 +15,7 @@ import { getTableColumns } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import {
   TACHO_ENFORCEMENT_TIERS,
+  TACHO_RECORD_BASES,
   TACHO_RUNTIMES,
   TACHO_SESSION_OUTCOMES,
   tachoSessionCommands,
@@ -63,6 +64,10 @@ describe("tacho.sessions CHECK constraints match the schema lists", () => {
     {
       constraint: "tacho_sessions_tier_check",
       values: TACHO_ENFORCEMENT_TIERS,
+    },
+    {
+      constraint: "tacho_sessions_record_basis_check",
+      values: TACHO_RECORD_BASES,
     },
   ];
 

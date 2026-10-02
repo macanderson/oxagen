@@ -156,21 +156,23 @@ export interface PrStateRead {
  * Whether a read is older than the state the row holds. Forges deliver out of
  * order, so the forge's `updated_at` decides when both carry one. A state the
  * forge dated outranks one it did not, whatever the read times. The read time
- * decides only between two undated states. The store's upsert holds the same
- * order (`saveOutcomeRows`).
+ * decides between two undated states, and between two states with the same
+ * `updated_at`: GitHub counts it in whole seconds, so two states can share
+ * one, and the later read is the newer state. The store's upserts hold the
+ * same order (`replacesStored` in run-pr-outcomes-store.ts).
  */
 export function isStaleRead(row: OutcomeRow, read: PrStateRead): boolean {
   if (row.prState === null) return false;
-  if (row.sourceUpdatedAt !== null)
-    return (
-      read.sourceUpdatedAt === null ||
-      read.sourceUpdatedAt.getTime() < row.sourceUpdatedAt.getTime()
-    );
-  if (read.sourceUpdatedAt !== null) return false;
-  return (
+  const readEarlier =
     row.prStateReadAt !== null &&
-    read.readAt.getTime() < row.prStateReadAt.getTime()
-  );
+    read.readAt.getTime() < row.prStateReadAt.getTime();
+  if (row.sourceUpdatedAt !== null) {
+    if (read.sourceUpdatedAt === null) return true;
+    const newer = read.sourceUpdatedAt.getTime() - row.sourceUpdatedAt.getTime();
+    return newer === 0 ? readEarlier : newer < 0;
+  }
+  if (read.sourceUpdatedAt !== null) return false;
+  return readEarlier;
 }
 
 /**
@@ -464,7 +466,13 @@ export function outcomeDeliveryOf(
     const head = recordOf(p.head);
     const repository = stringOf(recordOf(base.repo).full_name)?.toLowerCase();
     const number = p.number;
-    if (!repository || typeof number !== "number" || number <= 0) return null;
+    if (
+      !repository ||
+      typeof number !== "number" ||
+      !Number.isSafeInteger(number) ||
+      number <= 0
+    )
+      return null;
     const raw = stringOf(p.state);
     if (raw !== "open" && raw !== "closed") return null;
     const mergedAt = dateOf(p.merged_at);
@@ -509,42 +517,87 @@ export function outcomeDeliveryOf(
   return null;
 }
 
-/** What one merged change reverts: pull requests by number, or merge commits by sha. */
+/**
+ * What one merged change reverts: pull requests by number, or merge commits
+ * by sha. `branch` is the branch the change landed on, and a target counts
+ * as reverted only when it merged into that branch.
+ */
 export type RevertPlan =
-  | { kind: "pull_requests"; targets: PrRef[]; mark: RevertMark }
+  | {
+      kind: "pull_requests";
+      targets: PrRef[];
+      /** The base branch the reverting pull request merged into. */
+      branch: string;
+      mark: RevertMark;
+    }
   | {
       kind: "merge_commits";
       repository: string;
       shas: string[];
-      /** The branch the reverting commit landed on; a target must merge into it. */
-      branch: string | null;
+      /** The branch the reverting commit was pushed to. */
+      branch: string;
       mark: RevertMark;
     };
 
+/** A merged pull request, as a revert needs it. */
+export interface MergedPullRequest {
+  repository: string;
+  number: number;
+  /** The branch it merged into. */
+  baseRef: string | null;
+  body: string | null;
+  mark: Omit<RevertMark, "by">;
+}
+
+/**
+ * The pull requests a merged pull request reverts, or null for none. A target
+ * must be in the same repository: a merge into one repository changes no
+ * branch of another, so a body that names a pull request elsewhere reverts
+ * nothing Oxagen can place. GitHub's Revert button always names the same
+ * repository. A pull request whose base branch is unknown reverts nothing
+ * either, since its targets could have merged into any branch.
+ */
+export function mergedPullRequestRevertPlan(
+  pull: MergedPullRequest,
+): RevertPlan | null {
+  if (pull.baseRef === null) return null;
+  const repository = pull.repository.toLowerCase();
+  const targets = revertTargetsOf(pull.body, repository).filter(
+    (t) => t.repository === repository && t.number !== pull.number,
+  );
+  if (targets.length === 0) return null;
+  return {
+    kind: "pull_requests",
+    targets,
+    branch: pull.baseRef,
+    mark: { ...pull.mark, by: prKeyOf("github", repository, pull.number) },
+  };
+}
+
 /**
  * The reverts a delivery records, or null. A pull request reverts only once
- * it merges: an open revert that is closed unmerged reverted nothing.
+ * it merges: an open revert that is closed unmerged reverted nothing. A
+ * pushed commit reverts only on the branch it was pushed to, so a commit with
+ * no branch records nothing. The push delivery always carries the branch. The
+ * incremental GitHub poll records none, so a revert commit Oxagen sees only
+ * through the poll, after a missed push delivery, marks no row.
  */
 export function revertPlanOf(delivery: OutcomeDelivery): RevertPlan | null {
   if (delivery.kind === "pull_request") {
     if (delivery.state !== "merged") return null;
-    const targets = revertTargetsOf(delivery.body, delivery.repository).filter(
-      (t) =>
-        !(t.repository === delivery.repository && t.number === delivery.number),
-    );
-    if (targets.length === 0) return null;
-    return {
-      kind: "pull_requests",
-      targets,
+    return mergedPullRequestRevertPlan({
+      repository: delivery.repository,
+      number: delivery.number,
+      baseRef: delivery.baseRef,
+      body: delivery.body,
       mark: {
-        by: prKeyOf("github", delivery.repository, delivery.number),
         at: delivery.mergedAt ?? delivery.closedAt,
         readAt: delivery.readAt,
       },
-    };
+    });
   }
   const shas = revertedShasOf(delivery.message);
-  if (shas.length === 0) return null;
+  if (shas.length === 0 || delivery.branch === null) return null;
   return {
     kind: "merge_commits",
     repository: delivery.repository,
@@ -570,7 +623,11 @@ export interface RevertEvidence {
   number: number | null;
   /** The reverted merge commit, or null when the target is a pull request. */
   mergeCommitSha: string | null;
-  /** The branch the reverting commit landed on. Null matches any branch. */
+  /**
+   * The branch the revert landed on: the reverting pull request's base
+   * branch, or the branch the reverting commit was pushed to. Null on a
+   * revert kept before #4511, and it matches no row.
+   */
   branch: string | null;
   mark: RevertMark;
 }
@@ -582,7 +639,7 @@ export function revertEvidenceOf(plan: RevertPlan): RevertEvidence[] {
       repository: t.repository.toLowerCase(),
       number: t.number,
       mergeCommitSha: null,
-      branch: null,
+      branch: plan.branch,
       mark: plan.mark,
     }));
   return plan.shas.map((sha) => ({
@@ -595,19 +652,20 @@ export function revertEvidenceOf(plan: RevertPlan): RevertEvidence[] {
 }
 
 /**
- * Whether the evidence reverts the row's pull request. A pull request target
- * matches by repository and number. A merge commit target matches the row's
- * merge commit, on the branch the pull request merged into, as
- * `markMergeCommitsReverted` matches it.
+ * Whether the evidence reverts the row's pull request. A revert undoes a
+ * change only on the branch it landed on, so the row's pull request must have
+ * merged into that branch. Evidence with no branch matches no row. Then a
+ * pull request target matches by repository and number, and a merge commit
+ * target matches the row's merge commit. `markPullRequestsReverted` and
+ * `markMergeCommitsReverted` match the same way in SQL.
  */
 export function evidenceReverts(evidence: RevertEvidence, row: OutcomeRow): boolean {
   if (row.provider !== "github" || row.repository !== evidence.repository)
     return false;
+  if (evidence.branch === null || row.baseRef !== evidence.branch) return false;
   if (evidence.number !== null) return row.number === evidence.number;
   return (
-    row.mergeCommitSha !== null &&
-    row.mergeCommitSha === evidence.mergeCommitSha &&
-    (evidence.branch === null || row.baseRef === evidence.branch)
+    row.mergeCommitSha !== null && row.mergeCommitSha === evidence.mergeCommitSha
   );
 }
 

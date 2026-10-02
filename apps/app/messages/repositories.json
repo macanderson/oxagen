@@ -71,7 +71,14 @@
       "gitlabCredentialRejected": "GitLab no longer accepts the access token stored for this project. Nothing was changed. Connect the project again with a new token. If Oxagen created this steering project, an organization owner or admin must connect its group again with a new group access token.",
       "gitlabNotConnected": "This workspace has no GitLab project connected. Connect the project with a project access token first.",
       "repositoryHostUnsupported": "This is a GitLab project. This action works on GitHub repositories only today. Context PRs and steering publication work on GitLab.",
-      "toolNotRegistered": "This deployment does not run {capability} yet, so Oxagen changed nothing."
+      "toolNotRegistered": "This deployment does not run {capability} yet, so Oxagen changed nothing.",
+      "findingNotFound": "This finding is gone. Its pull request may have closed. Reload the page.",
+      "findingResolved": "This line no longer differs from a steering record, so there is nothing to promote.",
+      "alreadyInSteering": "Steering already says what this line says. Remove the line from the file instead.",
+      "alreadyProposed": "This line is already proposed. Open the proposal on the Steering page.",
+      "statementTooLong": "This line is longer than a steering record holds. Shorten it in the file, then promote it.",
+      "lineagePrOpen": "A steering PR for this record is already open. Merge or dismiss it, then promote the line.",
+      "recordNotProposable": "A line cannot change this kind of steering record. Edit the record in the steering repo instead."
     },
     "page": {
       "title": "Repositories",
@@ -609,11 +616,15 @@
     },
     "drift": {
       "heading": "Instruction files",
-      "notBacked": "Oxagen cannot read instruction files in code repositories yet, so this section lists none. The read needs <code>{capability}</code>.",
-      "detected": "<code>{path}</code> differs from the steering records.",
+      "location": "<code>{path}</code> line {line}",
+      "contradiction": "It says the opposite of the steering record {record}.",
+      "repeat": "It says what the steering record {record} already says.",
+      "openPullRequest": "Pull request #{number}",
+      "mergedPullRequest": "Merged in pull request #{number}",
       "promote": "Promote to steering",
       "promoting": "Promoting…",
-      "promoted": "Oxagen opened steering proposal {proposalId}. The file steers runs once its steering PR merges."
+      "promoted": "Oxagen opened steering proposal {proposalId}. The line steers runs once its steering PR merges.",
+      "proposed": "Proposed as steering proposal {proposalId}."
     },
     "steeringRepo": {
       "heading": "Steering repo",

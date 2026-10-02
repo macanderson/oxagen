@@ -1272,6 +1272,15 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./markdown-import/index"))
         .commitMarkdownImportHandler as CapabilityHandlerFn,
   );
+  // An agent opens a steering PR over MCP without a clone (#5134). The MCP
+  // server registers the resolver that names the proposing agent
+  // (steering.proposer.ts).
+  registerHandler(
+    "propose_steering",
+    async () =>
+      (await import("./steering.propose"))
+        .steeringProposeHandler as CapabilityHandlerFn,
+  );
   registerHandler(
     "import_workspace_steering",
     async () =>
@@ -1461,6 +1470,26 @@ registerHandlersOnce("@oxagen/handlers", () => {
     async () =>
       (await import("./context.pr.revert"))
         .revertSteeringPrHandler as CapabilityHandlerFn,
+  );
+  // Restore the managed block on a steering PR's branch, and list or promote
+  // the instruction-file statements the Oxagen check stores (#4518, ADR-263).
+  registerHandler(
+    "restore_managed_block",
+    async () =>
+      (await import("./context.pr.restore_managed_block"))
+        .restoreManagedBlockHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "list_code_repository_findings",
+    async () =>
+      (await import("./code-repo-check/handlers"))
+        .listCodeRepositoryFindingsHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "promote_instruction_to_steering",
+    async () =>
+      (await import("./code-repo-check/handlers"))
+        .promoteInstructionHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "set_governance_mode",
@@ -1767,6 +1796,12 @@ registerHandlersOnce("@oxagen/handlers", () => {
     async () =>
       (await import("./tacho.memories.recall"))
         .tachoMemoriesRecallHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "list_tacho_session_heads",
+    async () =>
+      (await import("./tacho.session_heads.list"))
+        .tachoSessionHeadsListHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "record_tacho_memory_uses",

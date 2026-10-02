@@ -552,3 +552,161 @@ describe("an index that goes stale while the shipper reads", () => {
     );
   });
 });
+
+describe("dropping a batch's bodies off the synchronous path", () => {
+  // The shipper drops the bodies a proven mandate withdraws from its batch.
+  // `dropBodies` read and rewrote the whole body file on the daemon's only
+  // thread to do it, which ADR-231 rules out. `dropBodiesAsync` scans with
+  // awaited reads and overwrites the withdrawn lines in place.
+
+  /** The body file one byte later at the same size, so every offset moves. */
+  function shiftedBy(original: string): string {
+    return `\n${original.slice(0, -1)}`;
+  }
+
+  it("overwrites the withdrawn lines and reads only those on the synchronous path", async () => {
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    const { events, bodies } = wave(0);
+    wal.append(events, bodies);
+    const bodyPath = join(paths.wal, `${SESSION}.bodies.jsonl`);
+    const size = statSync(bodyPath).size;
+    const withdrawn = [events[3]!, events[900]!];
+
+    const before = bodyReads.syncBytes;
+    expect(await wal.dropBodiesAsync(withdrawn)).toBe(2);
+    // The scan awaits its reads. The synchronous reads are the two lines,
+    // checked just before they are overwritten.
+    expect(bodyReads.syncBytes - before).toBeLessThan(size / 100);
+    // The content is gone, and the file keeps its size until compaction.
+    expect(statSync(bodyPath).size).toBe(size);
+    const text = readFileSync(bodyPath, "utf8");
+    expect(text).not.toContain(idemFor(3));
+    expect(text).not.toContain(idemFor(900));
+
+    const kept = events.filter((event) => event.seq !== 3 && event.seq !== 900);
+    const read = await wal.bodiesForAsync(events);
+    expect(read.map((body) => body.event_id_idem)).toEqual(
+      kept.map((event) => event.event_id_idem),
+    );
+    expect(new Wal(paths.wal).bodiesFor(events)).toEqual(read);
+    expect(await wal.dropBodiesAsync(withdrawn)).toBe(0);
+  });
+
+  it("keeps a body appended while the scan reads", async () => {
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    const { events, bodies } = wave(0);
+    wal.append(events.slice(0, 999), bodies.slice(0, 999));
+    let appended = false;
+    bodyReads.onAsyncRead = () => {
+      if (appended) return;
+      appended = true;
+      // A hook records while the drain waits on the scan.
+      wal.append(events.slice(999), bodies.slice(999));
+    };
+    let dropped: number;
+    try {
+      dropped = await wal.dropBodiesAsync([events[500]!]);
+    } finally {
+      bodyReads.onAsyncRead = undefined;
+    }
+
+    expect(appended).toBe(true);
+    expect(dropped).toBe(1);
+    const read = await wal.bodiesForAsync(events);
+    expect(read.map((body) => body.event_id_idem)).toEqual(
+      events
+        .filter((event) => event.seq !== 500)
+        .map((event) => event.event_id_idem),
+    );
+  });
+
+  it("leaves a line that moved before its slice ran, and scans again", async () => {
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    const { events, bodies } = wave(0);
+    wal.append(events, bodies);
+    const bodyPath = join(paths.wal, `${SESSION}.bodies.jsonl`);
+    const original = readFileSync(bodyPath, "utf8");
+    const size = Buffer.byteLength(original);
+    let scans = 0;
+    let shifted = false;
+    bodyReads.onAsyncRead = (position) => {
+      if (position === 0) scans += 1;
+      // The last read of the first scan. Every offset it found is now one
+      // byte early, as a rewrite between the scan and the write would leave.
+      if (position === size && !shifted) {
+        shifted = true;
+        writeFileSync(bodyPath, shiftedBy(original));
+      }
+    };
+    let dropped: number;
+    try {
+      dropped = await wal.dropBodiesAsync([events[900]!]);
+    } finally {
+      bodyReads.onAsyncRead = undefined;
+    }
+
+    expect(shifted).toBe(true);
+    expect(scans).toBe(2);
+    expect(dropped).toBe(1);
+    const text = readFileSync(bodyPath, "utf8");
+    expect(text).not.toContain(idemFor(900));
+    expect(text).toContain(idemFor(899));
+    expect(text).toContain(idemFor(901));
+    expect(Buffer.byteLength(text)).toBe(size);
+  });
+
+  it("uses the synchronous rewrite when the file moves under every scan", async () => {
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    const { events, bodies } = wave(0);
+    wal.append(events, bodies);
+    const bodyPath = join(paths.wal, `${SESSION}.bodies.jsonl`);
+    const original = readFileSync(bodyPath, "utf8");
+    const size = Buffer.byteLength(original);
+    let moves = 0;
+    bodyReads.onAsyncRead = (position) => {
+      if (position !== size) return;
+      moves += 1;
+      writeFileSync(bodyPath, moves % 2 === 1 ? shiftedBy(original) : original);
+    };
+    const wholeFileRewrite = vi.spyOn(wal, "dropBodies");
+    let dropped: number;
+    try {
+      dropped = await wal.dropBodiesAsync([events[900]!]);
+    } finally {
+      bodyReads.onAsyncRead = undefined;
+    }
+
+    expect(moves).toBe(3);
+    expect(wholeFileRewrite).toHaveBeenCalledTimes(1);
+    expect(dropped).toBe(1);
+    expect(readFileSync(bodyPath, "utf8")).not.toContain(idemFor(900));
+  });
+
+  it("leaves a body file the WAL ceiling removed during the scan removed", async () => {
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    const { events, bodies } = wave(0);
+    wal.append(events, bodies);
+    const bodyPath = join(paths.wal, `${SESSION}.bodies.jsonl`);
+    const size = statSync(bodyPath).size;
+    let removed = 0;
+    bodyReads.onAsyncRead = (position) => {
+      if (position === size && removed === 0)
+        removed = wal.dropSessionBodies(SESSION);
+    };
+    let dropped: number;
+    try {
+      dropped = await wal.dropBodiesAsync([events[900]!]);
+    } finally {
+      bodyReads.onAsyncRead = undefined;
+    }
+
+    expect(removed).toBe(size);
+    expect(dropped).toBe(0);
+    expect(existsSync(bodyPath)).toBe(false);
+  });
+});

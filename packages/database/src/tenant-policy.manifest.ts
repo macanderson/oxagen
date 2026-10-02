@@ -79,6 +79,9 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   // A steering repo's health (S2, #4560). The organization repo has no
   // workspace, so its row has a null workspace_id → workspace_nullable.
   { table: "agent.steering_repo_health", policyClass: "workspace_nullable" },
+  // The instruction-file statements the Oxagen check flagged in linked code
+  // repositories (ADR-263); org_id + workspace_id NOT NULL.
+  { table: "agent.code_repository_findings", policyClass: "standard" },
   { table: "agent.agent_executions", policyClass: "standard" },
   { table: "agent.agent_execution_steps", policyClass: "standard" },
   { table: "agent.agent_tool_calls", policyClass: "standard" },
@@ -179,6 +182,9 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   // Where the outcome refresh stands in each ledger run's receipts (#4511);
   // org_id + workspace_id NOT NULL.
   { table: "cost.run_pr_receipt_walks", policyClass: "standard" },
+  // The newest state a GitHub delivery carried for each pull request (#4511);
+  // org_id + workspace_id NOT NULL.
+  { table: "cost.run_pr_delivered_states", policyClass: "standard" },
   // The loops that reached a workspace's no-progress limit (spend spec,
   // detector 1); org_id + workspace_id NOT NULL.
   { table: "cost.no_progress_hits", policyClass: "standard" },

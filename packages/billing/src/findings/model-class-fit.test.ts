@@ -269,6 +269,14 @@ describe("model class fit", () => {
     expect(f!.fix).toContain("claude-sonnet-5");
     expect(f!.fix).toContain("model-route steering record");
     expect(f!.fix).toContain("Replay");
+    // #5023: the card names the model and the lighter model it repriced at.
+    expect(f!.evidence.values).toEqual({
+      kind: "model_class_fit",
+      model: "claude-opus-5-5",
+      lighterModel: "claude-sonnet-5",
+      unchangedRuns: 1,
+      editedRuns: 0,
+    });
   });
 
   it("claims no frame and pins no call", () => {
@@ -674,6 +682,13 @@ describe("model class fit on step classes", () => {
     expect(f!.why).toBe(
       "1 run changed no file, and 1 run with edit steps also had steps that only read. Repriced from claude-opus-5-5 to claude-sonnet-5 at list prices, the steps that only read would have cost an estimated 50% less.",
     );
+    expect(f!.evidence.values).toEqual({
+      kind: "model_class_fit",
+      model: "claude-opus-5-5",
+      lighterModel: "claude-sonnet-5",
+      unchangedRuns: 1,
+      editedRuns: 1,
+    });
     expect(f!.fix).toContain(
       "Replay a sample of the runs that changed no file",
     );
