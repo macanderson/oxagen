@@ -200,17 +200,21 @@ describe("type scale: the 14px floor and token-only sizes", () => {
     WHOLE_TREE_TIMEOUT_MS,
   );
 
-  it("no stylesheet under src/ sets a size under 14px", () => {
-    const files = stylesheets();
-    expect(files).toEqual(
-      expect.arrayContaining([
-        "src/app/globals.css",
-        "src/ui/phone.css",
-        "src/ui/transcript-skins.css",
-      ]),
-    );
-    expect(report(files.flatMap(stylesheetHits))).toEqual([]);
-  });
+  it(
+    "no stylesheet under src/ sets a size under 14px",
+    () => {
+      const files = stylesheets();
+      expect(files).toEqual(
+        expect.arrayContaining([
+          "src/app/globals.css",
+          "src/ui/phone.css",
+          "src/ui/transcript-skins.css",
+        ]),
+      );
+      expect(report(files.flatMap(stylesheetHits))).toEqual([]);
+    },
+    WHOLE_TREE_TIMEOUT_MS,
+  );
 
   it("the module scan reads the probe the way it reads a page", () => {
     const raw = `${PROBES}type-scale/raw.tsx`;
