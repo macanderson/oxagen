@@ -108,9 +108,10 @@ env:
   ATLAS_VERSION: "v1.2.2"
   # Where jobs run (ADR-246). With the CI_RUNNERS repository variable set to
   # `aws`, each job's runs-on picks one of our own pools: `oxagen-large-*`
-  # (16 vCPU, 64 GB or more) for checks, build, unit, e2e, rls-integration
-  # and rds-compatibility, `oxagen-small-*` (4 vCPU, 16 GB) for the light
-  # jobs, and `oxagen-deploy` for every job that touches production.
+  # (16 vCPU, 64 GB or more) for checks, build, unit and e2e,
+  # `oxagen-small-*` (4 vCPU, 16 GB) for the light jobs, rls-integration and
+  # rds-compatibility, and `oxagen-deploy` for every job that touches
+  # production.
   # CI_RUNNER_ARCH picks x64 (the default) or arm64 for the CI pools.
   # CI_HEAVY_POOL picks the pool the heavy jobs use: `large` (the default) or
   # `small`. While the account's EC2 quota holds 64 vCPUs, `small` runs 16
@@ -1083,7 +1084,12 @@ jobs:
       (github.event_name == 'pull_request' || github.event_name == 'merge_group' || (github.event_name == 'push' && github.ref == 'refs/heads/main')) &&
       needs.preflight.outputs.proceed != 'false' &&
       needs.preflight.outputs.heavy != 'false'
-    runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-{0}-{1}', vars.CI_HEAVY_POOL || 'large', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
+    # The small pool. These four suites took 2.1 minutes on a 16-vCPU runner
+    # and 2.1 minutes on a 4-vCPU one (run 36942279871), while heavy jobs
+    # waited 6 to 22 minutes for a 16-vCPU runner (runs 36948990846,
+    # 36949134740 and 36950286374). The small pool starts it sooner and
+    # leaves the large one to the jobs that use the cores.
+    runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-small-{0}', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
     container:
       image: ${{ vars.CI_IMAGE_REGISTRY || 'ghcr.io/macanderson' }}/oxagen-ci-base:latest
       volumes:
@@ -1171,7 +1177,10 @@ jobs:
       (github.event_name == 'pull_request' || github.event_name == 'merge_group' || (github.event_name == 'push' && github.ref == 'refs/heads/main')) &&
       needs.preflight.outputs.proceed != 'false' &&
       needs.preflight.outputs.heavy != 'false'
-    runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-{0}-{1}', vars.CI_HEAVY_POOL || 'large', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
+    # The small pool. This replay ran in 0.8 minutes on a 16-vCPU runner after
+    # waiting 8 to 22 minutes for one, and in 1.6 minutes on a 4-vCPU runner
+    # (run 36942279871).
+    runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-small-{0}', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-latest' }}
     container:
       image: ${{ vars.CI_IMAGE_REGISTRY || 'ghcr.io/macanderson' }}/oxagen-ci-base:latest
       volumes:
