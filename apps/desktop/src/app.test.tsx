@@ -257,10 +257,11 @@ describe("the window", () => {
     expect(sidecarCalls).toContainEqual({ sidecar, args });
   });
 
-  // #4879: the Activity log opened with the recorder's argv as a `tacho`
-  // command line, and a failure named it too. A person types `oxagen agent`
-  // now, so both say what the action does.
-  it("names a failed recorder action by what it does, not by its argv", async () => {
+  // #4891: Re-apply ran `tacho enroll`, which moved the hooks back to
+  // `tacho hook`, and the Activity log hid that command behind a
+  // description. It now runs `oxagen agent enroll`, the command a person
+  // types, and the log and the error both name it.
+  it("re-applies with oxagen agent enroll and names that command when it fails", async () => {
     bridge.runSidecar.mockResolvedValue({ code: 1, stdout: "", stderr: "" });
     bridge.readState.mockResolvedValue(olderSetup);
     render(<App />);
@@ -268,14 +269,19 @@ describe("the window", () => {
     await act(async () => {
       button.click();
     });
+    expect(bridge.runSidecar).toHaveBeenCalledWith(
+      "oxagen",
+      ["agent", "enroll"],
+      expect.any(Function),
+    );
     expect(
       await screen.findByText(
-        "Re-applying the hooks and the collector exited 1. See the output below.",
+        "oxagen agent enroll exited 1. See the output below.",
       ),
     ).toBeTruthy();
     const log =
       document.querySelector("pre.log[aria-live]")?.textContent ?? "";
-    expect(log.split("\n")[0]).toBe("Re-applying the hooks and the collector");
+    expect(log.split("\n")[0]).toBe("$ oxagen agent enroll");
     expect(log).not.toContain("tacho");
   });
 
@@ -462,8 +468,13 @@ describe("the setup wizard's agent step", () => {
         .click();
     });
     expect(bridge.runSidecar).toHaveBeenCalledWith(
-      "tacho",
-      expect.arrayContaining(["enroll", "--harness", "claude-code,cursor"]),
+      "oxagen",
+      expect.arrayContaining([
+        "agent",
+        "enroll",
+        "--harness",
+        "claude-code,cursor",
+      ]),
       expect.any(Function),
     );
     const next = await screen.findByRole("button", { name: "Continue" });
