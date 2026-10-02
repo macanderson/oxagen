@@ -656,6 +656,8 @@ export async function syncWorkspaceSteering(
               status: "pr_open",
               headSha: pr.headSha,
               checks: checksAfterMove(row.kind),
+              // The stored findings described the old head (#4518).
+              checkFindings: [],
             },
             [row.status],
             { headSha: row.headSha, noClaimSince },

@@ -9,9 +9,12 @@
  * behind it, so eight commits reached `main` with no run at all — and because an
  * evicted run concludes `cancelled`, nothing anywhere went red (#2730).
  *
- * ADR-046 removed that cause by giving each push to `main` its own concurrency
- * group. This catches the next cause, whatever it turns out to be: an Actions
- * outage, a push that raised no event, a workflow that failed to start.
+ * ADR-287 found that account wrong: runs on `main` kept finishing and
+ * deploying that day, and the eight commits were covered by later runs. The
+ * question still matters. This catches any cause of real blindness: an
+ * Actions outage, a push that raised no event, a workflow that failed to
+ * start. Since ADR-287, pushes to `main` share one concurrency group again,
+ * so most commits have no run of their own and read as `superseded` below.
  *
  * ## Three run states, not two
  *
@@ -23,8 +26,10 @@
  *   pending     some do not yet, and their runs are still in flight
  *   unverified  some have no run at all, or only cancelled ones
  *
- * Two later passes can resolve a `none` before it reaches the verdict:
- * `too_young` (the grace window below) and `superseded` (further below).
+ * Three later passes can resolve a `none` before it reaches the verdict:
+ * `too_young` (the grace window below), `superseded` (further below), and
+ * `awaiting_cover` (`applyCover`, for a commit a later run still going will
+ * answer).
  *
  * `pending` exits 0 and closes nothing. A recovery is claimed off an answer,
  * never off the absence of one.
@@ -209,18 +214,68 @@ export function applySupersession(states) {
 }
 
 /**
+ * How long a commit may wait for a later run to cover it.
+ *
+ * Pushes to `main` share one concurrency group (ADR-287), which runs one run
+ * at a time. A commit that lands just after a run starts waits for that run,
+ * then for its own, so about two run lengths of ~75 minutes. Three hours
+ * clears that with room for a slow runner.
+ */
+const COVER_MS =
+  Number(process.env.MAIN_VERIFIED_COVER_MINUTES ?? 180) * 60 * 1000;
+
+/**
+ * Rewrite `none` to `awaiting_cover` for a commit a later run still in flight
+ * will answer for, while the commit is younger than `coverMs`.
+ *
+ * Pushes to `main` share one concurrency group (ADR-287). GitHub keeps one run
+ * waiting there, and a newer push replaces it, so during a burst of merges
+ * most commits have only a `cancelled` run while the newest one waits behind
+ * the run going. When that newest run concludes, `applySupersession` reads
+ * the others as `superseded`. Until then they have no answer yet, which is
+ * `pending`, not `unverified`, and filing an issue for each burst would be a
+ * false alert.
+ *
+ * The age bound keeps a real gap detectable. A commit older than `coverMs`
+ * with no concluded run after it reports as `none`, however many runs are in
+ * flight. An undatable commit is left alone, as `applyGrace` leaves it.
+ *
+ * Run it after `applySupersession`, so a commit a later run already answered
+ * stays `superseded`. Pure, and it does not mutate its argument.
+ */
+export function applyCover(states, coverMs) {
+  let laterInFlight = false;
+  return states.map((s) => {
+    const covered =
+      laterInFlight &&
+      s.state === "none" &&
+      typeof s.ageMs === "number" &&
+      s.ageMs < coverMs;
+    if (s.state === "in_flight") laterInFlight = true;
+    return covered ? { ...s, state: "awaiting_cover" } : s;
+  });
+}
+
+/**
  * Fold per-commit states into the overall verdict.
  *
  * `superseded` is deliberately inert here: it is a gap nothing can ever fill,
  * so letting it reach `unverified` would pin the verdict open forever.
  *
- * `too_young` folds into `pending` rather than into `verified`: the commit has
- * no answer yet, and `pending` is precisely the state that neither announces
- * nor closes.
+ * `too_young` and `awaiting_cover` fold into `pending` rather than into
+ * `verified`: the commit has no answer yet, and `pending` is precisely the
+ * state that neither announces nor closes.
  */
 export function verdictOf(states) {
   if (states.some((s) => s.state === "none")) return "unverified";
-  if (states.some((s) => s.state === "in_flight" || s.state === "too_young"))
+  if (
+    states.some(
+      (s) =>
+        s.state === "in_flight" ||
+        s.state === "too_young" ||
+        s.state === "awaiting_cover",
+    )
+  )
     return "pending";
   return "verified";
 }
@@ -311,7 +366,10 @@ async function main() {
     states = await readWindow();
   }
 
-  const judged = applySupersession(applyGrace(states, GRACE_MS));
+  const judged = applyCover(
+    applySupersession(applyGrace(states, GRACE_MS)),
+    COVER_MS,
+  );
   const verdict = verdictOf(judged);
   const unverified = judged.filter((s) => s.state === "none").map((s) => s.sha);
   const inFlight = judged
@@ -322,6 +380,9 @@ async function main() {
     .map((s) => s.sha);
   const tooYoung = judged
     .filter((s) => s.state === "too_young")
+    .map((s) => s.sha);
+  const awaitingCover = judged
+    .filter((s) => s.state === "awaiting_cover")
     .map((s) => s.sha);
 
   console.log(`[main-verified] window=${judged.length} verdict=${verdict}`);
@@ -334,6 +395,10 @@ async function main() {
   if (tooYoung.length > 0)
     console.log(
       `  no run visible yet, within the ${GRACE_MS / 60000}m grace: ${tooYoung.join(", ")}`,
+    );
+  if (awaitingCover.length > 0)
+    console.log(
+      `  no run, a later run still going will answer: ${awaitingCover.join(", ")}`,
     );
   // Printed every time, never announced. The gap is real and permanent; what
   // changed is that a later commit answered the question it was asked about.

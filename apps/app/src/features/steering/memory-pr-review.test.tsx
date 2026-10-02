@@ -2,8 +2,9 @@
 // A memory PR's records as a person reviews them (#4518): each card shows the
 // record, the memories it cites with the agent each came from, and links to
 // the runs its evidence names. Drop removes one record and marks its card in
-// place, a record dropped earlier shows its commit, and a refusal is named on
-// the card. Each state gets an axe check.
+// place, a record dropped earlier shows its commit, a record the PR archives
+// offers no Drop, and a refusal is named on the card. Each state gets an axe
+// check.
 import {
   cleanup,
   fireEvent,
@@ -16,7 +17,7 @@ import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import { AT } from "@/test/steering-views";
 import {
-  MEMORY_BRANCH,
+  MEMORY_PR_NUMBER,
   memoryPrMemory,
   memoryPrRecord,
 } from "./memory-pr-review.builders";
@@ -68,7 +69,7 @@ const DROPPED = memoryPrRecord({
 function renderReview(records = [KEPT, DROPPED]) {
   render(
     <IntlProvider>
-      <MemoryPrReview at={AT} branch={MEMORY_BRANCH} records={records} />
+      <MemoryPrReview at={AT} number={MEMORY_PR_NUMBER} records={records} />
     </IntlProvider>,
   );
 }
@@ -150,13 +151,25 @@ describe("the records", () => {
     );
     expect(within(dropped).queryByRole("button")).toBeNull();
   });
+
+  it("offers no Drop on a record the PR archives (negative)", () => {
+    const archived = memoryPrRecord({
+      action: "retire",
+      path: ".oxagen/memory/release.old-proxy.toml",
+      lineage: "mem.release.old-proxy",
+      title: "Use the old proxy",
+      memories: [],
+    });
+    renderReview([archived]);
+    expect(within(card(archived.path)).queryByRole("button")).toBeNull();
+  });
 });
 
 describe("Drop", () => {
   it("drops the record from the memory branch and marks its card in place", async () => {
     dropMemoryRecord.mockResolvedValue({
       ok: true,
-      value: { commitSha: "a1b2c3d4e5f6", rejectionId: "mrj_01k5sz4n" },
+      value: { commitSha: "a1b2c3d4e5f6" },
     });
     renderReview([KEPT]);
     const button = drop();
@@ -166,18 +179,18 @@ describe("Drop", () => {
     expect(dropMemoryRecord).toHaveBeenCalledWith(
       "acme",
       "core-platform",
-      MEMORY_BRANCH,
+      MEMORY_PR_NUMBER,
       KEPT.path,
     );
     expect(drop()).toBeNull();
     expect(router.replace).not.toHaveBeenCalled();
   });
 
-  it("says the platform has not registered Drop yet and keeps the record (negative)", async () => {
+  it("names a memory PR that settled and keeps the record (negative)", async () => {
     dropMemoryRecord.mockResolvedValue({
       ok: false,
-      reason: "unavailable",
-      code: "tool_not_registered",
+      reason: "conflict",
+      code: "memory_pr_settled",
     });
     renderReview([KEPT]);
     const button = drop();
@@ -185,9 +198,27 @@ describe("Drop", () => {
     fireEvent.click(button);
     expect(
       await screen.findByTestId("drop-memory-record-failure"),
-    ).toHaveTextContent("Oxagen has not registered this action yet.");
+    ).toHaveTextContent(
+      "This memory PR is merged or closed, so its records can no longer change.",
+    );
     expect(drop()).toBeEnabled();
     expect(card(KEPT.path).querySelector("[data-dropped]")).toBeNull();
+  });
+
+  it("names the last record and keeps it (negative)", async () => {
+    dropMemoryRecord.mockResolvedValue({
+      ok: false,
+      reason: "conflict",
+      code: "last_record",
+    });
+    renderReview([KEPT]);
+    const button = drop();
+    if (button === null) throw new Error("no Drop button");
+    fireEvent.click(button);
+    expect(
+      await screen.findByTestId("drop-memory-record-failure"),
+    ).toHaveTextContent("This is the last record in the memory PR.");
+    expect(drop()).toBeEnabled();
   });
 
   it("names a write that threw and keeps the record (negative)", async () => {

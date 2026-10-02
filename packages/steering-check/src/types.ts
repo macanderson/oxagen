@@ -76,15 +76,24 @@ export interface CedarHooks {
 /** A server file read against its full schema: nothing wrong, or every issue. */
 export type ServerFileOutcome = { ok: true } | { ok: false; issues: readonly FileIssue[] };
 
+/** Whether a server's lock, as a steering PR adds or changes it, is a lock Oxagen writes, and if not, why. */
+export type LockOutcome = { ok: true } | { ok: false; problems: readonly string[] };
+
 /**
- * Readers for server.toml and tools.toml under tools/servers/<name>/. MCP
- * Studio owns their schemas, and the caller passes its readers in. Without a
- * reader, the schema check reads only the TOML syntax. tools.lock.json needs
- * no reader, because Oxagen writes it and the owned check refuses any edit.
+ * Readers for the files under tools/servers/<name>/. MCP Studio owns their
+ * schemas, and the caller passes its readers in. Without a reader, the
+ * schema check reads only the TOML syntax.
+ *
+ * Only Oxagen writes tools.lock.json, and it writes the lock into the
+ * steering PR that Studio's Review or a sync opens. `lock` tells the owned
+ * check whether the lock the head holds is one Oxagen writes for the folder
+ * against the base. Without it, the owned check refuses every change to a
+ * lock, because it cannot tell Oxagen's lock from a hand edit.
  */
 export interface ServerReaders {
   server?: (text: string) => ServerFileOutcome;
   tools?: (text: string) => ServerFileOutcome;
+  lock?: (name: string, head: SteeringTree, base: SteeringTree) => LockOutcome;
 }
 
 /** Everything the checks read. */

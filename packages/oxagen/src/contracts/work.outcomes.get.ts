@@ -19,6 +19,19 @@
  *     nothing. In-app triage spend is not here: it shows on Billing.
  *   - Reopens count only items that finished 30 or more days ago, and say how
  *     many newer items wait for their 30 days. Reverts are not recorded.
+ *   - Delivery counts the sends a person made in the window, each in one
+ *     bucket: rejected, claimed, withdrawn before a claim, or waiting. The
+ *     four buckets add up to the sends.
+ *   - Claim time runs from a send to the runtime's first claim, over the
+ *     claimed sends, with its median, its 90th percentile, and its sample.
+ *   - Each week counts the items that entered Work and the sends a person
+ *     made. Both counts are exact and never stop at a cap.
+ *   - A week used the full flow when at least one item was accepted and
+ *     merged in it.
+ *
+ * Delivery and the weekly counts are the pilot's measures
+ * (agent-work-phase-1.html, Release gates). No figure here decides the pilot.
+ * A person reads them and decides.
  *
  * The figures assess the workflow, never a person: nothing here names one.
  */
@@ -95,7 +108,35 @@ export const workOutcomesGet = registerCapability({
           waiting: z.number().int().nonnegative(),
         })
         .strict(),
-      /** More items finished than one read counts. The figures cover the newest of them. */
+      /** The sends a person made in the window. The four buckets add up to `sends`. */
+      delivery: z
+        .object({
+          sends: z.number().int().nonnegative(),
+          /** Sends a runtime claimed and that were not rejected. */
+          claimed: z.number().int().nonnegative(),
+          /** Sends the runtime or Oxagen refused or could not keep. */
+          rejected: z.number().int().nonnegative(),
+          /** Sends a person withdrew before any claim. */
+          withdrawn: z.number().int().nonnegative(),
+          /** Sends with no claim, rejection, or withdrawal yet. */
+          waiting: z.number().int().nonnegative(),
+          /** Minutes from each claimed send to its first claim. Null with no sample. */
+          claim_minutes: z
+            .object({
+              median: z.number().nonnegative().nullable(),
+              p90: z.number().nonnegative().nullable(),
+              sample: z.number().int().nonnegative(),
+            })
+            .strict(),
+          /** More sends were made in the window than one read counts. The delivery figures cover the newest of them. */
+          truncated: z.boolean(),
+        })
+        .strict(),
+      /**
+       * More items finished than one read counts. The figures cover the
+       * newest of them. Delivery carries its own flag, and the weekly entered
+       * and sent counts never stop at a cap.
+       */
       truncated: z.boolean(),
       weeks: z.array(
         z
@@ -105,6 +146,12 @@ export const workOutcomesGet = registerCapability({
             accepted_merged: z.number().int().nonnegative(),
             returned: z.number().int().nonnegative(),
             median_lead_hours: z.number().nonnegative().nullable(),
+            /** Items Oxagen created in the week, collected from a provider or entered by a person. */
+            entered: z.number().int().nonnegative(),
+            /** Sends a person made in the week. */
+            sent: z.number().int().nonnegative(),
+            /** True when at least one item was accepted and merged in the week. */
+            full_flow: z.boolean(),
           })
           .strict(),
       ),

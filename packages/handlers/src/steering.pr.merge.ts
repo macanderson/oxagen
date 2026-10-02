@@ -358,6 +358,9 @@ export function createMergeSteeringPrHandler(
           heads,
           authorUserId: recorded.createdById,
           merger,
+          // The approvals people gave in Oxagen (approve_steering_pr,
+          // ADR-267), under the same rule as the host's.
+          oxagenApprovals: () => deps.store.listApprovals(scope, recorded.id),
           isMember: async (uid) => {
             const roles = await roleOf(uid);
             return (
@@ -793,7 +796,13 @@ async function mergeGovernanceProposal(
         const from = row.headSha ?? recorded.headSha;
         row = await deps.store.updateProposal(
           row.id,
-          { status: "checks_running", headSha: head, updatedById: userId },
+          // A new run resets the findings, as every record run does.
+          {
+            status: "checks_running",
+            headSha: head,
+            checkFindings: [],
+            updatedById: userId,
+          },
           ["checks_passed"],
           { headSha: from },
         );

@@ -2,9 +2,10 @@
 // (#4914). A steering PR on a `memory/` branch proposes one record file per
 // lesson drawn from the agents' memories, and the records Promote adds from
 // the Memories tab join it. Each card shows the record, the memories it cites
-// with the agent each came from, and the runs its evidence names, and a Drop
-// button that removes that one record from the branch. The cards are keyed by
-// path, so a dropped card keeps its state through the page's refresh.
+// with the agent each came from, and the runs its evidence names. A record
+// the PR proposes has a Drop button that removes it from the branch
+// (drop_memory_record). A record the PR archives has none. The cards are
+// keyed by path, so a dropped card keeps its state through the page's refresh.
 import { useTranslations } from "next-intl";
 import type { MemoryPrRecords } from "@/data/contracts/steering";
 import { routes } from "@/shared/safe-path";
@@ -82,11 +83,12 @@ function Memory({ at, memory }: { at: SteeringAt; memory: MemoryPrMemory }) {
 
 export function MemoryPrReview({
   at,
-  branch,
+  number,
   records,
 }: {
   at: SteeringAt;
-  branch: string;
+  /** The memory PR's number, which drop_memory_record names it by. */
+  number: number;
   records: readonly MemoryPrRecord[];
 }) {
   const t = useTranslations("steering.pr.memory");
@@ -117,14 +119,16 @@ export function MemoryPrReview({
               </ul>
             </div>
           )}
-          <DropMemoryRecord
-            org={at.org}
-            ws={at.ws}
-            branch={branch}
-            path={record.path}
-            title={record.title}
-            dropped={record.dropped}
-          />
+          {record.action === "propose" ? (
+            <DropMemoryRecord
+              org={at.org}
+              ws={at.ws}
+              number={number}
+              path={record.path}
+              title={record.title}
+              dropped={record.dropped}
+            />
+          ) : null}
         </article>
       ))}
     </div>

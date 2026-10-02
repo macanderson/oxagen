@@ -1136,6 +1136,10 @@ describe("readRepositoryChange", () => {
       recordId: "rec_1",
     },
     closed: null,
+    // get_steering_pr answers the latest run's findings and the approvals
+    // given in Oxagen beside the view (#4518).
+    findings: [],
+    approvals: 0,
   };
 
   it("maps get_steering_pr onto what the detail draws, the merge included", async () => {

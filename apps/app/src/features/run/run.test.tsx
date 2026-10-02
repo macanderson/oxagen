@@ -877,6 +877,103 @@ describe("header", () => {
     await expectNoAxe(container);
   });
 
+  it("names the stored state of a pull request the work read did not reach, the state Fleet shows", async () => {
+    // The work read reads GitHub live and only for connected repositories.
+    // A merge request it cannot read still has the state a forge last
+    // reported, which get_run answers beside the frames (ADR-192).
+    const gitlab = "https://gitlab.com/acme/platform/web/-/merge_requests/9";
+    await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({
+            pullRequests: [
+              {
+                url: gitlab,
+                number: 9,
+                repository: "acme/platform/web",
+                state: "merged",
+                stateSeenAt: "2026-10-02T09:00:00.000Z",
+              },
+            ],
+          }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+      work: ok(runWork()),
+      outputs: ok(
+        runOutputs([
+          runOutputNode({
+            seq: "301",
+            kind: "pr",
+            name: "#9",
+            where: "acme/platform/web",
+            state: "open",
+            note: gitlab,
+            stat: null,
+          }),
+        ]),
+      ),
+    });
+    const checkout = within(await screen.findByTestId("run-checkout"));
+    const states = checkout.getAllByTestId("run-pull-state");
+    expect(states.map((s) => s.getAttribute("data-state"))).toEqual([
+      "open",
+      "merged",
+    ]);
+    expect(states[1]).toHaveTextContent("merged");
+    expect(checkout.queryByText("status unknown")).toBeNull();
+  });
+
+  it("names the stored state of each recorded pull request when the work read fails", async () => {
+    const url = "https://github.com/acme/platform/pull/482";
+    await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({
+            pullRequests: [
+              {
+                url,
+                number: 482,
+                repository: "acme/platform",
+                state: "draft",
+                stateSeenAt: "2026-10-02T09:00:00.000Z",
+              },
+            ],
+          }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+      work: readError("github_unreachable", 502),
+      outputs: ok(
+        runOutputs([
+          runOutputNode({
+            seq: "300",
+            kind: "pr",
+            name: "acme/platform#482",
+            note: url,
+            stat: null,
+          }),
+          // A pull request no forge has reported keeps "status unknown".
+          runOutputNode({
+            seq: "302",
+            kind: "pr",
+            name: "acme/docs#17",
+            note: "https://github.com/acme/docs/pull/17",
+            stat: null,
+          }),
+        ]),
+      ),
+    });
+    const checkout = within(await screen.findByTestId("run-checkout"));
+    const states = checkout.getAllByTestId("run-pull-state");
+    expect(states.map((s) => s.getAttribute("data-state"))).toEqual([
+      "draft",
+      "unknown",
+    ]);
+    expect(states[0]).toHaveTextContent("draft");
+    expect(states[1]).toHaveTextContent("status unknown");
+  });
+
   it("names the host with no enrolled checkout and says no path is held, with the host's facts on hover", async () => {
     await renderRun({
       detail: ok(runDetail()),

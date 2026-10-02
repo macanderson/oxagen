@@ -3,23 +3,22 @@
  * The full gate must not run to completion for a commit a later merge on
  * main already supersedes.
  *
- * ADR-046 gives every push to main its own concurrency group so a queued run
- * can never be evicted (#2730) — a queued run is protected, but nothing
- * protects a run that has already STARTED from doing 60+ minutes of `checks`
- * and `test` work for a commit that stopped mattering the moment a later
- * commit merged behind it. The later commit's run checks and ships
- * everything this one would (check-deploy-tip.mjs ships any commit newer
- * than what is live), so that work buys nothing, yet it holds a runner for
- * the full run, and under sustained merge pressure the queue of
- * full runs grows without bound: on 2026-09-21 `gh run list` showed 15
- * queued `pipeline.yml` runs on main behind 2 in progress, each costing the
- * full ~75-minute gate.
+ * Pushes to main share one concurrency group (ADR-287), so a run usually
+ * starts as main's tip. A push can still land between the run starting and
+ * this check, and then the run would do 60+ minutes of `checks` and `test`
+ * work for a commit a later merge already supersedes. The later commit's run
+ * checks and ships everything this one would (check-deploy-tip.mjs ships any
+ * commit newer than what is live), so that work buys nothing but a held
+ * runner. From 2026-09-07 to 2026-10-02 every push had a group of its own
+ * (ADR-046), and full runs queued up behind each other: on 2026-09-21
+ * `gh run list` showed 15 queued `pipeline.yml` runs on main behind 2 in
+ * progress, each costing the full ~75-minute gate.
  *
  * The fix runs at the front of the workflow rather than by cancelling a run
- * in flight: cancellation mid-run is exactly what produced #2730 (a queued
- * run evicted before it ever executed a step), so this checks the tip once,
- * cheaply, before the expensive jobs start, and lets an already-running job
- * finish rather than killing it.
+ * in flight: a running main run applies production migrations in
+ * `migration-gate`, so this checks the tip once, cheaply, before the
+ * expensive jobs start, and lets an already-running job finish rather than
+ * killing it.
  *
  * Two parts, the same shape as check-deploy-tip.mjs:
  *
