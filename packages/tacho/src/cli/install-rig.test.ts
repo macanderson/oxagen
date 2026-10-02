@@ -33,7 +33,7 @@ import { tachoHookPresence } from "../host/settings-writer";
 import { readStellaHooksFile, stellaHookPresence } from "../host/stella-writer";
 import { TEST_ENROLLMENT } from "../host/test-support";
 import type { TachoHarness } from "../wire";
-import { runtimeCommands } from "./deps";
+import { runtimeCommands, shellQuote } from "./deps";
 import { enroll } from "./enroll";
 import { loadOrCreateRunTokenKey, mintRunToken } from "../host/run-token";
 import {
@@ -1350,84 +1350,113 @@ describe.skipIf(process.platform === "win32")(
       return found as Record<string, string>;
     }
 
-    it("leaves every hook running the per-user copy, and none blocking once that is gone too", async () => {
-      const seed = seedHome();
-      const app = join(seed.home, "Applications", "Oxagen.app");
-      const bundled = join(app, "Contents", "MacOS", "tacho");
-      const kept = join(
-        seed.home,
-        "Library",
-        "Application Support",
-        "oxagen",
-        "bin",
-        "2.1.3",
-      );
-      stubTacho(bundled);
-      stubTacho(join(kept, "tacho"));
-      // What the desktop app's sidecar computes: it runs from the bundle,
-      // and the app hands it the per-user copy.
-      const runtime = runtimeCommands(
-        undefined,
-        { TACHO_BIN_DIR: kept },
-        bundled,
-        "darwin",
-        true,
-      );
-      const rig = buildRig(seed, { overrides: { runtime } });
-      const enrolled = await enroll({ harnesses: ALL }, rig.deps);
-      expect(enrolled.ok, enrolled.warnings.join("\n")).toBe(true);
+    /**
+     * Where each platform's app keeps its sidecar, where the app's copy
+     * goes, what removing the app deletes, and the service file. On Linux a
+     * `.deb` or `.rpm` puts the sidecar in `/usr/bin`, and `<home>/usr/bin`
+     * stands in for it.
+     */
+    const LAYOUTS: Array<{
+      platform: "darwin" | "linux";
+      removal: string;
+      app: string[];
+      bundle: string[];
+      kept: string[];
+      unit: string[];
+    }> = [
+      {
+        platform: "darwin",
+        removal: "moved to the Trash",
+        app: ["Applications", "Oxagen.app"],
+        bundle: ["Applications", "Oxagen.app", "Contents", "MacOS"],
+        kept: ["Library", "Application Support", "oxagen", "bin", "2.1.3"],
+        unit: ["Library", "LaunchAgents", "sh.oxagen.tachod.plist"],
+      },
+      {
+        platform: "linux",
+        removal: "removed with its package",
+        app: ["usr"],
+        bundle: ["usr", "bin"],
+        kept: [".local", "share", "oxagen", "bin", "2.1.3"],
+        unit: [".config", "systemd", "user", "tachod.service"],
+      },
+    ];
 
-      // Nothing enroll wrote names the bundle: the hooks, the service and
-      // the MCP entry name the copy.
-      const commands = preToolUseCommands(rig);
-      for (const command of Object.values(commands))
-        expect(command).not.toContain("Oxagen.app");
-      const plist = text(
-        seed.home,
-        "Library",
-        "LaunchAgents",
-        "sh.oxagen.tachod.plist",
-      );
-      expect(plist).toContain(`${join(kept, "tacho")}</string>`);
-      expect(plist).not.toContain("Oxagen.app");
-      const desktop = rig.deps.readClaudeDesktopConfig() as {
-        mcpServers: Record<string, { command?: string; args?: string[] }>;
-      };
-      const mcp = Object.values(desktop.mcpServers).find((entry) =>
-        entry.args?.includes(TEST_ENROLLMENT),
-      );
-      expect(mcp?.command).toBe(join(kept, "tacho"));
-      expect(readHostFile(rig.deps.paths.hostFile)?.hook_command).toBe(
-        `'${join(kept, "tacho")}' hook`,
-      );
+    it.each(LAYOUTS)(
+      "leaves every hook running the per-user copy once the app is $removal ($platform), and none blocking once the copy is gone too",
+      async (layout) => {
+        const seed = seedHome({ platform: layout.platform });
+        const app = join(seed.home, ...layout.app);
+        const bundled = join(seed.home, ...layout.bundle, "tacho");
+        const kept = join(seed.home, ...layout.kept);
+        stubTacho(bundled);
+        stubTacho(join(kept, "tacho"));
+        // What the desktop app's sidecar computes: it runs from the bundle,
+        // and the app hands it the per-user copy.
+        const runtime = runtimeCommands(
+          undefined,
+          { TACHO_BIN_DIR: kept },
+          bundled,
+          layout.platform,
+          true,
+        );
+        const rig = buildRig(seed, { overrides: { runtime } });
+        const enrolled = await enroll(
+          { harnesses: harnessesOn(layout.platform) },
+          rig.deps,
+        );
+        expect(enrolled.ok, enrolled.warnings.join("\n")).toBe(true);
 
-      // The app goes to the Trash. Every hook still runs the copy.
-      rmSync(app, { recursive: true, force: true });
-      for (const [harness, command] of Object.entries(commands)) {
-        const result = run(command);
-        expect(result.status, `${harness}: ${result.stderr}`).toBe(0);
-        expect(result.stdout, harness).toBe(`${ANSWER}\n`);
-      }
+        // Nothing enroll wrote names the bundle: the hooks, the service and
+        // the MCP entry name the copy.
+        const commands = preToolUseCommands(rig);
+        for (const command of Object.values(commands))
+          expect(command).not.toContain(bundled);
+        const unit = text(seed.home, ...layout.unit);
+        expect(unit).toContain(join(kept, "tacho"));
+        expect(unit).not.toContain(bundled);
+        if (layout.platform === "darwin") {
+          const desktop = rig.deps.readClaudeDesktopConfig() as {
+            mcpServers: Record<string, { command?: string; args?: string[] }>;
+          };
+          const mcp = Object.values(desktop.mcpServers).find((entry) =>
+            entry.args?.includes(TEST_ENROLLMENT),
+          );
+          expect(mcp?.command).toBe(join(kept, "tacho"));
+        }
+        expect(readHostFile(rig.deps.paths.hostFile)?.hook_command).toBe(
+          `${shellQuote(join(kept, "tacho"), layout.platform)} hook`,
+        );
 
-      // The copy goes too. Cursor and Stella block on a hook that cannot
-      // run, so theirs answer an allow themselves. Claude Code and Codex
-      // block only on exit 2, and report the shell's 127 as an error.
-      rmSync(kept, { recursive: true, force: true });
-      const cursor = run(commands["cursor"] as string);
-      expect(cursor.status, cursor.stderr).toBe(0);
-      expect(cursor.stdout).toBe('{"permission":"allow"}\n');
-      const stella = run(commands["stella"] as string);
-      expect(stella.status, stella.stderr).toBe(0);
-      expect(stella.stdout).toBe("");
-      for (const harness of ["claude-code", "codex"]) {
-        const result = run(commands[harness] as string);
-        expect(result.status, harness).toBe(127);
-      }
+        // The app goes. Every hook still runs the copy.
+        rmSync(app, { recursive: true, force: true });
+        expect(existsSync(bundled)).toBe(false);
+        for (const [harness, command] of Object.entries(commands)) {
+          const result = run(command);
+          expect(result.status, `${harness}: ${result.stderr}`).toBe(0);
+          expect(result.stdout, harness).toBe(`${ANSWER}\n`);
+        }
 
-      // The uninstall needs nothing from the app or the copy.
-      expect((await unenroll({ purge: true }, rig.deps)).ok).toBe(true);
-      expect(rig.serviceLoaded()).toBe(false);
-    });
+        // The copy goes too. Cursor and Stella block on a hook that cannot
+        // run, so theirs answer an allow themselves. Claude Code and Codex
+        // block only on exit 2, and report the shell's 127 as an error.
+        rmSync(kept, { recursive: true, force: true });
+        const cursor = run(commands["cursor"] as string);
+        expect(cursor.status, cursor.stderr).toBe(0);
+        expect(cursor.stdout).toBe('{"permission":"allow"}\n');
+        const stella = run(commands["stella"] as string);
+        expect(stella.status, stella.stderr).toBe(0);
+        expect(stella.stdout).toBe("");
+        for (const harness of ["claude-code", "codex"]) {
+          const result = run(commands[harness] as string);
+          expect(result.status, harness).toBe(127);
+        }
+
+        // The uninstall needs nothing from the app or the copy.
+        expect((await unenroll({ purge: true }, rig.deps)).ok).toBe(true);
+        expect(rig.serviceLoaded()).toBe(false);
+      },
+    );
 
     it("moves an enrollment that names the bundle onto the per-user copy on Re-apply", async () => {
       const seed = seedHome();

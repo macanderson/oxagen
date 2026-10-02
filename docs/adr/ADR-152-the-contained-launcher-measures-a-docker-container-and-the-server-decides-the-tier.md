@@ -6,8 +6,8 @@
 - **Related:** ADR-043 (runtime excision), ADR-096 (the contained tier; this
   record makes its Phase 5 build choice), ADR-095 (the tier ladder), ADR-094
   (the gateway), ADR-143 (the gateway brokers the vendor credential), ADR-064
-  (the witness runner), ADR-151 (Git custody), #3772 (the server half),
-  #3300 (Phase 5)
+  (the witness runner), ADR-151 (Git custody), ADR-254 (amends the GitHub
+  route), #3772 (the server half), #3300 (Phase 5)
 
 ## Context
 
@@ -53,7 +53,7 @@ path with a recorded `contained_gateway_route` denial:
 | `/model/v1/...` | The loopback model proxy (ADR-094), one harness's paths only | A fifteen-minute run token from the daemon's custody (ADR-143), set by the bridge |
 | `/hook` | The daemon's hook handler, with `session_id` and `cwd` pinned to the launched session | None |
 | `/mcp` | The local MCP gateway, then the Oxagen API | The host's gateway credential, held by the daemon |
-| `/github/...` | `github.com` smart-HTTP git and `api.github.com/repos/<owner>/<repo>`, for one repository, only when the operator supplied a token | The run's installation token, set by the bridge |
+| `/github/git/...` | The daemon's Git custody proxy (ADR-151), for smart-HTTP Git to the one repository the run names | A lease for the launched session, set by the bridge per request. The proxy swaps it for a token the server mints and revokes the token after the request (ADR-254) |
 
 No credential crosses into the container. The harness inside holds a
 placeholder key. The bridge replaces every inbound credential header.
@@ -117,23 +117,29 @@ fallback to an uncontained run.
 
 ### GitHub access
 
-The operator may supply one GitHub App installation token and name one
-repository. The launcher asks GitHub which repositories the token reaches and
-refuses it unless the answer is exactly that one. The token stays in the
-daemon. The bridge adds it to git and REST requests for that repository and
-records each forwarded request as a `contained_github_route` decision. When
-the run ends, or the launcher refuses it at any check, the launcher revokes
-the token (`DELETE /installation/token`), so it expires with the run rather
-than at GitHub's one-hour ceiling. The
-receipt's configuration digest covers the repository name, never the token.
+Amended by ADR-254 on 2026-10-02.
 
-Today the operator mints the token, for example with
-`actions/create-github-app-token`. ADR-151, merged the same day, mints one on
-the server from the workspace's own App installation and serves it through
-the daemon's Git proxy, so no operator handles it. The contained bridge does
-not route through that proxy yet: its lease is issued for a working
-directory and a loopback port the container does not share. #3815 moves the
-bridge onto it.
+The operator may name one repository. The operator hands over no GitHub
+token. The bridge sends the run's Git smart HTTP requests for that repository
+to ADR-151's Git custody proxy in the same daemon. For each request, the
+bridge leases a credential for the session the launcher started and puts it
+on the request outside the container. The proxy checks the signed mandate,
+has the server mint a token for the workspace's binding of the repository,
+records a `token_use` frame with `gateway_brokered`, forwards the request,
+and revokes the token. The receipt's configuration digest covers the
+repository name, never a credential.
+
+A contained run uses this path because it is the stronger one. The operator
+never handles a token. The server picks the installation and the
+repository's immutable ID, so a stale repository name cannot widen the grant.
+The chain carries the brokered use. The lease stays in the bridge, not in the
+session directory, because the bridge already belongs to that one session.
+ADR-254 gives the reasons, and why the REST route and the operator's own
+token are gone.
+
+The first version of this record accepted an installation token the operator
+minted, for example with `actions/create-github-app-token`, and forwarded
+REST calls under `/repos/<owner>/<repo>` with it. ADR-254 removed both.
 
 ## What the launcher trusts
 
@@ -144,7 +150,7 @@ bridge onto it.
   API requires the enrolling operator to hold Owner or Admin now.
 - The operator's image. The receipt records its digest. Nothing judges
   whether that digest is a good one.
-- GitHub, to scope and revoke the installation token as documented.
+- GitHub, to scope and revoke each installation token as documented.
 
 ## What a hostile host administrator can still do
 
@@ -160,7 +166,7 @@ not enforced against whoever administers the host. Membership in the
   `docker exec`, or a new mount through the daemon. The measurement describes
   the container at creation.
 - Read the vendor key from custody, which stays on the machine (ADR-143), and
-  the GitHub token while the run is live.
+  a GitHub token while a Git request is in flight (ADR-254).
 - Build a different image. Its digest lands in the receipt, and nothing
   compares it with a known-good list.
 - Stop the daemon or drop events before they ship. The record shows silence,

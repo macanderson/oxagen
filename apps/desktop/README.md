@@ -79,7 +79,7 @@ collector's `/status` on loopback) and every action runs a sidecar:
 | Wrappers | `host.harnesses`, hook presence per harness | `oxagen agent reassign --harness …` |
 | Command line | PATH, `cli_install` state | linked automatically on every launch; "Link into PATH" / "Remove links" for manual control |
 | Updates (macOS) | `autoUpdate` in `desktop.json`, `update_policy` | "Install updates automatically" writes `autoUpdate` through `set_auto_update` |
-| Uninstall | — | `remove_local_data` after unenroll; then the platform uninstaller |
+| Uninstall | — | `remove_local_data` after unenroll; then the platform uninstaller. With the app already gone, `oxagen agent uninstall` from the per-user copy does the same |
 | Masthead | the release feed, at launch, hourly, on focus, and on demand | `tauri-plugin-updater`: check, download + verify, install, restart the collector, relaunch. A Mac that passes the ADR-202 gates installs in the background and shows Restart |
 
 ### What installing does
@@ -125,6 +125,12 @@ once per launch, off the main thread:
   reports the outcome (`state`: `linked` / `already` / `skipped` /
   `opted_out` / `failed` / `pending`, plus `dir`, `files`, `skipped`,
   `profile`, `note`) so the UI never has to guess what happened.
+- **Keeps a journal of what it wrote (ADR-230, amendment of 2026-10-02).**
+  Each launch records the copy, each link with its target (each shim with
+  its text on Windows), the profile or fish file that holds its block, and
+  the Windows user PATH entry, in the `journal` list in `desktop.json`.
+  `oxagen agent uninstall`, run from the per-user copy once the app is gone,
+  unenrolls every agent and then removes exactly what the journal records.
 
 ## Build
 

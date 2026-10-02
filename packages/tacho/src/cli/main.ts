@@ -42,6 +42,7 @@ import { reassign } from "./reassign";
 import { runContained } from "./run";
 import { status } from "./status";
 import { unenroll } from "./unenroll";
+import { uninstall } from "./uninstall";
 import { verify } from "./verify";
 
 /**
@@ -385,6 +386,25 @@ export function buildTachoProgram(
     });
 
   program
+    .command("uninstall")
+    .description(
+      "Take Oxagen off this machine without the desktop app: unenroll every agent, then remove the app's per-user copy, PATH links, and shell profile lines, and ~/.config/oxagen, which holds your `oxagen login` session",
+    )
+    .option("--token <apiKey>", "Operator token for the server-side revoke")
+    .option("--token-stdin", "Read the operator token from stdin")
+    .option("--reason <text>", "Reason recorded with each revoke")
+    .action(async (opts: Record<string, unknown>) => {
+      const result = await uninstall(
+        {
+          token: tokenOption(opts, deps.err),
+          reason: opts["reason"] as string | undefined,
+        },
+        recordedCliDeps(options.deps),
+      );
+      if (!result.ok) process.exitCode = 1;
+    });
+
+  program
     .command("reassign")
     .description(
       "Point this host at another workspace (or org): revoke, then enroll again keeping the device key",
@@ -480,7 +500,7 @@ export function buildTachoProgram(
     )
     .option(
       "--github-repository <owner/name>",
-      "The one repository the run may reach, with a token in OXAGEN_CONTAINED_GITHUB_TOKEN",
+      "The one repository the run may fetch and push, through Oxagen's Git custody. The workspace must have it bound.",
     )
     .argument("<agent>", "claude or codex")
     .argument("[args...]", "Arguments for the agent, after --")

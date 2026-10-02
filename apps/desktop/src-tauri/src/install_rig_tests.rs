@@ -482,3 +482,52 @@ fn uninstall_names_the_revoke_a_retired_host_still_owes() {
         .pending_revoke
         .is_none());
 }
+
+/// The journal as `desktop.json` holds it.
+fn journal_of(roots: &Roots) -> Vec<serde_json::Value> {
+    let text = fs::read_to_string(roots.desktop_config_path()).unwrap();
+    let config: serde_json::Value = serde_json::from_str(&text).unwrap();
+    config
+        .get("journal")
+        .and_then(serde_json::Value::as_array)
+        .cloned()
+        .unwrap_or_default()
+}
+
+/// ADR-230, amendment of 2026-10-02: a launch journals what it wrote, so
+/// `oxagen agent uninstall` can remove exactly that once the app is gone
+/// (`packages/tacho/src/cli/uninstall.test.ts` reads this shape). The
+/// person's own `oxagen` was not written, so nothing names it. "Remove links"
+/// drops what it took off, and the copy stays named.
+#[cfg(unix)]
+#[test]
+fn the_journal_names_what_an_install_wrote_and_drops_what_remove_links_took() {
+    let roots = scratch_roots("journal", "/bin/zsh");
+    put(&roots.home.join(".zprofile"), USER_ZPROFILE.as_bytes());
+    put(&roots.home.join(".local/bin/oxagen"), b"#!/bin/sh\necho mine\n");
+    let env = env_for(roots, false);
+    assert_eq!(link_cli_in(&env, &CliInstallState::default()).unwrap().state, "linked");
+    let kept = env.kept_dir();
+    let copy = serde_json::json!({ "kind": "copy", "path": kept.display().to_string() });
+    let journal = vec![
+        copy.clone(),
+        serde_json::json!({
+            "kind": "link",
+            "path": env.roots.home.join(".local/bin/tacho").display().to_string(),
+            "target": kept.join("tacho").display().to_string(),
+        }),
+        serde_json::json!({
+            "kind": "profile",
+            "path": env.roots.home.join(".zprofile").display().to_string(),
+        }),
+    ];
+    assert_eq!(journal_of(&env.roots), journal);
+
+    // A second launch finds each thing as it left it and records nothing new.
+    link_cli_in(&env, &CliInstallState::default()).unwrap();
+    assert_eq!(journal_of(&env.roots), journal);
+
+    let outcome = unlink_cli_in(&env);
+    assert!(outcome.failed.is_empty(), "{outcome:?}");
+    assert_eq!(journal_of(&env.roots), vec![copy]);
+}

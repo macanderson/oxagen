@@ -1,7 +1,7 @@
 /**
  * Workspace owner assignments backfill (#5182)
  *
- * Replays 20261002170000_backfill_workspace_owner_assignments.sql against two
+ * Replays 20261002180000_backfill_workspace_owner_assignments.sql against two
  * orgs whose workspace owners hold no IAM assignment, and proves the
  * backfill:
  *
@@ -63,7 +63,7 @@ type Assignment = {
 it("gives every workspace owner with an active principal the workspace Owner role, once", async () => {
   const migration = readFileSync(
     new URL(
-      "../atlas/migrations/20261002170000_backfill_workspace_owner_assignments.sql",
+      "../atlas/migrations/20261002180000_backfill_workspace_owner_assignments.sql",
       import.meta.url,
     ),
     "utf8",

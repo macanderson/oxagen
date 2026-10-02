@@ -80,6 +80,7 @@ describe("the agent group after the wrapping commands moved onto it", () => {
       "run",
       "status",
       "unenroll",
+      "uninstall",
       "verify",
     ]);
   });

@@ -1,6 +1,6 @@
 ---
 title: Command reference
-description: "Every oxagen command and flag: budgets and cost, runs, the knowledge graph, agent memory, environments, the credential vault, and the market router."
+description: "Every oxagen command and flag: budgets and cost, runs, the knowledge graph, agent memory, steering, environments, the credential vault, and the market router."
 ---
 
 Run `oxagen --help` for the live list, and append `--help` to any command for its flags.
@@ -182,6 +182,58 @@ The preview lists each record with its kind, its force, its source line, and any
 
 The command sends files in calls of 25 and then compares the rows of every call. A statement two calls both hold is marked a duplicate, and when two files in different calls become the same policy file, the later one is skipped. The command skips a file over 100,000 characters. One steering PR holds at most 299 records and policy files, so `--yes` refuses an import that marks more add. The command calls `parse_markdown_import` and `commit_markdown_import`.
 
+## oxagen steering findings: instruction file findings
+
+```bash
+oxagen steering findings [--json]
+```
+
+Lists the findings in the workspace's linked code repositories. A finding is a statement in an instruction file, such as `AGENTS.md`, that repeats or contradicts an active steering record. The Oxagen check stores each statement it flags when it runs on a linked repository's pull request. `findings` compares those statements with today's records, so a statement that matches no record now drops off the list.
+
+The command prints one table for each repository that has a finding. Each row gives the finding's id (`crf_…`), its kind, the file and line, the record it matches, the pull request the check read, and the proposal opened from it. The kind is `repeat` when the statement says what the record says, and `contradiction` when it says the opposite. `--json` prints the full answer, with each statement's text and links to the line and the pull request.
+
+The command exits 0 on success and 1 on an API failure. It calls `list_code_repository_findings`.
+
+## oxagen steering promote: a contradiction into a proposal
+
+```bash
+oxagen steering promote <finding-id> [--json]
+```
+
+Turns one contradicting statement into a proposal for the record it contradicts. Pass the `crf_…` id that `oxagen steering findings` shows. The proposal is a new version of the record, with the statement as its text and the pull request and line as its evidence. The record keeps its lineage, kind, force, and scope. The proposal's steering PR opens at once and runs the six checks. Nothing steers an agent until a person merges the PR.
+
+The command prints the proposal id (`prp_…`), the steering PR, and the status of its checks. Oxagen refuses the request and writes nothing in these cases:
+
+| Reason | When |
+|---|---|
+| `already_in_steering` | The statement repeats its record, so steering already says it. |
+| `finding_resolved` | The statement matches no record now. |
+| `statement_too_long` | The statement is over 2,000 characters. |
+| `already_proposed` | The proposal opened from this finding is still open. |
+| `lineage_pr_open` | Another PR is open on the record. |
+
+The command exits 0 on success, 1 on a refusal or an API failure, and 2 when the id does not start with `crf_`. With `--json`, the error line on stderr carries the reason as its `code`. The command calls `promote_instruction_to_steering`.
+
+## oxagen steering restore-block: the managed block on a steering PR
+
+```bash
+oxagen steering restore-block <proposal-id> <AGENTS.md|CLAUDE.md|README.md> [--json]
+```
+
+Puts Oxagen's managed block back in one file of an open steering PR. In a steering repo, `AGENTS.md`, `CLAUDE.md`, and `README.md` each hold a managed block: the lines between two marker lines that only Oxagen writes. The `owned` check fails a steering PR that changes one.
+
+Pass the `prp_…` id of the proposal whose steering PR holds the file, then the file's name. The command writes one commit on the PR's branch. The block becomes the one on the production branch, and every line outside the block stays as it is. If the PR deleted the file, the whole file comes back. If the PR removed only the block, the block goes back at the top. The six checks then run again on the new commit. The command prints the commit and the status of the checks.
+
+Oxagen refuses the request and writes nothing when the PR is not open, and in these cases:
+
+| Reason | When |
+|---|---|
+| `block_intact` | The block at the PR's head already matches the production branch. |
+| `no_managed_block` | The production branch holds no block in the file. |
+| `no_managed_blocks` | The repository is not a steering repo. |
+
+The command exits 0 on success, 1 on a refusal or an API failure, and 2 on a bad argument, such as an id that does not start with `prp_` or a file with no managed block. With `--json`, the error line on stderr carries the reason as its `code`. The command calls `restore_managed_block`.
+
 ## oxagen agent: the agent identity
 
 ```bash
@@ -228,6 +280,7 @@ The first form is the scripted path of the register flow. The one-time enrollmen
 ```bash
 oxagen agent status [--json]
 oxagen agent unenroll [--harness <name>] [--all] [--token <apiKey>] [--purge] [--reason <text>]
+oxagen agent uninstall [--token <apiKey>] [--reason <text>]
 oxagen agent reassign [--workspace <slug>] [--org <slug>] [--harness <list>] [--token <apiKey>] [--api-url <url>] [--reason <text>] [--default]
 oxagen agent export [--session <id>] [--format <format>] [--out <file>] [--list]
 oxagen agent verify [--harness claude-code|codex|cursor|stella] [--json]
@@ -241,6 +294,7 @@ Each of these acts on the machine you run it on, except `hosts`, which reads the
 |---|---|
 | `status` | This machine's enrollments, collector, hooks, policy bundle, and spool. It first moves an older enrollment's hooks and service to the `oxagen` CLI. It exits 1 when no agent is enrolled, or when any agent's events are not reaching Oxagen. |
 | `unenroll` | Removes an agent's hooks and service, revokes its enrollment, and deletes its host key. On a machine with more than one enrollment, name the one to remove with `--harness`, or remove them all with `--all`. Pass one of the two. `--purge` also deletes the local event log, spool, and quarantine. `--token` is the operator token for the server-side revoke. |
+| `uninstall` | Takes Oxagen off this machine without the Oxagen app. It unenrolls every agent with `--purge`, then removes what the app recorded writing: the links, the shell profile lines, the per-user copies, and `~/.config/oxagen`, which holds your `oxagen login` session. It stops after the unenroll if any enrollment is left. See [Uninstall](/docs/cli/desktop#uninstall). |
 | `reassign` | Points an agent at another workspace or org. It revokes the enrollment and enrolls again through your CLI login, keeping the device key. `--harness` with no `--workspace` replaces the harness list. `--default` also makes the new org and workspace the CLI default in `config.json`. |
 | `export` | Exports a session from the local event log. `--format trace` writes the `contextgraph-trace` journal, and `--format otlp` writes OTLP JSON. The default, `--format tacho`, writes the recorder's own NDJSON. `--list` lists the sessions in the log. `--out` writes a file in place of stdout. |
 | `verify` | Runs one headless turn of a harness, Claude Code by default, and confirms the collector chained it. `--json` prints the result as JSON. It exits 1 when the turn was not chained. |
@@ -265,7 +319,7 @@ Runs one agent session under Oxagen control. Everything after `--` is the agent'
 | `--contained` | Start Claude Code or Codex in the contained launcher. |
 | `--image <ref>` | With `--contained`: the image. `OXAGEN_CONTAINED_IMAGE` also sets it. |
 | `--workspace <dir>` | With `--contained`: the repository root to mount at `/workspace`. Defaults to the current directory. This is a directory, not the workspace slug `enroll` takes. |
-| `--github-repository <owner/name>` | With `--contained`: the one repository the run may reach, with a token in `OXAGEN_CONTAINED_GITHUB_TOKEN`. |
+| `--github-repository <owner/name>` | With `--contained`: the one repository the run may fetch and push. Oxagen's Git custody gets the credential for each request, so you mint no token. The workspace must have the repository bound. |
 
 The command exits with the agent's own exit code. It exits 1 when the machine is not enrolled, when Oxagen refuses the session, or when the command cannot start. It exits 2 when no command follows `--`, when the custom agent's name is invalid, or when the harness is not wrapped on this machine. See [Wrap a custom agent](/docs/cli/wrap-an-agent#wrap-a-custom-agent).
 
