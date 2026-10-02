@@ -11,6 +11,8 @@
  *   oxagen agent hosts      every machine enrolled in this workspace, with its tier
  *   oxagen agent run        one agent session under Oxagen control
  *   oxagen agent detect     which harnesses this machine has, and which are enrolled
+ *   oxagen work list        the work orders waiting on this machine
+ *   oxagen work start       claim a work order and start its agent here
  *
  * The hidden `oxagen tacho <verb>` group calls the same handlers. The work
  * lives in `@oxagen/recorder/cli`; this module supplies the CLI's own
@@ -348,6 +350,32 @@ export async function handleAgentRun(
     process.off("SIGINT", stop);
     process.off("SIGTERM", stop);
   }
+}
+
+/**
+ * `oxagen work list`: the work orders Oxagen sent to the agents on this
+ * machine that no one has started yet (`workList` in the recorder).
+ */
+export async function handleWorkList(
+  writer: CommandWriter = stdoutWriter,
+): Promise<number> {
+  const { workList } = await import("@oxagen/recorder/cli");
+  const deps = await tachoDeps(writer);
+  return workList({ ...deps, cwd: process.cwd() });
+}
+
+/**
+ * `oxagen work start <wo>`: claim a work order, then start the agent's
+ * harness in this directory with the order's first prompt (`workStart` in
+ * the recorder, ADR-251). The harness gets the terminal's signals itself.
+ */
+export async function handleWorkStart(
+  workOrderId: string,
+  writer: CommandWriter = stdoutWriter,
+): Promise<number> {
+  const { workStart } = await import("@oxagen/recorder/cli");
+  const deps = await tachoDeps(writer);
+  return workStart(workOrderId, { ...deps, cwd: process.cwd() });
 }
 
 export interface TachoHostsOptions {

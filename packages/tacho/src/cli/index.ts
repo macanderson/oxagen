@@ -11,3 +11,4 @@ export * from "./verify";
 export * from "./run";
 export * from "./agent-run";
 export * from "./move-commands";
+export * from "./work";

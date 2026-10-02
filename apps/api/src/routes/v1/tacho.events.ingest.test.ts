@@ -290,7 +290,7 @@ describe("the /v1/tacho rate-limit buckets", () => {
     expect([...counts.keys()].some((k) => k.startsWith("tacho-host:"))).toBe(
       false,
     );
-    // The pre-auth credential ceiling (390) sat above every one of these, so
+    // The pre-auth credential ceiling (420) sat above every one of these, so
     // the 429 came from the ingest bucket and not from the shared one.
     const credential = [...counts.entries()].find(([k]) =>
       k.startsWith("tacho-preauth-credential:"),

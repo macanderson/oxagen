@@ -17,6 +17,7 @@ import type {
   GitHubPullRequest,
   GitHubRelease,
   GitHubRepoInfo,
+  RequiredChecksRead,
 } from "./types";
 
 /**
@@ -279,6 +280,14 @@ interface GHBranchListItem {
   protected: boolean;
 }
 
+/**
+ * One source of required checks, read on its own. `present` is true when the
+ * source has a required-checks setting for the branch.
+ */
+type RequiredChecksSourceRead =
+  | { ok: true; names: string[]; present: boolean }
+  | { ok: false; reason: string };
+
 // ---------------------------------------------------------------------------
 // Factory
 // ---------------------------------------------------------------------------
@@ -372,6 +381,15 @@ const INSTALLATION_REPOS_PER_PAGE = 100;
  */
 const MAX_PAGES = 5;
 const DEFAULT_SLEEP_MS = 1500;
+
+/** Page size for the branch-rules walk, GitHub's maximum. */
+const BRANCH_RULES_PER_PAGE = 100;
+/**
+ * How many pages of `GET /rules/branches/{branch}` one read walks. A full
+ * last page may hide more rules, and one of them could require a check, so
+ * the read fails rather than answer with a list that may be short.
+ */
+const BRANCH_RULES_MAX_PAGES = 10;
 
 /**
  * Percent-encode one URL path segment (an owner, a repo name, a PR number).
@@ -1169,6 +1187,96 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
     return { sha: statusRes.sha, checkRuns, statuses, complete };
   }
 
+  /**
+   * The checks a branch requires, from classic protection and from rulesets.
+   * An acceptance gate opens on a person's ticks when this answers an empty
+   * list, so every read that fails answers `ok: false` instead.
+   */
+  async function getRequiredStatusChecks(args: {
+    owner: string;
+    repo: string;
+    branch: string;
+  }): Promise<RequiredChecksRead> {
+    const repoPath = `/repos/${seg(args.owner)}/${seg(args.repo)}`;
+    // A branch name may contain `/`; it is encoded as one segment, as
+    // `getBranch` does.
+    const branch = encodeURIComponent(args.branch);
+    const [protection, rulesets] = await Promise.all([
+      readProtectionChecks(`${repoPath}/branches/${branch}`),
+      readRulesetChecks(`${repoPath}/rules/branches/${branch}`),
+    ]);
+    if (!protection.ok || !rulesets.ok) {
+      const reasons = [protection, rulesets].flatMap((read) =>
+        read.ok ? [] : [read.reason],
+      );
+      return { ok: false, reason: reasons.join("; ") };
+    }
+    return {
+      ok: true,
+      names: [...new Set([...protection.names, ...rulesets.names])].sort(),
+      sources: { protection: protection.present, rulesets: rulesets.present },
+    };
+  }
+
+  /**
+   * Classic protection's required checks, from the branch's own summary
+   * (`GET /branches/{branch}`). That endpoint needs only read access, where
+   * `/branches/{branch}/protection` needs the App's `Administration: read`.
+   */
+  async function readProtectionChecks(
+    path: string,
+  ): Promise<RequiredChecksSourceRead> {
+    let body: unknown;
+    try {
+      body = await request<unknown>("GET", path);
+    } catch (err) {
+      // A cancelled operation is reported as the cancellation, as in
+      // `forkRepo`, never as a failed read. A 404 means GitHub would not
+      // show the branch or the repository, which is a failed read too.
+      opts.signal?.throwIfAborted();
+      return { ok: false, reason: `protection read failed: ${failureOf(err)}` };
+    }
+    return branchProtectionChecks(body);
+  }
+
+  async function readRulesetChecks(
+    path: string,
+  ): Promise<RequiredChecksSourceRead> {
+    const names: string[] = [];
+    let present = false;
+    for (let page = 1; page <= BRANCH_RULES_MAX_PAGES; page++) {
+      let body: unknown;
+      try {
+        body = await request<unknown>(
+          "GET",
+          `${path}?per_page=${BRANCH_RULES_PER_PAGE}&page=${page}`,
+        );
+      } catch (err) {
+        opts.signal?.throwIfAborted();
+        // A 404 here means GitHub would not show the repository or the
+        // branch's rules. That says nothing about what the branch requires.
+        return { ok: false, reason: `rulesets read failed: ${failureOf(err)}` };
+      }
+      if (!isUnknownArray(body)) {
+        return { ok: false, reason: "rulesets read failed: malformed body" };
+      }
+      const rules = requiredCheckRules(body);
+      if (rules === null) {
+        return { ok: false, reason: "rulesets read failed: malformed body" };
+      }
+      if (rules.found) present = true;
+      names.push(...rules.names);
+      // An under-full page is the last one.
+      if (body.length < BRANCH_RULES_PER_PAGE) {
+        return { ok: true, names, present };
+      }
+    }
+    return {
+      ok: false,
+      reason: `rulesets read failed: more than ${BRANCH_RULES_MAX_PAGES} pages`,
+    };
+  }
+
   async function listPullRequestFiles(args: {
     owner: string;
     repo: string;
@@ -1462,6 +1570,7 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
     listReleases,
     listPullRequestComments,
     listCiChecks,
+    getRequiredStatusChecks,
     listPullRequestFiles,
     compareCommits,
     findOpenPullRequest,
@@ -1510,6 +1619,126 @@ function normaliseStatusState(state: string): GitHubCommitStatus["state"] {
     default:
       return "pending";
   }
+}
+
+// ---------------------------------------------------------------------------
+// Required-check body parsers
+// ---------------------------------------------------------------------------
+
+/** The short cause a failed read reports: the HTTP status, or the error text. */
+function failureOf(err: unknown): string {
+  if (err instanceof GitHubApiError) return String(err.status);
+  return err instanceof Error ? err.message : String(err);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isUnknownArray(value: unknown): value is readonly unknown[] {
+  return Array.isArray(value);
+}
+
+/** Each entry's `context`, or null when an entry is not `{ context: string }`. */
+function contextsOf(entries: unknown): string[] | null {
+  if (!isUnknownArray(entries)) return null;
+  const names: string[] = [];
+  for (const entry of entries) {
+    const context = isRecord(entry) ? entry.context : undefined;
+    if (typeof context !== "string") return null;
+    names.push(context);
+  }
+  return names;
+}
+
+/**
+ * Classic protection's required checks, read from the `protected` flag and
+ * the `protection` summary of a `GET /branches/{branch}` body:
+ *
+ * - `protected: false`: nothing required.
+ * - `protected: true` with no `protection` summary: GitHub did not say what
+ *   the branch requires, so the read fails.
+ * - A summary with no `required_status_checks`, or with an enforcement level
+ *   of "off": nothing required.
+ * - Any other enforcement level: `contexts` and every `checks[].context`. A
+ *   level this client does not know counts as enforced.
+ */
+function branchProtectionChecks(body: unknown): RequiredChecksSourceRead {
+  const malformed: RequiredChecksSourceRead = {
+    ok: false,
+    reason: "protection read failed: malformed body",
+  };
+  const none: RequiredChecksSourceRead = {
+    ok: true,
+    names: [],
+    present: false,
+  };
+  if (!isRecord(body)) return malformed;
+  const isProtected = body.protected;
+  if (typeof isProtected !== "boolean") return malformed;
+  if (!isProtected) return none;
+  const protection = body.protection;
+  if (protection === undefined || protection === null) {
+    return { ok: false, reason: "protection summary unreadable" };
+  }
+  if (!isRecord(protection) || typeof protection.enabled !== "boolean") {
+    return malformed;
+  }
+  const required = protection.required_status_checks;
+  if (required === undefined) return none;
+  if (!isRecord(required)) return malformed;
+  const level = required.enforcement_level;
+  if (typeof level !== "string") return malformed;
+  if (level === "off") return none;
+  const names = requiredStatusCheckNames(required);
+  return names === null ? malformed : { ok: true, names, present: true };
+}
+
+/**
+ * The names a `required_status_checks` setting lists, from `contexts` and
+ * from each `checks[].context`, or null for a setting of the wrong shape.
+ */
+function requiredStatusCheckNames(
+  required: Record<string, unknown>,
+): string[] | null {
+  const listed = required.contexts;
+  if (!isUnknownArray(listed)) return null;
+  const contexts: string[] = [];
+  for (const context of listed) {
+    if (typeof context !== "string") return null;
+    contexts.push(context);
+  }
+  // `checks` repeats `contexts` with the app each check must come from. An
+  // older GitHub Enterprise Server leaves it out.
+  const checks =
+    required.checks === undefined ? [] : contextsOf(required.checks);
+  if (checks === null) return null;
+  return [...contexts, ...checks];
+}
+
+/**
+ * The names the `required_status_checks` rules on one page require, or null
+ * for a page of the wrong shape. Other rule types are skipped. `found` is
+ * true when the page holds at least one such rule.
+ */
+function requiredCheckRules(
+  rules: readonly unknown[],
+): { names: string[]; found: boolean } | null {
+  const names: string[] = [];
+  let found = false;
+  for (const rule of rules) {
+    if (!isRecord(rule)) return null;
+    const type = rule.type;
+    if (typeof type !== "string") return null;
+    if (type !== "required_status_checks") continue;
+    const parameters = rule.parameters;
+    if (!isRecord(parameters)) return null;
+    const contexts = contextsOf(parameters.required_status_checks);
+    if (contexts === null) return null;
+    found = true;
+    names.push(...contexts);
+  }
+  return { names, found };
 }
 
 function toPrFile(f: GHPullFile): GitHubPrFile {

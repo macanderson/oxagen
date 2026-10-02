@@ -40,6 +40,7 @@ const outcomes = {
   exportCommand: true,
   moved: [] as Array<{ agentKey: string; from: string; ok: boolean }>,
   run: 0,
+  work: 0,
 };
 // The real parser: what the operator sees on a typo is its message, so the
 // mock must not paper over it. It is pulled in `vi.hoisted`, which runs while
@@ -89,6 +90,14 @@ vi.mock("@oxagen/recorder/cli", () => ({
     calls.push({ name: "runAgentSession", args });
     return outcomes.run;
   },
+  workList: (...args: unknown[]) => {
+    calls.push({ name: "workList", args });
+    return outcomes.work;
+  },
+  workStart: async (...args: unknown[]) => {
+    calls.push({ name: "workStart", args });
+    return outcomes.work;
+  },
   enroll: async (...args: unknown[]) => {
     calls.push({ name: "enroll", args });
     return outcomes.enroll;
@@ -132,6 +141,8 @@ import {
   handleTachoStatus,
   handleTachoUnenroll,
   handleTachoVerify,
+  handleWorkList,
+  handleWorkStart,
   tachoCredentials,
 } from "../tacho.js";
 
@@ -148,6 +159,7 @@ describe("oxagen tacho", () => {
     outcomes.reassign = { ok: true, warnings: [], to: undefined };
     outcomes.moved = [];
     outcomes.run = 0;
+    outcomes.work = 0;
   });
 
   it("lends the logged-in credentials and lets flags override them", () => {
@@ -361,6 +373,24 @@ describe("oxagen tacho", () => {
     });
     // The contained launcher's interrupt handlers come off with the run.
     expect(process.listenerCount("SIGINT")).toBe(listeners);
+  });
+
+  it("work list and work start hand the recorder this directory, and start the order named", async () => {
+    const { writer } = captureWriter();
+    outcomes.work = 5;
+    expect(await handleWorkStart("wo_01j9k2m3n4", writer)).toBe(5);
+    expect(lastCall("workStart")?.args[0]).toBe("wo_01j9k2m3n4");
+    const deps = lastCall("workStart")?.args[1] as {
+      runtime: unknown;
+      cwd: string;
+    };
+    expect(deps.runtime).toBe(OXAGEN_RUNTIME);
+    expect(deps.cwd).toBe(process.cwd());
+
+    outcomes.work = 0;
+    expect(await handleWorkList(writer)).toBe(0);
+    const listDeps = lastCall("workList")?.args[0] as { cwd: string };
+    expect(listDeps.cwd).toBe(process.cwd());
   });
 
   it("status, unenroll, export, and verify report their outcome as the exit status", async () => {

@@ -873,6 +873,17 @@ async function unenrollLocked(
       `could not remove the Stella identity cache: ${error instanceof Error ? error.message : String(error)}`,
     );
   }
+  // A work order waiting here was sent to this enrollment, and only this
+  // enrollment can claim it. Once the enrollment goes, the order cannot be
+  // started from this machine, so it goes too and the agent directory can be
+  // removed. A failure is a warning for the same reason as above.
+  try {
+    rmSync(deps.paths.workOrders, { recursive: true, force: true });
+  } catch (error) {
+    warnings.push(
+      `could not remove the waiting work orders in ${deps.paths.workOrders}: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
   // A harness file that could not be cleaned still needs the enrollment id
   // and the displaced values to be cleaned later, so host.json outlives it.
   if (

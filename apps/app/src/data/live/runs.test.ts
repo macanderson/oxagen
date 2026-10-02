@@ -2408,6 +2408,19 @@ describe("runs.commands", () => {
     expect(captureError).not.toHaveBeenCalled();
   });
 
+  it("leaves a work order out of a run's report, because it is addressed to a host", async () => {
+    kernelRead.mockResolvedValue(
+      readOk({
+        commands: [
+          { ...command, id: "tcm_wo", runId: null, command: "work_order", requestedMode: null, deliveryMode: null, degradedReason: null, text: null },
+          command,
+        ],
+      }),
+    );
+    const read = await runs.commands(ctx, { runId: "tse_4f0a" });
+    expect(read).toEqual(readOk({ commands: [command] }));
+  });
+
   it("reads a broadcast's commands by id, one row per id, and reads a blank issuer name as none", async () => {
     kernelRead.mockResolvedValue(
       readOk({

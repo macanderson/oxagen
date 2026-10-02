@@ -1,0 +1,193 @@
+{
+  "name": "send_work_order",
+  "domain": "work",
+  "description": "Send a work item's approved brief to an agent you operate. The agent's runtime claims the work order before any run starts.",
+  "mode": "sync",
+  "surfaces": [
+    "api"
+  ],
+  "sensitivity": "high",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "item_id": {
+        "type": "string"
+      },
+      "version": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "item_revision": {
+        "type": "integer",
+        "minimum": 1
+      },
+      "brief_revision": {
+        "type": "integer",
+        "minimum": 1
+      },
+      "brief_digest": {
+        "type": "string"
+      },
+      "agent_id": {
+        "type": "string"
+      },
+      "key": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "item_id",
+      "version",
+      "item_revision",
+      "brief_revision",
+      "brief_digest",
+      "agent_id",
+      "key"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "item": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "new",
+              "held",
+              "triaged",
+              "needs_info",
+              "changed",
+              "ready",
+              "sent",
+              "running",
+              "review",
+              "done",
+              "closed"
+            ]
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "id",
+          "state",
+          "revision",
+          "version"
+        ],
+        "additionalProperties": false
+      },
+      "repeat": {
+        "type": "boolean"
+      },
+      "order": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "send": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "key": {
+            "type": "string"
+          },
+          "delivery": {
+            "type": "string",
+            "enum": [
+              "waiting_for_claim",
+              "claimed",
+              "running",
+              "stopping",
+              "run_ended",
+              "stopped",
+              "returned",
+              "withdrawn",
+              "rejected"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "send",
+          "key",
+          "delivery"
+        ],
+        "additionalProperties": false
+      },
+      "command_id": {
+        "type": "string"
+      },
+      "target": {
+        "type": "object",
+        "properties": {
+          "agent_id": {
+            "type": "string"
+          },
+          "runtime_id": {
+            "type": "string"
+          },
+          "host_id": {
+            "type": "string"
+          },
+          "runtime_tier": {
+            "type": "string",
+            "enum": [
+              "contained",
+              "gateway",
+              "harness",
+              "observe"
+            ]
+          },
+          "mandate_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "agent_id",
+          "runtime_id",
+          "host_id",
+          "runtime_tier",
+          "mandate_id"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "required": [
+      "item",
+      "repeat",
+      "order",
+      "command_id",
+      "target"
+    ],
+    "additionalProperties": false
+  }
+}
