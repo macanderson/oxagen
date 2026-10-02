@@ -34,7 +34,10 @@
 import { z } from "zod";
 import { registerCapability } from "../registry";
 import { runPublicIdSchema } from "./run.list";
-import { rankedOperatorSchema } from "./spend.operator_ranking";
+import {
+  rankedOperatorSchema,
+  workOrderPublicIdSchema,
+} from "./spend.operator_ranking";
 import { dayRangeSchema, daySchema, moneySchema, ratioSchema } from "./spend.shared";
 
 /** At most this many work orders, runs, or agents are cited under one figure. */
@@ -184,8 +187,10 @@ export const UNASSIGNED_SPEND_DEFINITION = {
 } as const satisfies MetricDefinition;
 
 const evidence = {
-  /** The work orders behind the figure (`wo_…`). */
-  workOrders: z.array(z.string().min(1)).max(WORK_ORDER_METRICS_EVIDENCE_MAX),
+  /** The work orders behind the figure, by public id. */
+  workOrders: z
+    .array(workOrderPublicIdSchema)
+    .max(WORK_ORDER_METRICS_EVIDENCE_MAX),
   /** The runs behind the figure. */
   runs: z.array(runPublicIdSchema).max(WORK_ORDER_METRICS_EVIDENCE_MAX),
 };

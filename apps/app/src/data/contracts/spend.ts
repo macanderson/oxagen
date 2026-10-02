@@ -265,7 +265,7 @@ export const OperatorRanking = z.object({
       /** The done work orders behind the figure, each with its runs. */
       topDoneWorkOrders: z.array(
         z.object({
-          workOrderId: z.string().min(1),
+          workOrderId: PublicId,
           doneAt: z.string().min(1),
           runs: z.array(PublicId.regex(RUN_PUBLIC_ID)),
         }),

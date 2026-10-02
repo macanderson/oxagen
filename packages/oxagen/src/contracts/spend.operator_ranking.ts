@@ -37,6 +37,11 @@ import { dayRangeSchema, moneySchema, ratioSchema } from "./spend.shared";
 /** At most this many runs are cited under one operator, largest first. */
 export const OPERATOR_RANKING_RUNS_MAX = 10;
 
+/** A work order's public id (`wo_…`), the id a person reads; never its uuid. */
+export const workOrderPublicIdSchema = z
+  .string()
+  .regex(/^wo_[0-9a-z]+$/, "a work order public id (wo_…)");
+
 /** `Operator` and eight hex digits, stable for one operator in one workspace. */
 export const operatorPseudonymSchema = z
   .string()
@@ -97,8 +102,7 @@ export const operatorRankingRowSchema = z
       .array(
         z
           .object({
-            /** The work order's public id (`wo_…`). */
-            workOrderId: z.string().min(1),
+            workOrderId: workOrderPublicIdSchema,
             /** When its first passing check run finished. */
             doneAt: z.string().datetime(),
             runs: z.array(runPublicIdSchema).max(OPERATOR_RANKING_RUNS_MAX),

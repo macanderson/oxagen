@@ -413,8 +413,7 @@
                         "workOrders": {
                           "type": "array",
                           "items": {
-                            "type": "string",
-                            "minLength": 1
+                            "type": "string"
                           },
                           "maxItems": 10
                         },
@@ -461,8 +460,7 @@
                         "workOrders": {
                           "type": "array",
                           "items": {
-                            "type": "string",
-                            "minLength": 1
+                            "type": "string"
                           },
                           "maxItems": 10
                         },
@@ -512,8 +510,7 @@
                         "workOrders": {
                           "type": "array",
                           "items": {
-                            "type": "string",
-                            "minLength": 1
+                            "type": "string"
                           },
                           "maxItems": 10
                         },
@@ -549,8 +546,7 @@
                         "workOrders": {
                           "type": "array",
                           "items": {
-                            "type": "string",
-                            "minLength": 1
+                            "type": "string"
                           },
                           "maxItems": 10
                         },
@@ -598,8 +594,7 @@
                         "workOrders": {
                           "type": "array",
                           "items": {
-                            "type": "string",
-                            "minLength": 1
+                            "type": "string"
                           },
                           "maxItems": 10
                         },
@@ -647,8 +642,7 @@
                         "workOrders": {
                           "type": "array",
                           "items": {
-                            "type": "string",
-                            "minLength": 1
+                            "type": "string"
                           },
                           "maxItems": 10
                         },
@@ -693,8 +687,7 @@
                         "workOrders": {
                           "type": "array",
                           "items": {
-                            "type": "string",
-                            "minLength": 1
+                            "type": "string"
                           },
                           "maxItems": 10
                         },
@@ -867,8 +860,7 @@
                           "workOrders": {
                             "type": "array",
                             "items": {
-                              "type": "string",
-                              "minLength": 1
+                              "type": "string"
                             },
                             "maxItems": 10
                           },
@@ -916,8 +908,7 @@
                           "workOrders": {
                             "type": "array",
                             "items": {
-                              "type": "string",
-                              "minLength": 1
+                              "type": "string"
                             },
                             "maxItems": 10
                           },
@@ -1209,8 +1200,7 @@
                           "workOrders": {
                             "type": "array",
                             "items": {
-                              "type": "string",
-                              "minLength": 1
+                              "type": "string"
                             },
                             "maxItems": 10
                           },
@@ -1257,8 +1247,7 @@
                           "workOrders": {
                             "type": "array",
                             "items": {
-                              "type": "string",
-                              "minLength": 1
+                              "type": "string"
                             },
                             "maxItems": 10
                           },
@@ -1308,8 +1297,7 @@
                           "workOrders": {
                             "type": "array",
                             "items": {
-                              "type": "string",
-                              "minLength": 1
+                              "type": "string"
                             },
                             "maxItems": 10
                           },
@@ -1345,8 +1333,7 @@
                           "workOrders": {
                             "type": "array",
                             "items": {
-                              "type": "string",
-                              "minLength": 1
+                              "type": "string"
                             },
                             "maxItems": 10
                           },
@@ -1394,8 +1381,7 @@
                           "workOrders": {
                             "type": "array",
                             "items": {
-                              "type": "string",
-                              "minLength": 1
+                              "type": "string"
                             },
                             "maxItems": 10
                           },
@@ -1443,8 +1429,7 @@
                           "workOrders": {
                             "type": "array",
                             "items": {
-                              "type": "string",
-                              "minLength": 1
+                              "type": "string"
                             },
                             "maxItems": 10
                           },
@@ -1489,8 +1474,7 @@
                           "workOrders": {
                             "type": "array",
                             "items": {
-                              "type": "string",
-                              "minLength": 1
+                              "type": "string"
                             },
                             "maxItems": 10
                           },
@@ -1672,8 +1656,7 @@
                           "workOrders": {
                             "type": "array",
                             "items": {
-                              "type": "string",
-                              "minLength": 1
+                              "type": "string"
                             },
                             "maxItems": 10
                           },
@@ -1720,8 +1703,7 @@
                           "workOrders": {
                             "type": "array",
                             "items": {
-                              "type": "string",
-                              "minLength": 1
+                              "type": "string"
                             },
                             "maxItems": 10
                           },
@@ -1771,8 +1753,7 @@
                           "workOrders": {
                             "type": "array",
                             "items": {
-                              "type": "string",
-                              "minLength": 1
+                              "type": "string"
                             },
                             "maxItems": 10
                           },
@@ -1808,8 +1789,7 @@
                           "workOrders": {
                             "type": "array",
                             "items": {
-                              "type": "string",
-                              "minLength": 1
+                              "type": "string"
                             },
                             "maxItems": 10
                           },
@@ -1857,8 +1837,7 @@
                           "workOrders": {
                             "type": "array",
                             "items": {
-                              "type": "string",
-                              "minLength": 1
+                              "type": "string"
                             },
                             "maxItems": 10
                           },
@@ -1906,8 +1885,7 @@
                           "workOrders": {
                             "type": "array",
                             "items": {
-                              "type": "string",
-                              "minLength": 1
+                              "type": "string"
                             },
                             "maxItems": 10
                           },
@@ -1952,8 +1930,7 @@
                           "workOrders": {
                             "type": "array",
                             "items": {
-                              "type": "string",
-                              "minLength": 1
+                              "type": "string"
                             },
                             "maxItems": 10
                           },

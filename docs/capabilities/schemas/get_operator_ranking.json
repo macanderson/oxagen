@@ -322,8 +322,7 @@
                 "type": "object",
                 "properties": {
                   "workOrderId": {
-                    "type": "string",
-                    "minLength": 1
+                    "type": "string"
                   },
                   "doneAt": {
                     "type": "string"

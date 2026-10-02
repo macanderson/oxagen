@@ -124,6 +124,24 @@ describe("get_operator_ranking contract", () => {
         operators: [{ ...named, doneWorkOrders: -1 }],
       }).success,
     ).toBe(false);
+    // A work order is cited by its public id, never its uuid.
+    expect(
+      spendOperatorRanking.output.safeParse({
+        ...out,
+        operators: [
+          {
+            ...named,
+            topDoneWorkOrders: [
+              {
+                workOrderId: "0192d4a8-7c1e-7a00-8000-000000000001",
+                doneAt: "2026-09-12T10:00:00.000Z",
+                runs: [],
+              },
+            ],
+          },
+        ],
+      }).success,
+    ).toBe(false);
   });
 
   it("refuses a share above 1 and too many cited runs", () => {
