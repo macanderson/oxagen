@@ -380,6 +380,10 @@ describe("POST /api/v1/chat/stream — who pays for the tokens (ADR-053)", () =>
 });
 
 describe("POST /api/v1/chat/stream — per-turn budget field (ADR-235)", () => {
+  // The billing mock replaces requestTurnBudgetSchema, so this file cannot
+  // check that a malformed budget answers 400. The schema's own tests in
+  // packages/billing/src/turn-budget-policy.test.ts cover that. The body below
+  // is the full shape the old composer sent, which the real schema accepts.
   it("accepts a budget on the body and runs the turn with no budget guard", async () => {
     const req = new Request("https://app.oxagen.sh/api/v1/chat/stream", {
       method: "POST",
@@ -388,7 +392,12 @@ describe("POST /api/v1/chat/stream — per-turn budget field (ADR-235)", () => {
         content: "how many runs?",
         orgSlug: ORG.slug,
         workspaceSlug: WORKSPACE.slug,
-        budget: { enabled: true, limitUsd: 0.5, mode: "enforce" },
+        budget: {
+          enabled: true,
+          limitUsd: 0.5,
+          mode: "enforce",
+          graceOveragePct: 0.25,
+        },
       }),
     });
 
