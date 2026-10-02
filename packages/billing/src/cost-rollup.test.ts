@@ -490,6 +490,100 @@ describe("the graded steps (#3984, ADR-199)", () => {
   });
 });
 
+describe("the step classes (F17)", () => {
+  const ROOT = "00000000-0000-4000-8000-0000000000aa";
+  const CHILD = "00000000-0000-4000-8000-0000000000cc";
+  /** A time `s` seconds into the run, as a Date and as RFC 3339 text. */
+  const at = (s: number) => new Date(Date.UTC(2026, 8, 14, 10, 0, s));
+  const call = (s: number, isMutating: boolean | null, chain = ROOT) =>
+    tool(isMutating === true ? "Edit" : "Read", {
+      isMutating,
+      at: at(s).toISOString(),
+      sessionUuid: chain,
+    });
+  const model = (s: number, chain = ROOT) =>
+    frame({ at: at(s), sessionUuid: chain });
+  /** A model call whose store names no chain. */
+  const unchained = (s: number) => frame({ at: at(s) });
+
+  it("classes every step, so the classes sum to the run's steps", () => {
+    const record = rollupRun({
+      meta,
+      book: BOOK,
+      // Reads at 1 s, edits at 3 s, and answers in text at 5 s.
+      modelCalls: [model(1), model(3), model(5)],
+      toolCalls: [call(2, false), call(4, true)],
+    });
+    expect(record.breakdown.stepClasses).toEqual({ readOnly: 3, edit: 2 });
+    const { readOnly, edit } = record.breakdown.stepClasses!;
+    expect(readOnly + edit).toBe(record.steps);
+    // The causes keep their shape beside the classes.
+    expect(record.breakdown.steps).toEqual({
+      failed: 0,
+      repeated: 0,
+      retried: 0,
+    });
+  });
+
+  it("classes 50 steps that only read and 1 that edits", () => {
+    const modelCalls = Array.from({ length: 51 }, (_, i) => model(2 * i));
+    const toolCalls = Array.from({ length: 51 }, (_, i) =>
+      call(2 * i + 1, i === 50),
+    );
+    const record = rollupRun({ meta, book: BOOK, modelCalls, toolCalls });
+    expect(record.breakdown.stepClasses).toEqual({ readOnly: 100, edit: 2 });
+  });
+
+  it("places a call under the model call on its own chain", () => {
+    const record = rollupRun({
+      meta,
+      book: BOOK,
+      // The root asks at 1 s, a subagent answers at 2 s, and the root's edit
+      // lands at 3 s.
+      modelCalls: [model(1, ROOT), model(2, CHILD)],
+      toolCalls: [call(3, true, ROOT)],
+    });
+    // The root's model call and the edit are edits; the subagent's read only.
+    expect(record.breakdown.stepClasses).toEqual({ readOnly: 1, edit: 2 });
+  });
+
+  it("places a call whose chain has no model call under the run's latest", () => {
+    const record = rollupRun({
+      meta,
+      book: BOOK,
+      modelCalls: [unchained(1), unchained(5)],
+      toolCalls: [call(2, true, CHILD)],
+    });
+    expect(record.breakdown.stepClasses).toEqual({ readOnly: 1, edit: 2 });
+  });
+
+  it("classes a call with no time by its own flag, and holds it under no model call", () => {
+    const record = rollupRun({
+      meta,
+      book: BOOK,
+      modelCalls: [model(1)],
+      toolCalls: [tool("Edit", { isMutating: true })],
+    });
+    expect(record.breakdown.stepClasses).toEqual({ readOnly: 1, edit: 1 });
+  });
+
+  it("counts every step as an edit when a file changed and no call may write", () => {
+    const record = rollupRun({
+      meta,
+      book: BOOK,
+      modelCalls: [model(1), model(3)],
+      toolCalls: [call(2, false)],
+      changedFile: true,
+    });
+    expect(record.breakdown.stepClasses).toEqual({ readOnly: 0, edit: 3 });
+  });
+
+  it("answers null for a run with no step", () => {
+    const record = rollupRun({ meta, book: BOOK, toolCalls: [], modelCalls: [] });
+    expect(record.breakdown.stepClasses).toBeNull();
+  });
+});
+
 describe("each tool's result cost (#3892, ADR-199)", () => {
   /** 10,000 input tokens at $3 a million: 30,000 micros, so 3 micros a token. */
   const priced = frame({

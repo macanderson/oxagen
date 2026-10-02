@@ -1,6 +1,8 @@
 # ADR-202: The macOS desktop app installs updates without asking
 
-- **Status:** Accepted
+- **Status:** Accepted. Amended by ADR-247 (2026-10-01): the app reads its
+  feed from `https://downloads.oxagen.sh/updater/latest.json`, not
+  `desktop-latest/latest.json` on the GitHub release.
 - **Date:** 2026-09-26
 - **Owners:** desktop
 - **Related:** issue #4418 (this change), issue #3697 (the prompt-only rule
@@ -198,6 +200,8 @@ Recorded here, not built:
   off switch, under Verify, from 2.1.2 on. When Oxagen writes terms of
   service, they carry this sentence: "On macOS, the Oxagen desktop app
   downloads and installs new versions automatically unless you turn
-  automatic updates off."
+  automatic updates off." On 2026-10-01 the terms of service went up at
+  oxagen.sh/terms (`apps/web/terms/index.html`), and the section "Software
+  you install" carries the sentence word for word.
 - This replaces the rule confirmed on #3697 for macOS installs that pass the
   gates. Everywhere else, that rule still holds.

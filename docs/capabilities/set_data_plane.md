@@ -63,8 +63,8 @@ a plane never echoes the credential back.
 
 1. **Encrypt first.** The whole config is envelope-encrypted with the
    `@oxagen/crypto` KMS envelope (the same envelope the plugin credential vault
-   uses) before anything touches a column. If `AUTH_TOKEN_ENCRYPTION_KEY` is
-   unset the call is **refused** — a plaintext connection string must never
+   uses) before anything touches a column. If the deployment holds no
+   credential vault key ([`AUTH_TOKEN_ENCRYPTION_KEY`](../../packages/config/src/registry.ts)), the call is **refused**. A plaintext connection string must never
    reach Postgres, not even transiently.
 2. **Upsert `org.data_planes`** through `withSystemDb` (platform state on the
    shared plane). `config_digest` — a SHA-256 over the canonical plaintext
@@ -82,7 +82,7 @@ a plane never echoes the credential back.
 
 ## Errors
 
-- `AUTH_TOKEN_ENCRYPTION_KEY` unset while binding a dedicated plane — refused
+- No credential vault key ([`AUTH_TOKEN_ENCRYPTION_KEY`](../../packages/config/src/registry.ts)) while binding a dedicated plane: refused
   rather than stored in plaintext.
 - Contract validation: config present with `mode: "shared"`, config missing with
   `mode: "dedicated"`, or a config that does not match the declared kind.

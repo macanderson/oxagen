@@ -428,6 +428,8 @@ const STATIC_PAGES = [
   "story/index.html",
   "read/index.html",
   "products/oxagen/index.html",
+  "terms/index.html",
+  "privacy/index.html",
 ];
 
 /**

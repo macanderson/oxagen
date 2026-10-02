@@ -45,8 +45,8 @@ optional `spPrivateKey` (PEM) to sign AuthnRequests.
 
 ## Side effects
 
-1. **Refuse without a KMS.** When `AUTH_TOKEN_ENCRYPTION_KEY` is unset the
-   call fails before any network read or write. No secret is stored in
+1. **Refuse without a KMS.** When the deployment holds no credential vault
+   key ([`AUTH_TOKEN_ENCRYPTION_KEY`](../../packages/config/src/registry.ts)), the call fails before any network read or write. No secret is stored in
    plaintext.
 2. **OIDC discovery.** The handler reads
    `<issuer>/.well-known/openid-configuration` with a 10-second timeout and
@@ -70,7 +70,7 @@ optional `spPrivateKey` (PEM) to sign AuthnRequests.
 
 - `forbidden` / `sso_requires_enterprise`: the organisation is not on the
   Enterprise plan. The role check runs first.
-- `AUTH_TOKEN_ENCRYPTION_KEY` unset: refused rather than stored in plaintext.
+- No credential vault key ([`AUTH_TOKEN_ENCRYPTION_KEY`](../../packages/config/src/registry.ts)): refused rather than stored in plaintext.
 - `invalid_input`: a malformed field, an issuer on a private address, a
   discovery document that cannot be read, names another issuer, lacks an
   endpoint, or names an endpoint on a private address.

@@ -3,24 +3,22 @@
     "Scoop manifest for the two compiled CLIs on Windows: oxagen and the",
     "recorder's legacy executable, kept for machines enrolled before #4879,",
     "each a Node single-executable the Desktop workflow builds on",
-    "windows-latest and attaches to the desktop-v<version> release next to",
-    "an <asset>.sha256 file. The desktop app itself is the .msi / -setup.exe",
-    "on the same release. This is a template until a bucket exists;",
-    "tools/packaging/stamp.mjs fills the version and the digests from the",
-    "release .sha256 files (tools/packaging/README.md)."
+    "windows-latest and publishes to downloads.oxagen.sh/desktop/<version>/",
+    "next to an <asset>.sha256 file. The desktop app itself is the .msi /",
+    "-setup.exe in the same place. Nothing here reads a GitHub release: the",
+    "repository is private (ADR-247). This is a template until a bucket",
+    "exists; tools/packaging/stamp.mjs fills the version and the digests from",
+    "the version's SHA256SUMS.txt (tools/packaging/README.md)."
   ],
   "version": "{{version}}",
   "description": "The oxagen CLI, which puts Claude Code, Codex, Cursor, and Stella under Oxagen control",
   "homepage": "https://oxagen.sh/",
-  "license": {
-    "identifier": "Proprietary",
-    "url": "https://github.com/macanderson/oxagen/blob/main/LICENSE"
-  },
+  "license": "Proprietary",
   "architecture": {
     "64bit": {
       "url": [
-        "https://github.com/macanderson/oxagen/releases/download/desktop-v{{version}}/tacho-x86_64-pc-windows-msvc.exe",
-        "https://github.com/macanderson/oxagen/releases/download/desktop-v{{version}}/oxagen-x86_64-pc-windows-msvc.exe"
+        "https://downloads.oxagen.sh/desktop/{{version}}/tacho-x86_64-pc-windows-msvc.exe",
+        "https://downloads.oxagen.sh/desktop/{{version}}/oxagen-x86_64-pc-windows-msvc.exe"
       ],
       "hash": [
         "{{sha256:tacho-x86_64-pc-windows-msvc.exe}}",
@@ -36,15 +34,15 @@
     "if ($cmd -eq 'uninstall' -and (Test-Path \"$env:USERPROFILE\\.config\\oxagen\\tacho\")) { & \"$dir\\oxagen-x86_64-pc-windows-msvc.exe\" agent unenroll --all }"
   ],
   "checkver": {
-    "url": "https://github.com/macanderson/oxagen/releases.atom",
-    "regex": "desktop-v([\\d.]+)"
+    "url": "https://downloads.oxagen.sh/updater/latest.json",
+    "jsonpath": "$.version"
   },
   "autoupdate": {
     "architecture": {
       "64bit": {
         "url": [
-          "https://github.com/macanderson/oxagen/releases/download/desktop-v$version/tacho-x86_64-pc-windows-msvc.exe",
-          "https://github.com/macanderson/oxagen/releases/download/desktop-v$version/oxagen-x86_64-pc-windows-msvc.exe"
+          "https://downloads.oxagen.sh/desktop/$version/tacho-x86_64-pc-windows-msvc.exe",
+          "https://downloads.oxagen.sh/desktop/$version/oxagen-x86_64-pc-windows-msvc.exe"
         ]
       }
     },

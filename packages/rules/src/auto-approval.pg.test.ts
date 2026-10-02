@@ -832,6 +832,20 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(row?.runPublicId).toBeNull();
     });
 
+    // A context can carry a run id that is no uuid (the toolbelt read's
+    // "toolbelt-read"). Compared to the uuid column, Postgres refused the
+    // cast, the receipt's transaction aborted, and the call a rule released
+    // went to a person instead.
+    it("records the receipt with no run for a run id that is no uuid", async () => {
+      const decision = await autoApprove(CALL, [RULE], "toolbelt-read");
+      await inScope(async () => {
+        await decision?.commit?.();
+      });
+      const [row] = await approvalsOf();
+      expect(row?.resolvedByPolicy).toMatch(/^policy:/);
+      expect(row?.runPublicId).toBeNull();
+    });
+
     it("writes nothing when the call does not qualify, and reports why", async () => {
       const outcome = await autoApprove(
         { amount: { value: "900.00" }, vendor: "person:someone" },

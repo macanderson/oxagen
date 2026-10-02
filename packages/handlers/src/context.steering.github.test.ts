@@ -719,6 +719,9 @@ describe("the workspace's main repository", () => {
   // repository the workspace can see and is not steered by. Context PRs and
   // `get_steering_freshness` both resolve through this read, so an unordered
   // `limit(1)` without the filter could steer either one by a linked head.
+  // Kept on purpose (#3340): Mac decided on 2026-10-01 that a linked code
+  // repository never receives Context PRs, so this read stays pinned to the
+  // steering head.
   it("names the head's role in the joined read, so only a steering head steers", async () => {
     const counts = db({ bound: [] });
     await readGitHubConnection(SELECT_SCOPE);

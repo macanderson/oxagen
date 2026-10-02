@@ -33,12 +33,14 @@ Admin, or a workspace Owner.
 | `name`            | `string`                                   |                                         |
 | `healthStatus`    | `"healthy" \| "degraded" \| "unreachable"` | The probe made with the new token.      |
 | `discoveredTools` | `string[]`                                 | Names from `tools/list`.                |
+| `steeringPr`      | `{ number, url }?`                         | The steering PR that adds the server. Set only in a workspace whose tools live in its steering repo. |
 
 ## Side effects
 
 - Postgres: writes the access and refresh tokens to `mcp.credentials`, envelope-encrypted, with `expires_at`. The refresh watcher and the runtime renew them from there.
 - Postgres: upserts `mcp.mcp_servers` for the listing. A removed provider comes back.
 - Postgres: pins each tool descriptor in `mcp.tool_snapshots`, and appends an `enable` row to `security.mcp_server_changes`.
+- In a workspace whose tools live in its steering repo (ADR-209), the tokens are stored as above, and the row is decided the way `set_plugin_enabled` decides it. A server the repo already holds is written as above. Any other server becomes a disabled row with origin `proposed`, its tools are pinned, and a steering PR adds its folder. The server turns on when that PR merges and the next publish runs. No `enable` row is appended.
 - Postgres: deletes the single-use PKCE state, whether the exchange succeeded or not.
 
 ## Errors
@@ -50,3 +52,5 @@ Admin, or a workspace Owner.
 | `not_found` | `server_not_found`      | The provider was removed mid-flow.              |
 | `conflict`  | `authorization_failed`  | The authorization server refused the code.      |
 | `conflict`  | `redirect_url_invalid`  | The redirect URL is not the callback.           |
+| `conflict`  | `steering_pr_open`      | The tokens are stored, and a steering PR that adds the server is already open. The server turns on when it merges. |
+| `conflict`  | `plugin_enable_in_progress` | Another request changed the server's row while this one read it. Try again. |

@@ -381,6 +381,13 @@ describe("Sso: a read that did not list", () => {
     expect(
       tabs.every((tab) => tab.getAttribute("aria-selected") === "false"),
     ).toBe(true);
+    // With no tab selected the first tab keeps the row in the tab order, and
+    // the body under the row is no tab's panel.
+    expect(tabs.map((tab) => tab.getAttribute("tabindex"))).toEqual([
+      "0",
+      ...Array.from({ length: 7 }, () => "-1"),
+    ]);
+    expect(screen.queryByRole("tabpanel")).toBeNull();
     await expectNoAxe(container);
   });
 

@@ -84,6 +84,24 @@ function changedRecordTokens(env: ChangeEnv): string[] {
   return lines;
 }
 
+/** One changed record's growth in an always-on block. */
+interface AddedEntry {
+  lineage: string;
+  path: string;
+  /** The tokens the record added to the block. */
+  added: number;
+}
+
+/** The changed records that added tokens to the block, largest first. */
+function addedEntries(block: AlwaysOnBlock, prior: AlwaysOnBlock | undefined, changed: ReadonlySet<string>): AddedEntry[] {
+  const was = new Map((prior?.entries ?? []).map((entry) => [entry.lineage, entry.tokens]));
+  return block.entries
+    .filter((entry) => changed.has(entry.path))
+    .map((entry) => ({ lineage: entry.lineage, path: entry.path, added: entry.tokens - (was.get(entry.lineage) ?? 0) }))
+    .filter((entry) => entry.added > 0)
+    .sort((a, b) => b.added - a.added || (a.lineage < b.lineage ? -1 : 1));
+}
+
 function alwaysOnPart(env: ChangeEnv): { findings: Finding[]; notes: string[] } {
   const touched = [...env.changed, ...env.removed].some(
     (path) => isRecordPath(path) || path === GOVERNANCE_TOML_PATH || path === WORKSPACE_TOML_PATH,
@@ -110,6 +128,11 @@ function alwaysOnPart(env: ChangeEnv): { findings: Finding[]; notes: string[] } 
     if (block.tokens <= budget.tokens) continue;
     const largest = [...block.entries].sort((a, b) => b.tokens - a.tokens).slice(0, LARGEST);
     const changed = block.entries.filter((entry) => env.changed.has(entry.path));
+    const added = addedEntries(block, prior, env.changed);
+    const names =
+      added.length === 0
+        ? ""
+        : ` This steering PR added tokens in ${added.map((entry) => `${entry.lineage} (${formatCount(entry.added)} tokens)`).join(", ")}.`;
     findings.push(
       find({
         rule: "always-on",
@@ -117,7 +140,7 @@ function alwaysOnPart(env: ChangeEnv): { findings: Finding[]; notes: string[] } 
         path: GOVERNANCE_TOML_PATH,
         line,
         field: "steering.always_on_tokens",
-        message: `Always-on steering for ${repositoryName(block.repository)} is ${formatCount(block.tokens)} tokens, over the budget of ${formatCount(budget.tokens)}. It was ${formatCount(priorTokens)} before this steering PR.`,
+        message: `Always-on steering for ${repositoryName(block.repository)} is ${formatCount(block.tokens)} tokens, over the budget of ${formatCount(budget.tokens)}. It was ${formatCount(priorTokens)} before this steering PR.${names}`,
         expected: `At most ${formatCount(budget.tokens)} tokens of always-on steering per code repository, from ${budget.source}.`,
         fix: `To keep this cost, merge as is, or raise always_on_tokens in this PR. To cut it, shorten a record, set force: may so it loads when it fits, or narrow it with repos, applies_to, or tools. The largest records are ${largest.map(entryText).join(", ")}.`,
         detail: {
@@ -128,6 +151,7 @@ function alwaysOnPart(env: ChangeEnv): { findings: Finding[]; notes: string[] } 
           budget_source: budget.source,
           largest,
           changed,
+          added,
         },
       }),
     );

@@ -706,13 +706,52 @@ export function formatImportRows(rows: MarkdownImportRecord[]): string {
   );
 }
 
+/**
+ * The proposed Cedar policy files as a numbered table: the file each one
+ * writes, its statement count, the action, and the Markdown file it came
+ * from. Under a row go its duplicate, the published file it replaces, and
+ * the issues that keep it skip.
+ */
+export function formatImportPolicies(policies: MarkdownImportPolicy[]): string {
+  if (policies.length === 0) return "No policies were proposed.";
+  const header =
+    `${"#".padEnd(4)}  ${"policy file".padEnd(36)} ${"statements".padEnd(10)}` +
+    ` ${"action".padEnd(7)} source`;
+  const lines = policies.map((policy, i) => {
+    const notes: string[] = [];
+    if (policy.duplicate) notes.push(`Duplicate of ${policy.duplicate.path}.`);
+    if (policy.replaces) notes.push(`Replaces the published file at ${policy.path}.`);
+    for (const issue of policy.issues) {
+      notes.push(issue.line === null ? issue.message : `Line ${issue.line}: ${issue.message}`);
+    }
+    return (
+      `${String(i + 1).padEnd(4)}  ${truncate(policy.path, 36).padEnd(36)} ${String(policy.statements.length).padEnd(10)} ${policy.action.padEnd(7)} ${truncate(policy.file, 48)}` +
+      notes.map((note) => `\n      ${note}`).join("")
+    );
+  });
+  const count = policies.length;
+  const fix = policies.some((policy) => policy.issues.length > 0)
+    ? " A file with an issue stays skip. Fix its Markdown and import it again."
+    : "";
+  return (
+    [header, ...lines].join("\n") +
+    `\n${count} proposed policy ${count === 1 ? "file" : "files"}.${fix}`
+  );
+}
+
 /** The commit result: the steering PR, and what it holds. */
 export function formatImportPullRequest(
   output: SteeringMarkdownImportCommitOutput,
 ): string {
-  const noun = output.records === 1 ? "record" : "records";
+  const holds: string[] = [];
+  if (output.records > 0 || output.policies === 0) {
+    holds.push(`${output.records} ${output.records === 1 ? "record" : "records"}`);
+  }
+  if (output.policies > 0) {
+    holds.push(`${output.policies} ${output.policies === 1 ? "policy file" : "policy files"}`);
+  }
   const lines = [
-    `Opened steering PR #${output.pullRequest.number} on ${output.pullRequest.branch} with ${output.records} ${noun}.`,
+    `Opened steering PR #${output.pullRequest.number} on ${output.pullRequest.branch} with ${holds.join(" and ")}.`,
     output.pullRequest.url,
   ];
   if (output.skipped > 0) {

@@ -20,6 +20,8 @@
 //     steering head through the provision steps, and then links.
 //   - The store's trigger refuses, by constraint name, the writes the
 //     handlers refuse by sentence.
+//   - A repository linked again through the connection that replaced a
+//     retired one continues its one binding lineage (#3340).
 //
 // The tests run wherever DATABASE_URL points at a migrated database. CI's
 // `unit` lanes migrate Postgres with Atlas first. A run without DATABASE_URL
@@ -1335,5 +1337,72 @@ describe.skipIf(!enabled)("workspace repositories against Postgres", () => {
         providerRepositoryId: String(state?.repository?.id),
       },
     ]);
+  });
+
+  // #3340 finding 7. A repository whose GitHub connection was retired is
+  // unlinked, and linked again through the connection that replaced it. The
+  // binding versions are the evidence admitted runs cite, so the relink has to
+  // continue the repository's one lineage. The version lookup used to filter on
+  // the connection, found nothing on the new one, and wrote a second version 1
+  // with no predecessor.
+  it("keeps one binding lineage when a repository is linked again through the connection that replaced a retired one", async () => {
+    const { id } = await createWithSteering("lineage", "lineage-steer");
+    // No workspace.toml lists the link, so the unlink below deletes the head
+    // at once rather than opening a steering PR.
+    expect(productionOf(id)).toBeNull();
+    const first = await seedLegacyHead(id, "lineage-lib");
+
+    // ── the connection is retired ────────────────────────────────────────
+    await withSystemDb((tx) =>
+      tx
+        .update(schema.sourceConnections)
+        .set({ deletedAt: new Date() })
+        .where(
+          and(
+            eq(schema.sourceConnections.orgId, orgId),
+            eq(schema.sourceConnections.workspaceId, id),
+            eq(schema.sourceConnections.connectorId, GITHUB_PROVIDER),
+          ),
+        ),
+    );
+
+    // ── unlink, attach the replacement, link again ───────────────────────
+    await expect(unlink(id, first.bindingPublicId)).resolves.toMatchObject({
+      status: "unlinked",
+    });
+    expect(await headsFor(id, "lineage-lib")).toEqual([]);
+    await attachGithub(id);
+    const second = await seedLegacyHead(id, "lineage-lib");
+
+    const versions = await withSystemDb((tx) =>
+      tx
+        .select({
+          id: schema.repositoryBindings.id,
+          publicId: schema.repositoryBindings.publicId,
+          version: schema.repositoryBindings.version,
+          supersedesBindingId: schema.repositoryBindings.supersedesBindingId,
+          connectionId: schema.repositoryBindings.connectionId,
+        })
+        .from(schema.repositoryBindings)
+        .where(
+          and(
+            eq(schema.repositoryBindings.orgId, orgId),
+            eq(schema.repositoryBindings.workspaceId, id),
+            eq(
+              schema.repositoryBindings.providerRepositoryId,
+              repoId("acme", "lineage-lib"),
+            ),
+          ),
+        )
+        .orderBy(schema.repositoryBindings.version),
+    );
+    // One lineage: version 2 names version 1, through the new connection.
+    expect(versions.map((v) => v.version)).toEqual([1, 2]);
+    const [v1, v2] = versions;
+    expect(v1?.supersedesBindingId).toBeNull();
+    expect(v2?.supersedesBindingId).toBe(v1?.id);
+    expect(v2?.connectionId).not.toBe(v1?.connectionId);
+    expect(first.bindingPublicId).toBe(v1?.publicId);
+    expect(second.bindingPublicId).toBe(v2?.publicId);
   });
 });

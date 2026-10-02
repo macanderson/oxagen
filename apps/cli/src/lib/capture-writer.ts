@@ -26,6 +26,22 @@ export const stdoutWriter: CommandWriter = {
 };
 
 /**
+ * Print an error and diverge. The one-shot `oxagen <cmd>` path exits 1. Any
+ * other writer means a caller is capturing the output, where `process.exit`
+ * would end the caller's whole process, so it throws instead. The message is
+ * written to `writer` before either path is taken, so a caller that catches
+ * the throw already holds the text.
+ */
+export function failCommand(
+  message: string,
+  writer: CommandWriter = stdoutWriter,
+): never {
+  writer.writeErr(message);
+  if (writer === stdoutWriter) process.exit(1);
+  throw new Error(message);
+}
+
+/**
  * An in-memory accumulator for the REPL's inline capture-execution seam.
  * stdout and stderr are interleaved in call order — good enough for a single
  * assistant-message rendering of a command's output.

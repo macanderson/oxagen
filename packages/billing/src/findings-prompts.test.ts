@@ -19,6 +19,7 @@ vi.mock("@oxagen/database", () => ({
 vi.mock("@oxagen/telemetry", () => ({
   chSelect,
   readTachoToolCallObservations: vi.fn(),
+  readTachoFileChanges: vi.fn(),
   readModelCallFrames: vi.fn(),
 }));
 vi.mock("@oxagen/tenancy", () => ({ runInTenantScope }));

@@ -166,6 +166,8 @@ export type StudioRecord = {
   /** `definitionBudget` is server.toml's value, or the 8,000-token default. */
   exposure: { mode: "direct" | "search"; definitionBudget: number };
   sync: { schedule: "on-change" | "daily" | "manual"; lastAt: string | null };
+  /** The days each tool's feedback counts cover (get_studio_server's `feedback.windowDays`). */
+  feedbackWindowDays: number;
   tools: readonly StudioRecordTool[];
 };
 
