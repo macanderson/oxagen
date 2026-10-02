@@ -41,6 +41,7 @@ import {
   type CodexHookEventName,
   codexHookTimeoutS,
 } from "../host/codex-writer";
+import { withCodexPromptSource } from "../host/codex-prompt-source";
 import { cursorHookTimeoutS } from "../host/cursor-writer";
 import {
   COMMAND_HOOK_TIMEOUTS_S,
@@ -1118,6 +1119,12 @@ export async function runTachoHook(deps: HookRunDeps): Promise<HookRunResult> {
     harnessPid = (
       deps.harnessPid ?? (() => codexHarnessPid(process.ppid, platform))
     )();
+  // Codex names no sender on a prompt, so the hook adds `prompt_source` and
+  // `prompt_origin` from what Codex does record, and the daemon copies them
+  // onto the `turn_start`. It can read the head of the rollout, so it runs
+  // only on an enrolled machine, as the Stella identity does.
+  if (codex && (host !== undefined || hostReadError !== undefined))
+    raw = withCodexPromptSource(raw);
   // Stella reads `{"action": ...}` decisions and takes SessionStart stdout
   // as prompt text; Cursor reads a flat permission object whose shape differs
   // per event; every other harness reads Claude Code's answer as is.

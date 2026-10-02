@@ -16,8 +16,10 @@
  *     import is installed, and says plainly that the check could not run when
  *     one is not.
  *   - `tools/scripts/root-hook-deps.tree.test.ts` asks, in CI, whether each import
- *     is declared in the root `package.json`, so the sweep #3403 asked for
- *     keeps holding after it lands.
+ *     is declared in the root `package.json` or in `tools/scripts/package.json`,
+ *     so the sweep #3403 asked for keeps holding after it lands. The root
+ *     declares no workspace package, because turbo hashes the files of each
+ *     workspace package the root depends on into every task's hash (#4918).
  *
  * Everything here is pure over injected `read` and `exists` functions, apart
  * from the TypeScript parser the caller passes in.
