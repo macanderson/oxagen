@@ -183,8 +183,9 @@ describe.skipIf(!enabled)("work intake and triage against Postgres", () => {
       await tx.delete(s.workItems).where(eq(s.workItems.orgId, scope.orgId));
       await tx.delete(s.workInboundEvents).where(eq(s.workInboundEvents.orgId, scope.orgId));
       await tx.delete(s.workCollectors).where(eq(s.workCollectors.orgId, scope.orgId));
-      await tx.delete(s.contextRecordVersions).where(eq(s.contextRecordVersions.orgId, scope.orgId));
+      // A record names its active version, so the record goes first.
       await tx.delete(s.contextRecords).where(eq(s.contextRecords.orgId, scope.orgId));
+      await tx.delete(s.contextRecordVersions).where(eq(s.contextRecordVersions.orgId, scope.orgId));
       await tx.delete(s.sourceConnections).where(eq(s.sourceConnections.orgId, scope.orgId));
     });
     await closeDatabase();
