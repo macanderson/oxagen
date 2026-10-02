@@ -18,7 +18,12 @@ import type { ReactNode } from "react";
 import type { DataSource } from "@/data/ports";
 import type { Read } from "@/data/read";
 import type { WsCtx } from "@/server/viewer";
-import { buttonSecondary, panel } from "@/ui/control-styles";
+import {
+  buttonSecondary,
+  panel,
+  panelHeader,
+  panelTitle,
+} from "@/ui/control-styles";
 import { SafeLink } from "@/ui/navigation";
 import type { MemoryAgent, MemoryAgents } from "../memories/cells";
 import { MemoriesPanel } from "../memories/panel";
@@ -47,11 +52,8 @@ function Frame({ children }: { children: ReactNode }) {
       className={panel}
       data-testid="tab-memories"
     >
-      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-border bg-panel-head px-4 py-3">
-        <h3
-          id="memories-title"
-          className="text-sm font-semibold text-foreground"
-        >
+      <div className={panelHeader}>
+        <h3 id="memories-title" className={panelTitle}>
           {t("title")}
         </h3>
         <span className="text-[12.5px] text-muted-foreground">
