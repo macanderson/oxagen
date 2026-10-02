@@ -540,7 +540,7 @@ describe("resolveAssistantRunIdentity", () => {
       ...RETENTION_CONTENT_CLASSES,
     ]);
     expect(ASSISTANT_RETENTION_POLICY.mode).not.toBe("digest_only");
-    // Migration 20261002000000 moved each existing assistant row to the
+    // Migration 20261002030000 moved each existing assistant row to the
     // assistant's subject by this digest. A new policy body leaves old rows
     // behind under the old digest, so change this literal only with a review
     // of that backfill.

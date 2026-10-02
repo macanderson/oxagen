@@ -31,7 +31,19 @@ const mocks = vi.hoisted(() => ({
   withSystemDb: vi.fn(),
   withTenantDb: vi.fn(() => undefined),
   resolveDataPlane: vi.fn(),
+  resolveIncludedRetentionDays: vi.fn(),
 }));
+
+// The basis read has its own tests in packages/billing
+// (retention-window.test.ts). Here it is a seam, so the queued reads below
+// stay the handler's own three.
+vi.mock("@oxagen/billing", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/billing")>();
+  return {
+    ...real,
+    resolveIncludedRetentionDays: mocks.resolveIncludedRetentionDays,
+  };
+});
 
 vi.mock("@oxagen/tenancy", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/tenancy")>();
@@ -133,6 +145,9 @@ beforeEach(() => {
     mode: "shared",
     status: "active",
   });
+  mocks.resolveIncludedRetentionDays.mockResolvedValue(
+    RETENTION_INCLUDED_MONTHS * 30,
+  );
 });
 
 describe("billingEvidenceRetentionHandler", () => {
@@ -147,11 +162,29 @@ describe("billingEvidenceRetentionHandler", () => {
 
     expect(() => billingEvidenceRetention.output.parse(out)).not.toThrow();
     expect(out.includedMonths).toBe(RETENTION_INCLUDED_MONTHS);
+    expect(out.includedDays).toBe(RETENTION_INCLUDED_MONTHS * 30);
+    expect(mocks.resolveIncludedRetentionDays).toHaveBeenCalledWith(
+      TEST_CTX.orgId,
+      expect.any(Date),
+    );
     expect(out.usdPerGbMonth).toBe(RETENTION_USD_PER_GB_MONTH);
     expect(out.extendedRetentionEnabled).toBe(true);
     expect(out.effectiveRetentionDays).toBe(365);
     // A debit is a negative delta; the readout shows its magnitude.
     expect(out.creditsChargedThisPeriod).toBe(42);
+  });
+
+  // Codex review on #4936: the Price list showed 30 days for an
+  // organisation on its signup grant while this capability said 12 months.
+  it("reports 30 days for an organisation on its signup grant, and keeps the paid tiers' months", async () => {
+    mocks.resolveIncludedRetentionDays.mockResolvedValue(30);
+    queueDbReads([[], [], []]);
+
+    const out = await billingEvidenceRetentionHandler({}, TEST_CTX);
+
+    expect(() => billingEvidenceRetention.output.parse(out)).not.toThrow();
+    expect(out.includedDays).toBe(30);
+    expect(out.includedMonths).toBe(RETENTION_INCLUDED_MONTHS);
   });
 
   it("treats a missing settings row as never opted in", async () => {

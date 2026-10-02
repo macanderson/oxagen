@@ -390,6 +390,7 @@ describe("processStripeEvent", () => {
       orgId: "org-abc",
       billingReason: "subscription_create",
       gauSettlementId: null,
+      lineItemsComplete: true,
       lineItems: [],
     };
 
@@ -419,6 +420,67 @@ describe("processStripeEvent", () => {
     );
   });
 
+  // #4895: a webhook payload embeds the first page of invoice lines. The
+  // receipt and the plan-credit grant used to read that page alone.
+  it("invoice.paid with a short payload page uses every line from the synced read", async () => {
+    dbState.instance = makeDb([{ id: "row-uuid-pages" }]);
+
+    const line = (n: number) => ({
+      description: `Line ${n}`,
+      quantity: 1,
+      unitAmountCents: 100,
+      totalCents: 100,
+      metric: null,
+      metadata: {},
+    });
+    const fromEvent = {
+      id: "in_pages_001",
+      providerInvoiceId: "in_pages_001",
+      number: "INV-012",
+      status: "paid" as const,
+      amountDueCents: 1200,
+      amountPaidCents: 1200,
+      amountRemainingCents: 0,
+      currency: "usd",
+      periodStart: new Date(),
+      periodEnd: new Date(),
+      dueAt: null,
+      paidAt: new Date(),
+      hostedInvoiceUrl: null,
+      invoicePdfUrl: null,
+      subscriptionId: "sub_test_001",
+      orgId: "org-abc",
+      billingReason: "subscription_cycle",
+      gauSettlementId: null,
+      lineItemsComplete: false,
+      lineItems: [line(1)],
+    };
+    const twelve = Array.from({ length: 12 }, (_, i) => line(i + 1));
+    syncInvoiceMock.mockResolvedValueOnce({
+      ...fromEvent,
+      lineItemsComplete: true,
+      lineItems: twelve,
+    });
+
+    await processStripeEvent(
+      makeWebhookEvent({
+        providerEventId: "evt_inv_pages",
+        type: "invoice.paid",
+        subscriptionId: undefined,
+        invoice: fromEvent,
+      }),
+    );
+
+    const granted = grantPlanCreditsForInvoicePaidMock.mock.calls[0]?.[0];
+    expect(granted.lineItems).toHaveLength(12);
+    expect(granted.lineItemsComplete).toBe(true);
+    // The event's own fields stand: only the lines come from the read.
+    expect(granted.status).toBe("paid");
+    expect(onInvoiceRecoveredMock.mock.calls[0]?.[0].lineItems).toHaveLength(
+      12,
+    );
+  });
+
   it("invoice.paid — zero-amount invoice does NOT send a receipt", async () => {
     dbState.instance = makeDb([{ id: "row-uuid-zero" }]);
 
@@ -441,6 +503,7 @@ describe("processStripeEvent", () => {
       orgId: "org-abc",
       billingReason: "subscription_create",
       gauSettlementId: null,
+      lineItemsComplete: true,
       lineItems: [],
     };
 
@@ -481,6 +544,7 @@ describe("processStripeEvent", () => {
       orgId: "org-abc",
       billingReason: "subscription_cycle",
       gauSettlementId: null,
+      lineItemsComplete: true,
       lineItems: [],
     };
 
@@ -543,6 +607,7 @@ describe("processStripeEvent", () => {
         orgId: "org-abc",
         billingReason: null,
         gauSettlementId: null,
+        lineItemsComplete: true,
         lineItems: [],
       },
     });
@@ -578,6 +643,7 @@ describe("processStripeEvent", () => {
         orgId: "org-abc",
         billingReason: null,
         gauSettlementId: null,
+        lineItemsComplete: true,
         lineItems: [],
       },
     });
@@ -613,6 +679,7 @@ describe("processStripeEvent", () => {
         orgId: "org-abc",
         billingReason: null,
         gauSettlementId: null,
+        lineItemsComplete: true,
         lineItems: [],
       },
     });
@@ -823,6 +890,7 @@ describe("processStripeEvent", () => {
       orgId: "org-abc",
       billingReason: "manual",
       gauSettlementId: null,
+      lineItemsComplete: true,
       lineItems: [],
     };
 
@@ -1078,6 +1146,7 @@ describe("processStripeEvent — governed-action settlement invoices", () => {
       orgId: ORG,
       billingReason: "manual",
       gauSettlementId: settlementId,
+      lineItemsComplete: true,
       lineItems: [],
     };
   }
@@ -1278,6 +1347,7 @@ describe("processStripeEvent: prepaid-order invoices", () => {
       billingReason: "manual",
       gauSettlementId: null,
       prepaidOrder: { orderId: ORDER, assistantSpendCap: CAP },
+      lineItemsComplete: true,
       lineItems: [],
       ...over,
     };

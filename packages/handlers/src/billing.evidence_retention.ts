@@ -61,6 +61,7 @@ import {
   RETENTION_INCLUDED_MONTHS,
   RETENTION_USD_PER_GB_MONTH,
   actionPeriodStart,
+  resolveIncludedRetentionDays,
 } from "@oxagen/billing";
 import { assertContractRole } from "./lib/capability-role-guard";
 import { logger } from "./logger";
@@ -112,8 +113,13 @@ export const billingEvidenceRetentionHandler: CapabilityHandler<
   // The same entitlement window the action meter uses (`actionPeriodStart`), so
   // "this period" means one thing across the two capabilities a customer reads
   // side by side. Retention is raised monthly; this sums the year's raises.
-  const periodStart = actionPeriodStart(new Date());
+  const now = new Date();
+  const periodStart = actionPeriodStart(now);
   const periodEnd = new Date(Date.UTC(periodStart.getUTCFullYear() + 1, 0, 1));
+  // The window this organisation's billing basis includes: a subscriber's
+  // months, or 30 days with no subscription (ADR-241, signup grant). The
+  // Price list prints the same figure from get_gau_bucket.
+  const includedDays = await resolveIncludedRetentionDays(ctx.orgId, now);
 
   // tenancy: every read below is filtered on ctx.orgId, the caller's own
   // organisation, verified by the kernel scope before this handler runs.
@@ -199,6 +205,7 @@ export const billingEvidenceRetentionHandler: CapabilityHandler<
 
   return {
     includedMonths: RETENTION_INCLUDED_MONTHS,
+    includedDays,
     effectiveRetentionDays,
     extendedRetentionEnabled,
     usdPerGbMonth: RETENTION_USD_PER_GB_MONTH,

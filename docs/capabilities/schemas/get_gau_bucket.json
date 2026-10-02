@@ -37,6 +37,55 @@
           "invoice"
         ]
       },
+      "basis": {
+        "type": "string",
+        "enum": [
+          "subscription",
+          "signup_grant",
+          "after_signup_grant"
+        ]
+      },
+      "signupGrant": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "grantedGau": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "grantedAt": {
+                "type": "string"
+              },
+              "expiresAt": {
+                "type": "string"
+              },
+              "active": {
+                "type": "boolean"
+              },
+              "remainingGau": {
+                "type": "integer"
+              },
+              "evidenceDays": {
+                "type": "integer",
+                "exclusiveMinimum": 0
+              }
+            },
+            "required": [
+              "grantedGau",
+              "grantedAt",
+              "expiresAt",
+              "active",
+              "remainingGau",
+              "evidenceDays"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
       "period": {
         "type": "object",
         "properties": {
@@ -200,6 +249,8 @@
     },
     "required": [
       "mode",
+      "basis",
+      "signupGrant",
       "period",
       "includedGau",
       "purchasedGau",

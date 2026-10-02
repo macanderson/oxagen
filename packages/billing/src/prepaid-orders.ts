@@ -43,7 +43,7 @@ import { billingProvider } from "./client";
 import { CREDIT_REASONS } from "./constants";
 import { readGauEntitlement } from "./contract-terms";
 import { ensureStripeCustomer } from "./customers";
-import { ensureCurrentBucket, periodFor } from "./gau-bucket";
+import { bucketBasis, ensureCurrentBucket } from "./gau-bucket";
 import { grantCreditLotOnce } from "./grants";
 import {
   formatCount,
@@ -814,13 +814,12 @@ export async function grantPrepaidOrder(
 
     const quantity = Number(order.gauQuantity);
     if (quantity > 0 && order.unitsGrantedAt === null) {
-      const { terms, subscription } = await readGauEntitlement(
-        tx,
-        order.orgId,
-        now,
-      );
+      const { terms, period } = bucketBasis(
+      await readGauEntitlement(tx, order.orgId, now),
+      now,
+    );
       const bucket = await ensureCurrentBucket(tx, order.orgId, {
-        period: periodFor(subscription, now),
+        period,
         terms,
         usedDelta: 0,
         purchasedDelta: quantity,

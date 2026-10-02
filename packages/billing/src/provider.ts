@@ -611,6 +611,18 @@ export interface BillingInvoice {
    */
   prepaidOrder?: BillingPrepaidOrderRef | null;
   lineItems: BillingInvoiceLineItem[];
+  /**
+   * Whether `lineItems` holds every line the provider has on the invoice.
+   *
+   * False in two cases. A webhook payload embeds only the first page of
+   * lines, and its mapping cannot fetch the rest, so `processStripeEvent`
+   * replaces those lines with the full read before anything uses them. And
+   * `getInvoice` stops paging at `MAX_INVOICE_LINES`; an invoice with more
+   * lines than that comes back marked partial rather than refused, so a
+   * receipt still goes out and its total still comes from the invoice's own
+   * fields (#4895).
+   */
+  lineItemsComplete: boolean;
 }
 
 /**
