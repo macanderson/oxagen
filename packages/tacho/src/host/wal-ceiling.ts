@@ -1,5 +1,5 @@
 /**
- * The WAL ceiling (ADR-260): the most disk the WAL may hold for sessions the
+ * The WAL ceiling (ADR-261): the most disk the WAL may hold for sessions the
  * control plane has stopped accepting.
  *
  * `Wal.compact` frees a session only once it is sealed, fully shipped, and a
@@ -46,7 +46,7 @@ export interface WalCeilingPolicy {
 }
 
 /**
- * The figures ADR-260 chose, with its reasoning in short:
+ * The figures ADR-261 chose, with its reasoning in short:
  *
  * - 8 GiB is about one heavy working day: the day measured on #3694 wrote
  *   8.5 GB. An outage shorter than a working day loses nothing, and the first

@@ -1,5 +1,5 @@
 /**
- * The WAL ceiling, driven through the daemon (ADR-260, #3722).
+ * The WAL ceiling, driven through the daemon (ADR-261, #3722).
  *
  * A control plane that answers 503 to every ingest leaves each batch on the
  * host, which is right, and the WAL grows for as long as that lasts. Past the

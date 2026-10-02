@@ -330,7 +330,7 @@ export interface DaemonOptions {
    */
   localServers?: boolean;
   /**
-   * The WAL ceiling's figures (ADR-260). Defaults to `DEFAULT_WAL_CEILING`;
+   * The WAL ceiling's figures (ADR-261). Defaults to `DEFAULT_WAL_CEILING`;
    * a test sets a small ceiling and no grace to drive a session past it.
    */
   walCeiling?: Partial<WalCeilingPolicy>;
@@ -4238,7 +4238,7 @@ async function initializeDaemon(
 
   /**
    * Seal the frame that says one session's stored bodies went over the WAL
-   * ceiling (ADR-260), and write it. `WalCeiling.check` calls this right after
+   * ceiling (ADR-261), and write it. `WalCeiling.check` calls this right after
    * the body file is removed, in the same synchronous stretch.
    *
    * The frame goes on the daemon's own chain. A stalled session has often
@@ -4601,7 +4601,7 @@ async function initializeDaemon(
     // and already land a batch or more after the tool frames they belong with.
     void startGitReads();
     // After the drain, so a session that just shipped has moved its cursor
-    // before the ceiling looks at it (ADR-260). The check stats files and
+    // before the ceiling looks at it (ADR-261). The check stats files and
     // removes whole body files. It reads no body, and no event past the last
     // line the WAL already keeps, so it does not hold the thread on a large
     // file, and it runs on no hook queue (ADR-231).

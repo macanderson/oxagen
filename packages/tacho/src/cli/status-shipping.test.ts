@@ -178,7 +178,7 @@ describe("the shipping line", () => {
   });
 });
 
-describe("the WAL ceiling lines (ADR-260)", () => {
+describe("the WAL ceiling lines (ADR-261)", () => {
   const STALLED = "5c1f0a2e-0000-4000-8000-0000000000a1";
   const GIB = 1024 ** 3;
 

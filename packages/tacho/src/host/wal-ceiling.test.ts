@@ -1,5 +1,5 @@
 /**
- * The WAL ceiling (ADR-260, #3722): sessions the control plane stopped
+ * The WAL ceiling (ADR-261, #3722): sessions the control plane stopped
  * accepting lose their stored bodies, longest stalled first, once they hold
  * more than the ceiling. Their events stay, so the chain still verifies.
  */
