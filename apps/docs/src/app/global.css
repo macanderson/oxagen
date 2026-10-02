@@ -113,11 +113,16 @@
   line-height: var(--ox-a-h4-leading);
 }
 
-/* The sidebar, the phone drawer, and the table of contents title, at 15px.
-   The sidebar's own items set no size, so they follow their aside. */
+/* The sidebar, the phone drawer, the table of contents title, and the nav
+   title link, at 15px. The sidebar's own items set no size, so they follow
+   their aside. Fumadocs sets the nav title link to a fixed 15px by hand
+   (text-[0.9375rem]) in the sidebar and leaves it at the page's 16px in the
+   docs header, so neither followed the theme. The ox-nav-title class is set
+   in src/lib/layout.shared.tsx. */
 #nd-sidebar,
 #nd-sidebar-mobile,
-#toc-title {
+#toc-title,
+.ox-nav-title {
   font-size: calc(var(--ox-a-body) * 15 / 14);
   line-height: var(--ox-a-body-leading);
 }
