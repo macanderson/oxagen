@@ -3192,6 +3192,16 @@
       "consumes": []
     },
     {
+      "name": "list_tacho_session_heads",
+      "domain": "tacho",
+      "surfaces": [
+        "api"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "list_tacho_sessions",
       "domain": "tacho",
       "surfaces": [

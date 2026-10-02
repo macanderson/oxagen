@@ -1087,6 +1087,44 @@ describe("get_run witnessFor (ADR-064)", () => {
     expect(ledger.run.repositoryUnlinked).toBe(false);
     expect(runGet.output.parse(ledger)).toEqual(ledger);
   });
+
+  // ADR-161, #4028: the Run page marks a run a backfill rebuilt, and reads
+  // its cost from the rollup alone.
+  it("answers the record basis ingest recorded, and no reported cost for a rebuilt run", async () => {
+    for (const recordBasis of ["backfill", "mixed"] as const) {
+      const out = await harness({
+        tacho: [
+          tachoSession({
+            publicId: TACHO_ID,
+            session: {
+              recordBasis,
+              totalCostMicros: 7_000,
+              costBasis: "estimated",
+            },
+          }),
+        ],
+      }).get(input({ runId: TACHO_ID }), ctx());
+      expect(out.run.recordBasis).toBe(recordBasis);
+      expect(out.run.reportedCost).toBeNull();
+      expect(runGet.output.parse(out)).toEqual(out);
+    }
+  });
+
+  it("answers live for a live session, a row read without the column, and a ledger run (negative)", async () => {
+    const live = await harness({
+      tacho: [
+        tachoSession({ publicId: TACHO_ID, session: { recordBasis: "live" } }),
+      ],
+    }).get(input({ runId: TACHO_ID }), ctx());
+    expect(live.run.recordBasis).toBe("live");
+
+    const { get } = harness();
+    const unread = await get(input({ runId: TACHO_ID }), ctx());
+    const ledger = await get(input({ runId: LEDGER_ID }), ctx());
+    expect(unread.run.recordBasis).toBe("live");
+    expect(ledger.run.recordBasis).toBe("live");
+    expect(runGet.output.parse(ledger)).toEqual(ledger);
+  });
 });
 
 // #3823: a subagent records on a chain of its own, numbered from 0. get_run

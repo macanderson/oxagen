@@ -7449,6 +7449,17 @@ type Messages = {
       chain_break: string;
       telemetry_gap: string;
     };
+    backfill: {
+      badge: string;
+      partlyBadge: string;
+      note: string;
+      undatedNote: string;
+      partlyNote: string;
+      tierNotRecorded: string;
+      policy: string;
+      sealedBadge: string;
+      costNote: string;
+    };
     chain: {
       title: string;
       compacted: string;
@@ -7772,6 +7783,7 @@ type Messages = {
       corrective: string;
       provisional: string;
       estimate: string;
+      estimated: string;
       basisNotRecorded: string;
       noEnd: string;
       mostly: {

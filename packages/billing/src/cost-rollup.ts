@@ -66,7 +66,12 @@ export const ZERO_TOKENS: TokenCounts = {
 };
 
 /** Who observed a single frame. */
-type FrameBasis = "gateway_observed" | "client_attested";
+/**
+ * `estimated` is a frame a backfill rebuilt from a transcript (ADR-161). The
+ * book still prices it at the frame's instant, and the run's cost reads
+ * estimated whatever the book priced.
+ */
+type FrameBasis = "gateway_observed" | "client_attested" | "estimated";
 
 /** One model call, normalized from either frame store. */
 export interface ModelCallFrame {
