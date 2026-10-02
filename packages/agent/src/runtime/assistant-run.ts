@@ -98,7 +98,7 @@ export type AssistantRunSurface = Extract<PlatformSurface, "chat" | "api-chat">;
  * Before the subject column, the assistant's row was the workspace's latest
  * policy. An early build wrote `digest_only` with a thirty-day TTL, and one
  * assistant turn in a workspace with no policy opted every later Tacho run
- * there down to `inspect`. Migration 20261001120000 moved each row the
+ * there down to `inspect`. Migration 20261002000000 moved each row the
  * assistant wrote to its own subject.
  */
 export const ASSISTANT_RETENTION_POLICY = {
