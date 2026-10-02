@@ -42,9 +42,10 @@
 //      outside, because anyone who can push can write one.
 //   8. The workspace's steering repository published as its next steering
 //      version (#4447), when a publisher is wired. The publisher resolves the
-//      steering head and reads it again under its own lock. A publish that
-//      fails is a warning: the registry already matches the branch, and the
-//      next sync tries again.
+//      steering head and reads it again under its own lock. A version it
+//      publishes is recorded as a deployment to the steering environment. A
+//      publish that fails is a warning: the registry already matches the
+//      branch, and the next sync tries again.
 import { emitSecurityEvent } from "@oxagen/database/security";
 import { HandlerError } from "@oxagen/oxagen";
 import {
@@ -182,10 +183,13 @@ export function syncDeps(): SyncDeps {
     // The same publisher merge_context_pr calls, over the same host, so a
     // verified GitHub merge reaches the same version sequence.
     // The publish refuses while the steering repo is not healthy (S2).
+    // Each version the sync publishes is recorded as a deployment, as a
+    // merge's is. That covers a merge whose own publish failed (#4449).
     publish: steeringSyncPublish({
       host: github,
       extend: withToolProjection,
       readHealth: readSteeringHealth,
+      recordDeployments: true,
     }),
   };
 }
