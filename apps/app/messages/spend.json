@@ -185,8 +185,8 @@
         "needsPromptText": "Needs prompt text",
         "text": {
           "spin_loops": "{who} ran the same call 20 or more times in a row with an unchanged result. {calls, plural, one {# turn} other {# turns}} on {runs, plural, one {# run} other {# runs}} made only those repeats. The round trips cost {amount}.",
-          "duplicate_tool_calls": "{who} repeated tool calls that had already returned the same result in the run. {calls, plural, one {# turn} other {# turns}} on {runs, plural, one {# run} other {# runs}} made only those repeats. The round trips cost {amount}.",
-          "repeated_shell_commands": "Agents re-ran shell commands that had already returned the same result in the run. {calls, plural, one {# turn} other {# turns}} on {runs, plural, one {# run} other {# runs}} made only those repeats. The round trips cost {amount}.",
+          "duplicate_tool_calls": "{who} repeated tool calls that had already returned the same result in the run. {calls, plural, one {# call on {runs, plural, one {# run} other {# runs}} came} other {# calls on {runs, plural, one {# run} other {# runs}} each came}} from a turn that made no other call. The round trips cost {amount}.",
+          "repeated_shell_commands": "Agents re-ran shell commands that had already returned the same result in the run. {calls, plural, one {# call on {runs, plural, one {# run} other {# runs}} came} other {# calls on {runs, plural, one {# run} other {# runs}} each came}} from a turn that made no other call. The round trips cost {amount}.",
           "spend_with_no_outcome": "{who} spent {amount} on {runs, plural, one {# run} other {# runs}} that ended with nothing kept."
         }
       }

@@ -27,9 +27,39 @@ export function withQuery(path: string, pairs: readonly string[]): string {
   return `${path}${path.includes("?") ? "&" : "?"}${pairs.join("&")}`;
 }
 
-/** One query pair, percent-encoded. */
-export function queryPair(name: string, value: string): string {
-  return `${encodeURIComponent(name)}=${encodeURIComponent(value)}`;
+/**
+ * The reserved characters (RFC 3986) that a value sent with OpenAPI's
+ * allowReserved keeps as written. The rest stay encoded: a query cannot hold
+ * #, [, or ], and a form query reads & and = as separators and + as a space.
+ */
+const KEPT_RESERVED: Readonly<Record<string, string>> = {
+  "%3A": ":",
+  "%2F": "/",
+  "%3F": "?",
+  "%40": "@",
+  "%24": "$",
+  "%2C": ",",
+  "%3B": ";",
+};
+
+/**
+ * A query value, percent-encoded. With allowReserved, the reserved characters
+ * in KEPT_RESERVED and any percent-encoded triple, such as %2F, pass through as
+ * written (RFC 6570 reserved expansion, as OpenAPI defines allowReserved).
+ */
+export function queryValue(value: string, allowReserved = false): string {
+  if (!allowReserved) return encodeURIComponent(value);
+  return value
+    .split(/(%[0-9A-Fa-f]{2})/)
+    .map((part, index) =>
+      index % 2 === 1 ? part : encodeURIComponent(part).replace(/%(?:3A|2F|3F|40|24|2C|3B)/g, (code) => KEPT_RESERVED[code] ?? code),
+    )
+    .join("");
+}
+
+/** One query pair, percent-encoded. With allowReserved, the value keeps reserved characters a query can hold. */
+export function queryPair(name: string, value: string, allowReserved = false): string {
+  return `${encodeURIComponent(name)}=${queryValue(value, allowReserved)}`;
 }
 
 /** The target for one request, checked against the relay envelope's schema. */

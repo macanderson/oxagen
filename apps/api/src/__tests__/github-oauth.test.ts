@@ -10,12 +10,12 @@
  *   - state is base64url-encoded JSON
  *
  * - GET /oauth/github/callback
- *   - missing code or state → 400
+ *   - missing state with no install params → 400
  *   - missing env vars → 503
- *   - state with bad base64url → 400 (via the signature check; see the test)
- *   - state HMAC mismatch → 400
- *   - correctly-signed state that is not JSON → 400
- *   - expired state → 400
+ *   - a state it can't use ends on the app's result page, never JSON (#5151):
+ *     bad base64url (via the signature check; see the test), HMAC mismatch,
+ *     a signed body that is not JSON → 302 code=state_invalid; expired →
+ *     302 code=state_expired
  *   - GitHub token exchange failure (non-200) → 502
  *   - GitHub token exchange error field → 400
  *   - happy path → stores tokens + redirects to app with setup=github query
@@ -41,10 +41,15 @@
  *     redirect_uri; the retired app parameter is ignored (ADR-228)
  *
  * - GET /oauth/github/callback with a steering state (ADR-228)
- *   - each unset key → 503; a bad or expired state → 400
- *   - a state signed for any other purpose, or with malformed fields → 400
+ *   - each unset key → 503
+ *   - a bad signature, another purpose, or malformed fields → the result
+ *     page with code=state_invalid and no return_to (#5151)
+ *   - an expired steering state → the landing with its return_to and
+ *     code=state_expired; one whose return_to leaves the app → the result page
  *   - records the installation, stores the token as github_steering, and
  *     resends each waiting scope
+ *   - every outcome lands on the app's /github/steering with return_to and
+ *     the outcome on its query, never on return_to itself (#5151)
  *   - keeps the installation the install leg named, only when the owner's
  *     token lists it on a GitHub organization
  *
@@ -239,6 +244,12 @@ const CLIENT_ID = "Iv1.test_github_client_id";
 const CLIENT_SECRET = "test_github_client_secret";
 const APP_URL = "https://app.test.oxagen.ai";
 const API_URL = "https://api.test.oxagen.ai";
+/**
+ * Where the callback sends a state it can't use (#5151): the app's GitHub
+ * connection result page, never a JSON 400, and no return_to.
+ */
+const STATE_INVALID_URL = `${APP_URL}/github/steering/result?steering=error&code=state_invalid`;
+const STATE_EXPIRED_URL = `${APP_URL}/github/steering/result?steering=error&code=state_expired`;
 
 const APP_SLUG = "oxagen-test";
 
@@ -1092,14 +1103,14 @@ describe("GET /oauth/github/callback", () => {
     expect(res.status).toBe(503);
   });
 
-  it("returns 400 when state format is invalid (no dot separator)", async () => {
+  it("sends a state with no dot separator to the result page", async () => {
     const res = await makeCallbackReq({
       code: "code",
       state: "nodotseparator",
     });
-    expect(res.status).toBe(400);
-    const body = (await res.json()) as { error: string };
-    expect(body.error).toContain("Invalid state format");
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe(STATE_INVALID_URL);
+    expect(mocks.fetch).not.toHaveBeenCalled();
   });
 
   // Named for what it exercises, not for what it looks like it exercises: the
@@ -1110,17 +1121,16 @@ describe("GET /oauth/github/callback", () => {
   // removing it would change behaviour on a runtime whose base64url decoder
   // does throw, and it was equally unreachable before the refactor that moved
   // the check into @oxagen/github (behaviour-preserving port).
-  it("returns 400 for a state whose body is not base64url (refused on the signature)", async () => {
+  it("sends a state whose body is not base64url to the result page (refused on the signature)", async () => {
     const res = await makeCallbackReq({
       code: "code",
       state: "!!!invalid_base64!!!.abc123",
     });
-    expect(res.status).toBe(400);
-    const body = (await res.json()) as { error: string };
-    expect(body.error).toBe("Invalid state signature");
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe(STATE_INVALID_URL);
   });
 
-  it("returns 400 when a correctly-signed state decodes to something that is not JSON", async () => {
+  it("sends a correctly-signed state that is not JSON to the result page", async () => {
     // The `invalid_json` branch is reachable only with a VALID HMAC over a
     // non-JSON body — a state minted against a different payload shape, or a
     // stored secret reused across an encoding change. Same HMAC construction
@@ -1133,27 +1143,27 @@ describe("GET /oauth/github/callback", () => {
 
     const res = await makeCallbackReq({ code: "code", state });
 
-    expect(res.status).toBe(400);
-    const body = (await res.json()) as { error: string };
-    expect(body.error).toBe("Invalid state JSON");
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe(STATE_INVALID_URL);
   });
 
-  it("returns 400 when state HMAC does not match", async () => {
+  it("sends a state whose HMAC does not match to the result page", async () => {
     const validState = buildValidState();
     const dotIdx = validState.lastIndexOf(".");
     const tampered = `${validState.slice(0, dotIdx)}.deadbeefdeadbeef`;
     const res = await makeCallbackReq({ code: "code", state: tampered });
-    expect(res.status).toBe(400);
-    const body = (await res.json()) as { error: string };
-    expect(body.error).toContain("signature");
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe(STATE_INVALID_URL);
+    expect(mocks.fetch).not.toHaveBeenCalled();
   });
 
-  it("returns 400 when state is expired", async () => {
+  it("sends an expired workspace-connect state to the result page with no return_to", async () => {
     const expiredState = buildValidState({ expiresAt: Date.now() - 1000 });
     const res = await makeCallbackReq({ code: "code", state: expiredState });
-    expect(res.status).toBe(400);
-    const body = (await res.json()) as { error: string };
-    expect(body.error).toContain("expired");
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe(STATE_EXPIRED_URL);
+    // An expired state finishes nothing: no token exchange.
+    expect(mocks.fetch).not.toHaveBeenCalled();
   });
 
   it("returns 502 when GitHub token exchange API returns non-200", async () => {
@@ -2937,6 +2947,12 @@ const STEERING_BASE = `/v1/${ORG}/connections/steering`;
 const RETIRED_STEERING_CALLBACK_PATH = "/oauth/github/steering";
 const STEERING_USER_ID = "user-id-test";
 const STEERING_RETURN_TO = "/onboarding/steering";
+/**
+ * Where the callback sends every steering outcome: the app's landing, with
+ * `return_to` first and the outcome after it (#5151). URLSearchParams encodes
+ * each slash in the path.
+ */
+const STEERING_LANDING = `${APP_URL}/github/steering?return_to=${encodeURIComponent(STEERING_RETURN_TO)}`;
 
 /** Steering runs on the Oxagen GitHub App, so it reads only `GITHUB_APP_*` (ADR-228). */
 const STEERING_ENV: Record<string, string | undefined> = {
@@ -3315,7 +3331,7 @@ describe("GET /oauth/github/callback with a steering state (ADR-228)", () => {
   }
 
   function errorRedirect(code: string) {
-    return `${APP_URL}${STEERING_RETURN_TO}?steering=error&code=${code}`;
+    return `${STEERING_LANDING}&steering=error&code=${code}`;
   }
 
   /** What GitHub answers for the owner's `/user/installations`. */
@@ -3362,29 +3378,45 @@ describe("GET /oauth/github/callback with a steering state (ADR-228)", () => {
     },
   );
 
-  it("answers 400 to a steering state whose signature does not match", async () => {
+  it("sends a steering state whose signature does not match to the result page, with no return_to", async () => {
     const good = buildPurposeState();
     const forged = `${good.slice(0, good.lastIndexOf("."))}.${"0".repeat(64)}`;
 
     const res = await steeringCallback({ code: "steering-code", state: forged });
 
-    expect(res.status).toBe(400);
-    const body = (await res.json()) as { error?: string };
-    expect(body.error).toBe("Invalid state signature");
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe(STATE_INVALID_URL);
     expect(mocks.fetch).not.toHaveBeenCalled();
     expect(mocks.withSystemDb).not.toHaveBeenCalled();
   });
 
-  it("answers 400 to an expired steering state", async () => {
+  it("sends an expired steering state through the landing with its return_to", async () => {
     const res = await steeringCallback({
       code: "steering-code",
+      installation_id: "987654",
+      setup_action: "install",
       state: buildPurposeState({ expiresAt: Date.now() - 1000 }),
     });
 
-    expect(res.status).toBe(400);
-    const body = (await res.json()) as { error?: string };
-    expect(body.error).toContain("expired");
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe(errorRedirect("state_expired"));
+    // An expired state finishes nothing: no registry write, no token exchange.
+    expect(vi.mocked(upsertGithubInstallation)).not.toHaveBeenCalled();
     expect(mocks.fetch).not.toHaveBeenCalled();
+    expect(mocks.withSystemDb).not.toHaveBeenCalled();
+  });
+
+  it("sends an expired steering state with a return_to that leaves the app to the result page (negative)", async () => {
+    const res = await steeringCallback({
+      code: "steering-code",
+      state: buildPurposeState({
+        expiresAt: Date.now() - 1000,
+        returnTo: "//evil.test",
+      }),
+    });
+
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe(STATE_EXPIRED_URL);
   });
 
   it.each([
@@ -3408,7 +3440,7 @@ describe("GET /oauth/github/callback with a steering state (ADR-228)", () => {
       name: "a steering state with no organization",
       state: () => buildPurposeState({ orgId: "" }),
     },
-  ])("answers 400 to $name and touches nothing", async ({ state }) => {
+  ])("sends $name to the result page and touches nothing", async ({ state }) => {
     const res = await steeringCallback({
       code: "steering-code",
       installation_id: "987654",
@@ -3416,10 +3448,8 @@ describe("GET /oauth/github/callback with a steering state (ADR-228)", () => {
       state: state(),
     });
 
-    expect(res.status).toBe(400);
-    expect(res.headers.get("location")).toBeNull();
-    const body = (await res.json()) as { error?: string };
-    expect(body.error).toContain("not started for this callback");
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe(STATE_INVALID_URL);
     expect(vi.mocked(upsertGithubInstallation)).not.toHaveBeenCalled();
     expect(mocks.fetch).not.toHaveBeenCalled();
     expect(mocks.encrypt).not.toHaveBeenCalled();
@@ -3556,7 +3586,7 @@ describe("GET /oauth/github/callback with a steering state (ADR-228)", () => {
 
     expect(res.status).toBe(302);
     expect(res.headers.get("location")).toBe(
-      `${APP_URL}${STEERING_RETURN_TO}?steering=connected`,
+      `${STEERING_LANDING}&steering=connected`,
     );
 
     // The code went to GitHub with the Oxagen GitHub App's client, the same
@@ -3638,7 +3668,7 @@ describe("GET /oauth/github/callback with a steering state (ADR-228)", () => {
 
     expect(res.status).toBe(302);
     expect(res.headers.get("location")).toBe(
-      `${APP_URL}${STEERING_RETURN_TO}?steering=connected`,
+      `${STEERING_LANDING}&steering=connected`,
     );
     const expiresAt = insert.captured.values?.expiresAt;
     expect(expiresAt).toBeInstanceOf(Date);
@@ -3693,7 +3723,7 @@ describe("GET /oauth/github/callback with a steering state (ADR-228)", () => {
 
     expect(res.status).toBe(302);
     expect(res.headers.get("location")).toBe(
-      `${APP_URL}${STEERING_RETURN_TO}?steering=connected`,
+      `${STEERING_LANDING}&steering=connected`,
     );
     // The install goes into the platform registry, as a direct install does.
     expect(vi.mocked(upsertGithubInstallation)).toHaveBeenCalledWith({
@@ -3760,7 +3790,7 @@ describe("GET /oauth/github/callback with a steering state (ADR-228)", () => {
 
     expect(res.status).toBe(302);
     expect(res.headers.get("location")).toBe(
-      `${APP_URL}${STEERING_RETURN_TO}?steering=connected`,
+      `${STEERING_LANDING}&steering=connected`,
     );
     const connection = {
       provider: "github",
@@ -3823,7 +3853,7 @@ describe("GET /oauth/github/callback with a steering state (ADR-228)", () => {
 
     expect(res.status).toBe(302);
     expect(res.headers.get("location")).toBe(
-      `${APP_URL}${STEERING_RETURN_TO}?steering=connected`,
+      `${STEERING_LANDING}&steering=connected`,
     );
     expect(mocks.keepSteeringConnection).toHaveBeenCalledTimes(1);
   });
@@ -3873,7 +3903,7 @@ describe("GET /oauth/github/callback with a steering state (ADR-228)", () => {
 
       expect(res.status).toBe(302);
       expect(res.headers.get("location")).toBe(
-        `${APP_URL}${STEERING_RETURN_TO}?steering=connected`,
+        `${STEERING_LANDING}&steering=connected`,
       );
       expect(mocks.fetch.mock.calls[2]?.[0]).toBe(INSTALLATIONS_URL);
       expect(mocks.keepSteeringConnection).not.toHaveBeenCalled();
@@ -3898,7 +3928,7 @@ describe("GET /oauth/github/callback with a steering state (ADR-228)", () => {
 
       expect(res.status).toBe(302);
       expect(res.headers.get("location")).toBe(
-        `${APP_URL}${STEERING_RETURN_TO}?steering=connected`,
+        `${STEERING_LANDING}&steering=connected`,
       );
       expect(mocks.fetch).toHaveBeenCalledTimes(2);
       expect(mocks.keepSteeringConnection).not.toHaveBeenCalled();

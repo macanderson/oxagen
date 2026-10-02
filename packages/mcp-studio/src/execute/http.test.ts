@@ -570,3 +570,64 @@ describe("the shared helpers", () => {
     });
   });
 });
+
+describe("what import carries from the document (#4613)", () => {
+  it("sends to the operation's own server in place of the environment's url (finding 5)", async () => {
+    const template = operation({
+      base_url: "https://uploads.example.com/files/",
+      path: "/things/{id}",
+      parameters: [param("id", "path", { required: true })],
+    });
+    const request = await built(template, { id: "a b" });
+    expect(request.target).toEqual({
+      kind: "http",
+      scheme: "https",
+      method: "GET",
+      host: "uploads.example.com",
+      path: "/files/things/a%20b",
+    });
+    expect(request.network).toBe("cloud");
+  });
+
+  it("sends a list or an object under the form and cookie styles, one cookie per item or member when exploded (finding 6)", async () => {
+    const cookie = (p: HttpParameter, value: unknown): Promise<string | undefined> =>
+      built(operation({ parameters: [p] }), { c: value }).then((r) => header(r, "cookie"));
+    for (const style of ["form", "cookie"] as const) {
+      const exploded = param("c", "cookie", { style, explode: true });
+      const joined = param("c", "cookie", { style, explode: false });
+      expect(await cookie(exploded, ["blue", "black"])).toBe("c=blue; c=black");
+      expect(await cookie(exploded, { R: 100, G: 200 })).toBe("R=100; G=200");
+      expect(await cookie(joined, ["blue", "black"])).toBe("c=blue,black");
+      expect(await cookie(joined, { R: 100, G: 200 })).toBe("c=R,100,G,200");
+    }
+    expect(await cookie(param("c", "cookie", { style: "cookie" }), ["blue", "black"])).toBe("c=blue; c=black");
+  });
+
+  it("keeps the reserved characters a query can hold when allow_reserved is set (finding 10)", async () => {
+    const query = async (p: HttpParameter, value: unknown): Promise<[string, unknown]> => {
+      const { result, requests } = await send(operation({ parameters: [p] }), { q: value }, () => reply(200, {}));
+      const recorded = result.exchanges?.[0]?.request;
+      return [only(requests).target.path, recorded !== undefined && "query" in recorded ? recorded.query : undefined];
+    };
+    const reserved = param("q", "query", { allow_reserved: true });
+    expect(await query(reserved, "a/b:c?d@e$f,g;h!*'()")).toEqual([
+      "/v2/things?q=a/b:c?d@e$f,g;h!*'()",
+      { q: "a/b:c?d@e$f,g;h!*'()" },
+    ]);
+    expect(await query(reserved, "#[]&=+ %")).toEqual(["/v2/things?q=%23%5B%5D%26%3D%2B%20%25", { q: "#[]&=+ %" }]);
+    expect(await query(reserved, "%2F%zz")).toEqual(["/v2/things?q=%2F%25zz", { q: "%2F%zz" }]);
+    expect(await query(param("q", "query"), "a/b:c")).toEqual(["/v2/things?q=a%2Fb%3Ac", { q: "a/b:c" }]);
+    expect(await query(param("q", "query", { allow_reserved: true, explode: false }), ["a/b", "c:d"])).toEqual([
+      "/v2/things?q=a/b,c:d",
+      { q: "a/b,c:d" },
+    ]);
+    expect(await query(param("q", "query", { allow_reserved: true }), { "k/1": "a/b" })).toEqual([
+      "/v2/things?k%2F1=a/b",
+      { "k/1": "a/b" },
+    ]);
+    expect(await query(param("q", "query", { allow_reserved: true, style: "deepObject", explode: true }), { k: "a/b" })).toEqual([
+      "/v2/things?q[k]=a/b",
+      { "q[k]": "a/b" },
+    ]);
+  });
+});
