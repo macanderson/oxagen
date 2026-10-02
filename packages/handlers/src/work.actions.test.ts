@@ -70,6 +70,14 @@ describe("the person gate on work actions", () => {
     expect(d.governanceMode).not.toHaveBeenCalled();
   });
 
+  it("refuses a CLI login key even though it resolves to a person", async () => {
+    const d = deps();
+    const cliKey: CapabilityContext = { ...person, apiKeyId: "aky_cli", surface: "api" };
+    await expect(createWorkOrderAcceptHandler(d)(ACCEPT, cliKey)).rejects.toMatchObject({ code: "forbidden", reason: "person_required" });
+    expect(mocks.assertOrgRole).not.toHaveBeenCalled();
+    expect(d.db).not.toHaveBeenCalled();
+  });
+
   it("refuses an agent run, so an agent cannot accept its own work", async () => {
     const d = deps();
     await expect(createWorkOrderAcceptHandler(d)(ACCEPT, agentRun)).rejects.toMatchObject({ code: "forbidden", reason: "agent_run" });

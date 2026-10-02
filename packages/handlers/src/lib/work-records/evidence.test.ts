@@ -40,6 +40,12 @@ describe("observedChecksOf", () => {
     expect(read).toEqual([{ name: "test", conclusion: "success", at: "2026-10-02T09:20:00.000Z" }]);
   });
 
+  it("keeps the less successful result when two apps report the same name", () => {
+    const required = { ...run("ci", "completed", "failure", "2026-10-02T09:10:00.000Z"), appName: "GitHub Actions" };
+    const lookalike = { ...run("ci", "completed", "success", "2026-10-02T09:30:00.000Z"), appName: "Some App" };
+    expect(observedChecksOf(checks([required, lookalike]))).toEqual([{ name: "ci", conclusion: "failure", at: "2026-10-02T09:10:00.000Z" }]);
+  });
+
   it("reads a status error as a failure, and a disagreement as the less successful report", () => {
     const read = observedChecksOf(
       checks([run("ci", "completed", "success", "2026-10-02T09:10:00.000Z")], [
@@ -64,7 +70,17 @@ describe("evidenceFacts", () => {
   it("never records a required list from a failed read", () => {
     const { facts, summary } = evidenceFacts(ORDER, { pull: pull(), required: { ok: false, reason: "rulesets read failed: 404" }, checks: checks([]) }, NOW);
     expect(facts.some((fact) => fact.kind === "checks_required")).toBe(false);
-    expect(summary).toEqual({ head: SHA1, requiredChecks: null, unreadReason: "rulesets read failed: 404" });
+    expect(summary).toEqual({ head: SHA1, requiredChecks: null, checksRead: true, unreadReason: "rulesets read failed: 404" });
+  });
+
+  it("marks the check results unread when the read failed or came back cut short", () => {
+    const required = { ok: true as const, names: ["test"], sources: { protection: true, rulesets: false } };
+    const failed = evidenceFacts(ORDER, { pull: pull(), required, checks: null }, NOW).summary;
+    expect(failed).toMatchObject({ requiredChecks: ["test"], checksRead: false, unreadReason: "check results not read" });
+    const partial = evidenceFacts(ORDER, { pull: pull(), required, checks: { ...checks([run("test", "completed", "success", "2026-10-02T09:20:00.000Z")]), complete: false } }, NOW).summary;
+    expect(partial).toMatchObject({ checksRead: false, unreadReason: "GitHub returned only part of the check results" });
+    const whole = evidenceFacts(ORDER, { pull: pull(), required, checks: checks([]) }, NOW).summary;
+    expect(whole).toMatchObject({ checksRead: true, unreadReason: null });
   });
 
   it("records an empty required list only from a read that succeeded", () => {

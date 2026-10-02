@@ -38,14 +38,17 @@ export async function assertWorkActor(ctx: CapabilityContext, action: WorkItemAc
       message: "An agent run cannot decide work. A person decides it in Oxagen.",
     });
   }
-  if (!ctx.userId) {
+  // Any API key is refused, including an `oxagen login` key that resolves to
+  // the person who approved the login: an agent on that person's machine can
+  // read the key, and must not decide its own work with it.
+  if (ctx.apiKeyId || !ctx.userId) {
     throw new HandlerError({
       code: "forbidden",
       reason: "person_required",
       message: "Sign in to Oxagen to decide work. An API key cannot approve, send, return, or accept work.",
     });
   }
-  // With the API key refused above, the acting user is the session's own
+  // With every API key refused above, the acting user is the session's own
   // (INV-29: every role gate acts as the user resolveActingUserId returns).
   const userId = await resolveActingUserId(ctx);
   if (userId === null) {
