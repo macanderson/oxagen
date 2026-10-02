@@ -1451,3 +1451,58 @@ describe("ship order", () => {
     expect(wal.unshipped(100, new Set([LIVE]))).toEqual(imported);
   });
 });
+
+describe("the oldest unshipped event in stats()", () => {
+  // `health()` calls `stats()` for every `/health` request and every shipped
+  // batch, so what one call reads is read again and again.
+
+  /** `minimalSession` with each event one second after the one before. */
+  function spacedSession(): TachoEvent[] {
+    const start = Date.parse("2026-10-02T03:20:00.000Z");
+    return minimalSession().map((event) => ({
+      ...event,
+      ts: new Date(start + event.seq * 1_000).toISOString(),
+    }));
+  }
+
+  it("reads a small window, not a scan chunk, to find it", () => {
+    const wal = new Wal(scratchPaths().wal);
+    const session = spacedSession();
+    wal.append(session);
+    const reads = vi.mocked(readSync);
+    reads.mockClear();
+    expect(wal.stats().oldestUnshippedAt).toBe(session[0]!.ts);
+    expect(reads).toHaveBeenCalled();
+    for (const call of reads.mock.calls) {
+      const buffer = call[1] as Uint8Array;
+      expect(buffer.byteLength).toBeLessThanOrEqual(16 * 1024);
+    }
+  });
+
+  it("reads no event file again until the session's cursor moves", () => {
+    const wal = new Wal(scratchPaths().wal);
+    const session = spacedSession();
+    const uuid = session[0]!.session_uuid;
+    wal.append(session);
+    expect(wal.stats().oldestUnshippedAt).toBe(session[0]!.ts);
+    const opened = vi.mocked(openSync);
+    opened.mockClear();
+    expect(wal.stats().oldestUnshippedAt).toBe(session[0]!.ts);
+    expect(opened).not.toHaveBeenCalled();
+    wal.markShipped(uuid, 1);
+    expect(wal.stats().oldestUnshippedAt).toBe(session[2]!.ts);
+  });
+
+  it("reads a compacted session afresh when its id comes back", () => {
+    const wal = new Wal(scratchPaths().wal);
+    const session = spacedSession();
+    const uuid = session[0]!.session_uuid;
+    wal.append(session);
+    expect(wal.stats().oldestUnshippedAt).toBe(session[0]!.ts);
+    wal.markShipped(uuid, session.at(-1)!.seq);
+    expect(wal.compact(Date.now() + 10 * 86_400_000, 1)).toEqual([uuid]);
+    const again = { ...session[0]!, ts: "2026-10-03T00:00:00.000Z" };
+    wal.append([again]);
+    expect(wal.stats().oldestUnshippedAt).toBe(again.ts);
+  });
+});

@@ -248,17 +248,22 @@ export function readTailLine(
   }
 }
 
-/** Every line of a file from `from`, one at a time, with its byte span. */
+/**
+ * Every line of a file from `from`, one at a time, with its byte span. Each
+ * read takes `chunkBytes`. A caller that wants only the first line passes a
+ * small one, because the whole chunk is read before the first line is split.
+ */
 export function* readLinesFrom(
   path: string,
   from = 0,
+  chunkBytes = SCAN_CHUNK_BYTES,
 ): Generator<IndexedLine, void, undefined> {
   const fd = openSync(path, "r");
   try {
     const splitter = new LineSplitter(from);
     let position = from;
     for (;;) {
-      const chunk = Buffer.allocUnsafe(SCAN_CHUNK_BYTES);
+      const chunk = Buffer.allocUnsafe(chunkBytes);
       const size = readSync(fd, chunk, 0, chunk.length, position);
       if (size <= 0) break;
       position += size;

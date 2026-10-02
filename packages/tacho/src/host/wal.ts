@@ -184,6 +184,14 @@ export class Wal {
    */
   private readonly lastActivity = new Map<string, number>();
   /**
+   * Each session's first unshipped `ts`, with the shipped cursor it was read
+   * at. See `firstUnshippedAt`. Cleared wherever an event file is cut.
+   */
+  private readonly firstUnshipped = new Map<
+    string,
+    { through: number; ts: string }
+  >();
+  /**
    * Where each session's shipped cursor sits in its event file. `unshipped`
    * and `stats` resumed from the top of the file, so a session with 20,000
    * events parsed all of them for every 200 the shipper took, and `health()`
@@ -541,6 +549,7 @@ export class Wal {
         const priorActivity = priorLastActivity.get(session);
         if (priorActivity === undefined) this.lastActivity.delete(session);
         else this.lastActivity.set(session, priorActivity);
+        this.firstUnshipped.delete(session);
         const priorSeal = priorSealed.get(session);
         if (priorSeal === undefined) delete this.cursor.sealed[session];
         else this.cursor.sealed[session] = priorSeal;
@@ -1144,6 +1153,7 @@ export class Wal {
     truncateSync(path, line.offset);
     this.lastSeq.delete(sessionUuid);
     this.lastActivity.delete(sessionUuid);
+    this.firstUnshipped.delete(sessionUuid);
     this.resume.delete(sessionUuid);
     this.dirtyPaths.add(path);
     return "truncated";
@@ -1340,14 +1350,17 @@ export class Wal {
    * is joined by the next append and reading past it would skip the joined
    * line instead of failing on it.
    */
-  private *eventsAfterShipped(sessionUuid: string): Generator<TachoEvent> {
+  private *eventsAfterShipped(
+    sessionUuid: string,
+    chunkBytes?: number,
+  ): Generator<TachoEvent> {
     const path = this.fileFor(sessionUuid);
     if (!existsSync(path)) return;
     const through = this.shippedThrough(sessionUuid);
     const mark = this.resumeMark(sessionUuid, path);
     const from =
       mark !== undefined && mark.afterSeq <= through ? mark.offset : 0;
-    for (const line of readLinesFrom(path, from)) {
+    for (const line of readLinesFrom(path, from, chunkBytes)) {
       if (line.text.trim().length === 0) continue;
       let event: TachoEvent;
       try {
@@ -1411,6 +1424,40 @@ export class Wal {
     return out;
   }
 
+  /**
+   * The `ts` of a session's first event past its shipped cursor `through`.
+   *
+   * `health()` calls `stats`, and the daemon calls `health()` for every
+   * `/health` and `/status` request, every command poll, and every batch it
+   * ships. Each call read a 256 KiB chunk from every session with anything
+   * unshipped, to parse one line. With 447 sessions queued that came to
+   * about 110 MiB per call, read on the thread that also answers hooks and
+   * the model proxy. On 2026-10-02 a daemon in that state stopped answering
+   * both, its one thread busy copying memory.
+   *
+   * The file only grows past the cursor, so the answer holds until the
+   * cursor moves or the file is cut, and it is kept until then. A miss reads
+   * one small window, which holds a whole event line in the ordinary case.
+   */
+  private firstUnshippedAt(
+    sessionUuid: string,
+    through: number,
+  ): string | undefined {
+    const known = this.firstUnshipped.get(sessionUuid);
+    if (known?.through === through) return known.ts;
+    // Returning from inside the loop runs the walk's `finally`, so the file
+    // it opened is closed. A paused generator, from a bare `.next()`, kept
+    // one descriptor per session open on every call.
+    for (const first of this.eventsAfterShipped(
+      sessionUuid,
+      EVENT_TAIL_WINDOW,
+    )) {
+      this.firstUnshipped.set(sessionUuid, { through, ts: first.ts });
+      return first.ts;
+    }
+    return undefined;
+  }
+
   markShipped(sessionUuid: string, throughSeq: number): void {
     if (throughSeq <= this.shippedThrough(sessionUuid)) return;
     this.cursor.shipped[sessionUuid] = throughSeq;
@@ -1433,6 +1480,10 @@ export class Wal {
    * (already reported through `reportChainGap` when it was written) can
    * undercount here; that is the cost of a status figure no longer costing
    * the backlog it describes.
+   *
+   * `firstUnshippedAt` keeps the one event read per session until that
+   * session's cursor moves, so a call reads only the sessions that shipped
+   * since the last one.
    */
   stats(): WalStats {
     let unshipped = 0;
@@ -1443,13 +1494,9 @@ export class Wal {
       const through = this.shippedThrough(session);
       if (last <= through) continue;
       unshipped += last - through;
-      // A loop that breaks, not a bare `.next()`: leaving the break runs the
-      // walk's `finally`, so the file it opened is closed. A paused
-      // generator kept one descriptor per session open on every call.
-      for (const first of this.eventsAfterShipped(session)) {
-        if (oldest === undefined || first.ts < oldest) oldest = first.ts;
-        break;
-      }
+      const first = this.firstUnshippedAt(session, through);
+      if (first !== undefined && (oldest === undefined || first < oldest))
+        oldest = first;
     }
     return {
       sessions: sessions.length,
@@ -1662,6 +1709,7 @@ export class Wal {
       // orphan the loop below removes, on this pass or a later one.
       this.lastSeq.delete(session);
       this.lastActivity.delete(session);
+      this.firstUnshipped.delete(session);
       this.resume.delete(session);
       delete this.cursor.shipped[session];
       delete this.cursor.sealed[session];
