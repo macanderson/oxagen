@@ -18,6 +18,8 @@ export default defineConfig({
         "src/index.ts",
         // Fact builders the record tests share. No production module imports them.
         "src/records/test-fixtures.ts",
+        // The triage tests' shared item, priorities record, and recording model client.
+        "src/triage/fixtures/**",
       ],
       // Lane C0 ships types, constants, and stubs whose tests reach every
       // line. The ratchet caps a threshold at 90.

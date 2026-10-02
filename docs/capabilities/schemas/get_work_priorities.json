@@ -1,0 +1,133 @@
+{
+  "name": "get_work_priorities",
+  "domain": "work",
+  "description": "Read the priorities record triage ranks work by: its lineage, version, hash, and numbered rules, with triage's suggestions, corrections, and failures in the last 30 days.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "low",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {},
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "record": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "lineage": {
+                "type": "string"
+              },
+              "record_id": {
+                "type": "string"
+              },
+              "version": {
+                "type": "integer",
+                "exclusiveMinimum": 0
+              },
+              "hash": {
+                "type": "string"
+              },
+              "rules": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "number": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "text": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "number",
+                    "text"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "published_at": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "lineage",
+              "record_id",
+              "version",
+              "hash",
+              "rules",
+              "published_at"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "problem": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "last_30_days": {
+        "type": "object",
+        "properties": {
+          "suggestions": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "failures": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "corrections": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "suggestions",
+          "failures",
+          "corrections"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "required": [
+      "record",
+      "problem",
+      "last_30_days"
+    ],
+    "additionalProperties": false
+  }
+}

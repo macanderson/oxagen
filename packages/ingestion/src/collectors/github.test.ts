@@ -338,6 +338,7 @@ describe("toWorkItem", () => {
       priorityRaw: "p1",
       estimateMinutes: null,
       tainted: ["subject", "description"],
+      sourceRepository: "acme/web",
     });
   });
 
@@ -555,6 +556,29 @@ describe("fetchById", () => {
 
 describe("listChangedSince", () => {
   const NOW = "2026-09-29T00:00:00Z";
+
+  it("reads only the repositories the scope names, as GitHub spells them", async () => {
+    serve(
+      on("GET", "/user/repos", jsonResponse([
+        { full_name: "Acme/Web", has_issues: true },
+        { full_name: "acme/api", has_issues: true },
+      ])),
+      on("GET", "/repos/Acme/Web/issues", jsonResponse([])),
+      graphql("LastActors", () => ({ data: { nodes: [] } })),
+    );
+    const page = await githubCollector.listChangedSince(null, conn, { repos: ["acme/web", "ACME/WEB"] });
+    expect(page.items).toEqual([]);
+    expect(requests()).toEqual(["GET /user/repos", "GET /repos/Acme/Web/issues"]);
+  });
+
+  it("fails when the connection cannot read a repository the scope names", async () => {
+    serve(on("GET", "/user/repos", jsonResponse([{ full_name: "acme/web", has_issues: true }])));
+    const error = await failure(githubCollector.listChangedSince(null, conn, { repos: ["acme/web", "acme/billing"] }));
+    expect(error.message).toBe(
+      "The GitHub connection cannot read acme/billing. Give the Oxagen GitHub App access to each repository the collector names, or reconnect GitHub.",
+    );
+    expect(requests()).toEqual(["GET /user/repos"]);
+  });
 
   beforeEach(() => {
     vi.useFakeTimers({ toFake: ["Date"] });

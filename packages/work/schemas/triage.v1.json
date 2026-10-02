@@ -112,7 +112,7 @@
           "type": "null"
         }
       ],
-      "description": "The workflow's slug. Null only when the state is not triaged."
+      "description": "The workflow's slug, or null when no workflow applies. Phase 1 of agent work runs no workflows, so triage writes null."
     },
     "done_record": {
       "anyOf": [
@@ -137,7 +137,7 @@
           "type": "null"
         }
       ],
-      "description": "The criteria of the drafted done record. Null only when the state is not triaged."
+      "description": "The drafted acceptance criteria. Null only when the state is not triaged."
     },
     "questions": {
       "type": "array",
@@ -170,9 +170,6 @@
       },
       "then": {
         "properties": {
-          "workflow": {
-            "$ref": "#/$defs/slug"
-          },
           "done_record": {
             "type": "object"
           }

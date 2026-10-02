@@ -16,6 +16,7 @@
     "./hook": "./src/claude-code/hook-process.ts",
     "./trace": "./src/trace/index.ts",
     "./policy": "./src/policy/index.ts",
+    "./redaction": "./src/evidence/redaction.ts",
     "./local-servers": "./src/collector/local-servers/index.ts",
     "./session-subject": "./src/session-subject.ts",
     "./skills": "./src/skills/index.ts"

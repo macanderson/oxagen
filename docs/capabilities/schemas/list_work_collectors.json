@@ -1,0 +1,189 @@
+{
+  "name": "list_work_collectors",
+  "domain": "work",
+  "description": "List the workspace's work collectors with their repositories, health, last good read, failed reconciles in a row, and next check.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "low",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {},
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "collectors": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "collector_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "name": {
+              "type": "string"
+            },
+            "type": {
+              "const": "github"
+            },
+            "connection_id": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "repos": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "health": {
+              "type": "string",
+              "enum": [
+                "healthy",
+                "lagging",
+                "failing",
+                "paused"
+              ]
+            },
+            "cursor": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "last_reconcile": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "at": {
+                      "type": "string"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "pages": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "handled": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "missed": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "error": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "at",
+                    "ok",
+                    "pages",
+                    "handled",
+                    "missed",
+                    "error"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "last_success_at": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "failed_streak": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "next_check_at": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "last_event_at": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "created_at": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "collector_id",
+            "name",
+            "type",
+            "connection_id",
+            "repos",
+            "health",
+            "cursor",
+            "last_reconcile",
+            "last_success_at",
+            "failed_streak",
+            "next_check_at",
+            "last_event_at",
+            "created_at"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "collectors"
+    ],
+    "additionalProperties": false
+  }
+}

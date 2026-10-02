@@ -38,6 +38,11 @@
  *   2d. `pull_request` → store the state the delivery reports on every run
  *      row that names the pull request, in the workspaces connected to this
  *      installation (ADR-192).
+ *   2e. `issues` / `issue_comment` → hand the delivery to every work
+ *      collector that reads the repository (P1-03, #5103). Each verifies it
+ *      again, stores it once by delivery id, and a durable job fetches the
+ *      issue. A failure never fails the delivery: the 15-minute reconcile
+ *      reads the issue anyway.
  *   3. Resolve connected GitHub connection(s) for this installation + repo.
  *   4. Ask the connector to extract ingestable (sourceRecordType, record) pairs.
  *   5. Fan out one `ingestion/entity.received` per (connection × record). The
@@ -63,6 +68,10 @@ import {
 } from "@oxagen/handlers/steering-repo/health";
 import { githubHealthSignal } from "@oxagen/handlers/steering-repo/health.events";
 import { routeGithubDiscoveryPush } from "@oxagen/handlers/mcp-studio/discovery/webhook";
+import {
+  WORK_DELIVERY_EVENTS,
+  routeGithubWorkDelivery,
+} from "@oxagen/handlers/lib/work-intake/delivery";
 import { eventClient } from "../../event-client";
 import { getConnector } from "@oxagen/ingestion/connectors";
 import { requireEnv } from "@oxagen/config/env";
@@ -365,6 +374,34 @@ githubAppWebhookRoute.post("/", async (c) => {
         { err, eventName },
         "GitHub App webhook: could not store the pull request's state; runs show the last state stored",
       );
+    }
+  }
+
+  // ── Work intake (P1-03, #5103) ──────────────────────────────────────────
+  // An issue delivery reaches every work collector that reads its
+  // repository. GitHub does not redeliver a failed delivery on its own, so a
+  // failure here is logged, never answered with an error: the collector's
+  // 15-minute reconcile reads the issue and counts it as missed.
+  if (WORK_DELIVERY_EVENTS.has(eventName) && installationId) {
+    const workRepository = (body["repository"] as { full_name?: unknown } | null | undefined)?.full_name;
+    if (typeof workRepository === "string" && workRepository !== "") {
+      try {
+        await routeGithubWorkDelivery({
+          installationId,
+          repository: workRepository,
+          request: {
+            headers: c.req.header(),
+            body: payload,
+            receivedAt: new Date().toISOString(),
+          },
+          secret,
+        });
+      } catch (err) {
+        logger.error(
+          { err, eventName },
+          "GitHub App webhook: could not store an issue delivery for work intake; the collector's reconcile reads the issue",
+        );
+      }
     }
   }
 

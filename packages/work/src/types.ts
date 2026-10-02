@@ -345,9 +345,9 @@ export interface TriageDecision {
   claims: string[];
   duplicates: WorkItemId[];
   related: WorkItemId[];
-  /** A workflow slug. Null only when the state is not `triaged`. */
+  /** A workflow slug, or null when no workflow applies. Phase 1 runs no workflows, so triage writes null. */
   workflow: string | null;
-  /** The drafted criteria. Null only when the state is not `triaged`. */
+  /** The drafted acceptance criteria. Null only when the state is not `triaged`. */
   done_record: { criteria: string[] } | null;
   /** Questions for the people in the workspace. Never for the requester. */
   questions: string[];

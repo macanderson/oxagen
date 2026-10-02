@@ -217,6 +217,15 @@ export interface DurableFunctionConfig {
    * dialect — see the note at the top of this file.
    */
   debounce?: { period: string; key?: string; timeout?: string };
+  /**
+   * Start at most `limit` runs per `period` (e.g. "1m"). The provider queues
+   * every run over the limit and starts it in a later period, so no event is
+   * dropped. `key` throttles per key value; without it every event of the
+   * function shares one limit. `burst` lets that many extra runs start at
+   * the top of a period. Provider dialect: see the note at the top of this
+   * file.
+   */
+  throttle?: { limit: number; period: string; key?: string; burst?: number };
 }
 
 // ─── Function Trigger ────────────────────────────────────────────────────────
