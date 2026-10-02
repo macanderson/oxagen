@@ -13,9 +13,9 @@
 // count a frame by the time it ran (./lib/frame-time-spend.ts), so a run that
 // crosses the period's first or last day adds the same frames to each.
 //
-// Managers read it: an org Owner or Admin. The kernel's IAM check admits the
-// same two roles in an Enterprise org, and no person holds a workspace IAM
-// role yet (#3198), so the ranking names no workspace role. With the
+// Managers read it: an org Owner or Admin, or the workspace's Owner. A
+// workspace's creator holds the workspace Owner role in IAM (#5182), and the
+// kernel's IAM check admits the same three in an Enterprise org. With the
 // pseudonym setting on, a pseudonym replaces each name, and the answer drops
 // the key, the facts, and the run ids, since a run page names its operator.
 // It also drops the unproductive share and the run count: the share gives
@@ -110,7 +110,10 @@ export type OperatorRankingDeps = {
 };
 
 /** Who may read the ranking: the roles the contract's defaultRoles allow. */
-export const RANKING_ROLES = { org: ["Owner", "Admin"] } as const;
+export const RANKING_ROLES = {
+  org: ["Owner", "Admin"],
+  workspace: ["Owner"],
+} as const;
 
 async function readClaims(
   scope: RankingScope,
@@ -178,7 +181,10 @@ export function createOperatorRankingHandler(
   return async (input, ctx): Promise<SpendOperatorRankingOutput> => {
     const userId = await resolveActingUserId(ctx);
     const scope = { orgId: ctx.orgId, workspaceId: ctx.workspaceId };
-    await assertOrgRole({ ...ctx, userId }, { org: [...RANKING_ROLES.org] });
+    await assertOrgRole(
+      { orgId: ctx.orgId, workspaceId: ctx.workspaceId, userId },
+      { org: [...RANKING_ROLES.org], workspace: [...RANKING_ROLES.workspace] },
+    );
     const { from, to } = input.period;
     const window = { start: dayBounds(from).start, end: dayBounds(to).next };
 

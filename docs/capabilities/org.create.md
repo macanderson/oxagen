@@ -68,7 +68,7 @@ One `withSystemDb` transaction:
 - `org.organizations` (name, slug, namespace, type, status `active`)
 - `org.org_users` (caller as `owner`)
 - `iam.roles`, `iam.principals`, `iam.principal_role_assignments`, `iam.role_grants` (`bootstrapOrgIAM`)
-- `workspace.workspaces`, `workspace.workspace_users` (caller as `owner`), `agent.agents` + `agent.agent_versions` (the `qa-chat` agent), `mcp.mcp_registries` (default), `environments.environments` (default). `bootstrapWorkspace` writes them, the same code `create_workspace` runs. Skipped when the input sent `workspace: null`.
+- `workspace.workspaces`, `workspace.workspace_users` (caller as `owner`), `iam.principal_role_assignments` (the caller's principal holds the workspace `Owner` role on the new workspace), `agent.agents` + `agent.agent_versions` (the `qa-chat` agent), `mcp.mcp_registries` (default), `environments.environments` (default). `bootstrapWorkspace` writes them, the same code `create_workspace` runs. Skipped when the input sent `workspace: null`.
 - `org.onboarding_state` (the gate, pointing at the first workspace, or at none when there is none)
 
 After commit: a `security.security_events` row `organization.created`.
