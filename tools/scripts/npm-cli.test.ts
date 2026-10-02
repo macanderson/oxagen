@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   latestCorrection,
   manifestProblem,
+  movesLatestForward,
   type NpmRunner,
   parseRegistryState,
   planPublish,
@@ -78,6 +79,19 @@ describe("latestCorrection", () => {
   });
 });
 
+describe("movesLatestForward", () => {
+  it("moves only to a newer version", () => {
+    expect(movesLatestForward("2.1.4-1", "2.1.4-2")).toBe(true);
+    expect(movesLatestForward("2.1.4-2", "2.1.4-2")).toBe(false);
+    expect(movesLatestForward("2.1.4-2", "2.1.4-1")).toBe(false);
+  });
+
+  it("gives way when latest names nothing or a shape it cannot order", () => {
+    expect(movesLatestForward(null, "2.1.4-1")).toBe(true);
+    expect(movesLatestForward("3.0.0-beta.1", "2.1.4-1")).toBe(true);
+  });
+});
+
 describe("manifestProblem", () => {
   const good = {
     name: "@oxagen/cli",
@@ -95,6 +109,9 @@ describe("manifestProblem", () => {
       /private/,
     );
     expect(manifestProblem({ ...good, bin: {} }, "2.1.4-1")).toMatch(/bin/);
+    expect(manifestProblem({ ...good, bin: undefined }, "2.1.4-1")).toMatch(
+      /missing bin/,
+    );
     expect(manifestProblem(good, "2.1.4-2")).toMatch(/!= release version/);
     expect(
       manifestProblem(
@@ -105,39 +122,49 @@ describe("manifestProblem", () => {
   });
 });
 
+type State = { versions: string[]; latest: string | null };
+
 /**
  * A registry the publish talks to through `npm view`, `npm publish` and
- * `npm dist-tag add`. `onPublish` runs inside the publish call, where a test
- * can stand in for a second run or a failure.
+ * `npm dist-tag add`. `beforePublish` and `afterPublish` run inside the
+ * publish call, where a test stands in for a second run. `lagViews(n)`
+ * makes the next n reads answer the registry as it was at the start, the
+ * way a read can trail a publish by a few seconds.
  */
 function fakeRegistry(
-  initial: { versions: string[]; latest: string | null },
+  initial: State,
   version: string,
-  onPublish?: (state: { versions: string[]; latest: string | null }) => void,
+  hooks: {
+    beforePublish?: (state: State) => void;
+    afterPublish?: (state: State) => void;
+    refusePublish?: (state: State) => Error;
+  } = {},
 ) {
-  const state = { versions: [...initial.versions], latest: initial.latest };
+  const state: State = { versions: [...initial.versions], latest: initial.latest };
   const calls: Array<{ args: string[]; env?: NodeJS.ProcessEnv }> = [];
-  let staleViews = 0;
+  let stale = 0;
+  const view = (s: State) =>
+    JSON.stringify({
+      versions: s.versions,
+      "dist-tags": s.latest ? { latest: s.latest } : {},
+    });
   const npm: NpmRunner = (args, opts) => {
     calls.push({ args, env: opts.env });
     switch (args[0]) {
       case "view":
-        if (staleViews > 0) {
-          staleViews--;
-          return JSON.stringify({
-            versions: initial.versions,
-            "dist-tags": initial.latest ? { latest: initial.latest } : {},
-          });
+        if (stale > 0) {
+          stale--;
+          return view(initial);
         }
-        return JSON.stringify({
-          versions: state.versions,
-          "dist-tags": state.latest ? { latest: state.latest } : {},
-        });
-      case "publish":
-        onPublish?.(state);
+        return view(state);
+      case "publish": {
+        if (hooks.refusePublish) throw hooks.refusePublish(state);
+        hooks.beforePublish?.(state);
         state.versions.push(version);
         state.latest = version;
+        hooks.afterPublish?.(state);
         return "";
+      }
       case "dist-tag": {
         const spec = args[2] ?? "";
         state.latest = spec.slice(spec.lastIndexOf("@") + 1);
@@ -151,15 +178,18 @@ function fakeRegistry(
     npm,
     state,
     calls,
-    lagNextView: () => {
-      staleViews = 1;
+    lagViews: (n: number) => {
+      stale = n;
     },
+    tags: () =>
+      calls.filter((c) => c.args[0] === "dist-tag").map((c) => c.args[2]),
   };
 }
 
-function deps(npm: NpmRunner, version: string): PublishDeps & {
-  build: ReturnType<typeof vi.fn>;
-} {
+function deps(
+  npm: NpmRunner,
+  version: string,
+): PublishDeps & { build: ReturnType<typeof vi.fn> } {
   return {
     npm,
     build: vi.fn(),
@@ -171,6 +201,20 @@ function deps(npm: NpmRunner, version: string): PublishDeps & {
     }),
     log: () => {},
   };
+}
+
+/** The --userconfig file a publish passed, and its contents at the time. */
+function captureUserconfig(inner: NpmRunner) {
+  const seen = { path: "", text: "" };
+  const npm: NpmRunner = (args, opts) => {
+    const at = args.indexOf("--userconfig");
+    if (at >= 0 && seen.path === "") {
+      seen.path = args[at + 1] ?? "";
+      seen.text = readFileSync(seen.path, "utf8");
+    }
+    return inner(args, opts);
+  };
+  return { npm, seen };
 }
 
 describe("publishCliToNpm", () => {
@@ -195,18 +239,8 @@ describe("publishCliToNpm", () => {
       { versions: ["1.0.1", "2.1.3"], latest: "2.1.3" },
       "2.1.4-1",
     );
-    const d = deps(reg.npm, "2.1.4-1");
-    let npmrc = "";
-    let npmrcPath = "";
-    const publish = reg.npm;
-    const spy: NpmRunner = (args, opts) => {
-      if (args[0] === "publish") {
-        npmrcPath = args[args.indexOf("--userconfig") + 1] ?? "";
-        npmrc = readFileSync(npmrcPath, "utf8");
-      }
-      return publish(args, opts);
-    };
-    d.npm = spy;
+    const cap = captureUserconfig(reg.npm);
+    const d = deps(cap.npm, "2.1.4-1");
 
     await expect(publishCliToNpm("2.1.4-1", d)).resolves.toBe("published");
 
@@ -214,11 +248,20 @@ describe("publishCliToNpm", () => {
     const call = reg.calls.find((c) => c.args[0] === "publish");
     expect(call?.args.slice(0, 3)).toEqual(["publish", "--tag", "latest"]);
     expect(call?.env?.NPM_TOKEN).toBe(TOKEN);
-    expect(npmrc).toBe("//registry.npmjs.org/:_authToken=${NPM_TOKEN}\n");
-    expect(npmrc).not.toContain(TOKEN);
-    expect(existsSync(npmrcPath)).toBe(false);
+    expect(cap.seen.text).toBe(
+      "//registry.npmjs.org/:_authToken=${NPM_TOKEN}\n",
+    );
+    expect(existsSync(cap.seen.path)).toBe(false);
     expect(reg.state.latest).toBe("2.1.4-1");
-    expect(reg.calls.some((c) => c.args[0] === "dist-tag")).toBe(false);
+    expect(reg.tags()).toEqual([]);
+  });
+
+  it("strips the quotes a pasted token arrives in", async () => {
+    vi.stubEnv("NPM_TOKEN", `"${TOKEN}"`);
+    const reg = fakeRegistry({ versions: [], latest: null }, "2.1.4-1");
+    await publishCliToNpm("2.1.4-1", deps(reg.npm, "2.1.4-1"));
+    const call = reg.calls.find((c) => c.args[0] === "publish");
+    expect(call?.env?.NPM_TOKEN).toBe(TOKEN);
   });
 
   it("skips a version npm already holds without building", async () => {
@@ -229,6 +272,7 @@ describe("publishCliToNpm", () => {
     const d = deps(reg.npm, "2.1.4-1");
     await expect(publishCliToNpm("2.1.4-1", d)).resolves.toBe("skipped");
     expect(d.build).not.toHaveBeenCalled();
+    expect(reg.tags()).toEqual([]);
   });
 
   it("skips a build older than the newest on npm, so latest never moves back", async () => {
@@ -237,18 +281,29 @@ describe("publishCliToNpm", () => {
     await expect(publishCliToNpm("2.1.4-7", d)).resolves.toBe("skipped");
     expect(d.build).not.toHaveBeenCalled();
     expect(reg.state.latest).toBe("2.1.4");
+    expect(reg.tags()).toEqual([]);
+  });
+
+  it("repairs a latest an earlier race left behind, even when it publishes nothing", async () => {
+    const reg = fakeRegistry(
+      { versions: ["2.1.3", "2.1.4-1"], latest: "2.1.3" },
+      "2.1.4-1",
+    );
+    const d = deps(reg.npm, "2.1.4-1");
+    await expect(publishCliToNpm("2.1.4-1", d)).resolves.toBe("skipped");
+    expect(d.build).not.toHaveBeenCalled();
+    expect(reg.tags()).toEqual(["@oxagen/cli@2.1.4-1"]);
+    expect(reg.state.latest).toBe("2.1.4-1");
   });
 
   it("moves latest to a newer version another run published at the same time", async () => {
-    const reg = fakeRegistry(
-      { versions: ["2.1.3"], latest: "2.1.3" },
-      "2.1.4-7",
-      (state) => {
-        // The release run lands first; this run's publish then takes latest.
+    const reg = fakeRegistry({ versions: ["2.1.3"], latest: "2.1.3" }, "2.1.4-7", {
+      // The release run lands first; this run's publish then takes latest.
+      beforePublish: (state) => {
         state.versions.push("2.1.4");
         state.latest = "2.1.4";
       },
-    );
+    });
     await expect(
       publishCliToNpm("2.1.4-7", deps(reg.npm, "2.1.4-7")),
     ).resolves.toBe("published");
@@ -263,51 +318,69 @@ describe("publishCliToNpm", () => {
     expect(reg.state.latest).toBe("2.1.4");
   });
 
-  it("counts its own version when the registry has not caught up", async () => {
-    const reg = fakeRegistry({ versions: ["2.1.3"], latest: "2.1.3" }, "2.1.4-1");
-    const d = deps(reg.npm, "2.1.4-1");
-    const inner = reg.npm;
-    let published = false;
-    d.npm = (args, opts) => {
-      if (args[0] === "view" && published) reg.lagNextView();
-      const out = inner(args, opts);
-      if (args[0] === "publish") published = true;
-      return out;
-    };
-    await expect(publishCliToNpm("2.1.4-1", d)).resolves.toBe("published");
-    // The stale read says latest is 2.1.3; pointing it at 2.1.4-1 again is
-    // harmless, and pointing it back at 2.1.3 would not be.
-    expect(reg.state.latest).toBe("2.1.4-1");
+  it("counts its own version when every read after the publish is stale", async () => {
+    // Without counting 2.1.4-2 in, the stale reads would name 2.1.4-1 as the
+    // newest and move latest back to it.
+    const reg = fakeRegistry(
+      { versions: ["2.1.3", "2.1.4-1"], latest: "2.1.3" },
+      "2.1.4-2",
+      { afterPublish: () => reg.lagViews(2) },
+    );
+    await expect(
+      publishCliToNpm("2.1.4-2", deps(reg.npm, "2.1.4-2")),
+    ).resolves.toBe("published");
+    expect(reg.tags()).not.toContain("@oxagen/cli@2.1.4-1");
+    expect(reg.state.latest).toBe("2.1.4-2");
+  });
+
+  it("never moves latest back when a newer run lands between the publish and a stale read", async () => {
+    const reg = fakeRegistry({ versions: ["2.1.3"], latest: "2.1.3" }, "2.1.4-1", {
+      afterPublish: (state) => {
+        state.versions.push("2.1.4-2");
+        state.latest = "2.1.4-2";
+        reg.lagViews(1);
+      },
+    });
+    await expect(
+      publishCliToNpm("2.1.4-1", deps(reg.npm, "2.1.4-1")),
+    ).resolves.toBe("published");
+    expect(reg.tags()).toEqual([]);
+    expect(reg.state.latest).toBe("2.1.4-2");
   });
 
   it("treats a refused publish as done when another run published the version", async () => {
-    const reg = fakeRegistry({ versions: ["2.1.3"], latest: "2.1.3" }, "2.1.4");
-    const d = deps(reg.npm, "2.1.4");
-    const inner = reg.npm;
-    d.npm = (args, opts) => {
-      if (args[0] === "publish") {
-        reg.state.versions.push("2.1.4");
-        throw new Error("E403 You cannot publish over the previously published versions");
-      }
-      return inner(args, opts);
-    };
-    await expect(publishCliToNpm("2.1.4", d)).resolves.toBe("skipped");
+    const reg = fakeRegistry({ versions: ["2.1.3"], latest: "2.1.3" }, "2.1.4", {
+      refusePublish: (state) => {
+        state.versions.push("2.1.4");
+        state.latest = "2.1.4";
+        return new Error(
+          "E403 You cannot publish over the previously published versions",
+        );
+      },
+    });
+    await expect(
+      publishCliToNpm("2.1.4", deps(reg.npm, "2.1.4")),
+    ).resolves.toBe("skipped");
+    expect(reg.state.latest).toBe("2.1.4");
   });
 
-  it("fails with the way to replace the token when npm refuses the publish", async () => {
-    const reg = fakeRegistry({ versions: ["2.1.3"], latest: "2.1.3" }, "2.1.4-1");
-    const d = deps(reg.npm, "2.1.4-1");
-    const inner = reg.npm;
-    d.npm = (args, opts) => {
-      if (args[0] === "publish") throw new Error("E404 Not Found - PUT");
-      return inner(args, opts);
-    };
-    await expect(publishCliToNpm("2.1.4-1", d)).rejects.toThrow(
-      /E404 Not Found.*NPM_TOKEN is current.*ci-registry\.ts/,
+  it("fails with the way to replace the token, and keeps the token out of the message", async () => {
+    const reg = fakeRegistry({ versions: ["2.1.3"], latest: "2.1.3" }, "2.1.4-1", {
+      refusePublish: () => new Error("E404 Not Found - PUT"),
+    });
+    const cap = captureUserconfig(reg.npm);
+    const err = await publishCliToNpm("2.1.4-1", deps(cap.npm, "2.1.4-1")).then(
+      () => null,
+      (e: unknown) => e as Error,
     );
+    expect(err?.message).toMatch(
+      /npm publish failed: E404 Not Found.*NPM_TOKEN is current.*ci-registry\.ts/,
+    );
+    expect(err?.message).not.toContain(TOKEN);
+    expect(existsSync(cap.seen.path)).toBe(false);
   });
 
-  it("refuses a bad manifest before it publishes", async () => {
+  it("refuses a bad manifest before it publishes, without blaming the token", async () => {
     const reg = fakeRegistry({ versions: [], latest: null }, "2.1.4-1");
     const d = deps(reg.npm, "2.1.4-1");
     d.readManifest = () => ({
@@ -315,9 +388,14 @@ describe("publishCliToNpm", () => {
       version: "2.1.3",
       bin: { oxagen: "oxagen.mjs" },
     });
-    await expect(publishCliToNpm("2.1.4-1", d)).rejects.toThrow(
+    const err = await publishCliToNpm("2.1.4-1", d).then(
+      () => null,
+      (e: unknown) => e as Error,
+    );
+    expect(err?.message).toMatch(
       /manifest version 2\.1\.3 != release version 2\.1\.4-1/,
     );
+    expect(err?.message).not.toContain("NPM_TOKEN");
     expect(reg.calls.some((c) => c.args[0] === "publish")).toBe(false);
   });
 });

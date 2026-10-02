@@ -42,8 +42,10 @@ move forward.
    `next` tag for builds would leave `npm install -g` behind main until
    someone cut a release, which is the failure in #4489.
    `tools/scripts/lib/npm-cli.ts` skips a version older than the newest one
-   on npm. After each publish it reads the registry again and points
-   `latest` at the newest version, because two runs can publish at once.
+   on npm. Every run, including one that publishes nothing, then points
+   `latest` at the newest version npm holds, because two runs can publish
+   at once. It reads `latest` again right before that write and only moves
+   it forward, because a read can trail a publish by a few seconds.
 4. **Releases publish from their tag as well.** The `vX.Y.Z` tag starts
    `npm.yml`, so a release reaches npm even when a newer merge superseded
    its deploy. A release tag and the schedule each run in a concurrency

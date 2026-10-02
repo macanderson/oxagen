@@ -217,6 +217,25 @@ const defaultDeps: PublishDeps = {
 
 export type PublishOutcome = "published" | "skipped" | "no-token";
 
+const TOKEN_HINT = `Check that NPM_TOKEN is current and can write ${CLI_PACKAGE}. packages/config/src/ci-registry.ts says how to replace it.`;
+
+/**
+ * Whether pointing `latest` at `candidate` moves it forward from `current`.
+ * A `current` of a shape this code cannot order gives way, because it is not
+ * a version this pipeline published.
+ */
+export function movesLatestForward(
+  current: string | null,
+  candidate: string,
+): boolean {
+  if (current === null) return true;
+  try {
+    return compareVersions(candidate, current) > 0;
+  } catch {
+    return true;
+  }
+}
+
 /**
  * Publish `version` under `latest` unless npm already holds it or a newer
  * version, then make sure `latest` names the newest version npm holds.
@@ -238,12 +257,42 @@ export async function publishCliToNpm(
   const authed = { env: { ...env, NPM_TOKEN: cfg.token } };
   const auth = ["--userconfig", userconfig];
 
+  /**
+   * Point `latest` at the newest version npm holds, counting `known` in
+   * case the registry has not listed it yet. A read can lag a publish by a
+   * few seconds and show an older `latest`, so `latest` is read once more
+   * right before the write, and the write only ever moves it forward.
+   */
+  const repairLatest = (known: string[]): void => {
+    const seen = readRegistryState(npm);
+    const fix = latestCorrection({
+      versions: [...new Set([...seen.versions, ...known])],
+      latest: seen.latest,
+    });
+    if (fix === null) return;
+    const current = readRegistryState(npm).latest;
+    if (!movesLatestForward(current, fix)) return;
+    try {
+      npm(["dist-tag", "add", `${CLI_PACKAGE}@${fix}`, "latest", ...auth], {
+        cwd: ROOT,
+        ...authed,
+      });
+    } catch (err) {
+      throw new Error(
+        `npm dist-tag add ${CLI_PACKAGE}@${fix} latest failed: ${formatError(err)}. ${TOKEN_HINT}`,
+      );
+    }
+    log(kleur.yellow(`    latest named ${current}; moved it to ${fix}`));
+  };
+
   try {
     log(kleur.bold("\n  npm CLI publish:"));
-    const before = readRegistryState(npm);
-    const plan = planPublish(before, version);
+    const plan = planPublish(readRegistryState(npm), version);
     if (!plan.publish) {
       log(kleur.dim(`    ${plan.reason}; nothing to publish`));
+      // A run that publishes nothing still repairs a `latest` an earlier
+      // race left behind, so the daily run can fix it.
+      repairLatest([]);
       return "skipped";
     }
 
@@ -264,32 +313,14 @@ export async function publishCliToNpm(
       // Another run may have published this version since the check above.
       if (npmVersionExists(version, npm)) {
         log(kleur.dim(`    another run published ${version} first`));
+        repairLatest([version]);
         return "skipped";
       }
-      throw err;
+      throw new Error(`npm publish failed: ${formatError(err)}. ${TOKEN_HINT}`);
     }
     log(kleur.green(`    ✓ ${CLI_PACKAGE}@${version} published to npm`));
-
-    // The registry can lag a publish by a few seconds, so count this version
-    // in even when the read below does not list it yet.
-    const after = readRegistryState(npm);
-    const fix = latestCorrection({
-      versions: [...new Set([...after.versions, version])],
-      latest: after.latest,
-    });
-    if (fix !== null) {
-      npm(["dist-tag", "add", `${CLI_PACKAGE}@${fix}`, "latest", ...auth], {
-        cwd: ROOT,
-        ...authed,
-      });
-      log(kleur.yellow(`    latest named ${after.latest}; moved it to ${fix}`));
-    }
+    repairLatest([version]);
     return "published";
-  } catch (err) {
-    throw new Error(
-      `npm publish failed: ${formatError(err)}. ` +
-        `Check that NPM_TOKEN is current and can write ${CLI_PACKAGE}; packages/config/src/ci-registry.ts says how to replace it.`,
-    );
   } finally {
     rmSync(configDir, { recursive: true, force: true });
   }
