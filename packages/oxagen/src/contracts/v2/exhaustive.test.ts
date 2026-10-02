@@ -99,10 +99,10 @@ function unionOptionsOf(value: unknown): unknown[] | null {
  * Every key anywhere in a schema, at any depth.
  *
  * A carried field is allowed to move. `update_workspace` nests by policy —
- * `budget.mode` rather than a flat `mode` — because `mode` means three
- * different things across the four contracts it absorbs, and flattening would
- * force two of them to be renamed, breaking the by-import carry. Comparing only
- * top-level keys would report every such field as a silent drop.
+ * `routing.mode` rather than a flat `mode` — because `mode` means different
+ * things across the contracts it absorbs, and flattening would force renames,
+ * breaking the by-import carry. Comparing only top-level keys would report
+ * every such field as a silent drop.
  */
 function allKeys(
   schema: unknown,

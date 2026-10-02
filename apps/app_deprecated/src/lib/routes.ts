@@ -195,7 +195,7 @@ export const workspace = {
   },
 
   // Settings — web-app-2.0 Phase 2 consolidation: General (with a Members
-  // sub-tab) · Agent Defaults (Models·Budget·Prompts·Memory-policy sub-tabs) ·
+  // sub-tab) · Agent Defaults (Models·Prompts·Memory-policy sub-tabs) ·
   // GitHub · MCP Registries. The ontology/schema builder moved to Knowledge.
   settings: {
     root: (ctx: Required<ScopeContext>): string => `${wsBase(ctx)}/settings`,

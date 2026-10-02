@@ -1763,42 +1763,6 @@
       }
     },
     {
-      "name": "get_user_budget",
-      "file": "budget.policy.read.ts",
-      "domain": "user",
-      "mode": "sync",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "docs": true,
-        "mcp": true,
-        "unit": true
-      }
-    },
-    {
-      "name": "update_user_budget",
-      "file": "budget.policy.write.ts",
-      "domain": "user",
-      "mode": "sync",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "docs": true,
-        "mcp": true,
-        "unit": true
-      }
-    },
-    {
       "name": "get_capability_registry",
       "file": "capability.registry.get.ts",
       "domain": "capability",
@@ -8351,42 +8315,6 @@
         "unit": true,
         "docs": true,
         "app": true
-      }
-    },
-    {
-      "name": "get_budget_policy",
-      "file": "workspace.budget_policy.read.ts",
-      "domain": "workspace",
-      "mode": "sync",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "docs": true,
-        "mcp": true,
-        "unit": true
-      }
-    },
-    {
-      "name": "update_budget_policy",
-      "file": "workspace.budget_policy.write.ts",
-      "domain": "workspace",
-      "mode": "sync",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "docs": true,
-        "mcp": true,
-        "unit": true
       }
     },
     {

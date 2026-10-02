@@ -1,16 +1,20 @@
 import { providerCostUsd, type RateCard } from "./pricing";
 
 /**
- * Per-turn dollar budget — the metered ceiling a user can put on a single agent
- * turn. This module is the SINGLE SOURCE OF TRUTH for the budget's shape, its
- * three enforcement modes, and the pure evaluator every surface (CLI, API, app)
- * runs, so a budget behaves identically everywhere it is configured.
+ * Per-turn dollar budget: a dollar ceiling on one agent turn. This module holds
+ * the budget's shape, its three enforcement modes, and the pure evaluator.
  *
  * A turn budget is OFF by default. When enabled it carries a dollar `limitUsd`
  * and one `mode` that decides what happens the moment the turn's cumulative
- * provider cost reaches that limit. The host builds the guard and hands it to
- * the engine as `RunCodingAgentOptions.budgetGuard`; it converts tokens to
- * dollars via {@link providerCostUsd} and applies the policy below.
+ * provider cost reaches that limit. A host builds the guard with
+ * {@link createTurnBudgetGuard} and hands it to the engine as its
+ * `budgetGuard`; the guard converts tokens to dollars via
+ * {@link providerCostUsd} and applies the policy below.
+ *
+ * No customer sets a per-turn budget for Oxagen's in-app assistant
+ * (ADR-235, ADR-277), so no production caller builds a guard today.
+ * `runGovernedTurn` keeps `budgetGuard` as the seam a governed agent's turn
+ * can use.
  */
 
 /** What happens when a turn's cost reaches the budget limit. Strictness ladder: soft → gated → hard. */
@@ -360,97 +364,4 @@ export function formatBudgetUsd(usd: number): string {
   // Sub-cent turns are common; show enough precision to be meaningful.
   const decimals = usd < 0.1 ? 4 : 2;
   return `$${usd.toFixed(decimals)}`;
-}
-
-// ── Org / workspace governance ──────────────────────────────────────────────
-// A per-turn budget can be governed at the org and workspace level, not just by
-// the user. A governance policy is either a soft DEFAULT (seeds a member who
-// hasn't set their own budget; the member may raise OR lower it) or a hard
-// CEILING (clamps the member's effective budget — they cannot exceed it, and the
-// enforcement mode can only get STRICTER, never laxer). This section is pure —
-// the enforcement engine still consumes a single resolved TurnBudgetPolicy, so
-// governance changes NOTHING downstream of {@link resolveEffectiveTurnBudget}.
-
-/** How a governance policy relates to the member's own budget. */
-export type BudgetEnforcementKind = "default" | "ceiling";
-
-export interface GovernedBudget {
-  policy: TurnBudgetPolicy;
-  enforcement: BudgetEnforcementKind;
-}
-
-/** Strictness rank of a mode — a higher rank always wins on merge. */
-const MODE_STRICTNESS: Record<TurnBudgetMode, number> = {
-  grace: 0,
-  prompt: 1,
-  enforce: 2,
-};
-
-/** The stricter of two modes (enforce > prompt > grace). */
-export function strictestMode(
-  a: TurnBudgetMode,
-  b: TurnBudgetMode,
-): TurnBudgetMode {
-  return MODE_STRICTNESS[a] >= MODE_STRICTNESS[b] ? a : b;
-}
-
-/** Apply one enabled ceiling to a base policy: clamp limit down, tighten mode, force on. */
-function applyCeiling(
-  base: TurnBudgetPolicy,
-  ceiling: TurnBudgetPolicy,
-): TurnBudgetPolicy {
-  // A ceiling with no positive limit can't constrain a dollar amount — treat it
-  // as "no ceiling" rather than forcing a $0 (turn-killing) budget.
-  if (!ceiling.enabled || ceiling.limitUsd <= 0) return base;
-  const baseLimit =
-    base.enabled && base.limitUsd > 0
-      ? base.limitUsd
-      : Number.POSITIVE_INFINITY;
-  const limitUsd = Math.min(baseLimit, ceiling.limitUsd);
-  const mode = strictestMode(
-    base.enabled ? base.mode : ceiling.mode,
-    ceiling.mode,
-  );
-  // Only the grace cushion is meaningful when the resulting mode is grace; take
-  // the tighter (smaller) cushion so a ceiling never loosens the overage window.
-  const graceOveragePct =
-    mode === "grace"
-      ? Math.min(base.graceOveragePct, ceiling.graceOveragePct)
-      : base.graceOveragePct;
-  return { enabled: true, limitUsd, mode, graceOveragePct };
-}
-
-/**
- * Resolve the effective per-turn budget from the member's own policy plus
- * optional org and workspace governance. Precedence:
- *   1. Base = the member's policy (per-turn override or saved default).
- *   2. DEFAULTS apply only when the member has NOT opted in (base disabled):
- *      org default first, then workspace default (workspace wins).
- *   3. CEILINGS always apply and always clamp — limit is min()'d down and the
- *      mode can only get stricter. Org ceiling then workspace ceiling.
- * Governance the caller couldn't load should be passed as `null` (fail-open —
- * a broken governance row must never block a turn).
- */
-export function resolveEffectiveTurnBudget(
-  user: TurnBudgetPolicy,
-  org: GovernedBudget | null,
-  workspace: GovernedBudget | null,
-): TurnBudgetPolicy {
-  let effective: TurnBudgetPolicy = { ...user };
-
-  // 2. Defaults — only seed a member who hasn't set their own budget.
-  if (!effective.enabled) {
-    if (org?.enforcement === "default" && org.policy.enabled)
-      effective = { ...org.policy };
-    if (workspace?.enforcement === "default" && workspace.policy.enabled)
-      effective = { ...workspace.policy };
-  }
-
-  // 3. Ceilings — always clamp, strictest wins. Org then workspace.
-  if (org?.enforcement === "ceiling")
-    effective = applyCeiling(effective, org.policy);
-  if (workspace?.enforcement === "ceiling")
-    effective = applyCeiling(effective, workspace.policy);
-
-  return effective;
 }

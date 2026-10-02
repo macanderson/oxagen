@@ -6,7 +6,7 @@
  * ADR-043 removed the code half of the session (repo / branch / sandbox
  * environment, per-agent code memory, the durable code binding), so what is
  * left to prove is the governance-relevant contract: the agent binding, the
- * model/tier/effort/budget settings, the agent lock (derived from server truth
+ * model/tier/effort settings, the agent lock (derived from server truth
  * — `hasMessages` — not a client-side latch), and that persistence never leaks
  * one conversation's session onto another key.
  */
@@ -24,7 +24,6 @@ const SEED: SessionSeed = {
   defaultAgentId: null,
   textModel: null,
   textTier: "fast",
-  budgetUsd: null,
 };
 
 /** Probe that exposes the store as DOM for assertions and buttons for writes. */
@@ -40,9 +39,6 @@ function Probe() {
       </button>
       <button onClick={() => store.updateSession({ effort: "high" })}>
         raise-effort
-      </button>
-      <button onClick={() => store.updateSession({ budgetUsd: 2 })}>
-        set-budget
       </button>
       <button
         onClick={() =>
@@ -89,7 +85,7 @@ describe("ChatSessionProvider", () => {
     expect(s.tier).toBe("fast");
     expect(s.model).toBeNull();
     expect(s.effort).toBe("medium");
-    expect(s.budgetUsd).toBeNull();
+    expect(s).not.toHaveProperty("budgetUsd");
     expect(screen.getByTestId("dirty").textContent).toBe("false");
   });
 
@@ -135,7 +131,8 @@ describe("ChatSessionProvider", () => {
     const s = stateOf();
     expect(s.agentId).toBe("agt_saved");
     expect(s.effort).toBe("high");
-    expect(s.budgetUsd).toBe(2);
+    // A per-turn budget from an older stored session is dropped (ADR-235).
+    expect(s).not.toHaveProperty("budgetUsd");
   });
 
   // The draft session survives the first send: chat-shell-client pins the URL
@@ -146,10 +143,10 @@ describe("ChatSessionProvider", () => {
   it("carries the draft session onto the conversation key when the id arrives", () => {
     const { rerender } = renderProvider();
     fireEvent.click(screen.getByText("pick-agent"));
-    fireEvent.click(screen.getByText("set-budget"));
+    fireEvent.click(screen.getByText("raise-effort"));
     expect(
       window.localStorage.getItem(sessionStorageKey("ws", null)),
-    ).toContain('"budgetUsd":2');
+    ).toContain('"effort":"high"');
 
     rerender(
       <ChatSessionProvider
@@ -169,9 +166,9 @@ describe("ChatSessionProvider", () => {
     ).toBeNull();
     expect(
       window.localStorage.getItem(sessionStorageKey("ws", "cnv_new")),
-    ).toContain('"budgetUsd":2');
+    ).toContain('"effort":"high"');
     expect(stateOf().agentId).toBe("agt_pick");
-    expect(stateOf().budgetUsd).toBe(2);
+    expect(stateOf().effort).toBe("high");
   });
 
   // The lock is derived from server truth alone, so a send that FAILS before a

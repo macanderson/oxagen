@@ -321,13 +321,6 @@
   "packages/handlers/src/audit.log.query.ts": [
     "6ba4ca7418d121bbfd1e12858679f4f99022b7652b888370694940d7eff3eab6"
   ],
-  "packages/handlers/src/budget.policy.read.ts": [
-    "06ef5e7ddd07f282b4d9489b02ee60a38a1cc3964e474d2127de59d21b59464e"
-  ],
-  "packages/handlers/src/budget.policy.write.ts": [
-    "1ff4852b151a0a8319986993a411af62d6f4f8e8749e56ef6990e85243f53706",
-    "db7979facd5467b3c9d66032c59e6b6af4afaa612ea7a583f11b99c24c6daa7f"
-  ],
   "packages/handlers/src/generated-asset.serve.ts": [
     "57f8b31fbbfef7af0c9d974dfffac776729af378ea73cd62ce6a9e980fef7e76",
     "9708b8ee24188e9b864849ebe6df6ce8d183922287ce1c0cc10b7bff1059eff8"
