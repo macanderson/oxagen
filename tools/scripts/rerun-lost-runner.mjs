@@ -80,7 +80,14 @@ export function lastErrorLine(log) {
   return null;
 }
 
-/** Did this job fail because its runner went away? */
+/**
+ * Did this job fail because its runner went away?
+ *
+ * @param {{
+ *   log: string | null,
+ *   annotations?: Array<{ annotation_level?: string, message?: string }>,
+ * }} job
+ */
 export function lostRunner({ log, annotations = [] }) {
   if (isRunnerLossMessage(lastErrorLine(log))) return true;
   return annotations.some(
