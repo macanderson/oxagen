@@ -145,5 +145,8 @@ export function createRestoreManagedBlockHandler(
 
 export const restoreManagedBlockHandler = createRestoreManagedBlockHandler({
   ...steeringDeps(),
-  assertRole: (ctx) => assertContractRole(contextPrRestoreManagedBlock, ctx),
+  // The guard answers the role it found. The handler needs only the refusal.
+  assertRole: async (ctx) => {
+    await assertContractRole(contextPrRestoreManagedBlock, ctx);
+  },
 });

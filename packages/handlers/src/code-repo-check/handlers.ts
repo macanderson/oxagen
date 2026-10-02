@@ -18,7 +18,10 @@ export const listCodeRepositoryFindingsHandler: CapabilityHandler<
 > = createListCodeRepositoryFindingsHandler({
   store: postgresCodeRepoFindingStore,
   publishedRecords: codeRepoCheckDeps.publishedRecords,
-  assertRole: (ctx) => assertContractRole(codeRepositoryFindingsList, ctx),
+  // The guard answers the role it found. The handler needs only the refusal.
+  assertRole: async (ctx) => {
+    await assertContractRole(codeRepositoryFindingsList, ctx);
+  },
 });
 
 export const promoteInstructionHandler: CapabilityHandler<
@@ -28,5 +31,7 @@ export const promoteInstructionHandler: CapabilityHandler<
   publishedRecords: codeRepoCheckDeps.publishedRecords,
   steering: postgresSteeringStore,
   openPr: (input, ctx) => openContextPrHandler(input, ctx),
-  assertRole: (ctx) => assertContractRole(instructionPromote, ctx),
+  assertRole: async (ctx) => {
+    await assertContractRole(instructionPromote, ctx);
+  },
 });
