@@ -1,6 +1,7 @@
 # ADR-093: One assembler decides what reaches the agent, and records what it cut
 
-- **Status:** Accepted. Section 7 amended on 2026-09-25 (#4158).
+- **Status:** Accepted. Section 7 amended on 2026-09-25 (#4158) and on
+  2026-09-30 (ADR-235).
 - **Date:** 2026-09-18
 - **Owners:** platform
 - **Decided by:** the maintainer, 2026-09-18, approving the architecture review
@@ -136,6 +137,12 @@ exist in the checkout (point 4), what `search_skills` returns (point 3, ADR-090)
 and whether the description line is rendered (points 1 and 2).
 
 ### 7. One home, one memory system
+
+> **Amended 2026-09-30 by ADR-235.** The in-app turn no longer reads the
+> workspace's published records or its instructions, because the workspace
+> does not govern Stella. It records a `steering.manifest` frame that names no
+> item, and its system prompt is Oxagen's baseline alone. The text below
+> describes the path #4158 built and ADR-235 removed.
 
 > **Amended 2026-09-25 (#4158).** The original text, below, named
 > `packages/context-provider` as the assembler's home and said the in-app

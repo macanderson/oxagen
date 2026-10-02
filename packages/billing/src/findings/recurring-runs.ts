@@ -25,7 +25,7 @@
  * - The file change read has no entry for it.
  *
  * A ledger run records no prompt, so it is never grouped. A prompt a person
- * typed (`prompt_source` `user`) came from no clock, so its run is never
+ * typed (`prompt_source` `typed`) came from no clock, so its run is never
  * grouped either. On a harness that does not report `prompt_source`, the
  * digest is the only sign that runs come from one job, as the detector 7 card
  * notes.
@@ -52,8 +52,11 @@ const KIND = "recurring_runs";
 /** A prompt that starts this many runs or more is recurring. */
 export const RECURRING_RUNS_MIN = 5;
 
-/** The `prompt_source` Claude Code records for a prompt a person typed. */
-const PERSON_SOURCE = "user";
+/**
+ * The `prompt_source` Claude Code records for a prompt a person typed, and
+ * the value Tacho writes for one on Codex.
+ */
+const PERSON_SOURCE = "typed";
 
 /**
  * The job a run's first prompt names, or null for a prompt a person typed.

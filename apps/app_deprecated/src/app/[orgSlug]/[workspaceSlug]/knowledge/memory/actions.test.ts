@@ -6,8 +6,7 @@
  * The pre-existing CRUD/promote actions in this file are covered elsewhere
  * (memories-client.test.tsx exercises them through the client); this file
  * scopes to the two capabilities added for the Citations view and Evidence
- * attach panel, following the same mocking pattern as
- * bulk-import-actions.test.ts.
+ * attach panel.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";

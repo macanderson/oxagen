@@ -1,0 +1,16 @@
+[Unit]
+Description=Register this machine as an ephemeral GitHub Actions runner and run one job
+Wants=network-online.target docker.service
+# Not After=docker.service: registering needs only the network, and a runner
+# that shows online sooner is one the pool Lambda counts. Docker starts in
+# parallel and is up long before a job's first container step.
+After=network-online.target ci-local-disk.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/sbin/ci-start-runner
+StandardOutput=journal+console
+StandardError=journal+console
+
+[Install]
+WantedBy=multi-user.target

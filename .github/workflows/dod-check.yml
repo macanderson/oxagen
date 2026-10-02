@@ -64,13 +64,32 @@ permissions:
 # to stop a run that has already reported. Keyed by repository as well as PR
 # number: this workflow is called by four other repos through `workflow_call`,
 # and their PR numbers collide with each other's and with oxagen's.
+#
+# A bot's edit or label change skips the job (below), so its run gets a group
+# of its own. In the shared group it would cancel a run that is judging the
+# pull request and then judge nothing.
 concurrency:
-  group: dod-check-${{ github.repository }}-${{ github.event.pull_request.number || github.ref }}
+  group: >-
+    dod-check-${{ github.repository }}-${{ github.event.pull_request.number || github.ref }}${{
+      (github.event.sender.type == 'Bot' &&
+        contains(fromJSON('["edited","labeled","unlabeled"]'), github.event.action))
+        && format('-bot-{0}', github.run_id) || ''
+    }}
   cancel-in-progress: true
 
 jobs:
   dod:
-    runs-on: ubuntu-latest
+    # Skip a bot's edit or label change (#4918). Review bots such as
+    # cursor[bot] and sourcery-ai[bot] rewrite the description after every
+    # push, and those edits ran 3,249 runner minutes in the week of
+    # 2026-09-23. The verdict reads the issue links and the commits, which a
+    # push or a person's edit re-reads. dod-recheck.yml passes over the
+    # skipped runs this leaves.
+    if: >-
+      !(github.event.sender.type == 'Bot' &&
+        contains(fromJSON('["edited","labeled","unlabeled"]'), github.event.action))
+    # ubuntu-slim: a sparse checkout and a few API calls.
+    runs-on: ${{ vars.CI_RUNNERS == 'aws' && format('oxagen-small-{0}', vars.CI_RUNNER_ARCH || 'x64') || 'ubuntu-slim' }}
     timeout-minutes: 10
     steps:
       # A reusable workflow's steps run against the *caller's* repository, so
@@ -85,11 +104,13 @@ jobs:
       # until that merge, so every run could only fail with
       # ERR_MODULE_NOT_FOUND (#1323). Elsewhere `github.repository` is the
       # calling repo, `github.sha` is a commit oxagen does not have, and main
-      # is both correct and the only ref a caller can rely on.
+      # is both correct and the only ref a caller can rely on. This repository
+      # moved from macanderson/oxagen to oxageninc/product on 2026-10-01, and
+      # GitHub still redirects the old name, which `repository:` uses.
       - name: Fetch the SCR tooling
         uses: actions/checkout@v5
         with:
-          repository: oxageninc/product
+          repository: macanderson/oxagen
           ref: ${{ github.repository == 'oxageninc/product' && github.sha || 'main' }}
           path: .scr-tools
           sparse-checkout: tools/scripts
