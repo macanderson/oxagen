@@ -30,6 +30,7 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { randomUUID, timingSafeEqual } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 // M7's in-process ledger server, which serves grpc/ledger.proto from the same
 // descriptor set the gRPC Sender reads. Its own dependencies resolve from
@@ -439,25 +440,23 @@ function parseRelayStart(value: unknown): RelayStart | null {
   return { brokerUrl, token, name, workspace, trustedKeys };
 }
 
-/** Keeps each JSON line's event name and code. The relay never logs a token, and this keeps nothing else. */
-function keepRelayLines(text: string): void {
-  for (const line of text.split("\n")) {
-    if (line.trim() === "") continue;
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(line);
-    } catch {
-      continue;
-    }
-    if (!isRecord(parsed) || typeof parsed.event !== "string") continue;
-    const code = parsed.code;
-    relay.events.push({
-      event: parsed.event,
-      ...(typeof code === "string" || typeof code === "number" ? { code } : {}),
-      at: new Date().toISOString(),
-    });
-    if (relay.events.length > MAX_RELAY_EVENTS) relay.events.shift();
+/** Keeps one JSON line's event name and code. The relay never logs a token, and this keeps nothing else. */
+function keepRelayLine(line: string): void {
+  if (line.trim() === "") return;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(line);
+  } catch {
+    return;
   }
+  if (!isRecord(parsed) || typeof parsed.event !== "string") return;
+  const code = parsed.code;
+  relay.events.push({
+    event: parsed.event,
+    ...(typeof code === "string" || typeof code === "number" ? { code } : {}),
+    at: new Date().toISOString(),
+  });
+  if (relay.events.length > MAX_RELAY_EVENTS) relay.events.shift();
 }
 
 function stopRelay(): void {
@@ -482,10 +481,9 @@ function startRelay(start: RelayStart, ledger: LedgerServer, bundle: string): vo
     },
     stdio: ["ignore", "pipe", "pipe"],
   });
-  child.stdout.setEncoding("utf8");
-  child.stdout.on("data", (text: string) => {
-    keepRelayLines(text);
-  });
+  // A chunk can end inside a line, so read whole lines. The events the suite
+  // waits on, ready and token_revoked, are single lines.
+  createInterface({ input: child.stdout }).on("line", keepRelayLine);
   // The relay writes a configuration problem to standard error. Its lines name
   // variables, never values, so the workflow log may show them.
   child.stderr.setEncoding("utf8");
