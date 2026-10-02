@@ -5410,8 +5410,7 @@ type Messages = {
   record: {
     loading: string;
     header: {
-      steering: string;
-      record: string;
+      eyebrow: string;
       published: string;
       archived: string;
       slugTitle: string;
