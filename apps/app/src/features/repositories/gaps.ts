@@ -5,7 +5,7 @@
 export const REPOSITORY_GAPS = {
   /**
    * #3241 carries the lifecycle this page assumes: the pull-request kinds
-   * beyond context records, the close comment, the reconciler and drift, the
+   * beyond steering records, the close comment, the reconciler and drift, the
    * code graph and event counters, and `set_main_repository`. Working copies
    * left it with `list_working_copies`.
    */

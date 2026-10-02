@@ -2,7 +2,7 @@
 // repo in production (steering-repo-spec, Steering PR flow: Publish; S3,
 // #4449).
 //
-// merge_context_pr and the repository sync both publish a steering repo. Each
+// merge_steering_pr and the repository sync both publish a steering repo. Each
 // merge takes the next version from the version store, so both callers must
 // read one store, keyed by one repository string. Two keys for one repository
 // would give two merges the same number. This module is that one place:
@@ -12,7 +12,7 @@
 //   bundle names.
 // - steeringPublishDeps: publish()'s deps over the workspace's host and its
 //   Postgres version store. `withToolProjection` (M13) adds project().
-// - steeringPublisher: what merge_context_pr calls. Its withLock holds the
+// - steeringPublisher: what merge_steering_pr calls. Its withLock holds the
 //   store's lock from the version read through publish(), so the version a
 //   merge writes into its trailer is the one publish() assigns.
 // - steeringSyncPublish: the repository sync's publish port
@@ -229,7 +229,7 @@ export function steeringPublishDeps(
 }
 
 /**
- * The publisher merge_context_pr calls for one workspace. The version store
+ * The publisher merge_steering_pr calls for one workspace. The version store
  * is built once, so the merge's version read and publish() share it.
  * `extend` adds MCP Studio's project() to the deps. The production merge
  * passes `withToolProjection`.
@@ -285,7 +285,7 @@ export type SteeringSyncPublishOptions = Omit<
 /**
  * The repository sync's publish port (`SyncDeps.publish`). Each call resolves
  * the workspace's steering head and publishes its production branch's head
- * through the publisher merge_context_pr uses. Provisioned GitHub repositories
+ * through the publisher merge_steering_pr uses. Provisioned GitHub repositories
  * verify the exact commit before reading its tree. A repository in
  * the legacy layout has no bundle to publish, and the port answers null.
  *

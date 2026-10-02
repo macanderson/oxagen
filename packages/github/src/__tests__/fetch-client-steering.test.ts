@@ -1,4 +1,4 @@
-// The calls the Context PR (ADR-061) needs beyond the read client: a
+// The calls the steering PR (ADR-061) needs beyond the read client: a
 // completed check run on a commit, a pull request merge pinned to a head
 // commit, a close, a branch delete, the files a head changes against its
 // base, and the open pull request on a branch.

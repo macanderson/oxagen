@@ -1670,13 +1670,13 @@
     "group": "Context and steering",
     "does": "by kind, scope, status, lineage",
     "absorbs": [
-      "list_context_records",
+      "list_steering_records",
       "list_memories",
       "list_memory_citations",
       "get_citation_stats"
     ],
     "resolved": [
-      "list_context_records",
+      "list_steering_records",
       "list_memories",
       "list_memory_citations",
       "get_citation_stats"
@@ -1759,19 +1759,19 @@
     "does": "a proposal",
     "absorbs": [
       "promote_memory",
-      "promote_context_record",
+      "promote_steering_record",
       "suggest_promotion_rationales"
     ],
     "resolved": [
       "promote_memory",
-      "promote_context_record",
+      "promote_steering_record",
       "suggest_promotion_rationales"
     ],
     "unresolved": [],
     "isNew": false,
     "inherit": {
-      "name": "promote_context_record",
-      "file": "context.record.promote.ts",
+      "name": "promote_steering_record",
+      "file": "steering.record.promote.ts",
       "domain": "context",
       "mode": "sync",
       "sensitivity": "high",
@@ -1788,16 +1788,16 @@
     }
   },
   {
-    "name": "open_context_pr",
+    "name": "open_steering_pr",
     "group": "Context and steering",
     "does": "the pull request",
-    "absorbs": ["publish_context_record"],
-    "resolved": ["publish_context_record"],
+    "absorbs": ["publish_steering_record"],
+    "resolved": ["publish_steering_record"],
     "unresolved": [],
     "isNew": false,
     "inherit": {
-      "name": "publish_context_record",
-      "file": "context.record.publish.ts",
+      "name": "publish_steering_record",
+      "file": "steering.record.publish.ts",
       "domain": "context",
       "mode": "sync",
       "sensitivity": "high",

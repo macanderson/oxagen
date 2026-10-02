@@ -7,7 +7,7 @@
 // call for the same repository reuses the branch and the PR.
 //
 // With `record`, the PR's `workspace` proposal row is written or moved to the
-// new head, so merge_context_pr can land it through the merge queue (#5122,
+// new head, so merge_steering_pr can land it through the merge queue (#5122,
 // ADR-265). A row that fails to write is logged, and the PR stays open.
 import { createHash } from "node:crypto";
 import { OXAGEN_PR_LABELS } from "@oxagen/github";

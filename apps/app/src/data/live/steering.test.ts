@@ -2,11 +2,11 @@
 // view model, with a refusal passed through and an unmappable record reported
 // once. The workspace memory reads (#4914) send only the filters a caller
 // names.
-import { contextPrDiffGet } from "@oxagen/oxagen/contracts/context.pr.diff.get";
-import { contextPrGet } from "@oxagen/oxagen/contracts/context.pr.get";
-import { contextProposalList } from "@oxagen/oxagen/contracts/context.proposal.list";
-import { contextRecordsGet } from "@oxagen/oxagen/contracts/context.records.get";
-import { contextRecordsList } from "@oxagen/oxagen/contracts/context.records.list";
+import { steeringPrDiffGet } from "@oxagen/oxagen/contracts/steering.pr.diff.get";
+import { steeringPrGet } from "@oxagen/oxagen/contracts/steering.pr.get";
+import { steeringProposalList } from "@oxagen/oxagen/contracts/steering.proposal.list";
+import { steeringRecordsGet } from "@oxagen/oxagen/contracts/steering.records.get";
+import { steeringRecordsList } from "@oxagen/oxagen/contracts/steering.records.list";
 import { contextSteeringDeliveries } from "@oxagen/oxagen/contracts/context.steering.deliveries";
 import { contextSteeringFreshness } from "@oxagen/oxagen/contracts/context.steering.freshness";
 import { repositoryList } from "@oxagen/oxagen/contracts/repository.list";
@@ -16,7 +16,7 @@ import { steeringMemoriesList } from "@oxagen/oxagen/contracts/steering.memories
 import { steeringMemoryPrRecordsList } from "@oxagen/oxagen/contracts/steering.memory_pr_records.list";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  contextPrOutput,
+  steeringPrOutput,
   LINEAGE,
   memoriesOutput,
   memoryGetOutput,
@@ -71,7 +71,7 @@ describe("steering.records", () => {
     kernelRead.mockResolvedValue(readOk(recordsOutput(undefined, 1)));
     const read = await steering.records(ctx, { kind: null, offset: 0 });
     expect(kernelRead).toHaveBeenCalledWith(ctx, {
-      contract: contextRecordsList,
+      contract: steeringRecordsList,
       input: { status: "active", limit: 50, offset: 0 },
       page: "steering",
     });
@@ -116,7 +116,7 @@ describe("steering.record", () => {
     kernelRead.mockResolvedValue(readOk(recordGetOutput()));
     const read = await steering.record(ctx, "ctx.release.no-reread-changelog");
     expect(kernelRead).toHaveBeenCalledWith(ctx, {
-      contract: contextRecordsGet,
+      contract: steeringRecordsGet,
       input: { recordId: "ctx.release.no-reread-changelog" },
       page: "steering",
     });
@@ -177,7 +177,7 @@ describe("steering.proposals", () => {
     );
     const read = await steering.proposals(ctx, { offset: 100 });
     expect(kernelRead).toHaveBeenCalledWith(ctx, {
-      contract: contextProposalList,
+      contract: steeringProposalList,
       input: { limit: 50, offset: 100 },
       page: "steering",
     });
@@ -189,7 +189,7 @@ describe("steering.proposals", () => {
     kernelRead.mockResolvedValue(readOk({ proposals: [], total: 0 }));
     await steering.proposals(ctx, { offset: 20, limit: 10 });
     expect(kernelRead).toHaveBeenCalledWith(ctx, {
-      contract: contextProposalList,
+      contract: steeringProposalList,
       input: { limit: 10, offset: 20 },
       page: "steering",
     });
@@ -219,7 +219,7 @@ describe("steering.proposals", () => {
     // Asserted whole rather than field by field: an exact input is the only
     // way to say `lineageId` was not sent, rather than merely not checked.
     expect(kernelRead).toHaveBeenCalledWith(ctx, {
-      contract: contextProposalList,
+      contract: steeringProposalList,
       input: { limit: 50, offset: 0 },
       page: "steering",
     });
@@ -229,19 +229,19 @@ describe("steering.proposals", () => {
     kernelRead.mockResolvedValue(readOk({ proposals: [], total: 0 }));
     await steering.proposals(ctx, { offset: 0, limit: 25, state: "merged" });
     expect(kernelRead).toHaveBeenCalledWith(ctx, {
-      contract: contextProposalList,
+      contract: steeringProposalList,
       input: { limit: 25, offset: 0, state: "merged" },
       page: "steering",
     });
   });
 });
 
-describe("steering.contextPr", () => {
-  it("reads one proposal's Context PR", async () => {
-    kernelRead.mockResolvedValue(readOk(contextPrOutput()));
-    const read = await steering.contextPr(ctx, "prp_01k5ru4a");
+describe("steering.steeringPr", () => {
+  it("reads one proposal's steering PR", async () => {
+    kernelRead.mockResolvedValue(readOk(steeringPrOutput()));
+    const read = await steering.steeringPr(ctx, "prp_01k5ru4a");
     expect(kernelRead).toHaveBeenCalledWith(ctx, {
-      contract: contextPrGet,
+      contract: steeringPrGet,
       input: { proposalId: "prp_01k5ru4a" },
       page: "steering",
     });
@@ -254,11 +254,11 @@ describe("steering.contextPr", () => {
   it("passes a missing proposal through as its 404 (negative)", async () => {
     const missing = readError("not_found", 404);
     kernelRead.mockResolvedValue(missing);
-    expect(await steering.contextPr(ctx, "prp_missing")).toEqual(missing);
+    expect(await steering.steeringPr(ctx, "prp_missing")).toEqual(missing);
   });
 });
 
-describe("steering.contextPrDiff", () => {
+describe("steering.steeringPrDiff", () => {
   const out = {
     proposalId: "prp_01k5ru4a",
     state: "diff",
@@ -278,9 +278,9 @@ describe("steering.contextPrDiff", () => {
 
   it("reads the diff the host answers and maps it", async () => {
     kernelRead.mockResolvedValue(readOk(out));
-    const read = await steering.contextPrDiff(ctx, "prp_01k5ru4a");
+    const read = await steering.steeringPrDiff(ctx, "prp_01k5ru4a");
     expect(kernelRead).toHaveBeenCalledWith(ctx, {
-      contract: contextPrDiffGet,
+      contract: steeringPrDiffGet,
       input: { proposalId: "prp_01k5ru4a" },
       page: "steering",
     });
@@ -298,15 +298,15 @@ describe("steering.contextPrDiff", () => {
   it("passes the host's refusal through (negative)", async () => {
     const refused = readError("github_refused", 409);
     kernelRead.mockResolvedValue(refused);
-    expect(await steering.contextPrDiff(ctx, "prp_01k5ru4a")).toEqual(refused);
+    expect(await steering.steeringPrDiff(ctx, "prp_01k5ru4a")).toEqual(refused);
   });
 });
 
-describe("steering.contextPr, the raised proposal and its close", () => {
+describe("steering.steeringPr, the raised proposal and its close", () => {
   it("carries who raised it and how it closed", async () => {
     kernelRead.mockResolvedValue(
       readOk(
-        contextPrOutput({
+        steeringPrOutput({
           status: "rejected",
           closed: {
             at: "2026-09-15T09:30:00.000Z",
@@ -318,7 +318,7 @@ describe("steering.contextPr, the raised proposal and its close", () => {
         }),
       ),
     );
-    const read = await steering.contextPr(ctx, "prp_01k5ru4a");
+    const read = await steering.steeringPr(ctx, "prp_01k5ru4a");
     expect(read.ok && read.value.closed).toEqual({
       at: "2026-09-15T09:30:00.000Z",
       reason: "Closed on GitHub without merging",
@@ -482,7 +482,7 @@ describe("steering.hub", () => {
             governanceMode: "regulated",
           })
         );
-      if (call.contract === contextProposalList) {
+      if (call.contract === steeringProposalList) {
         const key = call.input.state;
         const totals: Record<string, number> = {
           open: 9,
@@ -544,7 +544,7 @@ describe("steering.hub", () => {
     });
     for (const state of ["open", "merged", "closed"]) {
       expect(kernelRead).toHaveBeenCalledWith(ctx, {
-        contract: contextProposalList,
+        contract: steeringProposalList,
         input: { limit: 1, offset: 0, state },
         page: "steering",
       });

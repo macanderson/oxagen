@@ -125,7 +125,7 @@ export default defineConfig({
         "src/tools/work.triage.retry.ts",
         "src/tools/work.triage.revise.ts",
         // instruction files (#4518, ADR-263)
-        "src/tools/context.pr.restore_managed_block.ts",
+        "src/tools/steering.pr.restore_managed_block.ts",
         "src/tools/repository.findings.list.ts",
         "src/tools/repository.instruction.promote.ts",
       ],

@@ -2,7 +2,7 @@
  * `oxagen pull`: write the steering published in this workspace into this
  * directory's `.oxagen/`.
  *
- * Steering is published by merging a Context PR onto the main repository's
+ * Steering is published by merging a steering PR onto the main repository's
  * production branch (ADR-061). A developer's machine may not have git access
  * to that repository, and a checkout of another repository has no branch to
  * sync from at all, so pull reads the published tree from Oxagen

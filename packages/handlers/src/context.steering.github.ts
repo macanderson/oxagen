@@ -1,4 +1,4 @@
-// context.steering.github.ts — the GitHub seam under the Context PR handlers
+// context.steering.github.ts — the GitHub seam under the steering PR handlers
 // (ADR-061; MC spec §10.1, §10.3). The workspace's repository is its
 // **steering repository**: the steering head's binding
 // (`ingestion.repository_binding_heads` → `ingestion.repository_bindings`),
@@ -35,7 +35,7 @@ import {
 import { assertGithubSteeringCommit } from "./steering-repo/diverged";
 
 /**
- * The repository hosts steering can publish through. A Context PR on GitHub is
+ * The repository hosts steering can publish through. A steering PR on GitHub is
  * a pull request; on GitLab it is a merge request. The two share this port and
  * nothing else: identifiers, credentials and check semantics stay with each
  * host's implementation.
@@ -75,7 +75,7 @@ interface SteeringRepositoryFields {
   /**
    * `owner/name` as the BINDING recorded it — an identifier, not a label.
    *
-   * `open_context_pr` dots this into the `set_id` at the top of every Context
+   * `open_steering_pr` dots this into the `set_id` at the top of every steering
    * record file and stores it as the proposal row's `repository`, so it is
    * what groups a workspace's records into one set. Taking it from live
    * GitHub meant a repository rename silently re-stamped every subsequent
@@ -104,7 +104,7 @@ interface SteeringRepositoryFields {
    */
   currentFullName: string;
   /**
-   * The production branch: the only ref a Context PR is opened against,
+   * The production branch: the only ref a steering PR is opened against,
    * compared against, checked on and merged into.
    *
    * For a BOUND repository this is the binding's `configured_default_ref`,
@@ -467,7 +467,7 @@ export type SteeringConnection =
        * That binding's `provider_full_name` — `owner/name` as it was when the
        * binding version was written. Like `approvedDefaultRef` it moves only
        * on a new binding version, never because the repository was renamed on
-       * GitHub, because it is dotted into the `set_id` every Context record
+       * GitHub, because it is dotted into the `set_id` every steering record
        * file carries and that id has to keep naming one set.
        */
       approvedFullName: string;
@@ -521,7 +521,7 @@ export type SteeringConnection =
  * The joined read above misses for two different reasons — no head was ever
  * written, or a head exists and the connection it was bound through is
  * retired — and they are not the same fact. Falling back on the second one
- * silently retargets steering and every Context PR at whatever unrelated
+ * silently retargets steering and every steering PR at whatever unrelated
  * repository a still-connected legacy sources connection happens to name in
  * its ingestion `delivery_config`. Writing steering into the wrong repository
  * is worse than steering being off, so a workspace whose steering repository
@@ -573,7 +573,7 @@ export async function readGitHubConnection(scope: {
           eq(schema.repositoryBindingHeads.workspaceId, scope.workspaceId),
           // Only the steering head steers. Its role is 'steering', and
           // 'linked' marks a code repository the workspace's agents work in,
-          // which receives no Context PR, because every record lives in the
+          // which receives no steering PR, because every record lives in the
           // steering repository (ADR-212). A reader
           // that ignores the column goes on resolving through a linked
           // head, so the cross-workspace steering collision the index
@@ -750,7 +750,7 @@ function headMoved(branch: string): HandlerError {
 }
 
 /**
- * A Context PR merges only into the production branch. GitHub lets anyone
+ * A steering PR merges only into the production branch. GitHub lets anyone
  * with write access retarget a PR, so its base is read back before the checks
  * run and before the merge.
  */
@@ -763,13 +763,13 @@ export function assertProductionBase(
     throw new HandlerError({
       code: "conflict",
       reason: "base_moved",
-      message: `${prUrl ?? "The pull request"} targets ${baseRef}; a Context PR merges only into ${repo.defaultBranch}`,
+      message: `${prUrl ?? "The pull request"} targets ${baseRef}; a steering PR merges only into ${repo.defaultBranch}`,
     });
   }
 }
 
 /**
- * A Context PR that the host merged at a commit the checks never ran on.
+ * A steering PR that the host merged at a commit the checks never ran on.
  *
  * Someone merged it on the host instead of from Oxagen, after the head moved:
  * a merge of `main` into the branch, or a review bot's suggestion accepted
@@ -792,7 +792,7 @@ export function mergedOutsideOxagen(
 }
 
 /**
- * Ask for the repository sync for a Context PR the host already merged, then
+ * Ask for the repository sync for a steering PR the host already merged, then
  * refuse. The sync runs through its queue (one per workspace at a time), not
  * inside this request: run here, it could write an older branch head over a
  * newer one the queue had already written.
@@ -1122,7 +1122,7 @@ export function createSteeringGitHub(
           code: "not_found",
           reason: "workspace_repository_missing",
           message:
-            "This workspace has no connected GitHub repository; a Context PR needs the main repo (MC spec §10.1)",
+            "This workspace has no connected GitHub repository; a steering PR needs the main repo (MC spec §10.1)",
         });
       }
       // A provisioned steering repository answers only to the Oxagen GitHub
@@ -1147,7 +1147,7 @@ export function createSteeringGitHub(
       // admin changes the repository's default branch on GitHub after the
       // binding is written, the immutable binding and the settings page still
       // name the approved branch, and steering must agree with them.
-      // Following GitHub instead would open, check and merge Context PRs into
+      // Following GitHub instead would open, check and merge steering PRs into
       // a branch no one approved, while `assertProductionBase` below — which
       // compares a PR's base against this very field — would wave it through.
       // Approving a new branch is a new binding version
@@ -1163,7 +1163,7 @@ export function createSteeringGitHub(
           ? connection.approvedDefaultRef
           : info.defaultBranch;
       // The same argument as the ref, one field over. `fullName` is dotted
-      // into the `set_id` of every Context record file and stored as the
+      // into the `set_id` of every steering record file and stored as the
       // proposal row's `repository`, so it is an IDENTIFIER: taking it from
       // live GitHub meant a rename re-stamped every later record with a new
       // set id while the existing ones kept the old one — two sets for one

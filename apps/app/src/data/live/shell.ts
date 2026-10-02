@@ -80,7 +80,7 @@ export const shell: DataSource["shell"] = {
         error: view.error,
         source: "app",
         orgId: ctx.orgId,
-        context: "shell.context record_unmappable",
+        context: "shell.context: record_unmappable",
       });
       return readError("record_unmappable", 502);
     }

@@ -464,7 +464,7 @@ const ENTITY_ID_MAX = 256;
  * A page that keeps its selection in the query string declares it, with
  * `<PageRecord>`, from the parse it already did in order to render. The shell
  * does not re-derive it: a `finding` outside the Findings tab, a `proposal` off
- * the Context PRs tab, and the `agent` on `/register/wrap` are all cases where
+ * the steering PRs tab, and the `agent` on `/register/wrap` are all cases where
  * the URL and the page disagree, and the page is right.
  *
  * A route whose record is the path segment after it (`runs/[run]`,

@@ -9,7 +9,7 @@
 // and one ledger line. The squash merge is pinned to the commit that was
 // checked (or stamped), and its message ends with the Oxagen-* trailers.
 //
-// The queue has two locks. merge_context_pr merges on the api surface, and
+// The queue has two locks. merge_steering_pr merges on the api surface, and
 // set_governance_mode merges on the mcp surface too, so two processes can
 // merge the same repository at once.
 //

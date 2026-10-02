@@ -27,10 +27,10 @@ const { router, dropMemoryRecord } = vi.hoisted(() => ({
 }));
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
 vi.mock("./actions", () => ({
-  openContextPr: vi.fn(),
-  mergeContextPr: vi.fn(),
+  openSteeringPr: vi.fn(),
+  mergeSteeringPr: vi.fn(),
   dismissProposal: vi.fn(),
-  approveContextPr: vi.fn(),
+  approveSteeringPr: vi.fn(),
   mergePrWithoutReview: vi.fn(),
   revertSteeringPr: vi.fn(),
   restoreManagedBlock: vi.fn(),

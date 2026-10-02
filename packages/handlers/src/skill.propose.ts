@@ -8,7 +8,7 @@
 //   1. Role gate: org Owner or Admin (assertOrgRole, INV-29), for the signed-in
 //      user. An API key carries no user, so the call is refused there.
 //   2. The main repository and its production branch, from the repository
-//      binding (the SteeringGitHub seam, the one open_context_pr uses).
+//      binding (the SteeringGitHub seam, the one open_steering_pr uses).
 //   3. What is merged today: the skill's SKILL.md on the production branch
 //      (a replacement must carry a strictly greater version) and the search
 //      budget from `.oxagen/skills.toml` (the default when it names none).

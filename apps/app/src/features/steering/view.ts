@@ -5,13 +5,13 @@
 // are its other shelves. A filter, the Proposals state (#5077), a page
 // offset, the rows a Proposals, Memories or Skills page holds (#4693), the
 // memory the Memories drawer opens (#4914) and a Skills cursor stay query
-// values. One Context PR is its own route, `/steering/proposals/prs/<prp_…>`.
+// values. One steering PR is its own route, `/steering/proposals/prs/<prp_…>`.
 //
 // Every address written before the five tabs still lands. `/steering/policy`
 // is Gates, `/steering/preview/<agent>` is `/steering/compiler/<agent>`,
-// `/steering/proposals/prs` and `/steering/prs`, the Context PRs segment, are
+// `/steering/proposals/prs` and `/steering/prs`, the steering PRs segment, are
 // the Proposals list (#5077), and one that selected a proposal with
-// `?proposal=` is that Context PR's page. A `?tab=` query from the old
+// `?proposal=` is that steering PR's page. A `?tab=` query from the old
 // one-route page moves to the path it now names. The tabs this page had
 // before the design (Settings and Delivery) moved into the tab whose question
 // they answer: the freshness gates refuse stale runs, so they are Gates, and
@@ -167,7 +167,7 @@ const REPO_REF =
 const REPO_MAX = 200;
 /** A Claude Code memory type, as list_workspace_memories takes it. */
 const MEMORY_TYPE = /^[a-z][a-z0-9_-]{0,31}$/;
-/** get_context_pr's own id rule, with a length the contract's id column holds. */
+/** get_steering_pr's own id rule, with a length the contract's id column holds. */
 export const PROPOSAL_ID = /^prp_[0-9A-Za-z]{1,60}$/;
 /** An opaque inventory cursor; the length bounds what a URL may carry. */
 const CURSOR_MAX = 512;
@@ -314,7 +314,7 @@ export function resolveSteeringRoute(
 ): SteeringRoute {
   const redirect = (tab: string, agent?: string): SteeringRoute => {
     const { proposal, ...kept } = carried(query);
-    // The Context PRs segment selected one proposal with `?proposal=`; that
+    // The steering PRs segment selected one proposal with `?proposal=`; that
     // proposal is its own page now (#5077).
     if (
       (tab === "prs" || tab === "proposals") &&
@@ -406,7 +406,7 @@ export function resolveSteeringRoute(
         ? redirect("proposals")
         : view({ tab: "proposals" });
     }
-    // `/proposals/prs/<id>` is the Context PR page, its own route; the
+    // `/proposals/prs/<id>` is the steering PR page, its own route; the
     // segment alone is the list.
     return second === "prs" && third === undefined
       ? redirect("proposals")
@@ -515,7 +515,7 @@ export function shelfLink(at: SteeringAt, shelf: LibraryShelf): SafePath {
 }
 
 /**
- * The list a Context PR page was opened from, as its query carries it: the
+ * The list a steering PR page was opened from, as its query carries it: the
  * state, the page size and the offset, each null when absent or not one the
  * list offers. The page's way back builds the list's address from it.
  */

@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 // The Steering header's own entry into a creation wizard (roadmap
 // creation-spec §1): "Add a skill" on the Skills shelf opens the skill wizard
-// over the page, and every other view's "Write a context record" opens the
-// context-record wizard. A view whose body holds its own primary action takes
+// over the page, and every other view's "Write a steering record" opens the
+// steering-record wizard. A view whose body holds its own primary action takes
 // the gold from the header (pages/steering.md, "One gold action").
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -56,7 +56,7 @@ describe("SteeringCreate", () => {
     }
   });
 
-  it("opens the context-record wizard from every view but the Skills shelf", () => {
+  it("opens the steering-record wizard from every view but the Skills shelf", () => {
     const views = [
       viewAt([]),
       viewAt(["records"]),
@@ -70,7 +70,7 @@ describe("SteeringCreate", () => {
         const { container } = mount(view);
         expect(container.querySelectorAll("button")).toHaveLength(1);
         fireEvent.click(
-          screen.getByRole("button", { name: "Write a context record" }),
+          screen.getByRole("button", { name: "Write a steering record" }),
         );
         cleanup();
       }
@@ -85,14 +85,14 @@ describe("SteeringCreate", () => {
   it("offers no record button on the Skills shelf (negative)", () => {
     mount(viewAt(["skills"]));
     expect(
-      screen.queryByRole("button", { name: "Write a context record" }),
+      screen.queryByRole("button", { name: "Write a steering record" }),
     ).toBeNull();
   });
 
   it("draws the button secondary where the view's body holds the gold", () => {
     mount(viewAt([]), false);
     const button = screen.getByRole("button", {
-      name: "Write a context record",
+      name: "Write a steering record",
     });
     expect(button.className).not.toMatch(/button-primary/);
   });

@@ -222,7 +222,7 @@ describe("apiRefusal", () => {
   it("reads the code, the reason, and the message from the body in the error's message", () => {
     expect(
       apiRefusal(
-        refusal("context/prs/restore-block", 409, {
+        refusal("steering/prs/restore-block", 409, {
           code: "conflict",
           reason: "block_intact",
           message: "The block matches main.",

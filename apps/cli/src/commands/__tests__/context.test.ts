@@ -70,12 +70,12 @@ afterEach(() => {
 });
 
 describe("oxagen context propose", () => {
-  it("records the proposal through propose_record and says where its Context PR is opened", async () => {
+  it("records the proposal through propose_record and says where its steering PR is opened", async () => {
     (apiPostOrThrow as Mock).mockResolvedValueOnce(PROPOSAL);
     const { writer, out, err } = memoryWriter();
     await contextPropose(FLAGS, writer);
     expect(apiPostOrThrow).toHaveBeenCalledTimes(1);
-    expect(apiPostOrThrow).toHaveBeenCalledWith("context/proposals/create", {
+    expect(apiPostOrThrow).toHaveBeenCalledWith("steering/proposals/create", {
       record: {
         lineageId: "ctx.a",
         kind: "constraint",
@@ -89,7 +89,7 @@ describe("oxagen context propose", () => {
     });
     expect(out).toEqual([
       "ctx.a · prp_9 · proposed",
-      "open its Context PR from Oxagen → Steering; merge there publishes it",
+      "open its steering PR from Oxagen → Steering; merge there publishes it",
     ]);
     expect(err).toEqual([]);
   });
@@ -145,7 +145,7 @@ describe("oxagen context revert", () => {
     const { writer, out, err } = memoryWriter();
     await contextRevert("prp_9", {}, writer);
     expect(apiPostOrThrow).toHaveBeenCalledTimes(1);
-    expect(apiPostOrThrow).toHaveBeenCalledWith("context/prs/revert", {
+    expect(apiPostOrThrow).toHaveBeenCalledWith("steering/prs/revert", {
       proposalId: "prp_9",
     });
     expect(out).toEqual([

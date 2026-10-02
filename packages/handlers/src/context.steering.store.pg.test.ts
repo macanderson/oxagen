@@ -7,13 +7,14 @@
 // red. Every row it writes is removed in afterAll.
 import { afterAll, describe, expect, it, vi } from "vitest";
 import { closeDatabase, schema, withSystemDb } from "@oxagen/database";
-import { contextRecordLabel } from "@oxagen/oxagen/context-record-label";
+import { steeringRecordLabel } from "@oxagen/oxagen/steering-record-label";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { asc, eq, inArray, sql } from "drizzle-orm";
 import {
   postgresSteeringStore as store,
   type ProposalRow,
 } from "./context.steering.store";
+import { LEGACY_RECORD_SCHEMA } from "@oxagen/oxagen/steering-repo/paths";
 import { buildRecordFile, serializeRecordFile } from "./context.steering.file";
 
 const enabled = Boolean(process.env.DATABASE_URL);
@@ -43,10 +44,10 @@ describe.skipIf(!enabled)("steering store against Postgres", () => {
   afterAll(async () => {
     await withSystemDb(async (tx) => {
       const records = await tx
-        .select({ id: schema.contextRecords.id })
-        .from(schema.contextRecords)
+        .select({ id: schema.steeringRecords.id })
+        .from(schema.steeringRecords)
         .where(
-          inArray(schema.contextRecords.workspaceId, [
+          inArray(schema.steeringRecords.workspaceId, [
             workspaceId,
             otherWorkspace,
             concurrentWorkspace,
@@ -57,18 +58,18 @@ describe.skipIf(!enabled)("steering store against Postgres", () => {
       const ids = records.map((r) => r.id);
       if (ids.length > 0) {
         await tx
-          .delete(schema.contextPromotions)
-          .where(inArray(schema.contextPromotions.recordId, ids));
+          .delete(schema.steeringPromotions)
+          .where(inArray(schema.steeringPromotions.recordId, ids));
         await tx
-          .update(schema.contextRecords)
+          .update(schema.steeringRecords)
           .set({ activeVersionId: null })
-          .where(inArray(schema.contextRecords.id, ids));
+          .where(inArray(schema.steeringRecords.id, ids));
         await tx
-          .delete(schema.contextRecordVersions)
-          .where(inArray(schema.contextRecordVersions.recordId, ids));
+          .delete(schema.steeringRecordVersions)
+          .where(inArray(schema.steeringRecordVersions.recordId, ids));
         await tx
-          .delete(schema.contextRecords)
-          .where(inArray(schema.contextRecords.id, ids));
+          .delete(schema.steeringRecords)
+          .where(inArray(schema.steeringRecords.id, ids));
       }
       await tx
         .delete(schema.contextAppends)
@@ -82,9 +83,9 @@ describe.skipIf(!enabled)("steering store against Postgres", () => {
           ]),
         );
       await tx
-        .delete(schema.contextProposals)
+        .delete(schema.steeringProposals)
         .where(
-          inArray(schema.contextProposals.workspaceId, [
+          inArray(schema.steeringProposals.workspaceId, [
             workspaceId,
             otherWorkspace,
             concurrentWorkspace,
@@ -143,9 +144,9 @@ describe.skipIf(!enabled)("steering store against Postgres", () => {
         expect(result.reason).toMatchObject({ reason: "clone_name_taken" });
     await withSystemDb((tx) =>
       tx
-        .update(schema.contextProposals)
+        .update(schema.steeringProposals)
         .set({ status: "rejected" })
-        .where(eq(schema.contextProposals.lineageId, cloneValues.lineageId)),
+        .where(eq(schema.steeringProposals.lineageId, cloneValues.lineageId)),
     );
     await expect(
       inScope(() => store.insertProposal(cloneValues, { createOnly: true })),
@@ -234,7 +235,7 @@ describe.skipIf(!enabled)("steering store against Postgres", () => {
         store.publishMerge({
           scope: concurrentScope,
           proposal: opened,
-          body: 'schema = "context-record/v0.1"\n',
+          body: `schema = "${LEGACY_RECORD_SCHEMA}"\n`,
           checksum: suffix.repeat(64).slice(0, 64),
           commitSha: `c0ffee${suffix}`,
           path: opened.path!,
@@ -282,7 +283,7 @@ describe.skipIf(!enabled)("steering store against Postgres", () => {
       store.publishMerge({
         scope,
         proposal: opened,
-        body: 'schema = "context-record/v0.1"\n',
+        body: `schema = "${LEGACY_RECORD_SCHEMA}"\n`,
         checksum: "b".repeat(64),
         commitSha: "7d2e91a",
         path: opened.path!,
@@ -336,7 +337,7 @@ describe.skipIf(!enabled)("steering store against Postgres", () => {
         store.publishMerge({
           scope,
           proposal: opened,
-          body: 'schema = "context-record/v0.1"\n# again\n',
+          body: `schema = "${LEGACY_RECORD_SCHEMA}"\n# again\n`,
           checksum: "d".repeat(64),
           commitSha: "7d2e91a",
           path: opened.path!,
@@ -384,7 +385,7 @@ describe.skipIf(!enabled)("steering store against Postgres", () => {
       store.publishMerge({
         scope,
         proposal: secondOpened,
-        body: 'schema = "context-record/v0.1"\n# v2\n',
+        body: `schema = "${LEGACY_RECORD_SCHEMA}"\n# v2\n`,
         checksum: "c".repeat(64),
         commitSha: "8e3f0ab",
         path: opened.path!,
@@ -408,15 +409,15 @@ describe.skipIf(!enabled)("steering store against Postgres", () => {
     const classified = await withSystemDb((tx) =>
       tx
         .select({
-          version: schema.contextRecordVersions.versionNumber,
-          kind: schema.contextRecordVersions.kind,
-          force: schema.contextRecordVersions.force,
-          constraintEffect: schema.contextRecordVersions.constraintEffect,
-          statement: schema.contextRecordVersions.statement,
+          version: schema.steeringRecordVersions.versionNumber,
+          kind: schema.steeringRecordVersions.kind,
+          force: schema.steeringRecordVersions.force,
+          constraintEffect: schema.steeringRecordVersions.constraintEffect,
+          statement: schema.steeringRecordVersions.statement,
         })
-        .from(schema.contextRecordVersions)
-        .where(eq(schema.contextRecordVersions.recordId, first.recordId))
-        .orderBy(asc(schema.contextRecordVersions.versionNumber)),
+        .from(schema.steeringRecordVersions)
+        .where(eq(schema.steeringRecordVersions.recordId, first.recordId))
+        .orderBy(asc(schema.steeringRecordVersions.versionNumber)),
     );
     expect(classified).toEqual([
       {
@@ -443,7 +444,7 @@ describe.skipIf(!enabled)("steering store against Postgres", () => {
       over: Partial<ProposalRow>,
       n: number,
       lineageId = labelLineage,
-      body = `schema = "context-record/v0.1"\n# ${n}\n`,
+      body = `schema = "${LEGACY_RECORD_SCHEMA}"\n# ${n}\n`,
     ) => {
       const proposal = await proposeIn(where, { lineageId, ...over });
       const opened = await runInTenantScope(where, () =>
@@ -499,7 +500,7 @@ describe.skipIf(!enabled)("steering store against Postgres", () => {
       await mergeWith({ title: "   " }, 4, `${labelLineage}.blank`),
     ).toMatchObject({
       title: "Do not re-read CHANGELOG.md more than once in a run.",
-      label: contextRecordLabel(`${labelLineage}.blank`),
+      label: steeringRecordLabel(`${labelLineage}.blank`),
     });
     // The merged file names the record (ADR-178), over the proposal.
     const named = serializeRecordFile(
@@ -593,9 +594,9 @@ describe.skipIf(!enabled)("steering store against Postgres", () => {
     await expect(
       withSystemDb((tx) =>
         tx
-          .update(schema.contextProposals)
+          .update(schema.steeringProposals)
           .set({ status: "merged", mergedCommit: "1a2b3c4d" })
-          .where(eq(schema.contextProposals.id, record.id)),
+          .where(eq(schema.steeringProposals.id, record.id)),
       ),
     ).rejects.toThrow();
     // The kind check still refuses a kind it does not list.
@@ -609,7 +610,7 @@ describe.skipIf(!enabled)("steering store against Postgres", () => {
     const inRevertScope = <T>(fn: () => Promise<T>) =>
       runInTenantScope(where, fn);
     const recordLineage = `${lineage}.reverted`;
-    // The record a Context PR published, which the revert deletes.
+    // The record a steering PR published, which the revert deletes.
     const proposal = await proposeIn(where, { lineageId: recordLineage });
     const opened = await inRevertScope(() =>
       store.updateProposal(
@@ -947,7 +948,7 @@ describe.skipIf(!enabled)("steering store against Postgres", () => {
         );
         await tx.execute(sql`set local role oxagen_app`);
         const proposals = await tx.execute(
-          sql`select id from agent.context_proposals`,
+          sql`select id from agent.steering_proposals`,
         );
         const appends = await tx.execute(
           sql`select id from agent.context_appends`,

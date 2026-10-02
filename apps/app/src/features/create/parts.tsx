@@ -2,7 +2,7 @@
 // The pieces every creation wizard is built from (roadmap creation-spec §2;
 // mockup `wzRail`, `wzDesc`, `wzDraftNote`, `wzFiles`, `wzChecks`,
 // `wzPrStep`). A kind module composes its steps out of these, so the agent,
-// context record and tool wizards read the same as the skill wizard without
+// steering record and tool wizards read the same as the skill wizard without
 // copying it.
 import {
   CheckIcon,

@@ -185,8 +185,8 @@ describe.skipIf(!enabled)("work intake and triage against Postgres", () => {
       await tx.delete(s.workInboundEvents).where(eq(s.workInboundEvents.orgId, scope.orgId));
       await tx.delete(s.workCollectors).where(eq(s.workCollectors.orgId, scope.orgId));
       // A record names its active version, so the record goes first.
-      await tx.delete(s.contextRecords).where(eq(s.contextRecords.orgId, scope.orgId));
-      await tx.delete(s.contextRecordVersions).where(eq(s.contextRecordVersions.orgId, scope.orgId));
+      await tx.delete(s.steeringRecords).where(eq(s.steeringRecords.orgId, scope.orgId));
+      await tx.delete(s.steeringRecordVersions).where(eq(s.steeringRecordVersions.orgId, scope.orgId));
       await tx.delete(s.sourceConnections).where(eq(s.sourceConnections.orgId, scope.orgId));
     });
     await closeDatabase();
@@ -319,11 +319,11 @@ describe.skipIf(!enabled)("work intake and triage against Postgres", () => {
     const statement = "Rank each item P0 to P3.\n1. A security hole is P0.\n2. A defect we found ranks P2.";
     await inScope(async (tx) => {
       const [record] = await tx
-        .insert(schema.contextRecords)
+        .insert(schema.steeringRecords)
         .values({ orgId: scope.orgId, workspaceId: scope.workspaceId, slug: "p103.work.priorities", title: "Work priorities", status: "active" })
-        .returning({ id: schema.contextRecords.id });
+        .returning({ id: schema.steeringRecords.id });
       const [version] = await tx
-        .insert(schema.contextRecordVersions)
+        .insert(schema.steeringRecordVersions)
         .values({
           orgId: scope.orgId,
           workspaceId: scope.workspaceId,
@@ -334,8 +334,8 @@ describe.skipIf(!enabled)("work intake and triage against Postgres", () => {
           versionNumber: 1,
           isLatest: true,
         })
-        .returning({ id: schema.contextRecordVersions.id });
-      await tx.update(schema.contextRecords).set({ activeVersionId: version!.id }).where(eq(schema.contextRecords.id, record!.id));
+        .returning({ id: schema.steeringRecordVersions.id });
+      await tx.update(schema.steeringRecords).set({ activeVersionId: version!.id }).where(eq(schema.steeringRecords.id, record!.id));
     });
 
     const { model, calls } = scriptedModel([suggestion(itemPublicId)]);

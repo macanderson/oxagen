@@ -14,20 +14,21 @@ import {
   panelTitle,
 } from "@/ui/control-styles";
 import { useFormatter } from "@/ui/formatter";
+import { LEGACY_RECORD_SCHEMA } from "@oxagen/oxagen/steering-repo/paths";
 import { formatCount } from "@/ui/money-format";
 import { RECORD_GAPS } from "./gaps";
 
 /**
  * The protocol the record's file declares, read off where it lives (#4765):
  * `memory/v1` under `steering/memory/`, `steering-record/v1` elsewhere under
- * `steering/`, and `context-record/v0.1` in a legacy `.oxagen/rules/*.toml`
+ * `steering/`, and `LEGACY_RECORD_SCHEMA` in a legacy `.oxagen/rules/*.toml`
  * file. Null while the path is unknown.
  */
 function schemaOf(path: string | null): string | null {
   if (path === null) return null;
   if (path.startsWith("steering/memory/")) return "memory/v1";
   if (path.startsWith("steering/")) return "steering-record/v1";
-  return "context-record/v0.1";
+  return LEGACY_RECORD_SCHEMA;
 }
 
 const code = (chunks: ReactNode) => <span className={mono}>{chunks}</span>;

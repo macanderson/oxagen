@@ -16,7 +16,7 @@
  *   `steering/` in a steering repository (#4821);
  * - the text of `.oxagen/workspace.toml` and of the governance file, and the
  *   governance mode it declares (`absent` when there is no file, which the
- *   Context PR gate reads as `team`; `invalid` when the file names no mode it
+ *   steering PR gate reads as `team`; `invalid` when the file names no mode it
  *   knows, which the gate refuses). The governance file is
  *   `steering/governance.toml` in a steering repository and
  *   `.oxagen/rules/governance.toml` in a legacy one, and `governancePath`

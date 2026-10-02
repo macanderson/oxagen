@@ -1,6 +1,6 @@
 // The record page's one write, through the real viewer and kernel seams: the
 // session and the kernel's invoke() are the only fakes, so each case shows
-// what `revise_context_record` was asked and what the page gets back.
+// what `revise_steering_record` was asked and what the page gets back.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { invoke, requireViewer } = vi.hoisted(() => ({
@@ -37,8 +37,8 @@ const ctx = unsafeMint(WsCtx, {
   wsRole: "member",
 });
 
-/** What `revise_context_record` answers: the Context PR it opened. */
-const CONTEXT_PR = {
+/** What `revise_steering_record` answers: the steering PR it opened. */
+const STEERING_PR = {
   proposalId: "prp_rev1",
   lineageId: "ctx.scr.001-never-push-to-main",
   kind: "rule",
@@ -88,7 +88,7 @@ beforeEach(() => {
 
 describe("reviseRecord", () => {
   it("revises the record with its statement and reason trimmed, and answers the pull request it opened", async () => {
-    invoke.mockResolvedValue(CONTEXT_PR);
+    invoke.mockResolvedValue(STEERING_PR);
     expect(
       await reviseRecord(
         "acme",
@@ -108,7 +108,7 @@ describe("reviseRecord", () => {
     });
     expect(requireViewer).toHaveBeenCalledWith("acme", "core-platform");
     expect(invoke).toHaveBeenCalledWith(
-      "revise_context_record",
+      "revise_steering_record",
       {
         recordId: "ctx.scr.001-never-push-to-main",
         statement: "Never push to main.",
@@ -119,7 +119,7 @@ describe("reviseRecord", () => {
   });
 
   it("sends no rationale when none was given, and answers a proposal whose pull request is not open yet", async () => {
-    invoke.mockResolvedValue({ ...CONTEXT_PR, status: "proposed", pr: null });
+    invoke.mockResolvedValue({ ...STEERING_PR, status: "proposed", pr: null });
     expect(
       await reviseRecord(
         "acme",

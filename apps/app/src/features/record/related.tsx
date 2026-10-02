@@ -42,7 +42,7 @@ export function Related({
   at: RecordAt;
   /** The workspace's name, which the empty line names. */
   workspace: string;
-  /** This record's kind; null when no Context PR classified it. */
+  /** This record's kind; null when no steering PR classified it. */
   kind: RecordKind | null;
   read: Read<RecordPage> | null;
 }) {

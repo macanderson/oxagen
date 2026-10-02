@@ -1,4 +1,4 @@
-// audit-exempt: a proposal and its steering PR steer nothing until merge_context_pr publishes the record (MC spec §9.2), and that merge emits steering.published; the kernel's capability.invoke_* audit records the call.
+// audit-exempt: a proposal and its steering PR steer nothing until merge_steering_pr publishes the record (MC spec §9.2), and that merge emits steering.published; the kernel's capability.invoke_* audit records the call.
 //
 // code-repo-check/promote.ts: promote_instruction_to_steering (S7, #4518;
 // ADR-263).
@@ -25,7 +25,7 @@
 // a person can open from the Steering page, and a second Promote does not
 // propose it twice.
 import { HandlerError, type CapabilityContext, type CapabilityHandler } from "@oxagen/oxagen";
-import type { ContextPrOpenOutput } from "@oxagen/oxagen/contracts/context.pr.open";
+import type { SteeringPrOpenOutput } from "@oxagen/oxagen/contracts/steering.pr.open";
 import {
   recordKindSchema,
   type ConstraintEffect,
@@ -35,7 +35,7 @@ import {
   type RecordKind,
 } from "@oxagen/oxagen/contracts/context.steering.shared";
 import type { instructionPromote } from "@oxagen/oxagen/contracts/repository.instruction.promote";
-import { createProposal } from "../context.proposal.shared";
+import { createProposal } from "../steering.proposal.shared";
 import type { SteeringStore } from "../context.steering.store";
 import { effectOfText, type PublishedStatement } from "./findings";
 import { compareStored } from "./findings.list";
@@ -53,8 +53,8 @@ export interface PromoteDeps {
   /** The workspace's active steering records. */
   publishedRecords(scope: FindingScope): Promise<PublishedStatement[]>;
   steering: Pick<SteeringStore, "findRecord" | "findOpenPrOnLineage" | "insertProposal">;
-  /** open_context_pr's handler: the steering PR and its six checks. */
-  openPr(input: { proposalId: string }, ctx: CapabilityContext): Promise<ContextPrOpenOutput>;
+  /** open_steering_pr's handler: the steering PR and its six checks. */
+  openPr(input: { proposalId: string }, ctx: CapabilityContext): Promise<SteeringPrOpenOutput>;
   /** The handler-side role check (lib/capability-role-guard.ts). */
   assertRole(ctx: CapabilityContext): Promise<void>;
 }
