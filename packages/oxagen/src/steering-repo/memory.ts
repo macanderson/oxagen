@@ -4,7 +4,7 @@
 // A memory stays in Oxagen. The curator reads memories and proposes records
 // in a memory PR, copying each cited memory's agent, run, statement, and
 // evidence into the record's `provenance.memories`. A cited memory keeps its
-// row after the PR merges or closes (ADR-245).
+// row after the PR merges or closes (ADR-248).
 //
 // Oxagen sets `agent` and `run` from the authenticated run, never from tool
 // input. The spec pairs them with `capture`: `remember` sets both, a

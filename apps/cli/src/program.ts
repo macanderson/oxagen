@@ -775,6 +775,22 @@ export function buildProgram(): Command {
       },
     );
 
+  // ── tools: the workspace's MCP servers (migrate_tools_to_steering) ─────────
+
+  const toolsCmd = program
+    .command("tools")
+    .description("The workspace's connected MCP servers and their tools");
+  toolsCmd
+    .command("migrate")
+    .description(
+      "Open the pull request that moves the workspace's MCP servers into its steering repo, or print the one already open",
+    )
+    .option("--json", "Output JSON")
+    .action(async (opts: { json?: boolean }) => {
+      const { toolsMigrate } = await import("./commands/tools.js");
+      await toolsMigrate(opts);
+    });
+
   // ── run: the recorded run (export_run, get_run_export) ────────────────────
 
   // `oxagen run -- <agent>` is the contained launcher (ADR-096, ADR-152);

@@ -70,7 +70,7 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "agent.memories", policyClass: "standard" },
   { table: "agent.memory_rejections", policyClass: "standard" },
   { table: "agent.memory_recalls", policyClass: "standard" },
-  // The runs that used each memory (ADR-245); org_id + workspace_id NOT NULL.
+  // The runs that used each memory (ADR-248); org_id + workspace_id NOT NULL.
   { table: "agent.memory_uses", policyClass: "standard" },
   // Published steering versions and the publish lease (S3, #4449); org_id +
   // workspace_id NOT NULL.
@@ -176,6 +176,9 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "cost.run_pr_outcomes", policyClass: "standard" },
   // The reverts kept until their outcome rows exist (#4491); org_id + workspace_id NOT NULL.
   { table: "cost.run_pr_reverts", policyClass: "standard" },
+  // Where the outcome refresh stands in each ledger run's receipts (#4511);
+  // org_id + workspace_id NOT NULL.
+  { table: "cost.run_pr_receipt_walks", policyClass: "standard" },
   // The loops that reached a workspace's no-progress limit (spend spec,
   // detector 1); org_id + workspace_id NOT NULL.
   { table: "cost.no_progress_hits", policyClass: "standard" },

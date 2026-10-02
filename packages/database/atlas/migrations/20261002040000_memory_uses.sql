@@ -1,4 +1,4 @@
--- Memory uses and the memory lifecycle (MEM2, #4908, ADR-245).
+-- Memory uses and the memory lifecycle (MEM2, #4908, ADR-248).
 --
 -- 1. agent.memories keeps every row for life. `state` replaces the purge
 --    that deleted a memory once its memory PR settled: waiting, in_pr,
@@ -15,7 +15,7 @@
 --
 -- agent.memory_recalls stays. Recall still stamps each memory record it
 -- serves there, and the curator's stale and contradiction checks read it
--- (ADR-238, ADR-245).
+-- (ADR-238, ADR-248).
 
 ALTER TABLE agent.memories
   ADD COLUMN IF NOT EXISTS state text NOT NULL DEFAULT 'waiting',
@@ -63,7 +63,7 @@ CREATE INDEX IF NOT EXISTS memories_waiting_idx ON agent.memories (org_id, works
 CREATE INDEX IF NOT EXISTS memories_source_idx ON agent.memories (workspace_id, source) WHERE source IS NOT NULL;
 
 COMMENT ON COLUMN agent.memories.state IS
-  'waiting, in_pr, promoted, dismissed, or retired (ADR-245).';
+  'waiting, in_pr, promoted, dismissed, or retired (ADR-248).';
 COMMENT ON COLUMN agent.memories.use_count IS
   'Distinct runs in agent.memory_uses, plus the count of its uses with no run. Written with the uses.';
 COMMENT ON COLUMN agent.memories.promoted_lineage IS

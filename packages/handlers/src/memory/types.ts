@@ -1,4 +1,4 @@
-// The shapes the memory pipeline passes between its steps (ADR-206, ADR-245).
+// The shapes the memory pipeline passes between its steps (ADR-206, ADR-248).
 //
 // capture.ts turns a sealed run's frames into drafts, store.ts writes and
 // reads the six memory tables, curate.ts and settle.ts decide what the next
@@ -26,7 +26,7 @@ export type MemoryCapture =
   | "import";
 
 /**
- * Where a memory is in its life (ADR-245). A memory keeps its row in every
+ * Where a memory is in its life (ADR-248). A memory keeps its row in every
  * state, and with it its uses.
  *
  * - `waiting`: collected, and in no open memory PR.
@@ -393,7 +393,7 @@ export interface MemoryStore {
   ): Promise<number>;
   /**
    * Store a memory as the one waiting memory of its capture and source
-   * (ADR-238, ADR-245). Tacho's memory upload calls it for each
+   * (ADR-238, ADR-248). Tacho's memory upload calls it for each
    * `local_gateway` memory, whose source is `<harness>:<path>`, so a memory
    * file has one waiting row and each edit replaces its text.
    *

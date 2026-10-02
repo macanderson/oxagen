@@ -667,7 +667,7 @@ export async function curateMemories(
     );
   const { paths, records } = await readRecords(deps.host, repo, head);
   // A waiting or promoted memory that no run used for `retire_after_days`
-  // retires before the plan reads the queue (ADR-245). Its clock runs from
+  // retires before the plan reads the queue (ADR-248). Its clock runs from
   // its newest use, or from its capture when no run used it.
   const retiredUnused = await deps.store.retireUnused(
     scope,

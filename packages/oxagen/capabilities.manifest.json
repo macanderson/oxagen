@@ -7099,6 +7099,25 @@
       }
     },
     {
+      "name": "migrate_tools_to_steering",
+      "file": "tool.steering.migrate.ts",
+      "domain": "tool",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "cli": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "set_mcp_credential",
       "file": "tool.studio.credential.set.ts",
       "domain": "tool",

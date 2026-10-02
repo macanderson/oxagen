@@ -2,7 +2,7 @@
 
 - **Status:** Accepted. Superseded in part by ADR-238 (2026-09-30): decision
   10's recall of unreviewed memories, and the last sentence of decision 11.
-  Superseded in part by ADR-245 (2026-10-01): decision 7's purge, and the age
+  Superseded in part by ADR-248 (2026-10-01): decision 7's purge, and the age
   drop in decision 6 step 3.
 - **Date:** 2026-09-26
 - **Owners:** steering, tacho
@@ -91,7 +91,7 @@ record leaves them as they are.
    statement in lowercase, with punctuation removed and whitespace collapsed.
 
    *Superseded in part by
-   [ADR-245](./ADR-245-memories-keep-their-rows-and-rank-by-use.md) on
+   [ADR-248](./ADR-248-memories-keep-their-rows-and-rank-by-use.md) on
    2026-10-01.* No memory is deleted. A merged record promotes its memories,
    a record that did not merge sends them back to waiting, and an active
    record that already says a waiting memory links it. A memory no run used

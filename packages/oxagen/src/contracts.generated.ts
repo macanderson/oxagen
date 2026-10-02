@@ -424,6 +424,7 @@ import "./contracts/tool.import";
 import "./contracts/tool.relay.create";
 import "./contracts/tool.relay.revoke";
 import "./contracts/tool.state.set";
+import "./contracts/tool.steering.migrate";
 import "./contracts/tool.studio.credential.set";
 import "./contracts/tool.studio.description.draft";
 import "./contracts/tool.studio.discovery.get";
