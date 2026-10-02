@@ -11,6 +11,11 @@
  * {@link OTHER_SPEND_KEY} row is the rest of every run's cost, so the rows
  * sum to the total.
  *
+ * The in-app assistant's spend is one row of its own in every grouping, the
+ * {@link ASSISTANT_SPEND_KEY} row, and the other rows leave it out (ADR-235,
+ * 2026-10-02 amendment). The total, the days, and the reported spend still
+ * count it, so the rows sum to the total. That row names no run.
+ *
  * Every money figure is integer micros with a currency and a basis (INV-09);
  * a group no frame priced answers `cost: null`. Proven and accepted spend are
  * never folded together (spec §12.8) and stay null until a verdict lane
@@ -52,6 +57,15 @@ export const spendGroupBySchema = z.enum([
  */
 export const OTHER_SPEND_KEY = "~other";
 
+/**
+ * The row key of the in-app assistant's spend, in every grouping. Oxagen runs
+ * the assistant, and the workspace does not monitor it (ADR-235), so the row
+ * lists no runs and opens no drill. No principal id, agent key, model id,
+ * tool name, task reference, cost-center label, or MCP server name starts
+ * with `~`, so no other key collides with it.
+ */
+export const ASSISTANT_SPEND_KEY = "~oxagen_assistant";
+
 /** The most runs a row lists. */
 export const SPEND_TOP_RUNS_MAX = 8;
 
@@ -82,19 +96,20 @@ export const spendRowSchema = spendFigureSchema
   .extend({
     /**
      * The group's key: a principal id, an agent key, a model id, a tool name,
-     * a task reference, a cost-center label, an MCP server name, or
-     * {@link OTHER_SPEND_KEY}.
+     * a task reference, a cost-center label, an MCP server name,
+     * {@link OTHER_SPEND_KEY}, or {@link ASSISTANT_SPEND_KEY}.
      */
     key: z.string(),
-    /** The model's provider on `model` rows; null elsewhere. */
+    /** The model's provider on `model` rows; null elsewhere, and on the {@link ASSISTANT_SPEND_KEY} row. */
     provider: z.string().nullable(),
     tokens: tokenCountsSchema,
-    /** Who the key names on `operator` rows; null elsewhere, and for a principal nobody can name. */
+    /** Who the key names on `operator` rows; null elsewhere, on the {@link ASSISTANT_SPEND_KEY} row, and for a principal nobody can name. */
     operator: operatorFactsSchema.nullable(),
     /**
      * The row's costliest runs in the period, at most
      * {@link SPEND_TOP_RUNS_MAX}; most calls first where nothing priced them.
-     * Empty on the {@link OTHER_SPEND_KEY} row. `runs` says how many there are.
+     * Empty on the {@link OTHER_SPEND_KEY} row and always empty on the
+     * {@link ASSISTANT_SPEND_KEY} row. `runs` says how many there are.
      */
     topRuns: z.array(spendTopRunSchema).max(SPEND_TOP_RUNS_MAX),
   })

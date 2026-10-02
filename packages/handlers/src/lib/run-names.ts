@@ -1,5 +1,6 @@
 import { schema, withTenantDb } from "@oxagen/database";
-import { and, eq, inArray } from "drizzle-orm";
+import { IN_APP_AGENT_SURFACES } from "@oxagen/oxagen/contracts/run.shared";
+import { and, eq, inArray, notInArray } from "drizzle-orm";
 import type { RunScope } from "../run.list";
 import { readRunEnrichmentEnabled } from "./run-enrichment";
 import { runLabel, tachoRunName } from "./run-item";
@@ -13,6 +14,10 @@ import { runLabel, tachoRunName } from "./run-item";
  * wrapped session reads its harness title, then the generated name, then the
  * prompt title, and a ledger run reads its generated name. With them off, a
  * wrapped session keeps only its harness title and a ledger run has none.
+ *
+ * An in-app assistant run has no name here either way (ADR-235). Its name
+ * may summarize the person's question, and the workspace does not monitor
+ * the assistant.
  */
 export async function readRunNames(
   scope: RunScope,
@@ -70,6 +75,7 @@ function readLedgerNames(scope: RunScope, publicIds: string[]) {
           eq(runs.orgId, scope.orgId),
           eq(runs.workspaceId, scope.workspaceId),
           inArray(runs.publicId, publicIds),
+          notInArray(runs.surface, [...IN_APP_AGENT_SURFACES]),
         ),
       ),
   );
