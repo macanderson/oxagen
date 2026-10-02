@@ -30,45 +30,35 @@ on:
         required: false
 
 concurrency:
-  # A push to main gets a group of its own, per commit; everything else groups
-  # by ref so a new push supersedes the run before it.
+  # Pushes to main share one group of their own (ADR-287). Everything else
+  # groups by ref, so a new push to a pull request supersedes the run before it.
   #
-  # The paragraph below has described the eviction since 2026-08-27, and on
-  # 2026-09-07 it stopped being a footnote: merges arrived every 10-20 minutes
-  # against a run that takes ~75, so each new one evicted the queued run before
-  # it started and NOTHING finished for hours. Eight commits reached main
-  # undeployed, because deploy-web and deploy-node run only after the check
-  # passes and no check ever did. Cancelled runs read as ordinary cleanup, so
-  # nothing went red (#2730).
+  # GitHub runs one run per group and keeps one more waiting. A newer push
+  # replaces the waiting run, which never starts and costs nothing. Because
+  # `cancel-in-progress` is false for a push, the running run always finishes,
+  # and the newest waiting push starts as soon as it does. A burst of merges
+  # therefore costs one run at a time, and each run checks and ships every
+  # merge since the run before it. Runs on main also finish in commit order,
+  # so an older commit cannot deploy after a newer commit's migration (#5247).
   #
-  # Per-commit on main means a queued run cannot be evicted, which is what makes
-  # 'every commit on main gets a finished check' true rather than usually true.
-  # It costs concurrent runners during a burst; that is the trade, and the
-  # alternative was silently not deploying.
+  # From 2026-09-07 to 2026-10-02 every push had a group of its own (ADR-046),
+  # on the belief that the shared group starved main on 2026-09-07. The run
+  # history shows green runs finishing and deploying about once an hour that
+  # day. The per-commit group ran the full gate for every merge, about three
+  # times the runner time of a shared group (#5248).
+  #
+  # A manual dispatch on main keeps the plain `ci-refs/heads/main` group, so a
+  # dispatch never replaces a waiting push run.
+  # tools/scripts/check-main-concurrency.mjs holds this shape.
   group: >-
     ci-${{ github.ref }}${{
       github.event_name == 'push' && github.ref == 'refs/heads/main'
-        && format('-{0}', github.sha) || ''
+        && '-push' || ''
     }}
-  # Auto-cancel superseded runs for PRs only. Since 2026-09-23 a main run's
+  # Cancel a superseded run for pull requests only. A main run's
   # `migration-gate` applies production migrations, and cancelling it
-  # mid-`atlas migrate apply` would strand prod behind the committed
+  # mid-`atlas migrate apply` would strand production behind the committed
   # migrations. Half a deploy is also worse than a slow one.
-  #
-  # `false` protects a run that has STARTED. It does not protect one still
-  # queued: GitHub keeps a single pending entry per concurrency group, so a
-  # third push evicts the second while the first is still running, and the
-  # evicted run is cancelled having executed nothing. That happened to
-  # 71007b78's run on 2026-08-27 — cancelled with zero jobs, moments after
-  # 2a3fae4d was pushed behind it.
-  #
-  # That reasoning held only while a run finished before the next merge. It
-  # said the evicting commit contains the evicted one so its run covers both —
-  # true, and irrelevant once the evicting run is itself evicted. Under
-  # sustained merge pressure the chain never terminates and no commit is
-  # covered by anything. The per-commit group above is why that can no longer
-  # happen on main; pull requests keep the old behaviour, where superseding is
-  # what you want.
   #
   # A pull request branch pushed faster than its run finishes gets only
   # cancelled runs, and a cancelled required check is not a pass.
@@ -167,11 +157,12 @@ env:
   INGESTION_ENCRYPTION_KEY: Z+kVBYRa3uc8nyyvgm+Z5tayV3Nawkg/YMzgzJnLh0U=
 
 jobs:
-  # A push to main gets its own concurrency group (see the comment above) so
-  # a queued run can never be evicted, but nothing stopped an already-started
-  # run from spending the full ~75-minute gate on a commit a later push
-  # already supersedes. The later push's run checks and ships everything this
-  # one would, so the work bought nothing but a held runner. A run that
+  # Pushes to main share one concurrency group (see the comment above), so a
+  # run usually starts as main's tip. A push can still land between the run
+  # starting and this job asking, and then the run would spend the full
+  # ~75-minute gate on a commit a later push already supersedes. The later
+  # push's run checks and ships everything this one would, so the work buys
+  # nothing but a held runner. A run that
   # starts its gate still ships when it finishes, even after main moves on
   # (check-deploy-tip.mjs). This job asks once, cheaply, before the expensive jobs
   # start; see check-main-preflight.mjs for the full reasoning and why this
@@ -1962,13 +1953,13 @@ jobs:
     # same commit, for every platform, to https://downloads.oxagen.sh/
     # (ADR-158). That was 105 builds in the week of 2026-09-23, 5,498 runner
     # minutes, 2,487 of them on macOS (#4918). A deploy now dispatches the
-    # build only when its pushed range changes what the installers carry: the
-    # app (apps/desktop), the two sidecars it bundles (packages/tacho and
-    # apps/cli, per apps/desktop/scripts/sidecars.mjs), the single-executable
-    # compiler (tools/sea), or desktop.yml. desktop.yml's daily schedule
-    # builds the commit production runs whenever these installers are older,
-    # which covers a change that reached main in a superseded push, and a
-    # change to a package the sidecars import.
+    # build only when the commits since the last installer build change what
+    # the installers carry: the app (apps/desktop), the two sidecars it
+    # bundles (packages/tacho and apps/cli, per
+    # apps/desktop/scripts/sidecars.mjs), the single-executable compiler
+    # (tools/sea), or desktop.yml. desktop.yml's daily schedule builds the
+    # commit production runs whenever these installers are older, which covers
+    # a change to a package the sidecars import.
     #
     # This job only dispatches desktop.yml: the four builds need macOS and
     # Windows runners and take most of an hour, and a separate run keeps that
@@ -2027,17 +2018,21 @@ jobs:
           DEPLOY_SERVICE: desktop
         run: node tools/scripts/check-deploy-tip.mjs
 
-      # The pushed range is the commit main held before this push and this
-      # commit. A squash merge is one push, so the range is that merge's own
-      # diff. The tree diff needs no history and no file contents: the fetch
-      # brings the earlier commit's trees only, and --no-renames keeps git
-      # from asking for blobs. Any doubt (a new branch, a failed fetch, a
-      # failed diff) dispatches the build.
+      # The range starts at the commit whose installers were last built, which
+      # the `order` step reads from the `desktop` record, and ends at this
+      # commit. One main run covers every merge since the run before it
+      # (ADR-287), so this push's own range would miss an installer change in
+      # an earlier merge that the run also covers. With no record, the range
+      # starts at the commit main held before this push. The tree diff needs
+      # no history and no file contents: the fetch brings the earlier
+      # commit's trees only, and --no-renames keeps git from asking for
+      # blobs. Any doubt (no earlier commit, a failed fetch, a failed diff)
+      # dispatches the build.
       - name: Decide whether this push changes what the installers carry
         id: desktop
         if: steps.order.outputs.ship == 'true'
         env:
-          BEFORE: ${{ github.event.before }}
+          BEFORE: ${{ steps.order.outputs.live || github.event.before }}
         run: |
           set -uo pipefail
           paths=(apps/desktop packages/tacho apps/cli tools/sea .github/workflows/desktop.yml)
@@ -2047,7 +2042,7 @@ jobs:
             echo "$2"
           }
           if ! [[ "$BEFORE" =~ ^[0-9a-f]{40}$ ]] || [ "$BEFORE" = 0000000000000000000000000000000000000000 ]; then
-            build true "This push names no earlier commit, so the desktop build runs."
+            build true "No earlier installer build is recorded and this push names no earlier commit, so the desktop build runs."
             exit 0
           fi
           if ! git fetch --no-tags --depth=1 --filter=blob:none origin "$BEFORE"; then
@@ -2059,9 +2054,9 @@ jobs:
             exit 0
           fi
           if [ -n "$changed" ]; then
-            build true "This push changes $(printf '%s\n' "$changed" | wc -l | tr -d ' ') installer source files, so the desktop build runs."
+            build true "$(printf '%s\n' "$changed" | wc -l | tr -d ' ') installer source files changed since ${BEFORE:0:9}, so the desktop build runs."
           else
-            build false "This push changes no installer source (${paths[*]}). The daily build in desktop.yml publishes the commit production runs."
+            build false "No installer source (${paths[*]}) changed since ${BEFORE:0:9}. The daily build in desktop.yml publishes the commit production runs."
           fi
 
       - name: Dispatch the desktop build for this commit

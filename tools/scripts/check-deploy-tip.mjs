@@ -46,6 +46,9 @@
  * 1. `node check-deploy-tip.mjs` (the `order` step, first after checkout)
  *    writes `ship=true|false` to $GITHUB_OUTPUT. Every later step carries
  *    `if: steps.order.outputs.ship == 'true'`, so a skipped run stays green.
+ *    It also writes `live`, the commit last recorded for the service, or an
+ *    empty string. `publish-installers` diffs from it, because one main run
+ *    covers every merge since the run before it (ADR-287).
  * 2. `node check-deploy-tip.mjs --record` (the `record` step, last) records
  *    what shipped. A failed record only warns: the next run compares against
  *    an older record, sees itself ahead, and deploys, which is safe.
@@ -77,6 +80,16 @@ export function taskFor(service) {
 }
 
 const short = (sha) => (sha ? sha.slice(0, 9) : "none");
+
+/**
+ * The order step's $GITHUB_OUTPUT lines. `live` is written only when it is a
+ * full commit id, so nothing the API returns can add a line of its own.
+ */
+export function orderOutputs(live, deploy) {
+  const id =
+    typeof live === "string" && /^[0-9a-f]{40}$/.test(live) ? live : "";
+  return `ship=${deploy}\nlive=${id}\n`;
+}
 
 /**
  * The deploy decision, separated from I/O so each ordering case is testable.
@@ -484,15 +497,17 @@ if (isEntrypoint) {
         );
       }
     } else {
-      const verdict = decide(
-        await readOrder({ repository, token, sha, service }),
-      );
+      const order = await readOrder({ repository, token, sha, service });
+      const verdict = decide(order);
       if (verdict.warning) console.log(`::warning::${verdict.warning}`);
       console.log(
         `${verdict.deploy ? "deploying" : "::notice::skipping the deploy"} ${service}: ${verdict.reason}`,
       );
       if (process.env.GITHUB_OUTPUT) {
-        appendFileSync(process.env.GITHUB_OUTPUT, `ship=${verdict.deploy}\n`);
+        appendFileSync(
+          process.env.GITHUB_OUTPUT,
+          orderOutputs(order.live, verdict.deploy),
+        );
       }
     }
   }
