@@ -1959,7 +1959,17 @@ jobs:
     #
     # `needs: deploy-node` means every service shipped: a failed leg publishes
     # nothing, so the installers never run ahead of the platform they talk to.
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    #
+    # The condition reads that result itself, after `!cancelled()`. Without a
+    # status function GitHub applies `success()`, which fails when any job
+    # upstream was skipped, and `staging` is skipped while it is dormant. From
+    # #4869 on 2026-09-30 every run skipped this job, so no recorder fix
+    # reached an installer (#5089). `deploy-node` runs past `staging` the
+    # same way.
+    if: >-
+      !cancelled() &&
+      github.event_name == 'push' && github.ref == 'refs/heads/main' &&
+      needs.deploy-node.result == 'success'
     needs: [deploy-node]
     # ubuntu-slim: a sparse checkout, two API calls and a tree diff.
     runs-on: ${{ vars.CI_RUNNERS == 'aws' && 'oxagen-deploy' || 'ubuntu-slim' }}
