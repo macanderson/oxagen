@@ -269,7 +269,7 @@ export async function buildBundle(input: BuildInput): Promise<BuildResult> {
     tools.servers.length === 0
       ? null
       : { schema: "tool-manifest/v1", servers: tools.servers };
-  // The modes the manifest records. steering_read and each request read the
+  // The modes the manifest records. read_steering and each request read the
   // same ones, so a record's mentions render the same wherever it appears.
   const modes = toolModesOf({ tools: manifest });
   const always_on: Bundle["always_on"] = [];
