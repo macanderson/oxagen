@@ -3714,6 +3714,18 @@
     },
     {
       "domain": "context",
+      "name": "revert_steering_pr",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "cli",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "context",
       "name": "revise_context_record",
       "reads": [],
       "surfaces": [

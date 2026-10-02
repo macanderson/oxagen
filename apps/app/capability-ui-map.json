@@ -1145,6 +1145,15 @@
       "verifiedAt": "2026-09-27",
       "verifiedBy": "3f363c89"
     },
+    "revert_steering_pr": {
+      "route": "/[org]/[ws]/steering",
+      "page": "apps/app/src/app/[org]/[ws]/steering/page.tsx",
+      "entry": "/[org]/[ws]/steering — the Revert pull request button on a merged steering PR, behind a confirming dialog (features/steering/write-controls.tsx, shown by context-pr-panel.tsx)",
+      "testid": "revert-steering-pr",
+      "proof": "apps/app/src/features/steering/write-controls.test.tsx",
+      "verifiedAt": "2026-10-02",
+      "verifiedBy": "054a9da7"
+    },
     "open_context_pr": {
       "route": "/[org]/[ws]/steering/proposals/prs/[proposal]",
       "page": "apps/app/src/app/[org]/[ws]/steering/proposals/prs/[proposal]/page.tsx",

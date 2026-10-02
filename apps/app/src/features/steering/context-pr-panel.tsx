@@ -5,7 +5,9 @@
 // disabled until every check has passed. Merge is the publication.
 //
 // Under the team and regulated modes the panel also offers Approve, and Merge
-// without review to an owner while no one has approved (#4518). A check
+// without review to an owner while no one has approved (#4518). A merged
+// steering PR offers Revert pull request, which opens a steering PR that
+// undoes it (#4449). A check
 // finding on a managed block shows the drift and a Restore block button. A PR
 // on a `memory/` branch lists its records from list_memory_pr_records
 // (#4914), each with a Drop button, or the read's failure in their place.
@@ -28,6 +30,7 @@ import {
   MergeWithoutReview,
   ProposalWrites,
   RestoreManagedBlock,
+  RevertSteeringPr,
 } from "./write-controls";
 
 /** One finding a check left on the steering PR's head. */
@@ -312,6 +315,17 @@ export function ContextPrPanel({
               </Fact>
             )}
           </Facts>
+          {/* revert_steering_pr refuses a governance change: setting the
+              mode again is the one route back (ADR-232). */}
+          {status === "merged" && !governance && pr !== null ? (
+            <div className="flex flex-wrap items-start gap-3">
+              <RevertSteeringPr
+                org={at.org}
+                ws={at.ws}
+                proposalId={value.proposalId}
+              />
+            </div>
+          ) : null}
         </div>
       )}
       {open ? (

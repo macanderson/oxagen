@@ -11,10 +11,11 @@
 # pull_request or push. The suite lives in apps/app/live/ with its own
 # Playwright config, and no unit, integration, or e2e lane picks it up.
 #
-# Issue #4724 names the rig and where each secret and variable comes from.
-# The values live in the `steering-live` environment, which allows only main.
-# STEERING_LIVE_ENABLED is a repository variable because a job-level `if:`
-# cannot read an environment's variables.
+# The "Steering live test" section of docs/specs/github-app/github-app-setup.md
+# names the test organization, the rig app, and each secret and variable.
+# The secrets live in the `steering-live` environment, which allows only main.
+# The variables are repository variables. STEERING_LIVE_ENABLED has to be one,
+# because a job-level `if:` cannot read an environment's variables.
 name: Steering live test
 
 on:
@@ -63,7 +64,7 @@ jobs:
             STEERING_LIVE_GITHUB_ORG \
             STEERING_LIVE_OXAGEN_ORG; do
             if [ "${!name}" != "true" ]; then
-              echo "::error::$name is not set in the steering-live environment. Issue #4724 names where it comes from."
+              echo "::error::$name is not set. The Steering live test section of docs/specs/github-app/github-app-setup.md says where to set it."
               missing=1
             fi
           done

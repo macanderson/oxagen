@@ -261,6 +261,7 @@ import { contextPrRefreshRoute } from "./routes/v1/context.pr.refresh";
 import { contextPrDiffGetRoute } from "./routes/v1/context.pr.diff.get";
 import { contextPrMergeRoute } from "./routes/v1/context.pr.merge";
 import { contextPrMergeWithoutReviewRoute } from "./routes/v1/context.pr.merge_without_review";
+import { contextPrRevertRoute } from "./routes/v1/context.pr.revert";
 import { agentRoleAssignRoute } from "./routes/v1/agent.role.assign";
 import { agentRoleRevokeRoute } from "./routes/v1/agent.role.revoke";
 import { agentRoleListRoute } from "./routes/v1/agent.role.list";
@@ -1379,6 +1380,8 @@ orgScoped.route(
   "/context/prs/merge-without-review",
   contextPrMergeWithoutReviewRoute,
 );
+// Open a steering PR that undoes a merged one (#4449).
+orgScoped.route("/context/prs/revert", contextPrRevertRoute);
 orgScoped.route("/privacy/export", privacyDataExportRoute);
 orgScoped.route("/privacy/erase", privacyDataEraseRoute);
 orgScoped.route("/connections", connectionRoute);

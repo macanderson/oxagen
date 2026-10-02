@@ -10606,6 +10606,13 @@ type Messages = {
         productionBranchMissing: string;
         productionBranchMoving: string;
         checksFailed: string;
+        notMerged: string;
+        governanceProposal: string;
+        prNotRecorded: string;
+        repositoryChanged: string;
+        mergeCommitUnknown: string;
+        nothingToRevert: string;
+        revertBranchExists: string;
         toolNotRegistered: string;
       };
       approve: {
@@ -10615,6 +10622,16 @@ type Messages = {
       mergeWithoutReview: {
         confirm: string;
         pending: string;
+      };
+      revert: {
+        open: string;
+        title: string;
+        body: string;
+        confirm: string;
+        pending: string;
+        opened: string;
+        goToPr: string;
+        checkFailed: string;
       };
       restore: {
         confirm: string;

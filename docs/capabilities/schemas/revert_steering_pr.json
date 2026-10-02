@@ -1,0 +1,116 @@
+{
+  "name": "revert_steering_pr",
+  "domain": "context",
+  "description": "Open a steering PR that undoes a merged one: each path the merge changed goes back to what the production branch held before it, and the ledger is left as it is. In a steering repo Oxagen runs the steering checks on the revert and reports the required Oxagen steering check. Refused unless the proposal is merged, and unless the governance mode lets the caller merge. A governance change is refused: set the mode again instead",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent",
+    "cli"
+  ],
+  "sensitivity": "high",
+  "agent": {
+    "requiresApproval": true,
+    "riskLevel": "high",
+    "category": "governance"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "proposalId": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "proposalId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "proposalId": {
+        "type": "string"
+      },
+      "reverted": {
+        "type": "object",
+        "properties": {
+          "number": {
+            "type": "integer",
+            "exclusiveMinimum": 0
+          },
+          "mergedCommit": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "number",
+          "mergedCommit"
+        ],
+        "additionalProperties": false
+      },
+      "pullRequest": {
+        "type": "object",
+        "properties": {
+          "number": {
+            "type": "integer",
+            "exclusiveMinimum": 0
+          },
+          "url": {
+            "type": "string"
+          },
+          "branch": {
+            "type": "string"
+          },
+          "headSha": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "number",
+          "url",
+          "branch",
+          "headSha"
+        ],
+        "additionalProperties": false
+      },
+      "check": {
+        "anyOf": [
+          {
+            "type": "string",
+            "enum": [
+              "success",
+              "failure"
+            ]
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "proposalId",
+      "reverted",
+      "pullRequest",
+      "check"
+    ],
+    "additionalProperties": false
+  }
+}

@@ -131,6 +131,7 @@ import "./contracts/context.pr.merge";
 import "./contracts/context.pr.merge_without_review";
 import "./contracts/context.pr.open";
 import "./contracts/context.pr.refresh";
+import "./contracts/context.pr.revert";
 import "./contracts/context.proposal.create";
 import "./contracts/context.proposal.dismiss";
 import "./contracts/context.proposal.list";

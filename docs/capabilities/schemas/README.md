@@ -193,6 +193,7 @@ capability rewrites, so two such branches always conflicted on it (ADR-216).
 - propose_record
 - publish_context_record
 - refresh_context_pr
+- revert_steering_pr
 - revise_context_record
 
 ## control

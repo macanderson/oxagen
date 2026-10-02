@@ -1176,6 +1176,15 @@ export class FakeGitHub implements SteeringGitHub {
   async holdsCommit(_repo: SteeringRepository, head: string, ancestor: string) {
     return this.lineage(this.shaOf(head)).includes(ancestor);
   }
+  /** The commit's parents: its first, then the branch a merge brought in. */
+  async commitParents(_repo: SteeringRepository, sha: string) {
+    const out: string[] = [];
+    const first = this.parents.get(sha);
+    if (first) out.push(first);
+    const second = this.mergedParents.get(sha);
+    if (second) out.push(second);
+    return out;
+  }
   /**
    * Merge `base`, a production branch head, into the PR's branch, as GitHub's
    * merges endpoint does. Each path the branch changed since the merge base

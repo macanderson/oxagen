@@ -139,6 +139,7 @@ import { contextPrRefresh } from "@oxagen/oxagen/contracts/context.pr.refresh";
 import { contextPrDiffGet } from "@oxagen/oxagen/contracts/context.pr.diff.get";
 import { contextPrMerge } from "@oxagen/oxagen/contracts/context.pr.merge";
 import { contextPrMergeWithoutReview } from "@oxagen/oxagen/contracts/context.pr.merge_without_review";
+import { contextPrRevert } from "@oxagen/oxagen/contracts/context.pr.revert";
 import { conversationAttachmentAdd } from "@oxagen/oxagen/contracts/conversation.attachment.add";
 import { tachoCommandDispatch } from "@oxagen/oxagen/contracts/tacho.command.dispatch";
 import { tachoCommandList } from "@oxagen/oxagen/contracts/tacho.command.list";
@@ -303,6 +304,7 @@ import { contextPrRefreshRoute } from "./context.pr.refresh";
 import { contextPrDiffGetRoute } from "./context.pr.diff.get";
 import { contextPrMergeRoute } from "./context.pr.merge";
 import { contextPrMergeWithoutReviewRoute } from "./context.pr.merge_without_review";
+import { contextPrRevertRoute } from "./context.pr.revert";
 import { conversationAttachmentAddRoute } from "./conversation.attachment.add";
 import { conversationChatRoute } from "./conversation.chat";
 import { costPriceEntryListRoute } from "./cost.price_entry.list";
@@ -740,6 +742,16 @@ const ROUTES: ThinRoute[] = [
     capability: contextPrMergeWithoutReview.name,
     body: { proposalId: "prp_1" },
     invalidBody: { proposalId: "prp_1", force: true },
+    status: 200,
+  },
+  {
+    file: "context.pr.revert",
+    route: contextPrRevertRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: contextPrRevert.name,
+    body: { proposalId: "prp_1" },
+    invalidBody: { proposalId: "prp_1", number: 7 },
+    jsonGuard: true,
     status: 200,
   },
   {

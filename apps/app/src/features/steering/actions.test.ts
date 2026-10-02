@@ -40,6 +40,7 @@ const {
   openContextPr,
   refreshContextPr,
   restoreManagedBlock,
+  revertSteeringPr,
   setGovernanceMode,
 } = await import("./actions");
 
@@ -287,6 +288,54 @@ describe("refreshContextPr", () => {
   });
 });
 
+describe("revertSteeringPr", () => {
+  it("opens the revert and returns its pull request and check", async () => {
+    invoke.mockResolvedValue({
+      proposalId: ID,
+      reverted: { number: 519, mergedCommit: "4d5e6f7a8b9c" },
+      pullRequest: {
+        number: 520,
+        url: "https://github.com/acme/oxagen-core-platform/pull/520",
+        branch: "steering/revert-519",
+        headSha: "9f8e7d6c",
+      },
+      check: "success",
+    });
+    expect(await revertSteeringPr("acme", "core-platform", ID)).toEqual({
+      ok: true,
+      value: {
+        number: 520,
+        url: "https://github.com/acme/oxagen-core-platform/pull/520",
+        branch: "steering/revert-519",
+        check: "success",
+      },
+    });
+    expect(invoke).toHaveBeenCalledWith(
+      "revert_steering_pr",
+      { proposalId: ID },
+      expect.objectContaining(TENANT),
+    );
+  });
+
+  it("returns a proposal that has not merged as a conflict (negative)", async () => {
+    invoke.mockRejectedValue(refused("conflict", "not_merged"));
+    expect(await revertSteeringPr("acme", "core-platform", ID)).toEqual({
+      ok: false,
+      reason: "conflict",
+      code: "not_merged",
+    });
+  });
+
+  it("returns a member the governance mode does not let merge as denied (negative)", async () => {
+    invoke.mockRejectedValue(refused("forbidden", "org_role_required"));
+    expect(await revertSteeringPr("acme", "core-platform", ID)).toMatchObject({
+      ok: false,
+      reason: "denied",
+      code: "org_role_required",
+    });
+  });
+});
+
 describe("a person the workspace refuses", () => {
   it.each([
     ["openContextPr", () => openContextPr("acme", "x", ID)],
@@ -295,6 +344,7 @@ describe("a person the workspace refuses", () => {
     ["refreshContextPr", () => refreshContextPr("acme", "x", ID)],
     ["approveContextPr", () => approveContextPr("acme", "x", ID)],
     ["mergePrWithoutReview", () => mergePrWithoutReview("acme", "x", ID)],
+    ["revertSteeringPr", () => revertSteeringPr("acme", "x", ID)],
     [
       "dropMemoryRecord",
       () => dropMemoryRecord("acme", "x", BRANCH, RECORD_PATH),
