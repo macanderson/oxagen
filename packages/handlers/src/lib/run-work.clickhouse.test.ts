@@ -270,6 +270,11 @@ describe.skipIf(!reachable)("run work reads on ClickHouse", () => {
     ]);
   });
 
+  it("reads a pull request a pr_open frame names on the run's spine", async () => {
+    const links = await read(() => readRunPrLinks(opened, []));
+    expect(links.map((row) => row.url)).toEqual([OPENED_PR]);
+  });
+
   it("reads the checkouts from before and after the break", async () => {
     const contexts = await read(() => readWorkContexts(session));
     expect(contexts.map(({ path, branch }) => [path, branch])).toEqual([

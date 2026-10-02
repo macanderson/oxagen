@@ -266,7 +266,8 @@ export async function readWorkPrLinks(
 }
 /**
  * The pull requests a run's chains linked, one row per URL: the run's own
- * chain, and each listed subagent chain under it. A subagent chain is read
+ * chain, and each listed subagent chain under it. A link is a `pr_link` frame
+ * or a `pr_open` frame that carries a URL, as in `readWorkPrLinks`. A subagent chain is read
  * only under `root_session_uuid`, so a chain of another run reads nothing.
  * A URL linked on several chains is one row, at its first frame on the
  * run's own chain when that chain linked it, and otherwise at its first
@@ -297,7 +298,8 @@ export async function readRunPrLinks(
         AND session_uuid IN {sessionUuids:Array(UUID)}
         AND (session_uuid = {rootSessionUuid:UUID}
           OR root_session_uuid = {rootSessionUuid:UUID})
-        AND kind = 'oxagen:pr_link' AND ${prAttr("url")} != ''
+        AND (kind = 'oxagen:pr_link' OR attrs['pr.url'] != '')
+        AND ${prAttr("url")} != ''
       GROUP BY url
       ORDER BY chain != {rootSessionUuid:UUID}, chain, first_seq
       LIMIT {limit:UInt32}`,
